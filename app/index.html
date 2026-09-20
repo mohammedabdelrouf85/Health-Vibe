@@ -213,7 +213,7 @@
       <section id="screen-patient" class="screen active">
         <div class="hero-panel app-hero">
           <div>
-            <span class="eyebrow">مرحبًا أحمد</span>
+            <span class="eyebrow" id="patientHeroTitle">مرحبًا أحمد</span>
             <h1>متابعة التنفس مع طبيبك في مسار واحد واضح</h1>
             <p>أدخل الأعراض والقياسات. يحصل الطبيب على نتيجة الذكاء الاصطناعي ومؤشر الثقة قبل اعتماد أي تقرير يظهر لك.</p>
             <div class="hero-actions">
@@ -224,20 +224,20 @@
           <div class="clinical-card">
             <div class="clinical-top">
               <span>آخر حالة</span>
-              <b>قيد المراجعة</b>
+              <b id="patientClinicalStatus">قيد المراجعة</b>
             </div>
             <div class="breath-orb app-orb"><span></span></div>
-            <div class="clinical-row"><span>نسبة الأكسجين</span><strong>95%</strong></div>
-            <div class="clinical-row"><span>الثقة</span><strong>78%</strong></div>
-            <div class="clinical-row"><span>الطبيب</span><strong>د. منى سامي</strong></div>
+            <div class="clinical-row"><span>نسبة الأكسجين</span><strong id="patientClinicalO2">--%</strong></div>
+            <div class="clinical-row"><span>الثقة</span><strong id="patientClinicalConfidence">--%</strong></div>
+            <div class="clinical-row"><span>الطبيب</span><strong id="patientClinicalDoctor">--</strong></div>
           </div>
         </div>
 
         <div class="metric-grid">
-          <article><span>الموعد القادم</span><strong>غدًا 7:30م</strong><small>استشارة متابعة</small></article>
-          <article><span>آخر تقرير</span><strong>20 سبتمبر</strong><small>تقييم التنفس - الإصدار الأول</small></article>
-          <article><span>حالة النتيجة</span><strong>قيد الانتظار</strong><small>بانتظار الطبيب</small></article>
-          <article><span>الملف الطبي</span><strong>92%</strong><small>مكتمل تقريبًا</small></article>
+          <article><span>الموعد القادم</span><strong id="patientNextAppt">--</strong><small>استشارة متابعة</small></article>
+          <article><span>آخر تقرير</span><strong id="patientLatestReport">--</strong><small>تقييم التنفس</small></article>
+          <article><span>حالة النتيجة</span><strong id="patientResultStatus">--</strong><small>بانتظار الطبيب</small></article>
+          <article><span>الملف الطبي</span><strong id="patientProfileCompletion">0%</strong><small>غير مكتمل</small></article>
         </div>
 
         <div class="content-grid">
@@ -251,10 +251,9 @@
             </div>
           </article>
           <article class="panel">
-            <div class="panel-head"><h3>التنبيهات</h3><span class="pill pending">2 جديد</span></div>
-            <div class="activity">
-              <div><strong>تقييمك وصل للطبيب</strong><span>منذ 22 دقيقة</span></div>
-              <div><strong>موعد متابعة مقترح</strong><span>غدًا 7:30 مساءً</span></div>
+            <div class="panel-head"><h3>التنبيهات</h3><span class="pill pending" id="patientAlertsCount">0 جديد</span></div>
+            <div class="activity" id="patientAlertsList">
+              <div><strong>لا توجد تنبيهات جديدة</strong><span>--</span></div>
             </div>
           </article>
         </div>

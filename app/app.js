@@ -689,6 +689,63 @@ function showScreen(name) {
   if (name === "doctor") {
     renderDoctorQueue();
   }
+  if (name === "patient") {
+    renderPatientDashboard();
+  }
+}
+
+async function renderPatientDashboard() {
+  const user = auth ? auth.currentUser : null;
+  const isEn = currentLanguage === "en";
+  
+  // Set default / empty states
+  document.getElementById("patientClinicalStatus").textContent = isEn ? "No recent assessment" : "لا يوجد فحص حديث";
+  document.getElementById("patientClinicalO2").textContent = "--%";
+  document.getElementById("patientClinicalConfidence").textContent = "--%";
+  document.getElementById("patientClinicalDoctor").textContent = "--";
+  document.getElementById("patientNextAppt").textContent = "--";
+  document.getElementById("patientLatestReport").textContent = "--";
+  document.getElementById("patientResultStatus").textContent = "--";
+  document.getElementById("patientProfileCompletion").textContent = "100%";
+  document.getElementById("patientAlertsCount").textContent = isEn ? "0 new" : "0 جديد";
+  document.getElementById("patientAlertsList").innerHTML = `<div><strong>${isEn ? 'No new alerts' : 'لا توجد تنبيهات جديدة'}</strong><span>--</span></div>`;
+
+  if (!user || !db) return;
+  
+  try {
+    const snapshot = await db.collection("cases").where("userId", "==", user.uid).get();
+    let cases = snapshot.docs.map(d => d.data());
+    
+    if (cases.length > 0) {
+      cases.sort((a, b) => {
+        const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt || 0);
+        const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.createdAt || 0);
+        return timeB - timeA;
+      });
+      const c = cases[0];
+      
+      document.getElementById("patientClinicalStatus").textContent = isEn ? c.status : (c.status === 'pending' ? 'قيد المراجعة' : 'معتمد');
+      document.getElementById("patientClinicalO2").textContent = `${c.o2}%`;
+      document.getElementById("patientClinicalConfidence").textContent = c.confidence;
+      document.getElementById("patientClinicalDoctor").textContent = isEn ? "Dr. Mona Samy" : "د. منى سامي";
+      
+      const dateVal = c.createdAt?.toMillis ? c.createdAt.toMillis() : c.createdAt;
+      const date = dateVal ? new Date(dateVal).toLocaleDateString(isEn ? 'en-US' : 'ar-EG') : "--";
+      
+      document.getElementById("patientLatestReport").textContent = date;
+      document.getElementById("patientResultStatus").textContent = isEn ? c.status : (c.status === 'pending' ? 'قيد الانتظار' : 'اكتمل');
+      
+      if (c.status === 'approved') {
+        document.getElementById("patientAlertsCount").textContent = isEn ? "1 new" : "1 جديد";
+        document.getElementById("patientAlertsList").innerHTML = `<div><strong>${isEn ? 'Your result is ready' : 'النتيجة المعتمدة جاهزة'}</strong><span>${date}</span></div>`;
+      } else {
+        document.getElementById("patientAlertsCount").textContent = isEn ? "1 pending" : "1 قيد المراجعة";
+        document.getElementById("patientAlertsList").innerHTML = `<div><strong>${isEn ? 'Assessment sent to doctor' : 'تم إرسال التقييم للطبيب'}</strong><span>${date}</span></div>`;
+      }
+    }
+  } catch (error) {
+    console.warn("Failed to fetch patient data", error);
+  }
 }
 
 function getActiveScreen() {
