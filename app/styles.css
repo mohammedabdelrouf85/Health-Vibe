@@ -14,6 +14,8 @@
   --surface-2: #f8fdfc;
   --line: #dcebea;
   --shadow: 0 24px 70px rgba(3, 72, 74, .12);
+  --hero-grad-1: #006d6f;
+  --hero-grad-2: #03484a;
   color-scheme: light;
   font-family: "Cairo", "IBM Plex Sans Arabic", "Segoe UI", Tahoma, sans-serif;
 }
@@ -33,6 +35,8 @@ body.dark {
   --green: #2cc570;
   --amber: #f0b429;
   --red: #f06060;
+  --hero-grad-1: #072628;
+  --hero-grad-2: #051618;
   color-scheme: dark;
 }
 
@@ -1076,7 +1080,7 @@ body.dark .topbar h2 { color: var(--ink); }
 }
 
 .app-hero {
-  background: linear-gradient(135deg, var(--teal), var(--teal-2));
+  background: linear-gradient(135deg, var(--hero-grad-1), var(--hero-grad-2));
 }
 
 .app-hero h1 {

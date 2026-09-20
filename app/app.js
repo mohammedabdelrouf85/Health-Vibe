@@ -1,4 +1,4 @@
-﻿const loader = document.getElementById("loader");
+const loader = document.getElementById("loader");
 const publicSite = document.getElementById("publicSite");
 const authScreen = document.getElementById("authScreen");
 const app = document.getElementById("app");
@@ -799,6 +799,14 @@ function toggleTheme() {
   const fabIcon = themeToggle ? themeToggle.querySelector(".theme-fab-icon") : null;
   if (fabIcon) fabIcon.textContent = isDark ? "☀️" : "🌙";
 }
+
+window.addEventListener("load", () => {
+  // Initialize theme toggle buttons to match the default dark mode
+  const isDark = document.body.classList.contains("dark");
+  if (siteThemeToggle) siteThemeToggle.textContent = localized(isDark ? "الوضع الداكن" : "الوضع الفاتح");
+  const fabIcon = themeToggle ? themeToggle.querySelector(".theme-fab-icon") : null;
+  if (fabIcon) fabIcon.textContent = isDark ? "☀️" : "🌙";
+});
 
 document.addEventListener("click", (event) => {
   const authOpen = event.target.closest("[data-auth-open]");
