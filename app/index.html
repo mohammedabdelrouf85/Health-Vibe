@@ -541,20 +541,8 @@
       </section>
 
       <section id="screen-verification" class="screen">
-        <div class="content-grid">
-          <article class="panel">
-            <div class="panel-head"><h3>توثيق الطبيب</h3><span class="pill pending">بانتظار التوثيق</span></div>
-            <div class="verification-steps">
-              <div class="done"><b></b><strong>الهوية الشخصية</strong><span>تم الرفع والمراجعة</span></div>
-              <div class="active"><b></b><strong>كارنيه النقابة / الترخيص</strong><span>بانتظار مراجعة الإدارة</span></div>
-              <div><b></b><strong>بيانات العيادة</strong><span>العنوان وأوقات العمل</span></div>
-            </div>
-          </article>
-          <article class="panel">
-            <div class="panel-head"><h3>صلاحية المراجعة</h3><span class="pill danger">معطلة حتى التوثيق</span></div>
-            <p class="muted-copy">في النسخة الإنتاجية، لا يستطيع الطبيب اعتماد تقارير مرضى قبل اكتمال التحقق المهني.</p>
-            <button class="outline-button full">رفع مستند جديد</button>
-          </article>
+        <div id="verificationContent">
+          <!-- Dynamically rendered via renderVerificationScreen() -->
         </div>
       </section>
 
@@ -575,10 +563,25 @@
       <section id="screen-admin" class="screen">
         <div class="metric-grid">
           <article><span>المستخدمون</span><strong>1,248</strong><small>+12 اليوم</small></article>
-          <article><span>الأطباء</span><strong>84</strong><small>6 بانتظار التوثيق</small></article>
+          <article><span>الأطباء المعتمدون</span><strong id="adminTotalDoctorsCount">84</strong><small id="adminPendingDocsBadge">2 بانتظار الاعتماد</small></article>
           <article><span>الفروع</span><strong>12</strong><small>نسخة مصر الأولى</small></article>
           <article><span>مراجعات معلقة</span><strong>31</strong><small>2 عاجلة</small></article>
         </div>
+
+        <!-- REAL DOCTOR APPLICATIONS APPROVAL BOARD -->
+        <article class="panel" style="margin-bottom: 24px;">
+          <div class="panel-head">
+            <div>
+              <h3 style="margin: 0; font-size: 19px;">طلبات توثيق واعتماد الأطباء (Doctor Verification & Approval)</h3>
+              <p style="margin: 4px 0 0; font-size: 13px; color: var(--muted);">مراجعة التراخيص الطبية واعتماد الأطباء رسمياً لتفعيل صلاحية فحص الحالات</p>
+            </div>
+            <span id="adminPendingAppsBadge" class="pill pending">قيد المراجعة</span>
+          </div>
+          <div id="adminDoctorAppsList" style="margin-top: 18px;">
+            <!-- Rendered via JS from Firestore doctor_applications -->
+          </div>
+        </article>
+
         <div class="content-grid">
           <article class="panel">
             <div class="panel-head"><h3>مؤشرات نموذج الذكاء الاصطناعي</h3><span class="pill info">الإصدار الأول</span></div>
@@ -592,7 +595,7 @@
           <article class="panel">
             <div class="panel-head"><h3>العمليات</h3><span class="pill pending">تحتاج مراجعة جودة</span></div>
             <div class="activity">
-              <div><strong>توثيق الأطباء</strong><span>6 مستندات مهنية بانتظار المراجعة</span></div>
+              <div><strong>توثيق الأطباء</strong><span id="adminOpsDocAppsCount">طلبات معلقة بانتظار الاعتماد</span></div>
               <div><strong>تحديث النموذج</strong><span>مسودة الإصدار الثاني بانتظار مراجعة الجودة الطبية</span></div>
             </div>
           </article>

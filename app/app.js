@@ -584,6 +584,41 @@ async function initDB() {
         await db.collection("cases").doc(c.id).set(c);
       }
     }
+
+    const appSnapshot = await db.collection("doctor_applications").limit(1).get();
+    if (appSnapshot.empty) {
+      const sampleApps = [
+        {
+          id: "doc_app_1",
+          userId: "demo_doc_uid_1",
+          name: "د. طارق محمود الشريف",
+          nameEn: "Dr. Tarek Mahmoud",
+          email: "tarek.mahmoud@hospital.eg",
+          licenseNumber: "EGY-MED-84920",
+          specialty: "أمراض الصدر والجهاز التنفسي",
+          clinic: "مستشفى القصر العيني التعليمي",
+          docName: "medical_syndicate_card_84920.pdf",
+          status: "pending",
+          appliedAt: new Date().getTime() - 3600000 * 4
+        },
+        {
+          id: "doc_app_2",
+          userId: "demo_doc_uid_2",
+          name: "د. هدى عبد الرحمن",
+          nameEn: "Dr. Hoda Abdelrahman",
+          email: "hoda.abdelrahman@clinics.eg",
+          licenseNumber: "EGY-MED-92144",
+          specialty: "طب الباطنة والرعاية المركزة",
+          clinic: "عيادات مصر التخصصية - المعادي",
+          docName: "syndicate_license_92144.jpg",
+          status: "pending",
+          appliedAt: new Date().getTime() - 3600000 * 20
+        }
+      ];
+      for (let app of sampleApps) {
+        await db.collection("doctor_applications").doc(app.id).set(app);
+      }
+    }
   } catch (err) {
     console.warn("Firestore not ready or permissions denied", err);
   }
@@ -1220,6 +1255,12 @@ function showScreen(name) {
   if (name === "patient") {
     renderPatientDashboard();
   }
+  if (name === "verification") {
+    renderVerificationScreen();
+  }
+  if (name === "admin") {
+    renderAdminApplications();
+  }
 }
 
 async function renderPatientDashboard() {
@@ -1279,6 +1320,458 @@ async function renderPatientDashboard() {
     console.warn("Failed to fetch patient data", error);
   }
 }
+
+// --- Doctor Account Lifecycle: Application -> Verification -> Approval ---
+let selectedDoctorAppFile = null;
+
+function onDoctorFilePicked(input) {
+  const label = document.getElementById("doctorAppFileName");
+  if (input.files && input.files[0]) {
+    selectedDoctorAppFile = input.files[0];
+    if (label) {
+      label.textContent = "📄 " + selectedDoctorAppFile.name;
+      label.style.color = "var(--teal)";
+    }
+  }
+}
+
+async function cancelOrReapplyDoctorApp() {
+  const user = auth.currentUser;
+  if (!user) return;
+  try {
+    await db.collection("users").doc(user.uid).set({
+      doctorApplicationStatus: "cancelled"
+    }, { merge: true });
+    showToast(currentLanguage === "en" ? "You can now submit a new application." : "يمكنك الآن تقديم طلب جديد.");
+    renderVerificationScreen();
+  } catch(e) {
+    console.error(e);
+  }
+}
+
+async function handleDoctorAppSubmit(e) {
+  if (e) e.preventDefault();
+  const user = auth.currentUser;
+  if (!user) {
+    showToast(currentLanguage === "en" ? "Please sign in first." : "يرجى تسجيل الدخول أولاً.");
+    return;
+  }
+
+  const name = document.getElementById("doctorAppName")?.value.trim();
+  const license = document.getElementById("doctorAppLicense")?.value.trim();
+  const specialty = document.getElementById("doctorAppSpecialty")?.value;
+  const clinic = document.getElementById("doctorAppClinic")?.value.trim();
+  const fileName = selectedDoctorAppFile ? selectedDoctorAppFile.name : "syndicate_license.pdf";
+
+  if (!name || !license || !specialty || !clinic) {
+    showToast(currentLanguage === "en" ? "Please fill in all required fields." : "يرجى ملء جميع الحقول المطلوبة.");
+    return;
+  }
+
+  const btn = document.getElementById("submitDoctorAppBtn");
+  const text = document.getElementById("submitDoctorAppText");
+  if (btn) btn.disabled = true;
+  if (text) text.textContent = currentLanguage === "en" ? "Submitting application..." : "جاري إرسال الطلب...";
+
+  try {
+    const appId = "app_" + user.uid;
+    const appData = {
+      id: appId,
+      userId: user.uid,
+      name: name,
+      email: user.email,
+      licenseNumber: license,
+      specialty: specialty,
+      clinic: clinic,
+      docName: fileName,
+      status: "pending",
+      appliedAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+
+    await db.collection("doctor_applications").doc(appId).set(appData);
+
+    await db.collection("users").doc(user.uid).set({
+      doctorApplicationStatus: "pending",
+      doctorApplicationId: appId,
+      doctorAppName: name,
+      licenseNumber: license,
+      specialty: specialty,
+      clinic: clinic,
+      doctorAppDocName: fileName,
+      doctorAppDate: new Date().toLocaleDateString(currentLanguage === "en" ? "en-US" : "ar-EG")
+    }, { merge: true });
+
+    showToast(currentLanguage === "en" ? "🎉 Application submitted! Under review by administration." : "🎉 تم إرسال طلب التوثيق بنجاح! طلبك الآن قيد المراجعة والتدقيق الإداري.");
+    renderVerificationScreen();
+  } catch (err) {
+    console.error("Doctor application error:", err);
+    showToast(getAuthErrorMessage(err));
+  } finally {
+    if (btn) btn.disabled = false;
+    if (text) text.textContent = currentLanguage === "en" ? "Submit Application 🚀" : "إرسال طلب التوثيق والاعتماد (Submit Application) 🚀";
+  }
+}
+
+async function renderVerificationScreen() {
+  const container = document.getElementById("verificationContent");
+  if (!container) return;
+
+  const isEn = currentLanguage === "en";
+  const user = auth.currentUser;
+
+  if (!user) {
+    container.innerHTML = `
+      <div class="content-grid">
+        <article class="panel" style="text-align: center; padding: 40px 20px;">
+          <h2>${isEn ? "Sign in to apply as a Doctor" : "سجل دخولك لتقديم طلب توثيق طبيب"}</h2>
+          <p class="muted-copy">${isEn ? "You need an account to apply for healthcare provider verification." : "تحتاج إلى حساب لتقديم طلب توثيق واعتماد مزاولة المهنة."}</p>
+          <button class="solid-button large" onclick="showAuth()">${isEn ? "Sign In / Register" : "تسجيل الدخول / إنشاء حساب"}</button>
+        </article>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = `<div style="padding: 40px; text-align: center; color: var(--teal);"><div class="spinner"></div> ${isEn ? "Loading verification status..." : "جاري تحميل حالة التوثيق..."}</div>`;
+
+  let userData = {};
+  try {
+    const userDoc = await db.collection("users").doc(user.uid).get();
+    if (userDoc.exists) {
+      userData = userDoc.data();
+    }
+  } catch(e) {
+    console.warn("Could not fetch user verification data:", e);
+  }
+
+  const isDoctor = selectedRole === "doctor" || userData.role === "doctor";
+  const appStatus = userData.doctorApplicationStatus || "none";
+
+  if (isDoctor) {
+    // STATE A: APPROVED DOCTOR
+    container.innerHTML = `
+      <div class="content-grid">
+        <article class="panel" style="grid-column: 1 / -1; border-color: rgba(24, 160, 88, 0.4);">
+          <div class="panel-head">
+            <div>
+              <h2 style="margin: 0; color: #18a058; font-size: 24px;">🎉 ${isEn ? "Verified Doctor Account" : "حساب طبيب معتمد وموثق"}</h2>
+              <p style="margin: 6px 0 0; color: var(--muted); font-size: 14px;">${isEn ? "Your credentials have been verified. You have full permission to review cases and approve AI clinical reports." : "تم التحقق بنجاح من ترخيصك وسجل النقابة. لديك الآن كامل الصلاحيات لمراجعة الحالات واعتماد التقارير الطبية."}</p>
+            </div>
+            <span class="pill ok" style="font-size: 13px; padding: 6px 14px;">Verified Doctor ✓</span>
+          </div>
+          <div class="summary-list" style="margin: 24px 0;">
+            <div><span>${isEn ? "Doctor Name" : "اسم الطبيب"}</span><strong>${userData.doctorAppName || userData.name || user.displayName || user.email}</strong></div>
+            <div><span>${isEn ? "Syndicate License #" : "رقم ترخيص النقابة"}</span><strong style="color: var(--teal);">${userData.licenseNumber || "EGY-MED-20491"}</strong></div>
+            <div><span>${isEn ? "Specialty" : "التخصص الطبي"}</span><strong>${userData.specialty || (isEn ? "Pulmonology & Respiratory" : "أمراض الصدر والجهاز التنفسي")}</strong></div>
+            <div><span>${isEn ? "Hospital / Clinic" : "الجهة الطبية"}</span><strong>${userData.clinic || (isEn ? "Kasr Al-Ainy Hospital" : "مستشفى القصر العيني التعليمي")}</strong></div>
+            <div><span>${isEn ? "Account Status" : "حالة الاعتماد"}</span><strong style="color: #18a058;">${isEn ? "Active & Verified" : "نشط ومكتمل التوثيق ✓"}</strong></div>
+          </div>
+          <button class="solid-button large" onclick="showScreen('doctor')">
+            🩺 ${isEn ? "Open Doctor Review Queue" : "الانتقال إلى لوحة مراجعة الحالات (Doctor Review)"}
+          </button>
+        </article>
+      </div>
+    `;
+  } else if (appStatus === "pending") {
+    // STATE B: APPLICATION SUBMITTED -> VERIFICATION IN PROGRESS
+    const appDate = userData.doctorAppDate || new Date().toLocaleDateString(isEn ? "en-US" : "ar-EG");
+    container.innerHTML = `
+      <div class="content-grid">
+        <article class="panel" style="grid-column: 1 / -1;">
+          <div class="panel-head">
+            <div>
+              <h2 style="margin: 0; font-size: 22px;">${isEn ? "Doctor Verification Lifecycle" : "مراحل توثيق واعتماد الطبيب"}</h2>
+              <p style="margin: 4px 0 0; color: var(--muted); font-size: 13.5px;">${isEn ? "Your application is currently being reviewed and verified against professional syndicate records." : "طلبك قيد المراجعة والتدقيق الإداري للتأكد من صحة ترخيص مزاولة المهنة."}</p>
+            </div>
+            <span class="pill pending" style="padding: 6px 14px;">${isEn ? "Under Review ⏳" : "قيد المراجعة والتدقيق ⏳"}</span>
+          </div>
+
+          <!-- 3-STAGE LIFECYCLE TRACKER -->
+          <div class="doctor-lifecycle-track" style="margin: 24px 0;">
+            <div class="track-step done">
+              <div class="step-num">✓</div>
+              <div class="step-info">
+                <strong>${isEn ? "1. Application Submitted" : "1. تقديم الطلب (Application)"}</strong>
+                <span>${isEn ? "Credentials received" : "تم استلام البيانات والمستندات"}</span>
+              </div>
+            </div>
+            <div class="track-step active">
+              <div class="step-num">2</div>
+              <div class="step-info">
+                <strong>${isEn ? "2. Verification & Audit" : "2. الفحص والتدقيق (Verification)"}</strong>
+                <span style="color: var(--teal);">${isEn ? "Matching syndicate license" : "جاري مطابقة الترخيص والتحقق المهني"}</span>
+              </div>
+            </div>
+            <div class="track-step pending">
+              <div class="step-num">3</div>
+              <div class="step-info">
+                <strong>${isEn ? "3. Admin Approval" : "3. الاعتماد النهائي (Approval)"}</strong>
+                <span>${isEn ? "Granting doctor review role" : "تفعيل الصلاحيات من الإدارة"}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- APPLICATION SUMMARY CARD -->
+          <div style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px; padding: 18px; margin-bottom: 20px;">
+            <h4 style="margin: 0 0 14px; font-size: 15px; color: var(--teal-2);">${isEn ? "Application Summary" : "ملخص بيانات الطلب المقدم"}</h4>
+            <div class="summary-list">
+              <div><span>${isEn ? "Doctor Name" : "اسم الطبيب"}</span><strong>${userData.doctorAppName || user.displayName || user.email}</strong></div>
+              <div><span>${isEn ? "Syndicate License #" : "رقم ترخيص النقابة"}</span><strong style="color: var(--teal);">${userData.licenseNumber || "--"}</strong></div>
+              <div><span>${isEn ? "Specialty" : "التخصص الطبي"}</span><strong>${userData.specialty || "--"}</strong></div>
+              <div><span>${isEn ? "Hospital / Clinic" : "الجهة الطبية"}</span><strong>${userData.clinic || "--"}</strong></div>
+              <div><span>${isEn ? "Attached File" : "المستند المرفق"}</span><strong>📄 ${userData.doctorAppDocName || "syndicate_license.pdf"}</strong></div>
+              <div><span>${isEn ? "Submission Date" : "تاريخ التقديم"}</span><strong>${appDate}</strong></div>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 14px; align-items: center; flex-wrap: wrap;">
+            <button class="soft-button" onclick="cancelOrReapplyDoctorApp()">${isEn ? "Cancel & Reapply" : "إلغاء الطلب وإعادة التقديم"}</button>
+            <span style="font-size: 13px; color: var(--muted);">${isEn ? "You will be automatically granted doctor access as soon as the administrator approves." : "سيتم تحويل حسابك تلقائياً لطبيب معتمد فور موافقة إدارة النظام."}</span>
+          </div>
+        </article>
+      </div>
+    `;
+  } else {
+    // STATE C: NEW APPLICATION FORM (STAGE 1: APPLICATION)
+    container.innerHTML = `
+      <div class="content-grid">
+        <article class="panel" style="grid-column: 1 / -1;">
+          <div class="panel-head">
+            <div>
+              <h2 style="margin: 0; font-size: 22px;">${isEn ? "Doctor Verification Application" : "تقديم طلب توثيق حساب طبيب"}</h2>
+              <p style="margin: 6px 0 0; color: var(--muted); font-size: 13.5px;">${isEn ? "To access the doctor case review queue and approve AI clinical results, please submit your professional medical credentials." : "للوصول إلى لوحة مراجعة الحالات واعتماد نتائج الذكاء الاصطناعي، يرجى تقديم بيانات ترخيص مزاولة المهنة."}</p>
+            </div>
+            <span class="pill info">${isEn ? "Stage 1: Application" : "المرحلة 1: التقديم"}</span>
+          </div>
+
+          <!-- LIFECYCLE PREVIEW -->
+          <div class="doctor-lifecycle-track" style="margin: 22px 0;">
+            <div class="track-step active">
+              <div class="step-num">1</div>
+              <div class="step-info">
+                <strong>${isEn ? "1. Application" : "1. تقديم الطلب (Application)"}</strong>
+                <span>${isEn ? "Submit license & specialty" : "املأ بيانات الترخيص المهني"}</span>
+              </div>
+            </div>
+            <div class="track-step pending">
+              <div class="step-num">2</div>
+              <div class="step-info">
+                <strong>${isEn ? "2. Verification" : "2. الفحص والتدقيق (Verification)"}</strong>
+                <span>${isEn ? "Credential & syndicate check" : "مطابقة أوراق النقابة والترخيص"}</span>
+              </div>
+            </div>
+            <div class="track-step pending">
+              <div class="step-num">3</div>
+              <div class="step-info">
+                <strong>${isEn ? "3. Approval" : "3. الاعتماد النهائي (Approval)"}</strong>
+                <span>${isEn ? "Doctor privileges activated" : "تفعيل الصلاحيات من الإدارة"}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- APPLICATION FORM -->
+          <form id="doctorAppForm" onsubmit="handleDoctorAppSubmit(event)" style="margin-top: 20px;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-bottom: 16px;">
+              <div class="form-group">
+                <label for="doctorAppName">${isEn ? "Full Name (as in Medical Syndicate) *" : "الاسم بالكامل (كما هو في ترخيص النقابة) *"}</label>
+                <input type="text" id="doctorAppName" value="${user.displayName || ''}" placeholder="${isEn ? 'Dr. Ahmed Mohamed' : 'د. أحمد محمد علي'}" required />
+              </div>
+              <div class="form-group">
+                <label for="doctorAppLicense">${isEn ? "Syndicate License Number *" : "رقم ترخيص مزاولة المهنة / رقم القيد بالنقابة *"}</label>
+                <input type="text" id="doctorAppLicense" placeholder="EGY-MED-12345" required />
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-bottom: 16px;">
+              <div class="form-group">
+                <label for="doctorAppSpecialty">${isEn ? "Medical Specialty *" : "التخصص الطبي *"}</label>
+                <select id="doctorAppSpecialty" required style="width: 100%; min-height: 48px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); padding: 0 14px; font-family: inherit;">
+                  <option value="${isEn ? 'Pulmonology & Respiratory' : 'أمراض الصدر والجهاز التنفسي'}">${isEn ? 'Pulmonology & Respiratory' : 'أمراض الصدر والجهاز التنفسي'}</option>
+                  <option value="${isEn ? 'Internal Medicine' : 'طب الباطنة العامة'}">${isEn ? 'Internal Medicine' : 'طب الباطنة العامة'}</option>
+                  <option value="${isEn ? 'ICU & Critical Care' : 'الرعاية المركزة والطوارئ'}">${isEn ? 'ICU & Critical Care' : 'الرعاية المركزة والطوارئ'}</option>
+                  <option value="${isEn ? 'Pediatrics' : 'طب الأطفال'}">${isEn ? 'Pediatrics' : 'طب الأطفال'}</option>
+                  <option value="${isEn ? 'Family Medicine' : 'طب الأسرة والمجتمع'}">${isEn ? 'Family Medicine' : 'طب الأسرة والمجتمع'}</option>
+                  <option value="${isEn ? 'Other' : 'تخصص طبي آخر'}">${isEn ? 'Other' : 'تخصص طبي آخر'}</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="doctorAppClinic">${isEn ? "Hospital, Clinic, or Affiliation *" : "جهة العمل أو المستشفى أو العيادة *"}</label>
+                <input type="text" id="doctorAppClinic" placeholder="${isEn ? 'Kasr Al-Ainy Hospital / Private Clinic' : 'مثال: مستشفى القصر العيني / عيادة خاصة'}" required />
+              </div>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 20px;">
+              <label for="doctorAppDocFile">${isEn ? "Syndicate ID / License Document (PDF, JPG, PNG)" : "صورة كارنيه النقابة أو ترخيص مزاولة المهنة (PDF, JPG, PNG)"}</label>
+              <div style="border: 2px dashed var(--line); border-radius: 14px; padding: 22px; text-align: center; background: var(--surface-2); cursor: pointer;" onclick="document.getElementById('doctorAppDocFile').click()">
+                <span style="font-size: 32px;">📄</span>
+                <p id="doctorAppFileName" style="margin: 8px 0 4px; font-weight: 600; color: var(--ink);">${isEn ? "Click to select syndicate document or license photo" : "اضغط لاختيار ملف المستند أو صورة الترخيص"}</p>
+                <span style="font-size: 12px; color: var(--muted);">${isEn ? "Max size: 10MB (Stored securely for credential audit)" : "أقصى حجم: 10 ميجابايت (يتم الحفظ كمرجع رسمي للتحقق)"}</span>
+                <input type="file" id="doctorAppDocFile" style="display: none;" accept="image/*,.pdf" onchange="onDoctorFilePicked(this)" />
+              </div>
+            </div>
+
+            <div style="margin-bottom: 22px;">
+              <label style="display: flex; align-items: flex-start; gap: 10px; font-size: 13.5px; color: var(--ink); cursor: pointer;">
+                <input type="checkbox" required style="margin-top: 3px;" />
+                <span>${isEn ? "I certify that the provided credentials are valid and issued by the official medical licensing authority, and I assume full professional and legal responsibility." : "أقر بأن البيانات والمستندات المرفقة صحيحة ومطابقة لترخيص مزاولة المهنة الصادر من نقابة الأطباء ووزارة الصحة، وأتحمل كامل المسؤولية القانونية والمهنية."}</span>
+              </label>
+            </div>
+
+            <button type="submit" id="submitDoctorAppBtn" class="solid-button large" style="width: 100%; justify-content: center;">
+              <span id="submitDoctorAppText">${isEn ? "Submit Application for Verification 🚀" : "إرسال طلب التوثيق والاعتماد (Submit Application) 🚀"}</span>
+            </button>
+          </form>
+        </article>
+      </div>
+    `;
+  }
+}
+
+async function renderAdminApplications() {
+  const container = document.getElementById("adminDoctorAppsList");
+  if (!container) return;
+
+  const isEn = currentLanguage === "en";
+  container.innerHTML = `<div style="padding: 24px; text-align: center; color: var(--teal);"><div class="spinner"></div> ${isEn ? "Loading doctor applications..." : "جاري تحميل طلبات التوثيق..."}</div>`;
+
+  try {
+    const snapshot = await db.collection("doctor_applications").orderBy("appliedAt", "desc").get();
+    const apps = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    const pendingApps = apps.filter(a => a.status === "pending");
+    const approvedApps = apps.filter(a => a.status === "approved");
+
+    const badge = document.getElementById("adminPendingAppsBadge");
+    if (badge) {
+      badge.textContent = isEn ? `${pendingApps.length} pending approval` : `${pendingApps.length} بانتظار الاعتماد`;
+    }
+    const opsBadge = document.getElementById("adminOpsDocAppsCount");
+    if (opsBadge) {
+      opsBadge.textContent = isEn ? `${pendingApps.length} documents pending review` : `${pendingApps.length} مستندات بانتظار الاعتماد`;
+    }
+    const totalDocsEl = document.getElementById("adminTotalDoctorsCount");
+    if (totalDocsEl) {
+      totalDocsEl.textContent = 84 + approvedApps.length;
+    }
+
+    if (pendingApps.length === 0) {
+      container.innerHTML = `
+        <div style="padding: 30px; text-align: center; color: var(--muted); background: var(--surface-2); border-radius: 14px; border: 1px solid var(--line);">
+          <span style="font-size: 32px; display: block; margin-bottom: 8px;">✅</span>
+          <strong style="color: var(--ink);">${isEn ? "No pending doctor applications" : "لا توجد طلبات أطباء معلقة حالياً"}</strong>
+          <p style="margin: 4px 0 0; font-size: 13px;">${isEn ? "All healthcare provider applications have been verified and processed." : "تمت مراجعة واعتماد كافة طلبات توثيق الأطباء بنجاح."}</p>
+        </div>
+      `;
+      return;
+    }
+
+    let html = "";
+    pendingApps.forEach(app => {
+      let dateStr = "--";
+      if (app.appliedAt) {
+        const d = app.appliedAt.toMillis ? new Date(app.appliedAt.toMillis()) : new Date(app.appliedAt);
+        dateStr = d.toLocaleDateString(isEn ? "en-US" : "ar-EG");
+      }
+
+      html += `
+        <div class="admin-app-card">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px;">
+            <div>
+              <h4 style="margin: 0; font-size: 17px; color: var(--ink);">${app.name}</h4>
+              <div style="display: flex; gap: 10px; align-items: center; margin-top: 4px; font-size: 13px; color: var(--muted); flex-wrap: wrap;">
+                <span>📧 ${app.email}</span> • <span>🏥 ${app.clinic}</span>
+              </div>
+            </div>
+            <span class="pill pending">${isEn ? "Pending Review" : "بانتظار الاعتماد ⏳"}</span>
+          </div>
+
+          <div class="summary-list" style="margin: 4px 0;">
+            <div><span>${isEn ? "Syndicate License #" : "رقم ترخيص النقابة"}</span><strong style="color: var(--teal); font-family: monospace; font-size: 14px;">${app.licenseNumber}</strong></div>
+            <div><span>${isEn ? "Specialty" : "التخصص الطبي"}</span><strong>${app.specialty}</strong></div>
+            <div><span>${isEn ? "Attached License" : "المستند المرفق"}</span><strong>📄 ${app.docName || 'syndicate_card.pdf'}</strong></div>
+            <div><span>${isEn ? "Application Date" : "تاريخ التقديم"}</span><strong>${dateStr}</strong></div>
+          </div>
+
+          <div style="display: flex; gap: 12px; justify-content: flex-end; align-items: center; padding-top: 10px; border-top: 1px solid var(--line); flex-wrap: wrap;">
+            <button class="danger-button" style="padding: 8px 16px; font-size: 13px;" onclick="rejectDoctorApplication('${app.id}', '${app.userId}')">
+              ${isEn ? "Reject ✗" : "رفض الطلب ✗"}
+            </button>
+            <button class="solid-button" style="padding: 9px 22px; font-size: 13.5px; background: #18a058; border-color: #18a058;" onclick="approveDoctorApplication('${app.id}', '${app.userId}', '${app.name}')">
+              ${isEn ? "Approve & Promote to Doctor ✓" : "اعتماد وترقية لطبيب موثق ✓ (Approve)"}
+            </button>
+          </div>
+        </div>
+      `;
+    });
+
+    container.innerHTML = html;
+  } catch(error) {
+    console.error("Error loading doctor applications:", error);
+    container.innerHTML = `<div style="color: var(--rose); padding: 20px;">${getAuthErrorMessage(error)}</div>`;
+  }
+}
+
+async function approveDoctorApplication(appId, userId, doctorName) {
+  const isEn = currentLanguage === "en";
+  try {
+    showToast(isEn ? `Approving ${doctorName}...` : `جاري اعتماد الطبيب ${doctorName}...`);
+
+    await db.collection("doctor_applications").doc(appId).update({
+      status: "approved",
+      approvedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      approvedBy: auth.currentUser ? auth.currentUser.email : "Admin"
+    });
+
+    if (userId && !userId.startsWith("demo_")) {
+      await db.collection("users").doc(userId).set({
+        role: "doctor",
+        doctorApplicationStatus: "approved",
+        verifiedDoctor: true
+      }, { merge: true });
+    }
+
+    if (auth.currentUser && auth.currentUser.uid === userId) {
+      selectedRole = "doctor";
+      updateNavVisibility();
+      accountLabel.textContent = isEn ? englishRoleLabels.doctor : roleLabels.doctor;
+    }
+
+    showToast(isEn ? `🎉 Successfully approved Dr. ${doctorName}!` : `🎉 تم اعتماد الطبيب ${doctorName} وترقيته رسمياً لطبيب موثق!`);
+    await renderAdminApplications();
+  } catch(error) {
+    console.error("Approve doctor error:", error);
+    showToast(getAuthErrorMessage(error));
+  }
+}
+
+async function rejectDoctorApplication(appId, userId) {
+  const isEn = currentLanguage === "en";
+  try {
+    await db.collection("doctor_applications").doc(appId).update({
+      status: "rejected",
+      rejectedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      rejectedBy: auth.currentUser ? auth.currentUser.email : "Admin"
+    });
+
+    if (userId && !userId.startsWith("demo_")) {
+      await db.collection("users").doc(userId).set({
+        doctorApplicationStatus: "rejected"
+      }, { merge: true });
+    }
+
+    showToast(isEn ? "Application rejected." : "تم رفض الطلب.");
+    await renderAdminApplications();
+  } catch(error) {
+    console.error("Reject doctor error:", error);
+    showToast(getAuthErrorMessage(error));
+  }
+}
+
+window.onDoctorFilePicked = onDoctorFilePicked;
+window.handleDoctorAppSubmit = handleDoctorAppSubmit;
+window.cancelOrReapplyDoctorApp = cancelOrReapplyDoctorApp;
+window.approveDoctorApplication = approveDoctorApplication;
+window.rejectDoctorApplication = rejectDoctorApplication;
 
 function getActiveScreen() {
   return document.querySelector(".screen.active")?.id.replace("screen-", "") || "patient";

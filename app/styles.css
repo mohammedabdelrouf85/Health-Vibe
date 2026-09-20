@@ -2181,3 +2181,106 @@ body.dark .theme-fab {
   vertical-align: middle;
 }
 
+/* Doctor Lifecycle: Application -> Verification -> Approval */
+.doctor-lifecycle-track {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+
+@media (max-width: 820px) {
+  .doctor-lifecycle-track {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+}
+
+.track-step {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  padding: 16px 18px;
+  border-radius: 16px;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.track-step .step-num {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 15px;
+  background: var(--line);
+  color: var(--muted);
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.track-step.done {
+  border-color: rgba(24, 160, 88, 0.35);
+  background: rgba(24, 160, 88, 0.06);
+}
+
+.track-step.done .step-num {
+  background: #18a058;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(24, 160, 88, 0.3);
+}
+
+.track-step.active {
+  border-color: var(--teal);
+  background: rgba(9, 184, 182, 0.08);
+  box-shadow: 0 0 0 2px rgba(9, 184, 182, 0.2);
+}
+
+.track-step.active .step-num {
+  background: linear-gradient(135deg, var(--teal-2), var(--teal));
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(9, 184, 182, 0.35);
+}
+
+.track-step .step-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.track-step .step-info strong {
+  font-size: 14px;
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.track-step .step-info span {
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+/* Admin Doctor App Card */
+.admin-app-card {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.admin-app-card:hover {
+  border-color: rgba(9, 184, 182, 0.35);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.04);
+}
+
+body.dark .admin-app-card:hover {
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+}
+
+
