@@ -58,6 +58,97 @@ const titles = {
   report: "التقرير"
 };
 
+// --- Real Role-Based Access Control (RBAC) Engine ---
+const ROLES = {
+  PATIENT: "patient",
+  DOCTOR: "doctor",
+  ADMIN: "admin"
+};
+
+const PERMISSIONS = {
+  VIEW_PATIENT_DASHBOARD: "view:patient_dashboard",
+  SUBMIT_ASSESSMENT: "submit:assessment",
+  VIEW_OWN_CASES: "view:own_cases",
+  APPLY_DOCTOR_VERIFICATION: "apply:doctor_verification",
+
+  // Doctor permissions
+  VIEW_DOCTOR_QUEUE: "view:doctor_queue",
+  REVIEW_CASE: "review:case",
+  APPROVE_CASE: "approve:case",
+  REJECT_CASE: "reject:case",
+
+  // Admin & Owner permissions
+  VIEW_ADMIN_DASHBOARD: "view:admin_dashboard",
+  VIEW_AUDIT_LOG: "view:audit_log",
+  APPROVE_DOCTOR_APPLICATION: "approve:doctor_application",
+  REJECT_DOCTOR_APPLICATION: "reject:doctor_application",
+  MANAGE_AI_MODELS: "manage:ai_models",
+  MANAGE_USER_ROLES: "manage:user_roles"
+};
+
+const ROLE_PERMISSIONS_MAP = {
+  [ROLES.PATIENT]: [
+    PERMISSIONS.VIEW_PATIENT_DASHBOARD,
+    PERMISSIONS.SUBMIT_ASSESSMENT,
+    PERMISSIONS.VIEW_OWN_CASES,
+    PERMISSIONS.APPLY_DOCTOR_VERIFICATION
+  ],
+  [ROLES.DOCTOR]: [
+    PERMISSIONS.VIEW_PATIENT_DASHBOARD,
+    PERMISSIONS.SUBMIT_ASSESSMENT,
+    PERMISSIONS.VIEW_OWN_CASES,
+    PERMISSIONS.APPLY_DOCTOR_VERIFICATION,
+    PERMISSIONS.VIEW_DOCTOR_QUEUE,
+    PERMISSIONS.REVIEW_CASE,
+    PERMISSIONS.APPROVE_CASE,
+    PERMISSIONS.REJECT_CASE
+  ],
+  [ROLES.ADMIN]: Object.values(PERMISSIONS)
+};
+
+const ROLE_ALLOWED_SCREENS = {
+  [ROLES.PATIENT]: [
+    "patient", "consent", "profile", "assessment", "pending", "result",
+    "history", "appointments", "assistant", "verification", "report"
+  ],
+  [ROLES.DOCTOR]: [
+    "patient", "consent", "profile", "assessment", "pending", "result",
+    "history", "appointments", "assistant", "verification", "report",
+    "doctor"
+  ],
+  [ROLES.ADMIN]: [
+    "patient", "consent", "profile", "assessment", "pending", "result",
+    "history", "appointments", "assistant", "verification", "report",
+    "doctor", "admin", "audit"
+  ]
+};
+
+function hasPermission(permission) {
+  const role = (typeof selectedRole !== "undefined" && selectedRole) ? selectedRole : ROLES.PATIENT;
+  const perms = ROLE_PERMISSIONS_MAP[role] || [];
+  return perms.includes(permission);
+}
+
+function canAccessScreen(screenName) {
+  const role = (typeof selectedRole !== "undefined" && selectedRole) ? selectedRole : ROLES.PATIENT;
+  const allowed = ROLE_ALLOWED_SCREENS[role] || ROLE_ALLOWED_SCREENS[ROLES.PATIENT];
+  return allowed.includes(screenName);
+}
+
+function enforcePermission(permission, actionDescription = "") {
+  if (!hasPermission(permission)) {
+    const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+    const msgEn = `Access Denied: You do not have permission for '${actionDescription || permission}'.`;
+    const msgAr = `تم رفض الوصول: ليس لديك الصلاحية لتنفيذ هذا الإجراء (${actionDescription || permission}).`;
+    if (typeof showToast === "function") {
+      showToast(isEn ? msgEn : msgAr);
+    }
+    console.warn(`[RBAC] Denied permission '${permission}' to current role '${selectedRole}'.`);
+    return false;
+  }
+  return true;
+}
+
 const OWNER_EMAIL = "mohammedabdelrouf85@gmail.com";
 
 function isOwnerUser(userOrEmail) {
@@ -635,6 +726,7 @@ async function getCases() {
 }
 
 async function updateCaseStatus(id, newStatus, note) {
+  if (!enforcePermission(PERMISSIONS.REVIEW_CASE, "Update Case Status")) return;
   try {
     await db.collection("cases").doc(id).update({
       status: newStatus,
@@ -680,6 +772,7 @@ async function renderDoctorQueue() {
 }
 
 window.approveCase = async function(id) {
+  if (!enforcePermission(PERMISSIONS.APPROVE_CASE, "Approve Clinical Result")) return;
   const noteInput = document.getElementById("doctorNoteInput");
   const note = noteInput ? noteInput.value : "";
   await updateCaseStatus(id, "approved", note);
@@ -1103,16 +1196,23 @@ function updateEmailVerificationUI(user) {
   const banner = document.getElementById("emailVerificationBanner");
   const badge = document.getElementById("emailVerifiedBadge");
   const ownerBadge = document.getElementById("ownerBadge");
+  const doctorBadge = document.getElementById("doctorBadge");
 
   if (!user) {
     if (banner) banner.style.display = "none";
     if (badge) badge.style.display = "none";
     if (ownerBadge) ownerBadge.style.display = "none";
+    if (doctorBadge) doctorBadge.style.display = "none";
     return;
   }
 
+  const isOwner = isOwnerUser(user.email);
   if (ownerBadge) {
-    ownerBadge.style.display = isOwnerUser(user.email) ? "inline-flex" : "none";
+    ownerBadge.style.display = isOwner ? "inline-flex" : "none";
+  }
+
+  if (doctorBadge) {
+    doctorBadge.style.display = (!isOwner && selectedRole === "doctor") ? "inline-flex" : "none";
   }
 
   if (badge) {
@@ -1217,23 +1317,18 @@ async function checkEmailVerification() {
 function updateNavVisibility() {
   document.querySelectorAll(".nav-item").forEach((btn) => {
     const screen = btn.dataset.screen;
-    if (screen === "admin" || screen === "audit") {
-      btn.style.display = selectedRole === "admin" ? "flex" : "none";
-    } else if (screen === "doctor") {
-      btn.style.display = (selectedRole === "doctor" || selectedRole === "admin") ? "flex" : "none";
-    } else {
-      btn.style.display = "flex";
-    }
+    btn.style.display = canAccessScreen(screen) ? "flex" : "none";
   });
 }
 
 function showScreen(name) {
-  if ((name === "admin" || name === "audit") && selectedRole !== "admin") {
-    showToast(currentLanguage === "en" ? "Restricted: Administrator access only." : "غير مصرح: هذا القسم خاص بإدارة النظام فقط.");
-    name = selectedRole === "doctor" ? "doctor" : "patient";
-  } else if (name === "doctor" && selectedRole !== "doctor" && selectedRole !== "admin") {
-    showToast(currentLanguage === "en" ? "Doctor review is restricted to verified healthcare providers." : "مراجعة الطبيب مقتصرة على الأطباء المعتمدين فقط.");
-    name = "patient";
+  if (!canAccessScreen(name)) {
+    const roleDefaultScreen = selectedRole === ROLES.ADMIN ? "admin" : (selectedRole === ROLES.DOCTOR ? "doctor" : "patient");
+    const msgEn = `Access Denied: Screen '${englishTitles[name] || name}' is restricted for role '${englishRoleLabels[selectedRole] || selectedRole}'.`;
+    const msgAr = `تم رفض الوصول: قسم '${titles[name] || name}' غير مصرح به لدور '${roleLabels[selectedRole] || selectedRole}'.`;
+    showToast(currentLanguage === "en" ? msgEn : msgAr);
+    console.warn(`[RBAC] Blocked access to screen '${name}' for role '${selectedRole}'. Redirecting to '${roleDefaultScreen}'.`);
+    name = roleDefaultScreen;
   }
 
   updateNavVisibility();
@@ -1712,6 +1807,7 @@ async function renderAdminApplications() {
 }
 
 async function approveDoctorApplication(appId, userId, doctorName) {
+  if (!enforcePermission(PERMISSIONS.APPROVE_DOCTOR_APPLICATION, "Approve Doctor Application")) return;
   const isEn = currentLanguage === "en";
   try {
     showToast(isEn ? `Approving ${doctorName}...` : `جاري اعتماد الطبيب ${doctorName}...`);
@@ -1745,6 +1841,7 @@ async function approveDoctorApplication(appId, userId, doctorName) {
 }
 
 async function rejectDoctorApplication(appId, userId) {
+  if (!enforcePermission(PERMISSIONS.REJECT_DOCTOR_APPLICATION, "Reject Doctor Application")) return;
   const isEn = currentLanguage === "en";
   try {
     await db.collection("doctor_applications").doc(appId).update({

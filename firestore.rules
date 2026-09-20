@@ -1,0 +1,79 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions for Role-Based Access Control (RBAC)
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner() {
+      return isAuthenticated() && 
+             (request.auth.token.email == 'mohammedabdelrouf85@gmail.com' ||
+              request.auth.token.email == 'mohammedabdelrouf85@gmail.com');
+    }
+    
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+    
+    function isAdmin() {
+      return isOwner() || (isAuthenticated() && getUserRole() == 'admin');
+    }
+    
+    function isDoctor() {
+      return isAdmin() || (isAuthenticated() && getUserRole() == 'doctor');
+    }
+    
+    function isSelf(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // 1. Users Collection
+    // - Authenticated users can read user docs
+    // - Self can create their own doc with role == 'patient' (Owner gets 'admin')
+    // - Self can update profile info but cannot elevate their own role
+    // - Admin / Owner can update roles and manage users
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.auth.uid == userId &&
+                    (isOwner() || request.resource.data.role == 'patient');
+      allow update: if isOwner() || isAdmin() || 
+                    (isSelf(userId) && request.resource.data.role == resource.data.role);
+      allow delete: if isAdmin();
+    }
+
+    // 2. Doctor Applications Collection (Application -> Verification -> Approval)
+    // - Applicant can read their own application, Admins can read all applications
+    // - Applicant can submit (create) their own application with status == 'pending'
+    // - Only Admin can approve, reject or delete applications
+    match /doctor_applications/{appId} {
+      allow read: if isAuthenticated() && (isAdmin() || resource.data.userId == request.auth.uid);
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid
+                    && request.resource.data.status == 'pending';
+      allow update, delete: if isAdmin();
+    }
+
+    // 3. Clinical Cases Collection
+    // - Authenticated users can read cases
+    // - Patients can submit assessments (create cases)
+    // - Only verified Doctors or Admins can review/approve/reject cases (update)
+    // - Only Admins can delete cases
+    match /cases/{caseId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isDoctor();
+      allow delete: if isAdmin();
+    }
+
+    // 4. Audit Log Events
+    // - Admins can read audit logs
+    // - Authenticated actions can append log events
+    // - Tampering or deletion is strictly forbidden (immutable audit trail)
+    match /audit_events/{eventId} {
+      allow read: if isAdmin();
+      allow create: if isAuthenticated();
+      allow update, delete: if false;
+    }
+  }
+}

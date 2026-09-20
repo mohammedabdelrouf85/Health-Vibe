@@ -2181,6 +2181,22 @@ body.dark .theme-fab {
   vertical-align: middle;
 }
 
+.doctor-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: linear-gradient(135deg, #0d9488, #0f766e);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 999px;
+  letter-spacing: 0.3px;
+  box-shadow: 0 2px 6px rgba(13, 148, 136, 0.4);
+  vertical-align: middle;
+}
+
+
 /* Doctor Lifecycle: Application -> Verification -> Approval */
 .doctor-lifecycle-track {
   display: grid;
