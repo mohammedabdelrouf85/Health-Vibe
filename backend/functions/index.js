@@ -11,6 +11,12 @@ if (!admin.apps.length) {
 }
 
 const OWNER_EMAIL = 'mohammedabdelrouf85@gmail.com';
+const ROLES = {
+  PATIENT: 'patient',
+  DOCTOR_PENDING: 'doctor_pending',
+  DOCTOR: 'doctor',
+  SUPER_ADMIN: 'super_admin'
+};
 
 /**
  * Trigger: On User Creation (Auth Trigger)
@@ -19,7 +25,7 @@ const OWNER_EMAIL = 'mohammedabdelrouf85@gmail.com';
 exports.onUserCreated = functions.auth.user().onCreate(async (user) => {
   const email = (user.email || '').toLowerCase();
   const isOwner = email === OWNER_EMAIL.toLowerCase();
-  const initialRole = isOwner ? 'admin' : 'patient';
+  const initialRole = isOwner ? ROLES.SUPER_ADMIN : ROLES.PATIENT;
 
   // 1. Assign cryptographic Custom Claims to Firebase JWT
   await admin.auth().setCustomUserClaims(user.uid, {
@@ -30,7 +36,7 @@ exports.onUserCreated = functions.auth.user().onCreate(async (user) => {
   // 2. Initialize Firestore user record
   await admin.firestore().collection('users').doc(user.uid).set({
     email: user.email,
-    name: user.displayName || user.email.split('@')[0],
+    name: user.displayName || (user.email ? user.email.split('@')[0] : user.uid),
     role: initialRole,
     isOwner: isOwner,
     createdAt: admin.firestore.FieldValue.serverTimestamp()
@@ -50,19 +56,38 @@ exports.onDoctorApplicationUpdated = functions.firestore
     const beforeData = change.before.data();
     const afterData = change.after.data();
 
-    // Detect transition to approved
-    if (beforeData.status !== 'approved' && afterData.status === 'approved') {
-      const targetUserId = afterData.userId;
+    const targetUserId = afterData.userId;
+    if (!targetUserId || beforeData.status === afterData.status) return null;
 
+    if (afterData.status === 'pending') {
+      await admin.auth().setCustomUserClaims(targetUserId, {
+        role: ROLES.DOCTOR_PENDING,
+        doctorVerified: false
+      });
+      await admin.firestore().collection('users').doc(targetUserId).set({
+        role: ROLES.DOCTOR_PENDING,
+        doctorApplicationStatus: 'pending'
+      }, { merge: true });
+    } else if (afterData.status === 'rejected' || afterData.status === 'cancelled') {
+      await admin.auth().setCustomUserClaims(targetUserId, {
+        role: ROLES.PATIENT,
+        doctorVerified: false
+      });
+      await admin.firestore().collection('users').doc(targetUserId).set({
+        role: ROLES.PATIENT,
+        verifiedDoctor: false,
+        doctorApplicationStatus: afterData.status
+      }, { merge: true });
+    } else if (afterData.status === 'approved') {
       // Update Custom Claims on Firebase Auth
       await admin.auth().setCustomUserClaims(targetUserId, {
-        role: 'doctor',
+        role: ROLES.DOCTOR,
         doctorVerified: true
       });
 
       // Update User Document
       await admin.firestore().collection('users').doc(targetUserId).set({
-        role: 'doctor',
+        role: ROLES.DOCTOR,
         verifiedDoctor: true
       }, { merge: true });
 
@@ -77,4 +102,24 @@ exports.onDoctorApplicationUpdated = functions.firestore
 
       console.log(`[CLOUD FUNCTION] Automatically granted doctor custom claims to user: ${targetUserId}`);
     }
+    return null;
+  });
+
+exports.onDoctorApplicationCreated = functions.firestore
+  .document('doctor_applications/{appId}')
+  .onCreate(async (snapshot) => {
+    const data = snapshot.data();
+    if (!data || data.status !== 'pending' || !data.userId) return null;
+
+    await admin.firestore().collection('users').doc(data.userId).set({
+      role: ROLES.DOCTOR_PENDING,
+      doctorApplicationStatus: 'pending'
+    }, { merge: true });
+
+    await admin.auth().setCustomUserClaims(data.userId, {
+      role: ROLES.DOCTOR_PENDING,
+      doctorVerified: false
+    });
+
+    return null;
   });

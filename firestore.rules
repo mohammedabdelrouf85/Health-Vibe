@@ -27,7 +27,11 @@ service cloud.firestore {
     }
     
     function isAdmin() {
-      return isOwner() || (isAuthenticated() && getUserRole() == 'admin');
+      return isOwner() || (isAuthenticated() && (getUserRole() == 'clinic_admin' || getUserRole() == 'super_admin'));
+    }
+
+    function isSupport() {
+      return isAuthenticated() && getUserRole() == 'support';
     }
     
     // Doctor role is strictly clinical and separated from Admin
@@ -41,17 +45,17 @@ service cloud.firestore {
 
     // --- 1. Users Collection ---
     // - Self can read their own profile; Doctors and Admins can read user profiles
-    // - Self can create their own doc with role == 'patient' (Owner gets 'admin')
-    // - Privilege escalation prevention: self cannot change their own role or isOwner status
-    // - Admin / Owner can update roles and manage users
+    // - Self can create their own profile shell without role or isOwner
+    // - Privilege escalation prevention: no client can change role or isOwner
+    // - Role changes must go through backend / Cloud Functions using Admin SDK
     match /users/{userId} {
-      allow read: if isAuthenticated() && (isSelf(userId) || isDoctor() || isAdmin());
-      allow create: if isAuthenticated() && request.auth.uid == userId &&
-                    (isOwner() ? request.resource.data.role == 'admin' : request.resource.data.role == 'patient');
-      allow update: if isOwner() || isAdmin() || 
-                    (isSelf(userId) && 
-                     request.resource.data.role == resource.data.role &&
-                     (!('isOwner' in request.resource.data) || request.resource.data.isOwner == resource.data.isOwner));
+      allow read: if isAuthenticated() && (isSelf(userId) || isDoctor() || isAdmin() || isSupport());
+      allow create: if isAuthenticated() &&
+                    request.auth.uid == userId &&
+                    !request.resource.data.keys().hasAny(['role', 'isOwner']);
+      allow update: if isAuthenticated() &&
+                    !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isOwner']) &&
+                    (isSelf(userId) || isAdmin());
       allow delete: if isAdmin();
     }
 
@@ -60,7 +64,7 @@ service cloud.firestore {
     // - Applicant can submit (create) their own application with status == 'pending'
     // - Applicant can cancel their pending application; Only Admin can approve, reject, or delete
     match /doctor_applications/{appId} {
-      allow read: if isAuthenticated() && (isAdmin() || resource.data.userId == request.auth.uid);
+      allow read: if isAuthenticated() && (isAdmin() || isSupport() || resource.data.userId == request.auth.uid);
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid
                     && request.resource.data.status == 'pending';
       allow update: if isAdmin() || (isSelf(resource.data.userId) && request.resource.data.status == 'cancelled');
@@ -68,15 +72,15 @@ service cloud.firestore {
     }
 
     // --- 3. Clinical Cases Collection ---
-    // - Privacy protection: Patient can ONLY read their own cases; Doctors and Admins can read assigned cases
+    // - Privacy protection: Patient can ONLY read their own cases; Doctors and Admins can read all cases
     // - Authenticated patient creates case for themselves with status == 'pending'
     // - ONLY licensed Doctors can clinically review/approve/reject cases (update)
     // - Admins can manage or clean up records (delete) but cannot alter clinical medical diagnoses
     match /cases/{caseId} {
       allow read: if isAuthenticated() && 
-                     (resource.data.userId == request.auth.uid || isDoctor() || isAdmin());
+                     (resource.data.patientId == request.auth.uid || isDoctor() || isAdmin() || isSupport());
       allow create: if isAuthenticated() && 
-                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.patientId == request.auth.uid &&
                        request.resource.data.status == 'pending';
       allow update: if isDoctor();
       allow delete: if isAdmin();
@@ -87,6 +91,14 @@ service cloud.firestore {
     // - Authenticated actions can append log events
     // - Immutable audit trail: updates and deletions are strictly forbidden
     match /audit_events/{eventId} {
+      allow read: if isAdmin();
+      allow create: if isAuthenticated();
+      allow update, delete: if false;
+    }
+
+    // --- 5. Audit Log (Frontend client writes) ---
+    // - Admin-only read; any authenticated user can append; immutable
+    match /auditLog/{logId} {
       allow read: if isAdmin();
       allow create: if isAuthenticated();
       allow update, delete: if false;

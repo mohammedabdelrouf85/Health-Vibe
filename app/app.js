@@ -61,9 +61,24 @@ const titles = {
 // --- Real Role-Based Access Control (RBAC) Engine ---
 const ROLES = {
   PATIENT: "patient",
+  DOCTOR_PENDING: "doctor_pending",
   DOCTOR: "doctor",
-  ADMIN: "admin"
+  CLINIC_ADMIN: "clinic_admin",
+  SUPPORT: "support",
+  SUPER_ADMIN: "super_admin"
 };
+const ADMIN_ROLES = [ROLES.CLINIC_ADMIN, ROLES.SUPER_ADMIN];
+const VALID_ROLES = Object.values(ROLES);
+
+function normalizeRole(role, isOwner = false) {
+  if (isOwner) return ROLES.SUPER_ADMIN;
+  if (role === "admin" || role === "owner") return ROLES.CLINIC_ADMIN;
+  return VALID_ROLES.includes(role) ? role : ROLES.PATIENT;
+}
+
+function isAdminRole(role) {
+  return ADMIN_ROLES.includes(normalizeRole(role));
+}
 
 const PERMISSIONS = {
   VIEW_PATIENT_DASHBOARD: "view:patient_dashboard",
@@ -95,6 +110,11 @@ const ROLE_PERMISSIONS_MAP = {
     PERMISSIONS.VIEW_OWN_CASES,
     PERMISSIONS.APPLY_DOCTOR_VERIFICATION
   ],
+  [ROLES.DOCTOR_PENDING]: [
+    PERMISSIONS.VIEW_PATIENT_DASHBOARD,
+    PERMISSIONS.VIEW_OWN_CASES,
+    PERMISSIONS.APPLY_DOCTOR_VERIFICATION
+  ],
   [ROLES.DOCTOR]: [
     PERMISSIONS.VIEW_DOCTOR_QUEUE,
     PERMISSIONS.REVIEW_CASE,
@@ -102,7 +122,21 @@ const ROLE_PERMISSIONS_MAP = {
     PERMISSIONS.REJECT_CASE,
     PERMISSIONS.VIEW_OWN_CASES
   ],
-  [ROLES.ADMIN]: [
+  [ROLES.CLINIC_ADMIN]: [
+    PERMISSIONS.VIEW_ADMIN_DASHBOARD,
+    PERMISSIONS.VIEW_AUDIT_LOG,
+    PERMISSIONS.APPROVE_DOCTOR_APPLICATION,
+    PERMISSIONS.REJECT_DOCTOR_APPLICATION,
+    PERMISSIONS.MANAGE_AI_MODELS,
+    PERMISSIONS.MANAGE_USERS,
+    PERMISSIONS.VIEW_SYSTEM_METRICS
+  ],
+  [ROLES.SUPPORT]: [
+    PERMISSIONS.VIEW_PATIENT_DASHBOARD,
+    PERMISSIONS.VIEW_OWN_CASES,
+    PERMISSIONS.VIEW_SYSTEM_METRICS
+  ],
+  [ROLES.SUPER_ADMIN]: [
     PERMISSIONS.VIEW_ADMIN_DASHBOARD,
     PERMISSIONS.VIEW_AUDIT_LOG,
     PERMISSIONS.APPROVE_DOCTOR_APPLICATION,
@@ -119,11 +153,24 @@ const ROLE_ALLOWED_SCREENS = {
     "patient", "consent", "profile", "assessment", "pending", "result",
     "history", "appointments", "assistant", "report"
   ],
+  [ROLES.DOCTOR_PENDING]: [
+    "patient", "verification", "history", "appointments", "report", "profile"
+  ],
   [ROLES.DOCTOR]: [
     "doctor", "verification", "history", "appointments", "report", "profile"
   ],
-  [ROLES.ADMIN]: [
-    "admin", "audit", "profile"
+  [ROLES.CLINIC_ADMIN]: [
+    "patient", "consent", "profile", "assessment", "pending", "result",
+    "history", "appointments", "assistant", "verification", "doctor",
+    "report", "admin", "audit"
+  ],
+  [ROLES.SUPPORT]: [
+    "patient", "history", "appointments", "assistant", "report"
+  ],
+  [ROLES.SUPER_ADMIN]: [
+    "patient", "consent", "profile", "assessment", "pending", "result",
+    "history", "appointments", "assistant", "verification", "doctor",
+    "report", "admin", "audit"
   ]
 };
 
@@ -140,7 +187,7 @@ let verifiedServerRole = null;
 async function getVerifiedServerRole(forceRefresh = false) {
   const user = auth ? auth.currentUser : null;
   if (!user) return ROLES.PATIENT;
-  if (isOwnerUser(user.email)) return ROLES.ADMIN;
+  if (isOwnerUser(user.email)) return ROLES.SUPER_ADMIN;
 
   if (verifiedServerRole && !forceRefresh) {
     return verifiedServerRole;
@@ -150,23 +197,23 @@ async function getVerifiedServerRole(forceRefresh = false) {
     // Read directly from Firestore database, never trusting mutable client memory
     const userDoc = await db.collection("users").doc(user.uid).get(forceRefresh ? { source: "server" } : undefined);
     if (userDoc.exists && userDoc.data().role) {
-      verifiedServerRole = userDoc.data().role;
+      verifiedServerRole = normalizeRole(userDoc.data().role, isOwnerUser(user.email));
       return verifiedServerRole;
     }
   } catch (err) {
     console.warn("[RBAC] Server role verification query failed:", err);
   }
-  return verifiedServerRole || selectedRole || ROLES.PATIENT;
+  return normalizeRole(verifiedServerRole || selectedRole || ROLES.PATIENT, isOwnerUser(user.email));
 }
 
 function hasPermission(permission) {
-  const role = (typeof selectedRole !== "undefined" && selectedRole) ? selectedRole : ROLES.PATIENT;
+  const role = normalizeRole((typeof selectedRole !== "undefined" && selectedRole) ? selectedRole : ROLES.PATIENT);
   const perms = ROLE_PERMISSIONS_MAP[role] || [];
   return perms.includes(permission);
 }
 
 function canAccessScreen(screenName) {
-  const role = (typeof selectedRole !== "undefined" && selectedRole) ? selectedRole : ROLES.PATIENT;
+  const role = normalizeRole((typeof selectedRole !== "undefined" && selectedRole) ? selectedRole : ROLES.PATIENT);
   if (screenName === "verification" && tempAllowDoctorApplication) {
     return true;
   }
@@ -207,7 +254,7 @@ async function enforceServerPermission(permission, actionDescription = "") {
     // Auto-revert any client-side memory tampering
     selectedRole = serverRole;
     updateNavVisibility();
-    showScreen(serverRole === ROLES.ADMIN ? "admin" : (serverRole === ROLES.DOCTOR ? "doctor" : "patient"));
+    showScreen(isAdminRole(serverRole) ? "admin" : (serverRole === ROLES.DOCTOR ? "doctor" : "patient"));
 
     const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
     const msgEn = `🔒 Server Security: Action '${actionDescription || permission}' rejected. Your database-verified role is '${englishRoleLabels[serverRole] || serverRole}'.`;
@@ -231,7 +278,7 @@ function handleServerPermissionDenied(err, actionContext = "") {
     getVerifiedServerRole(true).then((realRole) => {
       selectedRole = realRole;
       updateNavVisibility();
-      showScreen(realRole === ROLES.ADMIN ? "admin" : (realRole === ROLES.DOCTOR ? "doctor" : "patient"));
+      showScreen(isAdminRole(realRole) ? "admin" : (realRole === ROLES.DOCTOR ? "doctor" : "patient"));
     });
     return true;
   }
@@ -248,9 +295,11 @@ function isOwnerUser(userOrEmail) {
 
 const roleLabels = {
   patient: "حساب مريض",
+  doctor_pending: "طبيب بانتظار الاعتماد",
   doctor: "حساب طبيب موثق",
-  admin: "حساب إدارة",
-  owner: "مالك النظام (Owner)"
+  clinic_admin: "مدير عيادة",
+  support: "دعم فني",
+  super_admin: "مدير عام للنظام"
 };
 
 const englishTitles = {
@@ -272,9 +321,11 @@ const englishTitles = {
 
 const englishRoleLabels = {
   patient: "Patient account",
+  doctor_pending: "Pending doctor account",
   doctor: "Verified doctor account",
-  admin: "Admin account",
-  owner: "System Owner (Full Access)"
+  clinic_admin: "Clinic admin account",
+  support: "Support account",
+  super_admin: "Super admin account"
 };
 
 const englishNames = {
@@ -535,13 +586,19 @@ const uiText = {
   "رفض": "Reject",
   "المستخدمون": "Users",
   "الأطباء": "Doctors",
+  "الأطباء المعتمدون": "Verified doctors",
   "+12 اليوم": "+12 today",
   "6 بانتظار التوثيق": "6 awaiting verification",
+  "2 بانتظار الاعتماد": "2 pending approval",
   "الفروع": "Branches",
   "نسخة مصر الأولى": "Egypt first release",
   "مراجعات معلقة": "Pending reviews",
   "2 عاجلة": "2 urgent",
+  "طلبات توثيق واعتماد الأطباء (Doctor Verification & Approval)": "Doctor Verification & Approval",
+  "مراجعة التراخيص الطبية واعتماد الأطباء رسمياً لتفعيل صلاحية فحص الحالات": "Review medical licenses and officially approve doctors to enable case review permissions",
+  "قيد المراجعة": "Pending review",
   "مؤشرات نموذج الذكاء الاصطناعي": "AI model metrics",
+  "الإصدار الأول": "Version 1",
   "الحساسية": "Sensitivity",
   "النوعية": "Specificity",
   "الدقة": "Precision",
@@ -562,6 +619,9 @@ const uiText = {
   "للطوارئ فقط": "Emergency only",
   "أحداث التدقيق": "Audit events",
   "مفعلة": "Enabled",
+  "إدارة المستخدمين والصلاحيات (Users & Roles Governance)": "Users & Roles Governance",
+  "عرض وتعديل أدوار الحسابات وتطبيق مبدأ فصل المهام (Separation of Duties)": "View and update account roles while applying separation of duties",
+  "جاري التحميل...": "Loading...",
   "أحداث تجريبية": "Demo events",
   "20 سبتمبر 2026 - 03:18": "September 20, 2026 - 03:18",
   "20 سبتمبر 2026 - 03:21": "September 20, 2026 - 03:21",
@@ -728,9 +788,10 @@ function applyLanguage(language) {
   const activeScreenEl = document.querySelector(".screen.active");
   const activeScreenName = activeScreenEl ? activeScreenEl.id.replace("screen-", "") : "patient";
   const isOwner = auth && auth.currentUser && isOwnerUser(auth.currentUser.email);
+  const currentRole = normalizeRole(selectedRole, isOwner);
   accountLabel.textContent = language === "en"
-    ? (isOwner ? englishRoleLabels.owner : (englishRoleLabels[selectedRole] || englishRoleLabels.patient))
-    : (isOwner ? roleLabels.owner : (roleLabels[selectedRole] || roleLabels.patient));
+    ? (englishRoleLabels[currentRole] || englishRoleLabels.patient)
+    : (roleLabels[currentRole] || roleLabels.patient);
   if (typeof setAuthMode === "function") setAuthMode(authMode);
   if (typeof updateEmailVerificationUI === "function" && typeof auth !== "undefined") updateEmailVerificationUI(auth.currentUser);
 }
@@ -742,30 +803,65 @@ function showToast(message) {
   showToast.timer = window.setTimeout(() => toast.classList.remove("show"), 2600);
 }
 
-// --- Real Database (Firebase Firestore) ---
-const firebaseConfig = {
-  apiKey: "AIzaSyANyIglmiKcdM0I2EKkjPhzMjKR58o8BRM",
-  authDomain: "health-vibes-a4b3b.firebaseapp.com",
-  projectId: "health-vibes-a4b3b",
-  storageBucket: "health-vibes-a4b3b.firebasestorage.app",
-  messagingSenderId: "21682568356",
-  appId: "1:21682568356:web:d38947f11647fdfef13a31",
-  measurementId: "G-FSHSN2XB4L"
-};
+// --- Environment Config + Real Database (Firebase Firestore) ---
+const runtimeConfig = window.HEALTH_VIBE_CONFIG || {};
+const firebaseConfig = runtimeConfig.firebase;
+
+if (!firebaseConfig || !firebaseConfig.projectId) {
+  throw new Error("Missing Health Vibe environment config. Create app/config.js from app/config.example.js.");
+}
 
 // Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 const auth = firebase.auth();
 const googleProvider = new firebase.auth.GoogleAuthProvider();
+const API_BASE_URL = (runtimeConfig.apiBaseUrl || "").replace(/\/$/, "");
+
+const APP_ENV = {
+  name: runtimeConfig.environment || "production",
+  isLocalhost: ["localhost", "127.0.0.1", ""].includes(window.location.hostname),
+  allowDemoSeed: runtimeConfig.environment === "development" &&
+    runtimeConfig.allowDemoSeed === true &&
+    new URLSearchParams(window.location.search).get("seedDemo") === "true"
+};
+
+async function callBackend(path, options = {}) {
+  if (!auth.currentUser) {
+    throw new Error(currentLanguage === "en" ? "Authentication required." : "يجب تسجيل الدخول أولاً.");
+  }
+
+  const token = await auth.currentUser.getIdToken();
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+      Authorization: `Bearer ${token}`
+    }
+  });
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.message || payload.error || `Backend request failed (${response.status})`);
+  }
+
+  return payload;
+}
+
 async function initDB() {
+  if (!APP_ENV.isLocalhost || APP_ENV.name !== "development" || !APP_ENV.allowDemoSeed) {
+    console.info("[Demo Seed] Skipped. Demo data seeding is disabled outside explicit local development.");
+    return;
+  }
+
   try {
     const snapshot = await db.collection("cases").limit(1).get();
     if (snapshot.empty) {
       const initialCases = [
-        { id: "case_1", name: "أحمد محمد", nameEn: "Ahmed Mohamed", o2: 91, symptoms: "كحة شديدة", symptomsEn: "Severe cough", risk: "عاجل", riskEn: "Urgent", status: "pending", time: "الآن", aiScore: "عالية", aiScoreEn: "High", confidence: "89%", duration: "3 أيام", durationEn: "3 days", createdAt: new Date().getTime() },
-        { id: "case_2", name: "سارة علي", nameEn: "Sarah Ali", o2: 96, symptoms: "أعراض خفيفة", symptomsEn: "Mild symptoms", risk: "مراجعة", riskEn: "Review", status: "pending", time: "منذ 14 دقيقة", aiScore: "متوسطة", aiScoreEn: "Medium", confidence: "78%", duration: "يومين", durationEn: "2 days", createdAt: new Date().getTime() - 1000 },
-        { id: "case_3", name: "محمد حسن", nameEn: "Mohamed Hassan", o2: 98, symptoms: "لا توجد أعراض ظاهرة", symptomsEn: "No clear symptoms", risk: "منخفض", riskEn: "Low", status: "approved", time: "تقرير جاهز", aiScore: "منخفضة", aiScoreEn: "Low", confidence: "94%", duration: "يوم واحد", durationEn: "1 day", createdAt: new Date().getTime() - 2000 }
+        { id: "demo_case_1", isDemo: true, name: "أحمد محمد", nameEn: "Ahmed Mohamed", o2: 91, symptoms: "كحة شديدة", symptomsEn: "Severe cough", risk: "عاجل", riskEn: "Urgent", status: "pending", time: "الآن", aiScore: "عالية", aiScoreEn: "High", confidence: "89%", duration: "3 أيام", durationEn: "3 days", createdAt: new Date().getTime() },
+        { id: "demo_case_2", isDemo: true, name: "سارة علي", nameEn: "Sarah Ali", o2: 96, symptoms: "أعراض خفيفة", symptomsEn: "Mild symptoms", risk: "مراجعة", riskEn: "Review", status: "pending", time: "منذ 14 دقيقة", aiScore: "متوسطة", aiScoreEn: "Medium", confidence: "78%", duration: "يومين", durationEn: "2 days", createdAt: new Date().getTime() - 1000 },
+        { id: "demo_case_3", isDemo: true, name: "محمد حسن", nameEn: "Mohamed Hassan", o2: 98, symptoms: "لا توجد أعراض ظاهرة", symptomsEn: "No clear symptoms", risk: "منخفض", riskEn: "Low", status: "approved", time: "تقرير جاهز", aiScore: "منخفضة", aiScoreEn: "Low", confidence: "94%", duration: "يوم واحد", durationEn: "1 day", createdAt: new Date().getTime() - 2000 }
       ];
       for (let c of initialCases) {
         await db.collection("cases").doc(c.id).set(c);
@@ -776,7 +872,8 @@ async function initDB() {
     if (appSnapshot.empty) {
       const sampleApps = [
         {
-          id: "doc_app_1",
+          id: "demo_doc_app_1",
+          isDemo: true,
           userId: "demo_doc_uid_1",
           name: "د. طارق محمود الشريف",
           nameEn: "Dr. Tarek Mahmoud",
@@ -789,7 +886,8 @@ async function initDB() {
           appliedAt: new Date().getTime() - 3600000 * 4
         },
         {
-          id: "doc_app_2",
+          id: "demo_doc_app_2",
+          isDemo: true,
           userId: "demo_doc_uid_2",
           name: "د. هدى عبد الرحمن",
           nameEn: "Dr. Hoda Abdelrahman",
@@ -917,7 +1015,9 @@ async function selectDoctorCase(id) {
   }
 }
 
-initDB();
+if (APP_ENV.isLocalhost && APP_ENV.allowDemoSeed) {
+  initDB();
+}
 
 function showAuth() {
   authScreen.classList.add("open");
@@ -1083,14 +1183,12 @@ async function handleEmailAuth(e) {
         console.warn("Could not update profile displayName:", profileErr);
       }
       const isOwner = isOwnerUser(user.email);
-      const safeRole = isOwner ? "admin" : "patient";
+      const safeRole = normalizeRole(ROLES.PATIENT, isOwner);
       selectedRole = safeRole;
 
       await db.collection("users").doc(user.uid).set({
         name: displayName,
         email: user.email,
-        role: safeRole,
-        isOwner: isOwner,
         emailVerified: false,
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
@@ -1223,38 +1321,39 @@ async function enterApp(source = "google") {
       try {
         const userDoc = await db.collection("users").doc(user.uid).get();
         if (!userDoc.exists) {
-          const safeRole = isOwner ? "admin" : "patient";
+          const safeRole = normalizeRole(ROLES.PATIENT, isOwner);
           selectedRole = safeRole;
           await db.collection("users").doc(user.uid).set({
             name: user.displayName || user.email.split('@')[0],
             email: user.email,
-            role: safeRole,
-            isOwner: isOwner,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
           });
         } else {
           if (isOwner) {
-            selectedRole = "admin";
-            if (userDoc.data().role !== "admin" || !userDoc.data().isOwner) {
-              await db.collection("users").doc(user.uid).set({
-                role: "admin",
-                isOwner: true
-              }, { merge: true });
+            selectedRole = ROLES.SUPER_ADMIN;
+            if (normalizeRole(userDoc.data().role, true) !== ROLES.SUPER_ADMIN || !userDoc.data().isOwner) {
+              await callBackend("/api/admin/set-user-role", {
+                method: "POST",
+                body: JSON.stringify({
+                  targetUserId: user.uid,
+                  newRole: ROLES.SUPER_ADMIN
+                })
+              });
             }
           } else {
-            selectedRole = userDoc.data().role || selectedRole;
+            selectedRole = normalizeRole(userDoc.data().role || selectedRole);
           }
         }
       } catch (dbError) {
         console.warn("Firestore save failed, but auth succeeded:", dbError);
-        if (isOwner) selectedRole = "admin";
+        if (isOwner) selectedRole = ROLES.SUPER_ADMIN;
       }
 
       userName.textContent = user.displayName || user.email.split('@')[0];
       userEmail.textContent = user.email;
       accountLabel.textContent = currentLanguage === "en"
-        ? (isOwner ? englishRoleLabels.owner : (englishRoleLabels[selectedRole] || englishRoleLabels.patient))
-        : (isOwner ? roleLabels.owner : (roleLabels[selectedRole] || roleLabels.patient));
+        ? (englishRoleLabels[normalizeRole(selectedRole, isOwner)] || englishRoleLabels.patient)
+        : (roleLabels[normalizeRole(selectedRole, isOwner)] || roleLabels.patient);
       
       updateAvatar(user);
       updateEmailVerificationUI(user);
@@ -1262,7 +1361,7 @@ async function enterApp(source = "google") {
       publicSite.hidden = true;
       hideAuth();
       app.hidden = false;
-      showScreen(selectedRole === "doctor" ? "doctor" : selectedRole === "admin" ? "admin" : "patient");
+      showScreen("patient");
       showToast(currentLanguage === "en" ? "Signed in with Google" : "تم تسجيل الدخول بحساب جوجل");
     } catch (error) {
       console.error("Google Auth Error:", error);
@@ -1272,6 +1371,13 @@ async function enterApp(source = "google") {
 }
 
 async function leaveApp() {
+  // ── إيقاف الـ real-time listener عند تسجيل الخروج ────────────
+  if (window._patientCasesUnsub) {
+    window._patientCasesUnsub();
+    window._patientCasesUnsub = null;
+  }
+  window._currentCaseId = null;
+
   try {
     await auth.signOut();
   } catch(e) {
@@ -1415,7 +1521,7 @@ function updateNavVisibility() {
     const screen = btn.dataset.screen;
     // Patients must never see doctor, admin, audit, or verification in navigation
     if (screen === "verification") {
-      btn.style.display = (selectedRole === ROLES.DOCTOR || selectedRole === ROLES.ADMIN) ? "flex" : "none";
+      btn.style.display = (selectedRole === ROLES.DOCTOR || selectedRole === ROLES.DOCTOR_PENDING || isAdminRole(selectedRole)) ? "flex" : "none";
       return;
     }
     btn.style.display = canAccessScreen(screen) ? "flex" : "none";
@@ -1434,7 +1540,7 @@ function showScreen(name) {
   }
 
   if (!canAccessScreen(name)) {
-    const roleDefaultScreen = selectedRole === ROLES.ADMIN ? "admin" : (selectedRole === ROLES.DOCTOR ? "doctor" : "patient");
+    const roleDefaultScreen = isAdminRole(selectedRole) ? "admin" : (selectedRole === ROLES.DOCTOR ? "doctor" : "patient");
     const msgEn = `Access Denied: Screen '${englishTitles[name] || name}' is restricted for role '${englishRoleLabels[selectedRole] || selectedRole}'.`;
     const msgAr = `تم رفض الوصول: قسم '${titles[name] || name}' غير مصرح به لدور '${roleLabels[selectedRole] || selectedRole}'.`;
     showToast(currentLanguage === "en" ? msgEn : msgAr);
@@ -1465,6 +1571,7 @@ function showScreen(name) {
     renderVerificationScreen();
   }
   if (name === "admin") {
+    renderAdminMetrics();
     renderAdminApplications();
     renderAdminUsers();
   }
@@ -1474,8 +1581,10 @@ async function renderPatientDashboard() {
   const user = auth ? auth.currentUser : null;
   const isEn = currentLanguage === "en";
   
-  // Set default / empty states
-  const firstName = user ? (user.displayName ? user.displayName.split(" ")[0] : (isEn ? "Guest" : "ضيف")) : "أحمد";
+  // ── حالات افتراضية ───────────────────────────────────────────────
+  const firstName = user
+    ? (user.displayName ? user.displayName.split(" ")[0] : (isEn ? "Guest" : "ضيف"))
+    : "أحمد";
   const titleEl = document.getElementById("patientHeroTitle");
   if (titleEl) titleEl.textContent = isEn ? `Welcome, ${firstName}` : `مرحبًا ${firstName}`;
 
@@ -1491,41 +1600,90 @@ async function renderPatientDashboard() {
   document.getElementById("patientAlertsList").innerHTML = `<div><strong>${isEn ? 'No new alerts' : 'لا توجد تنبيهات جديدة'}</strong><span>--</span></div>`;
 
   if (!user || !db) return;
-  
-  try {
-    const snapshot = await db.collection("cases").where("userId", "==", user.uid).get();
-    let cases = snapshot.docs.map(d => d.data());
-    
-    if (cases.length > 0) {
-      cases.sort((a, b) => {
-        const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt || 0);
-        const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.createdAt || 0);
-        return timeB - timeA;
-      });
-      const c = cases[0];
-      
-      document.getElementById("patientClinicalStatus").textContent = isEn ? c.status : (c.status === 'pending' ? 'قيد المراجعة' : 'معتمد');
-      document.getElementById("patientClinicalO2").textContent = `${c.o2}%`;
-      document.getElementById("patientClinicalConfidence").textContent = c.confidence;
-      document.getElementById("patientClinicalDoctor").textContent = isEn ? "Dr. Mona Samy" : "د. منى سامي";
-      
-      const dateVal = c.createdAt?.toMillis ? c.createdAt.toMillis() : c.createdAt;
-      const date = dateVal ? new Date(dateVal).toLocaleDateString(isEn ? 'en-US' : 'ar-EG') : "--";
-      
-      document.getElementById("patientLatestReport").textContent = date;
-      document.getElementById("patientResultStatus").textContent = isEn ? c.status : (c.status === 'pending' ? 'قيد الانتظار' : 'اكتمل');
-      
-      if (c.status === 'approved') {
-        document.getElementById("patientAlertsCount").textContent = isEn ? "1 new" : "1 جديد";
-        document.getElementById("patientAlertsList").innerHTML = `<div><strong>${isEn ? 'Your result is ready' : 'النتيجة المعتمدة جاهزة'}</strong><span>${date}</span></div>`;
-      } else {
-        document.getElementById("patientAlertsCount").textContent = isEn ? "1 pending" : "1 قيد المراجعة";
-        document.getElementById("patientAlertsList").innerHTML = `<div><strong>${isEn ? 'Assessment sent to doctor' : 'تم إرسال التقييم للطبيب'}</strong><span>${date}</span></div>`;
-      }
-    }
-  } catch (error) {
-    console.warn("Failed to fetch patient data", error);
+
+  // ── إلغاء الاشتراك السابق لتجنب تسرب الذاكرة ─────────────────
+  if (window._patientCasesUnsub) {
+    window._patientCasesUnsub();
+    window._patientCasesUnsub = null;
   }
+
+  // ── Real-Time Listener — حالات المريض مربوطة بـ patientId ─────────
+  window._patientCasesUnsub = db
+    .collection("cases")
+    .where("patientId", "==", user.uid)
+    .orderBy("submittedAt", "desc")
+    .limit(10)
+    .onSnapshot(
+      (snapshot) => {
+        if (snapshot.empty) return;
+
+        // أحدث حالة (first doc بعد orderBy desc)
+        const latestDoc = snapshot.docs[0];
+        const c = { id: latestDoc.id, ...latestDoc.data() };
+
+        // فورمات التاريخ
+        const tsMillis = c.submittedAt?.toMillis
+          ? c.submittedAt.toMillis()
+          : (c.submittedAt || 0);
+        const dateStr = tsMillis
+          ? new Date(tsMillis).toLocaleDateString(isEn ? "en-US" : "ar-EG", {
+              year: "numeric", month: "short", day: "numeric",
+            })
+          : "--";
+
+        // ترجمة الحالة
+        const statusMap = {
+          pending:  isEn ? "⏳ Pending Review" : "تحت المراجعة",
+          approved: isEn ? "✅ Approved"       : "معتمد من الطبيب",
+          rejected: isEn ? "❌ Needs Attention" : "يحتاج متابعة",
+        };
+        const priorityMap = {
+          urgent: isEn ? "🚨 Urgent"  : "🚨 عاجل",
+          high:   isEn ? "⚠️ High"    : "⚠️ أولوية عالية",
+          normal: isEn ? "✔️ Normal"  : "✔️ عادي",
+        };
+
+        const statusLabel   = statusMap[c.status]   || c.status;
+        const priorityLabel = priorityMap[c.priority] || "--";
+        const o2Display     = c.oxygenLevel ? `${c.oxygenLevel}%` : "--%";
+        const doctorDisplay = c.reviewedBy || (isEn ? "Awaiting doctor" : "بانتظار طبيب");
+
+        // ── تحديث بطاقة الحالة ─────────────────────────────────────────
+        document.getElementById("patientClinicalStatus").textContent = statusLabel;
+        document.getElementById("patientClinicalO2").textContent = o2Display;
+        document.getElementById("patientClinicalConfidence").textContent = priorityLabel;
+        document.getElementById("patientClinicalDoctor").textContent = doctorDisplay;
+        document.getElementById("patientLatestReport").textContent = dateStr;
+        document.getElementById("patientResultStatus").textContent = statusLabel;
+
+        // ── التنبيهات ─────────────────────────────────────────────────────
+        if (c.status === "approved") {
+          document.getElementById("patientAlertsCount").textContent = isEn ? "1 new" : "1 جديد";
+          document.getElementById("patientAlertsList").innerHTML =
+            `<div>
+              <strong>${isEn ? "✅ Your result is ready" : "✅ النتيجة المعتمدة جاهزة"}</strong>
+              <span>${dateStr}</span>
+            </div>`;
+        } else if (c.status === "rejected") {
+          document.getElementById("patientAlertsCount").textContent = isEn ? "1 new" : "1 جديد";
+          document.getElementById("patientAlertsList").innerHTML =
+            `<div>
+              <strong>${isEn ? "⚠️ Doctor requested follow-up" : "⚠️ الطبيب يحتاج متابعة إضافية"}</strong>
+              <span>${c.doctorNotes || dateStr}</span>
+            </div>`;
+        } else {
+          document.getElementById("patientAlertsCount").textContent = isEn ? "1 pending" : "1 قيد المراجعة";
+          document.getElementById("patientAlertsList").innerHTML =
+            `<div>
+              <strong>${isEn ? "⏳ Assessment sent to doctor" : "⏳ تم إرسال التقييم للطبيب"}</strong>
+              <span>${dateStr} • رقم الحالة: ${c.id.slice(-6).toUpperCase()}</span>
+            </div>`;
+        }
+      },
+      (error) => {
+        console.warn("❌ Patient cases listener error:", error);
+      }
+    );
 }
 
 // --- Doctor Account Lifecycle: Application -> Verification -> Approval ---
@@ -1546,9 +1704,15 @@ async function cancelOrReapplyDoctorApp() {
   const user = auth.currentUser;
   if (!user) return;
   try {
+    const appId = "app_" + user.uid;
+    await db.collection("doctor_applications").doc(appId).update({
+      status: "cancelled",
+      cancelledAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
     await db.collection("users").doc(user.uid).set({
       doctorApplicationStatus: "cancelled"
     }, { merge: true });
+    selectedRole = ROLES.PATIENT;
     showToast(currentLanguage === "en" ? "You can now submit a new application." : "يمكنك الآن تقديم طلب جديد.");
     renderVerificationScreen();
   } catch(e) {
@@ -1608,6 +1772,8 @@ async function handleDoctorAppSubmit(e) {
       doctorAppDate: new Date().toLocaleDateString(currentLanguage === "en" ? "en-US" : "ar-EG")
     }, { merge: true });
 
+    selectedRole = ROLES.DOCTOR_PENDING;
+    updateNavVisibility();
     showToast(currentLanguage === "en" ? "🎉 Application submitted! Under review by administration." : "🎉 تم إرسال طلب التوثيق بنجاح! طلبك الآن قيد المراجعة والتدقيق الإداري.");
     renderVerificationScreen();
   } catch (err) {
@@ -1651,7 +1817,7 @@ async function renderVerificationScreen() {
     console.warn("Could not fetch user verification data:", e);
   }
 
-  const isDoctor = selectedRole === "doctor" || userData.role === "doctor";
+  const isDoctor = normalizeRole(selectedRole) === ROLES.DOCTOR || normalizeRole(userData.role) === ROLES.DOCTOR;
   const appStatus = userData.doctorApplicationStatus || "none";
 
   if (isDoctor) {
@@ -1852,7 +2018,6 @@ async function renderAdminApplications() {
     const apps = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 
     const pendingApps = apps.filter(a => a.status === "pending");
-    const approvedApps = apps.filter(a => a.status === "approved");
 
     const badge = document.getElementById("adminPendingAppsBadge");
     if (badge) {
@@ -1862,11 +2027,6 @@ async function renderAdminApplications() {
     if (opsBadge) {
       opsBadge.textContent = isEn ? `${pendingApps.length} documents pending review` : `${pendingApps.length} مستندات بانتظار الاعتماد`;
     }
-    const totalDocsEl = document.getElementById("adminTotalDoctorsCount");
-    if (totalDocsEl) {
-      totalDocsEl.textContent = 84 + approvedApps.length;
-    }
-
     if (pendingApps.length === 0) {
       container.innerHTML = `
         <div style="padding: 30px; text-align: center; color: var(--muted); background: var(--surface-2); border-radius: 14px; border: 1px solid var(--line);">
@@ -1928,25 +2088,170 @@ async function renderAdminApplications() {
   }
 }
 
+function setText(id, value) {
+  const element = document.getElementById(id);
+  if (element) element.textContent = value;
+}
+
+function toMillis(value) {
+  if (!value) return 0;
+  if (value.toMillis) return value.toMillis();
+  if (value.seconds) return value.seconds * 1000;
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatMetric(value) {
+  return Number.isFinite(value) ? value.toLocaleString(currentLanguage === "en" ? "en-US" : "ar-EG") : "--";
+}
+
+function formatModelMetric(value) {
+  return Number.isFinite(value) ? value.toFixed(2) : "--";
+}
+
+function getUserCreatedAt(user) {
+  return toMillis(user.createdAt || user.created_at || user.createdOn || user.created);
+}
+
+function getCaseSubmittedAt(item) {
+  return toMillis(item.submittedAt || item.createdAt || item.created_at || item.date);
+}
+
+async function renderAdminMetrics() {
+  const isEn = currentLanguage === "en";
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayStartMs = todayStart.getTime();
+
+  [
+    "adminUsersTotalCount",
+    "adminTotalDoctorsCount",
+    "adminBranchesCount",
+    "adminPendingReviewsCount",
+    "adminAiSensitivity",
+    "adminAiSpecificity",
+    "adminAiPrecision",
+    "adminAiAuc"
+  ].forEach((id) => setText(id, "--"));
+  setText("adminUsersTodayCount", isEn ? "Loading..." : "جاري التحميل...");
+  setText("adminPendingDocsBadge", isEn ? "Loading..." : "جاري التحميل...");
+  setText("adminBranchesNote", isEn ? "From approved doctors" : "من بيانات الأطباء المعتمدين");
+  setText("adminUrgentReviewsCount", isEn ? "Loading..." : "جاري التحميل...");
+
+  try {
+    const [serverMetrics, usersSnapshot, appsSnapshot, casesSnapshot, modelSnapshot] = await Promise.all([
+      callBackend("/api/admin/metrics").catch((error) => {
+        console.warn("Admin backend metrics unavailable; falling back to Firestore user docs.", error);
+        return null;
+      }),
+      db.collection("users").get(),
+      db.collection("doctor_applications").get(),
+      db.collection("cases").get(),
+      db.collection("ai_model_metrics").orderBy("createdAt", "desc").limit(1).get().catch(() => null)
+    ]);
+
+    const users = usersSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    const apps = appsSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    const cases = casesSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+
+    const usersTodayFromDocs = users.filter((user) => getUserCreatedAt(user) >= todayStartMs).length;
+    const totalUsers = Number.isFinite(serverMetrics?.authUsersCount)
+      ? serverMetrics.authUsersCount
+      : Math.max(users.length, auth.currentUser ? 1 : 0);
+    const usersToday = Number.isFinite(serverMetrics?.authUsersToday) ? serverMetrics.authUsersToday : usersTodayFromDocs;
+    const approvedDoctorsFromDocs = users.filter((user) =>
+      user.role === ROLES.DOCTOR ||
+      user.verifiedDoctor === true ||
+      user.doctorApplicationStatus === "approved"
+    ).length;
+    const approvedDoctors = Number.isFinite(serverMetrics?.approvedDoctors) ? serverMetrics.approvedDoctors : approvedDoctorsFromDocs;
+    const pendingApps = Number.isFinite(serverMetrics?.pendingDoctorApplications)
+      ? serverMetrics.pendingDoctorApplications
+      : apps.filter((app) => app.status === "pending").length;
+    const approvedDoctorApps = apps.filter((app) => app.status === "approved");
+    const branchNames = new Set(
+      approvedDoctorApps
+        .map((app) => (app.clinic || app.branch || app.hospital || "").trim().toLowerCase())
+        .filter(Boolean)
+    );
+    const branchCount = Number.isFinite(serverMetrics?.branchCount) ? serverMetrics.branchCount : branchNames.size;
+    const pendingReviews = Number.isFinite(serverMetrics?.pendingReviews)
+      ? serverMetrics.pendingReviews
+      : cases.filter((item) => item.status === "pending").length;
+    const urgentReviews = Number.isFinite(serverMetrics?.urgentReviews)
+      ? serverMetrics.urgentReviews
+      : cases.filter((item) =>
+        item.status === "pending" && ["urgent", "high"].includes(String(item.priority || item.risk || "").toLowerCase())
+      ).length;
+    const latestCaseMs = Math.max(0, ...cases.map(getCaseSubmittedAt));
+
+    setText("adminUsersTotalCount", formatMetric(totalUsers));
+    setText("adminUsersTodayCount", isEn ? `+${formatMetric(usersToday)} today` : `+${formatMetric(usersToday)} اليوم`);
+    setText("adminTotalDoctorsCount", formatMetric(approvedDoctors));
+    setText("adminPendingDocsBadge", isEn ? `${formatMetric(pendingApps)} pending approval` : `${formatMetric(pendingApps)} بانتظار الاعتماد`);
+    setText("adminBranchesCount", formatMetric(branchCount));
+    setText("adminBranchesNote", branchCount > 0
+      ? (isEn ? "Verified clinic locations" : "مواقع عيادات موثقة")
+      : (isEn ? "No verified branches yet" : "لا توجد فروع موثقة بعد"));
+    setText("adminPendingReviewsCount", formatMetric(pendingReviews));
+    setText("adminUrgentReviewsCount", isEn ? `${formatMetric(urgentReviews)} urgent` : `${formatMetric(urgentReviews)} عاجلة`);
+
+    if (serverMetrics?.aiModelMetrics) {
+      setText("adminAiSensitivity", formatModelMetric(Number(serverMetrics.aiModelMetrics.sensitivity)));
+      setText("adminAiSpecificity", formatModelMetric(Number(serverMetrics.aiModelMetrics.specificity)));
+      setText("adminAiPrecision", formatModelMetric(Number(serverMetrics.aiModelMetrics.precision)));
+      setText("adminAiAuc", formatModelMetric(Number(serverMetrics.aiModelMetrics.auc)));
+    } else if (modelSnapshot && !modelSnapshot.empty) {
+      const metrics = modelSnapshot.docs[0].data();
+      setText("adminAiSensitivity", formatModelMetric(Number(metrics.sensitivity)));
+      setText("adminAiSpecificity", formatModelMetric(Number(metrics.specificity)));
+      setText("adminAiPrecision", formatModelMetric(Number(metrics.precision)));
+      setText("adminAiAuc", formatModelMetric(Number(metrics.auc || metrics.areaUnderCurve)));
+    } else {
+      setText("adminAiSensitivity", "--");
+      setText("adminAiSpecificity", "--");
+      setText("adminAiPrecision", "--");
+      setText("adminAiAuc", "--");
+    }
+
+    console.info("[Admin Metrics] Loaded from Firestore", {
+      users: users.length,
+      authUsers: totalUsers,
+      usersToday,
+      approvedDoctors,
+      pendingApps,
+      branches: branchCount,
+      pendingReviews,
+      urgentReviews,
+      latestCaseAt: latestCaseMs
+    });
+  } catch (error) {
+    if (handleServerPermissionDenied(error, "Load Admin Metrics")) return;
+    console.error("renderAdminMetrics error:", error);
+    setText("adminUsersTodayCount", isEn ? "Unavailable" : "غير متاح");
+    setText("adminPendingDocsBadge", isEn ? "Unavailable" : "غير متاح");
+    setText("adminBranchesNote", isEn ? "Unavailable" : "غير متاح");
+    setText("adminUrgentReviewsCount", isEn ? "Unavailable" : "غير متاح");
+  }
+}
+
 async function approveDoctorApplication(appId, userId, doctorName) {
   if (!(await enforceServerPermission(PERMISSIONS.APPROVE_DOCTOR_APPLICATION, "Approve Doctor Application"))) return;
   const isEn = currentLanguage === "en";
   try {
     showToast(isEn ? `Approving ${doctorName}...` : `جاري اعتماد الطبيب ${doctorName}...`);
 
-    await db.collection("doctor_applications").doc(appId).update({
-      status: "approved",
-      approvedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      approvedBy: auth.currentUser ? auth.currentUser.email : "Admin"
-    });
-
-    if (userId && !userId.startsWith("demo_")) {
-      await db.collection("users").doc(userId).set({
-        role: "doctor",
-        doctorApplicationStatus: "approved",
-        verifiedDoctor: true
-      }, { merge: true });
+    if (!userId || userId.startsWith("demo_")) {
+      throw new Error(isEn ? "Only real Firebase users can be approved from production admin." : "لا يمكن اعتماد إلا مستخدم Firebase حقيقي من لوحة الإدارة.");
     }
+
+    await callBackend("/api/admin/approve-doctor-application", {
+      method: "POST",
+      body: JSON.stringify({
+        applicationId: appId,
+        applicantUserId: userId
+      })
+    });
 
     if (auth.currentUser && auth.currentUser.uid === userId) {
       selectedRole = "doctor";
@@ -1955,6 +2260,7 @@ async function approveDoctorApplication(appId, userId, doctorName) {
     }
 
     showToast(isEn ? `🎉 Successfully approved Dr. ${doctorName}!` : `🎉 تم اعتماد الطبيب ${doctorName} وترقيته رسمياً لطبيب موثق!`);
+    await renderAdminMetrics();
     await renderAdminApplications();
   } catch(error) {
     if (handleServerPermissionDenied(error, "Approve Doctor Application")) return;
@@ -1980,6 +2286,7 @@ async function rejectDoctorApplication(appId, userId) {
     }
 
     showToast(isEn ? "Application rejected." : "تم رفض الطلب.");
+    await renderAdminMetrics();
     await renderAdminApplications();
   } catch(error) {
     if (handleServerPermissionDenied(error, "Reject Doctor Application")) return;
@@ -2033,17 +2340,18 @@ async function renderAdminUsers() {
 
     users.forEach(u => {
       const isOwner = isOwnerUser(u.email) || u.isOwner;
-      const role = isOwner ? "owner" : (u.role || "patient");
-      const roleBadgeClass = isOwner ? "owner-badge" : (role === "admin" ? "pill danger" : (role === "doctor" ? "pill ok" : "pill info"));
+      const role = normalizeRole(u.role || "patient", isOwner);
+      const roleBadgeClass = isOwner ? "owner-badge" : (isAdminRole(role) ? "pill danger" : (role === ROLES.DOCTOR ? "pill ok" : "pill info"));
       const roleText = isEn ? (englishRoleLabels[role] || role) : (roleLabels[role] || role);
       const isEmailVerified = u.emailVerified ? (isEn ? "Verified Email ✓" : "بريد مؤكد ✓") : (isEn ? "Pending Email" : "بانتظار التأكيد");
       const userNameStr = u.name || u.displayName || u.email.split('@')[0];
+      const canManageRoles = hasPermission(PERMISSIONS.MANAGE_USER_ROLES);
 
       html += `
         <tr style="border-bottom: 1px solid var(--line);">
           <td style="padding: 12px; font-weight: 600; color: var(--ink);">
             ${userNameStr}
-            ${isOwner ? '<span class="owner-badge" style="margin-inline-start: 6px;">👑 Owner</span>' : ''}
+            ${isOwner ? `<span class="owner-badge" style="margin-inline-start: 6px;">${isEn ? "Super Admin" : "مدير عام"}</span>` : ''}
           </td>
           <td style="padding: 12px; color: var(--muted); font-family: monospace;">${u.email}</td>
           <td style="padding: 12px;">
@@ -2053,11 +2361,14 @@ async function renderAdminUsers() {
             ${isEmailVerified}
           </td>
           <td style="padding: 12px; text-align: end;">
-            ${isOwner ? `<span style="font-size: 12px; color: var(--muted);">${isEn ? "Protected (Owner)" : "محمي (مالك النظام)"}</span>` : `
+            ${isOwner || !canManageRoles ? `<span style="font-size: 12px; color: var(--muted);">${isOwner ? (isEn ? "Protected (Super Admin)" : "محمي (مدير عام)") : roleText}</span>` : `
               <select onchange="changeUserRole('${u.id}', this.value, '${userNameStr}')" style="padding: 5px 9px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 12px; cursor: pointer;">
                 <option value="patient" ${role === 'patient' ? 'selected' : ''}>${isEn ? 'Patient (مريض)' : 'حساب مريض'}</option>
+                <option value="doctor_pending" ${role === 'doctor_pending' ? 'selected' : ''}>${isEn ? 'Doctor pending' : 'طبيب بانتظار الاعتماد'}</option>
                 <option value="doctor" ${role === 'doctor' ? 'selected' : ''}>${isEn ? 'Doctor (طبيب)' : 'طبيب موثق'}</option>
-                <option value="admin" ${role === 'admin' ? 'selected' : ''}>${isEn ? 'Admin (إدارة)' : 'حساب إدارة'}</option>
+                <option value="clinic_admin" ${role === 'clinic_admin' ? 'selected' : ''}>${isEn ? 'Clinic admin' : 'مدير عيادة'}</option>
+                <option value="support" ${role === 'support' ? 'selected' : ''}>${isEn ? 'Support' : 'دعم فني'}</option>
+                <option value="super_admin" ${role === 'super_admin' ? 'selected' : ''}>${isEn ? 'Super admin' : 'مدير عام للنظام'}</option>
               </select>
             `}
           </td>
@@ -2086,17 +2397,13 @@ async function changeUserRole(userId, newRole, userName) {
   const isEn = currentLanguage === "en";
   try {
     showToast(isEn ? `Updating role for ${userName}...` : `جاري تحديث دور ${userName}...`);
-    await db.collection("users").doc(userId).set({
-      role: newRole
-    }, { merge: true });
 
-    // Log to audit events
-    await db.collection("audit_events").add({
-      type: "ROLE_CHANGE",
-      targetUserId: userId,
-      newRole: newRole,
-      changedBy: auth.currentUser ? auth.currentUser.email : "Admin",
-      timestamp: firebase.firestore.FieldValue.serverTimestamp()
+    await callBackend("/api/admin/set-user-role", {
+      method: "POST",
+      body: JSON.stringify({
+        targetUserId: userId,
+        newRole: newRole
+      })
     });
 
     showToast(isEn ? `Role updated to ${newRole} for ${userName}!` : `تم تغيير دور ${userName} إلى ${roleLabels[newRole] || newRole}!`);
@@ -2171,8 +2478,10 @@ document.addEventListener("click", (event) => {
 
   const preview = event.target.closest("[data-preview-app]");
   if (preview) {
-    selectedRole = "patient";
-    enterApp("preview");
+    showAuth();
+    showToast(currentLanguage === "en"
+      ? "Preview mode is disabled for production data. Please sign in to continue."
+      : "تم إيقاف المعاينة بدون حساب لحماية بيانات الإنتاج. يرجى تسجيل الدخول للمتابعة.");
     return;
   }
 
@@ -2226,11 +2535,161 @@ if (checkVerificationBtn) {
   checkVerificationBtn.addEventListener("click", checkEmailVerification);
 }
 
+// ── Choice Buttons — Toggle Active State ──────────────────────────────
+// Single-select: ضيق التنفس + درجة الكحة
+["breathingChoices", "coughChoices"].forEach((groupId) => {
+  const group = document.getElementById(groupId);
+  if (!group) return;
+  group.addEventListener("click", (e) => {
+    const btn = e.target.closest(".choice");
+    if (!btn) return;
+    group.querySelectorAll(".choice").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+  });
+});
+
+// Multi-select: عوامل الخطورة (يمكن اختيار أكثر من واحد)
+const riskGroup = document.getElementById("riskChoices");
+if (riskGroup) {
+  riskGroup.addEventListener("click", (e) => {
+    const btn = e.target.closest(".choice");
+    if (!btn) return;
+    // إذا اختار "لا يوجد" يُلغي باقي الخيارات
+    if (btn.textContent.trim() === "لا يوجد") {
+      riskGroup.querySelectorAll(".choice").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+    } else {
+      // إلغاء تنشيط "لا يوجد" عند اختيار عامل خطر
+      riskGroup.querySelectorAll(".choice").forEach((b) => {
+        if (b.textContent.trim() === "لا يوجد") b.classList.remove("active");
+      });
+      btn.classList.toggle("active");
+    }
+  });
+}
+
 document.getElementById("oxygenInput").addEventListener("input", updateOxygenWarning);
-document.getElementById("submitAssessment").addEventListener("click", () => {
+
+document.getElementById("submitAssessment").addEventListener("click", async () => {
   updateOxygenWarning();
-  showScreen("pending");
-  showToast(readOxygenValue() < 93 ? "تم إرسال الحالة للطبيب مع أولوية متابعة" : "تم إرسال التقييم للطبيب");
+
+  const user = auth.currentUser;
+  if (!user) {
+    showToast("يجب تسجيل الدخول أولاً");
+    return;
+  }
+
+  const submitBtn = document.getElementById("submitAssessment");
+  submitBtn.disabled = true;
+  submitBtn.textContent = "جاري الإرسال...";
+
+  try {
+    // ── جمع بيانات النموذج ──────────────────────────────────────────
+    const oxygenLevel = readOxygenValue();
+
+    // ضيق التنفس (نعم/لا)
+    const breathingChoices = document.querySelectorAll(
+      "#breathingChoices .choice"
+    );
+    let breathingDifficulty = "غير محدد";
+    breathingChoices.forEach((btn) => {
+      if (btn.classList.contains("active")) breathingDifficulty = btn.textContent.trim();
+    });
+
+    // درجة الكحة
+    const coughChoices = document.querySelectorAll(
+      "#coughChoices .choice"
+    );
+    let coughLevel = "غير محدد";
+    coughChoices.forEach((btn) => {
+      if (btn.classList.contains("active")) coughLevel = btn.textContent.trim();
+    });
+
+    // مدة الأعراض
+    const durationField = document.getElementById("symptomDuration");
+    const symptomDuration = durationField ? durationField.value.trim() : "غير محدد";
+
+    // عوامل الخطورة (يمكن أكثر من واحد)
+    const riskChoices = document.querySelectorAll(
+      "#riskChoices .choice"
+    );
+    const riskFactors = [];
+    riskChoices.forEach((btn) => {
+      if (btn.classList.contains("active")) riskFactors.push(btn.textContent.trim());
+    });
+
+    // ── تحديد الأولوية بناءً على نسبة الأكسجين ───────────────────
+    let priority = "normal";
+    if (oxygenLevel > 0 && oxygenLevel < 90) priority = "urgent";
+    else if (oxygenLevel > 0 && oxygenLevel < 93) priority = "high";
+
+    // ── بناء وثيقة الحالة ─────────────────────────────────────────
+    const caseData = {
+      patientId: user.uid,
+      patientEmail: user.email,
+      patientName: user.displayName || "مجهول",
+      status: "pending",
+      priority,
+      oxygenLevel,
+      breathingDifficulty,
+      coughLevel,
+      symptomDuration,
+      riskFactors,
+      submittedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      reviewedBy: null,
+      reviewedAt: null,
+      doctorNotes: null,
+      result: null,
+    };
+
+    // ── حفظ في Firestore ──────────────────────────────────────────
+    const docRef = await db.collection("cases").add(caseData);
+    console.log("✅ Case saved to Firestore:", docRef.id);
+
+    // ── تسجيل في Audit Log ────────────────────────────────────────
+    await db.collection("auditLog").add({
+      action: "CASE_SUBMITTED",
+      caseId: docRef.id,
+      patientId: user.uid,
+      priority,
+      oxygenLevel,
+      timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+
+    showScreen("pending");
+    showToast(
+      priority === "urgent"
+        ? "🚨 تم إرسال الحالة العاجلة للطبيب"
+        : priority === "high"
+        ? "⚠️ تم إرسال الحالة بأولوية عالية للطبيب"
+        : "✅ تم إرسال التقييم للطبيب"
+    );
+
+    // ── ملء بطاقة الحالة في شاشة الانتظار ───────────────────────
+    const priorityAr = { urgent: "🚨 عاجل", high: "⚠️ عالية", normal: "✔️ عادية" };
+    const now = new Date().toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" });
+    const safeSet = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    safeSet("pendingCaseId",    `#${docRef.id.slice(-6).toUpperCase()}`);
+    safeSet("pendingCaseName",  user.displayName || user.email);
+    safeSet("pendingCaseO2",    oxygenLevel ? `${oxygenLevel}%` : "--");
+    safeSet("pendingCasePriority", priorityAr[priority] || priority);
+    safeSet("pendingCaseTime",  now);
+
+    // حفظ caseId للاستخدام لاحقاً (مثلاً لمتابعة الحالة)
+    window._currentCaseId = docRef.id;
+
+
+  } catch (error) {
+    console.error("❌ Error saving case:", error);
+    if (error.code === "permission-denied") {
+      showToast("خطأ في الصلاحيات — تأكد من تسجيل الدخول");
+    } else {
+      showToast("حدث خطأ أثناء الإرسال. حاول مرة أخرى.");
+    }
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = "إرسال للطبيب";
+  }
 });
 const approveResultBtn = document.getElementById("approveResult");
 if (approveResultBtn) approveResultBtn.addEventListener("click", openApprovalModal);
@@ -2292,38 +2751,39 @@ window.addEventListener("load", () => {
         const userDoc = await db.collection("users").doc(user.uid).get();
         if (userDoc.exists) {
           if (isOwner) {
-            selectedRole = "admin";
-            if (userDoc.data().role !== "admin" || !userDoc.data().isOwner) {
-              await db.collection("users").doc(user.uid).set({
-                role: "admin",
-                isOwner: true
-              }, { merge: true });
+            selectedRole = ROLES.SUPER_ADMIN;
+            if (normalizeRole(userDoc.data().role, true) !== ROLES.SUPER_ADMIN || !userDoc.data().isOwner) {
+              await callBackend("/api/admin/set-user-role", {
+                method: "POST",
+                body: JSON.stringify({
+                  targetUserId: user.uid,
+                  newRole: ROLES.SUPER_ADMIN
+                })
+              });
             }
           } else {
-            selectedRole = userDoc.data().role || selectedRole;
+            selectedRole = normalizeRole(userDoc.data().role || selectedRole);
           }
           if (userDoc.data().name) displayName = userDoc.data().name;
         } else {
-          const safeRole = isOwner ? "admin" : "patient";
+          const safeRole = normalizeRole(ROLES.PATIENT, isOwner);
           selectedRole = safeRole;
           await db.collection("users").doc(user.uid).set({
             name: displayName || user.email.split('@')[0],
             email: user.email,
-            role: safeRole,
-            isOwner: isOwner,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
           }, { merge: true });
         }
       } catch (e) {
         console.warn("Firestore role fetch failed, defaulting to patient:", e);
-        if (isOwner) selectedRole = "admin";
+        if (isOwner) selectedRole = ROLES.SUPER_ADMIN;
       }
       
       userName.textContent = displayName || user.email.split('@')[0];
       userEmail.textContent = user.email;
       accountLabel.textContent = currentLanguage === "en"
-        ? (isOwner ? englishRoleLabels.owner : (englishRoleLabels[selectedRole] || englishRoleLabels.patient))
-        : (isOwner ? roleLabels.owner : (roleLabels[selectedRole] || roleLabels.patient));
+        ? (englishRoleLabels[normalizeRole(selectedRole, isOwner)] || englishRoleLabels.patient)
+        : (roleLabels[normalizeRole(selectedRole, isOwner)] || roleLabels.patient);
       
       updateAvatar(user);
       updateEmailVerificationUI(user);
@@ -2331,7 +2791,7 @@ window.addEventListener("load", () => {
       publicSite.hidden = true;
       hideAuth();
       app.hidden = false;
-      showScreen(selectedRole === "doctor" ? "doctor" : selectedRole === "admin" ? "admin" : "patient");
+      showScreen("patient");
       
       loader.classList.add("is-done");
     } else {

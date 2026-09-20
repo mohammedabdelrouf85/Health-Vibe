@@ -418,12 +418,12 @@
             <div class="panel-head"><h3>تقييم التنفس</h3><span class="pill info">الخطوة 2 من 4</span></div>
             <div class="progress"><span style="width:54%"></span></div>
             <label>هل يوجد ضيق تنفس؟</label>
-            <div class="choice-row">
+            <div id="breathingChoices" class="choice-row">
               <button class="choice active">نعم</button>
               <button class="choice">لا</button>
             </div>
             <label>درجة الكحة</label>
-            <div class="choice-row four">
+            <div id="coughChoices" class="choice-row four">
               <button class="choice">خفيفة</button>
               <button class="choice active">متوسطة</button>
               <button class="choice">شديدة</button>
@@ -433,9 +433,9 @@
             <input id="oxygenInput" value="95" aria-label="نسبة الأكسجين">
             <div id="oxygenWarning" class="field-warning" hidden></div>
             <label>مدة الأعراض</label>
-            <input value="3 أيام" aria-label="مدة الأعراض">
+            <input id="symptomDuration" value="3 أيام" aria-label="مدة الأعراض">
             <label>عوامل خطورة</label>
-            <div class="choice-row four">
+            <div id="riskChoices" class="choice-row four">
               <button class="choice">ربو</button>
               <button class="choice">تدخين</button>
               <button class="choice">حمل</button>
@@ -463,6 +463,16 @@
           <span class="pill pending">بانتظار مراجعة الطبيب</span>
           <h1>تم إرسال التقييم بنجاح</h1>
           <p>يراجع الطبيب الأعراض والقياسات ونتيجة الذكاء الاصطناعي قبل إصدار التقرير النهائي.</p>
+
+          <!-- بيانات الحالة الحقيقية -->
+          <div class="summary-list" id="pendingCaseSummary" style="max-width:360px;margin:16px auto;text-align:right;">
+            <div><span>رقم الحالة</span><strong id="pendingCaseId">--</strong></div>
+            <div><span>المريض</span><strong id="pendingCaseName">--</strong></div>
+            <div><span>نسبة الأكسجين</span><strong id="pendingCaseO2">--%</strong></div>
+            <div><span>الأولوية</span><strong id="pendingCasePriority">--</strong></div>
+            <div><span>وقت الإرسال</span><strong id="pendingCaseTime">--</strong></div>
+          </div>
+
           <div class="timeline">
             <div class="done"><b></b><span>استلام البيانات</span></div>
             <div class="done"><b></b><span>تشغيل الذكاء الاصطناعي</span></div>
@@ -475,6 +485,7 @@
           </div>
         </div>
       </section>
+
 
       <section id="screen-result" class="screen">
         <div class="result-layout">
@@ -581,10 +592,10 @@
 
       <section id="screen-admin" class="screen">
         <div class="metric-grid">
-          <article><span>المستخدمون</span><strong>1,248</strong><small>+12 اليوم</small></article>
-          <article><span>الأطباء المعتمدون</span><strong id="adminTotalDoctorsCount">84</strong><small id="adminPendingDocsBadge">2 بانتظار الاعتماد</small></article>
-          <article><span>الفروع</span><strong>12</strong><small>نسخة مصر الأولى</small></article>
-          <article><span>مراجعات معلقة</span><strong>31</strong><small>2 عاجلة</small></article>
+          <article><span>المستخدمون</span><strong id="adminUsersTotalCount">--</strong><small id="adminUsersTodayCount">--</small></article>
+          <article><span>الأطباء المعتمدون</span><strong id="adminTotalDoctorsCount">--</strong><small id="adminPendingDocsBadge">--</small></article>
+          <article><span>الفروع</span><strong id="adminBranchesCount">--</strong><small id="adminBranchesNote">--</small></article>
+          <article><span>مراجعات معلقة</span><strong id="adminPendingReviewsCount">--</strong><small id="adminUrgentReviewsCount">--</small></article>
         </div>
 
         <!-- REAL DOCTOR APPLICATIONS APPROVAL BOARD -->
@@ -605,10 +616,10 @@
           <article class="panel">
             <div class="panel-head"><h3>مؤشرات نموذج الذكاء الاصطناعي</h3><span class="pill info">الإصدار الأول</span></div>
             <div class="summary-list">
-              <div><span>الحساسية</span><strong>0.88</strong></div>
-              <div><span>النوعية</span><strong>0.81</strong></div>
-              <div><span>الدقة</span><strong>0.79</strong></div>
-              <div><span>المساحة تحت المنحنى</span><strong>0.86</strong></div>
+              <div><span>الحساسية</span><strong id="adminAiSensitivity">--</strong></div>
+              <div><span>النوعية</span><strong id="adminAiSpecificity">--</strong></div>
+              <div><span>الدقة</span><strong id="adminAiPrecision">--</strong></div>
+              <div><span>المساحة تحت المنحنى</span><strong id="adminAiAuc">--</strong></div>
             </div>
           </article>
           <article class="panel">
@@ -708,6 +719,7 @@
     <span class="theme-fab-icon">🌙</span>
   </button>
 
+  <script src="./config.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>

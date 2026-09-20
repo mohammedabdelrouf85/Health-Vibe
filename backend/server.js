@@ -13,7 +13,20 @@ const admin = require('firebase-admin');
 require('dotenv').config();
 
 const app = express();
-app.use(cors({ origin: true }));
+
+const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:3000')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error('CORS origin not allowed by environment config.'));
+  }
+}));
 app.use(express.json());
 
 // Initialize Firebase Admin SDK
@@ -30,6 +43,22 @@ const db = admin.apps.length ? admin.firestore() : null;
 
 // System Owner Email (Hardcoded single source of truth for supreme administrative rights)
 const OWNER_EMAIL = "mohammedabdelrouf85@gmail.com";
+const ROLES = {
+  PATIENT: 'patient',
+  DOCTOR_PENDING: 'doctor_pending',
+  DOCTOR: 'doctor',
+  CLINIC_ADMIN: 'clinic_admin',
+  SUPPORT: 'support',
+  SUPER_ADMIN: 'super_admin'
+};
+const VALID_ROLES = Object.values(ROLES);
+const ADMIN_ROLES = [ROLES.CLINIC_ADMIN, ROLES.SUPER_ADMIN];
+
+function normalizeRole(role, isOwner = false) {
+  if (isOwner) return ROLES.SUPER_ADMIN;
+  if (role === 'admin' || role === 'owner') return ROLES.CLINIC_ADMIN;
+  return VALID_ROLES.includes(role) ? role : ROLES.PATIENT;
+}
 
 /**
  * Middleware: Verify Firebase ID Token
@@ -72,14 +101,14 @@ async function requireAdmin(req, res, next) {
   }
 
   // Check custom claims
-  if (req.user.role === 'admin') {
+  if (ADMIN_ROLES.includes(normalizeRole(req.user.role))) {
     return next();
   }
 
   // Fallback to Firestore server document check (bypassing any client memory)
   try {
     const userDoc = await db.collection('users').doc(uid).get();
-    if (userDoc.exists && userDoc.data().role === 'admin') {
+    if (userDoc.exists && ADMIN_ROLES.includes(normalizeRole(userDoc.data().role))) {
       return next();
     }
   } catch (err) {
@@ -89,6 +118,29 @@ async function requireAdmin(req, res, next) {
   return res.status(403).json({
     error: 'ACCESS_DENIED',
     message: 'Server verification failed: Admin privileges are required to perform this action.'
+  });
+}
+
+async function requireSuperAdmin(req, res, next) {
+  const uid = req.user.uid;
+  const email = (req.user.email || '').toLowerCase();
+
+  if (email === OWNER_EMAIL.toLowerCase() || normalizeRole(req.user.role) === ROLES.SUPER_ADMIN) {
+    return next();
+  }
+
+  try {
+    const userDoc = await db.collection('users').doc(uid).get();
+    if (userDoc.exists && normalizeRole(userDoc.data().role) === ROLES.SUPER_ADMIN) {
+      return next();
+    }
+  } catch (err) {
+    console.error("[SERVER RBAC ERROR] Database super admin verification query failed:", err.message);
+  }
+
+  return res.status(403).json({
+    error: 'ACCESS_DENIED',
+    message: 'Server verification failed: Super Admin privileges are required to perform this action.'
   });
 }
 
@@ -130,12 +182,12 @@ async function requireDoctor(req, res, next) {
  */
 app.get('/api/auth/profile', requireAuth, async (req, res) => {
   const isOwner = (req.user.email || '').toLowerCase() === OWNER_EMAIL.toLowerCase();
-  let role = isOwner ? 'admin' : (req.user.role || 'patient');
+  let role = normalizeRole(req.user.role, isOwner);
 
   if (db && !isOwner) {
     const doc = await db.collection('users').doc(req.user.uid).get();
     if (doc.exists && doc.data().role) {
-      role = doc.data().role;
+      role = normalizeRole(doc.data().role, isOwner);
     }
   }
 
@@ -149,24 +201,129 @@ app.get('/api/auth/profile', requireAuth, async (req, res) => {
 });
 
 /**
+ * GET /api/admin/metrics
+ * Server-authoritative admin metrics that cannot be derived safely from frontend-only Firestore reads.
+ */
+app.get('/api/admin/metrics', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    let authUsersCount = 0;
+    let authUsersToday = 0;
+    let approvedDoctors = 0;
+    let nextPageToken;
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    do {
+      const result = await admin.auth().listUsers(1000, nextPageToken);
+      result.users.forEach((user) => {
+        authUsersCount += 1;
+        if (user.customClaims && user.customClaims.role === 'doctor') {
+          approvedDoctors += 1;
+        }
+        const createdAt = user.metadata && user.metadata.creationTime
+          ? new Date(user.metadata.creationTime).getTime()
+          : 0;
+        if (createdAt >= todayStart.getTime()) authUsersToday += 1;
+      });
+      nextPageToken = result.pageToken;
+    } while (nextPageToken);
+
+    let pendingDoctorApplications = 0;
+    let branchCount = 0;
+    let pendingReviews = 0;
+    let urgentReviews = 0;
+    let aiModelMetrics = null;
+
+    if (db) {
+      const [usersSnapshot, appsSnapshot, casesSnapshot, modelSnapshot] = await Promise.all([
+        db.collection('users').get(),
+        db.collection('doctor_applications').get(),
+        db.collection('cases').get(),
+        db.collection('ai_model_metrics').orderBy('createdAt', 'desc').limit(1).get().catch(() => null)
+      ]);
+
+      const users = usersSnapshot.docs.map((doc) => doc.data());
+      const apps = appsSnapshot.docs.map((doc) => doc.data());
+      const cases = casesSnapshot.docs.map((doc) => doc.data());
+
+      approvedDoctors = Math.max(
+        approvedDoctors,
+        users.filter((user) =>
+          user.role === 'doctor' ||
+          user.verifiedDoctor === true ||
+          user.doctorApplicationStatus === 'approved'
+        ).length
+      );
+
+      pendingDoctorApplications = apps.filter((app) => app.status === 'pending').length;
+
+      const branches = new Set(
+        apps
+          .filter((app) => app.status === 'approved')
+          .map((app) => (app.clinic || app.branch || app.hospital || '').trim().toLowerCase())
+          .filter(Boolean)
+      );
+      branchCount = branches.size;
+
+      pendingReviews = cases.filter((item) => item.status === 'pending').length;
+      urgentReviews = cases.filter((item) =>
+        item.status === 'pending' &&
+        ['urgent', 'high'].includes(String(item.priority || item.risk || '').toLowerCase())
+      ).length;
+
+      if (modelSnapshot && !modelSnapshot.empty) {
+        const metrics = modelSnapshot.docs[0].data();
+        aiModelMetrics = {
+          sensitivity: Number(metrics.sensitivity),
+          specificity: Number(metrics.specificity),
+          precision: Number(metrics.precision),
+          auc: Number(metrics.auc || metrics.areaUnderCurve)
+        };
+      }
+    }
+
+    res.json({
+      authUsersCount,
+      authUsersToday,
+      approvedDoctors,
+      pendingDoctorApplications,
+      branchCount,
+      pendingReviews,
+      urgentReviews,
+      aiModelMetrics
+    });
+  } catch (err) {
+    console.error("[SERVER ADMIN METRICS ERROR]:", err);
+    res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
+  }
+});
+
+/**
  * POST /api/admin/set-user-role
  * Server-authoritative endpoint to change a user's role and set Firebase Custom Claims
  */
-app.post('/api/admin/set-user-role', requireAuth, requireAdmin, async (req, res) => {
+app.post('/api/admin/set-user-role', requireAuth, requireSuperAdmin, async (req, res) => {
   const { targetUserId, newRole } = req.body;
 
-  if (!targetUserId || !['patient', 'doctor', 'admin'].includes(newRole)) {
+  if (!targetUserId || !VALID_ROLES.includes(newRole)) {
     return res.status(400).json({ error: 'INVALID_REQUEST', message: 'Valid targetUserId and newRole required.' });
   }
 
   try {
+    const targetUser = await admin.auth().getUser(targetUserId);
+    const targetIsOwner = (targetUser.email || '').toLowerCase() === OWNER_EMAIL.toLowerCase();
+
     // 1. Set cryptographic custom claims on Firebase Auth
-    await admin.auth().setCustomUserClaims(targetUserId, { role: newRole });
+    await admin.auth().setCustomUserClaims(targetUserId, {
+      role: normalizeRole(newRole, targetIsOwner),
+      isOwner: targetIsOwner
+    });
 
     // 2. Update Firestore user document
     if (db) {
       await db.collection('users').doc(targetUserId).set({
-        role: newRole,
+        role: normalizeRole(newRole, targetIsOwner),
+        isOwner: targetIsOwner,
         roleUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
         roleUpdatedBy: req.user.email
       }, { merge: true });
@@ -175,13 +332,13 @@ app.post('/api/admin/set-user-role', requireAuth, requireAdmin, async (req, res)
       await db.collection('audit_events').add({
         type: 'SERVER_ROLE_CHANGE',
         targetUserId: targetUserId,
-        newRole: newRole,
+        newRole: normalizeRole(newRole, targetIsOwner),
         assignedBy: req.user.email,
         timestamp: admin.firestore.FieldValue.serverTimestamp()
       });
     }
 
-    res.json({ success: true, message: `Successfully updated user role to ${newRole} on server.` });
+    res.json({ success: true, message: `Successfully updated user role to ${normalizeRole(newRole, targetIsOwner)} on server.` });
   } catch (err) {
     console.error("[SERVER ROLE UPDATE ERROR]:", err);
     res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
