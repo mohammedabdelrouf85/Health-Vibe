@@ -842,10 +842,13 @@ async function handleEmailAuth(e) {
       } catch (profileErr) {
         console.warn("Could not update profile displayName:", profileErr);
       }
+      const safeRole = (selectedRole === "doctor") ? "doctor" : "patient";
+      selectedRole = safeRole;
+
       await db.collection("users").doc(user.uid).set({
         name: displayName,
         email: user.email,
-        role: selectedRole,
+        role: safeRole,
         emailVerified: false,
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
@@ -977,10 +980,12 @@ async function enterApp(source = "google") {
       try {
         const userDoc = await db.collection("users").doc(user.uid).get();
         if (!userDoc.exists) {
+          const safeRole = (selectedRole === "doctor") ? "doctor" : "patient";
+          selectedRole = safeRole;
           await db.collection("users").doc(user.uid).set({
             name: user.displayName || user.email.split('@')[0],
             email: user.email,
-            role: selectedRole,
+            role: safeRole,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
           });
         } else {
@@ -1134,7 +1139,30 @@ async function checkEmailVerification() {
   }
 }
 
+function updateNavVisibility() {
+  document.querySelectorAll(".nav-item").forEach((btn) => {
+    const screen = btn.dataset.screen;
+    if (screen === "admin" || screen === "audit") {
+      btn.style.display = selectedRole === "admin" ? "flex" : "none";
+    } else if (screen === "doctor" || screen === "verification") {
+      btn.style.display = (selectedRole === "doctor" || selectedRole === "admin") ? "flex" : "none";
+    } else {
+      btn.style.display = "flex";
+    }
+  });
+}
+
 function showScreen(name) {
+  if ((name === "admin" || name === "audit") && selectedRole !== "admin") {
+    showToast(currentLanguage === "en" ? "Restricted: Administrator access only." : "غير مصرح: هذا القسم خاص بإدارة النظام فقط.");
+    name = selectedRole === "doctor" ? "doctor" : "patient";
+  } else if ((name === "doctor" || name === "verification") && selectedRole !== "doctor" && selectedRole !== "admin") {
+    showToast(currentLanguage === "en" ? "Restricted: Verified healthcare providers only." : "غير مصرح: هذا القسم مخصص للأطباء المعتمدين فقط.");
+    name = "patient";
+  }
+
+  updateNavVisibility();
+
   document.querySelectorAll(".screen").forEach((screen) => {
     screen.classList.toggle("active", screen.id === `screen-${name}`);
   });
@@ -1282,9 +1310,10 @@ document.addEventListener("click", (event) => {
 
   const roleButton = event.target.closest("[data-role]");
   if (roleButton) {
-    selectedRole = roleButton.dataset.role;
+    const requestedRole = roleButton.dataset.role;
+    selectedRole = (requestedRole === "doctor") ? "doctor" : "patient";
     document.querySelectorAll("[data-role]").forEach((button) => {
-      button.classList.toggle("active", button === roleButton);
+      button.classList.toggle("active", button.dataset.role === selectedRole);
     });
     return;
   }
@@ -1399,10 +1428,12 @@ window.addEventListener("load", () => {
           selectedRole = userDoc.data().role || selectedRole;
           if (userDoc.data().name) displayName = userDoc.data().name;
         } else {
+          const safeRole = (selectedRole === "doctor") ? "doctor" : "patient";
+          selectedRole = safeRole;
           await db.collection("users").doc(user.uid).set({
             name: displayName || user.email.split('@')[0],
             email: user.email,
-            role: selectedRole,
+            role: safeRole,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
           }, { merge: true });
         }

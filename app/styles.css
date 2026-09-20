@@ -734,7 +734,7 @@ body.dark .auth-card h2 { color: var(--ink); }
 
 .role-tabs {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   align-items: stretch;
   gap: 5px;
   min-height: 58px;
