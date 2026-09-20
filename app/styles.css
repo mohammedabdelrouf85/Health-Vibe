@@ -970,6 +970,12 @@ html[dir="ltr"] .nav-item {
   align-items: center;
   flex: 0 0 auto;
   min-width: 0;
+  max-width: 100%;
+}
+
+.account-card > div:not(.avatar) {
+  min-width: 0;
+  flex: 1;
 }
 
 .account-card strong,
@@ -981,9 +987,13 @@ html[dir="ltr"] .nav-item {
   white-space: nowrap;
 }
 
+.account-card strong {
+  font-size: 13.5px;
+}
+
 .account-card span {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
   direction: ltr;
 }
 
