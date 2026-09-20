@@ -208,7 +208,10 @@
         <div class="avatar" id="sidebarAvatar">أ</div>
         <div>
           <strong id="userName">أحمد محمد</strong>
-          <span id="userEmail">أحمد</span>
+          <div style="display:flex;align-items:center;gap:6px;margin-top:2px;">
+            <span id="userEmail">أحمد</span>
+            <span id="emailVerifiedBadge" class="verified-badge" title="Verified Account" style="display:none;">✓</span>
+          </div>
         </div>
       </div>
       <button id="logoutButton" class="logout-button">تسجيل الخروج</button>
@@ -229,6 +232,24 @@
           <div class="avatar" id="topbarAvatar">A</div>
         </div>
       </header>
+
+      <div id="emailVerificationBanner" class="verification-banner" style="display:none;" role="alert">
+        <div class="banner-content">
+          <span class="banner-icon">✉️</span>
+          <div class="banner-text">
+            <strong id="verificationBannerTitle">Email verification needed</strong>
+            <p id="verificationBannerDesc">Please verify your email address to secure your account and access all clinical features.</p>
+          </div>
+        </div>
+        <div class="banner-actions">
+          <button id="resendVerificationBtn" type="button" class="banner-btn primary">
+            <span id="resendVerificationText">Resend Verification</span>
+          </button>
+          <button id="checkVerificationBtn" type="button" class="banner-btn secondary">
+            <span>Check Status</span>
+          </button>
+        </div>
+      </div>
 
       <section id="screen-patient" class="screen active">
         <div class="hero-panel app-hero">

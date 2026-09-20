@@ -405,7 +405,10 @@ const uiText = {
   "كلمة المرور": "Password",
   "تذكرني": "Remember me",
   "نسيت كلمة المرور؟": "Forgot password?",
-  "اختر الدور المناسب لحسابك وسجل دخولك بالبريد أو جوجل للمتابعة بأمان.": "Select your account role and sign in with email or Google to proceed securely."
+  "اختر الدور المناسب لحسابك وسجل دخولك بالبريد أو جوجل للمتابعة بأمان.": "Select your account role and sign in with email or Google to proceed securely.",
+  "تأكيد البريد الإلكتروني مطلوب": "Email verification needed",
+  "إعادة إرسال الرابط": "Resend Verification",
+  "تحقق الآن": "Check Status"
 };
 
 const enToAr = {
@@ -426,7 +429,10 @@ const enToAr = {
   "Continue with Google": "المتابعة بحساب جوجل",
   "Close": "إغلاق",
   "Sign in": "تسجيل الدخول",
-  "Account role": "دور الحساب"
+  "Account role": "دور الحساب",
+  "Email verification needed": "تأكيد البريد الإلكتروني مطلوب",
+  "Resend Verification": "إعادة إرسال الرابط",
+  "Check Status": "تحقق الآن"
 };
 
 let selectedRole = "patient";
@@ -489,6 +495,7 @@ function applyLanguage(language) {
   screenTitle.textContent = language === "en" ? englishTitles[activeScreenName] || "Health Vibes" : titles[activeScreenName] || "Health Vibes";
   accountLabel.textContent = language === "en" ? englishRoleLabels[selectedRole] : roleLabels[selectedRole];
   if (typeof setAuthMode === "function") setAuthMode(authMode);
+  if (typeof updateEmailVerificationUI === "function" && typeof auth !== "undefined") updateEmailVerificationUI(auth.currentUser);
 }
 
 function showToast(message) {
@@ -768,10 +775,17 @@ async function handleEmailAuth(e) {
         name: displayName,
         email: user.email,
         role: selectedRole,
+        emailVerified: false,
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
 
-      showToast(currentLanguage === "en" ? "Account created successfully!" : "تم إنشاء الحساب بنجاح!");
+      try {
+        await user.sendEmailVerification();
+      } catch (verErr) {
+        console.warn("sendEmailVerification error:", verErr);
+      }
+
+      showToast(currentLanguage === "en" ? `Account created! Verification link sent to ${email}` : `تم إنشاء الحساب وإرسال رابط تأكيد البريد إلى ${email}`);
     } else {
       await auth.signInWithEmailAndPassword(email, password);
       showToast(currentLanguage === "en" ? "Signed in successfully!" : "تم تسجيل الدخول بنجاح!");
@@ -835,7 +849,120 @@ async function leaveApp() {
   publicSite.hidden = false;
   publicSite.classList.remove("is-hidden");
   document.body.classList.remove("sidebar-open");
+  updateEmailVerificationUI(null);
   showToast(currentLanguage === "en" ? "Signed out" : "تم تسجيل الخروج");
+}
+
+let resendCooldown = false;
+let resendTimer = null;
+
+function updateEmailVerificationUI(user) {
+  const banner = document.getElementById("emailVerificationBanner");
+  const badge = document.getElementById("emailVerifiedBadge");
+
+  if (!user) {
+    if (banner) banner.style.display = "none";
+    if (badge) badge.style.display = "none";
+    return;
+  }
+
+  if (badge) {
+    badge.style.display = user.emailVerified ? "inline-flex" : "none";
+  }
+
+  if (!banner) return;
+
+  if (user.emailVerified) {
+    banner.style.display = "none";
+    return;
+  }
+
+  banner.style.display = "flex";
+  const isEn = currentLanguage === "en";
+  const title = document.getElementById("verificationBannerTitle");
+  const desc = document.getElementById("verificationBannerDesc");
+  const resendText = document.getElementById("resendVerificationText");
+  const checkText = document.getElementById("checkVerificationBtn")?.querySelector("span");
+
+  if (title) title.textContent = isEn ? "Email verification needed" : "تأكيد البريد الإلكتروني مطلوب";
+  if (desc) desc.textContent = isEn
+    ? `We sent a verification link to ${user.email}. Please verify your email to secure your account.`
+    : `أرسلنا رابط التحقق إلى ${user.email}. يرجى تأكيد بريدك الإلكتروني لحماية حسابك الطبي.`;
+  if (resendText && !resendCooldown) {
+    resendText.textContent = isEn ? "Resend Verification" : "إعادة إرسال الرابط";
+  }
+  if (checkText) checkText.textContent = isEn ? "Check Status" : "تحقق الآن";
+}
+
+async function resendVerificationEmail() {
+  const user = auth.currentUser;
+  if (!user) return;
+
+  if (user.emailVerified) {
+    showToast(currentLanguage === "en" ? "Email is already verified!" : "البريد الإلكتروني مؤكد بالفعل!");
+    updateEmailVerificationUI(user);
+    return;
+  }
+
+  if (resendCooldown) {
+    showToast(currentLanguage === "en" ? "Please wait before resending." : "يرجى الانتظار قليلاً قبل إعادة الإرسال.");
+    return;
+  }
+
+  const resendBtn = document.getElementById("resendVerificationBtn");
+  const resendText = document.getElementById("resendVerificationText");
+
+  try {
+    if (resendBtn) resendBtn.disabled = true;
+    await user.sendEmailVerification();
+    showToast(currentLanguage === "en" ? "Verification email sent! Check your inbox." : "تم إرسال رابط التأكيد! يرجى فحص صندوق الوارد.");
+
+    resendCooldown = true;
+    let secondsLeft = 60;
+    if (resendText) resendText.textContent = `${secondsLeft}s`;
+
+    if (resendTimer) clearInterval(resendTimer);
+    resendTimer = setInterval(() => {
+      secondsLeft--;
+      if (secondsLeft <= 0) {
+        clearInterval(resendTimer);
+        resendCooldown = false;
+        if (resendBtn) resendBtn.disabled = false;
+        if (resendText) {
+          resendText.textContent = currentLanguage === "en" ? "Resend Verification" : "إعادة إرسال الرابط";
+        }
+      } else {
+        if (resendText) resendText.textContent = `${secondsLeft}s`;
+      }
+    }, 1000);
+  } catch (err) {
+    console.error("Resend verification error:", err);
+    showToast(getAuthErrorMessage(err));
+    if (resendBtn) resendBtn.disabled = false;
+  }
+}
+
+async function checkEmailVerification() {
+  const user = auth.currentUser;
+  if (!user) return;
+
+  try {
+    await user.reload();
+    const updatedUser = auth.currentUser;
+
+    if (updatedUser && updatedUser.emailVerified) {
+      showToast(currentLanguage === "en" ? "🎉 Email verified successfully!" : "🎉 تم تأكيد البريد الإلكتروني بنجاح!");
+      updateEmailVerificationUI(updatedUser);
+      await db.collection("users").doc(updatedUser.uid).set({
+        emailVerified: true
+      }, { merge: true });
+    } else {
+      showToast(currentLanguage === "en" ? "Email is not verified yet. Please check your inbox and click the verification link." : "لم يتم تأكيد البريد بعد. يرجى فتح البريد الإلكتروني والضغط على الرابط المرسل إليك أولاً.");
+    }
+  } catch (err) {
+    console.error("Check verification error:", err);
+    showToast(getAuthErrorMessage(err));
+  }
 }
 
 function showScreen(name) {
@@ -1028,6 +1155,17 @@ if (forgotPasswordBtn) {
     }
   });
 }
+
+const resendVerificationBtn = document.getElementById("resendVerificationBtn");
+if (resendVerificationBtn) {
+  resendVerificationBtn.addEventListener("click", resendVerificationEmail);
+}
+
+const checkVerificationBtn = document.getElementById("checkVerificationBtn");
+if (checkVerificationBtn) {
+  checkVerificationBtn.addEventListener("click", checkEmailVerification);
+}
+
 document.getElementById("oxygenInput").addEventListener("input", updateOxygenWarning);
 document.getElementById("submitAssessment").addEventListener("click", () => {
   updateOxygenWarning();
@@ -1110,6 +1248,7 @@ window.addEventListener("load", () => {
       accountLabel.textContent = currentLanguage === "en" ? englishRoleLabels[selectedRole] : roleLabels[selectedRole];
       
       updateAvatar(user);
+      updateEmailVerificationUI(user);
       
       publicSite.hidden = true;
       hideAuth();
@@ -1118,6 +1257,7 @@ window.addEventListener("load", () => {
       
       loader.classList.add("is-done");
     } else {
+      updateEmailVerificationUI(null);
       window.setTimeout(() => {
         loader.classList.add("is-done");
         publicSite.classList.remove("is-hidden");
