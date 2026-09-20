@@ -309,6 +309,13 @@ app.post('/api/admin/set-user-role', requireAuth, requireSuperAdmin, async (req,
     return res.status(400).json({ error: 'INVALID_REQUEST', message: 'Valid targetUserId and newRole required.' });
   }
 
+  if ([ROLES.DOCTOR_PENDING, ROLES.DOCTOR].includes(newRole)) {
+    return res.status(400).json({
+      error: 'INVALID_ROLE_TRANSITION',
+      message: 'Doctor roles cannot be assigned manually. The account must enter doctor_pending through an application, then be approved through /api/admin/approve-doctor-application.'
+    });
+  }
+
   try {
     const targetUser = await admin.auth().getUser(targetUserId);
     const targetIsOwner = (targetUser.email || '').toLowerCase() === OWNER_EMAIL.toLowerCase();
@@ -357,6 +364,32 @@ app.post('/api/admin/approve-doctor-application', requireAuth, requireAdmin, asy
   }
 
   try {
+    const [applicationDoc, applicantDoc] = await Promise.all([
+      db.collection('doctor_applications').doc(applicationId).get(),
+      db.collection('users').doc(applicantUserId).get()
+    ]);
+
+    if (!applicationDoc.exists || applicationDoc.data().userId !== applicantUserId) {
+      return res.status(400).json({
+        error: 'INVALID_DOCTOR_APPLICATION',
+        message: 'Doctor approval requires a valid application owned by the applicant.'
+      });
+    }
+
+    if (applicationDoc.data().status !== 'pending') {
+      return res.status(400).json({
+        error: 'INVALID_DOCTOR_APPLICATION_STATUS',
+        message: 'Only pending doctor applications can be approved.'
+      });
+    }
+
+    if (!applicantDoc.exists || normalizeRole(applicantDoc.data().role) !== ROLES.DOCTOR_PENDING) {
+      return res.status(400).json({
+        error: 'INVALID_ROLE_TRANSITION',
+        message: 'Applicant must be in doctor_pending before promotion to approved doctor.'
+      });
+    }
+
     // 1. Elevate user role to 'doctor' in Firebase Auth Custom Claims
     await admin.auth().setCustomUserClaims(applicantUserId, { role: 'doctor' });
 

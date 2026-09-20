@@ -67,7 +67,13 @@ service cloud.firestore {
       allow read: if isAuthenticated() && (isAdmin() || isSupport() || resource.data.userId == request.auth.uid);
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid
                     && request.resource.data.status == 'pending';
-      allow update: if isAdmin() || (isSelf(resource.data.userId) && request.resource.data.status == 'cancelled');
+      allow update: if (isAdmin() &&
+                       resource.data.status == 'pending' &&
+                       request.resource.data.userId == resource.data.userId &&
+                       request.resource.data.status in ['approved', 'rejected']) ||
+                      (isSelf(resource.data.userId) &&
+                       resource.data.status == 'pending' &&
+                       request.resource.data.status == 'cancelled');
       allow delete: if isAdmin();
     }
 

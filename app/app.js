@@ -2346,6 +2346,7 @@ async function renderAdminUsers() {
       const isEmailVerified = u.emailVerified ? (isEn ? "Verified Email ✓" : "بريد مؤكد ✓") : (isEn ? "Pending Email" : "بانتظار التأكيد");
       const userNameStr = u.name || u.displayName || u.email.split('@')[0];
       const canManageRoles = hasPermission(PERMISSIONS.MANAGE_USER_ROLES);
+      const roleManagedByApplication = role === ROLES.DOCTOR_PENDING || role === ROLES.DOCTOR;
 
       html += `
         <tr style="border-bottom: 1px solid var(--line);">
@@ -2361,11 +2362,9 @@ async function renderAdminUsers() {
             ${isEmailVerified}
           </td>
           <td style="padding: 12px; text-align: end;">
-            ${isOwner || !canManageRoles ? `<span style="font-size: 12px; color: var(--muted);">${isOwner ? (isEn ? "Protected (Super Admin)" : "محمي (مدير عام)") : roleText}</span>` : `
+            ${isOwner || !canManageRoles || roleManagedByApplication ? `<span style="font-size: 12px; color: var(--muted);">${isOwner ? (isEn ? "Protected (Super Admin)" : "محمي (مدير عام)") : roleText}</span>` : `
               <select onchange="changeUserRole('${u.id}', this.value, '${userNameStr}')" style="padding: 5px 9px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 12px; cursor: pointer;">
                 <option value="patient" ${role === 'patient' ? 'selected' : ''}>${isEn ? 'Patient (مريض)' : 'حساب مريض'}</option>
-                <option value="doctor_pending" ${role === 'doctor_pending' ? 'selected' : ''}>${isEn ? 'Doctor pending' : 'طبيب بانتظار الاعتماد'}</option>
-                <option value="doctor" ${role === 'doctor' ? 'selected' : ''}>${isEn ? 'Doctor (طبيب)' : 'طبيب موثق'}</option>
                 <option value="clinic_admin" ${role === 'clinic_admin' ? 'selected' : ''}>${isEn ? 'Clinic admin' : 'مدير عيادة'}</option>
                 <option value="support" ${role === 'support' ? 'selected' : ''}>${isEn ? 'Support' : 'دعم فني'}</option>
                 <option value="super_admin" ${role === 'super_admin' ? 'selected' : ''}>${isEn ? 'Super admin' : 'مدير عام للنظام'}</option>
