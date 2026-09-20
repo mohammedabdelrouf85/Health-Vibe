@@ -839,33 +839,90 @@ textarea {
 }
 
 .nav-list {
-  display: grid;
-  align-content: start;
-  gap: 6px;
-  margin-top: 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 16px;
   padding-inline: 0;
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
+  /* show a subtle scrollbar so users know there's more */
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+  padding-bottom: 6px;
+}
+
+.nav-list::-webkit-scrollbar {
+  width: 4px;
+  display: block;
+}
+
+.nav-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.nav-list::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 99px;
+}
+
+/* Section divider labels */
+.nav-section-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 12px 14px 4px;
+  border-top: 1px solid var(--line);
+  margin-top: 6px;
+}
+
+.nav-section-label:first-child {
+  border-top: none;
+  margin-top: 0;
+  padding-top: 4px;
 }
 
 .nav-item {
   width: 100%;
-  min-height: 42px;
+  min-height: 40px;
   border: 0;
   background: transparent;
   color: var(--muted);
   text-align: right;
-  border-radius: 15px;
-  padding: 10px 14px;
-  font-weight: 900;
+  border-radius: 12px;
+  padding: 9px 12px;
+  font-weight: 700;
+  font-size: 14px;
   line-height: 1.2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: background .18s ease, color .18s ease;
 }
 
 html[dir="ltr"] .nav-item {
   text-align: left;
+  flex-direction: row;
+}
+
+.nav-icon {
+  font-size: 16px;
+  width: 22px;
+  text-align: center;
+  flex-shrink: 0;
+  opacity: .75;
+  transition: opacity .18s ease;
+}
+
+.nav-item:hover .nav-icon,
+.nav-item.active .nav-icon {
+  opacity: 1;
 }
 
 .nav-item:hover,
