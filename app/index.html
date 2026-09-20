@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="utf-8">
@@ -228,15 +228,17 @@
 
     <section class="workspace">
       <header class="topbar">
-        <button id="menuToggle" class="icon-button" aria-label="فتح أو إغلاق القائمة">☰</button>
+        <button id="menuToggle" class="icon-button" aria-label="Toggle menu">☰</button>
         <div>
           <p>Health Vibe</p>
-          <h2 id="screenTitle">الرئيسية</h2>
+          <h2 id="screenTitle">Home</h2>
         </div>
         <div class="top-actions">
-          <button id="languageToggle" class="chip">عربي</button>
-          <button id="themeToggle" class="chip">الوضع الفاتح</button>
-          <div class="avatar">أ</div>
+          <button id="languageToggle" class="lang-toggle" aria-label="Switch language" title="Switch to Arabic">
+            <span class="lang-globe">🌐</span>
+            <span class="lang-label">AR</span>
+          </button>
+          <div class="avatar">A</div>
         </div>
       </header>
 
@@ -626,6 +628,11 @@
       </div>
     </div>
   </div>
+
+  <!-- Floating dark mode toggle -->
+  <button id="themeToggle" class="theme-fab" aria-label="Toggle dark mode" title="Toggle dark mode">
+    <span class="theme-fab-icon">🌙</span>
+  </button>
 
   <script src="./app.js"></script>
 </body>

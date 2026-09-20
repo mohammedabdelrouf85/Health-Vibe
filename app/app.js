@@ -1,4 +1,4 @@
-﻿const loader = document.getElementById("loader");
+const loader = document.getElementById("loader");
 const publicSite = document.getElementById("publicSite");
 const authScreen = document.getElementById("authScreen");
 const app = document.getElementById("app");
@@ -426,11 +426,18 @@ function applyLanguage(language) {
     element.setAttribute("aria-label", localized(element.arLabel));
   });
 
-  if (languageToggle) languageToggle.textContent = language === "ar" ? "English" : "عربي";
+  if (languageToggle) {
+    const langLabel = languageToggle.querySelector(".lang-label");
+    if (langLabel) {
+      langLabel.textContent = language === "ar" ? "EN" : "AR";
+      languageToggle.title = language === "ar" ? "Switch to English" : "Switch to Arabic";
+    } else {
+      languageToggle.textContent = language === "ar" ? "EN" : "AR";
+    }
+  }
   const themeLabel = document.body.classList.contains("dark") ? "الوضع الداكن" : "الوضع الفاتح";
-  if (themeToggle) themeToggle.textContent = localized(themeLabel);
   if (siteThemeToggle) siteThemeToggle.textContent = localized(themeLabel);
-  screenTitle.textContent = language === "en" ? englishTitles[getActiveScreen()] || "HealthVibe AI" : titles[getActiveScreen()] || "Health Vibe";
+  screenTitle.textContent = language === "en" ? englishTitles[getActiveScreen()] || "Health Vibe" : titles[getActiveScreen()] || "Health Vibe";
   accountLabel.textContent = language === "en" ? englishRoleLabels[selectedRole] : roleLabels[selectedRole];
 }
 
@@ -527,9 +534,11 @@ function closeApprovalModal() {
 
 function toggleTheme() {
   document.body.classList.toggle("dark");
-  const label = document.body.classList.contains("dark") ? "الوضع الداكن" : "الوضع الفاتح";
-  if (themeToggle) themeToggle.textContent = localized(label);
+  const isDark = document.body.classList.contains("dark");
+  const label = isDark ? "الوضع الداكن" : "الوضع الفاتح";
   if (siteThemeToggle) siteThemeToggle.textContent = localized(label);
+  const fabIcon = themeToggle ? themeToggle.querySelector(".theme-fab-icon") : null;
+  if (fabIcon) fabIcon.textContent = isDark ? "☀️" : "🌙";
 }
 
 document.addEventListener("click", (event) => {
@@ -623,5 +632,5 @@ window.addEventListener("load", () => {
 });
 
 showScreen("patient");
-applyLanguage("ar");
+applyLanguage("en");
 updateOxygenWarning();
