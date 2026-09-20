@@ -58,10 +58,19 @@ const titles = {
   report: "التقرير"
 };
 
+const OWNER_EMAIL = "mohammedabdelrouf85@gmail.com";
+
+function isOwnerUser(userOrEmail) {
+  if (!userOrEmail) return false;
+  const email = typeof userOrEmail === "string" ? userOrEmail : userOrEmail.email;
+  return Boolean(email && email.trim().toLowerCase() === OWNER_EMAIL.toLowerCase());
+}
+
 const roleLabels = {
   patient: "حساب مريض",
   doctor: "حساب طبيب موثق",
-  admin: "حساب إدارة"
+  admin: "حساب إدارة",
+  owner: "مالك النظام (Owner)"
 };
 
 const englishTitles = {
@@ -84,7 +93,8 @@ const englishTitles = {
 const englishRoleLabels = {
   patient: "Patient account",
   doctor: "Verified doctor account",
-  admin: "Admin account"
+  admin: "Admin account",
+  owner: "System Owner (Full Access)"
 };
 
 const englishNames = {
@@ -526,8 +536,10 @@ function applyLanguage(language) {
   if (siteThemeToggle) siteThemeToggle.textContent = localized(themeLabel);
   const activeScreenEl = document.querySelector(".screen.active");
   const activeScreenName = activeScreenEl ? activeScreenEl.id.replace("screen-", "") : "patient";
-  screenTitle.textContent = language === "en" ? englishTitles[activeScreenName] || "Health Vibes" : titles[activeScreenName] || "Health Vibes";
-  accountLabel.textContent = language === "en" ? englishRoleLabels[selectedRole] : roleLabels[selectedRole];
+  const isOwner = auth && auth.currentUser && isOwnerUser(auth.currentUser.email);
+  accountLabel.textContent = language === "en"
+    ? (isOwner ? englishRoleLabels.owner : (englishRoleLabels[selectedRole] || englishRoleLabels.patient))
+    : (isOwner ? roleLabels.owner : (roleLabels[selectedRole] || roleLabels.patient));
   if (typeof setAuthMode === "function") setAuthMode(authMode);
   if (typeof updateEmailVerificationUI === "function" && typeof auth !== "undefined") updateEmailVerificationUI(auth.currentUser);
 }
@@ -842,13 +854,15 @@ async function handleEmailAuth(e) {
       } catch (profileErr) {
         console.warn("Could not update profile displayName:", profileErr);
       }
-      const safeRole = (selectedRole === "doctor") ? "doctor" : "patient";
+      const isOwner = isOwnerUser(user.email);
+      const safeRole = isOwner ? "admin" : ((selectedRole === "doctor") ? "doctor" : "patient");
       selectedRole = safeRole;
 
       await db.collection("users").doc(user.uid).set({
         name: displayName,
         email: user.email,
         role: safeRole,
+        isOwner: isOwner,
         emailVerified: false,
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
@@ -977,29 +991,45 @@ async function enterApp(source = "google") {
       const result = await auth.signInWithPopup(googleProvider);
       const user = result.user;
       
+      const isOwner = isOwnerUser(user.email);
       try {
         const userDoc = await db.collection("users").doc(user.uid).get();
         if (!userDoc.exists) {
-          const safeRole = (selectedRole === "doctor") ? "doctor" : "patient";
+          const safeRole = isOwner ? "admin" : ((selectedRole === "doctor") ? "doctor" : "patient");
           selectedRole = safeRole;
           await db.collection("users").doc(user.uid).set({
             name: user.displayName || user.email.split('@')[0],
             email: user.email,
             role: safeRole,
+            isOwner: isOwner,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
           });
         } else {
-          selectedRole = userDoc.data().role || selectedRole;
+          if (isOwner) {
+            selectedRole = "admin";
+            if (userDoc.data().role !== "admin" || !userDoc.data().isOwner) {
+              await db.collection("users").doc(user.uid).set({
+                role: "admin",
+                isOwner: true
+              }, { merge: true });
+            }
+          } else {
+            selectedRole = userDoc.data().role || selectedRole;
+          }
         }
       } catch (dbError) {
         console.warn("Firestore save failed, but auth succeeded:", dbError);
+        if (isOwner) selectedRole = "admin";
       }
 
       userName.textContent = user.displayName || user.email.split('@')[0];
       userEmail.textContent = user.email;
-      accountLabel.textContent = currentLanguage === "en" ? englishRoleLabels[selectedRole] : roleLabels[selectedRole];
+      accountLabel.textContent = currentLanguage === "en"
+        ? (isOwner ? englishRoleLabels.owner : (englishRoleLabels[selectedRole] || englishRoleLabels.patient))
+        : (isOwner ? roleLabels.owner : (roleLabels[selectedRole] || roleLabels.patient));
       
       updateAvatar(user);
+      updateEmailVerificationUI(user);
 
       publicSite.hidden = true;
       hideAuth();
@@ -1033,11 +1063,17 @@ let resendTimer = null;
 function updateEmailVerificationUI(user) {
   const banner = document.getElementById("emailVerificationBanner");
   const badge = document.getElementById("emailVerifiedBadge");
+  const ownerBadge = document.getElementById("ownerBadge");
 
   if (!user) {
     if (banner) banner.style.display = "none";
     if (badge) badge.style.display = "none";
+    if (ownerBadge) ownerBadge.style.display = "none";
     return;
+  }
+
+  if (ownerBadge) {
+    ownerBadge.style.display = isOwnerUser(user.email) ? "inline-flex" : "none";
   }
 
   if (badge) {
@@ -1421,29 +1457,44 @@ logoutButton.addEventListener("click", leaveApp);
 window.addEventListener("load", () => {
   auth.onAuthStateChanged(async (user) => {
     if (user) {
+      const isOwner = isOwnerUser(user.email);
       let displayName = user.displayName;
       try {
         const userDoc = await db.collection("users").doc(user.uid).get();
         if (userDoc.exists) {
-          selectedRole = userDoc.data().role || selectedRole;
+          if (isOwner) {
+            selectedRole = "admin";
+            if (userDoc.data().role !== "admin" || !userDoc.data().isOwner) {
+              await db.collection("users").doc(user.uid).set({
+                role: "admin",
+                isOwner: true
+              }, { merge: true });
+            }
+          } else {
+            selectedRole = userDoc.data().role || selectedRole;
+          }
           if (userDoc.data().name) displayName = userDoc.data().name;
         } else {
-          const safeRole = (selectedRole === "doctor") ? "doctor" : "patient";
+          const safeRole = isOwner ? "admin" : ((selectedRole === "doctor") ? "doctor" : "patient");
           selectedRole = safeRole;
           await db.collection("users").doc(user.uid).set({
             name: displayName || user.email.split('@')[0],
             email: user.email,
             role: safeRole,
+            isOwner: isOwner,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
           }, { merge: true });
         }
       } catch (e) {
         console.warn("Firestore role fetch failed, defaulting to patient:", e);
+        if (isOwner) selectedRole = "admin";
       }
       
       userName.textContent = displayName || user.email.split('@')[0];
       userEmail.textContent = user.email;
-      accountLabel.textContent = currentLanguage === "en" ? englishRoleLabels[selectedRole] : roleLabels[selectedRole];
+      accountLabel.textContent = currentLanguage === "en"
+        ? (isOwner ? englishRoleLabels.owner : (englishRoleLabels[selectedRole] || englishRoleLabels.patient))
+        : (isOwner ? roleLabels.owner : (roleLabels[selectedRole] || roleLabels.patient));
       
       updateAvatar(user);
       updateEmailVerificationUI(user);
