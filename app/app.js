@@ -448,40 +448,77 @@ function showToast(message) {
   showToast.timer = window.setTimeout(() => toast.classList.remove("show"), 2600);
 }
 
-// --- Mock Database (LocalStorage) ---
-function initDB() {
-  if (!localStorage.getItem('hv_cases')) {
-    const initialCases = [
-      { id: 1, name: "أحمد محمد", nameEn: "Ahmed Mohamed", o2: 91, symptoms: "كحة شديدة", symptomsEn: "Severe cough", risk: "عاجل", riskEn: "Urgent", status: "pending", time: "الآن", aiScore: "عالية", aiScoreEn: "High", confidence: "89%", duration: "3 أيام", durationEn: "3 days" },
-      { id: 2, name: "سارة علي", nameEn: "Sarah Ali", o2: 96, symptoms: "أعراض خفيفة", symptomsEn: "Mild symptoms", risk: "مراجعة", riskEn: "Review", status: "pending", time: "منذ 14 دقيقة", aiScore: "متوسطة", aiScoreEn: "Medium", confidence: "78%", duration: "يومين", durationEn: "2 days" },
-      { id: 3, name: "محمد حسن", nameEn: "Mohamed Hassan", o2: 98, symptoms: "لا توجد أعراض ظاهرة", symptomsEn: "No clear symptoms", risk: "منخفض", riskEn: "Low", status: "approved", time: "تقرير جاهز", aiScore: "منخفضة", aiScoreEn: "Low", confidence: "94%", duration: "يوم واحد", durationEn: "1 day" }
-    ];
-    localStorage.setItem('hv_cases', JSON.stringify(initialCases));
+// --- Real Database (Firebase Firestore) ---
+const firebaseConfig = {
+  apiKey: "AIzaSyANYIgImikcdMOI2EkkjPhzMjKR58o8BRM",
+  authDomain: "health-vibes-a4b3b.firebaseapp.com",
+  projectId: "health-vibes-a4b3b",
+  storageBucket: "health-vibes-a4b3b.firebasestorage.app",
+  messagingSenderId: "21682568356",
+  appId: "1:21682568356:web:d38947f11647fdfef13a31",
+  measurementId: "G-FSHSN2XB4L"
+};
+
+// Initialize Firebase
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+async function initDB() {
+  try {
+    const snapshot = await db.collection("cases").limit(1).get();
+    if (snapshot.empty) {
+      const initialCases = [
+        { id: "case_1", name: "أحمد محمد", nameEn: "Ahmed Mohamed", o2: 91, symptoms: "كحة شديدة", symptomsEn: "Severe cough", risk: "عاجل", riskEn: "Urgent", status: "pending", time: "الآن", aiScore: "عالية", aiScoreEn: "High", confidence: "89%", duration: "3 أيام", durationEn: "3 days", createdAt: new Date().getTime() },
+        { id: "case_2", name: "سارة علي", nameEn: "Sarah Ali", o2: 96, symptoms: "أعراض خفيفة", symptomsEn: "Mild symptoms", risk: "مراجعة", riskEn: "Review", status: "pending", time: "منذ 14 دقيقة", aiScore: "متوسطة", aiScoreEn: "Medium", confidence: "78%", duration: "يومين", durationEn: "2 days", createdAt: new Date().getTime() - 1000 },
+        { id: "case_3", name: "محمد حسن", nameEn: "Mohamed Hassan", o2: 98, symptoms: "لا توجد أعراض ظاهرة", symptomsEn: "No clear symptoms", risk: "منخفض", riskEn: "Low", status: "approved", time: "تقرير جاهز", aiScore: "منخفضة", aiScoreEn: "Low", confidence: "94%", duration: "يوم واحد", durationEn: "1 day", createdAt: new Date().getTime() - 2000 }
+      ];
+      for (let c of initialCases) {
+        await db.collection("cases").doc(c.id).set(c);
+      }
+    }
+  } catch (err) {
+    console.warn("Firestore not ready or permissions denied", err);
   }
 }
 
-function getCases() {
-  return JSON.parse(localStorage.getItem('hv_cases') || '[]');
+async function getCases() {
+  try {
+    const snapshot = await db.collection("cases").orderBy("createdAt", "desc").get();
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  } catch (err) {
+    console.error(err);
+    return [];
+  }
 }
 
-function updateCaseStatus(id, newStatus, note) {
-  let cases = getCases();
-  let caseIndex = cases.findIndex(c => c.id === id);
-  if (caseIndex > -1) {
-    cases[caseIndex].status = newStatus;
-    cases[caseIndex].doctorNote = note;
-    localStorage.setItem('hv_cases', JSON.stringify(cases));
+async function updateCaseStatus(id, newStatus, note) {
+  try {
+    await db.collection("cases").doc(id).update({
+      status: newStatus,
+      doctorNote: note
+    });
+  } catch (err) {
+    console.error(err);
   }
 }
 
 let activeCaseId = null;
 
-function renderDoctorQueue() {
+async function renderDoctorQueue() {
   const queueList = document.getElementById("doctorQueueList");
   if (!queueList) return;
 
-  const cases = getCases();
+  queueList.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--teal);"><div class="spinner"></div> جاري جلب البيانات من Firebase...</div>';
+  const cases = await getCases();
   queueList.innerHTML = '';
+  
+  if (cases.length === 0) {
+    queueList.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--muted);">لا يوجد بيانات</div>';
+    return;
+  }
+  
+  // Sort cases: pending first
+  cases.sort((a, b) => (a.status === 'pending' ? -1 : 1) - (b.status === 'pending' ? -1 : 1));
   
   cases.forEach(c => {
     const isEn = currentLanguage === "en";
@@ -499,18 +536,18 @@ function renderDoctorQueue() {
   }
 }
 
-window.approveCase = function(id) {
+window.approveCase = async function(id) {
   const noteInput = document.getElementById("doctorNoteInput");
   const note = noteInput ? noteInput.value : "";
-  updateCaseStatus(id, "approved", note);
-  showToast(currentLanguage === "en" ? "Result approved and saved to audit log" : "تم اعتماد النتيجة وتسجيل الحدث في سجل التدقيق");
+  await updateCaseStatus(id, "approved", note);
+  showToast(currentLanguage === "en" ? "Result approved and saved to database" : "تم اعتماد النتيجة وحفظها في قاعدة البيانات");
   renderDoctorQueue();
   selectDoctorCase(id);
 };
 
-function selectDoctorCase(id) {
+async function selectDoctorCase(id) {
   activeCaseId = id;
-  const cases = getCases();
+  const cases = await getCases();
   const c = cases.find(c => c.id === id);
   const reviewPanel = document.getElementById("doctorReviewPanel");
   if (!c || !reviewPanel) return;
@@ -534,13 +571,18 @@ function selectDoctorCase(id) {
     <textarea id="doctorNoteInput" ${c.status === 'approved' ? 'disabled' : ''} style="width: 100%; min-height: 80px; margin-bottom: 15px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); padding: 12px; font-family: inherit;">${c.doctorNote || (isEn ? 'Follow-up recommended.' : 'يوصى بمتابعة خلال 24-48 ساعة مع مراقبة الأعراض.')}</textarea>
     ${c.status !== 'approved' ? `
     <div class="doctor-actions">
-      <button class="solid-button" onclick="approveCase(${c.id})">${isEn ? 'Approve Result' : 'اعتماد النتيجة'}</button>
+      <button class="solid-button" onclick="approveCase('${c.id}')">${isEn ? 'Approve Result' : 'اعتماد النتيجة'}</button>
       <button class="danger-button">${isEn ? 'Reject' : 'رفض'}</button>
     </div>` : ''}
   `;
   
   // Highlight active button in queue
-  renderDoctorQueue();
+  const queueList = document.getElementById("doctorQueueList");
+  if (queueList) {
+      Array.from(queueList.children).forEach(btn => btn.style.border = "none");
+      const activeBtn = Array.from(queueList.children).find(btn => btn.innerHTML.includes(c.name) || btn.innerHTML.includes(c.nameEn));
+      if (activeBtn) activeBtn.style.border = "2px solid var(--teal)";
+  }
 }
 
 initDB();
