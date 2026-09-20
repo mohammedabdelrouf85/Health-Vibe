@@ -1,0 +1,632 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>هيلث فايب الذكي</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div id="loader" class="loader" aria-live="polite">
+    <div class="loader-card">
+      <div class="logo-mark logo-xl" aria-hidden="true">
+        <svg viewBox="0 0 96 96">
+          <defs>
+            <linearGradient id="hvGradient" x1="12" y1="10" x2="84" y2="88">
+              <stop offset="0" stop-color="#09b8b6"/>
+              <stop offset=".52" stop-color="#006d6f"/>
+              <stop offset="1" stop-color="#18a058"/>
+            </linearGradient>
+          </defs>
+          <rect x="8" y="8" width="80" height="80" rx="25" fill="url(#hvGradient)"/>
+          <path d="M24 53c8-22 17-22 25 0 7 18 16 18 24 0" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round"/>
+          <path d="M32 34v28M64 34v28" fill="none" stroke="#d8fffb" stroke-width="6" stroke-linecap="round"/>
+          <circle cx="48" cy="53" r="5" fill="#fff"/>
+        </svg>
+      </div>
+      <h1>هيلث فايب الذكي</h1>
+      <p>نجهز تجربة رعاية صحية أوضح وأكثر أمانًا</p>
+      <div class="loading-bar"><span></span></div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <main id="publicSite" class="site-shell is-hidden">
+    <header class="site-nav">
+      <div class="brand">
+        <div class="logo-mark" aria-hidden="true">
+          <svg viewBox="0 0 96 96">
+            <rect x="8" y="8" width="80" height="80" rx="25"/>
+            <path d="M24 53c8-22 17-22 25 0 7 18 16 18 24 0"/>
+            <path d="M32 34v28M64 34v28"/>
+            <circle cx="48" cy="53" r="5"/>
+          </svg>
+        </div>
+        <div>
+          <strong>هيلث فايب الذكي</strong>
+          <span>رعاية صحية مدعومة بالذكاء الاصطناعي وتحت مراجعة الطبيب</span>
+        </div>
+      </div>
+      <nav class="site-links" aria-label="التنقل في الموقع">
+        <a href="#workflow">المسار</a>
+        <a href="#roles">الحسابات</a>
+        <a href="#safety">الأمان</a>
+      </nav>
+      <div class="nav-actions">
+        <button id="siteThemeToggle" class="ghost-button">الوضع الفاتح</button>
+        <button class="outline-button" data-auth-open>تسجيل الدخول</button>
+        <button class="solid-button" data-auth-open>ابدأ الآن</button>
+      </div>
+    </header>
+
+    <section class="site-hero">
+      <div class="hero-copy">
+        <span class="eyebrow">الوحدة الأولى لتقييم التنفس</span>
+        <h1>رعاية صحية رقمية تربط المريض بالطبيب قبل ظهور أي نتيجة نهائية</h1>
+        <p>هيلث فايب الذكي يجمع التقييم، مراجعة الطبيب، التقارير، المواعيد، والسجل الطبي في تجربة عربية واحدة مبنية للأفراد والعيادات في مصر.</p>
+        <div class="hero-actions">
+          <button class="solid-button large" data-auth-open>تجربة البرنامج</button>
+          <button class="soft-button large" data-preview-app>معاينة بدون حساب</button>
+        </div>
+        <div class="trust-row">
+          <span>الذكاء الاصطناعي لا يصدر تشخيصًا مستقلًا</span>
+          <span>مراجعة طبيب إلزامية</span>
+          <span>واجهة عربية كاملة</span>
+        </div>
+      </div>
+
+      <div class="hero-product-card" aria-label="معاينة المنتج">
+        <div class="phone-frame">
+          <div class="phone-screen">
+            <div class="mini-top">
+              <span>أحمد</span>
+              <b>قيد المراجعة</b>
+            </div>
+            <div class="breath-orb"><span></span></div>
+            <h3>تقييم التنفس</h3>
+            <p>نسبة الأكسجين 95% - كحة متوسطة - 3 أيام</p>
+            <div class="mini-list">
+              <div><span>تقدير الخطورة</span><strong>متوسط</strong></div>
+              <div><span>مراجعة الطبيب</span><strong>قيد الانتظار</strong></div>
+              <div><span>التقرير</span><strong>مغلق حتى الاعتماد</strong></div>
+            </div>
+          </div>
+        </div>
+        <div class="floating-card card-a"><b>78%</b><span>ثقة التحليل</span></div>
+        <div class="floating-card card-b"><b>موثق</b><span>اعتماد الطبيب</span></div>
+      </div>
+    </section>
+
+    <section id="workflow" class="site-section">
+      <div class="section-head">
+        <span class="eyebrow">مسار العمل</span>
+        <h2>مسار واضح من البيانات إلى التقرير</h2>
+      </div>
+      <div class="workflow-grid">
+        <article><b>1</b><h3>بيانات المريض</h3><p>أعراض، قياسات، ملف طبي، وموافقة خصوصية واضحة.</p></article>
+        <article><b>2</b><h3>تحليل الذكاء الاصطناعي</h3><p>تصنيف الخطورة ونسبة الثقة مع إصدار نموذج قابل للتتبع.</p></article>
+        <article><b>3</b><h3>مراجعة الطبيب</h3><p>الطبيب يعتمد أو يرفض أو يطلب متابعة إضافية.</p></article>
+        <article><b>4</b><h3>تقرير معتمد</h3><p>نتيجة وتوصيات وتنبيه طبي محفوظين في السجل.</p></article>
+      </div>
+    </section>
+
+    <section id="roles" class="site-section split-section">
+      <div>
+        <span class="eyebrow">الحسابات</span>
+        <h2>حسابات للمريض والطبيب والإدارة</h2>
+        <p>الواجهة الجديدة تبدأ بتسجيل دخول واضح، وتسجيل دخول جوجل جاهز للدمج، واختيار دور المستخدم بدون خلط بين مسارات المريض والطبيب والإدارة.</p>
+      </div>
+      <div class="role-stack">
+        <div><strong>المريض</strong><span>التقييمات، التقارير، والمواعيد</span></div>
+        <div><strong>الطبيب</strong><span>قائمة المراجعة، الاعتماد، والملاحظات</span></div>
+        <div><strong>الإدارة</strong><span>المستخدمون، الأطباء، الفروع، وجودة النموذج</span></div>
+      </div>
+    </section>
+
+    <section id="safety" class="site-section safety-band">
+      <div>
+        <span class="eyebrow">السلامة أولًا</span>
+        <h2>لا توجد نتيجة نهائية بدون طبيب</h2>
+        <p>التصميم يفرق بصريًا بين الحالات قيد الانتظار والمعتمدة والعاجلة، ويضع التنبيه الطبي في النتائج والتقارير بدل دفنه داخل الشروط.</p>
+      </div>
+      <button class="solid-button large" data-auth-open>إنشاء حساب</button>
+    </section>
+  </main>
+
+  <section id="authScreen" class="auth-screen" aria-label="تسجيل الدخول">
+    <div class="auth-card">
+      <button id="authClose" class="close-button" aria-label="إغلاق">×</button>
+      <div class="brand auth-brand">
+        <div class="logo-mark" aria-hidden="true">
+          <svg viewBox="0 0 96 96">
+            <rect x="8" y="8" width="80" height="80" rx="25"/>
+            <path d="M24 53c8-22 17-22 25 0 7 18 16 18 24 0"/>
+            <path d="M32 34v28M64 34v28"/>
+            <circle cx="48" cy="53" r="5"/>
+          </svg>
+        </div>
+        <div>
+          <strong>هيلث فايب الذكي</strong>
+          <span>دخول آمن للحساب</span>
+        </div>
+      </div>
+      <h2>ادخل لحسابك</h2>
+      <p>اختر الدور ثم سجل الدخول. زر جوجل يعمل كمحاكاة الآن وجاهز للتوصيل بمعرّف تسجيل جوجل.</p>
+
+      <div class="role-tabs" role="tablist" aria-label="دور الحساب">
+        <button class="active" data-role="patient">مريض</button>
+        <button data-role="doctor">طبيب</button>
+        <button data-role="admin">إدارة</button>
+      </div>
+
+      <button id="googleLogin" class="google-button">
+        <span class="google-g">ج</span>
+        المتابعة بحساب جوجل
+      </button>
+
+      <div class="divider"><span>أو</span></div>
+
+      <label>البريد الإلكتروني</label>
+      <input id="emailInput" value="أحمد" autocomplete="email">
+      <label>كلمة المرور</label>
+      <input id="passwordInput" value="كلمةالمرور" type="password" autocomplete="current-password">
+
+      <div class="auth-options">
+        <label><input type="checkbox" checked> تذكرني</label>
+        <button>نسيت كلمة المرور؟</button>
+      </div>
+
+      <button id="emailLogin" class="solid-button full">دخول البرنامج</button>
+      <p class="auth-note">للتطبيق الحقيقي: أضف معرّف تسجيل جوجل، ورابط رجوع للخادم، وملفات جلسة آمنة، واربط صلاحيات الوصول بالدور المختار.</p>
+    </div>
+  </section>
+
+  <main id="app" class="app-shell" hidden>
+    <aside class="sidebar" aria-label="التنقل داخل التطبيق">
+      <div class="brand">
+        <div class="logo-mark" aria-hidden="true">
+          <svg viewBox="0 0 96 96">
+            <rect x="8" y="8" width="80" height="80" rx="25"/>
+            <path d="M24 53c8-22 17-22 25 0 7 18 16 18 24 0"/>
+            <path d="M32 34v28M64 34v28"/>
+            <circle cx="48" cy="53" r="5"/>
+          </svg>
+        </div>
+        <div>
+          <strong>هيلث فايب الذكي</strong>
+          <span id="accountLabel">حساب مريض</span>
+        </div>
+      </div>
+
+      <nav class="nav-list">
+        <button class="nav-item active" data-screen="patient">الرئيسية</button>
+        <button class="nav-item" data-screen="consent">الموافقة والخصوصية</button>
+        <button class="nav-item" data-screen="profile">الملف الطبي</button>
+        <button class="nav-item" data-screen="assessment">تقييم التنفس</button>
+        <button class="nav-item" data-screen="pending">حالة المراجعة</button>
+        <button class="nav-item" data-screen="result">النتيجة</button>
+        <button class="nav-item" data-screen="history">السجل</button>
+        <button class="nav-item" data-screen="appointments">المواعيد</button>
+        <button class="nav-item" data-screen="assistant">المساعد الطبي</button>
+        <button class="nav-item" data-screen="verification">توثيق الطبيب</button>
+        <button class="nav-item" data-screen="doctor">الطبيب</button>
+        <button class="nav-item" data-screen="admin">الإدارة</button>
+        <button class="nav-item" data-screen="audit">سجل التدقيق</button>
+        <button class="nav-item" data-screen="report">التقرير</button>
+      </nav>
+
+      <div class="account-card">
+        <div class="avatar">أ</div>
+        <div>
+          <strong id="userName">أحمد محمد</strong>
+          <span id="userEmail">أحمد</span>
+        </div>
+      </div>
+      <button id="logoutButton" class="logout-button">تسجيل الخروج</button>
+    </aside>
+
+    <section class="workspace">
+      <header class="topbar">
+        <button id="menuToggle" class="icon-button" aria-label="فتح أو إغلاق القائمة">☰</button>
+        <div>
+          <p>هيلث فايب الذكي</p>
+          <h2 id="screenTitle">الرئيسية</h2>
+        </div>
+        <div class="top-actions">
+          <button id="languageToggle" class="chip">عربي</button>
+          <button id="themeToggle" class="chip">الوضع الفاتح</button>
+          <div class="avatar">أ</div>
+        </div>
+      </header>
+
+      <section id="screen-patient" class="screen active">
+        <div class="hero-panel app-hero">
+          <div>
+            <span class="eyebrow">مرحبًا أحمد</span>
+            <h1>متابعة التنفس مع طبيبك في مسار واحد واضح</h1>
+            <p>أدخل الأعراض والقياسات. يحصل الطبيب على نتيجة الذكاء الاصطناعي ومؤشر الثقة قبل اعتماد أي تقرير يظهر لك.</p>
+            <div class="hero-actions">
+              <button class="solid-button large" data-screen="assessment">بدء تقييم التنفس</button>
+              <button class="soft-button large" data-screen="history">عرض السجل</button>
+            </div>
+          </div>
+          <div class="clinical-card">
+            <div class="clinical-top">
+              <span>آخر حالة</span>
+              <b>قيد المراجعة</b>
+            </div>
+            <div class="breath-orb app-orb"><span></span></div>
+            <div class="clinical-row"><span>نسبة الأكسجين</span><strong>95%</strong></div>
+            <div class="clinical-row"><span>الثقة</span><strong>78%</strong></div>
+            <div class="clinical-row"><span>الطبيب</span><strong>د. منى سامي</strong></div>
+          </div>
+        </div>
+
+        <div class="metric-grid">
+          <article><span>الموعد القادم</span><strong>غدًا 7:30م</strong><small>استشارة متابعة</small></article>
+          <article><span>آخر تقرير</span><strong>20 سبتمبر</strong><small>تقييم التنفس - الإصدار الأول</small></article>
+          <article><span>حالة النتيجة</span><strong>قيد الانتظار</strong><small>بانتظار الطبيب</small></article>
+          <article><span>الملف الطبي</span><strong>92%</strong><small>مكتمل تقريبًا</small></article>
+        </div>
+
+        <div class="content-grid">
+          <article class="panel">
+            <div class="panel-head"><h3>مسار المريض</h3><span class="pill info">مريض</span></div>
+            <div class="steps">
+              <div class="step done"><b>1</b><span>الملف الطبي</span></div>
+              <div class="step active"><b>2</b><span>تقييم التنفس</span></div>
+              <div class="step"><b>3</b><span>مراجعة الطبيب</span></div>
+              <div class="step"><b>4</b><span>تقرير معتمد</span></div>
+            </div>
+          </article>
+          <article class="panel">
+            <div class="panel-head"><h3>التنبيهات</h3><span class="pill pending">2 جديد</span></div>
+            <div class="activity">
+              <div><strong>تقييمك وصل للطبيب</strong><span>منذ 22 دقيقة</span></div>
+              <div><strong>موعد متابعة مقترح</strong><span>غدًا 7:30 مساءً</span></div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="screen-consent" class="screen">
+        <div class="content-grid">
+          <article class="panel">
+            <div class="panel-head"><h3>الموافقة الطبية</h3><span class="pill pending">مطلوبة</span></div>
+            <p class="muted-copy">هيلث فايب الذكي يستخدم بياناتك الصحية لتقييم خطورة إرشادي ثم يرسلها لطبيب معتمد قبل ظهور أي نتيجة نهائية.</p>
+            <div class="check-list">
+              <label><input type="checkbox" checked> أوافق على استخدام البيانات الطبية داخل مسار التقييم والمراجعة.</label>
+              <label><input type="checkbox" checked> أفهم أن الذكاء الاصطناعي لا يقدم تشخيصًا مستقلًا ولا يغني عن الطبيب.</label>
+              <label><input type="checkbox"> أوافق على استقبال تنبيهات المواعيد والتقارير عبر البريد أو رابط آمن.</label>
+            </div>
+            <div class="safety-note">يمكنك طلب حذف الحساب أو البيانات وفق سياسة الاحتفاظ التي يجب تثبيتها قبل الإنتاج.</div>
+            <button class="solid-button full" data-screen="profile">حفظ والمتابعة للملف الطبي</button>
+          </article>
+          <article class="panel">
+            <div class="panel-head"><h3>نطاق الوصول</h3><span class="pill info">صلاحيات الأدوار</span></div>
+            <div class="access-matrix">
+              <div><strong>المريض</strong><span>يرى بياناته ونتائجه المعتمدة فقط.</span></div>
+              <div><strong>الطبيب</strong><span>يرى الحالات المرتبطة به فقط مع سجل المراجعة.</span></div>
+              <div><strong>الإدارة</strong><span>صلاحيات تشغيلية مقيدة حسب الدور مع سجل تدقيق.</span></div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="screen-profile" class="screen">
+        <div class="form-layout">
+          <article class="panel form-panel">
+            <div class="panel-head"><h3>الملف الطبي</h3><span class="pill ok">92% مكتمل</span></div>
+            <label>الاسم</label>
+            <input value="أحمد محمد">
+            <label>العمر</label>
+            <input value="34 سنة">
+            <label>الطبيب المرتبط</label>
+            <input value="د. منى سامي - عيادة مدينة نصر">
+            <label>أمراض مزمنة أو حساسية</label>
+            <textarea>لا يوجد حساسية معروفة. تاريخ سابق لكحة موسمية.</textarea>
+            <button class="solid-button full" data-screen="assessment">حفظ وبدء تقييم التنفس</button>
+          </article>
+          <article class="panel">
+            <div class="panel-head"><h3>ملفات طبية</h3><span class="pill info">اختياري</span></div>
+            <div class="upload-zone" id="uploadZone">
+              <strong>رفع تحليل أو أشعة أو صورة دواء</strong>
+              <span>حالة تجريبية: يتم تسجيل اسم الملف فقط بدون تحليل تلقائي.</span>
+              <input id="fileUpload" type="file" multiple>
+            </div>
+            <div id="fileList" class="file-list">
+              <div><strong>تقرير تحليل الدم</strong><span>محفوظ كمرجع للطبيب</span></div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="screen-assessment" class="screen">
+        <div class="form-layout">
+          <article class="panel form-panel">
+            <div class="panel-head"><h3>تقييم التنفس</h3><span class="pill info">الخطوة 2 من 4</span></div>
+            <div class="progress"><span style="width:54%"></span></div>
+            <label>هل يوجد ضيق تنفس؟</label>
+            <div class="choice-row">
+              <button class="choice active">نعم</button>
+              <button class="choice">لا</button>
+            </div>
+            <label>درجة الكحة</label>
+            <div class="choice-row four">
+              <button class="choice">خفيفة</button>
+              <button class="choice active">متوسطة</button>
+              <button class="choice">شديدة</button>
+              <button class="choice">لا توجد</button>
+            </div>
+            <label>نسبة الأكسجين</label>
+            <input id="oxygenInput" value="95" aria-label="نسبة الأكسجين">
+            <div id="oxygenWarning" class="field-warning" hidden></div>
+            <label>مدة الأعراض</label>
+            <input value="3 أيام" aria-label="مدة الأعراض">
+            <label>عوامل خطورة</label>
+            <div class="choice-row four">
+              <button class="choice">ربو</button>
+              <button class="choice">تدخين</button>
+              <button class="choice">حمل</button>
+              <button class="choice active">لا يوجد</button>
+            </div>
+            <div class="safety-note">لن تظهر نتيجة نهائية للمريض قبل مراجعة الطبيب للحالة.</div>
+            <button id="submitAssessment" class="solid-button full">إرسال للطبيب</button>
+          </article>
+          <article class="panel insight-panel">
+            <div class="panel-head"><h3>ملخص قبل الإرسال</h3><span class="pill pending">مراجعة</span></div>
+            <div class="summary-list">
+              <div><span>تقدير الخطورة</span><strong>متوسط</strong></div>
+              <div><span>الثقة</span><strong>78%</strong></div>
+              <div><span>النموذج</span><strong>الإصدار الأول</strong></div>
+              <div><span>الحالة</span><strong>بانتظار مراجعة الطبيب</strong></div>
+            </div>
+            <div class="clinical-note">هذه البيانات لا تتحول إلى تقرير للمريض إلا بعد اعتماد الطبيب.</div>
+          </article>
+        </div>
+      </section>
+
+      <section id="screen-pending" class="screen">
+        <div class="center-state">
+          <div class="review-orbit"><span></span></div>
+          <span class="pill pending">بانتظار مراجعة الطبيب</span>
+          <h1>تم إرسال التقييم بنجاح</h1>
+          <p>يراجع الطبيب الأعراض والقياسات ونتيجة الذكاء الاصطناعي قبل إصدار التقرير النهائي.</p>
+          <div class="timeline">
+            <div class="done"><b></b><span>استلام البيانات</span></div>
+            <div class="done"><b></b><span>تشغيل الذكاء الاصطناعي</span></div>
+            <div class="active"><b></b><span>مراجعة الطبيب</span></div>
+            <div><b></b><span>إصدار التقرير</span></div>
+          </div>
+          <button class="solid-button large" data-screen="doctor">فتح شاشة الطبيب</button>
+        </div>
+      </section>
+
+      <section id="screen-result" class="screen">
+        <div class="result-layout">
+          <article class="panel result-main">
+            <span class="pill ok">نتيجة معتمدة من الطبيب</span>
+            <h1>خطر متوسط ويحتاج متابعة</h1>
+            <p>يوصى بمتابعة الطبيب خلال 24-48 ساعة ومراقبة الأعراض.</p>
+            <div class="risk-meter"><span></span></div>
+            <div class="summary-list">
+              <div><span>الخطورة</span><strong>متوسطة</strong></div>
+              <div><span>الثقة</span><strong>78%</strong></div>
+              <div><span>الطبيب</span><strong>د. منى سامي</strong></div>
+            </div>
+          </article>
+          <article class="panel">
+            <div class="panel-head"><h3>التوصيات</h3><span class="pill pending">متابعة</span></div>
+            <ul class="recommendations">
+              <li>قياس الأكسجين عند توفر جهاز موثوق.</li>
+              <li>مراجعة الطبيب خلال 24-48 ساعة.</li>
+              <li>طلب رعاية عاجلة إذا زاد ضيق التنفس.</li>
+            </ul>
+            <div class="safety-note">تنبيه طبي: التقرير لا يعد تشخيصًا مستقلًا ولا يستبدل الطوارئ.</div>
+            <button class="solid-button full" data-screen="report">عرض التقرير</button>
+          </article>
+        </div>
+      </section>
+
+      <section id="screen-history" class="screen">
+        <article class="panel">
+          <div class="panel-head"><h3>السجل والتقارير</h3><span class="pill info">3 عناصر</span></div>
+          <div class="records">
+            <button data-screen="report"><strong>تقييم التنفس</strong><span>20 سبتمبر 2026 - خطر متوسط - الإصدار الأول</span><em class="pill pending">متابعة</em></button>
+            <button><strong>تقييم التنفس</strong><span>12 سبتمبر 2026 - خطر منخفض - د. منى</span><em class="pill ok">مطمئن</em></button>
+            <button><strong>استكمال الملف</strong><span>10 سبتمبر 2026 - الموافقة مفعلة</span><em class="pill info">بيانات</em></button>
+          </div>
+        </article>
+      </section>
+
+      <section id="screen-appointments" class="screen">
+        <div class="content-grid">
+          <article class="panel">
+            <div class="panel-head"><h3>حجز موعد</h3><span class="pill info">التقويم</span></div>
+            <div class="week">
+              <button>الأحد<br><b>20</b></button>
+              <button class="active">الإثنين<br><b>21</b></button>
+              <button>الثلاثاء<br><b>22</b></button>
+              <button>الأربعاء<br><b>23</b></button>
+              <button>الخميس<br><b>24</b></button>
+            </div>
+          </article>
+          <article class="panel">
+            <div class="panel-head"><h3>المواعيد المتاحة</h3><span class="pill ok">متاح</span></div>
+            <div class="slot-list">
+              <button><strong>7:30 مساءً</strong><span>استشارة متابعة - 20 دقيقة</span></button>
+              <button><strong>8:15 مساءً</strong><span>فيديو أو عيادة</span></button>
+            </div>
+            <button class="solid-button full">تأكيد الموعد</button>
+          </article>
+        </div>
+      </section>
+
+      <section id="screen-assistant" class="screen">
+        <div class="assistant-layout">
+          <article class="panel chat-panel">
+            <div class="panel-head"><h3>مساعد طبي إرشادي</h3><span class="pill pending">ليس تشخيصًا</span></div>
+            <div id="chatMessages" class="chat-messages">
+              <div class="bot">أقدر أشرح لك معنى الحالة أو أساعدك تجهز أسئلة للطبيب. في الطوارئ اطلب رعاية عاجلة فورًا.</div>
+            </div>
+            <div class="chat-compose">
+              <input id="chatInput" value="ماذا يعني خطر متوسط؟">
+              <button id="sendChat" class="solid-button">إرسال</button>
+            </div>
+          </article>
+          <article class="panel">
+            <div class="panel-head"><h3>حدود المساعد</h3><span class="pill info">السلامة</span></div>
+            <div class="access-matrix">
+              <div><strong>لا يبدل الطبيب</strong><span>يشرح ولا يعتمد علاجًا أو تشخيصًا.</span></div>
+              <div><strong>مرتبط بالسياق</strong><span>يعتمد على التقرير المعتمد والملاحظات الطبية المتاحة.</span></div>
+              <div><strong>تصعيد واضح</strong><span>الأعراض الشديدة توجه المستخدم للرعاية العاجلة.</span></div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="screen-verification" class="screen">
+        <div class="content-grid">
+          <article class="panel">
+            <div class="panel-head"><h3>توثيق الطبيب</h3><span class="pill pending">بانتظار التوثيق</span></div>
+            <div class="verification-steps">
+              <div class="done"><b></b><strong>الهوية الشخصية</strong><span>تم الرفع والمراجعة</span></div>
+              <div class="active"><b></b><strong>كارنيه النقابة / الترخيص</strong><span>بانتظار مراجعة الإدارة</span></div>
+              <div><b></b><strong>بيانات العيادة</strong><span>العنوان وأوقات العمل</span></div>
+            </div>
+          </article>
+          <article class="panel">
+            <div class="panel-head"><h3>صلاحية المراجعة</h3><span class="pill danger">معطلة حتى التوثيق</span></div>
+            <p class="muted-copy">في النسخة الإنتاجية، لا يستطيع الطبيب اعتماد تقارير مرضى قبل اكتمال التحقق المهني.</p>
+            <button class="outline-button full">رفع مستند جديد</button>
+          </article>
+        </div>
+      </section>
+
+      <section id="screen-doctor" class="screen">
+        <div class="doctor-layout">
+          <article class="panel">
+            <div class="panel-head"><h3>قائمة المرضى</h3><span class="pill ok">طبيب موثق</span></div>
+            <div class="queue">
+              <button class="danger"><strong>أحمد محمد</strong><span>نسبة الأكسجين 91% - كحة شديدة</span><em>عاجل</em></button>
+              <button class="pending"><strong>سارة علي</strong><span>خطر متوسط - منذ 14 دقيقة</span><em>مراجعة</em></button>
+              <button class="ok"><strong>محمد حسن</strong><span>خطر منخفض - تقرير جاهز</span><em>منخفض</em></button>
+            </div>
+          </article>
+          <article class="panel">
+            <div class="panel-head"><h3>مراجعة حالة أحمد</h3><span class="pill pending">قيد الانتظار</span></div>
+            <div class="summary-list">
+              <div><span>خطورة الذكاء الاصطناعي</span><strong>متوسطة</strong></div>
+              <div><span>الثقة</span><strong>78%</strong></div>
+              <div><span>نسبة الأكسجين</span><strong>95%</strong></div>
+              <div><span>مدة الأعراض</span><strong>3 أيام</strong></div>
+            </div>
+            <label>ملاحظة الطبيب</label>
+            <textarea>يوصى بمتابعة خلال 24-48 ساعة مع مراقبة الأعراض.</textarea>
+            <div class="doctor-actions">
+              <button id="approveResult" class="solid-button">اعتماد النتيجة</button>
+              <button class="danger-button">رفض</button>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="screen-admin" class="screen">
+        <div class="metric-grid">
+          <article><span>المستخدمون</span><strong>1,248</strong><small>+12 اليوم</small></article>
+          <article><span>الأطباء</span><strong>84</strong><small>6 بانتظار التوثيق</small></article>
+          <article><span>الفروع</span><strong>12</strong><small>نسخة مصر الأولى</small></article>
+          <article><span>مراجعات معلقة</span><strong>31</strong><small>2 عاجلة</small></article>
+        </div>
+        <div class="content-grid">
+          <article class="panel">
+            <div class="panel-head"><h3>مؤشرات نموذج الذكاء الاصطناعي</h3><span class="pill info">الإصدار الأول</span></div>
+            <div class="summary-list">
+              <div><span>الحساسية</span><strong>0.88</strong></div>
+              <div><span>النوعية</span><strong>0.81</strong></div>
+              <div><span>الدقة</span><strong>0.79</strong></div>
+              <div><span>المساحة تحت المنحنى</span><strong>0.86</strong></div>
+            </div>
+          </article>
+          <article class="panel">
+            <div class="panel-head"><h3>العمليات</h3><span class="pill pending">تحتاج مراجعة جودة</span></div>
+            <div class="activity">
+              <div><strong>توثيق الأطباء</strong><span>6 مستندات مهنية بانتظار المراجعة</span></div>
+              <div><strong>تحديث النموذج</strong><span>مسودة الإصدار الثاني بانتظار مراجعة الجودة الطبية</span></div>
+            </div>
+          </article>
+          <article class="panel">
+            <div class="panel-head"><h3>ضوابط صلاحيات الأدوار</h3><span class="pill danger">أقل صلاحية ممكنة</span></div>
+            <div class="summary-list">
+              <div><span>دعم الإدارة</span><strong>بدون ملاحظات طبية</strong></div>
+              <div><span>مراجعة الجودة الطبية</span><strong>وصول بدون هوية المريض</strong></div>
+              <div><span>الإدارة العليا</span><strong>للطوارئ فقط</strong></div>
+              <div><span>أحداث التدقيق</span><strong>مفعلة</strong></div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="screen-audit" class="screen">
+        <article class="panel">
+          <div class="panel-head"><h3>سجل التدقيق</h3><span class="pill info">أحداث تجريبية</span></div>
+          <div class="audit-table">
+            <div><strong>20 سبتمبر 2026 - 03:18</strong><span>المريض أرسل تقييم التنفس</span><em>المريض: 2048</em></div>
+            <div><strong>20 سبتمبر 2026 - 03:21</strong><span>نموذج التنفس أصدر تقدير خطورة متوسط</span><em>إصدار النموذج: الأول</em></div>
+            <div><strong>20 سبتمبر 2026 - 03:29</strong><span>الطبيب فتح مراجعة الحالة</span><em>الطبيب: منى 17</em></div>
+            <div><strong>20 سبتمبر 2026 - 03:35</strong><span>الإدارة راجعت لوحة جودة النموذج</span><em>الدور: مراجعة الجودة الطبية</em></div>
+          </div>
+        </article>
+      </section>
+
+      <section id="screen-report" class="screen">
+        <div class="report-page">
+          <div class="report-header">
+            <div class="brand">
+              <div class="logo-mark" aria-hidden="true">
+                <svg viewBox="0 0 96 96">
+                  <rect x="8" y="8" width="80" height="80" rx="25"/>
+                  <path d="M24 53c8-22 17-22 25 0 7 18 16 18 24 0"/>
+                  <path d="M32 34v28M64 34v28"/>
+                  <circle cx="48" cy="53" r="5"/>
+                </svg>
+              </div>
+              <div><strong>هيلث فايب الذكي</strong><span>تقرير تقييم التنفس</span></div>
+            </div>
+            <span class="pill pending">تنبيه</span>
+          </div>
+          <div class="report-grid">
+            <div><span>المريض</span><strong>أحمد محمد - رقم 2048</strong></div>
+            <div><span>الطبيب</span><strong>د. منى سامي - موثقة</strong></div>
+            <div><span>التاريخ</span><strong>20 سبتمبر 2026</strong></div>
+            <div><span>النموذج</span><strong>تقييم التنفس - الإصدار الأول</strong></div>
+          </div>
+          <h3>النتيجة</h3>
+          <p><strong>خطورة متوسطة.</strong> يوصى بالمتابعة خلال 24-48 ساعة. نسبة الثقة: 78%.</p>
+          <h3>التوصيات</h3>
+          <ul class="recommendations">
+            <li>راقب نسبة الأكسجين إذا توفر جهاز موثوق.</li>
+            <li>تابع مع الطبيب الذي راجع الحالة.</li>
+            <li>اطلب رعاية عاجلة إذا زاد ضيق التنفس.</li>
+          </ul>
+          <div class="safety-note">تنبيه طبي: هيلث فايب الذكي يساعد في دعم القرار الطبي ولا يستبدل التقييم الطبي المؤهل أو رعاية الطوارئ.</div>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <div id="confirmModal" class="confirm-modal" aria-hidden="true">
+    <div class="confirm-card">
+      <h3>تأكيد اعتماد التقرير</h3>
+      <p>بعد الاعتماد ستظهر النتيجة والتوصيات للمريض وسيتم حفظ الحدث في سجل التدقيق.</p>
+      <div class="doctor-actions">
+        <button id="confirmApprove" class="solid-button">تأكيد الاعتماد</button>
+        <button id="cancelApprove" class="outline-button">إلغاء</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>

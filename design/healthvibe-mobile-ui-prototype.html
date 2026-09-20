@@ -1,0 +1,1204 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HealthVibe AI Mobile UI Prototype</title>
+  <style>
+    :root {
+      --teal: #006d6f;
+      --teal-deep: #03484a;
+      --cyan: #e7f7f7;
+      --blue: #2b7de9;
+      --green: #18a058;
+      --amber: #d99a16;
+      --red: #d64545;
+      --ink: #152528;
+      --muted: #5e7275;
+      --surface: #ffffff;
+      --bg: #f4f8f8;
+      --line: #dce8e8;
+      --shadow: 0 18px 50px rgba(3, 72, 74, .12);
+      font-family: "Cairo", "IBM Plex Sans Arabic", "Segoe UI", Tahoma, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+    }
+
+    .page {
+      padding: 28px;
+      max-width: 1440px;
+      margin: 0 auto;
+    }
+
+    .intro {
+      direction: ltr;
+      text-align: left;
+      margin-bottom: 26px;
+      display: grid;
+      grid-template-columns: 1.2fr .8fr;
+      gap: 22px;
+      align-items: end;
+    }
+
+    h1, h2, h3, p { margin: 0; }
+
+    h1 {
+      font-size: clamp(30px, 4vw, 54px);
+      line-height: 1.02;
+      color: var(--teal-deep);
+      letter-spacing: 0;
+      max-width: 760px;
+    }
+
+    .intro p {
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.65;
+      max-width: 540px;
+    }
+
+    .system-strip {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+
+    .token {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 14px;
+      min-height: 96px;
+      box-shadow: 0 10px 24px rgba(3, 72, 74, .06);
+    }
+
+    .swatch {
+      height: 28px;
+      border-radius: 10px;
+      margin-bottom: 10px;
+      border: 1px solid rgba(0, 0, 0, .05);
+    }
+
+    .token strong { display: block; font-size: 13px; color: var(--teal-deep); }
+    .token span { display: block; font-size: 12px; color: var(--muted); margin-top: 4px; direction: ltr; text-align: left; }
+
+    .screens {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 24px;
+      align-items: start;
+    }
+
+    .design-section {
+      margin: 24px 0;
+      background: rgba(255,255,255,.78);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      padding: 18px;
+      box-shadow: 0 10px 24px rgba(3, 72, 74, .06);
+    }
+
+    .design-section h2 {
+      direction: ltr;
+      text-align: left;
+      color: var(--teal-deep);
+      font-size: 22px;
+      margin-bottom: 6px;
+    }
+
+    .design-section > p {
+      direction: ltr;
+      text-align: left;
+      color: var(--muted);
+      line-height: 1.55;
+      max-width: 760px;
+      margin-bottom: 16px;
+    }
+
+    .component-board {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 14px;
+    }
+
+    .component-card {
+      background: white;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 14px;
+      min-height: 150px;
+    }
+
+    .component-card h3 {
+      direction: ltr;
+      text-align: left;
+      color: var(--teal-deep);
+      font-size: 15px;
+      margin-bottom: 10px;
+    }
+
+    .component-card p {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .mini-stack {
+      display: grid;
+      gap: 8px;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+      direction: ltr;
+    }
+
+    .flow-step {
+      background: white;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 14px;
+      text-align: left;
+    }
+
+    .flow-step strong {
+      display: block;
+      color: var(--teal-deep);
+      margin-bottom: 5px;
+    }
+
+    .flow-step span {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .screen-wrap {
+      direction: ltr;
+    }
+
+    .caption {
+      font-size: 13px;
+      color: var(--muted);
+      margin: 0 0 8px 4px;
+      direction: ltr;
+      text-align: left;
+    }
+
+    .phone {
+      direction: rtl;
+      width: min(100%, 360px);
+      min-height: 720px;
+      margin: 0 auto;
+      border-radius: 34px;
+      background: #0f2528;
+      padding: 12px;
+      box-shadow: var(--shadow);
+    }
+
+    .screen {
+      min-height: 696px;
+      border-radius: 26px;
+      background: var(--surface);
+      overflow: hidden;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .status {
+      height: 32px;
+      padding: 10px 20px 0;
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--teal-deep);
+      direction: ltr;
+    }
+
+    .content {
+      padding: 18px 20px 86px;
+      flex: 1;
+    }
+
+    .no-nav .content { padding-bottom: 22px; }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--teal-deep);
+      font-weight: 700;
+    }
+
+    .logo {
+      width: 42px;
+      height: 42px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, var(--teal), #20b486);
+      color: #fff;
+      display: grid;
+      place-items: center;
+      font-weight: 800;
+      direction: ltr;
+    }
+
+    .hero-mark {
+      margin: 84px auto 32px;
+      width: 132px;
+      height: 132px;
+      border-radius: 38px;
+      background: radial-gradient(circle at 30% 20%, #ffffff 0 16%, transparent 17%), linear-gradient(135deg, var(--teal), #37b77c);
+      display: grid;
+      place-items: center;
+      color: #fff;
+      font-size: 34px;
+      font-weight: 800;
+      direction: ltr;
+      box-shadow: 0 24px 44px rgba(0, 109, 111, .28);
+    }
+
+    .title {
+      font-size: 24px;
+      line-height: 1.35;
+      color: var(--teal-deep);
+      font-weight: 700;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      line-height: 1.55;
+      margin-top: 8px;
+      font-size: 14px;
+    }
+
+    .btn {
+      border: 0;
+      border-radius: 16px;
+      min-height: 48px;
+      padding: 12px 16px;
+      font: inherit;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+    }
+
+    .btn.primary { background: var(--teal); color: white; }
+    .btn.secondary { background: var(--cyan); color: var(--teal-deep); }
+    .btn.outline { background: white; color: var(--teal); border: 1px solid var(--line); }
+    .btn.red { background: var(--red); color: white; }
+
+    .actions {
+      display: grid;
+      gap: 10px;
+      margin-top: 22px;
+    }
+
+    .seg {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      background: #eef6f6;
+      border-radius: 16px;
+      padding: 5px;
+      margin: 18px 0;
+    }
+
+    .seg span {
+      text-align: center;
+      padding: 10px 4px;
+      border-radius: 12px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .seg .active {
+      background: white;
+      color: var(--teal);
+      box-shadow: 0 6px 16px rgba(3,72,74,.10);
+    }
+
+    label.field {
+      display: block;
+      margin-top: 13px;
+      color: var(--teal-deep);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .input {
+      margin-top: 7px;
+      min-height: 48px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      padding: 0 14px;
+      color: var(--muted);
+      background: #fbfefe;
+      font-size: 14px;
+    }
+
+    .notice, .card, .metric, .row {
+      background: #fbfefe;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+    }
+
+    .notice {
+      padding: 14px;
+      color: var(--muted);
+      line-height: 1.55;
+      font-size: 13px;
+      margin-top: 16px;
+    }
+
+    .check-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 13px 0;
+      border-bottom: 1px solid var(--line);
+      font-size: 14px;
+      color: var(--ink);
+      line-height: 1.45;
+    }
+
+    .check {
+      width: 22px;
+      height: 22px;
+      border-radius: 7px;
+      background: var(--teal);
+      color: white;
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      margin-top: 1px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 18px;
+    }
+
+    .avatar {
+      width: 42px;
+      height: 42px;
+      border-radius: 14px;
+      background: var(--cyan);
+      color: var(--teal);
+      display: grid;
+      place-items: center;
+      font-weight: 800;
+    }
+
+    .icon-btn {
+      width: 42px;
+      height: 42px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: white;
+      color: var(--teal);
+      display: grid;
+      place-items: center;
+    }
+
+    .grid2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .card {
+      padding: 14px;
+      margin-top: 12px;
+    }
+
+    .card h3 {
+      font-size: 15px;
+      color: var(--teal-deep);
+      margin-bottom: 8px;
+    }
+
+    .card p {
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--muted);
+    }
+
+    .metric {
+      padding: 12px;
+    }
+
+    .metric small {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .metric strong {
+      display: block;
+      margin-top: 4px;
+      color: var(--teal-deep);
+      font-size: 18px;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .pending { background: #fff7e4; color: #8a5b07; }
+    .ok { background: #e8f8ef; color: #0d7640; }
+    .danger { background: #fdecec; color: #b43030; }
+    .info { background: #eaf3ff; color: #1f61b5; }
+
+    .module {
+      background: linear-gradient(135deg, var(--teal), #159e82);
+      color: white;
+      border-radius: 22px;
+      padding: 18px;
+      margin-top: 18px;
+    }
+
+    .module p { color: rgba(255,255,255,.82); margin-top: 6px; font-size: 13px; line-height: 1.5; }
+
+    .list {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .row {
+      padding: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .row-title {
+      font-size: 14px;
+      color: var(--teal-deep);
+      font-weight: 700;
+    }
+
+    .row-sub {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 3px;
+    }
+
+    .nav {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: 12px;
+      height: 62px;
+      background: rgba(255,255,255,.96);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      align-items: center;
+      box-shadow: 0 12px 30px rgba(3,72,74,.10);
+    }
+
+    .nav span {
+      display: grid;
+      place-items: center;
+      gap: 3px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .nav .active { color: var(--teal); }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .section-title {
+      margin-top: 18px;
+      margin-bottom: 8px;
+      font-size: 15px;
+      color: var(--teal-deep);
+      font-weight: 800;
+    }
+
+    .step {
+      height: 8px;
+      background: #edf5f5;
+      border-radius: 999px;
+      overflow: hidden;
+      margin: 12px 0 20px;
+    }
+
+    .step div {
+      height: 100%;
+      width: 54%;
+      background: var(--teal);
+      border-radius: inherit;
+    }
+
+    .choice-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .choice {
+      border: 1px solid var(--line);
+      background: white;
+      border-radius: 14px;
+      min-height: 44px;
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      font-weight: 700;
+      font-size: 13px;
+    }
+
+    .choice.active {
+      background: var(--cyan);
+      color: var(--teal);
+      border-color: #b8dddd;
+    }
+
+    .progress {
+      height: 10px;
+      background: #edf5f5;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .progress span {
+      display: block;
+      height: 100%;
+      background: var(--teal);
+      border-radius: inherit;
+    }
+
+    .result-ring {
+      width: 144px;
+      height: 144px;
+      margin: 30px auto 20px;
+      border-radius: 50%;
+      background: conic-gradient(var(--amber) 0 62%, #f3ece0 62% 100%);
+      display: grid;
+      place-items: center;
+    }
+
+    .result-ring div {
+      width: 104px;
+      height: 104px;
+      border-radius: 50%;
+      background: white;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      color: var(--teal-deep);
+      font-weight: 800;
+    }
+
+    .timeline {
+      position: relative;
+      padding-right: 18px;
+    }
+
+    .timeline::before {
+      content: "";
+      position: absolute;
+      right: 5px;
+      top: 10px;
+      bottom: 10px;
+      width: 2px;
+      background: var(--line);
+    }
+
+    .timeline .row {
+      position: relative;
+    }
+
+    .timeline .row::before {
+      content: "";
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--teal);
+      position: absolute;
+      right: -18px;
+      top: 22px;
+    }
+
+    .week {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .day {
+      min-height: 60px;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      background: white;
+      font-size: 12px;
+    }
+
+    .day.active {
+      background: var(--teal);
+      color: white;
+      border-color: var(--teal);
+    }
+
+    .queue-priority {
+      width: 4px;
+      height: 42px;
+      border-radius: 999px;
+      background: var(--amber);
+      flex: 0 0 auto;
+    }
+
+    .queue-priority.red { background: var(--red); }
+    .queue-priority.green { background: var(--green); }
+
+    .doctor-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .admin-shell .content { padding-bottom: 20px; }
+    .admin-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+    .admin-grid .metric strong { font-size: 20px; }
+
+    .report {
+      background: white;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px;
+      margin-top: 10px;
+      direction: ltr;
+      text-align: left;
+    }
+
+    .report-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 10px;
+      margin-bottom: 10px;
+    }
+
+    .report h3 { color: var(--teal-deep); font-size: 16px; }
+    .report p, .report li { font-size: 11px; line-height: 1.45; color: var(--muted); }
+
+    .empty-illustration {
+      width: 142px;
+      height: 142px;
+      border-radius: 42px;
+      margin: 54px auto 22px;
+      background:
+        linear-gradient(90deg, transparent 44%, rgba(255,255,255,.7) 44% 56%, transparent 56%),
+        radial-gradient(circle at 50% 35%, #bfe8e4 0 19%, transparent 20%),
+        linear-gradient(135deg, var(--cyan), #d9f3eb);
+      border: 1px solid #ccebea;
+    }
+
+    .error-field {
+      border-color: var(--red);
+      background: #fffafa;
+      color: var(--red);
+    }
+
+    .error-text {
+      color: var(--red);
+      font-size: 12px;
+      margin-top: 6px;
+    }
+
+    .dark-phone {
+      background: #061a1c;
+    }
+
+    .dark-phone .screen {
+      --surface: #0c2225;
+      --bg: #071719;
+      --line: #244245;
+      --ink: #e8f4f2;
+      --muted: #9fb9b8;
+      --cyan: #143538;
+      background: #0c2225;
+      color: var(--ink);
+    }
+
+    .dark-phone .status,
+    .dark-phone .title,
+    .dark-phone .row-title,
+    .dark-phone .card h3,
+    .dark-phone .metric strong,
+    .dark-phone .section-title {
+      color: #e8f4f2;
+    }
+
+    .dark-phone .card,
+    .dark-phone .metric,
+    .dark-phone .row,
+    .dark-phone .input,
+    .dark-phone .notice,
+    .dark-phone .nav,
+    .dark-phone .day,
+    .dark-phone .choice {
+      background: #102b2e;
+      border-color: #244245;
+    }
+
+    .dark-phone .module {
+      background: linear-gradient(135deg, #008083, #1aa77f);
+    }
+
+    .dark-phone .nav {
+      background: rgba(16,43,46,.96);
+    }
+
+    @media (max-width: 760px) {
+      .page { padding: 18px; }
+      .intro { grid-template-columns: 1fr; }
+      .system-strip { grid-template-columns: repeat(2, 1fr); }
+      .phone { max-width: 360px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="intro">
+      <div>
+        <h1>HealthVibe AI mobile-first product UI</h1>
+        <p>Complete visual direction and screen set for an Arabic-first AI-assisted HealthTech workflow. The screens show patient, doctor, admin, and report surfaces with doctor-reviewed AI results.</p>
+      </div>
+      <p>Design principles: clinical trust, calm colors, clear status states, large patient controls, denser doctor/admin workflows, Arabic RTL support, and visible medical safety boundaries.</p>
+    </section>
+
+    <section class="system-strip" aria-label="Color system">
+      <div class="token"><div class="swatch" style="background:#006d6f"></div><strong>Primary teal</strong><span>#006D6F - CTAs, active states</span></div>
+      <div class="token"><div class="swatch" style="background:#e7f7f7"></div><strong>Soft cyan</strong><span>#E7F7F7 - calm surfaces</span></div>
+      <div class="token"><div class="swatch" style="background:#18a058"></div><strong>Fresh green</strong><span>#18A058 - approved / low risk</span></div>
+      <div class="token"><div class="swatch" style="background:#d99a16"></div><strong>Amber</strong><span>#D99A16 - pending / caution</span></div>
+    </section>
+
+    <section class="design-section">
+      <h2>Component and state system</h2>
+      <p>Reusable UI decisions for patient, doctor, and admin flows. The same status language appears across mobile screens, dashboards, and the PDF report.</p>
+      <div class="component-board">
+        <div class="component-card">
+          <h3>Status language</h3>
+          <div class="mini-stack">
+            <span class="status-pill ok">مطمئن</span>
+            <span class="status-pill pending">بانتظار مراجعة الطبيب</span>
+            <span class="status-pill danger">يحتاج رعاية عاجلة</span>
+          </div>
+        </div>
+        <div class="component-card">
+          <h3>Primary actions</h3>
+          <div class="mini-stack">
+            <button class="btn primary">بدء تقييم التنفس</button>
+            <button class="btn secondary">عرض السجل</button>
+            <button class="btn outline">تغيير اللغة</button>
+          </div>
+        </div>
+        <div class="component-card">
+          <h3>AI confidence</h3>
+          <div class="progress"><span style="width:78%"></span></div>
+          <p style="margin-top:10px">Show percentage with physician-review wording. Never present AI as independent diagnosis.</p>
+        </div>
+        <div class="component-card">
+          <h3>Medical safety copy</h3>
+          <p>تنبيه طبي: هذه المعلومات لدعم القرار الطبي فقط ولا تستبدل تقييم طبيب مؤهل أو خدمات الطوارئ.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="design-section">
+      <h2>Core workflow</h2>
+      <p>The product should make the review gate obvious. Patients submit data, doctors approve, and only approved results enter patient history and reports.</p>
+      <div class="flow">
+        <div class="flow-step"><strong>Patient input</strong><span>Symptoms, measurements, risk factors, and consent-aware profile data.</span></div>
+        <div class="flow-step"><strong>AI assessment</strong><span>Risk class, confidence, model version, and no final patient diagnosis.</span></div>
+        <div class="flow-step"><strong>Doctor review</strong><span>Assigned doctor approves, rejects, adds notes, or requests follow-up.</span></div>
+        <div class="flow-step"><strong>Patient output</strong><span>Approved result, recommendations, visible disclaimer, and PDF report.</span></div>
+      </div>
+    </section>
+
+    <section class="screens">
+      <div class="screen-wrap">
+        <p class="caption">01 Splash / language-aware onboarding</p>
+        <div class="phone"><div class="screen no-nav">
+          <div class="status"><span>9:41</span><span>LTE 100%</span></div>
+          <div class="content" style="text-align:center">
+            <div class="hero-mark">HV</div>
+            <h2 class="title">HealthVibe AI</h2>
+            <p class="subtitle">منصة رعاية صحية تساعدك تتابع حالتك مع طبيبك بخطوات واضحة وآمنة.</p>
+            <div class="notice" style="text-align:right">تم اختيار العربية حسب لغة الجهاز. يمكنك تغيير اللغة في أي وقت.</div>
+            <div class="actions">
+              <button class="btn primary">ابدأ الآن</button>
+              <button class="btn secondary">Continue in English</button>
+            </div>
+          </div>
+        </div></div>
+      </div>
+
+      <div class="screen-wrap">
+        <p class="caption">02 Login / role-aware sign up</p>
+        <div class="phone"><div class="screen no-nav">
+          <div class="status"><span>9:41</span><span>LTE 100%</span></div>
+          <div class="content">
+            <div class="brand"><div class="logo">HV</div><span>HealthVibe AI</span></div>
+            <h2 class="title" style="margin-top:34px">تسجيل الدخول</h2>
+            <p class="subtitle">اختر نوع الحساب للوصول للتجربة المناسبة.</p>
+            <div class="seg"><span class="active">مريض</span><span>طبيب</span><span>Admin</span></div>
+            <label class="field">رقم الهاتف أو البريد</label><div class="input">example@email.com</div>
+            <label class="field">كلمة المرور</label><div class="input">••••••••</div>
+            <div class="notice">حساب الطبيب يحتاج تحقق مهني قبل تفعيل مراجعة الحالات.</div>
+            <div class="actions"><button class="btn primary">دخول</button><button class="btn outline">إنشاء حساب جديد</button></div>
+          </div>
+        </div></div>
+      </div>
+
+      <div class="screen-wrap">
+        <p class="caption">03 Consent and medical privacy</p>
+        <div class="phone"><div class="screen no-nav">
+          <div class="status"><span>9:41</span><span>LTE 100%</span></div>
+          <div class="content">
+            <h2 class="title">الموافقة والخصوصية</h2>
+            <p class="subtitle">نحتاج موافقتك قبل جمع أو استخدام أي بيانات طبية.</p>
+            <div class="notice">HealthVibe AI يقدم دعم قرار طبي فقط. النتيجة النهائية لا تظهر لك إلا بعد مراجعة طبيب مؤهل.</div>
+            <div style="margin-top:18px">
+              <div class="check-row"><span class="check">✓</span><span>أوافق على استخدام بياناتي الطبية لتقييم الحالة ومراجعتها من الطبيب.</span></div>
+              <div class="check-row"><span class="check">✓</span><span>أفهم أن النتائج لا تعتبر تشخيصًا مستقلًا أو بديلًا للطوارئ.</span></div>
+              <div class="check-row" style="border-bottom:0"><span class="check">✓</span><span>أوافق على سياسة الخصوصية وشروط الاستخدام.</span></div>
+            </div>
+            <div class="actions"><button class="btn primary">متابعة</button><button class="btn outline">قراءة سياسة الخصوصية</button></div>
+          </div>
+        </div></div>
+      </div>
+
+      <div class="screen-wrap">
+        <p class="caption">04 Patient dashboard</p>
+        <div class="phone"><div class="screen">
+          <div class="status"><span>9:41</span><span>LTE 100%</span></div>
+          <div class="content">
+            <div class="topbar"><div><p class="subtitle" style="margin:0">صباح الخير</p><h2 class="title">أحمد</h2></div><div class="avatar">أ</div></div>
+            <div class="module"><h3>تقييم التنفس</h3><p>ابدأ تقييم الأعراض والقياسات، ثم يراجع الطبيب النتيجة قبل اعتمادها.</p></div>
+            <div class="grid2">
+              <div class="metric"><small>الموعد القادم</small><strong>غدًا 7:30م</strong></div>
+              <div class="metric"><small>آخر نتيجة</small><strong>قيد المراجعة</strong></div>
+            </div>
+            <h3 class="section-title">آخر النشاط</h3>
+            <div class="list">
+              <div class="row"><div><div class="row-title">تقييم تنفس</div><div class="row-sub">أرسل للطبيب منذ 22 دقيقة</div></div><span class="status-pill pending">قيد المراجعة</span></div>
+              <div class="row"><div><div class="row-title">تقرير سابق</div><div class="row-sub">12 سبتمبر 2026</div></div><span class="status-pill ok">معتمد</span></div>
+            </div>
+          </div>
+          <div class="nav"><span class="active"><i class="dot"></i>الرئيسية</span><span>السجل</span><span>المواعيد</span><span>الملف</span></div>
+        </div></div>
+      </div>
+
+      <div class="screen-wrap">
+        <p class="caption">05 Patient medical profile</p>
+        <div class="phone"><div class="screen">
+          <div class="status"><span>9:41</span><span>LTE 100%</span></div>
+          <div class="content">
+            <div class="topbar"><h2 class="title">الملف الطبي</h2><button class="icon-btn">✎</button></div>
+            <div class="card"><h3>البيانات الأساسية</h3><p>أحمد محمد • 34 سنة • القاهرة<br>رقم المريض: HV-2048</p></div>
+            <div class="grid2">
+              <div class="metric"><small>الطول</small><strong>176 سم</strong></div>
+              <div class="metric"><small>الوزن</small><strong>82 كجم</strong></div>
+            </div>
+            <div class="card"><h3>التاريخ الطبي</h3><p>حساسية صدر موسمية. لا يوجد تدخين حالي. لا توجد حساسية أدوية مسجلة.</p></div>
+            <div class="card"><h3>الطبيب المرتبط</h3><p>د. منى سامي<br><span class="status-pill ok" style="margin-top:8px">Verified Doctor</span></p></div>
+            <div class="card"><h3>حالة الموافقة</h3><p>موافقة مشاركة البيانات الطبية مفعلة منذ 20 سبتمبر 2026.</p></div>
+          </div>
+          <div class="nav"><span>الرئيسية</span><span>السجل</span><span>المواعيد</span><span class="active"><i class="dot"></i>الملف</span></div>
+        </div></div>
+      </div>
+
+      <div class="screen-wrap">
+        <p class="caption">06 Respiratory assessment form</p>
+        <div class="phone"><div class="screen">
+          <div class="status"><span>9:41</span><span>LTE 100%</span></div>
+          <div class="content">
+            <h2 class="title">تقييم التنفس</h2>
+            <p class="subtitle">الخطوة 2 من 4: الأعراض الحالية</p>
+            <div class="step"><div></div></div>
+            <label class="field">هل يوجد ضيق تنفس؟</label>
+            <div class="choice-grid"><div class="choice active">نعم</div><div class="choice">لا</div></div>
+            <label class="field">درجة الكحة</label>
+            <div class="choice-grid"><div class="choice">خفيفة</div><div class="choice active">متوسطة</div><div class="choice">شديدة</div><div class="choice">لا توجد</div></div>
+            <label class="field">نسبة الأكسجين إن وجدت</label><div class="input">95%</div>
+            <label class="field">مدة الأعراض</label><div class="input">3 أيام</div>
+            <div class="notice">لن تظهر نتيجة نهائية قبل مراجعة الطبيب للحالة.</div>
+            <div class="actions"><button class="btn primary">متابعة</button></div>
+          </div>
+          <div class="nav"><span class="active"><i class="dot"></i>الرئيسية</span><span>السجل</span><span>المواعيد</span><span>الملف</span></div>
+        </div></div>
+      </div>
+
+      <div class="screen-wrap">
+        <p class="caption">07 Pending doctor review</p>
+        <div class="phone"><div class="screen">
+          <div class="status"><span>9:41</span><span>LTE 100%</span></div>
+          <div class="content" style="text-align:center">
+            <div class="result-ring"><div>قيد<br>المراجعة</div></div>
+            <h2 class="title">بانتظار مراجعة الطبيب</h2>
+            <p class="subtitle">تم حفظ تقييم التنفس وإرساله إلى د. منى سامي. ستظهر النتيجة النهائية بعد الاعتماد.</p>
+            <div class="card" style="text-align:right"><h3>ما الذي يحدث الآن؟</h3><p>يراجع الطبيب الأعراض، القياسات، نتيجة AI، والتاريخ الطبي قبل إصدار التقرير.</p></div>
+            <div class="actions"><button class="btn secondary">عرض حالة الطلب</button><button class="btn outline">العودة للرئيسية</button></div>
+          </div>
+          <div class="nav"><span class="active"><i class="dot"></i>الرئيسية</span><span>السجل</span><span>المواعيد</span><span>الملف</span></div>
+        </div></div>
+      </div>
+
+      <div class="screen-wrap">
+        <p class="caption">08 Approved result</p>
+        <div class="phone"><div class="screen">
+          <div class="status"><span>9:41</span><span>LTE 100%</span></div>
+          <div class="content">
+            <div class="topbar"><h2 class="title">نتيجة معتمدة</h2><span class="status-pill ok">دكتور معتمد</span></div>
+            <div class="card" style="background:#fff9ea;border-color:#f2dfae"><span class="status-pill pending">يحتاج متابعة</span><h3 style="margin-top:10px">خطر متوسط</h3><p>يوصى بمتابعة الطبيب خلال 24-48 ساعة ومراقبة الأعراض.</p></div>
+            <div class="card"><h3>ثقة النموذج</h3><div class="progress"><span style="width:78%"></span></div><p style="margin-top:8px">78% - راجع الطبيب النتيجة واعتمد التوصيات.</p></div>
+            <div class="card"><h3>التوصيات</h3><p>الالتزام بالعلاج الموصوف، قياس الأكسجين عند توفر جهاز، وطلب رعاية عاجلة عند زيادة ضيق التنفس.</p></div>
+            <div class="notice"><strong>تنبيه طبي:</strong> هذه النتيجة لا تعد تشخيصًا مستقلًا ولا تستبدل الطوارئ أو تقييم طبيب مؤهل.</div>
+            <div class="actions"><button class="btn primary">تحميل التقرير PDF</button></div>
+          </div>
+          <div class="nav"><span>الرئيسية</span><span class="active"><i class="dot"></i>السجل</span><span>المواعيد</span><span>الملف</span></div>
+        </div></div>
+      </div>
+
+      <div class="screen-wrap">
+        <p class="caption">09 Patient history and reports</p>
+        <div class="phone"><div class="screen">
+          <div class="status"><span>9:41</span><span>LTE 100%</span></div>
+          <div class="content">
+            <h2 class="title">السجل والتقارير</h2>
+            <p class="subtitle">كل تقييم معتمد محفوظ بتاريخ ونسخة النموذج.</p>
+            <div class="timeline list">
+              <div class="row"><div><div class="row-title">تقييم التنفس</div><div class="row-sub">20 سبتمبر • Model R-1.0</div></div><span class="status-pill pending">متابعة</span></div>
+              <div class="row"><div><div class="row-title">تقييم التنفس</div><div class="row-sub">12 سبتمبر • د. منى سامي</div></div><span class="status-pill ok">مطمئن</span></div>
+              <div class="row"><div><div class="row-title">استكمال الملف</div><div class="row-sub">10 سبتمبر</div></div><span class="status-pill info">بيانات</span></div>
+            </div>
+            <div class="actions"><button class="btn secondary">تصدير آخر تقرير</button></div>
+          </div>
+          <div class="nav"><span>الرئيسية</span><span class="active"><i class="dot"></i>السجل</span><span>المواعيد</span><span>الملف</span></div>
+        </div></div>
+      </div>
+
+      <div class="screen-wrap">
+        <p class="caption">10 Appointment booking calendar</p>
+        <div class="phone"><div class="screen">
+          <div class="status"><span>9:41</span><span>LTE 100%</span></div>
+          <div class="content">
+            <h2 class="title">حجز موعد</h2>
+            <p class="subtitle">اختر موعد متابعة مع الطبيب المرتبط بحسابك.</p>
+            <div class="week"><div class="day">الأحد<br>20</div><div class="day active">الإثنين<br>21</div><div class="day">الثلاثاء<br>22</div><div class="day">الأربعاء<br>23</div><div class="day">الخميس<br>24</div></div>
+            <h3 class="section-title">المواعيد المتاحة</h3>
+            <div class="list">
+              <div class="row"><div><div class="row-title">7:30 مساءً</div><div class="row-sub">استشارة متابعة • 20 دقيقة</div></div><span class="status-pill ok">متاح</span></div>
+              <div class="row"><div><div class="row-title">8:15 مساءً</div><div class="row-sub">فيديو أو عيادة</div></div><span class="status-pill ok">متاح</span></div>
+            </div>
+            <div class="actions"><button class="btn primary">تأكيد الموعد</button></div>
+          </div>
+          <div class="nav"><span>الرئيسية</span><span>السجل</span><span class="active"><i class="dot"></i>المواعيد</span><span>الملف</span></div>
+        </div></div>
+      </div>
+
+      <div class="screen-wrap">
+        <p class="caption">11 Doctor dashboard</p>
+        <div class="phone"><div class="screen no-nav">
+          <div class="status"><span>9:41</span><span>LTE 100%</span></div>
+          <div class="content">
+            <div class="topbar"><div><p class="subtitle" style="margin:0">Verified Doctor</p><h2 class="title">د. منى سامي</h2></div><div class="avatar">د</div></div>
+            <div class="grid2"><div class="metric"><small>قيد المراجعة</small><strong>8</strong></div><div class="metric"><small>عالي الأولوية</small><strong>2</strong></div></div>
+            <h3 class="section-title">قائمة المرضى</h3>
+            <div class="list">
+              <div class="row"><div class="queue-priority red"></div><div style="flex:1"><div class="row-title">أحمد محمد</div><div class="row-sub">SpO2 91% • كحة شديدة</div></div><span class="status-pill danger">عاجل</span></div>
+              <div class="row"><div class="queue-priority"></div><div style="flex:1"><div class="row-title">سارة علي</div><div class="row-sub">خطر متوسط • منذ 14 دقيقة</div></div><span class="status-pill pending">مراجعة</span></div>
+              <div class="row"><div class="queue-priority green"></div><div style="flex:1"><div class="row-title">محمد حسن</div><div class="row-sub">خطر منخفض • تقرير جاهز</div></div><span class="status-pill ok">منخفض</span></div>
+            </div>
+          </div>
+        </div></div>
+      </div>
+
+      <div class="screen-wrap">
+        <p class="caption">12 Doctor case review</p>
+        <div class="phone"><div class="screen no-nav">
+          <div class="status"><span>9:41</span><span>LTE 100%</span></div>
+          <div class="content">
+            <div class="topbar"><h2 class="title">مراجعة حالة</h2><span class="status-pill pending">Pending</span></div>
+            <div class="card"><h3>أحمد محمد</h3><p>34 سنة • حساسية صدر موسمية • آخر تقييم قبل 8 أيام</p></div>
+            <div class="grid2"><div class="metric"><small>AI Risk</small><strong>Medium</strong></div><div class="metric"><small>Confidence</small><strong>78%</strong></div></div>
+            <div class="card"><h3>مدخلات المريض</h3><p>ضيق تنفس: نعم<br>الكحة: متوسطة<br>SpO2: 95%<br>مدة الأعراض: 3 أيام</p></div>
+            <label class="field">ملاحظة الطبيب</label><div class="input" style="min-height:76px;align-items:flex-start;padding-top:12px">يوصى بمتابعة خلال 24-48 ساعة...</div>
+            <div class="doctor-actions"><button class="btn primary">اعتماد</button><button class="btn red">رفض</button></div>
+            <button class="btn secondary" style="margin-top:8px">طلب فحص إضافي</button>
+          </div>
+        </div></div>
+      </div>
+
+      <div class="screen-wrap">
+        <p class="caption">13 Admin dashboard</p>
+        <div class="phone"><div class="screen no-nav admin-shell">
+          <div class="status"><span>9:41</span><span>LTE 100%</span></div>
+          <div class="content">
+            <div class="topbar"><h2 class="title">Admin Dashboard</h2><span class="status-pill info">Ops</span></div>
+            <div class="admin-grid">
+              <div class="metric"><small>Users</small><strong>1,248</strong></div>
+              <div class="metric"><small>Doctors</small><strong>84</strong></div>
+              <div class="metric"><small>Branches</small><strong>12</strong></div>
+              <div class="metric"><small>Pending reviews</small><strong>31</strong></div>
+            </div>
+            <div class="card"><h3>AI model metrics</h3><p>Respiratory model R-1.0<br>Sensitivity 0.88 • Specificity 0.81<br>Last validation: 20 Sep 2026</p></div>
+            <div class="card"><h3>Access control</h3><p>Production mode should split Super Admin, Ops, Clinical QA, and Support roles with audit logs.</p></div>
+            <div class="list">
+              <div class="row"><div><div class="row-title">Doctor verification</div><div class="row-sub">6 pending professional documents</div></div><span class="status-pill pending">Pending</span></div>
+              <div class="row"><div><div class="row-title">Model update</div><div class="row-sub">R-1.1 draft awaiting QA</div></div><span class="status-pill info">QA</span></div>
+            </div>
+          </div>
+        </div></div>
+      </div>
+
+      <div class="screen-wrap">
+        <p class="caption">14 PDF medical report visual template</p>
+        <div class="phone"><div class="screen no-nav">
+          <div class="status"><span>9:41</span><span>LTE 100%</span></div>
+          <div class="content">
+            <h2 class="title">تقرير طبي PDF</h2>
+            <p class="subtitle">قالب التقرير المعتمد بعد مراجعة الطبيب.</p>
+            <div class="report">
+              <div class="report-head"><div><h3>HealthVibe AI</h3><p>Respiratory Assessment Report</p></div><div class="logo" style="width:38px;height:38px;border-radius:12px">HV</div></div>
+              <p><strong>Patient:</strong> Ahmed Mohamed • HV-2048</p>
+              <p><strong>Doctor:</strong> Dr. Mona Samy • Verified</p>
+              <p><strong>Date:</strong> 20 Sep 2026 • <strong>Model:</strong> R-1.0</p>
+              <div style="margin:10px 0"><span class="status-pill pending">CAUTION • follow-up required</span></div>
+              <p><strong>Risk classification:</strong> Medium</p>
+              <p><strong>Confidence:</strong> 78%</p>
+              <p><strong>Recommendations:</strong></p>
+              <ul style="padding-left:18px;margin-top:4px">
+                <li>Follow up with clinician in 24-48 hours.</li>
+                <li>Monitor oxygen level if device is available.</li>
+                <li>Seek urgent care if symptoms worsen.</li>
+              </ul>
+              <p style="border-top:1px solid var(--line);padding-top:8px;margin-top:8px"><strong>Medical disclaimer:</strong> This report supports clinical decision-making and does not replace qualified medical evaluation or emergency care.</p>
+            </div>
+          </div>
+        </div></div>
+      </div>
+
+      <div class="screen-wrap">
+        <p class="caption">15 Empty state / first-time patient</p>
+        <div class="phone"><div class="screen">
+          <div class="status"><span>9:41</span><span>LTE 100%</span></div>
+          <div class="content" style="text-align:center">
+            <div class="topbar" style="text-align:right"><div><p class="subtitle" style="margin:0">أهلًا بك</p><h2 class="title">ابدأ أول تقييم</h2></div><div class="avatar">ن</div></div>
+            <div class="empty-illustration"></div>
+            <h2 class="title">لا توجد نتائج بعد</h2>
+            <p class="subtitle">ابدأ بتقييم التنفس. سيتم إرسال النتيجة للطبيب قبل عرضها كتقرير نهائي.</p>
+            <div class="actions"><button class="btn primary">بدء تقييم التنفس</button><button class="btn outline">استكمال الملف الطبي</button></div>
+          </div>
+          <div class="nav"><span class="active"><i class="dot"></i>الرئيسية</span><span>السجل</span><span>المواعيد</span><span>الملف</span></div>
+        </div></div>
+      </div>
+
+      <div class="screen-wrap">
+        <p class="caption">16 Form validation / accessible error</p>
+        <div class="phone"><div class="screen">
+          <div class="status"><span>9:41</span><span>LTE 100%</span></div>
+          <div class="content">
+            <h2 class="title">تقييم التنفس</h2>
+            <p class="subtitle">الخطوة 3 من 4: القياسات</p>
+            <div class="step"><div style="width:72%"></div></div>
+            <label class="field">نسبة الأكسجين</label>
+            <div class="input error-field">88%</div>
+            <div class="error-text">القيمة منخفضة. إذا كان لديك ضيق تنفس شديد، اطلب رعاية عاجلة فورًا.</div>
+            <label class="field">درجة الحرارة</label><div class="input">37.8°</div>
+            <label class="field">معدل التنفس</label><div class="input">22 / دقيقة</div>
+            <div class="notice">يمكنك المتابعة، لكن سيتم إبراز الحالة للطبيب كأولوية أعلى.</div>
+            <div class="actions"><button class="btn primary">إرسال للطبيب</button><button class="btn outline">رجوع</button></div>
+          </div>
+          <div class="nav"><span class="active"><i class="dot"></i>الرئيسية</span><span>السجل</span><span>المواعيد</span><span>الملف</span></div>
+        </div></div>
+      </div>
+
+      <div class="screen-wrap">
+        <p class="caption">17 Doctor verification onboarding</p>
+        <div class="phone"><div class="screen no-nav">
+          <div class="status"><span>9:41</span><span>LTE 100%</span></div>
+          <div class="content">
+            <div class="brand"><div class="logo">HV</div><span>Doctor account</span></div>
+            <h2 class="title" style="margin-top:30px">توثيق حساب الطبيب</h2>
+            <p class="subtitle">لن تتمكن من اعتماد نتائج المرضى قبل مراجعة الهوية والبيانات المهنية.</p>
+            <div class="list">
+              <div class="row"><div><div class="row-title">بطاقة الهوية</div><div class="row-sub">صورة واضحة من الوجهين</div></div><span class="status-pill ok">مرفوع</span></div>
+              <div class="row"><div><div class="row-title">كارنيه النقابة أو الترخيص</div><div class="row-sub">PDF أو صورة</div></div><span class="status-pill pending">مطلوب</span></div>
+              <div class="row"><div><div class="row-title">بيانات العيادة</div><div class="row-sub">اختياري في نسخة العرض</div></div><span class="status-pill info">لاحقًا</span></div>
+            </div>
+            <div class="actions"><button class="btn primary">رفع المستند المطلوب</button><button class="btn outline">حفظ كمسودة</button></div>
+          </div>
+        </div></div>
+      </div>
+
+      <div class="screen-wrap">
+        <p class="caption">18 Dark mode patient dashboard</p>
+        <div class="phone dark-phone"><div class="screen">
+          <div class="status"><span>9:41</span><span>LTE 100%</span></div>
+          <div class="content">
+            <div class="topbar"><div><p class="subtitle" style="margin:0">مساء الخير</p><h2 class="title">أحمد</h2></div><div class="avatar">أ</div></div>
+            <div class="module"><h3>تقييم التنفس</h3><p>نفس البنية البصرية مع تباين هادئ مناسب للاستخدام الليلي.</p></div>
+            <div class="grid2">
+              <div class="metric"><small>حالة التقرير</small><strong>معتمد</strong></div>
+              <div class="metric"><small>المتابعة</small><strong>بعد يومين</strong></div>
+            </div>
+            <h3 class="section-title">آخر النشاط</h3>
+            <div class="list">
+              <div class="row"><div><div class="row-title">نتيجة معتمدة</div><div class="row-sub">خطر متوسط • د. منى سامي</div></div><span class="status-pill pending">متابعة</span></div>
+              <div class="row"><div><div class="row-title">موعد قادم</div><div class="row-sub">21 سبتمبر • 7:30م</div></div><span class="status-pill info">حجز</span></div>
+            </div>
+          </div>
+          <div class="nav"><span class="active"><i class="dot"></i>الرئيسية</span><span>السجل</span><span>المواعيد</span><span>الملف</span></div>
+        </div></div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
