@@ -121,7 +121,8 @@ const uiText = {
   "إنشاء حساب": "Create account",
   "دخول آمن للحساب": "Secure account access",
   "ادخل لحسابك": "Access your account",
-  "اختر الدور ثم سجل الدخول. زر جوجل يعمل كمحاكاة الآن وجاهز للتوصيل بمعرّف تسجيل جوجل.": "Choose a role, then sign in. The Google button is simulated for now and ready to connect to a Google sign-in client.",
+  "اختر الدور المناسب لحسابك وقم بتسجيل الدخول باستخدام حساب جوجل للمتابعة بأمان.": "Select your account role and continue with Google to proceed securely.",
+  "اختر الدور ثم سجل الدخول. زر جوجل يعمل كمحاكاة الآن وجاهز للتوصيل بمعرّف تسجيل جوجل.": "Select your account role and continue with Google to proceed securely.",
   "مريض": "Patient",
   "طبيب": "Doctor",
   "إدارة": "Admin",
@@ -390,11 +391,28 @@ const uiText = {
   "الواجهة مضبوطة على الإنجليزية": "Interface set to English"
 };
 
+const enToAr = {
+  "Access your account": "ادخل لحسابك",
+  "Select your account role and continue with Google to proceed securely.": "اختر الدور المناسب لحسابك وقم بتسجيل الدخول باستخدام حساب جوجل للمتابعة بأمان.",
+  "Select the appropriate role for your account and sign in with Google to proceed securely.": "اختر الدور المناسب لحسابك وقم بتسجيل الدخول باستخدام حساب جوجل للمتابعة بأمان.",
+  "Patient": "مريض",
+  "Doctor": "طبيب",
+  "Admin": "إدارة",
+  "Continue with Google": "المتابعة بحساب جوجل",
+  "Close": "إغلاق",
+  "Sign in": "تسجيل الدخول",
+  "Account role": "دور الحساب"
+};
+
 let selectedRole = "patient";
 let currentLanguage = "ar";
 
-function localized(arText) {
-  return currentLanguage === "en" ? uiText[arText] || arText : arText;
+function localized(text) {
+  if (currentLanguage === "en") {
+    return uiText[text] || text;
+  } else {
+    return enToAr[text] || text;
+  }
 }
 
 function preserveSpacing(original, value) {
