@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Health Vibe</title>
+  <link rel="icon" type="image/jpeg" href="./logo.jpg">
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
@@ -35,28 +36,20 @@
   <main id="publicSite" class="site-shell is-hidden">
     <header class="site-nav">
       <div class="brand">
-        <div class="logo-mark" aria-hidden="true">
-          <svg viewBox="0 0 96 96">
-            <rect x="8" y="8" width="80" height="80" rx="25"/>
-            <path d="M24 53c8-22 17-22 25 0 7 18 16 18 24 0"/>
-            <path d="M32 34v28M64 34v28"/>
-            <circle cx="48" cy="53" r="5"/>
-          </svg>
-        </div>
+        <img src="./logo.jpg" alt="Health Vibe Logo" class="brand-logo" />
         <div>
           <strong>Health Vibe</strong>
-          <span>رعاية صحية مدعومة بالذكاء الاصطناعي وتحت مراجعة الطبيب</span>
+          <span>AI-supported healthcare reviewed by doctors</span>
         </div>
       </div>
-      <nav class="site-links" aria-label="التنقل في الموقع">
-        <a href="#workflow">المسار</a>
-        <a href="#roles">الحسابات</a>
-        <a href="#safety">الأمان</a>
+      <nav class="site-links" aria-label="Site navigation">
+        <a href="#workflow">Workflow</a>
+        <a href="#roles">Accounts</a>
+        <a href="#safety">Safety</a>
       </nav>
       <div class="nav-actions">
-        <button id="siteThemeToggle" class="ghost-button">الوضع الفاتح</button>
-        <button class="outline-button" data-auth-open>تسجيل الدخول</button>
-        <button class="solid-button" data-auth-open>ابدأ الآن</button>
+        <button class="outline-button" data-auth-open>Sign in</button>
+        <button class="solid-button" data-auth-open>Get started</button>
       </div>
     </header>
 
@@ -185,17 +178,10 @@
   <main id="app" class="app-shell" hidden>
     <aside class="sidebar" aria-label="التنقل داخل التطبيق">
       <div class="brand">
-        <div class="logo-mark" aria-hidden="true">
-          <svg viewBox="0 0 96 96">
-            <rect x="8" y="8" width="80" height="80" rx="25"/>
-            <path d="M24 53c8-22 17-22 25 0 7 18 16 18 24 0"/>
-            <path d="M32 34v28M64 34v28"/>
-            <circle cx="48" cy="53" r="5"/>
-          </svg>
-        </div>
+        <img src="./logo.jpg" alt="Health Vibe" class="brand-logo" />
         <div>
           <strong>Health Vibe</strong>
-          <span id="accountLabel">حساب مريض</span>
+          <span id="accountLabel">Patient account</span>
         </div>
       </div>
 
