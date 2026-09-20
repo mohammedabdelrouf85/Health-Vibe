@@ -680,9 +680,14 @@ document.getElementById("submitAssessment").addEventListener("click", () => {
   showScreen("pending");
   showToast(readOxygenValue() < 93 ? "تم إرسال الحالة للطبيب مع أولوية متابعة" : "تم إرسال التقييم للطبيب");
 });
-document.getElementById("approveResult").addEventListener("click", openApprovalModal);
-document.getElementById("cancelApprove").addEventListener("click", closeApprovalModal);
-document.getElementById("confirmApprove").addEventListener("click", () => {
+const approveResultBtn = document.getElementById("approveResult");
+if (approveResultBtn) approveResultBtn.addEventListener("click", openApprovalModal);
+
+const cancelApproveBtn = document.getElementById("cancelApprove");
+if (cancelApproveBtn) cancelApproveBtn.addEventListener("click", closeApprovalModal);
+
+const confirmApproveBtn = document.getElementById("confirmApprove");
+if (confirmApproveBtn) confirmApproveBtn.addEventListener("click", () => {
   closeApprovalModal();
   showScreen("result");
   showToast("تم اعتماد النتيجة وتسجيل الحدث في سجل التدقيق");
