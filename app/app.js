@@ -462,7 +462,8 @@ const firebaseConfig = {
 // Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
-
+const auth = firebase.auth();
+const googleProvider = new firebase.auth.GoogleAuthProvider();
 async function initDB() {
   try {
     const snapshot = await db.collection("cases").limit(1).get();
@@ -595,38 +596,73 @@ function hideAuth() {
   authScreen.classList.remove("open");
 }
 
-function enterApp(source = "email", skipSave = false) {
-  const email = emailInput.value.trim() || "أحمد";
-  const names = {
-    patient: "أحمد محمد",
-    doctor: "د. منى سامي",
-    admin: "إدارة التشغيل"
-  };
+async function enterApp(source = "email", skipSave = false) {
+  if (source === "google") {
+    try {
+      const result = await auth.signInWithPopup(googleProvider);
+      const user = result.user;
+      
+      const userDoc = await db.collection("users").doc(user.uid).get();
+      if (!userDoc.exists) {
+        await db.collection("users").doc(user.uid).set({
+          name: user.displayName,
+          email: user.email,
+          role: selectedRole,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      } else {
+        selectedRole = userDoc.data().role || "patient";
+      }
 
-  userName.textContent = currentLanguage === "en" ? englishNames[selectedRole] : names[selectedRole];
-  userEmail.textContent = source === "google" ? localized("مستخدم جوجل التجريبي") : email;
-  accountLabel.textContent = currentLanguage === "en" ? englishRoleLabels[selectedRole] : roleLabels[selectedRole];
+      userName.textContent = user.displayName;
+      userEmail.textContent = user.email;
+      accountLabel.textContent = currentLanguage === "en" ? englishRoleLabels[selectedRole] : roleLabels[selectedRole];
 
-  const rememberMe = document.getElementById("rememberMe");
-  if (!skipSave && rememberMe && rememberMe.checked) {
-    localStorage.setItem("hv_session", JSON.stringify({ email, source, role: selectedRole }));
-  } else if (!skipSave) {
-    localStorage.removeItem("hv_session");
+      publicSite.hidden = true;
+      hideAuth();
+      app.hidden = false;
+      showScreen(selectedRole === "doctor" ? "doctor" : selectedRole === "admin" ? "admin" : "patient");
+      showToast(currentLanguage === "en" ? "Signed in with Google" : "تم تسجيل الدخول بحساب جوجل");
+    } catch (error) {
+      console.error(error);
+      showToast(currentLanguage === "en" ? "Google sign in failed" : "فشل تسجيل الدخول بجوجل");
+    }
+  } else {
+    const email = emailInput.value.trim() || "أحمد";
+    const names = {
+      patient: "أحمد محمد",
+      doctor: "د. منى سامي",
+      admin: "إدارة التشغيل"
+    };
+
+    userName.textContent = currentLanguage === "en" ? englishNames[selectedRole] : names[selectedRole];
+    userEmail.textContent = email;
+    accountLabel.textContent = currentLanguage === "en" ? englishRoleLabels[selectedRole] : roleLabels[selectedRole];
+
+    const rememberMe = document.getElementById("rememberMe");
+    if (!skipSave && rememberMe && rememberMe.checked) {
+      localStorage.setItem("hv_session", JSON.stringify({ email, source, role: selectedRole }));
+    } else if (!skipSave) {
+      localStorage.removeItem("hv_session");
+    }
+
+    publicSite.hidden = true;
+    hideAuth();
+    app.hidden = false;
+    showScreen(selectedRole === "doctor" ? "doctor" : selectedRole === "admin" ? "admin" : "patient");
+    showToast("تم تسجيل الدخول التجريبي بنجاح");
   }
-
-  publicSite.hidden = true;
-  hideAuth();
-  app.hidden = false;
-  showScreen(selectedRole === "doctor" ? "doctor" : selectedRole === "admin" ? "admin" : "patient");
-  showToast(source === "google" ? "تم تسجيل الدخول بمحاكاة تسجيل جوجل" : "تم تسجيل الدخول بنجاح");
 }
 
-function leaveApp() {
+async function leaveApp() {
+  try {
+    await auth.signOut();
+  } catch(e) {}
   localStorage.removeItem("hv_session");
   app.hidden = true;
   publicSite.hidden = false;
   publicSite.classList.remove("is-hidden");
-  showToast("تم تسجيل الخروج");
+  showToast(currentLanguage === "en" ? "Signed out" : "تم تسجيل الخروج");
 }
 
 function showScreen(name) {
@@ -781,26 +817,50 @@ menuToggle.addEventListener("click", () => {
 logoutButton.addEventListener("click", leaveApp);
 
 window.addEventListener("load", () => {
-  const session = localStorage.getItem("hv_session");
-  let loggedIn = false;
-  if (session) {
-    try {
-      const data = JSON.parse(session);
-      selectedRole = data.role || "patient";
-      if (emailInput) emailInput.value = data.email || "";
-      enterApp(data.source || "email", true);
-      loggedIn = true;
-    } catch(e) {
-      console.warn(e);
+  auth.onAuthStateChanged(async (user) => {
+    if (user) {
+      try {
+        const userDoc = await db.collection("users").doc(user.uid).get();
+        if (userDoc.exists) {
+          selectedRole = userDoc.data().role || "patient";
+        }
+        userName.textContent = user.displayName;
+        userEmail.textContent = user.email;
+        accountLabel.textContent = currentLanguage === "en" ? englishRoleLabels[selectedRole] : roleLabels[selectedRole];
+        
+        publicSite.hidden = true;
+        hideAuth();
+        app.hidden = false;
+        showScreen(selectedRole === "doctor" ? "doctor" : selectedRole === "admin" ? "admin" : "patient");
+        
+        loader.classList.add("is-done");
+      } catch (e) {
+        console.error(e);
+      }
+    } else {
+      // Fallback to local session (for mock email login)
+      const session = localStorage.getItem("hv_session");
+      let loggedIn = false;
+      if (session) {
+        try {
+          const data = JSON.parse(session);
+          selectedRole = data.role || "patient";
+          if (emailInput) emailInput.value = data.email || "";
+          enterApp(data.source || "email", true);
+          loggedIn = true;
+        } catch(e) {
+          console.warn(e);
+        }
+      }
+      
+      window.setTimeout(() => {
+        loader.classList.add("is-done");
+        if (!loggedIn) {
+          publicSite.classList.remove("is-hidden");
+        }
+      }, 900);
     }
-  }
-
-  window.setTimeout(() => {
-    loader.classList.add("is-done");
-    if (!loggedIn) {
-      publicSite.classList.remove("is-hidden");
-    }
-  }, 900);
+  });
 });
 
 showScreen("patient");
