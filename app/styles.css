@@ -879,24 +879,8 @@ textarea {
   overflow-y: auto;
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
-  /* show a subtle scrollbar so users know there's more */
-  scrollbar-width: thin;
-  scrollbar-color: var(--line) transparent;
+  scrollbar-width: none;
   padding-bottom: 6px;
-}
-
-.nav-list::-webkit-scrollbar {
-  width: 4px;
-  display: block;
-}
-
-.nav-list::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.nav-list::-webkit-scrollbar-thumb {
-  background: var(--line);
-  border-radius: 99px;
 }
 
 /* Section divider labels */
