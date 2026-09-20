@@ -595,7 +595,7 @@ function hideAuth() {
   authScreen.classList.remove("open");
 }
 
-function enterApp(source = "email") {
+function enterApp(source = "email", skipSave = false) {
   const email = emailInput.value.trim() || "أحمد";
   const names = {
     patient: "أحمد محمد",
@@ -607,6 +607,13 @@ function enterApp(source = "email") {
   userEmail.textContent = source === "google" ? localized("مستخدم جوجل التجريبي") : email;
   accountLabel.textContent = currentLanguage === "en" ? englishRoleLabels[selectedRole] : roleLabels[selectedRole];
 
+  const rememberMe = document.getElementById("rememberMe");
+  if (!skipSave && rememberMe && rememberMe.checked) {
+    localStorage.setItem("hv_session", JSON.stringify({ email, source, role: selectedRole }));
+  } else if (!skipSave) {
+    localStorage.removeItem("hv_session");
+  }
+
   publicSite.hidden = true;
   hideAuth();
   app.hidden = false;
@@ -615,6 +622,7 @@ function enterApp(source = "email") {
 }
 
 function leaveApp() {
+  localStorage.removeItem("hv_session");
   app.hidden = true;
   publicSite.hidden = false;
   publicSite.classList.remove("is-hidden");
@@ -773,9 +781,25 @@ menuToggle.addEventListener("click", () => {
 logoutButton.addEventListener("click", leaveApp);
 
 window.addEventListener("load", () => {
+  const session = localStorage.getItem("hv_session");
+  let loggedIn = false;
+  if (session) {
+    try {
+      const data = JSON.parse(session);
+      selectedRole = data.role || "patient";
+      if (emailInput) emailInput.value = data.email || "";
+      enterApp(data.source || "email", true);
+      loggedIn = true;
+    } catch(e) {
+      console.warn(e);
+    }
+  }
+
   window.setTimeout(() => {
     loader.classList.add("is-done");
-    publicSite.classList.remove("is-hidden");
+    if (!loggedIn) {
+      publicSite.classList.remove("is-hidden");
+    }
   }, 900);
 });
 
