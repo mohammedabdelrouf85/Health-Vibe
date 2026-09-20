@@ -602,16 +602,20 @@ async function enterApp(source = "email", skipSave = false) {
       const result = await auth.signInWithPopup(googleProvider);
       const user = result.user;
       
-      const userDoc = await db.collection("users").doc(user.uid).get();
-      if (!userDoc.exists) {
-        await db.collection("users").doc(user.uid).set({
-          name: user.displayName,
-          email: user.email,
-          role: selectedRole,
-          createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-      } else {
-        selectedRole = userDoc.data().role || "patient";
+      try {
+        const userDoc = await db.collection("users").doc(user.uid).get();
+        if (!userDoc.exists) {
+          await db.collection("users").doc(user.uid).set({
+            name: user.displayName,
+            email: user.email,
+            role: selectedRole,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          });
+        } else {
+          selectedRole = userDoc.data().role || "patient";
+        }
+      } catch (dbError) {
+        console.warn("Firestore save failed, but auth succeeded:", dbError);
       }
 
       userName.textContent = user.displayName;
@@ -825,19 +829,20 @@ window.addEventListener("load", () => {
         if (userDoc.exists) {
           selectedRole = userDoc.data().role || "patient";
         }
-        userName.textContent = user.displayName;
-        userEmail.textContent = user.email;
-        accountLabel.textContent = currentLanguage === "en" ? englishRoleLabels[selectedRole] : roleLabels[selectedRole];
-        
-        publicSite.hidden = true;
-        hideAuth();
-        app.hidden = false;
-        showScreen(selectedRole === "doctor" ? "doctor" : selectedRole === "admin" ? "admin" : "patient");
-        
-        loader.classList.add("is-done");
       } catch (e) {
-        console.error(e);
+        console.warn("Firestore role fetch failed, defaulting to patient:", e);
       }
+      
+      userName.textContent = user.displayName;
+      userEmail.textContent = user.email;
+      accountLabel.textContent = currentLanguage === "en" ? englishRoleLabels[selectedRole] : roleLabels[selectedRole];
+      
+      publicSite.hidden = true;
+      hideAuth();
+      app.hidden = false;
+      showScreen(selectedRole === "doctor" ? "doctor" : selectedRole === "admin" ? "admin" : "patient");
+      
+      loader.classList.add("is-done");
     } else {
       // Fallback to local session (for mock email login)
       const session = localStorage.getItem("hv_session");
