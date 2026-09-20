@@ -9,7 +9,18 @@ const siteThemeToggle = document.getElementById("siteThemeToggle") || null;
 const languageToggle = document.getElementById("languageToggle");
 const menuToggle = document.getElementById("menuToggle");
 const logoutButton = document.getElementById("logoutButton");
-const emailInput = document.getElementById("emailInput");
+const authEmailForm = document.getElementById("authEmailForm");
+const authTabSignIn = document.getElementById("authTabSignIn");
+const authTabSignUp = document.getElementById("authTabSignUp");
+const authNameGroup = document.getElementById("authNameGroup");
+const authName = document.getElementById("authName");
+const authEmail = document.getElementById("authEmail");
+const authPassword = document.getElementById("authPassword");
+const authSubmitBtn = document.getElementById("authSubmitBtn");
+const authSubmitText = document.getElementById("authSubmitText");
+const authErrorBanner = document.getElementById("authErrorBanner");
+const forgotPasswordBtn = document.getElementById("forgotPasswordBtn");
+let authMode = "signin";
 const accountLabel = document.getElementById("accountLabel");
 const userName = document.getElementById("userName");
 const userEmail = document.getElementById("userEmail");
@@ -388,16 +399,30 @@ const uiText = {
   "أحتاج توضيحًا": "I need clarification",
   "الخطر المتوسط يعني أن الحالة ليست مطمئنة تمامًا وتحتاج متابعة الطبيب خلال 24-48 ساعة. لا تبدأ علاجًا جديدًا دون مراجعة الطبيب.": "Medium risk means the case is not fully reassuring and needs doctor follow-up within 24-48 hours. Do not start a new treatment without consulting the doctor.",
   "الواجهة مضبوطة على العربية": "Interface set to Arabic",
-  "الواجهة مضبوطة على الإنجليزية": "Interface set to English"
+  "الواجهة مضبوطة على الإنجليزية": "Interface set to English",
+  "الاسم بالكامل": "Full Name",
+  "البريد الإلكتروني": "Email Address",
+  "كلمة المرور": "Password",
+  "تذكرني": "Remember me",
+  "نسيت كلمة المرور؟": "Forgot password?",
+  "اختر الدور المناسب لحسابك وسجل دخولك بالبريد أو جوجل للمتابعة بأمان.": "Select your account role and sign in with email or Google to proceed securely."
 };
 
 const enToAr = {
   "Access your account": "ادخل لحسابك",
   "Select your account role and continue with Google to proceed securely.": "اختر الدور المناسب لحسابك وقم بتسجيل الدخول باستخدام حساب جوجل للمتابعة بأمان.",
   "Select the appropriate role for your account and sign in with Google to proceed securely.": "اختر الدور المناسب لحسابك وقم بتسجيل الدخول باستخدام حساب جوجل للمتابعة بأمان.",
+  "Select your account role and sign in with email or Google to proceed securely.": "اختر الدور المناسب لحسابك وسجل دخولك بالبريد أو جوجل للمتابعة بأمان.",
   "Patient": "مريض",
   "Doctor": "طبيب",
   "Admin": "إدارة",
+  "Sign In": "تسجيل الدخول",
+  "Create Account": "إنشاء حساب",
+  "Full Name": "الاسم بالكامل",
+  "Email Address": "البريد الإلكتروني",
+  "Password": "كلمة المرور",
+  "Remember me": "تذكرني",
+  "Forgot password?": "نسيت كلمة المرور؟",
   "Continue with Google": "المتابعة بحساب جوجل",
   "Close": "إغلاق",
   "Sign in": "تسجيل الدخول",
@@ -459,8 +484,11 @@ function applyLanguage(language) {
   }
   const themeLabel = document.body.classList.contains("dark") ? "الوضع الداكن" : "الوضع الفاتح";
   if (siteThemeToggle) siteThemeToggle.textContent = localized(themeLabel);
-  screenTitle.textContent = language === "en" ? englishTitles[getActiveScreen()] || "Health Vibes" : titles[getActiveScreen()] || "Health Vibes";
+  const activeScreenEl = document.querySelector(".screen.active");
+  const activeScreenName = activeScreenEl ? activeScreenEl.id.replace("screen-", "") : "patient";
+  screenTitle.textContent = language === "en" ? englishTitles[activeScreenName] || "Health Vibes" : titles[activeScreenName] || "Health Vibes";
   accountLabel.textContent = language === "en" ? englishRoleLabels[selectedRole] : roleLabels[selectedRole];
+  if (typeof setAuthMode === "function") setAuthMode(authMode);
 }
 
 function showToast(message) {
@@ -612,14 +640,153 @@ initDB();
 
 function showAuth() {
   authScreen.classList.add("open");
+  clearAuthError();
 }
 
 function hideAuth() {
   authScreen.classList.remove("open");
+  clearAuthError();
 }
 
-async function enterApp(source = "email", skipSave = false) {
+function setAuthMode(mode) {
+  authMode = mode;
+  clearAuthError();
+  if (authTabSignIn && authTabSignUp) {
+    authTabSignIn.classList.toggle("active", mode === "signin");
+    authTabSignUp.classList.toggle("active", mode === "signup");
+  }
+  if (authNameGroup) {
+    authNameGroup.style.display = mode === "signup" ? "block" : "none";
+  }
+  if (authName) {
+    if (mode === "signup") {
+      authName.setAttribute("required", "true");
+    } else {
+      authName.removeAttribute("required");
+    }
+  }
+  if (authSubmitText) {
+    const isEn = currentLanguage === "en";
+    authSubmitText.textContent = mode === "signup" ? (isEn ? "Create Account" : "إنشاء حساب") : (isEn ? "Sign In" : "تسجيل الدخول");
+  }
+  if (forgotPasswordBtn) {
+    forgotPasswordBtn.style.display = mode === "signup" ? "none" : "inline-block";
+  }
+}
+
+function showAuthError(message) {
+  if (authErrorBanner) {
+    authErrorBanner.textContent = message;
+    authErrorBanner.style.display = "block";
+  }
+  showToast(message);
+}
+
+function clearAuthError() {
+  if (authErrorBanner) {
+    authErrorBanner.textContent = "";
+    authErrorBanner.style.display = "none";
+  }
+}
+
+function setAuthLoading(loading) {
+  if (!authSubmitBtn) return;
+  authSubmitBtn.disabled = loading;
+  if (authSubmitText) {
+    if (loading) {
+      authSubmitText.textContent = currentLanguage === "en" ? "Please wait..." : "يرجى الانتظار...";
+    } else {
+      const isEn = currentLanguage === "en";
+      authSubmitText.textContent = authMode === "signup" ? (isEn ? "Create Account" : "إنشاء حساب") : (isEn ? "Sign In" : "تسجيل الدخول");
+    }
+  }
+}
+
+function getAuthErrorMessage(error) {
+  const isEn = currentLanguage === "en";
+  switch (error.code) {
+    case "auth/invalid-email":
+      return isEn ? "Invalid email address format." : "صيغة البريد الإلكتروني غير صحيحة.";
+    case "auth/user-disabled":
+      return isEn ? "This account has been disabled." : "تم تعطيل هذا الحساب.";
+    case "auth/user-not-found":
+      return isEn ? "No account found with this email. Please click 'Create Account' first." : "لا يوجد حساب مسجل بهذا البريد. يمكنك الضغط على 'إنشاء حساب'.";
+    case "auth/wrong-password":
+      return isEn ? "Incorrect password. Please try again or use 'Forgot password?'." : "كلمة المرور غير صحيحة. يرجى المحاولة مجددًا أو استعادة كلمة المرور.";
+    case "auth/invalid-credential":
+      return isEn ? "Invalid email or password. Please check your credentials." : "بيانات تسجيل الدخول غير صحيحة. يرجى التأكد من البريد وكلمة المرور.";
+    case "auth/email-already-in-use":
+      return isEn ? "This email is already registered. Please switch to 'Sign In'." : "هذا البريد مسجل بالفعل. يرجى التبديل إلى 'تسجيل الدخول'.";
+    case "auth/weak-password":
+      return isEn ? "Password is too weak. Must be at least 6 characters." : "كلمة المرور ضعيفة. يجب أن تتكون من 6 أحرف أو أرقام على الأقل.";
+    case "auth/operation-not-allowed":
+      return isEn
+        ? "Email/Password sign-in is not enabled in Firebase Console. Please enable it under Authentication > Sign-in method."
+        : "تسجيل الدخول بالبريد غير مفعل في Firebase Console. يرجى تفعيله من Authentication > Sign-in method.";
+    case "auth/too-many-requests":
+      return isEn ? "Too many attempts. Please wait a moment and try again." : "محاولات كثيرة خاطئة. يرجى الانتظار قليلاً والمحاولة لاحقاً.";
+    case "auth/network-request-failed":
+      return isEn ? "Network error. Please check your internet connection." : "خطأ في الاتصال بالإنترنت. يرجى التحقق من اتصالك.";
+    default:
+      return error.message || (isEn ? "Authentication error." : "حدث خطأ أثناء تسجيل الدخول.");
+  }
+}
+
+async function handleEmailAuth(e) {
+  if (e) e.preventDefault();
+  clearAuthError();
+
+  const email = authEmail ? authEmail.value.trim() : "";
+  const password = authPassword ? authPassword.value : "";
+  const name = authName ? authName.value.trim() : "";
+  const remember = document.getElementById("rememberMe")?.checked;
+
+  if (!email || !password) {
+    showAuthError(currentLanguage === "en" ? "Please enter email and password." : "يرجى كتابة البريد الإلكتروني وكلمة المرور.");
+    return;
+  }
+
+  setAuthLoading(true);
+
+  try {
+    if (remember) {
+      await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+    } else {
+      await auth.setPersistence(firebase.auth.Auth.Persistence.SESSION);
+    }
+
+    if (authMode === "signup") {
+      const cred = await auth.createUserWithEmailAndPassword(email, password);
+      const user = cred.user;
+      const displayName = name || email.split("@")[0];
+      try {
+        await user.updateProfile({ displayName });
+      } catch (profileErr) {
+        console.warn("Could not update profile displayName:", profileErr);
+      }
+      await db.collection("users").doc(user.uid).set({
+        name: displayName,
+        email: user.email,
+        role: selectedRole,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+
+      showToast(currentLanguage === "en" ? "Account created successfully!" : "تم إنشاء الحساب بنجاح!");
+    } else {
+      await auth.signInWithEmailAndPassword(email, password);
+      showToast(currentLanguage === "en" ? "Signed in successfully!" : "تم تسجيل الدخول بنجاح!");
+    }
+  } catch (error) {
+    console.error("Firebase Auth Error:", error);
+    showAuthError(getAuthErrorMessage(error));
+  } finally {
+    setAuthLoading(false);
+  }
+}
+
+async function enterApp(source = "google") {
   if (source === "google") {
+    clearAuthError();
     try {
       const result = await auth.signInWithPopup(googleProvider);
       const user = result.user;
@@ -628,19 +795,19 @@ async function enterApp(source = "email", skipSave = false) {
         const userDoc = await db.collection("users").doc(user.uid).get();
         if (!userDoc.exists) {
           await db.collection("users").doc(user.uid).set({
-            name: user.displayName,
+            name: user.displayName || user.email.split('@')[0],
             email: user.email,
             role: selectedRole,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
           });
         } else {
-          selectedRole = userDoc.data().role || "patient";
+          selectedRole = userDoc.data().role || selectedRole;
         }
       } catch (dbError) {
         console.warn("Firestore save failed, but auth succeeded:", dbError);
       }
 
-      userName.textContent = user.displayName;
+      userName.textContent = user.displayName || user.email.split('@')[0];
       userEmail.textContent = user.email;
       accountLabel.textContent = currentLanguage === "en" ? englishRoleLabels[selectedRole] : roleLabels[selectedRole];
       
@@ -653,44 +820,21 @@ async function enterApp(source = "email", skipSave = false) {
       showToast(currentLanguage === "en" ? "Signed in with Google" : "تم تسجيل الدخول بحساب جوجل");
     } catch (error) {
       console.error("Google Auth Error:", error);
-      alert("Firebase Error: " + error.message + "\n\n(Hint: Make sure Google Auth is enabled and 'localhost' or '127.0.0.1' is in your Authorized Domains in Firebase Console)");
-      showToast(currentLanguage === "en" ? "Google sign in failed" : "فشل تسجيل الدخول بجوجل");
+      showAuthError(getAuthErrorMessage(error));
     }
-  } else {
-    const email = emailInput.value.trim() || "أحمد";
-    const names = {
-      patient: "أحمد محمد",
-      doctor: "د. منى سامي",
-      admin: "إدارة التشغيل"
-    };
-
-    userName.textContent = currentLanguage === "en" ? englishNames[selectedRole] : names[selectedRole];
-    userEmail.textContent = email;
-    accountLabel.textContent = currentLanguage === "en" ? englishRoleLabels[selectedRole] : roleLabels[selectedRole];
-
-    const rememberMe = document.getElementById("rememberMe");
-    if (!skipSave && rememberMe && rememberMe.checked) {
-      localStorage.setItem("hv_session", JSON.stringify({ email, source, role: selectedRole }));
-    } else if (!skipSave) {
-      localStorage.removeItem("hv_session");
-    }
-
-    publicSite.hidden = true;
-    hideAuth();
-    app.hidden = false;
-    showScreen(selectedRole === "doctor" ? "doctor" : selectedRole === "admin" ? "admin" : "patient");
-    showToast("تم تسجيل الدخول التجريبي بنجاح");
   }
 }
 
 async function leaveApp() {
   try {
     await auth.signOut();
-  } catch(e) {}
-  localStorage.removeItem("hv_session");
+  } catch(e) {
+    console.error("Sign out error:", e);
+  }
   app.hidden = true;
   publicSite.hidden = false;
   publicSite.classList.remove("is-hidden");
+  document.body.classList.remove("sidebar-open");
   showToast(currentLanguage === "en" ? "Signed out" : "تم تسجيل الخروج");
 }
 
@@ -857,6 +1001,33 @@ document.addEventListener("click", (event) => {
 
 document.getElementById("authClose").addEventListener("click", hideAuth);
 document.getElementById("googleLogin").addEventListener("click", () => enterApp("google"));
+
+if (authTabSignIn) {
+  authTabSignIn.addEventListener("click", () => setAuthMode("signin"));
+}
+if (authTabSignUp) {
+  authTabSignUp.addEventListener("click", () => setAuthMode("signup"));
+}
+if (authEmailForm) {
+  authEmailForm.addEventListener("submit", handleEmailAuth);
+}
+if (forgotPasswordBtn) {
+  forgotPasswordBtn.addEventListener("click", async () => {
+    clearAuthError();
+    const email = authEmail ? authEmail.value.trim() : "";
+    if (!email) {
+      showAuthError(currentLanguage === "en" ? "Please enter your email to receive a password reset link." : "يرجى كتابة بريدك الإلكتروني لاستلام رابط استعادة كلمة المرور.");
+      if (authEmail) authEmail.focus();
+      return;
+    }
+    try {
+      await auth.sendPasswordResetEmail(email);
+      showToast(currentLanguage === "en" ? "Password reset link sent to your email!" : "تم إرسال رابط استعادة كلمة المرور إلى بريدك!");
+    } catch (err) {
+      showAuthError(getAuthErrorMessage(err));
+    }
+  });
+}
 document.getElementById("oxygenInput").addEventListener("input", updateOxygenWarning);
 document.getElementById("submitAssessment").addEventListener("click", () => {
   updateOxygenWarning();
@@ -916,16 +1087,25 @@ logoutButton.addEventListener("click", leaveApp);
 window.addEventListener("load", () => {
   auth.onAuthStateChanged(async (user) => {
     if (user) {
+      let displayName = user.displayName;
       try {
         const userDoc = await db.collection("users").doc(user.uid).get();
         if (userDoc.exists) {
-          selectedRole = userDoc.data().role || "patient";
+          selectedRole = userDoc.data().role || selectedRole;
+          if (userDoc.data().name) displayName = userDoc.data().name;
+        } else {
+          await db.collection("users").doc(user.uid).set({
+            name: displayName || user.email.split('@')[0],
+            email: user.email,
+            role: selectedRole,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          }, { merge: true });
         }
       } catch (e) {
         console.warn("Firestore role fetch failed, defaulting to patient:", e);
       }
       
-      userName.textContent = user.displayName;
+      userName.textContent = displayName || user.email.split('@')[0];
       userEmail.textContent = user.email;
       accountLabel.textContent = currentLanguage === "en" ? englishRoleLabels[selectedRole] : roleLabels[selectedRole];
       
@@ -958,7 +1138,8 @@ function updateAvatar(user) {
     if (sidebarAvatar) sidebarAvatar.innerHTML = imgHtml;
     if (topbarAvatar) topbarAvatar.innerHTML = imgHtml;
   } else {
-    const initial = user && user.displayName ? user.displayName.charAt(0).toUpperCase() : (currentLanguage === "en" ? "A" : "أ");
+    const name = user && (user.displayName || user.email);
+    const initial = name ? name.charAt(0).toUpperCase() : (currentLanguage === "en" ? "A" : "أ");
     if (sidebarAvatar) sidebarAvatar.textContent = initial;
     if (topbarAvatar) topbarAvatar.textContent = initial;
   }

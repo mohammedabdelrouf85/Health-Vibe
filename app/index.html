@@ -127,17 +127,52 @@
         </div>
       </div>
       <h2>Access your account</h2>
-      <p>Select your account role and continue with Google to proceed securely.</p>
+      <p>Select your account role and sign in with email or Google to proceed securely.</p>
 
       <div class="role-tabs" role="tablist" aria-label="Account role">
-        <button class="active" data-role="patient">Patient</button>
-        <button data-role="doctor">Doctor</button>
-        <button data-role="admin">Admin</button>
+        <button class="active" data-role="patient" type="button">Patient</button>
+        <button data-role="doctor" type="button">Doctor</button>
+        <button data-role="admin" type="button">Admin</button>
       </div>
 
-      <button id="googleLogin" class="google-button">
+      <div class="auth-mode-switch" role="tablist" aria-label="Authentication mode">
+        <button type="button" id="authTabSignIn" class="auth-tab active">Sign In</button>
+        <button type="button" id="authTabSignUp" class="auth-tab">Create Account</button>
+      </div>
+
+      <div id="authErrorBanner" class="auth-error-banner" role="alert"></div>
+
+      <form id="authEmailForm" autocomplete="on">
+        <div id="authNameGroup" class="form-group" style="display:none;">
+          <label for="authName">Full Name</label>
+          <input type="text" id="authName" placeholder="e.g. Ahmed Mohamed" autocomplete="name" />
+        </div>
+
+        <div class="form-group">
+          <label for="authEmail">Email Address</label>
+          <input type="email" id="authEmail" placeholder="name@example.com" required autocomplete="email" />
+        </div>
+
+        <div class="form-group">
+          <label for="authPassword">Password</label>
+          <input type="password" id="authPassword" placeholder="••••••••" required autocomplete="current-password" minlength="6" />
+        </div>
+
+        <div class="auth-options">
+          <label><input type="checkbox" id="rememberMe" checked /> <span>Remember me</span></label>
+          <button type="button" id="forgotPasswordBtn">Forgot password?</button>
+        </div>
+
+        <button id="authSubmitBtn" type="submit" class="solid-button large auth-submit-btn">
+          <span id="authSubmitText">Sign In</span>
+        </button>
+      </form>
+
+      <div class="divider"><span>or</span></div>
+
+      <button id="googleLogin" class="google-button" type="button">
         <span class="google-g">G</span>
-        Continue with Google
+        <span>Continue with Google</span>
       </button>
     </div>
   </section>
