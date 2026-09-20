@@ -475,26 +475,12 @@
         <div class="doctor-layout">
           <article class="panel">
             <div class="panel-head"><h3>قائمة المرضى</h3><span class="pill ok">طبيب موثق</span></div>
-            <div class="queue">
-              <button class="danger"><strong>أحمد محمد</strong><span>نسبة الأكسجين 91% - كحة شديدة</span><em>عاجل</em></button>
-              <button class="pending"><strong>سارة علي</strong><span>خطر متوسط - منذ 14 دقيقة</span><em>مراجعة</em></button>
-              <button class="ok"><strong>محمد حسن</strong><span>خطر منخفض - تقرير جاهز</span><em>منخفض</em></button>
+            <div class="queue" id="doctorQueueList">
+              <!-- Rendered via JS -->
             </div>
           </article>
-          <article class="panel">
-            <div class="panel-head"><h3>مراجعة حالة أحمد</h3><span class="pill pending">قيد الانتظار</span></div>
-            <div class="summary-list">
-              <div><span>خطورة الذكاء الاصطناعي</span><strong>متوسطة</strong></div>
-              <div><span>الثقة</span><strong>78%</strong></div>
-              <div><span>نسبة الأكسجين</span><strong>95%</strong></div>
-              <div><span>مدة الأعراض</span><strong>3 أيام</strong></div>
-            </div>
-            <label>ملاحظة الطبيب</label>
-            <textarea>يوصى بمتابعة خلال 24-48 ساعة مع مراقبة الأعراض.</textarea>
-            <div class="doctor-actions">
-              <button id="approveResult" class="solid-button">اعتماد النتيجة</button>
-              <button class="danger-button">رفض</button>
-            </div>
+          <article class="panel" id="doctorReviewPanel" style="display: none;">
+            <!-- Rendered via JS -->
           </article>
         </div>
       </section>

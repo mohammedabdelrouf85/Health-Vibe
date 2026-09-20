@@ -448,6 +448,103 @@ function showToast(message) {
   showToast.timer = window.setTimeout(() => toast.classList.remove("show"), 2600);
 }
 
+// --- Mock Database (LocalStorage) ---
+function initDB() {
+  if (!localStorage.getItem('hv_cases')) {
+    const initialCases = [
+      { id: 1, name: "أحمد محمد", nameEn: "Ahmed Mohamed", o2: 91, symptoms: "كحة شديدة", symptomsEn: "Severe cough", risk: "عاجل", riskEn: "Urgent", status: "pending", time: "الآن", aiScore: "عالية", aiScoreEn: "High", confidence: "89%", duration: "3 أيام", durationEn: "3 days" },
+      { id: 2, name: "سارة علي", nameEn: "Sarah Ali", o2: 96, symptoms: "أعراض خفيفة", symptomsEn: "Mild symptoms", risk: "مراجعة", riskEn: "Review", status: "pending", time: "منذ 14 دقيقة", aiScore: "متوسطة", aiScoreEn: "Medium", confidence: "78%", duration: "يومين", durationEn: "2 days" },
+      { id: 3, name: "محمد حسن", nameEn: "Mohamed Hassan", o2: 98, symptoms: "لا توجد أعراض ظاهرة", symptomsEn: "No clear symptoms", risk: "منخفض", riskEn: "Low", status: "approved", time: "تقرير جاهز", aiScore: "منخفضة", aiScoreEn: "Low", confidence: "94%", duration: "يوم واحد", durationEn: "1 day" }
+    ];
+    localStorage.setItem('hv_cases', JSON.stringify(initialCases));
+  }
+}
+
+function getCases() {
+  return JSON.parse(localStorage.getItem('hv_cases') || '[]');
+}
+
+function updateCaseStatus(id, newStatus, note) {
+  let cases = getCases();
+  let caseIndex = cases.findIndex(c => c.id === id);
+  if (caseIndex > -1) {
+    cases[caseIndex].status = newStatus;
+    cases[caseIndex].doctorNote = note;
+    localStorage.setItem('hv_cases', JSON.stringify(cases));
+  }
+}
+
+let activeCaseId = null;
+
+function renderDoctorQueue() {
+  const queueList = document.getElementById("doctorQueueList");
+  if (!queueList) return;
+
+  const cases = getCases();
+  queueList.innerHTML = '';
+  
+  cases.forEach(c => {
+    const isEn = currentLanguage === "en";
+    const btn = document.createElement("button");
+    btn.className = c.status === "approved" ? "ok" : (c.risk === "عاجل" ? "danger" : "pending");
+    if (c.id === activeCaseId) btn.style.border = "2px solid var(--teal)";
+    
+    btn.innerHTML = `<strong>${isEn ? c.nameEn : c.name}</strong><span>${isEn ? 'O2 ' + c.o2 + '% - ' + c.symptomsEn : 'نسبة الأكسجين ' + c.o2 + '% - ' + c.symptoms}</span><em>${isEn ? c.riskEn : c.risk}</em>`;
+    btn.onclick = () => selectDoctorCase(c.id);
+    queueList.appendChild(btn);
+  });
+  
+  if (cases.length > 0 && !activeCaseId) {
+    selectDoctorCase(cases[0].id);
+  }
+}
+
+window.approveCase = function(id) {
+  const noteInput = document.getElementById("doctorNoteInput");
+  const note = noteInput ? noteInput.value : "";
+  updateCaseStatus(id, "approved", note);
+  showToast(currentLanguage === "en" ? "Result approved and saved to audit log" : "تم اعتماد النتيجة وتسجيل الحدث في سجل التدقيق");
+  renderDoctorQueue();
+  selectDoctorCase(id);
+};
+
+function selectDoctorCase(id) {
+  activeCaseId = id;
+  const cases = getCases();
+  const c = cases.find(c => c.id === id);
+  const reviewPanel = document.getElementById("doctorReviewPanel");
+  if (!c || !reviewPanel) return;
+
+  const isEn = currentLanguage === "en";
+  reviewPanel.style.display = "block";
+  
+  const statusPill = c.status === "approved" 
+    ? `<span class="pill ok">${isEn ? 'Approved' : 'معتمد'}</span>` 
+    : `<span class="pill pending">${isEn ? 'Pending' : 'قيد الانتظار'}</span>`;
+
+  reviewPanel.innerHTML = `
+    <div class="panel-head"><h3>${isEn ? 'Reviewing ' + c.nameEn : 'مراجعة حالة ' + c.name}</h3>${statusPill}</div>
+    <div class="summary-list">
+      <div><span>${isEn ? 'AI Risk' : 'خطورة الذكاء الاصطناعي'}</span><strong>${isEn ? c.aiScoreEn : c.aiScore}</strong></div>
+      <div><span>${isEn ? 'Confidence' : 'الثقة'}</span><strong>${c.confidence}</strong></div>
+      <div><span>${isEn ? 'Oxygen Level' : 'نسبة الأكسجين'}</span><strong>${c.o2}%</strong></div>
+      <div><span>${isEn ? 'Duration' : 'مدة الأعراض'}</span><strong>${isEn ? c.durationEn : c.duration}</strong></div>
+    </div>
+    <label>${isEn ? 'Doctor Note' : 'ملاحظة الطبيب'}</label>
+    <textarea id="doctorNoteInput" ${c.status === 'approved' ? 'disabled' : ''} style="width: 100%; min-height: 80px; margin-bottom: 15px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); padding: 12px; font-family: inherit;">${c.doctorNote || (isEn ? 'Follow-up recommended.' : 'يوصى بمتابعة خلال 24-48 ساعة مع مراقبة الأعراض.')}</textarea>
+    ${c.status !== 'approved' ? `
+    <div class="doctor-actions">
+      <button class="solid-button" onclick="approveCase(${c.id})">${isEn ? 'Approve Result' : 'اعتماد النتيجة'}</button>
+      <button class="danger-button">${isEn ? 'Reject' : 'رفض'}</button>
+    </div>` : ''}
+  `;
+  
+  // Highlight active button in queue
+  renderDoctorQueue();
+}
+
+initDB();
+
 function showAuth() {
   authScreen.classList.add("open");
 }
@@ -493,6 +590,10 @@ function showScreen(name) {
 
   screenTitle.textContent = currentLanguage === "en" ? englishTitles[name] || "HealthVibe AI" : titles[name] || "Health Vibe";
   document.body.classList.remove("sidebar-open");
+  
+  if (name === "doctor") {
+    renderDoctorQueue();
+  }
 }
 
 function getActiveScreen() {
