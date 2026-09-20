@@ -610,7 +610,7 @@ document.getElementById("sendChat").addEventListener("click", () => {
 });
 
 themeToggle.addEventListener("click", toggleTheme);
-siteThemeToggle.addEventListener("click", toggleTheme);
+if (siteThemeToggle) siteThemeToggle.addEventListener("click", toggleTheme);
 
 languageToggle.addEventListener("click", () => {
   const nextLanguage = currentLanguage === "ar" ? "en" : "ar";
