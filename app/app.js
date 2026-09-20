@@ -135,6 +135,30 @@ function handleOpenDoctorApply() {
 }
 window.handleOpenDoctorApply = handleOpenDoctorApply;
 
+let verifiedServerRole = null;
+
+async function getVerifiedServerRole(forceRefresh = false) {
+  const user = auth ? auth.currentUser : null;
+  if (!user) return ROLES.PATIENT;
+  if (isOwnerUser(user.email)) return ROLES.ADMIN;
+
+  if (verifiedServerRole && !forceRefresh) {
+    return verifiedServerRole;
+  }
+
+  try {
+    // Read directly from Firestore database, never trusting mutable client memory
+    const userDoc = await db.collection("users").doc(user.uid).get(forceRefresh ? { source: "server" } : undefined);
+    if (userDoc.exists && userDoc.data().role) {
+      verifiedServerRole = userDoc.data().role;
+      return verifiedServerRole;
+    }
+  } catch (err) {
+    console.warn("[RBAC] Server role verification query failed:", err);
+  }
+  return verifiedServerRole || selectedRole || ROLES.PATIENT;
+}
+
 function hasPermission(permission) {
   const role = (typeof selectedRole !== "undefined" && selectedRole) ? selectedRole : ROLES.PATIENT;
   const perms = ROLE_PERMISSIONS_MAP[role] || [];
@@ -150,6 +174,7 @@ function canAccessScreen(screenName) {
   return allowed.includes(screenName);
 }
 
+// Client-side quick check for UI feedback only
 function enforcePermission(permission, actionDescription = "") {
   if (!hasPermission(permission)) {
     const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
@@ -162,6 +187,55 @@ function enforcePermission(permission, actionDescription = "") {
     return false;
   }
   return true;
+}
+
+// Server-authoritative permission verification (Zero-Trust)
+// Re-queries the Firestore server document directly, bypassing any memory tampering
+async function enforceServerPermission(permission, actionDescription = "") {
+  const user = auth ? auth.currentUser : null;
+  if (!user) {
+    showToast(currentLanguage === "en" ? "Authentication required." : "يجب تسجيل الدخول أولاً.");
+    return false;
+  }
+
+  const serverRole = await getVerifiedServerRole(true);
+  const perms = ROLE_PERMISSIONS_MAP[serverRole] || [];
+  
+  if (!perms.includes(permission)) {
+    console.error(`[SECURITY ALERT] Action '${permission}' blocked by Server-Authoritative check. Database role is '${serverRole}'.`);
+    
+    // Auto-revert any client-side memory tampering
+    selectedRole = serverRole;
+    updateNavVisibility();
+    showScreen(serverRole === ROLES.ADMIN ? "admin" : (serverRole === ROLES.DOCTOR ? "doctor" : "patient"));
+
+    const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+    const msgEn = `🔒 Server Security: Action '${actionDescription || permission}' rejected. Your database-verified role is '${englishRoleLabels[serverRole] || serverRole}'.`;
+    const msgAr = `🔒 رفض من الخادم الأمني: تم حظر العملية (${actionDescription || permission}). دورك المعتمد في قاعدة البيانات هو '${roleLabels[serverRole] || serverRole}'.`;
+    showToast(isEn ? msgEn : msgAr);
+    return false;
+  }
+  return true;
+}
+
+// Handles Firestore Security Rules direct rejections (Permission Denied)
+function handleServerPermissionDenied(err, actionContext = "") {
+  if (err && (err.code === "permission-denied" || err.message?.includes("Missing or insufficient permissions"))) {
+    console.error(`[FIRESTORE RULES REJECTION] Database rejected operation '${actionContext}':`, err);
+    const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+    showToast(isEn
+      ? "🔒 Server Security Violation: Backend rejected operation (Permission Denied). Client cannot bypass database security rules."
+      : "🔒 رفض أمني من خادم قاعدة البيانات: تم حظر العملية بواسطة قواعد Firestore (Permission Denied). لا يمكن تجاوز الحماية عبر الواجهة.");
+    
+    // Immediately re-sync UI with true server role
+    getVerifiedServerRole(true).then((realRole) => {
+      selectedRole = realRole;
+      updateNavVisibility();
+      showScreen(realRole === ROLES.ADMIN ? "admin" : (realRole === ROLES.DOCTOR ? "doctor" : "patient"));
+    });
+    return true;
+  }
+  return false;
 }
 
 const OWNER_EMAIL = "mohammedabdelrouf85@gmail.com";
@@ -1845,13 +1919,17 @@ async function renderAdminApplications() {
 
     container.innerHTML = html;
   } catch(error) {
+    if (handleServerPermissionDenied(error, "Load Doctor Applications")) {
+      container.innerHTML = `<div style="color: var(--rose); padding: 20px;">🔒 ${isEn ? "Access Denied by Firestore Server Rules" : "تم رفض الوصول من خادم قاعدة البيانات (Permission Denied)"}</div>`;
+      return;
+    }
     console.error("Error loading doctor applications:", error);
     container.innerHTML = `<div style="color: var(--rose); padding: 20px;">${getAuthErrorMessage(error)}</div>`;
   }
 }
 
 async function approveDoctorApplication(appId, userId, doctorName) {
-  if (!enforcePermission(PERMISSIONS.APPROVE_DOCTOR_APPLICATION, "Approve Doctor Application")) return;
+  if (!(await enforceServerPermission(PERMISSIONS.APPROVE_DOCTOR_APPLICATION, "Approve Doctor Application"))) return;
   const isEn = currentLanguage === "en";
   try {
     showToast(isEn ? `Approving ${doctorName}...` : `جاري اعتماد الطبيب ${doctorName}...`);
@@ -1879,13 +1957,14 @@ async function approveDoctorApplication(appId, userId, doctorName) {
     showToast(isEn ? `🎉 Successfully approved Dr. ${doctorName}!` : `🎉 تم اعتماد الطبيب ${doctorName} وترقيته رسمياً لطبيب موثق!`);
     await renderAdminApplications();
   } catch(error) {
+    if (handleServerPermissionDenied(error, "Approve Doctor Application")) return;
     console.error("Approve doctor error:", error);
     showToast(getAuthErrorMessage(error));
   }
 }
 
 async function rejectDoctorApplication(appId, userId) {
-  if (!enforcePermission(PERMISSIONS.REJECT_DOCTOR_APPLICATION, "Reject Doctor Application")) return;
+  if (!(await enforceServerPermission(PERMISSIONS.REJECT_DOCTOR_APPLICATION, "Reject Doctor Application"))) return;
   const isEn = currentLanguage === "en";
   try {
     await db.collection("doctor_applications").doc(appId).update({
@@ -1903,6 +1982,7 @@ async function rejectDoctorApplication(appId, userId) {
     showToast(isEn ? "Application rejected." : "تم رفض الطلب.");
     await renderAdminApplications();
   } catch(error) {
+    if (handleServerPermissionDenied(error, "Reject Doctor Application")) return;
     console.error("Reject doctor error:", error);
     showToast(getAuthErrorMessage(error));
   }
@@ -1992,13 +2072,17 @@ async function renderAdminUsers() {
 
     container.innerHTML = html;
   } catch (err) {
+    if (handleServerPermissionDenied(err, "Load Users List")) {
+      container.innerHTML = `<div style="color: var(--rose); padding: 20px;">🔒 ${isEn ? "Access Denied by Firestore Server Rules" : "تم رفض الوصول من خادم قاعدة البيانات (Permission Denied)"}</div>`;
+      return;
+    }
     console.error("renderAdminUsers error:", err);
     container.innerHTML = `<div style="padding: 16px; color: var(--rose);">${getAuthErrorMessage(err)}</div>`;
   }
 }
 
 async function changeUserRole(userId, newRole, userName) {
-  if (!enforcePermission(PERMISSIONS.MANAGE_USER_ROLES, "Change User Role")) return;
+  if (!(await enforceServerPermission(PERMISSIONS.MANAGE_USER_ROLES, "Change User Role"))) return;
   const isEn = currentLanguage === "en";
   try {
     showToast(isEn ? `Updating role for ${userName}...` : `جاري تحديث دور ${userName}...`);
@@ -2018,6 +2102,7 @@ async function changeUserRole(userId, newRole, userName) {
     showToast(isEn ? `Role updated to ${newRole} for ${userName}!` : `تم تغيير دور ${userName} إلى ${roleLabels[newRole] || newRole}!`);
     await renderAdminUsers();
   } catch(err) {
+    if (handleServerPermissionDenied(err, "Change User Role")) return;
     console.error("changeUserRole error:", err);
     showToast(getAuthErrorMessage(err));
   }
