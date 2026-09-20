@@ -625,6 +625,8 @@ async function enterApp(source = "email", skipSave = false) {
       userName.textContent = user.displayName;
       userEmail.textContent = user.email;
       accountLabel.textContent = currentLanguage === "en" ? englishRoleLabels[selectedRole] : roleLabels[selectedRole];
+      
+      updateAvatar(user);
 
       publicSite.hidden = true;
       hideAuth();
@@ -902,6 +904,8 @@ window.addEventListener("load", () => {
       userEmail.textContent = user.email;
       accountLabel.textContent = currentLanguage === "en" ? englishRoleLabels[selectedRole] : roleLabels[selectedRole];
       
+      updateAvatar(user);
+      
       publicSite.hidden = true;
       hideAuth();
       app.hidden = false;
@@ -936,4 +940,19 @@ window.addEventListener("load", () => {
 
 showScreen("patient");
 applyLanguage("en");
+
+function updateAvatar(user) {
+  const sidebarAvatar = document.getElementById("sidebarAvatar");
+  const topbarAvatar = document.getElementById("topbarAvatar");
+  
+  if (user && user.photoURL) {
+    const imgHtml = `<img src="${user.photoURL}" alt="avatar" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">`;
+    if (sidebarAvatar) sidebarAvatar.innerHTML = imgHtml;
+    if (topbarAvatar) topbarAvatar.innerHTML = imgHtml;
+  } else {
+    const initial = user && user.displayName ? user.displayName.charAt(0).toUpperCase() : (currentLanguage === "en" ? "A" : "أ");
+    if (sidebarAvatar) sidebarAvatar.textContent = initial;
+    if (topbarAvatar) topbarAvatar.textContent = initial;
+  }
+}
 updateOxygenWarning();
