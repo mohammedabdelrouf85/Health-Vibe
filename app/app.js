@@ -109,7 +109,7 @@ const ROLE_PERMISSIONS_MAP = {
 const ROLE_ALLOWED_SCREENS = {
   [ROLES.PATIENT]: [
     "patient", "consent", "profile", "assessment", "pending", "result",
-    "history", "appointments", "assistant", "verification", "report"
+    "history", "appointments", "assistant", "report"
   ],
   [ROLES.DOCTOR]: [
     "patient", "consent", "profile", "assessment", "pending", "result",
@@ -123,6 +123,14 @@ const ROLE_ALLOWED_SCREENS = {
   ]
 };
 
+let tempAllowDoctorApplication = false;
+
+function handleOpenDoctorApply() {
+  tempAllowDoctorApplication = true;
+  showScreen("verification");
+}
+window.handleOpenDoctorApply = handleOpenDoctorApply;
+
 function hasPermission(permission) {
   const role = (typeof selectedRole !== "undefined" && selectedRole) ? selectedRole : ROLES.PATIENT;
   const perms = ROLE_PERMISSIONS_MAP[role] || [];
@@ -131,6 +139,9 @@ function hasPermission(permission) {
 
 function canAccessScreen(screenName) {
   const role = (typeof selectedRole !== "undefined" && selectedRole) ? selectedRole : ROLES.PATIENT;
+  if (screenName === "verification" && tempAllowDoctorApplication) {
+    return true;
+  }
   const allowed = ROLE_ALLOWED_SCREENS[role] || ROLE_ALLOWED_SCREENS[ROLES.PATIENT];
   return allowed.includes(screenName);
 }
@@ -365,6 +376,11 @@ const uiText = {
   "استلام البيانات": "Data received",
   "تشغيل الذكاء الاصطناعي": "Run AI",
   "إصدار التقرير": "Issue report",
+  "العودة للرئيسية ومتابعة الحالة": "Return to Dashboard",
+  "عرض سجل الفحوصات": "View Assessment History",
+  "هل أنت ممارس صحي أو طبيب مرخص؟": "Are you a licensed healthcare provider or physician?",
+  "يمكن للأطباء المرخصين تقديم طلب رسمي لتوثيق الحساب ومراجعة حالات المرضى بعد اعتماد الإدارة.": "Licensed doctors can apply for official verification to review patient cases upon administrative approval.",
+  "تقديم طلب توثيق طبيب 📄": "Apply for Doctor Verification 📄",
   "فتح شاشة الطبيب": "Open doctor screen",
   "نتيجة معتمدة من الطبيب": "Doctor-approved result",
   "خطر متوسط ويحتاج متابعة": "Medium risk requiring follow-up",
@@ -1317,11 +1333,26 @@ async function checkEmailVerification() {
 function updateNavVisibility() {
   document.querySelectorAll(".nav-item").forEach((btn) => {
     const screen = btn.dataset.screen;
+    // Patients must never see doctor, admin, audit, or verification in navigation
+    if (screen === "verification") {
+      btn.style.display = (selectedRole === ROLES.DOCTOR || selectedRole === ROLES.ADMIN) ? "flex" : "none";
+      return;
+    }
     btn.style.display = canAccessScreen(screen) ? "flex" : "none";
   });
+
+  // Update profile doctor onboarding card visibility
+  const docApplyCard = document.getElementById("doctorApplyCard");
+  if (docApplyCard) {
+    docApplyCard.style.display = selectedRole === ROLES.PATIENT ? "block" : "none";
+  }
 }
 
 function showScreen(name) {
+  if (name !== "verification") {
+    tempAllowDoctorApplication = false;
+  }
+
   if (!canAccessScreen(name)) {
     const roleDefaultScreen = selectedRole === ROLES.ADMIN ? "admin" : (selectedRole === ROLES.DOCTOR ? "doctor" : "patient");
     const msgEn = `Access Denied: Screen '${englishTitles[name] || name}' is restricted for role '${englishRoleLabels[selectedRole] || selectedRole}'.`;
@@ -1620,6 +1651,7 @@ async function renderVerificationScreen() {
           </div>
 
           <div style="display: flex; gap: 14px; align-items: center; flex-wrap: wrap;">
+            <button class="outline-button" onclick="showScreen('patient')">${isEn ? "Return to Dashboard" : "العودة للرئيسية"}</button>
             <button class="soft-button" onclick="cancelOrReapplyDoctorApp()">${isEn ? "Cancel & Reapply" : "إلغاء الطلب وإعادة التقديم"}</button>
             <span style="font-size: 13px; color: var(--muted);">${isEn ? "You will be automatically granted doctor access as soon as the administrator approves." : "سيتم تحويل حسابك تلقائياً لطبيب معتمد فور موافقة إدارة النظام."}</span>
           </div>
@@ -1712,9 +1744,14 @@ async function renderVerificationScreen() {
               </label>
             </div>
 
-            <button type="submit" id="submitDoctorAppBtn" class="solid-button large" style="width: 100%; justify-content: center;">
-              <span id="submitDoctorAppText">${isEn ? "Submit Application for Verification 🚀" : "إرسال طلب التوثيق والاعتماد (Submit Application) 🚀"}</span>
-            </button>
+            <div style="display: flex; gap: 12px; align-items: center;">
+              <button type="submit" id="submitDoctorAppBtn" class="solid-button large" style="flex: 1; justify-content: center;">
+                <span id="submitDoctorAppText">${isEn ? "Submit Application for Verification 🚀" : "إرسال طلب التوثيق والاعتماد (Submit Application) 🚀"}</span>
+              </button>
+              <button type="button" class="outline-button large" onclick="showScreen('profile')">
+                ${isEn ? "Cancel" : "إلغاء"}
+              </button>
+            </div>
           </form>
         </article>
       </div>

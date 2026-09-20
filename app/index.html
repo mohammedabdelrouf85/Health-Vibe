@@ -251,11 +251,11 @@
         <button class="nav-item" data-screen="history"><span class="nav-icon">📂</span>السجل الطبي</button>
         <button class="nav-item" data-screen="appointments"><span class="nav-icon">📅</span>المواعيد</button>
         <button class="nav-item" data-screen="assistant"><span class="nav-icon">🤖</span>المساعد الطبي</button>
-        <button class="nav-item" data-screen="verification"><span class="nav-icon">✅</span>توثيق الطبيب</button>
-        <button class="nav-item" data-screen="doctor"><span class="nav-icon">🩺</span>لوحة الطبيب</button>
+        <button class="nav-item" data-screen="verification" style="display:none;"><span class="nav-icon">✅</span>توثيق الطبيب</button>
+        <button class="nav-item" data-screen="doctor" style="display:none;"><span class="nav-icon">🩺</span>لوحة الطبيب</button>
         <button class="nav-item" data-screen="report"><span class="nav-icon">📄</span>التقرير</button>
-        <button class="nav-item" data-screen="admin"><span class="nav-icon">⚙️</span>لوحة الإدارة</button>
-        <button class="nav-item" data-screen="audit"><span class="nav-icon">🔍</span>سجل التدقيق</button>
+        <button class="nav-item" data-screen="admin" style="display:none;"><span class="nav-icon">⚙️</span>لوحة الإدارة</button>
+        <button class="nav-item" data-screen="audit" style="display:none;"><span class="nav-icon">🔍</span>سجل التدقيق</button>
       </nav>
 
       <div class="account-card">
@@ -394,6 +394,21 @@
               <div><strong>تقرير تحليل الدم</strong><span>محفوظ كمرجع للطبيب</span></div>
             </div>
           </article>
+          <article class="panel" id="doctorApplyCard" style="grid-column: 1 / -1; margin-top: 14px; border: 1px dashed var(--teal); background: rgba(14, 165, 164, 0.04);">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
+              <div>
+                <strong style="color: var(--teal); font-size: 15px; display: flex; align-items: center; gap: 6px;">
+                  <span>🩺</span> هل أنت ممارس صحي أو طبيب مرخص؟
+                </strong>
+                <p style="margin: 4px 0 0; font-size: 13px; color: var(--muted);">
+                  يمكن للأطباء المرخصين تقديم طلب رسمي لتوثيق الحساب ومراجعة حالات المرضى بعد اعتماد الإدارة.
+                </p>
+              </div>
+              <button type="button" class="soft-button" id="btnOpenDoctorApply" onclick="handleOpenDoctorApply()" style="white-space: nowrap;">
+                تقديم طلب توثيق طبيب 📄
+              </button>
+            </div>
+          </article>
         </div>
       </section>
 
@@ -454,7 +469,10 @@
             <div class="active"><b></b><span>مراجعة الطبيب</span></div>
             <div><b></b><span>إصدار التقرير</span></div>
           </div>
-          <button class="solid-button large" data-screen="doctor">فتح شاشة الطبيب</button>
+          <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 16px;">
+            <button class="solid-button large" data-screen="patient">العودة للرئيسية ومتابعة الحالة</button>
+            <button class="soft-button large" data-screen="history">عرض سجل الفحوصات</button>
+          </div>
         </div>
       </section>
 
