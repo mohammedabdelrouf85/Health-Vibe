@@ -2,19 +2,28 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Helper functions for Role-Based Access Control (RBAC)
+    // --- Helper Functions for Authentication & RBAC ---
     function isAuthenticated() {
       return request.auth != null;
     }
     
     function isOwner() {
       return isAuthenticated() && 
-             (request.auth.token.email == 'mohammedabdelrouf85@gmail.com' ||
-              request.auth.token.email == 'mohammedabdelrouf85@gmail.com');
+             'email' in request.auth.token &&
+             request.auth.token.email.lower() == 'mohammedabdelrouf85@gmail.com';
+    }
+    
+    function hasUserDoc() {
+      return isAuthenticated() && 
+             exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+    
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
     
     function getUserRole() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+      return hasUserDoc() && ('role' in getUserData()) ? getUserData().role : 'patient';
     }
     
     function isAdmin() {
@@ -30,47 +39,53 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // 1. Users Collection
-    // - Authenticated users can read user docs
+    // --- 1. Users Collection ---
+    // - Self can read their own profile; Doctors and Admins can read user profiles
     // - Self can create their own doc with role == 'patient' (Owner gets 'admin')
-    // - Self can update profile info but cannot elevate their own role
+    // - Privilege escalation prevention: self cannot change their own role or isOwner status
     // - Admin / Owner can update roles and manage users
     match /users/{userId} {
-      allow read: if isAuthenticated();
+      allow read: if isAuthenticated() && (isSelf(userId) || isDoctor() || isAdmin());
       allow create: if isAuthenticated() && request.auth.uid == userId &&
-                    (isOwner() || request.resource.data.role == 'patient');
+                    (isOwner() ? request.resource.data.role == 'admin' : request.resource.data.role == 'patient');
       allow update: if isOwner() || isAdmin() || 
-                    (isSelf(userId) && request.resource.data.role == resource.data.role);
+                    (isSelf(userId) && 
+                     request.resource.data.role == resource.data.role &&
+                     (!('isOwner' in request.resource.data) || request.resource.data.isOwner == resource.data.isOwner));
       allow delete: if isAdmin();
     }
 
-    // 2. Doctor Applications Collection (Application -> Verification -> Approval)
+    // --- 2. Doctor Applications Collection (Application -> Verification -> Approval) ---
     // - Applicant can read their own application, Admins can read all applications
     // - Applicant can submit (create) their own application with status == 'pending'
-    // - Only Admin can approve, reject or delete applications
+    // - Applicant can cancel their pending application; Only Admin can approve, reject, or delete
     match /doctor_applications/{appId} {
       allow read: if isAuthenticated() && (isAdmin() || resource.data.userId == request.auth.uid);
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid
                     && request.resource.data.status == 'pending';
-      allow update, delete: if isAdmin();
+      allow update: if isAdmin() || (isSelf(resource.data.userId) && request.resource.data.status == 'cancelled');
+      allow delete: if isAdmin();
     }
 
-    // 3. Clinical Cases Collection
-    // - Authenticated users can read cases
-    // - Patients can submit assessments (create cases)
-    // - Only verified Doctors or Admins can review/approve/reject cases (update)
-    // - Only Admins can delete cases
+    // --- 3. Clinical Cases Collection ---
+    // - Privacy protection: Patient can ONLY read their own cases; Doctors and Admins can read assigned cases
+    // - Authenticated patient creates case for themselves with status == 'pending'
+    // - ONLY licensed Doctors can clinically review/approve/reject cases (update)
+    // - Admins can manage or clean up records (delete) but cannot alter clinical medical diagnoses
     match /cases/{caseId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
+      allow read: if isAuthenticated() && 
+                     (resource.data.userId == request.auth.uid || isDoctor() || isAdmin());
+      allow create: if isAuthenticated() && 
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.status == 'pending';
       allow update: if isDoctor();
       allow delete: if isAdmin();
     }
 
-    // 4. Audit Log Events
-    // - Admins can read audit logs
+    // --- 4. Audit Log Events ---
+    // - Strictly Admin can read audit logs
     // - Authenticated actions can append log events
-    // - Tampering or deletion is strictly forbidden (immutable audit trail)
+    // - Immutable audit trail: updates and deletions are strictly forbidden
     match /audit_events/{eventId} {
       allow read: if isAdmin();
       allow create: if isAuthenticated();
