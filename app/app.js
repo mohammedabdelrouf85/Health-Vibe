@@ -1,4 +1,4 @@
-﻿const loader = document.getElementById("loader");
+const loader = document.getElementById("loader");
 const publicSite = document.getElementById("publicSite");
 const authScreen = document.getElementById("authScreen");
 const app = document.getElementById("app");
@@ -838,7 +838,6 @@ document.addEventListener("click", (event) => {
 });
 
 document.getElementById("authClose").addEventListener("click", hideAuth);
-document.getElementById("emailLogin").addEventListener("click", () => enterApp("email"));
 document.getElementById("googleLogin").addEventListener("click", () => enterApp("google"));
 document.getElementById("oxygenInput").addEventListener("input", updateOxygenWarning);
 document.getElementById("submitAssessment").addEventListener("click", () => {
@@ -921,26 +920,9 @@ window.addEventListener("load", () => {
       
       loader.classList.add("is-done");
     } else {
-      // Fallback to local session (for mock email login)
-      const session = localStorage.getItem("hv_session");
-      let loggedIn = false;
-      if (session) {
-        try {
-          const data = JSON.parse(session);
-          selectedRole = data.role || "patient";
-          if (emailInput) emailInput.value = data.email || "";
-          enterApp(data.source || "email", true);
-          loggedIn = true;
-        } catch(e) {
-          console.warn(e);
-        }
-      }
-      
       window.setTimeout(() => {
         loader.classList.add("is-done");
-        if (!loggedIn) {
-          publicSite.classList.remove("is-hidden");
-        }
+        publicSite.classList.remove("is-hidden");
       }, 900);
     }
   });
