@@ -699,6 +699,10 @@ async function renderPatientDashboard() {
   const isEn = currentLanguage === "en";
   
   // Set default / empty states
+  const firstName = user ? (user.displayName ? user.displayName.split(" ")[0] : (isEn ? "Guest" : "ضيف")) : "أحمد";
+  const titleEl = document.getElementById("patientHeroTitle");
+  if (titleEl) titleEl.textContent = isEn ? `Welcome, ${firstName}` : `مرحبًا ${firstName}`;
+
   document.getElementById("patientClinicalStatus").textContent = isEn ? "No recent assessment" : "لا يوجد فحص حديث";
   document.getElementById("patientClinicalO2").textContent = "--%";
   document.getElementById("patientClinicalConfidence").textContent = "--%";
