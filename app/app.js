@@ -781,11 +781,11 @@ async function handleEmailAuth(e) {
 
       try {
         await user.sendEmailVerification();
+        showToast(currentLanguage === "en" ? `Verification link sent! Check Inbox or Spam folder.` : `تم إرسال رابط التأكيد! يرجى فحص البريد الوارد أو مجلد Spam.`);
       } catch (verErr) {
-        console.warn("sendEmailVerification error:", verErr);
+        console.error("sendEmailVerification error:", verErr);
+        showToast(getAuthErrorMessage(verErr));
       }
-
-      showToast(currentLanguage === "en" ? `Account created! Verification link sent to ${email}` : `تم إنشاء الحساب وإرسال رابط تأكيد البريد إلى ${email}`);
     } else {
       await auth.signInWithEmailAndPassword(email, password);
       showToast(currentLanguage === "en" ? "Signed in successfully!" : "تم تسجيل الدخول بنجاح!");
@@ -886,8 +886,8 @@ function updateEmailVerificationUI(user) {
 
   if (title) title.textContent = isEn ? "Email verification needed" : "تأكيد البريد الإلكتروني مطلوب";
   if (desc) desc.textContent = isEn
-    ? `We sent a verification link to ${user.email}. Please verify your email to secure your account.`
-    : `أرسلنا رابط التحقق إلى ${user.email}. يرجى تأكيد بريدك الإلكتروني لحماية حسابك الطبي.`;
+    ? `Verification link sent to ${user.email}. Check your Inbox and Spam/Junk folder.`
+    : `أرسلنا رابط التحقق إلى ${user.email}. يرجى فحص صندوق الوارد أو مجلد الرسائل غير المرغوب فيها (Spam).`;
   if (resendText && !resendCooldown) {
     resendText.textContent = isEn ? "Resend Verification" : "إعادة إرسال الرابط";
   }
@@ -915,7 +915,7 @@ async function resendVerificationEmail() {
   try {
     if (resendBtn) resendBtn.disabled = true;
     await user.sendEmailVerification();
-    showToast(currentLanguage === "en" ? "Verification email sent! Check your inbox." : "تم إرسال رابط التأكيد! يرجى فحص صندوق الوارد.");
+    showToast(currentLanguage === "en" ? "Verification email sent! Check Inbox or Spam folder." : "تم إرسال رابط التأكيد! يرجى فحص البريد الوارد ومجلد Spam.");
 
     resendCooldown = true;
     let secondsLeft = 60;
