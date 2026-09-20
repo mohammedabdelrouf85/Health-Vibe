@@ -1040,12 +1040,14 @@ body.dark .topbar h2 { color: var(--ink); }
 .avatar {
   width: 42px;
   height: 42px;
-  border-radius: 14px;
+  flex-shrink: 0;
+  border-radius: 50%;
   display: grid;
   place-items: center;
   color: var(--teal);
   background: var(--cyan);
   font-weight: 900;
+  overflow: hidden;
 }
 
 .screen {
