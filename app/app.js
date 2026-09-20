@@ -71,19 +71,21 @@ const PERMISSIONS = {
   VIEW_OWN_CASES: "view:own_cases",
   APPLY_DOCTOR_VERIFICATION: "apply:doctor_verification",
 
-  // Doctor permissions
+  // Doctor permissions (Clinical - strictly for licensed medical professionals)
   VIEW_DOCTOR_QUEUE: "view:doctor_queue",
   REVIEW_CASE: "review:case",
   APPROVE_CASE: "approve:case",
   REJECT_CASE: "reject:case",
 
-  // Admin & Owner permissions
+  // Admin permissions (Governance & Operations - strictly administrative & non-clinical)
   VIEW_ADMIN_DASHBOARD: "view:admin_dashboard",
   VIEW_AUDIT_LOG: "view:audit_log",
   APPROVE_DOCTOR_APPLICATION: "approve:doctor_application",
   REJECT_DOCTOR_APPLICATION: "reject:doctor_application",
   MANAGE_AI_MODELS: "manage:ai_models",
-  MANAGE_USER_ROLES: "manage:user_roles"
+  MANAGE_USER_ROLES: "manage:user_roles",
+  MANAGE_USERS: "manage:users",
+  VIEW_SYSTEM_METRICS: "view:system_metrics"
 };
 
 const ROLE_PERMISSIONS_MAP = {
@@ -94,16 +96,22 @@ const ROLE_PERMISSIONS_MAP = {
     PERMISSIONS.APPLY_DOCTOR_VERIFICATION
   ],
   [ROLES.DOCTOR]: [
-    PERMISSIONS.VIEW_PATIENT_DASHBOARD,
-    PERMISSIONS.SUBMIT_ASSESSMENT,
-    PERMISSIONS.VIEW_OWN_CASES,
-    PERMISSIONS.APPLY_DOCTOR_VERIFICATION,
     PERMISSIONS.VIEW_DOCTOR_QUEUE,
     PERMISSIONS.REVIEW_CASE,
     PERMISSIONS.APPROVE_CASE,
-    PERMISSIONS.REJECT_CASE
+    PERMISSIONS.REJECT_CASE,
+    PERMISSIONS.VIEW_OWN_CASES
   ],
-  [ROLES.ADMIN]: Object.values(PERMISSIONS)
+  [ROLES.ADMIN]: [
+    PERMISSIONS.VIEW_ADMIN_DASHBOARD,
+    PERMISSIONS.VIEW_AUDIT_LOG,
+    PERMISSIONS.APPROVE_DOCTOR_APPLICATION,
+    PERMISSIONS.REJECT_DOCTOR_APPLICATION,
+    PERMISSIONS.MANAGE_AI_MODELS,
+    PERMISSIONS.MANAGE_USER_ROLES,
+    PERMISSIONS.MANAGE_USERS,
+    PERMISSIONS.VIEW_SYSTEM_METRICS
+  ]
 };
 
 const ROLE_ALLOWED_SCREENS = {
@@ -112,14 +120,10 @@ const ROLE_ALLOWED_SCREENS = {
     "history", "appointments", "assistant", "report"
   ],
   [ROLES.DOCTOR]: [
-    "patient", "consent", "profile", "assessment", "pending", "result",
-    "history", "appointments", "assistant", "verification", "report",
-    "doctor"
+    "doctor", "verification", "history", "appointments", "report", "profile"
   ],
   [ROLES.ADMIN]: [
-    "patient", "consent", "profile", "assessment", "pending", "result",
-    "history", "appointments", "assistant", "verification", "report",
-    "doctor", "admin", "audit"
+    "admin", "audit", "profile"
   ]
 };
 
@@ -381,6 +385,8 @@ const uiText = {
   "هل أنت ممارس صحي أو طبيب مرخص؟": "Are you a licensed healthcare provider or physician?",
   "يمكن للأطباء المرخصين تقديم طلب رسمي لتوثيق الحساب ومراجعة حالات المرضى بعد اعتماد الإدارة.": "Licensed doctors can apply for official verification to review patient cases upon administrative approval.",
   "تقديم طلب توثيق طبيب 📄": "Apply for Doctor Verification 📄",
+  "إدارة المستخدمين والصلاحيات": "Users & Roles Governance",
+  "عرض وتعديل أدوار الحسابات وتطبيق مبدأ فصل المهام (Separation of Duties)": "Manage account roles following Separation of Duties (SoD)",
   "فتح شاشة الطبيب": "Open doctor screen",
   "نتيجة معتمدة من الطبيب": "Doctor-approved result",
   "خطر متوسط ويحتاج متابعة": "Medium risk requiring follow-up",
@@ -1386,6 +1392,7 @@ function showScreen(name) {
   }
   if (name === "admin") {
     renderAdminApplications();
+    renderAdminUsers();
   }
 }
 
@@ -1906,6 +1913,115 @@ window.handleDoctorAppSubmit = handleDoctorAppSubmit;
 window.cancelOrReapplyDoctorApp = cancelOrReapplyDoctorApp;
 window.approveDoctorApplication = approveDoctorApplication;
 window.rejectDoctorApplication = rejectDoctorApplication;
+window.renderAdminUsers = renderAdminUsers;
+window.changeUserRole = changeUserRole;
+
+async function renderAdminUsers() {
+  const container = document.getElementById("adminUsersTableContainer");
+  if (!container) return;
+
+  const isEn = currentLanguage === "en";
+  container.innerHTML = `<div style="padding: 24px; text-align: center; color: var(--teal);"><div class="spinner"></div> ${isEn ? "Loading users & roles..." : "جاري تحميل قائمة المستخدمين والصلاحيات..."}</div>`;
+
+  try {
+    const snapshot = await db.collection("users").limit(50).get();
+    const users = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    const badge = document.getElementById("adminUsersCountBadge");
+    if (badge) {
+      badge.textContent = isEn ? `${users.length} registered users` : `${users.length} مستخدم مسجل`;
+    }
+
+    if (users.length === 0) {
+      container.innerHTML = `<div style="padding: 20px; text-align: center; color: var(--muted);">${isEn ? "No users found" : "لا يوجد مستخدمين مسجلين"}</div>`;
+      return;
+    }
+
+    let html = `
+      <table style="width: 100%; border-collapse: collapse; text-align: start; font-size: 13px;">
+        <thead>
+          <tr style="border-bottom: 2px solid var(--line); color: var(--muted);">
+            <th style="padding: 10px 12px; text-align: start;">${isEn ? "User" : "المستخدم"}</th>
+            <th style="padding: 10px 12px; text-align: start;">${isEn ? "Email" : "البريد الإلكتروني"}</th>
+            <th style="padding: 10px 12px; text-align: start;">${isEn ? "Role" : "الدور الحالي"}</th>
+            <th style="padding: 10px 12px; text-align: start;">${isEn ? "Verification" : "حالة الحساب"}</th>
+            <th style="padding: 10px 12px; text-align: end;">${isEn ? "Actions" : "إدارة الصلاحيات"}</th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
+
+    users.forEach(u => {
+      const isOwner = isOwnerUser(u.email) || u.isOwner;
+      const role = isOwner ? "owner" : (u.role || "patient");
+      const roleBadgeClass = isOwner ? "owner-badge" : (role === "admin" ? "pill danger" : (role === "doctor" ? "pill ok" : "pill info"));
+      const roleText = isEn ? (englishRoleLabels[role] || role) : (roleLabels[role] || role);
+      const isEmailVerified = u.emailVerified ? (isEn ? "Verified Email ✓" : "بريد مؤكد ✓") : (isEn ? "Pending Email" : "بانتظار التأكيد");
+      const userNameStr = u.name || u.displayName || u.email.split('@')[0];
+
+      html += `
+        <tr style="border-bottom: 1px solid var(--line);">
+          <td style="padding: 12px; font-weight: 600; color: var(--ink);">
+            ${userNameStr}
+            ${isOwner ? '<span class="owner-badge" style="margin-inline-start: 6px;">👑 Owner</span>' : ''}
+          </td>
+          <td style="padding: 12px; color: var(--muted); font-family: monospace;">${u.email}</td>
+          <td style="padding: 12px;">
+            <span class="${roleBadgeClass}" style="font-size: 11.5px; padding: 4px 10px;">${roleText}</span>
+          </td>
+          <td style="padding: 12px; color: ${u.emailVerified ? 'var(--teal)' : 'var(--muted)'};">
+            ${isEmailVerified}
+          </td>
+          <td style="padding: 12px; text-align: end;">
+            ${isOwner ? `<span style="font-size: 12px; color: var(--muted);">${isEn ? "Protected (Owner)" : "محمي (مالك النظام)"}</span>` : `
+              <select onchange="changeUserRole('${u.id}', this.value, '${userNameStr}')" style="padding: 5px 9px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 12px; cursor: pointer;">
+                <option value="patient" ${role === 'patient' ? 'selected' : ''}>${isEn ? 'Patient (مريض)' : 'حساب مريض'}</option>
+                <option value="doctor" ${role === 'doctor' ? 'selected' : ''}>${isEn ? 'Doctor (طبيب)' : 'طبيب موثق'}</option>
+                <option value="admin" ${role === 'admin' ? 'selected' : ''}>${isEn ? 'Admin (إدارة)' : 'حساب إدارة'}</option>
+              </select>
+            `}
+          </td>
+        </tr>
+      `;
+    });
+
+    html += `
+        </tbody>
+      </table>
+    `;
+
+    container.innerHTML = html;
+  } catch (err) {
+    console.error("renderAdminUsers error:", err);
+    container.innerHTML = `<div style="padding: 16px; color: var(--rose);">${getAuthErrorMessage(err)}</div>`;
+  }
+}
+
+async function changeUserRole(userId, newRole, userName) {
+  if (!enforcePermission(PERMISSIONS.MANAGE_USER_ROLES, "Change User Role")) return;
+  const isEn = currentLanguage === "en";
+  try {
+    showToast(isEn ? `Updating role for ${userName}...` : `جاري تحديث دور ${userName}...`);
+    await db.collection("users").doc(userId).set({
+      role: newRole
+    }, { merge: true });
+
+    // Log to audit events
+    await db.collection("audit_events").add({
+      type: "ROLE_CHANGE",
+      targetUserId: userId,
+      newRole: newRole,
+      changedBy: auth.currentUser ? auth.currentUser.email : "Admin",
+      timestamp: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    showToast(isEn ? `Role updated to ${newRole} for ${userName}!` : `تم تغيير دور ${userName} إلى ${roleLabels[newRole] || newRole}!`);
+    await renderAdminUsers();
+  } catch(err) {
+    console.error("changeUserRole error:", err);
+    showToast(getAuthErrorMessage(err));
+  }
+}
 
 function getActiveScreen() {
   return document.querySelector(".screen.active")?.id.replace("screen-", "") || "patient";
@@ -2039,6 +2155,7 @@ if (cancelApproveBtn) cancelApproveBtn.addEventListener("click", closeApprovalMo
 
 const confirmApproveBtn = document.getElementById("confirmApprove");
 if (confirmApproveBtn) confirmApproveBtn.addEventListener("click", () => {
+  if (!enforcePermission(PERMISSIONS.APPROVE_CASE, "Approve Clinical Case")) return;
   closeApprovalModal();
   showScreen("result");
   showToast("تم اعتماد النتيجة وتسجيل الحدث في سجل التدقيق");

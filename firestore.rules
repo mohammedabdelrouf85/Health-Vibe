@@ -21,8 +21,9 @@ service cloud.firestore {
       return isOwner() || (isAuthenticated() && getUserRole() == 'admin');
     }
     
+    // Doctor role is strictly clinical and separated from Admin
     function isDoctor() {
-      return isAdmin() || (isAuthenticated() && getUserRole() == 'doctor');
+      return isAuthenticated() && getUserRole() == 'doctor';
     }
     
     function isSelf(userId) {
