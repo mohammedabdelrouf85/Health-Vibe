@@ -432,6 +432,8 @@ const uiText = {
   "تذكرني": "Remember me",
   "نسيت كلمة المرور؟": "Forgot password?",
   "اختر الدور المناسب لحسابك وسجل دخولك بالبريد أو جوجل للمتابعة بأمان.": "Select your account role and sign in with email or Google to proceed securely.",
+  "سجل دخولك بالبريد أو جوجل للمتابعة بأمان.": "Sign in with email or Google to proceed securely.",
+  "للأطباء: يتم تفعيل حساب الطبيب بعد مراجعة وتوثيق ترخيص مزاولة المهنة.": "Healthcare provider? Doctor access is activated after credential verification.",
   "تأكيد البريد الإلكتروني مطلوب": "Email verification needed",
   "إعادة إرسال الرابط": "Resend Verification",
   "تحقق الآن": "Check Status",
@@ -451,6 +453,8 @@ const enToAr = {
   "Select your account role and continue with Google to proceed securely.": "اختر الدور المناسب لحسابك وقم بتسجيل الدخول باستخدام حساب جوجل للمتابعة بأمان.",
   "Select the appropriate role for your account and sign in with Google to proceed securely.": "اختر الدور المناسب لحسابك وقم بتسجيل الدخول باستخدام حساب جوجل للمتابعة بأمان.",
   "Select your account role and sign in with email or Google to proceed securely.": "اختر الدور المناسب لحسابك وسجل دخولك بالبريد أو جوجل للمتابعة بأمان.",
+  "Sign in with email or Google to proceed securely.": "سجل دخولك بالبريد أو جوجل للمتابعة بأمان.",
+  "Healthcare provider? Doctor access is activated after credential verification.": "للأطباء: يتم تفعيل حساب الطبيب بعد مراجعة وتوثيق ترخيص مزاولة المهنة.",
   "Patient": "مريض",
   "Doctor": "طبيب",
   "Admin": "إدارة",
@@ -855,7 +859,7 @@ async function handleEmailAuth(e) {
         console.warn("Could not update profile displayName:", profileErr);
       }
       const isOwner = isOwnerUser(user.email);
-      const safeRole = isOwner ? "admin" : ((selectedRole === "doctor") ? "doctor" : "patient");
+      const safeRole = isOwner ? "admin" : "patient";
       selectedRole = safeRole;
 
       await db.collection("users").doc(user.uid).set({
@@ -995,7 +999,7 @@ async function enterApp(source = "google") {
       try {
         const userDoc = await db.collection("users").doc(user.uid).get();
         if (!userDoc.exists) {
-          const safeRole = isOwner ? "admin" : ((selectedRole === "doctor") ? "doctor" : "patient");
+          const safeRole = isOwner ? "admin" : "patient";
           selectedRole = safeRole;
           await db.collection("users").doc(user.uid).set({
             name: user.displayName || user.email.split('@')[0],
@@ -1180,7 +1184,7 @@ function updateNavVisibility() {
     const screen = btn.dataset.screen;
     if (screen === "admin" || screen === "audit") {
       btn.style.display = selectedRole === "admin" ? "flex" : "none";
-    } else if (screen === "doctor" || screen === "verification") {
+    } else if (screen === "doctor") {
       btn.style.display = (selectedRole === "doctor" || selectedRole === "admin") ? "flex" : "none";
     } else {
       btn.style.display = "flex";
@@ -1192,8 +1196,8 @@ function showScreen(name) {
   if ((name === "admin" || name === "audit") && selectedRole !== "admin") {
     showToast(currentLanguage === "en" ? "Restricted: Administrator access only." : "غير مصرح: هذا القسم خاص بإدارة النظام فقط.");
     name = selectedRole === "doctor" ? "doctor" : "patient";
-  } else if ((name === "doctor" || name === "verification") && selectedRole !== "doctor" && selectedRole !== "admin") {
-    showToast(currentLanguage === "en" ? "Restricted: Verified healthcare providers only." : "غير مصرح: هذا القسم مخصص للأطباء المعتمدين فقط.");
+  } else if (name === "doctor" && selectedRole !== "doctor" && selectedRole !== "admin") {
+    showToast(currentLanguage === "en" ? "Doctor review is restricted to verified healthcare providers." : "مراجعة الطبيب مقتصرة على الأطباء المعتمدين فقط.");
     name = "patient";
   }
 
@@ -1346,11 +1350,7 @@ document.addEventListener("click", (event) => {
 
   const roleButton = event.target.closest("[data-role]");
   if (roleButton) {
-    const requestedRole = roleButton.dataset.role;
-    selectedRole = (requestedRole === "doctor") ? "doctor" : "patient";
-    document.querySelectorAll("[data-role]").forEach((button) => {
-      button.classList.toggle("active", button.dataset.role === selectedRole);
-    });
+    selectedRole = "patient";
     return;
   }
 
@@ -1475,7 +1475,7 @@ window.addEventListener("load", () => {
           }
           if (userDoc.data().name) displayName = userDoc.data().name;
         } else {
-          const safeRole = isOwner ? "admin" : ((selectedRole === "doctor") ? "doctor" : "patient");
+          const safeRole = isOwner ? "admin" : "patient";
           selectedRole = safeRole;
           await db.collection("users").doc(user.uid).set({
             name: displayName || user.email.split('@')[0],

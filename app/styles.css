@@ -732,6 +732,26 @@ body.dark .role-stack strong { color: var(--ink); }
 body.dark .auth-card h2 { color: var(--ink); }
 .auth-card p { color: var(--muted); line-height: 1.6; margin: 0 0 18px; }
 
+.doctor-auth-note {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(9, 184, 182, 0.08);
+  border: 1px solid rgba(9, 184, 182, 0.22);
+  border-radius: 12px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+body.dark .doctor-auth-note {
+  background: rgba(9, 184, 182, 0.12);
+  border-color: rgba(9, 184, 182, 0.25);
+  color: #cbd5e1;
+}
+
 .role-tabs {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
