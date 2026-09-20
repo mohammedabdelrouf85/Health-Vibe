@@ -1092,13 +1092,11 @@ body.dark .topbar h2 { color: var(--ink); }
 }
 
 .app-hero {
-  background:
-    linear-gradient(135deg, rgba(0, 109, 111, .95), rgba(24, 160, 88, .86)),
-    var(--teal);
+  background: linear-gradient(135deg, var(--teal), var(--teal-2));
 }
 
 .app-hero h1 {
-  color: white !important;
+  color: white;
   font-size: clamp(30px, 5vw, 58px);
 }
 
