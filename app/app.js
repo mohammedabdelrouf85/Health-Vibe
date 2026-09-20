@@ -450,7 +450,7 @@ function showToast(message) {
 
 // --- Real Database (Firebase Firestore) ---
 const firebaseConfig = {
-  apiKey: "AIzaSyANYIgImikcdMOI2EkkjPhzMjKR58o8BRM",
+  apiKey: "AIzaSyANyIglmiKcdM0I2EKkjPhzMjKR58o8BRM",
   authDomain: "health-vibes-a4b3b.firebaseapp.com",
   projectId: "health-vibes-a4b3b",
   storageBucket: "health-vibes-a4b3b.firebasestorage.app",
