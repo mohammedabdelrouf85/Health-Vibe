@@ -1,4 +1,4 @@
-const loader = document.getElementById("loader");
+﻿const loader = document.getElementById("loader");
 const publicSite = document.getElementById("publicSite");
 const authScreen = document.getElementById("authScreen");
 const app = document.getElementById("app");
@@ -67,7 +67,7 @@ const englishNames = {
 };
 
 const uiText = {
-  "Health Vibe": "HealthVibe AI",
+  "Health Vibes": "Health Vibess",
   "نجهز تجربة رعاية صحية أوضح وأكثر أمانًا": "Preparing a clearer, safer healthcare experience",
   "رعاية صحية مدعومة بالذكاء الاصطناعي وتحت مراجعة الطبيب": "AI-supported healthcare reviewed by doctors",
   "المسار": "Workflow",
@@ -79,7 +79,7 @@ const uiText = {
   "ابدأ الآن": "Get started",
   "الوحدة الأولى لتقييم التنفس": "Respiratory assessment module",
   "رعاية صحية رقمية تربط المريض بالطبيب قبل ظهور أي نتيجة نهائية": "Digital healthcare that connects patients with doctors before any final result appears",
-  "Health Vibe يجمع التقييم، مراجعة الطبيب، التقارير، المواعيد، والسجل الطبي في تجربة عربية واحدة مبنية للأفراد والعيادات في مصر.": "HealthVibe AI brings assessment, doctor review, reports, appointments, and medical history into one experience built for people and clinics in Egypt.",
+  "Health Vibes يجمع التقييم، مراجعة الطبيب، التقارير، المواعيد، والسجل الطبي في تجربة عربية واحدة مبنية للأفراد والعيادات في مصر.": "Health Vibess brings assessment, doctor review, reports, appointments, and medical history into one experience built for people and clinics in Egypt.",
   "تجربة البرنامج": "Try the app",
   "معاينة بدون حساب": "Preview without account",
   "الذكاء الاصطناعي لا يصدر تشخيصًا مستقلًا": "AI does not issue an independent diagnosis",
@@ -180,7 +180,7 @@ const uiText = {
   "غدًا 7:30 مساءً": "Tomorrow 7:30 PM",
   "الموافقة الطبية": "Medical consent",
   "مطلوبة": "Required",
-  "Health Vibe يستخدم بياناتك الصحية لتقييم خطورة إرشادي ثم يرسلها لطبيب معتمد قبل ظهور أي نتيجة نهائية.": "HealthVibe AI uses your health data for a guidance-only risk assessment, then sends it to a verified doctor before any final result appears.",
+  "Health Vibes يستخدم بياناتك الصحية لتقييم خطورة إرشادي ثم يرسلها لطبيب معتمد قبل ظهور أي نتيجة نهائية.": "Health Vibess uses your health data for a guidance-only risk assessment, then sends it to a verified doctor before any final result appears.",
   "أوافق على استخدام البيانات الطبية داخل مسار التقييم والمراجعة.": "I agree to use my medical data inside the assessment and review path.",
   "أفهم أن الذكاء الاصطناعي لا يقدم تشخيصًا مستقلًا ولا يغني عن الطبيب.": "I understand that AI does not provide an independent diagnosis and does not replace a doctor.",
   "أوافق على استقبال تنبيهات المواعيد والتقارير عبر البريد أو رابط آمن.": "I agree to receive appointment and report alerts by email or secure link.",
@@ -362,7 +362,7 @@ const uiText = {
   "راقب نسبة الأكسجين إذا توفر جهاز موثوق.": "Monitor oxygen level if a reliable device is available.",
   "تابع مع الطبيب الذي راجع الحالة.": "Follow up with the reviewing doctor.",
   "اطلب رعاية عاجلة إذا زاد ضيق التنفس.": "Seek urgent care if shortness of breath worsens.",
-  "تنبيه طبي: Health Vibe يساعد في دعم القرار الطبي ولا يستبدل التقييم الطبي المؤهل أو رعاية الطوارئ.": "Medical notice: HealthVibe AI supports clinical decision-making and does not replace qualified medical evaluation or emergency care.",
+  "تنبيه طبي: Health Vibes يساعد في دعم القرار الطبي ولا يستبدل التقييم الطبي المؤهل أو رعاية الطوارئ.": "Medical notice: Health Vibess supports clinical decision-making and does not replace qualified medical evaluation or emergency care.",
   "تأكيد اعتماد التقرير": "Confirm report approval",
   "بعد الاعتماد ستظهر النتيجة والتوصيات للمريض وسيتم حفظ الحدث في سجل التدقيق.": "After approval, the result and recommendations will appear to the patient and the event will be saved in the audit log.",
   "تأكيد الاعتماد": "Confirm approval",
@@ -407,7 +407,7 @@ function applyLanguage(language) {
   currentLanguage = language;
   document.documentElement.lang = language;
   document.documentElement.dir = language === "ar" ? "rtl" : "ltr";
-  document.title = localized("Health Vibe");
+  document.title = localized("Health Vibes");
 
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   const textNodes = [];
@@ -441,7 +441,7 @@ function applyLanguage(language) {
   }
   const themeLabel = document.body.classList.contains("dark") ? "الوضع الداكن" : "الوضع الفاتح";
   if (siteThemeToggle) siteThemeToggle.textContent = localized(themeLabel);
-  screenTitle.textContent = language === "en" ? englishTitles[getActiveScreen()] || "Health Vibe" : titles[getActiveScreen()] || "Health Vibe";
+  screenTitle.textContent = language === "en" ? englishTitles[getActiveScreen()] || "Health Vibes" : titles[getActiveScreen()] || "Health Vibes";
   accountLabel.textContent = language === "en" ? englishRoleLabels[selectedRole] : roleLabels[selectedRole];
 }
 
@@ -685,7 +685,7 @@ function showScreen(name) {
     button.classList.toggle("active", button.dataset.screen === name);
   });
 
-  screenTitle.textContent = currentLanguage === "en" ? englishTitles[name] || "HealthVibe AI" : titles[name] || "Health Vibe";
+  screenTitle.textContent = currentLanguage === "en" ? englishTitles[name] || "Health Vibess" : titles[name] || "Health Vibes";
   document.body.classList.remove("sidebar-open");
   
   if (name === "doctor") {

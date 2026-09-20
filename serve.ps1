@@ -1,5 +1,5 @@
-$port = 3000
-$root = "D:\MY PC\Coding\Health Vibe Ai\app"
+﻿$port = 3000
+$root = "D:\MY PC\Coding\Health Vibess\app"
 
 $listener = New-Object System.Net.HttpListener
 $listener.Prefixes.Add("http://localhost:$port/")
