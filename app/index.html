@@ -126,54 +126,109 @@
           <span>Secure account login</span>
         </div>
       </div>
-      <h2>Access your account</h2>
-      <p>Select your account role and sign in with email or Google to proceed securely.</p>
-
-      <div class="role-tabs" role="tablist" aria-label="Account role">
-        <button class="active" data-role="patient" type="button">Patient</button>
-        <button data-role="doctor" type="button">Doctor</button>
-        <button data-role="admin" type="button">Admin</button>
-      </div>
-
-      <div class="auth-mode-switch" role="tablist" aria-label="Authentication mode">
-        <button type="button" id="authTabSignIn" class="auth-tab active">Sign In</button>
-        <button type="button" id="authTabSignUp" class="auth-tab">Create Account</button>
-      </div>
-
       <div id="authErrorBanner" class="auth-error-banner" role="alert"></div>
 
-      <form id="authEmailForm" autocomplete="on">
-        <div id="authNameGroup" class="form-group" style="display:none;">
-          <label for="authName">Full Name</label>
-          <input type="text" id="authName" placeholder="e.g. Ahmed Mohamed" autocomplete="name" />
+      <!-- MAIN SIGN IN / SIGN UP VIEW -->
+      <div id="authMainView">
+        <h2>Access your account</h2>
+        <p>Select your account role and sign in with email or Google to proceed securely.</p>
+
+        <div class="role-tabs" role="tablist" aria-label="Account role">
+          <button class="active" data-role="patient" type="button">Patient</button>
+          <button data-role="doctor" type="button">Doctor</button>
+          <button data-role="admin" type="button">Admin</button>
         </div>
 
-        <div class="form-group">
-          <label for="authEmail">Email Address</label>
-          <input type="email" id="authEmail" placeholder="name@example.com" required autocomplete="email" />
+        <div class="auth-mode-switch" role="tablist" aria-label="Authentication mode">
+          <button type="button" id="authTabSignIn" class="auth-tab active">Sign In</button>
+          <button type="button" id="authTabSignUp" class="auth-tab">Create Account</button>
         </div>
 
-        <div class="form-group">
-          <label for="authPassword">Password</label>
-          <input type="password" id="authPassword" placeholder="••••••••" required autocomplete="current-password" minlength="6" />
-        </div>
+        <form id="authEmailForm" autocomplete="on">
+          <div id="authNameGroup" class="form-group" style="display:none;">
+            <label for="authName">Full Name</label>
+            <input type="text" id="authName" placeholder="e.g. Ahmed Mohamed" autocomplete="name" />
+          </div>
 
-        <div class="auth-options">
-          <label><input type="checkbox" id="rememberMe" checked /> <span>Remember me</span></label>
-          <button type="button" id="forgotPasswordBtn">Forgot password?</button>
-        </div>
+          <div class="form-group">
+            <label for="authEmail">Email Address</label>
+            <input type="email" id="authEmail" placeholder="name@example.com" required autocomplete="email" />
+          </div>
 
-        <button id="authSubmitBtn" type="submit" class="solid-button large auth-submit-btn">
-          <span id="authSubmitText">Sign In</span>
+          <div class="form-group">
+            <label for="authPassword">Password</label>
+            <input type="password" id="authPassword" placeholder="••••••••" required autocomplete="current-password" minlength="6" />
+          </div>
+
+          <div class="auth-options">
+            <label><input type="checkbox" id="rememberMe" checked /> <span>Remember me</span></label>
+            <button type="button" id="forgotPasswordBtn">Forgot password?</button>
+          </div>
+
+          <button id="authSubmitBtn" type="submit" class="solid-button large auth-submit-btn">
+            <span id="authSubmitText">Sign In</span>
+          </button>
+        </form>
+
+        <div class="divider"><span>or</span></div>
+
+        <button id="googleLogin" class="google-button" type="button">
+          <span class="google-g">G</span>
+          <span>Continue with Google</span>
         </button>
-      </form>
+      </div>
 
-      <div class="divider"><span>or</span></div>
+      <!-- DEDICATED FORGOT PASSWORD VIEW -->
+      <div id="authResetView" style="display:none;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+          <button id="backToSignInBtn" type="button" class="back-link-btn" title="Back to sign in">←</button>
+          <h2 style="margin:0;font-size:24px;">Reset Password</h2>
+        </div>
+        <p style="margin-bottom:16px;color:var(--muted);font-size:13.5px;line-height:1.5;">
+          Enter your account email and we will send you an official password reset link.
+        </p>
 
-      <button id="googleLogin" class="google-button" type="button">
-        <span class="google-g">G</span>
-        <span>Continue with Google</span>
-      </button>
+        <div id="resetSuccessMessage" class="reset-success-box" style="display:none;">
+          <strong>Reset link sent!</strong>
+          <p style="margin:4px 0 0;color:var(--ink);font-size:12.5px;">Please check your Inbox and Spam/Junk folder for the password reset email from Health Vibes.</p>
+        </div>
+
+        <form id="forgotPasswordForm">
+          <div class="form-group" style="margin-bottom:14px;">
+            <label for="resetEmailInput">Account Email</label>
+            <input type="email" id="resetEmailInput" placeholder="name@example.com" required autocomplete="email" />
+          </div>
+
+          <button id="sendResetLinkBtn" type="submit" class="solid-button large auth-submit-btn" style="margin-bottom:12px;">
+            <span id="sendResetLinkText">Send Reset Link</span>
+          </button>
+
+          <button id="cancelResetBtn" type="button" class="soft-button large" style="width:100%;justify-content:center;">
+            Back to Sign In
+          </button>
+        </form>
+      </div>
+
+      <!-- NEW PASSWORD VIEW (FOR EMAIL ACTION LINKS) -->
+      <div id="authNewPasswordView" style="display:none;">
+        <h2 style="margin:0 0 8px;font-size:24px;">Set New Password</h2>
+        <p style="margin-bottom:16px;color:var(--muted);font-size:13.5px;line-height:1.5;">
+          Enter your new password below.
+        </p>
+        <form id="newPasswordForm">
+          <div class="form-group" style="margin-bottom:12px;">
+            <label for="newPasswordInput">New Password</label>
+            <input type="password" id="newPasswordInput" placeholder="••••••••" required minlength="6" autocomplete="new-password" />
+          </div>
+          <div class="form-group" style="margin-bottom:16px;">
+            <label for="confirmNewPasswordInput">Confirm New Password</label>
+            <input type="password" id="confirmNewPasswordInput" placeholder="••••••••" required minlength="6" autocomplete="new-password" />
+          </div>
+          <button id="confirmPasswordResetBtn" type="submit" class="solid-button large auth-submit-btn">
+            <span id="confirmPasswordResetText">Save New Password</span>
+          </button>
+        </form>
+      </div>
     </div>
   </section>
 

@@ -20,6 +20,22 @@ const authSubmitBtn = document.getElementById("authSubmitBtn");
 const authSubmitText = document.getElementById("authSubmitText");
 const authErrorBanner = document.getElementById("authErrorBanner");
 const forgotPasswordBtn = document.getElementById("forgotPasswordBtn");
+const authMainView = document.getElementById("authMainView");
+const authResetView = document.getElementById("authResetView");
+const authNewPasswordView = document.getElementById("authNewPasswordView");
+const resetEmailInput = document.getElementById("resetEmailInput");
+const forgotPasswordForm = document.getElementById("forgotPasswordForm");
+const sendResetLinkBtn = document.getElementById("sendResetLinkBtn");
+const sendResetLinkText = document.getElementById("sendResetLinkText");
+const resetSuccessMessage = document.getElementById("resetSuccessMessage");
+const backToSignInBtn = document.getElementById("backToSignInBtn");
+const cancelResetBtn = document.getElementById("cancelResetBtn");
+const newPasswordForm = document.getElementById("newPasswordForm");
+const newPasswordInput = document.getElementById("newPasswordInput");
+const confirmNewPasswordInput = document.getElementById("confirmNewPasswordInput");
+const confirmPasswordResetBtn = document.getElementById("confirmPasswordResetBtn");
+const confirmPasswordResetText = document.getElementById("confirmPasswordResetText");
+let activeResetCode = null;
 let authMode = "signin";
 const accountLabel = document.getElementById("accountLabel");
 const userName = document.getElementById("userName");
@@ -408,7 +424,16 @@ const uiText = {
   "اختر الدور المناسب لحسابك وسجل دخولك بالبريد أو جوجل للمتابعة بأمان.": "Select your account role and sign in with email or Google to proceed securely.",
   "تأكيد البريد الإلكتروني مطلوب": "Email verification needed",
   "إعادة إرسال الرابط": "Resend Verification",
-  "تحقق الآن": "Check Status"
+  "تحقق الآن": "Check Status",
+  "استعادة كلمة المرور": "Reset Password",
+  "إرسال رابط الاستعادة": "Send Reset Link",
+  "العودة لتسجيل الدخول": "Back to Sign In",
+  "تعيين كلمة مرور جديدة": "Set New Password",
+  "كلمة المرور الجديدة": "New Password",
+  "تأكيد كلمة المرور الجديدة": "Confirm New Password",
+  "حفظ كلمة المرور الجديدة": "Save New Password",
+  "البريد الإلكتروني للحساب": "Account Email",
+  "تم إرسال رابط الاستعادة!": "Reset link sent!"
 };
 
 const enToAr = {
@@ -432,7 +457,16 @@ const enToAr = {
   "Account role": "دور الحساب",
   "Email verification needed": "تأكيد البريد الإلكتروني مطلوب",
   "Resend Verification": "إعادة إرسال الرابط",
-  "Check Status": "تحقق الآن"
+  "Check Status": "تحقق الآن",
+  "Reset Password": "استعادة كلمة المرور",
+  "Send Reset Link": "إرسال رابط الاستعادة",
+  "Back to Sign In": "العودة لتسجيل الدخول",
+  "Set New Password": "تعيين كلمة مرور جديدة",
+  "New Password": "كلمة المرور الجديدة",
+  "Confirm New Password": "تأكيد كلمة المرور الجديدة",
+  "Save New Password": "حفظ كلمة المرور الجديدة",
+  "Account Email": "البريد الإلكتروني للحساب",
+  "Reset link sent!": "تم إرسال رابط الاستعادة!"
 };
 
 let selectedRole = "patient";
@@ -648,11 +682,48 @@ initDB();
 function showAuth() {
   authScreen.classList.add("open");
   clearAuthError();
+  if (authNewPasswordView && authNewPasswordView.style.display === "block") {
+    // Keep new password view
+  } else {
+    showSignInView();
+  }
 }
 
 function hideAuth() {
   authScreen.classList.remove("open");
   clearAuthError();
+}
+
+function showForgotView() {
+  clearAuthError();
+  if (resetSuccessMessage) resetSuccessMessage.style.display = "none";
+  if (authMainView) authMainView.style.display = "none";
+  if (authNewPasswordView) authNewPasswordView.style.display = "none";
+  if (authResetView) authResetView.style.display = "block";
+
+  if (resetEmailInput) {
+    if (authEmail && authEmail.value.trim()) {
+      resetEmailInput.value = authEmail.value.trim();
+    }
+    resetEmailInput.focus();
+  }
+}
+
+function showSignInView() {
+  clearAuthError();
+  if (authResetView) authResetView.style.display = "none";
+  if (authNewPasswordView) authNewPasswordView.style.display = "none";
+  if (authMainView) authMainView.style.display = "block";
+}
+
+function showNewPasswordView(oobCode) {
+  activeResetCode = oobCode;
+  clearAuthError();
+  authScreen.classList.add("open");
+  if (authMainView) authMainView.style.display = "none";
+  if (authResetView) authResetView.style.display = "none";
+  if (authNewPasswordView) authNewPasswordView.style.display = "block";
+  if (newPasswordInput) newPasswordInput.focus();
 }
 
 function setAuthMode(mode) {
@@ -795,6 +866,104 @@ async function handleEmailAuth(e) {
     showAuthError(getAuthErrorMessage(error));
   } finally {
     setAuthLoading(false);
+  }
+}
+
+let resetCooldown = false;
+let resetTimer = null;
+
+async function handleForgotPasswordSubmit(e) {
+  if (e) e.preventDefault();
+  clearAuthError();
+  const email = resetEmailInput ? resetEmailInput.value.trim() : "";
+
+  if (!email) {
+    showAuthError(currentLanguage === "en" ? "Please enter your account email address." : "يرجى كتابة البريد الإلكتروني الخاص بحسابك.");
+    return;
+  }
+
+  if (resetCooldown) {
+    showToast(currentLanguage === "en" ? "Please wait before requesting another reset link." : "يرجى الانتظار قليلاً قبل طلب رابط جديد.");
+    return;
+  }
+
+  try {
+    if (sendResetLinkBtn) sendResetLinkBtn.disabled = true;
+    if (sendResetLinkText) sendResetLinkText.textContent = currentLanguage === "en" ? "Sending link..." : "جاري الإرسال...";
+
+    await auth.sendPasswordResetEmail(email);
+
+    if (resetSuccessMessage) {
+      resetSuccessMessage.style.display = "block";
+    }
+
+    showToast(currentLanguage === "en" ? `Reset link sent to ${email}! (Check Spam folder)` : `تم إرسال رابط الاستعادة إلى ${email}! (افحص مجلد Spam)`);
+
+    resetCooldown = true;
+    let seconds = 60;
+    if (sendResetLinkText) sendResetLinkText.textContent = `${seconds}s`;
+
+    if (resetTimer) clearInterval(resetTimer);
+    resetTimer = setInterval(() => {
+      seconds--;
+      if (seconds <= 0) {
+        clearInterval(resetTimer);
+        resetCooldown = false;
+        if (sendResetLinkBtn) sendResetLinkBtn.disabled = false;
+        if (sendResetLinkText) {
+          sendResetLinkText.textContent = currentLanguage === "en" ? "Send Reset Link" : "إرسال رابط الاستعادة";
+        }
+      } else {
+        if (sendResetLinkText) sendResetLinkText.textContent = `${seconds}s`;
+      }
+    }, 1000);
+  } catch (error) {
+    console.error("Password reset error:", error);
+    showAuthError(getAuthErrorMessage(error));
+    if (sendResetLinkBtn) sendResetLinkBtn.disabled = false;
+    if (sendResetLinkText) {
+      sendResetLinkText.textContent = currentLanguage === "en" ? "Send Reset Link" : "إرسال رابط الاستعادة";
+    }
+  }
+}
+
+async function handleNewPasswordSubmit(e) {
+  if (e) e.preventDefault();
+  clearAuthError();
+
+  const newPassword = newPasswordInput ? newPasswordInput.value : "";
+  const confirmPassword = confirmNewPasswordInput ? confirmNewPasswordInput.value : "";
+
+  if (!newPassword || newPassword.length < 6) {
+    showAuthError(currentLanguage === "en" ? "Password must be at least 6 characters." : "كلمة المرور يجب ألا تقل عن 6 أحرف.");
+    return;
+  }
+
+  if (newPassword !== confirmPassword) {
+    showAuthError(currentLanguage === "en" ? "Passwords do not match." : "كلمتا المرور غير متطابقتين.");
+    return;
+  }
+
+  if (!activeResetCode) {
+    showAuthError(currentLanguage === "en" ? "Invalid or expired password reset link." : "رابط استعادة كلمة المرور غير صالح أو منتهي الصلاحية.");
+    return;
+  }
+
+  try {
+    if (confirmPasswordResetBtn) confirmPasswordResetBtn.disabled = true;
+    if (confirmPasswordResetText) confirmPasswordResetText.textContent = currentLanguage === "en" ? "Updating..." : "جاري التحديث...";
+
+    await auth.confirmPasswordReset(activeResetCode, newPassword);
+
+    showToast(currentLanguage === "en" ? "🎉 Password updated successfully! Please sign in." : "🎉 تم تغيير كلمة المرور بنجاح! يمكنك الآن تسجيل الدخول.");
+    showSignInView();
+    if (authPassword) authPassword.value = "";
+  } catch (error) {
+    console.error("Confirm password reset error:", error);
+    showAuthError(getAuthErrorMessage(error));
+  } finally {
+    if (confirmPasswordResetBtn) confirmPasswordResetBtn.disabled = false;
+    if (confirmPasswordResetText) confirmPasswordResetText.textContent = currentLanguage === "en" ? "Save New Password" : "حفظ كلمة المرور";
   }
 }
 
@@ -1139,21 +1308,19 @@ if (authEmailForm) {
   authEmailForm.addEventListener("submit", handleEmailAuth);
 }
 if (forgotPasswordBtn) {
-  forgotPasswordBtn.addEventListener("click", async () => {
-    clearAuthError();
-    const email = authEmail ? authEmail.value.trim() : "";
-    if (!email) {
-      showAuthError(currentLanguage === "en" ? "Please enter your email to receive a password reset link." : "يرجى كتابة بريدك الإلكتروني لاستلام رابط استعادة كلمة المرور.");
-      if (authEmail) authEmail.focus();
-      return;
-    }
-    try {
-      await auth.sendPasswordResetEmail(email);
-      showToast(currentLanguage === "en" ? "Password reset link sent to your email!" : "تم إرسال رابط استعادة كلمة المرور إلى بريدك!");
-    } catch (err) {
-      showAuthError(getAuthErrorMessage(err));
-    }
-  });
+  forgotPasswordBtn.addEventListener("click", showForgotView);
+}
+if (backToSignInBtn) {
+  backToSignInBtn.addEventListener("click", showSignInView);
+}
+if (cancelResetBtn) {
+  cancelResetBtn.addEventListener("click", showSignInView);
+}
+if (forgotPasswordForm) {
+  forgotPasswordForm.addEventListener("submit", handleForgotPasswordSubmit);
+}
+if (newPasswordForm) {
+  newPasswordForm.addEventListener("submit", handleNewPasswordSubmit);
 }
 
 const resendVerificationBtn = document.getElementById("resendVerificationBtn");
@@ -1266,8 +1433,29 @@ window.addEventListener("load", () => {
   });
 });
 
+function checkUrlAuthAction() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const mode = urlParams.get("mode");
+  const oobCode = urlParams.get("oobCode");
+
+  if (mode === "resetPassword" && oobCode) {
+    showNewPasswordView(oobCode);
+  } else if (mode === "verifyEmail" && oobCode) {
+    auth.applyActionCode(oobCode).then(() => {
+      showToast(currentLanguage === "en" ? "🎉 Email verified successfully!" : "🎉 تم تأكيد البريد الإلكتروني بنجاح!");
+      if (auth.currentUser) {
+        auth.currentUser.reload().then(() => updateEmailVerificationUI(auth.currentUser));
+      }
+    }).catch(err => {
+      console.error("verifyEmail action error:", err);
+      showToast(getAuthErrorMessage(err));
+    });
+  }
+}
+
 showScreen("patient");
 applyLanguage("en");
+checkUrlAuthAction();
 
 function updateAvatar(user) {
   const sidebarAvatar = document.getElementById("sidebarAvatar");

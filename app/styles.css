@@ -846,6 +846,43 @@ body.dark .auth-tab.active {
   cursor: not-allowed;
 }
 
+.reset-success-box {
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(44, 197, 112, 0.12);
+  border: 1px solid rgba(44, 197, 112, 0.35);
+  color: #2cc570;
+  font-size: 13.5px;
+  margin-bottom: 16px;
+  line-height: 1.5;
+  animation: floatIn 0.3s ease both;
+}
+
+body.dark .reset-success-box {
+  background: rgba(44, 197, 112, 0.1);
+  border-color: rgba(44, 197, 112, 0.3);
+}
+
+.back-link-btn {
+  background: transparent;
+  border: 0;
+  color: var(--teal);
+  cursor: pointer;
+  font-size: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.back-link-btn:hover {
+  background: var(--surface-2);
+  color: var(--teal-3);
+}
+
 .verification-banner {
   margin: 14px 18px 0;
   padding: 12px 18px;
