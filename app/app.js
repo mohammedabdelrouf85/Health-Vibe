@@ -624,7 +624,8 @@ async function enterApp(source = "email", skipSave = false) {
       showScreen(selectedRole === "doctor" ? "doctor" : selectedRole === "admin" ? "admin" : "patient");
       showToast(currentLanguage === "en" ? "Signed in with Google" : "تم تسجيل الدخول بحساب جوجل");
     } catch (error) {
-      console.error(error);
+      console.error("Google Auth Error:", error);
+      alert("Firebase Error: " + error.message + "\n\n(Hint: Make sure Google Auth is enabled and 'localhost' or '127.0.0.1' is in your Authorized Domains in Firebase Console)");
       showToast(currentLanguage === "en" ? "Google sign in failed" : "فشل تسجيل الدخول بجوجل");
     }
   } else {
