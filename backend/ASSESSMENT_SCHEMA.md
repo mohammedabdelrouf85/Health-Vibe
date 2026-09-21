@@ -86,6 +86,9 @@
   "reviewedAt": null,
   "doctorNotes": null,
   "doctorNote": null,
+  "clinicalNotes": null,
+  "recommendation": null,
+  "recommendations": [],
   "approvingDoctorId": null,
   "approvingDoctorEmail": null,
   "result": null,
@@ -152,7 +155,12 @@
 * `generatedAt`: تاريخ ووقت إنشاء التقرير النهائي، ويُسجل عند اعتماد الطبيب.
 * `approvedAt`: تاريخ ووقت اعتماد الطبيب للتقرير النهائي.
 
-### 6. سجل دورة حياة الحالة والتدقيق (`statusHistory`):
+### 6. مخرجات مراجعة الطبيب (`Doctor Review Output`):
+* `doctorNote` / `clinicalNotes`: ملاحظات الطبيب السريرية الحقيقية المكتوبة قبل الاعتماد.
+* `recommendations`: قائمة توصيات الطبيب للمريض، وتُكتب كتوصية واحدة على الأقل قبل اعتماد التقرير.
+* `recommendation`: نسخة نصية متوافقة للخلف من التوصيات، مفصولة بأسطر.
+
+### 7. سجل دورة حياة الحالة والتدقيق (`statusHistory`):
 * مصفوفة متراكمة تسجل كل انتقال في حالة الفحص السريري:
   * `status`: الحالة الجديدة (`"pending"` | `"approved"` | `"rejected"` | `"under_review"`).
   * `previousStatus`: الحالة السابقة.

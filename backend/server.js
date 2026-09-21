@@ -56,6 +56,17 @@ const ROLES = {
 const VALID_ROLES = Object.values(ROLES);
 const ADMIN_ROLES = [ROLES.CLINIC_ADMIN, ROLES.SUPER_ADMIN];
 
+function normalizeRecommendations(recommendations, recommendation) {
+  if (Array.isArray(recommendations)) {
+    return recommendations.map((item) => String(item || '').trim()).filter(Boolean);
+  }
+
+  return String(recommendation || '')
+    .split(/\r?\n|[;؛]/)
+    .map((item) => item.replace(/^[\s\-*•\d.)]+/, '').trim())
+    .filter(Boolean);
+}
+
 function normalizeRole(role, isOwner = false) {
   if (isOwner) return ROLES.SUPER_ADMIN;
   if (role === 'admin' || role === 'owner') return ROLES.CLINIC_ADMIN;
@@ -450,7 +461,7 @@ app.post('/api/admin/approve-doctor-application', requireAuth, requireVerifiedEm
 /**
  * Helper: Authoritative Doctor Case Transition Executor
  */
-async function executeDoctorTransition({ req, res, caseId, targetStatus, note, clinicalNotes, recommendation }) {
+async function executeDoctorTransition({ req, res, caseId, targetStatus, note, clinicalNotes, recommendation, recommendations }) {
   const ALLOWED_DOCTOR_STATUSES = [
     'under_review',
     'more_info_requested',
@@ -476,6 +487,15 @@ async function executeDoctorTransition({ req, res, caseId, targetStatus, note, c
 
       const caseData = caseDoc.data();
       const currentStatus = caseData.status || 'pending';
+      const normalizedClinicalNotes = String(clinicalNotes || note || '').trim();
+      const normalizedRecommendations = normalizeRecommendations(recommendations, recommendation);
+
+      if (targetStatus === 'approved' && (!normalizedClinicalNotes || normalizedRecommendations.length === 0)) {
+        return res.status(400).json({
+          error: 'MISSING_CLINICAL_REPORT_DATA',
+          message: 'Doctor clinical notes and at least one patient recommendation are required before approving a report.'
+        });
+      }
 
       // Zero-trust assigned physician check
       const assignedDoctor = caseData.assignedDoctorId || caseData.doctorId || caseData.doctorUid;
@@ -522,7 +542,7 @@ async function executeDoctorTransition({ req, res, caseId, targetStatus, note, c
           changedByEmail: req.user.email,
           changedByName: req.user.name || req.user.displayName || 'Doctor',
           changedByRole: 'doctor',
-          note: note || clinicalNotes || recommendation || `Status transitioned to ${targetStatus}`
+          note: note || normalizedClinicalNotes || recommendation || `Status transitioned to ${targetStatus}`
         })
       };
 
@@ -534,8 +554,10 @@ async function executeDoctorTransition({ req, res, caseId, targetStatus, note, c
         updateData.generatedAt = admin.firestore.FieldValue.serverTimestamp();
         updateData.reportVersion = REPORT_VERSION;
         updateData.modelVersion = MODEL_VERSION;
-        if (clinicalNotes) updateData.clinicalNotes = clinicalNotes;
-        if (recommendation) updateData.recommendation = recommendation;
+        updateData.doctorNote = normalizedClinicalNotes;
+        updateData.clinicalNotes = normalizedClinicalNotes;
+        updateData.recommendation = normalizedRecommendations.join('\n');
+        updateData.recommendations = normalizedRecommendations;
       } else if (targetStatus === 'more_info_requested') {
         updateData.moreInfoRequestedAt = admin.firestore.FieldValue.serverTimestamp();
         updateData.moreInfoNote = note || '';
@@ -555,7 +577,7 @@ async function executeDoctorTransition({ req, res, caseId, targetStatus, note, c
         doctorId: req.user.uid,
         fromStatus: currentStatus,
         toStatus: targetStatus,
-        note: note || clinicalNotes || '',
+        note: note || normalizedClinicalNotes || '',
         timestamp: admin.firestore.FieldValue.serverTimestamp()
       });
     }
@@ -576,8 +598,8 @@ async function executeDoctorTransition({ req, res, caseId, targetStatus, note, c
  * Server-authoritative endpoint for doctor state machine transitions
  */
 app.post('/api/doctor/transition-case-status', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
-  const { caseId, targetStatus, note, clinicalNotes, recommendation } = req.body;
-  return executeDoctorTransition({ req, res, caseId, targetStatus, note, clinicalNotes, recommendation });
+  const { caseId, targetStatus, note, clinicalNotes, recommendation, recommendations } = req.body;
+  return executeDoctorTransition({ req, res, caseId, targetStatus, note, clinicalNotes, recommendation, recommendations });
 });
 
 /**
@@ -585,8 +607,8 @@ app.post('/api/doctor/transition-case-status', requireAuth, requireVerifiedEmail
  * Server-authoritative endpoint for doctor case approval
  */
 app.post('/api/doctor/approve-clinical-case', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
-  const { caseId, note, clinicalNotes, recommendation } = req.body;
-  return executeDoctorTransition({ req, res, caseId, targetStatus: 'approved', note, clinicalNotes, recommendation });
+  const { caseId, note, clinicalNotes, recommendation, recommendations } = req.body;
+  return executeDoctorTransition({ req, res, caseId, targetStatus: 'approved', note, clinicalNotes, recommendation, recommendations });
 });
 
 /**

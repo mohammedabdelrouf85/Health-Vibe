@@ -1153,7 +1153,8 @@ async function updateCaseStatus(id, newStatus, note, extraFields = {}) {
         targetStatus: newStatus,
         note: note || "",
         clinicalNotes: extraFields.clinicalNotes || note || "",
-        recommendation: extraFields.recommendation || ""
+        recommendation: extraFields.recommendation || "",
+        recommendations: extraFields.recommendations || []
       })
     });
     console.info("✅ Case status transitioned securely via backend authority:", backendResult);
@@ -1201,6 +1202,8 @@ async function updateCaseStatus(id, newStatus, note, extraFields = {}) {
           updatePayload.reportVersion = updatePayload.reportVersion || REPORT_VERSION;
           updatePayload.modelVersion = updatePayload.modelVersion || MODEL_VERSION;
           if (extraFields.clinicalNotes) updatePayload.clinicalNotes = extraFields.clinicalNotes;
+          if (extraFields.recommendations) updatePayload.recommendations = extraFields.recommendations;
+          if (extraFields.recommendation) updatePayload.recommendation = extraFields.recommendation;
         } else if (newStatus === CASE_STATUS.MORE_INFO_REQUESTED) {
           updatePayload.moreInfoRequestedAt = firebase.firestore.FieldValue.serverTimestamp();
           updatePayload.moreInfoNote = note || "";
@@ -1230,6 +1233,13 @@ async function updateCaseStatus(id, newStatus, note, extraFields = {}) {
 let activeCaseId = null;
 let currentDoctorQueueFilter = 'all';
 
+function parseDoctorRecommendations(rawText) {
+  return String(rawText || "")
+    .split(/\r?\n|[;؛]/)
+    .map((item) => item.replace(/^[\s\-*•\d.)]+/, "").trim())
+    .filter(Boolean);
+}
+
 window.setDoctorQueueFilter = function(filterKey) {
   currentDoctorQueueFilter = filterKey;
   renderDoctorQueue();
@@ -1237,11 +1247,24 @@ window.setDoctorQueueFilter = function(filterKey) {
 
 window.approveCase = async function(id) {
   if (!enforcePermission(PERMISSIONS.APPROVE_CASE, "Approve Clinical Result")) return;
+  const isEn = currentLanguage === "en";
   const noteInput = document.getElementById("doctorNoteInput");
+  const recommendationInput = document.getElementById("doctorRecommendationsInput");
   const note = noteInput ? noteInput.value.trim() : "";
-  const success = await updateCaseStatus(id, CASE_STATUS.APPROVED, note || (currentLanguage === "en" ? "Case approved by physician" : "تم اعتماد الحالة سريرياً بواسطة الطبيب"));
+  const recommendations = parseDoctorRecommendations(recommendationInput ? recommendationInput.value : "");
+  if (!note || recommendations.length === 0) {
+    showToast(isEn ? "Add real doctor notes and at least one recommendation before approval" : "أضف ملاحظات الطبيب وتوصية واحدة على الأقل قبل الاعتماد");
+    return;
+  }
+
+  const success = await updateCaseStatus(id, CASE_STATUS.APPROVED, note, {
+    clinicalNotes: note,
+    doctorNote: note,
+    recommendation: recommendations.join("\n"),
+    recommendations
+  });
   if (success) {
-    showToast(currentLanguage === "en" ? "Result approved and saved to database" : "تم اعتماد النتيجة وحفظها في قاعدة البيانات");
+    showToast(isEn ? "Result approved with doctor notes and recommendations" : "تم اعتماد النتيجة مع ملاحظات الطبيب والتوصيات");
     await renderDoctorQueue();
     selectDoctorCase(id);
   }
@@ -1638,6 +1661,11 @@ async function selectDoctorCase(id) {
     `;
   }
 
+  const existingDoctorNote = c.doctorNote || c.clinicalNotes || "";
+  const existingRecommendations = Array.isArray(c.recommendations)
+    ? c.recommendations.join("\n")
+    : (c.recommendation || "");
+
   reviewPanel.innerHTML = `
     <div class="panel-head">
       <div>
@@ -1653,8 +1681,10 @@ async function selectDoctorCase(id) {
       <div><span>${isEn ? 'Oxygen Level' : 'نسبة الأكسجين'}</span><strong style="${c.o2 < 90 ? 'color: #ef4444;' : ''}">${c.o2}%</strong></div>
       <div><span>${isEn ? 'Duration' : 'مدة الأعراض'}</span><strong>${isEn ? c.durationEn : c.duration}</strong></div>
     </div>
-    <label style="font-weight: 800; font-size: 13px; display: block; margin-top: 14px; margin-bottom: 6px;">${isEn ? 'Clinical Recommendations & Doctor Notes' : 'التوصيات السريرية وملاحظات الطبيب'}</label>
-    <textarea id="doctorNoteInput" ${isClosed ? 'disabled' : ''} style="width: 100%; min-height: 80px; margin-bottom: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); padding: 12px; font-family: inherit;">${c.doctorNote || (isEn ? 'Follow-up recommended.' : 'يوصى بمتابعة خلال 24-48 ساعة مع مراقبة الأعراض.')}</textarea>
+    <label style="font-weight: 800; font-size: 13px; display: block; margin-top: 14px; margin-bottom: 6px;">${isEn ? 'Doctor Clinical Notes' : 'ملاحظات الطبيب السريرية'}</label>
+    <textarea id="doctorNoteInput" ${isClosed ? 'disabled' : ''} placeholder="${isEn ? 'Write the physician assessment, findings, and clinical rationale.' : 'اكتب تقييم الطبيب والنتائج السريرية وسبب القرار.'}" style="width: 100%; min-height: 90px; margin-bottom: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); padding: 12px; font-family: inherit;">${existingDoctorNote}</textarea>
+    <label style="font-weight: 800; font-size: 13px; display: block; margin-bottom: 6px;">${isEn ? 'Patient Recommendations' : 'توصيات الطبيب للمريض'}</label>
+    <textarea id="doctorRecommendationsInput" ${isClosed ? 'disabled' : ''} placeholder="${isEn ? 'Add one recommendation per line.' : 'أضف كل توصية في سطر منفصل.'}" style="width: 100%; min-height: 105px; margin-bottom: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); padding: 12px; font-family: inherit;">${existingRecommendations}</textarea>
     ${actionToolbarHtml}
     ${timelineHtml}
   `;
@@ -2708,7 +2738,10 @@ async function renderReportScreen(targetCaseId = null) {
     const modelVersion = caseData.modelVersion || caseData.assessment?.aiTriage?.modelVersion || MODEL_VERSION;
 
     const clinicalDiagnosis = caseData.doctorNote || caseData.clinicalNotes || (isEn ? "Patient assessment reviewed and verified. Oxygen saturation stable. Mild seasonal respiratory symptoms." : "تمت المراجعة والتدقيق السريري لقياسات التنفس والأعراض. نسبة الأكسجين مقبولة وتوجد أعراض حساسية صدرية موسمية مع كحة متوسطة.");
-    const doctorRecommendations = caseData.recommendations || [
+    const savedRecommendations = Array.isArray(caseData.recommendations)
+      ? caseData.recommendations
+      : parseDoctorRecommendations(caseData.recommendation);
+    const doctorRecommendations = savedRecommendations.length > 0 ? savedRecommendations : [
       isEn ? "Monitor oxygen saturation twice daily using a calibrated pulse oximeter." : "قياس نسبة تشبع الأكسجين مرتين يومياً باستخدام جهاز نبض موثوق.",
       isEn ? "Maintain adequate hydration and practice guided deep breathing exercises." : "الحرص على شرب السوائل الدافئة وتمارين التنفس العميق بانتظام.",
       isEn ? "Follow-up consultation in clinic or teleconsultation within 48 hours." : "متابعة الاستشارة في العيادة أو عن بُعد خلال 48 ساعة لمراجعة التحسن.",
