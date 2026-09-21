@@ -50,7 +50,15 @@ service firebase.storage {
              appDoc(appId).data.status in ['pending', 'approved', 'rejected'];
     }
 
-    function isAllowedDoctorApplicationFile() {
+    function hasAllowedDoctorApplicationExtension(fileName) {
+      return fileName.matches('.*\\.([pP][dD][fF]|[jJ][pP][gG]|[jJ][pP][eE][gG]|[pP][nN][gG]|[wW][eE][bB][pP])$');
+    }
+
+    function hasBlockedExecutableExtension(fileName) {
+      return fileName.matches('.*\\.([eE][xX][eE]|[dD][lL][lL]|[bB][aA][tT]|[cC][mM][dD]|[cC][oO][mM]|[mM][sS][iI]|[pP][sS]1|[sS][hH]|[jJ][sS]|[vV][bB][sS]|[sS][cC][rR]|[jJ][aA][rR]|[aA][pP][kK]|[dD][mM][gG])$');
+    }
+
+    function isAllowedDoctorApplicationFile(fileName) {
       return request.resource != null &&
              request.resource.size <= 10 * 1024 * 1024 &&
              request.resource.contentType in [
@@ -58,13 +66,15 @@ service firebase.storage {
                'image/jpeg',
                'image/png',
                'image/webp'
-             ];
+             ] &&
+             hasAllowedDoctorApplicationExtension(fileName) &&
+             !hasBlockedExecutableExtension(fileName);
     }
 
     match /doctor_applications/{userId}/{appId}/{fileName} {
       allow read: if isOwner(userId) || adminCanReadDoctorApplicationFile(userId, appId);
       allow create, update: if ownerCanWriteDoctorApplicationFile(userId, appId) &&
-                            isAllowedDoctorApplicationFile();
+                            isAllowedDoctorApplicationFile(fileName);
       allow delete: if ownerCanWriteDoctorApplicationFile(userId, appId);
     }
 

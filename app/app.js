@@ -3127,6 +3127,8 @@ async function renderPatientHistory() {
 // --- Doctor Account Lifecycle: Application -> Verification -> Approval ---
 let selectedDoctorAppFile = null;
 const DOCTOR_APP_ALLOWED_FILE_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
+const DOCTOR_APP_ALLOWED_FILE_EXTENSIONS = [".pdf", ".jpg", ".jpeg", ".png", ".webp"];
+const DOCTOR_APP_BLOCKED_EXECUTABLE_EXTENSIONS = [".exe", ".dll", ".bat", ".cmd", ".com", ".msi", ".ps1", ".sh", ".js", ".vbs", ".scr", ".jar", ".apk", ".dmg"];
 const DOCTOR_APP_MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 function getSafeStorageFileName(fileName) {
@@ -3150,6 +3152,12 @@ function validateDoctorApplicationFile(file) {
   const isEn = currentLanguage === "en";
   if (!file) {
     throw new Error(isEn ? "Please attach your syndicate ID or medical license document." : "يرجى إرفاق صورة كارنيه النقابة أو ترخيص مزاولة المهنة.");
+  }
+  const lowerName = String(file.name || "").toLowerCase();
+  const hasAllowedExtension = DOCTOR_APP_ALLOWED_FILE_EXTENSIONS.some((ext) => lowerName.endsWith(ext));
+  const hasBlockedExecutableExtension = DOCTOR_APP_BLOCKED_EXECUTABLE_EXTENSIONS.some((ext) => lowerName.endsWith(ext));
+  if (hasBlockedExecutableExtension || !hasAllowedExtension) {
+    throw new Error(isEn ? "Unsupported or unsafe file extension. Please upload only PDF, JPG, PNG, or WEBP." : "امتداد الملف غير مدعوم أو غير آمن. يرجى رفع PDF أو JPG أو PNG أو WEBP فقط.");
   }
   if (!DOCTOR_APP_ALLOWED_FILE_TYPES.includes(file.type)) {
     throw new Error(isEn ? "Unsupported file type. Please upload a PDF, JPG, PNG, or WEBP file." : "نوع الملف غير مدعوم. يرجى رفع PDF أو JPG أو PNG أو WEBP.");
