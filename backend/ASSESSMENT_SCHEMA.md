@@ -55,7 +55,11 @@
       "riskEn": "Low",
       "aiScore": "منخفضة",
       "aiScoreEn": "Low",
-      "confidence": "94%",
+      "ruleScore": "low-rule-match",
+      "ruleScoreLabelAr": "مؤشر قواعد منخفض",
+      "ruleScoreLabelEn": "Low rule score",
+      "ruleScoreValidated": false,
+      "confidence": "not-validated-rule-score",
       "modelVersion": "HealthVibe-AI-v1.0"
     }
   },
@@ -75,7 +79,11 @@
   "riskEn": "Low",
   "aiScore": "منخفضة",
   "aiScoreEn": "Low",
-  "confidence": "94%",
+  "ruleScore": "low-rule-match",
+  "ruleScoreLabelAr": "مؤشر قواعد منخفض",
+  "ruleScoreLabelEn": "Low rule score",
+  "ruleScoreValidated": false,
+  "confidence": "not-validated-rule-score",
   "reportVersion": "1.0.0",
   "modelVersion": "HealthVibe-AI-v1.0",
   "generatedAt": null,
@@ -146,7 +154,9 @@
   * `"urgent"`: أكسجين أقل من 90%، يحتاج تدخلاً فورياً.
   * `"high"`: أكسجين بين 90% و 92%، أولوية مراجعة عالية.
   * `"normal"`: أكسجين 93% فأعلى، فحص اعتيادي تحت المراجعة.
-* `confidence`: نسبة ثقة النموذج الخوارزمي بالذكاء الاصطناعي (مثل: `"89%"`).
+* `ruleScore`: مؤشر قواعد إرشادي مبني على شروط ثابتة، وليس ثقة نموذج مُتحقق منها سريرياً.
+* `ruleScoreValidated`: قيمة ثابتة `false` حتى يتم اعتماد تحقق سريري رسمي لهذا المؤشر.
+* `confidence`: حقل توافق قديم، ويجب ألا يحتوي نسبة مئوية أو يُعرض كثقة طبية؛ قيمته الحالية `"not-validated-rule-score"`.
 * `modelVersion`: إصدار خوارزمية التقييم.
 
 ### 5. بيانات إصدار التقرير (`Report Metadata`):

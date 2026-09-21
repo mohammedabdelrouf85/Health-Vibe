@@ -363,7 +363,7 @@ const uiText = {
   "قيد الانتظار": "Pending",
   "التقرير": "Report",
   "مغلق حتى الاعتماد": "Locked until approval",
-  "ثقة التحليل": "Analysis confidence",
+  "مؤشر قواعد غير مُتحقق": "Rule score (not clinically validated)",
   "موثق": "Verified",
   "اعتماد الطبيب": "Doctor approval",
   "مسار العمل": "Workflow",
@@ -371,7 +371,7 @@ const uiText = {
   "بيانات المريض": "Patient data",
   "أعراض، قياسات، ملف طبي، وموافقة خصوصية واضحة.": "Symptoms, measurements, medical file, and clear privacy consent.",
   "تحليل الذكاء الاصطناعي": "AI analysis",
-  "تصنيف الخطورة ونسبة الثقة مع إصدار نموذج قابل للتتبع.": "Risk classification and confidence with a traceable model version.",
+  "تصنيف خطورة بقواعد واضحة، والمؤشر غير مُتحقق سريرياً.": "Rule-based risk classification with a clearly unvalidated score and traceable version.",
   "الطبيب يعتمد أو يرفض أو يطلب متابعة إضافية.": "The doctor approves, rejects, or requests extra follow-up.",
   "تقرير معتمد": "Approved report",
   "نتيجة وتوصيات وتنبيه طبي محفوظين في السجل.": "Result, recommendations, and medical notice saved in history.",
@@ -423,12 +423,12 @@ const uiText = {
   "عربي": "English",
   "مرحبًا أحمد": "Welcome, Ahmed",
   "متابعة التنفس مع طبيبك في مسار واحد واضح": "Track breathing with your doctor in one clear path",
-  "أدخل الأعراض والقياسات. يحصل الطبيب على نتيجة الذكاء الاصطناعي ومؤشر الثقة قبل اعتماد أي تقرير يظهر لك.": "Enter symptoms and measurements. The doctor receives the AI result and confidence score before approving any report shown to you.",
+  "أدخل الأعراض والقياسات. يحصل الطبيب على تقدير خطورة مبني على قواعد قبل اعتماد أي تقرير يظهر لك.": "Enter symptoms and measurements. The doctor receives a rule-based risk preview before approving any report shown to you.",
   "بدء تقييم التنفس": "Start breathing assessment",
   "عرض السجل": "View history",
   "آخر حالة": "Latest status",
   "نسبة الأكسجين": "Oxygen level",
-  "الثقة": "Confidence",
+  "مؤشر قواعد": "Rule score",
   "د. منى سامي": "Dr. Mona Samy",
   "الموعد القادم": "Next appointment",
   "غدًا 7:30م": "Tomorrow 7:30 PM",
@@ -643,7 +643,7 @@ const uiText = {
   "20 سبتمبر 2026": "September 20, 2026",
   "النتيجة": "Result",
   "خطورة متوسطة.": "Medium risk.",
-  "يوصى بالمتابعة خلال 24-48 ساعة. نسبة الثقة: 78%.": "Follow-up is recommended within 24-48 hours. Confidence: 78%.",
+  "يوصى بالمتابعة خلال 24-48 ساعة. مؤشر القواعد غير مُتحقق سريرياً.": "Follow-up is recommended within 24-48 hours. Rule score is not clinically validated.",
   "راقب نسبة الأكسجين إذا توفر جهاز موثوق.": "Monitor oxygen level if a reliable device is available.",
   "تابع مع الطبيب الذي راجع الحالة.": "Follow up with the reviewing doctor.",
   "اطلب رعاية عاجلة إذا زاد ضيق التنفس.": "Seek urgent care if shortness of breath worsens.",
@@ -1677,7 +1677,7 @@ async function selectDoctorCase(id) {
     ${emergencyDoctorBanner}
     <div class="summary-list">
       <div><span>${isEn ? 'AI Risk Score' : 'تصنيف الذكاء الاصطناعي'}</span><strong>${isEn ? c.aiScoreEn : c.aiScore}</strong></div>
-      <div><span>${isEn ? 'Confidence' : 'درجة الثقة'}</span><strong>${c.confidence}</strong></div>
+      <div><span>${isEn ? 'Rule score' : 'مؤشر القواعد'}</span><strong>${(isEn ? c.ruleScoreLabelEn : c.ruleScoreLabelAr) || c.ruleScore || (isEn ? 'Not clinically validated' : 'غير مُتحقق سريرياً')}</strong></div>
       <div><span>${isEn ? 'Oxygen Level' : 'نسبة الأكسجين'}</span><strong style="${c.o2 < 90 ? 'color: #ef4444;' : ''}">${c.o2}%</strong></div>
       <div><span>${isEn ? 'Duration' : 'مدة الأعراض'}</span><strong>${isEn ? c.durationEn : c.duration}</strong></div>
     </div>
@@ -2357,7 +2357,7 @@ async function renderPatientDashboard() {
 
   document.getElementById("patientClinicalStatus").textContent = isEn ? "No recent assessment" : "لا يوجد فحص حديث";
   document.getElementById("patientClinicalO2").textContent = "--%";
-  document.getElementById("patientClinicalConfidence").textContent = "--%";
+  document.getElementById("patientClinicalConfidence").textContent = "--";
   document.getElementById("patientClinicalDoctor").textContent = "--";
   document.getElementById("patientNextAppt").textContent = "--";
   document.getElementById("patientLatestReport").textContent = "--";
@@ -2407,7 +2407,7 @@ async function renderPatientDashboard() {
           normal: isEn ? "✔️ Normal"  : "✔️ عادي",
         };
 
-        const priorityLabel = priorityMap[c.priority] || "--";
+        const priorityLabel = (isEn ? c.ruleScoreLabelEn : c.ruleScoreLabelAr) || priorityMap[c.priority] || "--";
         const o2Display     = c.oxygenLevel ? `${c.oxygenLevel}%` : "--%";
         const doctorDisplay = c.assignedDoctorName || c.reviewedBy || (isEn ? "Assigned Physician" : "طبيب الرعاية المسند");
 
@@ -4292,9 +4292,9 @@ const AssessmentDictionaries = Object.freeze({
     severe:   { ar: "شديدة",   en: "Severe" }
   },
   priority: {
-    normal: { ar: "عادية", badge: "ok",      riskAr: "منخفض", riskEn: "Low",    aiScoreAr: "منخفضة", aiScoreEn: "Low",    confidence: "94%" },
-    high:   { ar: "عالية",  badge: "pending", riskAr: "مراجعة", riskEn: "Review", aiScoreAr: "متوسطة", aiScoreEn: "Medium", confidence: "78%" },
-    urgent: { ar: "عاجلة", badge: "danger",  riskAr: "عاجل",  riskEn: "Urgent", aiScoreAr: "عالية",  aiScoreEn: "High",   confidence: "89%" }
+    normal: { ar: "عادية", badge: "ok",      riskAr: "منخفض", riskEn: "Low",    aiScoreAr: "منخفضة", aiScoreEn: "Low",    ruleScore: "low-rule-match",    ruleScoreAr: "مؤشر قواعد منخفض", ruleScoreEn: "Low rule score" },
+    high:   { ar: "عالية",  badge: "pending", riskAr: "مراجعة", riskEn: "Review", aiScoreAr: "متوسطة", aiScoreEn: "Medium", ruleScore: "medium-rule-match", ruleScoreAr: "مؤشر قواعد متوسط", ruleScoreEn: "Medium rule score" },
+    urgent: { ar: "عاجلة", badge: "danger",  riskAr: "عاجل",  riskEn: "Urgent", aiScoreAr: "عالية",  aiScoreEn: "High",   ruleScore: "high-rule-match",   ruleScoreAr: "مؤشر قواعد عالٍ", ruleScoreEn: "High rule score" }
   },
   riskFactors: {
     "ربو":     { key: "asthma",    ar: "ربو",     en: "Asthma" },
@@ -4432,7 +4432,11 @@ function buildAssessmentModel({
         riskEn: prioMeta.riskEn,
         aiScore: prioMeta.aiScoreAr,
         aiScoreEn: prioMeta.aiScoreEn,
-        confidence: prioMeta.confidence,
+        ruleScore: prioMeta.ruleScore,
+        ruleScoreLabelAr: prioMeta.ruleScoreAr,
+        ruleScoreLabelEn: prioMeta.ruleScoreEn,
+        ruleScoreValidated: false,
+        confidence: "not-validated-rule-score",
         modelVersion: MODEL_VERSION
       }
     },
@@ -4454,7 +4458,11 @@ function buildAssessmentModel({
     riskEn: prioMeta.riskEn,
     aiScore: prioMeta.aiScoreAr,
     aiScoreEn: prioMeta.aiScoreEn,
-    confidence: prioMeta.confidence,
+    ruleScore: prioMeta.ruleScore,
+    ruleScoreLabelAr: prioMeta.ruleScoreAr,
+    ruleScoreLabelEn: prioMeta.ruleScoreEn,
+    ruleScoreValidated: false,
+    confidence: "not-validated-rule-score",
     reportVersion: REPORT_VERSION,
     modelVersion: MODEL_VERSION,
     generatedAt: null,
