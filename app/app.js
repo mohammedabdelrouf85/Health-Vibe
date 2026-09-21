@@ -1342,11 +1342,13 @@ async function enterApp(source = "google") {
       try {
         const userDoc = await db.collection("users").doc(user.uid).get();
         if (!userDoc.exists) {
-          const safeRole = normalizeRole(ROLES.PATIENT, isOwner);
+          // Google login creates patient ONLY by default (unless owner)
+          const safeRole = isOwner ? ROLES.SUPER_ADMIN : ROLES.PATIENT;
           selectedRole = safeRole;
           await db.collection("users").doc(user.uid).set({
             name: user.displayName || user.email.split('@')[0],
             email: user.email,
+            emailVerified: true,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
           });
         } else {
@@ -1362,12 +1364,13 @@ async function enterApp(source = "google") {
               });
             }
           } else {
-            selectedRole = normalizeRole(userDoc.data().role || selectedRole);
+            // Existing user: default strictly to patient if role is absent
+            selectedRole = normalizeRole(userDoc.data().role || ROLES.PATIENT);
           }
         }
       } catch (dbError) {
         console.warn("Firestore save failed, but auth succeeded:", dbError);
-        if (isOwner) selectedRole = ROLES.SUPER_ADMIN;
+        selectedRole = isOwner ? ROLES.SUPER_ADMIN : ROLES.PATIENT;
       }
 
       userName.textContent = user.displayName || user.email.split('@')[0];
@@ -1378,6 +1381,7 @@ async function enterApp(source = "google") {
       
       updateAvatar(user);
       updateEmailVerificationUI(user);
+      updateNavVisibility();
 
       publicSite.hidden = true;
       hideAuth();
@@ -2889,21 +2893,22 @@ window.addEventListener("load", () => {
               });
             }
           } else {
-            selectedRole = normalizeRole(userDoc.data().role || selectedRole);
+            selectedRole = normalizeRole(userDoc.data().role || ROLES.PATIENT);
           }
           if (userDoc.data().name) displayName = userDoc.data().name;
         } else {
-          const safeRole = normalizeRole(ROLES.PATIENT, isOwner);
+          const safeRole = isOwner ? ROLES.SUPER_ADMIN : ROLES.PATIENT;
           selectedRole = safeRole;
           await db.collection("users").doc(user.uid).set({
             name: displayName || user.email.split('@')[0],
             email: user.email,
+            emailVerified: user.emailVerified || false,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
           }, { merge: true });
         }
       } catch (e) {
         console.warn("Firestore role fetch failed, defaulting to patient:", e);
-        if (isOwner) selectedRole = ROLES.SUPER_ADMIN;
+        selectedRole = isOwner ? ROLES.SUPER_ADMIN : ROLES.PATIENT;
       }
       
       userName.textContent = displayName || user.email.split('@')[0];
@@ -2914,6 +2919,7 @@ window.addEventListener("load", () => {
       
       updateAvatar(user);
       updateEmailVerificationUI(user);
+      updateNavVisibility();
       
       publicSite.hidden = true;
       hideAuth();
