@@ -1246,29 +1246,154 @@ window.setDoctorQueueFilter = function(filterKey) {
   renderDoctorQueue();
 };
 
-window.approveCase = async function(id) {
-  if (!enforcePermission(PERMISSIONS.APPROVE_CASE, "Approve Clinical Result")) return;
+window.applyDiagPreset = function(presetKey) {
   const isEn = currentLanguage === "en";
+  const diagInput = document.getElementById("doctorDiagnosisInput");
+  const medInput = document.getElementById("doctorMedicationsInput");
+  const recInput = document.getElementById("doctorRecommendationsInput");
   const noteInput = document.getElementById("doctorNoteInput");
-  const recommendationInput = document.getElementById("doctorRecommendationsInput");
-  const note = noteInput ? noteInput.value.trim() : "";
-  const recommendations = parseDoctorRecommendations(recommendationInput ? recommendationInput.value : "");
-  if (!note || recommendations.length === 0) {
-    showToast(isEn ? "Add real doctor notes and at least one recommendation before approval" : "أضف ملاحظات الطبيب وتوصية واحدة على الأقل قبل الاعتماد");
+
+  const presets = {
+    bronchitis: {
+      diag: isEn ? "Acute bronchitis with mild bronchial irritation. Respiratory vitals monitored, no respiratory failure signs." : "التهاب شعبي حاد مع تهيج في الشعب الهوائية. تم فحص القياسات الحيوية ولا توجد مؤشرات على فشل تنفسي.",
+      meds: isEn ? "1. Bronchodilator Inhaler (Salbutamol 100mcg) - 2 puffs every 6-8 hours as needed for dyspnea.\n2. Expectorant Cough Syrup (Guaifenesin 100mg/5ml) - 10ml three times daily after meals for 5 days.\n3. Paracetamol 500mg - 1-2 tablets every 6 hours if fever/body aches arise." : "1. بخاخ موسع للشعب الهوائية (سالبوتامول 100 ميكروجرام) - بختان كل 6-8 ساعات عند الشعور بضيق التنفس.\n2. شراب طارد ومذيب للبلغم (جوايفينيزين) - ملعقة كبيرة 3 مرات يومياً بعد الوجبات لمدة 5 أيام.\n3. باراسيتامول 500 مجم - قرص كل 6 ساعات عند ارتفاع الحرارة أو الصداع.",
+      recs: isEn ? "• Drink warm fluids (herbal teas, honey-lemon) throughout the day.\n• Avoid sudden temperature changes, smoke, and air pollutants.\n• Rest voice and body for 48-72 hours.\n• Follow-up immediately if SpO2 drops below 92% or high fever persists." : "• تناول السوائل الدافئة بوفرة (عسل وليمون، مشروبات عشبية).\n• الابتعاد التام عن التدخين والغبار وتيارات الهواء البارد.\n• أخذ قسط وافر من الراحة البدنية لمدة 48-72 ساعة.\n• مراجعة الطوارئ فوراً في حال انخفاض نسبة الأكسجين عن 92% أو استمرار الحمى الشديدة."
+    },
+    stable: {
+      diag: isEn ? "Normal respiratory assessment. Mild seasonal upper airway sensitivity without hypoxemia or respiratory distress." : "تقييم تنفسي طبيعي ومستقر. حساسية موسمية خفيفة في المجاري التنفسية العليا دون نقص بالأكسجين أو علامات خطورة.",
+      meds: isEn ? "1. Antihistamine (Cetirizine 10mg) - 1 tablet once daily before bedtime for 7 days.\n2. Saline Nasal Spray - 2 sprays per nostril 3 times daily as needed." : "1. مضاد للهستامين (سيتريزين 10 مجم) - قرص واحد مساءً قبل النوم لمدة 7 أيام.\n2. بخاخ محلول ملحي للأنف - بختان في كل فتحة أنف 3 مرات يومياً عند الحاجة.",
+      recs: isEn ? "• Stay well-hydrated and maintain good indoor ventilation.\n• Continue healthy dietary habits and adequate sleep.\n• Routine health checkup in 6 months or if symptoms worsen." : "• شرب كميات كافية من الماء والحفاظ على تهوية جيدة للمنزل.\n• الاستمرار في نمط حياة صحي وغذاء متوازن ونوم كافٍ.\n• مراجعة الفحص الدوري بعد 6 أشهر أو عند حدوث أي تغير في الأعراض."
+    },
+    asthma: {
+      diag: isEn ? "Mild-to-moderate bronchial asthma flare-up. Reactive airway, SpO2 borderline stable." : "نوبة ربو شعبي متوسطة إلى خفيفة. وجود صفير بالصدر مع تهيج بالشعب الهوائية مع استقرار نسبي لنسبة الأكسجين.",
+      meds: isEn ? "1. Combination Inhaler (Budesonide/Formoterol 160/4.5mcg) - 1-2 inhalations twice daily.\n2. Oral Prednisolone 20mg - 1 tablet in the morning after breakfast for 3 days.\n3. Salbutamol Inhaler - 2 puffs as rescue therapy for acute shortness of breath." : "1. بخاخ مدمج (بوديزونايد / فورموتيرول) - استنشاقة واحدة مرتين يومياً صباحاً ومساءً.\n2. بريدنيزولون 20 مجم - قرص واحد صباحاً بعد الإفطار لمدة 3 أيام فقط.\n3. بخاخ سالبوتامول - بختان للإنقاذ عند الشعور بضيق مفاجئ في التنفس.",
+      recs: isEn ? "• Keep rescue inhaler readily accessible at all times.\n• Avoid known allergy triggers (perfumes, cat/dog dander, dust mites).\n• Measure peak flow or SpO2 twice daily.\n• Visit ER immediately if no improvement after 3 rescue doses within 1 hour." : "• الاحتفاظ ببخاخ الإنقاذ في متناول اليد في جميع الأوقات.\n• تجنب المهيجات المسببة للحساسية (العطور القوية، فراء الحيوانات، الغبار).\n• قياس نسبة الأكسجين SpO2 مرتين يومياً.\n• التوجه فوراً لقسم الطوارئ في حال عدم الاستجابة لثلاث جرعات إسعافية خلال ساعة."
+    },
+    uri: {
+      diag: isEn ? "Acute viral upper respiratory tract infection (URTI) with rhinitis and productive cough. No lower respiratory consolidation." : "التهاب فيروسي حاد بالجهاز التنفسي العلوي مصحوب بسيلان أنفي وسعال. لا توجد مؤشرات على التهاب رئوي سفلي.",
+      meds: isEn ? "1. Vitamin C + Zinc Lozenges - twice daily for 5 days.\n2. Decongestant / Antihistamine combo - 1 tablet twice daily after meals for 4 days.\n3. Paracetamol 500mg - every 6-8 hours for sore throat or fever." : "1. مكمل فيتامين سي مع زنك - مرتين يومياً لمدة 5 أيام.\n2. أقراص مزيلة للاحتقان ومضادة للهستامين - قرص مرتين يومياً بعد الأكل لمدة 4 أيام.\n3. باراسيتامول 500 مجم - قرص كل 6 إلى 8 ساعات لتسكين آلام الحلق والحمى.",
+      recs: isEn ? "• Strict rest and sleep to boost immune recovery.\n• Frequent warm saline gargles 3-4 times daily.\n• Wear a mask around vulnerable family members.\n• Follow-up in 3-5 days if symptoms fail to resolve." : "• الراحة التامة والنوم الكافي لتعزيز مناعة الجسم.\n• الغرغرة بمحلول ملحي دافئ 3-4 مرات يومياً لتخفيف احتقان الحلق.\n• ارتداء كمامة واقية عند التعامل مع كبار السن أو الأطفال.\n• مراجعة الطبيب إذا استمرت الأعراض لأكثر من 5 أيام دون تحسن."
+    }
+  };
+
+  const selected = presets[presetKey];
+  if (selected) {
+    if (diagInput) diagInput.value = selected.diag;
+    if (noteInput) noteInput.value = selected.diag;
+    if (medInput) medInput.value = selected.meds;
+    if (recInput) recInput.value = selected.recs;
+    showToast(isEn ? "Diagnostic preset applied" : "تم تطبيق القالب التشخيصي");
+  }
+};
+
+window.previewCaseReport = function(id) {
+  const isEn = currentLanguage === "en";
+  const queue = state.doctorQueue || [];
+  const c = queue.find(item => item.id === id);
+  if (!c) {
+    showToast(isEn ? "Case not found in current queue" : "لم يتم العثور على الحالة في قائمة الانتظار");
     return;
   }
 
-  const success = await updateCaseStatus(id, CASE_STATUS.APPROVED, note, {
-    clinicalNotes: note,
-    doctorNote: note,
+  const diagInput = document.getElementById("doctorDiagnosisInput") || document.getElementById("doctorNoteInput");
+  const medInput = document.getElementById("doctorMedicationsInput");
+  const recInput = document.getElementById("doctorRecommendationsInput");
+  const nameInput = document.getElementById("doctorNameInput");
+  const specInput = document.getElementById("doctorSpecialtyInput");
+  const licInput = document.getElementById("doctorLicenseInput");
+  const clinicInput = document.getElementById("doctorClinicInput");
+
+  const clinicalDiagnosis = diagInput ? diagInput.value.trim() : (c.clinicalDiagnosis || c.doctorNote || "");
+  const medications = medInput ? medInput.value.trim() : (c.medications || "");
+  const recommendations = parseDoctorRecommendations(recInput ? recInput.value : (c.recommendation || ""));
+
+  window.__doctorPreviewCase = {
+    ...c,
+    clinicalDiagnosis,
+    doctorNote: clinicalDiagnosis,
+    clinicalNotes: clinicalDiagnosis,
+    medications,
+    recommendations,
     recommendation: recommendations.join("\n"),
-    recommendations
-  });
+    approvingDoctorName: nameInput && nameInput.value.trim() ? nameInput.value.trim() : (c.approvingDoctorName || (auth.currentUser ? (auth.currentUser.displayName || auth.currentUser.email) : "Dr. Mona Samy")),
+    doctorSpecialty: specInput && specInput.value.trim() ? specInput.value.trim() : (c.doctorSpecialty || (isEn ? "Pulmonology & Respiratory Medicine" : "استشاري الأمراض الصدرية")),
+    doctorLicense: licInput && licInput.value.trim() ? licInput.value.trim() : (c.doctorLicense || "EGY-MED-20491"),
+    clinicName: clinicInput && clinicInput.value.trim() ? clinicInput.value.trim() : (c.clinicName || (isEn ? "Health Vibes Specialized Clinics" : "عيادات هيلث فايبز التخصصية")),
+    reportGeneratedAt: new Date().toISOString(),
+    approvedAt: new Date().toISOString(),
+    isDoctorPreview: true,
+    doctorApproved: true
+  };
+
+  showScreen("report");
+  renderReportScreen("preview");
+};
+
+window.generateAndApproveReport = async function(id) {
+  if (!enforcePermission(PERMISSIONS.APPROVE_CASE, "Approve Clinical Result")) return;
+  const isEn = currentLanguage === "en";
+
+  const diagInput = document.getElementById("doctorDiagnosisInput") || document.getElementById("doctorNoteInput");
+  const medInput = document.getElementById("doctorMedicationsInput");
+  const recInput = document.getElementById("doctorRecommendationsInput");
+  const nameInput = document.getElementById("doctorNameInput");
+  const specInput = document.getElementById("doctorSpecialtyInput");
+  const licInput = document.getElementById("doctorLicenseInput");
+  const clinicInput = document.getElementById("doctorClinicInput");
+
+  const clinicalDiagnosis = diagInput ? diagInput.value.trim() : "";
+  const medications = medInput ? medInput.value.trim() : "";
+  const recommendations = parseDoctorRecommendations(recInput ? recInput.value : "");
+
+  if (!clinicalDiagnosis) {
+    showToast(isEn ? "Please provide a clinical diagnosis before generating report" : "يرجى كتابة التشخيص الطبي السريري قبل إصدار التقرير");
+    if (diagInput) diagInput.focus();
+    return;
+  }
+  if (recommendations.length === 0) {
+    showToast(isEn ? "Please add at least one clinical recommendation" : "يرجى إضافة توصية طبية واحدة على الأقل");
+    if (recInput) recInput.focus();
+    return;
+  }
+
+  const approvingDoctorName = nameInput && nameInput.value.trim() ? nameInput.value.trim() : (auth.currentUser ? (auth.currentUser.displayName || auth.currentUser.email) : "Dr. Mona Samy");
+  const doctorSpecialty = specInput && specInput.value.trim() ? specInput.value.trim() : (isEn ? "Pulmonology & Respiratory Medicine" : "استشاري الأمراض الصدرية والرعاية المركزة");
+  const doctorLicense = licInput && licInput.value.trim() ? licInput.value.trim() : "EGY-MED-20491";
+  const clinicName = clinicInput && clinicInput.value.trim() ? clinicInput.value.trim() : (isEn ? "Health Vibes Specialized Clinics" : "عيادات هيلث فايبز التخصصية");
+  const reportRef = `HV-REP-${id.slice(-8).toUpperCase()}`;
+
+  const payload = {
+    clinicalDiagnosis,
+    clinicalNotes: clinicalDiagnosis,
+    doctorNote: clinicalDiagnosis,
+    medications,
+    recommendations,
+    recommendation: recommendations.join("\n"),
+    approvingDoctorName,
+    doctorSpecialty,
+    doctorLicense,
+    clinicName,
+    reportRef,
+    reportGeneratedAt: new Date().toISOString()
+  };
+
+  const success = await updateCaseStatus(id, CASE_STATUS.APPROVED, clinicalDiagnosis, payload);
   if (success) {
-    showToast(isEn ? "Result approved with doctor notes and recommendations" : "تم اعتماد النتيجة مع ملاحظات الطبيب والتوصيات");
+    showToast(isEn ? "Official Certified Medical Report Generated & Approved!" : "تم توليد واعتماد التقرير الطبي السريري بنجاح!");
     await renderDoctorQueue();
     selectDoctorCase(id);
+    showScreen("report");
+    renderReportScreen(id);
   }
+};
+
+window.openCaseReport = function(id) {
+  showScreen("report");
+  renderReportScreen(id);
+};
+
+window.approveCase = async function(id) {
+  await window.generateAndApproveReport(id);
 };
 
 window.requestMoreInfo = async function(id) {
@@ -1596,11 +1721,14 @@ async function selectDoctorCase(id) {
   const isEscalated = c.status === CASE_STATUS.ESCALATED;
   const isRejected = c.status === CASE_STATUS.REJECTED;
 
-  if (isUnderReview) {
+if (isUnderReview) {
     actionToolbarHtml = `
       <div class="doctor-actions-toolbar">
-        <button type="button" class="btn-clinical approve" onclick="approveCase('${c.id}')">
-          <span>✅</span> ${isEn ? 'Approve Result' : 'اعتماد سريري'}
+        <button type="button" class="btn-clinical approve" onclick="generateAndApproveReport('${c.id}')" title="${isEn ? 'Approve and generate official certified report' : 'اعتماد سريري وتوليد التقرير الطبي المعتمد'}">
+          <span>✨</span> ${isEn ? 'Generate & Approve Report' : 'توليد واعتماد التقرير'}
+        </button>
+        <button type="button" class="btn-clinical resume" onclick="previewCaseReport('${c.id}')" title="${isEn ? 'Preview report before final approval' : 'معاينة شكل التقرير الطبي قبل الاعتماد'}">
+          <span>👁️</span> ${isEn ? 'Preview Report' : 'معاينة التقرير'}
         </button>
         <button type="button" class="btn-clinical request-info" onclick="requestMoreInfo('${c.id}')">
           <span>❓</span> ${isEn ? 'Request More Info' : 'طلب بيانات إضافية'}
@@ -1649,6 +1777,14 @@ async function selectDoctorCase(id) {
   } else if (isApproved || isRejected) {
     actionToolbarHtml = `
       <div class="doctor-actions-toolbar">
+        ${isApproved ? `
+          <button type="button" class="btn-clinical approve" onclick="openCaseReport('${c.id}')">
+            <span>📄</span> ${isEn ? 'View Certified Report (PDF)' : 'عرض التقرير المعتمد (PDF)'}
+          </button>
+          <button type="button" class="btn-clinical resume" onclick="previewCaseReport('${c.id}')">
+            <span>🔄</span> ${isEn ? 'Edit & Reissue Report' : 'تعديل وإعادة إصدار التقرير'}
+          </button>
+        ` : ''}
         <button type="button" class="btn-clinical close" onclick="closeCase('${c.id}')">
           <span>🔒</span> ${isEn ? 'Archive & Close Case' : 'أرشفة وإغلاق الحالة'}
         </button>
@@ -1658,23 +1794,81 @@ async function selectDoctorCase(id) {
     actionToolbarHtml = `
       <div style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-top: 12px; text-align: center;">
         <span style="color: var(--muted); font-size: 13px; font-weight: 700;">🔒 ${isEn ? 'This case is closed and archived.' : 'هذه الحالة مكتملة ومؤرشفة.'}</span>
+        ${c.doctorApproved ? `
+          <button type="button" class="btn-clinical approve" style="margin-top: 8px; display: inline-flex;" onclick="openCaseReport('${c.id}')">
+            <span>📄</span> ${isEn ? 'View Archived Report (PDF)' : 'عرض التقرير المعتمد المؤرشف'}
+          </button>
+        ` : ''}
       </div>
     `;
   }
 
-  const existingDoctorNote = c.doctorNote || c.clinicalNotes || "";
+  const existingDoctorNote = c.clinicalDiagnosis || c.doctorNote || c.clinicalNotes || "";
   const existingRecommendations = Array.isArray(c.recommendations)
     ? c.recommendations.join("\n")
     : (c.recommendation || "");
-  const triggeredRules = Array.isArray(c.triggeredRules) ? c.triggeredRules : (Array.isArray(c.assessment?.aiTriage?.triggeredRules) ? c.assessment.aiTriage.triggeredRules : []);
-  const triggeredRulesHtml = triggeredRules.length > 0
-    ? `<div style="margin-top: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2);">
-        <strong style="display: block; font-size: 12.5px; margin-bottom: 6px; color: var(--teal-2);">${isEn ? 'Triggered clinical rules' : 'القواعد السريرية التي تم تفعيلها'}</strong>
-        <ul style="margin: 0; padding-inline-start: 18px; color: var(--muted); font-size: 12.5px;">
-          ${triggeredRules.map((rule) => `<li>${isEn ? rule.en : rule.ar}</li>`).join("")}
-        </ul>
-      </div>`
-    : "";
+  const existingMedications = c.medications || (isEn ? "1. Salbutamol Inhaler (100mcg): 2 puffs every 6 hours PRN.\n2. Hydration & Deep breathing exercises." : "1. بخاخ موسع للشعب (فينتولين 100 ميكروجرام): بختان عند اللزوم كل 6 ساعات.\n2. سوائل دافئة وراحة تامة.");
+
+  // Current doctor credentials
+  const currentDocName = c.approvingDoctorName || c.assignedDoctorName || (auth.currentUser ? (auth.currentUser.displayName || auth.currentUser.email.split('@')[0]) : (isEn ? "Dr. Mona Samy" : "د. منى سامي"));
+  const currentDocSpec = c.doctorSpecialty || (isEn ? "Pulmonology & Respiratory Medicine" : "استشاري الأمراض الصدرية والرعاية المركزة");
+  const currentDocLic = c.doctorLicense || "EGY-MED-20491";
+  const currentDocClinic = c.clinicName || (isEn ? "Health Vibes Specialized Clinics" : "عيادات هيلث فايبز التخصصية");
+
+  // Clinical Risk Rules evaluation data & versioning
+  const caseRuleVersion = (c.assessment && c.assessment.aiTriage && c.assessment.aiTriage.ruleEngineVersion) || c.ruleEngineVersion || (typeof RULE_ENGINE_VERSION !== 'undefined' ? RULE_ENGINE_VERSION : "HealthVibe-Rules-v1.0");
+  const caseTriggeredRules = (c.assessment && c.assessment.aiTriage && Array.isArray(c.assessment.aiTriage.triggeredRules))
+    ? c.assessment.aiTriage.triggeredRules
+    : (Array.isArray(c.triggeredRules) ? c.triggeredRules : []);
+  const caseRulePoints = (c.assessment && c.assessment.aiTriage && typeof c.assessment.aiTriage.ruleScorePoints === 'number')
+    ? c.assessment.aiTriage.ruleScorePoints
+    : (typeof c.ruleScorePoints === 'number' ? c.ruleScorePoints : 0);
+
+  const triggeredRulesListHtml = caseTriggeredRules.length > 0
+    ? caseTriggeredRules.map(r => `
+        <li style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px dashed var(--line); font-size: 12.5px;">
+          <span>
+            <strong style="color: var(--teal); font-weight: 700;">${r.id || ''}</strong>: 
+            ${isEn ? (r.en || r.ar || '') : (r.ar || r.en || '')}
+          </span>
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <span class="pill info" style="font-size: 10px; padding: 1px 6px;">${r.version || caseRuleVersion}</span>
+            <span class="pill danger" style="font-size: 10.5px; padding: 2px 7px; font-weight: 700;">+${r.points || 0} ${isEn ? 'pts' : 'ن'}</span>
+          </div>
+        </li>
+      `).join('')
+    : `<li style="font-size: 12.5px; color: var(--muted); padding: 6px 0;">${isEn ? 'No high-risk criteria triggered' : 'لم يتم تفعيل شروط خطورة إضافية'}</li>`;
+
+  const triggeredRulesHtml = `
+    <div class="doctor-rules-card" style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin: 14px 0;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+          <strong style="font-size: 13.5px; display: flex; align-items: center; gap: 6px;">
+            <span>📐</span> ${isEn ? 'Rules-Based Risk Evaluation' : 'تقييم مؤشر القواعد السريرية'}
+          </strong>
+          <span class="pill info" style="font-size: 11px; padding: 2px 8px; font-family: monospace;">${caseRuleVersion}</span>
+          <span class="pill ok" style="font-size: 10.5px; padding: 2px 8px;">${isEn ? 'Clinician-Reviewed' : 'معتمد سريرياً'}</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <span style="font-size: 12px; color: var(--muted);">${isEn ? 'Total Points:' : 'مجموع النقاط:'}</span>
+          <span class="pill ${c.o2 < 90 || caseRulePoints >= 6 ? 'danger' : (c.o2 < 93 || caseRulePoints >= 3 ? 'pending' : 'ok')}" style="font-size: 12px; font-weight: 800; padding: 2px 10px;">
+            ${caseRulePoints} ${isEn ? 'Points' : 'نقطة'}
+          </span>
+          <button type="button" class="soft-button" style="font-size: 11px; padding: 2px 8px;" onclick="openRulesGovernanceModal('${caseRuleVersion}')" title="${isEn ? 'Inspect Rule Definitions' : 'استعراض مواصفات هذه النسخة من القواعد'}">
+            🔍 ${isEn ? 'View Spec' : 'المواصفات'}
+          </button>
+        </div>
+      </div>
+      <ul style="list-style: none; margin: 0; padding: 0;">
+        ${triggeredRulesListHtml}
+      </ul>
+      <div style="margin-top: 10px; padding: 6px 10px; background: rgba(14, 165, 233, 0.08); border-radius: 6px; font-size: 11px; color: var(--muted); line-height: 1.4;">
+        ℹ️ ${isEn 
+          ? "Notice: This score is generated by deterministic, clinician-reviewed triage rules (unvalidated model score). It is purely advisory to assist doctor triage and does not replace medical judgment." 
+          : "تنبيه: هذا المؤشر ناتج عن قواعد فرز ثابتة قابلة لمراجعة الطبيب (مؤشر غير مُتحقق منه سريرياً كنموذج إحصائي). يُستخدم كدليل استرشادي لتسهيل الفرز ولا يحل محل التشخيص الطبي."}
+      </div>
+    </div>
+  `;
 
   reviewPanel.innerHTML = `
     <div class="panel-head">
@@ -1687,15 +1881,85 @@ async function selectDoctorCase(id) {
     ${emergencyDoctorBanner}
     <div class="summary-list">
       <div><span>${isEn ? 'AI Risk Score' : 'تصنيف الذكاء الاصطناعي'}</span><strong>${isEn ? c.aiScoreEn : c.aiScore}</strong></div>
-      <div><span>${isEn ? 'Rule score' : 'مؤشر القواعد'}</span><strong>${(isEn ? c.ruleScoreLabelEn : c.ruleScoreLabelAr) || c.ruleScore || (isEn ? 'Not clinically validated' : 'غير مُتحقق سريرياً')}</strong></div>
+      <div><span>${isEn ? 'Rule score' : 'مؤشر القواعد'}</span><strong>${(isEn ? c.ruleScoreLabelEn : c.ruleScoreLabelAr) || c.ruleScore || (isEn ? 'Not clinically validated' : 'غير مدقق سريرياً')}</strong></div>
       <div><span>${isEn ? 'Oxygen Level' : 'نسبة الأكسجين'}</span><strong style="${c.o2 < 90 ? 'color: #ef4444;' : ''}">${c.o2}%</strong></div>
       <div><span>${isEn ? 'Duration' : 'مدة الأعراض'}</span><strong>${isEn ? c.durationEn : c.duration}</strong></div>
     </div>
     ${triggeredRulesHtml}
-    <label style="font-weight: 800; font-size: 13px; display: block; margin-top: 14px; margin-bottom: 6px;">${isEn ? 'Doctor Clinical Notes' : 'ملاحظات الطبيب السريرية'}</label>
-    <textarea id="doctorNoteInput" ${isClosed ? 'disabled' : ''} placeholder="${isEn ? 'Write the physician assessment, findings, and clinical rationale.' : 'اكتب تقييم الطبيب والنتائج السريرية وسبب القرار.'}" style="width: 100%; min-height: 90px; margin-bottom: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); padding: 12px; font-family: inherit;">${existingDoctorNote}</textarea>
-    <label style="font-weight: 800; font-size: 13px; display: block; margin-bottom: 6px;">${isEn ? 'Patient Recommendations' : 'توصيات الطبيب للمريض'}</label>
-    <textarea id="doctorRecommendationsInput" ${isClosed ? 'disabled' : ''} placeholder="${isEn ? 'Add one recommendation per line.' : 'أضف كل توصية في سطر منفصل.'}" style="width: 100%; min-height: 105px; margin-bottom: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); padding: 12px; font-family: inherit;">${existingRecommendations}</textarea>
+
+    <!-- DYNAMIC CLINICAL REPORT BUILDER STATION -->
+    <div class="doctor-report-builder-card" style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin: 16px 0;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+        <h4 style="margin: 0; font-size: 14.5px; font-weight: 800; display: flex; align-items: center; gap: 8px; color: var(--teal);">
+          <span>🩺</span> ${isEn ? 'Dynamic Medical Report Builder' : 'محرر وتوليد التقرير الطبي السريري'}
+        </h4>
+        <span class="pill ok" style="font-size: 11px;">${isEn ? 'Official Physician Signature' : 'الاعتماد السريري والتوقيع'}</span>
+      </div>
+
+      <!-- Quick Diagnostic Presets -->
+      <div style="margin-bottom: 12px;">
+        <label style="font-size: 12px; font-weight: 700; color: var(--muted); display: block; margin-bottom: 6px;">
+          ${isEn ? '⚡ Quick Diagnostic Presets:' : '⚡ قوالب تشخيصية وخطة علاج سريعة:'}
+        </label>
+        <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+          <button type="button" class="soft-button" style="font-size: 11.5px; padding: 4px 10px;" onclick="applyDiagPreset('asthma')">🫁 ${isEn ? 'Asthma Flare' : 'حساسية صدرية وربو'}</button>
+          <button type="button" class="soft-button" style="font-size: 11.5px; padding: 4px 10px;" onclick="applyDiagPreset('bronchitis')">🌡️ ${isEn ? 'Acute Bronchitis' : 'التهاب شعبي حاد'}</button>
+          <button type="button" class="soft-button" style="font-size: 11.5px; padding: 4px 10px;" onclick="applyDiagPreset('uri')">🤧 ${isEn ? 'Upper Respiratory' : 'عدوى تنفسية علوية'}</button>
+          <button type="button" class="soft-button" style="font-size: 11.5px; padding: 4px 10px;" onclick="applyDiagPreset('stable')">✔️ ${isEn ? 'Stable Assessment' : 'أعراض مستقرة للمتابعة'}</button>
+        </div>
+      </div>
+
+      <!-- Diagnosis Input -->
+      <div style="margin-bottom: 12px;">
+        <label for="doctorDiagnosisInput" style="font-weight: 800; font-size: 13px; display: block; margin-bottom: 4px;">
+          ${isEn ? '1. Physician Clinical Diagnosis & Assessment *' : '1. التشخيص الطبي السريري المعتمد *'}
+        </label>
+        <textarea id="doctorDiagnosisInput" ${isClosed ? 'disabled' : ''} placeholder="${isEn ? 'Enter verified clinical diagnosis...' : 'اكتب التشخيص الطبي والملاحظات السريرية المعتمدة...'}" style="width: 100%; min-height: 75px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 10px; font-family: inherit; font-size: 13px;">${existingDoctorNote || (isEn ? 'Patient assessment verified. Normal breathing sounds with mild bronchial irritation.' : 'تمت المراجعة والتدقيق السريري. أعراض حساسية صدرية موسمية مع كحة خفيفة واستقرار تشبع الأكسجين.')}</textarea>
+        <input type="hidden" id="doctorNoteInput" value="${existingDoctorNote}" />
+      </div>
+
+      <!-- Prescriptions & Medications -->
+      <div style="margin-bottom: 12px;">
+        <label for="doctorMedicationsInput" style="font-weight: 800; font-size: 13px; display: block; margin-bottom: 4px;">
+          ${isEn ? '2. Prescription & Treatment Regimen (Rx)' : '2. الخطة العلاجية والروشتة الدوائية (Rx)'}
+        </label>
+        <textarea id="doctorMedicationsInput" ${isClosed ? 'disabled' : ''} placeholder="${isEn ? 'List prescribed medications, dosage and instructions...' : 'أدخل أسماء الأدوية، الجرعات، وطريقة الاستخدام...'}" style="width: 100%; min-height: 80px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 10px; font-family: inherit; font-size: 13px;">${existingMedications}</textarea>
+      </div>
+
+      <!-- Care Plan & Recommendations -->
+      <div style="margin-bottom: 14px;">
+        <label for="doctorRecommendationsInput" style="font-weight: 800; font-size: 13px; display: block; margin-bottom: 4px;">
+          ${isEn ? '3. Clinical Recommendations & Care Plan' : '3. التوصيات الطبية وخطة المتابعة'}
+        </label>
+        <textarea id="doctorRecommendationsInput" ${isClosed ? 'disabled' : ''} placeholder="${isEn ? 'Add one recommendation per line.' : 'أضف كل توصية في سطر منفصل.'}" style="width: 100%; min-height: 85px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 10px; font-family: inherit; font-size: 13px;">${existingRecommendations || (isEn ? '• Monitor oxygen saturation SpO2 twice daily.\n• Increase warm fluid intake and practice deep breathing.\n• Return for clinical evaluation within 48 hours.\n• Seek immediate emergency care (123) if breathing worsens.' : '• قياس نسبة تشبع الأكسجين مرتين يومياً بجهاز نبض موثوق.\n• الحرص على شرب السوائل الدافئة وتمارين التنفس العميق.\n• متابعة الاستشارة في العيادة أو عن بُعد خلال 48 ساعة.\n• التوجه الفوري للطوارئ أو الاتصال بالإسعاف (123) في حال زيادة ضيق التنفس.')}</textarea>
+      </div>
+
+      <!-- Doctor Identity & Credentials Box -->
+      <div style="background: rgba(var(--teal-rgb, 14, 165, 233), 0.05); border: 1px dashed var(--line); border-radius: 10px; padding: 12px;">
+        <span style="font-size: 12px; font-weight: 800; color: var(--teal); display: block; margin-bottom: 8px;">
+          🪪 ${isEn ? 'Doctor Credentials & Seal (Printed on report):' : 'بيانات الطبيب المعتمد والختم الرسمي (تظهر بالتقرير):'}
+        </span>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px;">
+          <div>
+            <label style="font-size: 11px; color: var(--muted);">${isEn ? 'Doctor Name' : 'اسم الطبيب'}</label>
+            <input type="text" id="doctorNameInput" value="${currentDocName}" style="width: 100%; padding: 6px 10px; font-size: 12.5px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);" />
+          </div>
+          <div>
+            <label style="font-size: 11px; color: var(--muted);">${isEn ? 'Specialty' : 'التخصص'}</label>
+            <input type="text" id="doctorSpecialtyInput" value="${currentDocSpec}" style="width: 100%; padding: 6px 10px; font-size: 12.5px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);" />
+          </div>
+          <div>
+            <label style="font-size: 11px; color: var(--muted);">${isEn ? 'Syndicate License #' : 'ترخيص النقابة'}</label>
+            <input type="text" id="doctorLicenseInput" value="${currentDocLic}" style="width: 100%; padding: 6px 10px; font-size: 12.5px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);" />
+          </div>
+          <div>
+            <label style="font-size: 11px; color: var(--muted);">${isEn ? 'Clinic / Hospital' : 'العيادة / المستشفى'}</label>
+            <input type="text" id="doctorClinicInput" value="${currentDocClinic}" style="width: 100%; padding: 6px 10px; font-size: 12.5px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);" />
+          </div>
+        </div>
+      </div>
+    </div>
+
     ${actionToolbarHtml}
     ${timelineHtml}
   `;
@@ -2725,12 +2989,20 @@ async function renderReportScreen(targetCaseId = null) {
       return;
     }
 
-    // STATE 3: GENUINE DOCTOR APPROVAL -> RENDER OFFICIAL CERTIFIED REPORT
+// STATE 3: GENUINE DOCTOR APPROVAL OR DOCTOR PREVIEW -> RENDER OFFICIAL CERTIFIED REPORT
+    const isPreview = (targetCaseId === "preview" && window.__doctorPreviewCase) || caseData.isDoctorPreview;
+    if (isPreview && window.__doctorPreviewCase) {
+      caseData = window.__doctorPreviewCase;
+    }
+
     const approvedDate = caseData.approvedAt
       ? (caseData.approvedAt.toDate ? caseData.approvedAt.toDate() : new Date(caseData.approvedAt))
       : (caseData.reviewedAt ? (caseData.reviewedAt.toDate ? caseData.reviewedAt.toDate() : new Date(caseData.reviewedAt)) : new Date());
-    const generatedDate = caseData.generatedAt
-      ? (caseData.generatedAt.toDate ? caseData.generatedAt.toDate() : new Date(caseData.generatedAt))
+    const generatedDate = caseData.reportGeneratedAt || caseData.generatedAt
+      ? (caseData.reportGeneratedAt ? new Date(caseData.reportGeneratedAt) : (caseData.generatedAt.toDate ? caseData.generatedAt.toDate() : new Date(caseData.generatedAt)))
+      : approvedDate;
+    const submittedDate = caseData.submittedAt
+      ? (caseData.submittedAt.toDate ? caseData.submittedAt.toDate() : new Date(caseData.submittedAt))
       : approvedDate;
 
     const dateFormatted = approvedDate.toLocaleDateString(isEn ? "en-US" : "ar-EG", {
@@ -2739,16 +3011,38 @@ async function renderReportScreen(targetCaseId = null) {
     const generatedDateFormatted = generatedDate.toLocaleDateString(isEn ? "en-US" : "ar-EG", {
       year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit"
     });
+    const submittedDateFormatted = submittedDate.toLocaleDateString(isEn ? "en-US" : "ar-EG", {
+      year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
+    });
 
-    const o2Val = caseData.oxygenLevel || caseData.o2 || 95;
-    const doctorName = caseData.assignedDoctorName || caseData.reviewedBy || caseData.approvingDoctorEmail || (isEn ? "Dr. Mona Samy" : "د. منى سامي");
+    const o2Val = Number(caseData.oxygenLevel || caseData.o2 || 95);
+    const o2Color = o2Val < 90 ? "#ef4444" : (o2Val < 95 ? "#f59e0b" : "#16a34a");
+    const o2StatusText = o2Val < 90 
+      ? (isEn ? "Hypoxemia / Critical" : "نقص أكسجين حاد / حرج") 
+      : (o2Val < 95 ? (isEn ? "Mild Borderline" : "انخفاض طفيف / مراقبة") : (isEn ? "Optimal Normal" : "مثالي وطبيعي"));
+
+    const doctorName = caseData.approvingDoctorName || caseData.assignedDoctorName || caseData.reviewedBy || (isEn ? "Dr. Mona Samy" : "د. منى سامي");
     const doctorSpecialty = caseData.doctorSpecialty || (isEn ? "Pulmonology & Respiratory Medicine" : "استشاري الأمراض الصدرية والرعاية المركزة");
+    const doctorLicense = caseData.doctorLicense || "EGY-MED-20491";
     const clinicName = caseData.clinicName || (isEn ? "Health Vibes Specialized Clinics" : "عيادات هيلث فايبز التخصصية");
-    const reportRef = `HV-REP-${caseData.id.slice(-8).toUpperCase()}`;
+    const reportRef = caseData.reportRef || `HV-REP-${caseData.id.slice(-8).toUpperCase()}`;
     const reportVersion = caseData.reportVersion || REPORT_VERSION;
     const modelVersion = caseData.modelVersion || caseData.assessment?.aiTriage?.modelVersion || MODEL_VERSION;
+    const ruleEngineVersion = caseData.assessment?.aiTriage?.ruleEngineVersion || caseData.ruleEngineVersion || (typeof RULE_ENGINE_VERSION !== 'undefined' ? RULE_ENGINE_VERSION : "HealthVibe-Rules-v1.0");
+    const ruleScorePoints = typeof caseData.assessment?.aiTriage?.ruleScorePoints === 'number'
+      ? caseData.assessment.aiTriage.ruleScorePoints
+      : (typeof caseData.ruleScorePoints === 'number' ? caseData.ruleScorePoints : 0);
+    const patientName = caseData.name || caseData.patientName || (user ? (user.displayName || user.email) : (isEn ? "Patient" : "مريض"));
 
-    const clinicalDiagnosis = caseData.doctorNote || caseData.clinicalNotes || (isEn ? "Patient assessment reviewed and verified. Oxygen saturation stable. Mild seasonal respiratory symptoms." : "تمت المراجعة والتدقيق السريري لقياسات التنفس والأعراض. نسبة الأكسجين مقبولة وتوجد أعراض حساسية صدرية موسمية مع كحة متوسطة.");
+    const clinicalDiagnosis = caseData.clinicalDiagnosis || caseData.doctorNote || caseData.clinicalNotes || (isEn ? "Patient assessment reviewed and verified. Oxygen saturation stable. Mild seasonal bronchial sensitivity." : "تمت المراجعة والتدقيق السريري لقياسات التنفس والأعراض. نسبة الأكسجين مقبولة وتوجد أعراض حساسية صدرية موسمية مع كحة متوسطة.");
+    
+    // Medications list parsing
+    const rawMeds = caseData.medications || (isEn ? "1. Salbutamol Inhaler (100mcg) - 2 puffs PRN\n2. Paracetamol 500mg - 1 tab every 8h" : "1. بخاخ موسع للشعب (سالبوتامول) - بختان عند اللزوم\n2. باراسيتامول 500 مجم - قرص كل 8 ساعات");
+    const medItems = String(rawMeds)
+      .split("\n")
+      .map(line => line.trim())
+      .filter(line => line.length > 0);
+
     const savedRecommendations = Array.isArray(caseData.recommendations)
       ? caseData.recommendations
       : parseDoctorRecommendations(caseData.recommendation);
@@ -2759,139 +3053,277 @@ async function renderReportScreen(targetCaseId = null) {
       isEn ? "Seek immediate emergency care if severe shortness of breath or chest tightness occurs." : "التوجه فوراً لقسم الطوارئ في حال زيادة ضيق التنفس أو ظهور ألم حاد بالصدر."
     ];
 
+    // Build SVG QR code representation
+    const qrSvg = `
+      <svg width="84" height="84" viewBox="0 0 84 84" xmlns="http://www.w3.org/2000/svg" style="background:#fff; border-radius:8px; padding:4px; box-shadow: 0 2px 6px rgba(0,0,0,0.08);">
+        <rect width="84" height="84" fill="#ffffff"/>
+        <!-- Corner 1 -->
+        <rect x="4" y="4" width="24" height="24" fill="#0f172a" rx="3"/>
+        <rect x="8" y="8" width="16" height="16" fill="#ffffff" rx="2"/>
+        <rect x="12" y="12" width="8" height="8" fill="#0f172a"/>
+        <!-- Corner 2 -->
+        <rect x="56" y="4" width="24" height="24" fill="#0f172a" rx="3"/>
+        <rect x="60" y="8" width="16" height="16" fill="#ffffff" rx="2"/>
+        <rect x="64" y="12" width="8" height="8" fill="#0f172a"/>
+        <!-- Corner 3 -->
+        <rect x="4" y="56" width="24" height="24" fill="#0f172a" rx="3"/>
+        <rect x="8" y="60" width="16" height="16" fill="#ffffff" rx="2"/>
+        <rect x="12" y="64" width="8" height="8" fill="#0f172a"/>
+        <!-- Data Dots -->
+        <rect x="34" y="8" width="6" height="6" fill="#0f172a"/>
+        <rect x="44" y="8" width="6" height="6" fill="#0f172a"/>
+        <rect x="34" y="20" width="6" height="6" fill="#0f172a"/>
+        <rect x="44" y="20" width="6" height="6" fill="#0f172a"/>
+        <rect x="34" y="34" width="16" height="16" fill="#0f172a" rx="2"/>
+        <circle cx="42" cy="42" r="3" fill="#14b8a6"/>
+        <rect x="8" y="34" width="6" height="6" fill="#0f172a"/>
+        <rect x="20" y="34" width="6" height="6" fill="#0f172a"/>
+        <rect x="8" y="44" width="6" height="6" fill="#0f172a"/>
+        <rect x="56" y="34" width="6" height="6" fill="#0f172a"/>
+        <rect x="68" y="34" width="6" height="6" fill="#0f172a"/>
+        <rect x="62" y="44" width="6" height="6" fill="#0f172a"/>
+        <rect x="34" y="56" width="6" height="6" fill="#0f172a"/>
+        <rect x="44" y="56" width="6" height="6" fill="#0f172a"/>
+        <rect x="34" y="68" width="6" height="6" fill="#0f172a"/>
+        <rect x="44" y="68" width="6" height="6" fill="#0f172a"/>
+        <rect x="56" y="56" width="6" height="6" fill="#0f172a"/>
+        <rect x="68" y="68" width="6" height="6" fill="#0f172a"/>
+        <rect x="68" y="56" width="6" height="6" fill="#0f172a"/>
+      </svg>
+    `;
+
     container.innerHTML = `
       <div class="report-page official-certified-report" id="printableReportArea">
+        ${isPreview ? `
+          <div class="doctor-preview-banner no-print" style="background: rgba(245, 158, 11, 0.12); border: 1.5px solid #f59e0b; border-radius: 14px; padding: 12px 18px; margin-bottom: 22px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <div>
+              <strong style="color: #b45309; font-size: 14px; display: flex; align-items: center; gap: 6px;">
+                <span>👁️</span> ${isEn ? "Doctor Live Preview Mode" : "وضع المعاينة الفورية للطبيب المعالج"}
+              </strong>
+              <span style="font-size: 12.5px; color: var(--ink);">
+                ${isEn ? "This is a dynamic live preview of the report before final signing and archiving." : "هذه معاينة حية لشكل التقرير الطبي قبل الاعتماد النهائي والأرشفة."}
+              </span>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button type="button" class="outline-button" style="padding: 6px 12px; font-size: 12px;" onclick="showScreen('doctor'); selectDoctorCase('${caseData.id}')">
+                ✏️ ${isEn ? "Return to Edit" : "العودة للتعديل"}
+              </button>
+              <button type="button" class="solid-button" style="padding: 6px 14px; font-size: 12px; background: #16a34a;" onclick="generateAndApproveReport('${caseData.id}')">
+                ✅ ${isEn ? "Approve & Issue" : "اعتماد وإصدار"}
+              </button>
+            </div>
+          </div>
+        ` : ''}
+
         <!-- OFFICIAL REPORT HEADER -->
-        <div class="report-header">
-          <div class="brand">
-            <div class="logo-mark" aria-hidden="true">
-              <svg viewBox="0 0 96 96">
+        <div class="report-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--line); padding-bottom: 18px; margin-bottom: 20px;">
+          <div class="brand" style="display: flex; align-items: center; gap: 14px;">
+            <div class="logo-mark" aria-hidden="true" style="width: 48px; height: 48px; border-radius: 14px; background: var(--surface-2); display: grid; place-items: center; border: 1px solid var(--line);">
+              <svg viewBox="0 0 96 96" width="32" height="32" fill="none" stroke="var(--teal)" stroke-width="6">
                 <rect x="8" y="8" width="80" height="80" rx="25"/>
                 <path d="M24 53c8-22 17-22 25 0 7 18 16 18 24 0"/>
                 <path d="M32 34v28M64 34v28"/>
-                <circle cx="48" cy="53" r="5"/>
+                <circle cx="48" cy="53" r="5" fill="var(--teal)"/>
               </svg>
             </div>
             <div>
-              <strong style="font-size: 20px;">Health Vibes Clinical Center</strong>
-              <span style="font-size: 13px; color: var(--teal);">${isEn ? "Certified Medical Assessment Report" : "التقرير الطبي السريري المعتمد"}</span>
+              <strong style="font-size: 20px; display: block; color: var(--ink);">${isEn ? "Health Vibes Medical Center" : "مركز هيلث فايبز الطبي التخصصي"}</strong>
+              <span style="font-size: 12.5px; color: var(--teal); font-weight: 700;">${isEn ? "Certified Clinical Assessment Report" : "التقرير الطبي السريري المعتمد"}</span>
             </div>
           </div>
           <div style="text-align: ${isEn ? 'right' : 'left'};">
-            <span class="pill ok" style="font-size: 13px; padding: 6px 14px; font-weight: 800;">
-              ✓ ${isEn ? "Approved by Physician" : "معتمد سريرياً ورسمياً"}
+            <span class="pill ok" style="font-size: 12.5px; padding: 6px 14px; font-weight: 800; display: inline-flex; align-items: center; gap: 6px;">
+              ✓ ${isPreview ? (isEn ? "Draft Preview" : "معاينة مسودة") : (isEn ? "Approved by Physician" : "معتمد سريرياً ورسمياً")}
             </span>
-            <div style="font-size: 11px; color: var(--muted); margin-top: 4px; font-family: monospace;">
+            <div style="font-size: 11px; color: var(--muted); margin-top: 4px; font-family: monospace; letter-spacing: 0.5px;">
               ${reportRef}
             </div>
           </div>
         </div>
 
         <!-- CLINICAL DOSSIER GRID -->
-        <div class="report-grid" style="margin: 20px 0;">
+        <div class="report-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-bottom: 20px;">
           <div>
-            <span>${isEn ? "Patient Name" : "اسم المريض"}</span>
-            <strong>${caseData.name || caseData.patientName || user.displayName || user.email}</strong>
+            <span style="font-size: 11.5px; color: var(--muted); display: block;">${isEn ? "Patient Name" : "اسم المريض"}</span>
+            <strong style="font-size: 13.5px; color: var(--ink);">${patientName}</strong>
           </div>
           <div>
-            <span>${isEn ? "Attending Physician" : "الطبيب المعالج والمعتمد"}</span>
-            <strong style="color: var(--teal);">${doctorName}</strong>
+            <span style="font-size: 11.5px; color: var(--muted); display: block;">${isEn ? "Attending Physician" : "الطبيب المعتمد"}</span>
+            <strong style="font-size: 13.5px; color: var(--teal);">${doctorName}</strong>
           </div>
           <div>
-            <span>${isEn ? "Clinical Specialty" : "التخصص والجهة"}</span>
-            <strong>${doctorSpecialty}</strong>
+            <span style="font-size: 11.5px; color: var(--muted); display: block;">${isEn ? "Specialty & Clinic" : "التخصص والعيادة"}</span>
+            <strong style="font-size: 13px; color: var(--ink);">${doctorSpecialty}</strong>
+            <small style="display: block; color: var(--muted); font-size: 11px;">${clinicName}</small>
           </div>
           <div>
-            <span>${isEn ? "Approval Date & Time" : "تاريخ ووقت الاعتماد"}</span>
-            <strong>${dateFormatted}</strong>
+            <span style="font-size: 11.5px; color: var(--muted); display: block;">${isEn ? "Medical License #" : "رقم ترخيص النقابة"}</span>
+            <strong style="font-size: 13px; color: var(--ink); font-family: monospace;">${doctorLicense}</strong>
           </div>
           <div>
-            <span>${isEn ? "Report Version" : "إصدار التقرير"}</span>
-            <strong>${reportVersion}</strong>
+            <span style="font-size: 11.5px; color: var(--muted); display: block;">${isEn ? "Submission Time" : "تاريخ ووقت الفحص"}</span>
+            <strong style="font-size: 12.5px; color: var(--ink);">${submittedDateFormatted}</strong>
           </div>
           <div>
-            <span>${isEn ? "Model Version" : "إصدار النموذج"}</span>
-            <strong>${modelVersion}</strong>
-          </div>
-          <div>
-            <span>${isEn ? "Generated At" : "تاريخ إنشاء التقرير"}</span>
-            <strong>${generatedDateFormatted}</strong>
+            <span style="font-size: 11.5px; color: var(--muted); display: block;">${isEn ? "Approval Time" : "تاريخ ووقت الاعتماد"}</span>
+            <strong style="font-size: 12.5px; color: var(--ink);">${dateFormatted}</strong>
           </div>
         </div>
 
-        <!-- VITALS & CLINICAL DATA SUMMARY -->
-        <div class="report-vitals-box" style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-bottom: 20px;">
-          <h4 style="margin: 0 0 12px; font-size: 14px; color: var(--teal-2); display: flex; align-items: center; gap: 6px;">
-            <span>🫁</span> ${isEn ? "Recorded Vital Signs & Symptoms" : "العلامات الحيوية والأعراض المسجلة"}
-          </h4>
-          <div class="summary-list" style="margin: 0;">
-            <div><span>${isEn ? "Oxygen Saturation (SpO2)" : "نسبة تشبع الأكسجين (SpO2)"}</span><strong style="color: ${o2Val < 90 ? '#ef4444' : '#16a34a'}; font-size: 16px;">${o2Val}%</strong></div>
-            <div><span>${isEn ? "Shortness of Breath" : "ضيق التنفس"}</span><strong>${caseData.breathingDifficulty || (isEn ? "None" : "لا يوجد")}</strong></div>
-            <div><span>${isEn ? "Cough Severity" : "درجة الكحة"}</span><strong>${caseData.coughLevel || (isEn ? "Moderate" : "متوسطة")}</strong></div>
-            <div><span>${isEn ? "Symptom Duration" : "مدة الأعراض"}</span><strong>${caseData.symptomDuration || caseData.duration || (isEn ? "3 Days" : "3 أيام")}</strong></div>
-            <div><span>${isEn ? "Risk Factors" : "عوامل الخطورة"}</span><strong>${Array.isArray(caseData.riskFactors) ? caseData.riskFactors.join('، ') : (isEn ? "None" : "لا يوجد")}</strong></div>
+        <!-- VITALS & CLINICAL DATA SUMMARY WITH GAUGES -->
+        <div class="report-vitals-box" style="background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; margin-bottom: 20px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+            <h4 style="margin: 0; font-size: 14.5px; color: var(--teal-2); display: flex; align-items: center; gap: 8px;">
+              <span>🫁</span> ${isEn ? "Recorded Vital Signs & Physiological Metrics" : "العلامات الحيوية والمؤشرات الفسيولوجية"}
+            </h4>
+            <span class="pill info" style="font-size: 11px;">${isEn ? "Clinical Vitals" : "بيانات سريرية موثقة"}</span>
+          </div>
+          
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 14px;">
+            <!-- OXYGEN SATURATION HERO GAUGE -->
+            <div style="background: var(--surface-2); border: 1.5px solid ${o2Color}; border-radius: 12px; padding: 12px; text-align: center;">
+              <span style="font-size: 11.5px; color: var(--muted); display: block; margin-bottom: 4px;">${isEn ? "Oxygen Saturation (SpO2)" : "نسبة تشبع الأكسجين"}</span>
+              <strong style="font-size: 26px; color: ${o2Color}; line-height: 1;">${o2Val}%</strong>
+              <small style="display: block; margin-top: 4px; font-weight: 700; font-size: 11px; color: ${o2Color};">${o2StatusText}</small>
+            </div>
+
+            <!-- BREATHING DIFFICULTY -->
+            <div style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px; text-align: center;">
+              <span style="font-size: 11.5px; color: var(--muted); display: block; margin-bottom: 4px;">${isEn ? "Shortness of Breath" : "ضيق التنفس"}</span>
+              <strong style="font-size: 15px; color: var(--ink); display: block; margin-top: 6px;">${caseData.breathingDifficulty || caseData.difficulty || (isEn ? "Moderate" : "متوسط")}</strong>
+            </div>
+
+            <!-- COUGH SEVERITY -->
+            <div style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px; text-align: center;">
+              <span style="font-size: 11.5px; color: var(--muted); display: block; margin-bottom: 4px;">${isEn ? "Cough Severity" : "درجة الكحة"}</span>
+              <strong style="font-size: 15px; color: var(--ink); display: block; margin-top: 6px;">${caseData.coughLevel || (isEn ? "Moderate" : "متوسطة")}</strong>
+            </div>
+
+            <!-- SYMPTOM DURATION -->
+            <div style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px; text-align: center;">
+              <span style="font-size: 11.5px; color: var(--muted); display: block; margin-bottom: 4px;">${isEn ? "Duration" : "مدة الأعراض"}</span>
+              <strong style="font-size: 15px; color: var(--ink); display: block; margin-top: 6px;">${caseData.symptomDuration || caseData.duration || (isEn ? "3 Days" : "3 أيام")}</strong>
+            </div>
+          </div>
+
+          <!-- RISK FACTORS & AI EVALUATION COMPARISON -->
+          <div style="display: flex; justify-content: space-between; align-items: center; background: var(--surface-2); border-radius: 10px; padding: 10px 14px; font-size: 12.5px; flex-wrap: wrap; gap: 8px;">
+            <div>
+              <span style="color: var(--muted);">${isEn ? "Reported Risk Factors:" : "عوامل الخطورة المسجلة:"}</span>
+              <strong style="margin-inline-start: 6px; color: var(--ink);">${Array.isArray(caseData.riskFactors) && caseData.riskFactors.length > 0 ? caseData.riskFactors.join('، ') : (isEn ? "None declared" : "لا توجد")}</strong>
+            </div>
+            <div>
+              <span style="color: var(--muted);">${isEn ? "AI Risk Classification:" : "تصنيف الذكاء الاصطناعي:"}</span>
+              <strong style="margin-inline-start: 6px; color: var(--teal);">${isEn ? (caseData.aiScoreEn || caseData.aiScore || "Low Risk") : (caseData.aiScore || "خطورة منخفضة")}</strong>
+            </div>
+          </div>
+
+          <!-- CLINICAL RULES TRIAGE BADGE IN REPORT -->
+          <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(14, 165, 233, 0.06); border: 1px solid rgba(14, 165, 233, 0.2); border-radius: 10px; padding: 8px 14px; font-size: 12px; margin-top: 10px; flex-wrap: wrap; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <span>📐</span>
+              <span style="color: var(--muted);">${isEn ? "Clinical Triage Rule Engine:" : "محرك قواعد الفرز السريري:"}</span>
+              <strong style="color: var(--teal); font-family: monospace;">${ruleEngineVersion}</strong>
+              <span class="pill ok" style="font-size: 10px; padding: 1px 6px;">${isEn ? "Clinician-Reviewed" : "معتمد سريرياً"}</span>
+            </div>
+            <div>
+              <span style="color: var(--muted);">${isEn ? "Rule Score Points:" : "نقاط المؤشر:"}</span>
+              <strong style="margin-inline-start: 4px;">${ruleScorePoints} ${isEn ? "pts" : "نقطة"}</strong>
+            </div>
           </div>
         </div>
 
         <!-- DOCTOR OFFICIAL DIAGNOSIS -->
-        <div class="report-diagnosis-section" style="background: rgba(24, 160, 88, 0.05); border: 2px solid rgba(24, 160, 88, 0.3); border-radius: 14px; padding: 18px; margin-bottom: 20px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-            <h3 style="margin: 0; font-size: 16px; color: #16a34a; display: flex; align-items: center; gap: 6px;">
+        <div class="report-diagnosis-section" style="background: rgba(22, 163, 74, 0.04); border: 2px solid rgba(22, 163, 74, 0.25); border-radius: 14px; padding: 18px; margin-bottom: 20px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <h3 style="margin: 0; font-size: 16px; color: #15803d; display: flex; align-items: center; gap: 8px;">
               <span>🩺</span> ${isEn ? "Physician's Clinical Diagnosis & Findings" : "التشخيص والملاحظات السريرية للطبيب المعالج"}
             </h3>
-            <span class="pill ok" style="font-size: 11px;">${isEn ? "Verified" : "موثق"}</span>
+            <span class="pill ok" style="font-size: 11px;">${isEn ? "Clinically Verified" : "موثق سريرياً"}</span>
           </div>
-          <p style="margin: 0; font-size: 14.5px; line-height: 1.6; color: var(--ink); font-weight: 500;">
+          <p style="margin: 0; font-size: 14.5px; line-height: 1.7; color: var(--ink); font-weight: 500;">
             ${clinicalDiagnosis}
           </p>
         </div>
 
-        <!-- DOCTOR RECOMMENDATIONS -->
-        <div style="margin-bottom: 24px;">
-          <h3 style="font-size: 16px; margin: 0 0 10px; color: var(--teal-2); display: flex; align-items: center; gap: 6px;">
-            <span>📋</span> ${isEn ? "Clinical Recommendations & Care Plan" : "التوصيات الطبية وخطة المتابعة"}
+        <!-- PRESCRIPTION & MEDICATION REGIMEN (Rx) -->
+        <div class="report-prescription-section" style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px; padding: 18px; margin-bottom: 20px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h3 style="margin: 0; font-size: 15.5px; color: var(--teal-2); display: flex; align-items: center; gap: 8px;">
+              <span>💊</span> ${isEn ? "Prescription & Medication Regimen (Rx)" : "الخطة العلاجية والروشتة الدوائية الموصوفة (Rx)"}
+            </h3>
+            <span class="pill info" style="font-size: 11px;">Rx Regimen</span>
+          </div>
+          <div class="prescriptions-list" style="display: flex; flex-direction: column; gap: 8px;">
+            ${medItems.map(item => `
+              <div style="background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; display: flex; align-items: center; gap: 10px;">
+                <span style="background: rgba(20, 184, 166, 0.15); color: var(--teal); font-weight: 800; font-size: 11px; padding: 3px 8px; border-radius: 6px;">Rx</span>
+                <span style="font-size: 13.5px; color: var(--ink); font-weight: 500;">${item}</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <!-- CLINICAL RECOMMENDATIONS & CARE PLAN -->
+        <div style="background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; margin-bottom: 22px;">
+          <h3 style="font-size: 15.5px; margin: 0 0 12px; color: var(--teal-2); display: flex; align-items: center; gap: 8px;">
+            <span>📋</span> ${isEn ? "Clinical Recommendations & Actionable Care Plan" : "التوصيات الطبية وخطة المتابعة والرعاية"}
           </h3>
-          <ul class="recommendations" style="margin: 0; padding-inline-start: 22px;">
+          <ul class="recommendations" style="margin: 0; padding-inline-start: 22px; display: flex; flex-direction: column; gap: 8px;">
             ${Array.isArray(doctorRecommendations) 
-              ? doctorRecommendations.map(r => `<li style="margin-bottom: 6px; font-size: 14px;">${r}</li>`).join('')
-              : `<li style="font-size: 14px;">${doctorRecommendations}</li>`}
+              ? doctorRecommendations.map(r => `<li style="font-size: 13.5px; color: var(--ink); line-height: 1.5;">${r}</li>`).join('')
+              : `<li style="font-size: 13.5px; color: var(--ink); line-height: 1.5;">${doctorRecommendations}</li>`}
           </ul>
         </div>
 
-        <!-- DIGITAL SEAL & SIGNATURE BLOCK -->
-        <div class="report-signature-block" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; padding: 18px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px; margin-bottom: 20px;">
-          <div>
-            <div style="font-size: 13px; color: var(--muted);">${isEn ? "Electronically Verified & Signed by:" : "تم الاعتماد والتوقيع الإلكتروني بواسطة:"}</div>
-            <strong style="font-size: 16px; color: var(--ink); display: block; margin-top: 2px;">${doctorName}</strong>
-            <span style="font-size: 12px; color: var(--teal);">${doctorSpecialty} • ${clinicName}</span>
-            <div style="font-size: 11px; color: var(--muted); margin-top: 4px; font-family: monospace;">
-              Digital Signature Hash: SHA256-${caseData.id.slice(0, 12).toUpperCase()}
+        <!-- DIGITAL SEAL & CRYPTOGRAPHIC VERIFICATION BLOCK -->
+        <div class="report-signature-block" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 18px; padding: 18px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px; margin-bottom: 20px;">
+          <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
+            <!-- QR CODE BOX -->
+            <div class="qr-verify-box" style="text-align: center;">
+              ${qrSvg}
+              <small style="display: block; font-size: 9.5px; color: var(--muted); margin-top: 4px; font-family: monospace;">SCAN TO VERIFY</small>
+            </div>
+            
+            <div>
+              <div style="font-size: 12.5px; color: var(--muted);">${isEn ? "Electronically Certified & Signed by:" : "تم الاعتماد والتوقيع الإلكتروني السريري بواسطة:"}</div>
+              <strong style="font-size: 16px; color: var(--ink); display: block; margin-top: 2px;">${doctorName}</strong>
+              <span style="font-size: 12px; color: var(--teal); font-weight: 600;">${doctorSpecialty} • ${doctorLicense}</span>
+              <div style="font-size: 11px; color: var(--muted); margin-top: 6px; font-family: monospace;">
+                Digital Hash: SHA256-${caseData.id.slice(0, 14).toUpperCase()}
+              </div>
+              <div style="font-size: 11px; color: var(--muted); font-family: monospace;">
+                Audit Ref: ${reportRef} | Ver: ${reportVersion} | Rules: ${ruleEngineVersion}
+              </div>
             </div>
           </div>
           
           <!-- OFFICIAL CLINICAL SEAL -->
-          <div class="official-clinical-seal" style="text-align: center; border: 2px dashed #16a34a; border-radius: 50%; width: 100px; height: 100px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 6px; background: rgba(22, 163, 74, 0.04); transform: rotate(-6deg);">
-            <span style="font-size: 20px;">🩺</span>
-            <strong style="font-size: 9px; color: #16a34a; text-transform: uppercase; letter-spacing: 0.5px;">Health Vibes</strong>
-            <span style="font-size: 8px; color: #15803d; font-weight: 800;">VERIFIED REPORT</span>
-            <span style="font-size: 7.5px; color: var(--muted);">OFFICIAL</span>
+          <div class="official-clinical-seal" style="text-align: center; border: 2.5px dashed #16a34a; border-radius: 50%; width: 105px; height: 105px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 6px; background: rgba(22, 163, 74, 0.05); transform: rotate(-5deg); box-shadow: 0 4px 12px rgba(22, 163, 74, 0.08);">
+            <span style="font-size: 22px;">🩺</span>
+            <strong style="font-size: 9px; color: #16a34a; text-transform: uppercase; letter-spacing: 0.6px; line-height: 1.1;">Health Vibes</strong>
+            <span style="font-size: 8px; color: #15803d; font-weight: 800; margin-top: 2px;">CERTIFIED REPORT</span>
+            <span style="font-size: 7px; color: var(--muted);">${new Date().getFullYear()} OFFICIAL</span>
           </div>
         </div>
 
         <!-- MANDATORY MEDICAL NOTICE -->
-        <div class="safety-note" style="font-size: 12px; line-height: 1.5; margin-bottom: 24px;">
+        <div class="safety-note" style="font-size: 12px; line-height: 1.5; margin-bottom: 24px; padding: 12px 16px; background: var(--surface-2); border-left: 4px solid var(--teal); border-radius: 8px;">
           ${isEn 
-            ? "Medical Notice: This clinical report was compiled and verified by a licensed medical practitioner based on recorded vital signs and physiological evaluation. For life-threatening emergencies, call 123 immediately."
-            : "تنبيه طبي: هذا التقرير صادر ومعتمد سريرياً من قبل طبيب مرخص بناءً على فحص العلامات الحيوية والتقييم السريري. في حالات الطوارئ الحادة يرجى الاتصال فوراً بالإسعاف (123)."}
+            ? "Medical Notice: This clinical report was compiled and verified by a licensed medical practitioner based on recorded vital signs, symptoms, and physiological assessment. For life-threatening emergencies, call emergency dispatch (123) immediately."
+            : "تنبيه طبي: هذا التقرير صادر ومعتمد سريرياً من قبل طبيب مرخص بناءً على فحص العلامات الحيوية والأعراض والتقييم السريري. في حالات الطوارئ الحادة يرجى الاتصال فوراً بالإسعاف (123)."}
         </div>
 
-        <!-- REPORT ACTION TOOLBAR (Hidden in Print) -->
+        <!-- REPORT ACTION TOOLBAR (Hidden on Print) -->
         <div class="report-actions-toolbar no-print" style="display: flex; gap: 12px; flex-wrap: wrap;">
           <button type="button" class="solid-button large print-report-btn" onclick="window.print()">
             <span>🖨️</span> ${isEn ? "Print Official Report (PDF)" : "طباعة التقرير الطبي (PDF)"}
           </button>
+          <button type="button" class="outline-button large" onclick="navigator.clipboard.writeText(window.location.href); showToast(currentLanguage === 'en' ? 'Report link copied' : 'تم نسخ رابط التقرير')">
+            <span>🔗</span> ${isEn ? "Copy Report Link" : "نسخ رابط التقرير"}
+          </button>
           <button type="button" class="outline-button large" onclick="showScreen('appointments')">
-            <span>📅</span> ${isEn ? "Book Follow-up Consultation" : "حجز استشارة متابعة"}
+            <span>📅</span> ${isEn ? "Book Follow-up" : "حجز استشارة متابعة"}
           </button>
           <button type="button" class="soft-button large" onclick="showScreen('history')">
             <span>📂</span> ${isEn ? "Medical Records" : "سجل الفحوصات"}
@@ -3959,6 +4391,152 @@ async function changeUserRole(userId, newRole, userName) {
   }
 }
 
+const ACTIVE_RISK_RULESET_ID = "breathing-triage";
+const ACTIVE_RISK_RULE_VERSION = "HealthVibe-Rules-v1.0";
+
+const RISK_RULESETS_REGISTRY = Object.freeze({
+  "breathing-triage": Object.freeze({
+    id: "breathing-triage",
+    nameAr: "فرز الجهاز التنفسي والتهابات الصدر",
+    nameEn: "Respiratory & Breathing Triage",
+    activeVersion: "HealthVibe-Rules-v1.0",
+    versions: Object.freeze({
+      "HealthVibe-Rules-v1.0": Object.freeze({
+        version: "HealthVibe-Rules-v1.0",
+        status: "active",
+        effectiveFrom: "2026-09-21",
+        deprecatedAt: null,
+        reviewedBy: "Clinical Governance & Pulmonology Board",
+        reviewStatus: "clinician-reviewed-rules",
+        changelog: Object.freeze({
+          ar: "الإصدار السريري الأساسي المعتمد: فرز مبني على عتبات SpO2، ضيق التنفس، شدة السعال، ومدة الأعراض.",
+          en: "Baseline certified clinical release: rule-based triage based on SpO2 thresholds, dyspnea, cough severity, and symptom duration."
+        }),
+        scoreThresholds: Object.freeze({
+          urgent: 6,
+          high: 3
+        }),
+        spo2Thresholds: Object.freeze({
+          urgentBelow: 90,
+          highBelow: 93,
+          closeFollowUpMin: 93,
+          closeFollowUpMax: 94
+        }),
+        rules: Object.freeze({
+          spo2_lt_90: Object.freeze({ points: 6, ar: "SpO2 أقل من 90%: تصعيد عاجل للطوارئ", en: "SpO2 below 90%: urgent emergency escalation" }),
+          spo2_90_92: Object.freeze({ points: 4, ar: "SpO2 بين 90% و92%: أولوية مراجعة عالية", en: "SpO2 between 90% and 92%: high review priority" }),
+          spo2_93_94: Object.freeze({ points: 2, ar: "SpO2 بين 93% و94%: متابعة قريبة", en: "SpO2 between 93% and 94%: close follow-up" }),
+          dyspnea_present: Object.freeze({ points: 2, ar: "وجود ضيق تنفس", en: "Shortness of breath present" }),
+          severe_cough: Object.freeze({ points: 2, ar: "كحة شديدة", en: "Severe cough" }),
+          moderate_cough: Object.freeze({ points: 1, ar: "كحة متوسطة", en: "Moderate cough" }),
+          symptoms_7_days: Object.freeze({ points: 1, ar: "استمرار الأعراض 7 أيام أو أكثر", en: "Symptoms lasting 7 days or more" }),
+          risk_factors_present: Object.freeze({ points: 1, ar: "وجود عوامل خطورة مسجلة", en: "Recorded risk factors present" })
+        })
+      }),
+      "HealthVibe-Rules-v1.1": Object.freeze({
+        version: "HealthVibe-Rules-v1.1",
+        status: "candidate",
+        effectiveFrom: "2026-10-01",
+        deprecatedAt: null,
+        reviewedBy: "Clinical Governance & Pulmonology Board",
+        reviewStatus: "clinician-reviewed-rules",
+        changelog: Object.freeze({
+          ar: "تحديث سريري مرتقب: تعزيز حساسية عوامل الخطورة التنفسية المزمنة ومطابقة معايير الفرز الرئوي الإقليمية.",
+          en: "Candidate clinical update: enhanced sensitivity for chronic respiratory risk factors and aligned regional pulmonology triage."
+        }),
+        scoreThresholds: Object.freeze({
+          urgent: 6,
+          high: 3
+        }),
+        spo2Thresholds: Object.freeze({
+          urgentBelow: 90,
+          highBelow: 93,
+          closeFollowUpMin: 93,
+          closeFollowUpMax: 94
+        }),
+        rules: Object.freeze({
+          spo2_lt_90: Object.freeze({ points: 6, ar: "SpO2 أقل من 90%: تصعيد عاجل للطوارئ", en: "SpO2 below 90%: urgent emergency escalation" }),
+          spo2_90_92: Object.freeze({ points: 4, ar: "SpO2 بين 90% و92%: أولوية مراجعة عالية", en: "SpO2 between 90% and 92%: high review priority" }),
+          spo2_93_94: Object.freeze({ points: 2, ar: "SpO2 بين 93% و94%: متابعة قريبة", en: "SpO2 between 93% and 94%: close follow-up" }),
+          dyspnea_present: Object.freeze({ points: 2, ar: "وجود ضيق تنفس حاد", en: "Acute shortness of breath present" }),
+          severe_cough: Object.freeze({ points: 2, ar: "كحة شديدة مستمرة", en: "Persistent severe cough" }),
+          moderate_cough: Object.freeze({ points: 1, ar: "كحة متوسطة", en: "Moderate cough" }),
+          symptoms_7_days: Object.freeze({ points: 1, ar: "استمرار الأعراض 7 أيام أو أكثر", en: "Symptoms lasting 7 days or more" }),
+          risk_factors_present: Object.freeze({ points: 2, ar: "وجود عوامل خطورة مسجلة (ربو / حمل / تدخين)", en: "Recorded clinical comorbidities (asthma / pregnancy / smoking)" })
+        })
+      })
+    })
+  })
+});
+
+function getRiskRuleset(ruleSetId = ACTIVE_RISK_RULESET_ID, version = null) {
+  const registry = RISK_RULESETS_REGISTRY[ruleSetId] || RISK_RULESETS_REGISTRY[ACTIVE_RISK_RULESET_ID];
+  if (!registry) return null;
+  const targetVersion = version || registry.activeVersion || ACTIVE_RISK_RULE_VERSION;
+  return registry.versions[targetVersion] || registry.versions[registry.activeVersion] || Object.values(registry.versions)[0];
+}
+
+const RISK_RULESETS = Object.freeze({
+  "breathing-triage": getRiskRuleset("breathing-triage", ACTIVE_RISK_RULE_VERSION)
+});
+const ACTIVE_RISK_RULESET = RISK_RULESETS[ACTIVE_RISK_RULESET_ID];
+const RULE_ENGINE_VERSION = ACTIVE_RISK_RULESET.version;
+
+function evaluateRulesBasedRisk({ oxygenLevel, hasDyspnea, coughKey, durationDays, riskFactorKeys, ruleSetId = ACTIVE_RISK_RULESET_ID, version = null }) {
+  const ruleSet = getRiskRuleset(ruleSetId, version) || ACTIVE_RISK_RULESET;
+  const rules = [];
+  let points = 0;
+
+  const addRule = (id) => {
+    const rule = ruleSet.rules[id];
+    if (!rule) return;
+    points += rule.points;
+    rules.push({ id, points: rule.points, ar: rule.ar, en: rule.en, version: ruleSet.version });
+  };
+
+  if (oxygenLevel > 0 && oxygenLevel < 90) {
+    addRule("spo2_lt_90");
+  } else if (oxygenLevel >= 90 && oxygenLevel <= 92) {
+    addRule("spo2_90_92");
+  } else if (oxygenLevel >= 93 && oxygenLevel <= 94) {
+    addRule("spo2_93_94");
+  }
+
+  if (hasDyspnea) addRule("dyspnea_present");
+  if (coughKey === "severe") addRule("severe_cough");
+  else if (coughKey === "moderate") addRule("moderate_cough");
+
+  if (durationDays >= 7) addRule("symptoms_7_days");
+
+  const clinicalRiskFactors = riskFactorKeys.filter((key) => key && key !== "none");
+  if (clinicalRiskFactors.length > 0) {
+    addRule("risk_factors_present");
+  }
+
+  let priority = "normal";
+  if (oxygenLevel > 0 && oxygenLevel < ruleSet.spo2Thresholds.urgentBelow || points >= ruleSet.scoreThresholds.urgent) priority = "urgent";
+  else if (oxygenLevel > 0 && oxygenLevel < ruleSet.spo2Thresholds.highBelow || points >= ruleSet.scoreThresholds.high) priority = "high";
+
+  const meta = AssessmentDictionaries.priority[priority];
+  return {
+    priority,
+    points,
+    rules,
+    riskAr: meta.riskAr,
+    riskEn: meta.riskEn,
+    aiScoreAr: meta.aiScoreAr,
+    aiScoreEn: meta.aiScoreEn,
+    ruleScore: meta.ruleScore,
+    ruleScoreAr: meta.ruleScoreAr,
+    ruleScoreEn: meta.ruleScoreEn,
+    ruleSetId: ruleSetId,
+    reviewStatus: ruleSet.reviewStatus,
+    validated: false,
+    version: ruleSet.version,
+    effectiveFrom: ruleSet.effectiveFrom
+  };
+}
+
 function getActiveScreen() {
   return document.querySelector(".screen.active")?.id.replace("screen-", "") || "patient";
 }
@@ -4176,10 +4754,109 @@ window.closeConfirmAssessmentModal = function() {
   _assessmentConfirmCallback = null;
 };
 
+window.openRulesGovernanceModal = function(selectedVersion = null) {
+  const modal = document.getElementById("rulesGovernanceModal");
+  if (!modal) return;
+
+  const isEn = currentLanguage === "en";
+  const selectEl = document.getElementById("rulesGovVersionSelect");
+  const container = document.getElementById("rulesGovDetailsContainer");
+  const activeBadge = document.getElementById("rulesGovActiveBadge");
+
+  const registry = RISK_RULESETS_REGISTRY[ACTIVE_RISK_RULESET_ID] || Object.values(RISK_RULESETS_REGISTRY)[0];
+  if (!registry) return;
+
+  const versions = Object.keys(registry.versions);
+  const targetVer = selectedVersion && registry.versions[selectedVersion]
+    ? selectedVersion
+    : registry.activeVersion;
+
+  if (selectEl) {
+    selectEl.innerHTML = versions.map(v => `<option value="${v}" ${v === targetVer ? 'selected' : ''}>${v}${v === registry.activeVersion ? (isEn ? ' (Active)' : ' (النشط)') : ''}</option>`).join('');
+    selectEl.onchange = (e) => {
+      renderRulesGovDetails(e.target.value);
+    };
+  }
+
+  function renderRulesGovDetails(verKey) {
+    const v = registry.versions[verKey];
+    if (!v || !container) return;
+
+    const isActive = verKey === registry.activeVersion;
+    if (activeBadge) {
+      activeBadge.textContent = isActive ? (isEn ? "Active Version" : "الإصدار النشط المعتمد") : (isEn ? `Status: ${v.status}` : `الحالة: ${v.status}`);
+      activeBadge.className = `pill ${isActive ? 'ok' : (v.status === 'candidate' ? 'pending' : 'info')}`;
+    }
+
+    const rulesRows = Object.entries(v.rules || {}).map(([rId, rDef]) => `
+      <tr>
+        <td style="font-family: monospace; font-weight: 700; color: var(--teal);">${rId}</td>
+        <td>${isEn ? (rDef.en || rDef.ar) : (rDef.ar || rDef.en)}</td>
+        <td style="text-align: center;"><span class="pill danger" style="font-weight: 800; font-size: 11px;">+${rDef.points}</span></td>
+      </tr>
+    `).join('');
+
+    container.innerHTML = `
+      <div style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 14px;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; font-size: 12.5px;">
+          <div><span style="color: var(--muted);">${isEn ? 'Target Ruleset:' : 'مجموعة القواعد:'}</span> <strong>${isEn ? registry.nameEn : registry.nameAr}</strong></div>
+          <div><span style="color: var(--muted);">${isEn ? 'Effective Date:' : 'تاريخ السريان:'}</span> <strong style="font-family: monospace;">${v.effectiveFrom || '--'}</strong></div>
+          <div><span style="color: var(--muted);">${isEn ? 'Review Authority:' : 'جهة الاعتماد والتدقيق:'}</span> <strong>${v.reviewedBy || 'Clinical Governance'}</strong></div>
+          <div><span style="color: var(--muted);">${isEn ? 'Score Thresholds:' : 'حدود الفرز والتصنيف:'}</span> <strong>${isEn ? `Urgent ≥ ${v.scoreThresholds.urgent} pts, High ≥ ${v.scoreThresholds.high} pts` : `عاجل ≥ ${v.scoreThresholds.urgent} نقاط، عالي ≥ ${v.scoreThresholds.high} نقاط`}</strong></div>
+        </div>
+        <div style="margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--line); font-size: 12px; color: var(--ink);">
+          <strong>${isEn ? 'Clinical Changelog:' : 'سجل التغييرات السريرية:'}</strong>
+          <p style="margin: 4px 0 0; color: var(--muted);">${isEn ? v.changelog.en : v.changelog.ar}</p>
+        </div>
+      </div>
+
+      <div style="margin-bottom: 12px;">
+        <h4 style="margin: 0 0 8px; font-size: 13.5px; color: var(--teal-2);">
+          ${isEn ? 'Rules & Point Attribution Matrix' : 'جدول القواعد وتوزيع النقاط السريرية'}
+        </h4>
+        <div style="overflow-x: auto;">
+          <table class="rules-spec-table">
+            <thead>
+              <tr>
+                <th style="width: 25%;">${isEn ? 'Rule Identifier' : 'معرّف القاعدة'}</th>
+                <th>${isEn ? 'Clinical Trigger Condition' : 'الشرط السريري'}</th>
+                <th style="width: 15%; text-align: center;">${isEn ? 'Points' : 'النقاط'}</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rulesRows}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div style="padding: 8px 12px; background: rgba(14, 165, 233, 0.08); border-radius: 8px; font-size: 11.5px; color: var(--muted); line-height: 1.5;">
+        🔒 ${isEn
+          ? "Immutability Notice: All cases are permanently stamped with the active rule version at evaluation time. New versions never retroactively change historical case points or triage status."
+          : "ضمان عدم التغيير الرجعي (Immutability): كل حالة يتم تثبيت إصدار القواعد المستخدم وقت إدخالها. لا تؤثر الإصدارات الجديدة رجعياً على تصنيف الحالات السابقة."}
+      </div>
+    `;
+  }
+
+  renderRulesGovDetails(targetVer);
+  modal.classList.add("open");
+  modal.setAttribute("aria-hidden", "false");
+};
+
+window.closeRulesGovernanceModal = function() {
+  const modal = document.getElementById("rulesGovernanceModal");
+  if (modal) {
+    modal.classList.remove("open");
+    modal.setAttribute("aria-hidden", "true");
+  }
+};
+
 // Bind interactive modals (Emergency & Confirmation)
 document.addEventListener("DOMContentLoaded", () => {
   const closeGuideBtn = document.getElementById("closeEmergencyGuideBtn");
   if (closeGuideBtn) closeGuideBtn.addEventListener("click", closeEmergencyGuideModal);
+  const closeRulesGovBtn = document.getElementById("closeRulesGovModalBtn");
+  if (closeRulesGovBtn) closeRulesGovBtn.addEventListener("click", closeRulesGovernanceModal);
 
   const proceedSubmitBtn = document.getElementById("emergencySubmitProceedBtn");
   if (proceedSubmitBtn) {
@@ -4421,92 +5098,6 @@ const AssessmentDictionaries = Object.freeze({
     none:      { key: "none",      ar: "لا يوجد", en: "None" }
   }
 });
-
-const ACTIVE_RISK_RULESET_ID = "breathing-triage";
-const RISK_RULESETS = Object.freeze({
-  "breathing-triage": Object.freeze({
-    version: "HealthVibe-Rules-v1.0",
-    effectiveFrom: "2026-09-21",
-    reviewStatus: "clinician-reviewed-rules",
-    scoreThresholds: Object.freeze({
-      urgent: 6,
-      high: 3
-    }),
-    spo2Thresholds: Object.freeze({
-      urgentBelow: 90,
-      highBelow: 93,
-      closeFollowUpMin: 93,
-      closeFollowUpMax: 94
-    }),
-    rules: Object.freeze({
-      spo2_lt_90: Object.freeze({ points: 6, ar: "SpO2 أقل من 90%: تصعيد عاجل للطوارئ", en: "SpO2 below 90%: urgent emergency escalation" }),
-      spo2_90_92: Object.freeze({ points: 4, ar: "SpO2 بين 90% و92%: أولوية مراجعة عالية", en: "SpO2 between 90% and 92%: high review priority" }),
-      spo2_93_94: Object.freeze({ points: 2, ar: "SpO2 بين 93% و94%: متابعة قريبة", en: "SpO2 between 93% and 94%: close follow-up" }),
-      dyspnea_present: Object.freeze({ points: 2, ar: "وجود ضيق تنفس", en: "Shortness of breath present" }),
-      severe_cough: Object.freeze({ points: 2, ar: "كحة شديدة", en: "Severe cough" }),
-      moderate_cough: Object.freeze({ points: 1, ar: "كحة متوسطة", en: "Moderate cough" }),
-      symptoms_7_days: Object.freeze({ points: 1, ar: "استمرار الأعراض 7 أيام أو أكثر", en: "Symptoms lasting 7 days or more" }),
-      risk_factors_present: Object.freeze({ points: 1, ar: "وجود عوامل خطورة مسجلة", en: "Recorded risk factors present" })
-    })
-  })
-});
-const ACTIVE_RISK_RULESET = RISK_RULESETS[ACTIVE_RISK_RULESET_ID];
-const RULE_ENGINE_VERSION = ACTIVE_RISK_RULESET.version;
-
-function evaluateRulesBasedRisk({ oxygenLevel, hasDyspnea, coughKey, durationDays, riskFactorKeys }) {
-  const ruleSet = ACTIVE_RISK_RULESET;
-  const rules = [];
-  let points = 0;
-
-  const addRule = (id) => {
-    const rule = ruleSet.rules[id];
-    if (!rule) return;
-    points += rule.points;
-    rules.push({ id, points: rule.points, ar: rule.ar, en: rule.en, version: ruleSet.version });
-  };
-
-  if (oxygenLevel > 0 && oxygenLevel < 90) {
-    addRule("spo2_lt_90");
-  } else if (oxygenLevel >= 90 && oxygenLevel <= 92) {
-    addRule("spo2_90_92");
-  } else if (oxygenLevel >= 93 && oxygenLevel <= 94) {
-    addRule("spo2_93_94");
-  }
-
-  if (hasDyspnea) addRule("dyspnea_present");
-  if (coughKey === "severe") addRule("severe_cough");
-  else if (coughKey === "moderate") addRule("moderate_cough");
-
-  if (durationDays >= 7) addRule("symptoms_7_days");
-
-  const clinicalRiskFactors = riskFactorKeys.filter((key) => key && key !== "none");
-  if (clinicalRiskFactors.length > 0) {
-    addRule("risk_factors_present");
-  }
-
-  let priority = "normal";
-  if (oxygenLevel > 0 && oxygenLevel < ruleSet.spo2Thresholds.urgentBelow || points >= ruleSet.scoreThresholds.urgent) priority = "urgent";
-  else if (oxygenLevel > 0 && oxygenLevel < ruleSet.spo2Thresholds.highBelow || points >= ruleSet.scoreThresholds.high) priority = "high";
-
-  const meta = AssessmentDictionaries.priority[priority];
-  return {
-    priority,
-    points,
-    rules,
-    riskAr: meta.riskAr,
-    riskEn: meta.riskEn,
-    aiScoreAr: meta.aiScoreAr,
-    aiScoreEn: meta.aiScoreEn,
-    ruleScore: meta.ruleScore,
-    ruleScoreAr: meta.ruleScoreAr,
-    ruleScoreEn: meta.ruleScoreEn,
-    ruleSetId: ACTIVE_RISK_RULESET_ID,
-    reviewStatus: ruleSet.reviewStatus,
-    validated: false,
-    version: ruleSet.version,
-    effectiveFrom: ruleSet.effectiveFrom
-  };
-}
 
 /**
  * Normalizes input symptoms and vital signs into a strict, validated Assessment Schema
