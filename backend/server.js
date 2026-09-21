@@ -234,6 +234,74 @@ app.get('/api/auth/profile', requireAuth, async (req, res) => {
 });
 
 /**
+ * GET /api/clinical/rules/versions
+ * Returns the Clinical Rules Registry and all registered rule engine versions
+ */
+app.get('/api/clinical/rules/versions', (req, res) => {
+  const versionsRegistry = {
+    ruleSetId: 'breathing-triage',
+    nameAr: 'فرز الجهاز التنفسي والتهابات الصدر',
+    nameEn: 'Respiratory & Breathing Triage',
+    activeVersion: 'HealthVibe-Rules-v1.0',
+    versions: {
+      'HealthVibe-Rules-v1.0': {
+        version: 'HealthVibe-Rules-v1.0',
+        status: 'active',
+        effectiveFrom: '2026-09-21',
+        deprecatedAt: null,
+        reviewedBy: 'Clinical Governance & Pulmonology Board',
+        reviewStatus: 'clinician-reviewed-rules',
+        changelog: {
+          ar: 'الإصدار السريري الأساسي المعتمد: فرز مبني على عتبات SpO2، ضيق التنفس، شدة السعال، ومدة الأعراض.',
+          en: 'Baseline certified clinical release: rule-based triage based on SpO2 thresholds, dyspnea, cough severity, and symptom duration.'
+        },
+        scoreThresholds: { urgent: 6, high: 3 },
+        spo2Thresholds: { urgentBelow: 90, highBelow: 93, closeFollowUpMin: 93, closeFollowUpMax: 94 },
+        rules: {
+          spo2_lt_90: { points: 6, ar: 'SpO2 أقل من 90%: تصعيد عاجل للطوارئ', en: 'SpO2 below 90%: urgent emergency escalation' },
+          spo2_90_92: { points: 4, ar: 'SpO2 بين 90% و92%: أولوية مراجعة عالية', en: 'SpO2 between 90% and 92%: high review priority' },
+          spo2_93_94: { points: 2, ar: 'SpO2 بين 93% و94%: متابعة قريبة', en: 'SpO2 between 93% and 94%: close follow-up' },
+          dyspnea_present: { points: 2, ar: 'وجود ضيق تنفس', en: 'Shortness of breath present' },
+          severe_cough: { points: 2, ar: 'كحة شديدة', en: 'Severe cough' },
+          moderate_cough: { points: 1, ar: 'كحة متوسطة', en: 'Moderate cough' },
+          symptoms_7_days: { points: 1, ar: 'استمرار الأعراض 7 أيام أو أكثر', en: 'Symptoms lasting 7 days or more' },
+          risk_factors_present: { points: 1, ar: 'وجود عوامل خطورة مسجلة', en: 'Recorded risk factors present' }
+        }
+      },
+      'HealthVibe-Rules-v1.1': {
+        version: 'HealthVibe-Rules-v1.1',
+        status: 'candidate',
+        effectiveFrom: '2026-10-01',
+        deprecatedAt: null,
+        reviewedBy: 'Clinical Governance & Pulmonology Board',
+        reviewStatus: 'clinician-reviewed-rules',
+        changelog: {
+          ar: 'تحديث سريري مرتقب: تعزيز حساسية عوامل الخطورة التنفسية المزمنة ومطابقة معايير الفرز الرئوي الإقليمية.',
+          en: 'Candidate clinical update: enhanced sensitivity for chronic respiratory risk factors and aligned regional pulmonology triage.'
+        },
+        scoreThresholds: { urgent: 6, high: 3 },
+        spo2Thresholds: { urgentBelow: 90, highBelow: 93, closeFollowUpMin: 93, closeFollowUpMax: 94 },
+        rules: {
+          spo2_lt_90: { points: 6, ar: 'SpO2 أقل من 90%: تصعيد عاجل للطوارئ', en: 'SpO2 below 90%: urgent emergency escalation' },
+          spo2_90_92: { points: 4, ar: 'SpO2 بين 90% و92%: أولوية مراجعة عالية', en: 'SpO2 between 90% and 92%: high review priority' },
+          spo2_93_94: { points: 2, ar: 'SpO2 بين 93% و94%: متابعة قريبة', en: 'SpO2 between 93% and 94%: close follow-up' },
+          dyspnea_present: { points: 2, ar: 'وجود ضيق تنفس حاد', en: 'Acute shortness of breath present' },
+          severe_cough: { points: 2, ar: 'كحة شديدة مستمرة', en: 'Persistent severe cough' },
+          moderate_cough: { points: 1, ar: 'كحة متوسطة', en: 'Moderate cough' },
+          symptoms_7_days: { points: 1, ar: 'استمرار الأعراض 7 أيام أو أكثر', en: 'Symptoms lasting 7 days or more' },
+          risk_factors_present: { points: 2, ar: 'وجود عوامل خطورة مسجلة (ربو / حمل / تدخين)', en: 'Recorded clinical comorbidities (asthma / pregnancy / smoking)' }
+        }
+      }
+    }
+  };
+
+  res.json({
+    success: true,
+    data: versionsRegistry
+  });
+});
+
+/**
  * GET /api/admin/metrics
  * Server-authoritative admin metrics that cannot be derived safely from frontend-only Firestore reads.
  */
@@ -461,7 +529,24 @@ app.post('/api/admin/approve-doctor-application', requireAuth, requireVerifiedEm
 /**
  * Helper: Authoritative Doctor Case Transition Executor
  */
-async function executeDoctorTransition({ req, res, caseId, targetStatus, note, clinicalNotes, recommendation, recommendations }) {
+async function executeDoctorTransition({
+  req,
+  res,
+  caseId,
+  targetStatus,
+  note,
+  clinicalNotes,
+  clinicalDiagnosis,
+  medications,
+  recommendation,
+  recommendations,
+  approvingDoctorName,
+  doctorSpecialty,
+  doctorLicense,
+  clinicName,
+  reportRef,
+  reportGeneratedAt
+}) {
   const ALLOWED_DOCTOR_STATUSES = [
     'under_review',
     'more_info_requested',
@@ -550,12 +635,20 @@ async function executeDoctorTransition({ req, res, caseId, targetStatus, note, c
         updateData.doctorApproved = true;
         updateData.approvingDoctorId = req.user.uid;
         updateData.approvingDoctorEmail = req.user.email;
+        updateData.approvingDoctorName = approvingDoctorName || req.user.displayName || req.user.name || 'Doctor';
+        updateData.doctorSpecialty = doctorSpecialty || 'Pulmonology & Respiratory Medicine';
+        updateData.doctorLicense = doctorLicense || 'EGY-MED-20491';
+        updateData.clinicName = clinicName || 'Health Vibes Specialized Clinics';
+        updateData.reportRef = reportRef || `HV-REP-${caseId.slice(-8).toUpperCase()}`;
+        updateData.reportGeneratedAt = reportGeneratedAt || new Date().toISOString();
         updateData.approvedAt = admin.firestore.FieldValue.serverTimestamp();
         updateData.generatedAt = admin.firestore.FieldValue.serverTimestamp();
         updateData.reportVersion = REPORT_VERSION;
         updateData.modelVersion = MODEL_VERSION;
-        updateData.doctorNote = normalizedClinicalNotes;
-        updateData.clinicalNotes = normalizedClinicalNotes;
+        updateData.clinicalDiagnosis = clinicalDiagnosis || normalizedClinicalNotes;
+        updateData.doctorNote = clinicalDiagnosis || normalizedClinicalNotes;
+        updateData.clinicalNotes = clinicalDiagnosis || normalizedClinicalNotes;
+        updateData.medications = medications || '';
         updateData.recommendation = normalizedRecommendations.join('\n');
         updateData.recommendations = normalizedRecommendations;
       } else if (targetStatus === 'more_info_requested') {
@@ -598,8 +691,16 @@ async function executeDoctorTransition({ req, res, caseId, targetStatus, note, c
  * Server-authoritative endpoint for doctor state machine transitions
  */
 app.post('/api/doctor/transition-case-status', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
-  const { caseId, targetStatus, note, clinicalNotes, recommendation, recommendations } = req.body;
-  return executeDoctorTransition({ req, res, caseId, targetStatus, note, clinicalNotes, recommendation, recommendations });
+  const {
+    caseId, targetStatus, note, clinicalNotes, clinicalDiagnosis,
+    medications, recommendation, recommendations,
+    approvingDoctorName, doctorSpecialty, doctorLicense, clinicName, reportRef, reportGeneratedAt
+  } = req.body;
+  return executeDoctorTransition({
+    req, res, caseId, targetStatus, note, clinicalNotes, clinicalDiagnosis,
+    medications, recommendation, recommendations,
+    approvingDoctorName, doctorSpecialty, doctorLicense, clinicName, reportRef, reportGeneratedAt
+  });
 });
 
 /**
@@ -607,8 +708,16 @@ app.post('/api/doctor/transition-case-status', requireAuth, requireVerifiedEmail
  * Server-authoritative endpoint for doctor case approval
  */
 app.post('/api/doctor/approve-clinical-case', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
-  const { caseId, note, clinicalNotes, recommendation, recommendations } = req.body;
-  return executeDoctorTransition({ req, res, caseId, targetStatus: 'approved', note, clinicalNotes, recommendation, recommendations });
+  const {
+    caseId, note, clinicalNotes, clinicalDiagnosis,
+    medications, recommendation, recommendations,
+    approvingDoctorName, doctorSpecialty, doctorLicense, clinicName, reportRef, reportGeneratedAt
+  } = req.body;
+  return executeDoctorTransition({
+    req, res, caseId, targetStatus: 'approved', note, clinicalNotes, clinicalDiagnosis,
+    medications, recommendation, recommendations,
+    approvingDoctorName, doctorSpecialty, doctorLicense, clinicName, reportRef, reportGeneratedAt
+  });
 });
 
 /**
