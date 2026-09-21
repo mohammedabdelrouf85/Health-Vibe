@@ -1,0 +1,75 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function userDoc(uid) {
+      return firestore.get(/databases/(default)/documents/users/$(uid));
+    }
+
+    function appDoc(appId) {
+      return firestore.get(/databases/(default)/documents/doctor_applications/$(appId));
+    }
+
+    function appExists(appId) {
+      return firestore.exists(/databases/(default)/documents/doctor_applications/$(appId));
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+             firestore.exists(/databases/(default)/documents/users/$(request.auth.uid)) &&
+             (
+               userDoc(request.auth.uid).data.role in ['clinic_admin', 'super_admin', 'admin', 'owner'] ||
+               userDoc(request.auth.uid).data.isOwner == true
+             );
+    }
+
+    function ownerCanWriteDoctorApplicationFile(userId, appId) {
+      return isOwner(userId) &&
+             appId == 'app_' + userId &&
+             (
+               !appExists(appId) ||
+               (
+                 appDoc(appId).data.userId == userId &&
+                 appDoc(appId).data.status in ['pending', 'cancelled']
+               )
+             );
+    }
+
+    function adminCanReadDoctorApplicationFile(userId, appId) {
+      return isAdmin() &&
+             appExists(appId) &&
+             appDoc(appId).data.userId == userId &&
+             appDoc(appId).data.status in ['pending', 'approved', 'rejected'];
+    }
+
+    function isAllowedDoctorApplicationFile() {
+      return request.resource != null &&
+             request.resource.size <= 10 * 1024 * 1024 &&
+             request.resource.contentType in [
+               'application/pdf',
+               'image/jpeg',
+               'image/png',
+               'image/webp'
+             ];
+    }
+
+    match /doctor_applications/{userId}/{appId}/{fileName} {
+      allow read: if isOwner(userId) || adminCanReadDoctorApplicationFile(userId, appId);
+      allow create, update: if ownerCanWriteDoctorApplicationFile(userId, appId) &&
+                            isAllowedDoctorApplicationFile();
+      allow delete: if ownerCanWriteDoctorApplicationFile(userId, appId);
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

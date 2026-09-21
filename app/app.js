@@ -837,6 +837,7 @@ if (!firebase.apps || !firebase.apps.length) {
 }
 const db = firebase.firestore();
 const auth = firebase.auth();
+const storage = firebase.storage();
 const googleProvider = new firebase.auth.GoogleAuthProvider();
 const API_BASE_URL = (runtimeConfig.apiBaseUrl || "").replace(/\/$/, "");
 
@@ -3125,11 +3126,78 @@ async function renderPatientHistory() {
 
 // --- Doctor Account Lifecycle: Application -> Verification -> Approval ---
 let selectedDoctorAppFile = null;
+const DOCTOR_APP_ALLOWED_FILE_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
+const DOCTOR_APP_MAX_FILE_SIZE = 10 * 1024 * 1024;
+
+function getSafeStorageFileName(fileName) {
+  const cleaned = String(fileName || "doctor-license")
+    .normalize("NFKD")
+    .replace(/[^\w.\-]+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return cleaned || "doctor-license";
+}
+
+function escapeHtmlAttr(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function validateDoctorApplicationFile(file) {
+  const isEn = currentLanguage === "en";
+  if (!file) {
+    throw new Error(isEn ? "Please attach your syndicate ID or medical license document." : "يرجى إرفاق صورة كارنيه النقابة أو ترخيص مزاولة المهنة.");
+  }
+  if (!DOCTOR_APP_ALLOWED_FILE_TYPES.includes(file.type)) {
+    throw new Error(isEn ? "Unsupported file type. Please upload a PDF, JPG, PNG, or WEBP file." : "نوع الملف غير مدعوم. يرجى رفع PDF أو JPG أو PNG أو WEBP.");
+  }
+  if (file.size > DOCTOR_APP_MAX_FILE_SIZE) {
+    throw new Error(isEn ? "File is too large. Maximum allowed size is 10MB." : "حجم الملف كبير جداً. الحد الأقصى المسموح به 10 ميجابايت.");
+  }
+}
+
+async function uploadDoctorApplicationDocument({ user, appId, file }) {
+  validateDoctorApplicationFile(file);
+  const safeName = getSafeStorageFileName(file.name);
+  const storagePath = `doctor_applications/${user.uid}/${appId}/${Date.now()}_${safeName}`;
+  const fileRef = storage.ref().child(storagePath);
+  const snapshot = await fileRef.put(file, {
+    contentType: file.type,
+    customMetadata: {
+      appId,
+      userId: user.uid,
+      uploadedFor: "doctor_application"
+    }
+  });
+  const downloadURL = await snapshot.ref.getDownloadURL();
+  return {
+    docName: file.name,
+    docSize: file.size,
+    docContentType: file.type,
+    storagePath,
+    downloadURL
+  };
+}
 
 function onDoctorFilePicked(input) {
   const label = document.getElementById("doctorAppFileName");
   if (input.files && input.files[0]) {
-    selectedDoctorAppFile = input.files[0];
+    try {
+      validateDoctorApplicationFile(input.files[0]);
+      selectedDoctorAppFile = input.files[0];
+    } catch (error) {
+      selectedDoctorAppFile = null;
+      input.value = "";
+      showToast(error.message);
+      if (label) {
+        label.textContent = currentLanguage === "en" ? "Click to select syndicate document or license photo" : "اضغط لاختيار ملف المستند أو صورة الترخيص";
+        label.style.color = "var(--ink)";
+      }
+      return;
+    }
     if (label) {
       label.textContent = "📄 " + selectedDoctorAppFile.name;
       label.style.color = "var(--teal)";
@@ -3170,20 +3238,34 @@ async function handleDoctorAppSubmit(e) {
   const license = document.getElementById("doctorAppLicense")?.value.trim();
   const specialty = document.getElementById("doctorAppSpecialty")?.value;
   const clinic = document.getElementById("doctorAppClinic")?.value.trim();
-  const fileName = selectedDoctorAppFile ? selectedDoctorAppFile.name : "syndicate_license.pdf";
 
   if (!name || !license || !specialty || !clinic) {
     showToast(currentLanguage === "en" ? "Please fill in all required fields." : "يرجى ملء جميع الحقول المطلوبة.");
     return;
   }
 
+  try {
+    validateDoctorApplicationFile(selectedDoctorAppFile);
+  } catch (error) {
+    showToast(error.message);
+    return;
+  }
+
   const btn = document.getElementById("submitDoctorAppBtn");
   const text = document.getElementById("submitDoctorAppText");
   if (btn) btn.disabled = true;
-  if (text) text.textContent = currentLanguage === "en" ? "Submitting application..." : "جاري إرسال الطلب...";
+  if (text) text.textContent = currentLanguage === "en" ? "Uploading document..." : "جاري رفع المستند...";
 
+  let uploadedDocument = null;
   try {
     const appId = "app_" + user.uid;
+    uploadedDocument = await uploadDoctorApplicationDocument({
+      user,
+      appId,
+      file: selectedDoctorAppFile
+    });
+    if (text) text.textContent = currentLanguage === "en" ? "Submitting application..." : "جاري إرسال الطلب...";
+
     const appData = {
       id: appId,
       userId: user.uid,
@@ -3192,7 +3274,11 @@ async function handleDoctorAppSubmit(e) {
       licenseNumber: license,
       specialty: specialty,
       clinic: clinic,
-      docName: fileName,
+      docName: uploadedDocument.docName,
+      docSize: uploadedDocument.docSize,
+      docContentType: uploadedDocument.docContentType,
+      storagePath: uploadedDocument.storagePath,
+      downloadURL: uploadedDocument.downloadURL,
       status: "pending",
       appliedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
@@ -3206,15 +3292,25 @@ async function handleDoctorAppSubmit(e) {
       licenseNumber: license,
       specialty: specialty,
       clinic: clinic,
-      doctorAppDocName: fileName,
+      doctorAppDocName: uploadedDocument.docName,
+      doctorAppDocSize: uploadedDocument.docSize,
+      doctorAppDocContentType: uploadedDocument.docContentType,
+      doctorAppDocStoragePath: uploadedDocument.storagePath,
+      doctorAppDocDownloadURL: uploadedDocument.downloadURL,
       doctorAppDate: new Date().toLocaleDateString(currentLanguage === "en" ? "en-US" : "ar-EG")
     }, { merge: true });
 
     selectedRole = ROLES.DOCTOR_PENDING;
+    selectedDoctorAppFile = null;
     updateNavVisibility();
     showToast(currentLanguage === "en" ? "🎉 Application submitted! Under review by administration." : "🎉 تم إرسال طلب التوثيق بنجاح! طلبك الآن قيد المراجعة والتدقيق الإداري.");
     renderVerificationScreen();
   } catch (err) {
+    if (uploadedDocument?.storagePath) {
+      storage.ref().child(uploadedDocument.storagePath).delete().catch((deleteError) => {
+        console.warn("Could not clean up uploaded doctor application document after submission failure:", deleteError);
+      });
+    }
     console.error("Doctor application error:", err);
     showToast(getAuthErrorMessage(err));
   } finally {
@@ -3330,7 +3426,7 @@ async function renderVerificationScreen() {
               <div><span>${isEn ? "Syndicate License #" : "رقم ترخيص النقابة"}</span><strong style="color: var(--teal);">${userData.licenseNumber || "--"}</strong></div>
               <div><span>${isEn ? "Specialty" : "التخصص الطبي"}</span><strong>${userData.specialty || "--"}</strong></div>
               <div><span>${isEn ? "Hospital / Clinic" : "الجهة الطبية"}</span><strong>${userData.clinic || "--"}</strong></div>
-              <div><span>${isEn ? "Attached File" : "المستند المرفق"}</span><strong>📄 ${userData.doctorAppDocName || "syndicate_license.pdf"}</strong></div>
+              <div><span>${isEn ? "Attached File" : "المستند المرفق"}</span><strong>📄 ${userData.doctorAppDocDownloadURL ? `<a href="${escapeHtmlAttr(userData.doctorAppDocDownloadURL)}" target="_blank" rel="noopener">${escapeHtmlAttr(userData.doctorAppDocName || "syndicate_license.pdf")}</a>` : escapeHtmlAttr(userData.doctorAppDocName || "syndicate_license.pdf")}</strong></div>
               <div><span>${isEn ? "Submission Date" : "تاريخ التقديم"}</span><strong>${appDate}</strong></div>
             </div>
           </div>
@@ -3499,7 +3595,7 @@ async function renderAdminApplications() {
           <div class="summary-list" style="margin: 4px 0;">
             <div><span>${isEn ? "Syndicate License #" : "رقم ترخيص النقابة"}</span><strong style="color: var(--teal); font-family: monospace; font-size: 14px;">${app.licenseNumber}</strong></div>
             <div><span>${isEn ? "Specialty" : "التخصص الطبي"}</span><strong>${app.specialty}</strong></div>
-            <div><span>${isEn ? "Attached License" : "المستند المرفق"}</span><strong>📄 ${app.docName || 'syndicate_card.pdf'}</strong></div>
+            <div><span>${isEn ? "Attached License" : "المستند المرفق"}</span><strong>📄 ${app.downloadURL ? `<a href="${escapeHtmlAttr(app.downloadURL)}" target="_blank" rel="noopener">${escapeHtmlAttr(app.docName || 'syndicate_card.pdf')}</a>` : escapeHtmlAttr(app.docName || 'syndicate_card.pdf')}</strong></div>
             <div><span>${isEn ? "Application Date" : "تاريخ التقديم"}</span><strong>${dateStr}</strong></div>
           </div>
 
@@ -4318,39 +4414,71 @@ const AssessmentDictionaries = Object.freeze({
   }
 });
 
-const RULE_ENGINE_VERSION = "HealthVibe-Rules-v1.0";
+const ACTIVE_RISK_RULESET_ID = "breathing-triage";
+const RISK_RULESETS = Object.freeze({
+  "breathing-triage": Object.freeze({
+    version: "HealthVibe-Rules-v1.0",
+    effectiveFrom: "2026-09-21",
+    reviewStatus: "clinician-reviewed-rules",
+    scoreThresholds: Object.freeze({
+      urgent: 6,
+      high: 3
+    }),
+    spo2Thresholds: Object.freeze({
+      urgentBelow: 90,
+      highBelow: 93,
+      closeFollowUpMin: 93,
+      closeFollowUpMax: 94
+    }),
+    rules: Object.freeze({
+      spo2_lt_90: Object.freeze({ points: 6, ar: "SpO2 أقل من 90%: تصعيد عاجل للطوارئ", en: "SpO2 below 90%: urgent emergency escalation" }),
+      spo2_90_92: Object.freeze({ points: 4, ar: "SpO2 بين 90% و92%: أولوية مراجعة عالية", en: "SpO2 between 90% and 92%: high review priority" }),
+      spo2_93_94: Object.freeze({ points: 2, ar: "SpO2 بين 93% و94%: متابعة قريبة", en: "SpO2 between 93% and 94%: close follow-up" }),
+      dyspnea_present: Object.freeze({ points: 2, ar: "وجود ضيق تنفس", en: "Shortness of breath present" }),
+      severe_cough: Object.freeze({ points: 2, ar: "كحة شديدة", en: "Severe cough" }),
+      moderate_cough: Object.freeze({ points: 1, ar: "كحة متوسطة", en: "Moderate cough" }),
+      symptoms_7_days: Object.freeze({ points: 1, ar: "استمرار الأعراض 7 أيام أو أكثر", en: "Symptoms lasting 7 days or more" }),
+      risk_factors_present: Object.freeze({ points: 1, ar: "وجود عوامل خطورة مسجلة", en: "Recorded risk factors present" })
+    })
+  })
+});
+const ACTIVE_RISK_RULESET = RISK_RULESETS[ACTIVE_RISK_RULESET_ID];
+const RULE_ENGINE_VERSION = ACTIVE_RISK_RULESET.version;
 
 function evaluateRulesBasedRisk({ oxygenLevel, hasDyspnea, coughKey, durationDays, riskFactorKeys }) {
+  const ruleSet = ACTIVE_RISK_RULESET;
   const rules = [];
   let points = 0;
 
-  const addRule = (id, pointsAdded, ar, en) => {
-    points += pointsAdded;
-    rules.push({ id, points: pointsAdded, ar, en });
+  const addRule = (id) => {
+    const rule = ruleSet.rules[id];
+    if (!rule) return;
+    points += rule.points;
+    rules.push({ id, points: rule.points, ar: rule.ar, en: rule.en, version: ruleSet.version });
   };
 
   if (oxygenLevel > 0 && oxygenLevel < 90) {
-    addRule("spo2_lt_90", 6, "SpO2 أقل من 90%: تصعيد عاجل للطوارئ", "SpO2 below 90%: urgent emergency escalation");
+    addRule("spo2_lt_90");
   } else if (oxygenLevel >= 90 && oxygenLevel <= 92) {
-    addRule("spo2_90_92", 4, "SpO2 بين 90% و92%: أولوية مراجعة عالية", "SpO2 between 90% and 92%: high review priority");
+    addRule("spo2_90_92");
   } else if (oxygenLevel >= 93 && oxygenLevel <= 94) {
-    addRule("spo2_93_94", 2, "SpO2 بين 93% و94%: متابعة قريبة", "SpO2 between 93% and 94%: close follow-up");
+    addRule("spo2_93_94");
   }
 
-  if (hasDyspnea) addRule("dyspnea_present", 2, "وجود ضيق تنفس", "Shortness of breath present");
-  if (coughKey === "severe") addRule("severe_cough", 2, "كحة شديدة", "Severe cough");
-  else if (coughKey === "moderate") addRule("moderate_cough", 1, "كحة متوسطة", "Moderate cough");
+  if (hasDyspnea) addRule("dyspnea_present");
+  if (coughKey === "severe") addRule("severe_cough");
+  else if (coughKey === "moderate") addRule("moderate_cough");
 
-  if (durationDays >= 7) addRule("symptoms_7_days", 1, "استمرار الأعراض 7 أيام أو أكثر", "Symptoms lasting 7 days or more");
+  if (durationDays >= 7) addRule("symptoms_7_days");
 
   const clinicalRiskFactors = riskFactorKeys.filter((key) => key && key !== "none");
   if (clinicalRiskFactors.length > 0) {
-    addRule("risk_factors_present", 1, "وجود عوامل خطورة مسجلة", "Recorded risk factors present");
+    addRule("risk_factors_present");
   }
 
   let priority = "normal";
-  if (oxygenLevel > 0 && oxygenLevel < 90 || points >= 6) priority = "urgent";
-  else if (oxygenLevel > 0 && oxygenLevel < 93 || points >= 3) priority = "high";
+  if (oxygenLevel > 0 && oxygenLevel < ruleSet.spo2Thresholds.urgentBelow || points >= ruleSet.scoreThresholds.urgent) priority = "urgent";
+  else if (oxygenLevel > 0 && oxygenLevel < ruleSet.spo2Thresholds.highBelow || points >= ruleSet.scoreThresholds.high) priority = "high";
 
   const meta = AssessmentDictionaries.priority[priority];
   return {
@@ -4364,9 +4492,11 @@ function evaluateRulesBasedRisk({ oxygenLevel, hasDyspnea, coughKey, durationDay
     ruleScore: meta.ruleScore,
     ruleScoreAr: meta.ruleScoreAr,
     ruleScoreEn: meta.ruleScoreEn,
-    reviewStatus: "clinician-reviewed-rules",
+    ruleSetId: ACTIVE_RISK_RULESET_ID,
+    reviewStatus: ruleSet.reviewStatus,
     validated: false,
-    version: RULE_ENGINE_VERSION
+    version: ruleSet.version,
+    effectiveFrom: ruleSet.effectiveFrom
   };
 }
 
@@ -4505,7 +4635,9 @@ function buildAssessmentModel({
         ruleScoreLabelEn: prioMeta.ruleScoreEn,
         ruleScorePoints: riskEvaluation.points,
         triggeredRules: riskEvaluation.rules,
+        ruleSetId: riskEvaluation.ruleSetId,
         ruleEngineVersion: riskEvaluation.version,
+        ruleEngineEffectiveFrom: riskEvaluation.effectiveFrom,
         ruleEngineReviewStatus: riskEvaluation.reviewStatus,
         ruleScoreValidated: false,
         confidence: "not-validated-rule-score",
@@ -4535,7 +4667,9 @@ function buildAssessmentModel({
     ruleScoreLabelEn: prioMeta.ruleScoreEn,
     ruleScorePoints: riskEvaluation.points,
     triggeredRules: riskEvaluation.rules,
+    ruleSetId: riskEvaluation.ruleSetId,
     ruleEngineVersion: riskEvaluation.version,
+    ruleEngineEffectiveFrom: riskEvaluation.effectiveFrom,
     ruleEngineReviewStatus: riskEvaluation.reviewStatus,
     ruleScoreValidated: false,
     confidence: "not-validated-rule-score",

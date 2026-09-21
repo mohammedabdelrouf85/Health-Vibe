@@ -64,10 +64,13 @@
           "id": "moderate_cough",
           "points": 1,
           "ar": "كحة متوسطة",
-          "en": "Moderate cough"
+          "en": "Moderate cough",
+          "version": "HealthVibe-Rules-v1.0"
         }
       ],
+      "ruleSetId": "breathing-triage",
       "ruleEngineVersion": "HealthVibe-Rules-v1.0",
+      "ruleEngineEffectiveFrom": "2026-09-21",
       "ruleEngineReviewStatus": "clinician-reviewed-rules",
       "ruleScoreValidated": false,
       "confidence": "not-validated-rule-score",
@@ -99,10 +102,13 @@
       "id": "moderate_cough",
       "points": 1,
       "ar": "كحة متوسطة",
-      "en": "Moderate cough"
+      "en": "Moderate cough",
+      "version": "HealthVibe-Rules-v1.0"
     }
   ],
+  "ruleSetId": "breathing-triage",
   "ruleEngineVersion": "HealthVibe-Rules-v1.0",
+  "ruleEngineEffectiveFrom": "2026-09-21",
   "ruleEngineReviewStatus": "clinician-reviewed-rules",
   "ruleScoreValidated": false,
   "confidence": "not-validated-rule-score",
@@ -178,14 +184,22 @@
   * `"normal"`: أكسجين 93% فأعلى، فحص اعتيادي تحت المراجعة.
 * `ruleScore`: مؤشر قواعد إرشادي مبني على شروط ثابتة، وليس ثقة نموذج مُتحقق منها سريرياً.
 * `ruleScorePoints`: مجموع نقاط القواعد المفعلة داخل محرك الفرز.
-* `triggeredRules`: القواعد السريرية التي تسببت في التصنيف، مع النص العربي والإنجليزي والنقاط.
+* `triggeredRules`: القواعد السريرية التي تسببت في التصنيف، مع النص العربي والإنجليزي والنقاط وإصدار القاعدة وقت التقييم.
+* `ruleSetId`: معرف مجموعة القواعد المستخدمة، مثل `"breathing-triage"`، لتمييز مسارات فرز مختلفة مستقبلاً.
 * `ruleEngineVersion`: إصدار محرك القواعد المستخدم.
+* `ruleEngineEffectiveFrom`: تاريخ بدء العمل بهذه النسخة من القواعد.
 * `ruleEngineReviewStatus`: يوضح أن القواعد مصممة لتكون قابلة لمراجعة الطبيب (`"clinician-reviewed-rules"`)، وليست نموذجاً إحصائياً مُتحققاً.
 * `ruleScoreValidated`: قيمة ثابتة `false` حتى يتم اعتماد تحقق سريري رسمي لهذا المؤشر.
 * `confidence`: حقل توافق قديم، ويجب ألا يحتوي نسبة مئوية أو يُعرض كثقة طبية؛ قيمته الحالية `"not-validated-rule-score"`.
 * `modelVersion`: إصدار خوارزمية التقييم.
 
-#### قواعد محرك الخطورة v1.0
+#### سياسة Versioning لقواعد الخطورة
+* أي تغيير في النقاط، العتبات، تعريفات القواعد، أو منطق التصنيف النهائي يجب أن يصدر كـ `ruleEngineVersion` جديد.
+* الحالات القديمة تحتفظ بـ `ruleSetId` و`ruleEngineVersion` و`ruleEngineEffectiveFrom` داخل الوثيقة حتى يمكن تفسير القرار لاحقاً بنفس القواعد التي أنتجته.
+* `triggeredRules[].version` يسجل إصدار كل قاعدة مفعلة وقت التقييم، ولا يعتمد على النسخة النشطة حالياً في الواجهة.
+* تغييرات النصوص التوضيحية فقط يمكن اعتبارها Patch version ما لم تغير المعنى السريري أو النقاط.
+
+#### قواعد محرك الخطورة `HealthVibe-Rules-v1.0`
 * `SpO2 < 90%`: +6 نقاط وتصنيف عاجل.
 * `SpO2 90-92%`: +4 نقاط وأولوية مراجعة عالية.
 * `SpO2 93-94%`: +2 نقاط ومتابعة قريبة.

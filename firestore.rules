@@ -103,12 +103,25 @@ service cloud.firestore {
     // - Applicant submits own application in 'pending' status with verified email.
     // - Applicant can ONLY cancel their own application without altering ownership (userId).
     // - Admin can approve, reject, or delete applications.
+    function hasValidDoctorApplicationDocument(data) {
+      return data.keys().hasAll(['docName', 'docSize', 'docContentType', 'storagePath', 'downloadURL']) &&
+             data.docName is string &&
+             data.docSize is number &&
+             data.docSize > 0 &&
+             data.docSize <= 10 * 1024 * 1024 &&
+             data.docContentType in ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'] &&
+             data.storagePath is string &&
+             data.storagePath.matches('^doctor_applications/' + request.auth.uid + '/app_' + request.auth.uid + '/.+') &&
+             data.downloadURL is string;
+    }
+
     match /doctor_applications/{appId} {
       allow read: if isAuthenticated() && (isAdmin() || resource.data.userId == request.auth.uid);
 
       allow create: if isEmailVerified() &&
                     request.resource.data.userId == request.auth.uid &&
-                    request.resource.data.status == 'pending';
+                    request.resource.data.status == 'pending' &&
+                    hasValidDoctorApplicationDocument(request.resource.data);
 
       allow update: if (isAdmin() && isEmailVerified() &&
                        resource.data.status == 'pending' &&
