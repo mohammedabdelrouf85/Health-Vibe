@@ -58,6 +58,17 @@
       "ruleScore": "low-rule-match",
       "ruleScoreLabelAr": "مؤشر قواعد منخفض",
       "ruleScoreLabelEn": "Low rule score",
+      "ruleScorePoints": 1,
+      "triggeredRules": [
+        {
+          "id": "moderate_cough",
+          "points": 1,
+          "ar": "كحة متوسطة",
+          "en": "Moderate cough"
+        }
+      ],
+      "ruleEngineVersion": "HealthVibe-Rules-v1.0",
+      "ruleEngineReviewStatus": "clinician-reviewed-rules",
       "ruleScoreValidated": false,
       "confidence": "not-validated-rule-score",
       "modelVersion": "HealthVibe-AI-v1.0"
@@ -82,6 +93,17 @@
   "ruleScore": "low-rule-match",
   "ruleScoreLabelAr": "مؤشر قواعد منخفض",
   "ruleScoreLabelEn": "Low rule score",
+  "ruleScorePoints": 1,
+  "triggeredRules": [
+    {
+      "id": "moderate_cough",
+      "points": 1,
+      "ar": "كحة متوسطة",
+      "en": "Moderate cough"
+    }
+  ],
+  "ruleEngineVersion": "HealthVibe-Rules-v1.0",
+  "ruleEngineReviewStatus": "clinician-reviewed-rules",
   "ruleScoreValidated": false,
   "confidence": "not-validated-rule-score",
   "reportVersion": "1.0.0",
@@ -155,9 +177,23 @@
   * `"high"`: أكسجين بين 90% و 92%، أولوية مراجعة عالية.
   * `"normal"`: أكسجين 93% فأعلى، فحص اعتيادي تحت المراجعة.
 * `ruleScore`: مؤشر قواعد إرشادي مبني على شروط ثابتة، وليس ثقة نموذج مُتحقق منها سريرياً.
+* `ruleScorePoints`: مجموع نقاط القواعد المفعلة داخل محرك الفرز.
+* `triggeredRules`: القواعد السريرية التي تسببت في التصنيف، مع النص العربي والإنجليزي والنقاط.
+* `ruleEngineVersion`: إصدار محرك القواعد المستخدم.
+* `ruleEngineReviewStatus`: يوضح أن القواعد مصممة لتكون قابلة لمراجعة الطبيب (`"clinician-reviewed-rules"`)، وليست نموذجاً إحصائياً مُتحققاً.
 * `ruleScoreValidated`: قيمة ثابتة `false` حتى يتم اعتماد تحقق سريري رسمي لهذا المؤشر.
 * `confidence`: حقل توافق قديم، ويجب ألا يحتوي نسبة مئوية أو يُعرض كثقة طبية؛ قيمته الحالية `"not-validated-rule-score"`.
 * `modelVersion`: إصدار خوارزمية التقييم.
+
+#### قواعد محرك الخطورة v1.0
+* `SpO2 < 90%`: +6 نقاط وتصنيف عاجل.
+* `SpO2 90-92%`: +4 نقاط وأولوية مراجعة عالية.
+* `SpO2 93-94%`: +2 نقاط ومتابعة قريبة.
+* وجود ضيق تنفس: +2 نقاط.
+* كحة شديدة: +2 نقاط، وكحة متوسطة: +1 نقطة.
+* استمرار الأعراض 7 أيام أو أكثر: +1 نقطة.
+* وجود عوامل خطورة مثل الربو، التدخين، أو الحمل: +1 نقطة.
+* التصنيف النهائي: عاجل عند `6+` نقاط أو `SpO2 < 90%`، عالي عند `3+` نقاط أو `SpO2 < 93%`، وإلا عادي.
 
 ### 5. بيانات إصدار التقرير (`Report Metadata`):
 * `reportVersion`: إصدار قالب التقرير الطبي المعتمد.

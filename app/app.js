@@ -1665,6 +1665,15 @@ async function selectDoctorCase(id) {
   const existingRecommendations = Array.isArray(c.recommendations)
     ? c.recommendations.join("\n")
     : (c.recommendation || "");
+  const triggeredRules = Array.isArray(c.triggeredRules) ? c.triggeredRules : (Array.isArray(c.assessment?.aiTriage?.triggeredRules) ? c.assessment.aiTriage.triggeredRules : []);
+  const triggeredRulesHtml = triggeredRules.length > 0
+    ? `<div style="margin-top: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2);">
+        <strong style="display: block; font-size: 12.5px; margin-bottom: 6px; color: var(--teal-2);">${isEn ? 'Triggered clinical rules' : 'القواعد السريرية التي تم تفعيلها'}</strong>
+        <ul style="margin: 0; padding-inline-start: 18px; color: var(--muted); font-size: 12.5px;">
+          ${triggeredRules.map((rule) => `<li>${isEn ? rule.en : rule.ar}</li>`).join("")}
+        </ul>
+      </div>`
+    : "";
 
   reviewPanel.innerHTML = `
     <div class="panel-head">
@@ -1681,6 +1690,7 @@ async function selectDoctorCase(id) {
       <div><span>${isEn ? 'Oxygen Level' : 'نسبة الأكسجين'}</span><strong style="${c.o2 < 90 ? 'color: #ef4444;' : ''}">${c.o2}%</strong></div>
       <div><span>${isEn ? 'Duration' : 'مدة الأعراض'}</span><strong>${isEn ? c.durationEn : c.duration}</strong></div>
     </div>
+    ${triggeredRulesHtml}
     <label style="font-weight: 800; font-size: 13px; display: block; margin-top: 14px; margin-bottom: 6px;">${isEn ? 'Doctor Clinical Notes' : 'ملاحظات الطبيب السريرية'}</label>
     <textarea id="doctorNoteInput" ${isClosed ? 'disabled' : ''} placeholder="${isEn ? 'Write the physician assessment, findings, and clinical rationale.' : 'اكتب تقييم الطبيب والنتائج السريرية وسبب القرار.'}" style="width: 100%; min-height: 90px; margin-bottom: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); padding: 12px; font-family: inherit;">${existingDoctorNote}</textarea>
     <label style="font-weight: 800; font-size: 13px; display: block; margin-bottom: 6px;">${isEn ? 'Patient Recommendations' : 'توصيات الطبيب للمريض'}</label>
@@ -4308,6 +4318,58 @@ const AssessmentDictionaries = Object.freeze({
   }
 });
 
+const RULE_ENGINE_VERSION = "HealthVibe-Rules-v1.0";
+
+function evaluateRulesBasedRisk({ oxygenLevel, hasDyspnea, coughKey, durationDays, riskFactorKeys }) {
+  const rules = [];
+  let points = 0;
+
+  const addRule = (id, pointsAdded, ar, en) => {
+    points += pointsAdded;
+    rules.push({ id, points: pointsAdded, ar, en });
+  };
+
+  if (oxygenLevel > 0 && oxygenLevel < 90) {
+    addRule("spo2_lt_90", 6, "SpO2 أقل من 90%: تصعيد عاجل للطوارئ", "SpO2 below 90%: urgent emergency escalation");
+  } else if (oxygenLevel >= 90 && oxygenLevel <= 92) {
+    addRule("spo2_90_92", 4, "SpO2 بين 90% و92%: أولوية مراجعة عالية", "SpO2 between 90% and 92%: high review priority");
+  } else if (oxygenLevel >= 93 && oxygenLevel <= 94) {
+    addRule("spo2_93_94", 2, "SpO2 بين 93% و94%: متابعة قريبة", "SpO2 between 93% and 94%: close follow-up");
+  }
+
+  if (hasDyspnea) addRule("dyspnea_present", 2, "وجود ضيق تنفس", "Shortness of breath present");
+  if (coughKey === "severe") addRule("severe_cough", 2, "كحة شديدة", "Severe cough");
+  else if (coughKey === "moderate") addRule("moderate_cough", 1, "كحة متوسطة", "Moderate cough");
+
+  if (durationDays >= 7) addRule("symptoms_7_days", 1, "استمرار الأعراض 7 أيام أو أكثر", "Symptoms lasting 7 days or more");
+
+  const clinicalRiskFactors = riskFactorKeys.filter((key) => key && key !== "none");
+  if (clinicalRiskFactors.length > 0) {
+    addRule("risk_factors_present", 1, "وجود عوامل خطورة مسجلة", "Recorded risk factors present");
+  }
+
+  let priority = "normal";
+  if (oxygenLevel > 0 && oxygenLevel < 90 || points >= 6) priority = "urgent";
+  else if (oxygenLevel > 0 && oxygenLevel < 93 || points >= 3) priority = "high";
+
+  const meta = AssessmentDictionaries.priority[priority];
+  return {
+    priority,
+    points,
+    rules,
+    riskAr: meta.riskAr,
+    riskEn: meta.riskEn,
+    aiScoreAr: meta.aiScoreAr,
+    aiScoreEn: meta.aiScoreEn,
+    ruleScore: meta.ruleScore,
+    ruleScoreAr: meta.ruleScoreAr,
+    ruleScoreEn: meta.ruleScoreEn,
+    reviewStatus: "clinician-reviewed-rules",
+    validated: false,
+    version: RULE_ENGINE_VERSION
+  };
+}
+
 /**
  * Normalizes input symptoms and vital signs into a strict, validated Assessment Schema
  */
@@ -4333,10 +4395,6 @@ function buildAssessmentModel({
   const o2 = o2Raw;
   const isCritical = o2 > 0 && o2 < 90;
   const isHighRisk = o2 > 0 && o2 < 93;
-
-  // 2. Priority & AI Triage
-  const priority = isCritical ? "urgent" : (isHighRisk ? "high" : "normal");
-  const prioMeta = AssessmentDictionaries.priority[priority];
 
   // 3. Breathing Difficulty Normalization
   const breathingClean = String(breathingRaw || "").trim();
@@ -4376,6 +4434,16 @@ function buildAssessmentModel({
     rfLabelsAr.push("لا يوجد");
     rfLabelsEn.push("None");
   }
+
+  const riskEvaluation = evaluateRulesBasedRisk({
+    oxygenLevel: o2,
+    hasDyspnea,
+    coughKey,
+    durationDays,
+    riskFactorKeys: rfKeys
+  });
+  const priority = riskEvaluation.priority;
+  const prioMeta = AssessmentDictionaries.priority[priority];
 
   // 7. Symptoms summary string
   const symptomsSummaryAr = `${coughMeta.ar && coughMeta.ar !== 'لا توجد' ? 'كحة ' + coughMeta.ar : ''}${hasDyspnea ? (coughMeta.ar && coughMeta.ar !== 'لا توجد' ? ' مع ضيق تنفس' : 'ضيق تنفس') : ''}`.trim() || "لا توجد أعراض ظاهرة";
@@ -4435,6 +4503,10 @@ function buildAssessmentModel({
         ruleScore: prioMeta.ruleScore,
         ruleScoreLabelAr: prioMeta.ruleScoreAr,
         ruleScoreLabelEn: prioMeta.ruleScoreEn,
+        ruleScorePoints: riskEvaluation.points,
+        triggeredRules: riskEvaluation.rules,
+        ruleEngineVersion: riskEvaluation.version,
+        ruleEngineReviewStatus: riskEvaluation.reviewStatus,
         ruleScoreValidated: false,
         confidence: "not-validated-rule-score",
         modelVersion: MODEL_VERSION
@@ -4461,6 +4533,10 @@ function buildAssessmentModel({
     ruleScore: prioMeta.ruleScore,
     ruleScoreLabelAr: prioMeta.ruleScoreAr,
     ruleScoreLabelEn: prioMeta.ruleScoreEn,
+    ruleScorePoints: riskEvaluation.points,
+    triggeredRules: riskEvaluation.rules,
+    ruleEngineVersion: riskEvaluation.version,
+    ruleEngineReviewStatus: riskEvaluation.reviewStatus,
     ruleScoreValidated: false,
     confidence: "not-validated-rule-score",
     reportVersion: REPORT_VERSION,
