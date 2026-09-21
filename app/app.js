@@ -1537,6 +1537,77 @@ async function checkEmailVerification() {
   }
 }
 
+function openVerifyRequiredModal(actionNameAr = "هذا الإجراء", actionNameEn = "this action") {
+  const modal = document.getElementById("verifyRequiredModal");
+  if (!modal) return;
+  const isEn = currentLanguage === "en";
+  const title = document.getElementById("verifyModalTitle");
+  const desc = document.getElementById("verifyModalDesc");
+  if (title) title.textContent = isEn ? "Email Verification Required" : "تأكيد البريد الإلكتروني إجباري";
+  if (desc) {
+    const userEmail = auth.currentUser ? auth.currentUser.email : "";
+    desc.textContent = isEn
+      ? `Email verification is mandatory before ${actionNameEn}. A verification link was sent to ${userEmail}. Check your inbox and spam folder.`
+      : `تأكيد البريد الإلكتروني إجباري قبل ${actionNameAr}. تم إرسال رابط التفعيل إلى ${userEmail}. يرجى فحص صندوق الوارد والرسائل غير المرغوب فيها.`;
+  }
+  modal.classList.add("open");
+  modal.setAttribute("aria-hidden", "false");
+}
+
+function closeVerifyRequiredModal() {
+  const modal = document.getElementById("verifyRequiredModal");
+  if (!modal) return;
+  modal.classList.remove("open");
+  modal.setAttribute("aria-hidden", "true");
+}
+
+/**
+ * Enforce Email Verification for Sensitive Operations
+ * Automatically performs background reload to detect fresh verification links.
+ * Blocks execution if unverified and triggers verification UI.
+ */
+async function enforceEmailVerification(actionNameAr = "هذا الإجراء", actionNameEn = "this action") {
+  const user = auth ? auth.currentUser : null;
+  if (!user) {
+    showToast(currentLanguage === "en" ? "Authentication required." : "يجب تسجيل الدخول أولاً.");
+    return false;
+  }
+
+  // System owner bypasses for disaster recovery
+  if (isOwnerUser(user.email)) {
+    return true;
+  }
+
+  // Attempt user reload in case link was clicked in another window/tab
+  try {
+    await user.reload();
+  } catch (e) {
+    console.warn("User reload failed during verification check:", e);
+  }
+
+  const freshUser = auth.currentUser;
+  if (freshUser && freshUser.emailVerified) {
+    updateEmailVerificationUI(freshUser);
+    db.collection("users").doc(freshUser.uid).set({ emailVerified: true }, { merge: true }).catch(() => {});
+    return true;
+  }
+
+  // User is not verified: trigger alert, pulse banner, and open modal
+  updateEmailVerificationUI(freshUser);
+  const banner = document.getElementById("emailVerificationBanner");
+  if (banner) {
+    banner.style.display = "flex";
+    banner.classList.add("pulse-highlight");
+    banner.scrollIntoView({ behavior: "smooth", block: "center" });
+    setTimeout(() => banner.classList.remove("pulse-highlight"), 3000);
+  }
+
+  openVerifyRequiredModal(actionNameAr, actionNameEn);
+  const isEn = currentLanguage === "en";
+  showToast(isEn ? `🔒 Email verification is required before ${actionNameEn}.` : `🔒 تأكيد البريد الإلكتروني إجباري قبل ${actionNameAr}.`);
+  return false;
+}
+
 function updateNavVisibility() {
   document.querySelectorAll(".nav-item").forEach((btn) => {
     const screen = btn.dataset.screen;
@@ -1743,6 +1814,7 @@ async function cancelOrReapplyDoctorApp() {
 
 async function handleDoctorAppSubmit(e) {
   if (e) e.preventDefault();
+  if (!(await enforceEmailVerification("تقديم طلب توثيق الطبيب", "submitting a doctor verification application"))) return;
   const user = auth.currentUser;
   if (!user) {
     showToast(currentLanguage === "en" ? "Please sign in first." : "يرجى تسجيل الدخول أولاً.");
@@ -2257,6 +2329,7 @@ async function renderAdminMetrics() {
 }
 
 async function approveDoctorApplication(appId, userId, doctorName) {
+  if (!(await enforceEmailVerification("اعتماد طلب الطبيب", "approving a doctor application"))) return;
   if (!(await enforceServerPermission(PERMISSIONS.APPROVE_DOCTOR_APPLICATION, "Approve Doctor Application"))) return;
   const isEn = currentLanguage === "en";
   try {
@@ -2291,6 +2364,7 @@ async function approveDoctorApplication(appId, userId, doctorName) {
 }
 
 async function rejectDoctorApplication(appId, userId) {
+  if (!(await enforceEmailVerification("رفض طلب الطبيب", "rejecting a doctor application"))) return;
   if (!(await enforceServerPermission(PERMISSIONS.REJECT_DOCTOR_APPLICATION, "Reject Doctor Application"))) return;
   const isEn = currentLanguage === "en";
   try {
@@ -2413,6 +2487,7 @@ async function renderAdminUsers() {
 }
 
 async function changeUserRole(userId, newRole, userName) {
+  if (!(await enforceEmailVerification("تغيير دور المستخدم", "changing user role"))) return;
   if (!(await enforceServerPermission(PERMISSIONS.MANAGE_USER_ROLES, "Change User Role"))) return;
   const isEn = currentLanguage === "en";
   try {
@@ -2593,6 +2668,10 @@ document.getElementById("oxygenInput").addEventListener("input", updateOxygenWar
 document.getElementById("submitAssessment").addEventListener("click", async () => {
   updateOxygenWarning();
 
+  if (!(await enforceEmailVerification("إرسال تقييم التنفس", "submitting a respiratory assessment"))) {
+    return;
+  }
+
   const user = auth.currentUser;
   if (!user) {
     showToast("يجب تسجيل الدخول أولاً");
@@ -2718,13 +2797,19 @@ const cancelApproveBtn = document.getElementById("cancelApprove");
 if (cancelApproveBtn) cancelApproveBtn.addEventListener("click", closeApprovalModal);
 
 const confirmApproveBtn = document.getElementById("confirmApprove");
-if (confirmApproveBtn) confirmApproveBtn.addEventListener("click", () => {
+if (confirmApproveBtn) confirmApproveBtn.addEventListener("click", async () => {
+  if (!(await enforceEmailVerification("اعتماد الحالة السريرية", "approving a clinical case"))) return;
   if (!enforcePermission(PERMISSIONS.APPROVE_CASE, "Approve Clinical Case")) return;
   closeApprovalModal();
   showScreen("result");
   showToast("تم اعتماد النتيجة وتسجيل الحدث في سجل التدقيق");
 });
-document.getElementById("fileUpload").addEventListener("change", (event) => {
+
+document.getElementById("fileUpload").addEventListener("change", async (event) => {
+  if (!(await enforceEmailVerification("رفع ملفات طبية", "uploading medical files"))) {
+    event.target.value = "";
+    return;
+  }
   const fileList = document.getElementById("fileList");
   [...event.target.files].forEach((file) => {
     const item = document.createElement("div");
@@ -2733,6 +2818,27 @@ document.getElementById("fileUpload").addEventListener("change", (event) => {
   });
   if (event.target.files.length) showToast("تمت إضافة الملف كمرجع للطبيب");
 });
+
+// Verification modal event bindings
+const verifyModalCheckBtn = document.getElementById("verifyModalCheckBtn");
+if (verifyModalCheckBtn) {
+  verifyModalCheckBtn.addEventListener("click", async () => {
+    await checkEmailVerification();
+    if (auth.currentUser && auth.currentUser.emailVerified) {
+      closeVerifyRequiredModal();
+    }
+  });
+}
+
+const verifyModalResendBtn = document.getElementById("verifyModalResendBtn");
+if (verifyModalResendBtn) {
+  verifyModalResendBtn.addEventListener("click", resendVerificationEmail);
+}
+
+const verifyModalCloseBtn = document.getElementById("verifyModalCloseBtn");
+if (verifyModalCloseBtn) {
+  verifyModalCloseBtn.addEventListener("click", closeVerifyRequiredModal);
+}
 document.getElementById("sendChat").addEventListener("click", () => {
   const input = document.getElementById("chatInput");
   const messages = document.getElementById("chatMessages");

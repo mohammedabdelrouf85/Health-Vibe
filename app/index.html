@@ -714,12 +714,25 @@
     </div>
   </div>
 
+  <div id="verifyRequiredModal" class="confirm-modal" aria-hidden="true">
+    <div class="confirm-card" style="text-align: center; max-width: 440px;">
+      <div style="font-size: 42px; margin-bottom: 10px;">🔒</div>
+      <h3 id="verifyModalTitle">تأكيد البريد الإلكتروني إجباري</h3>
+      <p id="verifyModalDesc">هذا الإجراء يتطلب حساباً موثقاً ببريد إلكتروني مفعل لضمان سلامة وسرية البيانات الطبية.</p>
+      <div class="doctor-actions" style="justify-content: center; gap: 8px; margin-top: 20px; flex-wrap: wrap;">
+        <button id="verifyModalCheckBtn" class="solid-button" style="background: var(--teal); border-color: var(--teal);">تحقق الآن</button>
+        <button id="verifyModalResendBtn" class="outline-button">إعادة إرسال الرابط</button>
+        <button id="verifyModalCloseBtn" class="outline-button" style="border-color: transparent;">إغلاق</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Floating dark mode toggle -->
   <button id="themeToggle" class="theme-fab" aria-label="Toggle dark mode" title="Toggle dark mode">
     <span class="theme-fab-icon">🌙</span>
   </button>
 
-  <script src="./config.js?v=2.1"></script>
-  <script src="./app.js?v=2.1"></script>
+  <script src="./config.js?v=2.2"></script>
+  <script src="./app.js?v=2.2"></script>
 </body>
 </html>

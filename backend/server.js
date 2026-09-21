@@ -88,6 +88,26 @@ async function requireAuth(req, res, next) {
 }
 
 /**
+ * Middleware: Enforce Verified Email for Sensitive Actions
+ * Verifies that the user's email is verified (or the user is the system owner)
+ */
+function requireVerifiedEmail(req, res, next) {
+  const email = (req.user.email || '').toLowerCase();
+  if (email === OWNER_EMAIL.toLowerCase()) {
+    return next();
+  }
+
+  if (!req.user.email_verified) {
+    return res.status(403).json({
+      error: 'EMAIL_NOT_VERIFIED',
+      message: 'Email verification is mandatory before executing this sensitive operation.'
+    });
+  }
+
+  next();
+}
+
+/**
  * Middleware: Enforce Server-Verified Admin Role
  * Verifies that the authenticated user holds the Admin role in Firestore or via Custom Claims.
  */
@@ -302,7 +322,7 @@ app.get('/api/admin/metrics', requireAuth, requireAdmin, async (req, res) => {
  * POST /api/admin/set-user-role
  * Server-authoritative endpoint to change a user's role and set Firebase Custom Claims
  */
-app.post('/api/admin/set-user-role', requireAuth, requireSuperAdmin, async (req, res) => {
+app.post('/api/admin/set-user-role', requireAuth, requireVerifiedEmail, requireSuperAdmin, async (req, res) => {
   const { targetUserId, newRole } = req.body;
 
   if (!targetUserId || !VALID_ROLES.includes(newRole)) {
@@ -356,7 +376,7 @@ app.post('/api/admin/set-user-role', requireAuth, requireSuperAdmin, async (req,
  * POST /api/admin/approve-doctor-application
  * Server-authoritative endpoint to approve a doctor application and elevate their role
  */
-app.post('/api/admin/approve-doctor-application', requireAuth, requireAdmin, async (req, res) => {
+app.post('/api/admin/approve-doctor-application', requireAuth, requireVerifiedEmail, requireAdmin, async (req, res) => {
   const { applicationId, applicantUserId } = req.body;
 
   if (!applicationId || !applicantUserId) {
@@ -428,7 +448,7 @@ app.post('/api/admin/approve-doctor-application', requireAuth, requireAdmin, asy
  * POST /api/doctor/approve-clinical-case
  * Server-authoritative endpoint for doctor case approval (strictly rejects non-doctors)
  */
-app.post('/api/doctor/approve-clinical-case', requireAuth, requireDoctor, async (req, res) => {
+app.post('/api/doctor/approve-clinical-case', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
   const { caseId, clinicalNotes, recommendation } = req.body;
 
   if (!caseId) {

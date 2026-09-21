@@ -923,6 +923,17 @@ body.dark .verification-banner {
   border-color: rgba(240, 180, 41, 0.3);
 }
 
+.verification-banner.pulse-highlight {
+  animation: bannerPulse 0.8s ease 3;
+  border-color: var(--amber) !important;
+  box-shadow: 0 0 24px rgba(240, 180, 41, 0.45);
+}
+
+@keyframes bannerPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+}
+
 .banner-content {
   display: flex;
   align-items: center;

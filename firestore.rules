@@ -12,6 +12,11 @@ service cloud.firestore {
              'email' in request.auth.token &&
              request.auth.token.email.lower() == 'mohammedabdelrouf85@gmail.com';
     }
+
+    // Email verification check for sensitive operations
+    function isEmailVerified() {
+      return isAuthenticated() && (request.auth.token.email_verified == true || isOwner());
+    }
     
     function hasUserDoc() {
       return isAuthenticated() && 
@@ -65,9 +70,9 @@ service cloud.firestore {
     // - Applicant can cancel their pending application; Only Admin can approve, reject, or delete
     match /doctor_applications/{appId} {
       allow read: if isAuthenticated() && (isAdmin() || isSupport() || resource.data.userId == request.auth.uid);
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid
+      allow create: if isEmailVerified() && request.resource.data.userId == request.auth.uid
                     && request.resource.data.status == 'pending';
-      allow update: if (isAdmin() &&
+      allow update: if (isAdmin() && isEmailVerified() &&
                        resource.data.status == 'pending' &&
                        request.resource.data.userId == resource.data.userId &&
                        request.resource.data.status in ['approved', 'rejected']) ||
@@ -79,16 +84,16 @@ service cloud.firestore {
 
     // --- 3. Clinical Cases Collection ---
     // - Privacy protection: Patient can ONLY read their own cases; Doctors and Admins can read all cases
-    // - Authenticated patient creates case for themselves with status == 'pending'
-    // - ONLY licensed Doctors can clinically review/approve/reject cases (update)
+    // - Authenticated patient with verified email creates case for themselves with status == 'pending'
+    // - ONLY licensed Doctors with verified email can clinically review/approve/reject cases (update)
     // - Admins can manage or clean up records (delete) but cannot alter clinical medical diagnoses
     match /cases/{caseId} {
       allow read: if isAuthenticated() && 
                      (resource.data.patientId == request.auth.uid || isDoctor() || isAdmin() || isSupport());
-      allow create: if isAuthenticated() && 
+      allow create: if isEmailVerified() && 
                        request.resource.data.patientId == request.auth.uid &&
                        request.resource.data.status == 'pending';
-      allow update: if isDoctor();
+      allow update: if isDoctor() && isEmailVerified();
       allow delete: if isAdmin();
     }
 

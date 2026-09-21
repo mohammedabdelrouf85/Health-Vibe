@@ -56,3 +56,9 @@
 ### 3. طبقة العميل (Client Anti-Tampering & Resynchronization):
 - عند محاولة تنفيذ أي إجراء إداري أو طبي، يتم استدعاء `enforceServerPermission` التي تستعلم الخادم قسراً عبر `{ source: "server" }` لضمان عدم وجود تلاعب بذاكرة المتصفح.
 - في حال استلام خطأ `permission-denied` من خادم Firestore، تلتقطه دالة `handleServerPermissionDenied` فوراً وتعيد ضبط واجهة المستخدم على دورها الحقيقي المسجل في قاعدة البيانات.
+
+### 4. الإلزامية الصارمة لتأكيد البريد الإلكتروني (Mandatory Email Verification):
+- **على مستوى قواعد Firestore:** تم تطبيق دالة `isEmailVerified()` لمنع إنشاء الحالات السريرية `cases`، أو تقديم طلبات توثيق الأطباء `doctor_applications`، أو اعتماد التشخيصات إلا بعد تأكيد البريد الإلكتروني (`request.auth.token.email_verified == true`).
+- **على مستوى الـ Backend:** تم تطبيق Middleware `requireVerifiedEmail` الذي يفحص الرمز المشفر ويمنع العمليات الإدارية والطبية الحساسة بحظر `403 EMAIL_NOT_VERIFIED`.
+- **على مستوى واجهة العميل (UX):** تم تطبيق دالة `enforceEmailVerification` مع نافذة حوار تفاعلية (`verifyRequiredModal`) تقوم بتحديث فوري لحالة الحساب (`user.reload()`) وتوفير خيارات التحقق وإعادة الإرسال الفوري.
+
