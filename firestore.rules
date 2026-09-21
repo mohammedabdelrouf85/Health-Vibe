@@ -181,6 +181,13 @@ service cloud.firestore {
              (data.statusHistory is list && data.statusHistory.size() <= 50);
     }
 
+    // Rule Engine Version validation (bounded string and points)
+    function isValidRuleEngine(data) {
+      return (!('ruleEngineVersion' in data) || (data.ruleEngineVersion is string && data.ruleEngineVersion.size() <= 50)) &&
+             (!('ruleSetId' in data) || (data.ruleSetId is string && data.ruleSetId.size() <= 50)) &&
+             (!('ruleScorePoints' in data) || (data.ruleScorePoints is number && data.ruleScorePoints >= 0 && data.ruleScorePoints <= 50));
+    }
+
     // Master assessment validation for all clinical fields
     function isValidAssessment(data) {
       return isValidOxygen(data) &&
@@ -189,7 +196,8 @@ service cloud.firestore {
              isValidDuration(data) &&
              isValidRiskFactors(data) &&
              isValidPriority(data) &&
-             isValidStatusHistory(data);
+             isValidStatusHistory(data) &&
+             isValidRuleEngine(data);
     }
 
     // Case Status Machine: draft -> submitted -> triaged -> assigned -> under_review -> more_info_requested -> approved / rejected / escalated / closed
