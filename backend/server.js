@@ -43,6 +43,8 @@ const db = admin.apps.length ? admin.firestore() : null;
 
 // System Owner Email (Hardcoded single source of truth for supreme administrative rights)
 const OWNER_EMAIL = "mohammedabdelrouf85@gmail.com";
+const REPORT_VERSION = '1.0.0';
+const MODEL_VERSION = 'HealthVibe-AI-v1.0';
 const ROLES = {
   PATIENT: 'patient',
   DOCTOR_PENDING: 'doctor_pending',
@@ -529,6 +531,9 @@ async function executeDoctorTransition({ req, res, caseId, targetStatus, note, c
         updateData.approvingDoctorId = req.user.uid;
         updateData.approvingDoctorEmail = req.user.email;
         updateData.approvedAt = admin.firestore.FieldValue.serverTimestamp();
+        updateData.generatedAt = admin.firestore.FieldValue.serverTimestamp();
+        updateData.reportVersion = REPORT_VERSION;
+        updateData.modelVersion = MODEL_VERSION;
         if (clinicalNotes) updateData.clinicalNotes = clinicalNotes;
         if (recommendation) updateData.recommendation = recommendation;
       } else if (targetStatus === 'more_info_requested') {

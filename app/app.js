@@ -1197,6 +1197,9 @@ async function updateCaseStatus(id, newStatus, note, extraFields = {}) {
           updatePayload.approvingDoctorId = user ? user.uid : null;
           updatePayload.approvingDoctorEmail = user ? user.email : null;
           updatePayload.approvedAt = firebase.firestore.FieldValue.serverTimestamp();
+          updatePayload.generatedAt = firebase.firestore.FieldValue.serverTimestamp();
+          updatePayload.reportVersion = updatePayload.reportVersion || REPORT_VERSION;
+          updatePayload.modelVersion = updatePayload.modelVersion || MODEL_VERSION;
           if (extraFields.clinicalNotes) updatePayload.clinicalNotes = extraFields.clinicalNotes;
         } else if (newStatus === CASE_STATUS.MORE_INFO_REQUESTED) {
           updatePayload.moreInfoRequestedAt = firebase.firestore.FieldValue.serverTimestamp();
@@ -2685,8 +2688,14 @@ async function renderReportScreen(targetCaseId = null) {
     const approvedDate = caseData.approvedAt
       ? (caseData.approvedAt.toDate ? caseData.approvedAt.toDate() : new Date(caseData.approvedAt))
       : (caseData.reviewedAt ? (caseData.reviewedAt.toDate ? caseData.reviewedAt.toDate() : new Date(caseData.reviewedAt)) : new Date());
+    const generatedDate = caseData.generatedAt
+      ? (caseData.generatedAt.toDate ? caseData.generatedAt.toDate() : new Date(caseData.generatedAt))
+      : approvedDate;
 
     const dateFormatted = approvedDate.toLocaleDateString(isEn ? "en-US" : "ar-EG", {
+      year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit"
+    });
+    const generatedDateFormatted = generatedDate.toLocaleDateString(isEn ? "en-US" : "ar-EG", {
       year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit"
     });
 
@@ -2695,6 +2704,8 @@ async function renderReportScreen(targetCaseId = null) {
     const doctorSpecialty = caseData.doctorSpecialty || (isEn ? "Pulmonology & Respiratory Medicine" : "استشاري الأمراض الصدرية والرعاية المركزة");
     const clinicName = caseData.clinicName || (isEn ? "Health Vibes Specialized Clinics" : "عيادات هيلث فايبز التخصصية");
     const reportRef = `HV-REP-${caseData.id.slice(-8).toUpperCase()}`;
+    const reportVersion = caseData.reportVersion || REPORT_VERSION;
+    const modelVersion = caseData.modelVersion || caseData.assessment?.aiTriage?.modelVersion || MODEL_VERSION;
 
     const clinicalDiagnosis = caseData.doctorNote || caseData.clinicalNotes || (isEn ? "Patient assessment reviewed and verified. Oxygen saturation stable. Mild seasonal respiratory symptoms." : "تمت المراجعة والتدقيق السريري لقياسات التنفس والأعراض. نسبة الأكسجين مقبولة وتوجد أعراض حساسية صدرية موسمية مع كحة متوسطة.");
     const doctorRecommendations = caseData.recommendations || [
@@ -2749,6 +2760,18 @@ async function renderReportScreen(targetCaseId = null) {
           <div>
             <span>${isEn ? "Approval Date & Time" : "تاريخ ووقت الاعتماد"}</span>
             <strong>${dateFormatted}</strong>
+          </div>
+          <div>
+            <span>${isEn ? "Report Version" : "إصدار التقرير"}</span>
+            <strong>${reportVersion}</strong>
+          </div>
+          <div>
+            <span>${isEn ? "Model Version" : "إصدار النموذج"}</span>
+            <strong>${modelVersion}</strong>
+          </div>
+          <div>
+            <span>${isEn ? "Generated At" : "تاريخ إنشاء التقرير"}</span>
+            <strong>${generatedDateFormatted}</strong>
           </div>
         </div>
 
@@ -4192,6 +4215,8 @@ if (riskGroup) {
 // =========================================================================
 
 const ASSESSMENT_SCHEMA_VERSION = "1.0.0";
+const REPORT_VERSION = "1.0.0";
+const MODEL_VERSION = "HealthVibe-AI-v1.0";
 
 const AssessmentEnums = Object.freeze({
   BreathingDifficulty: {
@@ -4375,7 +4400,7 @@ function buildAssessmentModel({
         aiScore: prioMeta.aiScoreAr,
         aiScoreEn: prioMeta.aiScoreEn,
         confidence: prioMeta.confidence,
-        modelVersion: "HealthVibe-AI-v1.0"
+        modelVersion: MODEL_VERSION
       }
     },
 
@@ -4397,6 +4422,10 @@ function buildAssessmentModel({
     aiScore: prioMeta.aiScoreAr,
     aiScoreEn: prioMeta.aiScoreEn,
     confidence: prioMeta.confidence,
+    reportVersion: REPORT_VERSION,
+    modelVersion: MODEL_VERSION,
+    generatedAt: null,
+    approvedAt: null,
 
     // ── Lifecycle & Audit ──
     submittedAt: firebase.firestore.FieldValue.serverTimestamp(),

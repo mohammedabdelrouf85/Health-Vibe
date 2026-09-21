@@ -76,6 +76,10 @@
   "aiScore": "منخفضة",
   "aiScoreEn": "Low",
   "confidence": "94%",
+  "reportVersion": "1.0.0",
+  "modelVersion": "HealthVibe-AI-v1.0",
+  "generatedAt": null,
+  "approvedAt": null,
 
   "submittedAt": "2026-09-21T00:00:00.000Z",
   "reviewedBy": null,
@@ -142,7 +146,13 @@
 * `confidence`: نسبة ثقة النموذج الخوارزمي بالذكاء الاصطناعي (مثل: `"89%"`).
 * `modelVersion`: إصدار خوارزمية التقييم.
 
-### 5. سجل دورة حياة الحالة والتدقيق (`statusHistory`):
+### 5. بيانات إصدار التقرير (`Report Metadata`):
+* `reportVersion`: إصدار قالب التقرير الطبي المعتمد.
+* `modelVersion`: إصدار نموذج الفرز المستخدم لإنتاج التقييم.
+* `generatedAt`: تاريخ ووقت إنشاء التقرير النهائي، ويُسجل عند اعتماد الطبيب.
+* `approvedAt`: تاريخ ووقت اعتماد الطبيب للتقرير النهائي.
+
+### 6. سجل دورة حياة الحالة والتدقيق (`statusHistory`):
 * مصفوفة متراكمة تسجل كل انتقال في حالة الفحص السريري:
   * `status`: الحالة الجديدة (`"pending"` | `"approved"` | `"rejected"` | `"under_review"`).
   * `previousStatus`: الحالة السابقة.
@@ -233,4 +243,3 @@ stateDiagram-v2
   تمنع قواعد أمان Firestore أي تعديل لحقول `patientId` أو `assignedDoctorId` أو `clinicId` عند تحديث الحالة الطبية من قبل الأطباء.
 * **أصالة وتتبع الحالة (Audit & Traceability)**:
   حفظ مصفوفة `statusHistory` التراكمية يمنع التلاعب بأصل الحالات ويوثق بدقة من قام بمراجعة أو اعتماد كل حالة وفي أي وقت مع حفظ الملاحظات السريرية المقترنة في كل خطوة.
-
