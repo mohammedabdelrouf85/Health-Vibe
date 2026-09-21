@@ -188,6 +188,12 @@ service cloud.firestore {
              (!('ruleScorePoints' in data) || (data.ruleScorePoints is number && data.ruleScorePoints >= 0 && data.ruleScorePoints <= 50));
     }
 
+    // Privacy Consent validation (must be valid map with affirmative acceptance)
+    function isValidPrivacyConsent(data) {
+      return !('privacyConsent' in data) || 
+             (data.privacyConsent is map && ('accepted' in data.privacyConsent) && data.privacyConsent.accepted == true);
+    }
+
     // Master assessment validation for all clinical fields
     function isValidAssessment(data) {
       return isValidOxygen(data) &&
@@ -197,7 +203,8 @@ service cloud.firestore {
              isValidRiskFactors(data) &&
              isValidPriority(data) &&
              isValidStatusHistory(data) &&
-             isValidRuleEngine(data);
+             isValidRuleEngine(data) &&
+             isValidPrivacyConsent(data);
     }
 
     // Case Status Machine: draft -> submitted -> triaged -> assigned -> under_review -> more_info_requested -> approved / rejected / escalated / closed

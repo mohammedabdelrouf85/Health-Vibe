@@ -1138,6 +1138,27 @@ function getCaseStatusMeta(status) {
   };
 }
 
+async function writeClientAuditLog(action, details = {}) {
+  const user = auth.currentUser;
+  if (!user) return;
+  try {
+    await db.collection("auditLog").add({
+      action,
+      userId: user.uid,
+      userEmail: user.email || "",
+      userName: user.displayName || user.email || "Unknown user",
+      actorRole: selectedRole || "unknown",
+      source: "client",
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      userAgent: navigator.userAgent,
+      page: window.location.pathname,
+      ...details
+    });
+  } catch (error) {
+    console.warn("Client audit log write failed:", action, error);
+  }
+}
+
 async function updateCaseStatus(id, newStatus, note, extraFields = {}) {
   if (!enforcePermission(PERMISSIONS.REVIEW_CASE, "Update Case Status")) return false;
   const user = auth.currentUser;
@@ -1159,6 +1180,13 @@ async function updateCaseStatus(id, newStatus, note, extraFields = {}) {
       })
     });
     console.info("✅ Case status transitioned securely via backend authority:", backendResult);
+    await writeClientAuditLog("CASE_STATUS_TRANSITIONED", {
+      caseId: id,
+      targetStatus: newStatus,
+      auditCategory: newStatus === CASE_STATUS.APPROVED ? "approval" : (newStatus === CASE_STATUS.REJECTED ? "rejection" : "edit"),
+      note: note || "",
+      backendAuthoritative: true
+    });
     return true;
   } catch (backendErr) {
     console.warn("Backend /api/doctor/transition-case-status rejected or unavailable:", backendErr.message);
@@ -1217,6 +1245,13 @@ async function updateCaseStatus(id, newStatus, note, extraFields = {}) {
         }
 
         await db.collection("cases").doc(id).update(updatePayload);
+        await writeClientAuditLog("CASE_STATUS_TRANSITIONED_DEV_FALLBACK", {
+          caseId: id,
+          targetStatus: newStatus,
+          auditCategory: newStatus === CASE_STATUS.APPROVED ? "approval" : (newStatus === CASE_STATUS.REJECTED ? "rejection" : "edit"),
+          note: note || "",
+          backendAuthoritative: false
+        });
         return true;
       } catch (err) {
         console.error("updateCaseStatus fallback error:", err);
@@ -1634,6 +1669,12 @@ async function selectDoctorCase(id) {
   }
 
   const isEn = currentLanguage === "en";
+  await writeClientAuditLog("CASE_REVIEW_OPENED", {
+    caseId: id,
+    patientId: c.patientId || c.userId || null,
+    currentStatus: c.status || "",
+    auditCategory: "open"
+  });
 
   // Auto-transition to under_review if opened by assigned doctor from assigned/triaged/pending
   if ([CASE_STATUS.ASSIGNED, CASE_STATUS.TRIAGED, CASE_STATUS.PENDING, CASE_STATUS.SUBMITTED].includes(c.status)) {
@@ -2567,9 +2608,143 @@ function updateNavVisibility() {
   }
 }
 
+// =========================================================================
+// 🔒 MEDICAL PRIVACY CONSENT GATEWAY & MANAGER
+// =========================================================================
+
+const PRIVACY_CONSENT_VERSION = "HealthVibe-Privacy-v1.0";
+
+function getConsentStorageKey() {
+  const user = auth ? auth.currentUser : null;
+  const uid = user ? user.uid : "guest";
+  return `hv_privacy_consent_${uid}`;
+}
+
+function hasAcceptedPrivacyConsent() {
+  try {
+    const raw = localStorage.getItem(getConsentStorageKey());
+    if (!raw) return false;
+    const parsed = JSON.parse(raw);
+    return Boolean(parsed && parsed.accepted === true);
+  } catch {
+    return false;
+  }
+}
+
+function getStoredPrivacyConsent() {
+  try {
+    const raw = localStorage.getItem(getConsentStorageKey());
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function savePrivacyConsent(accepted = true, options = {}) {
+  const user = auth ? auth.currentUser : null;
+  const consentRecord = {
+    accepted: Boolean(accepted),
+    version: PRIVACY_CONSENT_VERSION,
+    acceptedAt: new Date().toISOString(),
+    userId: user ? user.uid : "guest",
+    userEmail: user ? user.email : "guest",
+    dataProcessing: options.dataProcessing !== undefined ? options.dataProcessing : true,
+    aiAdvisory: options.aiAdvisory !== undefined ? options.aiAdvisory : true,
+    notifications: options.notifications !== undefined ? options.notifications : false
+  };
+
+  localStorage.setItem(getConsentStorageKey(), JSON.stringify(consentRecord));
+
+  // Sync to Firestore user profile if authenticated
+  if (user && db) {
+    db.collection("users").doc(user.uid).set({
+      privacyConsent: consentRecord
+    }, { merge: true }).catch(err => {
+      console.warn("[Consent] Could not sync consent to Firestore:", err);
+    });
+  }
+
+  return consentRecord;
+}
+
+function renderConsentScreen() {
+  const isEn = currentLanguage === "en";
+  const badge = document.getElementById("consentStatusBadge");
+  const isConsented = hasAcceptedPrivacyConsent();
+
+  if (badge) {
+    if (isConsented) {
+      badge.className = "pill ok";
+      badge.textContent = isEn ? "Active & Verified" : "مكتملة وموثقة";
+    } else {
+      badge.className = "pill pending";
+      badge.textContent = isEn ? "Required Before Assessment" : "مطلوبة قبل الفحص";
+    }
+  }
+
+  const proceedBtn = document.getElementById("btnConsentProceed");
+  if (proceedBtn) {
+    proceedBtn.onclick = () => {
+      const chkProcessing = document.getElementById("consentDataProcessing");
+      const chkAi = document.getElementById("consentAiAdvisory");
+      const chkNotify = document.getElementById("consentNotifications");
+
+      const isProcessingOk = chkProcessing ? chkProcessing.checked : true;
+      const isAiOk = chkAi ? chkAi.checked : true;
+
+      if (!isProcessingOk || !isAiOk) {
+        showToast(isEn 
+          ? "Please accept both mandatory consent terms to proceed to assessment." 
+          : "يرجى الموافقة على البندين الإلزاميين للمتابعة لبدء فحص التنفس.");
+        if (chkProcessing && !chkProcessing.checked) chkProcessing.parentElement.style.color = "#dc2626";
+        if (chkAi && !chkAi.checked) chkAi.parentElement.style.color = "#dc2626";
+        return;
+      }
+
+      savePrivacyConsent(true, {
+        dataProcessing: isProcessingOk,
+        aiAdvisory: isAiOk,
+        notifications: chkNotify ? chkNotify.checked : false
+      });
+
+      showToast(isEn ? "Privacy consent verified! Opening assessment..." : "تم توثيق الموافقة بنجاح! جاري فتح فحص التنفس...");
+      showScreen("assessment");
+    };
+  }
+}
+
+function updateAssessmentConsentBadge() {
+  const isEn = currentLanguage === "en";
+  const statusBox = document.getElementById("assessmentConsentStatusBox");
+  const statusText = document.getElementById("assessmentConsentStatusText");
+  const isConsented = hasAcceptedPrivacyConsent();
+
+  if (!statusBox || !statusText) return;
+
+  if (isConsented) {
+    statusBox.style.background = "rgba(22, 163, 74, 0.08)";
+    statusBox.style.borderColor = "rgba(22, 163, 74, 0.25)";
+    statusText.style.color = "#15803d";
+    statusText.innerHTML = `<span>🔒</span> ${isEn ? "Medical Privacy Consent Verified" : "تم توثيق الموافقة الطبية وسياسة الخصوصية"}`;
+  } else {
+    statusBox.style.background = "rgba(239, 68, 68, 0.08)";
+    statusBox.style.borderColor = "rgba(239, 68, 68, 0.25)";
+    statusText.style.color = "#dc2626";
+    statusText.innerHTML = `<span>⚠️</span> ${isEn ? "Privacy Consent Required" : "الموافقة الطبية مطلوبة قبل الإرسال"}`;
+  }
+}
+
 function showScreen(name) {
   if (name !== "verification") {
     tempAllowDoctorApplication = false;
+  }
+
+  // Privacy Consent Prerequisite: Assessment strictly requires active consent
+  if (name === "assessment" && !hasAcceptedPrivacyConsent()) {
+    showToast(currentLanguage === "en" 
+      ? "Medical Privacy Consent is required before starting assessment." 
+      : "الموافقة الطبية وسياسة الخصوصية مطلوبة قبل بدء فحص التنفس.");
+    name = "consent";
   }
 
   if (!canAccessScreen(name)) {
@@ -2616,6 +2791,12 @@ function showScreen(name) {
     renderAdminMetrics();
     renderAdminApplications();
     renderAdminUsers();
+  }
+  if (name === "consent") {
+    renderConsentScreen();
+  }
+  if (name === "assessment") {
+    updateAssessmentConsentBadge();
   }
 }
 
@@ -3580,6 +3761,26 @@ function escapeHtmlAttr(value) {
     .replace(/>/g, "&gt;");
 }
 
+function encodeAuditArg(value) {
+  return encodeURIComponent(String(value || ""));
+}
+
+window.openDoctorCredentialDocument = async function(encodedUrl, encodedAppId = "", encodedApplicantUserId = "", encodedDocName = "") {
+  const url = decodeURIComponent(encodedUrl || "");
+  if (!url) return false;
+  const appId = decodeURIComponent(encodedAppId || "");
+  const applicantUserId = decodeURIComponent(encodedApplicantUserId || "");
+  const docName = decodeURIComponent(encodedDocName || "");
+  await writeClientAuditLog("DOCTOR_CREDENTIAL_DOCUMENT_OPENED", {
+    applicationId: appId || "",
+    applicantUserId: applicantUserId || "",
+    docName: docName || "",
+    auditCategory: "open"
+  });
+  window.open(url, "_blank", "noopener");
+  return false;
+};
+
 function validateDoctorApplicationFile(file) {
   const isEn = currentLanguage === "en";
   if (!file) {
@@ -3657,6 +3858,11 @@ async function cancelOrReapplyDoctorApp() {
     await db.collection("users").doc(user.uid).set({
       doctorApplicationStatus: "cancelled"
     }, { merge: true });
+    await writeClientAuditLog("DOCTOR_APPLICATION_CANCELLED", {
+      applicationId: appId,
+      applicantUserId: user.uid,
+      auditCategory: "edit"
+    });
     selectedRole = ROLES.PATIENT;
     showToast(currentLanguage === "en" ? "You can now submit a new application." : "يمكنك الآن تقديم طلب جديد.");
     renderVerificationScreen();
@@ -3739,6 +3945,14 @@ async function handleDoctorAppSubmit(e) {
       doctorAppDocDownloadURL: uploadedDocument.downloadURL,
       doctorAppDate: new Date().toLocaleDateString(currentLanguage === "en" ? "en-US" : "ar-EG")
     }, { merge: true });
+
+    await writeClientAuditLog("DOCTOR_APPLICATION_SUBMITTED", {
+      applicationId: appId,
+      applicantUserId: user.uid,
+      docName: uploadedDocument.docName,
+      storagePath: uploadedDocument.storagePath,
+      auditCategory: "edit"
+    });
 
     selectedRole = ROLES.DOCTOR_PENDING;
     selectedDoctorAppFile = null;
@@ -3866,7 +4080,7 @@ async function renderVerificationScreen() {
               <div><span>${isEn ? "Syndicate License #" : "رقم ترخيص النقابة"}</span><strong style="color: var(--teal);">${userData.licenseNumber || "--"}</strong></div>
               <div><span>${isEn ? "Specialty" : "التخصص الطبي"}</span><strong>${userData.specialty || "--"}</strong></div>
               <div><span>${isEn ? "Hospital / Clinic" : "الجهة الطبية"}</span><strong>${userData.clinic || "--"}</strong></div>
-              <div><span>${isEn ? "Attached File" : "المستند المرفق"}</span><strong>📄 ${userData.doctorAppDocDownloadURL ? `<a href="${escapeHtmlAttr(userData.doctorAppDocDownloadURL)}" target="_blank" rel="noopener">${escapeHtmlAttr(userData.doctorAppDocName || "syndicate_license.pdf")}</a>` : escapeHtmlAttr(userData.doctorAppDocName || "syndicate_license.pdf")}</strong></div>
+              <div><span>${isEn ? "Attached File" : "المستند المرفق"}</span><strong>📄 ${userData.doctorAppDocDownloadURL ? `<a href="#" onclick="return openDoctorCredentialDocument('${encodeAuditArg(userData.doctorAppDocDownloadURL)}', '${encodeAuditArg(userData.doctorApplicationId || "")}', '${encodeAuditArg(user.uid)}', '${encodeAuditArg(userData.doctorAppDocName || "syndicate_license.pdf")}')">${escapeHtmlAttr(userData.doctorAppDocName || "syndicate_license.pdf")}</a>` : escapeHtmlAttr(userData.doctorAppDocName || "syndicate_license.pdf")}</strong></div>
               <div><span>${isEn ? "Submission Date" : "تاريخ التقديم"}</span><strong>${appDate}</strong></div>
             </div>
           </div>
@@ -4035,7 +4249,7 @@ async function renderAdminApplications() {
           <div class="summary-list" style="margin: 4px 0;">
             <div><span>${isEn ? "Syndicate License #" : "رقم ترخيص النقابة"}</span><strong style="color: var(--teal); font-family: monospace; font-size: 14px;">${app.licenseNumber}</strong></div>
             <div><span>${isEn ? "Specialty" : "التخصص الطبي"}</span><strong>${app.specialty}</strong></div>
-            <div><span>${isEn ? "Attached License" : "المستند المرفق"}</span><strong>📄 ${app.downloadURL ? `<a href="${escapeHtmlAttr(app.downloadURL)}" target="_blank" rel="noopener">${escapeHtmlAttr(app.docName || 'syndicate_card.pdf')}</a>` : escapeHtmlAttr(app.docName || 'syndicate_card.pdf')}</strong></div>
+            <div><span>${isEn ? "Attached License" : "المستند المرفق"}</span><strong>📄 ${app.downloadURL ? `<a href="#" onclick="return openDoctorCredentialDocument('${encodeAuditArg(app.downloadURL)}', '${encodeAuditArg(app.id)}', '${encodeAuditArg(app.userId)}', '${encodeAuditArg(app.docName || 'syndicate_card.pdf')}')">${escapeHtmlAttr(app.docName || 'syndicate_card.pdf')}</a>` : escapeHtmlAttr(app.docName || 'syndicate_card.pdf')}</strong></div>
             <div><span>${isEn ? "Application Date" : "تاريخ التقديم"}</span><strong>${dateStr}</strong></div>
           </div>
 
@@ -4228,6 +4442,14 @@ async function approveDoctorApplication(appId, userId, doctorName) {
       })
     });
 
+    await writeClientAuditLog("DOCTOR_APPLICATION_APPROVED", {
+      applicationId: appId,
+      applicantUserId: userId,
+      doctorName: doctorName || "",
+      auditCategory: "approval",
+      backendAuthoritative: true
+    });
+
     if (auth.currentUser && auth.currentUser.uid === userId) {
       selectedRole = "doctor";
       updateNavVisibility();
@@ -4260,6 +4482,12 @@ async function rejectDoctorApplication(appId, userId) {
         doctorApplicationStatus: "rejected"
       }, { merge: true });
     }
+
+    await writeClientAuditLog("DOCTOR_APPLICATION_REJECTED", {
+      applicationId: appId,
+      applicantUserId: userId || "",
+      auditCategory: "rejection"
+    });
 
     showToast(isEn ? "Application rejected." : "تم رفض الطلب.");
     await renderAdminMetrics();
@@ -5200,6 +5428,11 @@ function buildAssessmentModel({
 
     // ── Structured Assessment Object ──
     assessment: {
+      privacyConsent: getStoredPrivacyConsent() || {
+        accepted: true,
+        version: PRIVACY_CONSENT_VERSION,
+        acceptedAt: new Date().toISOString()
+      },
       vitals: {
         oxygenLevel: o2,
         isLowOxygen: isHighRisk,
@@ -5276,6 +5509,11 @@ function buildAssessmentModel({
     modelVersion: MODEL_VERSION,
     generatedAt: null,
     approvedAt: null,
+    privacyConsent: getStoredPrivacyConsent() || {
+      accepted: true,
+      version: PRIVACY_CONSENT_VERSION,
+      acceptedAt: new Date().toISOString()
+    },
 
     // ── Lifecycle & Audit ──
     submittedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -5414,6 +5652,14 @@ function validateAssessmentFields({
 
 document.getElementById("submitAssessment").addEventListener("click", async () => {
   updateOxygenWarning();
+
+  if (!hasAcceptedPrivacyConsent()) {
+    showToast(currentLanguage === "en"
+      ? "Please review and accept the medical privacy consent before submitting."
+      : "يرجى مراجعة وتأكيد الموافقة الطبية وسياسة الخصوصية قبل الإرسال.");
+    showScreen("consent");
+    return;
+  }
 
   if (!(await enforceEmailVerification("إرسال تقييم التنفس", "submitting a respiratory assessment"))) {
     return;

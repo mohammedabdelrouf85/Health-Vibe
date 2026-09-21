@@ -349,15 +349,36 @@
       <section id="screen-consent" class="screen">
         <div class="content-grid">
           <article class="panel">
-            <div class="panel-head"><h3>الموافقة الطبية</h3><span class="pill pending">مطلوبة</span></div>
-            <p class="muted-copy">Health Vibes يستخدم بياناتك الصحية لتقييم خطورة إرشادي ثم يرسلها لطبيب معتمد قبل ظهور أي نتيجة نهائية.</p>
-            <div class="check-list">
-              <label><input type="checkbox" checked> أوافق على استخدام البيانات الطبية داخل مسار التقييم والمراجعة.</label>
-              <label><input type="checkbox" checked> أفهم أن الذكاء الاصطناعي لا يقدم تشخيصًا مستقلًا ولا يغني عن الطبيب.</label>
-              <label><input type="checkbox"> أوافق على استقبال تنبيهات المواعيد والتقارير عبر البريد أو رابط آمن.</label>
+            <div class="panel-head">
+              <h3>الموافقة الطبية وسياسة الخصوصية</h3>
+              <span id="consentStatusBadge" class="pill pending">مطلوبة قبل الفحص</span>
             </div>
-            <div class="safety-note">يمكنك طلب حذف الحساب أو البيانات وفق سياسة الاحتفاظ التي يجب تثبيتها قبل الإنتاج.</div>
-            <button class="solid-button full" data-screen="profile">حفظ والمتابعة للملف الطبي</button>
+            <p class="muted-copy">Health Vibes يجمع بياناتك الصحية لتقييم خطورة إرشادي ثم يرسلها لطبيب معتمد قبل ظهور أي نتيجة نهائية. لحماية بياناتك والامتثال للمعايير الطبية، نرجو مراجعة وتأكيد بنود الموافقة أدناه:</p>
+            <div class="check-list" style="margin: 16px 0; display: flex; flex-direction: column; gap: 12px;">
+              <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer;">
+                <input type="checkbox" id="consentDataProcessing" checked style="margin-top: 3px;">
+                <span><strong>معالجة البيانات السريرية (إلزامي):</strong> أوافق على استخدام بيانات الأعراض والقياسات الحيوية داخل مسار التقييم ومشاركتها مع الطبيب المعالج المعتمد.</span>
+              </label>
+              <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer;">
+                <input type="checkbox" id="consentAiAdvisory" checked style="margin-top: 3px;">
+                <span><strong>الطبيعة الإرشادية للذكاء الاصطناعي (إلزامي):</strong> أفهم أن مؤشر الذكاء الاصطناعي أداة فرز إرشادية غير مدققة سريرياً ولا تُعد تشخيصاً طبياً مستقلاً ولا تغني عن فحص الطبيب.</span>
+              </label>
+              <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer;">
+                <input type="checkbox" id="consentNotifications" checked style="margin-top: 3px;">
+                <span><strong>تنبيهات المتابعة والتقارير (اختياري):</strong> أوافق على استقبال إشعارات تحديث الحالة وتقارير الفحص الصادرة من الطبيب.</span>
+              </label>
+            </div>
+            <div class="safety-note" style="margin-bottom: 16px;">
+              🔒 خصوصيتك أولويتنا: يتم تشفير البيانات ولا يتم مشاركتها مع أي طرف ثالث لأغراض إعلانية. يمكنك مراجعة أو سحب الموافقة في أي وقت.
+            </div>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+              <button id="btnConsentProceed" type="button" class="solid-button" style="flex: 1; font-size: 14.5px; padding: 12px;">
+                ✓ أوافق والمتابعة لبدء فحص التنفس
+              </button>
+              <button type="button" class="outline-button" style="padding: 12px 16px;" onclick="showScreen('profile')">
+                الملف الطبي
+              </button>
+            </div>
           </article>
           <article class="panel">
             <div class="panel-head"><h3>نطاق الوصول</h3><span class="pill info">صلاحيات الأدوار</span></div>
@@ -441,8 +462,13 @@
               <button class="choice">تدخين</button>
               <button class="choice">حمل</button>
               <button class="choice active">لا يوجد</button>
-            </div>
             <div class="safety-note">لن تظهر نتيجة نهائية للمريض قبل مراجعة الطبيب للحالة.</div>
+            <div id="assessmentConsentStatusBox" style="margin: 12px 0; padding: 10px 14px; background: rgba(22, 163, 74, 0.08); border: 1px solid rgba(22, 163, 74, 0.25); border-radius: 10px; font-size: 12px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+              <span id="assessmentConsentStatusText" style="color: #15803d; display: flex; align-items: center; gap: 6px; font-weight: 700;">
+                <span>🔒</span> تم توثيق الموافقة الطبية وسياسة الخصوصية
+              </span>
+              <button type="button" class="soft-button" style="padding: 2px 8px; font-size: 11px;" onclick="showScreen('consent')">مراجعة البنود</button>
+            </div>
             <button id="submitAssessment" class="solid-button full">إرسال للطبيب</button>
           </article>
           <article class="panel insight-panel">
