@@ -804,15 +804,36 @@ function showToast(message) {
 }
 
 // --- Environment Config + Real Database (Firebase Firestore) ---
-const runtimeConfig = window.HEALTH_VIBE_CONFIG || {};
-const firebaseConfig = runtimeConfig.firebase;
+const DEFAULT_FIREBASE_CONFIG = {
+  apiKey: "AIzaSyANyIglmiKcdM0I2EKkjPhzMjKR58o8BRM",
+  authDomain: "health-vibes-a4b3b.firebaseapp.com",
+  projectId: "health-vibes-a4b3b",
+  storageBucket: "health-vibes-a4b3b.firebasestorage.app",
+  messagingSenderId: "21682568356",
+  appId: "1:21682568356:web:d38947f11647fdfef13a31",
+  measurementId: "G-FSHSN2XB4L"
+};
 
-if (!firebaseConfig || !firebaseConfig.projectId) {
-  throw new Error("Missing Health Vibe environment config. Create app/config.js from app/config.example.js.");
-}
+const runtimeConfig = window.HEALTH_VIBE_CONFIG || {};
+const firebaseConfig = (runtimeConfig.firebase && runtimeConfig.firebase.projectId)
+  ? runtimeConfig.firebase
+  : DEFAULT_FIREBASE_CONFIG;
+
+// Fallback loader dismiss timer in case Firebase CDN or network hangs
+const loaderSafetyTimer = window.setTimeout(() => {
+  if (loader && !loader.classList.contains("is-done")) {
+    console.warn("Loader safety timeout: dismissing loader.");
+    loader.classList.add("is-done");
+    if (publicSite && publicSite.classList.contains("is-hidden")) {
+      publicSite.classList.remove("is-hidden");
+    }
+  }
+}, 2500);
 
 // Initialize Firebase
-firebase.initializeApp(firebaseConfig);
+if (!firebase.apps || !firebase.apps.length) {
+  firebase.initializeApp(firebaseConfig);
+}
 const db = firebase.firestore();
 const auth = firebase.auth();
 const googleProvider = new firebase.auth.GoogleAuthProvider();
@@ -2743,6 +2764,7 @@ logoutButton.addEventListener("click", leaveApp);
 
 window.addEventListener("load", () => {
   auth.onAuthStateChanged(async (user) => {
+    window.clearTimeout(loaderSafetyTimer);
     if (user) {
       const isOwner = isOwnerUser(user.email);
       let displayName = user.displayName;
@@ -2798,7 +2820,7 @@ window.addEventListener("load", () => {
       window.setTimeout(() => {
         loader.classList.add("is-done");
         publicSite.classList.remove("is-hidden");
-      }, 900);
+      }, 250);
     }
   });
 });
