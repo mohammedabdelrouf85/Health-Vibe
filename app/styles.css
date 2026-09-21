@@ -3218,8 +3218,54 @@ body.dark .report-locked-card {
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.08);
 }
 
+/* ==========================================================================
+   DYNAMIC MEDICAL REPORT BUILDER & CERTIFIED REPORT STYLES
+   ========================================================================== */
+.doctor-report-builder-card {
+  transition: border-color .2s ease;
+}
+
+.doctor-report-builder-card:focus-within {
+  border-color: var(--teal) !important;
+}
+
+.doctor-report-builder-card textarea:focus,
+.doctor-report-builder-card input:focus {
+  outline: none;
+  border-color: var(--teal) !important;
+  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.15);
+}
+
+.report-prescription-section .prescriptions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.report-page.official-certified-report {
+  width: min(880px, 100%);
+  margin: 0 auto;
+  border-radius: 20px;
+  padding: 34px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.04);
+}
+
 body.dark .report-page.official-certified-report {
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+}
+
+.doctor-preview-banner {
+  animation: fadeIn 0.3s ease;
+}
+
+.official-clinical-seal {
+  transition: transform 0.2s ease;
+}
+
+.official-clinical-seal:hover {
+  transform: rotate(0deg) scale(1.05);
 }
 
 /* PRINT MEDIA QUERY FOR CLEAN MEDICAL REPORTS */
@@ -3232,7 +3278,7 @@ body.dark .report-page.official-certified-report {
   body, html {
     background: #ffffff !important;
     color: #000000 !important;
-    font-size: 12pt !important;
+    font-size: 11pt !important;
   }
 
   /* Hide everything on the page except the active report */
@@ -3243,6 +3289,7 @@ body.dark .report-page.official-certified-report {
   .toast,
   .no-print,
   .report-actions-toolbar,
+  .doctor-preview-banner,
   aside.sidebar,
   #menuToggle,
   #loader,
@@ -3270,24 +3317,85 @@ body.dark .report-page.official-certified-report {
   }
 
   .report-page.official-certified-report {
-    border: 1px solid #999999 !important;
+    border: 1.5px solid #333333 !important;
     box-shadow: none !important;
-    padding: 20px !important;
+    padding: 24px !important;
     margin: 0 !important;
     background: #ffffff !important;
     color: #000000 !important;
-    border-radius: 0 !important;
+    border-radius: 4px !important;
     page-break-inside: avoid;
   }
 
-  .report-page.official-certified-report * {
+  .report-page.official-certified-report .report-header {
+    border-bottom: 2px solid #000000 !important;
+  }
+
+  .report-page.official-certified-report strong,
+  .report-page.official-certified-report span,
+  .report-page.official-certified-report p,
+  .report-page.official-certified-report div {
     color: #000000 !important;
-    background-color: transparent !important;
+  }
+
+  .report-page.official-certified-report .pill {
+    border: 1px solid #000000 !important;
+    background: #f3f4f6 !important;
+    color: #000000 !important;
   }
 
   .official-clinical-seal {
-    border: 2px solid #000000 !important;
+    border: 2px solid #16a34a !important;
+    background: #f0fdf4 !important;
+  }
+
+  .qr-verify-box svg {
+    display: block !important;
   }
 }
 
+/* ==========================================================================
+   📐 CLINICAL RULES & VERSIONING GOVERNANCE STYLES
+   ========================================================================== */
+.rules-governance-card {
+  width: min(720px, 96vw) !important;
+  max-height: 88vh;
+  overflow-y: auto;
+  padding: 24px;
+}
 
+.doctor-rules-card {
+  transition: all 0.2s ease-in-out;
+}
+
+.doctor-rules-card:hover {
+  border-color: var(--teal);
+}
+
+.rules-spec-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  margin-top: 10px;
+}
+
+.rules-spec-table th,
+.rules-spec-table td {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  text-align: start;
+}
+
+.rules-spec-table th {
+  background: var(--surface-2);
+  color: var(--teal-2);
+  font-weight: 700;
+}
+
+body.dark .rules-spec-table th {
+  color: var(--ink);
+}
+
+.rules-spec-table tr:hover td {
+  background: var(--surface-2);
+}

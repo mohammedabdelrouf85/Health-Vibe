@@ -826,6 +826,34 @@
     </div>
   </div>
 
+  <!-- Clinical Risk Rules Governance & Versioning Modal -->
+  <div id="rulesGovernanceModal" class="confirm-modal" aria-hidden="true">
+    <div class="confirm-card rules-governance-card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; border-bottom: 1px solid var(--line); padding-bottom: 10px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 22px;">📐</span>
+          <div>
+            <h3 id="rulesGovModalTitle" style="margin: 0; font-size: 16px;">حوكمة ومواصفات قواعد الفرز السريري</h3>
+            <small style="color: var(--muted); font-size: 11.5px;">Clinical Risk Rules Registry &amp; Versioning Matrix</small>
+          </div>
+        </div>
+        <button id="closeRulesGovModalBtn" type="button" class="outline-button" style="padding: 4px 10px; font-size: 12px; border-radius: 8px;">✕ إغلاق</button>
+      </div>
+
+      <div style="margin-bottom: 14px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+        <label for="rulesGovVersionSelect" style="font-size: 13px; font-weight: 700;">إصدار القواعد (Rule Engine Version):</label>
+        <select id="rulesGovVersionSelect" class="search-input" style="padding: 4px 10px; font-size: 12.5px; width: auto; font-family: monospace;">
+          <!-- Populated dynamically -->
+        </select>
+        <span id="rulesGovActiveBadge" class="pill ok" style="font-size: 11px;">نشط حالياً (Active)</span>
+      </div>
+
+      <div id="rulesGovDetailsContainer">
+        <!-- Injected dynamically -->
+      </div>
+    </div>
+  </div>
+
   <!-- Floating dark mode toggle -->
   <button id="themeToggle" class="theme-fab" aria-label="Toggle dark mode" title="Toggle dark mode">
     <span class="theme-fab-icon">🌙</span>
