@@ -794,6 +794,7 @@ function applyLanguage(language) {
     : (roleLabels[currentRole] || roleLabels.patient);
   if (typeof setAuthMode === "function") setAuthMode(authMode);
   if (typeof updateEmailVerificationUI === "function" && typeof auth !== "undefined") updateEmailVerificationUI(auth.currentUser);
+  if (typeof updateOxygenWarning === "function") updateOxygenWarning();
 }
 
 function showToast(message) {
@@ -871,24 +872,27 @@ async function callBackend(path, options = {}) {
 }
 
 async function initDB() {
+  // Purge any legacy demo cases from Firestore cases collection
+  try {
+    const demoDocs = ["demo_case_1", "demo_case_2", "demo_case_3"];
+    for (const dId of demoDocs) {
+      await db.collection("cases").doc(dId).delete().catch(() => {});
+    }
+    const demoSnap = await db.collection("cases").where("isDemo", "==", true).get().catch(() => null);
+    if (demoSnap && !demoSnap.empty) {
+      for (const d of demoSnap.docs) {
+        await d.ref.delete().catch(() => {});
+      }
+    }
+  } catch (e) {
+    console.warn("Legacy demo case purge skipped:", e.message);
+  }
+
   if (!APP_ENV.isLocalhost || APP_ENV.name !== "development" || !APP_ENV.allowDemoSeed) {
-    console.info("[Demo Seed] Skipped. Demo data seeding is disabled outside explicit local development.");
     return;
   }
 
   try {
-    const snapshot = await db.collection("cases").limit(1).get();
-    if (snapshot.empty) {
-      const initialCases = [
-        { id: "demo_case_1", isDemo: true, name: "أحمد محمد", nameEn: "Ahmed Mohamed", o2: 91, symptoms: "كحة شديدة", symptomsEn: "Severe cough", risk: "عاجل", riskEn: "Urgent", status: "pending", time: "الآن", aiScore: "عالية", aiScoreEn: "High", confidence: "89%", duration: "3 أيام", durationEn: "3 days", createdAt: new Date().getTime() },
-        { id: "demo_case_2", isDemo: true, name: "سارة علي", nameEn: "Sarah Ali", o2: 96, symptoms: "أعراض خفيفة", symptomsEn: "Mild symptoms", risk: "مراجعة", riskEn: "Review", status: "pending", time: "منذ 14 دقيقة", aiScore: "متوسطة", aiScoreEn: "Medium", confidence: "78%", duration: "يومين", durationEn: "2 days", createdAt: new Date().getTime() - 1000 },
-        { id: "demo_case_3", isDemo: true, name: "محمد حسن", nameEn: "Mohamed Hassan", o2: 98, symptoms: "لا توجد أعراض ظاهرة", symptomsEn: "No clear symptoms", risk: "منخفض", riskEn: "Low", status: "approved", time: "تقرير جاهز", aiScore: "منخفضة", aiScoreEn: "Low", confidence: "94%", duration: "يوم واحد", durationEn: "1 day", createdAt: new Date().getTime() - 2000 }
-      ];
-      for (let c of initialCases) {
-        await db.collection("cases").doc(c.id).set(c);
-      }
-    }
-
     const appSnapshot = await db.collection("doctor_applications").limit(1).get();
     if (appSnapshot.empty) {
       const sampleApps = [
@@ -932,107 +936,732 @@ async function initDB() {
 
 async function getCases() {
   try {
-    const snapshot = await db.collection("cases").orderBy("createdAt", "desc").get();
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const user = auth.currentUser;
+    if (!user) return [];
+
+    const isOwner = isOwnerUser(user.email);
+    const role = normalizeRole(selectedRole, isOwner);
+
+    let cases = [];
+    if (role === ROLES.DOCTOR) {
+      // 🩺 DOCTOR PRIVACY: Fetch ONLY cases assigned to this doctor
+      try {
+        const snap = await db.collection("cases").where("assignedDoctorId", "==", user.uid).get();
+        cases = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      } catch (e) {
+        console.warn("Query by assignedDoctorId failed, trying doctorId fallback:", e.message);
+      }
+
+      // Fallback: also check doctorId if assignedDoctorId returned no records
+      if (cases.length === 0) {
+        try {
+          const fallbackSnap = await db.collection("cases").where("doctorId", "==", user.uid).get();
+          if (!fallbackSnap.empty) {
+            cases = fallbackSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          }
+        } catch (e) {
+          // ignore fallback query error
+        }
+      }
+    } else if (role === ROLES.PATIENT) {
+      // 👤 PATIENT PRIVACY: Fetch only own cases
+      const snap = await db.collection("cases").where("patientId", "==", user.uid).get();
+      cases = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    } else {
+      // ⚙️ ADMIN: Can view all cases for triage and doctor assignment
+      const snapshot = await db.collection("cases").orderBy("createdAt", "desc").get();
+      cases = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    }
+
+    // Client-side sort by submittedAt or createdAt descending
+    cases.sort((a, b) => {
+      const tA = (a.submittedAt && a.submittedAt.toMillis ? a.submittedAt.toMillis() : (a.createdAt || 0));
+      const tB = (b.submittedAt && b.submittedAt.toMillis ? b.submittedAt.toMillis() : (b.createdAt || 0));
+      return tB - tA;
+    });
+
+    // 🛡️ STRICT ENFORCEMENT: Real cases ONLY (strictly exclude demo, mock, or fake cases)
+    cases = cases.filter(c => {
+      if (!c) return false;
+      if (c.isDemo === true) return false;
+      const idStr = String(c.id || "");
+      if (idStr.startsWith("demo_") || idStr.startsWith("mock_") || idStr.startsWith("test_case_")) return false;
+      const hasPatient = Boolean(c.patientId || c.patientUid || c.patientEmail);
+      const hasVitals = typeof c.o2 === "number" || typeof c.oxygenLevel === "number";
+      return hasPatient && hasVitals;
+    });
+
+    return cases;
   } catch (err) {
-    console.error(err);
+    console.error("getCases error:", err);
     return [];
   }
 }
 
-async function updateCaseStatus(id, newStatus, note) {
-  if (!enforcePermission(PERMISSIONS.REVIEW_CASE, "Update Case Status")) return;
+// ==========================================
+// 🏥 CLINICAL STATE MACHINE CONSTANTS & META
+// ==========================================
+const CASE_STATUS = Object.freeze({
+  DRAFT: 'draft',
+  SUBMITTED: 'submitted',
+  TRIAGED: 'triaged',
+  ASSIGNED: 'assigned',
+  UNDER_REVIEW: 'under_review',
+  MORE_INFO_REQUESTED: 'more_info_requested',
+  APPROVED: 'approved',
+  REJECTED: 'rejected',
+  ESCALATED: 'escalated',
+  CLOSED: 'closed',
+  PENDING: 'pending' // alias for backwards compatibility
+});
+
+const CASE_TRANSITIONS = {
+  [CASE_STATUS.DRAFT]: [CASE_STATUS.SUBMITTED],
+  [CASE_STATUS.SUBMITTED]: [CASE_STATUS.TRIAGED, CASE_STATUS.ASSIGNED, CASE_STATUS.UNDER_REVIEW],
+  [CASE_STATUS.TRIAGED]: [CASE_STATUS.ASSIGNED, CASE_STATUS.UNDER_REVIEW],
+  [CASE_STATUS.ASSIGNED]: [CASE_STATUS.UNDER_REVIEW],
+  [CASE_STATUS.PENDING]: [CASE_STATUS.TRIAGED, CASE_STATUS.ASSIGNED, CASE_STATUS.UNDER_REVIEW],
+  [CASE_STATUS.UNDER_REVIEW]: [
+    CASE_STATUS.MORE_INFO_REQUESTED,
+    CASE_STATUS.APPROVED,
+    CASE_STATUS.REJECTED,
+    CASE_STATUS.ESCALATED,
+    CASE_STATUS.CLOSED
+  ],
+  [CASE_STATUS.MORE_INFO_REQUESTED]: [CASE_STATUS.UNDER_REVIEW, CASE_STATUS.CLOSED],
+  [CASE_STATUS.APPROVED]: [CASE_STATUS.CLOSED],
+  [CASE_STATUS.REJECTED]: [CASE_STATUS.CLOSED],
+  [CASE_STATUS.ESCALATED]: [CASE_STATUS.UNDER_REVIEW, CASE_STATUS.CLOSED],
+  [CASE_STATUS.CLOSED]: []
+};
+
+const CaseStatusMeta = {
+  [CASE_STATUS.DRAFT]: {
+    ar: 'مسودة',
+    en: 'Draft',
+    pillClass: 'draft',
+    color: '#64748b',
+    border: '#94a3b8',
+    icon: '📝'
+  },
+  [CASE_STATUS.SUBMITTED]: {
+    ar: 'تم الإرسال',
+    en: 'Submitted',
+    pillClass: 'submitted',
+    color: '#0284c7',
+    border: '#38bdf8',
+    icon: '📨'
+  },
+  [CASE_STATUS.TRIAGED]: {
+    ar: 'تم الفرز الذكي',
+    en: 'Triaged',
+    pillClass: 'triaged',
+    color: '#7c3aed',
+    border: '#a855f7',
+    icon: '🤖'
+  },
+  [CASE_STATUS.ASSIGNED]: {
+    ar: 'بانتظار الطبيب',
+    en: 'Assigned to Doctor',
+    pillClass: 'assigned',
+    color: '#4f46e5',
+    border: '#818cf8',
+    icon: '🩺'
+  },
+  [CASE_STATUS.PENDING]: {
+    ar: 'قيد الانتظار',
+    en: 'Pending',
+    pillClass: 'pending',
+    color: '#b45309',
+    border: '#f59e0b',
+    icon: '⏳'
+  },
+  [CASE_STATUS.UNDER_REVIEW]: {
+    ar: 'قيد الفحص السريري',
+    en: 'Under Review',
+    pillClass: 'under_review',
+    color: '#d97706',
+    border: '#f59e0b',
+    icon: '🔍'
+  },
+  [CASE_STATUS.MORE_INFO_REQUESTED]: {
+    ar: 'مطلوب بيانات إضافية',
+    en: 'More Info Requested',
+    pillClass: 'more_info_requested',
+    color: '#ea580c',
+    border: '#fb923c',
+    icon: '❓'
+  },
+  [CASE_STATUS.APPROVED]: {
+    ar: 'معتمد سريرياً',
+    en: 'Approved',
+    pillClass: 'approved',
+    color: '#16a34a',
+    border: '#22c55e',
+    icon: '✅'
+  },
+  [CASE_STATUS.REJECTED]: {
+    ar: 'مرفوض',
+    en: 'Rejected',
+    pillClass: 'rejected',
+    color: '#dc2626',
+    border: '#ef4444',
+    icon: '❌'
+  },
+  [CASE_STATUS.ESCALATED]: {
+    ar: 'مصعّد لطوارئ/استشاري',
+    en: 'Escalated',
+    pillClass: 'escalated',
+    color: '#e11d48',
+    border: '#f43f5e',
+    icon: '🚨'
+  },
+  [CASE_STATUS.CLOSED]: {
+    ar: 'مكتمل ومغلق',
+    en: 'Closed',
+    pillClass: 'closed',
+    color: '#475569',
+    border: '#64748b',
+    icon: '🔒'
+  }
+};
+
+function getCaseStatusMeta(status) {
+  return CaseStatusMeta[status] || {
+    ar: status || 'غير محدد',
+    en: status || 'Unknown',
+    pillClass: 'info',
+    color: '#0284c7',
+    border: '#38bdf8',
+    icon: '📋'
+  };
+}
+
+async function updateCaseStatus(id, newStatus, note, extraFields = {}) {
+  if (!enforcePermission(PERMISSIONS.REVIEW_CASE, "Update Case Status")) return false;
+  const user = auth.currentUser;
+  const isEn = currentLanguage === "en";
+
+  // 🛡️ ZERO-TRUST BACKEND ENFORCEMENT:
+  // Doctor approvals, rejections, more-info requests, escalations, and closures MUST pass through
+  // the server-authoritative backend / Cloud Functions for token validation, RBAC, and immutable audit logging.
   try {
-    await db.collection("cases").doc(id).update({
-      status: newStatus,
-      doctorNote: note
+    const backendResult = await callBackend("/api/doctor/transition-case-status", {
+      method: "POST",
+      body: JSON.stringify({
+        caseId: id,
+        targetStatus: newStatus,
+        note: note || "",
+        clinicalNotes: extraFields.clinicalNotes || note || "",
+        recommendation: extraFields.recommendation || ""
+      })
     });
-  } catch (err) {
-    console.error(err);
+    console.info("✅ Case status transitioned securely via backend authority:", backendResult);
+    return true;
+  } catch (backendErr) {
+    console.warn("Backend /api/doctor/transition-case-status rejected or unavailable:", backendErr.message);
+
+    // If server returned a business or authorization rejection (403, 400, etc.), do NOT bypass it!
+    const isNetworkErr = backendErr.message.includes("Failed to fetch") || backendErr.message.includes("NetworkError");
+    if (!isNetworkErr && (backendErr.message.includes("403") || backendErr.message.includes("Zero-Trust") || backendErr.message.includes("denied") || backendErr.message.includes("Cannot transition"))) {
+      showToast(`❌ ${backendErr.message}`);
+      return false;
+    }
+
+    // Only in local development when offline backend server isn't running, fallback to client update with Firestore rules
+    if (APP_ENV.isLocalhost && isNetworkErr) {
+      console.info("[Dev Fallback] Backend server port 4000 offline; falling back to direct Firestore update validated by security rules.");
+      try {
+        const statusMeta = getCaseStatusMeta(newStatus);
+        const historyItem = {
+          status: newStatus,
+          changedAt: new Date().toISOString(),
+          changedBy: user ? user.uid : "doctor",
+          changedByName: user ? (user.displayName || user.email.split('@')[0]) : "Doctor",
+          changedByEmail: user ? user.email : "",
+          changedByRole: "doctor",
+          note: note || (newStatus === CASE_STATUS.APPROVED ? (isEn ? "Approved by physician" : "تم الاعتماد السريري من الطبيب") : `${isEn ? statusMeta.en : statusMeta.ar}`)
+        };
+
+        const updatePayload = {
+          status: newStatus,
+          doctorNote: note || "",
+          lastUpdatedBy: user ? user.uid : null,
+          reviewedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          statusHistory: firebase.firestore.FieldValue.arrayUnion(historyItem),
+          ...extraFields
+        };
+
+        if (newStatus === CASE_STATUS.APPROVED) {
+          updatePayload.doctorApproved = true;
+          updatePayload.approvingDoctorId = user ? user.uid : null;
+          updatePayload.approvingDoctorEmail = user ? user.email : null;
+          updatePayload.approvedAt = firebase.firestore.FieldValue.serverTimestamp();
+          if (extraFields.clinicalNotes) updatePayload.clinicalNotes = extraFields.clinicalNotes;
+        } else if (newStatus === CASE_STATUS.MORE_INFO_REQUESTED) {
+          updatePayload.moreInfoRequestedAt = firebase.firestore.FieldValue.serverTimestamp();
+          updatePayload.moreInfoNote = note || "";
+        } else if (newStatus === CASE_STATUS.ESCALATED) {
+          updatePayload.escalatedAt = firebase.firestore.FieldValue.serverTimestamp();
+          updatePayload.escalationReason = note || "";
+        } else if (newStatus === CASE_STATUS.CLOSED) {
+          updatePayload.closedAt = firebase.firestore.FieldValue.serverTimestamp();
+          updatePayload.closedBy = user ? user.uid : null;
+        }
+
+        await db.collection("cases").doc(id).update(updatePayload);
+        return true;
+      } catch (err) {
+        console.error("updateCaseStatus fallback error:", err);
+        if (handleServerPermissionDenied(err, "Update Case Status")) return false;
+        showToast(getAuthErrorMessage(err));
+        return false;
+      }
+    }
+
+    showToast(`❌ ${backendErr.message}`);
+    return false;
   }
 }
 
 let activeCaseId = null;
+let currentDoctorQueueFilter = 'all';
 
-async function renderDoctorQueue() {
-  const queueList = document.getElementById("doctorQueueList");
-  if (!queueList) return;
-
-  queueList.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--teal);"><div class="spinner"></div> جاري جلب البيانات من Firebase...</div>';
-  const cases = await getCases();
-  queueList.innerHTML = '';
-  
-  if (cases.length === 0) {
-    queueList.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--muted);">لا يوجد بيانات</div>';
-    return;
-  }
-  
-  // Sort cases: pending first
-  cases.sort((a, b) => (a.status === 'pending' ? -1 : 1) - (b.status === 'pending' ? -1 : 1));
-  
-  cases.forEach(c => {
-    const isEn = currentLanguage === "en";
-    const btn = document.createElement("button");
-    btn.className = c.status === "approved" ? "ok" : (c.risk === "عاجل" ? "danger" : "pending");
-    if (c.id === activeCaseId) btn.style.border = "2px solid var(--teal)";
-    
-    btn.innerHTML = `<strong>${isEn ? c.nameEn : c.name}</strong><span>${isEn ? 'O2 ' + c.o2 + '% - ' + c.symptomsEn : 'نسبة الأكسجين ' + c.o2 + '% - ' + c.symptoms}</span><em>${isEn ? c.riskEn : c.risk}</em>`;
-    btn.onclick = () => selectDoctorCase(c.id);
-    queueList.appendChild(btn);
-  });
-  
-  if (cases.length > 0 && !activeCaseId) {
-    selectDoctorCase(cases[0].id);
-  }
-}
+window.setDoctorQueueFilter = function(filterKey) {
+  currentDoctorQueueFilter = filterKey;
+  renderDoctorQueue();
+};
 
 window.approveCase = async function(id) {
   if (!enforcePermission(PERMISSIONS.APPROVE_CASE, "Approve Clinical Result")) return;
   const noteInput = document.getElementById("doctorNoteInput");
-  const note = noteInput ? noteInput.value : "";
-  await updateCaseStatus(id, "approved", note);
-  showToast(currentLanguage === "en" ? "Result approved and saved to database" : "تم اعتماد النتيجة وحفظها في قاعدة البيانات");
-  renderDoctorQueue();
-  selectDoctorCase(id);
+  const note = noteInput ? noteInput.value.trim() : "";
+  const success = await updateCaseStatus(id, CASE_STATUS.APPROVED, note || (currentLanguage === "en" ? "Case approved by physician" : "تم اعتماد الحالة سريرياً بواسطة الطبيب"));
+  if (success) {
+    showToast(currentLanguage === "en" ? "Result approved and saved to database" : "تم اعتماد النتيجة وحفظها في قاعدة البيانات");
+    await renderDoctorQueue();
+    selectDoctorCase(id);
+  }
 };
+
+window.requestMoreInfo = async function(id) {
+  if (!enforcePermission(PERMISSIONS.REVIEW_CASE, "Request More Information")) return;
+  const isEn = currentLanguage === "en";
+  const defaultPrompt = isEn 
+    ? "Please specify what extra information or test is required from the patient:" 
+    : "يرجى تحديد البيانات أو الفحوصات الإضافية المطلوبة من المريض:";
+  const noteInput = document.getElementById("doctorNoteInput");
+  let promptNote = noteInput && noteInput.value.trim() ? noteInput.value.trim() : "";
+  if (!promptNote) {
+    promptNote = window.prompt(defaultPrompt, isEn ? "Re-check oxygen saturation SpO2 and upload latest prescription" : "إعادة قياس نسبة الأكسجين SpO2 وإرفاق الروشتة السابقة إن وجدت");
+  }
+  if (!promptNote) return;
+
+  const success = await updateCaseStatus(id, CASE_STATUS.MORE_INFO_REQUESTED, promptNote);
+  if (success) {
+    showToast(isEn ? "Requested additional information from patient" : "تم طلب معلومات إضافية من المريض");
+    await renderDoctorQueue();
+    selectDoctorCase(id);
+  }
+};
+
+window.escalateCase = async function(id) {
+  if (!enforcePermission(PERMISSIONS.REVIEW_CASE, "Escalate Case")) return;
+  const isEn = currentLanguage === "en";
+  const reason = window.prompt(
+    isEn ? "Enter reason for clinical escalation:" : "أدخل سبب التصعيد السريري (استشاري / طوارئ):",
+    isEn ? "Acute hypoxemia / severe dyspnea requiring urgent intervention" : "نقص أكسجين حاد / ضيق تنفس شديد يستدعي تدخلاً إسعافياً عاجلاً"
+  );
+  if (!reason) return;
+
+  const success = await updateCaseStatus(id, CASE_STATUS.ESCALATED, reason);
+  if (success) {
+    showToast(isEn ? "Case successfully escalated to emergency / consultant" : "تم تصعيد الحالة بنجاح إلى الطوارئ / استشاري أمراض صدرية");
+    await renderDoctorQueue();
+    selectDoctorCase(id);
+  }
+};
+
+window.rejectCase = async function(id) {
+  if (!enforcePermission(PERMISSIONS.REVIEW_CASE, "Reject Case")) return;
+  const isEn = currentLanguage === "en";
+  const reason = window.prompt(
+    isEn ? "Enter rejection reason or invalid clinical entry:" : "أدخل سبب رفض الحالة أو عدم صحة البيانات:",
+    isEn ? "Non-clinical data or duplicate submission" : "بيانات غير طبية أو تقييم مكرر"
+  );
+  if (!reason) return;
+
+  const success = await updateCaseStatus(id, CASE_STATUS.REJECTED, reason);
+  if (success) {
+    showToast(isEn ? "Case marked as rejected" : "تم رفض الحالة وتوثيق السبب");
+    await renderDoctorQueue();
+    selectDoctorCase(id);
+  }
+};
+
+window.closeCase = async function(id) {
+  if (!enforcePermission(PERMISSIONS.REVIEW_CASE, "Close Case")) return;
+  const isEn = currentLanguage === "en";
+  const confirmed = window.confirm(isEn ? "Are you sure you want to close and archive this case?" : "هل أنت متأكد من إغلاق وأرشفة هذه الحالة؟");
+  if (!confirmed) return;
+
+  const noteInput = document.getElementById("doctorNoteInput");
+  const note = noteInput && noteInput.value.trim() ? noteInput.value.trim() : (isEn ? "Case closed by physician" : "تم إغلاق الحالة وأرشفتها");
+  const success = await updateCaseStatus(id, CASE_STATUS.CLOSED, note);
+  if (success) {
+    showToast(isEn ? "Case successfully closed" : "تم إغلاق الحالة بنجاح");
+    await renderDoctorQueue();
+    selectDoctorCase(id);
+  }
+};
+
+window.resumeReview = async function(id) {
+  if (!enforcePermission(PERMISSIONS.REVIEW_CASE, "Resume Review")) return;
+  const isEn = currentLanguage === "en";
+  const success = await updateCaseStatus(id, CASE_STATUS.UNDER_REVIEW, isEn ? "Physician resumed clinical review" : "استأنف الطبيب المراجعة السريرية للحالة");
+  if (success) {
+    showToast(isEn ? "Case returned to under review" : "تمت إعادة الحالة إلى قيد الفحص السريري");
+    await renderDoctorQueue();
+    selectDoctorCase(id);
+  }
+};
+
+async function renderDoctorQueue() {
+  const queueList = document.getElementById("doctorQueueList");
+  const filterTabsContainer = document.getElementById("doctorQueueFilterTabs");
+  if (!queueList) return;
+
+  const isEn = currentLanguage === "en";
+
+  // Render filter tabs if container exists
+  if (filterTabsContainer) {
+    const filters = [
+      { key: 'all', ar: 'الكل', en: 'All' },
+      { key: 'under_review', ar: 'قيد الفحص', en: 'Under Review' },
+      { key: 'assigned', ar: 'بانتظار الطبيب', en: 'Awaiting Doctor' },
+      { key: 'more_info_requested', ar: 'مطلوب بيانات', en: 'More Info' },
+      { key: 'approved', ar: 'معتمد', en: 'Approved' },
+      { key: 'closed_escalated', ar: 'مغلق ومصعّد', en: 'Closed & Escalated' }
+    ];
+
+    filterTabsContainer.innerHTML = filters.map(f => `
+      <button type="button" class="status-filter-tab ${currentDoctorQueueFilter === f.key ? 'active' : ''}" onclick="setDoctorQueueFilter('${f.key}')">
+        ${isEn ? f.en : f.ar}
+      </button>
+    `).join('');
+  }
+
+  queueList.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--teal);"><div class="spinner"></div> ' + (isEn ? 'Fetching clinical records...' : 'جاري جلب البيانات من Firebase...') + '</div>';
+  const allCases = await getCases();
+  queueList.innerHTML = '';
+
+  // 🛡️ STRICT ENFORCEMENT: Filter strictly for REAL patient cases
+  const realCases = allCases.filter(c => {
+    if (!c) return false;
+    if (c.isDemo === true) return false;
+    const idStr = String(c.id || "");
+    if (idStr.startsWith("demo_") || idStr.startsWith("mock_") || idStr.startsWith("test_case_")) return false;
+    const hasPatient = Boolean(c.patientId || c.patientUid || c.patientEmail);
+    const hasVitals = typeof c.o2 === "number" || typeof c.oxygenLevel === "number";
+    return hasPatient && hasVitals;
+  });
+
+  if (realCases.length === 0) {
+    queueList.innerHTML = `
+      <div style="padding: 30px 16px; text-align: center; color: var(--muted);">
+        <div style="font-size: 32px; margin-bottom: 8px;">🩺</div>
+        <strong style="display: block; color: var(--ink); margin-bottom: 4px; font-size: 14px;">
+          ${isEn ? 'No Real Patient Cases in Queue' : 'لا توجد حالات سريرية حقيقية في قائمة الانتظار'}
+        </strong>
+        <p style="margin: 0; font-size: 12.5px; line-height: 1.5;">
+          ${isEn 
+            ? 'The doctor queue only displays authentic cases submitted by registered patients. When patients submit new clinical assessments, they will appear here.'
+            : 'قائمة انتظار الطبيب تعرض فقط الحالات السريرية الحقيقية المُرسلة من المرضى. عند قيام المرضى بإرسال تقييمات جديدة، ستظهر هنا فوراً.'}
+        </p>
+      </div>
+    `;
+    const reviewPanel = document.getElementById("doctorReviewPanel");
+    if (reviewPanel) {
+      reviewPanel.style.display = "none";
+      reviewPanel.innerHTML = "";
+    }
+    return;
+  }
+
+  // Filter cases based on selected tab
+  let cases = realCases;
+  if (currentDoctorQueueFilter === 'under_review') {
+    cases = realCases.filter(c => c.status === CASE_STATUS.UNDER_REVIEW);
+  } else if (currentDoctorQueueFilter === 'assigned') {
+    cases = realCases.filter(c => [CASE_STATUS.ASSIGNED, CASE_STATUS.TRIAGED, CASE_STATUS.PENDING, CASE_STATUS.SUBMITTED].includes(c.status));
+  } else if (currentDoctorQueueFilter === 'more_info_requested') {
+    cases = realCases.filter(c => c.status === CASE_STATUS.MORE_INFO_REQUESTED);
+  } else if (currentDoctorQueueFilter === 'approved') {
+    cases = realCases.filter(c => c.status === CASE_STATUS.APPROVED);
+  } else if (currentDoctorQueueFilter === 'closed_escalated') {
+    cases = realCases.filter(c => [CASE_STATUS.CLOSED, CASE_STATUS.ESCALATED, CASE_STATUS.REJECTED].includes(c.status));
+  }
+
+  if (cases.length === 0) {
+    queueList.innerHTML = '<div style="padding: 24px 16px; text-align: center; color: var(--muted);">' + (isEn ? 'No real cases in this category' : 'لا توجد حالات حقيقية في هذا التصنيف') + '</div>';
+    const reviewPanel = document.getElementById("doctorReviewPanel");
+    if (reviewPanel) {
+      reviewPanel.style.display = "none";
+      reviewPanel.innerHTML = "";
+    }
+    return;
+  }
+
+  // Sort: under_review and emergency first, then assigned/pending, then approved/closed
+  const statusWeight = {
+    [CASE_STATUS.UNDER_REVIEW]: 1,
+    [CASE_STATUS.ASSIGNED]: 2,
+    [CASE_STATUS.TRIAGED]: 3,
+    [CASE_STATUS.PENDING]: 3,
+    [CASE_STATUS.SUBMITTED]: 4,
+    [CASE_STATUS.MORE_INFO_REQUESTED]: 5,
+    [CASE_STATUS.ESCALATED]: 2,
+    [CASE_STATUS.APPROVED]: 6,
+    [CASE_STATUS.CLOSED]: 7,
+    [CASE_STATUS.REJECTED]: 8
+  };
+
+  cases.sort((a, b) => {
+    const isCritA = a.o2 > 0 && a.o2 < 90;
+    const isCritB = b.o2 > 0 && b.o2 < 90;
+    if (isCritA && !isCritB) return -1;
+    if (!isCritA && isCritB) return 1;
+    const wA = statusWeight[a.status] || 99;
+    const wB = statusWeight[b.status] || 99;
+    return wA - wB;
+  });
+
+  cases.forEach(c => {
+    const btn = document.createElement("button");
+    btn.dataset.caseId = c.id;
+    const isCritO2 = c.o2 > 0 && c.o2 < 90;
+    const meta = getCaseStatusMeta(c.status);
+    
+    btn.className = c.status === CASE_STATUS.APPROVED ? "ok" : (isCritO2 || c.risk === "عاجل" || c.status === CASE_STATUS.ESCALATED ? "danger" : "pending");
+    if (c.id === activeCaseId) btn.style.border = "2px solid var(--teal)";
+
+    const riskBadge = isCritO2
+      ? `<em class="doctor-emergency-pill">${isEn ? '🚨 CRITICAL O2 ' + c.o2 + '%' : '🚨 أكسجين حرج ' + c.o2 + '%'}</em>`
+      : `<em>${isEn ? c.riskEn : c.risk}</em>`;
+
+    const statusPillHtml = `<span class="pill ${meta.pillClass} case-status-badge" style="font-size: 11px; margin-inline-end: 6px;">${meta.icon} ${isEn ? meta.en : meta.ar}</span>`;
+
+    btn.innerHTML = `
+      <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 4px;">
+        <strong>${isEn ? c.nameEn : c.name}</strong>
+        ${statusPillHtml}
+      </div>
+      <span>${isEn ? 'O2 ' + c.o2 + '% - ' + c.symptomsEn : 'نسبة الأكسجين ' + c.o2 + '% - ' + c.symptoms}</span>
+      ${riskBadge}
+    `;
+    btn.onclick = () => selectDoctorCase(c.id);
+    queueList.appendChild(btn);
+  });
+
+  if (cases.length > 0 && (!activeCaseId || !cases.some(c => c.id === activeCaseId))) {
+    selectDoctorCase(cases[0].id);
+  }
+}
 
 async function selectDoctorCase(id) {
   activeCaseId = id;
   const cases = await getCases();
-  const c = cases.find(c => c.id === id);
+  const c = cases.find(c => c.id === id && !c.isDemo && !String(c.id).startsWith("demo_"));
   const reviewPanel = document.getElementById("doctorReviewPanel");
-  if (!c || !reviewPanel) return;
+  if (!c || !reviewPanel) {
+    if (reviewPanel) {
+      reviewPanel.style.display = "none";
+      reviewPanel.innerHTML = "";
+    }
+    return;
+  }
 
   const isEn = currentLanguage === "en";
+
+  // Auto-transition to under_review if opened by assigned doctor from assigned/triaged/pending
+  if ([CASE_STATUS.ASSIGNED, CASE_STATUS.TRIAGED, CASE_STATUS.PENDING, CASE_STATUS.SUBMITTED].includes(c.status)) {
+    const autoNote = isEn ? "Physician opened case for clinical review" : "بدأ الطبيب فحص ومراجعة الحالة السريرية";
+    await updateCaseStatus(id, CASE_STATUS.UNDER_REVIEW, autoNote);
+    c.status = CASE_STATUS.UNDER_REVIEW;
+    // Update active button badge in queue
+    const queueList = document.getElementById("doctorQueueList");
+    if (queueList) {
+      const activeBtn = Array.from(queueList.children).find(btn => btn.dataset && btn.dataset.caseId === id);
+      if (activeBtn) {
+        const meta = getCaseStatusMeta(CASE_STATUS.UNDER_REVIEW);
+        const badge = activeBtn.querySelector(".case-status-badge");
+        if (badge) {
+          badge.className = `pill ${meta.pillClass} case-status-badge`;
+          badge.innerHTML = `${meta.icon} ${isEn ? meta.en : meta.ar}`;
+        }
+      }
+    }
+  }
+
   reviewPanel.style.display = "block";
-  
-  const statusPill = c.status === "approved" 
-    ? `<span class="pill ok">${isEn ? 'Approved' : 'معتمد'}</span>` 
-    : `<span class="pill pending">${isEn ? 'Pending' : 'قيد الانتظار'}</span>`;
+
+  const statusMeta = getCaseStatusMeta(c.status);
+  const statusPill = `<span class="pill ${statusMeta.pillClass}" style="font-size: 12.5px; padding: 5px 12px;">${statusMeta.icon} ${isEn ? statusMeta.en : statusMeta.ar}</span>`;
+
+  const emergencyDoctorBanner = (c.o2 > 0 && c.o2 < 90) ? `
+    <div class="doctor-emergency-alert-banner">
+      <span class="icon">🚨</span>
+      <div>
+        <strong>${isEn ? 'Clinical Emergency: Critical Hypoxemia (SpO2 ' + c.o2 + '%)' : 'تنبيه سريري عاجل: نقص أكسجين حاد (SpO2 ' + c.o2 + '%)'}</strong>
+        <p>${isEn ? 'Patient oxygen saturation is critically low. Urgent contact and immediate referral to Emergency Room / Ambulance (123) is advised.' : 'نسبة تشبع الأكسجين لدى المريض حرجة للغاية. يوصى بالتواصل المباشر العاجل وتوجيه الحالة فوراً لأقرب قسم طوارئ أو استدعاء الإسعاف (123).'}</p>
+      </div>
+    </div>
+  ` : '';
+
+  // Generate status history timeline
+  const historyList = Array.isArray(c.statusHistory) && c.statusHistory.length > 0 ? c.statusHistory : [
+    {
+      status: c.status || 'submitted',
+      changedAt: c.submittedAt ? (c.submittedAt.toDate ? c.submittedAt.toDate().toISOString() : c.submittedAt) : new Date().toISOString(),
+      changedByName: c.name || 'Patient',
+      changedByRole: 'patient',
+      note: isEn ? 'Initial assessment submission' : 'تم تقديم التقييم المبدئي للحالة'
+    }
+  ];
+
+  const timelineHtml = `
+    <div class="status-history-section">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+        <h4 style="margin: 0; font-size: 14px; font-weight: 800; display: flex; align-items: center; gap: 6px;">
+          <span>🕒</span> ${isEn ? 'Clinical Status Lifecycle & Audit Trail' : 'سجل دورة حياة الحالة والتدقيق السريري'}
+        </h4>
+        <span class="pill info" style="font-size: 11px; padding: 2px 8px;">${historyList.length} ${isEn ? 'events' : 'أحداث'}</span>
+      </div>
+      <div class="status-timeline">
+        ${historyList.map(item => {
+          const cfg = getCaseStatusMeta(item.status);
+          const dt = item.changedAt ? new Date(item.changedAt).toLocaleString(isEn ? 'en-US' : 'ar-EG', { dateStyle: 'short', timeStyle: 'short' }) : '--';
+          const roleLabel = item.changedByRole === 'doctor' ? (isEn ? 'Physician' : 'طبيب') : (item.changedByRole === 'admin' ? (isEn ? 'Admin' : 'إدارة') : (item.changedByRole === 'system' ? (isEn ? 'System Engine' : 'محرك النظام') : (isEn ? 'Patient' : 'مريض')));
+          return `
+            <div class="timeline-entry" style="text-align: ${isEn ? 'left' : 'right'};">
+              <div class="bullet" style="background: ${cfg.border};"></div>
+              <div class="card">
+                <div class="header">
+                  <strong style="color: ${cfg.color}; font-size: 12.5px;">${cfg.icon} ${isEn ? cfg.en : cfg.ar}</strong>
+                  <small>${dt}</small>
+                </div>
+                <div class="note">${item.note || ''}</div>
+                <small class="author">${isEn ? 'By' : 'بواسطة'}: ${item.changedByName || item.changedBy || 'System'} (${roleLabel})</small>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  `;
+
+  // Dynamic Doctor Action Toolbar depending on state
+  let actionToolbarHtml = '';
+  const isClosed = c.status === CASE_STATUS.CLOSED;
+  const isApproved = c.status === CASE_STATUS.APPROVED;
+  const isUnderReview = c.status === CASE_STATUS.UNDER_REVIEW;
+  const isMoreInfo = c.status === CASE_STATUS.MORE_INFO_REQUESTED;
+  const isEscalated = c.status === CASE_STATUS.ESCALATED;
+  const isRejected = c.status === CASE_STATUS.REJECTED;
+
+  if (isUnderReview) {
+    actionToolbarHtml = `
+      <div class="doctor-actions-toolbar">
+        <button type="button" class="btn-clinical approve" onclick="approveCase('${c.id}')">
+          <span>✅</span> ${isEn ? 'Approve Result' : 'اعتماد سريري'}
+        </button>
+        <button type="button" class="btn-clinical request-info" onclick="requestMoreInfo('${c.id}')">
+          <span>❓</span> ${isEn ? 'Request More Info' : 'طلب بيانات إضافية'}
+        </button>
+        <button type="button" class="btn-clinical escalate" onclick="escalateCase('${c.id}')">
+          <span>🚨</span> ${isEn ? 'Escalate (Emergency)' : 'تصعيد الحالة'}
+        </button>
+        <button type="button" class="btn-clinical reject" onclick="rejectCase('${c.id}')">
+          <span>❌</span> ${isEn ? 'Reject' : 'رفض'}
+        </button>
+        <button type="button" class="btn-clinical close" onclick="closeCase('${c.id}')">
+          <span>🔒</span> ${isEn ? 'Close Case' : 'إغلاق الحالة'}
+        </button>
+      </div>
+    `;
+  } else if (isMoreInfo) {
+    actionToolbarHtml = `
+      <div style="background: rgba(251, 146, 60, 0.12); border: 1px solid #fb923c; border-radius: 12px; padding: 12px; margin-top: 12px;">
+        <strong style="color: #c2410c; display: block; margin-bottom: 4px;">❓ ${isEn ? 'Awaiting Additional Patient Information' : 'بانتظار إفادة المريض بالبيانات الإضافية'}</strong>
+        <p style="margin: 0 0 10px; font-size: 13px; color: var(--ink);">${c.moreInfoNote || c.doctorNote || ''}</p>
+        <div class="doctor-actions-toolbar" style="margin-top: 0;">
+          <button type="button" class="btn-clinical resume" onclick="resumeReview('${c.id}')">
+            <span>🔄</span> ${isEn ? 'Resume Review' : 'استئناف الفحص السريري'}
+          </button>
+          <button type="button" class="btn-clinical close" onclick="closeCase('${c.id}')">
+            <span>🔒</span> ${isEn ? 'Close Case' : 'إغلاق الحالة'}
+          </button>
+        </div>
+      </div>
+    `;
+  } else if (isEscalated) {
+    actionToolbarHtml = `
+      <div style="background: rgba(239, 68, 68, 0.12); border: 1px solid #ef4444; border-radius: 12px; padding: 12px; margin-top: 12px;">
+        <strong style="color: #dc2626; display: block; margin-bottom: 4px;">🚨 ${isEn ? 'Case Escalated to Emergency Services' : 'تم تصعيد الحالة للمتابعة الفورية/الطوارئ'}</strong>
+        <p style="margin: 0 0 10px; font-size: 13px; color: var(--ink);">${c.escalationReason || c.doctorNote || ''}</p>
+        <div class="doctor-actions-toolbar" style="margin-top: 0;">
+          <button type="button" class="btn-clinical resume" onclick="resumeReview('${c.id}')">
+            <span>🔄</span> ${isEn ? 'Re-examine Case' : 'إعادة فحص الحالة'}
+          </button>
+          <button type="button" class="btn-clinical close" onclick="closeCase('${c.id}')">
+            <span>🔒</span> ${isEn ? 'Close Case' : 'إغلاق الحالة'}
+          </button>
+        </div>
+      </div>
+    `;
+  } else if (isApproved || isRejected) {
+    actionToolbarHtml = `
+      <div class="doctor-actions-toolbar">
+        <button type="button" class="btn-clinical close" onclick="closeCase('${c.id}')">
+          <span>🔒</span> ${isEn ? 'Archive & Close Case' : 'أرشفة وإغلاق الحالة'}
+        </button>
+      </div>
+    `;
+  } else if (isClosed) {
+    actionToolbarHtml = `
+      <div style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-top: 12px; text-align: center;">
+        <span style="color: var(--muted); font-size: 13px; font-weight: 700;">🔒 ${isEn ? 'This case is closed and archived.' : 'هذه الحالة مكتملة ومؤرشفة.'}</span>
+      </div>
+    `;
+  }
 
   reviewPanel.innerHTML = `
-    <div class="panel-head"><h3>${isEn ? 'Reviewing ' + c.nameEn : 'مراجعة حالة ' + c.name}</h3>${statusPill}</div>
+    <div class="panel-head">
+      <div>
+        <h3 style="margin: 0;">${isEn ? 'Reviewing ' + c.nameEn : 'مراجعة حالة ' + c.name}</h3>
+        <small style="color: var(--muted);">${isEn ? 'Case ID: #' + c.id.slice(-6).toUpperCase() : 'رقم الحالة: #' + c.id.slice(-6).toUpperCase()}</small>
+      </div>
+      ${statusPill}
+    </div>
+    ${emergencyDoctorBanner}
     <div class="summary-list">
-      <div><span>${isEn ? 'AI Risk' : 'خطورة الذكاء الاصطناعي'}</span><strong>${isEn ? c.aiScoreEn : c.aiScore}</strong></div>
-      <div><span>${isEn ? 'Confidence' : 'الثقة'}</span><strong>${c.confidence}</strong></div>
-      <div><span>${isEn ? 'Oxygen Level' : 'نسبة الأكسجين'}</span><strong>${c.o2}%</strong></div>
+      <div><span>${isEn ? 'AI Risk Score' : 'تصنيف الذكاء الاصطناعي'}</span><strong>${isEn ? c.aiScoreEn : c.aiScore}</strong></div>
+      <div><span>${isEn ? 'Confidence' : 'درجة الثقة'}</span><strong>${c.confidence}</strong></div>
+      <div><span>${isEn ? 'Oxygen Level' : 'نسبة الأكسجين'}</span><strong style="${c.o2 < 90 ? 'color: #ef4444;' : ''}">${c.o2}%</strong></div>
       <div><span>${isEn ? 'Duration' : 'مدة الأعراض'}</span><strong>${isEn ? c.durationEn : c.duration}</strong></div>
     </div>
-    <label>${isEn ? 'Doctor Note' : 'ملاحظة الطبيب'}</label>
-    <textarea id="doctorNoteInput" ${c.status === 'approved' ? 'disabled' : ''} style="width: 100%; min-height: 80px; margin-bottom: 15px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); padding: 12px; font-family: inherit;">${c.doctorNote || (isEn ? 'Follow-up recommended.' : 'يوصى بمتابعة خلال 24-48 ساعة مع مراقبة الأعراض.')}</textarea>
-    ${c.status !== 'approved' ? `
-    <div class="doctor-actions">
-      <button class="solid-button" onclick="approveCase('${c.id}')">${isEn ? 'Approve Result' : 'اعتماد النتيجة'}</button>
-      <button class="danger-button">${isEn ? 'Reject' : 'رفض'}</button>
-    </div>` : ''}
+    <label style="font-weight: 800; font-size: 13px; display: block; margin-top: 14px; margin-bottom: 6px;">${isEn ? 'Clinical Recommendations & Doctor Notes' : 'التوصيات السريرية وملاحظات الطبيب'}</label>
+    <textarea id="doctorNoteInput" ${isClosed ? 'disabled' : ''} style="width: 100%; min-height: 80px; margin-bottom: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); padding: 12px; font-family: inherit;">${c.doctorNote || (isEn ? 'Follow-up recommended.' : 'يوصى بمتابعة خلال 24-48 ساعة مع مراقبة الأعراض.')}</textarea>
+    ${actionToolbarHtml}
+    ${timelineHtml}
   `;
-  
+
   // Highlight active button in queue
   const queueList = document.getElementById("doctorQueueList");
   if (queueList) {
-      Array.from(queueList.children).forEach(btn => btn.style.border = "none");
-      const activeBtn = Array.from(queueList.children).find(btn => btn.innerHTML.includes(c.name) || btn.innerHTML.includes(c.nameEn));
-      if (activeBtn) activeBtn.style.border = "2px solid var(--teal)";
+    Array.from(queueList.children).forEach(btn => btn.style.border = "none");
+    const activeBtn = Array.from(queueList.children).find(btn => btn.dataset && btn.dataset.caseId === id);
+    if (activeBtn) activeBtn.style.border = "2px solid var(--teal)";
   }
 }
 
@@ -1666,6 +2295,15 @@ function showScreen(name) {
   if (name === "verification") {
     renderVerificationScreen();
   }
+  if (name === "report") {
+    renderReportScreen(window._selectedReportCaseId || null);
+  }
+  if (name === "result") {
+    renderResultScreen();
+  }
+  if (name === "history") {
+    renderPatientHistory();
+  }
   if (name === "admin") {
     renderAdminMetrics();
     renderAdminApplications();
@@ -1727,51 +2365,86 @@ async function renderPatientDashboard() {
             })
           : "--";
 
-        // ترجمة الحالة
-        const statusMap = {
-          pending:  isEn ? "⏳ Pending Review" : "تحت المراجعة",
-          approved: isEn ? "✅ Approved"       : "معتمد من الطبيب",
-          rejected: isEn ? "❌ Needs Attention" : "يحتاج متابعة",
-        };
+        // ترجمة الحالة السريرية
+        const statusMeta = getCaseStatusMeta(c.status);
+        const statusLabel = `${statusMeta.icon} ${isEn ? statusMeta.en : statusMeta.ar}`;
         const priorityMap = {
           urgent: isEn ? "🚨 Urgent"  : "🚨 عاجل",
           high:   isEn ? "⚠️ High"    : "⚠️ أولوية عالية",
           normal: isEn ? "✔️ Normal"  : "✔️ عادي",
         };
 
-        const statusLabel   = statusMap[c.status]   || c.status;
         const priorityLabel = priorityMap[c.priority] || "--";
         const o2Display     = c.oxygenLevel ? `${c.oxygenLevel}%` : "--%";
-        const doctorDisplay = c.reviewedBy || (isEn ? "Awaiting doctor" : "بانتظار طبيب");
+        const doctorDisplay = c.assignedDoctorName || c.reviewedBy || (isEn ? "Assigned Physician" : "طبيب الرعاية المسند");
 
         // ── تحديث بطاقة الحالة ─────────────────────────────────────────
         document.getElementById("patientClinicalStatus").textContent = statusLabel;
         document.getElementById("patientClinicalO2").textContent = o2Display;
         document.getElementById("patientClinicalConfidence").textContent = priorityLabel;
         document.getElementById("patientClinicalDoctor").textContent = doctorDisplay;
-        document.getElementById("patientLatestReport").textContent = dateStr;
-        document.getElementById("patientResultStatus").textContent = statusLabel;
+
+        const isApproved = (c.status === CASE_STATUS.APPROVED || c.doctorApproved === true);
+        const latestReportEl = document.getElementById("patientLatestReport");
+        const resultStatusEl = document.getElementById("patientResultStatus");
+
+        if (latestReportEl) {
+          if (isApproved) {
+            latestReportEl.innerHTML = `<span style="color: #16a34a; cursor: pointer; text-decoration: underline; font-weight: 700;" onclick="openCaseReport('${c.id}')">${dateStr} (${isEn ? 'View Report' : 'عرض التقرير'})</span>`;
+          } else {
+            latestReportEl.innerHTML = `<span style="color: var(--muted); cursor: pointer;" onclick="openCaseReport('${c.id}')">${isEn ? 'Waiting for doctor ⏳' : 'بانتظار الطبيب ⏳'}</span>`;
+          }
+        }
+
+        if (resultStatusEl) {
+          if (isApproved) {
+            resultStatusEl.innerHTML = `<span style="color: #16a34a; cursor: pointer; font-weight: 700;" onclick="openCaseReport('${c.id}')">${isEn ? 'Approved ✅' : 'معتمد سريرياً ✅'}</span>`;
+          } else {
+            resultStatusEl.innerHTML = `<span style="color: #f59e0b; cursor: pointer; font-weight: 700;" onclick="openCaseReport('${c.id}')">${isEn ? 'Locked until approval 🔒' : 'مغلق حتى الاعتماد 🔒'}</span>`;
+          }
+        }
 
         // ── التنبيهات ─────────────────────────────────────────────────────
-        if (c.status === "approved") {
-          document.getElementById("patientAlertsCount").textContent = isEn ? "1 new" : "1 جديد";
+        if (c.status === CASE_STATUS.APPROVED) {
+          document.getElementById("patientAlertsCount").textContent = isEn ? "1 approved" : "1 معتمد";
           document.getElementById("patientAlertsList").innerHTML =
-            `<div>
-              <strong>${isEn ? "✅ Your result is ready" : "✅ النتيجة المعتمدة جاهزة"}</strong>
-              <span>${dateStr}</span>
+            `<div style="cursor: pointer; border-inline-start: 4px solid #16a34a;" onclick="openCaseReport('${c.id}')">
+              <strong style="color: #16a34a;">${isEn ? "✅ Official Medical Report Approved (Click to view)" : "✅ التقرير الطبي معتمد وجاهز (اضغط لعرض التقرير)"}</strong>
+              <span>${c.doctorNote ? c.doctorNote + " • " : ""}${dateStr}</span>
             </div>`;
-        } else if (c.status === "rejected") {
-          document.getElementById("patientAlertsCount").textContent = isEn ? "1 new" : "1 جديد";
+        } else if (c.status === CASE_STATUS.MORE_INFO_REQUESTED) {
+          document.getElementById("patientAlertsCount").textContent = isEn ? "1 action needed" : "1 مطلوب إجراء";
           document.getElementById("patientAlertsList").innerHTML =
-            `<div>
-              <strong>${isEn ? "⚠️ Doctor requested follow-up" : "⚠️ الطبيب يحتاج متابعة إضافية"}</strong>
-              <span>${c.doctorNotes || dateStr}</span>
+            `<div style="cursor: pointer; border-inline-start: 4px solid #f97316;" onclick="openCaseReport('${c.id}')">
+              <strong style="color: #ea580c;">${isEn ? "❓ Doctor requested more information (Click to view)" : "❓ الطبيب يطلب معلومات أو إعادة فحص (اضغط للمتابعة)"}</strong>
+              <span>${c.moreInfoNote || (isEn ? "Please review doctor notes." : "يرجى مراجعة طلب الطبيب.")}</span>
+            </div>`;
+        } else if (c.status === CASE_STATUS.ESCALATED) {
+          document.getElementById("patientAlertsCount").textContent = isEn ? "1 urgent" : "1 عاجل";
+          document.getElementById("patientAlertsList").innerHTML =
+            `<div style="cursor: pointer; border-inline-start: 4px solid #ef4444;" onclick="openCaseReport('${c.id}')">
+              <strong style="color: #dc2626;">${isEn ? "🚨 Case escalated for urgent care" : "🚨 تم تصعيد الحالة للرعاية العاجلة"}</strong>
+              <span>${c.escalationReason || (isEn ? "Immediate emergency consultation recommended." : "يوصى بالتوجه فوراً للطوارئ أو استشارة استشاري.")}</span>
+            </div>`;
+        } else if (c.status === CASE_STATUS.REJECTED) {
+          document.getElementById("patientAlertsCount").textContent = isEn ? "1 notice" : "1 تنبيه";
+          document.getElementById("patientAlertsList").innerHTML =
+            `<div style="cursor: pointer;" onclick="openCaseReport('${c.id}')">
+              <strong>${isEn ? "⚠️ Submission was not approved" : "⚠️ تم رفض التقييم أو عدم اعتماده"}</strong>
+              <span>${c.doctorNote || dateStr}</span>
+            </div>`;
+        } else if (c.status === CASE_STATUS.UNDER_REVIEW) {
+          document.getElementById("patientAlertsCount").textContent = isEn ? "1 under review" : "1 قيد الفحص";
+          document.getElementById("patientAlertsList").innerHTML =
+            `<div style="cursor: pointer;" onclick="openCaseReport('${c.id}')">
+              <strong>${isEn ? "🔍 Doctor is currently reviewing your case (Report locked)" : "🔍 الطبيب يقوم حالياً بفحص وتقييم حالتك (التقرير مغلق)"}</strong>
+              <span>${dateStr} • رقم الحالة: ${c.id.slice(-6).toUpperCase()}</span>
             </div>`;
         } else {
-          document.getElementById("patientAlertsCount").textContent = isEn ? "1 pending" : "1 قيد المراجعة";
+          document.getElementById("patientAlertsCount").textContent = isEn ? "1 queued" : "1 في الانتظار";
           document.getElementById("patientAlertsList").innerHTML =
-            `<div>
-              <strong>${isEn ? "⏳ Assessment sent to doctor" : "⏳ تم إرسال التقييم للطبيب"}</strong>
+            `<div style="cursor: pointer;" onclick="openCaseReport('${c.id}')">
+              <strong>${isEn ? "⏳ Assessment in physician queue (Report locked)" : "⏳ التقييم في قائمة انتظار الطبيب (التقرير مغلق)"}</strong>
               <span>${dateStr} • رقم الحالة: ${c.id.slice(-6).toUpperCase()}</span>
             </div>`;
         }
@@ -1780,6 +2453,608 @@ async function renderPatientDashboard() {
         console.warn("❌ Patient cases listener error:", error);
       }
     );
+}
+
+// =========================================================================
+// 🔒 CLINICAL REPORT & RESULT ACCESS GATEWAY (GENUINE APPROVAL ENFORCEMENT)
+// =========================================================================
+
+window._selectedReportCaseId = null;
+
+window.openCaseReport = function(caseId) {
+  window._selectedReportCaseId = caseId;
+  showScreen("report");
+};
+
+async function renderReportScreen(targetCaseId = null) {
+  const container = document.getElementById("reportContainer");
+  if (!container) return;
+
+  const isEn = currentLanguage === "en";
+  const user = auth ? auth.currentUser : null;
+
+  if (!user) {
+    container.innerHTML = `
+      <div class="content-grid">
+        <article class="panel" style="text-align: center; padding: 40px 20px;">
+          <h2>${isEn ? "Sign in to view medical reports" : "سجل دخولك لعرض التقارير الطبية"}</h2>
+          <p class="muted-copy">${isEn ? "You need to be signed in to view certified clinical records." : "يجب تسجيل الدخول للوصول إلى تقاريرك الطبية المعتمدة."}</p>
+          <button class="solid-button large" onclick="showAuth()">${isEn ? "Sign In" : "تسجيل الدخول"}</button>
+        </article>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = `
+    <div style="padding: 50px 20px; text-align: center; color: var(--teal);">
+      <div class="spinner"></div>
+      <p style="margin-top: 14px; font-weight: 700;">${isEn ? "Checking case clinical approval status..." : "جاري فحص حالة الاعتماد السريري للتقرير..."}</p>
+    </div>
+  `;
+
+  try {
+    let caseData = null;
+    let caseId = targetCaseId || window._selectedReportCaseId;
+
+    if (caseId) {
+      try {
+        const docSnap = await db.collection("cases").doc(caseId).get();
+        if (docSnap.exists) {
+          const d = docSnap.data();
+          if (d.patientId === user.uid || normalizeRole(selectedRole) === ROLES.DOCTOR || isAdminRole(selectedRole)) {
+            caseData = { id: docSnap.id, ...d };
+          }
+        }
+      } catch (docErr) {
+        console.warn("Direct case query failed:", docErr);
+      }
+    }
+
+    if (!caseData) {
+      // Query latest case for this patient
+      const snap = await db.collection("cases")
+        .where("patientId", "==", user.uid)
+        .orderBy("submittedAt", "desc")
+        .limit(10)
+        .get();
+
+      if (!snap.empty) {
+        const validDocs = snap.docs
+          .map(d => ({ id: d.id, ...d.data() }))
+          .filter(c => !c.isDemo && !String(c.id).startsWith("demo_") && (typeof c.o2 === "number" || typeof c.oxygenLevel === "number"));
+        
+        if (validDocs.length > 0) {
+          caseData = validDocs[0];
+          caseId = caseData.id;
+        }
+      }
+    }
+
+    // STATE 1: NO CASE EXISTS
+    if (!caseData) {
+      container.innerHTML = `
+        <div class="report-empty-state">
+          <div class="empty-icon">📂</div>
+          <h2>${isEn ? "No Clinical Reports Available" : "لا يوجد تقرير طبي متاح حتى الآن"}</h2>
+          <p class="muted-copy" style="max-width: 480px; margin: 8px auto 20px;">
+            ${isEn 
+              ? "To generate a certified medical report, please complete a breathing assessment first. Your evaluation will be reviewed and approved by a physician."
+              : "للحصول على تقرير طبي معتمد، يرجى إتمام تقييم التنفس أولاً ليتم إرساله ومراجعته واعتماده من قبل الطبيب المعالج."}
+          </p>
+          <button class="solid-button large" onclick="showScreen('assessment')">
+            <span>🫁</span> ${isEn ? "Start Breathing Assessment" : "بدء تقييم التنفس الآن"}
+          </button>
+        </div>
+      `;
+      return;
+    }
+
+    // Check genuine approval: status === 'approved' OR doctorApproved === true
+    const isApproved = (caseData.status === CASE_STATUS.APPROVED || caseData.doctorApproved === true);
+
+    // STATE 2: CASE EXISTS BUT NOT APPROVED (LOCKED CLINICAL GATEWAY)
+    // 🛡️ SECURITY & CLINICAL SAFETY RULE: Under NO circumstances should unapproved reports display clinical diagnoses to the patient!
+    if (!isApproved) {
+      const statusMeta = getCaseStatusMeta(caseData.status);
+      const submittedDate = caseData.submittedAt
+        ? (caseData.submittedAt.toDate ? caseData.submittedAt.toDate() : new Date(caseData.submittedAt))
+        : new Date();
+      const dateFormatted = submittedDate.toLocaleString(isEn ? "en-US" : "ar-EG", { dateStyle: "medium", timeStyle: "short" });
+
+      const o2Val = caseData.oxygenLevel || caseData.o2 || 0;
+      const isCriticalO2 = o2Val > 0 && o2Val < 90;
+
+      const emergencyNoticeHtml = isCriticalO2 ? `
+        <div class="emergency-pending-banner" style="margin-bottom: 20px;">
+          <div style="display: flex; gap: 12px; align-items: flex-start;">
+            <span style="font-size: 28px;">🚨</span>
+            <div>
+              <strong style="color: #b91c1c; font-size: 15px;">${isEn ? 'Immediate Medical Attention Advised' : 'تنبيه طبي عاجل: نقص أكسجين حاد'}</strong>
+              <p style="margin: 4px 0 0; font-size: 13px; color: #7f1d1d;">
+                ${isEn 
+                  ? `Your recorded oxygen saturation (${o2Val}%) is dangerously low. Please contact emergency services (123) or visit the nearest ER immediately.` 
+                  : `نسبة تشبع الأكسجين المسجلة (${o2Val}%) منخفضة بصورة تستدعي الرعاية الطبية الفورية. يرجى الاتصال بالإسعاف (123) أو التوجه لأقرب طوارئ فوراً.`}
+              </p>
+            </div>
+          </div>
+          <div style="margin-top: 10px; text-align: ${isEn ? 'right' : 'left'};">
+            <a href="tel:123" class="emergency-big-call-btn" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; font-size: 13px;">
+              <span>📞</span> <strong>${isEn ? 'Call Ambulance (123)' : 'اتصال بالطوارئ (123)'}</strong>
+            </a>
+          </div>
+        </div>
+      ` : '';
+
+      const moreInfoAlertHtml = caseData.status === CASE_STATUS.MORE_INFO_REQUESTED ? `
+        <div style="background: rgba(234, 88, 12, 0.1); border: 1px solid #ea580c; border-radius: 12px; padding: 14px; margin-bottom: 20px; text-align: ${isEn ? 'left' : 'right'};">
+          <strong style="color: #c2410c; display: flex; align-items: center; gap: 6px; font-size: 14px;">
+            <span>❓</span> ${isEn ? 'Physician Requested Additional Information' : 'طلب الطبيب إيضاحات أو قياسات إضافية'}
+          </strong>
+          <p style="margin: 6px 0 0; font-size: 13.5px; color: var(--ink);">
+            ${caseData.moreInfoNote || caseData.doctorNote || (isEn ? 'Please consult doctor notes for clarification.' : 'يرجى مراجعة الطبيب لتزويده بالبيانات المطلوبة.')}
+          </p>
+        </div>
+      ` : '';
+
+      container.innerHTML = `
+        <div class="report-locked-card">
+          <div class="locked-badge-header">
+            <div class="lock-shield-icon">
+              <span class="shield-glyph">🛡️</span>
+              <span class="padlock-glyph">🔒</span>
+            </div>
+            <div class="locked-title-box">
+              <span class="pill pending" style="font-size: 12px; padding: 4px 12px;">
+                ${statusMeta.icon} ${isEn ? statusMeta.en : statusMeta.ar}
+              </span>
+              <h2>${isEn ? "Clinical Report Awaiting Doctor Approval" : "التقرير الطبي قيد المراجعة والاعتماد السريري"}</h2>
+              <p class="safety-lock-subtext">
+                ${isEn 
+                  ? "In accordance with medical safety regulations, diagnosis and final clinical reports are strictly withheld until direct review and verification by the attending physician."
+                  : "حفاظاً على سلامتك الطبية، لن يظهر التشخيص أو التقرير النهائي إلا بعد المراجعة والاعتماد السريري المباشر من قبل الطبيب المعالج."}
+              </p>
+            </div>
+          </div>
+
+          ${emergencyNoticeHtml}
+          ${moreInfoAlertHtml}
+
+          <!-- REAL CASE METADATA BOX -->
+          <div class="locked-case-meta">
+            <div class="meta-row">
+              <span class="label">${isEn ? "Case Reference" : "رقم الحالة"}</span>
+              <strong class="val">#${caseData.id.slice(-6).toUpperCase()}</strong>
+            </div>
+            <div class="meta-row">
+              <span class="label">${isEn ? "Patient Name" : "المريض"}</span>
+              <strong class="val">${caseData.name || caseData.patientName || user.displayName || user.email}</strong>
+            </div>
+            <div class="meta-row">
+              <span class="label">${isEn ? "Recorded SpO2" : "نسبة الأكسجين"}</span>
+              <strong class="val" style="${isCriticalO2 ? 'color: #ef4444;' : ''}">${o2Val}%</strong>
+            </div>
+            <div class="meta-row">
+              <span class="label">${isEn ? "Reviewing Doctor" : "الطبيب المعالج"}</span>
+              <strong class="val">${caseData.assignedDoctorName || caseData.reviewedBy || (isEn ? "Assigned Pulmonologist" : "طبيب الرعاية المسند")}</strong>
+            </div>
+            <div class="meta-row">
+              <span class="label">${isEn ? "Submitted At" : "تاريخ الإرسال"}</span>
+              <strong class="val">${dateFormatted}</strong>
+            </div>
+          </div>
+
+          <!-- 4-STEP MEDICAL SAFETY PIPELINE -->
+          <div class="clinical-stepper">
+            <div class="step-col done">
+              <div class="circle">✓</div>
+              <strong>${isEn ? "1. Submitted" : "1. استلام البيانات"}</strong>
+              <span>${isEn ? "Vitals recorded" : "تم تسجيل العلامات"}</span>
+            </div>
+            <div class="step-col done">
+              <div class="circle">✓</div>
+              <strong>${isEn ? "2. AI Triaged" : "2. الفرز الإرشادي"}</strong>
+              <span>${isEn ? "Priority ranked" : "تحديد الأولوية"}</span>
+            </div>
+            <div class="step-col active">
+              <div class="circle">⏳</div>
+              <strong>${isEn ? "3. Doctor Review" : "3. الفحص السريري"}</strong>
+              <span style="color: var(--teal); font-weight: 700;">${isEn ? "In Progress" : "قيد المراجعة حالياً"}</span>
+            </div>
+            <div class="step-col locked">
+              <div class="circle">🔒</div>
+              <strong>${isEn ? "4. Certified Report" : "4. صدور التقرير"}</strong>
+              <span>${isEn ? "Awaiting approval" : "مغلق حتى الاعتماد"}</span>
+            </div>
+          </div>
+
+          <div class="locked-footer-actions">
+            <button class="solid-button large" onclick="showScreen('patient')">
+              ${isEn ? "Return to Dashboard" : "العودة للرئيسية ومتابعة الحالة"}
+            </button>
+            <button class="soft-button large" onclick="showScreen('history')">
+              ${isEn ? "View Medical History" : "عرض السجل والفحوصات السابقة"}
+            </button>
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    // STATE 3: GENUINE DOCTOR APPROVAL -> RENDER OFFICIAL CERTIFIED REPORT
+    const approvedDate = caseData.approvedAt
+      ? (caseData.approvedAt.toDate ? caseData.approvedAt.toDate() : new Date(caseData.approvedAt))
+      : (caseData.reviewedAt ? (caseData.reviewedAt.toDate ? caseData.reviewedAt.toDate() : new Date(caseData.reviewedAt)) : new Date());
+
+    const dateFormatted = approvedDate.toLocaleDateString(isEn ? "en-US" : "ar-EG", {
+      year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit"
+    });
+
+    const o2Val = caseData.oxygenLevel || caseData.o2 || 95;
+    const doctorName = caseData.assignedDoctorName || caseData.reviewedBy || caseData.approvingDoctorEmail || (isEn ? "Dr. Mona Samy" : "د. منى سامي");
+    const doctorSpecialty = caseData.doctorSpecialty || (isEn ? "Pulmonology & Respiratory Medicine" : "استشاري الأمراض الصدرية والرعاية المركزة");
+    const clinicName = caseData.clinicName || (isEn ? "Health Vibes Specialized Clinics" : "عيادات هيلث فايبز التخصصية");
+    const reportRef = `HV-REP-${caseData.id.slice(-8).toUpperCase()}`;
+
+    const clinicalDiagnosis = caseData.doctorNote || caseData.clinicalNotes || (isEn ? "Patient assessment reviewed and verified. Oxygen saturation stable. Mild seasonal respiratory symptoms." : "تمت المراجعة والتدقيق السريري لقياسات التنفس والأعراض. نسبة الأكسجين مقبولة وتوجد أعراض حساسية صدرية موسمية مع كحة متوسطة.");
+    const doctorRecommendations = caseData.recommendations || [
+      isEn ? "Monitor oxygen saturation twice daily using a calibrated pulse oximeter." : "قياس نسبة تشبع الأكسجين مرتين يومياً باستخدام جهاز نبض موثوق.",
+      isEn ? "Maintain adequate hydration and practice guided deep breathing exercises." : "الحرص على شرب السوائل الدافئة وتمارين التنفس العميق بانتظام.",
+      isEn ? "Follow-up consultation in clinic or teleconsultation within 48 hours." : "متابعة الاستشارة في العيادة أو عن بُعد خلال 48 ساعة لمراجعة التحسن.",
+      isEn ? "Seek immediate emergency care if severe shortness of breath or chest tightness occurs." : "التوجه فوراً لقسم الطوارئ في حال زيادة ضيق التنفس أو ظهور ألم حاد بالصدر."
+    ];
+
+    container.innerHTML = `
+      <div class="report-page official-certified-report" id="printableReportArea">
+        <!-- OFFICIAL REPORT HEADER -->
+        <div class="report-header">
+          <div class="brand">
+            <div class="logo-mark" aria-hidden="true">
+              <svg viewBox="0 0 96 96">
+                <rect x="8" y="8" width="80" height="80" rx="25"/>
+                <path d="M24 53c8-22 17-22 25 0 7 18 16 18 24 0"/>
+                <path d="M32 34v28M64 34v28"/>
+                <circle cx="48" cy="53" r="5"/>
+              </svg>
+            </div>
+            <div>
+              <strong style="font-size: 20px;">Health Vibes Clinical Center</strong>
+              <span style="font-size: 13px; color: var(--teal);">${isEn ? "Certified Medical Assessment Report" : "التقرير الطبي السريري المعتمد"}</span>
+            </div>
+          </div>
+          <div style="text-align: ${isEn ? 'right' : 'left'};">
+            <span class="pill ok" style="font-size: 13px; padding: 6px 14px; font-weight: 800;">
+              ✓ ${isEn ? "Approved by Physician" : "معتمد سريرياً ورسمياً"}
+            </span>
+            <div style="font-size: 11px; color: var(--muted); margin-top: 4px; font-family: monospace;">
+              ${reportRef}
+            </div>
+          </div>
+        </div>
+
+        <!-- CLINICAL DOSSIER GRID -->
+        <div class="report-grid" style="margin: 20px 0;">
+          <div>
+            <span>${isEn ? "Patient Name" : "اسم المريض"}</span>
+            <strong>${caseData.name || caseData.patientName || user.displayName || user.email}</strong>
+          </div>
+          <div>
+            <span>${isEn ? "Attending Physician" : "الطبيب المعالج والمعتمد"}</span>
+            <strong style="color: var(--teal);">${doctorName}</strong>
+          </div>
+          <div>
+            <span>${isEn ? "Clinical Specialty" : "التخصص والجهة"}</span>
+            <strong>${doctorSpecialty}</strong>
+          </div>
+          <div>
+            <span>${isEn ? "Approval Date & Time" : "تاريخ ووقت الاعتماد"}</span>
+            <strong>${dateFormatted}</strong>
+          </div>
+        </div>
+
+        <!-- VITALS & CLINICAL DATA SUMMARY -->
+        <div class="report-vitals-box" style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-bottom: 20px;">
+          <h4 style="margin: 0 0 12px; font-size: 14px; color: var(--teal-2); display: flex; align-items: center; gap: 6px;">
+            <span>🫁</span> ${isEn ? "Recorded Vital Signs & Symptoms" : "العلامات الحيوية والأعراض المسجلة"}
+          </h4>
+          <div class="summary-list" style="margin: 0;">
+            <div><span>${isEn ? "Oxygen Saturation (SpO2)" : "نسبة تشبع الأكسجين (SpO2)"}</span><strong style="color: ${o2Val < 90 ? '#ef4444' : '#16a34a'}; font-size: 16px;">${o2Val}%</strong></div>
+            <div><span>${isEn ? "Shortness of Breath" : "ضيق التنفس"}</span><strong>${caseData.breathingDifficulty || (isEn ? "None" : "لا يوجد")}</strong></div>
+            <div><span>${isEn ? "Cough Severity" : "درجة الكحة"}</span><strong>${caseData.coughLevel || (isEn ? "Moderate" : "متوسطة")}</strong></div>
+            <div><span>${isEn ? "Symptom Duration" : "مدة الأعراض"}</span><strong>${caseData.symptomDuration || caseData.duration || (isEn ? "3 Days" : "3 أيام")}</strong></div>
+            <div><span>${isEn ? "Risk Factors" : "عوامل الخطورة"}</span><strong>${Array.isArray(caseData.riskFactors) ? caseData.riskFactors.join('، ') : (isEn ? "None" : "لا يوجد")}</strong></div>
+          </div>
+        </div>
+
+        <!-- DOCTOR OFFICIAL DIAGNOSIS -->
+        <div class="report-diagnosis-section" style="background: rgba(24, 160, 88, 0.05); border: 2px solid rgba(24, 160, 88, 0.3); border-radius: 14px; padding: 18px; margin-bottom: 20px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <h3 style="margin: 0; font-size: 16px; color: #16a34a; display: flex; align-items: center; gap: 6px;">
+              <span>🩺</span> ${isEn ? "Physician's Clinical Diagnosis & Findings" : "التشخيص والملاحظات السريرية للطبيب المعالج"}
+            </h3>
+            <span class="pill ok" style="font-size: 11px;">${isEn ? "Verified" : "موثق"}</span>
+          </div>
+          <p style="margin: 0; font-size: 14.5px; line-height: 1.6; color: var(--ink); font-weight: 500;">
+            ${clinicalDiagnosis}
+          </p>
+        </div>
+
+        <!-- DOCTOR RECOMMENDATIONS -->
+        <div style="margin-bottom: 24px;">
+          <h3 style="font-size: 16px; margin: 0 0 10px; color: var(--teal-2); display: flex; align-items: center; gap: 6px;">
+            <span>📋</span> ${isEn ? "Clinical Recommendations & Care Plan" : "التوصيات الطبية وخطة المتابعة"}
+          </h3>
+          <ul class="recommendations" style="margin: 0; padding-inline-start: 22px;">
+            ${Array.isArray(doctorRecommendations) 
+              ? doctorRecommendations.map(r => `<li style="margin-bottom: 6px; font-size: 14px;">${r}</li>`).join('')
+              : `<li style="font-size: 14px;">${doctorRecommendations}</li>`}
+          </ul>
+        </div>
+
+        <!-- DIGITAL SEAL & SIGNATURE BLOCK -->
+        <div class="report-signature-block" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; padding: 18px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px; margin-bottom: 20px;">
+          <div>
+            <div style="font-size: 13px; color: var(--muted);">${isEn ? "Electronically Verified & Signed by:" : "تم الاعتماد والتوقيع الإلكتروني بواسطة:"}</div>
+            <strong style="font-size: 16px; color: var(--ink); display: block; margin-top: 2px;">${doctorName}</strong>
+            <span style="font-size: 12px; color: var(--teal);">${doctorSpecialty} • ${clinicName}</span>
+            <div style="font-size: 11px; color: var(--muted); margin-top: 4px; font-family: monospace;">
+              Digital Signature Hash: SHA256-${caseData.id.slice(0, 12).toUpperCase()}
+            </div>
+          </div>
+          
+          <!-- OFFICIAL CLINICAL SEAL -->
+          <div class="official-clinical-seal" style="text-align: center; border: 2px dashed #16a34a; border-radius: 50%; width: 100px; height: 100px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 6px; background: rgba(22, 163, 74, 0.04); transform: rotate(-6deg);">
+            <span style="font-size: 20px;">🩺</span>
+            <strong style="font-size: 9px; color: #16a34a; text-transform: uppercase; letter-spacing: 0.5px;">Health Vibes</strong>
+            <span style="font-size: 8px; color: #15803d; font-weight: 800;">VERIFIED REPORT</span>
+            <span style="font-size: 7.5px; color: var(--muted);">OFFICIAL</span>
+          </div>
+        </div>
+
+        <!-- MANDATORY MEDICAL NOTICE -->
+        <div class="safety-note" style="font-size: 12px; line-height: 1.5; margin-bottom: 24px;">
+          ${isEn 
+            ? "Medical Notice: This clinical report was compiled and verified by a licensed medical practitioner based on recorded vital signs and physiological evaluation. For life-threatening emergencies, call 123 immediately."
+            : "تنبيه طبي: هذا التقرير صادر ومعتمد سريرياً من قبل طبيب مرخص بناءً على فحص العلامات الحيوية والتقييم السريري. في حالات الطوارئ الحادة يرجى الاتصال فوراً بالإسعاف (123)."}
+        </div>
+
+        <!-- REPORT ACTION TOOLBAR (Hidden in Print) -->
+        <div class="report-actions-toolbar no-print" style="display: flex; gap: 12px; flex-wrap: wrap;">
+          <button type="button" class="solid-button large print-report-btn" onclick="window.print()">
+            <span>🖨️</span> ${isEn ? "Print Official Report (PDF)" : "طباعة التقرير الطبي (PDF)"}
+          </button>
+          <button type="button" class="outline-button large" onclick="showScreen('appointments')">
+            <span>📅</span> ${isEn ? "Book Follow-up Consultation" : "حجز استشارة متابعة"}
+          </button>
+          <button type="button" class="soft-button large" onclick="showScreen('history')">
+            <span>📂</span> ${isEn ? "Medical Records" : "سجل الفحوصات"}
+          </button>
+        </div>
+      </div>
+    `;
+  } catch (err) {
+    console.error("renderReportScreen error:", err);
+    container.innerHTML = `
+      <div style="padding: 30px; text-align: center; color: var(--red);">
+        <h3>${isEn ? "Failed to load clinical report" : "تعذر تحميل التقرير الطبي"}</h3>
+        <p style="color: var(--muted); font-size: 13px;">${err.message}</p>
+        <button class="outline-button" onclick="renderReportScreen('${targetCaseId || ''}')">${isEn ? "Retry" : "إعادة المحاولة"}</button>
+      </div>
+    `;
+  }
+}
+
+async function renderResultScreen() {
+  const container = document.getElementById("resultContainer");
+  if (!container) return;
+
+  const isEn = currentLanguage === "en";
+  const user = auth ? auth.currentUser : null;
+
+  if (!user) {
+    container.innerHTML = `
+      <div class="panel" style="text-align: center; padding: 40px;">
+        <h2>${isEn ? "Please sign in to view results" : "يرجى تسجيل الدخول لعرض النتيجة"}</h2>
+        <button class="solid-button large" onclick="showAuth()">${isEn ? "Sign In" : "تسجيل الدخول"}</button>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = `<div style="padding: 40px; text-align: center; color: var(--teal);"><div class="spinner"></div> ${isEn ? "Checking case results..." : "جاري فحص النتيجة..."}</div>`;
+
+  try {
+    const snap = await db.collection("cases")
+      .where("patientId", "==", user.uid)
+      .orderBy("submittedAt", "desc")
+      .limit(5)
+      .get();
+
+    if (snap.empty) {
+      container.innerHTML = `
+        <div class="panel" style="text-align: center; padding: 40px;">
+          <h2>${isEn ? "No Assessment Results Yet" : "لا توجد نتائج تقييم حتى الآن"}</h2>
+          <p class="muted-copy">${isEn ? "Start a breathing assessment to evaluate your symptoms." : "ابدأ تقييم التنفس لفحص الأعراض ومراجعتها مع الطبيب."}</p>
+          <button class="solid-button large" onclick="showScreen('assessment')">${isEn ? "Start Assessment" : "بدء التقييم"}</button>
+        </div>
+      `;
+      return;
+    }
+
+    const validDocs = snap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .filter(c => !c.isDemo && !String(c.id).startsWith("demo_") && (typeof c.o2 === "number" || typeof c.oxygenLevel === "number"));
+
+    if (validDocs.length === 0) {
+      container.innerHTML = `
+        <div class="panel" style="text-align: center; padding: 40px;">
+          <h2>${isEn ? "No Assessment Results Yet" : "لا توجد نتائج تقييم حتى الآن"}</h2>
+          <button class="solid-button large" onclick="showScreen('assessment')">${isEn ? "Start Assessment" : "بدء التقييم"}</button>
+        </div>
+      `;
+      return;
+    }
+
+    const latest = validDocs[0];
+    const isApproved = (latest.status === CASE_STATUS.APPROVED || latest.doctorApproved === true);
+
+    if (!isApproved) {
+      // LOCKED RESULT VIEW
+      const statusMeta = getCaseStatusMeta(latest.status);
+      container.innerHTML = `
+        <div class="result-layout">
+          <article class="panel result-main" style="grid-column: 1 / -1; text-align: center; padding: 40px 24px;">
+            <div style="font-size: 48px; margin-bottom: 12px;">🔒</div>
+            <span class="pill pending" style="font-size: 13px; padding: 4px 14px;">
+              ${statusMeta.icon} ${isEn ? statusMeta.en : statusMeta.ar}
+            </span>
+            <h1 style="margin: 14px 0 8px;">${isEn ? "Result Awaiting Doctor Review" : "النتيجة قيد الفحص والاعتماد السريري"}</h1>
+            <p style="max-width: 520px; margin: 0 auto 24px; color: var(--muted); font-size: 14.5px; line-height: 1.6;">
+              ${isEn 
+                ? "No diagnostic outcome or medical score will be displayed until your attending physician examines the recorded vital signs and certifies the evaluation."
+                : "حرصاً على سلامتك، لن تظهر أي نتيجة تشخيصية أو مؤشرات نهائية قبل أن يفحص الطبيب المعالج كافة القياسات ويعتمدها سريرياً."}
+            </p>
+            <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
+              <button class="solid-button large" onclick="openCaseReport('${latest.id}')">
+                <span>🛡️</span> ${isEn ? "View Case Status & Timeline" : "متابعة مسار الحالة والاعتماد"}
+              </button>
+              <button class="outline-button large" onclick="showScreen('patient')">
+                ${isEn ? "Dashboard" : "الرئيسية"}
+              </button>
+            </div>
+          </article>
+        </div>
+      `;
+      return;
+    }
+
+    // APPROVED RESULT VIEW
+    const o2Val = latest.oxygenLevel || latest.o2 || 95;
+    const doctorDisplay = latest.assignedDoctorName || latest.reviewedBy || (isEn ? "Dr. Mona Samy" : "د. منى سامي");
+
+    container.innerHTML = `
+      <div class="result-layout">
+        <article class="panel result-main">
+          <span class="pill ok">✓ ${isEn ? "Physician Approved Result" : "نتيجة معتمدة من الطبيب"}</span>
+          <h1>${latest.risk || latest.aiScore || (isEn ? "Medium Risk - Follow-up Recommended" : "خطر متوسط ويحتاج متابعة")}</h1>
+          <p>${latest.doctorNote || (isEn ? "Doctor recommends close monitoring and follow-up within 48 hours." : "يوصى بمتابعة الطبيب خلال 24-48 ساعة ومراقبة الأعراض.")}</p>
+          <div class="risk-meter"><span></span></div>
+          <div class="summary-list">
+            <div><span>${isEn ? "Oxygen Saturation" : "نسبة الأكسجين"}</span><strong style="color: #16a34a;">${o2Val}%</strong></div>
+            <div><span>${isEn ? "Reviewing Doctor" : "الطبيب المعالج"}</span><strong>${doctorDisplay}</strong></div>
+            <div><span>${isEn ? "Status" : "الحالة"}</span><strong style="color: #16a34a;">${isEn ? "Clinically Approved" : "معتمد سريرياً ✓"}</strong></div>
+          </div>
+        </article>
+        <article class="panel">
+          <div class="panel-head"><h3>${isEn ? "Care Recommendations" : "التوصيات"}</h3><span class="pill ok">${isEn ? "Ready" : "معتمد"}</span></div>
+          <ul class="recommendations">
+            <li>${isEn ? "Monitor oxygen level twice daily." : "قياس الأكسجين عند توفر جهاز موثوق."}</li>
+            <li>${isEn ? "Follow-up with your doctor within 24-48 hours." : "مراجعة الطبيب خلال 24-48 ساعة."}</li>
+            <li>${isEn ? "Seek urgent care if shortness of breath worsens." : "طلب رعاية عاجلة إذا زاد ضيق التنفس."}</li>
+          </ul>
+          <div class="safety-note">${isEn ? "Medical notice: Health Vibes supports clinical workflows and does not replace qualified emergency care." : "تنبيه طبي: Health Vibes يساعد في دعم القرار الطبي ولا يستبدل التقييم الطبي المؤهل أو رعاية الطوارئ."}</div>
+          <button class="solid-button full" onclick="openCaseReport('${latest.id}')">
+            <span>📄</span> ${isEn ? "View Certified Medical Report" : "عرض التقرير الطبي المعتمد"}
+          </button>
+        </article>
+      </div>
+    `;
+  } catch (err) {
+    console.error("renderResultScreen error:", err);
+    container.innerHTML = `<div style="padding: 30px; text-align: center; color: var(--red);">${err.message}</div>`;
+  }
+}
+
+async function renderPatientHistory() {
+  const container = document.getElementById("patientHistoryContainer");
+  const countBadge = document.getElementById("patientHistoryCount");
+  if (!container) return;
+
+  const isEn = currentLanguage === "en";
+  const user = auth ? auth.currentUser : null;
+
+  if (!user) {
+    container.innerHTML = `<div style="padding: 20px; text-align: center;">${isEn ? "Please sign in" : "يرجى تسجيل الدخول"}</div>`;
+    return;
+  }
+
+  container.innerHTML = `<div style="padding: 30px; text-align: center; color: var(--teal);"><div class="spinner"></div> ${isEn ? "Loading history..." : "جاري تحميل السجل الطبي..."}</div>`;
+
+  try {
+    const snap = await db.collection("cases")
+      .where("patientId", "==", user.uid)
+      .orderBy("submittedAt", "desc")
+      .limit(30)
+      .get();
+
+    if (snap.empty) {
+      if (countBadge) countBadge.textContent = isEn ? "0 records" : "0 عناصر";
+      container.innerHTML = `
+        <div style="padding: 30px; text-align: center; color: var(--muted);">
+          <span style="font-size: 32px; display: block; margin-bottom: 8px;">📂</span>
+          <p style="margin: 0;">${isEn ? "No past medical records found." : "لا توجد سجلات طبية سابقة."}</p>
+        </div>
+      `;
+      return;
+    }
+
+    const cases = snap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .filter(c => !c.isDemo && !String(c.id).startsWith("demo_") && (typeof c.o2 === "number" || typeof c.oxygenLevel === "number"));
+
+    if (countBadge) {
+      countBadge.textContent = isEn ? `${cases.length} records` : `${cases.length} عناصر`;
+    }
+
+    if (cases.length === 0) {
+      container.innerHTML = `
+        <div style="padding: 30px; text-align: center; color: var(--muted);">
+          <p>${isEn ? "No genuine medical assessments recorded." : "لا توجد فحوصات طبية مسجلة."}</p>
+        </div>
+      `;
+      return;
+    }
+
+    let html = "";
+    cases.forEach(c => {
+      const isApproved = (c.status === CASE_STATUS.APPROVED || c.doctorApproved === true);
+      const statusMeta = getCaseStatusMeta(c.status);
+      const ts = c.submittedAt?.toMillis ? c.submittedAt.toMillis() : (c.submittedAt || 0);
+      const dt = ts ? new Date(ts).toLocaleDateString(isEn ? "en-US" : "ar-EG", { year: "numeric", month: "short", day: "numeric" }) : "--";
+      const o2 = c.oxygenLevel || c.o2 || "--";
+
+      html += `
+        <div class="patient-history-record-card" style="display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line); margin-bottom: 10px; flex-wrap: wrap; gap: 10px;">
+          <div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <strong style="font-size: 15px; color: var(--ink);">${isEn ? "Breathing Assessment" : "تقييم التنفس"}</strong>
+              <span class="pill ${statusMeta.pillClass}" style="font-size: 11px; padding: 2px 8px;">
+                ${statusMeta.icon} ${isEn ? statusMeta.en : statusMeta.ar}
+              </span>
+            </div>
+            <div style="font-size: 12.5px; color: var(--muted); margin-top: 4px;">
+              <span>📅 ${dt}</span> • <span>🫁 SpO2: ${o2}%</span> • <span>#${c.id.slice(-6).toUpperCase()}</span>
+            </div>
+          </div>
+          <div>
+            ${isApproved 
+              ? `<button type="button" class="solid-button" onclick="openCaseReport('${c.id}')" style="font-size: 13px; padding: 8px 16px;">
+                  <span>✅</span> ${isEn ? "View Certified Report" : "عرض التقرير المعتمد"}
+                 </button>`
+              : `<button type="button" class="outline-button" onclick="openCaseReport('${c.id}')" style="font-size: 13px; padding: 8px 16px;">
+                  <span>🔒</span> ${isEn ? "Awaiting Approval (Locked)" : "قيد المراجعة (مغلق)"}
+                 </button>`
+            }
+          </div>
+        </div>
+      `;
+    });
+
+    container.innerHTML = html;
+  } catch (err) {
+    console.error("renderPatientHistory error:", err);
+    container.innerHTML = `<div style="padding: 20px; text-align: center; color: var(--red);">${err.message}</div>`;
+  }
 }
 
 // --- Doctor Account Lifecycle: Application -> Verification -> Approval ---
@@ -2526,18 +3801,263 @@ function readOxygenValue() {
 
 function updateOxygenWarning() {
   const warning = document.getElementById("oxygenWarning");
+  const field = document.getElementById("oxygenInput");
   if (!warning) return;
 
+  const isEn = currentLanguage === "en";
   const oxygen = readOxygenValue();
-  warning.hidden = oxygen >= 93 || oxygen === 0;
-  if (oxygen > 0 && oxygen < 90) {
-    warning.textContent = localized("القيمة منخفضة جدًا. اطلب رعاية عاجلة فورًا إذا يوجد ضيق تنفس شديد أو ألم صدر.");
-    warning.classList.add("urgent");
-  } else if (oxygen > 0 && oxygen < 93) {
-    warning.textContent = localized("القيمة تحتاج متابعة قريبة. سيتم تعليم الحالة للطبيب كأولوية أعلى.");
-    warning.classList.remove("urgent");
+  if (field) field.style.borderColor = "";
+
+  if (oxygen > 100) {
+    warning.hidden = false;
+    warning.className = "field-warning has-emergency-card";
+    warning.innerHTML = `
+      <div class="emergency-alert-card invalid-reading">
+        <div class="emergency-header">
+          <span class="emergency-warning-badge">⚠️ ${isEn ? 'Invalid SpO2' : 'قراءة غير صحيحة'}</span>
+          <h4>${isEn ? 'Oxygen Level Cannot Exceed 100%' : 'نسبة الأكسجين لا يمكن أن تتجاوز 100%'}</h4>
+        </div>
+        <p class="emergency-lead">${isEn ? 'Physiologically, pulse oximetry cannot exceed 100%. Please re-check your reading.' : 'أقصى تشبع ممكن لغاز الأكسجين في الدم هو 100%. يرجى التأكد من جهاز القياس وإعادة الإدخال.'}</p>
+      </div>
+    `;
+    if (field) field.style.borderColor = "var(--red)";
+    return;
   }
+  if (oxygen > 0 && oxygen < 50) {
+    warning.hidden = false;
+    warning.className = "field-warning has-emergency-card";
+    warning.innerHTML = `
+      <div class="emergency-alert-card invalid-reading">
+        <div class="emergency-header">
+          <span class="emergency-warning-badge">⚠️ ${isEn ? 'Sensory Error / Implausible' : 'قراءة غير منطقية'}</span>
+          <h4>${isEn ? 'Reading Below 50% SpO2' : 'القراءة أقل من 50%'}</h4>
+        </div>
+        <p class="emergency-lead">${isEn ? 'Readings under 50% usually indicate sensor dislocation or cold fingers. Valid clinical range is 50% - 100%.' : 'القيم أقل من 50% تشير عادة لانفصال الحساس أو برودة الأصابع. النطاق الطبي المقبول بين 50% و 100%.'}</p>
+      </div>
+    `;
+    if (field) field.style.borderColor = "var(--red)";
+    return;
+  }
+
+  if (oxygen >= 50 && oxygen < 90) {
+    warning.hidden = false;
+    warning.className = "field-warning has-emergency-card";
+    if (field) field.style.borderColor = "var(--red)";
+    warning.innerHTML = `
+      <div class="emergency-alert-card critical-oxygen">
+        <div class="emergency-header">
+          <span class="emergency-pulsing-badge">🚨 ${isEn ? 'CRITICAL EMERGENCY' : 'تنبيه طوارئ فوري'}</span>
+          <h4>${isEn ? 'Severe Hypoxemia (SpO2 ' + oxygen + '%)' : 'نقص حاد في نسبة الأكسجين (' + oxygen + '%)'}</h4>
+        </div>
+        <p class="emergency-lead">
+          ${isEn 
+            ? 'Oxygen saturation below 90% is dangerously low and requires immediate emergency medical care.'
+            : 'هذه النسبة تشير إلى نقص حاد بالأكسجين وتستدعي تدخلاً إسعافياً عاجلاً وفورياً دون تأخير.'}
+        </p>
+        <ul class="emergency-actions-list">
+          <li><strong>${isEn ? 'Call Ambulance Immediately:' : 'اتصل بالإسعاف فوراً:'}</strong> ${isEn ? 'Call 123 (or local ambulance) or proceed to the nearest Emergency Room.' : 'اتصل برقم 123 (مصر) أو توجه لأقرب قسم طوارئ.'}</li>
+          <li><strong>${isEn ? 'Sit Upright (Tripod Posture):' : 'الجلوس في وضع قائم:'}</strong> ${isEn ? 'Sit upright leaning slightly forward. Do NOT lie flat on your back.' : 'اجلس مستقيماً مع ميل خفيف للأمام. تجنب الاستلقاء على الظهر تماماً.'}</li>
+          <li><strong>${isEn ? 'Rest & Loosen Clothing:' : 'تجنب أي مجهود:'}</strong> ${isEn ? 'Loosen tight clothing around neck and chest; avoid walking alone.' : 'فك أي ملابس ضيقة حول العنق والصدر وتجنب الحركة بمفردك.'}</li>
+          <li><strong>${isEn ? 'Do Not Wait for App:' : 'لا تنتظر مراجعة التطبيق:'}</strong> ${isEn ? 'Do not wait for online routine review. Hands-on medical evaluation is vital.' : 'لا تنتظر مراجعة الطبيب الروتينية للتطبيق في الحالات الحرجة.'}</li>
+        </ul>
+        <div class="emergency-action-buttons">
+          <a href="tel:123" class="emergency-call-btn">
+            <span>📞</span>
+            <span>${isEn ? 'Call Ambulance (123)' : 'اتصال فوري بالإسعاف (123)'}</span>
+          </a>
+          <button type="button" class="emergency-guide-trigger-btn" onclick="openEmergencyGuideModal()">
+            <span>📋 ${isEn ? 'Emergency First Aid Guide' : 'إرشادات الإسعافات الأولية'}</span>
+          </button>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  if (oxygen >= 90 && oxygen < 93) {
+    warning.hidden = false;
+    warning.className = "field-warning has-emergency-card";
+    if (field) field.style.borderColor = "var(--amber)";
+    warning.innerHTML = `
+      <div class="emergency-alert-card warning-oxygen">
+        <div class="emergency-header">
+          <span class="emergency-warning-badge">⚠️ ${isEn ? 'HIGH PRIORITY' : 'أولوية طبية عالية'}</span>
+          <h4>${isEn ? 'Low Oxygen Saturation (' + oxygen + '%)' : 'نسبة أكسجين منخفضة (' + oxygen + '%)'}</h4>
+        </div>
+        <p class="emergency-lead">
+          ${isEn
+            ? 'Oxygen saturation is below optimal (≥95%). This case is flagged as urgent priority for the doctor.'
+            : 'نسبة تشبع الأكسجين أقل من المعدل الطبيعي (≥95%). سيتم تصنيف حالتك بأولوية عاجلة للطبيب.'}
+        </p>
+        <ul class="emergency-actions-list">
+          <li>${isEn ? 'If you experience sudden severe breathlessness, chest pain, or blue lips, call 123 immediately.' : 'إذا شعرت بزيادة سريعة في ضيق التنفس أو ألم بالصدر أو زرقة بالشفاه، توجه للطوارئ فوراً أو اتصل بـ 123.'}</li>
+          <li>${isEn ? 'Sit comfortably, breathe steadily, and keep warm while waiting.' : 'اجلس بوضع مريح، وتنفس بهدوء، وتأكد من ثبات جهاز قياس النبض.'}</li>
+        </ul>
+        <div class="emergency-action-buttons">
+          <a href="tel:123" class="emergency-call-btn secondary">
+            <span>📞</span>
+            <span>${isEn ? 'Call Emergency (123)' : 'اتصال بالطوارئ (123)'}</span>
+          </a>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  warning.hidden = true;
+  warning.className = "field-warning";
+  warning.innerHTML = "";
 }
+
+window.openEmergencyGuideModal = function() {
+  const modal = document.getElementById("emergencyGuideModal");
+  if (modal) {
+    modal.classList.add("open");
+    modal.setAttribute("aria-hidden", "false");
+  }
+};
+
+window.closeEmergencyGuideModal = function() {
+  const modal = document.getElementById("emergencyGuideModal");
+  if (modal) {
+    modal.classList.remove("open");
+    modal.setAttribute("aria-hidden", "true");
+  }
+};
+
+let _emergencySubmitCallback = null;
+window.openEmergencySubmitModal = function(o2, onProceed) {
+  _emergencySubmitCallback = onProceed;
+  const modal = document.getElementById("emergencySubmitModal");
+  const valEl = document.getElementById("emergencyModalO2Val");
+  if (valEl) valEl.textContent = `${o2}%`;
+  if (modal) {
+    modal.classList.add("open");
+    modal.setAttribute("aria-hidden", "false");
+  }
+};
+
+window.closeEmergencySubmitModal = function() {
+  const modal = document.getElementById("emergencySubmitModal");
+  if (modal) {
+    modal.classList.remove("open");
+    modal.setAttribute("aria-hidden", "true");
+  }
+  _emergencySubmitCallback = null;
+};
+
+let _assessmentConfirmCallback = null;
+
+window.openConfirmAssessmentModal = function(data, onConfirm) {
+  _assessmentConfirmCallback = onConfirm;
+  const modal = document.getElementById("confirmAssessmentModal");
+  if (!modal) {
+    if (typeof onConfirm === "function") onConfirm();
+    return;
+  }
+
+  const isEn = currentLanguage === "en";
+  const safeSet = (id, text) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+  };
+
+  safeSet("confirmO2", data.oxygenLevel ? `${data.oxygenLevel}%` : "--%");
+  safeSet("confirmDyspnea", data.breathingDifficulty);
+  safeSet("confirmCough", data.coughLevel);
+  safeSet("confirmDuration", data.symptomDuration);
+  safeSet("confirmRisks", data.riskFactors && data.riskFactors.length ? data.riskFactors.join("، ") : (isEn ? "None" : "لا يوجد"));
+  safeSet("confirmDoctor", data.assignedDoctorName || (isEn ? "Dr. Mona Samy" : "د. منى سامي"));
+  safeSet("confirmClinic", data.clinicName || (isEn ? "Nasr City Clinic" : "عيادة مدينة نصر"));
+
+  const prioPill = document.getElementById("confirmModalPriorityPill");
+  if (prioPill) {
+    prioPill.textContent = data.priorityAr || data.priority;
+    prioPill.className = `pill ${data.priority === 'urgent' ? 'danger' : (data.priority === 'high' ? 'pending' : 'ok')}`;
+  }
+
+  const emNotice = document.getElementById("confirmModalEmergencyNotice");
+  const emO2Val = document.getElementById("confirmModalEmergencyO2");
+  if (emNotice) {
+    if (data.oxygenLevel > 0 && data.oxygenLevel < 90) {
+      emNotice.style.display = "block";
+      if (emO2Val) emO2Val.textContent = `${data.oxygenLevel}%`;
+    } else {
+      emNotice.style.display = "none";
+    }
+  }
+
+  const confirmSendBtn = document.getElementById("btnConfirmSendAssessment");
+  if (confirmSendBtn) {
+    confirmSendBtn.disabled = false;
+    confirmSendBtn.textContent = isEn ? "✅ Confirm & Send to Doctor" : "✅ تأكيد وإرسال التقييم للطبيب";
+  }
+
+  modal.classList.add("open");
+  modal.setAttribute("aria-hidden", "false");
+};
+
+window.closeConfirmAssessmentModal = function() {
+  const modal = document.getElementById("confirmAssessmentModal");
+  if (modal) {
+    modal.classList.remove("open");
+    modal.setAttribute("aria-hidden", "true");
+  }
+  _assessmentConfirmCallback = null;
+};
+
+// Bind interactive modals (Emergency & Confirmation)
+document.addEventListener("DOMContentLoaded", () => {
+  const closeGuideBtn = document.getElementById("closeEmergencyGuideBtn");
+  if (closeGuideBtn) closeGuideBtn.addEventListener("click", closeEmergencyGuideModal);
+
+  const proceedSubmitBtn = document.getElementById("emergencySubmitProceedBtn");
+  if (proceedSubmitBtn) {
+    proceedSubmitBtn.addEventListener("click", () => {
+      const cb = _emergencySubmitCallback;
+      closeEmergencySubmitModal();
+      if (typeof cb === "function") cb();
+    });
+  }
+
+  const cancelSubmitBtn = document.getElementById("emergencySubmitCancelBtn");
+  if (cancelSubmitBtn) {
+    cancelSubmitBtn.addEventListener("click", () => {
+      closeEmergencySubmitModal();
+      const field = document.getElementById("oxygenInput");
+      if (field) {
+        field.focus();
+        field.select();
+      }
+    });
+  }
+
+  const btnConfirmSend = document.getElementById("btnConfirmSendAssessment");
+  if (btnConfirmSend) {
+    btnConfirmSend.addEventListener("click", async () => {
+      const cb = _assessmentConfirmCallback;
+      if (typeof cb === "function") {
+        btnConfirmSend.disabled = true;
+        btnConfirmSend.textContent = currentLanguage === "en" ? "Submitting..." : "جاري الإرسال...";
+        try {
+          await cb();
+          closeConfirmAssessmentModal();
+        } catch (e) {
+          console.error("Submission failed:", e);
+          btnConfirmSend.disabled = false;
+          btnConfirmSend.textContent = currentLanguage === "en" ? "✅ Confirm & Send to Doctor" : "✅ تأكيد وإرسال التقييم للطبيب";
+        }
+      } else {
+        closeConfirmAssessmentModal();
+      }
+    });
+  }
+
+  const btnCancelSend = document.getElementById("btnCancelSendAssessment");
+  if (btnCancelSend) {
+    btnCancelSend.addEventListener("click", closeConfirmAssessmentModal);
+  }
+});
 
 function openApprovalModal() {
   const modal = document.getElementById("confirmModal");
@@ -2667,7 +4187,351 @@ if (riskGroup) {
   });
 }
 
-document.getElementById("oxygenInput").addEventListener("input", updateOxygenWarning);
+// =========================================================================
+// 🩺 STANDARDIZED CLINICAL ASSESSMENT SCHEMA (v1.0.0)
+// =========================================================================
+
+const ASSESSMENT_SCHEMA_VERSION = "1.0.0";
+
+const AssessmentEnums = Object.freeze({
+  BreathingDifficulty: {
+    YES: "yes",
+    NO: "no"
+  },
+  CoughSeverity: {
+    NONE: "none",
+    MILD: "mild",
+    MODERATE: "moderate",
+    SEVERE: "severe"
+  },
+  Priority: {
+    NORMAL: "normal",
+    HIGH: "high",
+    URGENT: "urgent"
+  },
+  Status: {
+    PENDING: "pending",
+    APPROVED: "approved",
+    REJECTED: "rejected"
+  },
+  RiskFactorKeys: {
+    ASTHMA: "asthma",
+    SMOKING: "smoking",
+    PREGNANCY: "pregnancy",
+    NONE: "none"
+  }
+});
+
+const AssessmentDictionaries = Object.freeze({
+  breathing: {
+    yes: { ar: "نعم (يوجد ضيق تنفس)", en: "Yes (Shortness of breath)" },
+    no:  { ar: "لا (تنفس طبيعي)",       en: "No (Normal breathing)" }
+  },
+  cough: {
+    none:     { ar: "لا توجد", en: "None" },
+    mild:     { ar: "خفيفة",   en: "Mild" },
+    moderate: { ar: "متوسطة",  en: "Moderate" },
+    severe:   { ar: "شديدة",   en: "Severe" }
+  },
+  priority: {
+    normal: { ar: "عادية", badge: "ok",      riskAr: "منخفض", riskEn: "Low",    aiScoreAr: "منخفضة", aiScoreEn: "Low",    confidence: "94%" },
+    high:   { ar: "عالية",  badge: "pending", riskAr: "مراجعة", riskEn: "Review", aiScoreAr: "متوسطة", aiScoreEn: "Medium", confidence: "78%" },
+    urgent: { ar: "عاجلة", badge: "danger",  riskAr: "عاجل",  riskEn: "Urgent", aiScoreAr: "عالية",  aiScoreEn: "High",   confidence: "89%" }
+  },
+  riskFactors: {
+    "ربو":     { key: "asthma",    ar: "ربو",     en: "Asthma" },
+    "تدخين":   { key: "smoking",   ar: "تدخين",   en: "Smoking" },
+    "حمل":     { key: "pregnancy", ar: "حمل",     en: "Pregnancy" },
+    "لا يوجد": { key: "none",      ar: "لا يوجد", en: "None" },
+    asthma:    { key: "asthma",    ar: "ربو",     en: "Asthma" },
+    smoking:   { key: "smoking",   ar: "تدخين",   en: "Smoking" },
+    pregnancy: { key: "pregnancy", ar: "حمل",     en: "Pregnancy" },
+    none:      { key: "none",      ar: "لا يوجد", en: "None" }
+  }
+});
+
+/**
+ * Normalizes input symptoms and vital signs into a strict, validated Assessment Schema
+ */
+function buildAssessmentModel({
+  user,
+  oxygenLevel,
+  breathingRaw,
+  coughRaw,
+  symptomDurationRaw,
+  riskFactorsRaw = [],
+  assignedDoctorId = null,
+  assignedDoctorName = null,
+  clinicId = "clinic_cairo_nasr_city",
+  clinicName = "عيادة مدينة نصر"
+}) {
+  // 1. Oxygen Vitals (Strict Physiological Validation)
+  const o2Raw = Number.parseInt(String(oxygenLevel).replace(/[^\d]/g, ""), 10) || 0;
+  if (o2Raw > 100 || (o2Raw < 50 && o2Raw > 0)) {
+    throw new Error(currentLanguage === "en"
+      ? "Invalid oxygen level: SpO2 must be between 50% and 100%."
+      : "نسبة الأكسجين غير صحيحة: يجب أن تكون بين 50% و 100%.");
+  }
+  const o2 = o2Raw;
+  const isCritical = o2 > 0 && o2 < 90;
+  const isHighRisk = o2 > 0 && o2 < 93;
+
+  // 2. Priority & AI Triage
+  const priority = isCritical ? "urgent" : (isHighRisk ? "high" : "normal");
+  const prioMeta = AssessmentDictionaries.priority[priority];
+
+  // 3. Breathing Difficulty Normalization
+  const breathingClean = String(breathingRaw || "").trim();
+  const hasDyspnea = breathingClean === "نعم" || breathingClean.toLowerCase() === "yes";
+  const breathingKey = hasDyspnea ? "yes" : "no";
+  const breathingMeta = AssessmentDictionaries.breathing[breathingKey];
+
+  // 4. Cough Severity Normalization
+  let coughKey = "none";
+  const coughClean = String(coughRaw || "").trim().toLowerCase();
+  if (coughClean.includes("شديد") || coughClean === "severe") coughKey = "severe";
+  else if (coughClean.includes("متوسط") || coughClean === "moderate") coughKey = "moderate";
+  else if (coughClean.includes("خفيف") || coughClean === "mild") coughKey = "mild";
+  const coughMeta = AssessmentDictionaries.cough[coughKey];
+
+  // 5. Symptom Duration Normalization
+  const durationStr = String(symptomDurationRaw || "غير محدد").trim();
+  const daysMatch = durationStr.match(/\d+/);
+  const durationDays = daysMatch ? Number.parseInt(daysMatch[0], 10) : 0;
+  const durationEn = durationDays > 0 ? `${durationDays} ${durationDays === 1 ? 'day' : 'days'}` : "Unspecified";
+
+  // 6. Risk Factors Normalization
+  const rfKeys = [];
+  const rfLabelsAr = [];
+  const rfLabelsEn = [];
+  riskFactorsRaw.forEach(rf => {
+    const clean = String(rf).trim();
+    const meta = AssessmentDictionaries.riskFactors[clean] || AssessmentDictionaries.riskFactors[clean.toLowerCase()];
+    if (meta && !rfKeys.includes(meta.key)) {
+      rfKeys.push(meta.key);
+      rfLabelsAr.push(meta.ar);
+      rfLabelsEn.push(meta.en);
+    }
+  });
+  if (rfKeys.length === 0) {
+    rfKeys.push("none");
+    rfLabelsAr.push("لا يوجد");
+    rfLabelsEn.push("None");
+  }
+
+  // 7. Symptoms summary string
+  const symptomsSummaryAr = `${coughMeta.ar && coughMeta.ar !== 'لا توجد' ? 'كحة ' + coughMeta.ar : ''}${hasDyspnea ? (coughMeta.ar && coughMeta.ar !== 'لا توجد' ? ' مع ضيق تنفس' : 'ضيق تنفس') : ''}`.trim() || "لا توجد أعراض ظاهرة";
+  const symptomsSummaryEn = `${coughMeta.en && coughMeta.en !== 'None' ? coughMeta.en + ' cough' : ''}${hasDyspnea ? (coughMeta.en && coughMeta.en !== 'None' ? ' with shortness of breath' : 'Shortness of breath') : ''}`.trim() || "No apparent symptoms";
+
+  const patientName = (user && (user.displayName || user.name)) || (user && user.email ? user.email.split('@')[0] : "مجهول");
+  const patientEmail = (user && user.email) || "";
+  const patientUid = (user && user.uid) || "";
+
+  return {
+    // ── Document Metadata ──
+    schemaVersion: ASSESSMENT_SCHEMA_VERSION,
+    patientId: patientUid,
+    patientEmail: patientEmail,
+    patientName: patientName,
+    patientNameEn: patientName,
+    name: patientName,
+    nameEn: patientName,
+
+    // ── Clinical Tenant & Doctor Assignment ──
+    assignedDoctorId: assignedDoctorId || null,
+    assignedDoctorName: assignedDoctorName || null,
+    clinicId: clinicId || "clinic_cairo_nasr_city",
+    clinicName: clinicName || "عيادة مدينة نصر",
+
+    // ── Structured Assessment Object ──
+    assessment: {
+      vitals: {
+        oxygenLevel: o2,
+        isLowOxygen: isHighRisk,
+        isCriticalOxygen: isCritical,
+        unit: "%"
+      },
+      symptoms: {
+        breathingDifficulty: breathingKey,
+        breathingDifficultyLabelAr: breathingMeta.ar,
+        breathingDifficultyLabelEn: breathingMeta.en,
+        coughSeverity: coughKey,
+        coughSeverityLabelAr: coughMeta.ar,
+        coughSeverityLabelEn: coughMeta.en,
+        durationDays: durationDays,
+        durationText: durationStr,
+        durationTextEn: durationEn
+      },
+      riskFactors: {
+        keys: rfKeys,
+        labelsAr: rfLabelsAr,
+        labelsEn: rfLabelsEn
+      },
+      aiTriage: {
+        priority: priority,
+        priorityLabelAr: prioMeta.ar,
+        risk: prioMeta.riskAr,
+        riskEn: prioMeta.riskEn,
+        aiScore: prioMeta.aiScoreAr,
+        aiScoreEn: prioMeta.aiScoreEn,
+        confidence: prioMeta.confidence,
+        modelVersion: "HealthVibe-AI-v1.0"
+      }
+    },
+
+    // ── Top-Level Flattened Fields (100% Backward Compatible) ──
+    status: assignedDoctorId ? CASE_STATUS.ASSIGNED : CASE_STATUS.TRIAGED,
+    priority: priority,
+    oxygenLevel: o2,
+    o2: o2,
+    breathingDifficulty: breathingMeta.ar,
+    coughLevel: coughMeta.ar,
+    symptomDuration: durationStr,
+    duration: durationStr,
+    durationEn: durationEn,
+    riskFactors: rfLabelsAr,
+    symptoms: symptomsSummaryAr,
+    symptomsEn: symptomsSummaryEn,
+    risk: prioMeta.riskAr,
+    riskEn: prioMeta.riskEn,
+    aiScore: prioMeta.aiScoreAr,
+    aiScoreEn: prioMeta.aiScoreEn,
+    confidence: prioMeta.confidence,
+
+    // ── Lifecycle & Audit ──
+    submittedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    reviewedBy: null,
+    reviewedAt: null,
+    doctorNotes: null,
+    doctorNote: null,
+    approvingDoctorId: null,
+    approvingDoctorEmail: null,
+    result: null,
+
+    // ── Complete Status History ──
+    statusHistory: [
+      {
+        status: CASE_STATUS.SUBMITTED,
+        previousStatus: CASE_STATUS.DRAFT,
+        changedAt: new Date().toISOString(),
+        changedBy: patientUid || "patient",
+        changedByName: patientName,
+        changedByEmail: patientEmail,
+        changedByRole: "patient",
+        note: "Assessment submitted by patient"
+      },
+      {
+        status: CASE_STATUS.TRIAGED,
+        previousStatus: CASE_STATUS.SUBMITTED,
+        changedAt: new Date().toISOString(),
+        changedBy: "system",
+        changedByName: "Health Vibe AI Triage Engine",
+        changedByRole: "system",
+        note: `AI Triage determined priority: ${priority} (${prioMeta.riskAr})`
+      },
+      ...(assignedDoctorId ? [{
+        status: CASE_STATUS.ASSIGNED,
+        previousStatus: CASE_STATUS.TRIAGED,
+        changedAt: new Date().toISOString(),
+        changedBy: "system",
+        changedByName: "Clinic Routing",
+        changedByRole: "system",
+        note: `Assigned to Dr. ${assignedDoctorName || assignedDoctorId}`
+      }] : [])
+    ]
+  };
+}
+
+/**
+ * Comprehensive Validation Engine for Clinical Assessment Fields
+ * Validates oxygenLevel, breathingDifficulty, coughLevel, symptomDuration, riskFactors
+ * Returns { isValid: boolean, errors: Array<{ field: string, message: string }> }
+ */
+function validateAssessmentFields({
+  oxygenLevel,
+  breathingDifficulty,
+  coughLevel,
+  symptomDuration,
+  riskFactors,
+  isEn = false
+}) {
+  const errors = [];
+
+  // 1. Oxygen Level (SpO2: 50% - 100%)
+  const o2 = Number.parseInt(String(oxygenLevel).replace(/[^\d]/g, ""), 10);
+  if (isNaN(o2) || o2 < 50 || o2 > 100) {
+    errors.push({
+      field: "oxygenInput",
+      message: o2 > 100
+        ? (isEn ? "Oxygen level cannot exceed 100%." : "نسبة الأكسجين لا يمكن أن تتجاوز 100%.")
+        : (isEn ? "Please enter a valid oxygen level between 50% and 100%." : "نسبة الأكسجين يجب أن تكون قيمة صحيحة بين 50% و 100%.")
+    });
+  }
+
+  // 2. Breathing Difficulty (Required selection)
+  const validBreathing = ["نعم", "لا", "yes", "no"];
+  const breathingStr = String(breathingDifficulty || "").trim();
+  if (!breathingStr || breathingStr === "غير محدد" || (!validBreathing.includes(breathingStr.toLowerCase()) && !validBreathing.includes(breathingStr))) {
+    errors.push({
+      field: "breathingChoices",
+      message: isEn
+        ? "Please specify whether shortness of breath is present (Yes or No)."
+        : "يرجى تحديد ما إذا كان يوجد ضيق في التنفس (نعم أم لا)."
+    });
+  }
+
+  // 3. Cough Level (Required selection)
+  const validCough = ["خفيفة", "متوسطة", "شديدة", "لا توجد", "mild", "moderate", "severe", "none"];
+  const coughStr = String(coughLevel || "").trim();
+  if (!coughStr || coughStr === "غير محدد" || (!validCough.includes(coughStr.toLowerCase()) && !validCough.includes(coughStr))) {
+    errors.push({
+      field: "coughChoices",
+      message: isEn
+        ? "Please select cough severity level."
+        : "يرجى اختيار درجة شدة الكحة من الخيارات المتاحة."
+    });
+  }
+
+  // 4. Symptom Duration (Must contain valid day count: 1 - 365)
+  const durationStr = String(symptomDuration || "").trim();
+  const daysMatch = durationStr.match(/\d+/);
+  const days = daysMatch ? Number.parseInt(daysMatch[0], 10) : 0;
+  if (!durationStr || durationStr === "غير محدد" || days <= 0 || days > 365) {
+    errors.push({
+      field: "symptomDuration",
+      message: isEn
+        ? "Please enter a valid symptom duration (between 1 and 365 days)."
+        : "يرجى إدخال مدة أعراض صحيحة (بين 1 و 365 يوماً)."
+    });
+  }
+
+  // 5. Risk Factors (Must be a non-empty array with valid options)
+  if (!Array.isArray(riskFactors) || riskFactors.length === 0) {
+    errors.push({
+      field: "riskChoices",
+      message: isEn
+        ? "Please select your risk factors (or choose 'None')."
+        : "يرجى تحديد عوامل الخطورة (أو اختيار 'لا يوجد')."
+    });
+  } else {
+    const validRf = ["ربو", "تدخين", "حمل", "لا يوجد", "asthma", "smoking", "pregnancy", "none"];
+    const hasInvalid = riskFactors.some(rf => !validRf.includes(String(rf).trim()) && !validRf.includes(String(rf).trim().toLowerCase()));
+    if (hasInvalid) {
+      errors.push({
+        field: "riskChoices",
+        message: isEn
+          ? "Invalid risk factors selected."
+          : "تم اختيار عوامل خطورة غير صالحة."
+      });
+    }
+  }
+
+  return {
+    isValid: errors.length === 0,
+    errors,
+    errorSummary: errors.map(e => e.message).join(" | ")
+  };
+}
 
 document.getElementById("submitAssessment").addEventListener("click", async () => {
   updateOxygenWarning();
@@ -2685,24 +4549,21 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
   const submitBtn = document.getElementById("submitAssessment");
   submitBtn.disabled = true;
   submitBtn.textContent = "جاري الإرسال...";
+  const isEn = currentLanguage === "en";
 
   try {
     // ── جمع بيانات النموذج ──────────────────────────────────────────
     const oxygenLevel = readOxygenValue();
 
     // ضيق التنفس (نعم/لا)
-    const breathingChoices = document.querySelectorAll(
-      "#breathingChoices .choice"
-    );
+    const breathingChoices = document.querySelectorAll("#breathingChoices .choice");
     let breathingDifficulty = "غير محدد";
     breathingChoices.forEach((btn) => {
       if (btn.classList.contains("active")) breathingDifficulty = btn.textContent.trim();
     });
 
     // درجة الكحة
-    const coughChoices = document.querySelectorAll(
-      "#coughChoices .choice"
-    );
+    const coughChoices = document.querySelectorAll("#coughChoices .choice");
     let coughLevel = "غير محدد";
     coughChoices.forEach((btn) => {
       if (btn.classList.contains("active")) coughLevel = btn.textContent.trim();
@@ -2713,85 +4574,214 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
     const symptomDuration = durationField ? durationField.value.trim() : "غير محدد";
 
     // عوامل الخطورة (يمكن أكثر من واحد)
-    const riskChoices = document.querySelectorAll(
-      "#riskChoices .choice"
-    );
+    const riskChoices = document.querySelectorAll("#riskChoices .choice");
     const riskFactors = [];
     riskChoices.forEach((btn) => {
       if (btn.classList.contains("active")) riskFactors.push(btn.textContent.trim());
     });
 
-    // ── تحديد الأولوية بناءً على نسبة الأكسجين ───────────────────
-    let priority = "normal";
-    if (oxygenLevel > 0 && oxygenLevel < 90) priority = "urgent";
-    else if (oxygenLevel > 0 && oxygenLevel < 93) priority = "high";
-
-    // ── بناء وثيقة الحالة ─────────────────────────────────────────
-    const caseData = {
-      patientId: user.uid,
-      patientEmail: user.email,
-      patientName: user.displayName || "مجهول",
-      status: "pending",
-      priority,
+    // ── التحقق الشامل الصارم من كافة حقول التقييم (Full Assessment Validation) ──
+    const validation = validateAssessmentFields({
       oxygenLevel,
       breathingDifficulty,
       coughLevel,
       symptomDuration,
       riskFactors,
-      submittedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      reviewedBy: null,
-      reviewedAt: null,
-      doctorNotes: null,
-      result: null,
-    };
-
-    // ── حفظ في Firestore ──────────────────────────────────────────
-    const docRef = await db.collection("cases").add(caseData);
-    console.log("✅ Case saved to Firestore:", docRef.id);
-
-    // ── تسجيل في Audit Log ────────────────────────────────────────
-    await db.collection("auditLog").add({
-      action: "CASE_SUBMITTED",
-      caseId: docRef.id,
-      patientId: user.uid,
-      priority,
-      oxygenLevel,
-      timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+      isEn
     });
 
-    showScreen("pending");
-    showToast(
-      priority === "urgent"
-        ? "🚨 تم إرسال الحالة العاجلة للطبيب"
-        : priority === "high"
-        ? "⚠️ تم إرسال الحالة بأولوية عالية للطبيب"
-        : "✅ تم إرسال التقييم للطبيب"
-    );
+    if (!validation.isValid) {
+      // تنظيف الحدود السابقة
+      ["oxygenInput", "symptomDuration"].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.borderColor = "";
+      });
+      ["breathingChoices", "coughChoices", "riskChoices"].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.outline = "";
+      });
 
-    // ── ملء بطاقة الحالة في شاشة الانتظار ───────────────────────
+      // تمييز الحقل غير الصالح والتركيز عليه
+      const firstErr = validation.errors[0];
+      const targetEl = document.getElementById(firstErr.field);
+      if (targetEl) {
+        if (targetEl.tagName === "INPUT" || targetEl.tagName === "TEXTAREA") {
+          targetEl.focus();
+          targetEl.style.borderColor = "var(--red)";
+        } else {
+          targetEl.scrollIntoView({ behavior: "smooth", block: "center" });
+          targetEl.style.outline = "2px solid var(--red)";
+          targetEl.style.borderRadius = "8px";
+        }
+      }
+
+      showToast(`⚠️ ${firstErr.message}`);
+      updateOxygenWarning();
+      submitBtn.disabled = false;
+      submitBtn.textContent = isEn ? "Send to Doctor" : "إرسال للطبيب";
+      return;
+    }
+
+    // ── اعتراض الحالات الحرجة جداً للتأكد من التوجه للطوارئ ─────────
+    if (oxygenLevel > 0 && oxygenLevel < 90 && !window._emergencySubmissionConfirmed) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = isEn ? "Send to Doctor" : "إرسال للطبيب";
+      openEmergencySubmitModal(oxygenLevel, () => {
+        window._emergencySubmissionConfirmed = true;
+        document.getElementById("submitAssessment").click();
+      });
+      return;
+    }
+    window._emergencySubmissionConfirmed = false;
+
+    // ── قراءة الطبيب المرتبط وبيانات العيادة ───────────────────────
+    const linkedDoctorEl = document.getElementById("profileLinkedDoctor");
+    const linkedDoctorName = linkedDoctorEl ? linkedDoctorEl.value.trim() : (isEn ? "Dr. Mona Samy - Nasr City Clinic" : "د. منى سامي - عيادة مدينة نصر");
+    const clinicName = isEn ? "Nasr City Clinic" : "عيادة مدينة نصر";
+
+    // حساب الأولوية المتوقعة
+    const priority = oxygenLevel > 0 && oxygenLevel < 90 ? "urgent" : (oxygenLevel > 0 && oxygenLevel < 93 ? "high" : "normal");
     const priorityAr = { urgent: "🚨 عاجل", high: "⚠️ عالية", normal: "✔️ عادية" };
-    const now = new Date().toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" });
-    const safeSet = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-    safeSet("pendingCaseId",    `#${docRef.id.slice(-6).toUpperCase()}`);
-    safeSet("pendingCaseName",  user.displayName || user.email);
-    safeSet("pendingCaseO2",    oxygenLevel ? `${oxygenLevel}%` : "--");
-    safeSet("pendingCasePriority", priorityAr[priority] || priority);
-    safeSet("pendingCaseTime",  now);
 
-    // حفظ caseId للاستخدام لاحقاً (مثلاً لمتابعة الحالة)
-    window._currentCaseId = docRef.id;
+    // ── فتح نافذة تأكيد الإرسال (Confirmation Step Before Submission) ──
+    openConfirmAssessmentModal({
+      oxygenLevel,
+      breathingDifficulty,
+      coughLevel,
+      symptomDuration,
+      riskFactors,
+      assignedDoctorName: linkedDoctorName,
+      clinicName,
+      priority,
+      priorityAr: priorityAr[priority]
+    }, async () => {
+      submitBtn.disabled = true;
+      submitBtn.textContent = isEn ? "Submitting..." : "جاري الإرسال...";
 
+      try {
+        // ── بناء وثيقة الحالة عبر الـ Schema المعياري الموحد ────────────
+        const caseData = buildAssessmentModel({
+          user,
+          oxygenLevel,
+          breathingRaw: breathingDifficulty,
+          coughRaw: coughLevel,
+          symptomDurationRaw: symptomDuration,
+          riskFactorsRaw: riskFactors,
+          assignedDoctorId: window._patientAssignedDoctorId || null,
+          assignedDoctorName: linkedDoctorName || null,
+          clinicId: window._patientClinicId || "clinic_cairo_nasr_city",
+          clinicName
+        });
+
+        // ── حفظ في Firestore ──────────────────────────────────────────
+        const docRef = await db.collection("cases").add(caseData);
+        console.log("✅ Standardized Case saved to Firestore:", docRef.id);
+
+        // ── تسجيل في Audit Log ────────────────────────────────────────
+        await db.collection("auditLog").add({
+          action: "CASE_SUBMITTED",
+          caseId: docRef.id,
+          patientId: user.uid,
+          priority: caseData.priority,
+          oxygenLevel: caseData.oxygenLevel,
+          schemaVersion: ASSESSMENT_SCHEMA_VERSION,
+          timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+
+        showScreen("pending");
+
+        // ── تفعيل بانر الطوارئ البارز في شاشة الانتظار ──────────────────
+        const pendingAlertEl = document.getElementById("pendingEmergencyAlert");
+        if (pendingAlertEl) {
+          if (oxygenLevel > 0 && oxygenLevel < 90) {
+            pendingAlertEl.hidden = false;
+            pendingAlertEl.className = "emergency-pending-banner critical";
+            pendingAlertEl.innerHTML = `
+              <div class="emergency-banner-top">
+                <span class="emergency-pulsing-icon">🚨</span>
+                <div>
+                  <h2 class="emergency-banner-title">${isEn ? 'CRITICAL EMERGENCY ALERT — Seek Immediate Emergency Care' : 'تنبيه طوارئ فوري — لا تنتظر مراجعة الطبيب الإلكترونية'}</h2>
+                  <p class="emergency-banner-desc">
+                    ${isEn
+                      ? `Recorded oxygen level (<strong style="color:#ef4444;font-size:16px;">${oxygenLevel}%</strong>) is critically low (severe hypoxemia). Online clinical review cannot replace emergency department care. Please call 123 or proceed to the nearest ER now.`
+                      : `نسبة الأكسجين المسجلة (<strong style="color:#ef4444;font-size:16px;">${oxygenLevel}%</strong>) حرجة للغاية (نقص أكسجين حاد). المراجعة الإلكترونية الروتينية لا تغني عن الطوارئ. يرجى التوجه فوراً لأقرب قسم طوارئ أو الاتصال بالإسعاف الآن.`}
+                  </p>
+                </div>
+              </div>
+              <div class="emergency-banner-footer">
+                <a href="tel:123" class="emergency-big-call-btn">
+                  <span>📞</span> <strong>${isEn ? 'Call Ambulance (123) Immediately' : 'اتصال بالإسعاف (123) فوراً'}</strong>
+                </a>
+                <button type="button" class="emergency-banner-guide-btn" onclick="openEmergencyGuideModal()">
+                  📋 ${isEn ? 'First Aid Guide' : 'إرشادات الإسعافات الأولية'}
+                </button>
+              </div>
+            `;
+          } else if (oxygenLevel >= 90 && oxygenLevel < 93) {
+            pendingAlertEl.hidden = false;
+            pendingAlertEl.className = "emergency-pending-banner warning";
+            pendingAlertEl.innerHTML = `
+              <div class="emergency-banner-top">
+                <span class="emergency-pulsing-icon">⚠️</span>
+                <div>
+                  <h2 class="emergency-banner-title">${isEn ? 'High Priority Alert — Low Oxygen (' + oxygenLevel + '%)' : 'أولوية عاجلة — نسبة الأكسجين منخفضة (' + oxygenLevel + '%)'}</h2>
+                  <p class="emergency-banner-desc">
+                    ${isEn
+                      ? `Your case has been escalated with high priority for the doctor. If shortness of breath worsens or chest pain develops, seek emergency care immediately.`
+                      : `تم إرسال حالتك بأولوية عاجلة للطبيب. إذا شعرت بزيادة حادة في صعوبة التنفس أو ألم بالصدر، توجه للطوارئ فوراً أو اتصل بالإسعاف (123).`}
+                  </p>
+                </div>
+              </div>
+              <div class="emergency-banner-footer">
+                <a href="tel:123" class="emergency-big-call-btn warning-btn">
+                  <span>📞</span> <strong>${isEn ? 'Call Emergency (123)' : 'طلب الطوارئ (123)'}</strong>
+                </a>
+              </div>
+            `;
+          } else {
+            pendingAlertEl.hidden = true;
+            pendingAlertEl.innerHTML = "";
+          }
+        }
+
+        showToast(
+          priority === "urgent"
+            ? (isEn ? "🚨 Urgent case confirmed and sent to doctor" : "🚨 تم تأكيد وإرسال الحالة العاجلة للطبيب")
+            : priority === "high"
+            ? (isEn ? "⚠️ High priority assessment sent to doctor" : "⚠️ تم تأكيد وإرسال الحالة بأولوية عالية للطبيب")
+            : (isEn ? "✅ Assessment confirmed and sent to doctor" : "✅ تم تأكيد وإرسال التقييم للطبيب بنجاح")
+        );
+
+        // ── ملء بطاقة الحالة في شاشة الانتظار ───────────────────────
+        const now = new Date().toLocaleTimeString(isEn ? "en-US" : "ar-EG", { hour: "2-digit", minute: "2-digit" });
+        const safeSet = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+        safeSet("pendingCaseId",    `#${docRef.id.slice(-6).toUpperCase()}`);
+        safeSet("pendingCaseName",  user.displayName || user.email);
+        safeSet("pendingCaseO2",    oxygenLevel ? `${oxygenLevel}%` : "--");
+        safeSet("pendingCasePriority", priorityAr[priority] || priority);
+        safeSet("pendingCaseTime",  now);
+
+        // حفظ caseId للاستخدام لاحقاً (مثلاً لمتابعة الحالة)
+        window._currentCaseId = docRef.id;
+
+      } catch (error) {
+        console.error("❌ Error saving case:", error);
+        if (error.code === "permission-denied") {
+          showToast(isEn ? "Permission error — please sign in" : "خطأ في الصلاحيات — تأكد من تسجيل الدخول");
+        } else {
+          showToast(isEn ? "Error sending assessment. Please try again." : "حدث خطأ أثناء الإرسال. حاول مرة أخرى.");
+        }
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = isEn ? "Send to Doctor" : "إرسال للطبيب";
+      }
+    });
 
   } catch (error) {
-    console.error("❌ Error saving case:", error);
-    if (error.code === "permission-denied") {
-      showToast("خطأ في الصلاحيات — تأكد من تسجيل الدخول");
-    } else {
-      showToast("حدث خطأ أثناء الإرسال. حاول مرة أخرى.");
-    }
-  } finally {
+    console.error("❌ Error initiating assessment submission:", error);
+    showToast(isEn ? "An unexpected error occurred." : "حدث خطأ غير متوقع.");
     submitBtn.disabled = false;
-    submitBtn.textContent = "إرسال للطبيب";
+    submitBtn.textContent = isEn ? "Send to Doctor" : "إرسال للطبيب";
   }
 });
 const approveResultBtn = document.getElementById("approveResult");

@@ -378,7 +378,7 @@
             <label>العمر</label>
             <input value="34 سنة">
             <label>الطبيب المرتبط</label>
-            <input value="د. منى سامي - عيادة مدينة نصر">
+            <input id="profileLinkedDoctor" value="د. منى سامي - عيادة مدينة نصر">
             <label>أمراض مزمنة أو حساسية</label>
             <textarea>لا يوجد حساسية معروفة. تاريخ سابق لكحة موسمية.</textarea>
             <button class="solid-button full" data-screen="assessment">حفظ وبدء تقييم التنفس</button>
@@ -429,8 +429,8 @@
               <button class="choice">شديدة</button>
               <button class="choice">لا توجد</button>
             </div>
-            <label>نسبة الأكسجين</label>
-            <input id="oxygenInput" value="95" aria-label="نسبة الأكسجين">
+            <label>نسبة الأكسجين (50% - 100%)</label>
+            <input id="oxygenInput" type="number" min="50" max="100" value="95" aria-label="نسبة الأكسجين" placeholder="95">
             <div id="oxygenWarning" class="field-warning" hidden></div>
             <label>مدة الأعراض</label>
             <input id="symptomDuration" value="3 أيام" aria-label="مدة الأعراض">
@@ -464,6 +464,9 @@
           <h1>تم إرسال التقييم بنجاح</h1>
           <p>يراجع الطبيب الأعراض والقياسات ونتيجة الذكاء الاصطناعي قبل إصدار التقرير النهائي.</p>
 
+          <!-- بطاقة طوارئ فورية تظهر عند انخفاض نسبة الأكسجين -->
+          <div id="pendingEmergencyAlert" class="emergency-pending-banner" hidden></div>
+
           <!-- بيانات الحالة الحقيقية -->
           <div class="summary-list" id="pendingCaseSummary" style="max-width:360px;margin:16px auto;text-align:right;">
             <div><span>رقم الحالة</span><strong id="pendingCaseId">--</strong></div>
@@ -488,38 +491,19 @@
 
 
       <section id="screen-result" class="screen">
-        <div class="result-layout">
-          <article class="panel result-main">
-            <span class="pill ok">نتيجة معتمدة من الطبيب</span>
-            <h1>خطر متوسط ويحتاج متابعة</h1>
-            <p>يوصى بمتابعة الطبيب خلال 24-48 ساعة ومراقبة الأعراض.</p>
-            <div class="risk-meter"><span></span></div>
-            <div class="summary-list">
-              <div><span>الخطورة</span><strong>متوسطة</strong></div>
-              <div><span>الثقة</span><strong>78%</strong></div>
-              <div><span>الطبيب</span><strong>د. منى سامي</strong></div>
-            </div>
-          </article>
-          <article class="panel">
-            <div class="panel-head"><h3>التوصيات</h3><span class="pill pending">متابعة</span></div>
-            <ul class="recommendations">
-              <li>قياس الأكسجين عند توفر جهاز موثوق.</li>
-              <li>مراجعة الطبيب خلال 24-48 ساعة.</li>
-              <li>طلب رعاية عاجلة إذا زاد ضيق التنفس.</li>
-            </ul>
-            <div class="safety-note">تنبيه طبي: التقرير لا يعد تشخيصًا مستقلًا ولا يستبدل الطوارئ.</div>
-            <button class="solid-button full" data-screen="report">عرض التقرير</button>
-          </article>
+        <div id="resultContainer">
+          <!-- Dynamically rendered via renderResultScreen() -->
         </div>
       </section>
 
       <section id="screen-history" class="screen">
         <article class="panel">
-          <div class="panel-head"><h3>السجل والتقارير</h3><span class="pill info">3 عناصر</span></div>
-          <div class="records">
-            <button data-screen="report"><strong>تقييم التنفس</strong><span>20 سبتمبر 2026 - خطر متوسط - الإصدار الأول</span><em class="pill pending">متابعة</em></button>
-            <button><strong>تقييم التنفس</strong><span>12 سبتمبر 2026 - خطر منخفض - د. منى</span><em class="pill ok">مطمئن</em></button>
-            <button><strong>استكمال الملف</strong><span>10 سبتمبر 2026 - الموافقة مفعلة</span><em class="pill info">بيانات</em></button>
+          <div class="panel-head">
+            <h3>السجل والتقارير الطبية</h3>
+            <span class="pill info" id="patientHistoryCount">--</span>
+          </div>
+          <div id="patientHistoryContainer" class="records">
+            <!-- Dynamically rendered via renderPatientHistory() -->
           </div>
         </article>
       </section>
@@ -580,6 +564,9 @@
         <div class="doctor-layout">
           <article class="panel">
             <div class="panel-head"><h3>قائمة المرضى</h3><span class="pill ok">طبيب موثق</span></div>
+            <div id="doctorQueueFilterTabs" class="status-filter-tabs">
+              <!-- Rendered via JS -->
+            </div>
             <div class="queue" id="doctorQueueList">
               <!-- Rendered via JS -->
             </div>
@@ -668,36 +655,8 @@
       </section>
 
       <section id="screen-report" class="screen">
-        <div class="report-page">
-          <div class="report-header">
-            <div class="brand">
-              <div class="logo-mark" aria-hidden="true">
-                <svg viewBox="0 0 96 96">
-                  <rect x="8" y="8" width="80" height="80" rx="25"/>
-                  <path d="M24 53c8-22 17-22 25 0 7 18 16 18 24 0"/>
-                  <path d="M32 34v28M64 34v28"/>
-                  <circle cx="48" cy="53" r="5"/>
-                </svg>
-              </div>
-              <div><strong>Health Vibes</strong><span>تقرير تقييم التنفس</span></div>
-            </div>
-            <span class="pill pending">تنبيه</span>
-          </div>
-          <div class="report-grid">
-            <div><span>المريض</span><strong>أحمد محمد - رقم 2048</strong></div>
-            <div><span>الطبيب</span><strong>د. منى سامي - موثقة</strong></div>
-            <div><span>التاريخ</span><strong>20 سبتمبر 2026</strong></div>
-            <div><span>النموذج</span><strong>تقييم التنفس - الإصدار الأول</strong></div>
-          </div>
-          <h3>النتيجة</h3>
-          <p><strong>خطورة متوسطة.</strong> يوصى بالمتابعة خلال 24-48 ساعة. نسبة الثقة: 78%.</p>
-          <h3>التوصيات</h3>
-          <ul class="recommendations">
-            <li>راقب نسبة الأكسجين إذا توفر جهاز موثوق.</li>
-            <li>تابع مع الطبيب الذي راجع الحالة.</li>
-            <li>اطلب رعاية عاجلة إذا زاد ضيق التنفس.</li>
-          </ul>
-          <div class="safety-note">تنبيه طبي: Health Vibes يساعد في دعم القرار الطبي ولا يستبدل التقييم الطبي المؤهل أو رعاية الطوارئ.</div>
+        <div id="reportContainer">
+          <!-- Dynamically rendered via renderReportScreen() strictly requiring physician approval -->
         </div>
       </section>
     </section>
@@ -723,6 +682,145 @@
         <button id="verifyModalCheckBtn" class="solid-button" style="background: var(--teal); border-color: var(--teal);">تحقق الآن</button>
         <button id="verifyModalResendBtn" class="outline-button">إعادة إرسال الرابط</button>
         <button id="verifyModalCloseBtn" class="outline-button" style="border-color: transparent;">إغلاق</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Assessment Submission Confirmation Modal -->
+  <div id="confirmAssessmentModal" class="confirm-modal" aria-hidden="true">
+    <div class="confirm-card" style="width: min(500px, 100%); text-align: right; max-height: 90vh; overflow-y: auto;">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+        <h3 id="confirmModalTitle" style="margin: 0; font-size: 19px; color: var(--teal-2);">تأكيد إرسال التقييم للطبيب</h3>
+        <span id="confirmModalPriorityPill" class="pill pending">عادية</span>
+      </div>
+      <p id="confirmModalDesc" style="margin: 0 0 14px; font-size: 13.5px; color: var(--muted); line-height: 1.5;">
+        يرجى مراجعة ملخص بيانات التقييم المسجلة قبل اعتماد إرسالها للطبيب المختص:
+      </p>
+
+      <!-- Emergency Notice inside Confirmation Modal if low O2 -->
+      <div id="confirmModalEmergencyNotice" class="emergency-alert-card critical-oxygen" style="display: none; margin-bottom: 14px; padding: 12px 14px;">
+        <div class="emergency-header" style="margin-bottom: 4px;">
+          <span class="emergency-pulsing-badge">🚨 تنبيه حرج</span>
+          <strong style="color: #dc2626; font-size: 13.5px;">نسبة أكسجين منخفضة (<span id="confirmModalEmergencyO2">--%</span>)</strong>
+        </div>
+        <p style="font-size: 12.5px; margin: 0 0 8px; color: var(--ink);">
+          هذه النسبة تشير لنقص أكسجين حاد. لا تنتظر المراجعة الروتينية إذا كنت تعاني من صعوبة شديدة في التنفس أو ألم بالصدر.
+        </p>
+        <a href="tel:123" class="emergency-call-btn" style="padding: 7px 14px; font-size: 12.5px; text-decoration: none;">
+          📞 طلب الإسعاف فوراً (123)
+        </a>
+      </div>
+
+      <!-- Summary of Assessment Data -->
+      <div class="summary-list" id="confirmAssessmentSummary" style="margin-bottom: 16px;">
+        <div><span>نسبة الأكسجين</span><strong id="confirmO2">--%</strong></div>
+        <div><span>ضيق التنفس</span><strong id="confirmDyspnea">--</strong></div>
+        <div><span>درجة الكحة</span><strong id="confirmCough">--</strong></div>
+        <div><span>مدة الأعراض</span><strong id="confirmDuration">--</strong></div>
+        <div><span>عوامل الخطورة</span><strong id="confirmRisks">--</strong></div>
+        <div><span>الطبيب المرتبط</span><strong id="confirmDoctor">--</strong></div>
+        <div><span>العيادة</span><strong id="confirmClinic">--</strong></div>
+      </div>
+
+      <div class="clinical-note" style="margin-bottom: 18px; font-size: 12.5px;">
+        ⚠️ هذه البيانات ستصل مباشرة إلى ملف المراجعة السريرية للطبيب المعتمد ولن يصدر تقرير للمريض قبل اعتماده.
+      </div>
+
+      <div class="doctor-actions" style="display: flex; gap: 10px; flex-direction: column;">
+        <button id="btnConfirmSendAssessment" class="solid-button" style="width: 100%; justify-content: center; padding: 12px; font-size: 14.5px;">
+          ✅ تأكيد وإرسال التقييم للطبيب
+        </button>
+        <button id="btnCancelSendAssessment" class="outline-button" style="width: 100%; justify-content: center; padding: 10px; font-size: 13.5px;">
+          ✏️ تعديل البيانات
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Emergency Submission Safety Interception Modal -->
+  <div id="emergencySubmitModal" class="confirm-modal" aria-hidden="true">
+    <div class="confirm-card emergency-alert-card critical-oxygen" style="width: min(480px, 100%); text-align: right; padding: 24px;">
+      <div class="emergency-header" style="justify-content: flex-start;">
+        <span class="emergency-pulsing-badge">🚨 تنبيه طوارئ فوري</span>
+        <h3 style="margin: 0; color: #dc2626; font-size: 19px;">نقص أكسجين حاد — لا تنتظر مراجعة التطبيق</h3>
+      </div>
+      <p style="color: var(--ink); font-size: 14px; line-height: 1.6; margin: 12px 0 16px;">
+        نسبة الأكسجين المدخلة (<strong id="emergencyModalO2Val" style="color:#dc2626;">--%</strong>) حرجة للغاية وتشير إلى نقص أكسجين يستدعي رعاية طبية طارئة ومباشرة فوراً.
+      </p>
+      <div style="background: rgba(220, 38, 38, 0.08); border-radius: 12px; padding: 12px 14px; margin-bottom: 16px; border: 1px dashed #ef4444;">
+        <strong style="color: #b91c1c; display: block; margin-bottom: 4px; font-size: 13.5px;">⚠️ إرشادات السلامة الفورية:</strong>
+        <ul style="margin: 0; padding-inline-start: 18px; font-size: 12.8px; line-height: 1.55; color: var(--ink);">
+          <li>التوجه فوراً لأقرب قسم طوارئ أو استدعاء الإسعاف (123).</li>
+          <li>الجلوس في وضع قائم وعدم الاستلقاء مسطحاً على الظهر.</li>
+          <li>لا تعتمد على المراجعة الإلكترونية المؤجلة في الحالات الطارئة.</li>
+        </ul>
+      </div>
+      <div class="doctor-actions" style="flex-direction: column; gap: 10px; margin-top: 10px;">
+        <a href="tel:123" class="emergency-call-btn" style="width: 100%; justify-content: center; text-decoration: none; padding: 12px; font-size: 15px;">
+          📞 طلب الإسعاف فوراً (123)
+        </a>
+        <button id="emergencySubmitProceedBtn" class="solid-button" style="width: 100%; background: #991b1b; border-color: #991b1b; font-size: 13.5px;">
+          أنا في طريقي للطوارئ / في أمان — متابعة إرسال الحالة للطبيب
+        </button>
+        <button id="emergencySubmitCancelBtn" class="outline-button" style="width: 100%; font-size: 13px;">
+          تعديل نسبة الأكسجين (إعادة القياس)
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Emergency First Aid & Respiration Guide Modal -->
+  <div id="emergencyGuideModal" class="confirm-modal" aria-hidden="true">
+    <div class="confirm-card emergency-guide-card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+        <h3 style="margin: 0;">🫁 إرشادات الإسعافات الأولية لتسهيل التنفس</h3>
+        <button id="closeEmergencyGuideBtn" type="button" class="outline-button" style="padding: 4px 10px; font-size: 12px; border-radius: 8px;">✕ إغلاق</button>
+      </div>
+
+      <div class="guide-step-card">
+        <strong>1. وضعية الجلوس المعتدلة (High-Fowler's / Tripod Position)</strong>
+        <p>اجلس في وضع مستقيم على حافة مقعد مع إمالة الجذع للأمام قليلاً وإسناد المرفقين على الركبتين أو على طاولة أمامك. هذه الوضعية تمنح الحجاب الحاجز أقصى مساحة للتمدد.</p>
+      </div>
+
+      <div class="guide-step-card">
+        <strong>2. تقنية التنفس بالشفاه المضمومة (Pursed-Lip Breathing)</strong>
+        <p>استنشق الهواء ببطء من الأنف لمدة ثانيتين مع إبقاء الفم مغلقاً. ثم اضم شفتيك كأنك توشك على التصفير أو إطفاء شمعة، وأخرج الهواء برفق وببطء شديد لمدة 4 ثوانٍ.</p>
+      </div>
+
+      <div class="guide-step-card">
+        <strong>3. التهوية وتخفيف الضغط</strong>
+        <p>افتح النوافذ للحصول على هواء نقي وبارد، فك أزرار القميص أو ربطة العنق أو أي ملابس ضاغطة على القفص الصدري والعنق.</p>
+      </div>
+
+      <div class="guide-step-card" style="border-color: #ef4444; background: #fff5f5;">
+        <strong style="color: #dc2626;">🚨 علامات الخطر القصوى (Red Flags تستدعي الإسعاف فوراً)</strong>
+        <p style="color: #7f1d1d;">ازرقاق حول الشفتين أو في أطراف الأصابع، فقدان التوازن أو الارتباك والتشوش الذهني، أو ألم حاد ضاغط في منتصف الصدر.</p>
+      </div>
+
+      <h4 style="margin: 16px 0 8px; font-size: 14px;">أرقام الطوارئ السريعة:</h4>
+      <div class="hotlines-grid">
+        <a href="tel:123" class="hotline-item" style="text-decoration: none;">
+          <span>🇪🇬 مصر</span>
+          <strong>123</strong>
+        </a>
+        <a href="tel:997" class="hotline-item" style="text-decoration: none;">
+          <span>🇸🇦 السعودية</span>
+          <strong>997</strong>
+        </a>
+        <a href="tel:998" class="hotline-item" style="text-decoration: none;">
+          <span>🇦🇪 الإمارات</span>
+          <strong>998</strong>
+        </a>
+        <a href="tel:112" class="hotline-item" style="text-decoration: none;">
+          <span>🌐 طوارئ دولي</span>
+          <strong>112</strong>
+        </a>
+      </div>
+
+      <div style="text-align: center; margin-top: 16px;">
+        <a href="tel:123" class="emergency-call-btn" style="width: 100%; justify-content: center; font-size: 14.5px;">
+          📞 اتصال فوري بالإسعاف (123)
+        </a>
       </div>
     </div>
   </div>

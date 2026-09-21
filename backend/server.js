@@ -285,9 +285,10 @@ app.get('/api/admin/metrics', requireAuth, requireAdmin, async (req, res) => {
       );
       branchCount = branches.size;
 
-      pendingReviews = cases.filter((item) => item.status === 'pending').length;
-      urgentReviews = cases.filter((item) =>
-        item.status === 'pending' &&
+      const realCases = cases.filter((item) => !item.isDemo && !String(item.id || '').startsWith('demo_'));
+      pendingReviews = realCases.filter((item) => ['pending', 'submitted', 'triaged', 'assigned', 'under_review'].includes(item.status)).length;
+      urgentReviews = realCases.filter((item) =>
+        ['pending', 'submitted', 'triaged', 'assigned', 'under_review'].includes(item.status) &&
         ['urgent', 'high'].includes(String(item.priority || item.risk || '').toLowerCase())
       ).length;
 
@@ -445,39 +446,240 @@ app.post('/api/admin/approve-doctor-application', requireAuth, requireVerifiedEm
 });
 
 /**
- * POST /api/doctor/approve-clinical-case
- * Server-authoritative endpoint for doctor case approval (strictly rejects non-doctors)
+ * Helper: Authoritative Doctor Case Transition Executor
  */
-app.post('/api/doctor/approve-clinical-case', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
-  const { caseId, clinicalNotes, recommendation } = req.body;
+async function executeDoctorTransition({ req, res, caseId, targetStatus, note, clinicalNotes, recommendation }) {
+  const ALLOWED_DOCTOR_STATUSES = [
+    'under_review',
+    'more_info_requested',
+    'approved',
+    'rejected',
+    'escalated',
+    'closed'
+  ];
 
-  if (!caseId) {
-    return res.status(400).json({ error: 'INVALID_REQUEST', message: 'caseId required.' });
+  if (!caseId || !targetStatus || !ALLOWED_DOCTOR_STATUSES.includes(targetStatus)) {
+    return res.status(400).json({
+      error: 'INVALID_REQUEST',
+      message: `caseId and valid targetStatus (${ALLOWED_DOCTOR_STATUSES.join(', ')}) required.`
+    });
   }
 
   try {
     if (db) {
-      await db.collection('cases').doc(caseId).update({
-        status: 'approved',
-        doctorApproved: true,
-        approvingDoctorId: req.user.uid,
-        approvingDoctorEmail: req.user.email,
-        clinicalNotes: clinicalNotes || '',
-        recommendation: recommendation || '',
-        approvedAt: admin.firestore.FieldValue.serverTimestamp()
-      });
+      const caseDoc = await db.collection('cases').doc(caseId).get();
+      if (!caseDoc.exists) {
+        return res.status(404).json({ error: 'NOT_FOUND', message: 'Case not found.' });
+      }
+
+      const caseData = caseDoc.data();
+      const currentStatus = caseData.status || 'pending';
+
+      // Zero-trust assigned physician check
+      const assignedDoctor = caseData.assignedDoctorId || caseData.doctorId || caseData.doctorUid;
+      if (assignedDoctor && assignedDoctor !== req.user.uid) {
+        return res.status(403).json({
+          error: 'ACCESS_DENIED',
+          message: 'Zero-Trust enforcement: This clinical case is assigned to another physician.'
+        });
+      }
+
+      // Valid State Machine Transitions
+      const VALID_TRANSITIONS = {
+        draft: ['submitted'],
+        submitted: ['triaged', 'assigned', 'under_review'],
+        triaged: ['assigned', 'under_review'],
+        assigned: ['under_review'],
+        pending: ['triaged', 'assigned', 'under_review'], // backward compat
+        under_review: ['more_info_requested', 'approved', 'rejected', 'escalated', 'closed'],
+        more_info_requested: ['under_review', 'closed'],
+        approved: ['closed'],
+        rejected: ['closed'],
+        escalated: ['under_review', 'closed'],
+        closed: []
+      };
+
+      const allowedNext = VALID_TRANSITIONS[currentStatus] || [];
+      if (!allowedNext.includes(targetStatus)) {
+        return res.status(400).json({
+          error: 'INVALID_STATUS_TRANSITION',
+          message: `Cannot transition from '${currentStatus}' to '${targetStatus}'. Allowed: [${allowedNext.join(', ')}]`
+        });
+      }
+
+      const updateData = {
+        status: targetStatus,
+        statusUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        lastUpdatedBy: req.user.uid,
+        lastUpdatedByEmail: req.user.email,
+        statusHistory: admin.firestore.FieldValue.arrayUnion({
+          status: targetStatus,
+          previousStatus: currentStatus,
+          changedAt: new Date().toISOString(),
+          changedBy: req.user.uid,
+          changedByEmail: req.user.email,
+          changedByName: req.user.name || req.user.displayName || 'Doctor',
+          changedByRole: 'doctor',
+          note: note || clinicalNotes || recommendation || `Status transitioned to ${targetStatus}`
+        })
+      };
+
+      if (targetStatus === 'approved') {
+        updateData.doctorApproved = true;
+        updateData.approvingDoctorId = req.user.uid;
+        updateData.approvingDoctorEmail = req.user.email;
+        updateData.approvedAt = admin.firestore.FieldValue.serverTimestamp();
+        if (clinicalNotes) updateData.clinicalNotes = clinicalNotes;
+        if (recommendation) updateData.recommendation = recommendation;
+      } else if (targetStatus === 'more_info_requested') {
+        updateData.moreInfoRequestedAt = admin.firestore.FieldValue.serverTimestamp();
+        updateData.moreInfoNote = note || '';
+      } else if (targetStatus === 'escalated') {
+        updateData.escalatedAt = admin.firestore.FieldValue.serverTimestamp();
+        updateData.escalationReason = note || '';
+      } else if (targetStatus === 'closed') {
+        updateData.closedAt = admin.firestore.FieldValue.serverTimestamp();
+        updateData.closedBy = req.user.uid;
+      }
+
+      await db.collection('cases').doc(caseId).update(updateData);
 
       await db.collection('audit_events').add({
-        type: 'CLINICAL_CASE_APPROVED',
+        type: `CLINICAL_CASE_${targetStatus.toUpperCase()}`,
         caseId: caseId,
         doctorId: req.user.uid,
+        fromStatus: currentStatus,
+        toStatus: targetStatus,
+        note: note || clinicalNotes || '',
         timestamp: admin.firestore.FieldValue.serverTimestamp()
       });
     }
 
-    res.json({ success: true, message: 'Case approved by authorized physician.' });
+    return res.json({
+      success: true,
+      message: `Case status successfully updated to ${targetStatus}.`,
+      targetStatus
+    });
   } catch (err) {
-    console.error("[SERVER CASE APPROVAL ERROR]:", err);
+    console.error(`[SERVER DOCTOR TRANSITION ERROR (${targetStatus})]:`, err);
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
+  }
+}
+
+/**
+ * POST /api/doctor/transition-case-status
+ * Server-authoritative endpoint for doctor state machine transitions
+ */
+app.post('/api/doctor/transition-case-status', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
+  const { caseId, targetStatus, note, clinicalNotes, recommendation } = req.body;
+  return executeDoctorTransition({ req, res, caseId, targetStatus, note, clinicalNotes, recommendation });
+});
+
+/**
+ * POST /api/doctor/approve-clinical-case
+ * Server-authoritative endpoint for doctor case approval
+ */
+app.post('/api/doctor/approve-clinical-case', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
+  const { caseId, note, clinicalNotes, recommendation } = req.body;
+  return executeDoctorTransition({ req, res, caseId, targetStatus: 'approved', note, clinicalNotes, recommendation });
+});
+
+/**
+ * POST /api/doctor/reject-clinical-case
+ * Server-authoritative endpoint for doctor case rejection
+ */
+app.post('/api/doctor/reject-clinical-case', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
+  const { caseId, reason, note } = req.body;
+  return executeDoctorTransition({ req, res, caseId, targetStatus: 'rejected', note: reason || note });
+});
+
+/**
+ * POST /api/doctor/request-more-info
+ * Server-authoritative endpoint to request more information from patient
+ */
+app.post('/api/doctor/request-more-info', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
+  const { caseId, note, infoRequired } = req.body;
+  return executeDoctorTransition({ req, res, caseId, targetStatus: 'more_info_requested', note: infoRequired || note });
+});
+
+/**
+ * POST /api/doctor/escalate-clinical-case
+ * Server-authoritative endpoint to escalate case to emergency / consultant
+ */
+app.post('/api/doctor/escalate-clinical-case', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
+  const { caseId, reason, note } = req.body;
+  return executeDoctorTransition({ req, res, caseId, targetStatus: 'escalated', note: reason || note });
+});
+
+/**
+ * POST /api/doctor/close-clinical-case
+ * Server-authoritative endpoint to conclude and archive case
+ */
+app.post('/api/doctor/close-clinical-case', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
+  const { caseId, note } = req.body;
+  return executeDoctorTransition({ req, res, caseId, targetStatus: 'closed', note });
+});
+
+/**
+ * POST /api/admin/assign-case
+ * Server-authoritative endpoint to assign a clinical case to a specific doctor
+ */
+app.post('/api/admin/assign-case', requireAuth, requireVerifiedEmail, requireAdmin, async (req, res) => {
+  const { caseId, doctorId, doctorName, clinicId, clinicName } = req.body;
+
+  if (!caseId || !doctorId) {
+    return res.status(400).json({ error: 'INVALID_REQUEST', message: 'caseId and doctorId required.' });
+  }
+
+  try {
+    if (db) {
+      const caseDoc = await db.collection('cases').doc(caseId).get();
+      if (!caseDoc.exists) {
+        return res.status(404).json({ error: 'NOT_FOUND', message: 'Case not found.' });
+      }
+
+      const caseData = caseDoc.data();
+      const currentStatus = caseData.status || 'pending';
+      const targetStatus = ['draft', 'submitted', 'triaged', 'pending'].includes(currentStatus) ? 'assigned' : currentStatus;
+
+      const updateData = {
+        assignedDoctorId: doctorId,
+        assignedDoctorName: doctorName || '',
+        assignedAt: admin.firestore.FieldValue.serverTimestamp(),
+        assignedBy: req.user.email,
+        status: targetStatus,
+        statusHistory: admin.firestore.FieldValue.arrayUnion({
+          status: targetStatus,
+          previousStatus: currentStatus,
+          event: 'CASE_ASSIGNED',
+          assignedDoctorId: doctorId,
+          assignedDoctorName: doctorName || '',
+          changedAt: new Date().toISOString(),
+          changedBy: req.user.uid,
+          changedByEmail: req.user.email,
+          changedByName: req.user.name || 'Admin',
+          changedByRole: 'admin',
+          note: `Case assigned to Dr. ${doctorName || doctorId}`
+        })
+      };
+      if (clinicId) updateData.clinicId = clinicId;
+      if (clinicName) updateData.clinicName = clinicName;
+
+      await db.collection('cases').doc(caseId).update(updateData);
+
+      await db.collection('audit_events').add({
+        type: 'CASE_ASSIGNED_TO_DOCTOR',
+        caseId: caseId,
+        assignedDoctorId: doctorId,
+        clinicId: clinicId || caseDoc.data().clinicId || null,
+        assignedBy: req.user.email,
+        timestamp: admin.firestore.FieldValue.serverTimestamp()
+      });
+    }
+
+    res.json({ success: true, message: 'Case successfully assigned to doctor.' });
+  } catch (err) {
+    console.error("[SERVER ASSIGN CASE ERROR]:", err);
     res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
   }
 });

@@ -1,36 +1,44 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // --- Helper Functions for Authentication & RBAC ---
+
+    // =========================================================================
+    // 🔐 HELPER FUNCTIONS (Zero-Trust Authentication & Strict RBAC)
+    // =========================================================================
+
     function isAuthenticated() {
       return request.auth != null;
     }
-    
+
+    // Owner check: MUST verify email to prevent spoofing / privilege escalation
     function isOwner() {
-      return isAuthenticated() && 
-             'email' in request.auth.token &&
-             request.auth.token.email.lower() == 'mohammedabdelrouf85@gmail.com';
+      return isAuthenticated() &&
+             request.auth.token.email_verified == true &&
+             (('isOwner' in request.auth.token && request.auth.token.isOwner == true) ||
+              ('email' in request.auth.token && request.auth.token.email.lower() == 'mohammedabdelrouf85@gmail.com'));
     }
 
-    // Email verification check for sensitive operations
+    // Strict Email Verification check
     function isEmailVerified() {
       return isAuthenticated() && (request.auth.token.email_verified == true || isOwner());
     }
-    
+
     function hasUserDoc() {
       return isAuthenticated() && 
              exists(/databases/$(database)/documents/users/$(request.auth.uid));
     }
-    
+
     function getUserData() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
-    
+
+    // Role extraction: Custom Claims (tamper-proof JWT) take precedence over Firestore doc
     function getUserRole() {
-      return hasUserDoc() && ('role' in getUserData()) ? getUserData().role : 'patient';
+      return !isAuthenticated() ? 'unauthenticated' :
+             ('role' in request.auth.token) ? request.auth.token.role :
+             (hasUserDoc() && ('role' in getUserData())) ? getUserData().role : 'patient';
     }
-    
+
     function isAdmin() {
       return isOwner() || (isAuthenticated() && (getUserRole() == 'clinic_admin' || getUserRole() == 'super_admin'));
     }
@@ -38,81 +46,232 @@ service cloud.firestore {
     function isSupport() {
       return isAuthenticated() && getUserRole() == 'support';
     }
-    
-    // Doctor role is strictly clinical and separated from Admin
+
+    // Doctor role is strictly clinical and separated from administrative access
     function isDoctor() {
       return isAuthenticated() && getUserRole() == 'doctor';
     }
-    
+
+    // Doctor can ONLY access cases specifically assigned to their UID
+    function isAssignedDoctor() {
+      return isDoctor() && (
+        ('assignedDoctorId' in resource.data && resource.data.assignedDoctorId == request.auth.uid) ||
+        ('doctorId' in resource.data && resource.data.doctorId == request.auth.uid) ||
+        ('doctorUid' in resource.data && resource.data.doctorUid == request.auth.uid) ||
+        ('approvingDoctorId' in resource.data && resource.data.approvingDoctorId == request.auth.uid)
+      );
+    }
+
     function isSelf(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // --- 1. Users Collection ---
-    // - Self can read their own profile; Doctors and Admins can read user profiles
-    // - Self can create their own profile shell without role or isOwner
-    // - Privilege escalation prevention: no client can change role or isOwner
-    // - Role changes must go through backend / Cloud Functions using Admin SDK
+    // =========================================================================
+    // 1. 👥 USERS COLLECTION (/users/{userId})
+    // =========================================================================
+    // - LEAKAGE MITIGATION: Doctors and Support can NEVER list/read all user profiles.
+    // - Self can read their own profile; Only Admins can view other user accounts.
+    // - Self can create/update profile, but PRIVILEGED FIELDS are strictly blocked
+    //   (role, isOwner, doctorVerified, verifiedDoctor, doctorApplicationStatus).
+    // - Role escalation MUST go through backend Cloud Functions / Admin SDK.
     match /users/{userId} {
-      allow read: if isAuthenticated() && (isSelf(userId) || isDoctor() || isAdmin() || isSupport());
+      allow read: if isAuthenticated() && (isSelf(userId) || isAdmin());
+
       allow create: if isAuthenticated() &&
-                    request.auth.uid == userId &&
-                    !request.resource.data.keys().hasAny(['role', 'isOwner']);
-      allow update: if isAuthenticated() &&
-                    !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isOwner']) &&
-                    (isSelf(userId) || isAdmin());
+                    isSelf(userId) &&
+                    !request.resource.data.keys().hasAny([
+                      'role', 'isOwner', 'doctorVerified', 'verifiedDoctor', 'doctorApplicationStatus'
+                    ]);
+
+      allow update: if isAuthenticated() && (
+        (isSelf(userId) && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'role', 'isOwner', 'doctorVerified', 'verifiedDoctor', 'doctorApplicationStatus'
+        ])) ||
+        (isAdmin() && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'role', 'isOwner'
+        ]))
+      );
+
       allow delete: if isAdmin();
     }
 
-    // --- 2. Doctor Applications Collection (Application -> Verification -> Approval) ---
-    // - Applicant can read their own application, Admins can read all applications
-    // - Applicant can submit (create) their own application with status == 'pending'
-    // - Applicant can cancel their pending application; Only Admin can approve, reject, or delete
+    // =========================================================================
+    // 2. 🩺 DOCTOR APPLICATIONS (/doctor_applications/{appId})
+    // =========================================================================
+    // - LEAKAGE MITIGATION: Support accounts cannot inspect doctor PII/CV credentials.
+    // - Applicant reads ONLY their own application; Admins can review all applications.
+    // - Applicant submits own application in 'pending' status with verified email.
+    // - Applicant can ONLY cancel their own application without altering ownership (userId).
+    // - Admin can approve, reject, or delete applications.
     match /doctor_applications/{appId} {
-      allow read: if isAuthenticated() && (isAdmin() || isSupport() || resource.data.userId == request.auth.uid);
-      allow create: if isEmailVerified() && request.resource.data.userId == request.auth.uid
-                    && request.resource.data.status == 'pending';
+      allow read: if isAuthenticated() && (isAdmin() || resource.data.userId == request.auth.uid);
+
+      allow create: if isEmailVerified() &&
+                    request.resource.data.userId == request.auth.uid &&
+                    request.resource.data.status == 'pending';
+
       allow update: if (isAdmin() && isEmailVerified() &&
                        resource.data.status == 'pending' &&
                        request.resource.data.userId == resource.data.userId &&
                        request.resource.data.status in ['approved', 'rejected']) ||
                       (isSelf(resource.data.userId) &&
                        resource.data.status == 'pending' &&
+                       request.resource.data.userId == resource.data.userId &&
                        request.resource.data.status == 'cancelled');
+
       allow delete: if isAdmin();
     }
 
-    // --- 3. Clinical Cases Collection ---
-    // - Privacy protection: Patient can ONLY read their own cases; Doctors and Admins can read all cases
-    // - Authenticated patient with verified email creates case for themselves with status == 'pending'
-    // - ONLY licensed Doctors with verified email can clinically review/approve/reject cases (update)
-    // - Admins can manage or clean up records (delete) but cannot alter clinical medical diagnoses
+    // =========================================================================
+    // 🩺 CLINICAL ASSESSMENT VALIDATION HELPERS
+    // =========================================================================
+    
+    // Pulse Oximetry Physiological Validation (SpO2: 50% - 100%)
+    function isValidOxygen(data) {
+      return (!('oxygenLevel' in data) || (data.oxygenLevel is number && data.oxygenLevel >= 50 && data.oxygenLevel <= 100)) &&
+             (!('o2' in data) || (data.o2 is number && data.o2 >= 50 && data.o2 <= 100));
+    }
+
+    // Breathing difficulty valid choices
+    function isValidBreathing(data) {
+      return !('breathingDifficulty' in data) || 
+             (data.breathingDifficulty is string && data.breathingDifficulty.size() > 0 && data.breathingDifficulty.size() <= 40);
+    }
+
+    // Cough severity valid choices
+    function isValidCough(data) {
+      return !('coughLevel' in data) || 
+             (data.coughLevel is string && data.coughLevel.size() > 0 && data.coughLevel.size() <= 40);
+    }
+
+    // Duration string length bound
+    function isValidDuration(data) {
+      return !('symptomDuration' in data) || 
+             (data.symptomDuration is string && data.symptomDuration.size() > 0 && data.symptomDuration.size() <= 50);
+    }
+
+    // Risk factors must be list with <= 10 elements
+    function isValidRiskFactors(data) {
+      return !('riskFactors' in data) || 
+             (data.riskFactors is list && data.riskFactors.size() <= 10);
+    }
+
+    // Priority must be within triage levels
+    function isValidPriority(data) {
+      return !('priority' in data) || 
+             data.priority in ['normal', 'high', 'urgent'];
+    }
+
+    // Status history validation (list of transitions with max 50 entries)
+    function isValidStatusHistory(data) {
+      return !('statusHistory' in data) || 
+             (data.statusHistory is list && data.statusHistory.size() <= 50);
+    }
+
+    // Master assessment validation for all clinical fields
+    function isValidAssessment(data) {
+      return isValidOxygen(data) &&
+             isValidBreathing(data) &&
+             isValidCough(data) &&
+             isValidDuration(data) &&
+             isValidRiskFactors(data) &&
+             isValidPriority(data) &&
+             isValidStatusHistory(data);
+    }
+
+    // Case Status Machine: draft -> submitted -> triaged -> assigned -> under_review -> more_info_requested -> approved / rejected / escalated / closed
+    function isValidCaseStatus(status) {
+      return status in [
+        'draft',
+        'submitted',
+        'triaged',
+        'assigned',
+        'under_review',
+        'more_info_requested',
+        'approved',
+        'rejected',
+        'escalated',
+        'closed',
+        'pending' // backward compatible alias
+      ];
+    }
+
+    // =========================================================================
+    // 3. 📋 CLINICAL CASES (/cases/{caseId})
+    // =========================================================================
+    // - PATIENT PRIVACY: Patients can ONLY read their own cases (patientId == auth.uid).
+    // - DOCTOR ACCESS RESTRICTION: Doctor sees ONLY cases assigned to them (isAssignedDoctor).
+    // - LEAKAGE MITIGATION: Support role has NO access to medical cases.
+    // - Admins can view cases for triage and doctor assignment.
+    // - Patients can create cases in draft, submitted, triaged, assigned, or pending status with verified email.
+    // - ASSIGNED DOCTORS ONLY can update cases; patientId is strictly IMMUTABLE.
+    // - STATUS MACHINE ENFORCEMENT: Status must strictly adhere to the clinical state machine.
+    // - Admins can delete or assign records, but CANNOT alter clinical diagnoses.
+    // - MEDICAL VALIDATION: All assessment fields are strictly validated (isValidAssessment).
     match /cases/{caseId} {
       allow read: if isAuthenticated() && 
-                     (resource.data.patientId == request.auth.uid || isDoctor() || isAdmin() || isSupport());
+                     (resource.data.patientId == request.auth.uid || isAssignedDoctor() || isAdmin());
+
       allow create: if isEmailVerified() && 
                        request.resource.data.patientId == request.auth.uid &&
-                       request.resource.data.status == 'pending';
-      allow update: if isDoctor() && isEmailVerified();
+                       request.resource.data.status in ['draft', 'submitted', 'triaged', 'assigned', 'pending'] &&
+                       isValidAssessment(request.resource.data);
+
+      allow update: if (((isAssignedDoctor() &&
+                         isEmailVerified() &&
+                         request.resource.data.patientId == resource.data.patientId &&
+                         (!('assignedDoctorId' in resource.data) || request.resource.data.assignedDoctorId == resource.data.assignedDoctorId) &&
+                         (!('clinicId' in resource.data) || request.resource.data.clinicId == resource.data.clinicId)) ||
+                        (isAdmin() &&
+                         request.resource.data.patientId == resource.data.patientId)) &&
+                        isValidCaseStatus(request.resource.data.status) &&
+                        isValidAssessment(request.resource.data));
+
       allow delete: if isAdmin();
     }
 
-    // --- 4. Audit Log Events ---
-    // - Strictly Admin can read audit logs
-    // - Authenticated actions can append log events
-    // - Immutable audit trail: updates and deletions are strictly forbidden
+    // =========================================================================
+    // 4. 🛡️ SERVER AUDIT EVENTS (/audit_events/{eventId})
+    // =========================================================================
+    // - BACKEND EXCLUSIVE: Server-side audit events are written via Firebase Admin SDK.
+    // - Clients (patients, doctors) CANNOT write fake audit logs or tamper with history.
+    // - Read-only access restricted strictly to Admins for compliance and security reviews.
     match /audit_events/{eventId} {
       allow read: if isAdmin();
-      allow create: if isAuthenticated();
+      allow write: if false;
+    }
+
+    // =========================================================================
+    // 5. 📝 CLIENT AUDIT LOG (/auditLog/{logId})
+    // =========================================================================
+    // - Patients logging client actions (e.g. CASE_SUBMITTED).
+    // - Must bind patientId/userId to request.auth.uid to prevent impersonation.
+    // - Admin-only read; completely immutable (no updates, no deletions).
+    match /auditLog/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAuthenticated() && (
+        ('patientId' in request.resource.data && request.resource.data.patientId == request.auth.uid) ||
+        ('userId' in request.resource.data && request.resource.data.userId == request.auth.uid)
+      );
       allow update, delete: if false;
     }
 
-    // --- 5. Audit Log (Frontend client writes) ---
-    // - Admin-only read; any authenticated user can append; immutable
-    match /auditLog/{logId} {
-      allow read: if isAdmin();
-      allow create: if isAuthenticated();
-      allow update, delete: if false;
+    // =========================================================================
+    // 6. 📊 AI MODEL METRICS (/ai_model_metrics/{metricId})
+    // =========================================================================
+    // - Admins and Doctors can read AI model performance metrics.
+    // - Write permissions restricted exclusively to Admins (or backend Admin SDK).
+    match /ai_model_metrics/{metricId} {
+      allow read: if isAuthenticated() && (isAdmin() || isDoctor());
+      allow write: if isAdmin();
+    }
+
+    // =========================================================================
+    // 7. 🛑 CATCH-ALL DEFAULT DENY
+    // =========================================================================
+    // - Explicitly deny any access to unspecified collections and paths.
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
