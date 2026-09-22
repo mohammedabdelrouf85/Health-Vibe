@@ -289,29 +289,29 @@
         </div>
       </div>
 
-      <nav class="nav-list" aria-label="القائمة الرئيسية">
-        <button class="nav-item active" data-screen="patient"><span class="nav-icon">🏠</span>الرئيسية</button>
-        <button class="nav-item" data-screen="consent"><span class="nav-icon">🔒</span>الموافقة والخصوصية</button>
-        <button class="nav-item" data-screen="profile"><span class="nav-icon">👤</span>الملف الطبي</button>
-        <button class="nav-item" data-screen="assessment"><span class="nav-icon">🫁</span>تقييم التنفس</button>
-        <button class="nav-item" data-screen="pending"><span class="nav-icon">⏳</span>حالة المراجعة</button>
-        <button class="nav-item" data-screen="result"><span class="nav-icon">📋</span>النتيجة</button>
-        <button class="nav-item" data-screen="history"><span class="nav-icon">📂</span>السجل الطبي</button>
-        <button class="nav-item" data-screen="appointments"><span class="nav-icon">📅</span>المواعيد</button>
-        <button class="nav-item" data-screen="assistant"><span class="nav-icon">🤖</span>المساعد الطبي</button>
-        <button class="nav-item" data-screen="verification" style="display:none;"><span class="nav-icon">✅</span>توثيق الطبيب</button>
-        <button class="nav-item" data-screen="doctor" style="display:none;"><span class="nav-icon">🩺</span>لوحة الطبيب</button>
-        <button class="nav-item" data-screen="report"><span class="nav-icon">📄</span>التقرير</button>
-        <button class="nav-item" data-screen="admin" style="display:none;"><span class="nav-icon">⚙️</span>لوحة الإدارة</button>
-        <button class="nav-item" data-screen="audit" style="display:none;"><span class="nav-icon">🔍</span>سجل التدقيق</button>
+      <nav class="nav-list" aria-label="Navigation">
+        <button class="nav-item active" data-screen="patient"><span class="nav-icon">🏠</span><span class="nav-label">Home</span></button>
+        <button class="nav-item" data-screen="consent"><span class="nav-icon">🔒</span><span class="nav-label">Consent & Privacy</span></button>
+        <button class="nav-item" data-screen="profile"><span class="nav-icon">👤</span><span class="nav-label">Medical Profile</span></button>
+        <button class="nav-item" data-screen="assessment"><span class="nav-icon">🫁</span><span class="nav-label">Breathing Assessment</span></button>
+        <button class="nav-item" data-screen="pending"><span class="nav-icon">⏳</span><span class="nav-label">Review Status</span></button>
+        <button class="nav-item" data-screen="result"><span class="nav-icon">📋</span><span class="nav-label">Result</span></button>
+        <button class="nav-item" data-screen="history"><span class="nav-icon">📂</span><span class="nav-label">History</span></button>
+        <button class="nav-item" data-screen="appointments"><span class="nav-icon">📅</span><span class="nav-label">Appointments</span></button>
+        <button class="nav-item" data-screen="assistant"><span class="nav-icon">🤖</span><span class="nav-label">Medical Assistant</span></button>
+        <button class="nav-item" data-screen="verification" style="display:none;"><span class="nav-icon">✅</span><span class="nav-label">Doctor Verification</span></button>
+        <button class="nav-item" data-screen="doctor" style="display:none;"><span class="nav-icon">🩺</span><span class="nav-label">Doctor Dashboard</span></button>
+        <button class="nav-item" data-screen="report"><span class="nav-icon">📄</span><span class="nav-label">Report</span></button>
+        <button class="nav-item" data-screen="admin" style="display:none;"><span class="nav-icon">⚙️</span><span class="nav-label">Admin Dashboard</span></button>
+        <button class="nav-item" data-screen="audit" style="display:none;"><span class="nav-icon">🔍</span><span class="nav-label">Audit Log</span></button>
       </nav>
 
       <div class="account-card">
-        <div class="avatar" id="sidebarAvatar">أ</div>
+        <div class="avatar" id="sidebarAvatar">A</div>
         <div>
-          <strong id="userName">أحمد محمد</strong>
+          <strong id="userName">Patient</strong>
           <div style="display:flex;align-items:center;gap:6px;margin-top:2px;">
-            <span id="userEmail">أحمد</span>
+            <span id="userEmail">patient@example.com</span>
             <span id="emailVerifiedBadge" class="verified-badge" title="Verified Account" style="display:none;">✓</span>
             <span id="ownerBadge" class="owner-badge" title="System Owner" style="display:none;">👑 Owner</span>
             <span id="doctorBadge" class="doctor-badge" title="Verified Doctor" style="display:none;">🩺 Doctor</span>
@@ -319,7 +319,7 @@
           </div>
         </div>
       </div>
-      <button id="logoutButton" class="logout-button">تسجيل الخروج</button>
+      <button id="logoutButton" class="logout-button">Sign out</button>
     </aside>
 
     <section class="workspace">
@@ -363,37 +363,37 @@
       <section id="screen-patient" class="screen active">
         <div class="hero-panel app-hero">
           <div>
-            <span class="eyebrow" id="patientHeroTitle">مرحبًا أحمد</span>
-            <h1>متابعة التنفس مع طبيبك في مسار واحد واضح</h1>
-            <p>أدخل الأعراض والقياسات. يحصل الطبيب على تقدير خطورة مبني على قواعد قبل اعتماد أي تقرير يظهر لك.</p>
+            <span class="eyebrow" id="patientHeroTitle">Welcome</span>
+            <h1>Track breathing with your doctor in one clear path</h1>
+            <p>Enter symptoms and measurements. The doctor receives a rule-based risk preview before approving any report shown to you.</p>
             <div class="hero-actions">
-              <button class="solid-button large" data-screen="assessment">بدء تقييم التنفس</button>
-              <button class="soft-button large" data-screen="history">عرض السجل</button>
+              <button class="solid-button large" data-screen="assessment">Start breathing assessment</button>
+              <button class="soft-button large" data-screen="history">View history</button>
             </div>
           </div>
           <div class="clinical-card">
             <div class="clinical-top">
-              <span>آخر حالة</span>
-              <b id="patientClinicalStatus">قيد المراجعة</b>
+              <span>Latest status</span>
+              <b id="patientClinicalStatus">No recent assessment</b>
             </div>
             <div class="breath-orb app-orb"><span></span></div>
-            <div class="clinical-row"><span>نسبة الأكسجين</span><strong id="patientClinicalO2">--%</strong></div>
-            <div class="clinical-row"><span>مؤشر قواعد غير مُتحقق</span><strong id="patientClinicalConfidence">--</strong></div>
-            <div class="clinical-row"><span>الطبيب</span><strong id="patientClinicalDoctor">--</strong></div>
+            <div class="clinical-row"><span>Oxygen level</span><strong id="patientClinicalO2">--%</strong></div>
+            <div class="clinical-row"><span>Rule score (not clinically validated)</span><strong id="patientClinicalConfidence">--</strong></div>
+            <div class="clinical-row"><span>Doctor</span><strong id="patientClinicalDoctor">--</strong></div>
           </div>
         </div>
 
         <div class="metric-grid">
-          <article><span>الموعد القادم</span><strong id="patientNextAppt">--</strong><small>استشارة متابعة</small></article>
-          <article><span>آخر تقرير</span><strong id="patientLatestReport">--</strong><small>تقييم التنفس</small></article>
-          <article><span>حالة النتيجة</span><strong id="patientResultStatus">--</strong><small>بانتظار الطبيب</small></article>
-          <article><span>الملف الطبي</span><strong id="patientProfileCompletion">0%</strong><small>غير مكتمل</small></article>
+          <article><span>Next appointment</span><strong id="patientNextAppt">--</strong><small>Follow-up consultation</small></article>
+          <article><span>Latest report</span><strong id="patientLatestReport">--</strong><small>Breathing Assessment</small></article>
+          <article><span>Result status</span><strong id="patientResultStatus">--</strong><small>Waiting for doctor</small></article>
+          <article><span>Medical Profile</span><strong id="patientProfileCompletion">100%</strong><small>Complete</small></article>
         </div>
 
         <article class="panel" style="margin-top: 18px;">
-          <div class="panel-head"><h3>التنبيهات</h3><span class="pill pending" id="patientAlertsCount">0 جديد</span></div>
+          <div class="panel-head"><h3>Alerts</h3><span class="pill pending" id="patientAlertsCount">0 new</span></div>
           <div class="activity" id="patientAlertsList">
-            <div><strong>لا توجد تنبيهات جديدة</strong><span>--</span></div>
+            <div><strong>No new alerts</strong><span>--</span></div>
           </div>
         </article>
       </section>
@@ -1315,7 +1315,7 @@
     </div>
   </div>
 
-  <script src="./config.js?v=3.1"></script>
-  <script src="./app.js?v=3.1"></script>
+  <script src="./config.js?v=3.2"></script>
+  <script src="./app.js?v=3.2"></script>
 </body>
 </html>

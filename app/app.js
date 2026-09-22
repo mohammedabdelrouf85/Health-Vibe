@@ -776,6 +776,156 @@ const uiText = {
   "حفظ كلمة المرور الجديدة": "Save New Password",
   "البريد الإلكتروني للحساب": "Account Email",
   "تم إرسال رابط الاستعادة!": "Reset link sent!"
+,
+  // --- Portal & Screens Internal Translations ---
+  "تفعيل عبر بوت الواتساب": "Activate via WhatsApp Bot",
+  "الموافقة الطبية وسياسة الخصوصية": "Medical Consent & Privacy Policy",
+  "مطلوبة قبل الفحص": "Required before assessment",
+  "Health Vibes يجمع بياناتك الصحية لتقييم خطورة إرشادي ثم يرسلها لطبيب معتمد قبل ظهور أي نتيجة نهائية. لحماية بياناتك والامتثال للمعايير الطبية، نرجو مراجعة وتأكيد بنود الموافقة أدناه:": "Health Vibes collects your health data for guidance-only risk assessment, then sends it to a verified doctor before any final result appears. To protect your data and comply with medical standards, please review and confirm the consent terms below:",
+  "معالجة البيانات السريرية (إلزامي):": "Clinical Data Processing (Mandatory):",
+  "أوافق على استخدام بيانات الأعراض والقياسات الحيوية داخل مسار التقييم ومشاركتها مع الطبيب المعالج المعتمد.": "I agree to the use of symptom data and vital signs in the assessment workflow and sharing them with the verified attending physician.",
+  "الطبيعة الإرشادية للذكاء الاصطناعي (إلزامي):": "Guidance Nature of AI (Mandatory):",
+  "أفهم أن مؤشر الذكاء الاصطناعي أداة فرز إرشادية غير مدققة سريرياً ولا تُعد تشخيصاً طبياً مستقلاً ولا تغني عن فحص الطبيب.": "I understand that AI indicator is an advisory triage tool, not clinically audited, does not constitute an independent medical diagnosis, and does not replace a doctor's examination.",
+  "تنبيهات المتابعة والتقارير (اختياري):": "Follow-up Alerts & Reports (Optional):",
+  "أوافق على استقبال إشعارات تحديث الحالة وتقارير الفحص الصادرة من الطبيب.": "I agree to receive status update notifications and assessment reports issued by the doctor.",
+  "🔒 خصوصيتك أولويتنا: يتم تشفير البيانات ولا يتم مشاركتها مع أي طرف ثالث لأغراض إعلانية. يمكنك مراجعة أو سحب الموافقة في أي وقت.": "🔒 Your privacy is our priority: Data is encrypted and never shared with third parties for advertising. You can review or withdraw consent at any time.",
+  "✓ أوافق والمتابعة لبدء فحص التنفس": "✓ I agree and proceed to Breathing Assessment",
+  "المعايير والوثائق القانونية والطبية:": "Legal & Medical Standards and Documents:",
+  "يمكنك قراءة الوثائق المعتمدة كاملة في أي وقت:": "You can read the full certified documents at any time:",
+  "🔒 سياسة الخصوصية": "🔒 Privacy Policy",
+  "📜 شروط الاستخدام": "📜 Terms of Service",
+  "🚨 إخلاء المسؤولية": "🚨 Disclaimer",
+  "🚨 إخلاء المسؤولية الطبي": "🚨 Medical Disclaimer",
+  "إدارة وتصدير البيانات وحذف الحساب (Privacy & Data Rights)": "Manage & Export Data and Delete Account (Privacy & Data Rights)",
+  "بموجب معايير حماية الخصوصية وميثاق الحق في محو البيانات، يمكنك تنزيل نسخة من سجلاتك أو حذف حسابك نهائياً.": "Under data protection regulations and the right to erasure, you can download a copy of your records or permanently delete your account.",
+  "📥 تصدير بياناتي (JSON)": "📥 Export My Data (JSON)",
+  "⚠️ حذف الحساب والبيانات": "⚠️ Delete Account & Data",
+  "نسبة الأكسجين (50% - 100%)": "Oxygen Level (50% - 100%)",
+  "تم توثيق الموافقة الطبية وسياسة الخصوصية": "Medical consent and privacy policy documented",
+  "مراجعة البنود الكاملة": "Review full terms",
+  "أوافق على ميثاق الخصوصية الطبية ومعالجة البيانات السريرية وإرسالها للطبيب المعتمد.": "I agree to medical privacy charter, clinical data processing, and sending to certified doctor.",
+  "مراجعة": "Review",
+  "غير مُتحقق سريرياً": "Not clinically validated",
+  "غير متحقق سريرياً": "Not clinically validated",
+  "رقم الحالة": "Case ID",
+  "الأولوية": "Priority",
+  "وقت الإرسال": "Submission Time",
+  "السجل والتقارير الطبية": "Medical History & Reports",
+  "السلامة": "Safety",
+  "لوحة الإدارة والمؤشرات السريرية الحقيقية": "Admin Dashboard & Live Clinical Metrics",
+  "مباشر من Firestore 🟢": "Live from Firestore 🟢",
+  "قراءات حقيقية من قاعدة البيانات: المستخدمون، الفحوصات، الأطباء، ومؤشرات السلامة": "Real database metrics: Users, Assessments, Doctors, and Safety Indicators",
+  "آخر تحديث: الآن": "Last updated: Just now",
+  "تحديث الأرقام المباشرة": "Refresh live numbers",
+  "إجمالي المستخدمين": "Total Users",
+  "الفروع والعيادات": "Clinics & Branches",
+  "إجمالي الفحوصات": "Total Assessments",
+  "مراجعات قيد الانتظار": "Pending Reviews",
+  "متوسط الأكسجين العام": "Overall Average SpO2",
+  "مؤشر طبي حقيقي": "Real Medical Indicator",
+  "التوزيع السريري للحالات ومستويات الخطورة (Live Clinical Triage Distribution)": "Clinical Triage Distribution & Risk Levels",
+  "نسب الحالات الفعلية المسجلة في النظام مقسمة حسب فرز الأكسجين والأعراض الحقيقية": "Actual registered case distribution sorted by oxygen and symptom triage",
+  "جاري الحساب...": "Calculating...",
+  "🚨 حالات عاجلة (SpO2 &lt; 90%)": "🚨 Urgent Cases (SpO2 < 90%)",
+  "🚨 حالات عاجلة (SpO2 < 90%)": "🚨 Urgent Cases (SpO2 < 90%)",
+  "0% من الحالات": "0% of cases",
+  "⚠️ أولوية عالية (90-92%)": "⚠️ High Priority (90-92%)",
+  "✔️ أولوية عادية (93%+)": "✔️ Normal Priority (93%+)",
+  "👨‍⚕️ تقارير معتمدة ومكتملة": "👨‍⚕️ Certified & Completed Reports",
+  "قائمة انتظار توثيق واعتماد الأطباء (Admin Verification Queue)": "Doctor Verification & Approval Queue",
+  "مراجعة التراخيص الطبية واعتماد الأطباء رسمياً لتفعيل صلاحية فحص الحالات السريرية": "Review medical licenses and certify doctors to activate clinical case review permissions",
+  "تسجيل طلب طبيب في القائمة": "Register doctor request in queue",
+  "طلبات معلقة بانتظار الاعتماد": "Pending Approval Requests",
+  "إدارة المستخدمين والصلاحيات (All Verified & Regular Users)": "User Management & Permissions (All Users)",
+  "عرض كافة الحسابات المسجلة (المؤكدة والعادية) وتعديل الصلاحيات وتوثيق الحسابات على السيستم": "View all registered accounts, manage roles, and verify users in the system",
+  "تسجيل الحسابات على السيستم": "System accounts registered",
+  "توثيق غير المؤكدة": "Verify unverified accounts",
+  "إضافة حساب": "Add Account",
+  "توثيق وتفعيل الحساب": "Account Verification & Activation",
+  "لضمان سلامة وسرية الملفات الطبية، يرجى تفعيل وتوثيق حسابك عبر كود الواتساب السريع أو رسالة الهاتف أو رابط البريد.": "To ensure medical records security, please activate and verify your account via WhatsApp code, SMS, or email link.",
+  "بوت الواتساب الآلي": "Automated WhatsApp Bot",
+  "رابط البريد الإلكتروني": "Email Link",
+  "بوت الواتساب الآلي (Health Vibe Bot)": "Automated WhatsApp Bot (Health Vibe Bot)",
+  "اضغط على الزر أدناه وسيقوم بوت الواتساب الآلي بإرسال كود التفعيل السري المكون من 6 أرقام إليك تلقائياً دون الحاجة لكتابة رقم الهاتف.": "Click the button below and the automated WhatsApp bot will send the 6-digit secret activation code directly to you.",
+  "إرسال كود التفعيل تلقائياً عبر بوت الواتساب": "Send activation code automatically via WhatsApp Bot",
+  "✅ تم إرسال كود التفعيل السري عبر بوت الواتساب! يرجى إدخال الكود أدناه.": "✅ Secret activation code sent via WhatsApp! Please enter it below.",
+  "أدخل كود التحقق المكون من 6 أرقام المستلم عبر البوت:": "Enter the 6-digit verification code received from the bot:",
+  "الكود صالح لمدة 10 دقائق": "Code is valid for 10 minutes",
+  "تأكيد الكود وتفعيل الحساب الآن ✓": "Confirm Code & Activate Account Now ✓",
+  "أرسلنا رابط تأكيد إلى بريدك الإلكتروني المسجل. يرجى فحص صندوق الوارد أو مجلد Spam ثم النقر على \"تحقق الآن\".": "We sent a confirmation link to your registered email. Please check your inbox or spam folder and click 'Check Status'.",
+  "تأكيد إرسال التقييم للطبيب": "Confirm Submitting Assessment to Doctor",
+  "عادية": "Normal",
+  "يرجى مراجعة ملخص بيانات التقييم المسجلة قبل اعتماد إرسالها للطبيب المختص:": "Please review the summary of entered assessment data before submitting to the specialist:",
+  "🚨 تنبيه حرج": "🚨 Critical Alert",
+  "نسبة أكسجين منخفضة (": "Low oxygen level (",
+  "هذه النسبة تشير لنقص أكسجين حاد. لا تنتظر المراجعة الروتينية إذا كنت تعاني من صعوبة شديدة في التنفس أو ألم بالصدر.": "This reading indicates severe oxygen deficit. Do not wait for routine review if experiencing severe shortness of breath or chest pain.",
+  "📞 طلب الإسعاف فوراً (123)": "📞 Call Ambulance Immediately (123)",
+  "ضيق التنفس": "Shortness of breath",
+  "عوامل الخطورة": "Risk factors",
+  "العيادة": "Clinic",
+  "🔒 موثقة ومقبولة": "🔒 Documented & Accepted",
+  "⚠️ هذه البيانات ستصل مباشرة إلى ملف المراجعة السريرية للطبيب المعتمد ولن يصدر تقرير للمريض قبل اعتماده.": "⚠️ This data is transmitted directly to the verified doctor's clinical review file, and no patient report is issued prior to physician sign-off.",
+  "✅ تأكيد وإرسال التقييم للطبيب": "✅ Confirm and Submit Assessment to Doctor",
+  "✏️ تعديل البيانات": "✏️ Edit Information",
+  "🚨 تنبيه طوارئ فوري": "🚨 Immediate Emergency Warning",
+  "نقص أكسجين حاد — لا تنتظر مراجعة التطبيق": "Acute Hypoxia — Do not wait for digital review",
+  "نسبة الأكسجين المدخلة (": "Entered oxygen level (",
+  ") حرجة للغاية وتشير إلى نقص أكسجين يستدعي رعاية طبية طارئة ومباشرة فوراً.": ") is extremely critical and indicates an oxygen deficit that requires immediate emergency care.",
+  "⚠️ إرشادات السلامة الفورية:": "⚠️ Immediate Safety Guidelines:",
+  "التوجه فوراً لأقرب قسم طوارئ أو استدعاء الإسعاف (123).": "Head immediately to nearest emergency room or call ambulance (123).",
+  "الجلوس في وضع قائم وعدم الاستلقاء مسطحاً على الظهر.": "Sit in an upright position and do not lie flat on your back.",
+  "لا تعتمد على المراجعة الإلكترونية المؤجلة في الحالات الطارئة.": "Do not rely on electronic review in medical emergencies.",
+  "أنا في طريقي للطوارئ / في أمان — متابعة إرسال الحالة للطبيب": "I am heading to emergency / safe — proceed to send case to doctor",
+  "تعديل نسبة الأكسجين (إعادة القياس)": "Adjust oxygen level (re-measure)",
+  "🫁 إرشادات الإسعافات الأولية لتسهيل التنفس": "🫁 First-Aid Guidelines to Ease Breathing",
+  "✕ إغلاق": "✕ Close",
+  "1. وضعية الجلوس المعتدلة (High-Fowler's / Tripod Position)": "1. Upright Sitting Position (High-Fowler's / Tripod Position)",
+  "2. تقنية التنفس بالشفاه المضمومة (Pursed-Lip Breathing)": "2. Pursed-Lip Breathing Technique",
+  "3. التهوية وتخفيف الضغط": "3. Ventilation & Pressure Relief",
+  "🚨 علامات الخطر القصوى (Red Flags تستدعي الإسعاف فوراً)": "🚨 Red Flag Symptoms (Call Emergency Immediately)",
+  "أرقام الطوارئ السريعة:": "Quick Emergency Numbers:",
+  "🇪🇬 مصر": "🇪🇬 Egypt",
+  "🇸🇦 السعودية": "🇸🇦 Saudi Arabia",
+  "🇦🇪 الإمارات": "🇦🇪 UAE",
+  "🌐 طوارئ دولي": "🌐 International Emergency",
+  "📞 اتصال فوري بالإسعاف (123)": "📞 Call Ambulance Immediately (123)",
+  "حوكمة ومواصفات قواعد الفرز السريري": "Clinical Triage Rule Governance & Specs",
+  "إصدار القواعد (Rule Engine Version):": "Rule Engine Version:",
+  "نشط حالياً (Active)": "Currently Active",
+  "المعايير القانونية والطبية": "Legal & Medical Standards",
+  "فهمت ذلك وإغلاق": "Understood & Close",
+  "حذف الحساب والبيانات السريرية": "Delete Account & Clinical Data",
+  "تنبيه هام: هذا الإجراء نهائي ولا يمكن التراجع عنه!": "Important Notice: This action is permanent and irreversible!",
+  "عند إتمام الحذف، ستفقد إمكانية الوصول إلى المنصة وسيتم حذف أو إخفاء هوية كافة بياناتك المسجلة.": "Upon completion, you will lose platform access and all registered data will be permanently deleted or anonymized.",
+  "سيتم حذف حسابك من نظام المصادقة (Firebase Auth) فوراً.": "Your account will be immediately deleted from Firebase Auth.",
+  "سيتم حذف ملفك الطبي ومعلومات الاتصال بالكامل من قاعدة البيانات.": "Your medical profile and contact information will be completely removed.",
+  "سيتم حذف أي طلبات توثيق طبية أو مستندات مرفوعة.": "Any verification requests or uploaded documents will be deleted.",
+  "الحالات والتقارير المعتمدة سابقاً سيتم حجب هويتك عنها بالكامل (Anonymization) امتثالاً لسجلات التدقيق السريري.": "Previously approved cases will be fully anonymized in compliance with clinical audit trails.",
+  "سيتم تطهير وتصفير كافة سجلات الموافقة والجلسة المخزنة على هذا الجهاز.": "All local consent and session records on this device will be purged.",
+  "لتأكيد الحذف، اكتب كلمة": "To confirm deletion, type",
+  "حذف": "delete",
+  "يرجى إدخال كلمة المرور الحالية لتأكيد الهوية:": "Please enter current password to verify identity:",
+  "🗑️ تأكيد وحذف الحساب نهائياً": "🗑️ Confirm & Permanently Delete Account",
+  "لا توجد تنبيهات جديدة": "No new alerts",
+  "لا يوجد فحص حديث": "No recent assessment",
+  "مكتمل": "Complete",
+  "غير مكتمل": "Incomplete",
+  "مؤشر قواعد غير مُتحقق": "Rule score (not clinically validated)",
+  "مؤشر قواعد غير متحقق": "Rule score (not clinically validated)",
+  "مؤشر قواعد": "Rule score",
+  "استشارة متابعة": "Follow-up consultation",
+  "بدء تقييم التنفس": "Start Breathing Assessment",
+  "عرض السجل": "View History",
+  "آخر حالة": "Latest status",
+  "الموعد القادم": "Next appointment",
+  "آخر تقرير": "Latest report",
+  "حالة النتيجة": "Result status",
+  "بانتظار الطبيب": "Waiting for doctor",
+  "نسبة الأكسجين": "Oxygen level",
+  "الطبيب": "Doctor",
+  "التنبيهات": "Alerts",
+  "0 جديد": "0 new"
+
 };
 
 const enToAr = {
@@ -798,6 +948,7 @@ const enToAr = {
   "Continue with Google": "المتابعة بحساب جوجل",
   "Close": "إغلاق",
   "Sign in": "تسجيل الدخول",
+  "Sign out": "تسجيل الخروج",
   "Account role": "دور الحساب",
   "Email verification needed": "تأكيد البريد الإلكتروني مطلوب",
   "Resend Verification": "إعادة إرسال الرابط",
@@ -813,6 +964,30 @@ const enToAr = {
   "Reset link sent!": "تم إرسال رابط الاستعادة!"
 };
 
+// Auto-populate reverse lookup from uiText for 100% two-way coverage
+Object.entries(uiText).forEach(([ar, en]) => {
+  if (en && !enToAr[en]) {
+    enToAr[en] = ar;
+  }
+});
+
+const navTranslations = {
+  patient: { en: "Home", ar: "الرئيسية" },
+  consent: { en: "Consent & Privacy", ar: "الموافقة والخصوصية" },
+  profile: { en: "Medical Profile", ar: "الملف الطبي" },
+  assessment: { en: "Breathing Assessment", ar: "تقييم التنفس" },
+  pending: { en: "Review Status", ar: "حالة المراجعة" },
+  result: { en: "Result", ar: "النتيجة" },
+  history: { en: "History", ar: "السجل الطبي" },
+  appointments: { en: "Appointments", ar: "المواعيد" },
+  assistant: { en: "Medical Assistant", ar: "المساعد الطبي" },
+  verification: { en: "Doctor Verification", ar: "توثيق الطبيب" },
+  doctor: { en: "Doctor Dashboard", ar: "لوحة الطبيب" },
+  report: { en: "Report", ar: "التقرير" },
+  admin: { en: "Admin Dashboard", ar: "لوحة الإدارة" },
+  audit: { en: "Audit Log", ar: "سجل التدقيق" }
+};
+
 let selectedRole = "patient";
 let currentLanguage = (function() {
   try {
@@ -823,10 +998,12 @@ let currentLanguage = (function() {
 })();
 
 function localized(text) {
+  if (!text || typeof text !== "string") return text;
+  const trimmed = text.trim();
   if (currentLanguage === "en") {
-    return uiText[text] || text;
+    return uiText[trimmed] ? text.replace(trimmed, uiText[trimmed]) : text;
   } else {
-    return enToAr[text] || text;
+    return enToAr[trimmed] ? text.replace(trimmed, enToAr[trimmed]) : text;
   }
 }
 
@@ -838,31 +1015,82 @@ function preserveSpacing(original, value) {
 
 function applyLanguage(language) {
   currentLanguage = language;
+  try {
+    localStorage.setItem("hv_lang", language);
+  } catch(e) {}
   document.documentElement.lang = language;
   document.documentElement.dir = language === "ar" ? "rtl" : "ltr";
   document.title = localized("Health Vibes");
 
+  // 1. Direct update for navigation buttons
+  document.querySelectorAll(".nav-item").forEach((btn) => {
+    const scr = btn.dataset.screen;
+    const labelSpan = btn.querySelector(".nav-label");
+    if (labelSpan && navTranslations[scr]) {
+      labelSpan.textContent = navTranslations[scr][language] || navTranslations[scr].en;
+    } else if (scr && navTranslations[scr]) {
+      const iconSpan = btn.querySelector(".nav-icon");
+      const icon = iconSpan ? iconSpan.outerHTML : "";
+      btn.innerHTML = `${icon}<span class="nav-label">${navTranslations[scr][language] || navTranslations[scr].en}</span>`;
+    }
+  });
+
+  // 2. Direct update for logout button
+  if (logoutButton) {
+    logoutButton.textContent = language === "ar" ? "تسجيل الخروج" : "Sign out";
+  }
+
+  // 3. TreeWalker translation for all content text nodes (skipping scripts, styles, inputs, emails)
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   const textNodes = [];
-  while (walker.nextNode()) textNodes.push(walker.currentNode);
+  while (walker.nextNode()) {
+    const node = walker.currentNode;
+    const parentTag = node.parentElement ? node.parentElement.tagName : "";
+    if (parentTag === "SCRIPT" || parentTag === "STYLE" || parentTag === "NOSCRIPT") continue;
+    if (node.parentElement && node.parentElement.classList && node.parentElement.classList.contains("nav-label")) continue;
+    if (node.parentElement && (node.parentElement.id === "userEmail" || node.parentElement.classList.contains("otp-digit"))) continue;
+    textNodes.push(node);
+  }
 
   textNodes.forEach((node) => {
-    const trimmed = node.textContent.trim();
+    const raw = node.textContent;
+    const trimmed = raw.trim();
     if (!trimmed) return;
-    if (!node.arText) node.arText = trimmed;
-    node.textContent = preserveSpacing(node.textContent, localized(node.arText));
+
+    if (!node._rawSource) {
+      node._rawSource = trimmed;
+    }
+    const src = node._rawSource;
+    let target = src;
+    if (language === "en") {
+      target = uiText[src] || src;
+    } else {
+      target = enToAr[src] || src;
+    }
+    node.textContent = preserveSpacing(raw, target);
   });
 
+  // 4. Form inputs placeholders and button values
   document.querySelectorAll("input, textarea").forEach((field) => {
-    if (!field.arValue) field.arValue = field.value;
-    field.value = localized(field.arValue);
+    if (!field._rawPlaceholder && field.placeholder) field._rawPlaceholder = field.placeholder;
+    if (field._rawPlaceholder) {
+      field.placeholder = localized(field._rawPlaceholder);
+    }
+    if (!field._rawValue && field.value && (field.type === "button" || field.type === "submit")) {
+      field._rawValue = field.value;
+    }
+    if (field._rawValue) {
+      field.value = localized(field._rawValue);
+    }
   });
 
+  // 5. Accessibility aria-labels
   document.querySelectorAll("[aria-label]").forEach((element) => {
-    if (!element.arLabel) element.arLabel = element.getAttribute("aria-label");
-    element.setAttribute("aria-label", localized(element.arLabel));
+    if (!element._rawLabel) element._rawLabel = element.getAttribute("aria-label");
+    if (element._rawLabel) element.setAttribute("aria-label", localized(element._rawLabel));
   });
 
+  // 6. Language Toggle button label
   if (languageToggle) {
     const langLabel = languageToggle.querySelector(".lang-label");
     if (langLabel) {
@@ -872,18 +1100,35 @@ function applyLanguage(language) {
       languageToggle.textContent = language === "ar" ? "EN" : "AR";
     }
   }
+
+  // 7. Theme toggle label
   const themeLabel = document.body.classList.contains("dark") ? "الوضع الداكن" : "الوضع الفاتح";
   if (siteThemeToggle) siteThemeToggle.textContent = localized(themeLabel);
+
+  // 8. Screen Title
   const activeScreenEl = document.querySelector(".screen.active");
   const activeScreenName = activeScreenEl ? activeScreenEl.id.replace("screen-", "") : "patient";
+  if (screenTitle) {
+    screenTitle.textContent = language === "en" ? (englishTitles[activeScreenName] || "Home") : (titles[activeScreenName] || "الرئيسية");
+  }
+
+  // 9. Role label in account badge
   const isOwner = auth && auth.currentUser && isOwnerUser(auth.currentUser.email);
   const currentRole = normalizeRole(selectedRole, isOwner);
-  accountLabel.textContent = language === "en"
-    ? (englishRoleLabels[currentRole] || englishRoleLabels.patient)
-    : (roleLabels[currentRole] || roleLabels.patient);
+  if (accountLabel) {
+    accountLabel.textContent = language === "en"
+      ? (englishRoleLabels[currentRole] || englishRoleLabels.patient)
+      : (roleLabels[currentRole] || roleLabels.patient);
+  }
+
   if (typeof setAuthMode === "function") setAuthMode(authMode);
   if (typeof updateEmailVerificationUI === "function" && typeof auth !== "undefined") updateEmailVerificationUI(auth.currentUser);
   if (typeof updateOxygenWarning === "function") updateOxygenWarning();
+
+  // 10. Re-render dynamic active screen
+  if (activeScreenName === "patient" && typeof renderPatientDashboard === "function") {
+    renderPatientDashboard();
+  }
 }
 
 function showToast(message) {
@@ -2672,6 +2917,7 @@ function transitionToApp(user) {
   if (typeof showScreen === "function") {
     showScreen("patient");
   }
+  applyLanguage(currentLanguage);
   if (loader) {
     loader.classList.add("is-done");
   }
