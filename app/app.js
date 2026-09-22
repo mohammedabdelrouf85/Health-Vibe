@@ -1311,11 +1311,6 @@ async function applyAuthPersistence(remember = shouldRememberSession()) {
   } catch(e) {}
 }
 
-async function clearAuthSessionPersistence() {
-  if (!auth || typeof firebase === "undefined" || !firebase.auth?.Auth?.Persistence) return;
-  await auth.setPersistence(firebase.auth.Auth.Persistence.NONE);
-}
-
 function initRememberMePreference() {
   const checkbox = document.getElementById("rememberMe");
   if (!checkbox) return;
@@ -3000,7 +2995,8 @@ function transitionToApp(user) {
     app.style.display = "grid";
   }
   if (typeof showScreen === "function") {
-    showScreen("patient");
+    const activeScreen = document.querySelector(".screen.active")?.id.replace("screen-", "") || "patient";
+    showScreen(canAccessScreen(activeScreen) ? activeScreen : "patient");
   }
   applyLanguage(currentLanguage);
   if (loader) {
@@ -3103,14 +3099,8 @@ async function leaveApp() {
 
   try {
     await auth.signOut();
-    await clearAuthSessionPersistence();
   } catch(e) {
     console.error("Sign out error:", e);
-    try {
-      await clearAuthSessionPersistence();
-    } catch(persistErr) {
-      console.warn("Could not clear auth persistence after sign out:", persistErr);
-    }
   }
   if (app) {
     app.hidden = true;
@@ -3734,6 +3724,20 @@ function updateNavVisibility() {
   if (docApplyCard) {
     docApplyCard.style.display = selectedRole === ROLES.PATIENT ? "block" : "none";
   }
+  bindScreenNavigation();
+}
+
+function bindScreenNavigation() {
+  document.querySelectorAll("[data-screen]").forEach((button) => {
+    if (button.dataset.navBound === "true") return;
+    button.dataset.navBound = "true";
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const targetScreen = button.dataset.screen;
+      if (targetScreen) showScreen(targetScreen);
+    });
+  });
 }
 
 // =========================================================================
@@ -7029,6 +7033,8 @@ document.addEventListener("click", (event) => {
 
   const screenButton = event.target.closest("[data-screen]");
   if (screenButton) {
+    event.preventDefault();
+    event.stopPropagation();
     showScreen(screenButton.dataset.screen);
   }
 });
@@ -8023,6 +8029,7 @@ function checkUrlAuthAction() {
 }
 
 showScreen("patient");
+bindScreenNavigation();
 applyLanguage(currentLanguage);
 checkUrlAuthAction();
 
