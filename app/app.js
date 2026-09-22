@@ -978,108 +978,44 @@ async function callBackend(path, options = {}) {
 
 const ACCOUNTS_REGISTRY_KEY = "hv_known_accounts_registry";
 
-const DEFAULT_KNOWN_ACCOUNTS = [
-  {
-    id: "usr_owner_1",
-    name: "م. محمد عبد الرؤوف",
-    displayName: "م. محمد عبد الرؤوف",
-    email: "mohammedabdelrouf85@gmail.com",
-    role: "super_admin",
-    emailVerified: true,
-    isOwner: true,
-    clinic: "مستشفى القصر العيني التعليمي",
-    createdAt: Date.now() - 86400000 * 30
-  },
-  {
-    id: "usr_owner_2",
-    name: "م. عبد الرؤوف",
-    displayName: "م. عبد الرؤوف",
-    email: "raouf.work@gmail.com",
-    role: "super_admin",
-    emailVerified: true,
-    isOwner: true,
-    clinic: "مجمع الجلاء العسكري الطبي",
-    createdAt: Date.now() - 86400000 * 20
-  },
-  {
-    id: "usr_doc_1",
-    name: "د. منى سامي",
-    displayName: "د. منى سامي",
-    email: "dr.mona.samy@healthvibe.ai",
-    role: "doctor",
-    verifiedDoctor: true,
-    doctorApplicationStatus: "approved",
-    emailVerified: true,
-    specialty: "استشاري أمراض الصدر والجهاز التنفسي",
-    clinic: "مستشفى القصر العيني التعليمي",
-    createdAt: Date.now() - 86400000 * 15
-  },
-  {
-    id: "usr_doc_2",
-    name: "د. طارق محمود الشريف",
-    displayName: "د. طارق محمود الشريف",
-    email: "dr.tarek.mahmoud@hospital.eg",
-    role: "doctor",
-    verifiedDoctor: true,
-    doctorApplicationStatus: "approved",
-    emailVerified: true,
-    specialty: "استشاري الرعاية المركزة",
-    clinic: "مجمع الجلاء العسكري الطبي",
-    createdAt: Date.now() - 86400000 * 10
-  },
-  {
-    id: "usr_reg_1",
-    name: "أحمد منصور (حساب مريض عادي)",
-    displayName: "أحمد منصور",
-    email: "ahmed.mansour.eg@gmail.com",
-    role: "patient",
-    emailVerified: false,
-    createdAt: Date.now() - 86400000 * 5
-  },
-  {
-    id: "usr_reg_2",
-    name: "فاطمة الزهراء (حساب مريض عادي)",
-    displayName: "فاطمة الزهراء",
-    email: "fatima.zahraa.med@gmail.com",
-    role: "patient",
-    emailVerified: false,
-    createdAt: Date.now() - 86400000 * 3
-  },
-  {
-    id: "usr_reg_3",
-    name: "محمود حسن (حساب مريض عادي)",
-    displayName: "محمود حسن",
-    email: "mahmoud.hassan.cairo@gmail.com",
-    role: "patient",
-    emailVerified: false,
-    createdAt: Date.now() - 86400000 * 2
-  },
-  {
-    id: "usr_reg_4",
-    name: "يوسف إبراهيم (حساب مريض عادي)",
-    displayName: "يوسف إبراهيم",
-    email: "youssef.ibrahim.alex@gmail.com",
-    role: "patient",
-    emailVerified: false,
-    createdAt: Date.now() - 86400000 * 1
-  }
-];
+// Strictly real accounts only - NO mock, demo, or placeholder accounts
+const DEFAULT_KNOWN_ACCOUNTS = [];
 
 function getLocalAccountsRegistry() {
   try {
     const raw = localStorage.getItem(ACCOUNTS_REGISTRY_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed)) {
+        // Filter out any mock/dummy/placeholder accounts
+        const cleaned = parsed.filter(u => {
+          if (!u || !u.email) return false;
+          const id = String(u.id || "");
+          const email = String(u.email || "").toLowerCase();
+          if (id.startsWith("usr_doc_") || id.startsWith("usr_reg_") || id.startsWith("demo_") || id.startsWith("mock_") || id.startsWith("test_")) return false;
+          if (email.includes("@healthvibe.ai") && !isOwnerUser(email)) return false;
+          return true;
+        });
+        if (cleaned.length !== parsed.length) {
+          localStorage.setItem(ACCOUNTS_REGISTRY_KEY, JSON.stringify(cleaned));
+        }
+        return cleaned;
+      }
     }
   } catch(e) {}
-  return JSON.parse(JSON.stringify(DEFAULT_KNOWN_ACCOUNTS));
+  return [];
 }
 
 function saveToAccountsRegistry(userObj) {
   if (!userObj || !userObj.email) return;
-  const list = getLocalAccountsRegistry();
   const emailNorm = userObj.email.trim().toLowerCase();
+  const idStr = String(userObj.id || userObj.uid || "");
+  
+  // Exclude fake/mock identifiers
+  if (idStr.startsWith("usr_doc_") || idStr.startsWith("usr_reg_") || idStr.startsWith("demo_") || idStr.startsWith("mock_")) return;
+  if (emailNorm.includes("@healthvibe.ai") && !isOwnerUser(emailNorm)) return;
+
+  const list = getLocalAccountsRegistry();
   const idx = list.findIndex(u => (u.email && u.email.trim().toLowerCase() === emailNorm) || (u.id && u.id === (userObj.id || userObj.uid)));
   
   const isOwner = isOwnerUser(userObj.email);
