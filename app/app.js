@@ -1258,9 +1258,46 @@ async function callBackend(path, options = {}) {
 // that registered, signed in, or interacted with the platform.
 
 const ACCOUNTS_REGISTRY_KEY = "hv_known_accounts_registry";
+const REMEMBER_ME_KEY = "hv_remember_me";
 
 // Strictly real accounts only - NO mock, demo, or placeholder accounts
 const DEFAULT_KNOWN_ACCOUNTS = [];
+
+function shouldRememberSession() {
+  const checkbox = document.getElementById("rememberMe");
+  if (checkbox) return checkbox.checked;
+  try {
+    return localStorage.getItem(REMEMBER_ME_KEY) !== "false";
+  } catch(e) {
+    return true;
+  }
+}
+
+async function applyAuthPersistence(remember = shouldRememberSession()) {
+  if (!auth || typeof firebase === "undefined" || !firebase.auth?.Auth?.Persistence) return;
+  const persistence = remember
+    ? firebase.auth.Auth.Persistence.LOCAL
+    : firebase.auth.Auth.Persistence.SESSION;
+  await auth.setPersistence(persistence);
+  try {
+    localStorage.setItem(REMEMBER_ME_KEY, remember ? "true" : "false");
+  } catch(e) {}
+}
+
+function initRememberMePreference() {
+  const checkbox = document.getElementById("rememberMe");
+  if (!checkbox) return;
+  try {
+    checkbox.checked = localStorage.getItem(REMEMBER_ME_KEY) !== "false";
+  } catch(e) {
+    checkbox.checked = true;
+  }
+  checkbox.addEventListener("change", () => {
+    applyAuthPersistence(checkbox.checked).catch(err => {
+      console.warn("Could not update auth persistence:", err);
+    });
+  });
+}
 
 function getLocalAccountsRegistry() {
   try {
@@ -2753,7 +2790,7 @@ async function handleEmailAuth(e) {
   const email = authEmail ? authEmail.value.trim() : "";
   const password = authPassword ? authPassword.value : "";
   const name = authName ? authName.value.trim() : "";
-  const remember = document.getElementById("rememberMe")?.checked;
+  const remember = shouldRememberSession();
 
   if (!email || !password) {
     showAuthError(currentLanguage === "en" ? "Please enter email and password." : "يرجى كتابة البريد الإلكتروني وكلمة المرور.");
@@ -2763,11 +2800,7 @@ async function handleEmailAuth(e) {
   setAuthLoading(true);
 
   try {
-    if (remember) {
-      await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
-    } else {
-      await auth.setPersistence(firebase.auth.Auth.Persistence.SESSION);
-    }
+    await applyAuthPersistence(remember);
 
     if (authMode === "signup") {
       const cred = await auth.createUserWithEmailAndPassword(email, password);
@@ -2952,10 +2985,12 @@ async function enterApp(source = "google") {
   if (source === "google") {
     clearAuthError();
     try {
+      await applyAuthPersistence(shouldRememberSession());
       const result = await auth.signInWithPopup(googleProvider);
       const user = result.user;
       
       const isOwner = isOwnerUser(user.email);
+      const verificationRevoked = isVerificationRevoked(user.email);
       try {
         const userDoc = await db.collection("users").doc(user.uid).get();
         if (!userDoc.exists) {
@@ -2965,10 +3000,18 @@ async function enterApp(source = "google") {
           await db.collection("users").doc(user.uid).set({
             name: user.displayName || user.email.split('@')[0],
             email: user.email,
-            emailVerified: true,
+            emailVerified: verificationRevoked ? false : true,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
           });
         } else {
+          if (verificationRevoked && (userDoc.data().emailVerified || userDoc.data().phoneVerified)) {
+            await db.collection("users").doc(user.uid).set({
+              emailVerified: false,
+              phoneVerified: false,
+              verifiedAt: null,
+              verifiedByAdmin: null
+            }, { merge: true }).catch(() => {});
+          }
           if (isOwner) {
             selectedRole = ROLES.SUPER_ADMIN;
             if (normalizeRole(userDoc.data().role, true) !== ROLES.SUPER_ADMIN || !userDoc.data().isOwner) {
@@ -3305,6 +3348,10 @@ async function verifyPhoneOtp() {
 
   try {
     const user = auth ? auth.currentUser : null;
+    if (isVerificationRevoked(user)) {
+      showToast(isEn ? "Account verification has been revoked by the platform administrator." : "تم إلغاء تفعيل هذا الحساب بواسطة إدارة المنصة.");
+      return;
+    }
 
     // 1. Update client verified state
     window._isUserVerified = true;
@@ -3361,6 +3408,12 @@ async function resendVerificationEmail() {
   const user = auth.currentUser;
   if (!user) return;
 
+  if (isVerificationRevoked(user)) {
+    showToast(currentLanguage === "en" ? "Account verification has been revoked by the platform administrator." : "تم إلغاء تفعيل هذا الحساب بواسطة إدارة المنصة.");
+    updateEmailVerificationUI(user);
+    return;
+  }
+
   if (isUserVerified(user)) {
     showToast(currentLanguage === "en" ? "Account is already verified!" : "الحساب مؤكد بالفعل!");
     updateEmailVerificationUI(user);
@@ -3408,6 +3461,12 @@ async function resendVerificationEmail() {
 async function checkEmailVerification() {
   const user = auth.currentUser;
   if (!user) return;
+
+  if (isVerificationRevoked(user)) {
+    showToast(currentLanguage === "en" ? "Account verification has been revoked by the platform administrator." : "تم إلغاء تفعيل هذا الحساب بواسطة إدارة المنصة.");
+    updateEmailVerificationUI(user);
+    return;
+  }
 
   try {
     await user.reload();
@@ -7713,6 +7772,10 @@ menuToggle.addEventListener("click", () => {
 });
 
 logoutButton.addEventListener("click", leaveApp);
+initRememberMePreference();
+applyAuthPersistence(shouldRememberSession()).catch(err => {
+  console.warn("Could not initialize auth persistence:", err);
+});
 
 function initHVAuthListener() {
   auth.onAuthStateChanged(async (user) => {
