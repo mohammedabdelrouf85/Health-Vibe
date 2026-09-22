@@ -1130,6 +1130,9 @@ function applyLanguage(language) {
   if (screenTitle) {
     screenTitle.textContent = language === "en" ? (englishTitles[activeScreenName] || "Home") : (titles[activeScreenName] || "الرئيسية");
   }
+  if (typeof updateVerificationSoonState === "function") {
+    updateVerificationSoonState();
+  }
 
   // 9. Role label in account badge
   const isOwner = auth && auth.currentUser && isOwnerUser(auth.currentUser.email);
@@ -3213,13 +3216,13 @@ function updateEmailVerificationUI(user) {
 
   if (title) title.textContent = isEn ? "Account verification needed" : "تأكيد وتوثيق الحساب مطلوب";
   if (desc) desc.textContent = isEn
-    ? `Verify your account via WhatsApp / SMS code or email link to secure medical records.`
-    : `يرجى تفعيل وتوثيق حسابك عبر كود الواتساب السريع، رسالة الهاتف، أو رابط البريد.`;
+    ? `WhatsApp and email activation are coming soon.`
+    : `تفعيل الواتساب والبريد الإلكتروني قريبًا.`;
   if (resendText && !resendCooldown) {
-    resendText.textContent = isEn ? "Resend Link" : "إعادة إرسال الرابط";
+    resendText.textContent = isEn ? "Soon" : "قريبًا";
   }
-  if (checkText) checkText.textContent = isEn ? "Check Status" : "تحقق الآن";
-  if (phoneVerifyText) phoneVerifyText.textContent = isEn ? "Verify via WhatsApp / Phone" : "تفعيل بالواتساب أو الهاتف";
+  if (checkText) checkText.textContent = isEn ? "Soon" : "قريبًا";
+  if (phoneVerifyText) phoneVerifyText.textContent = isEn ? "Activation Soon" : "التفعيل قريبًا";
 }
 
 function switchVerifyModalTab(tabName) {
@@ -3259,6 +3262,48 @@ function switchVerifyModalTab(tabName) {
     if (secOtp) secOtp.style.display = "none";
     if (secEmail) secEmail.style.display = "block";
   }
+  updateVerificationSoonState();
+}
+
+function updateVerificationSoonState() {
+  const isEn = currentLanguage === "en";
+  const soonText = isEn ? "Soon" : "قريبًا";
+  const whatsAppLabel = document.getElementById("tabOtpMethodLabel");
+  const emailLabel = document.getElementById("tabEmailMethodLabel");
+  const requestBotBtn = document.getElementById("requestBotCodeBtn");
+  const requestBotText = document.getElementById("requestBotBtnText");
+  const confirmOtpBtn = document.getElementById("confirmOtpBtn");
+  const emailCheckBtn = document.getElementById("verifyModalCheckBtn");
+  const emailResendBtn = document.getElementById("verifyModalResendBtn");
+  const emailNote = document.getElementById("verifyModalEmailNote");
+  const otpNote = document.getElementById("otpDigitsLabel");
+  const phoneInput = document.getElementById("verifyPhoneInput");
+
+  if (whatsAppLabel) whatsAppLabel.textContent = isEn ? `WhatsApp Bot (${soonText})` : `بوت الواتساب (${soonText})`;
+  if (emailLabel) emailLabel.textContent = isEn ? `Email Link (${soonText})` : `رابط البريد (${soonText})`;
+  if (requestBotText) requestBotText.textContent = isEn ? `WhatsApp verification coming soon` : `تفعيل الواتساب قريبًا`;
+  if (confirmOtpBtn) confirmOtpBtn.textContent = isEn ? `Code confirmation coming soon` : `تأكيد الكود قريبًا`;
+  if (emailCheckBtn) emailCheckBtn.textContent = soonText;
+  if (emailResendBtn) emailResendBtn.textContent = soonText;
+  if (emailNote) {
+    emailNote.textContent = isEn
+      ? "Email verification is coming soon. Please use the app without this activation step until it is enabled."
+      : "تفعيل البريد الإلكتروني قريبًا. يمكنك استخدام التطبيق بدون خطوة التفعيل حتى يتم تشغيلها.";
+  }
+  if (otpNote) {
+    otpNote.textContent = isEn
+      ? "WhatsApp code activation is coming soon."
+      : "تفعيل كود الواتساب قريبًا.";
+  }
+
+  [requestBotBtn, confirmOtpBtn, emailCheckBtn, emailResendBtn].forEach((btn) => {
+    if (!btn) return;
+    btn.disabled = true;
+    btn.setAttribute("aria-disabled", "true");
+    btn.style.opacity = "0.62";
+    btn.style.cursor = "not-allowed";
+  });
+  if (phoneInput) phoneInput.disabled = true;
 }
 
 /**
@@ -3267,6 +3312,9 @@ function switchVerifyModalTab(tabName) {
  */
 async function requestBotOtpCode() {
   const isEn = currentLanguage === "en";
+  showToast(isEn ? "WhatsApp verification is coming soon." : "تفعيل الواتساب قريبًا.");
+  updateVerificationSoonState();
+  return;
   const requestBtn = document.getElementById("requestBotCodeBtn");
   const requestBtnText = document.getElementById("requestBotBtnText");
   const statusNotice = document.getElementById("botStatusNotice");
@@ -3375,6 +3423,9 @@ async function requestBotOtpCode() {
 
 async function verifyPhoneOtp() {
   const isEn = currentLanguage === "en";
+  showToast(isEn ? "WhatsApp verification is coming soon." : "تفعيل الواتساب قريبًا.");
+  updateVerificationSoonState();
+  return;
   const otpInput = document.getElementById("verifyOtpCodeInput");
   const enteredCode = (otpInput?.value || "").trim().replace(/\D/g, "");
 
@@ -3480,6 +3531,9 @@ async function verifyPhoneOtp() {
 async function resendVerificationEmail() {
   const user = auth.currentUser;
   if (!user) return;
+  showToast(currentLanguage === "en" ? "Email verification is coming soon." : "تفعيل البريد الإلكتروني قريبًا.");
+  updateVerificationSoonState();
+  return;
 
   if (isVerificationRevoked(user)) {
     showToast(currentLanguage === "en" ? "Account verification has been revoked by the platform administrator." : "تم إلغاء تفعيل هذا الحساب بواسطة إدارة المنصة.");
@@ -3534,6 +3588,9 @@ async function resendVerificationEmail() {
 async function checkEmailVerification() {
   const user = auth.currentUser;
   if (!user) return;
+  showToast(currentLanguage === "en" ? "Email verification is coming soon." : "تفعيل البريد الإلكتروني قريبًا.");
+  updateVerificationSoonState();
+  return;
 
   if (isVerificationRevoked(user)) {
     showToast(currentLanguage === "en" ? "Account verification has been revoked by the platform administrator." : "تم إلغاء تفعيل هذا الحساب بواسطة إدارة المنصة.");
@@ -3568,10 +3625,9 @@ function openVerifyRequiredModal(actionNameAr = "هذا الإجراء", actionN
   const desc = document.getElementById("verifyModalDesc");
   if (title) title.textContent = isEn ? "Account Verification Required" : "توثيق وتفعيل الحساب إجباري";
   if (desc) {
-    const userEmail = auth.currentUser ? auth.currentUser.email : "";
     desc.textContent = isEn
-      ? `Account verification is mandatory before ${actionNameEn}. You can verify instantly via WhatsApp / SMS code or via email link to ${userEmail}.`
-      : `توثيق الحساب إجباري قبل ${actionNameAr}. يمكنك التفعيل الفوري بكود الواتساب / الهاتف، أو برابط التفعيل المرسل لـ ${userEmail}.`;
+      ? `WhatsApp and email activation are coming soon.`
+      : `تفعيل الواتساب والبريد الإلكتروني قريبًا.`;
   }
   const phoneInput = document.getElementById("verifyPhoneInput");
   if (phoneInput && !phoneInput.value) {
@@ -3584,6 +3640,7 @@ function openVerifyRequiredModal(actionNameAr = "هذا الإجراء", actionN
     }
   }
   switchVerifyModalTab(defaultTab);
+  updateVerificationSoonState();
   modal.classList.add("open");
   modal.setAttribute("aria-hidden", "false");
 }
