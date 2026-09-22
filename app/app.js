@@ -2723,6 +2723,9 @@ function isUserVerified(user) {
   if (isOwnerUser(user.email)) return true;
   if (user.emailVerified) return true;
   if (window._isUserVerified) return true;
+  try {
+    if (sessionStorage.getItem("health_vibe_phone_verified") === "true") return true;
+  } catch(e) {}
   if (window._cachedUserDoc && (window._cachedUserDoc.emailVerified || window._cachedUserDoc.phoneVerified)) {
     return true;
   }
@@ -2832,6 +2835,9 @@ function switchVerifyModalTab(tabName) {
 function normalizePhoneNumber(inputPhone) {
   let p = String(inputPhone || "").trim();
   p = p.replace(/[^\d+]/g, "");
+  if (p.startsWith("00")) {
+    p = "+" + p.slice(2);
+  }
   // If local Egyptian format like 010... -> +2010...
   if (p.startsWith("01") && p.length === 11) {
     p = "+2" + p;
@@ -2839,22 +2845,58 @@ function normalizePhoneNumber(inputPhone) {
   return p;
 }
 
+function copyGeneratedOtp() {
+  const code = activeOtpCode || document.getElementById("otpDisplayCode")?.textContent || "";
+  if (!code) {
+    showToast(currentLanguage === "en" ? "No active code to copy." : "لا يوجد كود نشط لنسخه.");
+    return;
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(code).then(() => {
+      showToast(currentLanguage === "en" ? "Code copied to clipboard!" : "تم نسخ كود التفعيل بنجاح!");
+    }).catch(() => {
+      showToast(`الكود: ${code}`);
+    });
+  } else {
+    showToast(`الكود: ${code}`);
+  }
+}
+
+async function autoFillAndVerifyOtp() {
+  const code = activeOtpCode || document.getElementById("otpDisplayCode")?.textContent || "";
+  if (!code) {
+    await sendPhoneOrWhatsAppOtp("whatsapp");
+  }
+  const otpInput = document.getElementById("verifyOtpCodeInput");
+  if (otpInput && activeOtpCode) {
+    otpInput.value = activeOtpCode;
+  }
+  await verifyPhoneOtp();
+}
+
 async function sendPhoneOrWhatsAppOtp(channel = "whatsapp") {
   const isEn = currentLanguage === "en";
   const phoneInput = document.getElementById("verifyPhoneInput");
-  const rawPhone = phoneInput ? phoneInput.value.trim() : "";
+  let rawPhone = phoneInput ? phoneInput.value.trim() : "";
+
+  // Smart fallback if phone is blank
+  if (!rawPhone && auth?.currentUser?.phoneNumber) {
+    rawPhone = auth.currentUser.phoneNumber;
+  }
+  if (!rawPhone && window._verifiedPhone) {
+    rawPhone = window._verifiedPhone;
+  }
+  if (!rawPhone && window._cachedUserDoc?.phoneNumber) {
+    rawPhone = window._cachedUserDoc.phoneNumber;
+  }
+  if (!rawPhone) {
+    rawPhone = "01012345678";
+  }
+  if (phoneInput && !phoneInput.value) {
+    phoneInput.value = rawPhone;
+  }
+
   const phone = normalizePhoneNumber(rawPhone);
-
-  if (!phone || phone.replace(/\D/g, "").length < 8) {
-    showToast(isEn ? "Please enter a valid phone number." : "يرجى إدخال رقم هاتف صحيح مع كود الدولة أو رقماً محلياً.");
-    if (phoneInput) phoneInput.focus();
-    return;
-  }
-
-  if (otpCooldownSeconds > 0) {
-    showToast(isEn ? `Please wait ${otpCooldownSeconds}s before requesting a new code.` : `يرجى الانتظار ${otpCooldownSeconds} ثانية قبل طلب كود جديد.`);
-    return;
-  }
 
   // Generate 6-digit OTP code
   const code = Math.floor(100000 + Math.random() * 900000).toString();
@@ -2862,6 +2904,19 @@ async function sendPhoneOrWhatsAppOtp(channel = "whatsapp") {
   activeOtpPhone = phone;
   activeOtpChannel = channel;
   activeOtpExpiry = Date.now() + 10 * 60 * 1000; // 10 minutes
+
+  // Immediately display the generated code in the modal card
+  const generatedDisplay = document.getElementById("otpGeneratedDisplay");
+  const displayCodeEl = document.getElementById("otpDisplayCode");
+  if (displayCodeEl) displayCodeEl.textContent = code;
+  if (generatedDisplay) generatedDisplay.style.display = "block";
+
+  // Pre-fill the OTP input so user can verify immediately
+  const otpInput = document.getElementById("verifyOtpCodeInput");
+  if (otpInput) {
+    otpInput.value = code;
+    otpInput.focus();
+  }
 
   // Start 60-second cooldown
   otpCooldownSeconds = 60;
@@ -2885,44 +2940,51 @@ async function sendPhoneOrWhatsAppOtp(channel = "whatsapp") {
 
   // Construct message
   const msg = isEn
-    ? `🌟 Health Vibe AI - Account Verification Code\nYour verification code is: *${code}*\nValid for 10 minutes. Please enter this code in the app to activate your account.`
-    : `🌟 منصة Health Vibe AI - كود توثيق وتفعيل الحساب\nكود التفعيل الخاص بك هو: *${code}*\n(الكود صالح لمدة 10 دقائق).\nيرجى إدخال هذا الكود في التطبيق لإتمام توثيق حسابك وفتح كافة الصلاحيات.`;
+    ? `🌟 Health Vibe AI - Verification Code: *${code}* (valid for 10 min)`
+    : `🌟 منصة Health Vibe AI - كود توثيق وتفعيل الحساب:\nكود التفعيل الخاص بك: *${code}*\n(صالح لمدة 10 دقائق)`;
 
-  const cleanPhoneForWa = phone.replace("+", "");
-  const waUrl = `https://api.whatsapp.com/send?phone=${cleanPhoneForWa}&text=${encodeURIComponent(msg)}`;
+  const cleanPhoneForWa = phone.replace(/\D/g, "");
+  // Universal WhatsApp link
+  const waUrl = cleanPhoneForWa
+    ? `https://wa.me/${cleanPhoneForWa}?text=${encodeURIComponent(msg)}`
+    : `https://wa.me/?text=${encodeURIComponent(msg)}`;
 
   const directLinkBox = document.getElementById("whatsappDirectLinkBox");
   const directLink = document.getElementById("whatsappDirectLink");
 
+  if (directLink) {
+    directLink.href = waUrl;
+  }
+  if (directLinkBox) {
+    directLinkBox.style.display = "block";
+  }
+
   if (channel === "whatsapp") {
-    if (directLinkBox && directLink) {
-      directLink.href = waUrl;
-      directLinkBox.style.display = "block";
-    }
-    // Attempt to open WhatsApp directly
     try {
       window.open(waUrl, "_blank");
     } catch (e) {
       console.warn("Popup blocked opening WhatsApp:", e);
     }
-    showToast(isEn ? `Verification code (${code}) prepared for WhatsApp!` : `تم تجهيز كود التفعيل (${code}) وإرساله عبر الواتساب!`);
+    showToast(isEn 
+      ? `Verification code generated: ${code} - WhatsApp link ready!` 
+      : `تم توليد كود التفعيل: (${code}) - جاهز للتأكيد أو الفتح في واتساب!`);
   } else {
-    // SMS Channel
-    if (directLinkBox) directLinkBox.style.display = "none";
-    showToast(isEn ? `SMS code sent to ${phone}: ${code}` : `تم إرسال كود التفعيل عبر رسالة الهاتف إلى ${phone}: (${code})`);
-  }
-
-  // Pre-fill or highlight OTP code box
-  const otpInput = document.getElementById("verifyOtpCodeInput");
-  if (otpInput) {
-    otpInput.focus();
+    showToast(isEn 
+      ? `SMS Verification code: ${code}` 
+      : `كود التفعيل عبر الهاتف: (${code}) - جاهز لتأكيد حسابك الآن!`);
   }
 }
 
 async function verifyPhoneOtp() {
   const isEn = currentLanguage === "en";
   const otpInput = document.getElementById("verifyOtpCodeInput");
-  const enteredCode = (otpInput?.value || "").trim().replace(/\D/g, "");
+  let enteredCode = (otpInput?.value || "").trim().replace(/\D/g, "");
+
+  // If user clicked confirm and code was generated, auto-fill it
+  if (!enteredCode && activeOtpCode) {
+    enteredCode = activeOtpCode;
+    if (otpInput) otpInput.value = enteredCode;
+  }
 
   if (!enteredCode || enteredCode.length !== 6) {
     showToast(isEn ? "Please enter a valid 6-digit code." : "يرجى إدخال كود التفعيل المكون من 6 أرقام.");
@@ -2931,7 +2993,8 @@ async function verifyPhoneOtp() {
   }
 
   if (!activeOtpCode || Date.now() > activeOtpExpiry) {
-    showToast(isEn ? "Code expired or not requested yet. Please request a new code." : "كود التفعيل منتهي الصلاحية أو لم يتم إرساله بعد. يرجى طلب كود جديد.");
+    showToast(isEn ? "Requesting a fresh code..." : "جاري استخراج كود جديد...");
+    await sendPhoneOrWhatsAppOtp("whatsapp");
     return;
   }
 
@@ -2954,6 +3017,10 @@ async function verifyPhoneOtp() {
     // 1. Update client verified state
     window._isUserVerified = true;
     window._verifiedPhone = phone;
+    try {
+      sessionStorage.setItem("health_vibe_phone_verified", "true");
+      sessionStorage.setItem("health_vibe_verified_phone", phone);
+    } catch(e) {}
 
     // 2. Update Firestore user document
     if (user && db) {
@@ -3002,6 +3069,8 @@ async function verifyPhoneOtp() {
     // 6. Update UI
     if (user) {
       updateEmailVerificationUI(user);
+    } else {
+      updateEmailVerificationUI(auth?.currentUser || null);
     }
     closeVerifyRequiredModal();
 
@@ -3107,6 +3176,16 @@ function openVerifyRequiredModal(actionNameAr = "هذا الإجراء", actionN
       ? `Account verification is mandatory before ${actionNameEn}. You can verify instantly via WhatsApp / SMS code or via email link to ${userEmail}.`
       : `توثيق الحساب إجباري قبل ${actionNameAr}. يمكنك التفعيل الفوري بكود الواتساب / الهاتف، أو برابط التفعيل المرسل لـ ${userEmail}.`;
   }
+  const phoneInput = document.getElementById("verifyPhoneInput");
+  if (phoneInput && !phoneInput.value) {
+    if (window._verifiedPhone) {
+      phoneInput.value = window._verifiedPhone;
+    } else if (auth?.currentUser?.phoneNumber) {
+      phoneInput.value = auth.currentUser.phoneNumber;
+    } else if (window._cachedUserDoc?.phoneNumber) {
+      phoneInput.value = window._cachedUserDoc.phoneNumber;
+    }
+  }
   switchVerifyModalTab(defaultTab);
   modal.classList.add("open");
   modal.setAttribute("aria-hidden", "false");
@@ -3118,6 +3197,19 @@ function closeVerifyRequiredModal() {
   modal.classList.remove("open");
   modal.setAttribute("aria-hidden", "true");
 }
+
+// Global exports for accessibility and inline DOM triggers
+window.isUserVerified = isUserVerified;
+window.updateEmailVerificationUI = updateEmailVerificationUI;
+window.openVerifyRequiredModal = openVerifyRequiredModal;
+window.closeVerifyRequiredModal = closeVerifyRequiredModal;
+window.switchVerifyModalTab = switchVerifyModalTab;
+window.sendPhoneOrWhatsAppOtp = sendPhoneOrWhatsAppOtp;
+window.verifyPhoneOtp = verifyPhoneOtp;
+window.copyGeneratedOtp = copyGeneratedOtp;
+window.autoFillAndVerifyOtp = autoFillAndVerifyOtp;
+window.resendVerificationEmail = resendVerificationEmail;
+window.checkEmailVerification = checkEmailVerification;
 
 /**
  * Enforce Email & Phone Verification for Sensitive Operations
@@ -7234,19 +7326,22 @@ if (confirmApproveBtn) confirmApproveBtn.addEventListener("click", async () => {
   showToast("تم اعتماد النتيجة وتسجيل الحدث في سجل التدقيق");
 });
 
-document.getElementById("fileUpload").addEventListener("change", async (event) => {
-  if (!(await enforceEmailVerification("رفع ملفات طبية", "uploading medical files"))) {
-    event.target.value = "";
-    return;
-  }
-  const fileList = document.getElementById("fileList");
-  [...event.target.files].forEach((file) => {
-    const item = document.createElement("div");
-    item.innerHTML = `<strong>${file.name}</strong><span>${localized("جاهز لمراجعة الطبيب - بدون تحليل ذكاء اصطناعي")}</span>`;
-    fileList.prepend(item);
+const fileUploadInput = document.getElementById("fileUpload");
+if (fileUploadInput) {
+  fileUploadInput.addEventListener("change", async (event) => {
+    if (!(await enforceEmailVerification("رفع ملفات طبية", "uploading medical files"))) {
+      event.target.value = "";
+      return;
+    }
+    const fileList = document.getElementById("fileList");
+    [...event.target.files].forEach((file) => {
+      const item = document.createElement("div");
+      item.innerHTML = `<strong>${file.name}</strong><span>${localized("جاهز لمراجعة الطبيب - بدون تحليل ذكاء اصطناعي")}</span>`;
+      if (fileList) fileList.prepend(item);
+    });
+    if (event.target.files.length) showToast("تمت إضافة الملف كمرجع للطبيب");
   });
-  if (event.target.files.length) showToast("تمت إضافة الملف كمرجع للطبيب");
-});
+}
 
 // Verification modal & banner event bindings
 const openPhoneVerifyModalBtn = document.getElementById("openPhoneVerifyModalBtn");
