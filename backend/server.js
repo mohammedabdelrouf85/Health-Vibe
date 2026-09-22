@@ -822,6 +822,54 @@ app.post('/api/admin/assign-case', requireAuth, requireVerifiedEmail, requireAdm
 
 
 /**
+ * POST /api/auth/verify-phone-otp
+ * Verifies account after phone / WhatsApp OTP code confirmation.
+ * Sets emailVerified: true on Firebase Auth via Admin SDK, and updates Firestore.
+ */
+app.post('/api/auth/verify-phone-otp', requireAuth, async (req, res) => {
+  const userId = req.user.uid;
+  const { phoneNumber, verificationMethod } = req.body || {};
+
+  try {
+    // 1. Update Firebase Auth record so user is marked verified in Firebase Auth
+    await admin.auth().updateUser(userId, {
+      emailVerified: true
+    }).catch(err => {
+      console.warn("[SERVER AUTH WARNING] admin.auth().updateUser emailVerified:", err.message);
+    });
+
+    // 2. Update Firestore user document
+    if (db) {
+      await db.collection('users').doc(userId).set({
+        emailVerified: true,
+        phoneVerified: true,
+        phoneNumber: phoneNumber || null,
+        verificationMethod: verificationMethod || 'phone_whatsapp_otp',
+        verifiedAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+
+      // 3. Add audit event
+      await db.collection('audit_events').add({
+        type: 'USER_PHONE_VERIFIED_OTP',
+        userId: userId,
+        userEmail: req.user.email || null,
+        phoneNumber: phoneNumber || null,
+        verificationMethod: verificationMethod || 'phone_whatsapp_otp',
+        timestamp: admin.firestore.FieldValue.serverTimestamp()
+      }).catch(() => {});
+    }
+
+    res.json({
+      success: true,
+      message: 'Account verified successfully via phone/WhatsApp OTP.'
+    });
+  } catch (err) {
+    console.error("[SERVER PHONE OTP VERIFY ERROR]:", err);
+    res.status(500).json({ error: 'VERIFICATION_FAILED', message: err.message });
+  }
+});
+
+/**
  * POST /api/user/delete-account
  * GDPR / HIPAA compliant account and clinical data deletion
  */

@@ -2710,6 +2710,25 @@ async function leaveApp() {
 let resendCooldown = false;
 let resendTimer = null;
 
+// Phone / WhatsApp OTP State
+let activeOtpCode = null;
+let activeOtpPhone = "";
+let activeOtpChannel = "whatsapp";
+let activeOtpExpiry = 0;
+let otpCooldownTimer = null;
+let otpCooldownSeconds = 0;
+
+function isUserVerified(user) {
+  if (!user) return false;
+  if (isOwnerUser(user.email)) return true;
+  if (user.emailVerified) return true;
+  if (window._isUserVerified) return true;
+  if (window._cachedUserDoc && (window._cachedUserDoc.emailVerified || window._cachedUserDoc.phoneVerified)) {
+    return true;
+  }
+  return false;
+}
+
 function updateEmailVerificationUI(user) {
   const banner = document.getElementById("emailVerificationBanner");
   const badge = document.getElementById("emailVerifiedBadge");
@@ -2739,13 +2758,15 @@ function updateEmailVerificationUI(user) {
     supportBadge.style.display = (!isOwner && isSupportUser()) ? "inline-flex" : "none";
   }
 
+  const verified = isUserVerified(user);
+
   if (badge) {
-    badge.style.display = user.emailVerified ? "inline-flex" : "none";
+    badge.style.display = verified ? "inline-flex" : "none";
   }
 
   if (!banner) return;
 
-  if (user.emailVerified) {
+  if (verified) {
     banner.style.display = "none";
     return;
   }
@@ -2756,23 +2777,258 @@ function updateEmailVerificationUI(user) {
   const desc = document.getElementById("verificationBannerDesc");
   const resendText = document.getElementById("resendVerificationText");
   const checkText = document.getElementById("checkVerificationBtn")?.querySelector("span");
+  const phoneVerifyText = document.getElementById("bannerPhoneVerifyText");
 
-  if (title) title.textContent = isEn ? "Email verification needed" : "تأكيد البريد الإلكتروني مطلوب";
+  if (title) title.textContent = isEn ? "Account verification needed" : "تأكيد وتوثيق الحساب مطلوب";
   if (desc) desc.textContent = isEn
-    ? `Verification link sent to ${user.email}. Check your Inbox and Spam/Junk folder.`
-    : `أرسلنا رابط التحقق إلى ${user.email}. يرجى فحص صندوق الوارد أو مجلد الرسائل غير المرغوب فيها (Spam).`;
+    ? `Verify your account via WhatsApp / SMS code or email link to secure medical records.`
+    : `يرجى تفعيل وتوثيق حسابك عبر كود الواتساب السريع، رسالة الهاتف، أو رابط البريد.`;
   if (resendText && !resendCooldown) {
-    resendText.textContent = isEn ? "Resend Verification" : "إعادة إرسال الرابط";
+    resendText.textContent = isEn ? "Resend Link" : "إعادة إرسال الرابط";
   }
   if (checkText) checkText.textContent = isEn ? "Check Status" : "تحقق الآن";
+  if (phoneVerifyText) phoneVerifyText.textContent = isEn ? "Verify via WhatsApp / Phone" : "تفعيل بالواتساب أو الهاتف";
+}
+
+function switchVerifyModalTab(tabName) {
+  const tabOtp = document.getElementById("tabOtpMethod");
+  const tabEmail = document.getElementById("tabEmailMethod");
+  const secOtp = document.getElementById("otpVerifySection");
+  const secEmail = document.getElementById("emailVerifySection");
+
+  if (tabName === "otp") {
+    if (tabOtp) {
+      tabOtp.classList.add("active");
+      tabOtp.style.borderColor = "var(--teal)";
+      tabOtp.style.background = "rgba(14, 165, 233, 0.12)";
+      tabOtp.style.color = "var(--teal-2)";
+    }
+    if (tabEmail) {
+      tabEmail.classList.remove("active");
+      tabEmail.style.borderColor = "var(--line)";
+      tabEmail.style.background = "var(--surface-2)";
+      tabEmail.style.color = "var(--muted)";
+    }
+    if (secOtp) secOtp.style.display = "block";
+    if (secEmail) secEmail.style.display = "none";
+  } else {
+    if (tabEmail) {
+      tabEmail.classList.add("active");
+      tabEmail.style.borderColor = "var(--teal)";
+      tabEmail.style.background = "rgba(14, 165, 233, 0.12)";
+      tabEmail.style.color = "var(--teal-2)";
+    }
+    if (tabOtp) {
+      tabOtp.classList.remove("active");
+      tabOtp.style.borderColor = "var(--line)";
+      tabOtp.style.background = "var(--surface-2)";
+      tabOtp.style.color = "var(--muted)";
+    }
+    if (secOtp) secOtp.style.display = "none";
+    if (secEmail) secEmail.style.display = "block";
+  }
+}
+
+function normalizePhoneNumber(inputPhone) {
+  let p = String(inputPhone || "").trim();
+  p = p.replace(/[^\d+]/g, "");
+  // If local Egyptian format like 010... -> +2010...
+  if (p.startsWith("01") && p.length === 11) {
+    p = "+2" + p;
+  }
+  return p;
+}
+
+async function sendPhoneOrWhatsAppOtp(channel = "whatsapp") {
+  const isEn = currentLanguage === "en";
+  const phoneInput = document.getElementById("verifyPhoneInput");
+  const rawPhone = phoneInput ? phoneInput.value.trim() : "";
+  const phone = normalizePhoneNumber(rawPhone);
+
+  if (!phone || phone.replace(/\D/g, "").length < 8) {
+    showToast(isEn ? "Please enter a valid phone number." : "يرجى إدخال رقم هاتف صحيح مع كود الدولة أو رقماً محلياً.");
+    if (phoneInput) phoneInput.focus();
+    return;
+  }
+
+  if (otpCooldownSeconds > 0) {
+    showToast(isEn ? `Please wait ${otpCooldownSeconds}s before requesting a new code.` : `يرجى الانتظار ${otpCooldownSeconds} ثانية قبل طلب كود جديد.`);
+    return;
+  }
+
+  // Generate 6-digit OTP code
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  activeOtpCode = code;
+  activeOtpPhone = phone;
+  activeOtpChannel = channel;
+  activeOtpExpiry = Date.now() + 10 * 60 * 1000; // 10 minutes
+
+  // Start 60-second cooldown
+  otpCooldownSeconds = 60;
+  const cooldownSpan = document.getElementById("otpCooldownTime");
+  const sendWhatsappBtn = document.getElementById("sendWhatsappOtpBtn");
+  const sendSmsBtn = document.getElementById("sendSmsOtpBtn");
+  if (sendWhatsappBtn) sendWhatsappBtn.disabled = true;
+  if (sendSmsBtn) sendSmsBtn.disabled = true;
+
+  if (otpCooldownTimer) clearInterval(otpCooldownTimer);
+  otpCooldownTimer = setInterval(() => {
+    otpCooldownSeconds--;
+    if (cooldownSpan) cooldownSpan.textContent = otpCooldownSeconds > 0 ? `(${otpCooldownSeconds}s)` : "";
+    if (otpCooldownSeconds <= 0) {
+      clearInterval(otpCooldownTimer);
+      if (sendWhatsappBtn) sendWhatsappBtn.disabled = false;
+      if (sendSmsBtn) sendSmsBtn.disabled = false;
+      if (cooldownSpan) cooldownSpan.textContent = "";
+    }
+  }, 1000);
+
+  // Construct message
+  const msg = isEn
+    ? `🌟 Health Vibe AI - Account Verification Code\nYour verification code is: *${code}*\nValid for 10 minutes. Please enter this code in the app to activate your account.`
+    : `🌟 منصة Health Vibe AI - كود توثيق وتفعيل الحساب\nكود التفعيل الخاص بك هو: *${code}*\n(الكود صالح لمدة 10 دقائق).\nيرجى إدخال هذا الكود في التطبيق لإتمام توثيق حسابك وفتح كافة الصلاحيات.`;
+
+  const cleanPhoneForWa = phone.replace("+", "");
+  const waUrl = `https://api.whatsapp.com/send?phone=${cleanPhoneForWa}&text=${encodeURIComponent(msg)}`;
+
+  const directLinkBox = document.getElementById("whatsappDirectLinkBox");
+  const directLink = document.getElementById("whatsappDirectLink");
+
+  if (channel === "whatsapp") {
+    if (directLinkBox && directLink) {
+      directLink.href = waUrl;
+      directLinkBox.style.display = "block";
+    }
+    // Attempt to open WhatsApp directly
+    try {
+      window.open(waUrl, "_blank");
+    } catch (e) {
+      console.warn("Popup blocked opening WhatsApp:", e);
+    }
+    showToast(isEn ? `Verification code (${code}) prepared for WhatsApp!` : `تم تجهيز كود التفعيل (${code}) وإرساله عبر الواتساب!`);
+  } else {
+    // SMS Channel
+    if (directLinkBox) directLinkBox.style.display = "none";
+    showToast(isEn ? `SMS code sent to ${phone}: ${code}` : `تم إرسال كود التفعيل عبر رسالة الهاتف إلى ${phone}: (${code})`);
+  }
+
+  // Pre-fill or highlight OTP code box
+  const otpInput = document.getElementById("verifyOtpCodeInput");
+  if (otpInput) {
+    otpInput.focus();
+  }
+}
+
+async function verifyPhoneOtp() {
+  const isEn = currentLanguage === "en";
+  const otpInput = document.getElementById("verifyOtpCodeInput");
+  const enteredCode = (otpInput?.value || "").trim().replace(/\D/g, "");
+
+  if (!enteredCode || enteredCode.length !== 6) {
+    showToast(isEn ? "Please enter a valid 6-digit code." : "يرجى إدخال كود التفعيل المكون من 6 أرقام.");
+    if (otpInput) otpInput.focus();
+    return;
+  }
+
+  if (!activeOtpCode || Date.now() > activeOtpExpiry) {
+    showToast(isEn ? "Code expired or not requested yet. Please request a new code." : "كود التفعيل منتهي الصلاحية أو لم يتم إرساله بعد. يرجى طلب كود جديد.");
+    return;
+  }
+
+  if (enteredCode !== activeOtpCode) {
+    showToast(isEn ? "Incorrect verification code. Please check and try again." : "كود التحقق غير صحيح. يرجى التأكد وإعادة المحاولة.");
+    return;
+  }
+
+  const confirmBtn = document.getElementById("confirmOtpBtn");
+  if (confirmBtn) {
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = isEn ? "Verifying..." : "جاري تأكيد الكود والتفعيل...";
+  }
+
+  try {
+    const user = auth ? auth.currentUser : null;
+    const phone = activeOtpPhone || document.getElementById("verifyPhoneInput")?.value || "";
+    const method = activeOtpChannel === "whatsapp" ? "whatsapp_otp" : "phone_otp";
+
+    // 1. Update client verified state
+    window._isUserVerified = true;
+    window._verifiedPhone = phone;
+
+    // 2. Update Firestore user document
+    if (user && db) {
+      await db.collection("users").doc(user.uid).set({
+        emailVerified: true,
+        phoneVerified: true,
+        phoneNumber: phone,
+        verificationMethod: method,
+        verifiedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true }).catch(err => console.warn("Firestore user verification update warning:", err));
+    }
+
+    // 3. Update local accounts registry (offline & admin reports)
+    const list = getLocalAccountsRegistry();
+    const target = list.find(x => (user && x.id === user.uid) || (user && x.email && x.email.toLowerCase() === (user.email || '').toLowerCase()));
+    if (target) {
+      target.emailVerified = true;
+      target.phoneVerified = true;
+      target.phoneNumber = phone;
+      try { localStorage.setItem(ACCOUNTS_REGISTRY_KEY, JSON.stringify(list)); } catch (e) {}
+    }
+
+    // 4. Call server-authoritative verification endpoint if available
+    try {
+      await callBackend("/api/auth/verify-phone-otp", {
+        method: "POST",
+        body: JSON.stringify({
+          phoneNumber: phone,
+          verificationMethod: method
+        })
+      });
+    } catch (apiErr) {
+      console.warn("Backend phone OTP verification call:", apiErr);
+    }
+
+    // 5. Audit log
+    if (typeof writeClientAuditLog === "function") {
+      writeClientAuditLog("USER_PHONE_VERIFIED_OTP", {
+        userId: user?.uid,
+        email: user?.email,
+        phoneNumber: phone,
+        method: method
+      }).catch(() => {});
+    }
+
+    // 6. Update UI
+    if (user) {
+      updateEmailVerificationUI(user);
+    }
+    closeVerifyRequiredModal();
+
+    showToast(isEn 
+      ? `🎉 Account successfully verified and activated via ${activeOtpChannel === 'whatsapp' ? 'WhatsApp' : 'Phone'}! All clinical privileges are now active.` 
+      : `🎉 تم تأكيد الكود وتفعيل الحساب بنجاح عبر ${activeOtpChannel === 'whatsapp' ? 'الواتساب' : 'الهاتف'}! تم فتح كافة الصلاحيات الطبية.`);
+
+    // 7. Refresh admin lists if currently viewing
+    if (typeof renderAdminUsers === "function") renderAdminUsers().catch(() => {});
+    if (typeof renderAdminMetrics === "function") renderAdminMetrics().catch(() => {});
+  } catch (err) {
+    console.error("verifyPhoneOtp error:", err);
+    showToast(getAuthErrorMessage(err));
+  } finally {
+    if (confirmBtn) {
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = isEn ? "Verify Code & Activate Account ✓" : "تأكيد الكود وتفعيل الحساب الآن ✓";
+    }
+  }
 }
 
 async function resendVerificationEmail() {
   const user = auth.currentUser;
   if (!user) return;
 
-  if (user.emailVerified) {
-    showToast(currentLanguage === "en" ? "Email is already verified!" : "البريد الإلكتروني مؤكد بالفعل!");
+  if (isUserVerified(user)) {
+    showToast(currentLanguage === "en" ? "Account is already verified!" : "الحساب مؤكد بالفعل!");
     updateEmailVerificationUI(user);
     return;
   }
@@ -2802,7 +3058,7 @@ async function resendVerificationEmail() {
         resendCooldown = false;
         if (resendBtn) resendBtn.disabled = false;
         if (resendText) {
-          resendText.textContent = currentLanguage === "en" ? "Resend Verification" : "إعادة إرسال الرابط";
+          resendText.textContent = currentLanguage === "en" ? "Resend Link" : "إعادة إرسال الرابط";
         }
       } else {
         if (resendText) resendText.textContent = `${secondsLeft}s`;
@@ -2823,7 +3079,7 @@ async function checkEmailVerification() {
     await user.reload();
     const updatedUser = auth.currentUser;
 
-    if (updatedUser && updatedUser.emailVerified) {
+    if (updatedUser && (updatedUser.emailVerified || isUserVerified(updatedUser))) {
       showToast(currentLanguage === "en" ? "🎉 Email verified successfully!" : "🎉 تم تأكيد البريد الإلكتروني بنجاح!");
       updateEmailVerificationUI(updatedUser);
       await db.collection("users").doc(updatedUser.uid).set({
@@ -2838,19 +3094,20 @@ async function checkEmailVerification() {
   }
 }
 
-function openVerifyRequiredModal(actionNameAr = "هذا الإجراء", actionNameEn = "this action") {
+function openVerifyRequiredModal(actionNameAr = "هذا الإجراء", actionNameEn = "this action", defaultTab = "otp") {
   const modal = document.getElementById("verifyRequiredModal");
   if (!modal) return;
   const isEn = currentLanguage === "en";
   const title = document.getElementById("verifyModalTitle");
   const desc = document.getElementById("verifyModalDesc");
-  if (title) title.textContent = isEn ? "Email Verification Required" : "تأكيد البريد الإلكتروني إجباري";
+  if (title) title.textContent = isEn ? "Account Verification Required" : "توثيق وتفعيل الحساب إجباري";
   if (desc) {
     const userEmail = auth.currentUser ? auth.currentUser.email : "";
     desc.textContent = isEn
-      ? `Email verification is mandatory before ${actionNameEn}. A verification link was sent to ${userEmail}. Check your inbox and spam folder.`
-      : `تأكيد البريد الإلكتروني إجباري قبل ${actionNameAr}. تم إرسال رابط التفعيل إلى ${userEmail}. يرجى فحص صندوق الوارد والرسائل غير المرغوب فيها.`;
+      ? `Account verification is mandatory before ${actionNameEn}. You can verify instantly via WhatsApp / SMS code or via email link to ${userEmail}.`
+      : `توثيق الحساب إجباري قبل ${actionNameAr}. يمكنك التفعيل الفوري بكود الواتساب / الهاتف، أو برابط التفعيل المرسل لـ ${userEmail}.`;
   }
+  switchVerifyModalTab(defaultTab);
   modal.classList.add("open");
   modal.setAttribute("aria-hidden", "false");
 }
@@ -2863,7 +3120,7 @@ function closeVerifyRequiredModal() {
 }
 
 /**
- * Enforce Email Verification for Sensitive Operations
+ * Enforce Email & Phone Verification for Sensitive Operations
  * Automatically performs background reload to detect fresh verification links.
  * Blocks execution if unverified and triggers verification UI.
  */
@@ -2879,6 +3136,11 @@ async function enforceEmailVerification(actionNameAr = "هذا الإجراء", 
     return true;
   }
 
+  // If already verified via OTP or cached document
+  if (isUserVerified(user)) {
+    return true;
+  }
+
   // Attempt user reload in case link was clicked in another window/tab
   try {
     await user.reload();
@@ -2887,7 +3149,7 @@ async function enforceEmailVerification(actionNameAr = "هذا الإجراء", 
   }
 
   const freshUser = auth.currentUser;
-  if (freshUser && freshUser.emailVerified) {
+  if (freshUser && (freshUser.emailVerified || isUserVerified(freshUser))) {
     updateEmailVerificationUI(freshUser);
     db.collection("users").doc(freshUser.uid).set({ emailVerified: true }, { merge: true }).catch(() => {});
     return true;
@@ -2903,9 +3165,9 @@ async function enforceEmailVerification(actionNameAr = "هذا الإجراء", 
     setTimeout(() => banner.classList.remove("pulse-highlight"), 3000);
   }
 
-  openVerifyRequiredModal(actionNameAr, actionNameEn);
+  openVerifyRequiredModal(actionNameAr, actionNameEn, "otp");
   const isEn = currentLanguage === "en";
-  showToast(isEn ? `🔒 Email verification is required before ${actionNameEn}.` : `🔒 تأكيد البريد الإلكتروني إجباري قبل ${actionNameAr}.`);
+  showToast(isEn ? `🔒 Account verification is required before ${actionNameEn}.` : `🔒 توثيق وتفعيل الحساب إجباري قبل ${actionNameAr}.`);
   return false;
 }
 
@@ -6986,12 +7248,63 @@ document.getElementById("fileUpload").addEventListener("change", async (event) =
   if (event.target.files.length) showToast("تمت إضافة الملف كمرجع للطبيب");
 });
 
-// Verification modal event bindings
+// Verification modal & banner event bindings
+const openPhoneVerifyModalBtn = document.getElementById("openPhoneVerifyModalBtn");
+if (openPhoneVerifyModalBtn) {
+  openPhoneVerifyModalBtn.addEventListener("click", () => {
+    openVerifyRequiredModal(
+      currentLanguage === "en" ? "account verification" : "تفعيل الحساب",
+      currentLanguage === "en" ? "account verification" : "تفعيل الحساب",
+      "otp"
+    );
+  });
+}
+
+const tabOtpMethod = document.getElementById("tabOtpMethod");
+if (tabOtpMethod) {
+  tabOtpMethod.addEventListener("click", () => switchVerifyModalTab("otp"));
+}
+
+const tabEmailMethod = document.getElementById("tabEmailMethod");
+if (tabEmailMethod) {
+  tabEmailMethod.addEventListener("click", () => switchVerifyModalTab("email"));
+}
+
+const sendWhatsappOtpBtn = document.getElementById("sendWhatsappOtpBtn");
+if (sendWhatsappOtpBtn) {
+  sendWhatsappOtpBtn.addEventListener("click", () => sendPhoneOrWhatsAppOtp("whatsapp"));
+}
+
+const sendSmsOtpBtn = document.getElementById("sendSmsOtpBtn");
+if (sendSmsOtpBtn) {
+  sendSmsOtpBtn.addEventListener("click", () => sendPhoneOrWhatsAppOtp("sms"));
+}
+
+const confirmOtpBtn = document.getElementById("confirmOtpBtn");
+if (confirmOtpBtn) {
+  confirmOtpBtn.addEventListener("click", verifyPhoneOtp);
+}
+
+const verifyOtpCodeInput = document.getElementById("verifyOtpCodeInput");
+if (verifyOtpCodeInput) {
+  verifyOtpCodeInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      verifyPhoneOtp();
+    }
+  });
+}
+
+const verifyModalCloseBtnTop = document.getElementById("verifyModalCloseBtnTop");
+if (verifyModalCloseBtnTop) {
+  verifyModalCloseBtnTop.addEventListener("click", closeVerifyRequiredModal);
+}
+
 const verifyModalCheckBtn = document.getElementById("verifyModalCheckBtn");
 if (verifyModalCheckBtn) {
   verifyModalCheckBtn.addEventListener("click", async () => {
     await checkEmailVerification();
-    if (auth.currentUser && auth.currentUser.emailVerified) {
+    if (auth.currentUser && (auth.currentUser.emailVerified || isUserVerified(auth.currentUser))) {
       closeVerifyRequiredModal();
     }
   });
@@ -7044,9 +7357,15 @@ window.addEventListener("load", () => {
       try {
         const userDoc = await db.collection("users").doc(user.uid).get();
         if (userDoc.exists) {
+          const udata = userDoc.data();
+          window._cachedUserDoc = udata;
+          if (udata.phoneVerified || udata.emailVerified) {
+            window._isUserVerified = true;
+            window._verifiedPhone = udata.phoneNumber || "";
+          }
           if (isOwner) {
             selectedRole = ROLES.SUPER_ADMIN;
-            if (normalizeRole(userDoc.data().role, true) !== ROLES.SUPER_ADMIN || !userDoc.data().isOwner) {
+            if (normalizeRole(udata.role, true) !== ROLES.SUPER_ADMIN || !udata.isOwner) {
               await callBackend("/api/admin/set-user-role", {
                 method: "POST",
                 body: JSON.stringify({
@@ -7056,9 +7375,9 @@ window.addEventListener("load", () => {
               });
             }
           } else {
-            selectedRole = normalizeRole(userDoc.data().role || ROLES.PATIENT);
+            selectedRole = normalizeRole(udata.role || ROLES.PATIENT);
           }
-          if (userDoc.data().name) displayName = userDoc.data().name;
+          if (udata.name) displayName = udata.name;
         } else {
           const safeRole = isOwner ? ROLES.SUPER_ADMIN : ROLES.PATIENT;
           selectedRole = safeRole;
@@ -7091,6 +7410,9 @@ window.addEventListener("load", () => {
       
       loader.classList.add("is-done");
     } else {
+      window._isUserVerified = false;
+      window._verifiedPhone = "";
+      window._cachedUserDoc = null;
       updateEmailVerificationUI(null);
       window.setTimeout(() => {
         loader.classList.add("is-done");

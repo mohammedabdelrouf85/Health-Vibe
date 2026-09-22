@@ -330,6 +330,10 @@
           </div>
         </div>
         <div class="banner-actions">
+          <button id="openPhoneVerifyModalBtn" type="button" class="banner-btn" style="background:#25D366; color:#fff; display:inline-flex; align-items:center; gap:6px;">
+            <span>📱</span>
+            <span id="bannerPhoneVerifyText">تفعيل بالواتساب أو الهاتف</span>
+          </button>
           <button id="resendVerificationBtn" type="button" class="banner-btn primary">
             <span id="resendVerificationText">Resend Verification</span>
           </button>
@@ -893,14 +897,95 @@
   </div>
 
   <div id="verifyRequiredModal" class="confirm-modal" aria-hidden="true">
-    <div class="confirm-card" style="text-align: center; max-width: 440px;">
-      <div style="font-size: 42px; margin-bottom: 10px;">🔒</div>
-      <h3 id="verifyModalTitle">تأكيد البريد الإلكتروني إجباري</h3>
-      <p id="verifyModalDesc">هذا الإجراء يتطلب حساباً موثقاً ببريد إلكتروني مفعل لضمان سلامة وسرية البيانات الطبية.</p>
-      <div class="doctor-actions" style="justify-content: center; gap: 8px; margin-top: 20px; flex-wrap: wrap;">
-        <button id="verifyModalCheckBtn" class="solid-button" style="background: var(--teal); border-color: var(--teal);">تحقق الآن</button>
-        <button id="verifyModalResendBtn" class="outline-button">إعادة إرسال الرابط</button>
-        <button id="verifyModalCloseBtn" class="outline-button" style="border-color: transparent;">إغلاق</button>
+    <div class="confirm-card" style="text-align: right; max-width: 480px; width: 95%; max-height: 90vh; overflow-y: auto;">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 26px;">🛡️</span>
+          <h3 id="verifyModalTitle" style="margin: 0; font-size: 18px; color: var(--ink);">توثيق وتفعيل الحساب</h3>
+        </div>
+        <button id="verifyModalCloseBtnTop" type="button" style="font-size: 20px; border: 0; background: transparent; cursor: pointer; color: var(--muted); line-height: 1;">&times;</button>
+      </div>
+
+      <p id="verifyModalDesc" style="margin: 0 0 14px; font-size: 13px; color: var(--muted); line-height: 1.5;">
+        لضمان سلامة وسرية الملفات الطبية، يرجى تفعيل وتوثيق حسابك عبر كود الواتساب السريع أو رسالة الهاتف أو رابط البريد.
+      </p>
+
+      <!-- Verification Method Tabs -->
+      <div class="verify-tabs" style="display: flex; gap: 8px; margin-bottom: 16px; border-bottom: 1px solid var(--line); padding-bottom: 8px;">
+        <button type="button" id="tabOtpMethod" class="verify-tab active" style="flex: 1; padding: 9px 12px; border-radius: 10px; border: 1.5px solid var(--teal); background: rgba(14, 165, 233, 0.12); color: var(--teal-2); font-weight: 700; font-size: 12.5px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
+          <span>📱</span>
+          <span id="tabOtpMethodLabel">كود الواتساب / الهاتف</span>
+        </button>
+        <button type="button" id="tabEmailMethod" class="verify-tab" style="flex: 1; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); font-weight: 700; font-size: 12.5px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
+          <span>✉️</span>
+          <span id="tabEmailMethodLabel">رابط البريد الإلكتروني</span>
+        </button>
+      </div>
+
+      <!-- Tab 1: WhatsApp / SMS OTP Section -->
+      <div id="otpVerifySection">
+        <div style="margin-bottom: 12px;">
+          <label style="display: block; font-size: 12.5px; font-weight: 700; margin-bottom: 6px; color: var(--ink);" id="phoneInputLabel">
+            رقم الهاتف أو الواتساب:
+          </label>
+          <div style="display: flex; gap: 8px;">
+            <input type="tel" id="verifyPhoneInput" dir="ltr" placeholder="010xxxxxxxx or +2010..." style="flex: 1; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-size: 14px; text-align: left; font-family: monospace;" />
+          </div>
+          <span style="font-size: 11px; color: var(--muted); display: block; margin-top: 4px;" id="phoneInputHint">أدخل رقمك مع كود الدولة أو رقماً محلياً (مثال: 01012345678 أو +201012345678)</span>
+        </div>
+
+        <div style="display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap;">
+          <button type="button" id="sendWhatsappOtpBtn" class="solid-button" style="flex: 1; min-width: 140px; background: #25D366; border-color: #25D366; color: #fff; font-size: 12.5px; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 9px 12px;">
+            <span>🟢</span>
+            <span id="sendWhatsappOtpText">إرسال كود واتساب</span>
+          </button>
+          <button type="button" id="sendSmsOtpBtn" class="soft-button" style="flex: 1; min-width: 130px; font-size: 12.5px; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 9px 12px;">
+            <span>💬</span>
+            <span id="sendSmsOtpText">إرسال كود SMS</span>
+          </button>
+        </div>
+
+        <!-- OTP Code Input Box -->
+        <div id="otpInputContainer" style="margin-top: 10px; padding: 14px; border-radius: 12px; background: var(--surface-2); border: 1px dashed var(--teal);">
+          <label style="display: block; font-size: 12.5px; font-weight: 700; margin-bottom: 6px; color: var(--ink);" id="otpDigitsLabel">
+            أدخل كود التحقق المكون من 6 أرقام:
+          </label>
+          <input type="text" id="verifyOtpCodeInput" maxlength="6" dir="ltr" placeholder="• • • • • •" style="width: 100%; letter-spacing: 8px; font-size: 22px; font-weight: 900; text-align: center; padding: 10px; border-radius: 10px; border: 2px solid var(--teal); background: var(--surface); color: var(--teal-2); font-family: monospace; box-sizing: border-box;" />
+          
+          <div id="otpCountdownBox" style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 11.5px; color: var(--muted);">
+            <span id="otpCountdownText">الكود صالح لمدة 10 دقائق</span>
+            <span id="otpCooldownTime" style="font-weight: 700; color: var(--amber);"></span>
+          </div>
+
+          <!-- Direct WhatsApp Open helper link -->
+          <div id="whatsappDirectLinkBox" style="display: none; margin-top: 10px; text-align: center; padding: 8px; background: rgba(37, 211, 102, 0.1); border-radius: 8px;">
+            <a id="whatsappDirectLink" href="#" target="_blank" rel="noopener noreferrer" style="font-size: 12px; color: #128C7E; text-decoration: none; font-weight: 700; display: inline-flex; align-items: center; gap: 6px;">
+              <span>📲</span>
+              <span>فتح تطبيق واتساب لاستلام الكود الآن</span>
+            </a>
+          </div>
+
+          <button type="button" id="confirmOtpBtn" class="solid-button large" style="width: 100%; margin-top: 12px; background: var(--teal); border-color: var(--teal); font-weight: 900; padding: 11px;">
+            تأكيد الكود وتفعيل الحساب الآن ✓
+          </button>
+        </div>
+      </div>
+
+      <!-- Tab 2: Email Link Section -->
+      <div id="emailVerifySection" style="display: none;">
+        <div style="background: var(--surface-2); padding: 14px; border-radius: 12px; border: 1px solid var(--line); margin-bottom: 16px;">
+          <p style="margin: 0 0 12px; font-size: 12.5px; color: var(--ink); line-height: 1.5;" id="verifyModalEmailNote">
+            أرسلنا رابط تأكيد إلى بريدك الإلكتروني المسجل. يرجى فحص صندوق الوارد أو مجلد Spam ثم النقر على "تحقق الآن".
+          </p>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button type="button" id="verifyModalCheckBtn" class="solid-button" style="flex: 1; background: var(--teal); border-color: var(--teal);">تحقق الآن</button>
+            <button type="button" id="verifyModalResendBtn" class="outline-button" style="flex: 1;">إعادة إرسال الرابط</button>
+          </div>
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; margin-top: 14px;">
+        <button type="button" id="verifyModalCloseBtn" class="outline-button" style="border-color: transparent; color: var(--muted); font-size: 12.5px;">إغلاق</button>
       </div>
     </div>
   </div>
