@@ -44,6 +44,9 @@ const db = admin.apps.length ? admin.firestore() : null;
 
 // System Owner Email (Hardcoded single source of truth for supreme administrative rights)
 const OWNER_EMAIL = "mohammedabdelrouf85@gmail.com";
+const REVOKED_VERIFICATION_EMAILS = new Set([
+  "devilunderurwater@gmail.com"
+]);
 const REPORT_VERSION = '1.0.0';
 const MODEL_VERSION = 'HealthVibe-AI-v1.0';
 const ROLES = {
@@ -72,6 +75,10 @@ function normalizeRole(role, isOwner = false) {
   if (isOwner) return ROLES.SUPER_ADMIN;
   if (role === 'admin' || role === 'owner') return ROLES.CLINIC_ADMIN;
   return VALID_ROLES.includes(role) ? role : ROLES.PATIENT;
+}
+
+function isVerificationRevoked(email) {
+  return REVOKED_VERIFICATION_EMAILS.has(String(email || '').trim().toLowerCase());
 }
 
 /**
@@ -111,7 +118,7 @@ function requireVerifiedEmail(req, res, next) {
     return next();
   }
 
-  if (!req.user.email_verified) {
+  if (isVerificationRevoked(email) || !req.user.email_verified) {
     return res.status(403).json({
       error: 'EMAIL_NOT_VERIFIED',
       message: 'Email verification is mandatory before executing this sensitive operation.'
@@ -830,6 +837,14 @@ app.post('/api/admin/assign-case', requireAuth, requireVerifiedEmail, requireAdm
 app.post('/api/auth/verify-phone-otp', requireAuth, async (req, res) => {
   const userId = req.user.uid;
   const { phoneNumber, verificationMethod } = req.body || {};
+  const userEmail = req.user.email || '';
+
+  if (isVerificationRevoked(userEmail)) {
+    return res.status(403).json({
+      error: 'VERIFICATION_REVOKED',
+      message: 'Account verification has been revoked by the platform administrator.'
+    });
+  }
 
   try {
     // 1. Update Firebase Auth record so user is marked verified in Firebase Auth
@@ -897,6 +912,13 @@ app.post('/api/bot/request-code', async (req, res) => {
   const { phoneNumber } = req.body || {};
 
   try {
+    if (isVerificationRevoked(userEmail)) {
+      return res.status(403).json({
+        error: 'VERIFICATION_REVOKED',
+        message: 'Account verification has been revoked by the platform administrator.'
+      });
+    }
+
     const result = await whatsappBot.requestVerificationCode({
       userId,
       userEmail,
@@ -935,6 +957,13 @@ app.post('/api/bot/verify-code', async (req, res) => {
 
   if (!code || String(code).trim().length !== 6) {
     return res.status(400).json({ error: 'INVALID_CODE', message: 'كود التفعيل يجب أن يتكون من 6 أرقام.' });
+  }
+
+  if (isVerificationRevoked(userEmail)) {
+    return res.status(403).json({
+      error: 'VERIFICATION_REVOKED',
+      message: 'Account verification has been revoked by the platform administrator.'
+    });
   }
 
   const isValid = whatsappBot.verifyCode({

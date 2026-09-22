@@ -368,12 +368,22 @@ const OWNER_EMAILS = [
   "admin@healthvibe.ai"
 ];
 
+const REVOKED_VERIFICATION_EMAILS = [
+  "devilunderurwater@gmail.com"
+];
+
 function isOwnerUser(userOrEmail) {
   if (!userOrEmail) return false;
   const email = (typeof userOrEmail === "string" ? userOrEmail : (userOrEmail.email || "")).trim().toLowerCase();
   if (OWNER_EMAILS.some(o => o.toLowerCase() === email)) return true;
   if (typeof userOrEmail === "object" && userOrEmail && userOrEmail.isOwner === true) return true;
   return false;
+}
+
+function isVerificationRevoked(userOrEmail) {
+  if (!userOrEmail) return false;
+  const email = (typeof userOrEmail === "string" ? userOrEmail : (userOrEmail.email || "")).trim().toLowerCase();
+  return REVOKED_VERIFICATION_EMAILS.includes(email);
 }
 
 const roleLabels = {
@@ -989,11 +999,18 @@ const navTranslations = {
 };
 
 let selectedRole = "patient";
+const DEFAULT_LANGUAGE = "en";
+const LANGUAGE_DEFAULT_VERSION = "2026-09-23-en-default";
 let currentLanguage = (function() {
   try {
-    return localStorage.getItem("hv_lang") || "en";
+    if (localStorage.getItem("hv_lang_default_version") !== LANGUAGE_DEFAULT_VERSION) {
+      localStorage.setItem("hv_lang_default_version", LANGUAGE_DEFAULT_VERSION);
+      localStorage.setItem("hv_lang", DEFAULT_LANGUAGE);
+      return DEFAULT_LANGUAGE;
+    }
+    return localStorage.getItem("hv_lang") || DEFAULT_LANGUAGE;
   } catch(e) {
-    return "en";
+    return DEFAULT_LANGUAGE;
   }
 })();
 
@@ -1283,6 +1300,7 @@ function saveToAccountsRegistry(userObj) {
   const idx = list.findIndex(u => (u.email && u.email.trim().toLowerCase() === emailNorm) || (u.id && u.id === (userObj.id || userObj.uid)));
   
   const isOwner = isOwnerUser(userObj.email);
+  const verificationRevoked = isVerificationRevoked(userObj.email);
   const role = userObj.role || (isOwner ? ROLES.SUPER_ADMIN : ROLES.PATIENT);
   const record = {
     id: userObj.id || userObj.uid || `user_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
@@ -1290,7 +1308,7 @@ function saveToAccountsRegistry(userObj) {
     displayName: userObj.name || userObj.displayName || userObj.email.split('@')[0],
     email: userObj.email,
     role: role,
-    emailVerified: Boolean(userObj.emailVerified || isOwner),
+    emailVerified: verificationRevoked ? false : Boolean(userObj.emailVerified || isOwner),
     isOwner: isOwner,
     clinic: userObj.clinic || "",
     createdAt: userObj.createdAt || Date.now(),
@@ -1316,13 +1334,14 @@ async function getAllKnownAccounts() {
     const cur = auth.currentUser;
     if (cur.email) {
       const isOwner = isOwnerUser(cur.email);
+      const verificationRevoked = isVerificationRevoked(cur.email);
       const curRec = {
         id: cur.uid,
         name: cur.displayName || cur.email.split('@')[0],
         displayName: cur.displayName || cur.email.split('@')[0],
         email: cur.email,
         role: isOwner ? ROLES.SUPER_ADMIN : (selectedRole || ROLES.PATIENT),
-        emailVerified: Boolean(cur.emailVerified || isOwner),
+        emailVerified: verificationRevoked ? false : Boolean(cur.emailVerified || isOwner),
         isOwner: isOwner,
         createdAt: cur.metadata?.creationTime ? new Date(cur.metadata.creationTime).getTime() : Date.now(),
         lastSeen: Date.now()
@@ -1352,13 +1371,14 @@ async function getAllKnownAccounts() {
         const email = (d.email || "").toLowerCase();
         if (email) {
           const isOwner = isOwnerUser(email) || d.isOwner === true;
+          const verificationRevoked = isVerificationRevoked(email);
           const rec = {
             id: doc.id,
             name: d.name || d.displayName || email.split('@')[0],
             displayName: d.name || d.displayName || email.split('@')[0],
             email: d.email,
             role: normalizeRole(d.role || ROLES.PATIENT, isOwner),
-            emailVerified: Boolean(d.emailVerified || isOwner),
+            emailVerified: verificationRevoked ? false : Boolean(d.emailVerified || isOwner),
             isOwner: isOwner,
             clinic: d.clinic || d.hospital || "",
             createdAt: toMillis(d.createdAt) || Date.now()
@@ -1432,7 +1452,7 @@ async function getAllKnownAccounts() {
           displayName: rec.displayName || rec.name || rec.email.split('@')[0],
           email: rec.email,
           role: rec.role || ROLES.PATIENT,
-          emailVerified: Boolean(rec.emailVerified),
+          emailVerified: isVerificationRevoked(rec.email) ? false : Boolean(rec.emailVerified),
           clinic: rec.clinic || "",
           updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         }, { merge: true }).catch(() => {});
@@ -3033,6 +3053,7 @@ let otpCooldownSeconds = 0;
 
 function isUserVerified(user) {
   if (!user) return false;
+  if (isVerificationRevoked(user)) return false;
   if (isOwnerUser(user.email)) return true;
   if (user.emailVerified) return true;
   if (window._isUserVerified) return true;
@@ -7701,13 +7722,25 @@ function initHVAuthListener() {
       transitionToApp(user);
 
       const isOwner = isOwnerUser(user.email);
+      const verificationRevoked = isVerificationRevoked(user.email);
       let displayName = user.displayName;
       try {
         const userDoc = await db.collection("users").doc(user.uid).get();
         if (userDoc.exists) {
           const udata = userDoc.data();
           window._cachedUserDoc = udata;
-          if (udata.phoneVerified || udata.emailVerified) {
+          if (verificationRevoked) {
+            window._isUserVerified = false;
+            window._verifiedPhone = "";
+            if (udata.emailVerified || udata.phoneVerified) {
+              db.collection("users").doc(user.uid).set({
+                emailVerified: false,
+                phoneVerified: false,
+                verifiedAt: null,
+                verifiedByAdmin: null
+              }, { merge: true }).catch(() => {});
+            }
+          } else if (udata.phoneVerified || udata.emailVerified) {
             window._isUserVerified = true;
             window._verifiedPhone = udata.phoneNumber || "";
           }
@@ -7732,7 +7765,7 @@ function initHVAuthListener() {
           await db.collection("users").doc(user.uid).set({
             name: displayName || user.email.split('@')[0],
             email: user.email,
-            emailVerified: user.emailVerified || false,
+            emailVerified: verificationRevoked ? false : (user.emailVerified || false),
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
           }, { merge: true });
         }
@@ -7793,7 +7826,7 @@ function checkUrlAuthAction() {
 }
 
 showScreen("patient");
-applyLanguage("en");
+applyLanguage(currentLanguage);
 checkUrlAuthAction();
 
 function updateAvatar(user) {
