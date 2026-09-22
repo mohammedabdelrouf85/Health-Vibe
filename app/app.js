@@ -1284,6 +1284,11 @@ async function applyAuthPersistence(remember = shouldRememberSession()) {
   } catch(e) {}
 }
 
+async function clearAuthSessionPersistence() {
+  if (!auth || typeof firebase === "undefined" || !firebase.auth?.Auth?.Persistence) return;
+  await auth.setPersistence(firebase.auth.Auth.Persistence.NONE);
+}
+
 function initRememberMePreference() {
   const checkbox = document.getElementById("rememberMe");
   if (!checkbox) return;
@@ -3055,17 +3060,30 @@ async function enterApp(source = "google") {
 window.enterApp = enterApp;
 
 async function leaveApp() {
+  window._isSigningOut = true;
   // ── إيقاف الـ real-time listener عند تسجيل الخروج ────────────
   if (window._patientCasesUnsub) {
     window._patientCasesUnsub();
     window._patientCasesUnsub = null;
   }
   window._currentCaseId = null;
+  window._isUserVerified = false;
+  window._verifiedPhone = "";
+  window._cachedUserDoc = null;
+  try {
+    sessionStorage.removeItem("health_vibe_phone_verified");
+  } catch(e) {}
 
   try {
     await auth.signOut();
+    await clearAuthSessionPersistence();
   } catch(e) {
     console.error("Sign out error:", e);
+    try {
+      await clearAuthSessionPersistence();
+    } catch(persistErr) {
+      console.warn("Could not clear auth persistence after sign out:", persistErr);
+    }
   }
   if (app) {
     app.hidden = true;
@@ -3081,6 +3099,9 @@ async function leaveApp() {
   document.body.classList.remove("sidebar-open");
   updateEmailVerificationUI(null);
   showToast(currentLanguage === "en" ? "Signed out" : "تم تسجيل الخروج");
+  window.setTimeout(() => {
+    window._isSigningOut = false;
+  }, 500);
 }
 
 let resendCooldown = false;
@@ -7780,6 +7801,10 @@ applyAuthPersistence(shouldRememberSession()).catch(err => {
 function initHVAuthListener() {
   auth.onAuthStateChanged(async (user) => {
     window.clearTimeout(loaderSafetyTimer);
+    if (window._isSigningOut) {
+      if (!user) window._isSigningOut = false;
+      return;
+    }
     if (user) {
       // 1. Instantly transition UI into the app so user never hangs
       transitionToApp(user);
