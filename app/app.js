@@ -3091,7 +3091,49 @@ async function enterApp(source = "google") {
 
 window.enterApp = enterApp;
 
-async function leaveApp() {
+function showSignedOutUI() {
+  if (app) {
+    app.hidden = true;
+    app.setAttribute("hidden", "true");
+    app.style.display = "none";
+  }
+  if (publicSite) {
+    publicSite.hidden = false;
+    publicSite.removeAttribute("hidden");
+    publicSite.style.display = "block";
+    publicSite.classList.remove("is-hidden");
+  }
+  document.body.classList.remove("sidebar-open");
+  updateEmailVerificationUI(null);
+}
+
+async function clearFirebaseAuthStorage() {
+  try {
+    Object.keys(localStorage).forEach((key) => {
+      if (key.startsWith("firebase:authUser:") || key.startsWith("firebase:persistence:")) {
+        localStorage.removeItem(key);
+      }
+    });
+  } catch(e) {}
+  try {
+    Object.keys(sessionStorage).forEach((key) => {
+      if (key.startsWith("firebase:authUser:") || key.startsWith("firebase:persistence:")) {
+        sessionStorage.removeItem(key);
+      }
+    });
+  } catch(e) {}
+  try {
+    if (window.indexedDB && indexedDB.deleteDatabase) {
+      indexedDB.deleteDatabase("firebaseLocalStorageDb");
+    }
+  } catch(e) {}
+}
+
+async function leaveApp(event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
   window._isSigningOut = true;
   // ── إيقاف الـ real-time listener عند تسجيل الخروج ────────────
   if (window._patientCasesUnsub) {
@@ -3106,29 +3148,22 @@ async function leaveApp() {
     sessionStorage.removeItem("health_vibe_phone_verified");
   } catch(e) {}
 
+  showSignedOutUI();
+
   try {
     await auth.signOut();
   } catch(e) {
     console.error("Sign out error:", e);
   }
-  if (app) {
-    app.hidden = true;
-    app.setAttribute("hidden", "true");
-    app.style.display = "none";
-  }
-  if (publicSite) {
-    publicSite.hidden = false;
-    publicSite.removeAttribute("hidden");
-    publicSite.style.display = "block";
-    publicSite.classList.remove("is-hidden");
-  }
-  document.body.classList.remove("sidebar-open");
-  updateEmailVerificationUI(null);
+  await clearFirebaseAuthStorage();
+  showSignedOutUI();
   showToast(currentLanguage === "en" ? "Signed out" : "تم تسجيل الخروج");
   window.setTimeout(() => {
     window._isSigningOut = false;
   }, 500);
 }
+
+window.leaveApp = leaveApp;
 
 let resendCooldown = false;
 let resendTimer = null;
