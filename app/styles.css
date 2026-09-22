@@ -1,3 +1,5 @@
+[hidden] { display: none !important; }
+
 :root {
   --teal: #006d6f;
   --teal-2: #03484a;

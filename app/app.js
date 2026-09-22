@@ -2531,10 +2531,11 @@ async function handleEmailAuth(e) {
         console.error("sendEmailVerification error:", verErr);
         showToast(getAuthErrorMessage(verErr));
       }
+      transitionToApp(user);
     } else {
-      await auth.signInWithEmailAndPassword(email, password);
+      const cred = await auth.signInWithEmailAndPassword(email, password);
       showToast(currentLanguage === "en" ? "Signed in successfully!" : "تم تسجيل الدخول بنجاح!");
-      hideAuth();
+      transitionToApp(cred.user || auth.currentUser);
     }
   } catch (error) {
     console.error("Firebase Auth Error:", error);
@@ -2644,6 +2645,43 @@ async function handleNewPasswordSubmit(e) {
   }
 }
 
+function transitionToApp(user) {
+  if (!user) return;
+  const isOwner = isOwnerUser(user.email);
+  const displayName = user.displayName || user.email.split('@')[0];
+  
+  if (userName) userName.textContent = displayName;
+  if (userEmail) userEmail.textContent = user.email;
+  if (accountLabel) {
+    accountLabel.textContent = currentLanguage === "en"
+      ? (englishRoleLabels[normalizeRole(selectedRole, isOwner)] || englishRoleLabels.patient)
+      : (roleLabels[normalizeRole(selectedRole, isOwner)] || roleLabels.patient);
+  }
+  
+  if (publicSite) {
+    publicSite.hidden = true;
+    publicSite.setAttribute("hidden", "true");
+    publicSite.style.display = "none";
+  }
+  hideAuth();
+  if (app) {
+    app.hidden = false;
+    app.removeAttribute("hidden");
+    app.style.display = "grid";
+  }
+  if (typeof showScreen === "function") {
+    showScreen("patient");
+  }
+  if (loader) {
+    loader.classList.add("is-done");
+  }
+  try { updateAvatar(user); } catch(e) {}
+  try { updateEmailVerificationUI(user); } catch(e) {}
+  try { updateNavVisibility(); } catch(e) {}
+}
+
+window.transitionToApp = transitionToApp;
+
 async function enterApp(source = "google") {
   if (source === "google") {
     clearAuthError();
@@ -2696,10 +2734,7 @@ async function enterApp(source = "google") {
       updateEmailVerificationUI(user);
       updateNavVisibility();
 
-      publicSite.hidden = true;
-      hideAuth();
-      app.hidden = false;
-      showScreen("patient");
+      transitionToApp(user);
       showToast(currentLanguage === "en" ? "Signed in with Google" : "تم تسجيل الدخول بحساب جوجل");
     } catch (error) {
       console.error("Google Auth Error:", error);
@@ -2723,9 +2758,17 @@ async function leaveApp() {
   } catch(e) {
     console.error("Sign out error:", e);
   }
-  app.hidden = true;
-  publicSite.hidden = false;
-  publicSite.classList.remove("is-hidden");
+  if (app) {
+    app.hidden = true;
+    app.setAttribute("hidden", "true");
+    app.style.display = "none";
+  }
+  if (publicSite) {
+    publicSite.hidden = false;
+    publicSite.removeAttribute("hidden");
+    publicSite.style.display = "block";
+    publicSite.classList.remove("is-hidden");
+  }
   document.body.classList.remove("sidebar-open");
   updateEmailVerificationUI(null);
   showToast(currentLanguage === "en" ? "Signed out" : "تم تسجيل الخروج");
@@ -7408,6 +7451,9 @@ function initHVAuthListener() {
   auth.onAuthStateChanged(async (user) => {
     window.clearTimeout(loaderSafetyTimer);
     if (user) {
+      // 1. Instantly transition UI into the app so user never hangs
+      transitionToApp(user);
+
       const isOwner = isOwnerUser(user.email);
       let displayName = user.displayName;
       try {
@@ -7449,30 +7495,26 @@ function initHVAuthListener() {
         selectedRole = isOwner ? ROLES.SUPER_ADMIN : ROLES.PATIENT;
       }
       
-      userName.textContent = displayName || user.email.split('@')[0];
-      userEmail.textContent = user.email;
-      accountLabel.textContent = currentLanguage === "en"
-        ? (englishRoleLabels[normalizeRole(selectedRole, isOwner)] || englishRoleLabels.patient)
-        : (roleLabels[normalizeRole(selectedRole, isOwner)] || roleLabels.patient);
-      
-      updateAvatar(user);
-      updateEmailVerificationUI(user);
-      updateNavVisibility();
-      
-      publicSite.hidden = true;
-      hideAuth();
-      app.hidden = false;
-      showScreen("patient");
-      
-      loader.classList.add("is-done");
+      // Update with enriched details
+      transitionToApp(user);
     } else {
       window._isUserVerified = false;
       window._verifiedPhone = "";
       window._cachedUserDoc = null;
       updateEmailVerificationUI(null);
+      if (app) {
+        app.hidden = true;
+        app.setAttribute("hidden", "true");
+        app.style.display = "none";
+      }
+      if (publicSite) {
+        publicSite.hidden = false;
+        publicSite.removeAttribute("hidden");
+        publicSite.style.display = "block";
+      }
       window.setTimeout(() => {
-        loader.classList.add("is-done");
-        publicSite.classList.remove("is-hidden");
+        if (loader) loader.classList.add("is-done");
+        if (publicSite) publicSite.classList.remove("is-hidden");
       }, 250);
     }
   });
