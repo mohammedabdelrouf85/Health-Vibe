@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Health Vibes</title>
-  <link rel="icon" type="image/jpeg" href="./logo.jpg">
-  <link rel="stylesheet" href="./styles.css">
+  <link rel="icon" type="image/png" href="./logo-light.png">
+  <link rel="stylesheet" href="./styles.css?v=2.4">
   <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-auth-compat.js"></script>
@@ -14,7 +14,15 @@
 <body class="dark">
   <div id="loader" class="loader" aria-live="polite">
     <div class="loader-card">
-      <img src="./logo.jpg" alt="Health Vibes" class="loader-logo" />
+      <div class="loader-media" aria-hidden="true">
+        <video class="loader-video" autoplay muted loop playsinline hidden poster="./logo-dark.png" data-video-candidates="./intro-animation.webm,./intro-animation.mp4"></video>
+        <img src="./logo-dark.png" alt="" class="loader-logo" data-logo />
+        <div class="loader-fallback-animation">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+      </div>
       <h1>Health Vibes</h1>
       <p>Preparing a clearer, safer healthcare experience</p>
       <div class="loading-bar"><span></span></div>
@@ -26,7 +34,7 @@
   <main id="publicSite" class="site-shell is-hidden">
     <header class="site-nav">
       <div class="brand">
-        <img src="./logo.jpg" alt="Health Vibes Logo" class="brand-logo" />
+        <img src="./logo-dark.png" alt="Health Vibes Logo" class="brand-logo" data-logo />
         <div>
           <strong>Health Vibes</strong>
           <span>AI-supported healthcare reviewed by doctors</span>
@@ -45,6 +53,7 @@
 
     <section class="site-hero">
       <div class="hero-copy">
+        <img src="./logo-dark.png" alt="Health Vibes" class="hero-brand-logo" data-logo />
         <span class="eyebrow">الوحدة الأولى لتقييم التنفس</span>
         <h1>رعاية صحية رقمية تربط المريض بالطبيب قبل ظهور أي نتيجة نهائية</h1>
         <p>Health Vibes يجمع التقييم، مراجعة الطبيب، التقارير، المواعيد، والسجل الطبي في تجربة عربية واحدة مبنية للأفراد والعيادات في مصر.</p>
@@ -121,7 +130,7 @@
     <div class="auth-card">
       <button id="authClose" class="close-button" aria-label="Close">×</button>
       <div class="brand auth-brand">
-        <img src="./logo.jpg" alt="Health Vibes" class="brand-logo" />
+        <img src="./logo-dark.png" alt="Health Vibes" class="brand-logo" data-logo />
         <div>
           <strong>Health Vibes</strong>
           <span>Secure account login</span>
@@ -235,7 +244,7 @@
   <main id="app" class="app-shell" hidden>
     <aside class="sidebar" aria-label="التنقل داخل التطبيق">
       <div class="brand">
-        <img src="./logo.jpg" alt="Health Vibes" class="brand-logo" />
+        <img src="./logo-dark.png" alt="Health Vibes" class="brand-logo" data-logo />
         <div>
           <strong>Health Vibes</strong>
           <span id="accountLabel">Patient account</span>
@@ -885,7 +894,7 @@
     <span class="theme-fab-icon">🌙</span>
   </button>
 
-  <script src="./config.js?v=2.3"></script>
-  <script src="./app.js?v=2.3"></script>
+  <script src="./config.js?v=2.4"></script>
+  <script src="./app.js?v=2.4"></script>
 </body>
 </html>

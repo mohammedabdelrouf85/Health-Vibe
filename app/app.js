@@ -40,6 +40,56 @@ let authMode = "signin";
 const accountLabel = document.getElementById("accountLabel");
 const userName = document.getElementById("userName");
 const userEmail = document.getElementById("userEmail");
+const LOGO_ASSETS = {
+  light: "./logo-light.png",
+  dark: "./logo-dark.png"
+};
+
+function getThemeLogoSrc() {
+  return document.body.classList.contains("dark") ? LOGO_ASSETS.dark : LOGO_ASSETS.light;
+}
+
+function updateThemeLogos() {
+  const logoSrc = getThemeLogoSrc();
+  document.querySelectorAll("[data-logo]").forEach((logo) => {
+    logo.setAttribute("src", logoSrc);
+  });
+}
+
+async function setupLoaderVideo() {
+  const video = document.querySelector(".loader-video");
+  if (!video) return;
+  if (video.dataset.loaderVideoInitialized === "true") return;
+  video.dataset.loaderVideoInitialized = "true";
+  const hideVideo = () => {
+    video.hidden = true;
+    video.setAttribute("aria-hidden", "true");
+  };
+  const candidates = (video.dataset.videoCandidates || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  hideVideo();
+  for (const candidate of candidates) {
+    try {
+      const response = await fetch(candidate, { method: "HEAD" });
+      if (response.ok) {
+        video.src = candidate;
+        video.hidden = false;
+        video.removeAttribute("aria-hidden");
+        video.load();
+        video.play().catch(() => {});
+        break;
+      }
+    } catch (error) {
+      // Keep the animated logo fallback when the optional intro video is absent.
+    }
+  }
+  video.addEventListener("error", hideVideo);
+  window.setTimeout(() => {
+    if (!video.src || video.readyState === 0) hideVideo();
+  }, 900);
+}
 
 const titles = {
   patient: "الرئيسية",
@@ -3299,14 +3349,7 @@ async function renderReportScreen(targetCaseId = null) {
         <!-- OFFICIAL REPORT HEADER -->
         <div class="report-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--line); padding-bottom: 18px; margin-bottom: 20px;">
           <div class="brand" style="display: flex; align-items: center; gap: 14px;">
-            <div class="logo-mark" aria-hidden="true" style="width: 48px; height: 48px; border-radius: 14px; background: var(--surface-2); display: grid; place-items: center; border: 1px solid var(--line);">
-              <svg viewBox="0 0 96 96" width="32" height="32" fill="none" stroke="var(--teal)" stroke-width="6">
-                <rect x="8" y="8" width="80" height="80" rx="25"/>
-                <path d="M24 53c8-22 17-22 25 0 7 18 16 18 24 0"/>
-                <path d="M32 34v28M64 34v28"/>
-                <circle cx="48" cy="53" r="5" fill="var(--teal)"/>
-              </svg>
-            </div>
+            <img src="${getThemeLogoSrc()}" alt="Health Vibes" class="report-logo" data-logo />
             <div>
               <strong style="font-size: 20px; display: block; color: var(--ink);">${isEn ? "Health Vibes Medical Center" : "مركز هيلث فايبز الطبي التخصصي"}</strong>
               <span style="font-size: 12.5px; color: var(--teal); font-weight: 700;">${isEn ? "Certified Clinical Assessment Report" : "التقرير الطبي السريري المعتمد"}</span>
@@ -5153,6 +5196,7 @@ function toggleTheme() {
   if (siteThemeToggle) siteThemeToggle.textContent = localized(label);
   const fabIcon = themeToggle ? themeToggle.querySelector(".theme-fab-icon") : null;
   if (fabIcon) fabIcon.textContent = isDark ? "☀️" : "🌙";
+  updateThemeLogos();
 }
 
 window.addEventListener("load", () => {
@@ -5161,6 +5205,13 @@ window.addEventListener("load", () => {
   if (siteThemeToggle) siteThemeToggle.textContent = localized(isDark ? "الوضع الداكن" : "الوضع الفاتح");
   const fabIcon = themeToggle ? themeToggle.querySelector(".theme-fab-icon") : null;
   if (fabIcon) fabIcon.textContent = isDark ? "☀️" : "🌙";
+  updateThemeLogos();
+  setupLoaderVideo();
+});
+
+document.addEventListener("DOMContentLoaded", () => {
+  updateThemeLogos();
+  setupLoaderVideo();
 });
 
 document.addEventListener("click", (event) => {
