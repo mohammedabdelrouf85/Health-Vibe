@@ -331,8 +331,8 @@
         </div>
         <div class="banner-actions">
           <button id="openPhoneVerifyModalBtn" type="button" onclick="openVerifyRequiredModal('تفعيل الحساب', 'account verification', 'otp')" class="banner-btn" style="background:#25D366; color:#fff; display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
-            <span>📱</span>
-            <span id="bannerPhoneVerifyText">تفعيل بالواتساب أو الهاتف</span>
+            <span>🤖</span>
+            <span id="bannerPhoneVerifyText">تفعيل عبر بوت الواتساب</span>
           </button>
           <button id="resendVerificationBtn" type="button" class="banner-btn primary">
             <span id="resendVerificationText">Resend Verification</span>
@@ -913,8 +913,8 @@
       <!-- Verification Method Tabs -->
       <div class="verify-tabs" style="display: flex; gap: 8px; margin-bottom: 16px; border-bottom: 1px solid var(--line); padding-bottom: 8px;">
         <button type="button" id="tabOtpMethod" class="verify-tab active" onclick="switchVerifyModalTab('otp')" style="flex: 1; padding: 9px 12px; border-radius: 10px; border: 1.5px solid var(--teal); background: rgba(14, 165, 233, 0.12); color: var(--teal-2); font-weight: 700; font-size: 12.5px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
-          <span>📱</span>
-          <span id="tabOtpMethodLabel">كود الواتساب / الهاتف</span>
+          <span>🤖</span>
+          <span id="tabOtpMethodLabel">بوت الواتساب الآلي</span>
         </button>
         <button type="button" id="tabEmailMethod" class="verify-tab" onclick="switchVerifyModalTab('email')" style="flex: 1; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); font-weight: 700; font-size: 12.5px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
           <span>✉️</span>
@@ -922,64 +922,38 @@
         </button>
       </div>
 
-      <!-- Tab 1: WhatsApp / SMS OTP Section -->
+      <!-- Tab 1: Automated WhatsApp Bot Section -->
       <div id="otpVerifySection">
-        <div style="margin-bottom: 12px;">
-          <label style="display: block; font-size: 12.5px; font-weight: 700; margin-bottom: 6px; color: var(--ink);" id="phoneInputLabel">
-            رقم الهاتف أو الواتساب:
-          </label>
-          <div style="display: flex; gap: 8px;">
-            <input type="tel" id="verifyPhoneInput" dir="ltr" placeholder="010xxxxxxxx or +2010..." style="flex: 1; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-size: 14px; text-align: left; font-family: monospace;" />
-          </div>
-          <span style="font-size: 11px; color: var(--muted); display: block; margin-top: 4px;" id="phoneInputHint">أدخل رقمك (مثال: 01012345678 أو +201012345678)</span>
-        </div>
+        <div class="bot-trigger-card" style="padding: 16px; border-radius: 14px; background: rgba(37, 211, 102, 0.08); border: 1.5px solid rgba(37, 211, 102, 0.35); margin-bottom: 16px; text-align: center;">
+          <div style="font-size: 32px; margin-bottom: 6px;">🤖💬</div>
+          <h4 style="margin: 0 0 6px; font-size: 15px; color: var(--ink);">بوت الواتساب الآلي (Health Vibe Bot)</h4>
+          <p style="margin: 0 0 14px; font-size: 12.5px; color: var(--muted); line-height: 1.5;">
+            اضغط على الزر أدناه وسيقوم بوت الواتساب الآلي بإرسال كود التفعيل السري المكون من 6 أرقام إليك تلقائياً دون الحاجة لكتابة رقم الهاتف.
+          </p>
+          <button type="button" id="requestBotCodeBtn" onclick="requestBotOtpCode()" class="solid-button" style="width: 100%; background: #25D366; border-color: #25D366; color: #fff; font-weight: 700; padding: 12px 14px; font-size: 14px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer;">
+            <span>🤖</span>
+            <span id="requestBotBtnText">إرسال كود التفعيل تلقائياً عبر بوت الواتساب</span>
+          </button>
 
-        <div style="display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap;">
-          <button type="button" id="sendWhatsappOtpBtn" onclick="sendPhoneOrWhatsAppOtp('whatsapp')" class="solid-button" style="flex: 1; min-width: 140px; background: #25D366; border-color: #25D366; color: #fff; font-size: 12.5px; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 12px; font-weight: 700;">
-            <span>🟢</span>
-            <span id="sendWhatsappOtpText">إرسال كود عبر واتساب</span>
-          </button>
-          <button type="button" id="sendSmsOtpBtn" onclick="sendPhoneOrWhatsAppOtp('sms')" class="soft-button" style="flex: 1; min-width: 130px; font-size: 12.5px; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 12px; font-weight: 700;">
-            <span>💬</span>
-            <span id="sendSmsOtpText">إرسال كود عبر الهاتف SMS</span>
-          </button>
-        </div>
-
-        <!-- Generated Code Banner (Displayed as soon as code is sent/generated) -->
-        <div id="otpGeneratedDisplay" style="display: none; margin-bottom: 14px; padding: 12px 14px; border-radius: 12px; background: rgba(37, 211, 102, 0.12); border: 1.5px solid #25D366; text-align: center;">
-          <div style="font-size: 12px; color: var(--muted); margin-bottom: 4px;">
-            <span>كود التفعيل الصادر لحسابك:</span>
+          <!-- Status notice when dispatched -->
+          <div id="botStatusNotice" style="display: none; margin-top: 12px; padding: 10px 14px; border-radius: 10px; background: rgba(37, 211, 102, 0.15); border: 1px solid #25D366; font-size: 12.5px; color: #128C7E; text-align: center; font-weight: 600;">
+            <span>✅ تم إرسال كود التفعيل السري عبر بوت الواتساب! يرجى إدخال الكود أدناه.</span>
           </div>
-          <div style="display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 8px;">
-            <strong id="otpDisplayCode" style="font-size: 28px; letter-spacing: 6px; font-family: monospace; color: #128C7E; font-weight: 900;">123456</strong>
-            <button type="button" id="copyOtpBtn" onclick="copyGeneratedOtp()" class="outline-button" style="padding: 4px 8px; font-size: 11.5px; border-radius: 6px; border-color: #25D366; color: #128C7E;">نسخ 📋</button>
-          </div>
-          <button type="button" id="autoFillOtpBtn" onclick="autoFillAndVerifyOtp()" class="solid-button" style="width: 100%; padding: 8px; font-size: 12.5px; background: #25D366; border-color: #25D366; color: #fff; font-weight: 700;">
-            ⚡ استخدام هذا الكود وتفعيل الحساب فوراً
-          </button>
         </div>
 
         <!-- OTP Code Input Box -->
-        <div id="otpInputContainer" style="margin-top: 10px; padding: 14px; border-radius: 12px; background: var(--surface-2); border: 1px dashed var(--teal);">
-          <label style="display: block; font-size: 12.5px; font-weight: 700; margin-bottom: 6px; color: var(--ink);" id="otpDigitsLabel">
-            أدخل كود التحقق المكون من 6 أرقام:
+        <div id="otpInputContainer" style="margin-top: 10px; padding: 16px; border-radius: 14px; background: var(--surface-2); border: 1px dashed var(--teal);">
+          <label style="display: block; font-size: 12.5px; font-weight: 700; margin-bottom: 8px; color: var(--ink);" id="otpDigitsLabel">
+            أدخل كود التحقق المكون من 6 أرقام المستلم عبر البوت:
           </label>
-          <input type="text" id="verifyOtpCodeInput" maxlength="6" dir="ltr" placeholder="• • • • • •" style="width: 100%; letter-spacing: 8px; font-size: 22px; font-weight: 900; text-align: center; padding: 10px; border-radius: 10px; border: 2px solid var(--teal); background: var(--surface); color: var(--teal-2); font-family: monospace; box-sizing: border-box;" />
+          <input type="text" id="verifyOtpCodeInput" maxlength="6" dir="ltr" placeholder="• • • • • •" autocomplete="one-time-code" style="width: 100%; letter-spacing: 8px; font-size: 24px; font-weight: 900; text-align: center; padding: 12px; border-radius: 10px; border: 2px solid var(--teal); background: var(--surface); color: var(--teal-2); font-family: monospace; box-sizing: border-box;" />
           
-          <div id="otpCountdownBox" style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 11.5px; color: var(--muted);">
+          <div id="otpCountdownBox" style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 11.5px; color: var(--muted);">
             <span id="otpCountdownText">الكود صالح لمدة 10 دقائق</span>
             <span id="otpCooldownTime" style="font-weight: 700; color: var(--amber);"></span>
           </div>
 
-          <!-- Direct WhatsApp Open helper link -->
-          <div id="whatsappDirectLinkBox" style="display: none; margin-top: 10px; text-align: center; padding: 10px; background: rgba(37, 211, 102, 0.1); border-radius: 8px;">
-            <a id="whatsappDirectLink" href="#" target="_blank" rel="noopener noreferrer" style="font-size: 12.5px; color: #128C7E; text-decoration: none; font-weight: 700; display: inline-flex; align-items: center; gap: 6px;">
-              <span>📲</span>
-              <span>فتح تطبيق أو موقع واتساب لاستلام الكود الآن</span>
-            </a>
-          </div>
-
-          <button type="button" id="confirmOtpBtn" onclick="verifyPhoneOtp()" class="solid-button large" style="width: 100%; margin-top: 12px; background: var(--teal); border-color: var(--teal); font-weight: 900; padding: 11px;">
+          <button type="button" id="confirmOtpBtn" onclick="verifyPhoneOtp()" class="solid-button large" style="width: 100%; margin-top: 14px; background: var(--teal); border-color: var(--teal); font-weight: 900; padding: 12px;">
             تأكيد الكود وتفعيل الحساب الآن ✓
           </button>
         </div>
@@ -1177,8 +1151,8 @@
     <span class="theme-fab-icon">🌙</span>
   </button>
 
-  <script src="./config.js?v=2.7"></script>
-  <script src="./app.js?v=2.7"></script>
+  <script src="./config.js?v=2.8"></script>
+  <script src="./app.js?v=2.8"></script>
   <!-- Legal & Compliance Modal (Privacy Policy + Terms + Medical Disclaimer) -->
   <div id="legalModal" class="confirm-modal" aria-hidden="true">
     <div class="confirm-card legal-modal-card">

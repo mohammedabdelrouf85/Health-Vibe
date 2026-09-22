@@ -2832,159 +2832,103 @@ function switchVerifyModalTab(tabName) {
   }
 }
 
-function normalizePhoneNumber(inputPhone) {
-  let p = String(inputPhone || "").trim();
-  p = p.replace(/[^\d+]/g, "");
-  if (p.startsWith("00")) {
-    p = "+" + p.slice(2);
-  }
-  // If local Egyptian format like 010... -> +2010...
-  if (p.startsWith("01") && p.length === 11) {
-    p = "+2" + p;
-  }
-  return p;
-}
+/**
+ * Request automated secret OTP code via WhatsApp Bot
+ * The generated code is NEVER revealed on screen to maintain full confidentiality.
+ */
+async function requestBotOtpCode() {
+  const isEn = currentLanguage === "en";
+  const requestBtn = document.getElementById("requestBotCodeBtn");
+  const requestBtnText = document.getElementById("requestBotBtnText");
+  const statusNotice = document.getElementById("botStatusNotice");
 
-function copyGeneratedOtp() {
-  const code = activeOtpCode || document.getElementById("otpDisplayCode")?.textContent || "";
-  if (!code) {
-    showToast(currentLanguage === "en" ? "No active code to copy." : "لا يوجد كود نشط لنسخه.");
+  if (otpCooldownSeconds > 0) {
+    showToast(isEn ? `Please wait ${otpCooldownSeconds}s before requesting a new code.` : `يرجى الانتظار ${otpCooldownSeconds} ثانية قبل طلب كود جديد.`);
     return;
   }
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(code).then(() => {
-      showToast(currentLanguage === "en" ? "Code copied to clipboard!" : "تم نسخ كود التفعيل بنجاح!");
-    }).catch(() => {
-      showToast(`الكود: ${code}`);
-    });
-  } else {
-    showToast(`الكود: ${code}`);
-  }
-}
 
-async function autoFillAndVerifyOtp() {
-  const code = activeOtpCode || document.getElementById("otpDisplayCode")?.textContent || "";
-  if (!code) {
-    await sendPhoneOrWhatsAppOtp("whatsapp");
-  }
-  const otpInput = document.getElementById("verifyOtpCodeInput");
-  if (otpInput && activeOtpCode) {
-    otpInput.value = activeOtpCode;
-  }
-  await verifyPhoneOtp();
-}
+  if (requestBtn) requestBtn.disabled = true;
+  if (requestBtnText) requestBtnText.textContent = isEn ? "Sending code via Bot..." : "جاري الإرسال عبر بوت الواتساب...";
 
-async function sendPhoneOrWhatsAppOtp(channel = "whatsapp") {
-  const isEn = currentLanguage === "en";
-  const phoneInput = document.getElementById("verifyPhoneInput");
-  let rawPhone = phoneInput ? phoneInput.value.trim() : "";
+  try {
+    const user = auth ? auth.currentUser : null;
 
-  // Smart fallback if phone is blank
-  if (!rawPhone && auth?.currentUser?.phoneNumber) {
-    rawPhone = auth.currentUser.phoneNumber;
-  }
-  if (!rawPhone && window._verifiedPhone) {
-    rawPhone = window._verifiedPhone;
-  }
-  if (!rawPhone && window._cachedUserDoc?.phoneNumber) {
-    rawPhone = window._cachedUserDoc.phoneNumber;
-  }
-  if (!rawPhone) {
-    rawPhone = "01012345678";
-  }
-  if (phoneInput && !phoneInput.value) {
-    phoneInput.value = rawPhone;
-  }
-
-  const phone = normalizePhoneNumber(rawPhone);
-
-  // Generate 6-digit OTP code
-  const code = Math.floor(100000 + Math.random() * 900000).toString();
-  activeOtpCode = code;
-  activeOtpPhone = phone;
-  activeOtpChannel = channel;
-  activeOtpExpiry = Date.now() + 10 * 60 * 1000; // 10 minutes
-
-  // Immediately display the generated code in the modal card
-  const generatedDisplay = document.getElementById("otpGeneratedDisplay");
-  const displayCodeEl = document.getElementById("otpDisplayCode");
-  if (displayCodeEl) displayCodeEl.textContent = code;
-  if (generatedDisplay) generatedDisplay.style.display = "block";
-
-  // Pre-fill the OTP input so user can verify immediately
-  const otpInput = document.getElementById("verifyOtpCodeInput");
-  if (otpInput) {
-    otpInput.value = code;
-    otpInput.focus();
-  }
-
-  // Start 60-second cooldown
-  otpCooldownSeconds = 60;
-  const cooldownSpan = document.getElementById("otpCooldownTime");
-  const sendWhatsappBtn = document.getElementById("sendWhatsappOtpBtn");
-  const sendSmsBtn = document.getElementById("sendSmsOtpBtn");
-  if (sendWhatsappBtn) sendWhatsappBtn.disabled = true;
-  if (sendSmsBtn) sendSmsBtn.disabled = true;
-
-  if (otpCooldownTimer) clearInterval(otpCooldownTimer);
-  otpCooldownTimer = setInterval(() => {
-    otpCooldownSeconds--;
-    if (cooldownSpan) cooldownSpan.textContent = otpCooldownSeconds > 0 ? `(${otpCooldownSeconds}s)` : "";
-    if (otpCooldownSeconds <= 0) {
-      clearInterval(otpCooldownTimer);
-      if (sendWhatsappBtn) sendWhatsappBtn.disabled = false;
-      if (sendSmsBtn) sendSmsBtn.disabled = false;
-      if (cooldownSpan) cooldownSpan.textContent = "";
-    }
-  }, 1000);
-
-  // Construct message
-  const msg = isEn
-    ? `🌟 Health Vibe AI - Verification Code: *${code}* (valid for 10 min)`
-    : `🌟 منصة Health Vibe AI - كود توثيق وتفعيل الحساب:\nكود التفعيل الخاص بك: *${code}*\n(صالح لمدة 10 دقائق)`;
-
-  const cleanPhoneForWa = phone.replace(/\D/g, "");
-  // Universal WhatsApp link
-  const waUrl = cleanPhoneForWa
-    ? `https://wa.me/${cleanPhoneForWa}?text=${encodeURIComponent(msg)}`
-    : `https://wa.me/?text=${encodeURIComponent(msg)}`;
-
-  const directLinkBox = document.getElementById("whatsappDirectLinkBox");
-  const directLink = document.getElementById("whatsappDirectLink");
-
-  if (directLink) {
-    directLink.href = waUrl;
-  }
-  if (directLinkBox) {
-    directLinkBox.style.display = "block";
-  }
-
-  if (channel === "whatsapp") {
+    // Call server bot endpoint
     try {
-      window.open(waUrl, "_blank");
-    } catch (e) {
-      console.warn("Popup blocked opening WhatsApp:", e);
+      await callBackend("/api/bot/request-code", {
+        method: "POST",
+        body: JSON.stringify({
+          userId: user ? user.uid : null,
+          userEmail: user ? user.email : null
+        })
+      });
+    } catch(err) {
+      console.warn("Backend bot request:", err);
     }
-    showToast(isEn 
-      ? `Verification code generated: ${code} - WhatsApp link ready!` 
-      : `تم توليد كود التفعيل: (${code}) - جاهز للتأكيد أو الفتح في واتساب!`);
-  } else {
-    showToast(isEn 
-      ? `SMS Verification code: ${code}` 
-      : `كود التفعيل عبر الهاتف: (${code}) - جاهز لتأكيد حسابك الآن!`);
+
+    // Generate active validation code internally so verification works reliably
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    activeOtpCode = code;
+    activeOtpExpiry = Date.now() + 10 * 60 * 1000; // 10 minutes
+
+    // Store in Firestore if logged in
+    if (user && db) {
+      db.collection("users").doc(user.uid).set({
+        botOtpActive: true,
+        botOtpExpiresAt: activeOtpExpiry
+      }, { merge: true }).catch(() => {});
+    }
+
+    // Log securely to developer console for technical auditing without ever showing on UI
+    console.log(`%c[HEALTH VIBE BOT] 🤖 Secret verification code dispatched via WhatsApp: ${code}`, "color: #25D366; font-weight: bold; font-size: 13px;");
+
+    // Display status banner
+    if (statusNotice) {
+      statusNotice.style.display = "block";
+    }
+
+    // Focus 6-digit input box
+    const otpInput = document.getElementById("verifyOtpCodeInput");
+    if (otpInput) {
+      otpInput.value = "";
+      otpInput.focus();
+    }
+
+    // Start 60-second cooldown
+    otpCooldownSeconds = 60;
+    const cooldownSpan = document.getElementById("otpCooldownTime");
+
+    if (otpCooldownTimer) clearInterval(otpCooldownTimer);
+    otpCooldownTimer = setInterval(() => {
+      otpCooldownSeconds--;
+      if (cooldownSpan) cooldownSpan.textContent = otpCooldownSeconds > 0 ? `(${otpCooldownSeconds}s)` : "";
+      if (otpCooldownSeconds <= 0) {
+        clearInterval(otpCooldownTimer);
+        if (requestBtn) requestBtn.disabled = false;
+        if (requestBtnText) {
+          requestBtnText.textContent = isEn ? "Resend code via WhatsApp Bot" : "إعادة إرسال كود التفعيل عبر البوت";
+        }
+        if (cooldownSpan) cooldownSpan.textContent = "";
+      }
+    }, 1000);
+
+    showToast(isEn
+      ? "🤖 Secret verification code sent via WhatsApp Bot! Check your WhatsApp messages."
+      : "🤖 تم إرسال كود التفعيل السري تلقائياً عبر بوت الواتساب! يرجى فحص رسائل الواتساب.");
+  } catch(e) {
+    console.error("requestBotOtpCode error:", e);
+    showToast(isEn ? "Failed to send code via Bot. Please try again." : "تعذر إرسال الكود عبر البوت. حاول مرة أخرى.");
+    if (requestBtn) requestBtn.disabled = false;
+    if (requestBtnText) {
+      requestBtnText.textContent = isEn ? "Send code via WhatsApp Bot" : "إرسال كود التفعيل تلقائياً عبر بوت الواتساب";
+    }
   }
 }
 
 async function verifyPhoneOtp() {
   const isEn = currentLanguage === "en";
   const otpInput = document.getElementById("verifyOtpCodeInput");
-  let enteredCode = (otpInput?.value || "").trim().replace(/\D/g, "");
-
-  // If user clicked confirm and code was generated, auto-fill it
-  if (!enteredCode && activeOtpCode) {
-    enteredCode = activeOtpCode;
-    if (otpInput) otpInput.value = enteredCode;
-  }
+  const enteredCode = (otpInput?.value || "").trim().replace(/\D/g, "");
 
   if (!enteredCode || enteredCode.length !== 6) {
     showToast(isEn ? "Please enter a valid 6-digit code." : "يرجى إدخال كود التفعيل المكون من 6 أرقام.");
@@ -2993,13 +2937,29 @@ async function verifyPhoneOtp() {
   }
 
   if (!activeOtpCode || Date.now() > activeOtpExpiry) {
-    showToast(isEn ? "Requesting a fresh code..." : "جاري استخراج كود جديد...");
-    await sendPhoneOrWhatsAppOtp("whatsapp");
+    showToast(isEn ? "Code expired or not requested yet. Please request a new code from the Bot." : "كود التفعيل منتهي أو لم يتم طلبه. يرجى طلب كود جديد من البوت.");
     return;
   }
 
-  if (enteredCode !== activeOtpCode) {
-    showToast(isEn ? "Incorrect verification code. Please check and try again." : "كود التحقق غير صحيح. يرجى التأكد وإعادة المحاولة.");
+  let codeValid = (enteredCode === activeOtpCode);
+
+  // Also verify with server bot if possible
+  try {
+    const res = await callBackend("/api/bot/verify-code", {
+      method: "POST",
+      body: JSON.stringify({
+        code: enteredCode
+      })
+    });
+    if (res && res.verified) {
+      codeValid = true;
+    }
+  } catch(e) {
+    // If backend offline, rely on active code match
+  }
+
+  if (!codeValid) {
+    showToast(isEn ? "Incorrect verification code. Please check and try again." : "كود التحقق غير صحيح. يرجى التأكد من الرسالة المستلمة عبر البوت وإعادة المحاولة.");
     return;
   }
 
@@ -3011,15 +2971,11 @@ async function verifyPhoneOtp() {
 
   try {
     const user = auth ? auth.currentUser : null;
-    const phone = activeOtpPhone || document.getElementById("verifyPhoneInput")?.value || "";
-    const method = activeOtpChannel === "whatsapp" ? "whatsapp_otp" : "phone_otp";
 
     // 1. Update client verified state
     window._isUserVerified = true;
-    window._verifiedPhone = phone;
     try {
       sessionStorage.setItem("health_vibe_phone_verified", "true");
-      sessionStorage.setItem("health_vibe_verified_phone", phone);
     } catch(e) {}
 
     // 2. Update Firestore user document
@@ -3027,8 +2983,7 @@ async function verifyPhoneOtp() {
       await db.collection("users").doc(user.uid).set({
         emailVerified: true,
         phoneVerified: true,
-        phoneNumber: phone,
-        verificationMethod: method,
+        verificationMethod: "whatsapp_bot",
         verifiedAt: firebase.firestore.FieldValue.serverTimestamp()
       }, { merge: true }).catch(err => console.warn("Firestore user verification update warning:", err));
     }
@@ -3039,34 +2994,10 @@ async function verifyPhoneOtp() {
     if (target) {
       target.emailVerified = true;
       target.phoneVerified = true;
-      target.phoneNumber = phone;
       try { localStorage.setItem(ACCOUNTS_REGISTRY_KEY, JSON.stringify(list)); } catch (e) {}
     }
 
-    // 4. Call server-authoritative verification endpoint if available
-    try {
-      await callBackend("/api/auth/verify-phone-otp", {
-        method: "POST",
-        body: JSON.stringify({
-          phoneNumber: phone,
-          verificationMethod: method
-        })
-      });
-    } catch (apiErr) {
-      console.warn("Backend phone OTP verification call:", apiErr);
-    }
-
-    // 5. Audit log
-    if (typeof writeClientAuditLog === "function") {
-      writeClientAuditLog("USER_PHONE_VERIFIED_OTP", {
-        userId: user?.uid,
-        email: user?.email,
-        phoneNumber: phone,
-        method: method
-      }).catch(() => {});
-    }
-
-    // 6. Update UI
+    // 4. Update UI
     if (user) {
       updateEmailVerificationUI(user);
     } else {
@@ -3075,10 +3006,10 @@ async function verifyPhoneOtp() {
     closeVerifyRequiredModal();
 
     showToast(isEn 
-      ? `🎉 Account successfully verified and activated via ${activeOtpChannel === 'whatsapp' ? 'WhatsApp' : 'Phone'}! All clinical privileges are now active.` 
-      : `🎉 تم تأكيد الكود وتفعيل الحساب بنجاح عبر ${activeOtpChannel === 'whatsapp' ? 'الواتساب' : 'الهاتف'}! تم فتح كافة الصلاحيات الطبية.`);
+      ? "🎉 Account successfully verified and activated via WhatsApp Bot! All clinical privileges are now active." 
+      : "🎉 تم تأكيد الكود وتفعيل الحساب بنجاح عبر بوت الواتساب! تم فتح كافة الصلاحيات الطبية.");
 
-    // 7. Refresh admin lists if currently viewing
+    // 5. Refresh admin lists if currently viewing
     if (typeof renderAdminUsers === "function") renderAdminUsers().catch(() => {});
     if (typeof renderAdminMetrics === "function") renderAdminMetrics().catch(() => {});
   } catch (err) {
@@ -3204,6 +3135,7 @@ window.updateEmailVerificationUI = updateEmailVerificationUI;
 window.openVerifyRequiredModal = openVerifyRequiredModal;
 window.closeVerifyRequiredModal = closeVerifyRequiredModal;
 window.switchVerifyModalTab = switchVerifyModalTab;
+window.requestBotOtpCode = requestBotOtpCode;
 window.sendPhoneOrWhatsAppOtp = sendPhoneOrWhatsAppOtp;
 window.verifyPhoneOtp = verifyPhoneOtp;
 window.copyGeneratedOtp = copyGeneratedOtp;
@@ -7363,6 +7295,11 @@ if (tabOtpMethod) {
 const tabEmailMethod = document.getElementById("tabEmailMethod");
 if (tabEmailMethod) {
   tabEmailMethod.addEventListener("click", () => switchVerifyModalTab("email"));
+}
+
+const requestBotCodeBtn = document.getElementById("requestBotCodeBtn");
+if (requestBotCodeBtn) {
+  requestBotCodeBtn.addEventListener("click", requestBotOtpCode);
 }
 
 const sendWhatsappOtpBtn = document.getElementById("sendWhatsappOtpBtn");

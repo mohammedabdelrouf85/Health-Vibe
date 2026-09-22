@@ -10,6 +10,7 @@
 const express = require('express');
 const cors = require('cors');
 const admin = require('firebase-admin');
+const whatsappBot = require('./whatsapp-bot');
 require('dotenv').config();
 
 const app = express();
@@ -867,6 +868,163 @@ app.post('/api/auth/verify-phone-otp', requireAuth, async (req, res) => {
     console.error("[SERVER PHONE OTP VERIFY ERROR]:", err);
     res.status(500).json({ error: 'VERIFICATION_FAILED', message: err.message });
   }
+});
+
+/**
+ * -------------------------------------------------------------
+ * AUTOMATED WHATSAPP BOT ENDPOINTS
+ * -------------------------------------------------------------
+ */
+
+/**
+ * POST /api/bot/request-code
+ * Triggers automated WhatsApp bot to generate and send a secret OTP code.
+ * Note: The generated code is NEVER returned to the client to guarantee zero leakage.
+ */
+app.post('/api/bot/request-code', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  let userId = null;
+  let userEmail = null;
+
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
+      const decoded = await admin.auth().verifyIdToken(authHeader.split('Bearer ')[1]);
+      userId = decoded.uid;
+      userEmail = decoded.email;
+    } catch(e) {}
+  }
+
+  const { phoneNumber } = req.body || {};
+
+  try {
+    const result = await whatsappBot.requestVerificationCode({
+      userId,
+      userEmail,
+      phoneNumber
+    });
+
+    res.json({
+      success: true,
+      message: result.message || "تم إرسال كود التفعيل السري تلقائياً عبر بوت الواتساب."
+    });
+  } catch(err) {
+    console.error("[WHATSAPP BOT REQUEST ERROR]:", err);
+    res.status(500).json({ error: 'BOT_DISPATCH_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/bot/verify-code
+ * Verifies code submitted by user against WhatsApp bot active registry.
+ * Upon match, elevates user to verified across Firebase Auth & Firestore.
+ */
+app.post('/api/bot/verify-code', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  let userId = null;
+  let userEmail = null;
+
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
+      const decoded = await admin.auth().verifyIdToken(authHeader.split('Bearer ')[1]);
+      userId = decoded.uid;
+      userEmail = decoded.email;
+    } catch(e) {}
+  }
+
+  const { code, phoneNumber } = req.body || {};
+
+  if (!code || String(code).trim().length !== 6) {
+    return res.status(400).json({ error: 'INVALID_CODE', message: 'كود التفعيل يجب أن يتكون من 6 أرقام.' });
+  }
+
+  const isValid = whatsappBot.verifyCode({
+    userId,
+    userEmail,
+    code: String(code).trim()
+  });
+
+  if (!isValid) {
+    return res.status(400).json({
+      error: 'CODE_MISMATCH',
+      message: 'كود التحقق غير صحيح أو انتهت صلاحيته. يرجى طلب كود جديد من البوت.'
+    });
+  }
+
+  try {
+    // 1. Mark verified in Firebase Auth
+    if (userId) {
+      await admin.auth().updateUser(userId, {
+        emailVerified: true
+      }).catch(err => console.warn("[BOT VERIFY AUTH WARNING]:", err.message));
+    }
+
+    // 2. Mark verified in Firestore user document
+    if (db && userId) {
+      await db.collection('users').doc(userId).set({
+        emailVerified: true,
+        phoneVerified: true,
+        phoneNumber: phoneNumber || null,
+        verificationMethod: 'whatsapp_bot',
+        verifiedAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+
+      // 3. Append audit log
+      await db.collection('audit_events').add({
+        type: 'USER_VERIFIED_VIA_WHATSAPP_BOT',
+        userId: userId,
+        userEmail: userEmail || null,
+        timestamp: admin.firestore.FieldValue.serverTimestamp()
+      }).catch(() => {});
+    }
+
+    res.json({
+      success: true,
+      verified: true,
+      message: 'تم تأكيد الكود وتفعيل الحساب بنجاح عبر بوت الواتساب!'
+    });
+  } catch(err) {
+    console.error("[BOT VERIFY ERROR]:", err);
+    res.status(500).json({ error: 'VERIFICATION_UPDATE_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/bot/status
+ * Returns online status and readiness of the automated bot
+ */
+app.get('/api/bot/status', (req, res) => {
+  res.json({
+    status: 'online',
+    botName: whatsappBot.botName,
+    ready: true,
+    timestamp: new Date().toISOString()
+  });
+});
+
+/**
+ * GET /api/bot/webhook
+ * Meta WhatsApp Cloud API webhook handshake challenge
+ */
+app.get('/api/bot/webhook', (req, res) => {
+  const mode = req.query['hub.mode'];
+  const token = req.query['hub.verify_token'];
+  const challenge = req.query['hub.challenge'];
+  const verifyToken = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || 'health_vibe_bot_verify_token';
+
+  if (mode === 'subscribe' && token === verifyToken) {
+    console.log('[WHATSAPP BOT] Webhook challenge verified.');
+    return res.status(200).send(challenge);
+  }
+  return res.sendStatus(403);
+});
+
+/**
+ * POST /api/bot/webhook
+ * Handles incoming WhatsApp webhook events
+ */
+app.post('/api/bot/webhook', (req, res) => {
+  whatsappBot.handleInboundWebhook(req.body);
+  res.sendStatus(200);
 });
 
 /**
