@@ -14,6 +14,10 @@ Write-Host "[ROOT] Serving folder: $root" -ForegroundColor Gray
 Write-Host "Press Ctrl+C to stop." -ForegroundColor Yellow
 Write-Host "==========================================" -ForegroundColor Cyan
 
+try {
+    Start-Process "http://localhost:$port"
+} catch {}
+
 while ($listener.IsListening) {
     try {
         $context = $listener.GetContext()
@@ -24,6 +28,7 @@ while ($listener.IsListening) {
     try {
         $request = $context.Request
         $response = $context.Response
+        $response.AddHeader("Access-Control-Allow-Origin", "*")
 
         $rawPath = $request.Url.LocalPath
         $localPath = [System.Uri]::UnescapeDataString($rawPath)

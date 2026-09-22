@@ -124,6 +124,18 @@
       </div>
       <button class="solid-button large" data-auth-open>إنشاء حساب</button>
     </section>
+
+    <!-- Public Site Footer with Legal Links -->
+    <footer class="site-footer">
+      <div>
+        <strong>Health Vibes AI</strong> &copy; 2026. المنصة السريرية الذكية لمتابعة صحة الجهاز التنفسي.
+      </div>
+      <div class="site-footer-links">
+        <button type="button" onclick="openLegalModal('privacy')">🔒 سياسة الخصوصية</button>
+        <button type="button" onclick="openLegalModal('terms')">📜 شروط الاستخدام</button>
+        <button type="button" onclick="openLegalModal('disclaimer')" style="color: #f87171;">🚨 إخلاء المسؤولية الطبي</button>
+      </div>
+    </footer>
   </main>
 
   <section id="authScreen" class="auth-screen" aria-label="Sign in">
@@ -172,6 +184,15 @@
           <div class="auth-options">
             <label><input type="checkbox" id="rememberMe" checked /> <span>Remember me</span></label>
             <button type="button" id="forgotPasswordBtn">Forgot password?</button>
+          </div>
+
+          <div style="margin: 12px 0 16px; text-align: center; font-size: 11.5px; color: var(--muted); line-height: 1.6;">
+            بالتسجيل أو المتابعة، فإنك توافق على 
+            <button type="button" style="background:none;border:none;color:var(--teal);text-decoration:underline;cursor:pointer;padding:0;font-size:inherit;" onclick="openLegalModal('terms')">شروط الاستخدام</button>
+            و 
+            <button type="button" style="background:none;border:none;color:var(--teal);text-decoration:underline;cursor:pointer;padding:0;font-size:inherit;" onclick="openLegalModal('privacy')">سياسة الخصوصية</button>
+            و 
+            <button type="button" style="background:none;border:none;color:#ef4444;text-decoration:underline;cursor:pointer;padding:0;font-size:inherit;" onclick="openLegalModal('disclaimer')">إخلاء المسؤولية الطبي</button>.
           </div>
 
           <button id="authSubmitBtn" type="submit" class="solid-button large auth-submit-btn">
@@ -396,6 +417,16 @@
               <div><strong>الطبيب</strong><span>يرى الحالات المرتبطة به فقط مع سجل المراجعة.</span></div>
               <div><strong>الإدارة</strong><span>صلاحيات تشغيلية مقيدة حسب الدور مع سجل تدقيق.</span></div>
             </div>
+
+            <div style="margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line);">
+              <h4 style="font-size: 13.5px; margin-bottom: 8px; color: var(--teal-2);">المعايير والوثائق القانونية والطبية:</h4>
+              <p class="muted-copy" style="font-size: 12px; margin-bottom: 10px;">يمكنك قراءة الوثائق المعتمدة كاملة في أي وقت:</p>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button type="button" class="soft-button" style="font-size: 12px; padding: 6px 10px;" onclick="openLegalModal('privacy')">🔒 سياسة الخصوصية</button>
+                <button type="button" class="soft-button" style="font-size: 12px; padding: 6px 10px;" onclick="openLegalModal('terms')">📜 شروط الاستخدام</button>
+                <button type="button" class="soft-button" style="font-size: 12px; padding: 6px 10px; color: #f87171;" onclick="openLegalModal('disclaimer')">🚨 إخلاء المسؤولية</button>
+              </div>
+            </div>
           </article>
         </div>
       </section>
@@ -440,6 +471,28 @@
               </button>
             </div>
           </article>
+
+          <!-- Account & Data Deletion Card (GDPR / HIPAA Right to Erasure) -->
+          <article class="panel" id="accountDeletionCard" style="grid-column: 1 / -1; margin-top: 14px; border: 1px solid rgba(239, 68, 68, 0.25); background: rgba(239, 68, 68, 0.03);">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
+              <div>
+                <strong style="color: #ef4444; font-size: 15px; display: flex; align-items: center; gap: 6px;">
+                  <span>🗑️</span> إدارة وتصدير البيانات وحذف الحساب (Privacy & Data Rights)
+                </strong>
+                <p style="margin: 4px 0 0; font-size: 13px; color: var(--muted); line-height: 1.5;">
+                  بموجب معايير حماية الخصوصية وميثاق الحق في محو البيانات، يمكنك تنزيل نسخة من سجلاتك أو حذف حسابك نهائياً.
+                </p>
+              </div>
+              <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <button type="button" class="soft-button" onclick="exportUserData()" style="font-size: 13px; padding: 8px 14px;">
+                  📥 تصدير بياناتي (JSON)
+                </button>
+                <button type="button" class="outline-button" onclick="openDeleteAccountModal()" style="border-color: rgba(239, 68, 68, 0.5); color: #ef4444; font-size: 13px; padding: 8px 14px;">
+                  ⚠️ حذف الحساب والبيانات
+                </button>
+              </div>
+            </div>
+          </article>
         </div>
       </section>
 
@@ -471,13 +524,23 @@
               <button class="choice">تدخين</button>
               <button class="choice">حمل</button>
               <button class="choice active">لا يوجد</button>
-            <div class="safety-note">لن تظهر نتيجة نهائية للمريض قبل مراجعة الطبيب للحالة.</div>
-            <div id="assessmentConsentStatusBox" style="margin: 12px 0; padding: 10px 14px; background: rgba(22, 163, 74, 0.08); border: 1px solid rgba(22, 163, 74, 0.25); border-radius: 10px; font-size: 12px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-              <span id="assessmentConsentStatusText" style="color: #15803d; display: flex; align-items: center; gap: 6px; font-weight: 700;">
-                <span>🔒</span> تم توثيق الموافقة الطبية وسياسة الخصوصية
-              </span>
-              <button type="button" class="soft-button" style="padding: 2px 8px; font-size: 11px;" onclick="showScreen('consent')">مراجعة البنود</button>
             </div>
+            <div class="safety-note">لن تظهر نتيجة نهائية للمريض قبل مراجعة الطبيب للحالة.</div>
+            
+            <!-- Privacy Consent Gate Box (Before Assessment Submission) -->
+            <div id="assessmentConsentStatusBox" style="margin: 14px 0 10px; padding: 12px 14px; background: rgba(22, 163, 74, 0.08); border: 1px solid rgba(22, 163, 74, 0.25); border-radius: 10px; font-size: 12.5px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px;">
+                <span id="assessmentConsentStatusText" style="color: #15803d; display: flex; align-items: center; gap: 6px; font-weight: 700;">
+                  <span>🔒</span> تم توثيق الموافقة الطبية وسياسة الخصوصية
+                </span>
+                <button type="button" class="soft-button" style="padding: 2px 8px; font-size: 11px;" onclick="showScreen('consent')">مراجعة البنود الكاملة</button>
+              </div>
+              <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer; color: var(--ink); font-size: 12px; margin-top: 4px;">
+                <input type="checkbox" id="assessmentInlineConsent" checked style="margin-top: 2px;">
+                <span>أوافق على ميثاق الخصوصية الطبية ومعالجة البيانات السريرية وإرسالها للطبيب المعتمد.</span>
+              </label>
+            </div>
+
             <button id="submitAssessment" class="solid-button full">إرسال للطبيب</button>
           </article>
           <article class="panel insight-panel">
@@ -614,12 +677,115 @@
       </section>
 
       <section id="screen-admin" class="screen">
-        <div class="metric-grid">
-          <article><span>المستخدمون</span><strong id="adminUsersTotalCount">--</strong><small id="adminUsersTodayCount">--</small></article>
-          <article><span>الأطباء المعتمدون</span><strong id="adminTotalDoctorsCount">--</strong><small id="adminPendingDocsBadge">--</small></article>
-          <article><span>الفروع</span><strong id="adminBranchesCount">--</strong><small id="adminBranchesNote">--</small></article>
-          <article><span>مراجعات معلقة</span><strong id="adminPendingReviewsCount">--</strong><small id="adminUrgentReviewsCount">--</small></article>
+        <!-- Live Admin Header with Realtime status & Refresh Button -->
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 20px;">
+          <div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <h2 style="margin: 0; font-size: 22px;">لوحة الإدارة والمؤشرات السريرية الحقيقية</h2>
+              <span class="pill ok" style="font-size: 11px;">مباشر من Firestore 🟢</span>
+            </div>
+            <p style="margin: 4px 0 0; font-size: 13px; color: var(--muted);">
+              قراءات حقيقية من قاعدة البيانات: المستخدمون، الفحوصات، الأطباء، ومؤشرات السلامة
+            </p>
+          </div>
+          <div style="display: flex; gap: 10px; align-items: center;">
+            <span id="adminLastRefreshedAt" style="font-size: 12px; color: var(--muted);">آخر تحديث: الآن</span>
+            <button type="button" class="soft-button" onclick="refreshAdminDashboardLive()" id="btnRefreshAdminMetrics" style="padding: 8px 16px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px;">
+              <span id="adminRefreshSpinnerIcon">🔄</span> تحديث الأرقام المباشرة
+            </button>
+          </div>
         </div>
+
+        <!-- Realtime KPI Grid (6 metrics) -->
+        <div class="metric-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
+          <article>
+            <span>إجمالي المستخدمين</span>
+            <strong id="adminUsersTotalCount">--</strong>
+            <small id="adminUsersTodayCount">--</small>
+          </article>
+          <article>
+            <span>الأطباء المعتمدون</span>
+            <strong id="adminTotalDoctorsCount">--</strong>
+            <small id="adminPendingDocsBadge">--</small>
+          </article>
+          <article>
+            <span>الفروع والعيادات</span>
+            <strong id="adminBranchesCount">--</strong>
+            <small id="adminBranchesNote">--</small>
+          </article>
+          <article>
+            <span>إجمالي الفحوصات</span>
+            <strong id="adminTotalCasesCount">--</strong>
+            <small id="adminCasesTodayBadge">--</small>
+          </article>
+          <article>
+            <span>مراجعات قيد الانتظار</span>
+            <strong id="adminPendingReviewsCount">--</strong>
+            <small id="adminUrgentReviewsCount" style="color: #ef4444;">--</small>
+          </article>
+          <article>
+            <span>متوسط الأكسجين العام</span>
+            <strong id="adminAvgSpO2Count">--%</strong>
+            <small id="adminAvgSpO2Status">مؤشر طبي حقيقي</small>
+          </article>
+        </div>
+
+        <!-- Real Clinical Triage & Risk Breakdown Card -->
+        <article class="panel" style="margin-bottom: 24px;">
+          <div class="panel-head">
+            <div>
+              <h3 style="margin: 0; font-size: 18px;">التوزيع السريري للحالات ومستويات الخطورة (Live Clinical Triage Distribution)</h3>
+              <p style="margin: 4px 0 0; font-size: 12.5px; color: var(--muted);">نسب الحالات الفعلية المسجلة في النظام مقسمة حسب فرز الأكسجين والأعراض الحقيقية</p>
+            </div>
+            <span class="pill info" id="adminTotalCasesBadge">جاري الحساب...</span>
+          </div>
+          
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-top: 16px;">
+            <div style="padding: 14px; background: rgba(239, 68, 68, 0.06); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 12px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <span style="font-size: 13px; font-weight: 700; color: #ef4444;">🚨 حالات عاجلة (SpO2 &lt; 90%)</span>
+                <strong id="adminDistUrgentCount" style="font-size: 16px; color: #ef4444;">0</strong>
+              </div>
+              <div style="background: rgba(0,0,0,0.2); border-radius: 999px; height: 6px; overflow: hidden;">
+                <div id="adminDistUrgentBar" style="background: #ef4444; height: 100%; width: 0%; transition: width 0.4s;"></div>
+              </div>
+              <small id="adminDistUrgentPct" style="font-size: 11.5px; color: var(--muted); margin-top: 4px; display: block;">0% من الحالات</small>
+            </div>
+
+            <div style="padding: 14px; background: rgba(245, 158, 11, 0.06); border: 1px solid rgba(245, 158, 11, 0.2); border-radius: 12px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <span style="font-size: 13px; font-weight: 700; color: #f59e0b;">⚠️ أولوية عالية (90-92%)</span>
+                <strong id="adminDistHighCount" style="font-size: 16px; color: #f59e0b;">0</strong>
+              </div>
+              <div style="background: rgba(0,0,0,0.2); border-radius: 999px; height: 6px; overflow: hidden;">
+                <div id="adminDistHighBar" style="background: #f59e0b; height: 100%; width: 0%; transition: width 0.4s;"></div>
+              </div>
+              <small id="adminDistHighPct" style="font-size: 11.5px; color: var(--muted); margin-top: 4px; display: block;">0% من الحالات</small>
+            </div>
+
+            <div style="padding: 14px; background: rgba(16, 185, 129, 0.06); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 12px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <span style="font-size: 13px; font-weight: 700; color: #10b981;">✔️ أولوية عادية (93%+)</span>
+                <strong id="adminDistNormalCount" style="font-size: 16px; color: #10b981;">0</strong>
+              </div>
+              <div style="background: rgba(0,0,0,0.2); border-radius: 999px; height: 6px; overflow: hidden;">
+                <div id="adminDistNormalBar" style="background: #10b981; height: 100%; width: 0%; transition: width 0.4s;"></div>
+              </div>
+              <small id="adminDistNormalPct" style="font-size: 11.5px; color: var(--muted); margin-top: 4px; display: block;">0% من الحالات</small>
+            </div>
+
+            <div style="padding: 14px; background: rgba(9, 184, 182, 0.06); border: 1px solid rgba(9, 184, 182, 0.2); border-radius: 12px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <span style="font-size: 13px; font-weight: 700; color: var(--teal);">👨‍⚕️ تقارير معتمدة ومكتملة</span>
+                <strong id="adminDistApprovedCount" style="font-size: 16px; color: var(--teal);">0</strong>
+              </div>
+              <div style="background: rgba(0,0,0,0.2); border-radius: 999px; height: 6px; overflow: hidden;">
+                <div id="adminDistApprovedBar" style="background: var(--teal); height: 100%; width: 0%; transition: width 0.4s;"></div>
+              </div>
+              <small id="adminDistApprovedPct" style="font-size: 11.5px; color: var(--muted); margin-top: 4px; display: block;">0% من الحالات</small>
+            </div>
+          </div>
+        </article>
 
         <!-- REAL DOCTOR APPLICATIONS APPROVAL BOARD -->
         <article class="panel" style="margin-bottom: 24px;">
@@ -665,12 +831,17 @@
 
         <!-- USER & ROLE GOVERNANCE -->
         <article class="panel" style="margin-top: 24px;">
-          <div class="panel-head">
+          <div class="panel-head" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
             <div>
-              <h3 style="margin: 0; font-size: 19px;">إدارة المستخدمين والصلاحيات (Users & Roles Governance)</h3>
-              <p style="margin: 4px 0 0; font-size: 13px; color: var(--muted);">عرض وتعديل أدوار الحسابات وتطبيق مبدأ فصل المهام (Separation of Duties)</p>
+              <h3 style="margin: 0; font-size: 19px;">إدارة المستخدمين والصلاحيات (All Verified & Regular Users)</h3>
+              <p style="margin: 4px 0 0; font-size: 13px; color: var(--muted);">عرض كافة الحسابات المسجلة (المؤكدة والعادية) وتعديل الصلاحيات فورياً</p>
             </div>
-            <span class="pill info" id="adminUsersCountBadge">جاري التحميل...</span>
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <span class="pill info" id="adminUsersCountBadge">جاري التحميل...</span>
+              <button type="button" class="soft-button" onclick="promptAddAccount()" style="padding: 6px 14px; font-size: 12.5px; display: inline-flex; align-items: center; gap: 5px;">
+                <span>➕</span> إضافة / تسجيل حساب
+              </button>
+            </div>
           </div>
           <div id="adminUsersTableContainer" style="margin-top: 18px; overflow-x: auto;">
             <!-- Rendered via renderAdminUsers() -->
@@ -756,6 +927,7 @@
         <div><span>عوامل الخطورة</span><strong id="confirmRisks">--</strong></div>
         <div><span>الطبيب المرتبط</span><strong id="confirmDoctor">--</strong></div>
         <div><span>العيادة</span><strong id="confirmClinic">--</strong></div>
+        <div><span>الموافقة الطبية</span><strong id="confirmConsentStatus" style="color: #10b981;">🔒 موثقة ومقبولة</strong></div>
       </div>
 
       <div class="clinical-note" style="margin-bottom: 18px; font-size: 12.5px;">
@@ -896,5 +1068,149 @@
 
   <script src="./config.js?v=2.5"></script>
   <script src="./app.js?v=2.5"></script>
+  <!-- Legal & Compliance Modal (Privacy Policy + Terms + Medical Disclaimer) -->
+  <div id="legalModal" class="confirm-modal" aria-hidden="true">
+    <div class="confirm-card legal-modal-card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 20px;">⚖️</span>
+          <h3 id="legalModalTitle" style="margin: 0; font-size: 17px; color: var(--teal-2);">المعايير القانونية والطبية</h3>
+        </div>
+        <button type="button" class="close-button" onclick="closeLegalModal()" aria-label="Close">×</button>
+      </div>
+
+      <!-- Legal Tabs -->
+      <div class="legal-tabs" role="tablist">
+        <button type="button" class="legal-tab-btn active" data-legal-tab="privacy" onclick="switchLegalTab('privacy')">
+          🔒 سياسة الخصوصية
+        </button>
+        <button type="button" class="legal-tab-btn" data-legal-tab="terms" onclick="switchLegalTab('terms')">
+          📜 شروط الاستخدام
+        </button>
+        <button type="button" class="legal-tab-btn danger-tab" data-legal-tab="disclaimer" onclick="switchLegalTab('disclaimer')">
+          🚨 إخلاء المسؤولية الطبي
+        </button>
+      </div>
+
+      <!-- Tab Contents -->
+      <div id="legalModalBody" class="legal-content-body">
+        <!-- 1. Privacy Policy -->
+        <div id="legal-section-privacy" class="legal-tab-content" style="display: block;">
+          <h4>1. الالتزام بحماية البيانات الصحية والسريرية</h4>
+          <p>تلتزم منصة Health Vibe AI بأعلى معايير حماية الخصوصية للمرضى وممارسي الرعاية الصحية وفق مبادئ HIPAA و GDPR وتشريعات حماية السجلات الطبية الإلكترونية.</p>
+          
+          <h4>2. البيانات التي يتم جمعها ومعالجتها</h4>
+          <ul>
+            <li><strong>البيانات الشخصية والحساب:</strong> الاسم، البريد الإلكتروني، معرف الحساب الرقمي، والدور المصرح.</li>
+            <li><strong>المؤشرات الحيوية والأعراض:</strong> نسبة تشبع الأكسجين في الدم (SpO2)، صعوبة التنفس، شدة الكحة، مدة الأعراض، وعوامل الخطورة كالحمل والتدخين وأمراض الصدر المزمنة.</li>
+            <li><strong>سجلات التدقيق:</strong> تاريخ وتوقيت تقديم التقييمات، سجلات دورة حياة الحالة، وسجل قرارات واعتماد الطبيب المعتمد.</li>
+          </ul>
+
+          <h4>3. التشفير وحماية البيانات</h4>
+          <p>تُنقل جميع البيانات مشفرة بالكامل عبر بروتوكول <code>HTTPS / TLS 1.3</code> وتُخزن في خوادم Google Cloud بمعيار تشفير <code>AES-256</code> المعتمد، مع تطبيق مبدأ انعدام الثقة (Zero-Trust) لعزل بيانات كل مريض عن الآخرين.</p>
+
+          <h4>4. عدم المشاركة الإعلانية أو التجارية</h4>
+          <p><strong>لا يتم بيع أو مشاركة بياناتك مع أي طرف ثالث لأغراض تجارية أو إعلانية نهائياً.</strong> يتم مشاركة بيانات الحالة حصراً مع الطبيب المعالج المعتمد لإتمام المراجعة السريرية وإصدار التقرير الطبي.</p>
+        </div>
+
+        <!-- 2. Terms of Service -->
+        <div id="legal-section-terms" class="legal-tab-content" style="display: none;">
+          <h4>1. شروط الأهلية والحساب</h4>
+          <p>يجب تقديم معلومات دقيقة وصحيحة عند التسجيل، والاحتفاظ بسرية بيانات الدخول، مع الالتزام بتأكيد البريد الإلكتروني لتفعيل الاتصال السريري.</p>
+
+          <h4>2. الاستخدام المسموح للمنصة</h4>
+          <p>تُستخدم المنصة كأداة متابعة رقمية وتنسيق سريري بين المريض وطبيبه، ولا يجوز إدخال بيانات كاذبة أو مضللة، أو محاولة تجاوز قواعد الأمان والصلاحيات.</p>
+
+          <h4>3. اعتماد الأطباء ومقدمي الرعاية</h4>
+          <p>يخضع حساب الطبيب للتدقيق والتحقق الإداري من التراخيص المهنية الصادرة عن الجهات الصحية الرسمية قبل منحه صلاحية مراجعة الحالات واعتماد التقارير السريرية.</p>
+
+          <h4>4. حدود المسؤولية</h4>
+          <p>الخدمة تقدم كما هي للمساعدة في تنظيم مسار الرعاية. المنصة لا تقدم تشخيصاً آلياً مستقلاً وليست بديلاً عن التوجه لأقسام الطوارئ أو الفحص السريري المباشر.</p>
+        </div>
+
+        <!-- 3. Medical Disclaimer -->
+        <div id="legal-section-disclaimer" class="legal-tab-content" style="display: none;">
+          <div class="emergency-alert-card critical-oxygen" style="margin-bottom: 16px; padding: 14px;">
+            <div class="emergency-header" style="margin-bottom: 6px;">
+              <span class="emergency-pulsing-badge">🚨 تنبيه طوارئ حرج</span>
+              <strong style="color: #dc2626; font-size: 14px;">لا تستخدم هذا التطبيق في حالات الطوارئ الطبية المهددة للحياة</strong>
+            </div>
+            <p style="font-size: 13px; margin: 0 0 10px; color: var(--ink); line-height: 1.6;">
+              إذا كنت تعاني من نسبة أكسجين أقل من 90%، أو ألم حاد ومفاجئ في الصدر، أو صعوبة بالغة في التنفس، أو زرقة بالوجه، اتصل فوراً بالإسعاف (123 في مصر) أو توجه لأقرب قسم طوارئ في مستشفى ولا تنتظر الرد الإلكتروني.
+            </p>
+            <a href="tel:123" class="emergency-call-btn" style="padding: 8px 16px; text-decoration: none; display: inline-flex;">
+              📞 طلب الإسعاف فوراً (123)
+            </a>
+          </div>
+
+          <h4>1. الطبيعة الاسترشادية للذكاء الاصطناعي</h4>
+          <p>محرك القواعد والذكاء الاصطناعي أداة فرز استرشادية لمساعدة الطبيب في ترتيب الأولويات (Clinical Decision Support)، ولا تُعد تشخيصاً طبياً مستقلاً أو بديلاً عن الفحص السريري للطبيب.</p>
+
+          <h4>2. شرط الاعتماد البشري الإلزامي</h4>
+          <p>لا تظهر أي نتيجة نهائية أو تقرير معتمد للمريض إلا بعد قيام طبيب بشري مرخص ومسجل بمراجعة تفاصيل الحالة واعتمادها يدوياً.</p>
+
+          <h4>3. قياسات الأكسجين المنزلية</h4>
+          <p>أجهزة قياس الأكسجين المنزلية قد تتأثر ببرودة الأطراف أو الحركة. في حال الشك بأي قراءة أو ظهور أعراض غير معتادة، يجب استشارة طبيب أو التوجه لمركز طبي فوراً.</p>
+        </div>
+      </div>
+
+      <div style="margin-top: 16px; display: flex; justify-content: flex-end;">
+        <button type="button" class="solid-button" onclick="closeLegalModal()" style="padding: 8px 22px;">
+          فهمت ذلك وإغلاق
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Account Confirmation Modal -->
+  <div id="deleteAccountModal" class="confirm-modal" aria-hidden="true">
+    <div class="confirm-card" style="width: min(520px, 100%); text-align: right; max-height: 90vh; overflow-y: auto;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 22px;">⚠️</span>
+          <h3 style="margin: 0; font-size: 18px; color: #ef4444;">حذف الحساب والبيانات السريرية</h3>
+        </div>
+        <button type="button" class="close-button" onclick="closeDeleteAccountModal()" aria-label="Close">×</button>
+      </div>
+
+      <div class="emergency-alert-card critical-oxygen" style="margin-bottom: 16px; padding: 12px 14px;">
+        <strong style="color: #dc2626; font-size: 13px;">تنبيه هام: هذا الإجراء نهائي ولا يمكن التراجع عنه!</strong>
+        <p style="font-size: 12.5px; margin: 4px 0 0; color: var(--ink); line-height: 1.5;">
+          عند إتمام الحذف، ستفقد إمكانية الوصول إلى المنصة وسيتم حذف أو إخفاء هوية كافة بياناتك المسجلة.
+        </p>
+      </div>
+
+      <ul style="font-size: 13px; color: var(--muted); line-height: 1.8; margin-bottom: 16px; padding-inline-start: 20px;">
+        <li>سيتم حذف حسابك من نظام المصادقة (Firebase Auth) فوراً.</li>
+        <li>سيتم حذف ملفك الطبي ومعلومات الاتصال بالكامل من قاعدة البيانات.</li>
+        <li>سيتم حذف أي طلبات توثيق طبية أو مستندات مرفوعة.</li>
+        <li>الحالات والتقارير المعتمدة سابقاً سيتم حجب هويتك عنها بالكامل (Anonymization) امتثالاً لسجلات التدقيق السريري.</li>
+        <li>سيتم تطهير وتصفير كافة سجلات الموافقة والجلسة المخزنة على هذا الجهاز.</li>
+      </ul>
+
+      <div style="margin-bottom: 16px;">
+        <label for="deleteConfirmationInput" style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--ink);">
+          لتأكيد الحذف، اكتب كلمة <strong style="color: #ef4444;">DELETE</strong> أو <strong style="color: #ef4444;">حذف</strong> أدناه:
+        </label>
+        <input type="text" id="deleteConfirmationInput" placeholder="اكتب DELETE أو حذف هنا" autocomplete="off" style="width: 100%; padding: 10px 14px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; background: var(--surface-2); color: var(--ink);">
+      </div>
+
+      <div id="deleteReauthGroup" style="display: none; margin-bottom: 16px;">
+        <label for="deletePasswordInput" style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--ink);">
+          يرجى إدخال كلمة المرور الحالية لتأكيد الهوية:
+        </label>
+        <input type="password" id="deletePasswordInput" placeholder="كلمة المرور الحالية" autocomplete="current-password" style="width: 100%; padding: 10px 14px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; background: var(--surface-2); color: var(--ink);">
+      </div>
+
+      <div style="display: flex; gap: 10px; flex-direction: column;">
+        <button type="button" id="btnExecuteAccountDeletion" class="solid-button" disabled style="width: 100%; justify-content: center; padding: 12px; font-size: 14px; background: #dc2626; border-color: #dc2626; opacity: 0.5; cursor: not-allowed;">
+          🗑️ تأكيد وحذف الحساب نهائياً
+        </button>
+        <button type="button" class="outline-button" onclick="closeDeleteAccountModal()" style="width: 100%; justify-content: center; padding: 10px; font-size: 13.5px;">
+          إلغاء والاحتفاظ بحسابي
+        </button>
+      </div>
+    </div>
+  </div>
 </body>
 </html>

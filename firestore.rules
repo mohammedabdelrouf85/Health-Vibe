@@ -15,7 +15,11 @@ service cloud.firestore {
       return isAuthenticated() &&
              request.auth.token.email_verified == true &&
              (('isOwner' in request.auth.token && request.auth.token.isOwner == true) ||
-              ('email' in request.auth.token && request.auth.token.email.lower() == 'mohammedabdelrouf85@gmail.com'));
+              ('email' in request.auth.token && (
+                request.auth.token.email.lower() == 'mohammedabdelrouf85@gmail.com' ||
+                request.auth.token.email.lower() == 'raouf.work@gmail.com' ||
+                request.auth.token.email.lower() == 'admin@healthvibe.ai'
+              )));
     }
 
     // Strict Email Verification check

@@ -3,14 +3,124 @@
 
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="refresh" content="0; url=./app/index.html">
-  <title>Health Vibes</title>
-  <link rel="canonical" href="./app/index.html">
-  <script>window.location.replace("./app/index.html");</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Health Vibes AI</title>
+  <link rel="icon" type="image/png" href="./app/logo-dark-mark.png">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #07191b;
+      color: #e2f1f0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 24px;
+    }
+    .launcher-card {
+      background: radial-gradient(circle at top right, rgba(9, 184, 182, 0.12), transparent 70%), #0c2326;
+      border: 1px solid rgba(9, 184, 182, 0.25);
+      border-radius: 20px;
+      padding: 36px 32px;
+      max-width: 520px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 20px 48px rgba(0, 0, 0, 0.6);
+    }
+    .badge {
+      display: inline-block;
+      padding: 6px 14px;
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.35);
+      color: #fca5a5;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 18px;
+    }
+    h1 {
+      font-size: 24px;
+      color: #ffffff;
+      margin-bottom: 12px;
+    }
+    p {
+      color: #94a3b8;
+      font-size: 14px;
+      line-height: 1.7;
+      margin-bottom: 24px;
+    }
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      padding: 14px 20px;
+      background: linear-gradient(135deg, #09b8b6, #0284c7);
+      color: #ffffff;
+      font-weight: 700;
+      font-size: 15px;
+      text-decoration: none;
+      border-radius: 12px;
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 6px 18px rgba(9, 184, 182, 0.3);
+      transition: transform 0.15s, opacity 0.15s;
+    }
+    .btn-primary:hover {
+      opacity: 0.95;
+      transform: translateY(-1px);
+    }
+    .note {
+      margin-top: 20px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      font-size: 13px;
+      color: #64748b;
+      line-height: 1.6;
+    }
+    code {
+      background: rgba(0, 0, 0, 0.4);
+      color: #2dd4bf;
+      padding: 2px 6px;
+      border-radius: 6px;
+      font-family: Consolas, monospace;
+      font-size: 12px;
+    }
+  </style>
 </head>
 
-<body style="background:#07191b;color:#7fa8a6;font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;">
-  <p>Loading Health Vibes... <a href="./app/index.html" style="color:#09b8b6;text-decoration:none;">Click here if not redirected</a></p>
+<body>
+  <div class="launcher-card" id="launcherCard">
+    <div class="badge">بيئة التشغيل / Environment Notice</div>
+    <h1>Health Vibes AI</h1>
+    <p>
+      تم فتح الصفحة كملف محلي (<code>file://</code>). يتطلب تسجيل الدخول عبر Firebase تشغيل التطبيق من خلال السيرفر المحلي.
+    </p>
+    <a href="http://localhost:3000" class="btn-primary" id="launchBtn">
+      الدخول عبر السيرفر المحلي (http://localhost:3000)
+    </a>
+    <div class="note">
+      إذا لم يفتح الرابط، تأكد من تشغيل <code>start-server.bat</code> أو <code>serve.ps1</code> في مجلد المشروع.
+    </div>
+  </div>
+
+  <script>
+    if (window.location.protocol !== "file:") {
+      // Running under HTTP server (e.g. localhost)
+      window.location.replace("./app/index.html");
+    } else {
+      // Under file://, check if localhost:3000 is active and auto-redirect
+      fetch("http://localhost:3000/index.html", { method: "HEAD", mode: "no-cors" })
+        .then(function() {
+          window.location.href = "http://localhost:3000";
+        })
+        .catch(function() {
+          // Keep the guide visible
+        });
+    }
+  </script>
 </body>
 
 </html>

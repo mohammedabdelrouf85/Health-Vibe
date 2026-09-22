@@ -820,6 +820,84 @@ app.post('/api/admin/assign-case', requireAuth, requireVerifiedEmail, requireAdm
   }
 });
 
+
+/**
+ * POST /api/user/delete-account
+ * GDPR / HIPAA compliant account and clinical data deletion
+ */
+app.post('/api/user/delete-account', requireAuth, async (req, res) => {
+  const userId = req.user.uid;
+  const userEmail = (req.user.email || '').toLowerCase();
+
+  try {
+    // 1. Safeguard system owner from automated deletion
+    const isOwner = userEmail === OWNER_EMAIL.toLowerCase();
+    if (isOwner) {
+      return res.status(403).json({
+        error: 'FORBIDDEN',
+        message: 'Platform owner account cannot be deleted via automated workflow.'
+      });
+    }
+
+    if (db) {
+      const batch = db.batch();
+
+      // 2. Anonymize or remove user cases
+      const casesSnapshot = await db.collection('cases').where('patientId', '==', userId).get();
+      casesSnapshot.forEach(docSnap => {
+        const cData = docSnap.data();
+        if (cData.status === 'pending') {
+          batch.delete(docSnap.ref);
+        } else {
+          // Maintain medical audit trail while purging PII
+          batch.update(docSnap.ref, {
+            patientId: `deleted_${userId.substring(0, 6)}`,
+            patientName: 'مريض محذوف (Deleted Patient)',
+            patientNameEn: 'Deleted Patient',
+            name: 'Deleted Patient',
+            nameEn: 'Deleted Patient',
+            patientEmail: 'deleted@anonymized.local',
+            'assessment.privacyConsent.revokedAt': new Date().toISOString(),
+            isAnonymized: true
+          });
+        }
+      });
+
+      // 3. Remove doctor applications if any
+      const docAppSnapshot = await db.collection('doctor_applications').where('userId', '==', userId).get();
+      docAppSnapshot.forEach(docSnap => {
+        batch.delete(docSnap.ref);
+      });
+
+      // 4. Delete user document from Firestore
+      const userRef = db.collection('users').doc(userId);
+      batch.delete(userRef);
+
+      // 5. Append audit log
+      const auditRef = db.collection('audit_events').doc();
+      const maskedEmail = userEmail ? `${userEmail[0]}***@${userEmail.split('@')[1]}` : 'anonymous';
+      batch.set(auditRef, {
+        type: 'ACCOUNT_DELETED',
+        userId: userId,
+        userEmailMasked: maskedEmail,
+        deletedCasesCount: casesSnapshot.size,
+        timestamp: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      await batch.commit();
+    }
+
+    // 6. Delete user from Firebase Auth
+    await admin.auth().deleteUser(userId);
+
+    console.log(`[ACCOUNT DELETED]: User ${userId} successfully deleted from system.`);
+    res.json({ success: true, message: 'Account and personal data successfully deleted.' });
+  } catch (err) {
+    console.error("[SERVER DELETE ACCOUNT ERROR]:", err);
+    res.status(500).json({ error: 'DELETION_FAILED', message: err.message });
+  }
+});
+
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
   console.log(`[Health Vibe AI Backend] Server running securely on port ${PORT}`);

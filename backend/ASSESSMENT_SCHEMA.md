@@ -25,6 +25,15 @@
   "clinicName": "عيادة مدينة نصر",
   "status": "pending",
 
+  "privacyConsent": {
+    "accepted": true,
+    "version": "HealthVibe-Privacy-v1.0",
+    "acceptedAt": "2026-09-21T00:00:00.000Z",
+    "dataProcessing": true,
+    "aiAdvisory": true,
+    "notifications": false
+  },
+
   "assessment": {
     "vitals": {
       "oxygenLevel": 95,
@@ -158,11 +167,14 @@
 
 ## 🔍 تفصيل الحقول والأنواع المسموحة (Field Types & Validations)
 
-### 0. الموافقة الطبية وسياسة الخصوصية (`assessment.privacyConsent`):
-* شرط إلزامي مسبق (`Privacy Consent Gate`): لا يمكن بدء أو إرسال تقييم التنفس بدون تأكيد الموافقة مسبقاً.
+### 0. الموافقة الطبية وسياسة الخصوصية (`privacyConsent` / `assessment.privacyConsent`):
+* شرط إلزامي مسبق (`Privacy Consent Gate`): لا يمكن بدء أو إرسال تقييم التنفس بدون تأكيد الموافقة مسبقاً، وتُسجل قبل كائن التقييم السريري (`assessment`).
 * `accepted`: قيمة بوليان إجبارية (`true`) تؤكد موافقة المريض الصريحة على معالجة البيانات السريرية والطبيعة الإرشادية للفرز الذكي.
 * `version`: إصدار ميثاق الخصوصية وقت الموافقة (مثال: `"HealthVibe-Privacy-v1.0"`).
 * `acceptedAt`: التوقيت الزمني لتوثيق الموافقة بصيغة ISO-8601 UTC.
+* `dataProcessing`: قيمة بوليان (`true`) للموافقة على معالجة البيانات ومشاركتها مع الطبيب المعالج المعتمد.
+* `aiAdvisory`: قيمة بوليان (`true`) للإقرار بالطبيعة الإرشادية لأدوات الذكاء الاصطناعي.
+* `notifications`: قيمة بوليان اختيارية لتلقي تحديثات الحالة وإشعارات المراجعة الطبية.
 
 ### 1. المؤشرات الحيوية (`assessment.vitals`):
 * `oxygenLevel`: رقم صحيح موجب (`0` إلى `100`).
