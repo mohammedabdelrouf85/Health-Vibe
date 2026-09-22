@@ -2515,6 +2515,7 @@ async function handleEmailAuth(e) {
     } else {
       await auth.signInWithEmailAndPassword(email, password);
       showToast(currentLanguage === "en" ? "Signed in successfully!" : "تم تسجيل الدخول بنجاح!");
+      hideAuth();
     }
   } catch (error) {
     console.error("Firebase Auth Error:", error);
@@ -7380,7 +7381,7 @@ menuToggle.addEventListener("click", () => {
 
 logoutButton.addEventListener("click", leaveApp);
 
-window.addEventListener("load", () => {
+function initHVAuthListener() {
   auth.onAuthStateChanged(async (user) => {
     window.clearTimeout(loaderSafetyTimer);
     if (user) {
@@ -7404,7 +7405,7 @@ window.addEventListener("load", () => {
                   targetUserId: user.uid,
                   newRole: ROLES.SUPER_ADMIN
                 })
-              });
+              }).catch(() => {});
             }
           } else {
             selectedRole = normalizeRole(udata.role || ROLES.PATIENT);
@@ -7452,7 +7453,13 @@ window.addEventListener("load", () => {
       }, 250);
     }
   });
-});
+}
+
+if (document.readyState === "complete" || document.readyState === "interactive") {
+  initHVAuthListener();
+} else {
+  window.addEventListener("DOMContentLoaded", initHVAuthListener);
+}
 
 function checkUrlAuthAction() {
   const urlParams = new URLSearchParams(window.location.search);
