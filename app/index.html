@@ -789,12 +789,17 @@
 
         <!-- REAL DOCTOR APPLICATIONS APPROVAL BOARD -->
         <article class="panel" style="margin-bottom: 24px;">
-          <div class="panel-head">
+          <div class="panel-head" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
             <div>
-              <h3 style="margin: 0; font-size: 19px;">طلبات توثيق واعتماد الأطباء (Doctor Verification & Approval)</h3>
-              <p style="margin: 4px 0 0; font-size: 13px; color: var(--muted);">مراجعة التراخيص الطبية واعتماد الأطباء رسمياً لتفعيل صلاحية فحص الحالات</p>
+              <h3 style="margin: 0; font-size: 19px;">قائمة انتظار توثيق واعتماد الأطباء (Admin Verification Queue)</h3>
+              <p style="margin: 4px 0 0; font-size: 13px; color: var(--muted);">مراجعة التراخيص الطبية واعتماد الأطباء رسمياً لتفعيل صلاحية فحص الحالات السريرية</p>
             </div>
-            <span id="adminPendingAppsBadge" class="pill pending">قيد المراجعة</span>
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <span id="adminPendingAppsBadge" class="pill pending">قيد المراجعة</span>
+              <button type="button" class="soft-button" onclick="promptAddDoctorVerificationToQueue()" style="padding: 6px 14px; font-size: 12.5px; display: inline-flex; align-items: center; gap: 5px;">
+                <span>➕</span> تسجيل طلب طبيب في القائمة
+              </button>
+            </div>
           </div>
           <div id="adminDoctorAppsList" style="margin-top: 18px;">
             <!-- Rendered via JS from Firestore doctor_applications -->

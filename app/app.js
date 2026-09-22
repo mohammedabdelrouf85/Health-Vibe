@@ -4670,25 +4670,133 @@ async function renderVerificationScreen() {
   }
 }
 
+let currentAdminDoctorQueueFilter = "pending";
+
+function setAdminDoctorQueueFilter(filter) {
+  currentAdminDoctorQueueFilter = filter;
+  renderAdminApplications();
+}
+window.setAdminDoctorQueueFilter = setAdminDoctorQueueFilter;
+
+async function promptAddDoctorVerificationToQueue() {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  const name = prompt(isEn ? "Enter doctor full name:" : "أدخل اسم الطبيب الرباعي:");
+  if (!name) return;
+  const email = prompt(isEn ? "Enter doctor email:" : "أدخل البريد الإلكتروني للطبيب:");
+  if (!email || !email.includes("@")) {
+    alert(isEn ? "Please enter a valid email." : "يرجى إدخال بريد إلكتروني صالح.");
+    return;
+  }
+  const licenseNumber = prompt(isEn ? "Enter syndicate license number:" : "أدخل رقم ترخيص مزاولة المهنة / النقابة:", "EG-" + Math.floor(100000 + Math.random() * 900000)) || "";
+  const specialty = prompt(isEn ? "Enter medical specialty:" : "أدخل التخصص الطبي:", isEn ? "Pulmonology & Respiratory Care" : "أمراض الصدر والجهاز التنفسي") || "";
+  const clinic = prompt(isEn ? "Enter clinic / hospital affiliation:" : "أدخل اسم المستشفى أو العيادة التابع لها:", isEn ? "Kasr Al-Ainy Hospital" : "مستشفى القصر العيني") || "";
+
+  const appId = "app_doc_" + Date.now();
+  const userId = `user_doc_${Date.now()}`;
+  const newApp = {
+    id: appId,
+    userId: userId,
+    name: name.trim(),
+    displayName: name.trim(),
+    email: email.trim().toLowerCase(),
+    licenseNumber: licenseNumber.trim(),
+    specialty: specialty.trim(),
+    clinic: clinic.trim(),
+    docName: "medical_license_syndicate.pdf",
+    status: "pending",
+    appliedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    appliedAtMs: Date.now()
+  };
+
+  showToast(isEn ? "Registering doctor verification request..." : "جاري تسجيل طلب توثيق الطبيب في قائمة الانتظار...");
+
+  try {
+    if (typeof db !== "undefined" && db) {
+      await db.collection("doctor_applications").doc(appId).set(newApp, { merge: true });
+      await db.collection("users").doc(userId).set({
+        name: newApp.name,
+        displayName: newApp.name,
+        email: newApp.email,
+        role: ROLES.DOCTOR_PENDING,
+        doctorApplicationStatus: "pending",
+        doctorApplicationId: appId,
+        licenseNumber: newApp.licenseNumber,
+        specialty: newApp.specialty,
+        clinic: newApp.clinic,
+        emailVerified: true,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+    }
+    showToast(isEn ? `Doctor ${name} application queued for verification!` : `تم تسجيل طلب د. ${name} في قائمة الانتظار بنجاح!`);
+    await renderAdminApplications();
+    await renderAdminMetrics();
+    await renderAdminUsers();
+  } catch(e) {
+    console.error("promptAddDoctorVerificationToQueue error:", e);
+    showToast(getAuthErrorMessage(e));
+  }
+}
+window.promptAddDoctorVerificationToQueue = promptAddDoctorVerificationToQueue;
+
 async function renderAdminApplications() {
   const container = document.getElementById("adminDoctorAppsList");
   if (!container) return;
 
   const isEn = currentLanguage === "en";
-  container.innerHTML = `<div style="padding: 24px; text-align: center; color: var(--teal);"><div class="spinner"></div> ${isEn ? "Loading doctor applications..." : "جاري تحميل طلبات التوثيق..."}</div>`;
+  container.innerHTML = `<div style="padding: 24px; text-align: center; color: var(--teal);"><div class="spinner"></div> ${isEn ? "Loading verification queue..." : "جاري تحميل قائمة انتظار التوثيق..."}</div>`;
 
   try {
-    let apps = [];
+    let appsMap = new Map();
+    // 1. Direct Firestore collection get (no composite index required)
     try {
-      const snapshot = await db.collection("doctor_applications").orderBy("appliedAt", "desc").get();
-      if (snapshot && !snapshot.empty) {
-        apps = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      if (typeof db !== "undefined" && db) {
+        const snap = await db.collection("doctor_applications").get();
+        if (snap && !snap.empty) {
+          snap.docs.forEach(d => {
+            const data = d.data();
+            appsMap.set(d.id, { id: d.id, ...data });
+          });
+        }
       }
     } catch (err) {
       console.warn("Doctor apps Firestore read:", err.message);
     }
 
-    const pendingApps = apps.filter(a => a.status === "pending");
+    // 2. Also check users collection for pending doctor applications
+    try {
+      if (typeof db !== "undefined" && db) {
+        const userAppSnap = await db.collection("users").where("doctorApplicationStatus", "in", ["pending", "approved", "rejected"]).get();
+        if (userAppSnap && !userAppSnap.empty) {
+          userAppSnap.docs.forEach(d => {
+            const u = d.data();
+            const id = u.doctorApplicationId || `app_${d.id}`;
+            if (!appsMap.has(id)) {
+              appsMap.set(id, {
+                id: id,
+                userId: d.id,
+                name: u.doctorAppName || u.name || u.displayName || 'طبيب',
+                displayName: u.doctorAppName || u.name || u.displayName || 'طبيب',
+                email: u.email,
+                licenseNumber: u.licenseNumber || '--',
+                specialty: u.specialty || '--',
+                clinic: u.clinic || '--',
+                docName: u.doctorAppDocName || 'license.pdf',
+                downloadURL: u.doctorAppDocDownloadURL || '',
+                status: u.doctorApplicationStatus || 'pending',
+                appliedAt: u.doctorAppDate || Date.now()
+              });
+            }
+          });
+        }
+      }
+    } catch(err) {}
+
+    const allApps = Array.from(appsMap.values());
+    allApps.sort((a, b) => toMillis(b.appliedAt || b.appliedAtMs) - toMillis(a.appliedAt || a.appliedAtMs));
+
+    const pendingApps = allApps.filter(a => (a.status || 'pending') === "pending");
+    const approvedApps = allApps.filter(a => a.status === "approved");
+    const rejectedApps = allApps.filter(a => a.status === "rejected");
 
     const badge = document.getElementById("adminPendingAppsBadge");
     if (badge) {
@@ -4699,27 +4807,74 @@ async function renderAdminApplications() {
       opsBadge.textContent = isEn ? `${pendingApps.length} documents pending review` : `${pendingApps.length} مستندات بانتظار الاعتماد`;
     }
 
-    if (pendingApps.length === 0) {
-      container.innerHTML = `
-        <div style="padding: 30px; text-align: center; color: var(--muted); background: var(--surface-2); border-radius: 14px; border: 1px solid var(--line);">
-          <span style="font-size: 32px; display: block; margin-bottom: 8px;">✅</span>
-          <strong style="color: var(--ink);">${isEn ? "No pending doctor applications" : "لا توجد طلبات أطباء معلقة حالياً"}</strong>
-          <p style="margin: 4px 0 0; font-size: 13px;">${isEn ? "All healthcare provider applications have been verified and processed." : "تمت مراجعة واعتماد كافة طلبات توثيق الأطباء بنجاح."}</p>
+    let displayedApps = allApps;
+    if (currentAdminDoctorQueueFilter === "pending") {
+      displayedApps = pendingApps;
+    } else if (currentAdminDoctorQueueFilter === "approved") {
+      displayedApps = approvedApps;
+    } else if (currentAdminDoctorQueueFilter === "rejected") {
+      displayedApps = rejectedApps;
+    }
+
+    let html = `
+      <div class="status-filter-tabs" style="margin-bottom: 16px;">
+        <button type="button" class="status-filter-tab ${currentAdminDoctorQueueFilter === 'pending' ? 'active' : ''}" onclick="setAdminDoctorQueueFilter('pending')" style="${pendingApps.length > 0 ? 'color: #f59e0b; font-weight: 700;' : ''}">
+          ${isEn ? 'Pending Approval' : 'قيد المراجعة'} (${pendingApps.length}) ${pendingApps.length > 0 ? '⏳' : ''}
+        </button>
+        <button type="button" class="status-filter-tab ${currentAdminDoctorQueueFilter === 'approved' ? 'active' : ''}" onclick="setAdminDoctorQueueFilter('approved')">
+          ${isEn ? 'Approved Doctors' : 'تم الاعتماد'} (${approvedApps.length}) ✓
+        </button>
+        <button type="button" class="status-filter-tab ${currentAdminDoctorQueueFilter === 'rejected' ? 'active' : ''}" onclick="setAdminDoctorQueueFilter('rejected')">
+          ${isEn ? 'Rejected' : 'المرفوضة'} (${rejectedApps.length}) ✗
+        </button>
+        <button type="button" class="status-filter-tab ${currentAdminDoctorQueueFilter === 'all' ? 'active' : ''}" onclick="setAdminDoctorQueueFilter('all')">
+          ${isEn ? 'All Applications' : 'كافة الطلبات'} (${allApps.length})
+        </button>
+      </div>
+    `;
+
+    if (displayedApps.length === 0) {
+      html += `
+        <div style="padding: 36px 20px; text-align: center; color: var(--muted); background: var(--surface-2); border-radius: 14px; border: 1px solid var(--line);">
+          <span style="font-size: 34px; display: block; margin-bottom: 10px;">${currentAdminDoctorQueueFilter === 'pending' ? '🎉' : '📂'}</span>
+          <strong style="color: var(--ink); font-size: 16px;">
+            ${currentAdminDoctorQueueFilter === 'pending' 
+              ? (isEn ? "No pending doctor applications in queue" : "لا توجد طلبات أطباء معلقة في قائمة الانتظار حالياً") 
+              : (isEn ? "No applications in this category" : "لا توجد طلبات في هذا التصنيف")}
+          </strong>
+          <p style="margin: 6px auto 16px; font-size: 13px; max-width: 440px;">
+            ${currentAdminDoctorQueueFilter === 'pending' 
+              ? (isEn ? "All incoming physician licenses have been verified, or doctors can submit new applications from the verification portal." : "تمت مراجعة واعتماد كافة التراخيص الطبية. يمكنك إضافة طلب طبيب للقائمة مباشرة بالزر بالأعلى.")
+              : (isEn ? "Applications will appear here once processed." : "ستظهر الطلبات هنا بمجرد معالجتها وتغيير حالتها.")}
+          </p>
+          <button type="button" class="soft-button" onclick="promptAddDoctorVerificationToQueue()" style="padding: 8px 16px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px;">
+            <span>➕</span> ${isEn ? "Add Doctor to Queue" : "تسجيل طلب طبيب في القائمة الآن"}
+          </button>
         </div>
       `;
+      container.innerHTML = html;
       return;
     }
 
-    let html = "";
-    pendingApps.forEach(app => {
+    displayedApps.forEach(app => {
       let dateStr = "--";
       if (app.appliedAt) {
         const d = app.appliedAt.toMillis ? new Date(app.appliedAt.toMillis()) : new Date(app.appliedAt);
         dateStr = d.toLocaleDateString(isEn ? "en-US" : "ar-EG");
       }
 
+      const isPending = (app.status || 'pending') === "pending";
+      const isApproved = app.status === "approved";
+      const isRejected = app.status === "rejected";
+
+      const statusBadge = isPending 
+        ? `<span class="pill pending">${isEn ? "Pending Review ⏳" : "بانتظار الاعتماد ⏳"}</span>`
+        : (isApproved ? `<span class="pill ok">${isEn ? "Verified & Approved ✓" : "طبيب معتمد وموثق ✓"}</span>` : `<span class="pill danger">${isEn ? "Rejected ✗" : "مرفوض ✗"}</span>`);
+
+      const hasDocLink = Boolean(app.downloadURL);
+
       html += `
-        <div class="admin-app-card" style="margin-bottom: 14px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 16px;">
+        <div class="admin-app-card" style="margin-bottom: 14px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 16px; transition: border-color 0.2s;">
           <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px;">
             <div>
               <h4 style="margin: 0; font-size: 17px; color: var(--ink);">${app.name || app.displayName || 'طبيب'}</h4>
@@ -4727,23 +4882,41 @@ async function renderAdminApplications() {
                 <span>📧 ${app.email}</span> • <span>🏥 ${app.clinic || (isEn ? 'Clinic / Hospital' : 'مستشفى / عيادة')}</span>
               </div>
             </div>
-            <span class="pill pending">${isEn ? "Pending Review" : "بانتظار الاعتماد ⏳"}</span>
+            ${statusBadge}
           </div>
 
-          <div class="summary-list" style="margin: 10px 0;">
+          <div class="summary-list" style="margin: 12px 0;">
             <div><span>${isEn ? "Syndicate License #" : "رقم ترخيص النقابة"}</span><strong style="color: var(--teal); font-family: monospace; font-size: 14px;">${app.licenseNumber || '--'}</strong></div>
             <div><span>${isEn ? "Specialty" : "التخصص الطبي"}</span><strong>${app.specialty || '--'}</strong></div>
-            <div><span>${isEn ? "Attached License" : "المستند المرفق"}</span><strong>📄 ${escapeHtmlAttr(app.docName || 'license.pdf')}</strong></div>
+            <div>
+              <span>${isEn ? "Attached License" : "المستند المرفق"}</span>
+              <div>
+                <strong>📄 ${escapeHtmlAttr(app.docName || 'license.pdf')}</strong>
+                ${hasDocLink ? `
+                  <a href="${app.downloadURL}" target="_blank" rel="noopener noreferrer" style="margin-inline-start: 8px; font-size: 12px; color: var(--teal); text-decoration: underline;">
+                    ${isEn ? "View Document ↗" : "عرض المستند ↗"}
+                  </a>
+                ` : ''}
+              </div>
+            </div>
             <div><span>${isEn ? "Application Date" : "تاريخ التقديم"}</span><strong>${dateStr}</strong></div>
           </div>
 
-          <div style="display: flex; gap: 12px; justify-content: flex-end; align-items: center; padding-top: 10px; border-top: 1px solid var(--line); flex-wrap: wrap;">
-            <button class="danger-button" style="padding: 8px 16px; font-size: 13px;" onclick="rejectDoctorApplication('${app.id}', '${app.userId}')">
-              ${isEn ? "Reject ✗" : "رفض الطلب ✗"}
-            </button>
-            <button class="solid-button" style="padding: 9px 22px; font-size: 13.5px; background: #18a058; border-color: #18a058;" onclick="approveDoctorApplication('${app.id}', '${app.userId}', '${app.name || 'طبيب'}')">
-              ${isEn ? "Approve & Promote to Doctor ✓" : "اعتماد وترقية لطبيب موثق ✓ (Approve)"}
-            </button>
+          <div style="display: flex; gap: 10px; justify-content: flex-end; align-items: center; padding-top: 10px; border-top: 1px solid var(--line); flex-wrap: wrap;">
+            ${isPending ? `
+              <button type="button" class="danger-button" style="padding: 8px 16px; font-size: 13px;" onclick="rejectDoctorApplication('${app.id}', '${app.userId || ''}')">
+                ${isEn ? "Reject ✗" : "رفض الطلب ✗"}
+              </button>
+              <button type="button" class="solid-button" style="padding: 9px 22px; font-size: 13.5px; background: #18a058; border-color: #18a058;" onclick="approveDoctorApplication('${app.id}', '${app.userId || ''}', '${app.name || 'طبيب'}')">
+                ${isEn ? "Approve & Promote to Doctor ✓" : "اعتماد وترقية لطبيب موثق ✓ (Approve)"}
+              </button>
+            ` : (isRejected ? `
+              <button type="button" class="solid-button" style="padding: 8px 18px; font-size: 13px; background: #18a058; border-color: #18a058;" onclick="approveDoctorApplication('${app.id}', '${app.userId || ''}', '${app.name || 'طبيب'}')">
+                ${isEn ? "Re-Approve Doctor ✓" : "إعادة الاعتماد والترقية ✓"}
+              </button>
+            ` : `
+              <span style="font-size: 12.5px; color: #10b981; font-weight: 600;">✓ ${isEn ? "Active Verified Doctor" : "طبيب موثق ومعتمد بنجاح"}</span>
+            `)}
           </div>
         </div>
       `;
