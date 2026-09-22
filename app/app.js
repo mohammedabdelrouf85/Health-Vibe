@@ -44,15 +44,24 @@ const LOGO_ASSETS = {
   light: "./logo-light.png",
   dark: "./logo-dark.png"
 };
+const LOGO_MARK_ASSETS = {
+  light: "./logo-light-mark.png",
+  dark: "./logo-dark-mark.png"
+};
 
 function getThemeLogoSrc() {
   return document.body.classList.contains("dark") ? LOGO_ASSETS.dark : LOGO_ASSETS.light;
 }
 
 function updateThemeLogos() {
-  const logoSrc = getThemeLogoSrc();
+  const isDark = document.body.classList.contains("dark");
+  const logoSrc = isDark ? LOGO_ASSETS.dark : LOGO_ASSETS.light;
+  const logoMarkSrc = isDark ? LOGO_MARK_ASSETS.dark : LOGO_MARK_ASSETS.light;
   document.querySelectorAll("[data-logo]").forEach((logo) => {
     logo.setAttribute("src", logoSrc);
+  });
+  document.querySelectorAll("[data-logo-mark]").forEach((logo) => {
+    logo.setAttribute("src", logoMarkSrc);
   });
 }
 
@@ -3349,7 +3358,7 @@ async function renderReportScreen(targetCaseId = null) {
         <!-- OFFICIAL REPORT HEADER -->
         <div class="report-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--line); padding-bottom: 18px; margin-bottom: 20px;">
           <div class="brand" style="display: flex; align-items: center; gap: 14px;">
-            <img src="${getThemeLogoSrc()}" alt="Health Vibes" class="report-logo" data-logo />
+            <img src="${document.body.classList.contains("dark") ? LOGO_MARK_ASSETS.dark : LOGO_MARK_ASSETS.light}" alt="Health Vibes" class="report-logo" data-logo-mark />
             <div>
               <strong style="font-size: 20px; display: block; color: var(--ink);">${isEn ? "Health Vibes Medical Center" : "مركز هيلث فايبز الطبي التخصصي"}</strong>
               <span style="font-size: 12.5px; color: var(--teal); font-weight: 700;">${isEn ? "Certified Clinical Assessment Report" : "التقرير الطبي السريري المعتمد"}</span>

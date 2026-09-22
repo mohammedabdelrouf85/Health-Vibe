@@ -322,34 +322,28 @@ body.dark .brand strong { color: var(--ink); }
 
 /* Logo image in brand areas */
 .brand-logo {
-  width: 52px;
-  height: 52px;
+  width: 58px;
+  height: 42px;
   object-fit: contain;
-  border-radius: 14px;
+  border-radius: 0;
   flex-shrink: 0;
   background: transparent;
 }
 
-body.dark .brand-logo,
-body.dark .loader-logo,
-body.dark .report-logo {
-  box-shadow: 0 8px 24px rgba(0, 0, 0, .24);
-}
-
 .sidebar .brand-logo {
-  width: 48px;
-  height: 48px;
-  border-radius: 13px;
+  width: 58px;
+  height: 42px;
+  border-radius: 0;
 }
 
 .report-logo {
-  width: 62px;
-  height: 62px;
+  width: 74px;
+  height: 54px;
   object-fit: contain;
-  border-radius: 14px;
-  background: var(--surface-2);
-  border: 1px solid var(--line);
-  padding: 3px;
+  border-radius: 0;
+  background: transparent;
+  border: 0;
+  padding: 0;
 }
 
 .hero-brand-logo {
@@ -360,7 +354,7 @@ body.dark .report-logo {
   object-fit: contain;
   object-position: left center;
   margin: 0 0 14px;
-  border-radius: 18px;
+  border-radius: 0;
 }
 
 body[dir="rtl"] .hero-brand-logo {
