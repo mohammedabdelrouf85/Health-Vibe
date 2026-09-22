@@ -1,11 +1,30 @@
 <!doctype html>
-<html lang="ar" dir="rtl">
+<html lang="en" dir="ltr">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Health Vibes</title>
   <link rel="icon" type="image/png" href="./logo-light.png">
-  <link rel="stylesheet" href="./styles.css?v=2.5">
+  <link rel="stylesheet" href="./styles.css?v=3.0">
+  <script>
+    function showAuth() {
+      var el = document.getElementById("authScreen");
+      if (el) {
+        el.classList.add("open");
+        el.style.display = "grid";
+      }
+      if (typeof window.showSignInView === "function") window.showSignInView();
+    }
+    function hideAuth() {
+      var el = document.getElementById("authScreen");
+      if (el) {
+        el.classList.remove("open");
+        el.style.display = "none";
+      }
+    }
+    window.showAuth = showAuth;
+    window.hideAuth = hideAuth;
+  </script>
   <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-auth-compat.js"></script>
@@ -46,101 +65,101 @@
         <a href="#safety">Safety</a>
       </nav>
       <div class="nav-actions">
-        <button class="outline-button" data-auth-open>Sign in</button>
-        <button class="solid-button" data-auth-open>Get started</button>
+        <button type="button" class="outline-button" data-auth-open onclick="if(typeof setAuthMode==='function') setAuthMode('signin'); showAuth();">Sign in</button>
+        <button type="button" class="solid-button" data-auth-open onclick="if(typeof setAuthMode==='function') setAuthMode('signup'); showAuth();">Get started</button>
       </div>
     </header>
 
     <section class="site-hero">
       <div class="hero-copy">
         <img src="./logo-dark.png" alt="Health Vibes" class="hero-brand-logo" data-logo />
-        <span class="eyebrow">الوحدة الأولى لتقييم التنفس</span>
-        <h1>رعاية صحية رقمية تربط المريض بالطبيب قبل ظهور أي نتيجة نهائية</h1>
-        <p>Health Vibes يجمع التقييم، مراجعة الطبيب، التقارير، المواعيد، والسجل الطبي في تجربة عربية واحدة مبنية للأفراد والعيادات في مصر.</p>
+        <span class="eyebrow">First Respiratory Assessment Unit</span>
+        <h1>Digital healthcare connecting patients with doctors before any final result</h1>
+        <p>Health Vibes unites clinical evaluation, physician review, verified reports, scheduling, and medical records into one seamless platform built for individuals and clinics.</p>
         <div class="hero-actions">
-          <button class="solid-button large" data-auth-open>تجربة البرنامج</button>
-          <button class="soft-button large" data-preview-app>معاينة بدون حساب</button>
+          <button type="button" class="solid-button large" data-auth-open onclick="if(typeof setAuthMode==='function') setAuthMode('signin'); showAuth();">Get Started</button>
+          <button type="button" class="soft-button large" data-preview-app onclick="if(typeof setAuthMode==='function') setAuthMode('signin'); showAuth();">Preview Experience</button>
         </div>
         <div class="trust-row">
-          <span>الذكاء الاصطناعي لا يصدر تشخيصًا مستقلًا</span>
-          <span>مراجعة طبيب إلزامية</span>
-          <span>واجهة عربية كاملة</span>
+          <span>AI does not make independent diagnoses</span>
+          <span>Mandatory physician review</span>
+          <span>Enterprise clinical security</span>
         </div>
       </div>
 
-      <div class="hero-product-card" aria-label="معاينة المنتج">
+      <div class="hero-product-card" aria-label="Product Preview">
         <div class="phone-frame">
           <div class="phone-screen">
             <div class="mini-top">
-              <span>أحمد</span>
-              <b>قيد المراجعة</b>
+              <span>Ahmed</span>
+              <b>In Review</b>
             </div>
             <div class="breath-orb"><span></span></div>
-            <h3>تقييم التنفس</h3>
-            <p>نسبة الأكسجين 95% - كحة متوسطة - 3 أيام</p>
+            <h3>Respiratory Assessment</h3>
+            <p>Oxygen 95% - Moderate cough - 3 days</p>
             <div class="mini-list">
-              <div><span>تقدير الخطورة</span><strong>متوسط</strong></div>
-              <div><span>مراجعة الطبيب</span><strong>قيد الانتظار</strong></div>
-              <div><span>التقرير</span><strong>مغلق حتى الاعتماد</strong></div>
+              <div><span>Risk Assessment</span><strong>Moderate</strong></div>
+              <div><span>Doctor Review</span><strong>Pending</strong></div>
+              <div><span>Report</span><strong>Locked until approval</strong></div>
             </div>
           </div>
         </div>
-        <div class="floating-card card-a"><b>Rule</b><span>مؤشر قواعد غير مُتحقق</span></div>
-        <div class="floating-card card-b"><b>موثق</b><span>اعتماد الطبيب</span></div>
+        <div class="floating-card card-a"><b>Rule</b><span>Non-validated rule indicator</span></div>
+        <div class="floating-card card-b"><b>Verified</b><span>Physician Approval</span></div>
       </div>
     </section>
 
     <section id="workflow" class="site-section">
       <div class="section-head">
-        <span class="eyebrow">مسار العمل</span>
-        <h2>مسار واضح من البيانات إلى التقرير</h2>
+        <span class="eyebrow">Workflow</span>
+        <h2>A Clear Pathway From Data to Certified Report</h2>
       </div>
       <div class="workflow-grid">
-        <article><b>1</b><h3>بيانات المريض</h3><p>أعراض، قياسات، ملف طبي، وموافقة خصوصية واضحة.</p></article>
-        <article><b>2</b><h3>تحليل الذكاء الاصطناعي</h3><p>تصنيف خطورة بقواعد واضحة، والمؤشر غير مُتحقق سريرياً.</p></article>
-        <article><b>3</b><h3>مراجعة الطبيب</h3><p>الطبيب يعتمد أو يرفض أو يطلب متابعة إضافية.</p></article>
-        <article><b>4</b><h3>تقرير معتمد</h3><p>نتيجة وتوصيات وتنبيه طبي محفوظين في السجل.</p></article>
+        <article><b>1</b><h3>Patient Data</h3><p>Symptoms, vitals, medical history, and transparent privacy consent.</p></article>
+        <article><b>2</b><h3>AI Analysis</h3><p>Rule-based triage classification with unvalidated clinical indicators flagged.</p></article>
+        <article><b>3</b><h3>Doctor Review</h3><p>Licensed physician approves, rejects, or requests supplementary follow-up.</p></article>
+        <article><b>4</b><h3>Certified Report</h3><p>Validated results, medical recommendations, and safety alerts recorded securely.</p></article>
       </div>
     </section>
 
     <section id="roles" class="site-section split-section">
       <div>
-        <span class="eyebrow">الحسابات</span>
-        <h2>حسابات للمريض والطبيب والإدارة</h2>
-        <p>الواجهة الجديدة تبدأ بتسجيل دخول واضح، وتسجيل دخول جوجل جاهز للدمج، واختيار دور المستخدم بدون خلط بين مسارات المريض والطبيب والإدارة.</p>
+        <span class="eyebrow">Accounts</span>
+        <h2>Dedicated Portals for Patients, Doctors, and Admins</h2>
+        <p>A unified interface featuring email and Google authentication, automated role routing, and zero overlap between patient, physician, and administrative workflows.</p>
       </div>
       <div class="role-stack">
-        <div><strong>المريض</strong><span>التقييمات، التقارير، والمواعيد</span></div>
-        <div><strong>الطبيب</strong><span>قائمة المراجعة، الاعتماد، والملاحظات</span></div>
-        <div><strong>الإدارة</strong><span>المستخدمون، الأطباء، الفروع، وجودة النموذج</span></div>
+        <div><strong>Patient</strong><span>Assessments, certified reports, and appointment management</span></div>
+        <div><strong>Doctor</strong><span>Clinical review queue, approval controls, and patient notes</span></div>
+        <div><strong>Admin</strong><span>User verification, physician credentialing, branches, and AI metrics</span></div>
       </div>
     </section>
 
     <section id="safety" class="site-section safety-band">
       <div>
-        <span class="eyebrow">السلامة أولًا</span>
-        <h2>لا توجد نتيجة نهائية بدون طبيب</h2>
-        <p>التصميم يفرق بصريًا بين الحالات قيد الانتظار والمعتمدة والعاجلة، ويضع التنبيه الطبي في النتائج والتقارير بدل دفنه داخل الشروط.</p>
+        <span class="eyebrow">Safety First</span>
+        <h2>Zero Final Results Without Physician Verification</h2>
+        <p>Our platform clearly differentiates between pending, certified, and urgent cases, displaying clinical advisories prominently rather than burying them in terms.</p>
       </div>
-      <button class="solid-button large" data-auth-open>إنشاء حساب</button>
+      <button type="button" class="solid-button large" data-auth-open onclick="if(typeof setAuthMode==='function') setAuthMode('signup'); showAuth();">Create Account</button>
     </section>
 
     <!-- Public Site Footer with Legal Links -->
     <footer class="site-footer">
       <div>
-        <strong>Health Vibes AI</strong> &copy; 2026. المنصة السريرية الذكية لمتابعة صحة الجهاز التنفسي.
+        <strong>Health Vibes AI</strong> &copy; 2026. Clinical AI-assisted respiratory healthcare platform.
       </div>
       <div class="site-footer-links">
-        <button type="button" onclick="openLegalModal('privacy')">🔒 سياسة الخصوصية</button>
-        <button type="button" onclick="openLegalModal('terms')">📜 شروط الاستخدام</button>
-        <button type="button" onclick="openLegalModal('disclaimer')" style="color: #f87171;">🚨 إخلاء المسؤولية الطبي</button>
+        <button type="button" onclick="openLegalModal('privacy')">🔒 Privacy Policy</button>
+        <button type="button" onclick="openLegalModal('terms')">📜 Terms of Service</button>
+        <button type="button" onclick="openLegalModal('disclaimer')" style="color: #f87171;">🚨 Medical Disclaimer</button>
       </div>
     </footer>
   </main>
 
   <section id="authScreen" class="auth-screen" aria-label="Sign in">
     <div class="auth-card">
-      <button id="authClose" class="close-button" aria-label="Close">×</button>
+      <button id="authClose" class="close-button" aria-label="Close" onclick="hideAuth()">×</button>
       <div class="brand auth-brand">
         <img src="./logo-dark-mark.png" alt="Health Vibes" class="brand-logo" data-logo-mark />
         <div>
@@ -161,11 +180,11 @@
         </div>
 
         <div class="auth-mode-switch" role="tablist" aria-label="Authentication mode">
-          <button type="button" id="authTabSignIn" class="auth-tab active">Sign In</button>
-          <button type="button" id="authTabSignUp" class="auth-tab">Create Account</button>
+          <button type="button" id="authTabSignIn" class="auth-tab active" onclick="setAuthMode('signin')">Sign In</button>
+          <button type="button" id="authTabSignUp" class="auth-tab" onclick="setAuthMode('signup')">Create Account</button>
         </div>
 
-        <form id="authEmailForm" autocomplete="on">
+        <form id="authEmailForm" autocomplete="on" onsubmit="event.preventDefault(); handleEmailAuth(event);">
           <div id="authNameGroup" class="form-group" style="display:none;">
             <label for="authName">Full Name</label>
             <input type="text" id="authName" placeholder="e.g. Ahmed Mohamed" autocomplete="name" />
@@ -183,16 +202,14 @@
 
           <div class="auth-options">
             <label><input type="checkbox" id="rememberMe" checked /> <span>Remember me</span></label>
-            <button type="button" id="forgotPasswordBtn">Forgot password?</button>
+            <button type="button" id="forgotPasswordBtn" onclick="showForgotView()">Forgot password?</button>
           </div>
 
           <div style="margin: 12px 0 16px; text-align: center; font-size: 11.5px; color: var(--muted); line-height: 1.6;">
-            بالتسجيل أو المتابعة، فإنك توافق على 
-            <button type="button" style="background:none;border:none;color:var(--teal);text-decoration:underline;cursor:pointer;padding:0;font-size:inherit;" onclick="openLegalModal('terms')">شروط الاستخدام</button>
-            و 
-            <button type="button" style="background:none;border:none;color:var(--teal);text-decoration:underline;cursor:pointer;padding:0;font-size:inherit;" onclick="openLegalModal('privacy')">سياسة الخصوصية</button>
-            و 
-            <button type="button" style="background:none;border:none;color:#ef4444;text-decoration:underline;cursor:pointer;padding:0;font-size:inherit;" onclick="openLegalModal('disclaimer')">إخلاء المسؤولية الطبي</button>.
+            By continuing, you acknowledge and agree to our 
+            <button type="button" style="background:none;border:none;color:var(--teal);text-decoration:underline;cursor:pointer;padding:0;font-size:inherit;" onclick="openLegalModal('terms')">Terms of Use</button>, 
+            <button type="button" style="background:none;border:none;color:var(--teal);text-decoration:underline;cursor:pointer;padding:0;font-size:inherit;" onclick="openLegalModal('privacy')">Privacy Policy</button>, and 
+            <button type="button" style="background:none;border:none;color:#ef4444;text-decoration:underline;cursor:pointer;padding:0;font-size:inherit;" onclick="openLegalModal('disclaimer')">Medical Disclaimer</button>.
           </div>
 
           <button id="authSubmitBtn" type="submit" class="solid-button large auth-submit-btn">
@@ -202,7 +219,7 @@
 
         <div class="divider"><span>or</span></div>
 
-        <button id="googleLogin" class="google-button" type="button">
+        <button id="googleLogin" class="google-button" type="button" onclick="enterApp('google')">
           <span class="google-g">G</span>
           <span>Continue with Google</span>
         </button>
@@ -1298,7 +1315,7 @@
     </div>
   </div>
 
-  <script src="./config.js?v=2.9"></script>
-  <script src="./app.js?v=2.9"></script>
+  <script src="./config.js?v=3.0"></script>
+  <script src="./app.js?v=3.0"></script>
 </body>
 </html>

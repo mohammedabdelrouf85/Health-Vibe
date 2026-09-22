@@ -814,7 +814,13 @@ const enToAr = {
 };
 
 let selectedRole = "patient";
-let currentLanguage = "ar";
+let currentLanguage = (function() {
+  try {
+    return localStorage.getItem("hv_lang") || "en";
+  } catch(e) {
+    return "en";
+  }
+})();
 
 function localized(text) {
   if (currentLanguage === "en") {
@@ -2321,7 +2327,10 @@ if (APP_ENV.isLocalhost && APP_ENV.allowDemoSeed) {
 }
 
 function showAuth() {
-  authScreen.classList.add("open");
+  if (authScreen) {
+    authScreen.classList.add("open");
+    authScreen.style.display = "grid";
+  }
   clearAuthError();
   if (window.location.protocol === "file:") {
     const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
@@ -2338,9 +2347,15 @@ function showAuth() {
 }
 
 function hideAuth() {
-  authScreen.classList.remove("open");
+  if (authScreen) {
+    authScreen.classList.remove("open");
+    authScreen.style.display = "none";
+  }
   clearAuthError();
 }
+
+window.showAuth = showAuth;
+window.hideAuth = hideAuth;
 
 function showForgotView() {
   clearAuthError();
@@ -2399,6 +2414,10 @@ function setAuthMode(mode) {
     forgotPasswordBtn.style.display = mode === "signup" ? "none" : "inline-block";
   }
 }
+
+window.setAuthMode = setAuthMode;
+window.showSignInView = showSignInView;
+window.showForgotView = showForgotView;
 
 function showAuthError(message) {
   if (authErrorBanner) {
@@ -2524,6 +2543,8 @@ async function handleEmailAuth(e) {
     setAuthLoading(false);
   }
 }
+
+window.handleEmailAuth = handleEmailAuth;
 
 let resetCooldown = false;
 let resetTimer = null;
@@ -2686,6 +2707,8 @@ async function enterApp(source = "google") {
     }
   }
 }
+
+window.enterApp = enterApp;
 
 async function leaveApp() {
   // ── إيقاف الـ real-time listener عند تسجيل الخروج ────────────
