@@ -1157,7 +1157,26 @@ async function getAllKnownAccounts() {
     }
   } catch(e) {}
 
-  return Array.from(accountMap.values());
+  const accountsList = Array.from(accountMap.values());
+
+  // Automatically register and sync all known accounts to Firestore in background
+  if (typeof db !== "undefined" && db) {
+    accountsList.forEach(rec => {
+      if (rec && rec.id && rec.email) {
+        db.collection("users").doc(rec.id).set({
+          name: rec.name || rec.displayName || rec.email.split('@')[0],
+          displayName: rec.displayName || rec.name || rec.email.split('@')[0],
+          email: rec.email,
+          role: rec.role || ROLES.PATIENT,
+          emailVerified: Boolean(rec.emailVerified),
+          clinic: rec.clinic || "",
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true }).catch(() => {});
+      }
+    });
+  }
+
+  return accountsList;
 }
 
 async function promptAddAccount() {
@@ -3238,11 +3257,179 @@ async function renderPatientDashboard() {
 // =========================================================================
 
 window._selectedReportCaseId = null;
+window._adminReportView = "accounts"; // 'accounts' or 'cases'
 
 window.openCaseReport = function(caseId) {
   window._selectedReportCaseId = caseId;
+  window._adminReportView = "cases";
   showScreen("report");
 };
+
+async function renderAdminAccountsReportView(container, isEn, hasCaseData) {
+  const users = await getAllKnownAccounts();
+  const totalUsers = users.length;
+  const verifiedUsers = users.filter(u => u.emailVerified || u.isOwner);
+  const unverifiedUsers = users.filter(u => !u.emailVerified && !u.isOwner);
+  const verifyRate = Math.round((verifiedUsers.length / Math.max(totalUsers, 1)) * 100);
+
+  let switcherHtml = "";
+  if (hasCaseData) {
+    switcherHtml = `
+      <div class="status-filter-tabs no-print" style="margin-bottom: 20px;">
+        <button type="button" class="status-filter-tab active" onclick="window._adminReportView = 'accounts'; renderReportScreen();">
+          👥 ${isEn ? "Admin Accounts & Verification Report" : "تقرير إدارة الحسابات والتوثيق"}
+        </button>
+        <button type="button" class="status-filter-tab" onclick="window._adminReportView = 'cases'; renderReportScreen();">
+          🫁 ${isEn ? "Clinical Case Report" : "التقرير الطبي للحالات"}
+        </button>
+      </div>
+    `;
+  }
+
+  let html = `
+    ${switcherHtml}
+    <div class="content-grid" style="grid-template-columns: 1fr; gap: 20px;">
+      <!-- Header Banner -->
+      <article class="panel">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 14px;">
+          <div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <h2 style="margin: 0; font-size: 22px;">${isEn ? "System Accounts & Verification Report" : "تقرير إدارة وتوثيق الحسابات بالنظام (Admin Report)"}</h2>
+              <span class="pill ok" style="font-size: 11px;">${isEn ? "System Governance" : "تقرير رسمي معتمد 🟢"}</span>
+            </div>
+            <p style="margin: 6px 0 0; font-size: 13.5px; color: var(--muted);">
+              ${isEn 
+                ? "Official audit report of all registered accounts, verification status, and administrative role allocations." 
+                : "تقرير شامل ومفصل بجميع الحسابات المسجلة وحالة توثيق البريد الإلكتروني والصلاحيات الممنوحة على السيستم."}
+            </p>
+          </div>
+          <div class="no-print" style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button type="button" class="soft-button" onclick="syncAllAccountsToFirestore()" style="padding: 7px 14px; font-size: 12.5px; display: inline-flex; align-items: center; gap: 6px;" title="مزامنة وتسجيل كافة الحسابات في قاعدة بيانات Firestore">
+              <span>💾</span> ${isEn ? "Sync All to Database" : "تسجيل كافة الحسابات على السيستم"}
+            </button>
+            <button type="button" class="soft-button" onclick="verifyAllUnverifiedAccounts()" style="padding: 7px 14px; font-size: 12.5px; display: inline-flex; align-items: center; gap: 6px; color: #10b981; border-color: rgba(16,185,129,0.4);" title="اعتماد وتوثيق الحسابات غير المؤكدة">
+              <span>⚡</span> ${isEn ? "Verify All Unverified" : "توثيق الحسابات غير المؤكدة"}
+            </button>
+            <button type="button" class="outline-button" onclick="window.print()" style="padding: 7px 14px; font-size: 12.5px; display: inline-flex; align-items: center; gap: 6px;">
+              <span>🖨️</span> ${isEn ? "Print Report" : "طباعة التقرير"}
+            </button>
+          </div>
+        </div>
+
+        <!-- Metric KPI Cards -->
+        <div class="metric-grid" style="grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); margin-top: 20px;">
+          <article>
+            <span>${isEn ? "Total Registered Users" : "إجمالي الحسابات"}</span>
+            <strong>${totalUsers}</strong>
+            <small>${isEn ? "Authoritative DB Count" : "مسجلين في قاعدة البيانات"}</small>
+          </article>
+          <article>
+            <span>${isEn ? "Verified Accounts" : "الحسابات المؤكدة"}</span>
+            <strong style="color: #10b981;">${verifiedUsers.length}</strong>
+            <small style="color: #10b981;">${verifyRate}% ${isEn ? "Verified" : "نسبة التوثيق"}</small>
+          </article>
+          <article>
+            <span>${isEn ? "Unverified (Regular)" : "الحسابات غير المؤكدة"}</span>
+            <strong style="color: #f59e0b;">${unverifiedUsers.length}</strong>
+            <small style="color: #f59e0b;">${isEn ? "Pending verification" : "بانتظار التوثيق"}</small>
+          </article>
+        </div>
+      </article>
+
+      <!-- UNVERIFIED ACCOUNTS SECTION -->
+      <article class="panel">
+        <div class="panel-head" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+          <div>
+            <h3 style="margin: 0; font-size: 18px; color: #f59e0b;">⚠️ ${isEn ? "Unverified Accounts Audit" : "سجل الحسابات غير المؤكدة المسجلة في النظام"}</h3>
+            <p style="margin: 4px 0 0; font-size: 13px; color: var(--muted);">${isEn ? "Accounts that entered or interacted with the system without completing email verification." : "الحسابات العادية المسجلة في النظام التي لم تكمل توثيق البريد الإلكتروني بعد."}</p>
+          </div>
+          <span class="pill pending" style="background: rgba(245, 158, 11, 0.12); color: #f59e0b;">${unverifiedUsers.length} ${isEn ? "Unverified" : "غير مؤكد"}</span>
+        </div>
+
+        ${unverifiedUsers.length === 0 ? `
+          <div style="padding: 30px; text-align: center; color: #10b981;">
+            <div style="font-size: 32px; margin-bottom: 8px;">🎉</div>
+            <strong>${isEn ? "All accounts are verified on the system!" : "جميع الحسابات مسجلة وموثقة بالكامل على السيستم!"}</strong>
+          </div>
+        ` : `
+          <div style="overflow-x: auto; margin-top: 14px;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+              <thead>
+                <tr style="border-bottom: 2px solid var(--line); color: var(--muted);">
+                  <th style="padding: 10px 12px; text-align: start;">${isEn ? "User Name" : "اسم المستخدم"}</th>
+                  <th style="padding: 10px 12px; text-align: start;">${isEn ? "Email Address" : "البريد الإلكتروني"}</th>
+                  <th style="padding: 10px 12px; text-align: start;">${isEn ? "Role" : "الدور"}</th>
+                  <th style="padding: 10px 12px; text-align: start;">${isEn ? "Status" : "حالة التوثيق"}</th>
+                  <th style="padding: 10px 12px; text-align: end;">${isEn ? "Admin Action" : "إجراء التوثيق"}</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${unverifiedUsers.map(u => {
+                  const uName = u.name || u.displayName || u.email.split('@')[0];
+                  return `
+                    <tr style="border-bottom: 1px solid var(--line);">
+                      <td style="padding: 12px; font-weight: 600;">${uName}</td>
+                      <td style="padding: 12px; font-family: monospace; color: var(--muted);">${u.email}</td>
+                      <td style="padding: 12px;"><span class="pill info">${englishRoleLabels[u.role] || u.role || 'patient'}</span></td>
+                      <td style="padding: 12px;"><span class="pill pending" style="background: rgba(245, 158, 11, 0.12); color: #f59e0b;">غير مؤكد (Regular)</span></td>
+                      <td style="padding: 12px; text-align: end;">
+                        <button type="button" onclick="toggleUserVerification('${u.id}', false, '${uName}', '${u.email}')" class="soft-button" style="padding: 4px 10px; font-size: 12px; background: rgba(16,185,129,0.12); border-color: #10b981; color: #10b981; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">
+                          <span>⚡</span> ${isEn ? "Verify on System" : "توثيق وتأكيد على السيستم"}
+                        </button>
+                      </td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        `}
+      </article>
+
+      <!-- ALL ACCOUNTS AUDIT LEDGER -->
+      <article class="panel">
+        <div class="panel-head">
+          <h3 style="margin: 0; font-size: 18px;">${isEn ? "All Accounts Ledger" : "سجل كافة الحسابات المسجلة في النظام"}</h3>
+          <span class="pill info">${totalUsers} ${isEn ? "Accounts" : "حساب"}</span>
+        </div>
+        <div style="overflow-x: auto; margin-top: 14px;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+            <thead>
+              <tr style="border-bottom: 2px solid var(--line); color: var(--muted);">
+                <th style="padding: 10px 12px; text-align: start;">${isEn ? "User" : "المستخدم"}</th>
+                <th style="padding: 10px 12px; text-align: start;">${isEn ? "Email" : "البريد الإلكتروني"}</th>
+                <th style="padding: 10px 12px; text-align: start;">${isEn ? "Role" : "الدور"}</th>
+                <th style="padding: 10px 12px; text-align: start;">${isEn ? "Status" : "حالة الحساب"}</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${users.map(u => {
+                const isOwner = isOwnerUser(u.email) || u.isOwner === true;
+                const isVerified = Boolean(u.emailVerified || isOwner);
+                const uName = u.name || u.displayName || u.email.split('@')[0];
+                return `
+                  <tr style="border-bottom: 1px solid var(--line);">
+                    <td style="padding: 10px 12px; font-weight: 600;">${uName} ${isOwner ? '<span class="owner-badge">Super Admin</span>' : ''}</td>
+                    <td style="padding: 10px 12px; font-family: monospace; color: var(--muted);">${u.email}</td>
+                    <td style="padding: 10px 12px;"><span class="pill info">${englishRoleLabels[u.role] || u.role}</span></td>
+                    <td style="padding: 10px 12px;">
+                      ${isVerified 
+                        ? `<span class="pill ok">${isEn ? "Verified ✓" : "مؤكد ✓"}</span>` 
+                        : `<span class="pill pending" style="background: rgba(245, 158, 11, 0.12); color: #f59e0b;">${isEn ? "Regular (Unverified)" : "غير مؤكد"}</span>`}
+                    </td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      </article>
+    </div>
+  `;
+
+  container.innerHTML = html;
+}
+window.renderAdminAccountsReportView = renderAdminAccountsReportView;
 
 async function renderReportScreen(targetCaseId = null) {
   const container = document.getElementById("reportContainer");
@@ -3307,6 +3494,13 @@ async function renderReportScreen(targetCaseId = null) {
           caseId = caseData.id;
         }
       }
+    }
+
+    // ADMIN CHECK: If Admin or Super Admin and viewing accounts report (or no clinical case)
+    const isUserAdmin = isOwnerUser(user.email) || isAdminRole(selectedRole) || selectedRole === ROLES.SUPER_ADMIN;
+    if (isUserAdmin && (!caseData || window._adminReportView === "accounts")) {
+      await renderAdminAccountsReportView(container, isEn, Boolean(caseData));
+      return;
     }
 
     // STATE 1: NO CASE EXISTS
@@ -4846,6 +5040,14 @@ window.rejectDoctorApplication = rejectDoctorApplication;
 window.renderAdminUsers = renderAdminUsers;
 window.changeUserRole = changeUserRole;
 
+let currentAdminUsersFilter = "all";
+
+function setAdminUsersFilter(filter) {
+  currentAdminUsersFilter = filter;
+  renderAdminUsers();
+}
+window.setAdminUsersFilter = setAdminUsersFilter;
+
 async function renderAdminUsers() {
   const container = document.getElementById("adminUsersTableContainer");
   if (!container) return;
@@ -4871,61 +5073,96 @@ async function renderAdminUsers() {
       return;
     }
 
+    let filteredUsers = users;
+    if (currentAdminUsersFilter === "unverified") {
+      filteredUsers = users.filter(u => !u.emailVerified && !u.isOwner);
+    } else if (currentAdminUsersFilter === "verified") {
+      filteredUsers = users.filter(u => u.emailVerified || u.isOwner);
+    }
+
     let html = `
+      <!-- Filter Tabs -->
+      <div class="status-filter-tabs" style="margin-bottom: 16px;">
+        <button type="button" class="status-filter-tab ${currentAdminUsersFilter === 'all' ? 'active' : ''}" onclick="setAdminUsersFilter('all')">
+          ${isEn ? 'All Accounts' : 'كافة الحسابات'} (${totalUsers})
+        </button>
+        <button type="button" class="status-filter-tab ${currentAdminUsersFilter === 'unverified' ? 'active' : ''}" onclick="setAdminUsersFilter('unverified')" style="${unverifiedUsersCount > 0 ? 'color: #f59e0b; font-weight: 700;' : ''}">
+          ${isEn ? 'Unverified / Regular' : 'الحسابات غير المؤكدة'} (${unverifiedUsersCount}) ${unverifiedUsersCount > 0 ? '⚠️' : ''}
+        </button>
+        <button type="button" class="status-filter-tab ${currentAdminUsersFilter === 'verified' ? 'active' : ''}" onclick="setAdminUsersFilter('verified')">
+          ${isEn ? 'Verified Accounts' : 'الحسابات المؤكدة'} (${verifiedUsersCount}) ✓
+        </button>
+      </div>
+
       <table style="width: 100%; border-collapse: collapse; text-align: start; font-size: 13px;">
         <thead>
           <tr style="border-bottom: 2px solid var(--line); color: var(--muted);">
             <th style="padding: 10px 12px; text-align: start;">${isEn ? "User" : "المستخدم"}</th>
             <th style="padding: 10px 12px; text-align: start;">${isEn ? "Email" : "البريد الإلكتروني"}</th>
             <th style="padding: 10px 12px; text-align: start;">${isEn ? "Role" : "الدور الحالي"}</th>
-            <th style="padding: 10px 12px; text-align: start;">${isEn ? "Verification" : "حالة الحساب"}</th>
-            <th style="padding: 10px 12px; text-align: end;">${isEn ? "Actions" : "إدارة الصلاحيات"}</th>
+            <th style="padding: 10px 12px; text-align: start;">${isEn ? "Verification" : "حالة التوثيق"}</th>
+            <th style="padding: 10px 12px; text-align: end;">${isEn ? "Actions" : "إدارة الصلاحيات والتوثيق"}</th>
           </tr>
         </thead>
         <tbody>
     `;
 
-    users.forEach(u => {
-      const isOwner = isOwnerUser(u.email) || u.isOwner === true;
-      const role = normalizeRole(u.role || "patient", isOwner);
-      const roleBadgeClass = isOwner ? "owner-badge" : (isAdminRole(role) ? "pill danger" : (role === ROLES.DOCTOR ? "pill ok" : "pill info"));
-      const roleText = isEn ? (englishRoleLabels[role] || role) : (roleLabels[role] || role);
-      
-      const isVerified = Boolean(u.emailVerified || isOwner);
-      const isEmailVerifiedHtml = isVerified
-        ? `<span class="pill ok" style="font-size: 11px; padding: 3px 8px;">${isEn ? "Verified Email ✓" : "بريد مؤكد ✓"}</span>`
-        : `<span class="pill pending" style="font-size: 11px; padding: 3px 8px; background: rgba(148, 163, 184, 0.12); color: var(--muted);">${isEn ? "Regular (Unverified)" : "حساب عادي (غير مؤكد)"}</span>`;
-      
-      const userNameStr = u.name || u.displayName || (u.email ? u.email.split('@')[0] : 'مستخدم');
-      const roleManagedByApplication = role === ROLES.DOCTOR_PENDING;
+    if (filteredUsers.length === 0) {
+      html += `<tr><td colspan="5" style="padding: 24px; text-align: center; color: var(--muted);">${isEn ? "No accounts match this filter" : "لا توجد حسابات تطابق هذا التصنيف"}</td></tr>`;
+    } else {
+      filteredUsers.forEach(u => {
+        const isOwner = isOwnerUser(u.email) || u.isOwner === true;
+        const role = normalizeRole(u.role || "patient", isOwner);
+        const roleBadgeClass = isOwner ? "owner-badge" : (isAdminRole(role) ? "pill danger" : (role === ROLES.DOCTOR ? "pill ok" : "pill info"));
+        const roleText = isEn ? (englishRoleLabels[role] || role) : (roleLabels[role] || role);
+        
+        const isVerified = Boolean(u.emailVerified || isOwner);
+        const isEmailVerifiedHtml = isVerified
+          ? `<span class="pill ok" style="font-size: 11px; padding: 3px 8px;">${isEn ? "Verified ✓" : "بريد مؤكد ✓"}</span>`
+          : `<span class="pill pending" style="font-size: 11px; padding: 3px 8px; background: rgba(245, 158, 11, 0.12); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3);">${isEn ? "Regular (Unverified) ⚠️" : "حساب عادي (غير مؤكد) ⚠️"}</span>`;
+        
+        const userNameStr = u.name || u.displayName || (u.email ? u.email.split('@')[0] : 'مستخدم');
+        const roleManagedByApplication = role === ROLES.DOCTOR_PENDING;
 
-      html += `
-        <tr style="border-bottom: 1px solid var(--line);">
-          <td style="padding: 12px; font-weight: 600; color: var(--ink);">
-            ${userNameStr}
-            ${isOwner ? `<span class="owner-badge" style="margin-inline-start: 6px;">${isEn ? "Super Admin" : "مدير عام"}</span>` : ''}
-          </td>
-          <td style="padding: 12px; color: var(--muted); font-family: monospace;">${u.email}</td>
-          <td style="padding: 12px;">
-            <span class="${roleBadgeClass}" style="font-size: 11.5px; padding: 4px 10px;">${roleText}</span>
-          </td>
-          <td style="padding: 12px;">
-            ${isEmailVerifiedHtml}
-          </td>
-          <td style="padding: 12px; text-align: end;">
-            ${isOwner || roleManagedByApplication ? `<span style="font-size: 12px; color: var(--muted);">${isOwner ? (isEn ? "Protected (Super Admin)" : "محمي (مدير عام)") : roleText}</span>` : `
-              <select onchange="changeUserRole('${u.id}', this.value, '${userNameStr}')" style="padding: 5px 9px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 12px; cursor: pointer;">
-                <option value="patient" ${role === 'patient' ? 'selected' : ''}>${isEn ? 'Patient (مريض)' : 'حساب مريض'}</option>
-                <option value="clinic_admin" ${role === 'clinic_admin' ? 'selected' : ''}>${isEn ? 'Clinic admin' : 'مدير عيادة'}</option>
-                <option value="doctor" ${role === 'doctor' ? 'selected' : ''}>${isEn ? 'Doctor' : 'طبيب موثق'}</option>
-                <option value="support" ${role === 'support' ? 'selected' : ''}>${isEn ? 'Support' : 'دعم فني'}</option>
-                <option value="super_admin" ${role === 'super_admin' ? 'selected' : ''}>${isEn ? 'Super admin' : 'مدير عام للنظام'}</option>
-              </select>
-            `}
-          </td>
-        </tr>
-      `;
-    });
+        html += `
+          <tr style="border-bottom: 1px solid var(--line);">
+            <td style="padding: 12px; font-weight: 600; color: var(--ink);">
+              ${userNameStr}
+              ${isOwner ? `<span class="owner-badge" style="margin-inline-start: 6px;">${isEn ? "Super Admin" : "مدير عام"}</span>` : ''}
+            </td>
+            <td style="padding: 12px; color: var(--muted); font-family: monospace;">${u.email}</td>
+            <td style="padding: 12px;">
+              <span class="${roleBadgeClass}" style="font-size: 11.5px; padding: 4px 10px;">${roleText}</span>
+            </td>
+            <td style="padding: 12px;">
+              <div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start;">
+                ${isEmailVerifiedHtml}
+                ${!isOwner ? (isVerified ? `
+                  <button type="button" onclick="toggleUserVerification('${u.id}', true, '${userNameStr}', '${u.email}')" class="soft-button" style="padding: 2px 7px; font-size: 10.5px; opacity: 0.75; color: #ef4444; border-color: rgba(239,68,68,0.3);" title="${isEn ? 'Revoke verification' : 'إلغاء التوثيق'}">
+                    ${isEn ? 'Unverify' : 'إلغاء التوثيق'}
+                  </button>
+                ` : `
+                  <button type="button" onclick="toggleUserVerification('${u.id}', false, '${userNameStr}', '${u.email}')" class="soft-button" style="padding: 3px 8px; font-size: 11px; background: rgba(16,185,129,0.12); border-color: #10b981; color: #10b981; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;" title="${isEn ? 'Verify and register account on system' : 'توثيق وتأكيد الحساب على السيستم'}">
+                    <span>⚡</span> ${isEn ? 'Verify on System' : 'توثيق على السيستم'}
+                  </button>
+                `) : ''}
+              </div>
+            </td>
+            <td style="padding: 12px; text-align: end;">
+              ${isOwner || roleManagedByApplication ? `<span style="font-size: 12px; color: var(--muted);">${isOwner ? (isEn ? "Protected (Super Admin)" : "محمي (مدير عام)") : roleText}</span>` : `
+                <select onchange="changeUserRole('${u.id}', this.value, '${userNameStr}')" style="padding: 5px 9px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 12px; cursor: pointer;">
+                  <option value="patient" ${role === 'patient' ? 'selected' : ''}>${isEn ? 'Patient (مريض)' : 'حساب مريض'}</option>
+                  <option value="clinic_admin" ${role === 'clinic_admin' ? 'selected' : ''}>${isEn ? 'Clinic admin' : 'مدير عيادة'}</option>
+                  <option value="doctor" ${role === 'doctor' ? 'selected' : ''}>${isEn ? 'Doctor' : 'طبيب موثق'}</option>
+                  <option value="support" ${role === 'support' ? 'selected' : ''}>${isEn ? 'Support' : 'دعم فني'}</option>
+                  <option value="super_admin" ${role === 'super_admin' ? 'selected' : ''}>${isEn ? 'Super admin' : 'مدير عام للنظام'}</option>
+                </select>
+              `}
+            </td>
+          </tr>
+        `;
+      });
+    }
 
     html += `
         </tbody>
@@ -4980,6 +5217,134 @@ async function changeUserRole(userId, newRole, userName) {
     showToast(getAuthErrorMessage(err));
   }
 }
+
+async function toggleUserVerification(userId, currentStatus, userName, userEmail) {
+  const isEn = currentLanguage === "en";
+  const newStatus = !currentStatus;
+  const actionText = newStatus 
+    ? (isEn ? `verify account for ${userName}` : `توثيق وتأكيد حساب ${userName}`)
+    : (isEn ? `unverify account for ${userName}` : `إلغاء توثيق حساب ${userName}`);
+    
+  if (!confirm(isEn ? `Are you sure you want to ${actionText} on the system?` : `هل أنت متأكد من رغبتك في ${actionText} وتسجيل ذلك في النظام؟`)) {
+    return;
+  }
+  
+  showToast(isEn ? `Updating verification status...` : `جاري تسجيل حالة التوثيق في النظام...`);
+  
+  try {
+    // 1. Update Firestore users collection
+    if (typeof db !== "undefined" && db) {
+      await db.collection("users").doc(userId).set({
+        emailVerified: newStatus,
+        verifiedAt: newStatus ? firebase.firestore.FieldValue.serverTimestamp() : null,
+        verifiedByAdmin: newStatus ? (auth?.currentUser?.email || "super_admin") : null
+      }, { merge: true });
+    }
+    
+    // 2. Update local registry
+    const list = getLocalAccountsRegistry();
+    const u = list.find(x => x.id === userId || (x.email && x.email.toLowerCase() === (userEmail || '').toLowerCase()));
+    if (u) {
+      u.emailVerified = newStatus;
+      try { localStorage.setItem(ACCOUNTS_REGISTRY_KEY, JSON.stringify(list)); } catch(e) {}
+    }
+    
+    // 3. Write audit log
+    if (typeof writeClientAuditLog === "function") {
+      await writeClientAuditLog(newStatus ? "ADMIN_VERIFIED_USER_ACCOUNT" : "ADMIN_UNVERIFIED_USER_ACCOUNT", {
+        targetUserId: userId,
+        targetEmail: userEmail,
+        newStatus: newStatus
+      }).catch(() => {});
+    }
+    
+    showToast(isEn ? `Account ${userName} is now ${newStatus ? 'VERIFIED' : 'UNVERIFIED'} on system!` : `تم ${newStatus ? 'توثيق وتأكيد' : 'إلغاء توثيق'} حساب ${userName} على السيستم بنجاح!`);
+    await renderAdminUsers();
+    await renderAdminMetrics();
+    if (window._adminReportView === "accounts") {
+      renderReportScreen();
+    }
+  } catch(err) {
+    console.error("toggleUserVerification error:", err);
+    showToast(getAuthErrorMessage(err));
+  }
+}
+window.toggleUserVerification = toggleUserVerification;
+
+async function syncAllAccountsToFirestore() {
+  const isEn = currentLanguage === "en";
+  showToast(isEn ? "Syncing all accounts to system..." : "جاري تسجيل ومزامنة كافة الحسابات على قاعدة بيانات السيستم...");
+  try {
+    const users = await getAllKnownAccounts();
+    let count = 0;
+    if (typeof db !== "undefined" && db) {
+      for (const u of users) {
+        if (u && u.email && u.id) {
+          await db.collection("users").doc(u.id).set({
+            name: u.name || u.displayName || u.email.split('@')[0],
+            displayName: u.name || u.displayName || u.email.split('@')[0],
+            email: u.email,
+            role: u.role || ROLES.PATIENT,
+            emailVerified: Boolean(u.emailVerified),
+            clinic: u.clinic || "",
+            syncedAt: firebase.firestore.FieldValue.serverTimestamp()
+          }, { merge: true }).catch(() => {});
+          count++;
+        }
+      }
+    }
+    showToast(isEn ? `Successfully registered ${count} accounts to system database!` : `تم تسجيل وحفظ ${count} حساب على قاعدة بيانات السيستم بنجاح!`);
+    await renderAdminUsers();
+    await renderAdminMetrics();
+    if (window._adminReportView === "accounts") {
+      renderReportScreen();
+    }
+  } catch(err) {
+    console.error("syncAllAccountsToFirestore error:", err);
+    showToast(getAuthErrorMessage(err));
+  }
+}
+window.syncAllAccountsToFirestore = syncAllAccountsToFirestore;
+
+async function verifyAllUnverifiedAccounts() {
+  const isEn = currentLanguage === "en";
+  if (!confirm(isEn ? "Are you sure you want to verify all unverified accounts on the system?" : "هل أنت متأكد من اعتماد وتوثيق جميع الحسابات غير المؤكدة على السيستم؟")) {
+    return;
+  }
+  showToast(isEn ? "Verifying all accounts..." : "جاري توثيق جميع الحسابات على السيستم...");
+  try {
+    const users = await getAllKnownAccounts();
+    const unverified = users.filter(u => !u.emailVerified && !u.isOwner);
+    let count = 0;
+    for (const u of unverified) {
+      if (u && u.id) {
+        if (typeof db !== "undefined" && db) {
+          await db.collection("users").doc(u.id).set({
+            emailVerified: true,
+            verifiedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            verifiedByAdmin: auth?.currentUser?.email || "super_admin"
+          }, { merge: true }).catch(() => {});
+        }
+        u.emailVerified = true;
+        count++;
+      }
+    }
+    // Update local registry
+    try {
+      localStorage.setItem(ACCOUNTS_REGISTRY_KEY, JSON.stringify(users));
+    } catch(e) {}
+    showToast(isEn ? `Successfully verified ${count} accounts on system!` : `تم توثيق وتأكيد ${count} حساب بنجاح على السيستم!`);
+    await renderAdminUsers();
+    await renderAdminMetrics();
+    if (window._adminReportView === "accounts") {
+      renderReportScreen();
+    }
+  } catch(err) {
+    console.error("verifyAllUnverifiedAccounts error:", err);
+    showToast(getAuthErrorMessage(err));
+  }
+}
+window.verifyAllUnverifiedAccounts = verifyAllUnverifiedAccounts;
 
 const ACTIVE_RISK_RULESET_ID = "breathing-triage";
 const ACTIVE_RISK_RULE_VERSION = "HealthVibe-Rules-v1.0";

@@ -834,12 +834,18 @@
           <div class="panel-head" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
             <div>
               <h3 style="margin: 0; font-size: 19px;">إدارة المستخدمين والصلاحيات (All Verified & Regular Users)</h3>
-              <p style="margin: 4px 0 0; font-size: 13px; color: var(--muted);">عرض كافة الحسابات المسجلة (المؤكدة والعادية) وتعديل الصلاحيات فورياً</p>
+              <p style="margin: 4px 0 0; font-size: 13px; color: var(--muted);">عرض كافة الحسابات المسجلة (المؤكدة والعادية) وتعديل الصلاحيات وتوثيق الحسابات على السيستم</p>
             </div>
             <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
               <span class="pill info" id="adminUsersCountBadge">جاري التحميل...</span>
+              <button type="button" class="soft-button" onclick="syncAllAccountsToFirestore()" style="padding: 6px 12px; font-size: 12.5px; display: inline-flex; align-items: center; gap: 5px;" title="تسجيل ومزامنة كافة الحسابات في قاعدة بيانات Firestore">
+                <span>💾</span> تسجيل الحسابات على السيستم
+              </button>
+              <button type="button" class="soft-button" onclick="verifyAllUnverifiedAccounts()" style="padding: 6px 12px; font-size: 12.5px; display: inline-flex; align-items: center; gap: 5px; color: #10b981; border-color: rgba(16, 185, 129, 0.4);" title="اعتماد وتوثيق الحسابات غير المؤكدة">
+                <span>⚡</span> توثيق غير المؤكدة
+              </button>
               <button type="button" class="soft-button" onclick="promptAddAccount()" style="padding: 6px 14px; font-size: 12.5px; display: inline-flex; align-items: center; gap: 5px;">
-                <span>➕</span> إضافة / تسجيل حساب
+                <span>➕</span> إضافة حساب
               </button>
             </div>
           </div>
