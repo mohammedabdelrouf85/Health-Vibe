@@ -835,54 +835,10 @@ app.post('/api/admin/assign-case', requireAuth, requireVerifiedEmail, requireAdm
  * Sets emailVerified: true on Firebase Auth via Admin SDK, and updates Firestore.
  */
 app.post('/api/auth/verify-phone-otp', requireAuth, async (req, res) => {
-  const userId = req.user.uid;
-  const { phoneNumber, verificationMethod } = req.body || {};
-  const userEmail = req.user.email || '';
-
-  if (isVerificationRevoked(userEmail)) {
-    return res.status(403).json({
-      error: 'VERIFICATION_REVOKED',
-      message: 'Account verification has been revoked by the platform administrator.'
-    });
-  }
-
-  try {
-    // 1. Update Firebase Auth record so user is marked verified in Firebase Auth
-    await admin.auth().updateUser(userId, {
-      emailVerified: true
-    }).catch(err => {
-      console.warn("[SERVER AUTH WARNING] admin.auth().updateUser emailVerified:", err.message);
-    });
-
-    // 2. Update Firestore user document
-    if (db) {
-      await db.collection('users').doc(userId).set({
-        emailVerified: true,
-        phoneVerified: true,
-        phoneNumber: phoneNumber || null,
-        verificationMethod: verificationMethod || 'phone_whatsapp_otp',
-        verifiedAt: admin.firestore.FieldValue.serverTimestamp()
-      }, { merge: true });
-
-      // 3. Add audit event
-      await db.collection('audit_events').add({
-        type: 'USER_PHONE_VERIFIED_OTP',
-        userId: userId,
-        userEmail: req.user.email || null,
-        phoneNumber: phoneNumber || null,
-        verificationMethod: verificationMethod || 'phone_whatsapp_otp',
-        timestamp: admin.firestore.FieldValue.serverTimestamp()
-      }).catch(() => {});
-    }
-
-    res.json({
-      success: true,
-      message: 'Account verified successfully via phone/WhatsApp OTP.'
-    });
-  } catch (err) {
-    console.error("[SERVER PHONE OTP VERIFY ERROR]:", err);
-    res.status(500).json({ error: 'VERIFICATION_FAILED', message: err.message });
-  }
+  return res.status(410).json({
+    error: 'ENDPOINT_DEPRECATED',
+    message: 'Use /api/bot/request-code and /api/bot/verify-code for verified OTP activation.'
+  });
 });
 
 /**
@@ -896,19 +852,9 @@ app.post('/api/auth/verify-phone-otp', requireAuth, async (req, res) => {
  * Triggers automated WhatsApp bot to generate and send a secret OTP code.
  * Note: The generated code is NEVER returned to the client to guarantee zero leakage.
  */
-app.post('/api/bot/request-code', async (req, res) => {
-  const authHeader = req.headers.authorization;
-  let userId = null;
-  let userEmail = null;
-
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    try {
-      const decoded = await admin.auth().verifyIdToken(authHeader.split('Bearer ')[1]);
-      userId = decoded.uid;
-      userEmail = decoded.email;
-    } catch(e) {}
-  }
-
+app.post('/api/bot/request-code', requireAuth, async (req, res) => {
+  const userId = req.user.uid;
+  const userEmail = req.user.email;
   const { phoneNumber } = req.body || {};
 
   try {
@@ -927,11 +873,12 @@ app.post('/api/bot/request-code', async (req, res) => {
 
     res.json({
       success: true,
+      expiresInSeconds: result.expiresInSeconds || 300,
       message: result.message || "تم إرسال كود التفعيل السري تلقائياً عبر بوت الواتساب."
     });
   } catch(err) {
     console.error("[WHATSAPP BOT REQUEST ERROR]:", err);
-    res.status(500).json({ error: 'BOT_DISPATCH_FAILED', message: err.message });
+    res.status(err.statusCode || 500).json({ error: err.code || 'BOT_DISPATCH_FAILED', message: err.message, retryAfterSeconds: err.retryAfterSeconds || null });
   }
 });
 
@@ -940,19 +887,9 @@ app.post('/api/bot/request-code', async (req, res) => {
  * Verifies code submitted by user against WhatsApp bot active registry.
  * Upon match, elevates user to verified across Firebase Auth & Firestore.
  */
-app.post('/api/bot/verify-code', async (req, res) => {
-  const authHeader = req.headers.authorization;
-  let userId = null;
-  let userEmail = null;
-
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    try {
-      const decoded = await admin.auth().verifyIdToken(authHeader.split('Bearer ')[1]);
-      userId = decoded.uid;
-      userEmail = decoded.email;
-    } catch(e) {}
-  }
-
+app.post('/api/bot/verify-code', requireAuth, async (req, res) => {
+  const userId = req.user.uid;
+  const userEmail = req.user.email;
   const { code, phoneNumber } = req.body || {};
 
   if (!code || String(code).trim().length !== 6) {
@@ -969,7 +906,8 @@ app.post('/api/bot/verify-code', async (req, res) => {
   const isValid = whatsappBot.verifyCode({
     userId,
     userEmail,
-    code: String(code).trim()
+    code: String(code).trim(),
+    phoneNumber
   });
 
   if (!isValid) {

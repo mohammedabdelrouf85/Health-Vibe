@@ -945,8 +945,13 @@
           <div style="font-size: 32px; margin-bottom: 6px;">🤖💬</div>
           <h4 style="margin: 0 0 6px; font-size: 15px; color: var(--ink);">بوت الواتساب الآلي (Health Vibe Bot)</h4>
           <p style="margin: 0 0 14px; font-size: 12.5px; color: var(--muted); line-height: 1.5;">
-            اضغط على الزر أدناه وسيقوم بوت الواتساب الآلي بإرسال كود التفعيل السري المكون من 6 أرقام إليك تلقائياً دون الحاجة لكتابة رقم الهاتف.
+            اكتب رقم واتساب بصيغة دولية، ثم سيقوم بوت Health Vibe بإرسال كود تفعيل سري مكون من 6 أرقام.
           </p>
+          <div class="form-group" style="text-align: start; margin: 0 0 12px;">
+            <label for="verifyPhoneInput" id="verifyPhoneInputLabel" style="display:block; font-size:12.5px; font-weight:800; color:var(--ink); margin-bottom:6px;">رقم واتساب لاستلام الكود</label>
+            <input type="tel" id="verifyPhoneInput" dir="ltr" inputmode="tel" autocomplete="tel" placeholder="+201001234567" style="width:100%; box-sizing:border-box; padding:12px 14px; border-radius:10px; border:1.5px solid var(--line); background:var(--surface); color:var(--ink); font-weight:800;" />
+            <small id="verifyPhoneInputHint" style="display:block; margin-top:6px; color:var(--muted); font-size:11.5px; line-height:1.4;">استخدم كود الدولة، مثال مصر: +201001234567.</small>
+          </div>
           <button type="button" id="requestBotCodeBtn" onclick="requestBotOtpCode()" class="solid-button" style="width: 100%; background: #25D366; border-color: #25D366; color: #fff; font-weight: 700; padding: 12px 14px; font-size: 14px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer;">
             <span>🤖</span>
             <span id="requestBotBtnText">إرسال كود التفعيل تلقائياً عبر بوت الواتساب</span>
@@ -966,7 +971,7 @@
           <input type="text" id="verifyOtpCodeInput" maxlength="6" dir="ltr" placeholder="• • • • • •" autocomplete="one-time-code" style="width: 100%; letter-spacing: 8px; font-size: 24px; font-weight: 900; text-align: center; padding: 12px; border-radius: 10px; border: 2px solid var(--teal); background: var(--surface); color: var(--teal-2); font-family: monospace; box-sizing: border-box;" />
           
           <div id="otpCountdownBox" style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 11.5px; color: var(--muted);">
-            <span id="otpCountdownText">الكود صالح لمدة 10 دقائق</span>
+            <span id="otpCountdownText">الكود صالح لمدة 5 دقائق</span>
             <span id="otpCooldownTime" style="font-weight: 700; color: var(--amber);"></span>
           </div>
 

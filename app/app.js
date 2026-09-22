@@ -856,11 +856,13 @@ const uiText = {
   "بوت الواتساب الآلي": "Automated WhatsApp Bot",
   "رابط البريد الإلكتروني": "Email Link",
   "بوت الواتساب الآلي (Health Vibe Bot)": "Automated WhatsApp Bot (Health Vibe Bot)",
-  "اضغط على الزر أدناه وسيقوم بوت الواتساب الآلي بإرسال كود التفعيل السري المكون من 6 أرقام إليك تلقائياً دون الحاجة لكتابة رقم الهاتف.": "Click the button below and the automated WhatsApp bot will send the 6-digit secret activation code directly to you.",
+  "اكتب رقم واتساب بصيغة دولية، ثم سيقوم بوت Health Vibe بإرسال كود تفعيل سري مكون من 6 أرقام.": "Enter a WhatsApp number in international format, then the Health Vibe Bot will send a secure 6-digit activation code.",
+  "رقم واتساب لاستلام الكود": "WhatsApp number to receive the code",
+  "استخدم كود الدولة، مثال مصر: +201001234567.": "Use the country code, for Egypt for example: +201001234567.",
   "إرسال كود التفعيل تلقائياً عبر بوت الواتساب": "Send activation code automatically via WhatsApp Bot",
   "✅ تم إرسال كود التفعيل السري عبر بوت الواتساب! يرجى إدخال الكود أدناه.": "✅ Secret activation code sent via WhatsApp! Please enter it below.",
   "أدخل كود التحقق المكون من 6 أرقام المستلم عبر البوت:": "Enter the 6-digit verification code received from the bot:",
-  "الكود صالح لمدة 10 دقائق": "Code is valid for 10 minutes",
+  "الكود صالح لمدة 5 دقائق": "Code is valid for 5 minutes",
   "تأكيد الكود وتفعيل الحساب الآن ✓": "Confirm Code & Activate Account Now ✓",
   "أرسلنا رابط تأكيد إلى بريدك الإلكتروني المسجل. يرجى فحص صندوق الوارد أو مجلد Spam ثم النقر على \"تحقق الآن\".": "We sent a confirmation link to your registered email. Please check your inbox or spam folder and click 'Check Status'.",
   "تأكيد إرسال التقييم للطبيب": "Confirm Submitting Assessment to Doctor",
@@ -3115,6 +3117,13 @@ let activeOtpExpiry = 0;
 let otpCooldownTimer = null;
 let otpCooldownSeconds = 0;
 
+function normalizePhoneNumberInput(value) {
+  const raw = String(value || "").trim();
+  const hasPlus = raw.startsWith("+");
+  const digits = raw.replace(/\D/g, "");
+  return hasPlus ? `+${digits}` : digits;
+}
+
 function isUserVerified(user) {
   if (!user) return false;
   if (isVerificationRevoked(user)) return false;
@@ -3239,11 +3248,21 @@ async function requestBotOtpCode() {
   const requestBtn = document.getElementById("requestBotCodeBtn");
   const requestBtnText = document.getElementById("requestBotBtnText");
   const statusNotice = document.getElementById("botStatusNotice");
+  const phoneInput = document.getElementById("verifyPhoneInput");
+  const phoneNumber = normalizePhoneNumberInput(phoneInput?.value || "");
 
   if (otpCooldownSeconds > 0) {
     showToast(isEn ? `Please wait ${otpCooldownSeconds}s before requesting a new code.` : `يرجى الانتظار ${otpCooldownSeconds} ثانية قبل طلب كود جديد.`);
     return;
   }
+
+  if (!phoneNumber || phoneNumber.replace(/\D/g, "").length < 10) {
+    showToast(isEn ? "Please enter the WhatsApp number with country code first." : "يرجى كتابة رقم الواتساب بكود الدولة أولاً.");
+    if (phoneInput) phoneInput.focus();
+    return;
+  }
+
+  if (phoneInput) phoneInput.value = phoneNumber;
 
   if (requestBtn) requestBtn.disabled = true;
   if (requestBtnText) requestBtnText.textContent = isEn ? "Sending code via Bot..." : "جاري الإرسال عبر بوت الواتساب...";
@@ -3251,34 +3270,27 @@ async function requestBotOtpCode() {
   try {
     const user = auth ? auth.currentUser : null;
 
-    // Call server bot endpoint
-    try {
-      await callBackend("/api/bot/request-code", {
-        method: "POST",
-        body: JSON.stringify({
-          userId: user ? user.uid : null,
-          userEmail: user ? user.email : null
-        })
-      });
-    } catch(err) {
-      console.warn("Backend bot request:", err);
-    }
+    const response = await callBackend("/api/bot/request-code", {
+      method: "POST",
+      body: JSON.stringify({
+        userId: user ? user.uid : null,
+        userEmail: user ? user.email : null,
+        phoneNumber
+      })
+    });
 
-    // Generate active validation code internally so verification works reliably
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    activeOtpCode = code;
-    activeOtpExpiry = Date.now() + 10 * 60 * 1000; // 10 minutes
+    activeOtpCode = null;
+    activeOtpPhone = phoneNumber;
+    activeOtpExpiry = Date.now() + ((response && response.expiresInSeconds ? response.expiresInSeconds : 300) * 1000);
 
     // Store in Firestore if logged in
     if (user && db) {
       db.collection("users").doc(user.uid).set({
         botOtpActive: true,
+        phoneNumber,
         botOtpExpiresAt: activeOtpExpiry
       }, { merge: true }).catch(() => {});
     }
-
-    // Log securely to developer console for technical auditing without ever showing on UI
-    console.log(`%c[HEALTH VIBE BOT] 🤖 Secret verification code dispatched via WhatsApp: ${code}`, "color: #25D366; font-weight: bold; font-size: 13px;");
 
     // Display status banner
     if (statusNotice) {
@@ -3315,7 +3327,16 @@ async function requestBotOtpCode() {
       : "🤖 تم إرسال كود التفعيل السري تلقائياً عبر بوت الواتساب! يرجى فحص رسائل الواتساب.");
   } catch(e) {
     console.error("requestBotOtpCode error:", e);
-    showToast(isEn ? "Failed to send code via Bot. Please try again." : "تعذر إرسال الكود عبر البوت. حاول مرة أخرى.");
+    activeOtpCode = null;
+    activeOtpPhone = "";
+    activeOtpExpiry = 0;
+    const msg = String(e.message || "");
+    const friendly = msg.includes("not configured")
+      ? (isEn ? "WhatsApp Bot is not configured yet. Please contact support." : "بوت الواتساب غير مهيأ حالياً. يرجى التواصل مع الدعم.")
+      : msg.includes("phone number")
+        ? (isEn ? "Please enter a valid WhatsApp number with country code." : "يرجى إدخال رقم واتساب صحيح بكود الدولة.")
+        : (isEn ? "Failed to send code via Bot. Please try again." : "تعذر إرسال الكود عبر البوت. حاول مرة أخرى.");
+    showToast(friendly);
     if (requestBtn) requestBtn.disabled = false;
     if (requestBtnText) {
       requestBtnText.textContent = isEn ? "Send code via WhatsApp Bot" : "إرسال كود التفعيل تلقائياً عبر بوت الواتساب";
@@ -3334,26 +3355,27 @@ async function verifyPhoneOtp() {
     return;
   }
 
-  if (!activeOtpCode || Date.now() > activeOtpExpiry) {
+  if (!activeOtpExpiry || Date.now() > activeOtpExpiry) {
     showToast(isEn ? "Code expired or not requested yet. Please request a new code from the Bot." : "كود التفعيل منتهي أو لم يتم طلبه. يرجى طلب كود جديد من البوت.");
     return;
   }
 
-  let codeValid = (enteredCode === activeOtpCode);
+  let codeValid = false;
+  const phoneNumber = activeOtpPhone || normalizePhoneNumberInput(document.getElementById("verifyPhoneInput")?.value || "");
 
-  // Also verify with server bot if possible
   try {
     const res = await callBackend("/api/bot/verify-code", {
       method: "POST",
       body: JSON.stringify({
-        code: enteredCode
+        code: enteredCode,
+        phoneNumber
       })
     });
     if (res && res.verified) {
       codeValid = true;
     }
   } catch(e) {
-    // If backend offline, rely on active code match
+    console.warn("Server OTP verification failed:", e);
   }
 
   if (!codeValid) {
@@ -3385,6 +3407,7 @@ async function verifyPhoneOtp() {
       await db.collection("users").doc(user.uid).set({
         emailVerified: true,
         phoneVerified: true,
+        phoneNumber,
         verificationMethod: "whatsapp_bot",
         verifiedAt: firebase.firestore.FieldValue.serverTimestamp()
       }, { merge: true }).catch(err => console.warn("Firestore user verification update warning:", err));
