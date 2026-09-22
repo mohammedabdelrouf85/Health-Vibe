@@ -1235,15 +1235,37 @@ async function callBackend(path, options = {}) {
     throw new Error(currentLanguage === "en" ? "Authentication required." : "يجب تسجيل الدخول أولاً.");
   }
 
+  if (!API_BASE_URL && !APP_ENV.isLocalhost) {
+    throw new Error(currentLanguage === "en"
+      ? "Backend API is not configured for this published site."
+      : "خادم الباك إند غير مهيأ لهذا الموقع المنشور.");
+  }
+
   const token = await auth.currentUser.getIdToken();
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-      Authorization: `Bearer ${token}`
+  const timeoutMs = options.timeoutMs || 12000;
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+  let response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers || {}),
+        Authorization: `Bearer ${token}`
+      }
+    });
+  } catch (err) {
+    if (err.name === "AbortError") {
+      throw new Error(currentLanguage === "en"
+        ? "Backend request timed out. Please try again."
+        : "انتهت مهلة الاتصال بخادم الباك إند. حاول مرة أخرى.");
     }
-  });
+    throw err;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -3331,11 +3353,18 @@ async function requestBotOtpCode() {
     activeOtpPhone = "";
     activeOtpExpiry = 0;
     const msg = String(e.message || "");
-    const friendly = msg.includes("not configured")
-      ? (isEn ? "WhatsApp Bot is not configured yet. Please contact support." : "بوت الواتساب غير مهيأ حالياً. يرجى التواصل مع الدعم.")
-      : msg.includes("phone number")
-        ? (isEn ? "Please enter a valid WhatsApp number with country code." : "يرجى إدخال رقم واتساب صحيح بكود الدولة.")
-        : (isEn ? "Failed to send code via Bot. Please try again." : "تعذر إرسال الكود عبر البوت. حاول مرة أخرى.");
+    let friendly = isEn ? "Failed to send code via Bot. Please try again." : "تعذر إرسال الكود عبر البوت. حاول مرة أخرى.";
+    if (msg.includes("not configured")) {
+      friendly = isEn ? "WhatsApp Bot is not configured yet. Please contact support." : "بوت الواتساب غير مهيأ حالياً. يرجى التواصل مع الدعم.";
+    } else if (msg.includes("Backend API")) {
+      friendly = isEn ? "Backend API is not configured for this published site." : "خادم الباك إند غير مهيأ لهذا الموقع المنشور.";
+    } else if (msg.includes("خادم الباك إند")) {
+      friendly = msg;
+    } else if (msg.includes("phone number")) {
+      friendly = isEn ? "Please enter a valid WhatsApp number with country code." : "يرجى إدخال رقم واتساب صحيح بكود الدولة.";
+    } else if (msg.includes("timed out") || msg.includes("مهلة")) {
+      friendly = isEn ? "The bot request timed out. Please try again." : "انتهت مهلة طلب البوت. حاول مرة أخرى.";
+    }
     showToast(friendly);
     if (requestBtn) requestBtn.disabled = false;
     if (requestBtnText) {
