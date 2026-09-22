@@ -1613,6 +1613,18 @@ async function getCases() {
       // 👤 PATIENT PRIVACY: Fetch only own cases
       const snap = await db.collection("cases").where("patientId", "==", user.uid).get();
       cases = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      if (user.email) {
+        try {
+          const emailSnap = await db.collection("cases").where("patientEmail", "==", user.email).get();
+          const byId = new Map(cases.map(c => [c.id, c]));
+          emailSnap.docs.forEach(doc => {
+            if (!byId.has(doc.id)) byId.set(doc.id, { id: doc.id, ...doc.data() });
+          });
+          cases = Array.from(byId.values());
+        } catch (e) {
+          console.warn("Patient cases email fallback failed:", e.message);
+        }
+      }
     } else {
       // ⚙️ ADMIN: Can view all cases for triage and doctor assignment
       const snapshot = await db.collection("cases").orderBy("createdAt", "desc").get();
@@ -1621,8 +1633,8 @@ async function getCases() {
 
     // Client-side sort by submittedAt or createdAt descending
     cases.sort((a, b) => {
-      const tA = (a.submittedAt && a.submittedAt.toMillis ? a.submittedAt.toMillis() : (a.createdAt || 0));
-      const tB = (b.submittedAt && b.submittedAt.toMillis ? b.submittedAt.toMillis() : (b.createdAt || 0));
+      const tA = toMillis(a.submittedAt || a.createdAt || a.updatedAt) || 0;
+      const tB = toMillis(b.submittedAt || b.createdAt || b.updatedAt) || 0;
       return tB - tA;
     });
 
@@ -4031,20 +4043,32 @@ async function renderPatientDashboard() {
   window._patientCasesUnsub = db
     .collection("cases")
     .where("patientId", "==", user.uid)
-    .orderBy("submittedAt", "desc")
-    .limit(10)
     .onSnapshot(
-      (snapshot) => {
-        if (snapshot.empty) return;
+      async (snapshot) => {
+        let c = null;
 
-        // أحدث حالة (first doc بعد orderBy desc)
-        const latestDoc = snapshot.docs[0];
-        const c = { id: latestDoc.id, ...latestDoc.data() };
+        if (!snapshot.empty) {
+          const realDocs = snapshot.docs
+            .map(doc => ({ id: doc.id, ...doc.data() }))
+            .filter(item => {
+              if (!item || item.isDemo === true) return false;
+              const idStr = String(item.id || "");
+              if (idStr.startsWith("demo_") || idStr.startsWith("mock_") || idStr.startsWith("test_case_")) return false;
+              return Boolean(item.patientId || item.patientUid || item.patientEmail);
+            })
+            .sort((a, b) => (toMillis(b.submittedAt || b.createdAt || b.updatedAt) || 0) - (toMillis(a.submittedAt || a.createdAt || a.updatedAt) || 0));
+          c = realDocs[0] || null;
+        }
+
+        if (!c) {
+          const fallbackCases = await getCases();
+          c = fallbackCases[0] || null;
+        }
+
+        if (!c) return;
 
         // فورمات التاريخ
-        const tsMillis = c.submittedAt?.toMillis
-          ? c.submittedAt.toMillis()
-          : (c.submittedAt || 0);
+        const tsMillis = toMillis(c.submittedAt || c.createdAt || c.updatedAt) || 0;
         const dateStr = tsMillis
           ? new Date(tsMillis).toLocaleDateString(isEn ? "en-US" : "ar-EG", {
               year: "numeric", month: "short", day: "numeric",
