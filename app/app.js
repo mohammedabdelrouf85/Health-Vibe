@@ -1326,6 +1326,14 @@ function initRememberMePreference() {
   });
 }
 
+async function initializeAuthPersistence() {
+  try {
+    await applyAuthPersistence(shouldRememberSession());
+  } catch (err) {
+    console.warn("Could not initialize auth persistence:", err);
+  }
+}
+
 function getLocalAccountsRegistry() {
   try {
     const raw = localStorage.getItem(ACCOUNTS_REGISTRY_KEY);
@@ -2970,8 +2978,9 @@ async function handleNewPasswordSubmit(e) {
   }
 }
 
-function transitionToApp(user) {
+function transitionToApp(user, options = {}) {
   if (!user) return;
+  const navigate = options.navigate !== false;
   const isOwner = isOwnerUser(user.email);
   const displayName = user.displayName || user.email.split('@')[0];
   
@@ -2994,7 +3003,7 @@ function transitionToApp(user) {
     app.removeAttribute("hidden");
     app.style.display = "grid";
   }
-  if (typeof showScreen === "function") {
+  if (navigate && typeof showScreen === "function") {
     const activeScreen = document.querySelector(".screen.active")?.id.replace("screen-", "") || "patient";
     showScreen(canAccessScreen(activeScreen) ? activeScreen : "patient");
   }
@@ -7909,11 +7918,10 @@ menuToggle.addEventListener("click", () => {
 
 logoutButton.addEventListener("click", leaveApp);
 initRememberMePreference();
-applyAuthPersistence(shouldRememberSession()).catch(err => {
-  console.warn("Could not initialize auth persistence:", err);
-});
 
 function initHVAuthListener() {
+  if (window._hvAuthListenerStarted) return;
+  window._hvAuthListenerStarted = true;
   auth.onAuthStateChanged(async (user) => {
     window.clearTimeout(loaderSafetyTimer);
     if (window._isSigningOut) {
@@ -7922,7 +7930,7 @@ function initHVAuthListener() {
     }
     if (user) {
       // 1. Instantly transition UI into the app so user never hangs
-      transitionToApp(user);
+      transitionToApp(user, { navigate: false });
 
       const isOwner = isOwnerUser(user.email);
       const verificationRevoked = isVerificationRevoked(user.email);
@@ -8002,11 +8010,13 @@ function initHVAuthListener() {
   });
 }
 
-if (document.readyState === "complete" || document.readyState === "interactive") {
-  initHVAuthListener();
-} else {
-  window.addEventListener("DOMContentLoaded", initHVAuthListener);
-}
+initializeAuthPersistence().then(() => {
+  if (document.readyState === "complete" || document.readyState === "interactive") {
+    initHVAuthListener();
+  } else {
+    window.addEventListener("DOMContentLoaded", initHVAuthListener, { once: true });
+  }
+});
 
 function checkUrlAuthAction() {
   const urlParams = new URLSearchParams(window.location.search);
