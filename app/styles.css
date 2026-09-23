@@ -95,6 +95,29 @@ html.hv-has-session #publicSite {
   display: none !important;
 }
 
+html.hv-theme-light body:not(.dark),
+body:not(.dark) {
+  --bg: #f5fbfa;
+  --surface: #ffffff;
+  --surface-2: #f8fdfc;
+  --line: #dcebea;
+  --ink: #13272a;
+  --muted: #607477;
+  --cyan: #e7f7f7;
+  color-scheme: light;
+}
+
+html.hv-theme-light body {
+  background:
+    radial-gradient(circle at 88% 9%, rgba(9, 184, 182, .22), transparent 28%),
+    radial-gradient(circle at 8% 26%, rgba(24, 160, 88, .16), transparent 24%),
+    linear-gradient(180deg, #ffffff 0%, var(--bg) 42%, #eef8f6 100%) !important;
+}
+
+body:not(.dark) .theme-fab {
+  background: linear-gradient(135deg, var(--teal-2), var(--teal)) !important;
+}
+
 .loader {
   position: fixed;
   inset: 0;

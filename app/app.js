@@ -3820,6 +3820,28 @@ function closeVerifyRequiredModal() {
   modal.setAttribute("aria-hidden", "true");
 }
 
+function sendPhoneOrWhatsAppOtp(channel = "whatsapp") {
+  return requestBotOtpCode();
+}
+
+function copyGeneratedOtp() {
+  const codeEl = document.getElementById("otpDisplayCode");
+  if (codeEl && codeEl.textContent) {
+    navigator.clipboard.writeText(codeEl.textContent.trim()).then(() => {
+      showToast(currentLanguage === "en" ? "Code copied to clipboard" : "تم نسخ الكود");
+    }).catch(() => {});
+  }
+}
+
+function autoFillAndVerifyOtp() {
+  const codeEl = document.getElementById("otpDisplayCode");
+  const inputEl = document.getElementById("verifyOtpCodeInput");
+  if (codeEl && inputEl && codeEl.textContent) {
+    inputEl.value = codeEl.textContent.trim();
+    verifyPhoneOtp();
+  }
+}
+
 // Global exports for accessibility and inline DOM triggers
 window.isUserVerified = isUserVerified;
 window.updateEmailVerificationUI = updateEmailVerificationUI;
@@ -6803,7 +6825,7 @@ function getActiveScreen() {
 function readOxygenValue() {
   const field = document.getElementById("oxygenInput");
   if (!field) return 0;
-  return Number.parseInt(field.value.replace(/[^\d]/g, ""), 10) || 0;
+  return Number.parseInt((field.value || "").replace(/[^\d]/g, ""), 10) || 0;
 }
 
 function updateOxygenWarning() {
@@ -7178,9 +7200,17 @@ function closeApprovalModal() {
   modal.setAttribute("aria-hidden", "true");
 }
 
-function toggleTheme() {
-  document.body.classList.toggle("dark");
-  const isDark = document.body.classList.contains("dark");
+function applyTheme(theme) {
+  const isDark = theme === "dark";
+  document.body.classList.toggle("dark", isDark);
+  if (!isDark) {
+    document.documentElement.classList.add("hv-theme-light");
+  } else {
+    document.documentElement.classList.remove("hv-theme-light");
+  }
+  try {
+    localStorage.setItem("hv_theme", isDark ? "dark" : "light");
+  } catch(e) {}
   const label = isDark ? "الوضع الداكن" : "الوضع الفاتح";
   if (siteThemeToggle) siteThemeToggle.textContent = localized(label);
   const fabIcon = themeToggle ? themeToggle.querySelector(".theme-fab-icon") : null;
@@ -7188,18 +7218,30 @@ function toggleTheme() {
   updateThemeLogos();
 }
 
+function toggleTheme() {
+  const willBeDark = !document.body.classList.contains("dark");
+  applyTheme(willBeDark ? "dark" : "light");
+}
+
+function initTheme() {
+  let theme = "dark";
+  try {
+    const saved = localStorage.getItem("hv_theme");
+    if (saved) theme = saved;
+  } catch(e) {}
+  applyTheme(theme);
+}
+window.toggleTheme = toggleTheme;
+window.applyTheme = applyTheme;
+window.initTheme = initTheme;
+
 window.addEventListener("load", () => {
-  // Initialize theme toggle buttons to match the default dark mode
-  const isDark = document.body.classList.contains("dark");
-  if (siteThemeToggle) siteThemeToggle.textContent = localized(isDark ? "الوضع الداكن" : "الوضع الفاتح");
-  const fabIcon = themeToggle ? themeToggle.querySelector(".theme-fab-icon") : null;
-  if (fabIcon) fabIcon.textContent = isDark ? "☀️" : "🌙";
-  updateThemeLogos();
+  initTheme();
   setupLoaderVideo();
 });
 
 document.addEventListener("DOMContentLoaded", () => {
-  updateThemeLogos();
+  initTheme();
   setupLoaderVideo();
 });
 
@@ -8209,6 +8251,9 @@ function initHVAuthListener() {
     }
   });
 }
+
+// Initialize saved theme immediately
+initTheme();
 
 // Instantly restore active session if previously logged in so refresh never logs out
 restorePersistedSession();

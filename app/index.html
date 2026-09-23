@@ -5,10 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Health Vibes</title>
   <link rel="icon" type="image/png" href="./logo-light.png">
-  <link rel="stylesheet" href="./styles.css?v=3.5">
+  <link rel="stylesheet" href="./styles.css?v=3.6">
   <script>
     (function() {
       try {
+        var savedTheme = localStorage.getItem("hv_theme");
+        if (savedTheme === "light") {
+          document.documentElement.classList.add("hv-theme-light");
+        }
         var hasSession = localStorage.getItem("hv_user_logged_in") === "true" || !!localStorage.getItem("hv_active_session");
         if (!hasSession) {
           for (var i = 0; i < localStorage.length; i++) {
@@ -1186,7 +1190,7 @@
   </div>
 
   <!-- Floating dark mode toggle -->
-  <button id="themeToggle" class="theme-fab" aria-label="Toggle dark mode" title="Toggle dark mode">
+  <button id="themeToggle" class="theme-fab" type="button" onclick="if(typeof toggleTheme==='function') toggleTheme();" aria-label="Toggle dark mode" title="Toggle dark mode">
     <span class="theme-fab-icon">🌙</span>
   </button>
 
@@ -1337,7 +1341,7 @@
     </div>
   </div>
 
-  <script src="./config.js?v=3.5"></script>
-  <script src="./app.js?v=3.5"></script>
+  <script src="./config.js?v=3.6"></script>
+  <script src="./app.js?v=3.6"></script>
 </body>
 </html>
