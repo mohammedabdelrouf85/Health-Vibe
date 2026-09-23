@@ -91,6 +91,10 @@ a { color: inherit; text-decoration: none; }
   transform: translateY(8px);
 }
 
+html.hv-has-session #publicSite {
+  display: none !important;
+}
+
 .loader {
   position: fixed;
   inset: 0;

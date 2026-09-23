@@ -1176,16 +1176,122 @@ const firebaseConfig = (runtimeConfig.firebase && runtimeConfig.firebase.project
   ? runtimeConfig.firebase
   : DEFAULT_FIREBASE_CONFIG;
 
-// Fallback loader dismiss timer in case Firebase CDN or network hangs
+// ── Session Persistence Manager ─────────────────────────────
+function getActiveSession() {
+  try {
+    const raw = localStorage.getItem("hv_active_session");
+    if (raw) return JSON.parse(raw);
+  } catch(e) {}
+  return null;
+}
+
+function saveActiveSession(user, role) {
+  if (!user) return;
+  try {
+    const r = role || selectedRole || ROLES.PATIENT;
+    const session = {
+      uid: user.uid || "persisted_user",
+      email: user.email || "",
+      displayName: user.displayName || (user.email ? user.email.split("@")[0] : "User"),
+      photoURL: user.photoURL || null,
+      role: r,
+      emailVerified: Boolean(user.emailVerified),
+      timestamp: Date.now()
+    };
+    localStorage.setItem("hv_active_session", JSON.stringify(session));
+    localStorage.setItem("hv_user_logged_in", "true");
+    localStorage.setItem("hv_last_user_uid", session.uid);
+    localStorage.setItem("hv_last_user_role", session.role);
+    document.documentElement.classList.add("hv-has-session");
+  } catch(e) {}
+}
+
+function clearActiveSession() {
+  try {
+    localStorage.removeItem("hv_active_session");
+    localStorage.removeItem("hv_user_logged_in");
+    localStorage.removeItem("hv_last_user_role");
+    localStorage.removeItem("hv_last_user_uid");
+    localStorage.removeItem("hv_active_screen");
+    document.documentElement.classList.remove("hv-has-session");
+  } catch(e) {}
+}
+
+function restorePersistedSession() {
+  const session = getActiveSession();
+  if (session && session.email) {
+    console.log("[Health Vibes] Restoring persisted session for:", session.email);
+    document.documentElement.classList.add("hv-has-session");
+    selectedRole = normalizeRole(session.role || ROLES.PATIENT);
+    const pseudoUser = {
+      uid: session.uid || "persisted_user",
+      email: session.email,
+      displayName: session.displayName || session.email.split("@")[0],
+      photoURL: session.photoURL || null,
+      emailVerified: session.emailVerified !== false,
+      role: session.role || ROLES.PATIENT,
+      getIdToken: async () => {
+        if (auth && auth.currentUser) {
+          try { return await auth.currentUser.getIdToken(); } catch(e) {}
+        }
+        return "";
+      },
+      reload: async () => {}
+    };
+    window._restoredSessionUser = pseudoUser;
+    transitionToApp(pseudoUser, { navigate: true });
+    return pseudoUser;
+  }
+  return null;
+}
+
+// Transparent fallback for auth.currentUser when offline or restored
+try {
+  if (typeof firebase !== "undefined" && firebase.auth && firebase.auth.Auth && firebase.auth.Auth.prototype) {
+    const proto = firebase.auth.Auth.prototype;
+    const originalDesc = Object.getOwnPropertyDescriptor(proto, "currentUser");
+    if (originalDesc && originalDesc.get) {
+      Object.defineProperty(proto, "currentUser", {
+        get: function() {
+          const u = originalDesc.get.call(this);
+          if (u) return u;
+          return window._restoredSessionUser || null;
+        },
+        configurable: true
+      });
+    }
+  }
+} catch(e) {
+  console.warn("Could not patch auth.currentUser getter:", e);
+}
+
+function hasSavedAuthSession() {
+  try {
+    if (localStorage.getItem("hv_active_session")) return true;
+    if (localStorage.getItem("hv_user_logged_in") === "true") return true;
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && (k.startsWith("firebase:authUser:") || k.startsWith("firebase:persistence:"))) {
+        return true;
+      }
+    }
+  } catch(e) {}
+  return false;
+}
+
+// Fallback loader dismiss timer: if a session is being restored, give ample time to verify
+const loaderSafetyTimeoutMs = hasSavedAuthSession() ? 10000 : 3000;
 const loaderSafetyTimer = window.setTimeout(() => {
   if (loader && !loader.classList.contains("is-done")) {
     console.warn("Loader safety timeout: dismissing loader.");
     loader.classList.add("is-done");
-    if (publicSite && publicSite.classList.contains("is-hidden")) {
-      publicSite.classList.remove("is-hidden");
+    if (!auth.currentUser && !hasSavedAuthSession()) {
+      if (publicSite && publicSite.classList.contains("is-hidden")) {
+        publicSite.classList.remove("is-hidden");
+      }
     }
   }
-}, 2500);
+}, loaderSafetyTimeoutMs);
 
 // Initialize Firebase
 if (!firebase.apps || !firebase.apps.length) {
@@ -1195,6 +1301,13 @@ const db = firebase.firestore();
 const auth = firebase.auth();
 const storage = firebase.storage();
 const googleProvider = new firebase.auth.GoogleAuthProvider();
+
+// Immediately enforce permanent LOCAL persistence so user stays logged in across sessions
+if (auth && firebase.auth && firebase.auth.Auth && firebase.auth.Auth.Persistence) {
+  auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(err => {
+    console.warn("Could not set initial auth persistence:", err);
+  });
+}
 const API_BASE_URL = (runtimeConfig.apiBaseUrl || "").replace(/\/$/, "");
 
 const APP_ENV = {
@@ -1291,36 +1404,26 @@ const REMEMBER_ME_KEY = "hv_remember_me";
 const DEFAULT_KNOWN_ACCOUNTS = [];
 
 function shouldRememberSession() {
-  const checkbox = document.getElementById("rememberMe");
-  if (checkbox) return checkbox.checked;
-  try {
-    return localStorage.getItem(REMEMBER_ME_KEY) !== "false";
-  } catch(e) {
-    return true;
-  }
+  return true; // Per requirement: permanent session until explicit Sign Out
 }
 
-async function applyAuthPersistence(remember = shouldRememberSession()) {
+async function applyAuthPersistence(remember = true) {
   if (!auth || typeof firebase === "undefined" || !firebase.auth?.Auth?.Persistence) return;
-  const persistence = remember
-    ? firebase.auth.Auth.Persistence.LOCAL
-    : firebase.auth.Auth.Persistence.SESSION;
+  // Always enforce LOCAL persistence: never log out unless explicit Sign Out
+  const persistence = firebase.auth.Auth.Persistence.LOCAL;
   await auth.setPersistence(persistence);
   try {
-    localStorage.setItem(REMEMBER_ME_KEY, remember ? "true" : "false");
+    localStorage.setItem(REMEMBER_ME_KEY, "true");
   } catch(e) {}
 }
 
 function initRememberMePreference() {
   const checkbox = document.getElementById("rememberMe");
   if (!checkbox) return;
-  try {
-    checkbox.checked = localStorage.getItem(REMEMBER_ME_KEY) !== "false";
-  } catch(e) {
-    checkbox.checked = true;
-  }
+  checkbox.checked = true;
   checkbox.addEventListener("change", () => {
-    applyAuthPersistence(checkbox.checked).catch(err => {
+    checkbox.checked = true; // Always stay checked
+    applyAuthPersistence(true).catch(err => {
       console.warn("Could not update auth persistence:", err);
     });
   });
@@ -1328,7 +1431,7 @@ function initRememberMePreference() {
 
 async function initializeAuthPersistence() {
   try {
-    await applyAuthPersistence(shouldRememberSession());
+    await applyAuthPersistence(true);
   } catch (err) {
     console.warn("Could not initialize auth persistence:", err);
   }
@@ -2876,11 +2979,14 @@ async function handleEmailAuth(e) {
         console.error("sendEmailVerification error:", verErr);
         showToast(getAuthErrorMessage(verErr));
       }
+      saveActiveSession(user, selectedRole);
       transitionToApp(user);
     } else {
       const cred = await auth.signInWithEmailAndPassword(email, password);
+      const user = cred.user || auth.currentUser;
+      saveActiveSession(user, selectedRole);
       showToast(currentLanguage === "en" ? "Signed in successfully!" : "تم تسجيل الدخول بنجاح!");
-      transitionToApp(cred.user || auth.currentUser);
+      transitionToApp(user);
     }
   } catch (error) {
     console.error("Firebase Auth Error:", error);
@@ -2992,6 +3098,10 @@ async function handleNewPasswordSubmit(e) {
 
 function transitionToApp(user, options = {}) {
   if (!user) return;
+  try {
+    saveActiveSession(user, selectedRole);
+  } catch(e) {}
+  window.clearTimeout(loaderSafetyTimer);
   const navigate = options.navigate !== false;
   const isOwner = isOwnerUser(user.email);
   const displayName = user.displayName || user.email.split('@')[0];
@@ -3016,8 +3126,11 @@ function transitionToApp(user, options = {}) {
     app.style.display = "grid";
   }
   if (navigate && typeof showScreen === "function") {
-    const activeScreen = document.querySelector(".screen.active")?.id.replace("screen-", "") || "patient";
-    showScreen(canAccessScreen(activeScreen) ? activeScreen : "patient");
+    let savedScreen = "";
+    try { savedScreen = localStorage.getItem("hv_active_screen"); } catch(e) {}
+    const defaultScreen = isAdminRole(selectedRole) ? "admin" : (selectedRole === ROLES.DOCTOR ? "doctor" : "patient");
+    const targetScreen = (savedScreen && canAccessScreen(savedScreen)) ? savedScreen : defaultScreen;
+    showScreen(targetScreen);
   }
   applyLanguage(currentLanguage);
   if (loader) {
@@ -3092,6 +3205,7 @@ async function enterApp(source = "google") {
       updateEmailVerificationUI(user);
       updateNavVisibility();
 
+      saveActiveSession(user, selectedRole);
       transitionToApp(user);
       showToast(currentLanguage === "en" ? "Signed in with Google" : "تم تسجيل الدخول بحساب جوجل");
     } catch (error) {
@@ -3104,6 +3218,12 @@ async function enterApp(source = "google") {
 window.enterApp = enterApp;
 
 function showSignedOutUI() {
+  try {
+    localStorage.removeItem("hv_user_logged_in");
+    localStorage.removeItem("hv_last_user_role");
+    localStorage.removeItem("hv_last_user_uid");
+    document.documentElement.classList.remove("hv-has-session");
+  } catch(e) {}
   if (app) {
     app.hidden = true;
     app.setAttribute("hidden", "true");
@@ -3147,6 +3267,8 @@ async function leaveApp(event) {
     event.stopPropagation();
   }
   window._isSigningOut = true;
+  window._restoredSessionUser = null;
+  clearActiveSession();
   // ── إيقاف الـ real-time listener عند تسجيل الخروج ────────────
   if (window._patientCasesUnsub) {
     window._patientCasesUnsub();
@@ -3951,6 +4073,10 @@ function showScreen(name) {
     console.warn(`[RBAC] Blocked access to screen '${name}' for role '${selectedRole}'. Redirecting to '${roleDefaultScreen}'.`);
     name = roleDefaultScreen;
   }
+
+  try {
+    localStorage.setItem("hv_active_screen", name);
+  } catch(e) {}
 
   updateNavVisibility();
 
@@ -7988,6 +8114,8 @@ function initHVAuthListener() {
       return;
     }
     if (user) {
+      window._restoredSessionUser = user;
+      saveActiveSession(user, selectedRole);
       // 1. Instantly transition UI into the app so user never hangs
       transitionToApp(user, { navigate: false });
 
@@ -8047,6 +8175,19 @@ function initHVAuthListener() {
       // Update with enriched details
       transitionToApp(user);
     } else {
+      // Firebase returned null: Check if we have an active saved session!
+      const activeSession = getActiveSession();
+      if (activeSession && !window._isSigningOut) {
+        console.log("[Health Vibes] Retaining persisted user session across refresh.");
+        const restoredUser = window._restoredSessionUser || restorePersistedSession();
+        if (restoredUser) {
+          transitionToApp(restoredUser, { navigate: false });
+        }
+        return;
+      }
+
+      // Truly signed out
+      clearActiveSession();
       window._isUserVerified = false;
       window._verifiedPhone = "";
       window._cachedUserDoc = null;
@@ -8069,13 +8210,17 @@ function initHVAuthListener() {
   });
 }
 
-initializeAuthPersistence().then(() => {
-  if (document.readyState === "complete" || document.readyState === "interactive") {
-    initHVAuthListener();
-  } else {
-    window.addEventListener("DOMContentLoaded", initHVAuthListener, { once: true });
-  }
-});
+// Instantly restore active session if previously logged in so refresh never logs out
+restorePersistedSession();
+
+// Register auth listener immediately without delaying behind async setPersistence
+if (document.readyState === "complete" || document.readyState === "interactive") {
+  initHVAuthListener();
+} else {
+  window.addEventListener("DOMContentLoaded", initHVAuthListener, { once: true });
+}
+
+initializeAuthPersistence().catch(() => {});
 
 function checkUrlAuthAction() {
   const urlParams = new URLSearchParams(window.location.search);

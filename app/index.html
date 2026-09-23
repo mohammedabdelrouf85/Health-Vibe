@@ -5,8 +5,25 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Health Vibes</title>
   <link rel="icon" type="image/png" href="./logo-light.png">
-  <link rel="stylesheet" href="./styles.css?v=3.0">
+  <link rel="stylesheet" href="./styles.css?v=3.5">
   <script>
+    (function() {
+      try {
+        var hasSession = localStorage.getItem("hv_user_logged_in") === "true" || !!localStorage.getItem("hv_active_session");
+        if (!hasSession) {
+          for (var i = 0; i < localStorage.length; i++) {
+            var k = localStorage.key(i);
+            if (k && (k.indexOf("firebase:authUser:") === 0 || k.indexOf("firebase:persistence:") === 0)) {
+              hasSession = true;
+              break;
+            }
+          }
+        }
+        if (hasSession) {
+          document.documentElement.classList.add("hv-has-session");
+        }
+      } catch(e) {}
+    })();
     function showAuth() {
       var el = document.getElementById("authScreen");
       if (el) {
@@ -1173,8 +1190,8 @@
     <span class="theme-fab-icon">🌙</span>
   </button>
 
-  <script src="./config.js?v=2.8"></script>
-  <script src="./app.js?v=2.8"></script>
+
+
   <!-- Legal & Compliance Modal (Privacy Policy + Terms + Medical Disclaimer) -->
   <div id="legalModal" class="confirm-modal" aria-hidden="true">
     <div class="confirm-card legal-modal-card">
@@ -1320,7 +1337,7 @@
     </div>
   </div>
 
-  <script src="./config.js?v=3.2"></script>
-  <script src="./app.js?v=3.2"></script>
+  <script src="./config.js?v=3.5"></script>
+  <script src="./app.js?v=3.5"></script>
 </body>
 </html>
