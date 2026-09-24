@@ -8762,6 +8762,55 @@ const verifyModalCloseBtn = document.getElementById("verifyModalCloseBtn");
 if (verifyModalCloseBtn) {
   verifyModalCloseBtn.addEventListener("click", closeVerifyRequiredModal);
 }
+// ── CLINICAL ASSISTANT GUARDRAILS: STRICTLY NO AUTONOMOUS DIAGNOSIS & NO TREATMENT PRESCRIBING ──
+function evaluateClinicalGuardrails(query, isEn) {
+  const q = String(query || "").toLowerCase();
+
+  // 1. Emergency Red Flags (Triage Guardrail)
+  const isEmergency = /ألم في الصدر|الم في الصدر|وجع في صدري|خنقة شديدة|مش قادر اتنفس|مش قادرة اتنفس|اختناق|إغماء|اغماء|كحة دم|سعال دم|ازرقاق|توقف التنفس|chest pain|cannot breathe|can't breathe|suffocating|fainting|coughing blood|blue lips|shortness of breath emergency/i.test(q);
+  if (isEmergency) {
+    return {
+      triggered: true,
+      type: "emergency",
+      message: isEn
+        ? `🚨 <strong>CRITICAL EMERGENCY ALERT:</strong><br><br>The symptoms you described indicate a potential high-risk medical emergency!<br><br>• <strong>Immediate Action:</strong> Discontinue using this app and call emergency services (123 / 911) or proceed immediately to the nearest Emergency Department (ER).<br>• Do not wait for digital messages or teleconsultations.`
+        : `🚨 <strong>تنبيه طوارئ فوري وحرج:</strong><br><br>الأعراض التي ذكرتها قد تشير إلى حالة طوارئ طبية عاجلة تستوجب التدخل الفوري!<br><br>• <strong>التصرف الفوري:</strong> توقف عن استخدام التطبيق وتوجه حالاً إلى أقرب قسم طوارئ في مستشفى أو اتصل بالإسعاف (123) فوراً.<br>• لا تنتظر أي رسائل أو مشورات إلكترونية عند وجود ضيق تنفس حاد أو ألم بالصدر.`
+    };
+  }
+
+  // 2. Direct Treatment / Prescription / Dosing Requests (Treatment Guardrail)
+  const isTreatmentRequest = /اوصفلي|عايز علاج|عايز دواء|وصفة جديدة|دواء بديل|تغيير الجرعة|ازود الجرعة|انقص الجرعة|اوقف الدواء|اخذ دواء ايه|ايه علاج|علاج للكحة|علاج للبلغم|مضاد حيوي|مسكن قوي|كورتيزون|بديل الفينتولين|علاج الحساسية|prescribe|prescribe me|recommend drug|alternative medicine|change dose|increase dose|stop taking|which antibiotic|what medicine should i take|cure for/i.test(q);
+  if (isTreatmentRequest) {
+    return {
+      triggered: true,
+      type: "treatment_prohibited",
+      message: isEn
+        ? `🛡️ <strong>Safety Guardrail: Treatment & Prescription Strictly Prohibited</strong><br><br>The AI Assistant is <strong>prohibited</strong> from prescribing new medications, recommending drug alterations, adjusting doses, or initiating treatment regimens.<br><br>• <strong>Clinical Governance:</strong> Prescribing or modifying medication is the exclusive legal authority of a licensed physician.<br>• Please adhere strictly to the prescription certified in your official medical report.`
+        : `🛡️ <strong>حاجز أمان سريري: حظر وصف أو تعديل العلاج</strong><br><br>المساعد الذكي <strong>ممنوع تماماً</strong> من وصف أدوية جديدة، أو اقتراح بدائل علاجية، أو تعديل الجرعات، أو اقتراح أدوية بدون استشارة طبية.<br><br>• <strong>المسؤولية الطبية:</strong> صرف وتعديل العلاجات اختصاص أصيل وحصري للطبيب البشري المعالج.<br>• يرجى الالتزام التام بالروشتة المعتمدة رسمياً في تقريرك الطبي دون أي تعديل مستقل.`
+    };
+  }
+
+  // 3. Autonomous / Speculative Diagnosis Requests (Diagnosis Guardrail)
+  const isDiagnosisRequest = /شخصني|ما هو تشخيصي|عندي ايه|ايه اللي عندي|هل عندي كورونا|هل عندي كوفيد|هل عندي ربو|هل عندي التهاب رئوي|هل مرضي خطير|خمن مرضي|ما مرضي|diagnose me|what disease do i have|do i have covid|do i have pneumonia|guess my illness|what is wrong with me/i.test(q);
+  if (isDiagnosisRequest) {
+    return {
+      triggered: true,
+      type: "diagnosis_prohibited",
+      message: isEn
+        ? `🛡️ <strong>Safety Guardrail: Autonomous Diagnosis Strictly Prohibited</strong><br><br>The AI Assistant is <strong>prohibited</strong> from formulating independent medical diagnoses or speculating on pathology.<br><br>• <strong>Clinical Governance:</strong> Accurate medical diagnosis requires formal clinical evaluation, physical exam, and certified medical licensure.<br>• The assistant can only recite and clarify the diagnosis explicitly signed by your attending physician.`
+        : `🛡️ <strong>حاجز أمان سريري: حظر التشخيص الآلي المستقل</strong><br><br>المساعد الذكي <strong>ممنوع تماماً</strong> من إصدار تشخيصات طبية مستقلة أو التكهن بنوع المرض أو خطورته.<br><br>• <strong>المسؤولية الطبية:</strong> التشخيص الطبي اختصاص حصري للطبيب البشري المرخص بعد الفحص السريري الكامل.<br>• يقتصر دور المساعد فقط على قراءة وتوضيح التشخيص الذي اعتمده طبيبك رسمياً في التقرير الطبي.`
+    };
+  }
+
+  return { triggered: false };
+}
+
+function getClinicalGuardrailDisclaimer(isEn) {
+  return isEn
+    ? `<div style="margin-top: 12px; padding: 8px 12px; background: rgba(239, 68, 68, 0.06); border-inline-start: 3px solid #ef4444; border-radius: 6px; font-size: 11.5px; color: var(--muted);"><strong style="color: #ef4444;">🛡️ Clinical Guardrail:</strong> The Assistant does NOT provide autonomous diagnoses nor prescribe/modify treatments. It solely clarifies what your licensed physician officially certified. In emergencies, call 123 immediately.</div>`
+    : `<div style="margin-top: 12px; padding: 8px 12px; background: rgba(239, 68, 68, 0.06); border-inline-start: 3px solid #ef4444; border-radius: 6px; font-size: 11.5px; color: var(--muted);"><strong style="color: #ef4444;">🛡️ حاجز الأمان السريري:</strong> المساعد لا يقدم تشخيصاً مستقلاً ولا يصف أو يعدل أي علاج. دوره يقتصر حصرياً على توضيح ما اعتمده الطبيب البشري المرخص في تقريرك. في حالات الطوارئ اتصل بالإسعاف (123) فوراً.</div>`;
+}
+
 // ── CLINICAL ASSISTANT: EXCLUSIVELY EXPLAINS CERTIFIED & APPROVED REPORTS ──
 async function getLatestApprovedReportForAssistant(user) {
   if (!user || !db) return { status: "none", report: null };
@@ -8886,6 +8935,7 @@ async function handleSendChatMessage() {
 
   const isEn = currentLanguage === "en";
   const user = auth ? auth.currentUser : null;
+  const disclaimerHtml = getClinicalGuardrailDisclaimer(isEn);
 
   // Render user bubble
   const userBubble = document.createElement("div");
@@ -8898,21 +8948,77 @@ async function handleSendChatMessage() {
   // Add temporary bot thinking indicator
   const thinkingBubble = document.createElement("div");
   thinkingBubble.className = "bot";
-  thinkingBubble.innerHTML = `<span style="opacity: 0.7;">${isEn ? "Consulting certified medical dossier..." : "جاري مراجعة الملف الطبي المعتمد..."}</span>`;
+  thinkingBubble.innerHTML = `<span style="opacity: 0.7;">${isEn ? "Evaluating clinical guardrails & report..." : "جاري فحص حواجز الأمان والملف الطبي المعتمد..."}</span>`;
   messages.appendChild(thinkingBubble);
   messages.scrollTop = messages.scrollHeight;
+
+  // 1. EVALUATE GUARDRAILS FIRST (SAFETY FIRST)
+  const guardrail = evaluateClinicalGuardrails(query, isEn);
 
   // Re-verify latest approved report
   const caseStatusInfo = await getLatestApprovedReportForAssistant(user);
   window._assistantCaseStatus = caseStatusInfo;
+  const hasApprovedReport = caseStatusInfo.status === "approved" && caseStatusInfo.report;
 
   let botResponse = "";
 
-  if (caseStatusInfo.status !== "approved") {
+  if (guardrail.triggered) {
+    if (guardrail.type === "emergency") {
+      botResponse = guardrail.message + disclaimerHtml;
+      thinkingBubble.innerHTML = botResponse;
+      messages.scrollTop = messages.scrollHeight;
+      return;
+    }
+
+    if (guardrail.type === "treatment_prohibited") {
+      botResponse = guardrail.message;
+      if (hasApprovedReport) {
+        const r = caseStatusInfo.report;
+        const synth = synthesizeClinicalAssessment(r, isEn);
+        const meds = r.medications || synth.meds;
+        const docName = r.approvingDoctorName || r.assignedDoctorName || (isEn ? "Dr. Mona Samy" : "د. منى سامي");
+        botResponse += isEn
+          ? `<br><br>📋 <strong>Only the following medications were certified for your case by ${docName}:</strong><br><br>${meds.replace(/\n/g, '<br>')}`
+          : `<br><br>📋 <strong>الأدوية الوحيدة المعتمدة لحالتك من قِبل ${docName} هي:</strong><br><br>${meds.replace(/\n/g, '<br>')}`;
+      } else {
+        botResponse += isEn
+          ? `<br><br>🔒 <em>You currently do not have a doctor-approved prescription. Please wait for clinical review.</em>`
+          : `<br><br>🔒 <em>لا توجد روشتة معتمدة من الطبيب لحسابك حالياً. يُرجى انتظار اعتماد الطبيب.</em>`;
+      }
+      botResponse += disclaimerHtml;
+      thinkingBubble.innerHTML = botResponse;
+      messages.scrollTop = messages.scrollHeight;
+      return;
+    }
+
+    if (guardrail.type === "diagnosis_prohibited") {
+      botResponse = guardrail.message;
+      if (hasApprovedReport) {
+        const r = caseStatusInfo.report;
+        const synth = synthesizeClinicalAssessment(r, isEn);
+        const diag = r.clinicalDiagnosis || r.doctorNote || r.clinicalNotes || synth.diag;
+        const docName = r.approvingDoctorName || r.assignedDoctorName || (isEn ? "Dr. Mona Samy" : "د. منى سامي");
+        botResponse += isEn
+          ? `<br><br>🩺 <strong>The certified diagnosis established by ${docName} is:</strong><br><br>${diag}`
+          : `<br><br>🩺 <strong>التشخيص السريري المعتمد الوحيد لك من قِبل ${docName} هو:</strong><br><br>${diag}`;
+      } else {
+        botResponse += isEn
+          ? `<br><br>🔒 <em>Your assessment is still awaiting physician review. Independent AI diagnosis is barred.</em>`
+          : `<br><br>🔒 <em>فحصك الطبي قيد مراجعة الطبيب حالياً. يمنع النظام أي تشخيص آلي قبل اعتماد الطبيب.</em>`;
+      }
+      botResponse += disclaimerHtml;
+      thinkingBubble.innerHTML = botResponse;
+      messages.scrollTop = messages.scrollHeight;
+      return;
+    }
+  }
+
+  // 2. IF NOT APPROVED: LOCK RESULTS
+  if (!hasApprovedReport) {
     if (caseStatusInfo.status === "none") {
       botResponse = isEn
-        ? "Welcome! No certified medical reports were found in your account. You can conduct a breathing assessment first, and once a doctor approves it, I will be delighted to explain all details."
-        : "أهلاً بك! لم يتم العثور على تقرير طبي معتمد في حسابك حتى الآن. يمكنك إجراء فحص تنفسي جديد أولاً، وفور اعتماده من قِبل الطبيب سيسعدني شرح كافة التفاصيل لك.";
+        ? "Welcome! No certified medical reports were found in your account. You can conduct a breathing assessment first, and once a doctor approves it, I will clarify all details."
+        : "أهلاً بك! لم يتم العثور على تقرير طبي معتمد في حسابك حتى الآن. يمكنك إجراء فحص تنفسي جديد أولاً، وفور اعتماده من قِبل الطبيب سيسعدني توضيح كافة التفاصيل لك.";
     } else if (caseStatusInfo.status === CASE_STATUS.MORE_INFO_REQUESTED) {
       botResponse = isEn
         ? "⚠️ The attending physician requested additional information regarding your symptoms. Please review your alerts and reply to the doctor. I cannot interpret clinical findings before the report is certified."
@@ -8923,59 +9029,64 @@ async function handleSendChatMessage() {
         : "⚠️ تم إلغاء أو رفض هذا التقييم من قِبل الطبيب المختص. يُرجى إجراء فحص تنفسي جديد بدقة ليتم فحصه واعتماده.";
     } else {
       botResponse = isEn
-        ? "🔒 Notice: Your assessment is still undergoing clinical review by the doctor. For patient safety, the assistant cannot provide diagnoses, scores, or medication advice before official certification. Please wait for doctor approval."
-        : "🔒 تنبيه طبي: فحصك الطبي ما زال قيد المراجعة والتدقيق بواسطة الطبيب المختص. حرصاً على سلامتك، يمتنع المساعد تماماً عن تقديم تشخيصات أو شرح أرقام أو وصف علاجات قبل صدور الاعتماد الرسمي من الطبيب. يرجى الانتظار حتى اعتماد التقرير.";
+        ? "🔒 Notice: Your assessment is still undergoing clinical review by the doctor. In accordance with clinical guardrails, the assistant cannot provide diagnoses or medication advice before official certification. Please wait for doctor approval."
+        : "🔒 تنبيه طبي: فحصك الطبي ما زال قيد المراجعة والتدقيق بواسطة الطبيب المختص. وفقاً لحواجز الأمان السريرية، يمتنع المساعد تماماً عن تقديم تشخيصات أو وصف علاجات قبل صدور الاعتماد الرسمي من الطبيب. يرجى الانتظار حتى اعتماد التقرير.";
     }
-  } else {
-    // Case is genuinely APPROVED!
-    const r = caseStatusInfo.report;
-    const synth = synthesizeClinicalAssessment(r, isEn);
-    const diag = r.clinicalDiagnosis || r.doctorNote || r.clinicalNotes || synth.diag;
-    const meds = r.medications || synth.meds;
-    const recs = (Array.isArray(r.recommendations) && r.recommendations.length > 0) ? r.recommendations : synth.recs;
-    const docName = r.approvingDoctorName || r.assignedDoctorName || (isEn ? "Dr. Mona Samy" : "د. منى سامي");
-    const docLicense = r.doctorLicense || "EGY-MED-84920";
-    const o2 = r.oxygenLevel || r.o2 || "--";
-
-    const q = query.toLowerCase();
-    const isMedQuery = /دواء|علاج|روشتة|جرعة|أدوية|بخاخ|مضاد|مسكن|medication|medicine|drug|prescription|dose|rx/i.test(q);
-    const isRecQuery = /نصائح|تعليمات|ارشادات|توصيات|أعمل ايه|ماذا أفعل|advice|recommendation|instruction|tips/i.test(q);
-    const isDiagQuery = /تشخيص|مرضي|حالتي|ماذا عندي|أعراض|diagnosis|condition|disease|what do i have/i.test(q);
-    const isDocQuery = /طبيب|دكتور|مين|ترخيص|doctor|physician|license/i.test(q);
-
-    if (isMedQuery) {
-      botResponse = isEn
-        ? `💊 <strong>Prescribed Medications (Certified by ${docName}):</strong><br><br>${meds.replace(/\n/g, '<br>')}<br><br>⚠️ <em>Notice: Please adhere strictly to the prescribed doses and do not modify medications without consulting your doctor.</em>`
-        : `💊 <strong>الأدوية المعتمدة في تقريرك الطبي (بواسطة ${docName}):</strong><br><br>${meds.replace(/\n/g, '<br>')}<br><br>⚠️ <em>تنبيه: يُرجى الالتزام التام بالجرعات المقررة ومراجعة الطبيب قبل تغيير أو إيقاف أي علاج.</em>`;
-    } else if (isRecQuery) {
-      const recListHtml = recs.map((rec, i) => `${i + 1}. ${rec}`).join("<br>");
-      botResponse = isEn
-        ? `💡 <strong>Doctor's Clinical Instructions & Recommendations:</strong><br><br>${recListHtml}<br><br>🚨 <em>Emergency notice: In case of severe shortness of breath or persistent chest pain, seek immediate emergency care.</em>`
-        : `💡 <strong>تعليمات وتوصيات الطبيب المعتمد (${docName}):</strong><br><br>${recListHtml}<br><br>🚨 <em>تنبيه طوارئ: في حال حدوث ضيق تنفس حاد مفاجئ أو ألم بالصدر، توجه فوراً لأقرب قسم طوارئ.</em>`;
-    } else if (isDiagQuery) {
-      botResponse = isEn
-        ? `🩺 <strong>Certified Clinical Assessment (by ${docName}):</strong><br><br>${diag}<br><br>• <strong>Oxygen Saturation (SpO2):</strong> ${o2}%<br>• <strong>License:</strong> <code>${docLicense}</code>`
-        : `🩺 <strong>التشخيص السريري المعتمد (بواسطة ${docName}):</strong><br><br>${diag}<br><br>• <strong>نسبة تشبع الأكسجين المسجلة:</strong> ${o2}%<br>• <strong>ترخيص الطبيب:</strong> <code>${docLicense}</code>`;
-    } else if (isDocQuery) {
-      botResponse = isEn
-        ? `👨‍⚕️ <strong>Attending Physician Credentials:</strong><br><br>• <strong>Doctor:</strong> ${docName}<br>• <strong>Medical Syndicate License:</strong> <code>${docLicense}</code><br>• <strong>Status:</strong> Certified & Digitally Signed`
-        : `👨‍⚕️ <strong>بيانات الطبيب المعتمد للتقرير:</strong><br><br>• <strong>الطبيب:</strong> ${docName}<br>• <strong>رقم ترخيص النقابة:</strong> <code>${docLicense}</code><br>• <strong>الحالة:</strong> تقرير طبي معتمد وموقع رقمياً`;
-    } else {
-      const shortRecs = recs.slice(0, 2).map((rec, i) => `${i + 1}. ${rec}`).join("<br>");
-      botResponse = isEn
-        ? `📋 <strong>Summary of Certified Report (#${r.id.slice(-6).toUpperCase()} by ${docName}):</strong><br><br>` +
-          `🩺 <strong>Diagnosis:</strong> ${diag}<br><br>` +
-          `💊 <strong>Prescription:</strong><br>${meds.replace(/\n/g, '<br>')}<br><br>` +
-          `💡 <strong>Key Instructions:</strong><br>${shortRecs}<br><br>` +
-          `<em>Feel free to ask specifically about your medications, diagnosis, or instructions.</em>`
-        : `📋 <strong>ملخص تقريرك الطبي المعتمد (#${r.id.slice(-6).toUpperCase()} بواسطة ${docName}):</strong><br><br>` +
-          `🩺 <strong>التشخيص المعتمد:</strong> ${diag}<br><br>` +
-          `💊 <strong>الخطة الدوائية:</strong><br>${meds.replace(/\n/g, '<br>')}<br><br>` +
-          `💡 <strong>أهم التعليمات:</strong><br>${shortRecs}<br><br>` +
-          `<em>يمكنك سؤالي بالتفصيل عن الأدوية الموصوفة، أو التشخيص، أو التعليمات الطبية.</em>`;
-    }
+    botResponse += disclaimerHtml;
+    thinkingBubble.innerHTML = botResponse;
+    messages.scrollTop = messages.scrollHeight;
+    return;
   }
 
+  // 3. CASE IS GENUINELY APPROVED - EXPLAIN ONLY WHAT THE DOCTOR RECORDED
+  const r = caseStatusInfo.report;
+  const synth = synthesizeClinicalAssessment(r, isEn);
+  const diag = r.clinicalDiagnosis || r.doctorNote || r.clinicalNotes || synth.diag;
+  const meds = r.medications || synth.meds;
+  const recs = (Array.isArray(r.recommendations) && r.recommendations.length > 0) ? r.recommendations : synth.recs;
+  const docName = r.approvingDoctorName || r.assignedDoctorName || (isEn ? "Dr. Mona Samy" : "د. منى سامي");
+  const docLicense = r.doctorLicense || "EGY-MED-84920";
+  const o2 = r.oxygenLevel || r.o2 || "--";
+
+  const q = query.toLowerCase();
+  const isMedQuery = /دواء|علاج|روشتة|جرعة|أدوية|بخاخ|مضاد|مسكن|medication|medicine|drug|prescription|dose|rx/i.test(q);
+  const isRecQuery = /نصائح|تعليمات|ارشادات|توصيات|أعمل ايه|ماذا أفعل|advice|recommendation|instruction|tips/i.test(q);
+  const isDiagQuery = /تشخيص|مرضي|حالتي|ماذا عندي|أعراض|diagnosis|condition|disease|what do i have/i.test(q);
+  const isDocQuery = /طبيب|دكتور|مين|ترخيص|doctor|physician|license/i.test(q);
+
+  if (isMedQuery) {
+    botResponse = isEn
+      ? `💊 <strong>Prescribed Medications (Certified by ${docName}):</strong><br><br>${meds.replace(/\n/g, '<br>')}<br><br>⚠️ <em>Notice: The assistant does not alter or prescribe medications. Please adhere strictly to the prescribed doses.</em>`
+      : `💊 <strong>الأدوية المعتمدة في تقريرك الطبي (بواسطة ${docName}):</strong><br><br>${meds.replace(/\n/g, '<br>')}<br><br>⚠️ <em>تنبيه أمان: المساعد لا يصف أدوية ولا يعدل جرعات. يُرجى الالتزام التام بالجرعات المقررة ومراجعة الطبيب قبل تغيير أو إيقاف أي علاج.</em>`;
+  } else if (isRecQuery) {
+    const recListHtml = recs.map((rec, i) => `${i + 1}. ${rec}`).join("<br>");
+    botResponse = isEn
+      ? `💡 <strong>Doctor's Clinical Instructions & Recommendations:</strong><br><br>${recListHtml}<br><br>🚨 <em>Emergency notice: In case of severe shortness of breath or persistent chest pain, seek immediate emergency care.</em>`
+      : `💡 <strong>تعليمات وتوصيات الطبيب المعتمد (${docName}):</strong><br><br>${recListHtml}<br><br>🚨 <em>تنبيه طوارئ: في حال حدوث ضيق تنفس حاد مفاجئ أو ألم بالصدر، توجه فوراً لأقرب قسم طوارئ.</em>`;
+  } else if (isDiagQuery) {
+    botResponse = isEn
+      ? `🩺 <strong>Certified Clinical Assessment (Signed by ${docName}):</strong><br><br>${diag}<br><br>• <strong>Oxygen Saturation (SpO2):</strong> ${o2}%<br>• <strong>Doctor License:</strong> <code>${docLicense}</code><br><br><em>(This is an explanation of the doctor's certified record, not an independent AI diagnosis.)</em>`
+      : `🩺 <strong>التشخيص السريري المعتمد (الموقع من ${docName}):</strong><br><br>${diag}<br><br>• <strong>نسبة تشبع الأكسجين المسجلة:</strong> ${o2}%<br>• <strong>ترخيص الطبيب:</strong> <code>${docLicense}</code><br><br><em>(هذا توضيح لما سجله الطبيب المعتمد في تقريرك، وليس تشخيصاً آلياً مستقلاً.)</em>`;
+  } else if (isDocQuery) {
+    botResponse = isEn
+      ? `👨‍⚕️ <strong>Attending Physician Credentials:</strong><br><br>• <strong>Doctor:</strong> ${docName}<br>• <strong>Medical Syndicate License:</strong> <code>${docLicense}</code><br>• <strong>Status:</strong> Certified & Digitally Signed`
+      : `👨‍⚕️ <strong>بيانات الطبيب المعتمد للتقرير:</strong><br><br>• <strong>الطبيب:</strong> ${docName}<br>• <strong>رقم ترخيص النقابة:</strong> <code>${docLicense}</code><br>• <strong>الحالة:</strong> تقرير طبي معتمد وموقع رقمياً`;
+  } else {
+    const shortRecs = recs.slice(0, 2).map((rec, i) => `${i + 1}. ${rec}`).join("<br>");
+    botResponse = isEn
+      ? `📋 <strong>Summary of Certified Report (#${r.id.slice(-6).toUpperCase()} by ${docName}):</strong><br><br>` +
+        `🩺 <strong>Doctor's Diagnosis:</strong> ${diag}<br><br>` +
+        `💊 <strong>Doctor's Prescription:</strong><br>${meds.replace(/\n/g, '<br>')}<br><br>` +
+        `💡 <strong>Key Instructions:</strong><br>${shortRecs}<br><br>` +
+        `<em>You may ask to clarify specific items from the doctor's approved report.</em>`
+      : `📋 <strong>ملخص تقريرك الطبي المعتمد (#${r.id.slice(-6).toUpperCase()} بواسطة ${docName}):</strong><br><br>` +
+        `🩺 <strong>تشخيص الطبيب المعتمد:</strong> ${diag}<br><br>` +
+        `💊 <strong>العلاج المعتمد من الطبيب:</strong><br>${meds.replace(/\n/g, '<br>')}<br><br>` +
+        `💡 <strong>أهم التعليمات:</strong><br>${shortRecs}<br><br>` +
+        `<em>يمكنك سؤالي لتوضيح أي نقطة واردة في تقرير الطبيب المعتمد.</em>`;
+  }
+
+  botResponse += disclaimerHtml;
   thinkingBubble.innerHTML = botResponse;
   messages.scrollTop = messages.scrollHeight;
 }
