@@ -1913,6 +1913,7 @@ app.post('/api/clinics/demo-request', (req, res) => {
       contactName,
       email,
       phone,
+      packageType = 'pilot',
       specialty = 'pulmonology',
       doctorCount = '1-5',
       city = 'Cairo',
@@ -1932,6 +1933,7 @@ app.post('/api/clinics/demo-request', (req, res) => {
       return res.status(400).json({ error: 'INVALID_PHONE', message: 'A valid WhatsApp/phone number is required.' });
     }
 
+    const isPilot = packageType === 'pilot' || String(packageType).toLowerCase().includes('pilot');
     const leadId = `LEAD-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
     const leadData = {
       leadId,
@@ -1939,10 +1941,19 @@ app.post('/api/clinics/demo-request', (req, res) => {
       contactName: String(contactName).trim().substring(0, 100),
       email: String(email).trim().toLowerCase().substring(0, 100),
       phone: String(phone).trim().substring(0, 30),
+      packageType: String(packageType).trim().substring(0, 50),
       specialty: String(specialty).trim().substring(0, 50),
       doctorCount: String(doctorCount).trim().substring(0, 20),
       city: String(city).trim().substring(0, 50),
       notes: String(notes || '').trim().substring(0, 500),
+      pilotSpecs: isPilot ? {
+        isPilot: true,
+        clinicCount: 1,
+        doctorCount: 3,
+        durationDays: 30,
+        cost: 0,
+        trialStatus: 'active_trial'
+      } : null,
       status: 'pending_contact',
       source: 'clinic_sales_landing',
       createdAt: new Date().toISOString()
@@ -1957,12 +1968,16 @@ app.post('/api/clinics/demo-request', (req, res) => {
       });
     }
 
-    console.log(`[CLINIC DEMO REQUEST RECEIVED]: Lead ${leadId} for '${leadData.clinicName}' (${leadData.contactName} - ${leadData.phone})`);
+    console.log(`[CLINIC DEMO REQUEST RECEIVED]: Lead ${leadId} for '${leadData.clinicName}' (${leadData.contactName} - ${leadData.phone}) - Package: ${leadData.packageType} [isPilot: ${isPilot}]`);
 
     res.status(201).json({
       success: true,
       leadId,
-      message: 'Demo request received successfully. Our clinical onboarding specialist will contact you within 24 hours.'
+      packageType: leadData.packageType,
+      isPilot,
+      message: isPilot
+        ? 'Pilot package onboarding request registered (1 Clinic, 3 Doctors, 30 Days).'
+        : 'Demo request received successfully. Our clinical onboarding specialist will contact you within 24 hours.'
     });
   } catch (err) {
     console.error('[CLINIC DEMO REQUEST ERROR]:', err);

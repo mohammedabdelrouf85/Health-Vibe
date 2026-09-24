@@ -675,7 +675,7 @@
   <!-- Top Announcement -->
   <div class="top-announcement">
     <span class="badge-pill" id="announcementBadge">✨ إطلاق حصري لعام 2026</span>
-    <span id="announcementText">انضم إلى أكثر من 45 عيادة متخصصة تعتمد على Health Vibes AI في مصر — احصل على شهر تجريبي مجاناً مع تدريب كامل لفريقك.</span>
+    <span id="announcementText">انضم إلى أكثر من 45 عيادة متخصصة في مصر — احصل على باقة التشغيل التجريبي الرسمية (عيادة واحدة • 3 أطباء • 30 يوماً مجاناً).</span>
   </div>
 
   <!-- Navigation -->
@@ -1013,6 +1013,37 @@
         <p id="pricingDesc">جميع الباقات تتضمن فترة تجريبية مجانية لمدة 30 يوماً بدون أي التزام مسبق.</p>
       </div>
 
+      <!-- 🌟 PILOT PACKAGE SPOTLIGHT CARD (1 Clinic, 3 Doctors, 30 Days) -->
+      <div class="pilot-package-banner" style="background: linear-gradient(135deg, rgba(9, 184, 182, 0.18) 0%, rgba(2, 132, 199, 0.12) 100%); border: 2px solid rgba(9, 184, 182, 0.55); border-radius: 20px; padding: 28px 32px; margin-bottom: 36px; box-shadow: 0 12px 36px rgba(9, 184, 182, 0.15); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 24px; position: relative; overflow: hidden;">
+        <div style="max-width: 680px;">
+          <div style="display: inline-flex; align-items: center; gap: 8px; background: rgba(9, 184, 182, 0.25); color: #2dd4bf; padding: 4px 14px; border-radius: 999px; font-size: 13px; font-weight: 700; margin-bottom: 12px; border: 1px solid rgba(45, 212, 191, 0.4);">
+            <span>🚀</span>
+            <span id="pilotBadge">باقة التشغيل التجريبي المعتمدة (Pilot Package)</span>
+          </div>
+          <h3 style="font-size: 24px; font-weight: 800; color: #ffffff; margin-bottom: 8px;" id="pilotTitle">
+            باقة الانطلاق للعيادات: <span style="color: #2dd4bf;">عيادة واحدة • 3 أطباء • 30 يوماً مجاناً</span>
+          </h3>
+          <p style="font-size: 14.5px; color: #92b1af; line-height: 1.6; margin-bottom: 16px;" id="pilotDesc">
+            ابدأ بتطبيق منظومة الذكاء الاصطناعي السريري في عيادتك دون أي مخاطرة مالية. تمنحك هذه الباقة وصولاً كاملاً لـ 3 أطباء واستشاريين لمدة 30 يوماً مع تدريب كامل لفريقك ودعم فني مخصص.
+          </p>
+          <div style="display: flex; flex-wrap: wrap; gap: 16px; font-size: 13px; color: #e2e8f0;">
+            <div style="display: flex; align-items: center; gap: 6px;"><span style="color:#2dd4bf;">✓</span> <strong id="pilotSpec1">عيادة واحدة / فرع رئيسي (1 Clinic)</strong></div>
+            <div style="display: flex; align-items: center; gap: 6px;"><span style="color:#2dd4bf;">✓</span> <strong id="pilotSpec2">حتى 3 أطباء واستشاريين (3 Doctors)</strong></div>
+            <div style="display: flex; align-items: center; gap: 6px;"><span style="color:#2dd4bf;">✓</span> <strong id="pilotSpec3">30 يوماً تشغيل سريري كامل (30 Days)</strong></div>
+            <div style="display: flex; align-items: center; gap: 6px;"><span style="color:#2dd4bf;">✓</span> <strong id="pilotSpec4">فرز ذكي + تقارير QR + واتساب بوت</strong></div>
+            <div style="display: flex; align-items: center; gap: 6px;"><span style="color:#2dd4bf;">✓</span> <strong id="pilotSpec5">بدون بطاقة بنكية وبدون التزام مسبق</strong></div>
+          </div>
+        </div>
+        <div style="text-align: center; min-width: 220px; flex-shrink: 0;">
+          <div style="font-size: 36px; font-weight: 900; color: #2dd4bf; margin-bottom: 2px;">0 <span style="font-size: 16px; font-weight: 600; color: #92b1af;">جنيه</span></div>
+          <div style="font-size: 12.5px; color: #94a3b8; margin-bottom: 14px;" id="pilotCostNote">فترة تجريبية مجانية 100%</div>
+          <a href="#demoForm" onclick="selectPilotPackage()" class="cta-btn-primary" style="justify-content: center; width: 100%; padding: 12px 20px; font-size: 14px;" id="btnSelectPilot">
+            <span>🎯</span>
+            <span id="btnSelectPilotText">تفعيل باقة الـ Pilot لعيادتي</span>
+          </a>
+        </div>
+      </div>
+
       <div class="pricing-grid">
         <!-- Tier 1: Solo -->
         <div class="price-card">
@@ -1077,6 +1108,16 @@
 
         <form id="clinicLeadForm" onsubmit="handleClinicLeadSubmit(event)">
           <div class="form-grid">
+            <div class="form-field full-span">
+              <label for="leadPackage" id="labelPackage">الباقة المرغوبة لتشغيل العيادة *</label>
+              <select id="leadPackage" onchange="handlePackageSelectChange(this.value)" style="border: 1.5px solid rgba(9, 184, 182, 0.6); background: rgba(9, 184, 182, 0.08);">
+                <option value="pilot" selected>🎯 باقة الإطلاق التجريبية المعتمدة (1 عيادة • 3 أطباء • 30 يوماً مجاناً)</option>
+                <option value="solo">العيادة الفردية (طبيب واحد - 1,250 ج.م/شهرياً)</option>
+                <option value="center">المركز الطبي التخصصي (حتى 5 أطباء - 2,950 ج.م/شهرياً)</option>
+                <option value="enterprise">مجمع عيادات ومستشفيات (باقة مخصصة)</option>
+              </select>
+            </div>
+
             <div class="form-field">
               <label for="leadClinicName" id="labelClinicName">اسم العيادة أو المركز الطبي *</label>
               <input type="text" id="leadClinicName" placeholder="مثال: عيادات النيل لأمراض الصدر والحساسية" required />
@@ -1263,7 +1304,7 @@
     const clinicTranslations = {
       ar: {
         announcementBadge: "✨ إطلاق حصري لعام 2026",
-        announcementText: "انضم إلى أكثر من 45 عيادة متخصصة تعتمد على Health Vibes AI في مصر — احصل على شهر تجريبي مجاناً مع تدريب كامل لفريقك.",
+        announcementText: "انضم إلى أكثر من 45 عيادة متخصصة في مصر — احصل على باقة التشغيل التجريبي الرسمية (عيادة واحدة • 3 أطباء • 30 يوماً مجاناً).",
         navRoleBadge: "بوابة العيادات والمراكز",
         navFeatures: "المميزات السريرية",
         navWorkflow: "مسار العمل",
@@ -1289,11 +1330,22 @@
         calcHoursSavedLabel: "ساعات توثيق وفرز يتم توفيرها شهرياً للعيادة",
         calcRevenueGainLabel: "عائد شهري إضافي متوقع من استرداد المواعيد المهدرة",
         calcTriageSpeedLabel: "سرعة إصدار وتوثيق التقارير الطبية المعتمدة",
-        calcCtaBtn: "ابدأ بتطبيق المنظومة في عيادتك الآن"
+        calcCtaBtn: "ابدأ بتطبيق المنظومة في عيادتك الآن",
+        pilotBadge: "باقة التشغيل التجريبي المعتمدة (Pilot Package)",
+        pilotTitle: 'باقة الانطلاق للعيادات: <span style="color: #2dd4bf;">عيادة واحدة • 3 أطباء • 30 يوماً مجاناً</span>',
+        pilotDesc: "ابدأ بتطبيق منظومة الذكاء الاصطناعي السريري في عيادتك دون أي مخاطرة مالية. تمنحك هذه الباقة وصولاً كاملاً لـ 3 أطباء واستشاريين لمدة 30 يوماً مع تدريب كامل لفريقك ودعم فني مخصص.",
+        pilotSpec1: "عيادة واحدة / فرع رئيسي (1 Clinic)",
+        pilotSpec2: "حتى 3 أطباء واستشاريين (3 Doctors)",
+        pilotSpec3: "30 يوماً تشغيل سريري كامل (30 Days)",
+        pilotSpec4: "فرز ذكي + تقارير QR + واتساب بوت",
+        pilotSpec5: "بدون بطاقة بنكية وبدون التزام مسبق",
+        pilotCostNote: "فترة تجريبية مجانية 100%",
+        btnSelectPilotText: "تفعيل باقة الـ Pilot لعيادتي",
+        labelPackage: "الباقة المرغوبة لتشغيل العيادة *"
       },
       en: {
         announcementBadge: "✨ 2026 Exclusive Release",
-        announcementText: "Join over 45 specialized clinics relying on Health Vibes AI — get a 30-day free trial with full team onboarding.",
+        announcementText: "Join over 45 specialized clinics relying on Health Vibes AI — get our Official Clinical Pilot Package (1 Clinic • 3 Doctors • 30 Days Free).",
         navRoleBadge: "Clinics & Medical Centers",
         navFeatures: "Clinical Features",
         navWorkflow: "Workflow",
@@ -1319,7 +1371,18 @@
         calcHoursSavedLabel: "Documentation hours saved per month",
         calcRevenueGainLabel: "Projected monthly revenue boost from recovered no-shows",
         calcTriageSpeedLabel: "Faster certified report generation",
-        calcCtaBtn: "Deploy Health Vibes in Your Clinic Today"
+        calcCtaBtn: "Deploy Health Vibes in Your Clinic Today",
+        pilotBadge: "Official Clinical Pilot Package",
+        pilotTitle: 'Clinic Onboarding Pilot: <span style="color: #2dd4bf;">1 Clinic • 3 Doctors • 30 Days Free</span>',
+        pilotDesc: "Deploy clinical AI in your clinic with zero financial risk. Get full, unrestricted access for up to 3 physicians for 30 days, complete with clinical team training and dedicated support.",
+        pilotSpec1: "1 Single Clinic / Main Branch",
+        pilotSpec2: "Up to 3 Licensed Doctors",
+        pilotSpec3: "30 Days Full Clinical Operation",
+        pilotSpec4: "AI Triage + QR Reports + WhatsApp Bot",
+        pilotSpec5: "No credit card or commitment required",
+        pilotCostNote: "100% Free Pilot Evaluation",
+        btnSelectPilotText: "Claim 30-Day Pilot Package",
+        labelPackage: "Desired Clinic Package *"
       }
     };
 
@@ -1376,6 +1439,35 @@
       document.getElementById("calcRevenueGain").textContent = isAr ? `+${extraRevenue.toLocaleString()} جنيه` : `+${extraRevenue.toLocaleString()} EGP`;
     }
 
+    function selectPilotPackage() {
+      const pkgSelect = document.getElementById("leadPackage");
+      if (pkgSelect) {
+        pkgSelect.value = "pilot";
+      }
+      const docSelect = document.getElementById("leadDoctorCount");
+      if (docSelect) {
+        docSelect.value = "2-5";
+      }
+      const formElem = document.getElementById("demoForm");
+      if (formElem) {
+        formElem.scrollIntoView({ behavior: "smooth" });
+      }
+    }
+
+    function handlePackageSelectChange(val) {
+      const docSelect = document.getElementById("leadDoctorCount");
+      if (!docSelect) return;
+      if (val === "pilot") {
+        docSelect.value = "2-5";
+      } else if (val === "solo") {
+        docSelect.value = "1";
+      } else if (val === "center") {
+        docSelect.value = "2-5";
+      } else if (val === "enterprise") {
+        docSelect.value = "15+";
+      }
+    }
+
     async function handleClinicLeadSubmit(event) {
       event.preventDefault();
       const submitBtn = document.getElementById("btnSubmitClinicLead");
@@ -1390,6 +1482,7 @@
         contactName: document.getElementById("leadContactName").value,
         email: document.getElementById("leadEmail").value,
         phone: document.getElementById("leadPhone").value,
+        packageType: document.getElementById("leadPackage") ? document.getElementById("leadPackage").value : "pilot",
         specialty: document.getElementById("leadSpecialty").value,
         doctorCount: document.getElementById("leadDoctorCount").value,
         city: document.getElementById("leadCity").value,

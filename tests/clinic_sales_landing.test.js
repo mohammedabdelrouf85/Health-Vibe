@@ -144,26 +144,39 @@ server.listen(0, async () => {
     assert.strictEqual(resBadEmail.statusCode, 400, 'Rejects payload with invalid email');
     assert.strictEqual(resBadEmail.body.error, 'INVALID_EMAIL');
 
-    // 8c: Successful lead ingestion
+    // 8c: Successful lead ingestion (Pilot Package: 1 Clinic, 3 Doctors, 30 Days)
     const resGood = await makePostRequest(`${baseUrl}/api/clinics/demo-request`, {
       clinicName: 'Nile Chest Care Center',
       contactName: 'Prof. Tarek Mahmoud',
       email: 'tarek@nilechest.com',
       phone: '+201009876543',
+      packageType: 'pilot',
       specialty: 'pulmonology',
       doctorCount: '2-5',
       city: 'Cairo',
-      notes: 'Interested in connecting our WhatsApp bot for outpatient scheduling'
+      notes: 'Pilot package: 1 clinic, 3 doctors, 30 days trial onboarding'
     });
 
     assert.strictEqual(resGood.statusCode, 201, 'Accepts valid demo request with 201 Created');
     assert.strictEqual(resGood.body.success, true);
+    assert.strictEqual(resGood.body.isPilot, true, 'Correctly tags Pilot package in response');
+    assert.strictEqual(resGood.body.packageType, 'pilot', 'Reflects packageType: pilot');
     assert(resGood.body.leadId && resGood.body.leadId.startsWith('LEAD-'), 'Generates unique LEAD reference');
 
-    console.log('  ✓ Backend ingestion route validated: input hygiene, error checks, 201 response.\n');
+    // TEST 9: Pilot Package HTML elements (1 Clinic, 3 Doctors, 30 Days)
+    assert(clinicsHtmlContent.includes('pilot-package-banner'), 'Pilot package banner element exists in DOM');
+    assert(clinicsHtmlContent.includes('id="pilotBadge"'), 'Pilot package badge element exists');
+    assert(clinicsHtmlContent.includes('id="pilotTitle"'), 'Pilot package title element exists');
+    assert(clinicsHtmlContent.includes('id="pilotSpec1"'), '1 clinic spec element exists');
+    assert(clinicsHtmlContent.includes('id="pilotSpec2"'), '3 doctors spec element exists');
+    assert(clinicsHtmlContent.includes('id="pilotSpec3"'), '30 days spec element exists');
+    assert(clinicsHtmlContent.includes('id="leadPackage"'), 'Package selection dropdown exists in form');
+    assert(clinicsHtmlContent.includes('value="pilot"'), 'Pilot package option exists in dropdown');
+    assert(clinicsHtmlContent.includes('function selectPilotPackage()'), 'Pilot package CTA handler function exists');
+    console.log('  ✓ Pilot Package (1 Clinic, 3 Doctors, 30 Days) verified across UI, form, and backend API.\n');
 
     console.log('==================================================================');
-    console.log('🎉 ALL 8 CLINIC SALES LANDING PAGE TESTS PASSED WITH 100% SUCCESS!');
+    console.log('🎉 ALL 9 CLINIC SALES & PILOT PACKAGE TESTS PASSED WITH 100% SUCCESS!');
     console.log('==================================================================');
 
     server.close();
