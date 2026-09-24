@@ -2019,8 +2019,13 @@ async function updateCaseStatus(id, newStatus, note, extraFields = {}) {
       updatePayload.rejectionReason = note || extraFields.rejectionReason || (isEn ? "Non-clinical data or duplicate submission" : "بيانات غير طبية أو تقييم مكرر");
       updatePayload.doctorNote = updatePayload.rejectionReason;
     } else if (newStatus === CASE_STATUS.MORE_INFO_REQUESTED) {
+      updatePayload.doctorApproved = false;
       updatePayload.moreInfoRequestedAt = firebase.firestore.FieldValue.serverTimestamp();
-      updatePayload.moreInfoNote = note || "";
+      updatePayload.moreInfoNote = note || extraFields.moreInfoNote || "";
+      updatePayload.doctorNote = updatePayload.moreInfoNote;
+      updatePayload.requestingDoctorId = user ? user.uid : null;
+      updatePayload.requestingDoctorName = extraFields.requestingDoctorName || (user ? (user.displayName || (user.email ? user.email.split('@')[0] : "Doctor")) : "Doctor");
+      updatePayload.requestingDoctorEmail = user ? user.email : null;
     } else if (newStatus === CASE_STATUS.ESCALATED) {
       updatePayload.escalatedAt = firebase.firestore.FieldValue.serverTimestamp();
       updatePayload.escalationReason = note || "";
@@ -2241,16 +2246,27 @@ window.requestMoreInfo = async function(id) {
   const defaultPrompt = isEn 
     ? "Please specify what extra information or test is required from the patient:" 
     : "يرجى تحديد البيانات أو الفحوصات الإضافية المطلوبة من المريض:";
-  const noteInput = document.getElementById("doctorNoteInput");
-  let promptNote = noteInput && noteInput.value.trim() ? noteInput.value.trim() : "";
-  if (!promptNote) {
-    promptNote = window.prompt(defaultPrompt, isEn ? "Re-check oxygen saturation SpO2 and upload latest prescription" : "إعادة قياس نسبة الأكسجين SpO2 وإرفاق الروشتة السابقة إن وجدت");
-  }
-  if (!promptNote) return;
+  const noteInput = document.getElementById("doctorDiagnosisInput") || document.getElementById("doctorNoteInput");
+  let existingNote = noteInput && noteInput.value.trim() ? noteInput.value.trim() : "";
+  
+  let promptNote = window.prompt(defaultPrompt, existingNote || (isEn ? "Re-check oxygen saturation SpO2 and upload latest prescription or update symptoms" : "إعادة قياس نسبة الأكسجين SpO2 وإرفاق الروشتة السابقة أو توضيح تطور الأعراض"));
+  if (promptNote === null) return; // Cancelled
+  
+  promptNote = promptNote.trim() || existingNote || (isEn ? "Re-check oxygen saturation SpO2 and upload latest prescription or update symptoms" : "إعادة قياس نسبة الأكسجين SpO2 وإرفاق الروشتة السابقة أو توضيح تطور الأعراض");
 
-  const success = await updateCaseStatus(id, CASE_STATUS.MORE_INFO_REQUESTED, promptNote);
+  const user = auth ? auth.currentUser : null;
+  const payload = {
+    moreInfoNote: promptNote,
+    doctorNote: promptNote,
+    requestingDoctorId: user ? user.uid : null,
+    requestingDoctorName: user ? (user.displayName || user.email) : (isEn ? "Physician" : "الطبيب المعالج"),
+    requestingDoctorEmail: user ? user.email : null,
+    doctorApproved: false
+  };
+
+  const success = await updateCaseStatus(id, CASE_STATUS.MORE_INFO_REQUESTED, promptNote, payload);
   if (success) {
-    showToast(isEn ? "Requested additional information from patient" : "تم طلب معلومات إضافية من المريض");
+    showToast(isEn ? "Requested additional information from patient" : "تم إرسال طلب المعلومات الإضافية وتوثيق الحالة بنجاح");
     await renderDoctorQueue();
     selectDoctorCase(id);
   }
@@ -2659,10 +2675,26 @@ if (isUnderReview) {
     `;
   } else if (isMoreInfo) {
     actionToolbarHtml = `
-      <div style="background: rgba(251, 146, 60, 0.12); border: 1px solid #fb923c; border-radius: 12px; padding: 12px; margin-top: 12px;">
-        <strong style="color: #c2410c; display: block; margin-bottom: 4px;">❓ ${isEn ? 'Awaiting Additional Patient Information' : 'بانتظار إفادة المريض بالبيانات الإضافية'}</strong>
-        <p style="margin: 0 0 10px; font-size: 13px; color: var(--ink);">${c.moreInfoNote || c.doctorNote || ''}</p>
-        <div class="doctor-actions-toolbar" style="margin-top: 0;">
+      <div style="background: rgba(251, 146, 60, 0.12); border: 1.5px solid #fb923c; border-radius: 14px; padding: 14px; margin-top: 14px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+          <strong style="color: #c2410c; display: flex; align-items: center; gap: 6px; font-size: 14px;">
+            <span>❓</span> ${isEn ? 'Awaiting Additional Patient Information' : 'بانتظار إفادة المريض بالبيانات الإضافية'}
+          </strong>
+          <span class="pill pending" style="font-size: 11px;">${isEn ? 'Awaiting Patient' : 'بانتظار المريض'}</span>
+        </div>
+        <p style="margin: 0 0 10px; font-size: 13px; color: var(--ink); line-height: 1.5; background: var(--surface); padding: 8px 12px; border-radius: 8px; border: 1px dashed rgba(251, 146, 60, 0.4);">
+          <strong>${isEn ? 'Doctor Request: ' : 'الطلب الموجه للمريض: '}</strong>${c.moreInfoNote || c.doctorNote || ''}
+        </p>
+        ${c.patientResponse ? `
+          <div style="background: rgba(14, 165, 164, 0.12); border: 1px solid var(--teal); border-radius: 8px; padding: 10px 14px; margin-bottom: 12px;">
+            <strong style="color: var(--teal); display: block; margin-bottom: 4px; font-size: 13px;">📩 ${isEn ? 'Patient Response Received:' : 'رد وإفادة المريض الواردة:'}</strong>
+            <p style="margin: 0; font-size: 13px; color: var(--ink); font-weight: 600;">${c.patientResponse}</p>
+          </div>
+        ` : ''}
+        <div class="doctor-actions-toolbar" style="margin-top: 6px;">
+          <button type="button" class="btn-clinical approve" onclick="generateAndApproveReport('${c.id}')" title="${isEn ? 'Approve and generate official certified report' : 'اعتماد سريري وتوليد التقرير الطبي المعتمد'}">
+            <span>✨</span> ${isEn ? 'Generate & Approve Report' : 'توليد واعتماد التقرير'}
+          </button>
           <button type="button" class="btn-clinical resume" onclick="resumeReview('${c.id}')">
             <span>🔄</span> ${isEn ? 'Resume Review' : 'استئناف الفحص السريري'}
           </button>
@@ -4858,13 +4890,41 @@ async function renderReportScreen(targetCaseId = null) {
       ` : '';
 
       const moreInfoAlertHtml = caseData.status === CASE_STATUS.MORE_INFO_REQUESTED ? `
-        <div style="background: rgba(234, 88, 12, 0.1); border: 1px solid #ea580c; border-radius: 12px; padding: 14px; margin-bottom: 20px; text-align: ${isEn ? 'left' : 'right'};">
-          <strong style="color: #c2410c; display: flex; align-items: center; gap: 6px; font-size: 14px;">
-            <span>❓</span> ${isEn ? 'Physician Requested Additional Information' : 'طلب الطبيب إيضاحات أو قياسات إضافية'}
-          </strong>
-          <p style="margin: 6px 0 0; font-size: 13.5px; color: var(--ink);">
-            ${caseData.moreInfoNote || caseData.doctorNote || (isEn ? 'Please consult doctor notes for clarification.' : 'يرجى مراجعة الطبيب لتزويده بالبيانات المطلوبة.')}
+        <div style="background: rgba(234, 88, 12, 0.08); border: 1.5px solid #ea580c; border-radius: 14px; padding: 18px; margin-bottom: 24px; text-align: ${isEn ? 'left' : 'right'};">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+            <strong style="color: #c2410c; display: flex; align-items: center; gap: 8px; font-size: 15px;">
+              <span>❓</span> ${isEn ? 'Physician Requested Additional Information' : 'طلب الطبيب إيضاحات أو قياسات إضافية'}
+            </strong>
+            <span class="pill pending" style="font-size: 11px;">${isEn ? 'Action Required' : 'مطلوب الرد'}</span>
+          </div>
+          <p style="margin: 0 0 12px; font-size: 13.5px; color: var(--ink); line-height: 1.5; background: var(--surface); padding: 10px 14px; border-radius: 8px; border: 1px dashed rgba(234, 88, 12, 0.4);">
+            <strong>${isEn ? 'Doctor Request: ' : 'طلب الطبيب: '}</strong>${caseData.moreInfoNote || caseData.doctorNote || (isEn ? 'Please provide additional details regarding your symptoms or latest vitals.' : 'يرجى تزويدنا بتفاصيل إضافية عن الأعراض أو قياس الأكسجين الأخير.')}
           </p>
+
+          ${caseData.patientResponse ? `
+            <div style="background: rgba(14, 165, 164, 0.1); border: 1px solid var(--teal); border-radius: 8px; padding: 10px 14px; margin-bottom: 12px;">
+              <small style="color: var(--teal); font-weight: 700; display: block; margin-bottom: 4px;">✅ ${isEn ? 'Your response sent to doctor:' : 'ردك المرسل للطبيب:'}</small>
+              <div style="font-size: 13px; color: var(--ink);">${caseData.patientResponse}</div>
+            </div>
+          ` : ''}
+
+          <!-- Interactive Reply Form for Patient -->
+          <div style="margin-top: 14px; border-top: 1px solid rgba(234, 88, 12, 0.2); padding-top: 14px;">
+            <label for="patientResponseInput" style="font-size: 13px; font-weight: 700; color: var(--ink); display: block; margin-bottom: 6px;">
+              ✍️ ${isEn ? 'Your Response / Updated Information to Physician:' : '✍️ إجابتك والمعلومات الإضافية المطلوبة للطبيب:'}
+            </label>
+            <textarea id="patientResponseInput" placeholder="${isEn ? 'Enter the requested test results, latest SpO2, symptom update or doctor notes...' : 'اكتب القياسات المطلوبة، أو نسبة الأكسجين المحدثة، أو توضيح الأعراض...'}" style="width: 100%; min-height: 80px; padding: 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-family: inherit; font-size: 13px; box-sizing: border-box;"></textarea>
+
+            <div style="display: flex; gap: 10px; margin-top: 10px; align-items: center; flex-wrap: wrap;">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <label for="patientNewO2Input" style="font-size: 12px; color: var(--muted);">${isEn ? 'New SpO2 (%):' : 'نسبة أكسجين جديدة (%):'}</label>
+                <input type="number" id="patientNewO2Input" min="50" max="100" placeholder="${caseData.oxygenLevel || caseData.o2 || '98'}" style="width: 80px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-size: 13px;" />
+              </div>
+              <button type="button" class="solid-button" onclick="submitPatientMoreInfo('${caseData.id}')" style="padding: 8px 18px; font-size: 13px; background: #ea580c; border-color: #ea580c;">
+                <span>📤</span> ${isEn ? 'Send to Physician' : 'إرسال الإفادة للطبيب الآن'}
+              </button>
+            </div>
+          </div>
         </div>
       ` : '';
 
@@ -8861,3 +8921,66 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 });
+
+
+window.submitPatientMoreInfo = async function(caseId) {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  const user = auth ? auth.currentUser : null;
+  if (!user) {
+    showToast(isEn ? "Please sign in to submit information." : "يرجى تسجيل الدخول أولاً.");
+    return;
+  }
+
+  const responseEl = document.getElementById("patientResponseInput");
+  const newO2El = document.getElementById("patientNewO2Input");
+  const responseText = responseEl ? responseEl.value.trim() : "";
+  const rawO2 = newO2El ? parseInt(newO2El.value.trim(), 10) : NaN;
+
+  if (!responseText && isNaN(rawO2)) {
+    showToast(isEn ? "Please write your response or provide updated measurements." : "يرجى كتابة ردك أو تزويدنا بالقياسات المطلوبة.");
+    if (responseEl) responseEl.focus();
+    return;
+  }
+
+  try {
+    const finalResponseText = responseText || (isEn ? `Updated vitals submitted: SpO2 ${rawO2}%` : `تم تسجيل نسبة أكسجين محدثة: ${rawO2}%`);
+    const historyItem = {
+      status: CASE_STATUS.UNDER_REVIEW,
+      changedAt: new Date().toISOString(),
+      changedBy: user.uid,
+      changedByName: user.displayName || (user.email ? user.email.split('@')[0] : "Patient"),
+      changedByEmail: user.email || "",
+      changedByRole: "patient",
+      note: isEn ? `Patient submitted requested info: ${finalResponseText.slice(0, 120)}` : `أرسل المريض البيانات المطلوبة: ${finalResponseText.slice(0, 120)}`
+    };
+
+    const updatePayload = {
+      status: CASE_STATUS.UNDER_REVIEW,
+      patientResponse: finalResponseText,
+      patientRespondedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      statusHistory: firebase.firestore.FieldValue.arrayUnion(historyItem)
+    };
+
+    if (!isNaN(rawO2) && rawO2 >= 50 && rawO2 <= 100) {
+      updatePayload.oxygenLevel = rawO2;
+      updatePayload.o2 = rawO2;
+    }
+
+    await db.collection("cases").doc(caseId).update(updatePayload);
+    console.info(`✅ Patient successfully provided more info for case ${caseId}`);
+
+    showToast(isEn ? "Information sent to physician! Case is back under clinical review." : "تم إرسال البيانات للطبيب بنجاح! الحالة الآن قيد الفحص السريري.");
+    
+    // Refresh report screen
+    await renderReportScreen(caseId);
+    
+    // Refresh patient dashboard if function exists
+    if (typeof renderPatientDashboard === "function") {
+      renderPatientDashboard();
+    }
+  } catch (err) {
+    console.error("❌ Error submitting patient more info:", err);
+    showToast(getAuthErrorMessage(err) || (isEn ? "Failed to send information. Please try again." : "فشل إرسال البيانات، يرجى المحاولة مرة أخرى."));
+  }
+};
