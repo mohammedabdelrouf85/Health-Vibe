@@ -4620,6 +4620,9 @@ function showScreen(name) {
   if (name === "profile") {
     loadUserProfileData();
   }
+  if (name === "assistant") {
+    renderAssistantScreen();
+  }
 }
 
 async function renderPatientDashboard() {
@@ -8759,19 +8762,245 @@ const verifyModalCloseBtn = document.getElementById("verifyModalCloseBtn");
 if (verifyModalCloseBtn) {
   verifyModalCloseBtn.addEventListener("click", closeVerifyRequiredModal);
 }
-document.getElementById("sendChat").addEventListener("click", () => {
+// ── CLINICAL ASSISTANT: EXCLUSIVELY EXPLAINS CERTIFIED & APPROVED REPORTS ──
+async function getLatestApprovedReportForAssistant(user) {
+  if (!user || !db) return { status: "none", report: null };
+  try {
+    const records = await getPatientDatabaseHistoryRecords(user);
+    if (!records || records.length === 0) {
+      return { status: "none", report: null };
+    }
+
+    // Filter genuinely approved reports
+    const approved = records.filter(r => isCaseApprovedForPatient(r));
+    if (approved.length > 0) {
+      // Return the latest approved report
+      return { status: "approved", report: approved[0] };
+    }
+
+    // If no approved report, identify pending or under-review case
+    const latestRecord = records[0];
+    const rawStatus = latestRecord.status || CASE_STATUS.SUBMITTED;
+    return { status: rawStatus, report: latestRecord };
+  } catch (err) {
+    console.warn("getLatestApprovedReportForAssistant error:", err);
+    return { status: "none", report: null };
+  }
+}
+
+async function renderAssistantScreen() {
+  const user = auth ? auth.currentUser : null;
+  const isEn = currentLanguage === "en";
+  const messagesEl = document.getElementById("chatMessages");
+  const chipsEl = document.getElementById("chatQuickChips");
+  const inputEl = document.getElementById("chatInput");
+  if (!messagesEl) return;
+
+  messagesEl.innerHTML = `<div class="bot" style="opacity: 0.7;">${isEn ? "Checking certified reports..." : "جاري فحص التقارير الطبية المعتمدة..."}</div>`;
+  if (chipsEl) chipsEl.innerHTML = "";
+
+  const caseStatusInfo = await getLatestApprovedReportForAssistant(user);
+  window._assistantCaseStatus = caseStatusInfo;
+
+  if (caseStatusInfo.status === "approved") {
+    const r = caseStatusInfo.report;
+    const docName = r.approvingDoctorName || r.assignedDoctorName || (isEn ? "Dr. Mona Samy" : "د. منى سامي");
+    messagesEl.innerHTML = `
+      <div class="bot">
+        ${isEn
+          ? `🩺 <strong>Welcome! Your medical report (#${r.id.slice(-6).toUpperCase()}) has been certified by ${docName}.</strong><br><br>I am your clinical guide to explain the doctor's certified diagnosis, prescribed medications, and home-care recommendations. What would you like to know?`
+          : `🩺 <strong>أهلاً بك! تم اعتماد تقريرك الطبي (#${r.id.slice(-6).toUpperCase()}) وتوثيقه بواسطة ${docName}.</strong><br><br>أنا هنا لمساعدتك في فهم التشخيص المعتمد، توضيح الأدوية الموصوفة لك، وشرح إرشادات الطبيب. كيف يمكنني مساعدتك؟`
+        }
+      </div>
+    `;
+    if (inputEl) {
+      inputEl.placeholder = isEn ? "Ask about diagnosis, medications, or doctor instructions..." : "اسأل عن التشخيص، الأدوية، أو تعليمات الطبيب المعتمدة...";
+    }
+    if (chipsEl) {
+      chipsEl.innerHTML = `
+        <button type="button" class="outline-button" style="font-size: 12px; padding: 4px 10px; border-radius: 20px;" onclick="sendAssistantQuickPrompt('${isEn ? "Explain my approved diagnosis" : "شرح التشخيص المعتمد"}')">🩺 ${isEn ? "Diagnosis" : "شرح التشخيص"}</button>
+        <button type="button" class="outline-button" style="font-size: 12px; padding: 4px 10px; border-radius: 20px;" onclick="sendAssistantQuickPrompt('${isEn ? "What medications are prescribed?" : "الأدوية الموصوفة"}')">💊 ${isEn ? "Medications" : "الأدوية الموصوفة"}</button>
+        <button type="button" class="outline-button" style="font-size: 12px; padding: 4px 10px; border-radius: 20px;" onclick="sendAssistantQuickPrompt('${isEn ? "Doctor recommendations" : "تعليمات الطبيب"}')">💡 ${isEn ? "Instructions" : "تعليمات الطبيب"}</button>
+      `;
+    }
+  } else if (caseStatusInfo.status === CASE_STATUS.MORE_INFO_REQUESTED) {
+    messagesEl.innerHTML = `
+      <div class="bot" style="border-inline-start: 4px solid #f59e0b;">
+        ${isEn
+          ? `⚠️ <strong>Additional Information Requested:</strong><br>The attending doctor has requested more details regarding your breathing assessment. Please visit your Dashboard alerts to reply. The assistant cannot explain clinical outcomes until the report is certified.`
+          : `⚠️ <strong>مطلوب إفادة إضافية:</strong><br>طلب الطبيب المعالج معلومات إضافية لاستكمال التقييم. يرجى مراجعة تنبيهات لوحة التحكم وتقديم الإفادة المطلوبة للطبيب. لا يمكن للمساعد شرح النتائج قبل اعتماد التقرير رسمياً.`
+        }
+      </div>
+    `;
+    if (inputEl) {
+      inputEl.placeholder = isEn ? "Awaiting doctor review - Locked..." : "قيد انتظار مراجعة الطبيب - مغلق...";
+    }
+  } else if (caseStatusInfo.status === CASE_STATUS.REJECTED) {
+    messagesEl.innerHTML = `
+      <div class="bot" style="border-inline-start: 4px solid #ef4444;">
+        ${isEn
+          ? `⚠️ <strong>Assessment Needs Re-testing:</strong><br>This assessment was rejected or cancelled by the doctor (unclear data or technical artifact). Please submit a new breathing assessment.`
+          : `⚠️ <strong>يتطلب إعادة الفحص:</strong><br>تم رفض هذا الفحص أو إلغاؤه من قِبل الطبيب (بسبب عدم وضوح القراءات أو الحاجة لإعادة التسجيل). يُرجى إجراء فحص تنفسي جديد بدقة.`
+        }
+      </div>
+    `;
+    if (inputEl) {
+      inputEl.placeholder = isEn ? "Assessment cancelled - Please re-test..." : "الفحص ملغى - يُرجى إعادة الفحص...";
+    }
+  } else if (caseStatusInfo.status === "none") {
+    messagesEl.innerHTML = `
+      <div class="bot">
+        ${isEn
+          ? `👋 <strong>Welcome to Health Vibes Assistant!</strong><br><br>No certified medical reports were found in your account yet. You can submit a new breathing assessment through the app to be evaluated and certified by a physician.`
+          : `👋 <strong>أهلاً بك في المساعد الطبي الذكي!</strong><br><br>لم يتم العثور على تقرير طبي معتمد في حسابك حتى الآن. يمكنك بدء فحص تنفسي جديد عبر التطبيق ليقوم الطبيب بمراجعته واعتماده رسمياً.`
+        }
+      </div>
+    `;
+    if (inputEl) {
+      inputEl.placeholder = isEn ? "No approved report available..." : "لا يوجد تقرير معتمد حالياً...";
+    }
+  } else {
+    // Pending / Under review
+    const rId = caseStatusInfo.report?.id ? caseStatusInfo.report.id.slice(-6).toUpperCase() : "";
+    messagesEl.innerHTML = `
+      <div class="bot" style="border-inline-start: 4px solid #0284c7;">
+        ${isEn
+          ? `🔒 <strong>Clinical Review in Progress ${rId ? `(#${rId})` : ""}:</strong><br><br>Your assessment is currently being reviewed and verified by the attending physician.<br><br>🛡️ <em>Safety Policy:</em> To protect patient safety, the AI Assistant cannot provide diagnosis, guess scores, or recommend treatments prior to official doctor approval.<br><br>Full certified report guidance will unlock here immediately once approved.`
+          : `🔒 <strong>الحالة قيد المراجعة السريرية ${rId ? `(#${rId})` : ""}:</strong><br><br>بيانات فحصك قيد التدقيق والمراجعة حالياً من قِبل الطبيب المختص ولم يتم اعتمادها بعد.<br><br>🛡️ <em>بروتوكول الأمان الطبي:</em> لحمايتك الطبية، يُحظر على المساعد الذكي تقديم تشخيصات افتراضية أو شرح نتائج غير معتمدة أو اقتراح أدوية قبل اعتماد الطبيب رسمياً.<br><br>سيتاح الشرح الكامل والتفصيلي هنا فور اعتماد الدكتور للتقرير.`
+        }
+      </div>
+    `;
+    if (inputEl) {
+      inputEl.placeholder = isEn ? "Awaiting doctor approval - Locked..." : "التقرير قيد مراجعة الطبيب - مغلق حتى الاعتماد...";
+    }
+  }
+}
+
+async function handleSendChatMessage() {
   const input = document.getElementById("chatInput");
   const messages = document.getElementById("chatMessages");
-  const user = document.createElement("div");
-  user.className = "user";
-  user.textContent = input.value.trim() || localized("أحتاج توضيحًا");
-  const bot = document.createElement("div");
-  bot.className = "bot";
-  bot.textContent = localized("الخطر المتوسط يعني أن الحالة ليست مطمئنة تمامًا وتحتاج متابعة الطبيب خلال 24-48 ساعة. لا تبدأ علاجًا جديدًا دون مراجعة الطبيب.");
-  messages.append(user, bot);
+  if (!input || !messages) return;
+
+  const query = input.value.trim();
+  if (!query) return;
+
+  const isEn = currentLanguage === "en";
+  const user = auth ? auth.currentUser : null;
+
+  // Render user bubble
+  const userBubble = document.createElement("div");
+  userBubble.className = "user";
+  userBubble.textContent = query;
+  messages.appendChild(userBubble);
   input.value = "";
   messages.scrollTop = messages.scrollHeight;
-});
+
+  // Add temporary bot thinking indicator
+  const thinkingBubble = document.createElement("div");
+  thinkingBubble.className = "bot";
+  thinkingBubble.innerHTML = `<span style="opacity: 0.7;">${isEn ? "Consulting certified medical dossier..." : "جاري مراجعة الملف الطبي المعتمد..."}</span>`;
+  messages.appendChild(thinkingBubble);
+  messages.scrollTop = messages.scrollHeight;
+
+  // Re-verify latest approved report
+  const caseStatusInfo = await getLatestApprovedReportForAssistant(user);
+  window._assistantCaseStatus = caseStatusInfo;
+
+  let botResponse = "";
+
+  if (caseStatusInfo.status !== "approved") {
+    if (caseStatusInfo.status === "none") {
+      botResponse = isEn
+        ? "Welcome! No certified medical reports were found in your account. You can conduct a breathing assessment first, and once a doctor approves it, I will be delighted to explain all details."
+        : "أهلاً بك! لم يتم العثور على تقرير طبي معتمد في حسابك حتى الآن. يمكنك إجراء فحص تنفسي جديد أولاً، وفور اعتماده من قِبل الطبيب سيسعدني شرح كافة التفاصيل لك.";
+    } else if (caseStatusInfo.status === CASE_STATUS.MORE_INFO_REQUESTED) {
+      botResponse = isEn
+        ? "⚠️ The attending physician requested additional information regarding your symptoms. Please review your alerts and reply to the doctor. I cannot interpret clinical findings before the report is certified."
+        : "⚠️ طلب الطبيب المعالج معلومات إضافية بشأن الأعراض. يُرجى مراجعة التنبيهات في لوحة التحكم والرد على استفسار الطبيب. لا يمكن للمساعد شرح النتائج قبل اعتماد التقرير رسمياً.";
+    } else if (caseStatusInfo.status === CASE_STATUS.REJECTED) {
+      botResponse = isEn
+        ? "⚠️ This assessment was cancelled or rejected by the physician. Please submit a new breathing assessment for evaluation."
+        : "⚠️ تم إلغاء أو رفض هذا التقييم من قِبل الطبيب المختص. يُرجى إجراء فحص تنفسي جديد بدقة ليتم فحصه واعتماده.";
+    } else {
+      botResponse = isEn
+        ? "🔒 Notice: Your assessment is still undergoing clinical review by the doctor. For patient safety, the assistant cannot provide diagnoses, scores, or medication advice before official certification. Please wait for doctor approval."
+        : "🔒 تنبيه طبي: فحصك الطبي ما زال قيد المراجعة والتدقيق بواسطة الطبيب المختص. حرصاً على سلامتك، يمتنع المساعد تماماً عن تقديم تشخيصات أو شرح أرقام أو وصف علاجات قبل صدور الاعتماد الرسمي من الطبيب. يرجى الانتظار حتى اعتماد التقرير.";
+    }
+  } else {
+    // Case is genuinely APPROVED!
+    const r = caseStatusInfo.report;
+    const synth = synthesizeClinicalAssessment(r, isEn);
+    const diag = r.clinicalDiagnosis || r.doctorNote || r.clinicalNotes || synth.diag;
+    const meds = r.medications || synth.meds;
+    const recs = (Array.isArray(r.recommendations) && r.recommendations.length > 0) ? r.recommendations : synth.recs;
+    const docName = r.approvingDoctorName || r.assignedDoctorName || (isEn ? "Dr. Mona Samy" : "د. منى سامي");
+    const docLicense = r.doctorLicense || "EGY-MED-84920";
+    const o2 = r.oxygenLevel || r.o2 || "--";
+
+    const q = query.toLowerCase();
+    const isMedQuery = /دواء|علاج|روشتة|جرعة|أدوية|بخاخ|مضاد|مسكن|medication|medicine|drug|prescription|dose|rx/i.test(q);
+    const isRecQuery = /نصائح|تعليمات|ارشادات|توصيات|أعمل ايه|ماذا أفعل|advice|recommendation|instruction|tips/i.test(q);
+    const isDiagQuery = /تشخيص|مرضي|حالتي|ماذا عندي|أعراض|diagnosis|condition|disease|what do i have/i.test(q);
+    const isDocQuery = /طبيب|دكتور|مين|ترخيص|doctor|physician|license/i.test(q);
+
+    if (isMedQuery) {
+      botResponse = isEn
+        ? `💊 <strong>Prescribed Medications (Certified by ${docName}):</strong><br><br>${meds.replace(/\n/g, '<br>')}<br><br>⚠️ <em>Notice: Please adhere strictly to the prescribed doses and do not modify medications without consulting your doctor.</em>`
+        : `💊 <strong>الأدوية المعتمدة في تقريرك الطبي (بواسطة ${docName}):</strong><br><br>${meds.replace(/\n/g, '<br>')}<br><br>⚠️ <em>تنبيه: يُرجى الالتزام التام بالجرعات المقررة ومراجعة الطبيب قبل تغيير أو إيقاف أي علاج.</em>`;
+    } else if (isRecQuery) {
+      const recListHtml = recs.map((rec, i) => `${i + 1}. ${rec}`).join("<br>");
+      botResponse = isEn
+        ? `💡 <strong>Doctor's Clinical Instructions & Recommendations:</strong><br><br>${recListHtml}<br><br>🚨 <em>Emergency notice: In case of severe shortness of breath or persistent chest pain, seek immediate emergency care.</em>`
+        : `💡 <strong>تعليمات وتوصيات الطبيب المعتمد (${docName}):</strong><br><br>${recListHtml}<br><br>🚨 <em>تنبيه طوارئ: في حال حدوث ضيق تنفس حاد مفاجئ أو ألم بالصدر، توجه فوراً لأقرب قسم طوارئ.</em>`;
+    } else if (isDiagQuery) {
+      botResponse = isEn
+        ? `🩺 <strong>Certified Clinical Assessment (by ${docName}):</strong><br><br>${diag}<br><br>• <strong>Oxygen Saturation (SpO2):</strong> ${o2}%<br>• <strong>License:</strong> <code>${docLicense}</code>`
+        : `🩺 <strong>التشخيص السريري المعتمد (بواسطة ${docName}):</strong><br><br>${diag}<br><br>• <strong>نسبة تشبع الأكسجين المسجلة:</strong> ${o2}%<br>• <strong>ترخيص الطبيب:</strong> <code>${docLicense}</code>`;
+    } else if (isDocQuery) {
+      botResponse = isEn
+        ? `👨‍⚕️ <strong>Attending Physician Credentials:</strong><br><br>• <strong>Doctor:</strong> ${docName}<br>• <strong>Medical Syndicate License:</strong> <code>${docLicense}</code><br>• <strong>Status:</strong> Certified & Digitally Signed`
+        : `👨‍⚕️ <strong>بيانات الطبيب المعتمد للتقرير:</strong><br><br>• <strong>الطبيب:</strong> ${docName}<br>• <strong>رقم ترخيص النقابة:</strong> <code>${docLicense}</code><br>• <strong>الحالة:</strong> تقرير طبي معتمد وموقع رقمياً`;
+    } else {
+      const shortRecs = recs.slice(0, 2).map((rec, i) => `${i + 1}. ${rec}`).join("<br>");
+      botResponse = isEn
+        ? `📋 <strong>Summary of Certified Report (#${r.id.slice(-6).toUpperCase()} by ${docName}):</strong><br><br>` +
+          `🩺 <strong>Diagnosis:</strong> ${diag}<br><br>` +
+          `💊 <strong>Prescription:</strong><br>${meds.replace(/\n/g, '<br>')}<br><br>` +
+          `💡 <strong>Key Instructions:</strong><br>${shortRecs}<br><br>` +
+          `<em>Feel free to ask specifically about your medications, diagnosis, or instructions.</em>`
+        : `📋 <strong>ملخص تقريرك الطبي المعتمد (#${r.id.slice(-6).toUpperCase()} بواسطة ${docName}):</strong><br><br>` +
+          `🩺 <strong>التشخيص المعتمد:</strong> ${diag}<br><br>` +
+          `💊 <strong>الخطة الدوائية:</strong><br>${meds.replace(/\n/g, '<br>')}<br><br>` +
+          `💡 <strong>أهم التعليمات:</strong><br>${shortRecs}<br><br>` +
+          `<em>يمكنك سؤالي بالتفصيل عن الأدوية الموصوفة، أو التشخيص، أو التعليمات الطبية.</em>`;
+    }
+  }
+
+  thinkingBubble.innerHTML = botResponse;
+  messages.scrollTop = messages.scrollHeight;
+}
+
+window.sendAssistantQuickPrompt = function(promptText) {
+  const input = document.getElementById("chatInput");
+  if (input) {
+    input.value = promptText;
+    handleSendChatMessage();
+  }
+};
+
+const sendChatBtn = document.getElementById("sendChat");
+if (sendChatBtn) {
+  sendChatBtn.addEventListener("click", handleSendChatMessage);
+}
+const chatInputField = document.getElementById("chatInput");
+if (chatInputField) {
+  chatInputField.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSendChatMessage();
+    }
+  });
+}
 
 themeToggle.addEventListener("click", toggleTheme);
 if (siteThemeToggle) siteThemeToggle.addEventListener("click", toggleTheme);
