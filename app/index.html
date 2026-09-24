@@ -1200,6 +1200,57 @@
             <!-- Rendered via renderAdminUsers() -->
           </div>
         </article>
+
+        <!-- 28. REAL-TIME SYSTEM ERROR MONITORING & OBSERVABILITY -->
+        <article class="panel" id="adminErrorMonitoringPanel" style="margin-top: 24px;">
+          <div class="panel-head" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <h3 style="margin: 0; font-size: 19px;">مراقبة الأخطاء وحالة النظام (Error Monitoring & Telemetry)</h3>
+                <span class="pill ok" id="monitoringSystemHealthBadge" style="font-size: 11px;">مستقر 🟢</span>
+              </div>
+              <p style="margin: 4px 0 0; font-size: 13px; color: var(--muted);">رصد حي واستباقي للأخطاء البرمجية، الانهيارات (Crashes)، واستثناءات الـ API والـ Promises</p>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <button type="button" class="soft-button" onclick="updateAdminErrorMonitoringUI()" style="padding: 6px 12px; font-size: 12.5px; display: inline-flex; align-items: center; gap: 5px;">
+                <span>🔄</span> تحديث السجل
+              </button>
+              <button type="button" class="outline-button" onclick="clearErrorLogs(); updateAdminErrorMonitoringUI();" style="padding: 6px 12px; font-size: 12.5px; display: inline-flex; align-items: center; gap: 5px;">
+                <span>🧹</span> تفريغ السجل
+              </button>
+            </div>
+          </div>
+
+          <!-- Monitoring Hero Metrics Cards -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-top: 18px;">
+            <div class="kpi-mini-card" style="padding: 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color, rgba(255,255,255,0.06)); border-radius: 12px;">
+              <div style="font-size: 12px; color: var(--muted);">إجمالي الأخطاء المسجلة</div>
+              <div id="monitoringTotalErrorsCount" style="font-size: 24px; font-weight: 800; margin-top: 4px;">0</div>
+            </div>
+            <div class="kpi-mini-card" style="padding: 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color, rgba(255,255,255,0.06)); border-radius: 12px;">
+              <div style="font-size: 12px; color: var(--muted);">معدل الجلسات الخالية من الأخطاء</div>
+              <div id="monitoringCrashFreeRate" style="font-size: 24px; font-weight: 800; color: #10b981; margin-top: 4px;">100%</div>
+            </div>
+          </div>
+
+          <!-- Error Stream Table -->
+          <div id="adminErrorMonitoringContainer" style="margin-top: 18px; overflow-x: auto;">
+            <table class="data-table" style="width: 100%; border-collapse: collapse; text-align: right;">
+              <thead>
+                <tr style="border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.1)); color: var(--muted); font-size: 12px;">
+                  <th style="padding: 10px;">الوقت</th>
+                  <th style="padding: 10px;">الخطورة</th>
+                  <th style="padding: 10px;">رسالة الخطأ</th>
+                  <th style="padding: 10px;">النوع والشاشة</th>
+                  <th style="padding: 10px;">المستخدم</th>
+                </tr>
+              </thead>
+              <tbody id="monitoringErrorsTableBody">
+                <tr><td colspan="5" style="text-align: center; color: var(--muted); padding: 18px;">✅ لا توجد أخطاء مسجلة حالياً - النظام يعمل بكفاءة تامة</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
       </section>
 
       <!-- 23. DEDICATED CLINICAL & OPERATIONAL KPI DASHBOARD -->
