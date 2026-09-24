@@ -1083,6 +1083,11 @@ function applyLanguage(language) {
     logoutButton.textContent = language === "ar" ? "تسجيل الخروج" : "Sign out";
   }
 
+  // 2b. Direct update for mobile bottom nav
+  if (typeof updateMobileBottomNav === "function") {
+    updateMobileBottomNav();
+  }
+
   // 3. TreeWalker translation for all content text nodes (skipping scripts, styles, inputs, emails)
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   const textNodes = [];
@@ -4780,6 +4785,9 @@ function updateNavVisibility() {
   if (docApplyCard) {
     docApplyCard.style.display = selectedRole === ROLES.PATIENT ? "block" : "none";
   }
+  if (typeof updateMobileBottomNav === "function") {
+    updateMobileBottomNav();
+  }
   bindScreenNavigation();
 }
 
@@ -5046,8 +5054,17 @@ function showScreen(name) {
     button.classList.toggle("active", button.dataset.screen === name);
   });
 
+  // Update mobile bottom nav active item
+  document.querySelectorAll(".mobile-nav-btn").forEach((button) => {
+    button.classList.toggle("active", button.dataset.mobileScreen === name);
+  });
+
   screenTitle.textContent = currentLanguage === "en" ? englishTitles[name] || "Health Vibes" : titles[name] || "Health Vibes";
-  document.body.classList.remove("sidebar-open");
+  if (typeof closeSidebarDrawer === "function") {
+    closeSidebarDrawer();
+  } else {
+    document.body.classList.remove("sidebar-open");
+  }
 
   if (name === "doctor") {
     renderDoctorQueue();
@@ -10887,7 +10904,11 @@ languageToggle.addEventListener("click", () => {
 });
 
 menuToggle.addEventListener("click", () => {
-  document.body.classList.toggle("sidebar-open");
+  if (typeof toggleSidebarDrawer === "function") {
+    toggleSidebarDrawer();
+  } else {
+    document.body.classList.toggle("sidebar-open");
+  }
 });
 
 logoutButton.addEventListener("click", leaveApp);
@@ -11905,4 +11926,122 @@ window.setKpiPriorityFilter = setKpiPriorityFilter;
 window.refreshKpiDashboardLive = refreshKpiDashboardLive;
 window.exportKpiReport = exportKpiReport;
 window.updateDoctorMiniKpiBar = updateDoctorMiniKpiBar;
+
+// ==========================================================================
+// 24. MOBILE UX ENHANCEMENTS & ADAPTIVE BOTTOM NAVIGATION
+// ==========================================================================
+
+function toggleSidebarDrawer(forceState) {
+  if (typeof forceState === "boolean") {
+    document.body.classList.toggle("sidebar-open", forceState);
+  } else {
+    document.body.classList.toggle("sidebar-open");
+  }
+}
+
+function closeSidebarDrawer() {
+  document.body.classList.remove("sidebar-open");
+}
+
+function updateMobileBottomNav() {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  const navContainer = document.getElementById("mobileBottomNav");
+  if (!navContainer) return;
+
+  const currentRole = (typeof selectedRole !== "undefined" && selectedRole) ? selectedRole : ROLES.PATIENT;
+
+  let items = [];
+  if (currentRole === ROLES.DOCTOR) {
+    items = [
+      { screen: "doctor", icon: "🩺", label: isEn ? "Queue" : "المرضى" },
+      { screen: "kpi", icon: "📊", label: isEn ? "KPIs" : "المؤشرات" },
+      { screen: "appointments", icon: "📅", label: isEn ? "Appts" : "المواعيد" },
+      { screen: "report", icon: "📄", label: isEn ? "Reports" : "التقارير" },
+      { isMenu: true, icon: "☰", label: isEn ? "Menu" : "المزيد" }
+    ];
+  } else if (isAdminRole(currentRole)) {
+    items = [
+      { screen: "admin", icon: "⚙️", label: isEn ? "Admin" : "الإدارة" },
+      { screen: "kpi", icon: "📊", label: isEn ? "KPIs" : "المؤشرات" },
+      { screen: "doctor", icon: "🩺", label: isEn ? "Queue" : "الحالات" },
+      { screen: "patient", icon: "🏠", label: isEn ? "Home" : "الرئيسية" },
+      { isMenu: true, icon: "☰", label: isEn ? "Menu" : "المزيد" }
+    ];
+  } else {
+    items = [
+      { screen: "patient", icon: "🏠", label: isEn ? "Home" : "الرئيسية" },
+      { screen: "assessment", icon: "🫁", label: isEn ? "Assess" : "الفحص" },
+      { screen: "appointments", icon: "📅", label: isEn ? "Appts" : "المواعيد" },
+      { screen: "history", icon: "📂", label: isEn ? "History" : "السجل" },
+      { isMenu: true, icon: "☰", label: isEn ? "Menu" : "المزيد" }
+    ];
+  }
+
+  const activeScreenName = (typeof activeScreen !== "undefined" && activeScreen)
+    ? activeScreen
+    : (localStorage.getItem("hv_active_screen") || (isAdminRole(currentRole) ? "admin" : (currentRole === ROLES.DOCTOR ? "doctor" : "patient")));
+
+  navContainer.innerHTML = items.map(item => {
+    if (item.isMenu) {
+      return `
+        <button type="button" class="mobile-nav-btn" id="mobileNavMenuBtn" onclick="toggleSidebarDrawer()" aria-label="${item.label}">
+          <span class="mobile-nav-icon">${item.icon}</span>
+          <span class="mobile-nav-label">${item.label}</span>
+        </button>
+      `;
+    }
+    const isActive = activeScreenName === item.screen;
+    return `
+      <button type="button" class="mobile-nav-btn ${isActive ? 'active' : ''}" data-mobile-screen="${item.screen}" onclick="showScreen('${item.screen}')" aria-label="${item.label}">
+        <span class="mobile-nav-icon">${item.icon}</span>
+        <span class="mobile-nav-label">${item.label}</span>
+      </button>
+    `;
+  }).join('');
+}
+
+function initMobileTouchGestures() {
+  const sidebar = document.querySelector(".sidebar");
+  if (!sidebar || sidebar.dataset.touchBound === "true") return;
+  sidebar.dataset.touchBound = "true";
+
+  let startX = 0;
+  let startY = 0;
+
+  sidebar.addEventListener("touchstart", (e) => {
+    if (!e.touches || !e.touches[0]) return;
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+  }, { passive: true });
+
+  sidebar.addEventListener("touchend", (e) => {
+    if (!e.changedTouches || !e.changedTouches[0]) return;
+    const endX = e.changedTouches[0].clientX;
+    const endY = e.changedTouches[0].clientY;
+    const diffX = endX - startX;
+    const diffY = Math.abs(endY - startY);
+
+    // Swipe horizontally to dismiss
+    if (diffX > 50 && diffY < 120) {
+      closeSidebarDrawer();
+    }
+  }, { passive: true });
+}
+
+window.toggleSidebarDrawer = toggleSidebarDrawer;
+window.closeSidebarDrawer = closeSidebarDrawer;
+window.updateMobileBottomNav = updateMobileBottomNav;
+window.initMobileTouchGestures = initMobileTouchGestures;
+
+// Initialize on DOM ready
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", () => {
+    initMobileTouchGestures();
+    updateMobileBottomNav();
+  });
+} else {
+  initMobileTouchGestures();
+  updateMobileBottomNav();
+}
+
 

@@ -302,6 +302,9 @@
   </section>
 
   <main id="app" class="app-shell" hidden>
+    <!-- Mobile Drawer Backdrop Overlay -->
+    <div id="sidebarBackdrop" class="sidebar-backdrop" onclick="closeSidebarDrawer()" aria-hidden="true"></div>
+
     <aside class="sidebar" aria-label="التنقل داخل التطبيق">
       <div class="brand">
         <img src="./logo-dark-mark.png" alt="Health Vibes" class="brand-logo" data-logo-mark />
@@ -1516,6 +1519,11 @@
         </div>
       </section>
     </section>
+
+    <!-- Mobile Bottom Ergonomic Navigation Bar -->
+    <nav class="mobile-bottom-nav" id="mobileBottomNav" aria-label="Mobile Navigation">
+      <!-- Populated dynamically via updateMobileBottomNav() based on role and language -->
+    </nav>
   </main>
 
   <!-- Quick Clinical & Patient Feedback Modal -->
