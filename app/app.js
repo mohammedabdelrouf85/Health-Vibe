@@ -1345,6 +1345,25 @@ const auth = firebase.auth();
 const storage = firebase.storage();
 const googleProvider = new firebase.auth.GoogleAuthProvider();
 
+// Connect to Emulators if explicitly enabled in Development environment
+if (runtimeConfig.environment === "development" && runtimeConfig.emulators && runtimeConfig.emulators.enabled) {
+  try {
+    const fsHost = runtimeConfig.emulators.firestoreHost || "localhost";
+    const fsPort = runtimeConfig.emulators.firestorePort || 8080;
+    db.useEmulator(fsHost, fsPort);
+    console.log(`[DEV EMULATOR] Firestore connected to emulator at ${fsHost}:${fsPort}`);
+  } catch (e) {
+    console.warn("Firestore emulator connection note:", e.message);
+  }
+  try {
+    const authUrl = runtimeConfig.emulators.authUrl || "http://localhost:9099";
+    auth.useEmulator(authUrl);
+    console.log(`[DEV EMULATOR] Auth connected to emulator at ${authUrl}`);
+  } catch (e) {
+    console.warn("Auth emulator connection note:", e.message);
+  }
+}
+
 // Immediately enforce permanent LOCAL persistence so user stays logged in across sessions
 if (auth && firebase.auth && firebase.auth.Auth && firebase.auth.Auth.Persistence) {
   auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(err => {
@@ -1360,6 +1379,43 @@ const APP_ENV = {
     runtimeConfig.allowDemoSeed === true &&
     new URLSearchParams(window.location.search).get("seedDemo") === "true"
 };
+
+// 🛠️ Visual Environment Badge: Render indicator exclusively in Development mode
+function renderDevEnvironmentBadge() {
+  if (runtimeConfig.environment !== "development" || typeof document === "undefined") return;
+  if (document.getElementById("hvDevEnvBadge")) return;
+
+  const badge = document.createElement("div");
+  badge.id = "hvDevEnvBadge";
+  badge.setAttribute("title", `Health Vibe AI - Development Mode\nAPI: ${API_BASE_URL || 'Local'}\nProject: ${firebaseConfig.projectId}`);
+  badge.style.cssText = "position:fixed;bottom:14px;right:14px;z-index:99999;background:#0f172a;color:#38bdf8;border:1px solid #38bdf8;border-radius:20px;padding:4px 12px;font-size:11px;font-weight:700;font-family:inherit;box-shadow:0 4px 12px rgba(0,0,0,0.3);display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;letter-spacing:0.5px;";
+  badge.innerHTML = `<span>🛠️ DEV</span><span style="opacity:0.75;font-weight:normal;font-size:10px;">(تطوير)</span>`;
+  badge.onclick = () => {
+    const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+    const change = window.confirm(
+      isEn
+        ? `Current Environment: DEVELOPMENT\nProject: ${firebaseConfig.projectId}\nAPI: ${API_BASE_URL || 'Same Origin'}\n\nSwitch to PRODUCTION environment?`
+        : `البيئة الحالية: بيئة التطوير (Development)\nالمشروع: ${firebaseConfig.projectId}\nواجهة API: ${API_BASE_URL || 'نفس النطاق'}\n\nهل تريد التبديل إلى بيئة الإنتاج (Production)؟`
+    );
+    if (change && window.HEALTH_VIBE_CONFIG && window.HEALTH_VIBE_CONFIG.setEnvironment) {
+      window.HEALTH_VIBE_CONFIG.setEnvironment("production");
+    }
+  };
+
+  if (document.body) {
+    document.body.appendChild(badge);
+  } else {
+    document.addEventListener("DOMContentLoaded", () => document.body.appendChild(badge));
+  }
+}
+
+if (typeof document !== "undefined") {
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", renderDevEnvironmentBadge);
+  } else {
+    renderDevEnvironmentBadge();
+  }
+}
 
 // Protocol environment check: Firebase Auth requires http/https
 if (typeof window !== "undefined" && window.location.protocol === "file:") {

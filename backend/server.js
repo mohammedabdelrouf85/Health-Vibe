@@ -7,36 +7,105 @@
  * on the server using cryptographic Firebase ID Tokens and Firebase Admin SDK.
  */
 
+const path = require('path');
+const fs = require('fs');
 const express = require('express');
 const cors = require('cors');
 const admin = require('firebase-admin');
+const dotenv = require('dotenv');
 const whatsappBot = require('./whatsapp-bot');
-require('dotenv').config();
+
+// =============================================================================
+// 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
+// =============================================================================
+const NODE_ENV = (process.env.NODE_ENV || 'development').trim().toLowerCase();
+const isDevelopment = NODE_ENV === 'development';
+const isProduction = NODE_ENV === 'production';
+
+// Cascading 12-factor environment loader
+const candidateEnvFiles = [
+  path.resolve(__dirname, `.env.${NODE_ENV}.local`),
+  path.resolve(__dirname, `.env.${NODE_ENV}`),
+  path.resolve(__dirname, '.env.local'),
+  path.resolve(__dirname, '.env')
+];
+
+for (const envFile of candidateEnvFiles) {
+  if (fs.existsSync(envFile)) {
+    dotenv.config({ path: envFile, override: false });
+  }
+}
+dotenv.config();
 
 const app = express();
 
-const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:3000')
+// Allowed Origins for Development vs Production
+const devDefaultOrigins = [
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'http://localhost:4000',
+  'http://127.0.0.1:4000',
+  'http://localhost:5000',
+  'http://127.0.0.1:5000',
+  'http://localhost:5500',
+  'http://127.0.0.1:5500',
+  'http://localhost:8080',
+  'http://127.0.0.1:8080'
+];
+
+const configuredOrigins = (process.env.CORS_ORIGINS || '')
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean);
+
+const allowedOrigins = isDevelopment
+  ? Array.from(new Set([...devDefaultOrigins, ...configuredOrigins]))
+  : (configuredOrigins.length > 0 ? configuredOrigins : ['https://healthvibe.ai', 'https://app.healthvibe.ai']);
 
 app.use(cors({
   origin(origin, callback) {
     if (!origin || allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
-    return callback(new Error('CORS origin not allowed by environment config.'));
+    return callback(new Error(`CORS origin '${origin}' not allowed by ${NODE_ENV} environment policy.`));
   }
 }));
 app.use(express.json());
 
+// Diagnostic Health Check Route for Dev & Prod
+app.get(['/health', '/api/health'], (req, res) => {
+  res.json({
+    status: 'ok',
+    service: 'Health Vibe AI Server-Authoritative Backend',
+    environment: NODE_ENV,
+    isDevelopment,
+    isProduction,
+    uptimeSeconds: Math.floor(process.uptime()),
+    timestamp: new Date().toISOString(),
+    corsAllowed: allowedOrigins,
+    firebase: {
+      initialized: Boolean(admin.apps.length),
+      projectId: process.env.FIREBASE_PROJECT_ID || 'health-vibes-a4b3b',
+      emulatorActive: Boolean(process.env.FIRESTORE_EMULATOR_HOST)
+    }
+  });
+});
+
+// Emulator Support (Development ONLY)
+if (isDevelopment && (process.env.USE_FIREBASE_EMULATOR === 'true' || process.env.FIRESTORE_EMULATOR_HOST)) {
+  process.env.FIRESTORE_EMULATOR_HOST = process.env.FIRESTORE_EMULATOR_HOST || 'localhost:8080';
+  process.env.FIREBASE_AUTH_EMULATOR_HOST = process.env.FIREBASE_AUTH_EMULATOR_HOST || 'localhost:9099';
+  console.log(`[BACKEND DEV] Using local Firebase Emulators: Firestore (${process.env.FIRESTORE_EMULATOR_HOST}), Auth (${process.env.FIREBASE_AUTH_EMULATOR_HOST})`);
+}
+
 // Initialize Firebase Admin SDK
-// Uses GOOGLE_APPLICATION_CREDENTIALS in production
 if (!admin.apps.length) {
   try {
-    admin.initializeApp();
+    const projectId = process.env.FIREBASE_PROJECT_ID || 'health-vibes-a4b3b';
+    admin.initializeApp({ projectId });
+    console.log(`[BACKEND] Firebase Admin initialized for [${projectId}] in [${NODE_ENV}] mode.`);
   } catch (err) {
-    console.warn("[BACKEND WARNING] Firebase Admin SDK initialized without default credentials. Provide serviceAccountKey.json in production.");
+    console.warn("[BACKEND WARNING] Firebase Admin SDK initialized with fallback:", err.message);
   }
 }
 
@@ -1071,9 +1140,9 @@ app.post('/api/user/delete-account', requireAuth, async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 4000;
+const PORT = process.env.PORT || (isDevelopment ? 4000 : 8080);
 app.listen(PORT, () => {
-  console.log(`[Health Vibe AI Backend] Server running securely on port ${PORT}`);
+  console.log(`[Health Vibe AI Backend] Server running in [${NODE_ENV.toUpperCase()}] mode on port ${PORT}`);
 });
 
 module.exports = app;

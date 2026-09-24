@@ -1,9 +1,30 @@
-// Copy this file to config.js for the target environment.
-// Firebase web config is public, but keep environment separation strict.
+/**
+ * Health Vibe AI - Configuration Template (config.example.js)
+ * Copy this file to config.js to configure your local or target environment.
+ */
+
 window.HEALTH_VIBE_CONFIG = {
-  environment: "development", // development | production
-  apiBaseUrl: "", // same origin by default, e.g. "http://localhost:3000" for a separate backend
+  // Current active environment: "development" | "production"
+  environment: "development",
+
+  // Backend API URL (use http://localhost:4000 for local dev server, or leave empty for same-origin)
+  apiBaseUrl: "http://localhost:4000",
+
+  // Demo seeding permission
   allowDemoSeed: false,
+
+  // Debug logging
+  debug: true,
+
+  // Local Firebase Emulators (development only)
+  emulators: {
+    enabled: false,
+    authUrl: "http://localhost:9099",
+    firestoreHost: "localhost",
+    firestorePort: 8080
+  },
+
+  // Firebase Web Client Configuration
   firebase: {
     apiKey: "YOUR_FIREBASE_API_KEY",
     authDomain: "YOUR_PROJECT.firebaseapp.com",

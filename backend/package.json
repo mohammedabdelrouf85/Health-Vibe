@@ -5,7 +5,9 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js",
+    "start:dev": "node server.js",
+    "start:prod": "node server.js",
+    "dev": "node server.js",
     "test:rules": "node ../tests/firestore_rules_emulator.test.js",
     "test:e2e": "node ../tests/e2e_happy_path.test.js"
   },

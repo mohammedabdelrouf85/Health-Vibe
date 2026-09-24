@@ -30,3 +30,6 @@ npm-debug.log*
 output/
 
 scratch/
+*serviceAccount*.json
+*.key
+*.pem
