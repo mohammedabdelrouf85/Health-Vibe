@@ -2636,11 +2636,26 @@ function renderDoctorQueueItems(allCases) {
   }
 
   if (cases.length === 0) {
-    queueList.innerHTML = '<div style="padding: 24px 16px; text-align: center; color: var(--muted);">' + (isEn ? 'No real cases in this category' : 'لا توجد حالات حقيقية في هذا التصنيف') + '</div>';
+    queueList.innerHTML = `
+      <div class="hv-state-card" style="margin: 16px 0;">
+        <span class="state-icon">📋</span>
+        <h4>${isEn ? 'No Cases in Queue' : 'لا توجد حالات في هذا التصنيف'}</h4>
+        <p>${isEn ? 'All patient assessments in this category have been attended to, or no new assessments have arrived yet.' : 'تم التعامل مع جميع التقييمات في هذا التصنيف، أو لم تصل تقييمات جديدة حتى الآن.'}</p>
+        <button type="button" class="outline-button" onclick="renderDoctorQueue()" style="font-size: 12.5px; padding: 6px 14px; margin-top: 4px;">
+          <span>🔄</span> ${isEn ? 'Refresh' : 'تحديث القائمة'}
+        </button>
+      </div>
+    `;
     const reviewPanel = document.getElementById("doctorReviewPanel");
     if (reviewPanel) {
-      reviewPanel.style.display = "none";
-      reviewPanel.innerHTML = "";
+      reviewPanel.style.display = "block";
+      reviewPanel.innerHTML = `
+        <div class="hv-state-card" style="margin: 40px auto; max-width: 480px; padding: 36px 20px;">
+          <span class="state-icon">🩺</span>
+          <h4>${isEn ? 'Select a Patient Case' : 'اختر حالة لبدء التدقيق السريري'}</h4>
+          <p>${isEn ? 'Select any patient from the queue on the left to inspect real-time SpO2, symptoms, and prepare certified reports.' : 'اختر أي مريض من القائمة الجانبية لفحص نسبة الأكسجين والأعراض، وتوليد التقرير السريري المعتمد.'}</p>
+        </div>
+      `;
     }
     return;
   }
@@ -2732,7 +2747,18 @@ async function renderDoctorQueue() {
     window._doctorQueueUnsub = null;
   }
 
-  queueList.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--teal);"><div class="spinner"></div> ' + (isEn ? 'Connecting real-time clinical queue...' : 'جاري الاتصال المباشر بقائمة الانتظار السريرية...') + '</div>';
+  // ── LOADING STATE: SKELETON WITH SPINNER ──────────────────────
+  queueList.innerHTML = `
+    <div style="padding: 14px 10px; display: flex; flex-direction: column; gap: 10px;">
+      <div style="display: flex; align-items: center; gap: 8px; color: var(--teal); font-size: 13px; font-weight: 600;">
+        <div class="spinner" style="width: 15px; height: 15px;"></div>
+        <span>${isEn ? 'Synchronizing clinical queue with cloud...' : 'جاري مزامنة قائمة الانتظار السريرية مع السحابة...'}</span>
+      </div>
+      <div class="hv-skeleton" style="height: 72px; width: 100%;"></div>
+      <div class="hv-skeleton" style="height: 72px; width: 100%;"></div>
+      <div class="hv-skeleton" style="height: 72px; width: 100%;"></div>
+    </div>
+  `;
 
   // ── مستمع حي Real-Time Listener لاستقبال التقييمات فورياً ──────
   if (typeof db !== "undefined" && db) {
@@ -2753,21 +2779,48 @@ async function renderDoctorQueue() {
         },
         async (err) => {
           console.warn("Doctor queue real-time listener error, fallback to getCases():", err.message);
-          const cases = await getCases();
-          renderDoctorQueueItems(cases);
+          try {
+            const cases = await getCases();
+            renderDoctorQueueItems(cases);
+          } catch(e) {
+            renderDoctorQueueError(e);
+          }
         }
       );
     } catch(e) {
       console.warn("Could not bind real-time doctor queue:", e.message);
-      const cases = await getCases();
-      renderDoctorQueueItems(cases);
+      try {
+        const cases = await getCases();
+        renderDoctorQueueItems(cases);
+      } catch(errFallback) {
+        renderDoctorQueueError(errFallback);
+      }
     }
   } else {
-    const cases = await getCases();
-    renderDoctorQueueItems(cases);
+    try {
+      const cases = await getCases();
+      renderDoctorQueueItems(cases);
+    } catch(e) {
+      renderDoctorQueueError(e);
+    }
   }
 }
 
+function renderDoctorQueueError(err) {
+  const queueList = document.getElementById("doctorQueueList");
+  if (!queueList) return;
+  const isEn = currentLanguage === "en";
+  queueList.innerHTML = `
+    <div class="hv-state-card error-card" style="margin: 14px 0;">
+      <span class="state-icon">⚠️</span>
+      <h4>${isEn ? 'Failed to Load Queue' : 'تعذر تحميل قائمة الحالات'}</h4>
+      <p>${isEn ? 'A connection issue occurred while syncing with the clinical database.' : 'حدث خطأ أثناء الاتصال بقاعدة البيانات السريرية. يرجى إعادة المحاولة.'}</p>
+      <button type="button" class="solid-button" onclick="renderDoctorQueue()" style="font-size: 13px; padding: 6px 16px; margin-top: 4px;">
+        <span>🔄</span> ${isEn ? 'Retry' : 'إعادة المحاولة'}
+      </button>
+    </div>
+  `;
+}
 async function selectDoctorCase(id) {
   activeCaseId = id;
   const cases = await getCases();
@@ -5278,9 +5331,14 @@ async function renderReportScreen(targetCaseId = null) {
   }
 
   container.innerHTML = `
-    <div style="padding: 50px 20px; text-align: center; color: var(--teal);">
-      <div class="spinner"></div>
-      <p style="margin-top: 14px; font-weight: 700;">${isEn ? "Checking case clinical approval status..." : "جاري فحص حالة الاعتماد السريري للتقرير..."}</p>
+    <div style="padding: 30px 10px; max-width: 820px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px;">
+      <div style="display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--teal); font-size: 14px; font-weight: 600;">
+        <div class="spinner" style="width: 18px; height: 18px;"></div>
+        <span>${isEn ? "Retrieving certified clinical report..." : "جاري استرجاع التقرير الطبي المعتمد وفحص التوقيع الرقمي..."}</span>
+      </div>
+      <div class="hv-skeleton" style="height: 100px; width: 100%;"></div>
+      <div class="hv-skeleton" style="height: 140px; width: 100%;"></div>
+      <div class="hv-skeleton" style="height: 220px; width: 100%;"></div>
     </div>
   `;
 
@@ -5960,10 +6018,13 @@ async function renderReportScreen(targetCaseId = null) {
   } catch (err) {
     console.error("renderReportScreen error:", err);
     container.innerHTML = `
-      <div style="padding: 30px; text-align: center; color: var(--red);">
-        <h3>${isEn ? "Failed to load clinical report" : "تعذر تحميل التقرير الطبي"}</h3>
-        <p style="color: var(--muted); font-size: 13px;">${err.message}</p>
-        <button class="outline-button" onclick="renderReportScreen('${targetCaseId || ''}')">${isEn ? "Retry" : "إعادة المحاولة"}</button>
+      <div class="hv-state-card error-card" style="margin: 40px auto; max-width: 500px; padding: 36px 20px;">
+        <span class="state-icon">⚠️</span>
+        <h4>${isEn ? "Failed to Load Clinical Report" : "تعذر استرجاع التقرير الطبي"}</h4>
+        <p>${isEn ? "A network or permission issue prevented loading this medical record. Please verify your connection and try again." : "حدث خطأ أثناء استرجاع التقرير من الخادم السحابي. يرجى التأكد من اتصال الإنترنت وإعادة المحاولة."}</p>
+        <button class="solid-button" onclick="renderReportScreen('${targetCaseId || ''}')" style="margin-top: 8px;">
+          <span>🔄</span> ${isEn ? "Retry" : "إعادة المحاولة"}
+        </button>
       </div>
     `;
   }
@@ -6107,7 +6168,17 @@ async function renderPatientHistory() {
     return;
   }
 
-  container.innerHTML = `<div style="padding: 30px; text-align: center; color: var(--teal);"><div class="spinner"></div> ${isEn ? "Loading history..." : "جاري تحميل السجل الطبي..."}</div>`;
+  container.innerHTML = `
+    <div style="padding: 16px 0; display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; align-items: center; gap: 8px; color: var(--teal); font-size: 13px; font-weight: 600;">
+        <div class="spinner" style="width: 15px; height: 15px;"></div>
+        <span>${isEn ? "Retrieving complete medical history..." : "جاري استرجاع السجل الطبي الشامل..."}</span>
+      </div>
+      <div class="hv-skeleton" style="height: 68px; width: 100%;"></div>
+      <div class="hv-skeleton" style="height: 68px; width: 100%;"></div>
+      <div class="hv-skeleton" style="height: 68px; width: 100%;"></div>
+    </div>
+  `;
 
   try {
     let records = await getPatientDatabaseHistoryRecords(user);
@@ -6123,9 +6194,13 @@ async function renderPatientHistory() {
 
     if (records.length === 0) {
       container.innerHTML = `
-        <div style="padding: 30px; text-align: center; color: var(--muted);">
-          <span style="font-size: 32px; display: block; margin-bottom: 8px;">📂</span>
-          <p style="margin: 0;">${isEn ? "No past medical records found." : "لا توجد سجلات طبية سابقة."}</p>
+        <div class="hv-state-card" style="margin: 24px 0; padding: 40px 20px;">
+          <span class="state-icon">📂</span>
+          <h4>${isEn ? "Your Medical History is Empty" : "سجلك الطبي خالٍ حتى الآن"}</h4>
+          <p>${isEn ? "No previous respiratory assessments or certified reports were found. Submit your first breathing assessment to start tracking your respiratory health." : "لم تسجل أي فحوصات تنفسية أو تقارير معتمدة سابقة في هذا الحساب. ابدأ تقييمك الأول لتوثيق ومتابعة صحتك بانتظام."}</p>
+          <button type="button" class="solid-button" onclick="showScreen('assessment')" style="margin-top: 8px;">
+            <span>🫁</span> ${isEn ? "Start First Assessment" : "إجراء أول فحص طبي"}
+          </button>
         </div>
       `;
       return;
@@ -6183,7 +6258,16 @@ async function renderPatientHistory() {
     container.innerHTML = html;
   } catch (err) {
     console.error("renderPatientHistory error:", err);
-    container.innerHTML = `<div style="padding: 20px; text-align: center; color: var(--red);">${err.message}</div>`;
+    container.innerHTML = `
+      <div class="hv-state-card error-card" style="margin: 24px 0; padding: 36px 20px;">
+        <span class="state-icon">⚠️</span>
+        <h4>${isEn ? "Failed to Load Medical History" : "تعذر استرجاع السجل الطبي"}</h4>
+        <p>${isEn ? "An unexpected connection issue occurred while fetching your medical records. Please verify your connection." : "حدث خطأ أثناء استرجاع السجلات الطبية من الخادم. يرجى فحص الاتصال وإعادة المحاولة."}</p>
+        <button type="button" class="solid-button" onclick="renderPatientHistory()" style="margin-top: 8px;">
+          <span>🔄</span> ${isEn ? "Retry" : "إعادة المحاولة"}
+        </button>
+      </div>
+    `;
   }
 }
 
@@ -8864,8 +8948,8 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
 
       } catch (error) {
         console.error("❌ Error saving case:", error);
-        if (error.code === "permission-denied") {
-          showToast(isEn ? "Permission error — please sign in" : "خطأ في الصلاحيات — تأكد من تسجيل الدخول");
+        if (typeof showAppError === "function") {
+          showAppError(error, { context: "Assessment Submission" });
         } else {
           showToast(isEn ? "Error sending assessment. Please try again." : "حدث خطأ أثناء الإرسال. حاول مرة أخرى.");
         }

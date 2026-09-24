@@ -3644,3 +3644,72 @@ body.dark .legal-content-body h4 {
 .site-footer-links button:hover {
   color: var(--teal);
 }
+
+/* ========================================================================= */
+/* 🎨 UI STATES: SKELETON LOADERS, EMPTY STATES & ERROR CARDS */
+/* ========================================================================= */
+
+@keyframes hvShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.hv-skeleton {
+  background: linear-gradient(90deg, var(--surface-2) 25%, var(--line) 50%, var(--surface-2) 75%);
+  background-size: 200% 100%;
+  animation: hvShimmer 1.5s infinite;
+  border-radius: 8px;
+}
+
+.hv-state-card {
+  padding: 36px 20px;
+  text-align: center;
+  background: var(--surface-2);
+  border: 1px dashed var(--line);
+  border-radius: 16px;
+  margin: 12px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.hv-state-card .state-icon {
+  font-size: 42px;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.hv-state-card h4 {
+  margin: 0;
+  font-size: 16.5px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.hv-state-card p {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--muted);
+  max-width: 440px;
+  line-height: 1.55;
+}
+
+.hv-state-card.error-card {
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.04);
+}
+
+.hv-state-card.error-card h4 {
+  color: #ef4444;
+}
+
+.hv-state-card.success-card {
+  border-color: rgba(22, 163, 74, 0.4);
+  background: rgba(22, 163, 74, 0.04);
+}
+
+.hv-state-card.success-card h4 {
+  color: #16a34a;
+}
