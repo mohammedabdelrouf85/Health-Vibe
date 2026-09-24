@@ -1354,6 +1354,89 @@ const auth = firebase.auth();
 const storage = firebase.storage();
 const googleProvider = new firebase.auth.GoogleAuthProvider();
 
+// =============================================================================
+// 🛡️ FIREBASE APP CHECK INITIALIZATION (Zero-Trust App Attestation)
+// =============================================================================
+let appCheckInstance = null;
+
+function initAppCheck() {
+  if (typeof firebase === "undefined" || !firebase.appCheck) {
+    return null;
+  }
+  try {
+    const isDev = (runtimeConfig && runtimeConfig.environment === "development") ||
+      (typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"));
+    const appCheckCfg = (runtimeConfig && runtimeConfig.appCheck) || {};
+
+    if (isDev) {
+      if (typeof self !== "undefined") {
+        self.FIREBASE_APPCHECK_DEBUG_TOKEN = (typeof window !== "undefined" && window.HV_APPCHECK_DEBUG_TOKEN) || appCheckCfg.debugToken || true;
+      }
+      appCheckInstance = firebase.appCheck();
+      if (firebase.appCheck.CustomProvider) {
+        appCheckInstance.activate(
+          new firebase.appCheck.CustomProvider({
+            getToken: () => Promise.resolve({
+              token: (typeof window !== "undefined" && window.HV_APPCHECK_DEBUG_TOKEN) || appCheckCfg.debugToken || "healthvibe-dev-debug-token",
+              expireTimeMillis: Date.now() + 3600000
+            })
+          }),
+          appCheckCfg.isTokenAutoRefreshEnabled !== false
+        );
+      } else {
+        appCheckInstance.activate(appCheckCfg.siteKey || "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI", true);
+      }
+      console.log("[APP CHECK] Initialized in Development mode (Debug Provider active).");
+    } else {
+      const siteKey = appCheckCfg.siteKey || (typeof window !== "undefined" && window.HV_RECAPTCHA_KEY) || "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI";
+      appCheckInstance = firebase.appCheck();
+      if (firebase.appCheck.ReCaptchaV3Provider) {
+        appCheckInstance.activate(
+          new firebase.appCheck.ReCaptchaV3Provider(siteKey),
+          appCheckCfg.isTokenAutoRefreshEnabled !== false
+        );
+      } else {
+        appCheckInstance.activate(siteKey, true);
+      }
+      console.log("[APP CHECK] Initialized in Production mode (reCAPTCHA v3 active).");
+    }
+    return appCheckInstance;
+  } catch (err) {
+    console.warn("[APP CHECK] Note during initialization:", err.message);
+    return null;
+  }
+}
+
+try {
+  initAppCheck();
+} catch (e) {}
+
+async function getAppCheckToken(forceRefresh = false) {
+  if (!appCheckInstance && typeof firebase !== "undefined" && firebase.appCheck) {
+    try {
+      appCheckInstance = firebase.appCheck();
+    } catch (e) {}
+  }
+  if (!appCheckInstance) return null;
+  try {
+    const result = await appCheckInstance.getToken(Boolean(forceRefresh));
+    return result && result.token ? result.token : null;
+  } catch (err) {
+    return null;
+  }
+}
+
+async function authenticatedFetch(url, options = {}) {
+  const headers = Object.assign({}, options.headers || {});
+  try {
+    const token = await getAppCheckToken();
+    if (token) {
+      headers['X-Firebase-AppCheck'] = token;
+    }
+  } catch (e) {}
+  return fetch(url, Object.assign({}, options, { headers }));
+}
+
 // Connect to Emulators if explicitly enabled in Development environment
 if (runtimeConfig.environment === "development" && runtimeConfig.emulators && runtimeConfig.emulators.enabled) {
   try {
@@ -12032,6 +12115,9 @@ window.toggleSidebarDrawer = toggleSidebarDrawer;
 window.closeSidebarDrawer = closeSidebarDrawer;
 window.updateMobileBottomNav = updateMobileBottomNav;
 window.initMobileTouchGestures = initMobileTouchGestures;
+window.initAppCheck = initAppCheck;
+window.getAppCheckToken = getAppCheckToken;
+window.authenticatedFetch = authenticatedFetch;
 
 // Initialize on DOM ready
 if (document.readyState === "loading") {

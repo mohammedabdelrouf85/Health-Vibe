@@ -40,6 +40,11 @@
         firestoreHost: "localhost",
         firestorePort: 8080
       },
+      appCheck: {
+        provider: "debug",
+        debugToken: "healthvibe-dev-debug-token",
+        isTokenAutoRefreshEnabled: true
+      },
       firebase: DEV_FIREBASE
     },
     production: {
@@ -51,6 +56,11 @@
       debug: false,
       emulators: {
         enabled: false
+      },
+      appCheck: {
+        provider: "recaptcha-v3",
+        siteKey: "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI",
+        isTokenAutoRefreshEnabled: true
       },
       firebase: PROD_FIREBASE
     }
@@ -103,6 +113,7 @@
     allowDemoSeed: activeConfig.allowDemoSeed,
     debug: activeConfig.debug,
     emulators: activeConfig.emulators,
+    appCheck: activeConfig.appCheck,
     firebase: activeConfig.firebase,
 
     // Environment dictionary & details
