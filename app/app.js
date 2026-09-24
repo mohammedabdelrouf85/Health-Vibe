@@ -1796,7 +1796,7 @@ async function getCases() {
       return hasPatient && hasVitals;
     });
 
-    return cases;
+    return role === ROLES.PATIENT ? cases.map(maskUnapprovedPatientCase) : cases;
   } catch (err) {
     console.error("getCases error:", err);
     return [];
@@ -1819,6 +1819,63 @@ const CASE_STATUS = Object.freeze({
   CLOSED: 'closed',
   PENDING: 'pending' // alias for backwards compatibility
 });
+
+function isCaseApprovedForPatient(c) {
+  return Boolean(c && c.status === CASE_STATUS.APPROVED && c.doctorApproved === true);
+}
+
+function maskUnapprovedPatientCase(c) {
+  if (!c || isCaseApprovedForPatient(c)) return c;
+  const masked = { ...c };
+  [
+    "result",
+    "risk",
+    "riskEn",
+    "aiScore",
+    "aiScoreEn",
+    "ruleScore",
+    "ruleScoreLabelAr",
+    "ruleScoreLabelEn",
+    "clinicalDiagnosis",
+    "clinicalNotes",
+    "doctorNotes",
+    "medications",
+    "recommendation",
+    "recommendations",
+    "reportRef",
+    "reportGeneratedAt",
+    "generatedAt",
+    "approvedAt",
+    "approvingDoctorId",
+    "approvingDoctorEmail",
+    "approvingDoctorName",
+    "doctorSpecialty",
+    "doctorLicense",
+    "clinicName"
+  ].forEach((key) => {
+    if (key in masked) masked[key] = null;
+  });
+  if (masked.doctorNote && ![CASE_STATUS.MORE_INFO_REQUESTED, CASE_STATUS.REJECTED].includes(masked.status)) {
+    masked.doctorNote = null;
+  }
+  if (masked.assessment && masked.assessment.aiTriage) {
+    masked.assessment = {
+      ...masked.assessment,
+      aiTriage: {
+        ...masked.assessment.aiTriage,
+        risk: null,
+        riskEn: null,
+        aiScore: null,
+        aiScoreEn: null,
+        ruleScore: null,
+        ruleScoreLabelAr: null,
+        ruleScoreLabelEn: null,
+        confidence: null
+      }
+    };
+  }
+  return masked;
+}
 
 const CASE_TRANSITIONS = {
   [CASE_STATUS.DRAFT]: [CASE_STATUS.SUBMITTED],
@@ -2732,7 +2789,7 @@ async function selectDoctorCase(id) {
   // Dynamic Doctor Action Toolbar depending on state
   let actionToolbarHtml = '';
   const isClosed = c.status === CASE_STATUS.CLOSED;
-  const isApproved = (c.status === CASE_STATUS.APPROVED || c.doctorApproved === true);
+  const isApproved = isCaseApprovedForPatient(c);
   const isMoreInfo = c.status === CASE_STATUS.MORE_INFO_REQUESTED;
   const isEscalated = c.status === CASE_STATUS.ESCALATED;
   const isRejected = c.status === CASE_STATUS.REJECTED;
@@ -4541,7 +4598,7 @@ async function renderPatientDashboard() {
 
         if (!snapshot.empty) {
           const realDocs = snapshot.docs
-            .map(doc => ({ id: doc.id, ...doc.data() }))
+            .map(doc => maskUnapprovedPatientCase({ id: doc.id, ...doc.data() }))
             .filter(item => {
               if (!item || item.isDemo === true) return false;
               const idStr = String(item.id || "");
@@ -4577,7 +4634,7 @@ async function renderPatientDashboard() {
         };
 
         const isSupport = isSupportUser();
-        const priorityLabel = isSupport
+        let priorityLabel = isSupport
           ? (isEn ? "🔒 Masked (Support)" : "🔒 محجوب للدعم الفني")
           : ((isEn ? c.ruleScoreLabelEn : c.ruleScoreLabelAr) || priorityMap[c.priority] || "--");
         const o2Display = isSupport
@@ -4591,7 +4648,11 @@ async function renderPatientDashboard() {
         document.getElementById("patientClinicalConfidence").textContent = priorityLabel;
         document.getElementById("patientClinicalDoctor").textContent = doctorDisplay;
 
-        const isApproved = (c.status === CASE_STATUS.APPROVED || c.doctorApproved === true);
+        const isApproved = isCaseApprovedForPatient(c);
+        if (!isSupport && !isApproved) {
+          priorityLabel = isEn ? "Locked until approval" : "مغلق حتى الاعتماد";
+          document.getElementById("patientClinicalConfidence").textContent = priorityLabel;
+        }
         const latestReportEl = document.getElementById("patientLatestReport");
         const resultStatusEl = document.getElementById("patientResultStatus");
 
@@ -4613,7 +4674,7 @@ async function renderPatientDashboard() {
 
         // ── التنبيهات ─────────────────────────────────────────────────────
         const alertNoteText = isSupport ? "" : (c.doctorNote ? c.doctorNote + " • " : "");
-        if (c.status === CASE_STATUS.APPROVED) {
+        if (isApproved) {
           document.getElementById("patientAlertsCount").textContent = isEn ? "1 approved" : "1 معتمد";
           document.getElementById("patientAlertsList").innerHTML =
             `<div style="cursor: pointer; border-inline-start: 4px solid #16a34a;" onclick="openCaseReport('${c.id}')">
@@ -4880,6 +4941,9 @@ async function renderReportScreen(targetCaseId = null) {
           const d = docSnap.data();
           if (d.patientId === user.uid || normalizeRole(selectedRole) === ROLES.DOCTOR || isAdminRole(selectedRole) || isSupportRole(selectedRole)) {
             caseData = { id: docSnap.id, ...d };
+            if (d.patientId === user.uid && normalizeRole(selectedRole) === ROLES.PATIENT) {
+              caseData = maskUnapprovedPatientCase(caseData);
+            }
           }
         }
       } catch (docErr) {
@@ -4892,14 +4956,14 @@ async function renderReportScreen(targetCaseId = null) {
       let docs = [];
       try {
         const snap = await db.collection("cases").where("patientId", "==", user.uid).get();
-        if (!snap.empty) docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        if (!snap.empty) docs = snap.docs.map(d => maskUnapprovedPatientCase({ id: d.id, ...d.data() }));
       } catch (e) {
         console.warn("Direct patientId query failed in report:", e.message);
       }
       if (docs.length === 0 && user.email) {
         try {
           const emailSnap = await db.collection("cases").where("patientEmail", "==", user.email).get();
-          if (!emailSnap.empty) docs = emailSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+          if (!emailSnap.empty) docs = emailSnap.docs.map(d => maskUnapprovedPatientCase({ id: d.id, ...d.data() }));
         } catch(e) {}
       }
       if (docs.length === 0) {
@@ -4942,8 +5006,8 @@ async function renderReportScreen(targetCaseId = null) {
       return;
     }
 
-    // Check genuine approval: status === 'approved' OR doctorApproved === true
-    const isApproved = (caseData.status === CASE_STATUS.APPROVED || caseData.doctorApproved === true);
+    // Check genuine approval: both case status and doctor approval flag must be released.
+    const isApproved = isCaseApprovedForPatient(caseData);
 
     // STATE 2: CASE EXISTS BUT NOT APPROVED (LOCKED CLINICAL GATEWAY)
     // 🛡️ SECURITY & CLINICAL SAFETY RULE: Under NO circumstances should unapproved reports display clinical diagnoses to the patient!
@@ -5569,14 +5633,14 @@ async function renderResultScreen() {
     let docs = [];
     try {
       const snap = await db.collection("cases").where("patientId", "==", user.uid).get();
-      if (!snap.empty) docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      if (!snap.empty) docs = snap.docs.map(d => maskUnapprovedPatientCase({ id: d.id, ...d.data() }));
     } catch(err1) {
       console.warn("patientId result query error:", err1.message);
     }
     if (docs.length === 0 && user.email) {
       try {
         const snapEmail = await db.collection("cases").where("patientEmail", "==", user.email).get();
-        if (!snapEmail.empty) docs = snapEmail.docs.map(d => ({ id: d.id, ...d.data() }));
+        if (!snapEmail.empty) docs = snapEmail.docs.map(d => maskUnapprovedPatientCase({ id: d.id, ...d.data() }));
       } catch(err2) {
         console.warn("patientEmail result query error:", err2.message);
       }
@@ -5602,7 +5666,7 @@ async function renderResultScreen() {
     }
 
     const latest = validDocs[0];
-    const isApproved = (latest.status === CASE_STATUS.APPROVED || latest.doctorApproved === true);
+    const isApproved = isCaseApprovedForPatient(latest);
 
     if (!isApproved) {
       // LOCKED RESULT VIEW
@@ -5690,14 +5754,14 @@ async function renderPatientHistory() {
     let docs = [];
     try {
       const snap = await db.collection("cases").where("patientId", "==", user.uid).get();
-      if (!snap.empty) docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      if (!snap.empty) docs = snap.docs.map(d => maskUnapprovedPatientCase({ id: d.id, ...d.data() }));
     } catch(err1) {
       console.warn("patientId history query error:", err1.message);
     }
     if (docs.length === 0 && user.email) {
       try {
         const snapEmail = await db.collection("cases").where("patientEmail", "==", user.email).get();
-        if (!snapEmail.empty) docs = snapEmail.docs.map(d => ({ id: d.id, ...d.data() }));
+        if (!snapEmail.empty) docs = snapEmail.docs.map(d => maskUnapprovedPatientCase({ id: d.id, ...d.data() }));
       } catch(err2) {
         console.warn("patientEmail history query error:", err2.message);
       }
@@ -5737,7 +5801,7 @@ async function renderPatientHistory() {
     }
 
     cases.forEach(c => {
-      const isApproved = (c.status === CASE_STATUS.APPROVED || c.doctorApproved === true);
+      const isApproved = isCaseApprovedForPatient(c);
       const statusMeta = getCaseStatusMeta(c.status);
       const ts = c.submittedAt?.toMillis ? c.submittedAt.toMillis() : (c.submittedAt || 0);
       const dt = ts ? new Date(ts).toLocaleDateString(isEn ? "en-US" : "ar-EG", { year: "numeric", month: "short", day: "numeric" }) : "--";

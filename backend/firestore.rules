@@ -219,6 +219,56 @@ service cloud.firestore {
              isValidStatusHistory(data);
     }
 
+    function hasNoPatientForgedClinicalResult(data) {
+      return (!('result' in data) || data.result == null) &&
+             (!('doctorApproved' in data) || data.doctorApproved == false) &&
+             (!('approvedAt' in data) || data.approvedAt == null) &&
+             (!('generatedAt' in data) || data.generatedAt == null) &&
+             (!('reportGeneratedAt' in data) || data.reportGeneratedAt == null) &&
+             (!('clinicalDiagnosis' in data) || data.clinicalDiagnosis == null) &&
+             (!('clinicalNotes' in data) || data.clinicalNotes == null) &&
+             (!('doctorNotes' in data) || data.doctorNotes == null) &&
+             (!('doctorNote' in data) || data.doctorNote == null) &&
+             (!('medications' in data) || data.medications == null) &&
+             (!('recommendation' in data) || data.recommendation == null) &&
+             (!('recommendations' in data) || data.recommendations == null) &&
+             (!('approvingDoctorId' in data) || data.approvingDoctorId == null) &&
+             (!('approvingDoctorEmail' in data) || data.approvingDoctorEmail == null) &&
+             (!('approvingDoctorName' in data) || data.approvingDoctorName == null) &&
+             (!('reportRef' in data) || data.reportRef == null);
+    }
+
+    function isDoctorApprovedCase(data) {
+      return data.status == 'approved' && ('doctorApproved' in data) && data.doctorApproved == true;
+    }
+
+    function hasNoUnreleasedClinicalResult(data) {
+      return (!('result' in data) || data.result == null) &&
+             (!('clinicalDiagnosis' in data) || data.clinicalDiagnosis == null) &&
+             (!('clinicalNotes' in data) || data.clinicalNotes == null) &&
+             (!('doctorNotes' in data) || data.doctorNotes == null) &&
+             (!('doctorNote' in data) || data.doctorNote == null || data.status in ['more_info_requested', 'rejected']) &&
+             (!('medications' in data) || data.medications == null) &&
+             (!('recommendation' in data) || data.recommendation == null) &&
+             (!('recommendations' in data) || data.recommendations == null);
+    }
+
+    function isPatientMoreInfoResponse() {
+      return resource.data.patientId == request.auth.uid &&
+             resource.data.status == 'more_info_requested' &&
+             request.resource.data.status == 'under_review' &&
+             request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+               'status',
+               'patientResponse',
+               'patientRespondedAt',
+               'updatedAt',
+               'statusHistory',
+               'oxygenLevel',
+               'o2'
+             ]) &&
+             hasNoPatientForgedClinicalResult(request.resource.data);
+    }
+
     // Case Status Machine: draft -> submitted -> triaged -> assigned -> under_review -> more_info_requested -> approved / rejected / escalated / closed
     function isValidCaseStatus(status) {
       return status in [
@@ -250,15 +300,19 @@ service cloud.firestore {
     // - MEDICAL VALIDATION: All assessment fields are strictly validated (isValidAssessment).
     match /cases/{caseId} {
       allow read: if isAuthenticated() && 
-                     (resource.data.patientId == request.auth.uid || isDoctor() || isAssignedDoctor() || isAdmin());
+                     ((resource.data.patientId == request.auth.uid &&
+                       (isDoctorApprovedCase(resource.data) || hasNoUnreleasedClinicalResult(resource.data))) ||
+                      isAssignedDoctor() ||
+                      isAdmin());
 
       allow create: if isEmailVerified() && 
                        request.resource.data.patientId == request.auth.uid &&
                        request.resource.data.status in ['draft', 'submitted', 'triaged', 'assigned', 'pending'] &&
+                       hasNoPatientForgedClinicalResult(request.resource.data) &&
                        isValidAssessment(request.resource.data);
 
       allow update: if (isAuthenticated() &&
-                        (isDoctor() || isAssignedDoctor() || isAdmin() || isOwner() || (resource.data.patientId == request.auth.uid)) &&
+                        (isAssignedDoctor() || isAdmin() || isOwner() || isPatientMoreInfoResponse()) &&
                         request.resource.data.patientId == resource.data.patientId &&
                         isValidCaseStatus(request.resource.data.status) &&
                         isValidAssessment(request.resource.data));
@@ -308,16 +362,6 @@ service cloud.firestore {
     // - Healthcare providers apply for verification and submit medical licenses.
     // - Doctors/Applicants can read and create their own application.
     // - Admins can read all applications, approve, or reject them.
-    match /doctor_applications/{appId} {
-      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow update: if isAuthenticated() && (
-        (request.resource.data.userId == request.auth.uid && resource.data.userId == request.auth.uid) || 
-        isAdmin()
-      );
-      allow delete: if isAdmin();
-    }
-
     // =========================================================================
     // 8. 🛑 CATCH-ALL DEFAULT DENY
     // =========================================================================
