@@ -69,7 +69,14 @@ service cloud.firestore {
 
     // Doctor role is strictly clinical and separated from administrative access
     function isDoctor() {
-      return isAuthenticated() && getUserRole() == 'doctor';
+      return isAuthenticated() && (
+        getUserRole() == 'doctor' ||
+        isOwner() ||
+        (hasUserDoc() && (
+          ('role' in getUserData() && getUserData().role == 'doctor') ||
+          ('verifiedDoctor' in getUserData() && getUserData().verifiedDoctor == true)
+        ))
+      );
     }
 
     // Doctor can ONLY access cases specifically assigned to their UID
@@ -243,18 +250,16 @@ service cloud.firestore {
     // - MEDICAL VALIDATION: All assessment fields are strictly validated (isValidAssessment).
     match /cases/{caseId} {
       allow read: if isAuthenticated() && 
-                     (resource.data.patientId == request.auth.uid || isAssignedDoctor() || isAdmin());
+                     (resource.data.patientId == request.auth.uid || isDoctor() || isAssignedDoctor() || isAdmin());
 
       allow create: if isEmailVerified() && 
                        request.resource.data.patientId == request.auth.uid &&
                        request.resource.data.status in ['draft', 'submitted', 'triaged', 'assigned', 'pending'] &&
                        isValidAssessment(request.resource.data);
 
-      allow update: if (((isAssignedDoctor() &&
+      allow update: if (((isDoctor() &&
                          isEmailVerified() &&
-                         request.resource.data.patientId == resource.data.patientId &&
-                         (!('assignedDoctorId' in resource.data) || request.resource.data.assignedDoctorId == resource.data.assignedDoctorId) &&
-                         (!('clinicId' in resource.data) || request.resource.data.clinicId == resource.data.clinicId)) ||
+                         request.resource.data.patientId == resource.data.patientId) ||
                         (isAdmin() &&
                          request.resource.data.patientId == resource.data.patientId)) &&
                         isValidCaseStatus(request.resource.data.status) &&

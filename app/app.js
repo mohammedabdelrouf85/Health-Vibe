@@ -1708,37 +1708,39 @@ async function initDB() {
 
 async function getCases() {
   try {
-    const user = auth.currentUser;
+    const user = getActiveUser();
     if (!user) return [];
 
     const isOwner = isOwnerUser(user.email);
     const role = normalizeRole(selectedRole, isOwner);
 
     let cases = [];
-    if (role === ROLES.DOCTOR) {
-      // 🩺 DOCTOR PRIVACY: Fetch ONLY cases assigned to this doctor
+    if (role === ROLES.DOCTOR || isAdminRole(role) || isOwner) {
+      // 🩺 DOCTOR & ADMIN: Fetch all cases for clinical review queue
       try {
-        const snap = await db.collection("cases").where("assignedDoctorId", "==", user.uid).get();
+        const snap = await db.collection("cases").get();
         cases = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       } catch (e) {
-        console.warn("Query by assignedDoctorId failed, trying doctorId fallback:", e.message);
-      }
-
-      // Fallback: also check doctorId if assignedDoctorId returned no records
-      if (cases.length === 0) {
+        console.warn("Direct cases collection get failed, trying fallback:", e.message);
         try {
-          const fallbackSnap = await db.collection("cases").where("doctorId", "==", user.uid).get();
-          if (!fallbackSnap.empty) {
-            cases = fallbackSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          }
-        } catch (e) {
-          // ignore fallback query error
-        }
+          const snapAssigned = await db.collection("cases").where("assignedDoctorId", "==", user.uid).get();
+          cases = snapAssigned.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        } catch (e2) {}
+        try {
+          const snapUnassigned = await db.collection("cases").where("assignedDoctorId", "==", null).get();
+          const byId = new Map(cases.map(c => [c.id, c]));
+          snapUnassigned.docs.forEach(doc => {
+            if (!byId.has(doc.id)) byId.set(doc.id, { id: doc.id, ...doc.data() });
+          });
+          cases = Array.from(byId.values());
+        } catch (e3) {}
       }
     } else if (role === ROLES.PATIENT) {
       // 👤 PATIENT PRIVACY: Fetch only own cases
-      const snap = await db.collection("cases").where("patientId", "==", user.uid).get();
-      cases = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      try {
+        const snap = await db.collection("cases").where("patientId", "==", user.uid).get();
+        cases = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      } catch(e) {}
       if (user.email) {
         try {
           const emailSnap = await db.collection("cases").where("patientEmail", "==", user.email).get();
@@ -1752,9 +1754,10 @@ async function getCases() {
         }
       }
     } else {
-      // ⚙️ ADMIN: Can view all cases for triage and doctor assignment
-      const snapshot = await db.collection("cases").orderBy("createdAt", "desc").get();
-      cases = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      try {
+        const snapshot = await db.collection("cases").get();
+        cases = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      } catch(e) {}
     }
 
     // Client-side sort by submittedAt or createdAt descending
@@ -2296,34 +2299,11 @@ window.resumeReview = async function(id) {
   }
 };
 
-async function renderDoctorQueue() {
+function renderDoctorQueueItems(allCases) {
   const queueList = document.getElementById("doctorQueueList");
-  const filterTabsContainer = document.getElementById("doctorQueueFilterTabs");
   if (!queueList) return;
 
   const isEn = currentLanguage === "en";
-
-  // Render filter tabs if container exists
-  if (filterTabsContainer) {
-    const filters = [
-      { key: 'all', ar: 'الكل', en: 'All' },
-      { key: 'under_review', ar: 'قيد الفحص', en: 'Under Review' },
-      { key: 'assigned', ar: 'بانتظار الطبيب', en: 'Awaiting Doctor' },
-      { key: 'more_info_requested', ar: 'مطلوب بيانات', en: 'More Info' },
-      { key: 'approved', ar: 'معتمد', en: 'Approved' },
-      { key: 'closed_escalated', ar: 'مغلق ومصعّد', en: 'Closed & Escalated' }
-    ];
-
-    filterTabsContainer.innerHTML = filters.map(f => `
-      <button type="button" class="status-filter-tab ${currentDoctorQueueFilter === f.key ? 'active' : ''}" onclick="setDoctorQueueFilter('${f.key}')">
-        ${isEn ? f.en : f.ar}
-      </button>
-    `).join('');
-  }
-
-  queueList.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--teal);"><div class="spinner"></div> ' + (isEn ? 'Fetching clinical records...' : 'جاري جلب البيانات من Firebase...') + '</div>';
-  const allCases = await getCases();
-  queueList.innerHTML = '';
 
   // 🛡️ STRICT ENFORCEMENT: Filter strictly for REAL patient cases
   const realCases = allCases.filter(c => {
@@ -2336,6 +2316,16 @@ async function renderDoctorQueue() {
     return hasPatient && hasVitals;
   });
 
+  // 🔔 تحديث شارة عدد الحالات في قائمة الانتظار
+  const queueCountBadge = document.getElementById("doctorQueueCount");
+  if (queueCountBadge) {
+    const actionable = realCases.filter(c => [CASE_STATUS.ASSIGNED, CASE_STATUS.TRIAGED, CASE_STATUS.PENDING, CASE_STATUS.SUBMITTED, CASE_STATUS.UNDER_REVIEW].includes(c.status)).length;
+    queueCountBadge.textContent = String(actionable);
+    queueCountBadge.className = `pill ${actionable > 0 ? 'danger' : 'ok'}`;
+  }
+
+  queueList.innerHTML = '';
+
   if (realCases.length === 0) {
     queueList.innerHTML = `
       <div style="padding: 30px 16px; text-align: center; color: var(--muted);">
@@ -2345,8 +2335,8 @@ async function renderDoctorQueue() {
         </strong>
         <p style="margin: 0; font-size: 12.5px; line-height: 1.5;">
           ${isEn 
-            ? 'The doctor queue only displays authentic cases submitted by registered patients. When patients submit new clinical assessments, they will appear here.'
-            : 'قائمة انتظار الطبيب تعرض فقط الحالات السريرية الحقيقية المُرسلة من المرضى. عند قيام المرضى بإرسال تقييمات جديدة، ستظهر هنا فوراً.'}
+            ? 'The doctor queue only displays authentic cases submitted by registered patients. When patients submit new clinical assessments, they will appear here instantly.'
+            : 'قائمة انتظار الطبيب تعرض الحالات السريرية الحقيقية المُرسلة من المرضى فورياً وبشكل حي.'}
         </p>
       </div>
     `;
@@ -2423,10 +2413,10 @@ async function renderDoctorQueue() {
 
     btn.innerHTML = `
       <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 4px;">
-        <strong>${isEn ? c.nameEn : c.name}</strong>
+        <strong>${isEn ? (c.nameEn || c.patientNameEn || c.name || c.patientName) : (c.name || c.patientName || c.nameEn || c.patientNameEn)}</strong>
         ${statusPillHtml}
       </div>
-      <span>${isEn ? 'O2 ' + c.o2 + '% - ' + c.symptomsEn : 'نسبة الأكسجين ' + c.o2 + '% - ' + c.symptoms}</span>
+      <span>${isEn ? 'O2 ' + c.o2 + '% - ' + (c.symptomsEn || c.symptoms || '') : 'نسبة الأكسجين ' + c.o2 + '% - ' + (c.symptoms || c.symptomsEn || '')}</span>
       ${riskBadge}
     `;
     btn.onclick = () => selectDoctorCase(c.id);
@@ -2435,6 +2425,73 @@ async function renderDoctorQueue() {
 
   if (cases.length > 0 && (!activeCaseId || !cases.some(c => c.id === activeCaseId))) {
     selectDoctorCase(cases[0].id);
+  }
+}
+
+async function renderDoctorQueue() {
+  const queueList = document.getElementById("doctorQueueList");
+  const filterTabsContainer = document.getElementById("doctorQueueFilterTabs");
+  if (!queueList) return;
+
+  const isEn = currentLanguage === "en";
+
+  // Render filter tabs if container exists
+  if (filterTabsContainer) {
+    const filters = [
+      { key: 'all', ar: 'الكل', en: 'All' },
+      { key: 'under_review', ar: 'قيد الفحص', en: 'Under Review' },
+      { key: 'assigned', ar: 'بانتظار الطبيب', en: 'Awaiting Doctor' },
+      { key: 'more_info_requested', ar: 'مطلوب بيانات', en: 'More Info' },
+      { key: 'approved', ar: 'معتمد', en: 'Approved' },
+      { key: 'closed_escalated', ar: 'مغلق ومصعّد', en: 'Closed & Escalated' }
+    ];
+
+    filterTabsContainer.innerHTML = filters.map(f => `
+      <button type="button" class="status-filter-tab ${currentDoctorQueueFilter === f.key ? 'active' : ''}" onclick="setDoctorQueueFilter('${f.key}')">
+        ${isEn ? f.en : f.ar}
+      </button>
+    `).join('');
+  }
+
+  // ── إلغاء المستمع السابق لتجنب التسريب ────────────────────────
+  if (window._doctorQueueUnsub) {
+    window._doctorQueueUnsub();
+    window._doctorQueueUnsub = null;
+  }
+
+  queueList.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--teal);"><div class="spinner"></div> ' + (isEn ? 'Connecting real-time clinical queue...' : 'جاري الاتصال المباشر بقائمة الانتظار السريرية...') + '</div>';
+
+  // ── مستمع حي Real-Time Listener لاستقبال التقييمات فورياً ──────
+  if (typeof db !== "undefined" && db) {
+    try {
+      window._doctorQueueUnsub = db.collection("cases").onSnapshot(
+        (snapshot) => {
+          if (!snapshot.empty) {
+            const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            docs.sort((a, b) => {
+              const tA = toMillis(a.submittedAt || a.createdAt || a.updatedAt) || 0;
+              const tB = toMillis(b.submittedAt || b.createdAt || b.updatedAt) || 0;
+              return tB - tA;
+            });
+            renderDoctorQueueItems(docs);
+          } else {
+            renderDoctorQueueItems([]);
+          }
+        },
+        async (err) => {
+          console.warn("Doctor queue real-time listener error, fallback to getCases():", err.message);
+          const cases = await getCases();
+          renderDoctorQueueItems(cases);
+        }
+      );
+    } catch(e) {
+      console.warn("Could not bind real-time doctor queue:", e.message);
+      const cases = await getCases();
+      renderDoctorQueueItems(cases);
+    }
+  } else {
+    const cases = await getCases();
+    renderDoctorQueueItems(cases);
   }
 }
 
@@ -4225,6 +4282,9 @@ function showScreen(name) {
   
   if (name === "doctor") {
     renderDoctorQueue();
+  } else if (window._doctorQueueUnsub) {
+    window._doctorQueueUnsub();
+    window._doctorQueueUnsub = null;
   }
   if (name === "patient") {
     renderPatientDashboard();
@@ -7767,6 +7827,8 @@ function buildAssessmentModel({
 
     // ── Lifecycle & Audit ──
     submittedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     reviewedBy: null,
     reviewedAt: null,
     doctorNotes: null,
