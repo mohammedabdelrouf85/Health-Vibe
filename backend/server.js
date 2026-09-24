@@ -471,7 +471,7 @@ app.post('/api/admin/backup/restore', async (req, res) => {
 app.get(['/health', '/api/health'], (req, res) => {
   res.json({
     status: 'ok',
-    service: 'Health Vibe AI Server-Authoritative Backend',
+    service: 'Health Vibes AI Server-Authoritative Backend',
     environment: NODE_ENV,
     isDevelopment,
     isProduction,
@@ -1895,7 +1895,7 @@ app.post('/api/user/delete-account', requireAuth, async (req, res) => {
 const PORT = process.env.PORT || (isDevelopment ? 4000 : 8080);
 if (require.main === module) {
   app.listen(PORT, () => {
-    console.log(`[Health Vibe AI Backend] Server running in [${NODE_ENV.toUpperCase()}] mode on port ${PORT}`);
+    console.log(`[Health Vibes AI Backend] Server running in [${NODE_ENV.toUpperCase()}] mode on port ${PORT}`);
   });
 }
 

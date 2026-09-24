@@ -1,5 +1,5 @@
 /**
- * Health Vibe AI - Configuration Template (config.example.js)
+ * Health Vibes AI - Configuration Template (config.example.js)
  * Copy this file to config.js to configure your local or target environment.
  */
 

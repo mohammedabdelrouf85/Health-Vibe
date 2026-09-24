@@ -1,7 +1,7 @@
 {
   "name": "health-vibe-backend",
   "version": "1.0.0",
-  "description": "Health Vibe AI - Server-authoritative Zero-Trust RBAC Backend",
+  "description": "Health Vibes AI - Server-authoritative Zero-Trust RBAC Backend",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

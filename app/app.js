@@ -879,8 +879,8 @@ const uiText = {
   "لضمان سلامة وسرية الملفات الطبية، يرجى تفعيل وتوثيق حسابك عبر كود الواتساب السريع أو رسالة الهاتف أو رابط البريد.": "To ensure medical records security, please activate and verify your account via WhatsApp code, SMS, or email link.",
   "بوت الواتساب الآلي": "Automated WhatsApp Bot",
   "رابط البريد الإلكتروني": "Email Link",
-  "بوت الواتساب الآلي (Health Vibe Bot)": "Automated WhatsApp Bot (Health Vibe Bot)",
-  "اكتب رقم واتساب بصيغة دولية، ثم سيقوم بوت Health Vibe بإرسال كود تفعيل سري مكون من 6 أرقام.": "Enter a WhatsApp number in international format, then the Health Vibe Bot will send a secure 6-digit activation code.",
+  "بوت الواتساب الآلي (Health Vibes Bot)": "Automated WhatsApp Bot (Health Vibes Bot)",
+  "اكتب رقم واتساب بصيغة دولية، ثم سيقوم بوت Health Vibes بإرسال كود تفعيل سري مكون من 6 أرقام.": "Enter a WhatsApp number in international format, then the Health Vibes Bot will send a secure 6-digit activation code.",
   "رقم واتساب لاستلام الكود": "WhatsApp number to receive the code",
   "استخدم كود الدولة، مثال مصر: +201001234567.": "Use the country code, for Egypt for example: +201001234567.",
   "إرسال كود التفعيل تلقائياً عبر بوت الواتساب": "Send activation code automatically via WhatsApp Bot",
@@ -1042,6 +1042,10 @@ let currentLanguage = (function() {
 
 function localized(text) {
   if (!text || typeof text !== "string") return text;
+  if (typeof window !== "undefined" && window.i18n && typeof window.i18n.t === "function") {
+    const res = window.i18n.t(text);
+    if (res && res !== text) return res;
+  }
   const trimmed = text.trim();
   if (currentLanguage === "en") {
     return uiText[trimmed] ? text.replace(trimmed, uiText[trimmed]) : text;
@@ -1058,68 +1062,48 @@ function preserveSpacing(original, value) {
 
 function applyLanguage(language) {
   currentLanguage = language;
-  try {
-    localStorage.setItem("hv_lang", language);
-  } catch(e) {}
-  document.documentElement.lang = language;
-  document.documentElement.dir = language === "ar" ? "rtl" : "ltr";
-  document.title = localized("Health Vibes");
 
-  // 1. Direct update for navigation buttons
+  // 1. Sync with structured i18n engine
+  if (typeof window !== "undefined" && window.i18n && typeof window.i18n.setLanguage === "function") {
+    window.i18n.setLanguage(language, true);
+  } else {
+    try {
+      localStorage.setItem("hv_lang", language);
+    } catch(e) {}
+    document.documentElement.lang = language;
+    document.documentElement.dir = language === "ar" ? "rtl" : "ltr";
+  }
+  document.title = (window.i18n && window.i18n.t("common.appName")) || localized("Health Vibes");
+
+  // 2. Direct update for navigation buttons
   document.querySelectorAll(".nav-item").forEach((btn) => {
     const scr = btn.dataset.screen;
     const labelSpan = btn.querySelector(".nav-label");
-    if (labelSpan && navTranslations[scr]) {
-      labelSpan.textContent = navTranslations[scr][language] || navTranslations[scr].en;
-    } else if (scr && navTranslations[scr]) {
-      const iconSpan = btn.querySelector(".nav-icon");
-      const icon = iconSpan ? iconSpan.outerHTML : "";
-      btn.innerHTML = `${icon}<span class="nav-label">${navTranslations[scr][language] || navTranslations[scr].en}</span>`;
+    const trans = (window.i18n && window.i18n.t(`nav.${scr}`)) || (navTranslations[scr] && (navTranslations[scr][language] || navTranslations[scr].en));
+    if (trans) {
+      if (labelSpan) {
+        labelSpan.textContent = trans;
+      } else {
+        const iconSpan = btn.querySelector(".nav-icon");
+        const icon = iconSpan ? iconSpan.outerHTML : "";
+        btn.innerHTML = `${icon}<span class="nav-label">${trans}</span>`;
+      }
+      btn.title = trans;
     }
   });
 
-  // 2. Direct update for logout button
+  // 3. Direct update for logout button
   if (logoutButton) {
-    logoutButton.textContent = language === "ar" ? "تسجيل الخروج" : "Sign out";
+    logoutButton.textContent = (window.i18n && window.i18n.t("nav.signOut")) || (language === "ar" ? "تسجيل الخروج" : "Sign out");
   }
 
-  // 2b. Direct update for mobile bottom nav
+  // 4. Direct update for mobile bottom nav
   if (typeof updateMobileBottomNav === "function") {
     updateMobileBottomNav();
   }
 
-  // 3. TreeWalker translation for all content text nodes (skipping scripts, styles, inputs, emails)
-  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-  const textNodes = [];
-  while (walker.nextNode()) {
-    const node = walker.currentNode;
-    const parentTag = node.parentElement ? node.parentElement.tagName : "";
-    if (parentTag === "SCRIPT" || parentTag === "STYLE" || parentTag === "NOSCRIPT") continue;
-    if (node.parentElement && node.parentElement.classList && node.parentElement.classList.contains("nav-label")) continue;
-    if (node.parentElement && (node.parentElement.id === "userEmail" || node.parentElement.classList.contains("otp-digit"))) continue;
-    textNodes.push(node);
-  }
-
-  textNodes.forEach((node) => {
-    const raw = node.textContent;
-    const trimmed = raw.trim();
-    if (!trimmed) return;
-
-    if (!node._rawSource) {
-      node._rawSource = trimmed;
-    }
-    const src = node._rawSource;
-    let target = src;
-    if (language === "en") {
-      target = uiText[src] || src;
-    } else {
-      target = enToAr[src] || src;
-    }
-    node.textContent = preserveSpacing(raw, target);
-  });
-
-  // 4. Form inputs placeholders and button values
-  document.querySelectorAll("input, textarea").forEach((field) => {
+  // 5. Fallback for legacy form inputs placeholders and button values without data-i18n
+  document.querySelectorAll("input:not([data-i18n-placeholder]), textarea:not([data-i18n-placeholder])").forEach((field) => {
     if (!field._rawPlaceholder && field.placeholder) field._rawPlaceholder = field.placeholder;
     if (field._rawPlaceholder) {
       field.placeholder = localized(field._rawPlaceholder);
@@ -1132,13 +1116,13 @@ function applyLanguage(language) {
     }
   });
 
-  // 5. Accessibility aria-labels
-  document.querySelectorAll("[aria-label]").forEach((element) => {
+  // 6. Fallback for legacy aria-labels without data-i18n-aria
+  document.querySelectorAll("[aria-label]:not([data-i18n-aria])").forEach((element) => {
     if (!element._rawLabel) element._rawLabel = element.getAttribute("aria-label");
     if (element._rawLabel) element.setAttribute("aria-label", localized(element._rawLabel));
   });
 
-  // 6. Language Toggle button label
+  // 7. Language Toggle button label
   if (languageToggle) {
     const langLabel = languageToggle.querySelector(".lang-label");
     if (langLabel) {
@@ -1149,27 +1133,27 @@ function applyLanguage(language) {
     }
   }
 
-  // 7. Theme toggle label
+  // 8. Theme toggle label
   const themeLabel = document.body.classList.contains("dark") ? "الوضع الداكن" : "الوضع الفاتح";
   if (siteThemeToggle) siteThemeToggle.textContent = localized(themeLabel);
 
-  // 8. Screen Title
+  // 9. Screen Title
   const activeScreenEl = document.querySelector(".screen.active");
   const activeScreenName = activeScreenEl ? activeScreenEl.id.replace("screen-", "") : "patient";
   if (screenTitle) {
-    screenTitle.textContent = language === "en" ? (englishTitles[activeScreenName] || "Home") : (titles[activeScreenName] || "الرئيسية");
+    screenTitle.textContent = (window.i18n && window.i18n.t(`nav.${activeScreenName}`)) || (language === "en" ? (englishTitles[activeScreenName] || "Home") : (titles[activeScreenName] || "الرئيسية"));
   }
   if (typeof updateVerificationSoonState === "function") {
     updateVerificationSoonState();
   }
 
-  // 9. Role label in account badge
+  // 10. Role label in account badge
   const isOwner = auth && auth.currentUser && isOwnerUser(auth.currentUser.email);
   const currentRole = normalizeRole(selectedRole, isOwner);
   if (accountLabel) {
-    accountLabel.textContent = language === "en"
+    accountLabel.textContent = (window.i18n && window.i18n.t(`roles.${currentRole}`)) || (language === "en"
       ? (englishRoleLabels[currentRole] || englishRoleLabels.patient)
-      : (roleLabels[currentRole] || roleLabels.patient);
+      : (roleLabels[currentRole] || roleLabels.patient));
   }
 
   if (typeof setAuthMode === "function") setAuthMode(authMode);
@@ -1834,7 +1818,7 @@ function renderDevEnvironmentBadge() {
 
   const badge = document.createElement("div");
   badge.id = "hvDevEnvBadge";
-  badge.setAttribute("title", `Health Vibe AI - Development Mode\nAPI: ${API_BASE_URL || 'Local'}\nProject: ${firebaseConfig.projectId}`);
+  badge.setAttribute("title", `Health Vibes AI - Development Mode\nAPI: ${API_BASE_URL || 'Local'}\nProject: ${firebaseConfig.projectId}`);
   badge.style.cssText = "position:fixed;bottom:14px;right:14px;z-index:99999;background:#0f172a;color:#38bdf8;border:1px solid #38bdf8;border-radius:20px;padding:4px 12px;font-size:11px;font-weight:700;font-family:inherit;box-shadow:0 4px 12px rgba(0,0,0,0.3);display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;letter-spacing:0.5px;";
   badge.innerHTML = `<span>🛠️ DEV</span><span style="opacity:0.75;font-weight:normal;font-size:10px;">(تطوير)</span>`;
   badge.onclick = () => {
@@ -10468,7 +10452,7 @@ function buildAssessmentModel({
         previousStatus: CASE_STATUS.SUBMITTED,
         changedAt: new Date().toISOString(),
         changedBy: "system",
-        changedByName: "Health Vibe AI Triage Engine",
+        changedByName: "Health Vibes AI Triage Engine",
         changedByRole: "system",
         note: `AI Triage determined priority: ${priority} (${prioMeta.riskAr})`
       },

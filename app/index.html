@@ -195,8 +195,8 @@
 
       <!-- MAIN SIGN IN / SIGN UP VIEW -->
       <div id="authMainView">
-        <h2>Access your account</h2>
-        <p>Sign in with email or Google to proceed securely.</p>
+        <h2 data-i18n="auth.signIn">Access your account</h2>
+        <p data-i18n="auth.accountRole">Sign in with email or Google to proceed securely.</p>
 
         <div class="doctor-auth-note">
           <span style="font-size:16px;">🩺</span>
@@ -204,29 +204,29 @@
         </div>
 
         <div class="auth-mode-switch" role="tablist" aria-label="Authentication mode">
-          <button type="button" id="authTabSignIn" class="auth-tab active" onclick="setAuthMode('signin')">Sign In</button>
-          <button type="button" id="authTabSignUp" class="auth-tab" onclick="setAuthMode('signup')">Create Account</button>
+          <button type="button" id="authTabSignIn" class="auth-tab active" onclick="setAuthMode('signin')" data-i18n="auth.signIn">Sign In</button>
+          <button type="button" id="authTabSignUp" class="auth-tab" onclick="setAuthMode('signup')" data-i18n="auth.createAccount">Create Account</button>
         </div>
 
         <form id="authEmailForm" autocomplete="on" onsubmit="event.preventDefault(); handleEmailAuth(event);">
           <div id="authNameGroup" class="form-group" style="display:none;">
-            <label for="authName">Full Name</label>
-            <input type="text" id="authName" placeholder="e.g. Ahmed Mohamed" autocomplete="name" />
+            <label for="authName" data-i18n="auth.fullName">Full Name</label>
+            <input type="text" id="authName" placeholder="e.g. Ahmed Mohamed" data-i18n-placeholder="auth.fullNamePlaceholder" autocomplete="name" />
           </div>
 
           <div class="form-group">
-            <label for="authEmail">Email Address</label>
-            <input type="email" id="authEmail" placeholder="name@example.com" required autocomplete="email" />
+            <label for="authEmail" data-i18n="auth.email">Email Address</label>
+            <input type="email" id="authEmail" placeholder="name@example.com" data-i18n-placeholder="auth.emailPlaceholder" required autocomplete="email" />
           </div>
 
           <div class="form-group">
-            <label for="authPassword">Password</label>
-            <input type="password" id="authPassword" placeholder="••••••••" required autocomplete="current-password" minlength="6" />
+            <label for="authPassword" data-i18n="auth.password">Password</label>
+            <input type="password" id="authPassword" placeholder="••••••••" data-i18n-placeholder="auth.passwordPlaceholder" required autocomplete="current-password" minlength="6" />
           </div>
 
           <div class="auth-options">
-            <label><input type="checkbox" id="rememberMe" checked /> <span>Remember me</span></label>
-            <button type="button" id="forgotPasswordBtn" onclick="showForgotView()">Forgot password?</button>
+            <label><input type="checkbox" id="rememberMe" checked /> <span data-i18n="auth.rememberMe">Remember me</span></label>
+            <button type="button" id="forgotPasswordBtn" onclick="showForgotView()" data-i18n="auth.forgotPassword">Forgot password?</button>
           </div>
 
           <div style="margin: 12px 0 16px; text-align: center; font-size: 11.5px; color: var(--muted); line-height: 1.6;">
@@ -237,7 +237,7 @@
           </div>
 
           <button id="authSubmitBtn" type="submit" class="solid-button large auth-submit-btn">
-            <span id="authSubmitText">Sign In</span>
+            <span id="authSubmitText" data-i18n="auth.signIn">Sign In</span>
           </button>
         </form>
 
@@ -245,7 +245,7 @@
 
         <button id="googleLogin" class="google-button" type="button" onclick="enterApp('google')">
           <span class="google-g">G</span>
-          <span>Continue with Google</span>
+          <span data-i18n="auth.continueWithGoogle">Continue with Google</span>
         </button>
       </div>
 
@@ -253,7 +253,7 @@
       <div id="authResetView" style="display:none;">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
           <button id="backToSignInBtn" type="button" class="back-link-btn" title="Back to sign in">←</button>
-          <h2 style="margin:0;font-size:24px;">Reset Password</h2>
+          <h2 style="margin:0;font-size:24px;" data-i18n="auth.resetPassword">Reset Password</h2>
         </div>
         <p style="margin-bottom:16px;color:var(--muted);font-size:13.5px;line-height:1.5;">
           Enter your account email and we will send you an official password reset link.
@@ -266,15 +266,15 @@
 
         <form id="forgotPasswordForm">
           <div class="form-group" style="margin-bottom:14px;">
-            <label for="resetEmailInput">Account Email</label>
-            <input type="email" id="resetEmailInput" placeholder="name@example.com" required autocomplete="email" />
+            <label for="resetEmailInput" data-i18n="auth.email">Account Email</label>
+            <input type="email" id="resetEmailInput" placeholder="name@example.com" data-i18n-placeholder="auth.emailPlaceholder" required autocomplete="email" />
           </div>
 
           <button id="sendResetLinkBtn" type="submit" class="solid-button large auth-submit-btn" style="margin-bottom:12px;">
-            <span id="sendResetLinkText">Send Reset Link</span>
+            <span id="sendResetLinkText" data-i18n="auth.sendResetLink">Send Reset Link</span>
           </button>
 
-          <button id="cancelResetBtn" type="button" class="soft-button large" style="width:100%;justify-content:center;">
+          <button id="cancelResetBtn" type="button" class="soft-button large" style="width:100%;justify-content:center;" data-i18n="auth.backToSignIn">
             Back to Sign In
           </button>
         </form>
@@ -317,22 +317,22 @@
       </div>
 
       <nav class="nav-list" aria-label="Navigation">
-        <button class="nav-item active" data-screen="patient"><span class="nav-icon">🏠</span><span class="nav-label">Home</span></button>
-        <button class="nav-item" data-screen="consent"><span class="nav-icon">🔒</span><span class="nav-label">Consent & Privacy</span></button>
-        <button class="nav-item" data-screen="profile"><span class="nav-icon">👤</span><span class="nav-label">Medical Profile</span></button>
-        <button class="nav-item" data-screen="assessment"><span class="nav-icon">🫁</span><span class="nav-label">Breathing Assessment</span></button>
-        <button class="nav-item" data-screen="pending"><span class="nav-icon">⏳</span><span class="nav-label">Review Status</span></button>
-        <button class="nav-item" data-screen="result"><span class="nav-icon">📋</span><span class="nav-label">Result</span></button>
-        <button class="nav-item" data-screen="history"><span class="nav-icon">📂</span><span class="nav-label">History</span></button>
-        <button class="nav-item" data-screen="appointments"><span class="nav-icon">📅</span><span class="nav-label">Appointments</span></button>
-        <button class="nav-item" data-screen="feedback"><span class="nav-icon">⭐</span><span class="nav-label">Feedback & Rating</span></button>
-        <button class="nav-item" data-screen="assistant"><span class="nav-icon">🤖</span><span class="nav-label">Medical Assistant</span></button>
-        <button class="nav-item" data-screen="verification" style="display:none;"><span class="nav-icon">✅</span><span class="nav-label">Doctor Verification</span></button>
-        <button class="nav-item" data-screen="doctor" style="display:none;"><span class="nav-icon">🩺</span><span class="nav-label">Doctor Dashboard</span></button>
-        <button class="nav-item" data-screen="kpi" style="display:none;"><span class="nav-icon">📊</span><span class="nav-label">KPI Dashboard</span></button>
-        <button class="nav-item" data-screen="report"><span class="nav-icon">📄</span><span class="nav-label">Report</span></button>
-        <button class="nav-item" data-screen="admin" style="display:none;"><span class="nav-icon">⚙️</span><span class="nav-label">Admin Dashboard</span></button>
-        <button class="nav-item" data-screen="audit" style="display:none;"><span class="nav-icon">🔍</span><span class="nav-label">Audit Log</span></button>
+        <button class="nav-item active" data-screen="patient" data-i18n-title="nav.home"><span class="nav-icon">🏠</span><span class="nav-label" data-i18n="nav.home">Home</span></button>
+        <button class="nav-item" data-screen="consent" data-i18n-title="nav.consent"><span class="nav-icon">🔒</span><span class="nav-label" data-i18n="nav.consent">Consent & Privacy</span></button>
+        <button class="nav-item" data-screen="profile" data-i18n-title="nav.profile"><span class="nav-icon">👤</span><span class="nav-label" data-i18n="nav.profile">Medical Profile</span></button>
+        <button class="nav-item" data-screen="assessment" data-i18n-title="nav.assessment"><span class="nav-icon">🫁</span><span class="nav-label" data-i18n="nav.assessment">Breathing Assessment</span></button>
+        <button class="nav-item" data-screen="pending" data-i18n-title="nav.pending"><span class="nav-icon">⏳</span><span class="nav-label" data-i18n="nav.pending">Review Status</span></button>
+        <button class="nav-item" data-screen="result" data-i18n-title="nav.result"><span class="nav-icon">📋</span><span class="nav-label" data-i18n="nav.result">Result</span></button>
+        <button class="nav-item" data-screen="history" data-i18n-title="nav.history"><span class="nav-icon">📂</span><span class="nav-label" data-i18n="nav.history">History</span></button>
+        <button class="nav-item" data-screen="appointments" data-i18n-title="nav.appointments"><span class="nav-icon">📅</span><span class="nav-label" data-i18n="nav.appointments">Appointments</span></button>
+        <button class="nav-item" data-screen="feedback" data-i18n-title="nav.feedback"><span class="nav-icon">⭐</span><span class="nav-label" data-i18n="nav.feedback">Feedback & Rating</span></button>
+        <button class="nav-item" data-screen="assistant" data-i18n-title="nav.assistant"><span class="nav-icon">🤖</span><span class="nav-label" data-i18n="nav.assistant">Medical Assistant</span></button>
+        <button class="nav-item" data-screen="verification" style="display:none;" data-i18n-title="nav.verification"><span class="nav-icon">✅</span><span class="nav-label" data-i18n="nav.verification">Doctor Verification</span></button>
+        <button class="nav-item" data-screen="doctor" style="display:none;" data-i18n-title="nav.doctor"><span class="nav-icon">🩺</span><span class="nav-label" data-i18n="nav.doctor">Doctor Dashboard</span></button>
+        <button class="nav-item" data-screen="kpi" style="display:none;" data-i18n-title="nav.kpi"><span class="nav-icon">📊</span><span class="nav-label" data-i18n="nav.kpi">KPI Dashboard</span></button>
+        <button class="nav-item" data-screen="report" data-i18n-title="nav.report"><span class="nav-icon">📄</span><span class="nav-label" data-i18n="nav.report">Report</span></button>
+        <button class="nav-item" data-screen="admin" style="display:none;" data-i18n-title="nav.admin"><span class="nav-icon">⚙️</span><span class="nav-label" data-i18n="nav.admin">Admin Dashboard</span></button>
+        <button class="nav-item" data-screen="audit" style="display:none;" data-i18n-title="nav.audit"><span class="nav-icon">🔍</span><span class="nav-label" data-i18n="nav.audit">Audit Log</span></button>
       </nav>
 
       <div class="account-card">
@@ -348,7 +348,7 @@
           </div>
         </div>
       </div>
-      <button id="logoutButton" class="logout-button" type="button" onclick="leaveApp(event)">Sign out</button>
+      <button id="logoutButton" class="logout-button" type="button" onclick="leaveApp(event)" data-i18n="nav.signOut">Sign out</button>
     </aside>
 
     <section class="workspace">
@@ -371,20 +371,20 @@
         <div class="banner-content">
           <span class="banner-icon">✉️</span>
           <div class="banner-text">
-            <strong id="verificationBannerTitle">Email verification needed</strong>
-            <p id="verificationBannerDesc">Please verify your email address to secure your account and access all clinical features.</p>
+            <strong id="verificationBannerTitle" data-i18n="auth.emailVerificationNeeded">Email verification needed</strong>
+            <p id="verificationBannerDesc" data-i18n="auth.emailVerificationDesc">Please verify your email address to secure your account and access all clinical features.</p>
           </div>
         </div>
         <div class="banner-actions">
           <button id="openPhoneVerifyModalBtn" type="button" onclick="openVerifyRequiredModal('تفعيل الحساب', 'account verification', 'otp')" class="banner-btn" style="background:#25D366; color:#fff; display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
             <span>🤖</span>
-            <span id="bannerPhoneVerifyText">تفعيل عبر بوت الواتساب</span>
+            <span id="bannerPhoneVerifyText" data-i18n="auth.whatsappVerify">تفعيل عبر بوت الواتساب</span>
           </button>
           <button id="resendVerificationBtn" type="button" class="banner-btn primary">
-            <span id="resendVerificationText">Resend Verification</span>
+            <span id="resendVerificationText" data-i18n="auth.resendVerification">Resend Verification</span>
           </button>
           <button id="checkVerificationBtn" type="button" class="banner-btn secondary">
-            <span>Check Status</span>
+            <span data-i18n="auth.checkStatus">Check Status</span>
           </button>
         </div>
       </div>
@@ -392,31 +392,31 @@
       <section id="screen-patient" class="screen active">
         <div class="hero-panel app-hero">
           <div>
-            <span class="eyebrow" id="patientHeroTitle">Welcome</span>
-            <h1>Track breathing with your doctor in one clear path</h1>
-            <p>Enter symptoms and measurements. The doctor receives a rule-based risk preview before approving any report shown to you.</p>
+            <span class="eyebrow" id="patientHeroTitle" data-i18n="patient.welcome">Welcome</span>
+            <h1 data-i18n="patient.heroTitle">Track breathing with your doctor in one clear path</h1>
+            <p data-i18n="patient.heroSubtitle">Enter symptoms and measurements. The doctor receives a rule-based risk preview before approving any report shown to you.</p>
             <div class="hero-actions">
-              <button class="solid-button large" data-screen="assessment">Start breathing assessment</button>
-              <button class="soft-button large" data-screen="history">View history</button>
+              <button class="solid-button large" data-screen="assessment" data-i18n="patient.startBreathingAssessment">Start breathing assessment</button>
+              <button class="soft-button large" data-screen="history" data-i18n="patient.viewHistory">View history</button>
             </div>
           </div>
           <div class="clinical-card">
             <div class="clinical-top">
-              <span>Latest status</span>
-              <b id="patientClinicalStatus">No recent assessment</b>
+              <span data-i18n="patient.latestStatus">Latest status</span>
+              <b id="patientClinicalStatus" data-i18n="patient.noRecentAssessment">No recent assessment</b>
             </div>
             <div class="breath-orb app-orb"><span></span></div>
-            <div class="clinical-row"><span>Oxygen level</span><strong id="patientClinicalO2">--%</strong></div>
-            <div class="clinical-row"><span>Rule score (not clinically validated)</span><strong id="patientClinicalConfidence">--</strong></div>
-            <div class="clinical-row"><span>Doctor</span><strong id="patientClinicalDoctor">--</strong></div>
+            <div class="clinical-row"><span data-i18n="patient.oxygenLevel">Oxygen level</span><strong id="patientClinicalO2">--%</strong></div>
+            <div class="clinical-row"><span data-i18n="patient.ruleScore">Rule score (not clinically validated)</span><strong id="patientClinicalConfidence">--</strong></div>
+            <div class="clinical-row"><span data-i18n="patient.doctor">Doctor</span><strong id="patientClinicalDoctor">--</strong></div>
           </div>
         </div>
 
         <div class="metric-grid">
-          <article><span>Next appointment</span><strong id="patientNextAppt">--</strong><small>Follow-up consultation</small></article>
-          <article><span>Latest report</span><strong id="patientLatestReport">--</strong><small>Breathing Assessment</small></article>
-          <article><span>Result status</span><strong id="patientResultStatus">--</strong><small>Waiting for doctor</small></article>
-          <article><span>Medical Profile</span><strong id="patientProfileCompletion">100%</strong><small>Complete</small></article>
+          <article><span data-i18n="patient.nextAppointment">Next appointment</span><strong id="patientNextAppt">--</strong><small data-i18n="patient.followUpConsultation">Follow-up consultation</small></article>
+          <article><span data-i18n="patient.latestReport">Latest report</span><strong id="patientLatestReport">--</strong><small data-i18n="nav.assessment">Breathing Assessment</small></article>
+          <article><span data-i18n="patient.resultStatus">Result status</span><strong id="patientResultStatus">--</strong><small data-i18n="patient.waitingForDoctor">Waiting for doctor</small></article>
+          <article><span data-i18n="patient.medicalProfile">Medical Profile</span><strong id="patientProfileCompletion">100%</strong><small data-i18n="common.complete">Complete</small></article>
         </div>
 
         <article class="panel" style="margin-top: 18px;">
@@ -1726,9 +1726,9 @@
       <div id="otpVerifySection">
         <div class="bot-trigger-card" style="padding: 16px; border-radius: 14px; background: rgba(37, 211, 102, 0.08); border: 1.5px solid rgba(37, 211, 102, 0.35); margin-bottom: 16px; text-align: center;">
           <div style="font-size: 32px; margin-bottom: 6px;">🤖💬</div>
-          <h4 style="margin: 0 0 6px; font-size: 15px; color: var(--ink);">بوت الواتساب الآلي (Health Vibe Bot)</h4>
+          <h4 style="margin: 0 0 6px; font-size: 15px; color: var(--ink);">بوت الواتساب الآلي (Health Vibes Bot)</h4>
           <p style="margin: 0 0 14px; font-size: 12.5px; color: var(--muted); line-height: 1.5;">
-            اكتب رقم واتساب بصيغة دولية، ثم سيقوم بوت Health Vibe بإرسال كود تفعيل سري مكون من 6 أرقام.
+            اكتب رقم واتساب بصيغة دولية، ثم سيقوم بوت Health Vibes بإرسال كود تفعيل سري مكون من 6 أرقام.
           </p>
           <div class="form-group" style="text-align: start; margin: 0 0 12px;">
             <label for="verifyPhoneInput" id="verifyPhoneInputLabel" style="display:block; font-size:12.5px; font-weight:800; color:var(--ink); margin-bottom:6px;">رقم واتساب لاستلام الكود</label>
@@ -1987,7 +1987,7 @@
         <!-- 1. Privacy Policy -->
         <div id="legal-section-privacy" class="legal-tab-content" style="display: block;">
           <h4>1. الالتزام بحماية البيانات الصحية والسريرية</h4>
-          <p>تلتزم منصة Health Vibe AI بأعلى معايير حماية الخصوصية للمرضى وممارسي الرعاية الصحية وفق مبادئ HIPAA و GDPR وتشريعات حماية السجلات الطبية الإلكترونية.</p>
+          <p>تلتزم منصة Health Vibes AI بأعلى معايير حماية الخصوصية للمرضى وممارسي الرعاية الصحية وفق مبادئ HIPAA و GDPR وتشريعات حماية السجلات الطبية الإلكترونية.</p>
           
           <h4>2. البيانات التي يتم جمعها ومعالجتها</h4>
           <ul>
@@ -2113,27 +2113,27 @@
           ⚠️
         </div>
         <div style="flex: 1;">
-          <h3 id="centralErrorTitle" style="margin: 0 0 4px; font-size: 17px; font-weight: 700; color: var(--ink);">
+          <h3 id="centralErrorTitle" style="margin: 0 0 4px; font-size: 17px; font-weight: 700; color: var(--ink);" data-i18n="errors.centralErrorTitle">
             تنبيه في النظام
           </h3>
-          <span id="centralErrorCategory" class="pill danger" style="font-size: 11px; padding: 2px 8px;">
+          <span id="centralErrorCategory" class="pill danger" style="font-size: 11px; padding: 2px 8px;" data-i18n="common.systemSecurity">
             أمان النظام
           </span>
         </div>
-        <button type="button" class="close-button" onclick="closeCentralErrorModal()" aria-label="Close" style="background: none; border: none; font-size: 22px; cursor: pointer; color: var(--muted); padding: 4px;">×</button>
+        <button type="button" class="close-button" onclick="closeCentralErrorModal()" aria-label="Close" style="background: none; border: none; font-size: 22px; cursor: pointer; color: var(--muted); padding: 4px;" data-i18n-aria="common.close">×</button>
       </div>
 
-      <div id="centralErrorMessage" style="font-size: 14px; color: var(--ink); line-height: 1.65; margin-bottom: 14px; background: var(--surface-2); padding: 14px 16px; border-radius: 12px; border: 1px solid var(--line);">
+      <div id="centralErrorMessage" style="font-size: 14px; color: var(--ink); line-height: 1.65; margin-bottom: 14px; background: var(--surface-2); padding: 14px 16px; border-radius: 12px; border: 1px solid var(--line);" data-i18n="errors.centralErrorDefault">
         نعتذر، تعذر إتمام العملية المطلوبة حالياً.
       </div>
 
-      <div id="centralErrorAction" style="font-size: 12.5px; color: var(--muted); line-height: 1.5; margin-bottom: 16px; padding-inline-start: 4px;">
+      <div id="centralErrorAction" style="font-size: 12.5px; color: var(--muted); line-height: 1.5; margin-bottom: 16px; padding-inline-start: 4px;" data-i18n="errors.centralErrorHint">
         💡 يرجى المحاولة مرة أخرى، أو مراجعة الاتصال بالإنترنت.
       </div>
 
       <!-- Collapsible Support Details (No raw error dump) -->
       <details style="margin-bottom: 18px; background: var(--surface-2); border: 1px dashed var(--line); border-radius: 10px; padding: 8px 12px; font-size: 11.5px; color: var(--muted);">
-        <summary style="cursor: pointer; user-select: none; font-weight: 600; color: var(--ink); outline: none;">
+        <summary style="cursor: pointer; user-select: none; font-weight: 600; color: var(--ink); outline: none;" data-i18n="errors.supportRef">
           ℹ️ مرجع الدعم الفني (Support Reference)
         </summary>
         <div style="margin-top: 8px; font-family: monospace; font-size: 11px; word-break: break-all;" id="centralErrorRef">
@@ -2142,16 +2142,17 @@
       </details>
 
       <div style="display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap;">
-        <button type="button" id="centralErrorSecondaryBtn" class="outline-button" onclick="closeCentralErrorModal()" style="font-size: 13.5px; padding: 9px 18px;">
+        <button type="button" id="centralErrorSecondaryBtn" class="outline-button" onclick="closeCentralErrorModal()" style="font-size: 13.5px; padding: 9px 18px;" data-i18n="common.close">
           إغلاق
         </button>
-        <button type="button" id="centralErrorPrimaryBtn" class="solid-button" onclick="handleCentralErrorRetry()" style="font-size: 13.5px; padding: 9px 20px;">
+        <button type="button" id="centralErrorPrimaryBtn" class="solid-button" onclick="handleCentralErrorRetry()" style="font-size: 13.5px; padding: 9px 20px;" data-i18n="common.understood">
           حسناً، فهمت
         </button>
       </div>
     </div>
   </div>
 
+  <script src="./i18n.js?v=4.6"></script>
   <script src="./config.js?v=4.6"></script>
   <script src="./app.js?v=4.6"></script>
 </body>

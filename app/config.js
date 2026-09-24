@@ -1,5 +1,5 @@
 /**
- * Health Vibe AI - Dual Environment Configuration Engine
+ * Health Vibes AI - Dual Environment Configuration Engine
  * Seamlessly isolates Development and Production environments
  */
 

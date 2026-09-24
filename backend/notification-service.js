@@ -73,7 +73,7 @@ function buildResultReadyEmail({
 <html dir="rtl" lang="ar">
 <head>
   <meta charset="utf-8">
-  <title>نتيجة الفحص التنفسي السريري - Health Vibe AI</title>
+  <title>نتيجة الفحص التنفسي السريري - Health Vibes AI</title>
 </head>
 <body style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8fafc; margin: 0; padding: 24px; color: #1e293b; direction: rtl; text-align: right;">
   <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
@@ -81,7 +81,7 @@ function buildResultReadyEmail({
     <!-- Header -->
     <div style="background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%); padding: 28px 24px; color: #ffffff;">
       <div style="display: flex; align-items: center; justify-content: space-between;">
-        <h1 style="margin: 0; font-size: 20px; font-weight: 700;">Health Vibe AI 🩺</h1>
+        <h1 style="margin: 0; font-size: 20px; font-weight: 700;">Health Vibes AI 🩺</h1>
         <span style="background: rgba(255,255,255,0.2); padding: 4px 12px; border-radius: 999px; font-size: 12px;">معتمد سريرياً</span>
       </div>
       <p style="margin: 8px 0 0; font-size: 14px; opacity: 0.9;">تقرير الفحص السريري والاستشارة التنفسية</p>
@@ -135,7 +135,7 @@ function buildResultReadyEmail({
     <!-- Footer -->
     <div style="background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 18px 24px; font-size: 12px; color: #64748b; text-align: center; line-height: 1.5;">
       <p style="margin: 0 0 6px;">⚠️ <strong>تنبيه طبي:</strong> هذا التقرير صادر عن طبيب مرخص. في حال الشعور بضيق تنفس حاد، هبوط سريع في الأكسجين، أو ألم بالصدر، يرجى التوجه فوراً لأقرب قسم طوارئ.</p>
-      <p style="margin: 0;">© Health Vibe AI - منظومة الذكاء الاصطناعي للرعاية التنفسية السريرية.</p>
+      <p style="margin: 0;">© Health Vibes AI - منظومة الذكاء الاصطناعي للرعاية التنفسية السريرية.</p>
     </div>
   </div>
 </body>
@@ -143,7 +143,7 @@ function buildResultReadyEmail({
   `;
 
   const text = `
-Health Vibe AI - نتيجة الفحص التنفسي السريري
+Health Vibes AI - نتيجة الفحص التنفسي السريري
 ==============================================
 عزيزي المريض / ${patientName || 'المحترم'}،
 
@@ -157,7 +157,7 @@ Health Vibe AI - نتيجة الفحص التنفسي السريري
 ${reportLink}
 
 تنبيه: في حالات الطوارئ الطبية توجه فورًا إلى أقرب مستشفى.
-© Health Vibe AI
+© Health Vibes AI
   `;
 
   return { html, text };
@@ -181,7 +181,7 @@ function buildMoreInfoEmail({
 <html dir="rtl" lang="ar">
 <head>
   <meta charset="utf-8">
-  <title>مطلوب استكمال بيانات لفحصك الطبي - Health Vibe AI</title>
+  <title>مطلوب استكمال بيانات لفحصك الطبي - Health Vibes AI</title>
 </head>
 <body style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8fafc; margin: 0; padding: 24px; color: #1e293b; direction: rtl; text-align: right;">
   <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
@@ -189,7 +189,7 @@ function buildMoreInfoEmail({
     <!-- Header -->
     <div style="background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%); padding: 28px 24px; color: #ffffff;">
       <div style="display: flex; align-items: center; justify-content: space-between;">
-        <h1 style="margin: 0; font-size: 20px; font-weight: 700;">Health Vibe AI ⚠️</h1>
+        <h1 style="margin: 0; font-size: 20px; font-weight: 700;">Health Vibes AI ⚠️</h1>
         <span style="background: rgba(255,255,255,0.25); padding: 4px 12px; border-radius: 999px; font-size: 12px;">مطلوب بيانات</span>
       </div>
       <p style="margin: 8px 0 0; font-size: 14px; opacity: 0.95;">تحديث بخصوص فحصك السريري رقم #${caseId.slice(-6).toUpperCase()}</p>
@@ -225,7 +225,7 @@ function buildMoreInfoEmail({
     <!-- Footer -->
     <div style="background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 18px 24px; font-size: 12px; color: #64748b; text-align: center; line-height: 1.5;">
       <p style="margin: 0 0 6px;">في حال كانت لديك استفسارات طارئة، يرجى التوجه لمركز الرعاية الصحية الأقرب إليك.</p>
-      <p style="margin: 0;">© Health Vibe AI - منظومة الذكاء الاصطناعي للرعاية التنفسية السريرية.</p>
+      <p style="margin: 0;">© Health Vibes AI - منظومة الذكاء الاصطناعي للرعاية التنفسية السريرية.</p>
     </div>
   </div>
 </body>
@@ -233,7 +233,7 @@ function buildMoreInfoEmail({
   `;
 
   const text = `
-Health Vibe AI - مطلوب استكمال بيانات لفحصك الطبي
+Health Vibes AI - مطلوب استكمال بيانات لفحصك الطبي
 ===================================================
 عزيزي المريض / ${patientName || 'المحترم'}،
 
@@ -245,7 +245,7 @@ Health Vibe AI - مطلوب استكمال بيانات لفحصك الطبي
 يرجى إرسال الرد عبر الرابط التالي:
 ${reviewLink}
 
-© Health Vibe AI
+© Health Vibes AI
   `;
 
   return { html, text };
@@ -279,7 +279,7 @@ async function sendClinicalNotificationEmail({
 
   if (type === 'result_ready') {
     const ref = reportRef || `HV-REP-${caseId.slice(-8).toUpperCase()}`;
-    subject = `🩺 نتيجة فحصك التنفسي جاهزة ومعتمدة - Health Vibe AI (${ref})`;
+    subject = `🩺 نتيجة فحصك التنفسي جاهزة ومعتمدة - Health Vibes AI (${ref})`;
     emailContent = buildResultReadyEmail({
       patientName,
       caseId,
@@ -292,7 +292,7 @@ async function sendClinicalNotificationEmail({
       appUrl
     });
   } else if (type === 'more_info_requested') {
-    subject = `⚠️ مطلوب استكمال بيانات لفحصك الطبي - Health Vibe AI (#${caseId.slice(-6).toUpperCase()})`;
+    subject = `⚠️ مطلوب استكمال بيانات لفحصك الطبي - Health Vibes AI (#${caseId.slice(-6).toUpperCase()})`;
     emailContent = buildMoreInfoEmail({
       patientName,
       caseId,
@@ -305,7 +305,7 @@ async function sendClinicalNotificationEmail({
   }
 
   const transporter = createTransporter();
-  const fromAddress = process.env.SMTP_FROM || 'Health Vibe AI <notifications@healthvibe.ai>';
+  const fromAddress = process.env.SMTP_FROM || 'Health Vibes AI <notifications@healthvibe.ai>';
 
   const mailOptions = {
     from: fromAddress,

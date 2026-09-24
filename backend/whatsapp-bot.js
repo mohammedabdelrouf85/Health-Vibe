@@ -7,7 +7,7 @@ const crypto = require('crypto');
 
 class WhatsAppBotService {
   constructor() {
-    this.botName = "Health Vibe AI Automated Verification Bot";
+    this.botName = "Health Vibes AI Automated Verification Bot";
     this.activeOtps = new Map(); // key: userId or email, value: { codeHash, expiresAt, createdAt, phoneNumber, attempts }
     this.otpTtlMs = 5 * 60 * 1000; // 5 minutes
     this.requestCooldownMs = 45 * 1000;

@@ -42,7 +42,7 @@ const sampleResultData = {
 };
 
 const resultEmail = buildResultReadyEmail(sampleResultData);
-assert(resultEmail.html.includes("Health Vibe AI"), "HTML must contain service branding");
+assert(resultEmail.html.includes("Health Vibes AI"), "HTML must contain service branding");
 assert(resultEmail.html.includes("طارق محمود"), "HTML must address patient by name");
 assert(resultEmail.html.includes("HV-REP-TEST9981"), "HTML must contain official report reference");
 assert(resultEmail.html.includes("د. منى سامي"), "HTML must contain doctor name");
@@ -69,7 +69,7 @@ const sampleMoreInfoData = {
 };
 
 const moreInfoEmail = buildMoreInfoEmail(sampleMoreInfoData);
-assert(moreInfoEmail.html.includes("Health Vibe AI"), "HTML must contain branding");
+assert(moreInfoEmail.html.includes("Health Vibes AI"), "HTML must contain branding");
 assert(moreInfoEmail.html.includes("فاطمة الزهراء"), "HTML must address patient by name");
 assert(moreInfoEmail.html.includes("د. أحمد السيد"), "HTML must include requesting doctor's name");
 assert(moreInfoEmail.html.includes("يرجى إعادة قياس نسبة الأكسجين"), "HTML must display doctor's specific required info");
