@@ -6566,7 +6566,85 @@ function updateAppointmentSummary() {
   }
 }
 
-function renderAppointmentsScreen() {
+async function getConfirmedAppointmentsForDoctorAndDate(doctorId, dateStr) {
+  const confirmed = [];
+  try {
+    const globalRaw = localStorage.getItem("hv_appointments");
+    if (globalRaw) {
+      const list = JSON.parse(globalRaw);
+      list.forEach(a => {
+        if (a.status === "confirmed" && a.date === dateStr && a.doctorId === doctorId) {
+          confirmed.push(a);
+        }
+      });
+    }
+  } catch (e) {}
+
+  if (db) {
+    try {
+      const snap = await db.collection("appointments")
+        .where("doctorId", "==", doctorId)
+        .where("date", "==", dateStr)
+        .where("status", "==", "confirmed")
+        .get();
+      snap.forEach(doc => {
+        const d = doc.data();
+        if (!confirmed.some(c => c.id === d.id)) {
+          confirmed.push(d);
+        }
+      });
+    } catch (e) {
+      console.warn("Firestore query warning for doctor appointments:", e);
+    }
+  }
+  return confirmed;
+}
+
+async function getConfirmedAppointmentsForPatientAndDate(patientId, dateStr) {
+  const confirmed = [];
+  try {
+    const key = `hv_appointments_${patientId}`;
+    const raw = localStorage.getItem(key);
+    if (raw) {
+      const list = JSON.parse(raw);
+      list.forEach(a => {
+        if (a.status === "confirmed" && a.date === dateStr) {
+          confirmed.push(a);
+        }
+      });
+    }
+    const globalRaw = localStorage.getItem("hv_appointments");
+    if (globalRaw) {
+      const list = JSON.parse(globalRaw);
+      list.forEach(a => {
+        if (a.status === "confirmed" && a.date === dateStr && a.patientId === patientId && !confirmed.some(c => c.id === a.id)) {
+          confirmed.push(a);
+        }
+      });
+    }
+  } catch (e) {}
+
+  if (db && patientId && patientId !== "anon_patient") {
+    try {
+      const snap = await db.collection("appointments")
+        .where("patientId", "==", patientId)
+        .where("date", "==", dateStr)
+        .where("status", "==", "confirmed")
+        .get();
+      snap.forEach(doc => {
+        const d = doc.data();
+        if (!confirmed.some(c => c.id === d.id)) {
+          confirmed.push(d);
+        }
+      });
+    } catch (e) {
+      console.warn("Firestore query warning for patient appointments:", e);
+    }
+  }
+  return confirmed;
+}
+
+async function renderAppointmentsScreen() {
   const isEn = currentLanguage === "en";
   apptDaysList = generateAppointmentDays();
 
@@ -6577,8 +6655,29 @@ function renderAppointmentsScreen() {
     apptSelectedDate = existing || apptDaysList[0];
   }
 
-  if (!apptSelectedSlot) {
-    apptSelectedSlot = AVAILABLE_APPOINTMENT_SLOTS[0];
+  // Identify current doctor and patient
+  const doctorSelect = document.getElementById("apptDoctorSelect");
+  const doctorId = doctorSelect ? doctorSelect.value : "dr_mona";
+
+  const user = auth ? auth.currentUser : null;
+  const activeSession = (typeof getActiveSession === "function" ? getActiveSession() : null) || {};
+  const patientId = user ? user.uid : (activeSession.uid || "anon_patient");
+
+  // Query confirmed bookings to prevent double-booking
+  const [doctorBookings, patientBookings] = await Promise.all([
+    getConfirmedAppointmentsForDoctorAndDate(doctorId, apptSelectedDate.dateStr),
+    getConfirmedAppointmentsForPatientAndDate(patientId, apptSelectedDate.dateStr)
+  ]);
+
+  const doctorBookedSlotIds = new Set(doctorBookings.map(b => b.slotId));
+  const patientBookedSlotIds = new Set(patientBookings.map(b => b.slotId));
+
+  // Determine available non-booked slots
+  const availableSlots = AVAILABLE_APPOINTMENT_SLOTS.filter(s => !doctorBookedSlotIds.has(s.id) && !patientBookedSlotIds.has(s.id));
+
+  // If currently selected slot is booked, auto-select first available non-booked slot
+  if (!apptSelectedSlot || doctorBookedSlotIds.has(apptSelectedSlot.id) || patientBookedSlotIds.has(apptSelectedSlot.id)) {
+    apptSelectedSlot = availableSlots.length > 0 ? availableSlots[0] : null;
   }
 
   // Render Date Selector
@@ -6596,20 +6695,49 @@ function renderAppointmentsScreen() {
     }).join("");
   }
 
-  // Render Slots Selector
+  // Render Slots Selector with Double-Booking Guards
   const slotsContainer = document.getElementById("appointmentTimeSlots");
   if (slotsContainer) {
     slotsContainer.innerHTML = AVAILABLE_APPOINTMENT_SLOTS.map((slot) => {
-      const isActive = apptSelectedSlot && slot.id === apptSelectedSlot.id;
+      const isDocBooked = doctorBookedSlotIds.has(slot.id);
+      const isPatBooked = patientBookedSlotIds.has(slot.id);
+      const isUnavailable = isDocBooked || isPatBooked;
+      const isActive = !isUnavailable && apptSelectedSlot && slot.id === apptSelectedSlot.id;
+
       const timeText = isEn ? slot.timeEn : slot.timeAr;
-      const descText = isEn ? slot.periodEn : slot.periodAr;
+      let descText = isEn ? slot.periodEn : slot.periodAr;
+
+      if (isDocBooked) {
+        descText = isEn ? "⛔ Booked for this doctor" : "⛔ محجوز مسبقاً لدى الطبيب";
+      } else if (isPatBooked) {
+        descText = isEn ? "⚠️ You have another booking" : "⚠️ لديك موعد آخر بنفس الوقت";
+      }
+
       return `
-        <button type="button" class="${isActive ? 'active' : ''}" onclick="selectAppointmentSlot('${slot.id}')">
+        <button type="button" class="${isActive ? 'active' : ''} ${isUnavailable ? 'is-booked' : ''}" ${isUnavailable ? 'disabled="disabled"' : ''} onclick="${isUnavailable ? '' : `selectAppointmentSlot('${slot.id}')`}">
           <strong>${timeText}</strong>
           <span>${descText}</span>
         </button>
       `;
     }).join("");
+  }
+
+  // Update Available Slots Badge
+  const countBadge = document.getElementById("availableSlotsCount");
+  if (countBadge) {
+    if (availableSlots.length > 0) {
+      countBadge.textContent = isEn ? `${availableSlots.length} slots available` : `${availableSlots.length} فترات متاحة`;
+      countBadge.className = "pill ok";
+    } else {
+      countBadge.textContent = isEn ? "Fully Booked (0 slots)" : "جميع الفترات محجوزة بهذا اليوم";
+      countBadge.className = "pill danger";
+    }
+  }
+
+  // Enable/Disable Confirm Booking Button
+  const confirmBtn = document.getElementById("btnConfirmBooking");
+  if (confirmBtn) {
+    confirmBtn.disabled = !apptSelectedSlot;
   }
 
   // Bind Type Buttons
@@ -6622,14 +6750,15 @@ function renderAppointmentsScreen() {
     };
   });
 
-  // Doctor Select change
-  const doctorSelect = document.getElementById("apptDoctorSelect");
+  // Doctor Select change triggers re-checking schedule
   if (doctorSelect) {
-    doctorSelect.onchange = () => updateAppointmentSummary();
+    doctorSelect.onchange = () => {
+      updateAppointmentSummary();
+      renderAppointmentsScreen();
+    };
   }
 
   // Confirm booking button
-  const confirmBtn = document.getElementById("btnConfirmBooking");
   if (confirmBtn) {
     confirmBtn.onclick = () => confirmAppointmentBooking();
   }
@@ -6712,7 +6841,7 @@ function updateLocalAppointmentStatus(apptId, newStatus) {
 async function confirmAppointmentBooking() {
   const isEn = currentLanguage === "en";
   if (!apptSelectedDate || !apptSelectedSlot) {
-    showToast(isEn ? "Please select a date and an available time slot." : "يرجى تحديد اليوم والفترة الزمنية المناسبة.");
+    showToast(isEn ? "Please select an available date and time slot." : "يرجى تحديد اليوم والفترة الزمنية المتاحة.");
     return;
   }
 
@@ -6734,6 +6863,28 @@ async function confirmAppointmentBooking() {
   const patientEmail = user?.email || cachedDoc.email || activeSession.email || "";
   const patientPhone = cachedDoc.phoneNumber || user?.phoneNumber || activeSession.phoneNumber || "";
 
+  // 🛡️ ANTI-DOUBLE BOOKING GUARD #1: Check if Doctor is already booked for this slot
+  const doctorExisting = await getConfirmedAppointmentsForDoctorAndDate(doctorId, apptSelectedDate.dateStr);
+  const isDoctorDoubleBooked = doctorExisting.some(a => a.slotId === apptSelectedSlot.id && a.status === "confirmed");
+  if (isDoctorDoubleBooked) {
+    showToast(isEn
+      ? "Conflict: This time slot is already booked for this doctor. Please choose another slot."
+      : "تضارب: هذا الموعد محجوز بالفعل لدى الطبيب المختار. يرجى اختيار فترة زمنية أخرى.");
+    await renderAppointmentsScreen();
+    return;
+  }
+
+  // 🛡️ ANTI-DOUBLE BOOKING GUARD #2: Check if Patient already has another active appointment at this exact date and slot
+  const patientExisting = await getConfirmedAppointmentsForPatientAndDate(patientId, apptSelectedDate.dateStr);
+  const isPatientDoubleBooked = patientExisting.some(a => a.slotId === apptSelectedSlot.id && a.status === "confirmed");
+  if (isPatientDoubleBooked) {
+    showToast(isEn
+      ? "Conflict: You already have another active appointment scheduled at this exact time."
+      : "تضارب: لديك موعد طبي آخر محجوز بالفعل في نفس هذا التوقيت.");
+    await renderAppointmentsScreen();
+    return;
+  }
+
   const apptId = "appt_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6);
   const dateLabel = isEn ? apptSelectedDate.fullLabelEn : apptSelectedDate.fullLabelAr;
   const timeLabel = isEn ? apptSelectedSlot.timeEn : apptSelectedSlot.timeAr;
@@ -6754,6 +6905,8 @@ async function confirmAppointmentBooking() {
     dateLabel: dateLabel,
     timeSlot: timeLabel,
     slotId: apptSelectedSlot.id,
+    slotKey: `${doctorId}_${apptSelectedDate.dateStr}_${apptSelectedSlot.id}`,
+    patientSlotKey: `${patientId}_${apptSelectedDate.dateStr}_${apptSelectedSlot.id}`,
     notes: notes,
     status: "confirmed",
     createdAt: new Date().toISOString()
@@ -6780,6 +6933,7 @@ async function confirmAppointmentBooking() {
     if (notesInput) notesInput.value = "";
 
     await renderPatientAppointmentsList();
+    await renderAppointmentsScreen();
     updatePatientDashboardNextAppt();
   } catch (err) {
     console.error("Booking appointment error:", err);
@@ -6914,6 +7068,7 @@ async function cancelAppointment(apptId) {
     updateLocalAppointmentStatus(apptId, "cancelled");
     showToast(isEn ? "Appointment has been cancelled." : "تم إلغاء الموعد الطبي بنجاح.");
     await renderPatientAppointmentsList();
+    await renderAppointmentsScreen();
     updatePatientDashboardNextAppt();
   } catch (err) {
     console.error("Cancel appointment error:", err);
@@ -6968,6 +7123,8 @@ window.cancelAppointment = cancelAppointment;
 window.joinAppointmentVideo = joinAppointmentVideo;
 window.showClinicDirections = showClinicDirections;
 window.updatePatientDashboardNextAppt = updatePatientDashboardNextAppt;
+window.getConfirmedAppointmentsForDoctorAndDate = getConfirmedAppointmentsForDoctorAndDate;
+window.getConfirmedAppointmentsForPatientAndDate = getConfirmedAppointmentsForPatientAndDate;
 
 // --- Doctor Account Lifecycle: Application -> Verification -> Approval ---
 let selectedDoctorAppFile = null;

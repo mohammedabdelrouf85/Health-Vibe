@@ -3764,6 +3764,25 @@ html[dir="ltr"] .slot-list button {
   color: #ffffff !important;
 }
 
+.slot-list button.is-booked,
+.slot-list button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed !important;
+  background: var(--surface-3) !important;
+  border-color: var(--line) !important;
+  pointer-events: none;
+}
+
+.slot-list button.is-booked strong {
+  color: var(--muted) !important;
+  text-decoration: line-through;
+}
+
+.slot-list button.is-booked span {
+  color: #ef4444 !important;
+  font-weight: 600;
+}
+
 .appointment-card {
   display: flex;
   justify-content: space-between;

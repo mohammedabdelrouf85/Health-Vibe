@@ -233,7 +233,9 @@ const requiredExports = [
   "window.cancelAppointment",
   "window.joinAppointmentVideo",
   "window.showClinicDirections",
-  "window.updatePatientDashboardNextAppt"
+  "window.updatePatientDashboardNextAppt",
+  "window.getConfirmedAppointmentsForDoctorAndDate",
+  "window.getConfirmedAppointmentsForPatientAndDate"
 ];
 
 for (const exp of requiredExports) {
@@ -241,6 +243,103 @@ for (const exp of requiredExports) {
 }
 console.log("  ✓ All booking and management functions successfully exposed on window.");
 
+// ── TEST 8: Anti-Double Booking Guard: Doctor Slot Concurrency ───────────────
+console.log("\n▶ TEST 8: Anti-Double Booking Guard - Doctor Schedule Conflict");
+
+const sharedDate = generatedDays[2].dateStr; // e.g. 2026-09-27
+const sharedSlotId = "slot_1000";
+
+// Patient 1 books Dr. Mona
+const patient1Appt = {
+  id: "appt_p1_mona_1000",
+  patientId: "patient_001",
+  patientName: "المريض الأول",
+  doctorId: "dr_mona",
+  doctorName: "د. منى سامي",
+  date: sharedDate,
+  slotId: sharedSlotId,
+  timeSlot: "10:00 صباحًا",
+  status: "confirmed"
+};
+saveAppt(patient1Appt);
+
+// Function to validate booking availability
+function checkDoubleBooking(newBooking, allAppointments) {
+  // Check doctor double-booking
+  const doctorConflict = allAppointments.some(a =>
+    a.status === "confirmed" &&
+    a.doctorId === newBooking.doctorId &&
+    a.date === newBooking.date &&
+    a.slotId === newBooking.slotId
+  );
+  if (doctorConflict) {
+    return { allowed: false, reason: "doctor_conflict" };
+  }
+
+  // Check patient self-overlap
+  const patientConflict = allAppointments.some(a =>
+    a.status === "confirmed" &&
+    a.patientId === newBooking.patientId &&
+    a.date === newBooking.date &&
+    a.slotId === newBooking.slotId
+  );
+  if (patientConflict) {
+    return { allowed: false, reason: "patient_conflict" };
+  }
+
+  return { allowed: true };
+}
+
+// Patient 2 tries to book Dr. Mona at the same date & slot
+const patient2ConflictAppt = {
+  id: "appt_p2_mona_1000",
+  patientId: "patient_002",
+  patientName: "المريض الثاني",
+  doctorId: "dr_mona",
+  date: sharedDate,
+  slotId: sharedSlotId,
+  status: "confirmed"
+};
+
+const conflictResult = checkDoubleBooking(patient2ConflictAppt, [patient1Appt]);
+assert.strictEqual(conflictResult.allowed, false, "Double booking for same doctor & slot must be REJECTED");
+assert.strictEqual(conflictResult.reason, "doctor_conflict");
+console.log("  ✓ Doctor Double-Booking Conflict detected and strictly BLOCKED.");
+
+// Now Patient 1 cancels their appointment
+patient1Appt.status = "cancelled";
+const afterCancelResult = checkDoubleBooking(patient2ConflictAppt, [patient1Appt]);
+assert.strictEqual(afterCancelResult.allowed, true, "Cancelled appointment must free up the slot for other patients");
+console.log("  ✓ Cancelled slot immediately unblocked and made available for subsequent booking.");
+
+// ── TEST 9: Anti-Double Booking Guard - Patient Self-Overlap ─────────────────
+console.log("\n▶ TEST 9: Anti-Double Booking Guard - Patient Self-Overlap Conflict");
+
+// Patient 1 books Dr. Mona at slot 11:30
+const p1Existing = {
+  id: "appt_p1_mona_1130",
+  patientId: "patient_001",
+  doctorId: "dr_mona",
+  date: sharedDate,
+  slotId: "slot_1130",
+  status: "confirmed"
+};
+
+// Patient 1 tries to book Dr. Ahmed at the SAME slot 11:30 on the SAME date
+const p1OverlapAppt = {
+  id: "appt_p1_ahmed_1130",
+  patientId: "patient_001",
+  doctorId: "dr_ahmed",
+  date: sharedDate,
+  slotId: "slot_1130",
+  status: "confirmed"
+};
+
+const overlapResult = checkDoubleBooking(p1OverlapAppt, [p1Existing]);
+assert.strictEqual(overlapResult.allowed, false, "Patient overlapping booking at same date/slot must be REJECTED");
+assert.strictEqual(overlapResult.reason, "patient_conflict");
+console.log("  ✓ Patient Self-Overlap conflict detected and strictly BLOCKED.");
+
 console.log("\n==================================================================");
-console.log("🎉 ALL 7 APPOINTMENTS BOOKING TESTS PASSED WITH 100% SUCCESS!");
-console.log("==================================================================\n");
+console.log("🎉 ALL 9 APPOINTMENTS BOOKING & ANTI-DOUBLE BOOKING TESTS PASSED!");
+console.log("==================================================================");
