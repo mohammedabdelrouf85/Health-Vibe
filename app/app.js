@@ -342,10 +342,10 @@ async function enforceServerPermission(permission, actionDescription = "") {
 
   const serverRole = await getVerifiedServerRole(true);
   const perms = ROLE_PERMISSIONS_MAP[serverRole] || [];
-  
+
   if (!perms.includes(permission)) {
     console.error(`[SECURITY ALERT] Action '${permission}' blocked by Server-Authoritative check. Database role is '${serverRole}'.`);
-    
+
     // Auto-revert any client-side memory tampering
     selectedRole = serverRole;
     updateNavVisibility();
@@ -362,19 +362,21 @@ async function enforceServerPermission(permission, actionDescription = "") {
 
 // Handles Firestore Security Rules direct rejections (Permission Denied)
 function handleServerPermissionDenied(err, actionContext = "") {
-  if (err && (err.code === "permission-denied" || err.message?.includes("Missing or insufficient permissions"))) {
-    console.error(`[FIRESTORE RULES REJECTION] Database rejected operation '${actionContext}':`, err);
-    const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
-    showToast(isEn
-      ? "🔒 Server Security Violation: Backend rejected operation (Permission Denied). Client cannot bypass database security rules."
-      : "🔒 رفض أمني من خادم قاعدة البيانات: تم حظر العملية بواسطة قواعد Firestore (Permission Denied). لا يمكن تجاوز الحماية عبر الواجهة.");
-    
-    // Immediately re-sync UI with true server role
-    getVerifiedServerRole(true).then((realRole) => {
-      selectedRole = realRole;
-      updateNavVisibility();
-      showScreen(isAdminRole(realRole) ? "admin" : (realRole === ROLES.DOCTOR ? "doctor" : "patient"));
-    });
+  if (err && (err.code === "permission-denied" || (err.message && err.message.includes("insufficient permissions")))) {
+    console.warn(`[FIRESTORE RULES REJECTION] Database rejected operation '${actionContext}':`, err);
+    if (typeof showAppError === "function") {
+      showAppError(err, { context: actionContext });
+    }
+    // Re-sync UI with true server role
+    if (typeof getVerifiedServerRole === "function") {
+      getVerifiedServerRole(true).then((realRole) => {
+        selectedRole = realRole;
+        if (typeof updateNavVisibility === "function") updateNavVisibility();
+        if (typeof showScreen === "function") {
+          showScreen(isAdminRole(realRole) ? "admin" : (realRole === ROLES.DOCTOR ? "doctor" : "patient"));
+        }
+      }).catch(() => {});
+    }
     return true;
   }
   return false;
@@ -1507,14 +1509,14 @@ function saveToAccountsRegistry(userObj) {
   if (!userObj || !userObj.email) return;
   const emailNorm = userObj.email.trim().toLowerCase();
   const idStr = String(userObj.id || userObj.uid || "");
-  
+
   // Exclude fake/mock identifiers
   if (idStr.startsWith("usr_doc_") || idStr.startsWith("usr_reg_") || idStr.startsWith("demo_") || idStr.startsWith("mock_")) return;
   if (emailNorm.includes("@healthvibe.ai") && !isOwnerUser(emailNorm)) return;
 
   const list = getLocalAccountsRegistry();
   const idx = list.findIndex(u => (u.email && u.email.trim().toLowerCase() === emailNorm) || (u.id && u.id === (userObj.id || userObj.uid)));
-  
+
   const isOwner = isOwnerUser(userObj.email);
   const verificationRevoked = isVerificationRevoked(userObj.email);
   const role = userObj.role || (isOwner ? ROLES.SUPER_ADMIN : ROLES.PATIENT);
@@ -1530,13 +1532,13 @@ function saveToAccountsRegistry(userObj) {
     createdAt: userObj.createdAt || Date.now(),
     lastSeen: Date.now()
   };
-  
+
   if (idx >= 0) {
     list[idx] = { ...list[idx], ...record };
   } else {
     list.unshift(record);
   }
-  
+
   try {
     localStorage.setItem(ACCOUNTS_REGISTRY_KEY, JSON.stringify(list));
   } catch(e) {}
@@ -2213,19 +2215,19 @@ function synthesizeClinicalAssessment(c, isEn) {
   const o2 = Number(c.oxygenLevel || c.o2 || 95);
   const dyspnea = Boolean(
     c.breathingDifficulty && (
-      c.breathingDifficulty === "نعم" || 
-      String(c.breathingDifficulty).toLowerCase() === "yes" || 
+      c.breathingDifficulty === "نعم" ||
+      String(c.breathingDifficulty).toLowerCase() === "yes" ||
       String(c.breathingDifficulty).includes("ضيق")
     )
   );
   const cough = c.coughLevel || (isEn ? "mild" : "خفيفة");
   const duration = c.symptomDuration || c.duration || (isEn ? "recent onset" : "حديثة");
-  const rfList = Array.isArray(c.riskFactors) && c.riskFactors.length > 0 
+  const rfList = Array.isArray(c.riskFactors) && c.riskFactors.length > 0
     ? c.riskFactors.filter(r => r && r !== "None" && r !== "لا يوجد")
     : [];
   const rf = rfList.length > 0 ? rfList.join("، ") : (isEn ? "None" : "لا توجد");
-  const patientReply = c.patientResponse 
-    ? (isEn ? ` [Patient Response: ${c.patientResponse}]` : ` [إفادة المريض الإضافية: ${c.patientResponse}]`) 
+  const patientReply = c.patientResponse
+    ? (isEn ? ` [Patient Response: ${c.patientResponse}]` : ` [إفادة المريض الإضافية: ${c.patientResponse}]`)
     : "";
 
   let diag = "";
@@ -2466,15 +2468,15 @@ window.approveCase = async function(id) {
 window.requestMoreInfo = async function(id) {
   if (!enforcePermission(PERMISSIONS.REVIEW_CASE, "Request More Information")) return;
   const isEn = currentLanguage === "en";
-  const defaultPrompt = isEn 
-    ? "Please specify what extra information or test is required from the patient:" 
+  const defaultPrompt = isEn
+    ? "Please specify what extra information or test is required from the patient:"
     : "يرجى تحديد البيانات أو الفحوصات الإضافية المطلوبة من المريض:";
   const noteInput = document.getElementById("doctorDiagnosisInput") || document.getElementById("doctorNoteInput");
   let existingNote = noteInput && noteInput.value.trim() ? noteInput.value.trim() : "";
-  
+
   let promptNote = window.prompt(defaultPrompt, existingNote || (isEn ? "Re-check oxygen saturation SpO2 and upload latest prescription or update symptoms" : "إعادة قياس نسبة الأكسجين SpO2 وإرفاق الروشتة السابقة أو توضيح تطور الأعراض"));
   if (promptNote === null) return; // Cancelled
-  
+
   promptNote = promptNote.trim() || existingNote || (isEn ? "Re-check oxygen saturation SpO2 and upload latest prescription or update symptoms" : "إعادة قياس نسبة الأكسجين SpO2 وإرفاق الروشتة السابقة أو توضيح تطور الأعراض");
 
   const user = auth ? auth.currentUser : null;
@@ -2605,7 +2607,7 @@ function renderDoctorQueueItems(allCases) {
           ${isEn ? 'No Real Patient Cases in Queue' : 'لا توجد حالات سريرية حقيقية في قائمة الانتظار'}
         </strong>
         <p style="margin: 0; font-size: 12.5px; line-height: 1.5;">
-          ${isEn 
+          ${isEn
             ? 'The doctor queue only displays authentic cases submitted by registered patients. When patients submit new clinical assessments, they will appear here instantly.'
             : 'قائمة انتظار الطبيب تعرض الحالات السريرية الحقيقية المُرسلة من المرضى فورياً وبشكل حي.'}
         </p>
@@ -2672,7 +2674,7 @@ function renderDoctorQueueItems(allCases) {
     btn.dataset.caseId = c.id;
     const isCritO2 = c.o2 > 0 && c.o2 < 90;
     const meta = getCaseStatusMeta(c.status);
-    
+
     btn.className = c.status === CASE_STATUS.APPROVED ? "ok" : (isCritO2 || c.risk === "عاجل" || c.status === CASE_STATUS.ESCALATED ? "danger" : "pending");
     if (c.id === activeCaseId) btn.style.border = "2px solid var(--teal)";
 
@@ -3014,7 +3016,7 @@ if (isUnderReview) {
     ? caseTriggeredRules.map(r => `
         <li style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px dashed var(--line); font-size: 12.5px;">
           <span>
-            <strong style="color: var(--teal); font-weight: 700;">${r.id || ''}</strong>: 
+            <strong style="color: var(--teal); font-weight: 700;">${r.id || ''}</strong>:
             ${isEn ? (r.en || r.ar || '') : (r.ar || r.en || '')}
           </span>
           <div style="display: flex; gap: 6px; align-items: center;">
@@ -3049,8 +3051,8 @@ if (isUnderReview) {
         ${triggeredRulesListHtml}
       </ul>
       <div style="margin-top: 10px; padding: 6px 10px; background: rgba(14, 165, 233, 0.08); border-radius: 6px; font-size: 11px; color: var(--muted); line-height: 1.4;">
-        ℹ️ ${isEn 
-          ? "Notice: This score is generated by deterministic, clinician-reviewed triage rules (unvalidated model score). It is purely advisory to assist doctor triage and does not replace medical judgment." 
+        ℹ️ ${isEn
+          ? "Notice: This score is generated by deterministic, clinician-reviewed triage rules (unvalidated model score). It is purely advisory to assist doctor triage and does not replace medical judgment."
           : "تنبيه: هذا المؤشر ناتج عن قواعد فرز ثابتة قابلة لمراجعة الطبيب (مؤشر غير مُتحقق منه سريرياً كنموذج إحصائي). يُستخدم كدليل استرشادي لتسهيل الفرز ولا يحل محل التشخيص الطبي."}
       </div>
     </div>
@@ -3263,17 +3265,279 @@ window.setAuthMode = setAuthMode;
 window.showSignInView = showSignInView;
 window.showForgotView = showForgotView;
 
-function showAuthError(message) {
-  if (authErrorBanner) {
-    authErrorBanner.textContent = message;
-    authErrorBanner.style.display = "block";
+// =========================================================================
+// 🛑 CENTRALIZED APPLICATION ERROR ENGINE (Human-Friendly UI, No Raw Firebase Technical Jargon)
+// =========================================================================
+
+function toFriendlyAppError(err, context = "") {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  let code = "";
+  let rawMessage = "";
+
+  if (typeof err === "string") {
+    rawMessage = err;
+    if (err.startsWith("auth/") || err.startsWith("firestore/")) {
+      code = err;
+    }
+  } else if (err && typeof err === "object") {
+    code = String(err.code || "").toLowerCase();
+    rawMessage = String(err.message || "");
   }
-  showToast(message);
+
+  // Detect patterns in raw error message when code is not standard
+  if (!code && rawMessage) {
+    if (rawMessage.includes("permission-denied") || rawMessage.includes("insufficient permissions")) {
+      code = "permission-denied";
+    } else if (rawMessage.includes("network") || rawMessage.includes("Failed to fetch") || rawMessage.includes("offline")) {
+      code = "network-error";
+    } else if (rawMessage.includes("quota") || rawMessage.includes("resource-exhausted")) {
+      code = "resource-exhausted";
+    } else if (rawMessage.includes("user-not-found") || rawMessage.includes("wrong-password") || rawMessage.includes("invalid-credential")) {
+      code = "auth/invalid-credential";
+    }
+  }
+
+  // 1. Authentication Credentials
+  if (code.includes("user-not-found") || code.includes("wrong-password") || code.includes("invalid-credential")) {
+    return {
+      icon: "🔒",
+      category: isEn ? "Authentication" : "تسجيل الدخول",
+      title: isEn ? "Incorrect Login Credentials" : "بيانات تسجيل الدخول غير صحيحة",
+      message: isEn
+        ? "The email address or password entered does not match our verified records. Please check your credentials."
+        : "البريد الإلكتروني أو كلمة المرور غير مطابقة لسجلاتنا. يرجى التحقق من صحة البيانات والمحاولة ثانية.",
+      action: isEn ? "Check for typos in your email and password, or use 'Forgot Password?' to restore access." : "تأكد من كتابة البريد وكلمة المرور بدقة، أو اضغط على 'نسيت كلمة المرور؟' لاستعادة الحساب.",
+      ref: code || "auth/invalid-credential"
+    };
+  }
+
+  if (code.includes("invalid-email")) {
+    return {
+      icon: "📧",
+      category: isEn ? "Validation" : "صحة البيانات",
+      title: isEn ? "Invalid Email Format" : "صيغة البريد غير صحيحة",
+      message: isEn
+        ? "Please enter a valid email address (e.g. user@example.com)."
+        : "يرجى كتابة عنوان بريد إلكتروني صحيح ومكتمل (مثال: user@example.com).",
+      action: isEn ? "Verify there are no extra spaces or missing symbols in the email field." : "تأكد من عدم وجود مسافات إضافية وكتابة الرمز @ واسم النطاق بشكل صحيح.",
+      ref: code || "auth/invalid-email"
+    };
+  }
+
+  if (code.includes("email-already-in-use")) {
+    return {
+      icon: "📧",
+      category: isEn ? "Registration" : "إنشاء حساب",
+      title: isEn ? "Email Already Registered" : "البريد مسجل بالفعل",
+      message: isEn
+        ? "An existing Health Vibes account is already associated with this email address."
+        : "يوجد حساب مسجل مسبقاً بهذا البريد الإلكتروني في النظام.",
+      action: isEn ? "Please switch to 'Sign In' or recover your password if you forgot it." : "يرجى التبديل إلى 'تسجيل الدخول' أو استعادة كلمة المرور إذا كنت قد نسيتها.",
+      ref: code || "auth/email-already-in-use"
+    };
+  }
+
+  if (code.includes("weak-password")) {
+    return {
+      icon: "🛡️",
+      category: isEn ? "Security" : "أمان الحساب",
+      title: isEn ? "Password Too Weak" : "كلمة المرور قصيرة جداً",
+      message: isEn
+        ? "For patient clinical data privacy, passwords must contain at least 6 characters."
+        : "لحماية خصوصية وسجلاتك الطبية، يجب أن تتكون كلمة المرور من 6 خانات على الأقل.",
+      action: isEn ? "Please enter a stronger password combining letters and numbers." : "يرجى اختيار كلمة مرور أطول تحتوي على أحرف وأرقام.",
+      ref: code || "auth/weak-password"
+    };
+  }
+
+  if (code.includes("too-many-requests")) {
+    return {
+      icon: "⏳",
+      category: isEn ? "Rate Limit" : "أمان النظام",
+      title: isEn ? "Too Many Attempts" : "محاولات متكررة غير صحيحة",
+      message: isEn
+        ? "Access has been temporarily paused due to multiple consecutive incorrect attempts."
+        : "تم تعليق المحاولات مؤقتاً لحماية الحساب بعد تكرار إدخال بيانات غير صحيحة.",
+      action: isEn ? "Please wait 1-2 minutes before attempting to sign in again." : "يرجى الانتظار لمدة دقيقة أو دقيقتين ثم إعادة المحاولة.",
+      ref: code || "auth/too-many-requests"
+    };
+  }
+
+  if (code.includes("requires-recent-login")) {
+    return {
+      icon: "🔐",
+      category: isEn ? "Security Check" : "تأكيد الهوية",
+      title: isEn ? "Re-Authentication Required" : "مطلوب تأكيد كلمة المرور",
+      message: isEn
+        ? "This sensitive operation requires confirming your password to ensure account ownership."
+        : "هذا الإجراء الحساس يتطلب تأكيد كلمة المرور الحالية للتأكد من هوية صاحب الحساب.",
+      action: isEn ? "Please enter your password in the prompt to proceed." : "يرجى كتابة كلمة المرور الحالية لتأكيد الإجراء بأمان.",
+      ref: code || "auth/requires-recent-login"
+    };
+  }
+
+  if (code.includes("user-disabled")) {
+    return {
+      icon: "🛑",
+      category: isEn ? "Account Status" : "حالة الحساب",
+      title: isEn ? "Account Suspended" : "الحساب موقوف",
+      message: isEn
+        ? "This account has been disabled by platform administration."
+        : "تم تعطيل هذا الحساب بواسطة إدارة المنصة لمراجعة أمنية أو إدارية.",
+      action: isEn ? "Please contact support if you believe this is in error." : "يرجى التواصل مع الدعم الفني للاستفسار والمراجعة.",
+      ref: code || "auth/user-disabled"
+    };
+  }
+
+  if (code.includes("network") || code.includes("unavailable") || code.includes("deadline-exceeded") || code.includes("fetch")) {
+    return {
+      icon: "📡",
+      category: isEn ? "Connectivity" : "الاتصال والشبكة",
+      title: isEn ? "Connection Unavailable" : "تعذر الاتصال بالخادم",
+      message: isEn
+        ? "Could not establish a stable connection with the medical cloud service. Your local records are secure."
+        : "تعذر الوصول إلى خوادم السحابة الطبية حالياً. بياناتك المسجلة بأمان.",
+      action: isEn ? "Please check your internet or Wi-Fi connection and try again." : "يرجى التأكد من اتصالك بالإنترنت (واي فاي أو باقة الهاتف) وإعادة المحاولة.",
+      ref: code || "network/offline"
+    };
+  }
+
+  if (code.includes("permission-denied") || code.includes("insufficient-permission")) {
+    return {
+      icon: "🛡️",
+      category: isEn ? "Access Control" : "صلاحيات الوصول",
+      title: isEn ? "Access Restricted" : "إجراء غير مصرح به",
+      message: isEn
+        ? "You do not have the required medical or administrative permissions for this operation."
+        : "لا تملك الصلاحيات الطبية أو الإدارية الكافية لإتمام هذا الإجراء (امتثالاً لسياسة الخصوصية والأمان).",
+      action: isEn ? "If you are an attending doctor, verify that your syndicate license is approved." : "إذا كنت طبيباً، تأكد من اعتماد ترخيصك وتكليفك بالحالة من إدارة المنصة.",
+      ref: code || "firestore/permission-denied"
+    };
+  }
+
+  if (code.includes("resource-exhausted") || code.includes("quota")) {
+    return {
+      icon: "⚡",
+      category: isEn ? "System Load" : "ضغط الخدمة",
+      title: isEn ? "Server High Volume" : "الخادم قيد ضغط مؤقت",
+      message: isEn
+        ? "The system is currently experiencing high request traffic."
+        : "الخدمة الطبية تشهد ضغطاً مؤقتاً في معالجة الطلبات السريرية.",
+      action: isEn ? "Please wait a moment and submit your request again." : "يرجى الانتظار بضع لحظات والمحاولة مجدداً.",
+      ref: code || "system/quota-exhausted"
+    };
+  }
+
+  // Fallback: Never display raw technical error dumps to users
+  return {
+    icon: "⚠️",
+    category: isEn ? "System Notice" : "تنبيه بالنظام",
+    title: isEn ? "Operation Could Not Be Completed" : "تعذر استكمال العملية",
+    message: isEn
+      ? "An unexpected issue occurred while processing your request. Please rest assured your saved medical records remain safe."
+      : "حدث أمر غير متوقع أثناء معالجة طلبك. نؤكد لك أن سجلاتك الطبية المحفوظة بأمان تام.",
+    action: isEn ? "Please try again in a few moments, or contact support if this recurs." : "يرجى المحاولة بعد لحظات، أو التواصل مع الدعم الفني إذا استمرت المشكلة.",
+    ref: code || (rawMessage ? `MSG-${rawMessage.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 24)}` : "ERR-GENERAL")
+  };
+}
+
+function showAppError(err, options = {}) {
+  const friendly = toFriendlyAppError(err, options.context);
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+
+  if (options.silent) {
+    console.warn("[AppError (silent)]", friendly);
+    return friendly;
+  }
+
+  // 1. If targeted at Auth screen banner:
+  if (options.target === "auth") {
+    if (authErrorBanner) {
+      authErrorBanner.innerHTML = `
+        <div style="display: flex; align-items: flex-start; gap: 10px; text-align: start;">
+          <span style="font-size: 20px; line-height: 1;">${friendly.icon}</span>
+          <div>
+            <strong style="display: block; font-size: 13.5px; margin-bottom: 2px;">${friendly.title}</strong>
+            <span style="display: block; font-size: 12px; opacity: 0.95; line-height: 1.4;">${friendly.message}</span>
+            <small style="display: block; font-size: 11px; margin-top: 4px; opacity: 0.85;">💡 ${friendly.action}</small>
+          </div>
+        </div>
+      `;
+      authErrorBanner.style.display = "block";
+    }
+    showToast(`${friendly.icon} ${friendly.title}`);
+    return friendly;
+  }
+
+  // 2. If quick toast requested:
+  if (options.mode === "toast") {
+    showToast(`${friendly.icon} ${friendly.title}: ${friendly.message}`);
+    return friendly;
+  }
+
+  // 3. Centralized Modal Presentation:
+  const modal = document.getElementById("centralErrorModal");
+  if (modal) {
+    const iconEl = document.getElementById("centralErrorIcon");
+    const titleEl = document.getElementById("centralErrorTitle");
+    const catEl = document.getElementById("centralErrorCategory");
+    const msgEl = document.getElementById("centralErrorMessage");
+    const actionEl = document.getElementById("centralErrorAction");
+    const refEl = document.getElementById("centralErrorRef");
+    const primaryBtn = document.getElementById("centralErrorPrimaryBtn");
+
+    if (iconEl) iconEl.textContent = friendly.icon;
+    if (titleEl) titleEl.textContent = friendly.title;
+    if (catEl) catEl.textContent = friendly.category;
+    if (msgEl) msgEl.textContent = friendly.message;
+    if (actionEl) actionEl.innerHTML = `💡 ${friendly.action}`;
+    if (refEl) refEl.textContent = `REF: ${friendly.ref} • TIMESTAMP: ${new Date().toISOString()}`;
+
+    if (typeof options.onRetry === "function") {
+      window._centralErrorRetryCallback = options.onRetry;
+      if (primaryBtn) {
+        primaryBtn.textContent = isEn ? "Retry" : "إعادة المحاولة";
+      }
+    } else {
+      window._centralErrorRetryCallback = null;
+      if (primaryBtn) {
+        primaryBtn.textContent = isEn ? "OK" : "حسناً، فهمت";
+      }
+    }
+
+    modal.style.display = "flex";
+  } else {
+    showToast(`${friendly.icon} ${friendly.title}: ${friendly.message}`);
+  }
+
+  return friendly;
+}
+
+window.showAppError = showAppError;
+window.toFriendlyAppError = toFriendlyAppError;
+
+window.closeCentralErrorModal = function() {
+  const modal = document.getElementById("centralErrorModal");
+  if (modal) modal.style.display = "none";
+  window._centralErrorRetryCallback = null;
+};
+
+window.handleCentralErrorRetry = function() {
+  const cb = window._centralErrorRetryCallback;
+  window.closeCentralErrorModal();
+  if (typeof cb === "function") {
+    try { cb(); } catch(e) { console.error("Retry callback error:", e); }
+  }
+};
+
+
+function showAuthError(messageOrErr) {
+  showAppError(messageOrErr, { target: "auth" });
 }
 
 function clearAuthError() {
   if (authErrorBanner) {
-    authErrorBanner.textContent = "";
+    authErrorBanner.innerHTML = "";
     authErrorBanner.style.display = "none";
   }
 }
@@ -3292,37 +3556,8 @@ function setAuthLoading(loading) {
 }
 
 function getAuthErrorMessage(error) {
-  const isEn = currentLanguage === "en";
-  switch (error.code) {
-    case "auth/invalid-email":
-      return isEn ? "Invalid email address format." : "صيغة البريد الإلكتروني غير صحيحة.";
-    case "auth/user-disabled":
-      return isEn ? "This account has been disabled." : "تم تعطيل هذا الحساب.";
-    case "auth/user-not-found":
-      return isEn ? "No account found with this email. Please click 'Create Account' first." : "لا يوجد حساب مسجل بهذا البريد. يمكنك الضغط على 'إنشاء حساب'.";
-    case "auth/wrong-password":
-      return isEn ? "Incorrect password. Please try again or use 'Forgot password?'." : "كلمة المرور غير صحيحة. يرجى المحاولة مجددًا أو استعادة كلمة المرور.";
-    case "auth/invalid-credential":
-      return isEn ? "Invalid email or password. Please check your credentials." : "بيانات تسجيل الدخول غير صحيحة. يرجى التأكد من البريد وكلمة المرور.";
-    case "auth/email-already-in-use":
-      return isEn ? "This email is already registered. Please switch to 'Sign In'." : "هذا البريد مسجل بالفعل. يرجى التبديل إلى 'تسجيل الدخول'.";
-    case "auth/weak-password":
-      return isEn ? "Password is too weak. Must be at least 6 characters." : "كلمة المرور ضعيفة. يجب أن تتكون من 6 أحرف أو أرقام على الأقل.";
-    case "auth/operation-not-allowed":
-      return isEn
-        ? "Email/Password sign-in is not enabled in Firebase Console. Please enable it under Authentication > Sign-in method."
-        : "تسجيل الدخول بالبريد غير مفعل في Firebase Console. يرجى تفعيله من Authentication > Sign-in method.";
-    case "auth/too-many-requests":
-      return isEn ? "Too many attempts. Please wait a moment and try again." : "محاولات كثيرة خاطئة. يرجى الانتظار قليلاً والمحاولة لاحقاً.";
-    case "auth/network-request-failed":
-      return isEn ? "Network error. Please check your internet connection." : "خطأ في الاتصال بالإنترنت. يرجى التحقق من اتصالك.";
-    case "auth/operation-not-supported-in-this-environment":
-      return isEn
-        ? "Firebase Authentication is not supported when running via file://. Please open http://localhost:3000"
-        : "لا يمكن تسجيل الدخول عند فتح الموقع كملف محلي (file://). يرجى فتح التطبيق عبر السيرفر المحلي: http://localhost:3000";
-    default:
-      return error.message || (isEn ? "Authentication error." : "حدث خطأ أثناء تسجيل الدخول.");
-  }
+  if (!error) return "";
+  return toFriendlyAppError(error).message;
 }
 
 async function handleEmailAuth(e) {
@@ -3497,7 +3732,7 @@ function transitionToApp(user, options = {}) {
   const navigate = options.navigate !== false;
   const isOwner = isOwnerUser(user.email);
   const displayName = user.displayName || user.email.split('@')[0];
-  
+
   if (userName) userName.textContent = displayName;
   if (userEmail) userEmail.textContent = user.email;
   if (accountLabel) {
@@ -3505,7 +3740,7 @@ function transitionToApp(user, options = {}) {
       ? (englishRoleLabels[normalizeRole(selectedRole, isOwner)] || englishRoleLabels.patient)
       : (roleLabels[normalizeRole(selectedRole, isOwner)] || roleLabels.patient);
   }
-  
+
   if (publicSite) {
     publicSite.hidden = true;
     publicSite.setAttribute("hidden", "true");
@@ -3542,7 +3777,7 @@ async function enterApp(source = "google") {
       await applyAuthPersistence(shouldRememberSession());
       const result = await auth.signInWithPopup(googleProvider);
       const user = result.user;
-      
+
       const isOwner = isOwnerUser(user.email);
       const verificationRevoked = isVerificationRevoked(user.email);
       try {
@@ -3592,7 +3827,7 @@ async function enterApp(source = "google") {
       accountLabel.textContent = currentLanguage === "en"
         ? (englishRoleLabels[normalizeRole(selectedRole, isOwner)] || englishRoleLabels.patient)
         : (roleLabels[normalizeRole(selectedRole, isOwner)] || roleLabels.patient);
-      
+
       updateAvatar(user);
       updateEmailVerificationUI(user);
       updateNavVisibility();
@@ -4070,8 +4305,8 @@ async function verifyPhoneOtp() {
     }
     closeVerifyRequiredModal();
 
-    showToast(isEn 
-      ? "🎉 Account successfully verified and activated via WhatsApp Bot! All clinical privileges are now active." 
+    showToast(isEn
+      ? "🎉 Account successfully verified and activated via WhatsApp Bot! All clinical privileges are now active."
       : "🎉 تم تأكيد الكود وتفعيل الحساب بنجاح عبر بوت الواتساب! تم فتح كافة الصلاحيات الطبية.");
 
     // 5. Refresh admin lists if currently viewing
@@ -4417,8 +4652,8 @@ function renderConsentScreen() {
       const isAiOk = chkAi ? chkAi.checked : true;
 
       if (!isProcessingOk || !isAiOk) {
-        showToast(isEn 
-          ? "Please accept both mandatory consent terms to proceed to assessment." 
+        showToast(isEn
+          ? "Please accept both mandatory consent terms to proceed to assessment."
           : "يرجى الموافقة على البندين الإلزاميين للمتابعة لبدء فحص التنفس.");
         if (chkProcessing && !chkProcessing.checked) chkProcessing.parentElement.style.color = "#dc2626";
         if (chkAi && !chkAi.checked) chkAi.parentElement.style.color = "#dc2626";
@@ -4552,8 +4787,8 @@ function showScreen(name) {
   if (name === "assessment") {
     updateAssessmentConsentBadge();
     if (!hasAcceptedPrivacyConsent()) {
-      showToast(currentLanguage === "en" 
-        ? "Medical Privacy Consent is required before starting assessment." 
+      showToast(currentLanguage === "en"
+        ? "Medical Privacy Consent is required before starting assessment."
         : "الموافقة الطبية وسياسة الخصوصية مطلوبة قبل بدء فحص التنفس.");
       name = "consent";
     }
@@ -4584,7 +4819,7 @@ function showScreen(name) {
 
   screenTitle.textContent = currentLanguage === "en" ? englishTitles[name] || "Health Vibes" : titles[name] || "Health Vibes";
   document.body.classList.remove("sidebar-open");
-  
+
   if (name === "doctor") {
     renderDoctorQueue();
   } else if (window._doctorQueueUnsub) {
@@ -4628,7 +4863,7 @@ function showScreen(name) {
 async function renderPatientDashboard() {
   const user = auth ? auth.currentUser : null;
   const isEn = currentLanguage === "en";
-  
+
   // ── تحية المريض بالاسم الفعلي ────────────────────────────────────
   const cachedDoc = window._cachedUserDoc || {};
   const activeSession = (typeof getActiveSession === "function" ? getActiveSession() : null) || {};
@@ -4889,8 +5124,8 @@ async function renderAdminAccountsReportView(container, isEn, hasCaseData) {
               <span class="pill ok" style="font-size: 11px;">${isEn ? "System Governance" : "تقرير رسمي معتمد 🟢"}</span>
             </div>
             <p style="margin: 6px 0 0; font-size: 13.5px; color: var(--muted);">
-              ${isEn 
-                ? "Official audit report of all registered accounts, verification status, and administrative role allocations." 
+              ${isEn
+                ? "Official audit report of all registered accounts, verification status, and administrative role allocations."
                 : "تقرير شامل ومفصل بجميع الحسابات المسجلة وحالة توثيق البريد الإلكتروني والصلاحيات الممنوحة على السيستم."}
             </p>
           </div>
@@ -5004,8 +5239,8 @@ async function renderAdminAccountsReportView(container, isEn, hasCaseData) {
                     <td style="padding: 10px 12px; font-family: monospace; color: var(--muted);">${u.email}</td>
                     <td style="padding: 10px 12px;"><span class="pill info">${englishRoleLabels[u.role] || u.role}</span></td>
                     <td style="padding: 10px 12px;">
-                      ${isVerified 
-                        ? `<span class="pill ok">${isEn ? "Verified ✓" : "مؤكد ✓"}</span>` 
+                      ${isVerified
+                        ? `<span class="pill ok">${isEn ? "Verified ✓" : "مؤكد ✓"}</span>`
                         : `<span class="pill pending" style="background: rgba(245, 158, 11, 0.12); color: #f59e0b;">${isEn ? "Regular (Unverified)" : "غير مؤكد"}</span>`}
                     </td>
                   </tr>
@@ -5118,7 +5353,7 @@ async function renderReportScreen(targetCaseId = null) {
           <div class="empty-icon">📂</div>
           <h2>${isEn ? "No Clinical Reports Available" : "لا يوجد تقرير طبي متاح حتى الآن"}</h2>
           <p class="muted-copy" style="max-width: 480px; margin: 8px auto 20px;">
-            ${isEn 
+            ${isEn
               ? "To generate a certified medical report, please complete a breathing assessment first. Your evaluation will be reviewed and approved by a physician."
               : "للحصول على تقرير طبي معتمد، يرجى إتمام تقييم التنفس أولاً ليتم إرساله ومراجعته واعتماده من قبل الطبيب المعالج."}
           </p>
@@ -5152,8 +5387,8 @@ async function renderReportScreen(targetCaseId = null) {
             <div>
               <strong style="color: #b91c1c; font-size: 15px;">${isEn ? 'Immediate Medical Attention Advised' : 'تنبيه طبي عاجل: نقص أكسجين حاد'}</strong>
               <p style="margin: 4px 0 0; font-size: 13px; color: #7f1d1d;">
-                ${isEn 
-                  ? `Your recorded oxygen saturation (${o2Val}%) is dangerously low. Please contact emergency services (123) or visit the nearest ER immediately.` 
+                ${isEn
+                  ? `Your recorded oxygen saturation (${o2Val}%) is dangerously low. Please contact emergency services (123) or visit the nearest ER immediately.`
                   : `نسبة تشبع الأكسجين المسجلة (${o2Val}%) منخفضة بصورة تستدعي الرعاية الطبية الفورية. يرجى الاتصال بالإسعاف (123) أو التوجه لأقرب طوارئ فوراً.`}
               </p>
             </div>
@@ -5221,11 +5456,11 @@ async function renderReportScreen(targetCaseId = null) {
         : (isEn ? "Clinical Report Awaiting Doctor Approval" : "التقرير الطبي قيد المراجعة والاعتماد السريري");
 
       const lockedSubtext = caseData.status === CASE_STATUS.REJECTED
-        ? (isEn 
-            ? "The attending physician has evaluated this assessment submission and determined it cannot be clinically certified. Please see the documented reason below." 
+        ? (isEn
+            ? "The attending physician has evaluated this assessment submission and determined it cannot be clinically certified. Please see the documented reason below."
             : "قام الطبيب المعالج بمراجعة هذا التقييم وتقرر عدم اعتماده سريرياً. يرجى الاطلاع على سبب الرفض الموثق أدناه.")
-        : (isEn 
-            ? "In accordance with medical safety regulations, diagnosis and final clinical reports are strictly withheld until direct review and verification by the attending physician." 
+        : (isEn
+            ? "In accordance with medical safety regulations, diagnosis and final clinical reports are strictly withheld until direct review and verification by the attending physician."
             : "حفاظاً على سلامتك الطبية، لن يظهر التشخيص أو التقرير النهائي إلا بعد المراجعة والاعتماد السريري المباشر من قبل الطبيب المعالج.");
 
       container.innerHTML = `
@@ -5343,8 +5578,8 @@ async function renderReportScreen(targetCaseId = null) {
     const o2Color = isSupport ? "#64748b" : (o2Val < 90 ? "#ef4444" : (o2Val < 95 ? "#f59e0b" : "#16a34a"));
     const o2StatusText = isSupport
       ? (isEn ? "Concealed (Support Privacy Mode)" : "محجوب لحماية خصوصية المريض")
-      : (o2Val < 90 
-        ? (isEn ? "Hypoxemia / Critical" : "نقص أكسجين حاد / حرج") 
+      : (o2Val < 90
+        ? (isEn ? "Hypoxemia / Critical" : "نقص أكسجين حاد / حرج")
         : (o2Val < 95 ? (isEn ? "Mild Borderline" : "انخفاض طفيف / مراقبة") : (isEn ? "Optimal Normal" : "مثالي وطبيعي")));
     const o2Display = isSupport ? "**%" : `${o2Val}%`;
 
@@ -5367,7 +5602,7 @@ async function renderReportScreen(targetCaseId = null) {
     // Synthesize tailored clinical findings from actual case indicators if not explicitly set
     const reportSynth = synthesizeClinicalAssessment(caseData, isEn);
     const clinicalDiagnosis = caseData.clinicalDiagnosis || caseData.doctorNote || caseData.clinicalNotes || reportSynth.diag;
-    
+
     // Medications list parsing (from actual case or tailored synthesis)
     const rawMeds = caseData.medications || reportSynth.meds;
     const medItems = String(rawMeds)
@@ -5383,7 +5618,7 @@ async function renderReportScreen(targetCaseId = null) {
     const breathingDifficultyDisplay = isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوب") : (caseData.breathingDifficulty || caseData.difficulty || (isEn ? "Moderate" : "متوسط"));
     const coughLevelDisplay = isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوبة") : (caseData.coughLevel || (isEn ? "Moderate" : "متوسطة"));
     const durationDisplay = isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوب") : (caseData.symptomDuration || caseData.duration || (isEn ? "3 Days" : "3 أيام"));
-    const riskFactorsDisplay = isSupport 
+    const riskFactorsDisplay = isSupport
       ? (isEn ? "🔒 Medical data redacted" : "🔒 بيانات سريرية محجوبة")
       : (Array.isArray(caseData.riskFactors) && caseData.riskFactors.length > 0 ? caseData.riskFactors.join('، ') : (isEn ? "None declared" : "لا توجد"));
     const aiScoreDisplay = isSupport
@@ -5463,8 +5698,8 @@ async function renderReportScreen(targetCaseId = null) {
                 ${isEn ? "Support Role Restricted Mode — Medical Privacy Protection" : "وضع الدعم الفني المحدود — حماية الخصوصية والسرية الطبية"}
               </strong>
               <span style="font-size: 12.5px; color: var(--ink); line-height: 1.5; display: block;">
-                ${isEn 
-                  ? "In compliance with healthcare privacy regulations, vital signs, oxygen saturation, physician diagnoses, and medication regimens are redacted for Support accounts." 
+                ${isEn
+                  ? "In compliance with healthcare privacy regulations, vital signs, oxygen saturation, physician diagnoses, and medication regimens are redacted for Support accounts."
                   : "امتثالاً لمعايير الخصوصية وسرية البيانات الصحية، تم حجب القياسات السريرية (نسبة الأكسجين) وتشخيص الطبيب والوصفات الدوائية لحسابات الدعم الفني."}
               </span>
             </div>
@@ -5482,8 +5717,8 @@ async function renderReportScreen(targetCaseId = null) {
           </div>
           <div style="text-align: ${isEn ? 'right' : 'left'};">
             <span class="pill ${isSupport ? 'info' : 'ok'}" style="font-size: 12.5px; padding: 6px 14px; font-weight: 800; display: inline-flex; align-items: center; gap: 6px;">
-              ${isSupport 
-                ? `🛡️ ${isEn ? "Support View (Redacted)" : "نسخة دعم فني (محجوبة سريرياً)"}` 
+              ${isSupport
+                ? `🛡️ ${isEn ? "Support View (Redacted)" : "نسخة دعم فني (محجوبة سريرياً)"}`
                 : (isPreview ? (isEn ? "Draft Preview" : "معاينة مسودة") : (isEn ? "Approved by Physician" : "معتمد سريرياً ورسمياً"))}
             </span>
             <div style="font-size: 11px; color: var(--muted); margin-top: 4px; font-family: monospace; letter-spacing: 0.5px;">
@@ -5532,7 +5767,7 @@ async function renderReportScreen(targetCaseId = null) {
             </h4>
             <span class="pill info" style="font-size: 11px;">${isSupport ? (isEn ? "Redacted Vitals" : "مؤشرات محجوبة") : (isEn ? "Clinical Vitals" : "بيانات سريرية موثقة")}</span>
           </div>
-          
+
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 14px;">
             <!-- OXYGEN SATURATION HERO GAUGE -->
             <div style="background: var(--surface-2); border: 1.5px solid ${o2Color}; border-radius: 12px; padding: 12px; text-align: center;">
@@ -5595,8 +5830,8 @@ async function renderReportScreen(targetCaseId = null) {
               ${isEn ? "Clinical Diagnosis & Findings Redacted" : "التشخيص الطبي السريري وملاحظات الفحص محجوبة"}
             </h3>
             <p style="margin: 0; font-size: 13px; color: var(--ink); line-height: 1.6; max-width: 580px; margin-inline: auto;">
-              ${isEn 
-                ? "Physician clinical findings, differential diagnoses, and internal clinical notes are accessible strictly to the licensed attending physician and the patient to ensure clinical confidentiality." 
+              ${isEn
+                ? "Physician clinical findings, differential diagnoses, and internal clinical notes are accessible strictly to the licensed attending physician and the patient to ensure clinical confidentiality."
                 : "التشخيص الطبي والملاحظات السريرية مقتصرة حصرياً على الطبيب المعالج المعتمد والمريض وفقاً لمعايير السرية الطبية (HIPAA / GDPR)، ولا تتاح لحسابات الدعم الفني."}
             </p>
           </div>
@@ -5622,8 +5857,8 @@ async function renderReportScreen(targetCaseId = null) {
               ${isEn ? "Prescription & Medication Regimen (Rx) Masked" : "الخطة العلاجية والروشتة الدوائية الموصوفة (Rx) محجوبة"}
             </h3>
             <p style="margin: 0; font-size: 13px; color: var(--muted); max-width: 520px; margin-inline: auto;">
-              ${isEn 
-                ? "Prescription details, dosage forms, and therapeutic regimens are redacted for Support role personnel." 
+              ${isEn
+                ? "Prescription details, dosage forms, and therapeutic regimens are redacted for Support role personnel."
                 : "تفاصيل الأدوية والجرعات العلاجية محجوبة لدور الدعم الفني لحماية البيانات الصحية الحساسة."}
             </p>
           </div>
@@ -5656,7 +5891,7 @@ async function renderReportScreen(targetCaseId = null) {
               <li style="font-size: 13.5px; color: var(--muted); line-height: 1.6;">
                 🔒 ${isEn ? "Detailed care instructions and clinical follow-up directives are restricted for Support role." : "توصيات الرعاية السريرية التفصيلية وتعليمات المتابعة محجوبة لدواعي الخصوصية والسرية الطبية."}
               </li>
-            ` : (Array.isArray(doctorRecommendations) 
+            ` : (Array.isArray(doctorRecommendations)
               ? doctorRecommendations.map(r => `<li style="font-size: 13.5px; color: var(--ink); line-height: 1.5;">${r}</li>`).join('')
               : `<li style="font-size: 13.5px; color: var(--ink); line-height: 1.5;">${doctorRecommendations}</li>`)}
           </ul>
@@ -5670,7 +5905,7 @@ async function renderReportScreen(targetCaseId = null) {
               ${qrSvg}
               <small style="display: block; font-size: 9.5px; color: var(--muted); margin-top: 4px; font-family: monospace;">SCAN TO VERIFY</small>
             </div>
-            
+
             <div>
               <div style="font-size: 12.5px; color: var(--muted);">${isEn ? "Electronically Certified & Signed by:" : "تم الاعتماد والتوقيع الإلكتروني السريري بواسطة:"}</div>
               <strong style="font-size: 16px; color: var(--ink); display: block; margin-top: 2px;">${doctorName}</strong>
@@ -5683,7 +5918,7 @@ async function renderReportScreen(targetCaseId = null) {
               </div>
             </div>
           </div>
-          
+
           <!-- OFFICIAL CLINICAL SEAL -->
           <div class="official-clinical-seal" style="text-align: center; border: 2.5px dashed #16a34a; border-radius: 50%; width: 105px; height: 105px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 6px; background: rgba(22, 163, 74, 0.05); transform: rotate(-5deg); box-shadow: 0 4px 12px rgba(22, 163, 74, 0.08);">
             <span style="font-size: 22px;">🩺</span>
@@ -5695,10 +5930,10 @@ async function renderReportScreen(targetCaseId = null) {
 
         <!-- MANDATORY MEDICAL NOTICE -->
         <div class="safety-note" style="font-size: 12px; line-height: 1.5; margin-bottom: 24px; padding: 12px 16px; background: var(--surface-2); border-left: 4px solid ${isSupport ? '#f59e0b' : 'var(--teal)'}; border-radius: 8px;">
-          ${isSupport ? (isEn 
+          ${isSupport ? (isEn
             ? "Support Security Notice: This record is accessed under technical support privileges. Full physiological measurements, clinical diagnoses, and Rx prescriptions remain redacted in compliance with medical confidentiality standards."
             : "تنبيه أمان الدعم الفني: يتم استعراض هذا السجل بصلاحية الدعم الفني واللوجستي، وتظل كافة العلامات الفسيولوجية والتشخيصات والوصفات محجوبة ومحمية وفقاً للتشريعات الطبية.")
-            : (isEn 
+            : (isEn
             ? "Medical Notice: This clinical report was compiled and verified by a licensed medical practitioner based on recorded vital signs, symptoms, and physiological assessment. For life-threatening emergencies, call emergency dispatch (123) immediately."
             : "تنبيه طبي: هذا التقرير صادر ومعتمد سريرياً من قبل طبيب مرخص بناءً على فحص العلامات الحيوية والأعراض والتقييم السريري. في حالات الطوارئ الحادة يرجى الاتصال فوراً بالإسعاف (123).")}
         </div>
@@ -5804,7 +6039,7 @@ async function renderResultScreen() {
             </span>
             <h1 style="margin: 14px 0 8px;">${isEn ? "Result Awaiting Doctor Review" : "النتيجة قيد الفحص والاعتماد السريري"}</h1>
             <p style="max-width: 520px; margin: 0 auto 24px; color: var(--muted); font-size: 14.5px; line-height: 1.6;">
-              ${isEn 
+              ${isEn
                 ? "No diagnostic outcome or medical score will be displayed until your attending physician examines the recorded vital signs and certifies the evaluation."
                 : "حرصاً على سلامتك، لن تظهر أي نتيجة تشخيصية أو مؤشرات نهائية قبل أن يفحص الطبيب المعالج كافة القياسات ويعتمدها سريرياً."}
             </p>
@@ -5932,7 +6167,7 @@ async function renderPatientHistory() {
             </div>
           </div>
           <div>
-            ${isApproved 
+            ${isApproved
               ? `<button type="button" class="solid-button" onclick="openPatientHistoryRecord('${c.sourceCollection || 'cases'}', '${c.id}')" style="font-size: 13px; padding: 8px 16px;">
                   <span>${isSupport ? "🛡️" : "✅"}</span> ${isSupport ? (isEn ? "View Support Dossier (Redacted)" : "عرض السجل (محجوب سريرياً)") : (isEn ? "View Certified Report" : "عرض التقرير المعتمد")}
                  </button>`
@@ -6577,12 +6812,12 @@ async function renderAdminApplications() {
         <div style="padding: 36px 20px; text-align: center; color: var(--muted); background: var(--surface-2); border-radius: 14px; border: 1px solid var(--line);">
           <span style="font-size: 34px; display: block; margin-bottom: 10px;">${currentAdminDoctorQueueFilter === 'pending' ? '🎉' : '📂'}</span>
           <strong style="color: var(--ink); font-size: 16px;">
-            ${currentAdminDoctorQueueFilter === 'pending' 
-              ? (isEn ? "No pending doctor applications in queue" : "لا توجد طلبات أطباء معلقة في قائمة الانتظار حالياً") 
+            ${currentAdminDoctorQueueFilter === 'pending'
+              ? (isEn ? "No pending doctor applications in queue" : "لا توجد طلبات أطباء معلقة في قائمة الانتظار حالياً")
               : (isEn ? "No applications in this category" : "لا توجد طلبات في هذا التصنيف")}
           </strong>
           <p style="margin: 6px auto 16px; font-size: 13px; max-width: 440px;">
-            ${currentAdminDoctorQueueFilter === 'pending' 
+            ${currentAdminDoctorQueueFilter === 'pending'
               ? (isEn ? "All incoming physician licenses have been verified, or doctors can submit new applications from the verification portal." : "تمت مراجعة واعتماد كافة التراخيص الطبية. يمكنك إضافة طلب طبيب للقائمة مباشرة بالزر بالأعلى.")
               : (isEn ? "Applications will appear here once processed." : "ستظهر الطلبات هنا بمجرد معالجتها وتغيير حالتها.")}
           </p>
@@ -6606,7 +6841,7 @@ async function renderAdminApplications() {
       const isApproved = app.status === "approved";
       const isRejected = app.status === "rejected";
 
-      const statusBadge = isPending 
+      const statusBadge = isPending
         ? `<span class="pill pending">${isEn ? "Pending Review ⏳" : "بانتظار الاعتماد ⏳"}</span>`
         : (isApproved ? `<span class="pill ok">${isEn ? "Verified & Approved ✓" : "طبيب معتمد وموثق ✓"}</span>` : `<span class="pill danger">${isEn ? "Rejected ✗" : "مرفوض ✗"}</span>`);
 
@@ -6764,8 +6999,8 @@ async function renderAdminMetrics() {
     setText("adminCasesTodayBadge", isEn ? `+${casesToday} today` : `+${casesToday} اليوم`);
 
     const pendingReviews = cases.filter(c => ['pending', 'submitted', 'triaged', 'assigned', 'under_review'].includes(c.status)).length;
-    const urgentReviews = cases.filter(c => 
-      (Number(c.oxygenLevel) > 0 && Number(c.oxygenLevel) < 90) || 
+    const urgentReviews = cases.filter(c =>
+      (Number(c.oxygenLevel) > 0 && Number(c.oxygenLevel) < 90) ||
       String(c.priority || c.risk || '').toLowerCase() === 'urgent'
     ).length;
 
@@ -6777,7 +7012,7 @@ async function renderAdminMetrics() {
     if (validO2List.length > 0) {
       const avgO2 = (validO2List.reduce((a, b) => a + b, 0) / validO2List.length).toFixed(1);
       setText("adminAvgSpO2Count", `${avgO2}%`);
-      setText("adminAvgSpO2Status", Number(avgO2) >= 94 
+      setText("adminAvgSpO2Status", Number(avgO2) >= 94
         ? (isEn ? "Physiologically Normal" : "مستوى تنفسي آمن وطبيعي")
         : (isEn ? "Requires Clinical Attention" : "يتطلب متابعة سريرية قريبة"));
     } else {
@@ -7027,12 +7262,12 @@ async function renderAdminUsers() {
         const role = normalizeRole(u.role || "patient", isOwner);
         const roleBadgeClass = isOwner ? "owner-badge" : (isAdminRole(role) ? "pill danger" : (role === ROLES.DOCTOR ? "pill ok" : "pill info"));
         const roleText = isEn ? (englishRoleLabels[role] || role) : (roleLabels[role] || role);
-        
+
         const isVerified = Boolean(u.emailVerified || isOwner);
         const isEmailVerifiedHtml = isVerified
           ? `<span class="pill ok" style="font-size: 11px; padding: 3px 8px;">${isEn ? "Verified ✓" : "بريد مؤكد ✓"}</span>`
           : `<span class="pill pending" style="font-size: 11px; padding: 3px 8px; background: rgba(245, 158, 11, 0.12); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3);">${isEn ? "Regular (Unverified) ⚠️" : "حساب عادي (غير مؤكد) ⚠️"}</span>`;
-        
+
         const userNameStr = u.name || u.displayName || (u.email ? u.email.split('@')[0] : 'مستخدم');
         const roleManagedByApplication = role === ROLES.DOCTOR_PENDING;
 
@@ -7133,16 +7368,16 @@ async function changeUserRole(userId, newRole, userName) {
 async function toggleUserVerification(userId, currentStatus, userName, userEmail) {
   const isEn = currentLanguage === "en";
   const newStatus = !currentStatus;
-  const actionText = newStatus 
+  const actionText = newStatus
     ? (isEn ? `verify account for ${userName}` : `توثيق وتأكيد حساب ${userName}`)
     : (isEn ? `unverify account for ${userName}` : `إلغاء توثيق حساب ${userName}`);
-    
+
   if (!confirm(isEn ? `Are you sure you want to ${actionText} on the system?` : `هل أنت متأكد من رغبتك في ${actionText} وتسجيل ذلك في النظام؟`)) {
     return;
   }
-  
+
   showToast(isEn ? `Updating verification status...` : `جاري تسجيل حالة التوثيق في النظام...`);
-  
+
   try {
     // 1. Update Firestore users collection
     if (typeof db !== "undefined" && db) {
@@ -7152,7 +7387,7 @@ async function toggleUserVerification(userId, currentStatus, userName, userEmail
         verifiedByAdmin: newStatus ? (auth?.currentUser?.email || "super_admin") : null
       }, { merge: true });
     }
-    
+
     // 2. Update local registry
     const list = getLocalAccountsRegistry();
     const u = list.find(x => x.id === userId || (x.email && x.email.toLowerCase() === (userEmail || '').toLowerCase()));
@@ -7160,7 +7395,7 @@ async function toggleUserVerification(userId, currentStatus, userName, userEmail
       u.emailVerified = newStatus;
       try { localStorage.setItem(ACCOUNTS_REGISTRY_KEY, JSON.stringify(list)); } catch(e) {}
     }
-    
+
     // 3. Write audit log
     if (typeof writeClientAuditLog === "function") {
       await writeClientAuditLog(newStatus ? "ADMIN_VERIFIED_USER_ACCOUNT" : "ADMIN_UNVERIFIED_USER_ACCOUNT", {
@@ -7169,7 +7404,7 @@ async function toggleUserVerification(userId, currentStatus, userName, userEmail
         newStatus: newStatus
       }).catch(() => {});
     }
-    
+
     showToast(isEn ? `Account ${userName} is now ${newStatus ? 'VERIFIED' : 'UNVERIFIED'} on system!` : `تم ${newStatus ? 'توثيق وتأكيد' : 'إلغاء توثيق'} حساب ${userName} على السيستم بنجاح!`);
     await renderAdminUsers();
     await renderAdminMetrics();
@@ -7465,7 +7700,7 @@ function updateOxygenWarning() {
           <h4>${isEn ? 'Severe Hypoxemia (SpO2 ' + oxygen + '%)' : 'نقص حاد في نسبة الأكسجين (' + oxygen + '%)'}</h4>
         </div>
         <p class="emergency-lead">
-          ${isEn 
+          ${isEn
             ? 'Oxygen saturation below 90% is dangerously low and requires immediate emergency medical care.'
             : 'هذه النسبة تشير إلى نقص حاد بالأكسجين وتستدعي تدخلاً إسعافياً عاجلاً وفورياً دون تأخير.'}
         </p>
@@ -9196,7 +9431,7 @@ function initHVAuthListener() {
         console.warn("Firestore role fetch failed, defaulting to patient:", e);
         selectedRole = isOwner ? ROLES.SUPER_ADMIN : ROLES.PATIENT;
       }
-      
+
       // Update with enriched details
       transitionToApp(user);
     } else {
@@ -9278,7 +9513,7 @@ checkUrlAuthAction();
 function updateAvatar(user) {
   const sidebarAvatar = document.getElementById("sidebarAvatar");
   const topbarAvatar = document.getElementById("topbarAvatar");
-  
+
   if (user && user.photoURL) {
     const imgHtml = `<img src="${user.photoURL}" alt="avatar" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">`;
     if (sidebarAvatar) sidebarAvatar.innerHTML = imgHtml;
@@ -9343,7 +9578,7 @@ window.exportUserData = async function() {
   }
 
   showToast(isEn ? "Preparing your medical data..." : "جاري تجهيز بياناتك الطبية للتصدير...");
-  
+
   try {
     const exportPayload = {
       exportVersion: "HealthVibe-Export-v1.0",
@@ -9572,10 +9807,10 @@ window.submitPatientMoreInfo = async function(caseId) {
     console.info(`✅ Patient successfully provided more info for case ${caseId}`);
 
     showToast(isEn ? "Information sent to physician! Case is back under clinical review." : "تم إرسال البيانات للطبيب بنجاح! الحالة الآن قيد الفحص السريري.");
-    
+
     // Refresh report screen
     await renderReportScreen(caseId);
-    
+
     // Refresh patient dashboard if function exists
     if (typeof renderPatientDashboard === "function") {
       renderPatientDashboard();
