@@ -320,6 +320,7 @@
         <button class="nav-item" data-screen="result"><span class="nav-icon">📋</span><span class="nav-label">Result</span></button>
         <button class="nav-item" data-screen="history"><span class="nav-icon">📂</span><span class="nav-label">History</span></button>
         <button class="nav-item" data-screen="appointments"><span class="nav-icon">📅</span><span class="nav-label">Appointments</span></button>
+        <button class="nav-item" data-screen="feedback"><span class="nav-icon">⭐</span><span class="nav-label">Feedback & Rating</span></button>
         <button class="nav-item" data-screen="assistant"><span class="nav-icon">🤖</span><span class="nav-label">Medical Assistant</span></button>
         <button class="nav-item" data-screen="verification" style="display:none;"><span class="nav-icon">✅</span><span class="nav-label">Doctor Verification</span></button>
         <button class="nav-item" data-screen="doctor" style="display:none;"><span class="nav-icon">🩺</span><span class="nav-label">Doctor Dashboard</span></button>
@@ -780,6 +781,152 @@
         </article>
       </section>
 
+      <!-- ========================================================================= -->
+      <!-- ⭐ SCREEN: CLINICAL & PATIENT FEEDBACK                                    -->
+      <!-- ========================================================================= -->
+      <section id="screen-feedback" class="screen">
+        <div class="content-grid">
+          <!-- 1. Submission Form Panel -->
+          <article class="panel">
+            <div class="panel-head">
+              <h3 id="feedbackFormTitle">
+                <span class="lang-ar">نموذج التقييم والملاحظات السريرية</span>
+                <span class="lang-en">Clinical &amp; Patient Feedback Form</span>
+              </h3>
+              <span class="pill ok" id="feedbackPerspectiveBadge">
+                <span class="lang-ar">تقييم المريض</span>
+                <span class="lang-en">Patient Feedback</span>
+              </span>
+            </div>
+
+            <!-- Role Perspective Switcher (Patient vs Doctor perspective) -->
+            <div class="form-group" style="margin-bottom: 14px;">
+              <label style="display:block; margin-bottom:6px; font-weight:600; font-size:13px;">
+                <span class="lang-ar">صفة مقدم التقييم:</span>
+                <span class="lang-en">Feedback Role Perspective:</span>
+              </label>
+              <div style="display: flex; gap: 8px;">
+                <button type="button" id="feedbackRoleBtnPatient" class="soft-button" onclick="setFeedbackPerspective('patient')" style="flex: 1; padding: 8px 12px; border: 1.5px solid var(--teal); background: rgba(9, 184, 182, 0.12); color: var(--teal); font-weight: 700; border-radius: 10px; cursor: pointer;">
+                  👤 <span class="lang-ar">مريض / مستفيد</span><span class="lang-en">Patient</span>
+                </button>
+                <button type="button" id="feedbackRoleBtnDoctor" class="soft-button" onclick="setFeedbackPerspective('doctor')" style="flex: 1; padding: 8px 12px; border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); font-weight: 700; border-radius: 10px; cursor: pointer;">
+                  🩺 <span class="lang-ar">طبيب / ممارس صحي</span><span class="lang-en">Doctor / Clinician</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Star Rating Widget -->
+            <div class="form-group" style="margin-bottom: 16px;">
+              <label style="display:block; margin-bottom:6px; font-weight:600; font-size:13px;">
+                <span class="lang-ar">التقييم العام (من 1 إلى 5 نجوم):</span>
+                <span class="lang-en">Overall Rating (1 to 5 Stars):</span>
+              </label>
+              <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                <div id="starRatingWidget" class="star-rating-widget" style="display: flex; gap: 4px; font-size: 28px; cursor: pointer;">
+                  <span class="star-item active" data-val="1" onclick="setFeedbackRating(1)" title="1 نجمة" style="color: #f59e0b; transition: transform 0.15s;">★</span>
+                  <span class="star-item active" data-val="2" onclick="setFeedbackRating(2)" title="2 نجوم" style="color: #f59e0b; transition: transform 0.15s;">★</span>
+                  <span class="star-item active" data-val="3" onclick="setFeedbackRating(3)" title="3 نجوم" style="color: #f59e0b; transition: transform 0.15s;">★</span>
+                  <span class="star-item active" data-val="4" onclick="setFeedbackRating(4)" title="4 نجوم" style="color: #f59e0b; transition: transform 0.15s;">★</span>
+                  <span class="star-item active" data-val="5" onclick="setFeedbackRating(5)" title="5 نجوم" style="color: #f59e0b; transition: transform 0.15s;">★</span>
+                </div>
+                <span id="starRatingText" style="font-weight: 700; font-size: 13px; color: #f59e0b;">
+                  5 / 5 (ممتاز / Excellent)
+                </span>
+                <input type="hidden" id="feedbackRatingValue" value="5">
+              </div>
+            </div>
+
+            <!-- Feedback Category Dropdown -->
+            <div class="form-group" style="margin-bottom: 14px;">
+              <label for="feedbackCategorySelect" style="display:block; margin-bottom:6px; font-weight:600; font-size:13px;">
+                <span class="lang-ar">تصنيف التقييم / موضوع الملاحظة:</span>
+                <span class="lang-en">Feedback Category:</span>
+              </label>
+              <select id="feedbackCategorySelect" class="form-control" style="width: 100%; padding: 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);">
+                <!-- Dynamic categories loaded based on role perspective -->
+              </select>
+            </div>
+
+            <!-- Related Case / Appointment (Optional) -->
+            <div class="form-group" style="margin-bottom: 14px;">
+              <label for="feedbackRefInput" style="display:block; margin-bottom:6px; font-weight:600; font-size:13px;">
+                <span class="lang-ar">رقم الحالة أو الموعد المرتبط (اختياري):</span>
+                <span class="lang-en">Related Case or Appointment ID (Optional):</span>
+              </label>
+              <input type="text" id="feedbackRefInput" class="form-control" placeholder="مثال: case_123 أو appt_456" style="width: 100%; padding: 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-family: monospace;">
+            </div>
+
+            <!-- Comment / Notes Textarea -->
+            <div class="form-group" style="margin-bottom: 14px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <label for="feedbackCommentInput" style="font-weight:600; font-size:13px;">
+                  <span class="lang-ar">تفاصيل الملاحظات والتجربة السريرية:</span>
+                  <span class="lang-en">Detailed Feedback &amp; Suggestions:</span>
+                </label>
+                <span id="feedbackCharCount" style="font-size: 11px; color: var(--muted);">0 / 1000 حرف</span>
+              </div>
+              <textarea id="feedbackCommentInput" class="form-control" rows="4" maxlength="1000" placeholder="اكتب رأيك أو ملاحظاتك السريرية بدقة لمساعدتنا على تحسين الخدمة..." style="width: 100%; padding: 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); resize: vertical; line-height: 1.5;"></textarea>
+            </div>
+
+            <!-- Anonymous / Public Checkbox -->
+            <div class="form-group" style="margin-bottom: 18px; display: flex; align-items: center; gap: 8px;">
+              <input type="checkbox" id="feedbackIsPublic" checked style="accent-color: var(--teal); width: 16px; height: 16px;">
+              <label for="feedbackIsPublic" style="font-size: 13px; color: var(--ink); cursor: pointer;">
+                <span class="lang-ar">مشاركة التقييم بشكل علني في لوحة آراء المجتمع والمركز الطبي</span>
+                <span class="lang-en">Share this feedback publicly in the community feedback wall</span>
+              </label>
+            </div>
+
+            <!-- Submit Button -->
+            <button type="button" id="btnSubmitFeedback" onclick="handleFeedbackSubmit()" class="solid-button full" style="padding: 12px; font-size: 14px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 8px;">
+              <span>⭐</span>
+              <span class="lang-ar">إرسال التقييم والملاحظات</span>
+              <span class="lang-en">Submit Feedback</span>
+            </button>
+          </article>
+
+          <!-- 2. Metrics & Previous Feedbacks Panel -->
+          <article class="panel">
+            <div class="panel-head">
+              <h3>
+                <span class="lang-ar">مؤشرات الرضا وسجل التقييمات</span>
+                <span class="lang-en">Satisfaction &amp; Feedback History</span>
+              </h3>
+              <span class="pill info" id="feedbackTotalCountBadge">0 تقييم</span>
+            </div>
+
+            <!-- Summary KPI Badges -->
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px;">
+              <div style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px; text-align: center;">
+                <div style="font-size: 20px; font-weight: 800; color: #f59e0b;" id="kpiAvgRating">4.9 ★</div>
+                <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">متوسط التقييم</div>
+              </div>
+              <div style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px; text-align: center;">
+                <div style="font-size: 20px; font-weight: 800; color: var(--teal);" id="kpiSatisfactionRate">98%</div>
+                <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">نسبة الرضا</div>
+              </div>
+              <div style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px; text-align: center;">
+                <div style="font-size: 20px; font-weight: 800; color: var(--ink);" id="kpiTotalFeedbacks">0</div>
+                <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">إجمالي الملاحظات</div>
+              </div>
+            </div>
+
+            <!-- Feed Filter Tabs -->
+            <div style="display: flex; gap: 6px; margin-bottom: 12px; overflow-x: auto; padding-bottom: 4px;">
+              <button type="button" class="filter-tab active" data-filter="all" onclick="filterFeedbackList('all')" style="padding: 6px 12px; border-radius: 8px; border: 1px solid var(--teal); background: rgba(9, 184, 182, 0.12); color: var(--teal); font-size: 12px; font-weight: 700; cursor: pointer;">الكل</button>
+              <button type="button" class="filter-tab" data-filter="mine" onclick="filterFeedbackList('mine')" style="padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); font-size: 12px; font-weight: 600; cursor: pointer;">تقييماتي</button>
+              <button type="button" class="filter-tab" data-filter="patient" onclick="filterFeedbackList('patient')" style="padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); font-size: 12px; font-weight: 600; cursor: pointer;">تجارب المرضى</button>
+              <button type="button" class="filter-tab" data-filter="doctor" onclick="filterFeedbackList('doctor')" style="padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); font-size: 12px; font-weight: 600; cursor: pointer;">ملاحظات الأطباء</button>
+            </div>
+
+            <!-- Feedbacks Feed Container -->
+            <div id="feedbackHistoryList" class="records" style="max-height: 480px; overflow-y: auto;">
+              <!-- Dynamic populated via renderFeedbackList() -->
+            </div>
+          </article>
+        </div>
+      </section>
+
       <section id="screen-assistant" class="screen">
         <div class="assistant-layout">
           <article class="panel chat-panel">
@@ -1030,6 +1177,53 @@
       </section>
     </section>
   </main>
+
+  <!-- Quick Clinical & Patient Feedback Modal -->
+  <div id="feedbackModal" class="confirm-modal" aria-hidden="true">
+    <div class="confirm-card" style="text-align: right; max-width: 500px; width: 95%;">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 22px;">⭐</span>
+          <h3 id="modalFeedbackTitle" style="margin: 0; font-size: 17px; color: var(--ink);">تقييم الخدمة والملاحظات</h3>
+        </div>
+        <button type="button" onclick="closeFeedbackModal()" style="background: none; border: none; font-size: 20px; color: var(--muted); cursor: pointer; line-height: 1;">&times;</button>
+      </div>
+      <p id="modalFeedbackSub" style="font-size: 13px; color: var(--muted); margin-bottom: 14px; line-height: 1.5;">
+        شاركنا تقييمك ورأيك السريري لمساعدتنا على تحسين جودة التشخيص والرعاية.
+      </p>
+
+      <div style="margin-bottom: 12px;">
+        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 6px;">درجة التقييم:</label>
+        <div id="modalStarRating" style="display: flex; gap: 6px; font-size: 28px; justify-content: center; cursor: pointer;">
+          <span class="m-star active" data-val="1" onclick="setModalFeedbackRating(1)" style="color: #f59e0b; transition: transform 0.15s;">★</span>
+          <span class="m-star active" data-val="2" onclick="setModalFeedbackRating(2)" style="color: #f59e0b; transition: transform 0.15s;">★</span>
+          <span class="m-star active" data-val="3" onclick="setModalFeedbackRating(3)" style="color: #f59e0b; transition: transform 0.15s;">★</span>
+          <span class="m-star active" data-val="4" onclick="setModalFeedbackRating(4)" style="color: #f59e0b; transition: transform 0.15s;">★</span>
+          <span class="m-star active" data-val="5" onclick="setModalFeedbackRating(5)" style="color: #f59e0b; transition: transform 0.15s;">★</span>
+        </div>
+        <input type="hidden" id="modalFeedbackRatingValue" value="5">
+      </div>
+
+      <div style="margin-bottom: 12px;">
+        <label for="modalFeedbackCategory" style="display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 6px;">تصنيف الملاحظة:</label>
+        <select id="modalFeedbackCategory" class="form-control" style="width: 100%; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);">
+          <option value="doctor_report">جودة التقرير المعتمد والوصفة (Certified Report & Rx)</option>
+          <option value="clinical_assessment">دقة وسهولة الفحص السريري (Clinical Assessment)</option>
+          <option value="doctor_queue_efficiency">كفاءة وأدوات طابور المراجعة (Doctor Review Workflow)</option>
+          <option value="ai_triage_accuracy">دقة فرز الذكاء الاصطناعي (AI Triage & Classification)</option>
+          <option value="appointments">حجز المواعيد والعيادات (Appointments)</option>
+          <option value="general">اقتراح وملاحظة عامة (General Suggestion)</option>
+        </select>
+      </div>
+
+      <textarea id="modalFeedbackComment" class="form-control" rows="3" placeholder="اكتب ملاحظاتك وتجربتك هنا..." style="width: 100%; padding: 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); margin-bottom: 14px; font-family: inherit; font-size: 13px;"></textarea>
+
+      <div class="doctor-actions">
+        <button id="modalBtnSubmitFeedback" class="solid-button" onclick="submitModalFeedback()">إرسال التقييم</button>
+        <button type="button" class="outline-button" onclick="closeFeedbackModal()">إلغاء</button>
+      </div>
+    </div>
+  </div>
 
   <div id="confirmModal" class="confirm-modal" aria-hidden="true">
     <div class="confirm-card">

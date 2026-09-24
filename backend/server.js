@@ -946,6 +946,131 @@ app.post('/api/notifications/send-email', requireAuth, requireVerifiedEmail, req
   }
 });
 
+// =========================================================================
+// ⭐ CLINICAL & PATIENT FEEDBACK API ENDPOINTS
+// =========================================================================
+
+/**
+ * POST /api/feedback/submit
+ * Allows patients, doctors, and staff to submit structured feedback & ratings.
+ */
+app.post('/api/feedback/submit', requireAuth, async (req, res) => {
+  const {
+    rating,
+    category,
+    comment,
+    role,
+    caseId,
+    appointmentId,
+    isPublic,
+    metadata
+  } = req.body;
+
+  const numericRating = Number(rating);
+  if (!numericRating || isNaN(numericRating) || numericRating < 1 || numericRating > 5) {
+    return res.status(400).json({
+      error: 'INVALID_RATING',
+      message: 'Rating must be an integer between 1 and 5 stars.'
+    });
+  }
+
+  if (!comment || typeof comment !== 'string' || comment.trim().length < 2) {
+    return res.status(400).json({
+      error: 'INVALID_COMMENT',
+      message: 'Comment must be at least 2 characters.'
+    });
+  }
+
+  if (comment.length > 2000) {
+    return res.status(400).json({
+      error: 'COMMENT_TOO_LONG',
+      message: 'Comment cannot exceed 2000 characters.'
+    });
+  }
+
+  const userRole = req.user.role || role || 'patient';
+  const validRoles = ['patient', 'doctor', 'doctor_pending', 'clinic_admin', 'super_admin'];
+  const sanitizedRole = validRoles.includes(userRole) ? userRole : 'patient';
+
+  const feedbackId = `fb_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  const feedbackDoc = {
+    feedbackId,
+    userId: req.user.uid,
+    userName: req.user.displayName || req.user.name || (sanitizedRole === 'doctor' ? 'طبيب ممارس' : 'مريض مجهول'),
+    userEmail: req.user.email || null,
+    role: sanitizedRole,
+    rating: Math.round(numericRating),
+    category: (typeof category === 'string' && category.trim()) ? category.trim() : 'general',
+    comment: comment.trim(),
+    caseId: caseId || null,
+    appointmentId: appointmentId || null,
+    isPublic: Boolean(isPublic),
+    status: 'received',
+    createdAt: new Date().toISOString(),
+    environment: CURRENT_ENV.name,
+    metadata: metadata || {}
+  };
+
+  try {
+    if (db && typeof db.collection === 'function') {
+      await db.collection('feedbacks').doc(feedbackId).set(feedbackDoc);
+    }
+
+    console.log(`[FEEDBACK] New feedback received: ${feedbackId} | User: ${req.user.uid} (${sanitizedRole}) | Rating: ${numericRating}★`);
+
+    return res.status(201).json({
+      success: true,
+      feedbackId,
+      status: 'received',
+      message: 'Feedback submitted successfully',
+      feedback: feedbackDoc
+    });
+  } catch (err) {
+    console.error('[FEEDBACK ERROR]:', err);
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
+  }
+});
+
+/**
+ * GET /api/feedback/list
+ * Returns list of feedbacks based on caller's role (patient sees own; doctor/admin sees all or filtered)
+ */
+app.get('/api/feedback/list', requireAuth, async (req, res) => {
+  try {
+    const userRole = req.user.role || 'patient';
+    const isDocOrAdmin = ['doctor', 'clinic_admin', 'super_admin'].includes(userRole) || (req.user.email && isSuperAdminUser(req.user.email));
+
+    if (!db || typeof db.collection !== 'function') {
+      return res.json({ success: true, feedbacks: [], total: 0 });
+    }
+
+    let query = db.collection('feedbacks');
+    if (!isDocOrAdmin) {
+      query = query.where('userId', '==', req.user.uid);
+    } else if (req.query.role) {
+      query = query.where('role', '==', req.query.role);
+    }
+
+    const snapshot = await query.get();
+    const feedbacks = [];
+    snapshot.forEach(doc => {
+      feedbacks.push(doc.data());
+    });
+
+    // Sort newest first
+    feedbacks.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+
+    return res.json({
+      success: true,
+      feedbacks,
+      total: feedbacks.length
+    });
+  } catch (err) {
+    console.error('[FEEDBACK LIST ERROR]:', err);
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
+  }
+});
+
 /**
  * POST /api/admin/assign-case
  * Server-authoritative endpoint to assign a clinical case to a specific doctor

@@ -447,7 +447,35 @@ service cloud.firestore {
     }
 
     // =========================================================================
-    // 9. 🛑 CATCH-ALL DEFAULT DENY
+    // 9. ⭐ CLINICAL & PATIENT FEEDBACKS (/feedbacks/{feedbackId})
+    // =========================================================================
+    // - Authenticated patients and doctors can submit feedback.
+    // - Submitter must match authenticated uid and provide valid rating (1-5).
+    // - Admins and doctors can read feedbacks; patients can read their own feedbacks or public reviews.
+    // - Updates and deletions restricted to Admins.
+    match /feedbacks/{feedbackId} {
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        isDoctor() ||
+        resource.data.userId == request.auth.uid ||
+        resource.data.isPublic == true
+      );
+
+      allow create: if isAuthenticated() &&
+                    request.resource.data.userId == request.auth.uid &&
+                    request.resource.data.rating is number &&
+                    request.resource.data.rating >= 1 &&
+                    request.resource.data.rating <= 5 &&
+                    request.resource.data.role in ['patient', 'doctor', 'clinic_admin', 'super_admin'] &&
+                    request.resource.data.comment is string &&
+                    request.resource.data.comment.size() > 0 &&
+                    request.resource.data.comment.size() <= 2000;
+
+      allow update, delete: if isAdmin();
+    }
+
+    // =========================================================================
+    // 10. 🛑 CATCH-ALL DEFAULT DENY
     // =========================================================================
     // - Explicitly deny any access to unspecified collections and paths.
     match /{document=**} {

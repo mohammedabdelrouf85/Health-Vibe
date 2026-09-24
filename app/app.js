@@ -114,7 +114,8 @@ const titles = {
   doctor: "مراجعة الطبيب",
   admin: "لوحة الإدارة",
   audit: "سجل التدقيق",
-  report: "التقرير"
+  report: "التقرير",
+  feedback: "التقييم والملاحظات"
 };
 
 // --- Real Role-Based Access Control (RBAC) Engine ---
@@ -233,25 +234,25 @@ const ROLE_PERMISSIONS_MAP = {
 const ROLE_ALLOWED_SCREENS = {
   [ROLES.PATIENT]: [
     "patient", "consent", "profile", "assessment", "pending", "result",
-    "history", "appointments", "assistant", "report"
+    "history", "appointments", "feedback", "assistant", "report"
   ],
   [ROLES.DOCTOR_PENDING]: [
-    "patient", "verification", "history", "appointments", "report", "profile"
+    "patient", "verification", "history", "appointments", "feedback", "report", "profile"
   ],
   [ROLES.DOCTOR]: [
-    "doctor", "verification", "history", "appointments", "report", "profile"
+    "doctor", "verification", "history", "appointments", "feedback", "report", "profile"
   ],
   [ROLES.CLINIC_ADMIN]: [
     "patient", "consent", "profile", "assessment", "pending", "result",
-    "history", "appointments", "assistant", "verification", "doctor",
+    "history", "appointments", "feedback", "assistant", "verification", "doctor",
     "report", "admin", "audit"
   ],
   [ROLES.SUPPORT]: [
-    "patient", "history", "appointments", "assistant", "report"
+    "patient", "history", "appointments", "feedback", "assistant", "report"
   ],
   [ROLES.SUPER_ADMIN]: [
     "patient", "consent", "profile", "assessment", "pending", "result",
-    "history", "appointments", "assistant", "verification", "doctor",
+    "history", "appointments", "feedback", "assistant", "verification", "doctor",
     "report", "admin", "audit"
   ]
 };
@@ -429,7 +430,8 @@ const englishTitles = {
   doctor: "Doctor Review",
   admin: "Admin Dashboard",
   audit: "Audit Log",
-  report: "Report"
+  report: "Report",
+  feedback: "Feedback & Rating"
 };
 
 const englishRoleLabels = {
@@ -5081,6 +5083,9 @@ function showScreen(name) {
   if (name === "appointments") {
     renderAppointmentsScreen();
   }
+  if (name === "feedback") {
+    renderFeedbackScreen();
+  }
 }
 
 async function renderPatientDashboard() {
@@ -7136,6 +7141,531 @@ window.showClinicDirections = showClinicDirections;
 window.updatePatientDashboardNextAppt = updatePatientDashboardNextAppt;
 window.getConfirmedAppointmentsForDoctorAndDate = getConfirmedAppointmentsForDoctorAndDate;
 window.getConfirmedAppointmentsForPatientAndDate = getConfirmedAppointmentsForPatientAndDate;
+
+// =========================================================================
+// ⭐ CLINICAL & PATIENT FEEDBACK MODULE
+// =========================================================================
+
+const FEEDBACK_CATEGORIES = {
+  patient: [
+    { id: "clinical_assessment", ar: "دقة وسهولة الفحص السريري الذكي", en: "Smart Breathing Assessment" },
+    { id: "doctor_report", ar: "جودة التقرير المعتمد والوصفة الطبية", en: "Doctor Report & Prescription" },
+    { id: "appointments", ar: "تجربة حجز ومواعيد العيادات", en: "Appointments & Scheduling" },
+    { id: "assistant", ar: "سهولة استخدام المنظومة والمساعد الطبي", en: "App Experience & Medical Assistant" },
+    { id: "general", ar: "اقتراح أو ملاحظة عامة", en: "General Suggestion / Feedback" }
+  ],
+  doctor: [
+    { id: "ai_triage_accuracy", ar: "دقة تصنيف وفرز الذكاء الاصطناعي (AI Triage)", en: "AI Triage & Classification Accuracy" },
+    { id: "doctor_queue_efficiency", ar: "كفاءة وأدوات طابور المراجعة السريرية", en: "Clinical Review Queue & Workflow" },
+    { id: "rx_diagnostic_tools", ar: "أدوات كتابة التشخيص والوصفة الطبية (Rx)", en: "Prescription & Medical Notes Editor" },
+    { id: "platform_performance", ar: "أداء وسرعة النظام والواجهة", en: "Platform Performance & UI" },
+    { id: "clinical_protocol", ar: "اقتراح بروتوكول علاجي أو سريري", en: "Clinical Protocol Suggestion" }
+  ]
+};
+
+let currentFeedbackPerspective = "patient";
+let currentFeedbackFilter = "all";
+let cachedFeedbacks = [];
+
+function setFeedbackPerspective(role) {
+  currentFeedbackPerspective = role === "doctor" ? "doctor" : "patient";
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+
+  const btnPatient = document.getElementById("feedbackRoleBtnPatient");
+  const btnDoctor = document.getElementById("feedbackRoleBtnDoctor");
+  const badge = document.getElementById("feedbackPerspectiveBadge");
+
+  if (btnPatient && btnDoctor) {
+    if (currentFeedbackPerspective === "doctor") {
+      btnDoctor.style.border = "1.5px solid var(--teal)";
+      btnDoctor.style.background = "rgba(9, 184, 182, 0.12)";
+      btnDoctor.style.color = "var(--teal)";
+      btnPatient.style.border = "1px solid var(--line)";
+      btnPatient.style.background = "var(--surface-2)";
+      btnPatient.style.color = "var(--muted)";
+    } else {
+      btnPatient.style.border = "1.5px solid var(--teal)";
+      btnPatient.style.background = "rgba(9, 184, 182, 0.12)";
+      btnPatient.style.color = "var(--teal)";
+      btnDoctor.style.border = "1px solid var(--line)";
+      btnDoctor.style.background = "var(--surface-2)";
+      btnDoctor.style.color = "var(--muted)";
+    }
+  }
+
+  if (badge) {
+    badge.textContent = currentFeedbackPerspective === "doctor"
+      ? (isEn ? "Doctor Clinical Perspective" : "ملاحظة سريرية كطبيب")
+      : (isEn ? "Patient Experience" : "تقييم تجربة المريض");
+  }
+
+  populateFeedbackCategories();
+}
+
+function populateFeedbackCategories() {
+  const select = document.getElementById("feedbackCategorySelect");
+  if (!select) return;
+
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  const list = FEEDBACK_CATEGORIES[currentFeedbackPerspective] || FEEDBACK_CATEGORIES.patient;
+  select.innerHTML = list.map(item => `
+    <option value="${item.id}">${isEn ? item.en : item.ar}</option>
+  `).join("");
+}
+
+function setFeedbackRating(val) {
+  val = Math.max(1, Math.min(5, Number(val) || 5));
+  const hiddenInput = document.getElementById("feedbackRatingValue");
+  if (hiddenInput) hiddenInput.value = val;
+
+  const container = document.getElementById("starRatingWidget");
+  if (container) {
+    const stars = container.querySelectorAll(".star-item");
+    stars.forEach(s => {
+      const starVal = Number(s.dataset.val) || 0;
+      s.classList.toggle("active", starVal <= val);
+      s.style.color = starVal <= val ? "#f59e0b" : "var(--line)";
+    });
+  }
+
+  const labelEl = document.getElementById("starRatingText");
+  if (labelEl) {
+    const ratingLabels = {
+      1: { ar: "1 / 5 (بحاجة لتحسين / Needs Improvement)", en: "1 / 5 (Needs Improvement)" },
+      2: { ar: "2 / 5 (مقبول / Fair)", en: "2 / 5 (Fair)" },
+      3: { ar: "3 / 5 (جيد / Good)", en: "3 / 5 (Good)" },
+      4: { ar: "4 / 5 (جيد جداً / Very Good)", en: "4 / 5 (Very Good)" },
+      5: { ar: "5 / 5 (ممتاز / Excellent)", en: "5 / 5 (Excellent)" }
+    };
+    const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+    labelEl.textContent = ratingLabels[val] ? (isEn ? ratingLabels[val].en : ratingLabels[val].ar) : `${val} / 5`;
+  }
+}
+
+function setModalFeedbackRating(val) {
+  val = Math.max(1, Math.min(5, Number(val) || 5));
+  const hiddenInput = document.getElementById("modalFeedbackRatingValue");
+  if (hiddenInput) hiddenInput.value = val;
+
+  const container = document.getElementById("modalStarRating");
+  if (container) {
+    const stars = container.querySelectorAll(".m-star");
+    stars.forEach(s => {
+      const starVal = Number(s.dataset.val) || 0;
+      s.classList.toggle("active", starVal <= val);
+      s.style.color = starVal <= val ? "#f59e0b" : "var(--line)";
+    });
+  }
+}
+
+function openFeedbackModal(options = {}) {
+  const modal = document.getElementById("feedbackModal");
+  if (!modal) return;
+
+  const isDoc = (typeof isDoctorRole === "function" && isDoctorRole(selectedRole)) || (typeof selectedRole !== "undefined" && selectedRole === "doctor");
+  const role = options.role || (isDoc ? "doctor" : "patient");
+  const caseId = options.caseId || "";
+  const appointmentId = options.appointmentId || "";
+  const defaultCategory = options.defaultCategory || (role === "doctor" ? "ai_triage_accuracy" : "doctor_report");
+
+  modal._feedbackContext = { role, caseId, appointmentId };
+
+  const catSelect = document.getElementById("modalFeedbackCategory");
+  if (catSelect && defaultCategory) {
+    catSelect.value = defaultCategory;
+  }
+
+  setModalFeedbackRating(5);
+  const commentEl = document.getElementById("modalFeedbackComment");
+  if (commentEl) commentEl.value = "";
+
+  modal.classList.add("open");
+  modal.setAttribute("aria-hidden", "false");
+}
+
+function closeFeedbackModal() {
+  const modal = document.getElementById("feedbackModal");
+  if (modal) {
+    modal.classList.remove("open");
+    modal.setAttribute("aria-hidden", "true");
+    modal._feedbackContext = null;
+  }
+}
+
+async function handleFeedbackSubmit() {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  const user = (typeof auth !== "undefined" && auth) ? auth.currentUser : null;
+  if (!user) {
+    if (typeof showToast === "function") {
+      showToast(isEn ? "Please sign in to submit feedback." : "يرجى تسجيل الدخول أولاً لإرسال تقييمك.");
+    }
+    if (typeof showAuth === "function") showAuth();
+    return;
+  }
+
+  const ratingVal = Number(document.getElementById("feedbackRatingValue")?.value || 5);
+  const category = document.getElementById("feedbackCategorySelect")?.value || "general";
+  const refInput = document.getElementById("feedbackRefInput")?.value?.trim() || "";
+  const commentInput = document.getElementById("feedbackCommentInput")?.value?.trim() || "";
+  const isPublic = Boolean(document.getElementById("feedbackIsPublic")?.checked);
+
+  if (!commentInput || commentInput.length < 2) {
+    if (typeof showToast === "function") {
+      showToast(isEn ? "Please write a brief comment describing your feedback." : "يرجى كتابة ملاحظاتك باختصار (حرفين على الأقل).");
+    }
+    document.getElementById("feedbackCommentInput")?.focus();
+    return;
+  }
+
+  const submitBtn = document.getElementById("btnSubmitFeedback");
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = `<span>⏳</span> <span>${isEn ? "Submitting..." : "جاري الإرسال..."}</span>`;
+  }
+
+  try {
+    const feedbackId = `fb_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const isDoc = (typeof isDoctorRole === "function" && isDoctorRole(selectedRole)) || (typeof selectedRole !== "undefined" && selectedRole === "doctor");
+    const userRole = currentFeedbackPerspective || (isDoc ? "doctor" : "patient");
+    const feedbackDoc = {
+      feedbackId,
+      userId: user.uid,
+      userName: user.displayName || (userRole === "doctor" ? "طبيب معالج" : "مريض"),
+      userEmail: user.email || null,
+      role: userRole,
+      rating: ratingVal,
+      category,
+      comment: commentInput,
+      refId: refInput || null,
+      isPublic,
+      status: "received",
+      createdAt: new Date().toISOString()
+    };
+
+    // 1. Try sending to backend endpoint
+    let submittedToBackend = false;
+    try {
+      const token = user.getIdToken ? await user.getIdToken() : null;
+      const res = await fetch("/api/feedback/submit", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          rating: ratingVal,
+          category,
+          comment: commentInput,
+          role: userRole,
+          caseId: refInput.startsWith("case_") ? refInput : null,
+          appointmentId: refInput.startsWith("appt_") ? refInput : null,
+          isPublic
+        })
+      });
+      if (res.ok) {
+        submittedToBackend = true;
+      }
+    } catch (netErr) {
+      console.warn("Backend feedback API unreachable, saving to Firestore directly:", netErr);
+    }
+
+    // 2. Persist to Firestore if client Firestore is active
+    if (!submittedToBackend && typeof db !== "undefined" && db && !user.isAnonymous) {
+      try {
+        await db.collection("feedbacks").doc(feedbackId).set(feedbackDoc);
+      } catch (dbErr) {
+        console.warn("Firestore feedback write failed, saving to local cache:", dbErr);
+      }
+    }
+
+    // 3. Update local cache
+    saveLocalFeedback(feedbackDoc);
+
+    if (typeof showToast === "function") {
+      showToast(isEn ? "Thank you! Your feedback has been received." : "شكراً لك! تم استلام تقييمك وملاحظاتك بنجاح.");
+    }
+
+    // Reset inputs
+    if (document.getElementById("feedbackCommentInput")) {
+      document.getElementById("feedbackCommentInput").value = "";
+    }
+    if (document.getElementById("feedbackRefInput")) {
+      document.getElementById("feedbackRefInput").value = "";
+    }
+    const charCounter = document.getElementById("feedbackCharCount");
+    if (charCounter) charCounter.textContent = "0 / 1000 حرف";
+    setFeedbackRating(5);
+
+    await renderFeedbackHistory();
+  } catch (err) {
+    console.error("Feedback submit error:", err);
+    if (typeof showToast === "function") {
+      showToast(isEn ? "Failed to submit feedback: " + err.message : "تعذر إرسال التقييم: " + err.message);
+    }
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = `<span>⭐</span> <span class="lang-ar">إرسال التقييم والملاحظات</span><span class="lang-en">Submit Feedback</span>`;
+    }
+  }
+}
+
+async function submitModalFeedback() {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  const user = (typeof auth !== "undefined" && auth) ? auth.currentUser : null;
+  if (!user) {
+    if (typeof showToast === "function") {
+      showToast(isEn ? "Please sign in to submit feedback." : "يرجى تسجيل الدخول أولاً لإرسال تقييمك.");
+    }
+    closeFeedbackModal();
+    if (typeof showAuth === "function") showAuth();
+    return;
+  }
+
+  const modal = document.getElementById("feedbackModal");
+  const ctx = (modal && modal._feedbackContext) || {};
+
+  const ratingVal = Number(document.getElementById("modalFeedbackRatingValue")?.value || 5);
+  const category = document.getElementById("modalFeedbackCategory")?.value || "doctor_report";
+  const commentInput = document.getElementById("modalFeedbackComment")?.value?.trim() || "";
+
+  if (!commentInput || commentInput.length < 2) {
+    if (typeof showToast === "function") {
+      showToast(isEn ? "Please write a comment describing your review." : "يرجى كتابة ملاحظاتك باختصار.");
+    }
+    return;
+  }
+
+  const feedbackId = `fb_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  const isDoc = (typeof isDoctorRole === "function" && isDoctorRole(selectedRole)) || (typeof selectedRole !== "undefined" && selectedRole === "doctor");
+  const userRole = ctx.role || (isDoc ? "doctor" : "patient");
+  const feedbackDoc = {
+    feedbackId,
+    userId: user.uid,
+    userName: user.displayName || (userRole === "doctor" ? "طبيب معالج" : "مريض"),
+    userEmail: user.email || null,
+    role: userRole,
+    rating: ratingVal,
+    category,
+    comment: commentInput,
+    caseId: ctx.caseId || null,
+    appointmentId: ctx.appointmentId || null,
+    isPublic: true,
+    status: "received",
+    createdAt: new Date().toISOString()
+  };
+
+  try {
+    if (typeof db !== "undefined" && db && !user.isAnonymous) {
+      db.collection("feedbacks").doc(feedbackId).set(feedbackDoc).catch(e => console.warn(e));
+    }
+    saveLocalFeedback(feedbackDoc);
+    closeFeedbackModal();
+    if (typeof showToast === "function") {
+      showToast(isEn ? "Thank you! Your rating has been submitted." : "شكراً لتقييمك! تم حفظ ملاحظاتك بنجاح.");
+    }
+    if (document.getElementById("screen-feedback")?.classList.contains("active")) {
+      await renderFeedbackHistory();
+    }
+  } catch (err) {
+    if (typeof showToast === "function") showToast(err.message);
+  }
+}
+
+function getStoredLocalFeedbacks() {
+  try {
+    const raw = localStorage.getItem("hv_local_feedbacks");
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalFeedback(doc) {
+  try {
+    const existing = getStoredLocalFeedbacks();
+    existing.unshift(doc);
+    localStorage.setItem("hv_local_feedbacks", JSON.stringify(existing.slice(0, 50)));
+  } catch (e) {
+    console.warn("Could not save to localStorage:", e);
+  }
+}
+
+async function renderFeedbackScreen() {
+  const isDoc = (typeof isDoctorRole === "function" && isDoctorRole(selectedRole)) || (typeof selectedRole !== "undefined" && selectedRole === "doctor");
+  if (isDoc) {
+    setFeedbackPerspective("doctor");
+  } else {
+    setFeedbackPerspective("patient");
+  }
+
+  const commentInput = document.getElementById("feedbackCommentInput");
+  const counter = document.getElementById("feedbackCharCount");
+  if (commentInput && counter && !commentInput._boundCounter) {
+    commentInput._boundCounter = true;
+    commentInput.addEventListener("input", () => {
+      counter.textContent = `${commentInput.value.length} / 1000 حرف`;
+    });
+  }
+
+  await renderFeedbackHistory();
+}
+
+async function renderFeedbackHistory() {
+  const container = document.getElementById("feedbackHistoryList");
+  if (!container) return;
+
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  const user = (typeof auth !== "undefined" && auth) ? auth.currentUser : null;
+
+  let feedbacks = [];
+
+  if (typeof db !== "undefined" && db && user && !user.isAnonymous) {
+    try {
+      const snap = await db.collection("feedbacks").limit(40).get();
+      snap.forEach(d => feedbacks.push(d.data()));
+    } catch (e) {
+      console.warn("Firestore feedback fetch fallback:", e);
+    }
+  }
+
+  const localList = getStoredLocalFeedbacks();
+  const map = new Map();
+  [...feedbacks, ...localList].forEach(item => {
+    if (item && item.feedbackId && !map.has(item.feedbackId)) {
+      map.set(item.feedbackId, item);
+    }
+  });
+
+  if (map.size === 0) {
+    const initialSamples = [
+      {
+        feedbackId: "fb_sample_1",
+        userId: "demo_patient_1",
+        userName: "أحمد كمال (مريض)",
+        role: "patient",
+        rating: 5,
+        category: "clinical_assessment",
+        comment: "الفحص الصدري بالذكاء الاصطناعي سريع جداً وملاحظات الطبيب كانت مطمئنة للغاية.",
+        createdAt: new Date(Date.now() - 3600000 * 24).toISOString()
+      },
+      {
+        feedbackId: "fb_sample_2",
+        userId: "demo_doc_1",
+        userName: "د. منى سامي",
+        role: "doctor",
+        rating: 5,
+        category: "ai_triage_accuracy",
+        comment: "نظام تصنيف وتحديد درجة خطورة نقص الأكسجين ممتاز ويختصر وقتاً ثميناً في الطوارئ.",
+        createdAt: new Date(Date.now() - 3600000 * 12).toISOString()
+      },
+      {
+        feedbackId: "fb_sample_3",
+        userId: "demo_patient_2",
+        userName: "سارة عبد الله (مريضة)",
+        role: "patient",
+        rating: 4,
+        category: "doctor_report",
+        comment: "التقرير المعتمد شافي ومفصل، والوصفة الطبية واضحة جداً بالجرعات.",
+        createdAt: new Date(Date.now() - 3600000 * 4).toISOString()
+      }
+    ];
+    initialSamples.forEach(s => map.set(s.feedbackId, s));
+  }
+
+  cachedFeedbacks = Array.from(map.values()).sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+
+  const total = cachedFeedbacks.length;
+  const avg = total > 0 ? (cachedFeedbacks.reduce((acc, c) => acc + (Number(c.rating) || 5), 0) / total).toFixed(1) : "5.0";
+  const positiveCount = cachedFeedbacks.filter(c => Number(c.rating) >= 4).length;
+  const satisfactionRate = total > 0 ? Math.round((positiveCount / total) * 100) : 100;
+
+  const kpiAvg = document.getElementById("kpiAvgRating");
+  if (kpiAvg) kpiAvg.textContent = `${avg} ★`;
+
+  const kpiSat = document.getElementById("kpiSatisfactionRate");
+  if (kpiSat) kpiSat.textContent = `${satisfactionRate}%`;
+
+  const kpiTot = document.getElementById("kpiTotalFeedbacks");
+  if (kpiTot) kpiTot.textContent = `${total}`;
+
+  const totalBadge = document.getElementById("feedbackTotalCountBadge");
+  if (totalBadge) totalBadge.textContent = isEn ? `${total} reviews` : `${total} تقييم`;
+
+  let displayed = cachedFeedbacks;
+  if (currentFeedbackFilter === "mine" && user) {
+    displayed = cachedFeedbacks.filter(f => f.userId === user.uid);
+  } else if (currentFeedbackFilter === "patient") {
+    displayed = cachedFeedbacks.filter(f => f.role === "patient");
+  } else if (currentFeedbackFilter === "doctor") {
+    displayed = cachedFeedbacks.filter(f => f.role === "doctor" || f.role === "doctor_pending");
+  }
+
+  if (displayed.length === 0) {
+    container.innerHTML = `
+      <div class="hv-state-card" style="margin: 16px 0; padding: 24px 16px;">
+        <span class="state-icon">⭐</span>
+        <h4>${isEn ? "No Reviews in this category" : "لا توجد تقييمات في هذا التصنيف حالياً"}</h4>
+        <p>${isEn ? "Be the first to leave your feedback using the form." : "كن أول من يشاركنا تجربته وملاحظاته عبر النموذج أعلاه."}</p>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = displayed.map(f => {
+    const isDoc = f.role === "doctor" || f.role === "doctor_pending";
+    const roleBadgeClass = isDoc ? "feedback-badge-role doctor" : "feedback-badge-role patient";
+    const roleIcon = isDoc ? "🩺" : "👤";
+    const roleLabel = isDoc ? (isEn ? "Doctor Note" : "ملاحظة طبيب") : (isEn ? "Patient Review" : "تجربة مريض");
+    const starsStr = "★".repeat(Math.max(1, Math.min(5, Number(f.rating) || 5)));
+    const dateFormatted = f.createdAt ? new Date(f.createdAt).toLocaleDateString(isEn ? "en-US" : "ar-EG", { month: "short", day: "numeric" }) : "";
+
+    return `
+      <div class="feedback-item-card" id="fb-card-${f.feedbackId}">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <strong style="font-size: 14px; color: var(--ink);">${f.userName || (isDoc ? "طبيب ممارس" : "مريض")}</strong>
+            <span class="${roleBadgeClass}">${roleIcon} ${roleLabel}</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span style="color: #f59e0b; font-size: 16px; letter-spacing: 1px;">${starsStr}</span>
+            <span style="font-size: 11px; color: var(--muted);">${dateFormatted}</span>
+          </div>
+        </div>
+        <p style="font-size: 13px; color: var(--ink); line-height: 1.5; margin: 0 0 6px;">
+          ${f.comment}
+        </p>
+        ${f.category ? `<span class="pill" style="font-size: 10px; background: var(--surface-3); color: var(--muted);">${f.category}</span>` : ""}
+      </div>
+    `;
+  }).join("");
+}
+
+function filterFeedbackList(filter) {
+  currentFeedbackFilter = filter;
+  const tabs = document.querySelectorAll(".filter-tab");
+  tabs.forEach(t => {
+    const isActive = t.dataset.filter === filter;
+    t.classList.toggle("active", isActive);
+    t.style.border = isActive ? "1px solid var(--teal)" : "1px solid var(--line)";
+    t.style.background = isActive ? "rgba(9, 184, 182, 0.12)" : "var(--surface-2)";
+    t.style.color = isActive ? "var(--teal)" : "var(--muted)";
+    t.style.fontWeight = isActive ? "700" : "600";
+  });
+  renderFeedbackHistory();
+}
+
+window.FEEDBACK_CATEGORIES = FEEDBACK_CATEGORIES;
+window.setFeedbackPerspective = setFeedbackPerspective;
+window.setFeedbackRating = setFeedbackRating;
+window.setModalFeedbackRating = setModalFeedbackRating;
+window.openFeedbackModal = openFeedbackModal;
+window.closeFeedbackModal = closeFeedbackModal;
+window.handleFeedbackSubmit = handleFeedbackSubmit;
+window.submitModalFeedback = submitModalFeedback;
+window.renderFeedbackScreen = renderFeedbackScreen;
+window.renderFeedbackHistory = renderFeedbackHistory;
+window.filterFeedbackList = filterFeedbackList;
 
 // --- Doctor Account Lifecycle: Application -> Verification -> Approval ---
 let selectedDoctorAppFile = null;

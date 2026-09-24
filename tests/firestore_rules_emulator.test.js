@@ -317,6 +317,28 @@ class RulesSimulator {
     return false;
   }
 
+  // Evaluate /feedbacks/{feedbackId}
+  canReadFeedback(request, resourceData) {
+    if (!request.auth) return false;
+    if (this.isAdmin(request) || this.isDoctor(request)) return true;
+    if (resourceData.userId === request.auth.uid) return true;
+    return resourceData.isPublic === true;
+  }
+
+  canCreateFeedback(request, resourceData) {
+    if (!request.auth) return false;
+    if (resourceData.userId !== request.auth.uid) return false;
+    if (typeof resourceData.rating !== "number" || resourceData.rating < 1 || resourceData.rating > 5) return false;
+    if (!["patient", "doctor", "clinic_admin", "super_admin"].includes(resourceData.role)) return false;
+    if (typeof resourceData.comment !== "string" || resourceData.comment.length === 0 || resourceData.comment.length > 2000) return false;
+    return true;
+  }
+
+  canUpdateOrDeleteFeedback(request) {
+    if (!request.auth) return false;
+    return this.isAdmin(request);
+  }
+
   // Catch-all
   canAccessCatchAll() {
     return false;
@@ -791,6 +813,108 @@ runTest("Doctor reads clinical email notification -> ALLOW", () => {
 
 runTest("Client attempts to write directly to /email_notifications -> DENY", () => {
   assert.strictEqual(sim.canWriteEmailNotification(), false);
+});
+
+// SECTION G: CLINICAL & PATIENT FEEDBACKS (/feedbacks/{feedbackId})
+runTest("Patient creates valid feedback (5 stars, clinical experience) -> ALLOW", () => {
+  const req = {
+    auth: sim.evalAuth({ uid: "user_patient", email: "patient@test.com", email_verified: true })
+  };
+  const feedbackData = {
+    userId: "user_patient",
+    role: "patient",
+    rating: 5,
+    category: "clinical_assessment",
+    comment: "تجربة ممتازة وتشخيص دقيق وسريع للغاية."
+  };
+  assert.strictEqual(sim.canCreateFeedback(req, feedbackData), true);
+});
+
+runTest("Doctor creates valid clinical feedback (AI accuracy observation) -> ALLOW", () => {
+  const req = {
+    auth: sim.evalAuth({ uid: "user_doctor_assigned", role: "doctor", verifiedDoctor: true })
+  };
+  const feedbackData = {
+    userId: "user_doctor_assigned",
+    role: "doctor",
+    rating: 4,
+    category: "ai_triage_accuracy",
+    comment: "توزيع دقيق لدرجات الخطورة وتطابق عالي مع معايير SpO2."
+  };
+  assert.strictEqual(sim.canCreateFeedback(req, feedbackData), true);
+});
+
+runTest("User attempts to submit feedback for another user ID -> DENY", () => {
+  const req = {
+    auth: sim.evalAuth({ uid: "user_patient", email: "patient@test.com", email_verified: true })
+  };
+  const feedbackData = {
+    userId: "victim_user_123",
+    role: "patient",
+    rating: 5,
+    comment: "Forged user comment"
+  };
+  assert.strictEqual(sim.canCreateFeedback(req, feedbackData), false);
+});
+
+runTest("User attempts to submit feedback with invalid rating (6 stars) -> DENY", () => {
+  const req = {
+    auth: sim.evalAuth({ uid: "user_patient", email: "patient@test.com", email_verified: true })
+  };
+  const feedbackData = {
+    userId: "user_patient",
+    role: "patient",
+    rating: 6,
+    comment: "Invalid star rating"
+  };
+  assert.strictEqual(sim.canCreateFeedback(req, feedbackData), false);
+});
+
+runTest("Patient reads their own feedback -> ALLOW", () => {
+  const req = {
+    auth: sim.evalAuth({ uid: "user_patient", email: "patient@test.com", email_verified: true })
+  };
+  const feedbackDoc = {
+    userId: "user_patient",
+    isPublic: false
+  };
+  assert.strictEqual(sim.canReadFeedback(req, feedbackDoc), true);
+});
+
+runTest("Patient attempts to read private feedback of another user -> DENY", () => {
+  const req = {
+    auth: sim.evalAuth({ uid: "user_patient", email: "patient@test.com", email_verified: true })
+  };
+  const feedbackDoc = {
+    userId: "other_patient_99",
+    isPublic: false
+  };
+  assert.strictEqual(sim.canReadFeedback(req, feedbackDoc), false);
+});
+
+runTest("Doctor reads patient feedback -> ALLOW", () => {
+  const req = {
+    auth: sim.evalAuth({ uid: "user_doctor_assigned", role: "doctor", verifiedDoctor: true })
+  };
+  const feedbackDoc = {
+    userId: "user_patient",
+    isPublic: false
+  };
+  assert.strictEqual(sim.canReadFeedback(req, feedbackDoc), true);
+});
+
+runTest("Patient attempts to update/delete feedback -> DENY (Admin only)", () => {
+  const req = {
+    auth: sim.evalAuth({ uid: "user_patient", email: "patient@test.com", email_verified: true })
+  };
+  assert.strictEqual(sim.canUpdateOrDeleteFeedback(req), false);
+});
+
+runTest("Admin can update/delete feedback -> ALLOW", () => {
+  const req = {
+    auth: sim.evalAuth({ uid: "user_admin", role: "super_admin", isOwner: true, emailVerified: true })
+  };
+  assert.strictEqual(sim.canUpdateOrDeleteFeedback(req), true);
 });
 
 console.log(`\n========================================`);
