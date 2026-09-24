@@ -63,6 +63,25 @@ const allowedOrigins = isDevelopment
   ? Array.from(new Set([...devDefaultOrigins, ...configuredOrigins]))
   : (configuredOrigins.length > 0 ? configuredOrigins : ['https://healthvibe.ai', 'https://app.healthvibe.ai']);
 
+// =============================================================================
+// 🛡️ SECURITY HARDENING & OWASP COMPLIANCE
+// =============================================================================
+// Suppress server fingerprinting
+app.disable('x-powered-by');
+
+// Defense-in-depth OWASP Security Response Headers
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  if (isProduction) {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  }
+  next();
+});
+
 app.use(cors({
   origin(origin, callback) {
     if (!origin || allowedOrigins.includes(origin)) {
@@ -71,7 +90,54 @@ app.use(cors({
     return callback(new Error(`CORS origin '${origin}' not allowed by ${NODE_ENV} environment policy.`));
   }
 }));
-app.use(express.json());
+
+// Body size limit to prevent memory exhaustion / DoS attacks
+app.use(express.json({ limit: '1mb' }));
+
+// In-Memory Sliding Window Rate Limiter
+function createRateLimiter({ windowMs = 60000, maxRequests = 100, message = 'Too many requests. Please slow down.' } = {}) {
+  const requests = new Map();
+
+  return (req, res, next) => {
+    const ip = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown-client';
+    const now = Date.now();
+    const windowStart = now - windowMs;
+
+    const timestamps = (requests.get(ip) || []).filter(ts => ts > windowStart);
+    if (timestamps.length >= maxRequests) {
+      res.setHeader('Retry-After', Math.ceil(windowMs / 1000));
+      return res.status(429).json({
+        error: 'RATE_LIMIT_EXCEEDED',
+        message
+      });
+    }
+
+    timestamps.push(now);
+    requests.set(ip, timestamps);
+
+    if (requests.size > 5000) {
+      for (const [key, tsList] of requests.entries()) {
+        const fresh = tsList.filter(ts => ts > windowStart);
+        if (fresh.length === 0) requests.delete(key);
+        else requests.set(key, fresh);
+      }
+    }
+
+    next();
+  };
+}
+
+// Global API rate limiter (120 req / minute)
+app.use('/api/', createRateLimiter({ windowMs: 60000, maxRequests: 120, message: 'API rate limit exceeded. Please try again shortly.' }));
+
+// Strict rate limiter for sensitive mutation endpoints (20 req / minute)
+const strictMutationLimiter = createRateLimiter({ windowMs: 60000, maxRequests: 20, message: 'Too many mutation attempts. Please wait 1 minute.' });
+app.use([
+  '/api/notifications/send-email',
+  '/api/feedback/submit',
+  '/api/appointments/book',
+  '/api/user/delete-account'
+], strictMutationLimiter);
 
 // Diagnostic Health Check Route for Dev & Prod
 app.get(['/health', '/api/health'], (req, res) => {
@@ -1499,8 +1565,10 @@ app.post('/api/user/delete-account', requireAuth, async (req, res) => {
 });
 
 const PORT = process.env.PORT || (isDevelopment ? 4000 : 8080);
-app.listen(PORT, () => {
-  console.log(`[Health Vibe AI Backend] Server running in [${NODE_ENV.toUpperCase()}] mode on port ${PORT}`);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`[Health Vibe AI Backend] Server running in [${NODE_ENV.toUpperCase()}] mode on port ${PORT}`);
+  });
+}
 
 module.exports = app;
