@@ -655,25 +655,129 @@
 
       <section id="screen-appointments" class="screen">
         <div class="content-grid">
+          <!-- 1. Selection & Date Selector Panel -->
           <article class="panel">
-            <div class="panel-head"><h3>حجز موعد</h3><span class="pill info">التقويم</span></div>
-            <div class="week">
-              <button>الأحد<br><b>20</b></button>
-              <button class="active">الإثنين<br><b>21</b></button>
-              <button>الثلاثاء<br><b>22</b></button>
-              <button>الأربعاء<br><b>23</b></button>
-              <button>الخميس<br><b>24</b></button>
+            <div class="panel-head">
+              <h3 id="apptHeaderTitle">حجز موعد سريري جديد</h3>
+              <span class="pill ok" id="apptBookingPill">حجز فوري</span>
+            </div>
+
+            <!-- Doctor & Specialty Selection -->
+            <div class="form-group" style="margin-bottom: 14px;">
+              <label for="apptDoctorSelect" style="display:block; margin-bottom:6px; font-weight:600; font-size:13px;">
+                <span class="lang-ar">اختر الطبيب المعالج والعيادة:</span>
+                <span class="lang-en">Select Doctor &amp; Clinic:</span>
+              </label>
+              <select id="apptDoctorSelect" class="form-control" style="width: 100%; padding: 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);">
+                <option value="dr_mona" data-name="د. منى سامي" data-name-en="Dr. Mona Sami" data-spec="استشاري أمراض صدرية وجهاز تنفسي" data-spec-en="Consultant Pulmonologist" data-clinic="عيادة الصدر والرعاية التنفسية">
+                  د. منى سامي - استشاري أمراض صدرية وجهاز تنفسي
+                </option>
+                <option value="dr_ahmed" data-name="د. أحمد السيد" data-name-en="Dr. Ahmed El-Sayed" data-spec="أخصائي حساسية ومناعة ورعاية تنفسية" data-spec-en="Allergy &amp; Respiratory Specialist" data-clinic="مركز الحساسية والمناعة">
+                  د. أحمد السيد - أخصائي حساسية ومناعة ورعاية تنفسية
+                </option>
+                <option value="dr_sarah" data-name="د. سارة محمود" data-name-en="Dr. Sarah Mahmoud" data-spec="استشاري طب الحالات الحرجة والطوارئ" data-spec-en="Critical Care &amp; Emergency" data-clinic="وحدة الاستشارات العاجلة">
+                  د. سارة محمود - استشاري طب الحالات الحرجة والطوارئ
+                </option>
+              </select>
+            </div>
+
+            <!-- Consultation Type Selector -->
+            <div class="form-group" style="margin-bottom: 16px;">
+              <label style="display:block; margin-bottom:6px; font-weight:600; font-size:13px;">
+                <span class="lang-ar">نوع الاستشارة:</span>
+                <span class="lang-en">Consultation Mode:</span>
+              </label>
+              <div class="appt-types-row" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+                <button type="button" class="appt-type-btn active" data-type="video" style="padding: 10px 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); color: var(--ink); text-align: center; cursor: pointer; font-size: 13px;">
+                  <strong style="display:block; font-size:13px;">📹 فيديو عن بُعد</strong>
+                  <span style="font-size: 11px; color: var(--muted);">Telehealth</span>
+                </button>
+                <button type="button" class="appt-type-btn" data-type="clinic" style="padding: 10px 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); color: var(--ink); text-align: center; cursor: pointer; font-size: 13px;">
+                  <strong style="display:block; font-size:13px;">🏥 حضور العيادة</strong>
+                  <span style="font-size: 11px; color: var(--muted);">In-Clinic</span>
+                </button>
+                <button type="button" class="appt-type-btn" data-type="followup" style="padding: 10px 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); color: var(--ink); text-align: center; cursor: pointer; font-size: 13px;">
+                  <strong style="display:block; font-size:13px;">📋 متابعة نتائج</strong>
+                  <span style="font-size: 11px; color: var(--muted);">Follow-up</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Date Selector (Dynamic 7 Days) -->
+            <div class="form-group" style="margin-bottom: 14px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <label style="font-weight:600; font-size:13px;">
+                  <span class="lang-ar">اختر اليوم المناسب:</span>
+                  <span class="lang-en">Select Date:</span>
+                </label>
+                <span id="selectedDateBadge" class="pill info" style="font-size: 11px;">--</span>
+              </div>
+              <div id="appointmentDateSelector" class="week">
+                <!-- Dynamically generated via renderAppointmentsScreen() -->
+              </div>
+            </div>
+
+            <!-- Clinical Notes / Reason for Visit -->
+            <div class="form-group" style="margin-top: 14px;">
+              <label for="apptNotesInput" style="display:block; margin-bottom:6px; font-weight:600; font-size:13px;">
+                <span class="lang-ar">سبب الزيارة أو ملاحظات سريرية (اختياري):</span>
+                <span class="lang-en">Reason for Visit / Clinical Notes (Optional):</span>
+              </label>
+              <input type="text" id="apptNotesInput" class="form-control" style="width: 100%; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 13px;" placeholder="مثال: متابعة بعد تقييم التنفس، كحة مستمرة، مراجعة الخطة العلاجية...">
             </div>
           </article>
+
+          <!-- 2. Time Slots & Confirmation Panel -->
           <article class="panel">
-            <div class="panel-head"><h3>المواعيد المتاحة</h3><span class="pill ok">متاح</span></div>
-            <div class="slot-list">
-              <button><strong>7:30 مساءً</strong><span>استشارة متابعة - 20 دقيقة</span></button>
-              <button><strong>8:15 مساءً</strong><span>فيديو أو عيادة</span></button>
+            <div class="panel-head">
+              <h3>
+                <span class="lang-ar">المواعيد المتاحة</span>
+                <span class="lang-en">Available Time Slots</span>
+              </h3>
+              <span class="pill ok" id="availableSlotsCount">5 فترات متاحة</span>
             </div>
-            <button class="solid-button full">تأكيد الموعد</button>
+
+            <!-- Dynamic Time Slots -->
+            <div id="appointmentTimeSlots" class="slot-list" style="margin-bottom: 16px;">
+              <!-- Dynamically generated via renderAppointmentsScreen() -->
+            </div>
+
+            <!-- Booking Summary Box -->
+            <div id="apptSummaryCard" style="background: var(--surface-3, rgba(13,148,136,0.08)); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin-bottom: 16px; font-size: 13px;">
+              <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+                <span style="color:var(--muted);" class="lang-ar">الطبيب:</span>
+                <strong id="summaryDoctorName" style="color:var(--ink);">د. منى سامي</strong>
+              </div>
+              <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+                <span style="color:var(--muted);" class="lang-ar">الموعد:</span>
+                <strong id="summaryDateTime" style="color:var(--teal-2, #0d9488);">--</strong>
+              </div>
+              <div style="display:flex; justify-content:space-between;">
+                <span style="color:var(--muted);" class="lang-ar">نوع الاستشارة:</span>
+                <span id="summaryApptType" class="pill info" style="font-size:11px;">فيديو عن بُعد</span>
+              </div>
+            </div>
+
+            <button type="button" id="btnConfirmBooking" class="solid-button full" style="padding: 14px; font-size: 15px; font-weight: 600;">
+              <span class="lang-ar">✓ تأكيد حجز الموعد</span>
+              <span class="lang-en">✓ Confirm Appointment Booking</span>
+            </button>
           </article>
         </div>
+
+        <!-- 3. My Booked Appointments Section -->
+        <article class="panel" style="margin-top: 18px;">
+          <div class="panel-head">
+            <h3>
+              <span class="lang-ar">حجوزاتي القادمة والسابقة</span>
+              <span class="lang-en">My Booked Appointments</span>
+            </h3>
+            <span class="pill info" id="patientApptsCount">0 مواعيد</span>
+          </div>
+          <div id="patientBookedAppointmentsList" class="records">
+            <!-- Dynamically populated via renderAppointmentsScreen() -->
+          </div>
+        </article>
       </section>
 
       <section id="screen-assistant" class="screen">

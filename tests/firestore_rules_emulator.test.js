@@ -24,6 +24,7 @@ const requiredMatches = [
   "match /audit_events/{eventId}",
   "match /auditLog/{logId}",
   "match /ai_model_metrics/{metricId}",
+  "match /appointments/{appointmentId}",
   "match /{document=**}"
 ];
 
@@ -277,6 +278,31 @@ class RulesSimulator {
 
   canWriteAuditEvent() {
     return false;
+  }
+
+  // Evaluate /appointments/{appointmentId}
+  canReadAppointment(request, resourceData) {
+    if (!request.auth) return false;
+    if (this.isAdmin(request) || this.isDoctor(request)) return true;
+    return resourceData.patientId === request.auth.uid;
+  }
+
+  canCreateAppointment(request, resourceData) {
+    if (!request.auth) return false;
+    if (resourceData.patientId !== request.auth.uid) return false;
+    return ['confirmed', 'pending'].includes(resourceData.status);
+  }
+
+  canUpdateAppointment(request, resourceData, updatedData) {
+    if (!request.auth) return false;
+    if (this.isAdmin(request) || this.isDoctor(request)) return true;
+    return resourceData.patientId === request.auth.uid && updatedData.patientId === request.auth.uid;
+  }
+
+  canDeleteAppointment(request, resourceData) {
+    if (!request.auth) return false;
+    if (this.isAdmin(request)) return true;
+    return resourceData.patientId === request.auth.uid;
   }
 
   // Catch-all
@@ -630,6 +656,88 @@ runTest("Admin reads /audit_events -> ALLOW", () => {
 
 runTest("Access to arbitrary collection /secret_vault -> DENY", () => {
   assert.strictEqual(sim.canAccessCatchAll(), false);
+});
+
+// SECTION E: CLINICAL APPOINTMENTS (/appointments/{appointmentId})
+runTest("Patient creates valid appointment for themselves -> ALLOW", () => {
+  const req = {
+    auth: sim.evalAuth({ uid: "user_patient", email: "patient@test.com", email_verified: true })
+  };
+  const apptDoc = {
+    patientId: "user_patient",
+    doctorName: "د. منى سامي",
+    date: "2026-09-25",
+    timeSlot: "10:00 AM",
+    status: "confirmed"
+  };
+  assert.strictEqual(sim.canCreateAppointment(req, apptDoc), true);
+});
+
+runTest("Patient attempts to create appointment for another patient -> DENY", () => {
+  const req = {
+    auth: sim.evalAuth({ uid: "user_patient", email: "patient@test.com", email_verified: true })
+  };
+  const apptDoc = {
+    patientId: "another_patient_id",
+    doctorName: "د. منى سامي",
+    date: "2026-09-25",
+    timeSlot: "10:00 AM",
+    status: "confirmed"
+  };
+  assert.strictEqual(sim.canCreateAppointment(req, apptDoc), false);
+});
+
+runTest("Patient reads own appointment -> ALLOW", () => {
+  const req = {
+    auth: sim.evalAuth({ uid: "user_patient" })
+  };
+  const apptDoc = {
+    patientId: "user_patient",
+    doctorName: "د. منى سامي",
+    status: "confirmed"
+  };
+  assert.strictEqual(sim.canReadAppointment(req, apptDoc), true);
+});
+
+runTest("Patient attempts to read another patient's appointment -> DENY", () => {
+  const req = {
+    auth: sim.evalAuth({ uid: "user_patient" })
+  };
+  const apptDoc = {
+    patientId: "other_patient_99",
+    doctorName: "د. منى سامي",
+    status: "confirmed"
+  };
+  assert.strictEqual(sim.canReadAppointment(req, apptDoc), false);
+});
+
+runTest("Doctor reads any clinical appointment -> ALLOW", () => {
+  const req = {
+    auth: sim.evalAuth({ uid: "user_doctor_assigned", role: "doctor", verifiedDoctor: true })
+  };
+  const apptDoc = {
+    patientId: "user_patient",
+    doctorName: "د. منى سامي",
+    status: "confirmed"
+  };
+  assert.strictEqual(sim.canReadAppointment(req, apptDoc), true);
+});
+
+runTest("Patient cancels/updates their own appointment -> ALLOW", () => {
+  const req = {
+    auth: sim.evalAuth({ uid: "user_patient" })
+  };
+  const apptDoc = {
+    patientId: "user_patient",
+    doctorName: "د. منى سامي",
+    status: "confirmed"
+  };
+  const updatedDoc = {
+    patientId: "user_patient",
+    doctorName: "د. منى سامي",
+    status: "cancelled"
+  };
+  assert.strictEqual(sim.canUpdateAppointment(req, apptDoc, updatedDoc), true);
 });
 
 console.log(`\n========================================`);

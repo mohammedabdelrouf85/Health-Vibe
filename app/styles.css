@@ -3713,3 +3713,72 @@ body.dark .legal-content-body h4 {
 .hv-state-card.success-card h4 {
   color: #16a34a;
 }
+
+/* ── Clinical Appointments Booking ── */
+.week {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(70px, 1fr));
+  gap: 8px;
+}
+
+.week button {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.appt-type-btn {
+  transition: all 0.2s ease;
+}
+
+.appt-type-btn.active {
+  background: var(--teal) !important;
+  border-color: var(--teal) !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 12px rgba(13, 148, 136, 0.25);
+}
+
+.appt-type-btn.active strong,
+.appt-type-btn.active span {
+  color: #ffffff !important;
+}
+
+.slot-list button {
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: right;
+}
+
+html[dir="ltr"] .slot-list button {
+  text-align: left;
+}
+
+.slot-list button.active {
+  background: var(--teal) !important;
+  border-color: var(--teal) !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 12px rgba(13, 148, 136, 0.25);
+}
+
+.slot-list button.active strong,
+.slot-list button.active span {
+  color: #ffffff !important;
+}
+
+.appointment-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  border-radius: 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  margin-bottom: 10px;
+}
+
+@media (max-width: 640px) {
+  .appointment-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

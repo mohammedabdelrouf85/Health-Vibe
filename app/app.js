@@ -5067,6 +5067,9 @@ function showScreen(name) {
   if (name === "assistant") {
     renderAssistantScreen();
   }
+  if (name === "appointments") {
+    renderAppointmentsScreen();
+  }
 }
 
 async function renderPatientDashboard() {
@@ -5085,7 +5088,7 @@ async function renderPatientDashboard() {
   document.getElementById("patientClinicalO2").textContent = "--%";
   document.getElementById("patientClinicalConfidence").textContent = "--";
   document.getElementById("patientClinicalDoctor").textContent = "--";
-  document.getElementById("patientNextAppt").textContent = "--";
+  updatePatientDashboardNextAppt();
   document.getElementById("patientLatestReport").textContent = "--";
   document.getElementById("patientResultStatus").textContent = "--";
 
@@ -6455,6 +6458,516 @@ async function renderPatientHistory() {
     `;
   }
 }
+
+// ============================================================================
+// 📅 CLINICAL APPOINTMENTS BOOKING & MANAGEMENT ENGINE
+// ============================================================================
+
+const AVAILABLE_APPOINTMENT_SLOTS = [
+  { id: "slot_1000", timeAr: "10:00 صباحًا", timeEn: "10:00 AM", periodAr: "استشارة صباحية - 20 دقيقة", periodEn: "Morning Consultation - 20 min" },
+  { id: "slot_1130", timeAr: "11:30 صباحًا", timeEn: "11:30 AM", periodAr: "استشارة ومتابعة سريرية", periodEn: "Clinical Review & Follow-up" },
+  { id: "slot_1600", timeAr: "04:00 مساءً", timeEn: "04:00 PM", periodAr: "عيادة مسائية مبكرة", periodEn: "Early Evening Clinic" },
+  { id: "slot_1830", timeAr: "06:30 مساءً", timeEn: "06:30 PM", periodAr: "جلسة مراجعة تنفسية متخصصة", periodEn: "Specialized Respiratory Review" },
+  { id: "slot_2000", timeAr: "08:00 مساءً", timeEn: "08:00 PM", periodAr: "استشارة مسائية متقدمة", periodEn: "Late Evening Telehealth" }
+];
+
+let apptDaysList = [];
+let apptSelectedDate = null;
+let apptSelectedSlot = null;
+let apptSelectedType = "video";
+
+function generateAppointmentDays() {
+  const days = [];
+  const arDays = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
+  const enDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const arMonths = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
+  const enMonths = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+  const now = new Date();
+  const startOffset = now.getHours() >= 20 ? 1 : 0;
+
+  for (let i = 0; i < 7; i++) {
+    const d = new Date();
+    d.setDate(now.getDate() + startOffset + i);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    const dateStr = `${year}-${month}-${day}`;
+
+    const dayOfWeek = d.getDay();
+    let labelAr = arDays[dayOfWeek];
+    let labelEn = enDays[dayOfWeek];
+
+    if (startOffset === 0) {
+      if (i === 0) {
+        labelAr = "اليوم";
+        labelEn = "Today";
+      } else if (i === 1) {
+        labelAr = "غداً";
+        labelEn = "Tomorrow";
+      }
+    } else {
+      if (i === 0) {
+        labelAr = "غداً";
+        labelEn = "Tomorrow";
+      }
+    }
+
+    days.push({
+      dateStr: dateStr,
+      dayNumber: d.getDate(),
+      dayOfWeek: dayOfWeek,
+      labelAr: labelAr,
+      labelEn: labelEn,
+      fullLabelAr: `${arDays[dayOfWeek]} ${d.getDate()} ${arMonths[d.getMonth()]}`,
+      fullLabelEn: `${enDays[dayOfWeek]}, ${d.getDate()} ${enMonths[d.getMonth()]}`
+    });
+  }
+  return days;
+}
+
+function updateAppointmentSummary() {
+  const isEn = currentLanguage === "en";
+  const doctorSelect = document.getElementById("apptDoctorSelect");
+  const selectedOption = doctorSelect ? doctorSelect.selectedOptions[0] : null;
+  const docName = selectedOption ? (isEn ? (selectedOption.dataset.nameEn || selectedOption.dataset.name) : selectedOption.dataset.name) : (isEn ? "Dr. Mona Sami" : "د. منى سامي");
+
+  const docEl = document.getElementById("summaryDoctorName");
+  if (docEl) docEl.textContent = docName;
+
+  const dateTimeEl = document.getElementById("summaryDateTime");
+  if (dateTimeEl) {
+    if (apptSelectedDate && apptSelectedSlot) {
+      const dateLabel = isEn ? apptSelectedDate.fullLabelEn : apptSelectedDate.fullLabelAr;
+      const slotLabel = isEn ? apptSelectedSlot.timeEn : apptSelectedSlot.timeAr;
+      dateTimeEl.textContent = `${dateLabel} - ${slotLabel}`;
+    } else {
+      dateTimeEl.textContent = "--";
+    }
+  }
+
+  const typeEl = document.getElementById("summaryApptType");
+  if (typeEl) {
+    if (apptSelectedType === "video") {
+      typeEl.textContent = isEn ? "Telehealth Video" : "فيديو عن بُعد";
+      typeEl.className = "pill info";
+    } else if (apptSelectedType === "clinic") {
+      typeEl.textContent = isEn ? "In-Clinic Visit" : "حضور العيادة";
+      typeEl.className = "pill ok";
+    } else {
+      typeEl.textContent = isEn ? "Results Follow-up" : "متابعة نتائج";
+      typeEl.className = "pill pending";
+    }
+  }
+
+  const dateBadgeEl = document.getElementById("selectedDateBadge");
+  if (dateBadgeEl && apptSelectedDate) {
+    dateBadgeEl.textContent = isEn ? apptSelectedDate.fullLabelEn : apptSelectedDate.fullLabelAr;
+  }
+}
+
+function renderAppointmentsScreen() {
+  const isEn = currentLanguage === "en";
+  apptDaysList = generateAppointmentDays();
+
+  if (!apptSelectedDate) {
+    apptSelectedDate = apptDaysList[0];
+  } else {
+    const existing = apptDaysList.find(d => d.dateStr === apptSelectedDate.dateStr);
+    apptSelectedDate = existing || apptDaysList[0];
+  }
+
+  if (!apptSelectedSlot) {
+    apptSelectedSlot = AVAILABLE_APPOINTMENT_SLOTS[0];
+  }
+
+  // Render Date Selector
+  const dateContainer = document.getElementById("appointmentDateSelector");
+  if (dateContainer) {
+    dateContainer.innerHTML = apptDaysList.map((dayItem) => {
+      const isActive = dayItem.dateStr === apptSelectedDate.dateStr;
+      const dayLabel = isEn ? dayItem.labelEn : dayItem.labelAr;
+      return `
+        <button type="button" class="${isActive ? 'active' : ''}" onclick="selectAppointmentDate('${dayItem.dateStr}')">
+          <span style="font-size:12px; display:block; opacity:0.85;">${dayLabel}</span>
+          <b style="font-size:16px; display:block; margin-top:3px;">${dayItem.dayNumber}</b>
+        </button>
+      `;
+    }).join("");
+  }
+
+  // Render Slots Selector
+  const slotsContainer = document.getElementById("appointmentTimeSlots");
+  if (slotsContainer) {
+    slotsContainer.innerHTML = AVAILABLE_APPOINTMENT_SLOTS.map((slot) => {
+      const isActive = apptSelectedSlot && slot.id === apptSelectedSlot.id;
+      const timeText = isEn ? slot.timeEn : slot.timeAr;
+      const descText = isEn ? slot.periodEn : slot.periodAr;
+      return `
+        <button type="button" class="${isActive ? 'active' : ''}" onclick="selectAppointmentSlot('${slot.id}')">
+          <strong>${timeText}</strong>
+          <span>${descText}</span>
+        </button>
+      `;
+    }).join("");
+  }
+
+  // Bind Type Buttons
+  document.querySelectorAll(".appt-type-btn").forEach((btn) => {
+    btn.onclick = () => {
+      document.querySelectorAll(".appt-type-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      apptSelectedType = btn.dataset.type || "video";
+      updateAppointmentSummary();
+    };
+  });
+
+  // Doctor Select change
+  const doctorSelect = document.getElementById("apptDoctorSelect");
+  if (doctorSelect) {
+    doctorSelect.onchange = () => updateAppointmentSummary();
+  }
+
+  // Confirm booking button
+  const confirmBtn = document.getElementById("btnConfirmBooking");
+  if (confirmBtn) {
+    confirmBtn.onclick = () => confirmAppointmentBooking();
+  }
+
+  updateAppointmentSummary();
+  renderPatientAppointmentsList();
+}
+
+function selectAppointmentDate(dateStr) {
+  const found = apptDaysList.find(d => d.dateStr === dateStr);
+  if (found) {
+    apptSelectedDate = found;
+    renderAppointmentsScreen();
+  }
+}
+
+function selectAppointmentSlot(slotId) {
+  const found = AVAILABLE_APPOINTMENT_SLOTS.find(s => s.id === slotId);
+  if (found) {
+    apptSelectedSlot = found;
+    renderAppointmentsScreen();
+  }
+}
+
+function getLocalAppointments(patientId) {
+  try {
+    const key = patientId ? `hv_appointments_${patientId}` : "hv_appointments";
+    const raw = localStorage.getItem(key);
+    if (raw) return JSON.parse(raw);
+    const globalRaw = localStorage.getItem("hv_appointments");
+    if (globalRaw) {
+      const list = JSON.parse(globalRaw);
+      return patientId ? list.filter(a => a.patientId === patientId) : list;
+    }
+  } catch (e) {}
+  return [];
+}
+
+function saveAppointmentToLocalStorage(appt) {
+  try {
+    const patientKey = `hv_appointments_${appt.patientId}`;
+    let list = [];
+    const raw = localStorage.getItem(patientKey);
+    if (raw) list = JSON.parse(raw);
+    list = list.filter(a => a.id !== appt.id);
+    list.unshift(appt);
+    localStorage.setItem(patientKey, JSON.stringify(list));
+
+    let globalList = [];
+    const globalRaw = localStorage.getItem("hv_appointments");
+    if (globalRaw) globalList = JSON.parse(globalRaw);
+    globalList = globalList.filter(a => a.id !== appt.id);
+    globalList.unshift(appt);
+    localStorage.setItem("hv_appointments", JSON.stringify(globalList));
+  } catch (e) {}
+}
+
+function updateLocalAppointmentStatus(apptId, newStatus) {
+  try {
+    const keys = Object.keys(localStorage).filter(k => k.startsWith("hv_appointments"));
+    keys.forEach(k => {
+      try {
+        const raw = localStorage.getItem(k);
+        if (raw) {
+          const list = JSON.parse(raw);
+          let changed = false;
+          list.forEach(a => {
+            if (a.id === apptId) {
+              a.status = newStatus;
+              changed = true;
+            }
+          });
+          if (changed) localStorage.setItem(k, JSON.stringify(list));
+        }
+      } catch (e) {}
+    });
+  } catch (e) {}
+}
+
+async function confirmAppointmentBooking() {
+  const isEn = currentLanguage === "en";
+  if (!apptSelectedDate || !apptSelectedSlot) {
+    showToast(isEn ? "Please select a date and an available time slot." : "يرجى تحديد اليوم والفترة الزمنية المناسبة.");
+    return;
+  }
+
+  const doctorSelect = document.getElementById("apptDoctorSelect");
+  const selectedOption = doctorSelect ? doctorSelect.selectedOptions[0] : null;
+  const doctorId = doctorSelect ? doctorSelect.value : "dr_mona";
+  const doctorName = selectedOption ? (selectedOption.dataset.name || "د. منى سامي") : "د. منى سامي";
+  const doctorSpecialty = selectedOption ? (selectedOption.dataset.spec || "استشاري أمراض صدرية") : "استشاري أمراض صدرية";
+  const clinicName = selectedOption ? (selectedOption.dataset.clinic || "عيادة الصدر والرعاية التنفسية") : "عيادة الصدر والرعاية التنفسية";
+
+  const notesInput = document.getElementById("apptNotesInput");
+  const notes = notesInput ? notesInput.value.trim() : "";
+
+  const user = auth ? auth.currentUser : null;
+  const cachedDoc = window._cachedUserDoc || {};
+  const activeSession = (typeof getActiveSession === "function" ? getActiveSession() : null) || {};
+  const patientId = user ? user.uid : (activeSession.uid || "anon_patient");
+  const patientName = cachedDoc.name || cachedDoc.displayName || user?.displayName || activeSession.displayName || activeSession.name || (user?.email ? user.email.split("@")[0] : (isEn ? "Patient" : "مريض"));
+  const patientEmail = user?.email || cachedDoc.email || activeSession.email || "";
+  const patientPhone = cachedDoc.phoneNumber || user?.phoneNumber || activeSession.phoneNumber || "";
+
+  const apptId = "appt_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6);
+  const dateLabel = isEn ? apptSelectedDate.fullLabelEn : apptSelectedDate.fullLabelAr;
+  const timeLabel = isEn ? apptSelectedSlot.timeEn : apptSelectedSlot.timeAr;
+
+  const apptData = {
+    id: apptId,
+    patientId: patientId,
+    patientName: patientName,
+    patientEmail: patientEmail,
+    patientPhone: patientPhone,
+    doctorId: doctorId,
+    doctorName: doctorName,
+    doctorSpecialty: doctorSpecialty,
+    clinicName: clinicName,
+    type: apptSelectedType,
+    typeLabel: apptSelectedType === "video" ? (isEn ? "Telehealth Video" : "فيديو عن بُعد") : (apptSelectedType === "clinic" ? (isEn ? "In-Clinic Visit" : "حضور العيادة") : (isEn ? "Results Follow-up" : "متابعة نتائج")),
+    date: apptSelectedDate.dateStr,
+    dateLabel: dateLabel,
+    timeSlot: timeLabel,
+    slotId: apptSelectedSlot.id,
+    notes: notes,
+    status: "confirmed",
+    createdAt: new Date().toISOString()
+  };
+
+  const confirmBtn = document.getElementById("btnConfirmBooking");
+  if (confirmBtn) {
+    confirmBtn.disabled = true;
+    confirmBtn.innerHTML = `<span>⏳</span> ${isEn ? "Confirming..." : "جاري الحجز..."}`;
+  }
+
+  try {
+    if (db && user && !user.isAnonymous) {
+      try {
+        await db.collection("appointments").doc(apptId).set(apptData);
+      } catch (fErr) {
+        console.warn("Firestore appointments write warning:", fErr);
+      }
+    }
+
+    saveAppointmentToLocalStorage(apptData);
+
+    showToast(isEn ? "Appointment confirmed successfully! Reminder notification scheduled." : "تم تأكيد حجز الموعد بنجاح! سيصلك تذكير قبل موعد الاستشارة.");
+    if (notesInput) notesInput.value = "";
+
+    await renderPatientAppointmentsList();
+    updatePatientDashboardNextAppt();
+  } catch (err) {
+    console.error("Booking appointment error:", err);
+    showToast(isEn ? "Error booking appointment: " + err.message : "حدث خطأ أثناء حجز الموعد: " + err.message);
+  } finally {
+    if (confirmBtn) {
+      confirmBtn.disabled = false;
+      confirmBtn.innerHTML = `<span class="lang-ar">✓ تأكيد حجز الموعد</span><span class="lang-en">✓ Confirm Appointment Booking</span>`;
+    }
+  }
+}
+
+async function renderPatientAppointmentsList() {
+  const container = document.getElementById("patientBookedAppointmentsList");
+  if (!container) return;
+
+  const isEn = currentLanguage === "en";
+  const user = auth ? auth.currentUser : null;
+  const activeSession = (typeof getActiveSession === "function" ? getActiveSession() : null) || {};
+  const patientId = user ? user.uid : (activeSession.uid || "anon_patient");
+
+  let appts = [];
+  const localList = getLocalAppointments(patientId);
+
+  if (db && user && !user.isAnonymous) {
+    try {
+      const snap = await db.collection("appointments").where("patientId", "==", patientId).get();
+      snap.forEach(doc => {
+        appts.push(doc.data());
+      });
+    } catch (e) {
+      console.warn("Could not query appointments from Firestore, using local cache:", e);
+    }
+  }
+
+  // Merge with localList and deduplicate by id
+  const map = new Map();
+  localList.forEach(a => map.set(a.id, a));
+  appts.forEach(a => map.set(a.id, a));
+  const merged = Array.from(map.values()).sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+
+  const countBadge = document.getElementById("patientApptsCount");
+  if (countBadge) {
+    countBadge.textContent = isEn ? `${merged.length} appointments` : `${merged.length} مواعيد`;
+  }
+
+  if (merged.length === 0) {
+    container.innerHTML = `
+      <div class="hv-state-card" style="margin: 16px 0; padding: 28px 16px;">
+        <span class="state-icon">📅</span>
+        <h4>${isEn ? "No Appointments Scheduled" : "لا توجد مواعيد محجوزة حالياً"}</h4>
+        <p>${isEn ? "Select your preferred date, doctor, and time slot above to schedule an authentic medical consultation." : "يمكنك اختيار الطبيب واليوم والفترة الزمنية المناسبة من النموذج أعلاه لحجز استشارتك الطبية."}</p>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = merged.map((appt) => {
+    const isCancelled = appt.status === "cancelled";
+    const statusPillClass = isCancelled ? "pill danger" : "pill ok";
+    const statusLabel = isCancelled
+      ? (isEn ? "Cancelled" : "ملغي")
+      : (isEn ? "Confirmed" : "مؤكد");
+
+    let typePillClass = "pill info";
+    let typeIcon = "📹";
+    if (appt.type === "clinic") {
+      typePillClass = "pill ok";
+      typeIcon = "🏥";
+    } else if (appt.type === "followup") {
+      typePillClass = "pill pending";
+      typeIcon = "📋";
+    }
+
+    return `
+      <div class="appointment-card" id="appt-card-${appt.id}">
+        <div style="flex: 1;">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap;">
+            <span class="${statusPillClass}">${statusLabel}</span>
+            <span class="${typePillClass}">${typeIcon} ${appt.typeLabel || appt.type}</span>
+            <span class="pill" style="background:var(--surface-3); color:var(--ink); font-size:11px;">⏰ ${appt.dateLabel} - ${appt.timeSlot}</span>
+          </div>
+          <strong style="display: block; font-size: 15px; color: var(--ink); margin-bottom: 2px;">
+            ${appt.doctorName}
+          </strong>
+          <span style="font-size: 12px; color: var(--muted); display: block;">
+            ${appt.clinicName || appt.doctorSpecialty}
+          </span>
+          ${appt.notes ? `<p style="margin: 6px 0 0; font-size: 12px; color: var(--ink); opacity: 0.85;">💬 ${appt.notes}</p>` : ""}
+        </div>
+        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+          ${!isCancelled ? `
+            ${appt.type === "video" ? `
+              <button type="button" class="solid-button" style="padding: 8px 14px; font-size: 12px;" onclick="joinAppointmentVideo('${appt.id}')">
+                📹 ${isEn ? "Join Video Call" : "انضمام للاستشارة"}
+              </button>
+            ` : `
+              <button type="button" class="outline-button" style="padding: 8px 14px; font-size: 12px;" onclick="showClinicDirections('${appt.id}')">
+                📍 ${isEn ? "Clinic Details" : "موقع العيادة"}
+              </button>
+            `}
+            <button type="button" class="soft-button" style="padding: 8px 14px; font-size: 12px; color: #ef4444;" onclick="cancelAppointment('${appt.id}')">
+              ✕ ${isEn ? "Cancel" : "إلغاء الموعد"}
+            </button>
+          ` : `
+            <span style="font-size: 12px; color: var(--muted);">${isEn ? "Booking Cancelled" : "تم إلغاء الحجز"}</span>
+          `}
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+async function cancelAppointment(apptId) {
+  const isEn = currentLanguage === "en";
+  const confirmed = window.confirm(isEn ? "Are you sure you want to cancel this appointment?" : "هل أنت متأكد من رغبتك في إلغاء هذا الموعد الطبي؟");
+  if (!confirmed) return;
+
+  try {
+    const user = auth ? auth.currentUser : null;
+    if (db && user && !user.isAnonymous) {
+      try {
+        await db.collection("appointments").doc(apptId).update({
+          status: "cancelled",
+          cancelledAt: new Date().toISOString()
+        });
+      } catch (e) {
+        console.warn("Could not cancel on Firestore, updating local cache:", e);
+      }
+    }
+
+    updateLocalAppointmentStatus(apptId, "cancelled");
+    showToast(isEn ? "Appointment has been cancelled." : "تم إلغاء الموعد الطبي بنجاح.");
+    await renderPatientAppointmentsList();
+    updatePatientDashboardNextAppt();
+  } catch (err) {
+    console.error("Cancel appointment error:", err);
+    showToast(isEn ? "Failed to cancel appointment: " + err.message : "تعذر إلغاء الموعد: " + err.message);
+  }
+}
+
+function joinAppointmentVideo(apptId) {
+  const isEn = currentLanguage === "en";
+  showToast(isEn
+    ? "Connecting to secure clinical telehealth room... (Available 10 minutes before the scheduled time)"
+    : "جاري فتح غرفة الاستشارة الطبية المشفرة... (متاحة قبل موعد الجلسة بـ 10 دقائق).");
+}
+
+function showClinicDirections(apptId) {
+  const isEn = currentLanguage === "en";
+  showToast(isEn
+    ? "Clinic location: Specialized Respiratory Center, Medical District, Clinic 402."
+    : "عنوان العيادة: مجمع العيادات التخصصية - مبنى الرعاية الصدرية والتنفسية، عيادة 402.");
+}
+
+async function updatePatientDashboardNextAppt() {
+  const nextApptEl = document.getElementById("patientNextAppt");
+  if (!nextApptEl) return;
+
+  const isEn = currentLanguage === "en";
+  const user = auth ? auth.currentUser : null;
+  const activeSession = (typeof getActiveSession === "function" ? getActiveSession() : null) || {};
+  const patientId = user ? user.uid : (activeSession.uid || "anon_patient");
+
+  const localList = getLocalAppointments(patientId);
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
+
+  const activeAppts = localList
+    .filter(a => a.status === "confirmed" && a.date >= todayStr)
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  if (activeAppts.length > 0) {
+    const next = activeAppts[0];
+    nextApptEl.textContent = `${next.dateLabel} - ${next.timeSlot}`;
+  } else {
+    nextApptEl.textContent = isEn ? "None scheduled" : "لا يوجد موعد قادم";
+  }
+}
+
+window.renderAppointmentsScreen = renderAppointmentsScreen;
+window.selectAppointmentDate = selectAppointmentDate;
+window.selectAppointmentSlot = selectAppointmentSlot;
+window.confirmAppointmentBooking = confirmAppointmentBooking;
+window.cancelAppointment = cancelAppointment;
+window.joinAppointmentVideo = joinAppointmentVideo;
+window.showClinicDirections = showClinicDirections;
+window.updatePatientDashboardNextAppt = updatePatientDashboardNextAppt;
 
 // --- Doctor Account Lifecycle: Application -> Verification -> Approval ---
 let selectedDoctorAppFile = null;

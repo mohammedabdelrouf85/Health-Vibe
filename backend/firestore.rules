@@ -401,11 +401,34 @@ service cloud.firestore {
     }
 
     // =========================================================================
-    // 7. 🩺 DOCTOR APPLICATIONS (/doctor_applications/{appId})
+    // 7. 📅 CLINICAL APPOINTMENTS (/appointments/{appointmentId})
     // =========================================================================
-    // - Healthcare providers apply for verification and submit medical licenses.
-    // - Doctors/Applicants can read and create their own application.
-    // - Admins can read all applications, approve, or reject them.
+    // - Authenticated patient creates appointments bound to their own patientId.
+    // - Patients read only their own appointments; Doctors and Admins can read all appointments.
+    // - Patient can cancel/update their own appointment; Doctors/Admins can update status.
+    // - Patient can delete/cancel their own appointment; Admin can delete any appointment.
+    match /appointments/{appointmentId} {
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        isDoctor() ||
+        resource.data.patientId == request.auth.uid
+      );
+
+      allow create: if isAuthenticated() &&
+                    request.resource.data.patientId == request.auth.uid &&
+                    request.resource.data.status in ['confirmed', 'pending'];
+
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        isDoctor() ||
+        (resource.data.patientId == request.auth.uid && request.resource.data.patientId == request.auth.uid)
+      );
+
+      allow delete: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.patientId == request.auth.uid
+      );
+    }
     // =========================================================================
     // 8. 🛑 CATCH-ALL DEFAULT DENY
     // =========================================================================
