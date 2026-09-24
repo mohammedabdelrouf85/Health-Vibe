@@ -1877,6 +1877,84 @@ function maskUnapprovedPatientCase(c) {
   return masked;
 }
 
+function isPublishedDatabaseReport(record) {
+  if (!record) return false;
+  const status = String(record.status || record.reportStatus || record.approvalStatus || "").toLowerCase();
+  return record.doctorApproved === true || ["approved", "published", "certified", "released"].includes(status);
+}
+
+function normalizeHistoryRecord(record, sourceCollection) {
+  const source = sourceCollection || record.sourceCollection || "cases";
+  const isReportSource = ["reports", "medical_reports", "clinical_reports"].includes(source);
+  const normalized = {
+    ...record,
+    sourceCollection: source,
+    historyType: isReportSource || isPublishedDatabaseReport(record) ? "report" : "assessment"
+  };
+
+  if (isReportSource && isPublishedDatabaseReport(normalized)) {
+    normalized.status = CASE_STATUS.APPROVED;
+    normalized.doctorApproved = true;
+  }
+
+  return maskUnapprovedPatientCase(normalized);
+}
+
+async function queryPatientCollection(collectionName, user) {
+  const docsById = new Map();
+  const queries = [
+    ["patientId", user.uid],
+    ["patientUid", user.uid],
+    ["userId", user.uid],
+    ["uid", user.uid]
+  ];
+  if (user.email) {
+    queries.push(["patientEmail", user.email], ["email", user.email]);
+  }
+
+  for (const [field, value] of queries) {
+    if (!value) continue;
+    try {
+      const snap = await db.collection(collectionName).where(field, "==", value).get();
+      snap.docs.forEach((doc) => {
+        if (!docsById.has(doc.id)) {
+          docsById.set(doc.id, normalizeHistoryRecord({ id: doc.id, ...doc.data() }, collectionName));
+        }
+      });
+    } catch (error) {
+      console.warn(`${collectionName}.${field} history query error:`, error.message);
+    }
+  }
+
+  return Array.from(docsById.values());
+}
+
+async function getPatientDatabaseHistoryRecords(user) {
+  if (!user || !db) return [];
+  const collections = ["cases", "assessments", "reports", "medical_reports", "clinical_reports"];
+  const recordsByKey = new Map();
+
+  for (const collectionName of collections) {
+    const records = await queryPatientCollection(collectionName, user);
+    records.forEach((record) => {
+      const key = `${record.sourceCollection}:${record.id}`;
+      if (!recordsByKey.has(key)) recordsByKey.set(key, record);
+    });
+  }
+
+  return Array.from(recordsByKey.values())
+    .filter((record) => {
+      if (!record || record.isDemo === true) return false;
+      const idStr = String(record.id || "");
+      return !idStr.startsWith("demo_") && !idStr.startsWith("mock_") && !idStr.startsWith("test_case_");
+    })
+    .sort((a, b) => {
+      const bTime = toMillis(b.approvedAt || b.reportGeneratedAt || b.submittedAt || b.createdAt || b.updatedAt) || 0;
+      const aTime = toMillis(a.approvedAt || a.reportGeneratedAt || a.submittedAt || a.createdAt || a.updatedAt) || 0;
+      return bTime - aTime;
+    });
+}
+
 const CASE_TRANSITIONS = {
   [CASE_STATUS.DRAFT]: [CASE_STATUS.SUBMITTED],
   [CASE_STATUS.SUBMITTED]: [CASE_STATUS.TRIAGED, CASE_STATUS.ASSIGNED, CASE_STATUS.UNDER_REVIEW],
@@ -4733,8 +4811,46 @@ window._adminReportView = "accounts"; // 'accounts' or 'cases'
 
 window.openCaseReport = function(caseId) {
   window._selectedReportCaseId = caseId;
+  window.__selectedHistoryRecord = null;
   window._adminReportView = "cases";
   showScreen("report");
+};
+
+window.openPatientHistoryRecord = async function(sourceCollection, recordId) {
+  const isEn = currentLanguage === "en";
+  const user = auth ? auth.currentUser : null;
+  if (!user || !db || !sourceCollection || !recordId) return;
+
+  if (sourceCollection === "cases") {
+    window.__selectedHistoryRecord = null;
+    openCaseReport(recordId);
+    return;
+  }
+
+  try {
+    const docSnap = await db.collection(sourceCollection).doc(recordId).get();
+    if (!docSnap.exists) {
+      showToast(isEn ? "Record not found in database." : "لم يتم العثور على السجل في قاعدة البيانات.");
+      return;
+    }
+
+    const raw = { id: docSnap.id, ...docSnap.data() };
+    const belongsToPatient = [raw.patientId, raw.patientUid, raw.userId, raw.uid].includes(user.uid) ||
+      (user.email && [raw.patientEmail, raw.email].includes(user.email));
+    if (!belongsToPatient && !isAdminRole(selectedRole) && !isSupportRole(selectedRole)) {
+      showToast(isEn ? "You do not have access to this record." : "لا تملك صلاحية عرض هذا السجل.");
+      return;
+    }
+
+    window.__selectedHistoryRecord = normalizeHistoryRecord(raw, sourceCollection);
+    window._selectedReportCaseId = null;
+    window._adminReportView = "cases";
+    showScreen("report");
+    renderReportScreen("history-record");
+  } catch (error) {
+    console.error("openPatientHistoryRecord error:", error);
+    showToast(getAuthErrorMessage(error) || (isEn ? "Failed to open record." : "تعذر فتح السجل."));
+  }
 };
 
 async function renderAdminAccountsReportView(container, isEn, hasCaseData) {
@@ -4934,7 +5050,12 @@ async function renderReportScreen(targetCaseId = null) {
     let caseData = null;
     let caseId = targetCaseId || window._selectedReportCaseId;
 
-    if (caseId) {
+    if (targetCaseId === "history-record" && window.__selectedHistoryRecord) {
+      caseData = window.__selectedHistoryRecord;
+      caseId = caseData.id;
+    }
+
+    if (caseId && !caseData) {
       try {
         const docSnap = await db.collection("cases").doc(caseId).get();
         if (docSnap.exists) {
@@ -5751,35 +5872,18 @@ async function renderPatientHistory() {
   container.innerHTML = `<div style="padding: 30px; text-align: center; color: var(--teal);"><div class="spinner"></div> ${isEn ? "Loading history..." : "جاري تحميل السجل الطبي..."}</div>`;
 
   try {
-    let docs = [];
-    try {
-      const snap = await db.collection("cases").where("patientId", "==", user.uid).get();
-      if (!snap.empty) docs = snap.docs.map(d => maskUnapprovedPatientCase({ id: d.id, ...d.data() }));
-    } catch(err1) {
-      console.warn("patientId history query error:", err1.message);
-    }
-    if (docs.length === 0 && user.email) {
-      try {
-        const snapEmail = await db.collection("cases").where("patientEmail", "==", user.email).get();
-        if (!snapEmail.empty) docs = snapEmail.docs.map(d => maskUnapprovedPatientCase({ id: d.id, ...d.data() }));
-      } catch(err2) {
-        console.warn("patientEmail history query error:", err2.message);
-      }
-    }
-    if (docs.length === 0) {
-      const fallback = await getCases();
-      docs = fallback;
-    }
-
-    const cases = docs
-      .filter(c => !c.isDemo && !String(c.id).startsWith("demo_") && (typeof c.o2 === "number" || typeof c.oxygenLevel === "number"))
-      .sort((a, b) => (toMillis(b.submittedAt || b.createdAt || b.updatedAt) || 0) - (toMillis(a.submittedAt || a.createdAt || a.updatedAt) || 0));
+    let records = await getPatientDatabaseHistoryRecords(user);
+    if (records.length === 0) records = await getCases();
 
     if (countBadge) {
-      countBadge.textContent = isEn ? `${cases.length} records` : `${cases.length} عناصر`;
+      const reportCount = records.filter((item) => item.historyType === "report").length;
+      const assessmentCount = records.length - reportCount;
+      countBadge.textContent = isEn
+        ? `${assessmentCount} assessments / ${reportCount} reports`
+        : `${assessmentCount} تقييم / ${reportCount} تقرير`;
     }
 
-    if (cases.length === 0) {
+    if (records.length === 0) {
       container.innerHTML = `
         <div style="padding: 30px; text-align: center; color: var(--muted);">
           <span style="font-size: 32px; display: block; margin-bottom: 8px;">📂</span>
@@ -5800,32 +5904,36 @@ async function renderPatientHistory() {
       `;
     }
 
-    cases.forEach(c => {
+    records.forEach(c => {
       const isApproved = isCaseApprovedForPatient(c);
       const statusMeta = getCaseStatusMeta(c.status);
-      const ts = c.submittedAt?.toMillis ? c.submittedAt.toMillis() : (c.submittedAt || 0);
+      const ts = toMillis(c.approvedAt || c.reportGeneratedAt || c.submittedAt || c.createdAt || c.updatedAt) || 0;
       const dt = ts ? new Date(ts).toLocaleDateString(isEn ? "en-US" : "ar-EG", { year: "numeric", month: "short", day: "numeric" }) : "--";
       const o2Display = isSupport ? `**% (${isEn ? "Masked" : "محجوب للدعم 🔒"})` : `${c.oxygenLevel || c.o2 || "--"}%`;
+      const recordTypeLabel = c.historyType === "report"
+        ? (isEn ? "Certified Report" : "تقرير طبي معتمد")
+        : (isEn ? "Breathing Assessment" : "تقييم التنفس");
+      const sourceLabel = c.sourceCollection ? c.sourceCollection.replace(/_/g, " ") : "cases";
 
       html += `
         <div class="patient-history-record-card" style="display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line); margin-bottom: 10px; flex-wrap: wrap; gap: 10px;">
           <div>
             <div style="display: flex; align-items: center; gap: 8px;">
-              <strong style="font-size: 15px; color: var(--ink);">${isEn ? "Breathing Assessment" : "تقييم التنفس"}</strong>
+              <strong style="font-size: 15px; color: var(--ink);">${recordTypeLabel}</strong>
               <span class="pill ${statusMeta.pillClass}" style="font-size: 11px; padding: 2px 8px;">
                 ${statusMeta.icon} ${isEn ? statusMeta.en : statusMeta.ar}
               </span>
             </div>
             <div style="font-size: 12.5px; color: var(--muted); margin-top: 4px;">
-              <span>📅 ${dt}</span> • <span>🫁 SpO2: ${o2Display}</span> • <span>#${c.id.slice(-6).toUpperCase()}</span>
+              <span>📅 ${dt}</span> • <span>${isEn ? "DB" : "قاعدة البيانات"}: ${sourceLabel}</span> • <span>🫁 SpO2: ${o2Display}</span> • <span>#${c.id.slice(-6).toUpperCase()}</span>
             </div>
           </div>
           <div>
             ${isApproved 
-              ? `<button type="button" class="solid-button" onclick="openCaseReport('${c.id}')" style="font-size: 13px; padding: 8px 16px;">
+              ? `<button type="button" class="solid-button" onclick="openPatientHistoryRecord('${c.sourceCollection || 'cases'}', '${c.id}')" style="font-size: 13px; padding: 8px 16px;">
                   <span>${isSupport ? "🛡️" : "✅"}</span> ${isSupport ? (isEn ? "View Support Dossier (Redacted)" : "عرض السجل (محجوب سريرياً)") : (isEn ? "View Certified Report" : "عرض التقرير المعتمد")}
                  </button>`
-              : `<button type="button" class="outline-button" onclick="openCaseReport('${c.id}')" style="font-size: 13px; padding: 8px 16px;">
+              : `<button type="button" class="outline-button" onclick="openPatientHistoryRecord('${c.sourceCollection || 'cases'}', '${c.id}')" style="font-size: 13px; padding: 8px 16px;">
                   <span>🔒</span> ${isEn ? "Awaiting Approval (Locked)" : "قيد المراجعة (مغلق)"}
                  </button>`
             }

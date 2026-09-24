@@ -268,6 +268,21 @@ service cloud.firestore {
              (!('recommendations' in data) || data.recommendations == null);
     }
 
+    function isPatientOwnedRecord(data) {
+      return ('patientId' in data && data.patientId == request.auth.uid) ||
+             ('patientUid' in data && data.patientUid == request.auth.uid) ||
+             ('userId' in data && data.userId == request.auth.uid) ||
+             ('uid' in data && data.uid == request.auth.uid) ||
+             ('patientEmail' in data && 'email' in request.auth.token && data.patientEmail == request.auth.token.email) ||
+             ('email' in data && 'email' in request.auth.token && data.email == request.auth.token.email);
+    }
+
+    function isPublishedReport(data) {
+      return isDoctorApprovedCase(data) ||
+             ('reportStatus' in data && data.reportStatus in ['approved', 'published', 'certified', 'released']) ||
+             ('approvalStatus' in data && data.approvalStatus in ['approved', 'published', 'certified', 'released']);
+    }
+
     function isPatientMoreInfoResponse() {
       return resource.data.patientId == request.auth.uid &&
              resource.data.status == 'more_info_requested' &&
@@ -333,6 +348,35 @@ service cloud.firestore {
                         isValidAssessment(request.resource.data));
 
       allow delete: if isAdmin();
+    }
+
+    match /assessments/{assessmentId} {
+      allow read: if isAuthenticated() &&
+                    ((isPatientOwnedRecord(resource.data) &&
+                      (isDoctorApprovedCase(resource.data) || hasNoUnreleasedClinicalResult(resource.data))) ||
+                     isAdmin());
+      allow write: if false;
+    }
+
+    match /reports/{reportId} {
+      allow read: if isAuthenticated() &&
+                    ((isPatientOwnedRecord(resource.data) && isPublishedReport(resource.data)) ||
+                     isAdmin());
+      allow write: if false;
+    }
+
+    match /medical_reports/{reportId} {
+      allow read: if isAuthenticated() &&
+                    ((isPatientOwnedRecord(resource.data) && isPublishedReport(resource.data)) ||
+                     isAdmin());
+      allow write: if false;
+    }
+
+    match /clinical_reports/{reportId} {
+      allow read: if isAuthenticated() &&
+                    ((isPatientOwnedRecord(resource.data) && isPublishedReport(resource.data)) ||
+                     isAdmin());
+      allow write: if false;
     }
 
     // =========================================================================
