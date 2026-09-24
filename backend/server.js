@@ -14,6 +14,7 @@ const cors = require('cors');
 const admin = require('firebase-admin');
 const dotenv = require('dotenv');
 const whatsappBot = require('./whatsapp-bot');
+const { sendClinicalNotificationEmail } = require('./notification-service');
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -750,6 +751,59 @@ async function executeDoctorTransition({
         note: note || normalizedClinicalNotes || '',
         timestamp: admin.firestore.FieldValue.serverTimestamp()
       });
+
+      // 📧 CLINICAL NOTIFICATION DISPATCH (Result Ready / More Info Requested)
+      let notificationResult = null;
+      let targetRecipient = caseData.patientEmail || caseData.email || null;
+      let targetPatientName = caseData.patientName || caseData.name || null;
+
+      if (!targetRecipient && caseData.patientId) {
+        try {
+          const patientUserDoc = await db.collection('users').doc(caseData.patientId).get();
+          if (patientUserDoc.exists) {
+            const pud = patientUserDoc.data();
+            targetRecipient = pud.email || pud.patientEmail || null;
+            if (!targetPatientName) targetPatientName = pud.name || pud.displayName || null;
+          }
+        } catch (e) {
+          console.warn('[SERVER] Could not fetch patient user doc for email notification:', e.message);
+        }
+      }
+
+      if (targetRecipient) {
+        if (targetStatus === 'approved') {
+          notificationResult = await sendClinicalNotificationEmail({
+            type: 'result_ready',
+            patientEmail: targetRecipient,
+            patientName: targetPatientName,
+            caseId: caseId,
+            reportRef: updateData.reportRef,
+            doctorName: updateData.approvingDoctorName,
+            doctorSpecialty: updateData.doctorSpecialty,
+            clinicalDiagnosis: updateData.clinicalDiagnosis,
+            medications: updateData.medications,
+            recommendations: updateData.recommendations,
+            db
+          });
+        } else if (targetStatus === 'more_info_requested') {
+          notificationResult = await sendClinicalNotificationEmail({
+            type: 'more_info_requested',
+            patientEmail: targetRecipient,
+            patientName: targetPatientName,
+            caseId: caseId,
+            doctorName: req.user.displayName || req.user.name || 'الطبيب المعالج',
+            moreInfoNote: note || '',
+            db
+          });
+        }
+      }
+
+      return res.json({
+        success: true,
+        message: `Case status successfully updated to ${targetStatus}.`,
+        targetStatus,
+        notification: notificationResult
+      });
     }
 
     return res.json({
@@ -831,6 +885,65 @@ app.post('/api/doctor/escalate-clinical-case', requireAuth, requireVerifiedEmail
 app.post('/api/doctor/close-clinical-case', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
   const { caseId, note } = req.body;
   return executeDoctorTransition({ req, res, caseId, targetStatus: 'closed', note });
+});
+
+/**
+ * POST /api/notifications/send-email
+ * Dedicated endpoint for dispatching clinical email notifications
+ */
+app.post('/api/notifications/send-email', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
+  const { type, caseId, note, overrideRecipient } = req.body;
+  if (!['result_ready', 'more_info_requested'].includes(type)) {
+    return res.status(400).json({
+      error: 'INVALID_TYPE',
+      message: "Notification type must be 'result_ready' or 'more_info_requested'."
+    });
+  }
+  if (!caseId) {
+    return res.status(400).json({ error: 'MISSING_CASE_ID', message: 'caseId is required.' });
+  }
+
+  try {
+    const caseDoc = await db.collection('cases').doc(caseId).get();
+    if (!caseDoc.exists) {
+      return res.status(404).json({ error: 'CASE_NOT_FOUND', message: `Case ${caseId} does not exist.` });
+    }
+    const c = caseDoc.data();
+    let recipient = overrideRecipient || c.patientEmail || c.email;
+    let patientName = c.patientName || c.name;
+
+    if (!recipient && c.patientId) {
+      const uDoc = await db.collection('users').doc(c.patientId).get();
+      if (uDoc.exists) {
+        recipient = uDoc.data().email || uDoc.data().patientEmail;
+        if (!patientName) patientName = uDoc.data().name || uDoc.data().displayName;
+      }
+    }
+
+    if (!recipient) {
+      return res.status(400).json({ error: 'NO_RECIPIENT_EMAIL', message: 'Could not find patient email for this case.' });
+    }
+
+    const result = await sendClinicalNotificationEmail({
+      type,
+      patientEmail: recipient,
+      patientName,
+      caseId,
+      reportRef: c.reportRef,
+      doctorName: c.approvingDoctorName || req.user.displayName || req.user.name || 'Doctor',
+      doctorSpecialty: c.doctorSpecialty,
+      clinicalDiagnosis: c.clinicalDiagnosis || c.clinicalNotes,
+      medications: c.medications,
+      recommendations: c.recommendations,
+      moreInfoNote: note || c.moreInfoNote,
+      db
+    });
+
+    return res.json({ success: true, notification: result });
+  } catch (err) {
+    console.error('[SERVER NOTIFICATION ERROR]:', err);
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
+  }
 });
 
 /**

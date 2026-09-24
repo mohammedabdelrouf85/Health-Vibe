@@ -430,7 +430,24 @@ service cloud.firestore {
       );
     }
     // =========================================================================
-    // 8. 🛑 CATCH-ALL DEFAULT DENY
+    // 8. 📧 EMAIL NOTIFICATIONS (/email_notifications/{notificationId})
+    // =========================================================================
+    // - Server-written audit log of outgoing patient email notifications.
+    // - Patients can read notifications sent to their own patientId or email.
+    // - Doctors and Admins can read all notifications.
+    // - Client writes are forbidden (created via server-authoritative Admin SDK).
+    match /email_notifications/{notificationId} {
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        isDoctor() ||
+        resource.data.patientId == request.auth.uid ||
+        (request.auth.token.email != null && resource.data.recipient == request.auth.token.email)
+      );
+      allow write: if false;
+    }
+
+    // =========================================================================
+    // 9. 🛑 CATCH-ALL DEFAULT DENY
     // =========================================================================
     // - Explicitly deny any access to unspecified collections and paths.
     match /{document=**} {

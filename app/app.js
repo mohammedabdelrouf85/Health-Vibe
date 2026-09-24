@@ -2295,9 +2295,20 @@ async function updateCaseStatus(id, newStatus, note, extraFields = {}) {
           targetStatus: newStatus,
           note: note || "",
           clinicalNotes: extraFields.clinicalNotes || note || "",
+          clinicalDiagnosis: extraFields.clinicalDiagnosis || extraFields.clinicalNotes || note || "",
+          medications: extraFields.medications || "",
           recommendation: extraFields.recommendation || "",
-          recommendations: extraFields.recommendations || []
+          recommendations: extraFields.recommendations || [],
+          approvingDoctorName: extraFields.approvingDoctorName || "",
+          doctorSpecialty: extraFields.doctorSpecialty || "",
+          doctorLicense: extraFields.doctorLicense || "",
+          clinicName: extraFields.clinicName || "",
+          reportRef: extraFields.reportRef || ""
         })
+      }).then(res => {
+        if (res && res.notification && res.notification.success) {
+          console.info(`[Email Notification] Successfully dispatched ${res.notification.type} to ${res.notification.recipient}`);
+        }
       }).catch(err => console.warn("Backend notification failed (non-critical):", err.message));
     }
 
@@ -5220,14 +5231,14 @@ async function renderPatientDashboard() {
           document.getElementById("patientAlertsList").innerHTML =
             `<div style="cursor: pointer; border-inline-start: 4px solid #16a34a;" onclick="openCaseReport('${c.id}')">
               <strong style="color: #16a34a;">${isEn ? "✅ Official Medical Report Approved (Click to view)" : "✅ التقرير الطبي معتمد وجاهز (اضغط لعرض التقرير)"}</strong>
-              <span>${alertNoteText}${dateStr}</span>
+              <span>📧 ${isEn ? "Email notification sent with your certified results • " : "تم إرسال إشعار ونسخة من النتيجة لبريدك الإلكتروني • "}${alertNoteText}${dateStr}</span>
             </div>`;
         } else if (c.status === CASE_STATUS.MORE_INFO_REQUESTED) {
           document.getElementById("patientAlertsCount").textContent = isEn ? "1 action needed" : "1 مطلوب إجراء";
           document.getElementById("patientAlertsList").innerHTML =
             `<div style="cursor: pointer; border-inline-start: 4px solid #f97316;" onclick="openCaseReport('${c.id}')">
               <strong style="color: #ea580c;">${isEn ? "❓ Doctor requested more information (Click to view)" : "❓ الطبيب يطلب معلومات أو إعادة فحص (اضغط للمتابعة)"}</strong>
-              <span>${c.moreInfoNote || (isEn ? "Please review doctor notes." : "يرجى مراجعة طلب الطبيب.")}</span>
+              <span>📧 ${isEn ? "Action required via email: " : "يرجى مراجعة بريدك الإلكتروني والرد: "}${c.moreInfoNote || (isEn ? "Please review doctor notes." : "يرجى مراجعة طلب الطبيب.")}</span>
             </div>`;
         } else if (c.status === CASE_STATUS.ESCALATED) {
           document.getElementById("patientAlertsCount").textContent = isEn ? "1 urgent" : "1 عاجل";

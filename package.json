@@ -3,12 +3,13 @@
   "version": "1.0.0",
   "description": "Health Vibe AI - Smart Respiratory Clinical Assessment",
   "scripts": {
-    "test": "node tests/firestore_rules_emulator.test.js && node tests/e2e_happy_path.test.js && node tests/data_isolation.test.js && node tests/environment_config.test.js && node tests/appointments_booking.test.js",
+    "test": "node tests/firestore_rules_emulator.test.js && node tests/e2e_happy_path.test.js && node tests/data_isolation.test.js && node tests/environment_config.test.js && node tests/appointments_booking.test.js && node tests/email_notifications.test.js",
     "test:rules": "node tests/firestore_rules_emulator.test.js",
     "test:e2e": "node tests/e2e_happy_path.test.js",
     "test:isolation": "node tests/data_isolation.test.js",
     "test:env": "node tests/environment_config.test.js",
     "test:appointments": "node tests/appointments_booking.test.js",
+    "test:notifications": "node tests/email_notifications.test.js",
     "dev:backend": "cd backend && node server.js",
     "prod:backend": "cd backend && node server.js"
   },

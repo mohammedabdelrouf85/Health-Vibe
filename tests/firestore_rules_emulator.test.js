@@ -25,6 +25,7 @@ const requiredMatches = [
   "match /auditLog/{logId}",
   "match /ai_model_metrics/{metricId}",
   "match /appointments/{appointmentId}",
+  "match /email_notifications/{notificationId}",
   "match /{document=**}"
 ];
 
@@ -303,6 +304,17 @@ class RulesSimulator {
     if (!request.auth) return false;
     if (this.isAdmin(request)) return true;
     return resourceData.patientId === request.auth.uid;
+  }
+
+  // Evaluate /email_notifications/{notificationId}
+  canReadEmailNotification(request, resourceData) {
+    if (!request.auth) return false;
+    if (this.isAdmin(request) || this.isDoctor(request)) return true;
+    return resourceData.patientId === request.auth.uid || Boolean(request.auth.token && request.auth.token.email && resourceData.recipient === request.auth.token.email);
+  }
+
+  canWriteEmailNotification() {
+    return false;
   }
 
   // Catch-all
@@ -738,6 +750,47 @@ runTest("Patient cancels/updates their own appointment -> ALLOW", () => {
     status: "cancelled"
   };
   assert.strictEqual(sim.canUpdateAppointment(req, apptDoc, updatedDoc), true);
+});
+
+// SECTION F: EMAIL NOTIFICATIONS (/email_notifications/{notificationId})
+runTest("Patient reads own email notification -> ALLOW", () => {
+  const req = {
+    auth: sim.evalAuth({ uid: "user_patient", email: "patient@test.com", email_verified: true })
+  };
+  const notificationDoc = {
+    patientId: "user_patient",
+    recipient: "patient@test.com",
+    type: "result_ready"
+  };
+  assert.strictEqual(sim.canReadEmailNotification(req, notificationDoc), true);
+});
+
+runTest("Patient attempts to read another patient's email notification -> DENY", () => {
+  const req = {
+    auth: sim.evalAuth({ uid: "user_patient", email: "patient@test.com", email_verified: true })
+  };
+  const notificationDoc = {
+    patientId: "another_user_99",
+    recipient: "other@example.com",
+    type: "result_ready"
+  };
+  assert.strictEqual(sim.canReadEmailNotification(req, notificationDoc), false);
+});
+
+runTest("Doctor reads clinical email notification -> ALLOW", () => {
+  const req = {
+    auth: sim.evalAuth({ uid: "user_doctor_assigned", role: "doctor", verifiedDoctor: true })
+  };
+  const notificationDoc = {
+    patientId: "user_patient",
+    recipient: "patient@test.com",
+    type: "result_ready"
+  };
+  assert.strictEqual(sim.canReadEmailNotification(req, notificationDoc), true);
+});
+
+runTest("Client attempts to write directly to /email_notifications -> DENY", () => {
+  assert.strictEqual(sim.canWriteEmailNotification(), false);
 });
 
 console.log(`\n========================================`);
