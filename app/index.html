@@ -86,6 +86,7 @@
         <a href="#workflow">Workflow</a>
         <a href="#roles">Accounts</a>
         <a href="#safety">Safety</a>
+        <a href="./clinics.html" style="color: var(--teal); font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">🏥 For Clinics / للعيادات</a>
       </nav>
       <div class="nav-actions">
         <button type="button" class="outline-button" data-auth-open onclick="if(typeof setAuthMode==='function') setAuthMode('signin'); showAuth();">Sign in</button>
@@ -168,12 +169,32 @@
       <button type="button" class="solid-button large" data-auth-open onclick="if(typeof setAuthMode==='function') setAuthMode('signup'); showAuth();">Create Account</button>
     </section>
 
+    <!-- Clinic B2B Showcase Section -->
+    <section id="clinicsTeaser" class="site-section" style="background: radial-gradient(circle at center, rgba(9, 184, 182, 0.12) 0%, transparent 70%), #0c2326; border: 1px solid var(--clinic-line, rgba(9, 184, 182, 0.25)); border-radius: 24px; padding: 42px 32px; margin: 40px auto; max-width: 1100px; text-align: center;">
+      <span class="pill" style="background: rgba(9, 184, 182, 0.2); color: #2dd4bf; border: 1px solid rgba(9, 184, 182, 0.4); padding: 4px 14px; border-radius: 99px; font-size: 12px; font-weight: 700;">🏥 للأطباء والمراكز الطبية / For Clinics</span>
+      <h2 style="font-size: 28px; font-weight: 800; color: #ffffff; margin: 16px 0 10px;">هل تدير عيادة أو مركزاً متخصصاً للأمراض الصدرية؟</h2>
+      <p style="font-size: 15px; color: #92b1af; max-width: 680px; margin: 0 auto 24px; line-height: 1.6;">
+        اكتشف منظومة Health Vibes المتكاملة للعيادات والمراكز: فرز سريري استباقي للمرضى، تقارير طبية معتمدة برمز QR، بوت واتساب للمواعيد، ومضاعفة القدرة الاستيعابية.
+      </p>
+      <div style="display: flex; gap: 14px; justify-content: center; flex-wrap: wrap;">
+        <a href="./clinics.html" class="solid-button large" style="background: linear-gradient(135deg, #09b8b6 0%, #0284c7 100%); text-decoration: none; display: inline-flex; align-items: center; gap: 8px;">
+          <span>🩺</span>
+          <span>استكشف حلول العيادات والمراكز الطبية</span>
+        </a>
+        <a href="./clinics.html#calculator" class="soft-button large" style="text-decoration: none; display: inline-flex; align-items: center; gap: 8px;">
+          <span>📊</span>
+          <span>احسب العائد والإنتاجية لعيادتك</span>
+        </a>
+      </div>
+    </section>
+
     <!-- Public Site Footer with Legal Links -->
     <footer class="site-footer">
       <div>
         <strong>Health Vibes AI</strong> &copy; 2026. Clinical AI-assisted respiratory healthcare platform.
       </div>
       <div class="site-footer-links">
+        <a href="./clinics.html" style="color: var(--teal); font-weight: 700; text-decoration: none; padding: 4px 8px; border: 1px solid rgba(9, 184, 182, 0.3); border-radius: 6px;">🏥 بوابة العيادات والمراكز</a>
         <button type="button" onclick="openLegalModal('privacy')">🔒 Privacy Policy</button>
         <button type="button" onclick="openLegalModal('terms')">📜 Terms of Service</button>
         <button type="button" onclick="openLegalModal('disclaimer')" style="color: #f87171;">🚨 Medical Disclaimer</button>

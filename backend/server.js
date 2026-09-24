@@ -1892,6 +1892,75 @@ app.post('/api/user/delete-account', requireAuth, async (req, res) => {
   }
 });
 
+// =============================================================================
+// 🏥 B2B CLINIC SALES & DEMO REQUEST INGESTION ROUTE
+// =============================================================================
+const inMemoryClinicLeads = [];
+
+app.post('/api/clinics/demo-request', (req, res) => {
+  try {
+    const {
+      clinicName,
+      contactName,
+      email,
+      phone,
+      specialty = 'pulmonology',
+      doctorCount = '1-5',
+      city = 'Cairo',
+      notes = ''
+    } = req.body || {};
+
+    if (!clinicName || !clinicName.trim()) {
+      return res.status(400).json({ error: 'MISSING_FIELD', message: 'Clinic name is required.' });
+    }
+    if (!contactName || !contactName.trim()) {
+      return res.status(400).json({ error: 'MISSING_FIELD', message: 'Contact name is required.' });
+    }
+    if (!email || !email.includes('@')) {
+      return res.status(400).json({ error: 'INVALID_EMAIL', message: 'A valid business email address is required.' });
+    }
+    if (!phone || phone.trim().length < 8) {
+      return res.status(400).json({ error: 'INVALID_PHONE', message: 'A valid WhatsApp/phone number is required.' });
+    }
+
+    const leadId = `LEAD-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+    const leadData = {
+      leadId,
+      clinicName: String(clinicName).trim().substring(0, 100),
+      contactName: String(contactName).trim().substring(0, 100),
+      email: String(email).trim().toLowerCase().substring(0, 100),
+      phone: String(phone).trim().substring(0, 30),
+      specialty: String(specialty).trim().substring(0, 50),
+      doctorCount: String(doctorCount).trim().substring(0, 20),
+      city: String(city).trim().substring(0, 50),
+      notes: String(notes || '').trim().substring(0, 500),
+      status: 'pending_contact',
+      source: 'clinic_sales_landing',
+      createdAt: new Date().toISOString()
+    };
+
+    inMemoryClinicLeads.push(leadData);
+    if (inMemoryClinicLeads.length > 500) inMemoryClinicLeads.shift();
+
+    if (db) {
+      db.collection('clinic_leads').doc(leadId).set(leadData).catch((err) => {
+        console.warn('[FIRESTORE CLINIC LEAD WARNING]:', err.message);
+      });
+    }
+
+    console.log(`[CLINIC DEMO REQUEST RECEIVED]: Lead ${leadId} for '${leadData.clinicName}' (${leadData.contactName} - ${leadData.phone})`);
+
+    res.status(201).json({
+      success: true,
+      leadId,
+      message: 'Demo request received successfully. Our clinical onboarding specialist will contact you within 24 hours.'
+    });
+  } catch (err) {
+    console.error('[CLINIC DEMO REQUEST ERROR]:', err);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to process demo request.' });
+  }
+});
+
 const PORT = process.env.PORT || (isDevelopment ? 4000 : 8080);
 if (require.main === module) {
   app.listen(PORT, () => {
