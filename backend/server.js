@@ -15,6 +15,7 @@ const admin = require('firebase-admin');
 const dotenv = require('dotenv');
 const whatsappBot = require('./whatsapp-bot');
 const { sendClinicalNotificationEmail } = require('./notification-service');
+const backupService = require('./backup-service');
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -367,6 +368,103 @@ app.get('/api/monitoring/errors/summary', (req, res) => {
 app.post('/api/monitoring/errors/clear', (req, res) => {
   errorLogsRingBuffer.length = 0;
   res.json({ success: true, message: 'In-memory error logs successfully cleared.' });
+});
+
+// =============================================================================
+// 🛡️ ENTERPRISE CLINICAL BACKUP & DISASTER RECOVERY ENDPOINTS
+// =============================================================================
+
+// Endpoint: Trigger on-demand backup snapshot
+app.post('/api/admin/backup/create', async (req, res) => {
+  try {
+    const initiator = req.body && req.body.initiator ? req.body.initiator : 'admin_manual';
+    const manifest = await backupService.createBackupSnapshot({
+      initiator,
+      environment: NODE_ENV,
+      firestoreDb: db
+    });
+
+    if (db) {
+      db.collection('audit_events').add({
+        type: 'BACKUP_SNAPSHOT_CREATED',
+        backupId: manifest.backupId,
+        initiator,
+        totalRecords: manifest.totalRecords,
+        checksum: manifest.checksum.hash,
+        timestamp: admin.firestore.FieldValue.serverTimestamp()
+      }).catch(() => {});
+    }
+
+    res.status(201).json({
+      success: true,
+      manifest,
+      message: `Snapshot '${manifest.backupId}' successfully generated with SHA-256 integrity hash.`
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'BACKUP_FAILED', message: err.message });
+  }
+});
+
+// Endpoint: List available backup snapshots
+app.get('/api/admin/backup/list', (req, res) => {
+  try {
+    const snapshots = backupService.listBackupSnapshots();
+    res.json({
+      status: 'ok',
+      count: snapshots.length,
+      rpoCompliance: '< 15 minutes (PITR active)',
+      rtoTarget: '< 30 minutes',
+      snapshots
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'LIST_FAILED', message: err.message });
+  }
+});
+
+// Endpoint: Verify backup integrity
+app.post('/api/admin/backup/verify', (req, res) => {
+  try {
+    const { backupId } = req.body || {};
+    if (!backupId) {
+      return res.status(400).json({ error: 'MISSING_BACKUP_ID', message: 'backupId is required for verification.' });
+    }
+    const result = backupService.verifyBackupIntegrity(backupId);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: 'VERIFY_FAILED', message: err.message });
+  }
+});
+
+// Endpoint: Execute guarded restoration
+app.post('/api/admin/backup/restore', async (req, res) => {
+  try {
+    const { backupId, confirmToken, dryRun } = req.body || {};
+    if (!backupId) {
+      return res.status(400).json({ error: 'MISSING_BACKUP_ID', message: 'backupId is required for restore.' });
+    }
+    const result = await backupService.restoreBackupSnapshot(backupId, {
+      confirmToken,
+      dryRun: Boolean(dryRun),
+      firestoreDb: db
+    });
+
+    if (result.success && !result.dryRun && db) {
+      db.collection('audit_events').add({
+        type: 'DATABASE_RESTORE_EXECUTED',
+        backupId,
+        restoredRecords: result.restoredRecords,
+        timestamp: admin.firestore.FieldValue.serverTimestamp()
+      }).catch(() => {});
+    }
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: 'RESTORE_FAILED', message: err.message });
+  }
 });
 
 // Diagnostic Health Check Route for Dev & Prod

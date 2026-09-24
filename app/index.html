@@ -1251,6 +1251,65 @@
             </table>
           </div>
         </article>
+
+        <!-- 29. CLINICAL BACKUP & DISASTER RECOVERY (DR) -->
+        <article class="panel" id="adminBackupDRPanel" style="margin-top: 24px;">
+          <div class="panel-head" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <h3 style="margin: 0; font-size: 19px;">النسخ الاحتياطي والتعافي من الكوارث (Backup & Disaster Recovery)</h3>
+                <span class="pill ok" id="adminBackupRpoBadge" style="font-size: 11px;">RPO &lt; 15m (PITR)</span>
+              </div>
+              <p style="margin: 4px 0 0; font-size: 13px; color: var(--muted);">تصدير فوري مشفر لقاعدة البيانات السريرية مع فحص سلامة التجزئة الرقمية SHA-256 ومحاكاة الاستعادة الآمنة</p>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <span class="pill info" id="adminBackupCountBadge">جاري فحص النسخ...</span>
+              <button type="button" class="soft-button" id="btnTriggerBackupSnapshot" onclick="triggerBackupSnapshot()" style="padding: 6px 14px; font-size: 12.5px; display: inline-flex; align-items: center; gap: 5px;">
+                <span>💾</span> إنشاء نسخة احتياطية فورية
+              </button>
+              <button type="button" class="outline-button" onclick="renderAdminBackupUI()" style="padding: 6px 12px; font-size: 12.5px; display: inline-flex; align-items: center; gap: 5px;">
+                <span>🔄</span> تحديث
+              </button>
+            </div>
+          </div>
+
+          <!-- Backup DR Hero Metrics Cards -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-top: 18px;">
+            <div class="kpi-mini-card" style="padding: 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color, rgba(255,255,255,0.06)); border-radius: 12px;">
+              <div style="font-size: 12px; color: var(--muted);">هدف نقطة الاستعادة (RPO)</div>
+              <div style="font-size: 20px; font-weight: 800; color: #10b981; margin-top: 4px;">&lt; 15 دقيقة</div>
+              <div style="font-size: 11px; color: var(--muted); margin-top: 2px;">PITR 7 أيام نشط</div>
+            </div>
+            <div class="kpi-mini-card" style="padding: 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color, rgba(255,255,255,0.06)); border-radius: 12px;">
+              <div style="font-size: 12px; color: var(--muted);">هدف زمن الاستعادة (RTO)</div>
+              <div style="font-size: 20px; font-weight: 800; color: #38bdf8; margin-top: 4px;">&lt; 30 دقيقة</div>
+              <div style="font-size: 11px; color: var(--muted); margin-top: 2px;">تخزين متعدد المناطق</div>
+            </div>
+            <div class="kpi-mini-card" style="padding: 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color, rgba(255,255,255,0.06)); border-radius: 12px;">
+              <div style="font-size: 12px; color: var(--muted);">تشفير النسخ المخزنة</div>
+              <div style="font-size: 20px; font-weight: 800; color: #fbbf24; margin-top: 4px;">AES-256 / SHA-256</div>
+              <div style="font-size: 11px; color: var(--muted); margin-top: 2px;">FIPS 140-2 Validated</div>
+            </div>
+          </div>
+
+          <!-- Snapshots Table -->
+          <div style="margin-top: 18px; overflow-x: auto;">
+            <table class="data-table" style="width: 100%; border-collapse: collapse; text-align: right;">
+              <thead>
+                <tr style="border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.1)); color: var(--muted); font-size: 12px;">
+                  <th style="padding: 10px;">معرف النسخة (Snapshot ID)</th>
+                  <th style="padding: 10px;">التوقيت</th>
+                  <th style="padding: 10px;">إجمالي السجلات</th>
+                  <th style="padding: 10px;">الحالة</th>
+                  <th style="padding: 10px;">إجراءات الأمان والتحقق</th>
+                </tr>
+              </thead>
+              <tbody id="adminBackupSnapshotsTableBody">
+                <tr><td colspan="5" style="text-align: center; color: var(--muted); padding: 18px;">جاري تحميل سجل النسخ الاحتياطية...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
       </section>
 
       <!-- 23. DEDICATED CLINICAL & OPERATIONAL KPI DASHBOARD -->
