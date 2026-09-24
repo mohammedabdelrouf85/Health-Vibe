@@ -64,6 +64,7 @@
         admin: "لوحة الإدارة",
         audit: "سجل التدقيق",
         kpi: "لوحة المؤشرات",
+        clinicsSales: "حلول العيادات (Sales)",
         signOut: "تسجيل الخروج",
         menu: "المزيد"
       },
@@ -227,6 +228,7 @@
         admin: "Admin Dashboard",
         audit: "Audit Log",
         kpi: "KPI Dashboard",
+        clinicsSales: "Clinic Solutions (Sales)",
         signOut: "Sign out",
         menu: "Menu"
       },
