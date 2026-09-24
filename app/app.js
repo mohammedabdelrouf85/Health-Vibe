@@ -2830,12 +2830,21 @@ function renderDoctorQueueItems(allCases) {
 
     const statusPillHtml = `<span class="pill ${meta.pillClass} case-status-badge" style="font-size: 11px; margin-inline-end: 6px;">${meta.icon} ${isEn ? meta.en : meta.ar}</span>`;
 
+    const isDemoCase = isTestOrDemoRecord(c);
+    const demoTag = isDemoCase ? `<span class="pill demo-pill" style="font-size: 10px; background: rgba(245, 158, 11, 0.18); color: #b45309; border: 1px solid rgba(245, 158, 11, 0.4); padding: 1px 6px; margin-inline-end: 4px; font-weight: bold;">🧪 ${isEn ? 'Demo Data' : 'بيانات تجريبية'}</span>` : '';
+    const o2Text = isEn
+      ? `O2 ${c.o2}%${isDemoCase ? ' (Demo Data)' : ''} - ${(c.symptomsEn || c.symptoms || '')}`
+      : `نسبة الأكسجين ${c.o2}%${isDemoCase ? ' (بيانات تجريبية)' : ''} - ${(c.symptoms || c.symptomsEn || '')}`;
+
     btn.innerHTML = `
       <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 4px;">
-        <strong>${isEn ? (c.nameEn || c.patientNameEn || c.name || c.patientName) : (c.name || c.patientName || c.nameEn || c.patientNameEn)}</strong>
+        <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
+          ${demoTag}
+          <strong>${isEn ? (c.nameEn || c.patientNameEn || c.name || c.patientName) : (c.name || c.patientName || c.nameEn || c.patientNameEn)}</strong>
+        </div>
         ${statusPillHtml}
       </div>
-      <span>${isEn ? 'O2 ' + c.o2 + '% - ' + (c.symptomsEn || c.symptoms || '') : 'نسبة الأكسجين ' + c.o2 + '% - ' + (c.symptoms || c.symptomsEn || '')}</span>
+      <span>${o2Text}</span>
       ${riskBadge}
     `;
     btn.onclick = () => selectDoctorCase(c.id);
@@ -3243,6 +3252,20 @@ if (isUnderReview) {
     </div>
   `;
 
+  const isDemoCase = isTestOrDemoRecord(c);
+  const demoCaseBanner = isDemoCase ? `
+    <div style="background: rgba(245, 158, 11, 0.14); border: 1.5px dashed #f59e0b; border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: #b45309;">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span style="font-size: 18px;">🧪</span>
+        <div>
+          <strong>${isEn ? 'DEMO DATA (SIMULATED TEST CASE)' : 'بيانات تجريبية (حالة اختبارية للمحاكاة)'}</strong>
+          <span style="display: block; font-size: 12px; margin-top: 2px;">${isEn ? 'All recorded vitals (SpO2, Duration, AI score) in this case are simulated demo values.' : 'كافة الأرقام والمؤشرات الحيوية (نسبة الأكسجين، المدة، تقييم الذكاء الاصطناعي) هي أرقام تجريبية للمحاكاة فقط.'}</span>
+        </div>
+      </div>
+      <span class="pill warning" style="font-size: 11px; font-weight: bold;">Demo Data</span>
+    </div>
+  ` : '';
+
   reviewPanel.innerHTML = `
     <div class="panel-head">
       <div>
@@ -3251,8 +3274,9 @@ if (isUnderReview) {
       </div>
       ${statusPill}
     </div>
+    ${demoCaseBanner}
     <div style="background: rgba(14, 165, 164, 0.08); border: 1px solid var(--teal); border-radius: 12px; padding: 12px 16px; margin: 12px 0; display: flex; flex-wrap: wrap; gap: 16px; align-items: center; font-size: 13px;">
-      <div><span style="color: var(--muted);">${isEn ? 'Patient:' : 'المريض:'}</span> <strong>${c.patientName || c.name || '--'}</strong></div>
+      <div><span style="color: var(--muted);">${isEn ? 'Patient:' : 'المريض:'}</span> <strong>${c.patientName || c.name || '--'}${isDemoCase ? ' (Demo)' : ''}</strong></div>
       <div><span style="color: var(--muted);">${isEn ? 'Email:' : 'البريد:'}</span> <strong>${c.patientEmail || c.userEmail || '--'}</strong></div>
       ${c.patientPhone || c.phone ? `<div><span style="color: var(--muted);">${isEn ? 'Phone:' : 'الهاتف:'}</span> <strong>${c.patientPhone || c.phone}</strong></div>` : ''}
       ${c.patientAge || c.age ? `<div><span style="color: var(--muted);">${isEn ? 'Age:' : 'العمر:'}</span> <strong>${c.patientAge || c.age}</strong></div>` : ''}
@@ -3260,10 +3284,10 @@ if (isUnderReview) {
     </div>
     ${emergencyDoctorBanner}
     <div class="summary-list">
-      <div><span>${isEn ? 'AI Risk Score' : 'تصنيف الذكاء الاصطناعي'}</span><strong>${isEn ? c.aiScoreEn : c.aiScore}</strong></div>
+      <div><span>${isEn ? 'AI Risk Score' : 'تصنيف الذكاء الاصطناعي'}</span><strong>${isEn ? c.aiScoreEn : c.aiScore}${isDemoCase ? ' (Demo Data)' : ''}</strong></div>
       <div><span>${isEn ? 'Rule score' : 'مؤشر القواعد'}</span><strong>${(isEn ? c.ruleScoreLabelEn : c.ruleScoreLabelAr) || c.ruleScore || (isEn ? 'Not clinically validated' : 'غير مدقق سريرياً')}</strong></div>
-      <div><span>${isEn ? 'Oxygen Level' : 'نسبة الأكسجين'}</span><strong style="${c.o2 < 90 ? 'color: #ef4444;' : ''}">${c.o2}%</strong></div>
-      <div><span>${isEn ? 'Duration' : 'مدة الأعراض'}</span><strong>${isEn ? c.durationEn : c.duration}</strong></div>
+      <div><span>${isEn ? 'Oxygen Level' : 'نسبة الأكسجين'}</span><strong style="${c.o2 < 90 ? 'color: #ef4444;' : ''}">${c.o2}%${isDemoCase ? ' (Demo Data)' : ''}</strong></div>
+      <div><span>${isEn ? 'Duration' : 'مدة الأعراض'}</span><strong>${isEn ? c.durationEn : c.duration}${isDemoCase ? ' (Demo Data)' : ''}</strong></div>
     </div>
     ${triggeredRulesHtml}
 
@@ -5064,7 +5088,20 @@ async function renderPatientDashboard() {
   document.getElementById("patientNextAppt").textContent = "--";
   document.getElementById("patientLatestReport").textContent = "--";
   document.getElementById("patientResultStatus").textContent = "--";
-  document.getElementById("patientProfileCompletion").textContent = "100%";
+
+  // Calculate real profile completion based on authentic patient fields
+  const profileFields = [
+    Boolean(fullPatientName && fullPatientName !== "مريض" && fullPatientName !== "Patient"),
+    Boolean(user?.email || cachedDoc.email),
+    Boolean(cachedDoc.phoneNumber || user?.phoneNumber || window._verifiedPhone),
+    Boolean(cachedDoc.age || cachedDoc.medicalHistory)
+  ];
+  const filledCount = profileFields.filter(Boolean).length;
+  const completionPct = Math.round((filledCount / profileFields.length) * 100);
+  const profileCompletionEl = document.getElementById("patientProfileCompletion");
+  if (profileCompletionEl) {
+    profileCompletionEl.textContent = `${completionPct}%`;
+  }
   document.getElementById("patientAlertsCount").textContent = isEn ? "0 new" : "0 جديد";
   document.getElementById("patientAlertsList").innerHTML = `<div><strong>${isEn ? 'No new alerts' : 'لا توجد تنبيهات جديدة'}</strong><span>--</span></div>`;
 
@@ -5891,6 +5928,22 @@ async function renderReportScreen(targetCaseId = null) {
                 ${isEn
                   ? "In compliance with healthcare privacy regulations, vital signs, oxygen saturation, physician diagnoses, and medication regimens are redacted for Support accounts."
                   : "امتثالاً لمعايير الخصوصية وسرية البيانات الصحية، تم حجب القياسات السريرية (نسبة الأكسجين) وتشخيص الطبيب والوصفات الدوائية لحسابات الدعم الفني."}
+              </span>
+            </div>
+          </div>
+        ` : ''}
+
+        ${isTestOrDemoRecord(caseData) ? `
+          <div class="demo-report-banner no-print" style="background: rgba(245, 158, 11, 0.14); border: 2px dashed #f59e0b; border-radius: 14px; padding: 14px 18px; margin-bottom: 22px; display: flex; align-items: center; gap: 14px; color: #b45309;">
+            <span style="font-size: 28px;">🧪</span>
+            <div>
+              <strong style="font-size: 15px; display: block; margin-bottom: 2px;">
+                ${isEn ? "DEMO DATA REPORT — Non-Clinical Simulation" : "تقرير بيانات تجريبية (Demo Data) — محاكاة غير سريرية"}
+              </strong>
+              <span style="font-size: 12.5px; line-height: 1.5; display: block;">
+                ${isEn
+                  ? "All vital numbers (SpO2, symptoms, duration, doctor notes) in this document are simulated test values and do not belong to a real patient."
+                  : "كافة الأرقام والمؤشرات السريرية (نسبة الأكسجين، مدة الأعراض، ملاحظات الطبيب) في هذا التقرير هي أرقام تجريبية للمحاكاة وتدريب النظام فقط."}
               </span>
             </div>
           </div>
@@ -7270,22 +7323,35 @@ async function renderAdminMetrics() {
     setText("adminTotalCasesBadge", isEn ? `${totalCases} total cases recorded` : `${totalCases} إجمالي الحالات المسجلة`);
 
     // 7. Clinical AI Model & Rule Engine Real Benchmarks
+    const aiBadge = document.getElementById("adminAiMetricsBadge");
     if (serverMetrics?.aiModelMetrics) {
+      if (aiBadge) {
+        aiBadge.className = "pill ok";
+        aiBadge.textContent = isEn ? "✓ Live Clinical Benchmarks" : "✓ مؤشرات مدققة سريرياً";
+      }
       setText("adminAiSensitivity", formatModelMetric(Number(serverMetrics.aiModelMetrics.sensitivity)));
       setText("adminAiSpecificity", formatModelMetric(Number(serverMetrics.aiModelMetrics.specificity)));
       setText("adminAiPrecision", formatModelMetric(Number(serverMetrics.aiModelMetrics.precision)));
       setText("adminAiAuc", formatModelMetric(Number(serverMetrics.aiModelMetrics.auc)));
     } else if (modelSnapshot && !modelSnapshot.empty) {
+      if (aiBadge) {
+        aiBadge.className = "pill ok";
+        aiBadge.textContent = isEn ? "✓ Live Clinical Benchmarks" : "✓ مؤشرات مدققة سريرياً";
+      }
       const metrics = modelSnapshot.docs[0].data();
       setText("adminAiSensitivity", formatModelMetric(Number(metrics.sensitivity)));
       setText("adminAiSpecificity", formatModelMetric(Number(metrics.specificity)));
       setText("adminAiPrecision", formatModelMetric(Number(metrics.precision)));
       setText("adminAiAuc", formatModelMetric(Number(metrics.auc || metrics.areaUnderCurve)));
     } else {
-      setText("adminAiSensitivity", "0.95");
-      setText("adminAiSpecificity", "0.91");
-      setText("adminAiPrecision", "0.90");
-      setText("adminAiAuc", "0.96");
+      if (aiBadge) {
+        aiBadge.className = "pill warning";
+        aiBadge.textContent = isEn ? "🧪 Demo Data / Benchmark Simulation" : "🧪 بيانات تجريبية (محاكاة)";
+      }
+      setText("adminAiSensitivity", isEn ? "0.95 (Demo Data)" : "0.95 (بيانات تجريبية)");
+      setText("adminAiSpecificity", isEn ? "0.91 (Demo Data)" : "0.91 (بيانات تجريبية)");
+      setText("adminAiPrecision", isEn ? "0.90 (Demo Data)" : "0.90 (بيانات تجريبية)");
+      setText("adminAiAuc", isEn ? "0.96 (Demo Data)" : "0.96 (بيانات تجريبية)");
     }
 
     // Update last refreshed time
