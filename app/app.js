@@ -1184,7 +1184,7 @@ const firebaseConfig = (runtimeConfig.firebase && runtimeConfig.firebase.project
 // ── Session Persistence Manager ─────────────────────────────
 function getActiveSession() {
   try {
-    const raw = localStorage.getItem("hv_active_session");
+    const raw = sessionStorage.getItem("hv_active_session") || localStorage.getItem("hv_active_session");
     if (raw) return JSON.parse(raw);
   } catch(e) {}
   return null;
@@ -1217,6 +1217,7 @@ function saveActiveSession(user, role) {
   if (!user) return;
   try {
     const r = role || selectedRole || ROLES.PATIENT;
+    const remember = (typeof shouldRememberSession === "function") ? shouldRememberSession() : true;
     const session = {
       uid: user.uid || "persisted_user",
       email: user.email || "",
@@ -1224,23 +1225,42 @@ function saveActiveSession(user, role) {
       photoURL: user.photoURL || null,
       role: r,
       emailVerified: Boolean(user.emailVerified),
+      remember: Boolean(remember),
       timestamp: Date.now()
     };
-    localStorage.setItem("hv_active_session", JSON.stringify(session));
-    localStorage.setItem("hv_user_logged_in", "true");
-    localStorage.setItem("hv_last_user_uid", session.uid);
-    localStorage.setItem("hv_last_user_role", session.role);
+
+    // Always maintain in active tab session
+    sessionStorage.setItem("hv_active_session", JSON.stringify(session));
+    sessionStorage.setItem("hv_user_logged_in", "true");
+
+    if (remember) {
+      // Personal / Authorized Workstation: persist across browser restarts
+      localStorage.setItem("hv_active_session", JSON.stringify(session));
+      localStorage.setItem("hv_user_logged_in", "true");
+      localStorage.setItem("hv_last_user_uid", session.uid);
+      localStorage.setItem("hv_last_user_role", session.role);
+    } else {
+      // Shared / Clinical Desk: sanitize persistent storage to protect patient PHI
+      localStorage.removeItem("hv_active_session");
+      localStorage.removeItem("hv_user_logged_in");
+      localStorage.removeItem("hv_last_user_uid");
+      localStorage.removeItem("hv_last_user_role");
+    }
     document.documentElement.classList.add("hv-has-session");
   } catch(e) {}
 }
 
 function clearActiveSession() {
   try {
+    sessionStorage.removeItem("hv_active_session");
+    sessionStorage.removeItem("hv_user_logged_in");
+    sessionStorage.removeItem("hv_session_security");
     localStorage.removeItem("hv_active_session");
     localStorage.removeItem("hv_user_logged_in");
     localStorage.removeItem("hv_last_user_role");
     localStorage.removeItem("hv_last_user_uid");
     localStorage.removeItem("hv_active_screen");
+    localStorage.removeItem("hv_session_security");
     document.documentElement.classList.remove("hv-has-session");
   } catch(e) {}
 }
@@ -1926,26 +1946,68 @@ const REMEMBER_ME_KEY = "hv_remember_me";
 const DEFAULT_KNOWN_ACCOUNTS = [];
 
 function shouldRememberSession() {
-  return true; // Per requirement: permanent session until explicit Sign Out
+  const checkbox = document.getElementById("rememberMe");
+  if (checkbox) return Boolean(checkbox.checked);
+  try {
+    const saved = localStorage.getItem(REMEMBER_ME_KEY);
+    if (saved !== null) return saved === "true";
+  } catch(e) {}
+  return true; // Default for personal device
 }
 
-async function applyAuthPersistence(remember = true) {
+async function applyAuthPersistence(remember) {
+  if (typeof remember === "undefined") {
+    remember = shouldRememberSession();
+  }
   if (!auth || typeof firebase === "undefined" || !firebase.auth?.Auth?.Persistence) return;
-  // Always enforce LOCAL persistence: never log out unless explicit Sign Out
-  const persistence = firebase.auth.Auth.Persistence.LOCAL;
-  await auth.setPersistence(persistence);
+
+  // Dual-Mode Persistence:
+  // - LOCAL: Persists across browser restarts (Personal / Authorized Workstation)
+  // - SESSION: Flushes when tab/window closes (Shared / Clinical / Reception Desk)
+  const persistence = remember
+    ? firebase.auth.Auth.Persistence.LOCAL
+    : firebase.auth.Auth.Persistence.SESSION;
+
   try {
-    localStorage.setItem(REMEMBER_ME_KEY, "true");
+    await auth.setPersistence(persistence);
+  } catch (err) {
+    console.warn("Could not set firebase persistence:", err);
+  }
+
+  try {
+    localStorage.setItem(REMEMBER_ME_KEY, remember ? "true" : "false");
+    const securityMeta = {
+      remember: Boolean(remember),
+      mode: remember ? "LOCAL" : "SESSION",
+      updatedAt: Date.now(),
+      origin: window.location.origin
+    };
+    localStorage.setItem(SESSION_SECURITY_KEY, JSON.stringify(securityMeta));
+    sessionStorage.setItem(SESSION_SECURITY_KEY, JSON.stringify(securityMeta));
   } catch(e) {}
 }
 
 function initRememberMePreference() {
   const checkbox = document.getElementById("rememberMe");
   if (!checkbox) return;
-  checkbox.checked = true;
+
+  try {
+    const saved = localStorage.getItem(REMEMBER_ME_KEY);
+    if (saved !== null) {
+      checkbox.checked = (saved === "true");
+    } else {
+      checkbox.checked = true;
+    }
+  } catch(e) {
+    checkbox.checked = true;
+  }
+
   checkbox.addEventListener("change", () => {
-    checkbox.checked = true; // Always stay checked
-    applyAuthPersistence(true).catch(err => {
+    const isChecked = checkbox.checked;
+    try {
+      localStorage.setItem(REMEMBER_ME_KEY, isChecked ? "true" : "false");
+    } catch(e) {}
+    applyAuthPersistence(isChecked).catch(err => {
       console.warn("Could not update auth persistence:", err);
     });
   });
@@ -1953,10 +2015,137 @@ function initRememberMePreference() {
 
 async function initializeAuthPersistence() {
   try {
-    await applyAuthPersistence(true);
+    await applyAuthPersistence(shouldRememberSession());
   } catch (err) {
     console.warn("Could not initialize auth persistence:", err);
   }
+}
+
+// =========================================================================
+// 🔒 CLINICAL INACTIVITY & HIPAA IDLE SCREEN LOCK MONITOR
+// =========================================================================
+window._isIdleLocked = false;
+window._lastUserActivity = Date.now();
+window._idleMonitorStarted = false;
+
+// 30 min default for trusted device, 15 min for shared station
+const IDLE_TIMEOUT_TRUSTED_MS = 30 * 60 * 1000;
+const IDLE_TIMEOUT_SHARED_MS = 15 * 60 * 1000;
+
+function getIdleTimeoutDuration() {
+  if (window._testIdleTimeoutMs) return window._testIdleTimeoutMs;
+  return shouldRememberSession() ? IDLE_TIMEOUT_TRUSTED_MS : IDLE_TIMEOUT_SHARED_MS;
+}
+
+function recordUserActivity() {
+  if (window._isIdleLocked) return;
+  window._lastUserActivity = Date.now();
+}
+
+function lockSessionDueToInactivity() {
+  const activeUser = getActiveUser();
+  if (!activeUser || !activeUser.uid) return;
+  if (window._isSigningOut || window._isIdleLocked) return;
+
+  const lockScreen = document.getElementById("idleLockScreen");
+  if (!lockScreen) return;
+
+  window._isIdleLocked = true;
+
+  // Populate user chip
+  const nameEl = document.getElementById("idleLockUserName");
+  const emailEl = document.getElementById("idleLockUserEmail");
+  const avatarEl = document.getElementById("idleLockAvatar");
+  const badgeEl = document.getElementById("idleLockWorkstationBadge");
+
+  const displayName = activeUser.displayName || activeUser.name || (activeUser.email ? activeUser.email.split("@")[0] : "User");
+  const email = activeUser.email || "";
+
+  if (nameEl) nameEl.textContent = displayName;
+  if (emailEl) emailEl.textContent = email;
+  if (avatarEl) {
+    const initials = displayName.split(" ").filter(Boolean).map(n => n[0]).slice(0, 2).join("").toUpperCase() || "HV";
+    avatarEl.textContent = initials;
+  }
+  if (badgeEl) {
+    const isShared = !shouldRememberSession();
+    const modeKey = isShared ? "auth.workstationShared" : "auth.workstationPersonal";
+    if (window.i18n && typeof window.i18n.t === "function") {
+      badgeEl.textContent = window.i18n.t(modeKey);
+    } else {
+      badgeEl.textContent = isShared ? "محطة مشتركة (مؤقت)" : "حاسوب موثوق (دائم)";
+    }
+    badgeEl.className = isShared ? "pill warning" : "pill success";
+  }
+
+  // Translate DOM for lock modal
+  try {
+    if (window.i18n && typeof window.i18n.translateDOM === "function") {
+      window.i18n.translateDOM(lockScreen);
+    }
+  } catch(e) {}
+
+  lockScreen.style.display = "flex";
+}
+
+function resumeLockedSession() {
+  const lockScreen = document.getElementById("idleLockScreen");
+  const activeUser = getActiveUser();
+
+  if (!activeUser || !activeUser.uid) {
+    leaveApp();
+    return;
+  }
+
+  if (lockScreen) {
+    lockScreen.style.display = "none";
+  }
+  window._isIdleLocked = false;
+  window._lastUserActivity = Date.now();
+
+  const msg = (currentLanguage === "en")
+    ? "Session resumed securely"
+    : "تم استئناف الجلسة بأمان";
+  if (typeof showToast === "function") {
+    showToast(msg);
+  }
+}
+
+window.lockSessionDueToInactivity = lockSessionDueToInactivity;
+window.resumeLockedSession = resumeLockedSession;
+window.setIdleTimeoutForTesting = function(ms) {
+  window._testIdleTimeoutMs = ms;
+};
+
+function initIdleSessionLockMonitor() {
+  if (window._idleMonitorStarted) return;
+  window._idleMonitorStarted = true;
+  window._lastUserActivity = Date.now();
+
+  const events = ["mousemove", "mousedown", "keydown", "touchstart", "scroll", "click"];
+  events.forEach(evt => {
+    window.addEventListener(evt, recordUserActivity, { passive: true });
+  });
+
+  // Check inactivity every 10 seconds
+  setInterval(() => {
+    if (window._isIdleLocked || window._isSigningOut) return;
+    const activeUser = getActiveUser();
+    if (!activeUser || !activeUser.uid) return;
+
+    // Only lock when app is active (auth card hidden or has session)
+    const authCard = document.getElementById("authCard");
+    if (authCard && authCard.style.display !== "none" && !document.documentElement.classList.contains("hv-has-session")) {
+      return;
+    }
+
+    const elapsed = Date.now() - (window._lastUserActivity || Date.now());
+    const limit = getIdleTimeoutDuration();
+
+    if (elapsed >= limit) {
+      lockSessionDueToInactivity();
+    }
+  }, 10000);
 }
 
 function getLocalAccountsRegistry() {
@@ -4543,6 +4732,9 @@ async function leaveApp(event) {
   }
   window._isSigningOut = true;
   window._restoredSessionUser = null;
+  const lockScreen = document.getElementById("idleLockScreen");
+  if (lockScreen) lockScreen.style.display = "none";
+  window._isIdleLocked = false;
   clearActiveSession();
   // ── إيقاف الـ real-time listener عند تسجيل الخروج ────────────
   if (window._patientCasesUnsub) {
@@ -11334,6 +11526,8 @@ menuToggle.addEventListener("click", () => {
 
 logoutButton.addEventListener("click", leaveApp);
 initRememberMePreference();
+initIdleSessionLockMonitor();
+initializeAuthPersistence();
 
 function initHVAuthListener() {
   if (window._hvAuthListenerStarted) return;
