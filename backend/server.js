@@ -506,8 +506,17 @@ if (!admin.apps.length) {
 
 const db = admin.apps.length ? admin.firestore() : null;
 
-// System Owner Email (Hardcoded single source of truth for supreme administrative rights)
+// System Owner Emails (Supreme administrative rights across all clinical, system, and user surfaces)
 const OWNER_EMAIL = "mohammedabdelrouf85@gmail.com";
+const OWNER_EMAILS = [
+  "mohammedabdelrouf85@gmail.com",
+  "raouf.work@gmail.com",
+  "admin@healthvibe.ai"
+];
+function isOwnerEmail(email) {
+  if (!email) return false;
+  return OWNER_EMAILS.includes(String(email).trim().toLowerCase());
+}
 const REVOKED_VERIFICATION_EMAILS = new Set([
   "devilunderurwater@gmail.com"
 ]);
@@ -578,7 +587,7 @@ async function requireAuth(req, res, next) {
  */
 function requireVerifiedEmail(req, res, next) {
   const email = (req.user.email || '').toLowerCase();
-  if (email === OWNER_EMAIL.toLowerCase()) {
+  if (isOwnerEmail(email)) {
     return next();
   }
 
@@ -601,7 +610,7 @@ async function requireAdmin(req, res, next) {
   const email = (req.user.email || '').toLowerCase();
 
   // Automatic Owner validation
-  if (email === OWNER_EMAIL.toLowerCase()) {
+  if (isOwnerEmail(email)) {
     return next();
   }
 
@@ -630,7 +639,7 @@ async function requireSuperAdmin(req, res, next) {
   const uid = req.user.uid;
   const email = (req.user.email || '').toLowerCase();
 
-  if (email === OWNER_EMAIL.toLowerCase() || normalizeRole(req.user.role) === ROLES.SUPER_ADMIN) {
+  if (isOwnerEmail(email) || normalizeRole(req.user.role) === ROLES.SUPER_ADMIN) {
     return next();
   }
 
@@ -686,7 +695,7 @@ async function requireDoctor(req, res, next) {
  * Returns the true server-authoritative role and permissions for the authenticated user
  */
 app.get('/api/auth/profile', requireAuth, async (req, res) => {
-  const isOwner = (req.user.email || '').toLowerCase() === OWNER_EMAIL.toLowerCase();
+  const isOwner = isOwnerEmail(req.user.email);
   let role = normalizeRole(req.user.role, isOwner);
 
   if (db && !isOwner) {
@@ -880,7 +889,7 @@ app.get('/api/kpi/metrics', requireAuth, async (req, res) => {
   try {
     const userRole = normalizeRole(req.user.role);
     const email = (req.user.email || '').toLowerCase();
-    const isOwner = email === OWNER_EMAIL.toLowerCase();
+    const isOwner = isOwnerEmail(email);
     const canView = isOwner || [...ADMIN_ROLES, ROLES.DOCTOR, ROLES.SUPPORT].includes(userRole);
     if (!canView) {
       return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Clinical or Admin privileges required.' });
@@ -1012,7 +1021,7 @@ app.post('/api/admin/set-user-role', requireAuth, requireVerifiedEmail, requireS
 
   try {
     const targetUser = await admin.auth().getUser(targetUserId);
-    const targetIsOwner = (targetUser.email || '').toLowerCase() === OWNER_EMAIL.toLowerCase();
+    const targetIsOwner = isOwnerEmail(targetUser.email);
 
     // 1. Set cryptographic custom claims on Firebase Auth
     await admin.auth().setCustomUserClaims(targetUserId, {
@@ -1825,7 +1834,7 @@ app.post('/api/user/delete-account', requireAuth, async (req, res) => {
 
   try {
     // 1. Safeguard system owner from automated deletion
-    const isOwner = userEmail === OWNER_EMAIL.toLowerCase();
+    const isOwner = isOwnerEmail(userEmail);
     if (isOwner) {
       return res.status(403).json({
         error: 'FORBIDDEN',

@@ -215,21 +215,7 @@ const ROLE_PERMISSIONS_MAP = {
     PERMISSIONS.VIEW_OWN_CASES,
     PERMISSIONS.VIEW_SYSTEM_METRICS
   ],
-  [ROLES.SUPER_ADMIN]: [
-    PERMISSIONS.VIEW_ADMIN_DASHBOARD,
-    PERMISSIONS.VIEW_DOCTOR_QUEUE,
-    PERMISSIONS.REVIEW_CASE,
-    PERMISSIONS.APPROVE_CASE,
-    PERMISSIONS.REJECT_CASE,
-    PERMISSIONS.VIEW_OWN_CASES,
-    PERMISSIONS.VIEW_AUDIT_LOG,
-    PERMISSIONS.APPROVE_DOCTOR_APPLICATION,
-    PERMISSIONS.REJECT_DOCTOR_APPLICATION,
-    PERMISSIONS.MANAGE_AI_MODELS,
-    PERMISSIONS.MANAGE_USER_ROLES,
-    PERMISSIONS.MANAGE_USERS,
-    PERMISSIONS.VIEW_SYSTEM_METRICS
-  ]
+  [ROLES.SUPER_ADMIN]: Object.values(PERMISSIONS)
 };
 
 const ROLE_ALLOWED_SCREENS = {
@@ -292,15 +278,17 @@ async function getVerifiedServerRole(forceRefresh = false) {
 
 function hasPermission(permission) {
   const user = (typeof auth !== "undefined" && auth) ? auth.currentUser : null;
-  const isOwner = Boolean(user && isOwnerUser(user.email));
+  const isOwner = Boolean(user && (isOwnerUser(user.email) || isOwnerUser(user)));
   if (isOwner) return true;
   const role = normalizeRole((typeof selectedRole !== "undefined" && selectedRole) ? selectedRole : ROLES.PATIENT, isOwner);
+  if (role === ROLES.SUPER_ADMIN) return true;
   const perms = ROLE_PERMISSIONS_MAP[role] || [];
   return perms.includes(permission);
 }
 
 function canAccessScreen(screenName) {
-  const isOwner = Boolean(typeof auth !== "undefined" && auth && auth.currentUser && isOwnerUser(auth.currentUser.email));
+  const user = (typeof auth !== "undefined" && auth) ? auth.currentUser : null;
+  const isOwner = Boolean(user && (isOwnerUser(user.email) || isOwnerUser(user)));
   if (isOwner) return true;
   if ((screenName === "admin" || screenName === "audit" || screenName === "kpi") && (window.location.search.includes("admin=true") || (typeof APP_ENV !== "undefined" && APP_ENV.isLocalhost))) {
     return true;
@@ -316,7 +304,7 @@ function canAccessScreen(screenName) {
 // Client-side quick check for UI feedback only
 function enforcePermission(permission, actionDescription = "") {
   const user = (typeof auth !== "undefined" && auth) ? auth.currentUser : null;
-  if (user && isOwnerUser(user.email)) return true;
+  if (user && (isOwnerUser(user.email) || isOwnerUser(user))) return true;
   if (typeof activeScreen !== "undefined" && activeScreen === "doctor" && [PERMISSIONS.REVIEW_CASE, PERMISSIONS.APPROVE_CASE, PERMISSIONS.REJECT_CASE, PERMISSIONS.VIEW_DOCTOR_QUEUE].includes(permission)) {
     return true;
   }
@@ -341,6 +329,7 @@ async function enforceServerPermission(permission, actionDescription = "") {
     showToast(currentLanguage === "en" ? "Authentication required." : "يجب تسجيل الدخول أولاً.");
     return false;
   }
+  if (isOwnerUser(user.email) || isOwnerUser(user)) return true;
 
   const serverRole = await getVerifiedServerRole(true);
   const perms = ROLE_PERMISSIONS_MAP[serverRole] || [];
@@ -398,7 +387,10 @@ function isOwnerUser(userOrEmail) {
   if (!userOrEmail) return false;
   const email = (typeof userOrEmail === "string" ? userOrEmail : (userOrEmail.email || "")).trim().toLowerCase();
   if (OWNER_EMAILS.some(o => o.toLowerCase() === email)) return true;
-  if (typeof userOrEmail === "object" && userOrEmail && userOrEmail.isOwner === true) return true;
+  if (typeof userOrEmail === "object" && userOrEmail) {
+    if (userOrEmail.isOwner === true) return true;
+    if (userOrEmail.role === "owner" || userOrEmail.role === "super_admin") return true;
+  }
   return false;
 }
 
@@ -5192,8 +5184,15 @@ async function enforceEmailVerification(actionNameAr = "هذا الإجراء", 
 }
 
 function updateNavVisibility() {
+  const user = (typeof auth !== "undefined" && auth) ? auth.currentUser : null;
+  const isOwner = Boolean(user && (isOwnerUser(user.email) || isOwnerUser(user)));
+
   document.querySelectorAll(".nav-item").forEach((btn) => {
     const screen = btn.dataset.screen;
+    if (isOwner) {
+      btn.style.display = "flex";
+      return;
+    }
     // Patients must never see doctor, admin, audit, or verification in navigation
     if (screen === "verification") {
       btn.style.display = (selectedRole === ROLES.DOCTOR || selectedRole === ROLES.DOCTOR_PENDING || isAdminRole(selectedRole)) ? "flex" : "none";

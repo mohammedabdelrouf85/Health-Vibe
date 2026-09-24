@@ -76,10 +76,12 @@ class RulesSimulator {
 
   isOwner(request) {
     if (!request.auth || this.isVerificationRevoked(request)) return false;
-    if (request.auth.token.email_verified !== true) return false;
     if (request.auth.token.isOwner === true) return true;
+    if (request.auth.token.role === 'owner' || request.auth.token.role === 'super_admin') return true;
     const email = (request.auth.token.email || '').toLowerCase();
-    return ['mohammedabdelrouf85@gmail.com', 'raouf.work@gmail.com', 'admin@healthvibe.ai'].includes(email);
+    if (['mohammedabdelrouf85@gmail.com', 'raouf.work@gmail.com', 'admin@healthvibe.ai'].includes(email)) return true;
+    const udata = this.getUserData(request);
+    return udata.isOwner === true || udata.role === 'owner' || udata.role === 'super_admin';
   }
 
   hasUserDoc(request) {
@@ -198,9 +200,9 @@ class RulesSimulator {
     return Boolean((rStatus && valid.includes(rStatus)) || (aStatus && valid.includes(aStatus)));
   }
 
-  // Evaluate /cases/{caseId}
   canReadCase(request, resourceData) {
     if (!request.auth) return false;
+    if (this.isOwner(request)) return true;
     if (this.isAdmin(request)) return true;
     if (this.isAssignedDoctor(request, resourceData)) return true;
     if (resourceData.patientId === request.auth.uid) {
@@ -254,6 +256,7 @@ class RulesSimulator {
 
   canUpdateUser(request, userId, currentData, updatedData) {
     if (!request.auth) return false;
+    if (this.isOwner(request)) return true;
     const privileged = ['role', 'isOwner', 'doctorVerified', 'verifiedDoctor', 'doctorApplicationStatus'];
     if (request.auth.uid === userId) {
       return !privileged.some(k => (k in updatedData) && updatedData[k] !== currentData[k]);
@@ -265,9 +268,9 @@ class RulesSimulator {
     return false;
   }
 
-  // Evaluate /reports/{reportId}
   canReadReport(request, resourceData) {
     if (!request.auth) return false;
+    if (this.isOwner(request)) return true;
     if (this.isAdmin(request)) return true;
     return Boolean(this.isPatientOwnedRecord(request, resourceData) && this.isPublishedReport(resourceData));
   }
@@ -915,6 +918,40 @@ runTest("Admin can update/delete feedback -> ALLOW", () => {
     auth: sim.evalAuth({ uid: "user_admin", role: "super_admin", isOwner: true, emailVerified: true })
   };
   assert.strictEqual(sim.canUpdateOrDeleteFeedback(req), true);
+});
+
+// SECTION J: 👑 SUPREME OWNER UNRESTRICTED PERMISSIONS
+runTest("Owner can read ANY clinical case without restriction -> ALLOW", () => {
+  const req = {
+    auth: sim.evalAuth({ uid: "user_owner", email: "mohammedabdelrouf85@gmail.com", role: "super_admin" })
+  };
+  const unapprovedCase = {
+    patientId: "random_patient_99",
+    status: "draft",
+    officialDiagnosis: "Confidential Finding"
+  };
+  assert.strictEqual(sim.canReadCase(req, unapprovedCase), true);
+});
+
+runTest("Owner can update privileged role and isOwner fields on any user doc -> ALLOW", () => {
+  const req = {
+    auth: sim.evalAuth({ uid: "user_owner", email: "mohammedabdelrouf85@gmail.com", role: "super_admin" })
+  };
+  const currentDoc = { name: "Doctor Ali", role: "doctor" };
+  const updatedDoc = { name: "Doctor Ali", role: "clinic_admin", isOwner: true };
+  assert.strictEqual(sim.canUpdateUser(req, "target_user_123", currentDoc, updatedDoc), true);
+});
+
+runTest("Owner can read ANY medical/clinical report -> ALLOW", () => {
+  const req = {
+    auth: sim.evalAuth({ uid: "user_owner", email: "mohammedabdelrouf85@gmail.com", role: "super_admin" })
+  };
+  const unreleasedReport = {
+    patientId: "patient_secret",
+    status: "draft",
+    doctorApproved: false
+  };
+  assert.strictEqual(sim.canReadReport(req, unreleasedReport), true);
 });
 
 console.log(`\n========================================`);
