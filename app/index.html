@@ -477,16 +477,18 @@
       <section id="screen-profile" class="screen">
         <div class="form-layout">
           <article class="panel form-panel">
-            <div class="panel-head"><h3>الملف الطبي</h3><span class="pill ok">92% مكتمل</span></div>
-            <label>الاسم</label>
-            <input value="أحمد محمد">
+            <div class="panel-head"><h3>الملف الطبي</h3><span class="pill ok" id="profileCompletionBadge">92% مكتمل</span></div>
+            <label>الاسم بالكامل</label>
+            <input id="profileName" placeholder="اسم المريض بالكامل">
             <label>العمر</label>
-            <input value="34 سنة">
+            <input id="profileAge" placeholder="العمر (مثال: 34 سنة)">
+            <label>رقم الهاتف</label>
+            <input id="profilePhone" placeholder="رقم الهاتف للتواصل">
             <label>الطبيب المرتبط</label>
             <input id="profileLinkedDoctor" value="د. منى سامي - عيادة مدينة نصر">
             <label>أمراض مزمنة أو حساسية</label>
-            <textarea>لا يوجد حساسية معروفة. تاريخ سابق لكحة موسمية.</textarea>
-            <button class="solid-button full" data-screen="assessment">حفظ وبدء تقييم التنفس</button>
+            <textarea id="profileMedicalHistory" placeholder="أمراض مزمنة أو حساسية إن وجدت"></textarea>
+            <button class="solid-button full" id="btnSaveProfile" data-screen="assessment">حفظ وبدء تقييم التنفس</button>
           </article>
           <article class="panel">
             <div class="panel-head"><h3>ملفات طبية</h3><span class="pill info">اختياري</span></div>
@@ -1341,7 +1343,7 @@
     </div>
   </div>
 
-  <script src="./config.js?v=3.6"></script>
-  <script src="./app.js?v=3.6"></script>
+  <script src="./config.js?v=3.8"></script>
+  <script src="./app.js?v=3.8"></script>
 </body>
 </html>

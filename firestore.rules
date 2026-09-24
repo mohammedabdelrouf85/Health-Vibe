@@ -33,7 +33,14 @@ service cloud.firestore {
 
     // Strict Email Verification check
     function isEmailVerified() {
-      return isAuthenticated() && !isVerificationRevoked() && (request.auth.token.email_verified == true || isOwner());
+      return isAuthenticated() && !isVerificationRevoked() && (
+        request.auth.token.email_verified == true || 
+        isOwner() ||
+        (hasUserDoc() && (
+          ('emailVerified' in getUserData() && getUserData().emailVerified == true) ||
+          ('phoneVerified' in getUserData() && getUserData().phoneVerified == true)
+        ))
+      );
     }
 
     function hasUserDoc() {

@@ -1185,6 +1185,29 @@ function getActiveSession() {
   return null;
 }
 
+function getActiveUser() {
+  if (typeof auth !== "undefined" && auth && auth.currentUser) {
+    return auth.currentUser;
+  }
+  if (window._restoredSessionUser) {
+    return window._restoredSessionUser;
+  }
+  const session = getActiveSession();
+  if (session && session.uid) {
+    return {
+      uid: session.uid,
+      email: session.email || "",
+      displayName: session.displayName || session.name || (session.email ? session.email.split('@')[0] : ""),
+      name: session.name || session.displayName || "",
+      phoneNumber: session.phoneNumber || window._verifiedPhone || "",
+      role: session.role || ROLES.PATIENT,
+      emailVerified: session.emailVerified !== false
+    };
+  }
+  return null;
+}
+window.getActiveUser = getActiveUser;
+
 function saveActiveSession(user, role) {
   if (!user) return;
   try {
@@ -2679,6 +2702,13 @@ if (isUnderReview) {
       </div>
       ${statusPill}
     </div>
+    <div style="background: rgba(14, 165, 164, 0.08); border: 1px solid var(--teal); border-radius: 12px; padding: 12px 16px; margin: 12px 0; display: flex; flex-wrap: wrap; gap: 16px; align-items: center; font-size: 13px;">
+      <div><span style="color: var(--muted);">${isEn ? 'Patient:' : 'المريض:'}</span> <strong>${c.patientName || c.name || '--'}</strong></div>
+      <div><span style="color: var(--muted);">${isEn ? 'Email:' : 'البريد:'}</span> <strong>${c.patientEmail || c.userEmail || '--'}</strong></div>
+      ${c.patientPhone || c.phone ? `<div><span style="color: var(--muted);">${isEn ? 'Phone:' : 'الهاتف:'}</span> <strong>${c.patientPhone || c.phone}</strong></div>` : ''}
+      ${c.patientAge || c.age ? `<div><span style="color: var(--muted);">${isEn ? 'Age:' : 'العمر:'}</span> <strong>${c.patientAge || c.age}</strong></div>` : ''}
+      <div><span style="color: var(--muted);">${isEn ? 'Patient ID:' : 'معرّف المريض:'}</span> <code style="font-size: 11px;">${(c.patientId || c.userId || '--').slice(0, 10)}...</code></div>
+    </div>
     ${emergencyDoctorBanner}
     <div class="summary-list">
       <div><span>${isEn ? 'AI Risk Score' : 'تصنيف الذكاء الاصطناعي'}</span><strong>${isEn ? c.aiScoreEn : c.aiScore}</strong></div>
@@ -4071,6 +4101,86 @@ function updateAssessmentConsentBadge() {
   }
 }
 
+
+// ── Medical Profile Loading & Saving ──
+async function loadUserProfileData() {
+  const user = getActiveUser();
+  if (!user) return;
+
+  const cachedDoc = window._cachedUserDoc || {};
+  const activeSession = (typeof getActiveSession === "function" ? getActiveSession() : null) || {};
+
+  const nameEl = document.getElementById("profileName");
+  const ageEl = document.getElementById("profileAge");
+  const phoneEl = document.getElementById("profilePhone");
+  const historyEl = document.getElementById("profileMedicalHistory");
+  const doctorEl = document.getElementById("profileLinkedDoctor");
+
+  const nameVal = cachedDoc.name || cachedDoc.displayName || user.displayName || user.name || activeSession.displayName || activeSession.name || (user.email ? user.email.split('@')[0] : "");
+  const ageVal = cachedDoc.age || "";
+  const phoneVal = cachedDoc.phoneNumber || window._verifiedPhone || user.phoneNumber || activeSession.phoneNumber || "";
+  const historyVal = cachedDoc.medicalHistory || "";
+  const docVal = cachedDoc.linkedDoctor || (currentLanguage === "en" ? "Dr. Mona Samy - Nasr City Clinic" : "د. منى سامي - عيادة مدينة نصر");
+
+  if (nameEl && (!nameEl.value || nameEl.value === "أحمد محمد")) nameEl.value = nameVal;
+  if (ageEl && (!ageEl.value || ageEl.value === "34 سنة")) ageEl.value = ageVal;
+  if (phoneEl && !phoneEl.value) phoneEl.value = phoneVal;
+  if (historyEl && (!historyEl.value || historyEl.value.includes("لا يوجد حساسية معروفة"))) historyEl.value = historyVal;
+  if (doctorEl && !doctorEl.value) doctorEl.value = docVal;
+}
+
+async function saveUserProfileData() {
+  const user = getActiveUser();
+  const nameEl = document.getElementById("profileName");
+  const ageEl = document.getElementById("profileAge");
+  const phoneEl = document.getElementById("profilePhone");
+  const historyEl = document.getElementById("profileMedicalHistory");
+  const doctorEl = document.getElementById("profileLinkedDoctor");
+
+  const name = nameEl ? nameEl.value.trim() : "";
+  const age = ageEl ? ageEl.value.trim() : "";
+  const phone = phoneEl ? phoneEl.value.trim() : "";
+  const medicalHistory = historyEl ? historyEl.value.trim() : "";
+  const linkedDoctor = doctorEl ? doctorEl.value.trim() : "";
+
+  if (!window._cachedUserDoc) window._cachedUserDoc = {};
+  if (name) window._cachedUserDoc.name = name;
+  if (age) window._cachedUserDoc.age = age;
+  if (phone) window._cachedUserDoc.phoneNumber = phone;
+  if (medicalHistory) window._cachedUserDoc.medicalHistory = medicalHistory;
+  if (linkedDoctor) window._cachedUserDoc.linkedDoctor = linkedDoctor;
+
+  if (user && user.uid && typeof db !== "undefined" && db) {
+    try {
+      await db.collection("users").doc(user.uid).set({
+        name: name || user.displayName || (user.email ? user.email.split('@')[0] : "مريض"),
+        displayName: name || user.displayName || (user.email ? user.email.split('@')[0] : "مريض"),
+        age: age || null,
+        phoneNumber: phone || null,
+        medicalHistory: medicalHistory || null,
+        linkedDoctor: linkedDoctor || null,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+    } catch(err) {
+      console.warn("Could not save profile to Firestore:", err);
+    }
+  }
+
+  try {
+    const rawSession = localStorage.getItem("hv_active_session");
+    if (rawSession) {
+      const s = JSON.parse(rawSession);
+      if (name) s.displayName = name;
+      if (phone) s.phoneNumber = phone;
+      localStorage.setItem("hv_active_session", JSON.stringify(s));
+    }
+  } catch(e) {}
+
+  showToast(currentLanguage === "en" ? "Medical profile updated successfully!" : "تم حفظ وتحديث الملف الطبي بنجاح!");
+}
+window.loadUserProfileData = loadUserProfileData;
+window.saveUserProfileData = saveUserProfileData;
+
 function showScreen(name) {
   if (name !== "verification") {
     tempAllowDoctorApplication = false;
@@ -4142,16 +4252,20 @@ function showScreen(name) {
   if (name === "assessment") {
     updateAssessmentConsentBadge();
   }
+  if (name === "profile") {
+    loadUserProfileData();
+  }
 }
 
 async function renderPatientDashboard() {
   const user = auth ? auth.currentUser : null;
   const isEn = currentLanguage === "en";
   
-  // ── حالات افتراضية ───────────────────────────────────────────────
-  const firstName = user
-    ? (user.displayName ? user.displayName.split(" ")[0] : (isEn ? "Guest" : "ضيف"))
-    : "أحمد";
+  // ── تحية المريض بالاسم الفعلي ────────────────────────────────────
+  const cachedDoc = window._cachedUserDoc || {};
+  const activeSession = (typeof getActiveSession === "function" ? getActiveSession() : null) || {};
+  const fullPatientName = cachedDoc.name || cachedDoc.displayName || user?.displayName || user?.name || activeSession.displayName || activeSession.name || (user?.email ? user.email.split("@")[0] : (isEn ? "Patient" : "مريض"));
+  const firstName = fullPatientName.split(" ")[0];
   const titleEl = document.getElementById("patientHeroTitle");
   if (titleEl) titleEl.textContent = isEn ? `Welcome, ${firstName}` : `مرحبًا ${firstName}`;
 
@@ -4544,22 +4658,31 @@ async function renderReportScreen(targetCaseId = null) {
     }
 
     if (!caseData) {
-      // Query latest case for this patient
-      const snap = await db.collection("cases")
-        .where("patientId", "==", user.uid)
-        .orderBy("submittedAt", "desc")
-        .limit(10)
-        .get();
+      // Query latest case for this patient safely (works without composite index)
+      let docs = [];
+      try {
+        const snap = await db.collection("cases").where("patientId", "==", user.uid).get();
+        if (!snap.empty) docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      } catch (e) {
+        console.warn("Direct patientId query failed in report:", e.message);
+      }
+      if (docs.length === 0 && user.email) {
+        try {
+          const emailSnap = await db.collection("cases").where("patientEmail", "==", user.email).get();
+          if (!emailSnap.empty) docs = emailSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        } catch(e) {}
+      }
+      if (docs.length === 0) {
+        const fallbackCases = await getCases();
+        docs = fallbackCases;
+      }
+      const validDocs = docs
+        .filter(c => !c.isDemo && !String(c.id).startsWith("demo_") && (typeof c.o2 === "number" || typeof c.oxygenLevel === "number"))
+        .sort((a, b) => (toMillis(b.submittedAt || b.createdAt || b.updatedAt) || 0) - (toMillis(a.submittedAt || a.createdAt || a.updatedAt) || 0));
 
-      if (!snap.empty) {
-        const validDocs = snap.docs
-          .map(d => ({ id: d.id, ...d.data() }))
-          .filter(c => !c.isDemo && !String(c.id).startsWith("demo_") && (typeof c.o2 === "number" || typeof c.oxygenLevel === "number"));
-        
-        if (validDocs.length > 0) {
-          caseData = validDocs[0];
-          caseId = caseData.id;
-        }
+      if (validDocs.length > 0) {
+        caseData = validDocs[0];
+        caseId = caseData.id;
       }
     }
 
@@ -5163,31 +5286,35 @@ async function renderResultScreen() {
   container.innerHTML = `<div style="padding: 40px; text-align: center; color: var(--teal);"><div class="spinner"></div> ${isEn ? "Checking case results..." : "جاري فحص النتيجة..."}</div>`;
 
   try {
-    const snap = await db.collection("cases")
-      .where("patientId", "==", user.uid)
-      .orderBy("submittedAt", "desc")
-      .limit(5)
-      .get();
-
-    if (snap.empty) {
-      container.innerHTML = `
-        <div class="panel" style="text-align: center; padding: 40px;">
-          <h2>${isEn ? "No Assessment Results Yet" : "لا توجد نتائج تقييم حتى الآن"}</h2>
-          <p class="muted-copy">${isEn ? "Start a breathing assessment to evaluate your symptoms." : "ابدأ تقييم التنفس لفحص الأعراض ومراجعتها مع الطبيب."}</p>
-          <button class="solid-button large" onclick="showScreen('assessment')">${isEn ? "Start Assessment" : "بدء التقييم"}</button>
-        </div>
-      `;
-      return;
+    let docs = [];
+    try {
+      const snap = await db.collection("cases").where("patientId", "==", user.uid).get();
+      if (!snap.empty) docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    } catch(err1) {
+      console.warn("patientId result query error:", err1.message);
+    }
+    if (docs.length === 0 && user.email) {
+      try {
+        const snapEmail = await db.collection("cases").where("patientEmail", "==", user.email).get();
+        if (!snapEmail.empty) docs = snapEmail.docs.map(d => ({ id: d.id, ...d.data() }));
+      } catch(err2) {
+        console.warn("patientEmail result query error:", err2.message);
+      }
+    }
+    if (docs.length === 0) {
+      const fallback = await getCases();
+      docs = fallback;
     }
 
-    const validDocs = snap.docs
-      .map(d => ({ id: d.id, ...d.data() }))
-      .filter(c => !c.isDemo && !String(c.id).startsWith("demo_") && (typeof c.o2 === "number" || typeof c.oxygenLevel === "number"));
+    const validDocs = docs
+      .filter(c => !c.isDemo && !String(c.id).startsWith("demo_") && (typeof c.o2 === "number" || typeof c.oxygenLevel === "number"))
+      .sort((a, b) => (toMillis(b.submittedAt || b.createdAt || b.updatedAt) || 0) - (toMillis(a.submittedAt || a.createdAt || a.updatedAt) || 0));
 
     if (validDocs.length === 0) {
       container.innerHTML = `
         <div class="panel" style="text-align: center; padding: 40px;">
           <h2>${isEn ? "No Assessment Results Yet" : "لا توجد نتائج تقييم حتى الآن"}</h2>
+          <p class="muted-copy">${isEn ? "Start a breathing assessment to evaluate your symptoms." : "ابدأ تقييم التنفس لفحص الأعراض ومراجعتها مع الطبيب."}</p>
           <button class="solid-button large" onclick="showScreen('assessment')">${isEn ? "Start Assessment" : "بدء التقييم"}</button>
         </div>
       `;
@@ -5280,26 +5407,29 @@ async function renderPatientHistory() {
   container.innerHTML = `<div style="padding: 30px; text-align: center; color: var(--teal);"><div class="spinner"></div> ${isEn ? "Loading history..." : "جاري تحميل السجل الطبي..."}</div>`;
 
   try {
-    const snap = await db.collection("cases")
-      .where("patientId", "==", user.uid)
-      .orderBy("submittedAt", "desc")
-      .limit(30)
-      .get();
-
-    if (snap.empty) {
-      if (countBadge) countBadge.textContent = isEn ? "0 records" : "0 عناصر";
-      container.innerHTML = `
-        <div style="padding: 30px; text-align: center; color: var(--muted);">
-          <span style="font-size: 32px; display: block; margin-bottom: 8px;">📂</span>
-          <p style="margin: 0;">${isEn ? "No past medical records found." : "لا توجد سجلات طبية سابقة."}</p>
-        </div>
-      `;
-      return;
+    let docs = [];
+    try {
+      const snap = await db.collection("cases").where("patientId", "==", user.uid).get();
+      if (!snap.empty) docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    } catch(err1) {
+      console.warn("patientId history query error:", err1.message);
+    }
+    if (docs.length === 0 && user.email) {
+      try {
+        const snapEmail = await db.collection("cases").where("patientEmail", "==", user.email).get();
+        if (!snapEmail.empty) docs = snapEmail.docs.map(d => ({ id: d.id, ...d.data() }));
+      } catch(err2) {
+        console.warn("patientEmail history query error:", err2.message);
+      }
+    }
+    if (docs.length === 0) {
+      const fallback = await getCases();
+      docs = fallback;
     }
 
-    const cases = snap.docs
-      .map(d => ({ id: d.id, ...d.data() }))
-      .filter(c => !c.isDemo && !String(c.id).startsWith("demo_") && (typeof c.o2 === "number" || typeof c.oxygenLevel === "number"));
+    const cases = docs
+      .filter(c => !c.isDemo && !String(c.id).startsWith("demo_") && (typeof c.o2 === "number" || typeof c.oxygenLevel === "number"))
+      .sort((a, b) => (toMillis(b.submittedAt || b.createdAt || b.updatedAt) || 0) - (toMillis(a.submittedAt || a.createdAt || a.updatedAt) || 0));
 
     if (countBadge) {
       countBadge.textContent = isEn ? `${cases.length} records` : `${cases.length} عناصر`;
@@ -5308,7 +5438,8 @@ async function renderPatientHistory() {
     if (cases.length === 0) {
       container.innerHTML = `
         <div style="padding: 30px; text-align: center; color: var(--muted);">
-          <p>${isEn ? "No genuine medical assessments recorded." : "لا توجد فحوصات طبية مسجلة."}</p>
+          <span style="font-size: 32px; display: block; margin-bottom: 8px;">📂</span>
+          <p style="margin: 0;">${isEn ? "No past medical records found." : "لا توجد سجلات طبية سابقة."}</p>
         </div>
       `;
       return;
@@ -7490,19 +7621,44 @@ function buildAssessmentModel({
   const symptomsSummaryAr = `${coughMeta.ar && coughMeta.ar !== 'لا توجد' ? 'كحة ' + coughMeta.ar : ''}${hasDyspnea ? (coughMeta.ar && coughMeta.ar !== 'لا توجد' ? ' مع ضيق تنفس' : 'ضيق تنفس') : ''}`.trim() || "لا توجد أعراض ظاهرة";
   const symptomsSummaryEn = `${coughMeta.en && coughMeta.en !== 'None' ? coughMeta.en + ' cough' : ''}${hasDyspnea ? (coughMeta.en && coughMeta.en !== 'None' ? ' with shortness of breath' : 'Shortness of breath') : ''}`.trim() || "No apparent symptoms";
 
-  const patientName = (user && (user.displayName || user.name)) || (user && user.email ? user.email.split('@')[0] : "مجهول");
-  const patientEmail = (user && user.email) || "";
-  const patientUid = (user && user.uid) || "";
+  // Resolve authentic patient identity
+  const cachedDoc = window._cachedUserDoc || {};
+  const activeSession = (typeof getActiveSession === "function" ? getActiveSession() : null) || {};
+  const profileNameInput = document.getElementById("profileName");
+  const profileAgeInput = document.getElementById("profileAge");
+  const profilePhoneInput = document.getElementById("profilePhone");
+  const profileHistoryInput = document.getElementById("profileMedicalHistory");
+
+  const patientName = (profileNameInput && profileNameInput.value.trim() && profileNameInput.value.trim() !== "أحمد محمد")
+    ? profileNameInput.value.trim()
+    : (cachedDoc.name || cachedDoc.displayName || user?.displayName || user?.name || activeSession.displayName || activeSession.name || (user?.email ? user.email.split('@')[0] : "مريض"));
+
+  const patientEmail = (user && user.email) || cachedDoc.email || activeSession.email || "";
+  const patientUid = (user && user.uid) || activeSession.uid || "";
+  const patientPhone = (profilePhoneInput && profilePhoneInput.value.trim()) || window._verifiedPhone || cachedDoc.phoneNumber || user?.phoneNumber || activeSession.phoneNumber || "";
+  const patientAge = (profileAgeInput && profileAgeInput.value.trim()) || cachedDoc.age || "";
+  const patientHistory = (profileHistoryInput && profileHistoryInput.value.trim()) || cachedDoc.medicalHistory || "";
 
   return {
-    // ── Document Metadata ──
+    // ── Document Metadata & Complete Patient Linkage ──
     schemaVersion: ASSESSMENT_SCHEMA_VERSION,
     patientId: patientUid,
+    patientUid: patientUid,
+    userId: patientUid,
+    uid: patientUid,
+    createdBy: patientUid,
+    submittedBy: patientUid,
     patientEmail: patientEmail,
+    userEmail: patientEmail,
     patientName: patientName,
     patientNameEn: patientName,
     name: patientName,
     nameEn: patientName,
+    patientPhone: patientPhone,
+    phone: patientPhone,
+    patientAge: patientAge,
+    age: patientAge,
+    patientMedicalHistory: patientHistory,
 
     // ── Clinical Tenant & Doctor Assignment ──
     assignedDoctorId: assignedDoctorId || null,
@@ -7629,7 +7785,7 @@ function buildAssessmentModel({
         changedByName: patientName,
         changedByEmail: patientEmail,
         changedByRole: "patient",
-        note: "Assessment submitted by patient"
+        note: currentLanguage === "en" ? "Assessment submitted by patient" : "تم تقديم التقييم السريري بواسطة المريض"
       },
       {
         status: CASE_STATUS.TRIAGED,
@@ -7652,6 +7808,7 @@ function buildAssessmentModel({
     ]
   };
 }
+window.buildAssessmentModel = buildAssessmentModel;
 
 /**
  * Comprehensive Validation Engine for Clinical Assessment Fields
@@ -7764,9 +7921,10 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
     return;
   }
 
-  const user = auth.currentUser;
+  const user = getActiveUser();
   if (!user) {
-    showToast("يجب تسجيل الدخول أولاً");
+    showToast(currentLanguage === "en" ? "Please sign in first to submit assessment" : "يجب تسجيل الدخول أولاً لإرسال تقييم التنفس");
+    showScreen("login");
     return;
   }
 
@@ -7901,6 +8059,30 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
         const docRef = await db.collection("cases").add(caseData);
         console.log("✅ Standardized Case saved to Firestore:", docRef.id);
 
+        // ── ربط الحالة مباشرة بسجل المستخدم في Firestore ──────────────
+        if (db && user.uid) {
+          db.collection("users").doc(user.uid).set({
+            latestCaseId: docRef.id,
+            latestAssessmentAt: firebase.firestore.FieldValue.serverTimestamp(),
+            latestStatus: caseData.status,
+            latestOxygenLevel: oxygenLevel,
+            hasAssessments: true,
+            assessmentCount: firebase.firestore.FieldValue.increment(1)
+          }, { merge: true }).catch(e => console.warn("User latest case sync warning:", e));
+        }
+
+        // ── تحديث سجل الحسابات المحلي لربط الحالة فورياً ───────────────
+        try {
+          const knownAccounts = getLocalAccountsRegistry();
+          const targetAcc = knownAccounts.find(a => a.id === user.uid || (user.email && a.email && a.email.toLowerCase() === user.email.toLowerCase()));
+          if (targetAcc) {
+            targetAcc.latestCaseId = docRef.id;
+            targetAcc.latestAssessmentAt = Date.now();
+            targetAcc.latestOxygenLevel = oxygenLevel;
+            saveToAccountsRegistry(targetAcc);
+          }
+        } catch(e) {}
+
         // ── تسجيل في Audit Log ────────────────────────────────────────
         await db.collection("auditLog").add({
           action: "CASE_SUBMITTED",
@@ -7980,7 +8162,7 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
         const now = new Date().toLocaleTimeString(isEn ? "en-US" : "ar-EG", { hour: "2-digit", minute: "2-digit" });
         const safeSet = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
         safeSet("pendingCaseId",    `#${docRef.id.slice(-6).toUpperCase()}`);
-        safeSet("pendingCaseName",  user.displayName || user.email);
+        safeSet("pendingCaseName",  caseData.patientName || user.displayName || user.email);
         safeSet("pendingCaseO2",    oxygenLevel ? `${oxygenLevel}%` : "--");
         safeSet("pendingCasePriority", priorityAr[priority] || priority);
         safeSet("pendingCaseTime",  now);
@@ -8008,6 +8190,13 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
     submitBtn.textContent = isEn ? "Send to Doctor" : "إرسال للطبيب";
   }
 });
+const btnSaveProfile = document.getElementById("btnSaveProfile");
+if (btnSaveProfile) {
+  btnSaveProfile.addEventListener("click", async () => {
+    await saveUserProfileData();
+  });
+}
+
 const approveResultBtn = document.getElementById("approveResult");
 if (approveResultBtn) approveResultBtn.addEventListener("click", openApprovalModal);
 
