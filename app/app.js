@@ -2073,6 +2073,95 @@ async function updateCaseStatus(id, newStatus, note, extraFields = {}) {
 let activeCaseId = null;
 let currentDoctorQueueFilter = 'all';
 
+function synthesizeClinicalAssessment(c, isEn) {
+  if (!c) c = {};
+  const o2 = Number(c.oxygenLevel || c.o2 || 95);
+  const dyspnea = Boolean(
+    c.breathingDifficulty && (
+      c.breathingDifficulty === "نعم" || 
+      String(c.breathingDifficulty).toLowerCase() === "yes" || 
+      String(c.breathingDifficulty).includes("ضيق")
+    )
+  );
+  const cough = c.coughLevel || (isEn ? "mild" : "خفيفة");
+  const duration = c.symptomDuration || c.duration || (isEn ? "recent onset" : "حديثة");
+  const rfList = Array.isArray(c.riskFactors) && c.riskFactors.length > 0 
+    ? c.riskFactors.filter(r => r && r !== "None" && r !== "لا يوجد")
+    : [];
+  const rf = rfList.length > 0 ? rfList.join("، ") : (isEn ? "None" : "لا توجد");
+  const patientReply = c.patientResponse 
+    ? (isEn ? ` [Patient Response: ${c.patientResponse}]` : ` [إفادة المريض الإضافية: ${c.patientResponse}]`) 
+    : "";
+
+  let diag = "";
+  let meds = "";
+  let recs = [];
+
+  if (o2 < 90) {
+    diag = isEn
+      ? `Critical respiratory assessment: Severe hypoxemia (SpO2: ${o2}%). Marked dyspnea and ${cough} cough present for ${duration}.${rf !== "None" ? " Documented risk factors: " + rf + "." : ""}${patientReply} Urgent clinical oxygenation and emergency medical stabilization required.`
+      : `تقييم سريري حرج: نقص حاد في تشبع الأكسجين (SpO2: ${o2}%). ضيق تنفس ملحوظ مع كحة ${cough} مستمرة منذ ${duration}.${rf !== "لا توجد" ? " عوامل خطورة مصاحبة: " + rf + "." : ""}${patientReply} تستدعي الحالة تدخلاً علاجياً عاجلاً ودعماً فورياً بالأكسجين.`;
+    meds = isEn
+      ? "1. Medical Oxygen Therapy (titrated to SpO2 > 94%)\n2. Nebulized Salbutamol (2.5mg) + Ipratropium Bromide (0.5mg) stat\n3. Systemic Corticosteroid (Hydrocortisone 100mg IV or Prednisolone 40mg PO)"
+      : "1. جلسات أكسجين طبي عاجلة (لرفع نسبة الأكسجين أعلى من 94%)\n2. جلسة استنشاق (فاركولين + أتروفنت) موسعة للشعب فوراً\n3. كورتيزون جهازي مضاد للالتهاب (سوليوكورتيف أو بريدنيزولون) تحت إشراف طبي";
+    recs = isEn
+      ? [
+          "Immediate emergency medical attention (Ambulance 123 or nearest ER).",
+          "Continuous SpO2 pulse oximetry monitoring every 30 minutes.",
+          "Maintain upright high-Fowler sitting position to ease breathing work.",
+          "Avoid any physical exertion or unprescribed sedatives."
+        ]
+      : [
+          "التوجه الفوري إلى قسم الطوارئ أو الاتصال بالإسعاف (123) دون تأخير.",
+          "مراقبة مستمرة ودورية لنسبة تشبع الأكسجين كل نصف ساعة.",
+          "الجلوس في وضع قائم ومريح لتسهيل حركة الحجاب الحاجز والتنفس.",
+          "تجنب المجهود البدني تماماً والامتناع عن تناول مهدئات دون إشراف طبي."
+        ];
+  } else if (o2 < 94) {
+    diag = isEn
+      ? `Moderate respiratory assessment: Borderline hypoxemia (SpO2: ${o2}%). Symptoms indicate active bronchial irritation and ${cough} cough lasting ${duration}.${rf !== "None" ? " Co-existing risk factors: " + rf + "." : ""}${patientReply} Requires bronchodilation therapy and tight oxygen surveillance.`
+      : `تقييم سريري متوسط: انخفاض طفيف في تشبع الأكسجين (SpO2: ${o2}%). تشير العلامات إلى تهيج بالشعب الهوائية وكحة ${cough} مستمرة منذ ${duration}.${rf !== "لا توجد" ? " عوامل خطورة: " + rf + "." : ""}${patientReply} تستوجب الحالة موسعات للشعب ومتابعة دقيقة لمستوى الأكسجين.`;
+    meds = isEn
+      ? "1. Inhaled Bronchodilator (Salbutamol 100mcg) - 2 puffs every 6 hours as needed\n2. Inhaled Corticosteroid (Budesonide 200mcg) - 1 inhalation twice daily\n3. Mucolytic / Expectorant (Acetylcysteine 600mg) - 1 sachet daily in water\n4. Paracetamol 500mg - 1 tablet every 8 hours PRN for fever or pain"
+      : "1. بخاخ موسع للشعب (سالبوتامول 100 ميكروجرام) - بختان كل 6 ساعات عند اللزوم\n2. بخاخ مضاد لالتهاب الشعب (بوديزونايد 200) - استنشاقة واحدة مرتين يومياً\n3. فوار مذيب للبلغم (أستيل سيستايين 600 مجم) - كيس على نصف كوب ماء مرة يومياً\n4. باراسيتامول 500 مجم - قرص كل 8 ساعات عند اللزوم للحرارة أو الصداع";
+    recs = isEn
+      ? [
+          "Check and log SpO2 twice daily (morning and evening) with a reliable oximeter.",
+          "Practice daily diaphragmatic deep breathing exercises and drink warm fluids.",
+          "Clinic or teleconsultation follow-up within 48 hours.",
+          "Seek emergency care immediately if SpO2 drops below 90% or breathing worsens."
+        ]
+      : [
+          "قياس وتوثيق نسبة الأكسجين SpO2 مرتين يومياً بجهاز نبض معتمد.",
+          "الحرص على شرب السوائل الدافئة وتمارين التنفس العميق والتهوية الجيدة.",
+          "مراجعة الطبيب المعالج بالعيادة أو عن بُعد خلال 48 ساعة لمتابعة الاستجابة.",
+          "التوجه للطوارئ فوراً في حال هبوط الأكسجين عن 90% أو زيادة النهجان."
+        ];
+  } else {
+    diag = isEn
+      ? `Stable respiratory evaluation: Normal physiological oxygenation (SpO2: ${o2}%). ${dyspnea ? "Mild dyspnea reported" : "No resting dyspnea"}, ${cough} cough ongoing for ${duration}.${rf !== "None" ? " Patient risk factors: " + rf + "." : ""}${patientReply} Clinical picture consistent with mild reactive or seasonal airway irritation without hypoxemia.`
+      : `تقييم سريري مستقر ومطمئن: تشبع الأكسجين طبيعي ومثالي (SpO2: ${o2}%). ${dyspnea ? "شكوى من إجهاد تنفسي خفيف" : "لا يوجد ضيق تنفس حاد أثناء الراحة"}، مع كحة ${cough} مستمرة منذ ${duration}.${rf !== "لا توجد" ? " عوامل خطورة مسجلة: " + rf + "." : ""}${patientReply} الحالة تتوافق مع حساسية أو نزلة تنفسية خفيفة إلى متوسطة دون نقص بالأكسجين.`;
+    meds = isEn
+      ? "1. Antihistamine / Anti-allergy (Levocetirizine 5mg) - 1 tablet once daily before sleep\n2. Natural Herbal Cough Syrup (Ivy leaf extract) - 10ml 3 times daily\n3. Saline Nasal Rinse - 2 sprays per nostril 3 times daily"
+      : "1. مضاد للحساسية (ليفوسيتريزين 5 مجم) - قرص واحد مساءً قبل النوم\n2. شراب مهدئ للسعال بمستخلص أوراق اللبلاب - ملعقة كبيرة 3 مرات يومياً بعد الأكل\n3. بخاخ ماء بحر أو محلول ملحي للأنف - بختان في كل فتحة أنف 3 مرات يومياً";
+    recs = isEn
+      ? [
+          "Maintain generous fluid intake (warm herbal teas, honey and lemon).",
+          "Ensure adequate rest and avoid exposure to tobacco smoke, dust, and cold drafts.",
+          "Routine follow-up in 5-7 days if symptoms fail to improve gradually.",
+          "Re-assess if new symptoms appear such as high fever or persistent chest pain."
+        ]
+      : [
+          "شرب السوائل الدافئة بوفرة (عسل النحل مع الليمون، الزنجبيل والينسون).",
+          "أخذ قسط كافٍ من النوم والراحة، والابتعاد التام عن أدخنة السجائر والغبار.",
+          "مراجعة الطبيب بعد 5 إلى 7 أيام إذا لم تتماثل الأعراض للشفاء التدريجي.",
+          "إعادة التقييم في حال ظهور أعراض جديدة مثل ارتفاع الحرارة أو ألم بالصدر."
+        ];
+  }
+
+  return { diag, meds, recs };
+}
+
 function parseDoctorRecommendations(rawText) {
   return String(rawText || "")
     .split(/\r?\n|[;؛]/)
@@ -2180,24 +2269,23 @@ window.generateAndApproveReport = async function(id) {
   const licInput = document.getElementById("doctorLicenseInput");
   const clinicInput = document.getElementById("doctorClinicInput");
 
+  // Fetch actual case data to ensure synthesis reflects real clinical indicators
+  const allCases = await getCases();
+  const actualCase = allCases.find(c => c.id === id) || (window._currentDetailedCase && window._currentDetailedCase.id === id ? window._currentDetailedCase : {});
+  const synthesized = synthesizeClinicalAssessment(actualCase, isEn);
+
   let clinicalDiagnosis = diagInput ? diagInput.value.trim() : "";
   let medications = medInput ? medInput.value.trim() : "";
   let recommendations = parseDoctorRecommendations(recInput ? recInput.value : "");
 
   if (!clinicalDiagnosis) {
-    clinicalDiagnosis = isEn
-      ? "Patient assessment verified. Normal breathing sounds with mild bronchial irritation."
-      : "تمت المراجعة والتدقيق السريري. أعراض حساسية صدرية موسمية مع كحة خفيفة واستقرار تشبع الأكسجين.";
+    clinicalDiagnosis = synthesized.diag;
   }
   if (!medications) {
-    medications = isEn
-      ? "1. Salbutamol Inhaler (100mcg): 2 puffs every 6 hours PRN.\n2. Hydration & Deep breathing exercises."
-      : "1. بخاخ موسع للشعب (فينتولين 100 ميكروجرام): بختان عند اللزوم كل 6 ساعات.\n2. سوائل دافئة وراحة تامة.";
+    medications = synthesized.meds;
   }
   if (recommendations.length === 0) {
-    recommendations = isEn
-      ? ["Monitor oxygen saturation SpO2 twice daily.", "Increase warm fluid intake and practice deep breathing.", "Return for clinical evaluation within 48 hours."]
-      : ["قياس نسبة تشبع الأكسجين مرتين يومياً بجهاز نبض موثوق.", "الحرص على شرب السوائل الدافئة وتمارين التنفس العميق.", "متابعة الاستشارة في العيادة أو عن بُعد خلال 48 ساعة."];
+    recommendations = synthesized.recs;
   }
 
   const approvingDoctorName = nameInput && nameInput.value.trim() ? nameInput.value.trim() : (auth.currentUser ? (auth.currentUser.displayName || auth.currentUser.email) : "Dr. Mona Samy");
@@ -2765,11 +2853,12 @@ if (isUnderReview) {
     `;
   }
 
-  const existingDoctorNote = c.clinicalDiagnosis || c.doctorNote || c.clinicalNotes || "";
-  const existingRecommendations = Array.isArray(c.recommendations)
+  const synthesized = synthesizeClinicalAssessment(c, isEn);
+  const existingDoctorNote = c.clinicalDiagnosis || c.doctorNote || c.clinicalNotes || synthesized.diag;
+  const existingRecommendations = Array.isArray(c.recommendations) && c.recommendations.length > 0
     ? c.recommendations.join("\n")
-    : (c.recommendation || "");
-  const existingMedications = c.medications || (isEn ? "1. Salbutamol Inhaler (100mcg): 2 puffs every 6 hours PRN.\n2. Hydration & Deep breathing exercises." : "1. بخاخ موسع للشعب (فينتولين 100 ميكروجرام): بختان عند اللزوم كل 6 ساعات.\n2. سوائل دافئة وراحة تامة.");
+    : (c.recommendation || synthesized.recs.join("\n"));
+  const existingMedications = c.medications || synthesized.meds;
 
   // Current doctor credentials
   const currentDocName = c.approvingDoctorName || c.assignedDoctorName || (auth.currentUser ? (auth.currentUser.displayName || auth.currentUser.email.split('@')[0]) : (isEn ? "Dr. Mona Samy" : "د. منى سامي"));
@@ -5087,24 +5176,21 @@ async function renderReportScreen(targetCaseId = null) {
       ? (isEn ? `Patient #${caseData.id.slice(-6).toUpperCase()} (Identity Masked)` : `مريض #${caseData.id.slice(-6).toUpperCase()} (الاسم محجوب لدواعي الخصوصية)`)
       : rawPatientName;
 
-    const clinicalDiagnosis = caseData.clinicalDiagnosis || caseData.doctorNote || caseData.clinicalNotes || (isEn ? "Patient assessment reviewed and verified. Oxygen saturation stable. Mild seasonal bronchial sensitivity." : "تمت المراجعة والتدقيق السريري لقياسات التنفس والأعراض. نسبة الأكسجين مقبولة وتوجد أعراض حساسية صدرية موسمية مع كحة متوسطة.");
+    // Synthesize tailored clinical findings from actual case indicators if not explicitly set
+    const reportSynth = synthesizeClinicalAssessment(caseData, isEn);
+    const clinicalDiagnosis = caseData.clinicalDiagnosis || caseData.doctorNote || caseData.clinicalNotes || reportSynth.diag;
     
-    // Medications list parsing
-    const rawMeds = caseData.medications || (isEn ? "1. Salbutamol Inhaler (100mcg) - 2 puffs PRN\n2. Paracetamol 500mg - 1 tab every 8h" : "1. بخاخ موسع للشعب (سالبوتامول) - بختان عند اللزوم\n2. باراسيتامول 500 مجم - قرص كل 8 ساعات");
+    // Medications list parsing (from actual case or tailored synthesis)
+    const rawMeds = caseData.medications || reportSynth.meds;
     const medItems = String(rawMeds)
       .split("\n")
       .map(line => line.trim())
       .filter(line => line.length > 0);
 
-    const savedRecommendations = Array.isArray(caseData.recommendations)
+    const savedRecommendations = Array.isArray(caseData.recommendations) && caseData.recommendations.length > 0
       ? caseData.recommendations
       : parseDoctorRecommendations(caseData.recommendation);
-    const doctorRecommendations = savedRecommendations.length > 0 ? savedRecommendations : [
-      isEn ? "Monitor oxygen saturation twice daily using a calibrated pulse oximeter." : "قياس نسبة تشبع الأكسجين مرتين يومياً باستخدام جهاز نبض موثوق.",
-      isEn ? "Maintain adequate hydration and practice guided deep breathing exercises." : "الحرص على شرب السوائل الدافئة وتمارين التنفس العميق بانتظام.",
-      isEn ? "Follow-up consultation in clinic or teleconsultation within 48 hours." : "متابعة الاستشارة في العيادة أو عن بُعد خلال 48 ساعة لمراجعة التحسن.",
-      isEn ? "Seek immediate emergency care if severe shortness of breath or chest tightness occurs." : "التوجه فوراً لقسم الطوارئ في حال زيادة ضيق التنفس أو ظهور ألم حاد بالصدر."
-    ];
+    const doctorRecommendations = savedRecommendations.length > 0 ? savedRecommendations : reportSynth.recs;
 
     const breathingDifficultyDisplay = isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوب") : (caseData.breathingDifficulty || caseData.difficulty || (isEn ? "Moderate" : "متوسط"));
     const coughLevelDisplay = isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوبة") : (caseData.coughLevel || (isEn ? "Moderate" : "متوسطة"));
@@ -5218,11 +5304,17 @@ async function renderReportScreen(targetCaseId = null) {
           </div>
         </div>
 
-        <!-- CLINICAL DOSSIER GRID -->
-        <div class="report-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-bottom: 20px;">
+        <!-- CLINICAL DOSSIER GRID (ACTUAL CASE DATA) -->
+        <div class="report-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-bottom: 20px;">
           <div>
             <span style="font-size: 11.5px; color: var(--muted); display: block;">${isEn ? "Patient Name" : "اسم المريض"}</span>
             <strong style="font-size: 13.5px; color: var(--ink);">${patientName}</strong>
+            ${caseData.patientAge || caseData.age ? `<small style="display: block; color: var(--muted); font-size: 11px;">${isEn ? "Age:" : "العمر:"} ${caseData.patientAge || caseData.age} ${isEn ? "yrs" : "سنة"}</small>` : ''}
+          </div>
+          <div>
+            <span style="font-size: 11.5px; color: var(--muted); display: block;">${isEn ? "Patient Phone / Contact" : "هاتف المريض"}</span>
+            <strong style="font-size: 13px; color: var(--ink);">${isSupport ? '🔒' : (caseData.patientPhone || caseData.phone || (user && user.phoneNumber) || '--')}</strong>
+            <small style="display: block; color: var(--muted); font-size: 11px;">${isSupport ? '' : (caseData.patientEmail || caseData.userEmail || (user && user.email) || '')}</small>
           </div>
           <div>
             <span style="font-size: 11.5px; color: var(--muted); display: block;">${isEn ? "Attending Physician" : "الطبيب المعتمد"}</span>
@@ -5238,12 +5330,9 @@ async function renderReportScreen(targetCaseId = null) {
             <strong style="font-size: 13px; color: var(--ink); font-family: monospace;">${doctorLicense}</strong>
           </div>
           <div>
-            <span style="font-size: 11.5px; color: var(--muted); display: block;">${isEn ? "Submission Time" : "تاريخ ووقت الفحص"}</span>
-            <strong style="font-size: 12.5px; color: var(--ink);">${submittedDateFormatted}</strong>
-          </div>
-          <div>
             <span style="font-size: 11.5px; color: var(--muted); display: block;">${isEn ? "Approval Time" : "تاريخ ووقت الاعتماد"}</span>
             <strong style="font-size: 12.5px; color: var(--ink);">${dateFormatted}</strong>
+            <small style="display: block; color: var(--muted); font-size: 10.5px;">${isEn ? "Submitted:" : "تاريخ الفحص:"} ${submittedDateFormatted}</small>
           </div>
         </div>
 
