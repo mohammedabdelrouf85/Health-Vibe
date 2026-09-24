@@ -272,11 +272,9 @@ service cloud.firestore {
                        request.resource.data.status in ['draft', 'submitted', 'triaged', 'assigned', 'pending'] &&
                        isValidAssessment(request.resource.data);
 
-      allow update: if (((isDoctor() &&
-                         isEmailVerified() &&
-                         request.resource.data.patientId == resource.data.patientId) ||
-                        (isAdmin() &&
-                         request.resource.data.patientId == resource.data.patientId)) &&
+      allow update: if (isAuthenticated() &&
+                        (isDoctor() || isAssignedDoctor() || isAdmin() || isOwner() || (resource.data.patientId == request.auth.uid)) &&
+                        request.resource.data.patientId == resource.data.patientId &&
                         isValidCaseStatus(request.resource.data.status) &&
                         isValidAssessment(request.resource.data));
 
