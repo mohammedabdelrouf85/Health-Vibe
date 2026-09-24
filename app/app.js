@@ -1726,7 +1726,68 @@ async function initDB() {
   await getAllKnownAccounts();
 }
 
-async function getCases() {
+// =========================================================================
+// 🧪 DATA ISOLATION ENGINE: STRICT SEPARATION OF TEST/DEMO DATA FROM REAL USERS
+// =========================================================================
+
+function isTestOrDemoRecord(record) {
+  if (!record) return true;
+
+  // 1. Explicit boolean or environment flags
+  if (record.isDemo === true || record.isTest === true || record.isMock === true || record.isSample === true || record.isSeed === true) {
+    return true;
+  }
+  if (record.environment === "test" || record.environment === "demo" || record.environment === "sandbox" || record.env === "test") {
+    return true;
+  }
+
+  // 2. ID prefix conventions (test runs, mock seeds)
+  const idStr = String(record.id || record._id || "").toLowerCase();
+  if (
+    idStr.startsWith("demo_") ||
+    idStr.startsWith("mock_") ||
+    idStr.startsWith("test_case_") ||
+    idStr.startsWith("sample_") ||
+    idStr.startsWith("seed_") ||
+    idStr.startsWith("fake_")
+  ) {
+    return true;
+  }
+
+  // 3. User / Email conventions (explicit mock accounts)
+  const email = String(record.patientEmail || record.userEmail || record.email || "").toLowerCase();
+  if (
+    email.startsWith("test_case_") ||
+    email.startsWith("demo_user_") ||
+    email === "demo@healthvibe.ai" ||
+    email.includes("mock_patient") ||
+    email.includes("test_patient")
+  ) {
+    return true;
+  }
+
+  // 4. Name conventions (explicit demo identifiers)
+  const name = String(record.patientName || record.name || record.displayName || "").toLowerCase();
+  if (
+    name.startsWith("demo patient") ||
+    name.startsWith("مريض تجريبي") ||
+    name.startsWith("حالة تجريبية") ||
+    name.startsWith("test patient")
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+function isRealProductionRecord(record) {
+  return !isTestOrDemoRecord(record);
+}
+
+window.isTestOrDemoRecord = isTestOrDemoRecord;
+window.isRealProductionRecord = isRealProductionRecord;
+
+async function getCases(options = {}) {
   try {
     const user = getActiveUser();
     if (!user) return [];
@@ -1787,12 +1848,10 @@ async function getCases() {
       return tB - tA;
     });
 
-    // 🛡️ STRICT ENFORCEMENT: Real cases ONLY (strictly exclude demo, mock, or fake cases)
+    // 🛡️ STRICT ENFORCEMENT: Real cases ONLY (strictly isolate test/demo data)
     cases = cases.filter(c => {
       if (!c) return false;
-      if (c.isDemo === true) return false;
-      const idStr = String(c.id || "");
-      if (idStr.startsWith("demo_") || idStr.startsWith("mock_") || idStr.startsWith("test_case_")) return false;
+      if (!options.includeTest && isTestOrDemoRecord(c)) return false;
       const hasPatient = Boolean(c.patientId || c.patientUid || c.patientEmail);
       const hasVitals = typeof c.o2 === "number" || typeof c.oxygenLevel === "number";
       return hasPatient && hasVitals;
@@ -1945,11 +2004,7 @@ async function getPatientDatabaseHistoryRecords(user) {
   }
 
   return Array.from(recordsByKey.values())
-    .filter((record) => {
-      if (!record || record.isDemo === true) return false;
-      const idStr = String(record.id || "");
-      return !idStr.startsWith("demo_") && !idStr.startsWith("mock_") && !idStr.startsWith("test_case_");
-    })
+    .filter(isRealProductionRecord)
     .sort((a, b) => {
       const bTime = toMillis(b.approvedAt || b.reportGeneratedAt || b.submittedAt || b.createdAt || b.updatedAt) || 0;
       const aTime = toMillis(a.approvedAt || a.reportGeneratedAt || a.submittedAt || a.createdAt || a.updatedAt) || 0;
@@ -2407,7 +2462,7 @@ window.generateAndApproveReport = async function(id) {
   const clinicInput = document.getElementById("doctorClinicInput");
 
   // Fetch actual case data to ensure synthesis reflects real clinical indicators
-  const allCases = await getCases();
+  const allCases = await getCases({ includeTest: true });
   const actualCase = allCases.find(c => c.id === id) || (window._currentDetailedCase && window._currentDetailedCase.id === id ? window._currentDetailedCase : {});
   const synthesized = synthesizeClinicalAssessment(actualCase, isEn);
 
@@ -2577,19 +2632,19 @@ function renderDoctorQueueItems(allCases) {
   if (!queueList) return;
 
   const isEn = currentLanguage === "en";
+  const isSandbox = currentDoctorQueueFilter === 'test_sandbox';
 
-  // 🛡️ STRICT ENFORCEMENT: Filter strictly for REAL patient cases
-  const realCases = allCases.filter(c => {
-    if (!c) return false;
-    if (c.isDemo === true) return false;
-    const idStr = String(c.id || "");
-    if (idStr.startsWith("demo_") || idStr.startsWith("mock_") || idStr.startsWith("test_case_")) return false;
+  // 🛡️ STRICT ISOLATION: Partition cases into authentic patients vs test/demo data
+  const realCases = (allCases || []).filter(c => {
+    if (!c || !isRealProductionRecord(c)) return false;
     const hasPatient = Boolean(c.patientId || c.patientUid || c.patientEmail);
     const hasVitals = typeof c.o2 === "number" || typeof c.oxygenLevel === "number";
     return hasPatient && hasVitals;
   });
 
-  // 🔔 تحديث شارة عدد الحالات في قائمة الانتظار
+  const sandboxCases = (allCases || []).filter(c => c && isTestOrDemoRecord(c));
+
+  // 🔔 تحديث شارة عدد الحالات في قائمة الانتظار للمرضى الفعليين فقط
   const queueCountBadge = document.getElementById("doctorQueueCount");
   if (queueCountBadge) {
     const actionable = realCases.filter(c => [CASE_STATUS.ASSIGNED, CASE_STATUS.TRIAGED, CASE_STATUS.PENDING, CASE_STATUS.SUBMITTED, CASE_STATUS.UNDER_REVIEW].includes(c.status)).length;
@@ -2599,53 +2654,73 @@ function renderDoctorQueueItems(allCases) {
 
   queueList.innerHTML = '';
 
-  if (realCases.length === 0) {
-    queueList.innerHTML = `
-      <div style="padding: 30px 16px; text-align: center; color: var(--muted);">
-        <div style="font-size: 32px; margin-bottom: 8px;">🩺</div>
-        <strong style="display: block; color: var(--ink); margin-bottom: 4px; font-size: 14px;">
-          ${isEn ? 'No Real Patient Cases in Queue' : 'لا توجد حالات سريرية حقيقية في قائمة الانتظار'}
-        </strong>
-        <p style="margin: 0; font-size: 12.5px; line-height: 1.5;">
-          ${isEn
-            ? 'The doctor queue only displays authentic cases submitted by registered patients. When patients submit new clinical assessments, they will appear here instantly.'
-            : 'قائمة انتظار الطبيب تعرض الحالات السريرية الحقيقية المُرسلة من المرضى فورياً وبشكل حي.'}
-        </p>
-      </div>
+  // 🧪 في بيئة الاختبار: عرض تنبيه بيئة المحاكاة المعزولة
+  if (isSandbox) {
+    const banner = document.createElement("div");
+    banner.style.cssText = "background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; font-size: 12px; color: #b45309;";
+    banner.innerHTML = `
+      <div style="font-weight: bold; margin-bottom: 2px;">🧪 ${isEn ? "Isolated Sandbox Environment" : "بيئة الاختبار والمحاكاة المعزولة"}</div>
+      <div>${isEn ? "Showing mock, demo, and test accounts only. Real patient records are strictly protected and isolated from this view." : "هذه الحالات مخصصة للمحاكاة والاختبار فقط، ومفصولة تماماً عن سجلات وقوائم المرضى الحقيقيين."}</div>
     `;
-    const reviewPanel = document.getElementById("doctorReviewPanel");
-    if (reviewPanel) {
-      reviewPanel.style.display = "none";
-      reviewPanel.innerHTML = "";
-    }
-    return;
+    queueList.appendChild(banner);
   }
 
-  // Filter cases based on selected tab
-  let cases = realCases;
-  if (currentDoctorQueueFilter === 'under_review') {
-    cases = realCases.filter(c => c.status === CASE_STATUS.UNDER_REVIEW);
-  } else if (currentDoctorQueueFilter === 'assigned') {
-    cases = realCases.filter(c => [CASE_STATUS.ASSIGNED, CASE_STATUS.TRIAGED, CASE_STATUS.PENDING, CASE_STATUS.SUBMITTED].includes(c.status));
-  } else if (currentDoctorQueueFilter === 'more_info_requested') {
-    cases = realCases.filter(c => c.status === CASE_STATUS.MORE_INFO_REQUESTED);
-  } else if (currentDoctorQueueFilter === 'approved') {
-    cases = realCases.filter(c => c.status === CASE_STATUS.APPROVED);
-  } else if (currentDoctorQueueFilter === 'closed_escalated') {
-    cases = realCases.filter(c => [CASE_STATUS.CLOSED, CASE_STATUS.ESCALATED, CASE_STATUS.REJECTED].includes(c.status));
+  // 🛡️ STRICT DATA ISOLATION: Segregate real patient cases from test/mock records
+  let cases = [];
+  if (isSandbox) {
+    cases = sandboxCases;
+  } else {
+    // Normal queue: REAL PATIENTS ONLY
+    if (currentDoctorQueueFilter === 'under_review') {
+      cases = realCases.filter(c => c.status === CASE_STATUS.UNDER_REVIEW);
+    } else if (currentDoctorQueueFilter === 'assigned') {
+      cases = realCases.filter(c => [CASE_STATUS.ASSIGNED, CASE_STATUS.TRIAGED, CASE_STATUS.PENDING, CASE_STATUS.SUBMITTED].includes(c.status));
+    } else if (currentDoctorQueueFilter === 'more_info_requested') {
+      cases = realCases.filter(c => c.status === CASE_STATUS.MORE_INFO_REQUESTED);
+    } else if (currentDoctorQueueFilter === 'approved') {
+      cases = realCases.filter(c => c.status === CASE_STATUS.APPROVED);
+    } else if (currentDoctorQueueFilter === 'closed_escalated') {
+      cases = realCases.filter(c => [CASE_STATUS.CLOSED, CASE_STATUS.ESCALATED, CASE_STATUS.REJECTED].includes(c.status));
+    } else {
+      cases = realCases;
+    }
   }
 
   if (cases.length === 0) {
-    queueList.innerHTML = `
-      <div class="hv-state-card" style="margin: 16px 0;">
-        <span class="state-icon">📋</span>
-        <h4>${isEn ? 'No Cases in Queue' : 'لا توجد حالات في هذا التصنيف'}</h4>
-        <p>${isEn ? 'All patient assessments in this category have been attended to, or no new assessments have arrived yet.' : 'تم التعامل مع جميع التقييمات في هذا التصنيف، أو لم تصل تقييمات جديدة حتى الآن.'}</p>
-        <button type="button" class="outline-button" onclick="renderDoctorQueue()" style="font-size: 12.5px; padding: 6px 14px; margin-top: 4px;">
-          <span>🔄</span> ${isEn ? 'Refresh' : 'تحديث القائمة'}
-        </button>
-      </div>
-    `;
+    if (isSandbox) {
+      queueList.innerHTML += `
+        <div class="hv-state-card" style="margin: 16px 0;">
+          <span class="state-icon">🧪</span>
+          <h4>${isEn ? 'Sandbox is Empty' : 'بيئة الاختبار خالية'}</h4>
+          <p>${isEn ? 'No test, demo, or seed cases currently found in the system.' : 'لا توجد أي حالات تجريبية أو بيانات محاكاة في بيئة الاختبار حالياً.'}</p>
+        </div>
+      `;
+    } else if (realCases.length === 0) {
+      queueList.innerHTML = `
+        <div style="padding: 30px 16px; text-align: center; color: var(--muted);">
+          <div style="font-size: 32px; margin-bottom: 8px;">🩺</div>
+          <strong style="display: block; color: var(--ink); margin-bottom: 4px; font-size: 14px;">
+            ${isEn ? 'No Real Patient Cases in Queue' : 'لا توجد حالات سريرية حقيقية في قائمة الانتظار'}
+          </strong>
+          <p style="margin: 0; font-size: 12.5px; line-height: 1.5;">
+            ${isEn
+              ? 'The doctor queue only displays authentic cases submitted by registered patients. Test and mock data are quarantined in the Sandbox tab.'
+              : 'قائمة انتظار الطبيب تعرض حصراً الحالات السريرية الحقيقية المُرسلة من المرضى. بيانات الاختبار معزولة في تبويب بيئة الاختبار.'}
+          </p>
+        </div>
+      `;
+    } else {
+      queueList.innerHTML = `
+        <div class="hv-state-card" style="margin: 16px 0;">
+          <span class="state-icon">📋</span>
+          <h4>${isEn ? 'No Cases in Queue' : 'لا توجد حالات في هذا التصنيف'}</h4>
+          <p>${isEn ? 'All patient assessments in this category have been attended to, or no new assessments have arrived yet.' : 'تم التعامل مع جميع التقييمات في هذا التصنيف، أو لم تصل تقييمات جديدة حتى الآن.'}</p>
+          <button type="button" class="outline-button" onclick="renderDoctorQueue()" style="font-size: 12.5px; padding: 6px 14px; margin-top: 4px;">
+            <span>🔄</span> ${isEn ? 'Refresh' : 'تحديث القائمة'}
+          </button>
+        </div>
+      `;
+    }
     const reviewPanel = document.getElementById("doctorReviewPanel");
     if (reviewPanel) {
       reviewPanel.style.display = "block";
@@ -2726,12 +2801,13 @@ async function renderDoctorQueue() {
   // Render filter tabs if container exists
   if (filterTabsContainer) {
     const filters = [
-      { key: 'all', ar: 'الكل', en: 'All' },
+      { key: 'all', ar: 'الكل (مرضى فعليين)', en: 'All Real Patients' },
       { key: 'under_review', ar: 'قيد الفحص', en: 'Under Review' },
       { key: 'assigned', ar: 'بانتظار الطبيب', en: 'Awaiting Doctor' },
       { key: 'more_info_requested', ar: 'مطلوب بيانات', en: 'More Info' },
       { key: 'approved', ar: 'معتمد', en: 'Approved' },
-      { key: 'closed_escalated', ar: 'مغلق ومصعّد', en: 'Closed & Escalated' }
+      { key: 'closed_escalated', ar: 'مغلق ومصعّد', en: 'Closed & Escalated' },
+      { key: 'test_sandbox', ar: '🧪 بيئة الاختبار (Sandbox)', en: '🧪 Test Sandbox' }
     ];
 
     filterTabsContainer.innerHTML = filters.map(f => `
@@ -2780,7 +2856,7 @@ async function renderDoctorQueue() {
         async (err) => {
           console.warn("Doctor queue real-time listener error, fallback to getCases():", err.message);
           try {
-            const cases = await getCases();
+            const cases = await getCases({ includeTest: true });
             renderDoctorQueueItems(cases);
           } catch(e) {
             renderDoctorQueueError(e);
@@ -2790,7 +2866,7 @@ async function renderDoctorQueue() {
     } catch(e) {
       console.warn("Could not bind real-time doctor queue:", e.message);
       try {
-        const cases = await getCases();
+        const cases = await getCases({ includeTest: true });
         renderDoctorQueueItems(cases);
       } catch(errFallback) {
         renderDoctorQueueError(errFallback);
@@ -2798,7 +2874,7 @@ async function renderDoctorQueue() {
     }
   } else {
     try {
-      const cases = await getCases();
+      const cases = await getCases({ includeTest: true });
       renderDoctorQueueItems(cases);
     } catch(e) {
       renderDoctorQueueError(e);
@@ -2823,8 +2899,8 @@ function renderDoctorQueueError(err) {
 }
 async function selectDoctorCase(id) {
   activeCaseId = id;
-  const cases = await getCases();
-  const c = cases.find(c => c.id === id && !c.isDemo && !String(c.id).startsWith("demo_"));
+  const cases = await getCases({ includeTest: true });
+  const c = cases.find(c => c.id === id);
   const reviewPanel = document.getElementById("doctorReviewPanel");
   if (!c || !reviewPanel) {
     if (reviewPanel) {
@@ -5388,7 +5464,7 @@ async function renderReportScreen(targetCaseId = null) {
         docs = fallbackCases;
       }
       const validDocs = docs
-        .filter(c => !c.isDemo && !String(c.id).startsWith("demo_") && (typeof c.o2 === "number" || typeof c.oxygenLevel === "number"))
+        .filter(c => isRealProductionRecord(c) && (typeof c.o2 === "number" || typeof c.oxygenLevel === "number"))
         .sort((a, b) => (toMillis(b.submittedAt || b.createdAt || b.updatedAt) || 0) - (toMillis(a.submittedAt || a.createdAt || a.updatedAt) || 0));
 
       if (validDocs.length > 0) {
@@ -6071,7 +6147,7 @@ async function renderResultScreen() {
     }
 
     const validDocs = docs
-      .filter(c => !c.isDemo && !String(c.id).startsWith("demo_") && (typeof c.o2 === "number" || typeof c.oxygenLevel === "number"))
+      .filter(c => isRealProductionRecord(c) && (typeof c.o2 === "number" || typeof c.oxygenLevel === "number"))
       .sort((a, b) => (toMillis(b.submittedAt || b.createdAt || b.updatedAt) || 0) - (toMillis(a.submittedAt || a.createdAt || a.updatedAt) || 0));
 
     if (validDocs.length === 0) {
@@ -8416,6 +8492,9 @@ function buildAssessmentModel({
   return {
     // ── Document Metadata & Complete Patient Linkage ──
     schemaVersion: ASSESSMENT_SCHEMA_VERSION,
+    isDemo: false,
+    isTest: false,
+    environment: "production",
     patientId: patientUid,
     patientUid: patientUid,
     userId: patientUid,
