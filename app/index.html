@@ -324,6 +324,7 @@
         <button class="nav-item" data-screen="assistant"><span class="nav-icon">🤖</span><span class="nav-label">Medical Assistant</span></button>
         <button class="nav-item" data-screen="verification" style="display:none;"><span class="nav-icon">✅</span><span class="nav-label">Doctor Verification</span></button>
         <button class="nav-item" data-screen="doctor" style="display:none;"><span class="nav-icon">🩺</span><span class="nav-label">Doctor Dashboard</span></button>
+        <button class="nav-item" data-screen="kpi" style="display:none;"><span class="nav-icon">📊</span><span class="nav-label">KPI Dashboard</span></button>
         <button class="nav-item" data-screen="report"><span class="nav-icon">📄</span><span class="nav-label">Report</span></button>
         <button class="nav-item" data-screen="admin" style="display:none;"><span class="nav-icon">⚙️</span><span class="nav-label">Admin Dashboard</span></button>
         <button class="nav-item" data-screen="audit" style="display:none;"><span class="nav-icon">🔍</span><span class="nav-label">Audit Log</span></button>
@@ -958,6 +959,26 @@
       </section>
 
       <section id="screen-doctor" class="screen">
+        <!-- Doctor Clinical Performance & TAT Header Bar -->
+        <div class="kpi-banner-cta" style="margin-bottom: 16px;">
+          <div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 18px;">⚡</span>
+              <strong style="font-size: 14.5px; color: var(--ink);">مؤشرات أدائك السريري (Doctor Clinical KPIs)</strong>
+            </div>
+            <div style="display: flex; gap: 16px; margin-top: 6px; flex-wrap: wrap; font-size: 12.5px;">
+              <span>معدل إنجاز الحالات: <strong id="docKpiCompletionRate" style="color: #10b981;">--%</strong></span>
+              <span style="color: var(--muted);">•</span>
+              <span>متوسط سرعة استجابتك: <strong id="docKpiResponseTime" style="color: #3b82f6;">-- دقيقة</strong></span>
+              <span style="color: var(--muted);">•</span>
+              <span>متوسط استخراج التقارير: <strong id="docKpiTurnaroundTime" style="color: var(--teal);">-- دقيقة</strong></span>
+            </div>
+          </div>
+          <button type="button" class="soft-button" onclick="showScreen('kpi')" style="padding: 7px 14px; font-size: 12.5px; display: inline-flex; align-items: center; gap: 6px;">
+            <span>📊</span> عرض لوحة المؤشرات الكاملة (KPIs)
+          </button>
+        </div>
+
         <div class="doctor-layout">
           <article class="panel">
             <div class="panel-head"><h3>قائمة المرضى</h3><span class="pill ok">طبيب موثق</span></div>
@@ -986,15 +1007,18 @@
               قراءات حقيقية من قاعدة البيانات: المستخدمون، الفحوصات، الأطباء، ومؤشرات السلامة
             </p>
           </div>
-          <div style="display: flex; gap: 10px; align-items: center;">
+          <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
             <span id="adminLastRefreshedAt" style="font-size: 12px; color: var(--muted);">آخر تحديث: الآن</span>
             <button type="button" class="soft-button" onclick="refreshAdminDashboardLive()" id="btnRefreshAdminMetrics" style="padding: 8px 16px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px;">
               <span id="adminRefreshSpinnerIcon">🔄</span> تحديث الأرقام المباشرة
             </button>
+            <button type="button" class="solid-button" onclick="showScreen('kpi')" style="padding: 8px 16px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px;">
+              <span>📊</span> لوحة مؤشرات الأداء (KPIs)
+            </button>
           </div>
         </div>
 
-        <!-- Realtime KPI Grid (6 metrics) -->
+        <!-- Realtime KPI Grid (9 metrics including Core KPIs) -->
         <div class="metric-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
           <article>
             <span>إجمالي المستخدمين</span>
@@ -1025,6 +1049,21 @@
             <span>متوسط الأكسجين العام</span>
             <strong id="adminAvgSpO2Count">--%</strong>
             <small id="adminAvgSpO2Status">مؤشر طبي حقيقي</small>
+          </article>
+          <article style="border: 1px solid rgba(16, 185, 129, 0.3); background: rgba(16, 185, 129, 0.04);">
+            <span>معدل إكمال الحالات (KPI)</span>
+            <strong id="adminKpiCompletionRate" style="color: #10b981;">--%</strong>
+            <small id="adminKpiCompletionSub" style="color: #10b981;">الهدف: ≥ 90%</small>
+          </article>
+          <article style="border: 1px solid rgba(59, 130, 246, 0.3); background: rgba(59, 130, 246, 0.04);">
+            <span>سرعة الاستجابة (KPI)</span>
+            <strong id="adminKpiResponseTime" style="color: #3b82f6;">-- دقيقة</strong>
+            <small id="adminKpiResponseSub" style="color: #3b82f6;">SLA: &lt; 30 دقيقة</small>
+          </article>
+          <article style="border: 1px solid rgba(9, 184, 182, 0.3); background: rgba(9, 184, 182, 0.04);">
+            <span>زمن استخراج التقرير (TAT)</span>
+            <strong id="adminKpiTurnaroundTime" style="color: var(--teal);">-- دقيقة</strong>
+            <small id="adminKpiTurnaroundSub" style="color: var(--teal);">الهدف: &lt; 2 ساعة</small>
           </article>
         </div>
 
@@ -1156,6 +1195,307 @@
             <!-- Rendered via renderAdminUsers() -->
           </div>
         </article>
+      </section>
+
+      <!-- 23. DEDICATED CLINICAL & OPERATIONAL KPI DASHBOARD -->
+      <section id="screen-kpi" class="screen">
+        <div class="kpi-dashboard-wrapper">
+          <!-- KPI Top Header with Title, Actions & Live Badge -->
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
+            <div>
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <h2 style="margin: 0; font-size: 24px; font-weight: 800;">لوحة مؤشرات الأداء السريري والتشغيلي (Clinical KPIs)</h2>
+                <span class="pill ok" id="kpiLiveStreamBadge" style="font-size: 11px;">مباشر من Firestore 🟢</span>
+              </div>
+              <p style="margin: 5px 0 0; font-size: 13.5px; color: var(--muted);">
+                مراقبة حية لمعدل إنجاز الفحوصات، زمن استجابة الأطباء، وسرعة توثيق واعتماد التقارير الطبية (SLA)
+              </p>
+            </div>
+            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+              <span id="kpiLastRefreshedAt" style="font-size: 12px; color: var(--muted);">آخر تحديث: الآن</span>
+              <button type="button" class="soft-button" onclick="refreshKpiDashboardLive()" id="btnRefreshKpiMetrics" style="padding: 8px 16px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px;">
+                <span id="kpiRefreshSpinnerIcon">🔄</span> تحديث المؤشرات
+              </button>
+              <button type="button" class="outline-button" onclick="exportKpiReport('csv')" style="padding: 8px 14px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px;">
+                <span>📥</span> تصدير CSV
+              </button>
+              <button type="button" class="outline-button" onclick="window.print()" style="padding: 8px 14px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px;">
+                <span>🖨️</span> طباعة التقرير
+              </button>
+            </div>
+          </div>
+
+          <!-- Time Range & Priority Filter Toolbar -->
+          <div class="kpi-filter-bar">
+            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+              <span style="font-size: 13px; font-weight: 700; color: var(--muted);">النطاق الزمني:</span>
+              <div class="kpi-pill-group" id="kpiTimeFilterGroup">
+                <button type="button" class="kpi-pill-btn active" data-range="all" onclick="setKpiTimeFilter('all')">الكل (All Time)</button>
+                <button type="button" class="kpi-pill-btn" data-range="today" onclick="setKpiTimeFilter('today')">اليوم (Today)</button>
+                <button type="button" class="kpi-pill-btn" data-range="7d" onclick="setKpiTimeFilter('7d')">آخر 7 أيام (7 Days)</button>
+                <button type="button" class="kpi-pill-btn" data-range="30d" onclick="setKpiTimeFilter('30d')">آخر 30 يوم (30 Days)</button>
+              </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+              <span style="font-size: 13px; font-weight: 700; color: var(--muted);">أولوية الحالات:</span>
+              <select id="kpiPrioritySelect" onchange="setKpiPriorityFilter(this.value)" style="padding: 6px 12px; font-size: 12.5px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);">
+                <option value="all">كافة الأولويات (All Priorities)</option>
+                <option value="urgent">🚨 عاجلة (SpO2 &lt; 90%)</option>
+                <option value="high">⚠️ عالية (SpO2 90-92%)</option>
+                <option value="normal">✔️ عادية (SpO2 93%+)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- THE THREE CORE HERO KPI CARDS -->
+          <div class="kpi-hero-grid">
+            <!-- 1. COMPLETION RATE CARD -->
+            <div class="kpi-card" id="kpiCardCompletion">
+              <div class="kpi-card-glow emerald"></div>
+              <div>
+                <div class="kpi-card-header">
+                  <div class="kpi-card-title-group">
+                    <div class="kpi-icon-bubble emerald">✅</div>
+                    <div>
+                      <span class="kpi-card-label">معدل إكمال الحالات</span>
+                      <h3 style="margin: 2px 0 0; font-size: 16px;">Case Completion Rate</h3>
+                    </div>
+                  </div>
+                  <span id="kpiCompletionSlaBadge" class="kpi-badge-sla optimal">الهدف: ≥ 90%</span>
+                </div>
+
+                <div class="kpi-hero-number-wrap">
+                  <strong id="kpiCompletionRateValue" class="kpi-hero-number" style="color: #10b981;">--%</strong>
+                  <span class="kpi-hero-unit" id="kpiCompletionUnit">مكتملة ومعتمدة</span>
+                </div>
+
+                <p id="kpiCompletionContext" style="margin: 0; font-size: 12.5px; color: var(--muted);">
+                  جاري حساب الحالات المعتمدة سريرياً...
+                </p>
+
+                <div class="kpi-progress-bar-container">
+                  <div id="kpiCompletionBar" class="kpi-progress-bar-fill" style="width: 0%; background: linear-gradient(90deg, #10b981, #059669);"></div>
+                </div>
+              </div>
+
+              <div class="kpi-submetrics-row">
+                <div class="kpi-submetric-item">
+                  <span class="kpi-submetric-label">معتمدة بالكامل</span>
+                  <strong class="kpi-submetric-value" id="kpiApprovedCasesCount">--</strong>
+                </div>
+                <div class="kpi-submetric-item">
+                  <span class="kpi-submetric-label">قيد المراجعة</span>
+                  <strong class="kpi-submetric-value" id="kpiPendingCasesCount">--</strong>
+                </div>
+                <div class="kpi-submetric-item">
+                  <span class="kpi-submetric-label">إنجاز العاجلة</span>
+                  <strong class="kpi-submetric-value" id="kpiUrgentCompletionRate" style="color: #10b981;">--%</strong>
+                </div>
+              </div>
+            </div>
+
+            <!-- 2. RESPONSE TIME CARD -->
+            <div class="kpi-card" id="kpiCardResponse">
+              <div class="kpi-card-glow blue"></div>
+              <div>
+                <div class="kpi-card-header">
+                  <div class="kpi-card-title-group">
+                    <div class="kpi-icon-bubble blue">⚡</div>
+                    <div>
+                      <span class="kpi-card-label">سرعة استجابة الأطباء</span>
+                      <h3 style="margin: 2px 0 0; font-size: 16px;">Physician Response Time</h3>
+                    </div>
+                  </div>
+                  <span id="kpiResponseSlaBadge" class="kpi-badge-sla optimal">SLA: &lt; 30 دقيقة</span>
+                </div>
+
+                <div class="kpi-hero-number-wrap">
+                  <strong id="kpiResponseTimeValue" class="kpi-hero-number" style="color: #3b82f6;">--</strong>
+                  <span class="kpi-hero-unit" id="kpiResponseTimeUnit">دقيقة</span>
+                </div>
+
+                <p id="kpiResponseContext" style="margin: 0; font-size: 12.5px; color: var(--muted);">
+                  من وقت تقديم الفحص حتى أول إجراء طبي سريري
+                </p>
+
+                <div class="kpi-progress-bar-container">
+                  <div id="kpiResponseBar" class="kpi-progress-bar-fill" style="width: 0%; background: linear-gradient(90deg, #3b82f6, #0284c7);"></div>
+                </div>
+              </div>
+
+              <div class="kpi-submetrics-row">
+                <div class="kpi-submetric-item">
+                  <span class="kpi-submetric-label">استجابة العاجلة</span>
+                  <strong class="kpi-submetric-value" id="kpiUrgentResponseTime" style="color: #ef4444;">--</strong>
+                </div>
+                <div class="kpi-submetric-item">
+                  <span class="kpi-submetric-label">الوسيط الإحصائي</span>
+                  <strong class="kpi-submetric-value" id="kpiMedianResponseTime">--</strong>
+                </div>
+                <div class="kpi-submetric-item">
+                  <span class="kpi-submetric-label">ضمن المعيار</span>
+                  <strong class="kpi-submetric-value" id="kpiResponseSlaRate" style="color: #3b82f6;">--%</strong>
+                </div>
+              </div>
+            </div>
+
+            <!-- 3. REPORT TURNAROUND TIME CARD -->
+            <div class="kpi-card" id="kpiCardTurnaround">
+              <div class="kpi-card-glow teal"></div>
+              <div>
+                <div class="kpi-card-header">
+                  <div class="kpi-card-title-group">
+                    <div class="kpi-icon-bubble teal">📄</div>
+                    <div>
+                      <span class="kpi-card-label">زمن استخراج التقرير</span>
+                      <h3 style="margin: 2px 0 0; font-size: 16px;">Report Turnaround (TAT)</h3>
+                    </div>
+                  </div>
+                  <span id="kpiTurnaroundSlaBadge" class="kpi-badge-sla optimal">الهدف: &lt; 2 ساعة</span>
+                </div>
+
+                <div class="kpi-hero-number-wrap">
+                  <strong id="kpiTurnaroundTimeValue" class="kpi-hero-number" style="color: var(--teal);">--</strong>
+                  <span class="kpi-hero-unit" id="kpiTurnaroundTimeUnit">دقيقة</span>
+                </div>
+
+                <p id="kpiTurnaroundContext" style="margin: 0; font-size: 12.5px; color: var(--muted);">
+                  من إرسال التقييم حتى توثيق واعتماد التقرير الطبي
+                </p>
+
+                <div class="kpi-progress-bar-container">
+                  <div id="kpiTurnaroundBar" class="kpi-progress-bar-fill" style="width: 0%; background: linear-gradient(90deg, var(--teal), #0d9488);"></div>
+                </div>
+              </div>
+
+              <div class="kpi-submetrics-row">
+                <div class="kpi-submetric-item">
+                  <span class="kpi-submetric-label">التسليم المنضبط</span>
+                  <strong class="kpi-submetric-value" id="kpiOnTimeTurnaroundRate" style="color: var(--teal);">--%</strong>
+                </div>
+                <div class="kpi-submetric-item">
+                  <span class="kpi-submetric-label">مؤشر P95</span>
+                  <strong class="kpi-submetric-value" id="kpiP95TurnaroundTime">--</strong>
+                </div>
+                <div class="kpi-submetric-item">
+                  <span class="kpi-submetric-label">أسرع تقرير صادر</span>
+                  <strong class="kpi-submetric-value" id="kpiFastestTurnaroundTime">--</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- END-TO-END CLINICAL WATERFALL PIPELINE -->
+          <article class="panel">
+            <div class="panel-head">
+              <div>
+                <h3 style="margin: 0; font-size: 18px;">مراحل دورة حياة الفحص حتى تسليم التقرير السريري (Clinical Turnaround Waterfall)</h3>
+                <p style="margin: 4px 0 0; font-size: 12.5px; color: var(--muted);">تفصيل زمني للوقت المستغرق في كل مرحلة من الفحص حتى التقرير النهائي</p>
+              </div>
+              <span class="pill info" id="kpiWaterfallTotalTimeBadge">متوسط الدورة الكاملة: جاري الحساب...</span>
+            </div>
+
+            <div class="kpi-waterfall-grid">
+              <div class="kpi-stage-card">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span class="kpi-stage-badge">المرحلة 1</span>
+                  <span style="font-size: 18px;">📱</span>
+                </div>
+                <div class="kpi-stage-time" id="kpiStageIntakeTime">-- دقيقة</div>
+                <strong style="font-size: 13.5px; display: block;">إدخال الفحص والفرز الذكي</strong>
+                <p class="kpi-stage-desc">تسجيل المؤشرات الحيوية وحساب خطورة SpO2 فائق السرعة عبر الذكاء الاصطناعي</p>
+              </div>
+
+              <div class="kpi-stage-card">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span class="kpi-stage-badge">المرحلة 2</span>
+                  <span style="font-size: 18px;">⏳</span>
+                </div>
+                <div class="kpi-stage-time" id="kpiStageQueueTime">-- دقيقة</div>
+                <strong style="font-size: 13.5px; display: block;">الانتظار في قائمة الطبيب</strong>
+                <p class="kpi-stage-desc">الوقت المنقضي من اكتمال التقييم حتى قيام الطبيب المعتمد بفتح ومباشرة الفحص</p>
+              </div>
+
+              <div class="kpi-stage-card">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span class="kpi-stage-badge">المرحلة 3</span>
+                  <span style="font-size: 18px;">🩺</span>
+                </div>
+                <div class="kpi-stage-time" id="kpiStageReviewTime">-- دقيقة</div>
+                <strong style="font-size: 13.5px; display: block;">الفحص والتشخيص الطبي</strong>
+                <p class="kpi-stage-desc">مراجعة المؤشرات الحيوية وكتابة الملاحظات الطبية والتشخيص والعلاج المعتمد</p>
+              </div>
+
+              <div class="kpi-stage-card">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span class="kpi-stage-badge">المرحلة 4</span>
+                  <span style="font-size: 18px;">🛡️</span>
+                </div>
+                <div class="kpi-stage-time" id="kpiStageReportTime">-- دقيقة</div>
+                <strong style="font-size: 13.5px; display: block;">إصدار التقرير والختم الرقمي</strong>
+                <p class="kpi-stage-desc">توليد التقرير السريري النهائي المشفر وإتاحته للمريض مع إرسال إشعار فوري</p>
+              </div>
+            </div>
+          </article>
+
+          <!-- SLA COMPLIANCE BENCHMARK MATRIX & PHYSICIAN LEADERBOARD -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 20px;">
+            <!-- SLA Table Card -->
+            <article class="panel">
+              <div class="panel-head">
+                <div>
+                  <h3 style="margin: 0; font-size: 17px;">مصفوفة الالتزام بمعايير الجودة الطبية (SLA Benchmarks)</h3>
+                  <p style="margin: 4px 0 0; font-size: 12px; color: var(--muted);">مقارنة الأداء الفعلي مقابل الأهداف الطبية المعتمدة للعيادات</p>
+                </div>
+                <span class="pill ok">معايير معتمدة</span>
+              </div>
+              <div style="overflow-x: auto; margin-top: 10px;">
+                <table class="kpi-table">
+                  <thead>
+                    <tr>
+                      <th>المؤشر السريري (KPI)</th>
+                      <th>الهدف المرجعي (SLA)</th>
+                      <th>الأداء الفعلي</th>
+                      <th>نسبة الالتزام</th>
+                      <th>الحالة</th>
+                    </tr>
+                  </thead>
+                  <tbody id="kpiSlaTableBody">
+                    <!-- Populated via JS -->
+                  </tbody>
+                </table>
+              </div>
+            </article>
+
+            <!-- Physician Performance Table Card -->
+            <article class="panel">
+              <div class="panel-head">
+                <div>
+                  <h3 style="margin: 0; font-size: 17px;">أداء الأطباء وسرعة إصدار التقارير (Physician Performance)</h3>
+                  <p style="margin: 4px 0 0; font-size: 12px; color: var(--muted);">متابعة معدل الإنجاز والسرعة لكل طبيب موثق على السيستم</p>
+                </div>
+                <span class="pill info" id="kpiActiveDoctorsCountBadge">-- أطباء</span>
+              </div>
+              <div style="overflow-x: auto; margin-top: 10px;">
+                <table class="kpi-table">
+                  <thead>
+                    <tr>
+                      <th>الطبيب والعيادة</th>
+                      <th>الحالات</th>
+                      <th>معدل الإنجاز</th>
+                      <th>متوسط الاستجابة</th>
+                      <th>زمن التقرير</th>
+                      <th>الجودة</th>
+                    </tr>
+                  </thead>
+                  <tbody id="kpiDoctorsTableBody">
+                    <!-- Populated via JS -->
+                  </tbody>
+                </table>
+              </div>
+            </article>
+          </div>
+        </div>
       </section>
 
       <section id="screen-audit" class="screen">

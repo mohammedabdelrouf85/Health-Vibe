@@ -479,6 +479,126 @@ app.get('/api/admin/metrics', requireAuth, requireAdmin, async (req, res) => {
 });
 
 /**
+ * GET /api/kpi/metrics
+ * Server-authoritative KPI analytics: completion rate, physician response time, report turnaround time (TAT).
+ */
+app.get('/api/kpi/metrics', requireAuth, async (req, res) => {
+  try {
+    const userRole = normalizeRole(req.user.role);
+    const email = (req.user.email || '').toLowerCase();
+    const isOwner = email === OWNER_EMAIL.toLowerCase();
+    const canView = isOwner || [...ADMIN_ROLES, ROLES.DOCTOR, ROLES.SUPPORT].includes(userRole);
+    if (!canView) {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Clinical or Admin privileges required.' });
+    }
+
+    if (!db) {
+      return res.json({
+        success: true,
+        completionRate: 0,
+        avgResponseTimeMinutes: 0,
+        avgTurnaroundMinutes: 0,
+        totalCases: 0,
+        completedCasesCount: 0,
+        pendingCasesCount: 0,
+        responseSlaCompliance: 100,
+        turnaroundSlaCompliance: 100,
+        isBenchmark: true
+      });
+    }
+
+    const casesSnapshot = await db.collection('cases').get();
+    const cases = casesSnapshot.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .filter(c => !c.isDemo && !String(c.id || '').startsWith('demo_'));
+
+    const timeRange = (req.query.range || 'all').toLowerCase();
+    const now = Date.now();
+    let minTimestamp = 0;
+    if (timeRange === 'today') {
+      const d = new Date();
+      d.setHours(0, 0, 0, 0);
+      minTimestamp = d.getTime();
+    } else if (timeRange === '7d') {
+      minTimestamp = now - (7 * 24 * 60 * 60 * 1000);
+    } else if (timeRange === '30d') {
+      minTimestamp = now - (30 * 24 * 60 * 60 * 1000);
+    }
+
+    const parseTs = (val) => {
+      if (!val) return 0;
+      if (typeof val === 'number') return val;
+      if (val.toMillis) return val.toMillis();
+      if (val.seconds) return val.seconds * 1000;
+      const parsed = Date.parse(val);
+      return isNaN(parsed) ? 0 : parsed;
+    };
+
+    const filteredCases = cases.filter(c => {
+      const ts = parseTs(c.submittedAt || c.createdAt || c.timestamp);
+      return minTimestamp === 0 || ts >= minTimestamp;
+    });
+
+    const totalCases = filteredCases.length;
+    const completedCases = filteredCases.filter(c => c.status === 'approved' || c.doctorApproved === true || c.status === 'closed');
+    const pendingCases = filteredCases.filter(c => !['approved', 'rejected', 'closed'].includes(c.status));
+    const completionRate = totalCases > 0 ? Math.round((completedCases.length / totalCases) * 100) : 0;
+
+    const responseTimes = [];
+    const turnaroundTimes = [];
+
+    filteredCases.forEach(c => {
+      const submitTs = parseTs(c.submittedAt || c.createdAt || c.timestamp);
+      const responseTs = parseTs(c.firstReviewedAt || c.reviewedAt || c.moreInfoRequestedAt || c.approvedAt || c.rejectedAt);
+      const approvedTs = parseTs(c.approvedAt || c.reportGeneratedAt || c.generatedAt || c.certifiedAt);
+
+      if (submitTs > 0 && responseTs >= submitTs) {
+        const diffMins = Math.max(0, (responseTs - submitTs) / 60000);
+        responseTimes.push(diffMins);
+      }
+
+      if (submitTs > 0 && approvedTs >= submitTs && (c.status === 'approved' || c.doctorApproved === true)) {
+        const diffMins = Math.max(0, (approvedTs - submitTs) / 60000);
+        turnaroundTimes.push(diffMins);
+      }
+    });
+
+    const avgResponseTimeMinutes = responseTimes.length > 0
+      ? Number((responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length).toFixed(1))
+      : 0;
+
+    const avgTurnaroundMinutes = turnaroundTimes.length > 0
+      ? Number((turnaroundTimes.reduce((a, b) => a + b, 0) / turnaroundTimes.length).toFixed(1))
+      : 0;
+
+    const responseSlaCompliance = responseTimes.length > 0
+      ? Math.round((responseTimes.filter(t => t <= 30).length / responseTimes.length) * 100)
+      : 100;
+
+    const turnaroundSlaCompliance = turnaroundTimes.length > 0
+      ? Math.round((turnaroundTimes.filter(t => t <= 120).length / turnaroundTimes.length) * 100)
+      : 100;
+
+    res.json({
+      success: true,
+      timeRange,
+      totalCases,
+      completedCasesCount: completedCases.length,
+      pendingCasesCount: pendingCases.length,
+      completionRate,
+      avgResponseTimeMinutes,
+      avgTurnaroundMinutes,
+      responseSlaCompliance,
+      turnaroundSlaCompliance,
+      evaluatedSampleCount: filteredCases.length
+    });
+  } catch (err) {
+    console.error("[SERVER KPI METRICS ERROR]:", err);
+    res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
+  }
+});
+
+/**
  * POST /api/admin/set-user-role
  * Server-authoritative endpoint to change a user's role and set Firebase Custom Claims
  */
