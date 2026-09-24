@@ -2009,6 +2009,15 @@ async function updateCaseStatus(id, newStatus, note, extraFields = {}) {
       if (extraFields.recommendations) updatePayload.recommendations = extraFields.recommendations;
       if (extraFields.recommendation) updatePayload.recommendation = extraFields.recommendation;
       if (extraFields.medications) updatePayload.medications = extraFields.medications;
+    } else if (newStatus === CASE_STATUS.REJECTED) {
+      updatePayload.doctorApproved = false;
+      updatePayload.rejectedAt = firebase.firestore.FieldValue.serverTimestamp();
+      updatePayload.rejectedBy = user ? user.uid : null;
+      updatePayload.rejectingDoctorId = user ? user.uid : null;
+      updatePayload.rejectingDoctorName = extraFields.rejectingDoctorName || (user ? (user.displayName || (user.email ? user.email.split('@')[0] : "Doctor")) : "Doctor");
+      updatePayload.rejectingDoctorEmail = user ? user.email : null;
+      updatePayload.rejectionReason = note || extraFields.rejectionReason || (isEn ? "Non-clinical data or duplicate submission" : "بيانات غير طبية أو تقييم مكرر");
+      updatePayload.doctorNote = updatePayload.rejectionReason;
     } else if (newStatus === CASE_STATUS.MORE_INFO_REQUESTED) {
       updatePayload.moreInfoRequestedAt = firebase.firestore.FieldValue.serverTimestamp();
       updatePayload.moreInfoNote = note || "";
@@ -2267,15 +2276,29 @@ window.escalateCase = async function(id) {
 window.rejectCase = async function(id) {
   if (!enforcePermission(PERMISSIONS.REVIEW_CASE, "Reject Case")) return;
   const isEn = currentLanguage === "en";
+  const defaultReason = isEn ? "Non-clinical data or duplicate submission" : "بيانات غير طبية أو تقييم مكرر";
+
+  const diagInput = document.getElementById("doctorDiagnosisInput") || document.getElementById("doctorNoteInput");
+  const existingNote = diagInput && diagInput.value.trim() ? diagInput.value.trim() : "";
+
   const reason = window.prompt(
     isEn ? "Enter rejection reason or invalid clinical entry:" : "أدخل سبب رفض الحالة أو عدم صحة البيانات:",
-    isEn ? "Non-clinical data or duplicate submission" : "بيانات غير طبية أو تقييم مكرر"
+    existingNote || defaultReason
   );
-  if (!reason) return;
+  if (reason === null) return; // Cancelled
 
-  const success = await updateCaseStatus(id, CASE_STATUS.REJECTED, reason);
+  const finalReason = (reason && reason.trim()) ? reason.trim() : (existingNote || defaultReason);
+
+  const payload = {
+    rejectionReason: finalReason,
+    doctorNote: finalReason,
+    doctorApproved: false,
+    rejectingDoctorName: (auth && auth.currentUser) ? (auth.currentUser.displayName || auth.currentUser.email) : (isEn ? "Physician" : "الطبيب المعالج")
+  };
+
+  const success = await updateCaseStatus(id, CASE_STATUS.REJECTED, finalReason, payload);
   if (success) {
-    showToast(isEn ? "Case marked as rejected" : "تم رفض الحالة وتوثيق السبب");
+    showToast(isEn ? "Case successfully marked as rejected" : "تم رفض الحالة وتوثيق سبب الرفض في السجل الطبي بنجاح");
     await renderDoctorQueue();
     selectDoctorCase(id);
   }
@@ -2664,17 +2687,34 @@ if (isUnderReview) {
         </div>
       </div>
     `;
-  } else if (isApproved || isRejected) {
+  } else if (isRejected) {
+    actionToolbarHtml = `
+      <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; border-radius: 12px; padding: 14px; margin-top: 14px;">
+        <strong style="color: #dc2626; display: flex; align-items: center; gap: 6px; font-size: 13.5px; margin-bottom: 6px;">
+          <span>❌</span> ${isEn ? 'Case Formally Rejected by Physician' : 'تم رفض الحالة سريرياً وتوثيق السبب'}
+        </strong>
+        <p style="margin: 0 0 12px; font-size: 13px; color: var(--ink); line-height: 1.5;">
+          <strong>${isEn ? 'Documented Reason: ' : 'السبب الموثق: '}</strong>${c.rejectionReason || c.doctorNote || (isEn ? 'Non-clinical data or duplicate submission' : 'بيانات غير طبية أو تقييم مكرر')}
+        </p>
+        <div class="doctor-actions-toolbar" style="margin-top: 0;">
+          <button type="button" class="btn-clinical resume" onclick="resumeReview('${c.id}')" title="${isEn ? 'Reopen and return to review' : 'إعادة فتح وفحص الحالة من جديد'}">
+            <span>🔄</span> ${isEn ? 'Reopen Review' : 'إعادة فتح الفحص'}
+          </button>
+          <button type="button" class="btn-clinical close" onclick="closeCase('${c.id}')">
+            <span>🔒</span> ${isEn ? 'Archive & Close Case' : 'أرشفة وإغلاق الحالة'}
+          </button>
+        </div>
+      </div>
+    `;
+  } else if (isApproved) {
     actionToolbarHtml = `
       <div class="doctor-actions-toolbar">
-        ${isApproved ? `
-          <button type="button" class="btn-clinical approve" onclick="openCaseReport('${c.id}')">
-            <span>📄</span> ${isEn ? 'View Certified Report (PDF)' : 'عرض التقرير المعتمد (PDF)'}
-          </button>
-          <button type="button" class="btn-clinical resume" onclick="previewCaseReport('${c.id}')">
-            <span>🔄</span> ${isEn ? 'Edit & Reissue Report' : 'تعديل وإعادة إصدار التقرير'}
-          </button>
-        ` : ''}
+        <button type="button" class="btn-clinical approve" onclick="openCaseReport('${c.id}')">
+          <span>📄</span> ${isEn ? 'View Certified Report (PDF)' : 'عرض التقرير المعتمد (PDF)'}
+        </button>
+        <button type="button" class="btn-clinical resume" onclick="previewCaseReport('${c.id}')">
+          <span>🔄</span> ${isEn ? 'Edit & Reissue Report' : 'تعديل وإعادة إصدار التقرير'}
+        </button>
         <button type="button" class="btn-clinical close" onclick="closeCase('${c.id}')">
           <span>🔒</span> ${isEn ? 'Archive & Close Case' : 'أرشفة وإغلاق الحالة'}
         </button>
@@ -4828,6 +4868,29 @@ async function renderReportScreen(targetCaseId = null) {
         </div>
       ` : '';
 
+      const rejectionAlertHtml = caseData.status === CASE_STATUS.REJECTED ? `
+        <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; border-radius: 12px; padding: 14px; margin-bottom: 20px; text-align: ${isEn ? 'left' : 'right'};">
+          <strong style="color: #dc2626; display: flex; align-items: center; gap: 6px; font-size: 14px;">
+            <span>❌</span> ${isEn ? 'Assessment Submission Not Approved / Rejected' : 'تم فحص التقييم ورفضه من قِبل الطبيب المختص'}
+          </strong>
+          <p style="margin: 6px 0 0; font-size: 13.5px; color: var(--ink);">
+            <strong>${isEn ? 'Reason for Rejection: ' : 'سبب الرفض: '}</strong>${caseData.rejectionReason || caseData.doctorNote || (isEn ? 'Non-clinical data or invalid vitals recorded.' : 'بيانات غير طبية أو تقييم غير دقيق.')}
+          </p>
+        </div>
+      ` : '';
+
+      const lockedTitle = caseData.status === CASE_STATUS.REJECTED
+        ? (isEn ? "Clinical Assessment Formally Rejected" : "تم رفض التقييم السريري وعدم اعتماده")
+        : (isEn ? "Clinical Report Awaiting Doctor Approval" : "التقرير الطبي قيد المراجعة والاعتماد السريري");
+
+      const lockedSubtext = caseData.status === CASE_STATUS.REJECTED
+        ? (isEn 
+            ? "The attending physician has evaluated this assessment submission and determined it cannot be clinically certified. Please see the documented reason below." 
+            : "قام الطبيب المعالج بمراجعة هذا التقييم وتقرر عدم اعتماده سريرياً. يرجى الاطلاع على سبب الرفض الموثق أدناه.")
+        : (isEn 
+            ? "In accordance with medical safety regulations, diagnosis and final clinical reports are strictly withheld until direct review and verification by the attending physician." 
+            : "حفاظاً على سلامتك الطبية، لن يظهر التشخيص أو التقرير النهائي إلا بعد المراجعة والاعتماد السريري المباشر من قبل الطبيب المعالج.");
+
       container.innerHTML = `
         <div class="report-locked-card">
           <div class="locked-badge-header">
@@ -4836,20 +4899,19 @@ async function renderReportScreen(targetCaseId = null) {
               <span class="padlock-glyph">🔒</span>
             </div>
             <div class="locked-title-box">
-              <span class="pill pending" style="font-size: 12px; padding: 4px 12px;">
+              <span class="pill ${statusMeta.pillClass || 'pending'}" style="font-size: 12px; padding: 4px 12px;">
                 ${statusMeta.icon} ${isEn ? statusMeta.en : statusMeta.ar}
               </span>
-              <h2>${isEn ? "Clinical Report Awaiting Doctor Approval" : "التقرير الطبي قيد المراجعة والاعتماد السريري"}</h2>
+              <h2>${lockedTitle}</h2>
               <p class="safety-lock-subtext">
-                ${isEn 
-                  ? "In accordance with medical safety regulations, diagnosis and final clinical reports are strictly withheld until direct review and verification by the attending physician."
-                  : "حفاظاً على سلامتك الطبية، لن يظهر التشخيص أو التقرير النهائي إلا بعد المراجعة والاعتماد السريري المباشر من قبل الطبيب المعالج."}
+                ${lockedSubtext}
               </p>
             </div>
           </div>
 
           ${emergencyNoticeHtml}
           ${moreInfoAlertHtml}
+          ${rejectionAlertHtml}
 
           <!-- REAL CASE METADATA BOX -->
           <div class="locked-case-meta">
