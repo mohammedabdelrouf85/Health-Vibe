@@ -1026,6 +1026,75 @@ app.get('/api/kpi/metrics', requireAuth, async (req, res) => {
 });
 
 /**
+ * POST /api/user/sync-role
+ * Server-authoritative endpoint to determine, initialize, and sync a user's role from the Backend.
+ */
+app.post('/api/user/sync-role', requireAuth, async (req, res) => {
+  const uid = req.user.uid;
+  const email = (req.user.email || '').toLowerCase();
+  const isOwner = isOwnerEmail(email);
+
+  try {
+    let role = ROLES.PATIENT;
+    let verifiedDoctor = false;
+
+    if (db) {
+      const userRef = db.collection('users').doc(uid);
+      const userDoc = await userRef.get();
+
+      if (userDoc.exists) {
+        const data = userDoc.data();
+        if (data.role && VALID_ROLES.includes(data.role)) {
+          role = data.role;
+        } else if (isOwner) {
+          role = ROLES.SUPER_ADMIN;
+          await userRef.set({ role, isOwner: true }, { merge: true });
+        } else {
+          role = ROLES.PATIENT;
+          await userRef.set({ role, isOwner: false }, { merge: true });
+        }
+        verifiedDoctor = Boolean(data.verifiedDoctor || role === ROLES.DOCTOR);
+      } else {
+        // Initialize new user on the backend
+        role = isOwner ? ROLES.SUPER_ADMIN : ROLES.PATIENT;
+        verifiedDoctor = role === ROLES.DOCTOR;
+        await userRef.set({
+          name: req.user.name || email.split('@')[0],
+          email: email,
+          role: role,
+          isOwner: isOwner,
+          verifiedDoctor: verifiedDoctor,
+          emailVerified: Boolean(req.user.email_verified || isOwner),
+          createdAt: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+      }
+    } else {
+      role = isOwner ? ROLES.SUPER_ADMIN : ROLES.PATIENT;
+      verifiedDoctor = role === ROLES.DOCTOR;
+    }
+
+    // Set cryptographic custom claims on Firebase Auth
+    await admin.auth().setCustomUserClaims(uid, {
+      role: role,
+      isOwner: isOwner,
+      verifiedDoctor: verifiedDoctor
+    }).catch(() => {});
+
+    res.json({
+      success: true,
+      uid,
+      email,
+      role,
+      isOwner,
+      verifiedDoctor
+    });
+  } catch (err) {
+    console.error("[SERVER ROLE SYNC ERROR]:", err);
+    res.status(500).json({ error: 'SYNC_FAILED', message: err.message });
+  }
+});
+
+/**
  * POST /api/admin/set-user-role
  * Server-authoritative endpoint to change a user's role and set Firebase Custom Claims
  */
@@ -1036,27 +1105,23 @@ app.post('/api/admin/set-user-role', requireAuth, requireVerifiedEmail, requireS
     return res.status(400).json({ error: 'INVALID_REQUEST', message: 'Valid targetUserId and newRole required.' });
   }
 
-  if ([ROLES.DOCTOR_PENDING, ROLES.DOCTOR].includes(newRole)) {
-    return res.status(400).json({
-      error: 'INVALID_ROLE_TRANSITION',
-      message: 'Doctor roles cannot be assigned manually. The account must enter doctor_pending through an application, then be approved through /api/admin/approve-doctor-application.'
-    });
-  }
-
   try {
     const targetUser = await admin.auth().getUser(targetUserId);
     const targetIsOwner = isOwnerEmail(targetUser.email);
+    const isDoctor = newRole === ROLES.DOCTOR;
 
     // 1. Set cryptographic custom claims on Firebase Auth
     await admin.auth().setCustomUserClaims(targetUserId, {
-      role: normalizeRole(newRole, targetIsOwner),
-      isOwner: targetIsOwner
+      role: newRole,
+      isOwner: targetIsOwner,
+      verifiedDoctor: isDoctor
     });
 
     // 2. Update Firestore user document
     if (db) {
       await db.collection('users').doc(targetUserId).set({
-        role: normalizeRole(newRole, targetIsOwner),
+        role: newRole,
+        verifiedDoctor: isDoctor,
         isOwner: targetIsOwner,
         roleUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
         roleUpdatedBy: req.user.email
@@ -1066,13 +1131,15 @@ app.post('/api/admin/set-user-role', requireAuth, requireVerifiedEmail, requireS
       await db.collection('audit_events').add({
         type: 'SERVER_ROLE_CHANGE',
         targetUserId: targetUserId,
-        newRole: normalizeRole(newRole, targetIsOwner),
+        targetEmail: targetUser.email,
+        newRole: newRole,
         assignedBy: req.user.email,
         timestamp: admin.firestore.FieldValue.serverTimestamp()
       });
     }
 
-    res.json({ success: true, message: `Successfully updated user role to ${normalizeRole(newRole, targetIsOwner)} on server.` });
+    console.log(`[SERVER RBAC] User ${targetUser.email} (${targetUserId}) role updated to ${newRole} by ${req.user.email}`);
+    res.json({ success: true, newRole, message: `Successfully updated user role to ${newRole} on server.` });
   } catch (err) {
     console.error("[SERVER ROLE UPDATE ERROR]:", err);
     res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });

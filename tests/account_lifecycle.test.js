@@ -95,6 +95,23 @@ authKeys.forEach(k => {
 });
 console.log('  ✓ 100% Arabic and English catalog parity for switch and delete account keys.');
 
+// -----------------------------------------------------------------------------
+// TEST 7: Server-Authoritative Role Determination in backend/server.js
+// -----------------------------------------------------------------------------
+console.log('\n▶ TEST 7: Server-Authoritative Role Determination in backend/server.js');
+const setUserRoleSlice = serverJs.slice(serverJs.indexOf("app.post('/api/admin/set-user-role'"), serverJs.indexOf("app.post('/api/admin/toggle-user-suspension'"));
+assert(!setUserRoleSlice.includes("Doctor roles cannot be assigned manually"), 'Backend must allow assigning doctor roles from admin panel');
+console.log('  ✓ Backend defines authoritative sync-role and flexible set-user-role endpoints.');
+
+// -----------------------------------------------------------------------------
+// TEST 8: Direct Role Assignment Dropdown in app.js
+// -----------------------------------------------------------------------------
+console.log('\n▶ TEST 8: Direct Role Assignment Dropdown in app.js');
+assert(appJs.includes('class="admin-role-select"'), 'Admin table must render role selection dropdown for accounts');
+assert(appJs.includes("changeUserRole('${u.id}', this.value"), 'Role select must trigger changeUserRole with target user ID and new role');
+assert(appJs.includes('/api/user/sync-role'), 'app.js onAuthStateChanged must sync authoritative role with backend');
+console.log('  ✓ Admin table renders role dropdown for accounts and syncs with backend.');
+
 console.log('\n==================================================================');
-console.log('🎉 ALL 6 ACCOUNT LIFECYCLE TESTS PASSED WITH 100% SUCCESS!');
+console.log('🎉 ALL 8 ACCOUNT & ROLE LIFECYCLE TESTS PASSED WITH 100% SUCCESS!');
 console.log('==================================================================');

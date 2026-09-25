@@ -2287,7 +2287,7 @@ async function getAllKnownAccounts() {
         name: cur.displayName || cur.email.split('@')[0],
         displayName: cur.displayName || cur.email.split('@')[0],
         email: cur.email,
-        role: isOwner ? ROLES.SUPER_ADMIN : (selectedRole || ROLES.PATIENT),
+        role: selectedRole || (isOwner ? ROLES.SUPER_ADMIN : ROLES.PATIENT),
         emailVerified: verificationRevoked ? false : Boolean(cur.emailVerified || isOwner),
         isOwner: isOwner,
         createdAt: cur.metadata?.creationTime ? new Date(cur.metadata.creationTime).getTime() : Date.now(),
@@ -2324,7 +2324,7 @@ async function getAllKnownAccounts() {
             name: d.name || d.displayName || email.split('@')[0],
             displayName: d.name || d.displayName || email.split('@')[0],
             email: d.email,
-            role: normalizeRole(d.role || ROLES.PATIENT, isOwner),
+            role: d.role && VALID_ROLES.includes(d.role) ? d.role : (isOwner ? ROLES.SUPER_ADMIN : ROLES.PATIENT),
             emailVerified: verificationRevoked ? false : Boolean(d.emailVerified || isOwner),
             isOwner: isOwner,
             clinic: d.clinic || d.hospital || "",
@@ -4706,19 +4706,11 @@ async function enterApp(source = "google") {
               verifiedByAdmin: null
             }, { merge: true }).catch(() => {});
           }
-          if (isOwner) {
+          if (userDoc.data().role && VALID_ROLES.includes(userDoc.data().role)) {
+            selectedRole = userDoc.data().role;
+          } else if (isOwner) {
             selectedRole = ROLES.SUPER_ADMIN;
-            if (normalizeRole(userDoc.data().role, true) !== ROLES.SUPER_ADMIN || !userDoc.data().isOwner) {
-              await callBackend("/api/admin/set-user-role", {
-                method: "POST",
-                body: JSON.stringify({
-                  targetUserId: user.uid,
-                  newRole: ROLES.SUPER_ADMIN
-                })
-              });
-            }
           } else {
-            // Existing user: default strictly to patient if role is absent
             selectedRole = normalizeRole(userDoc.data().role || ROLES.PATIENT);
           }
         }
@@ -9550,8 +9542,8 @@ async function renderAdminUsers() {
     } else {
       filteredUsers.forEach(u => {
         const isOwner = isOwnerUser(u.email) || u.isOwner === true;
-        const role = normalizeRole(u.role || "patient", isOwner);
-        const roleBadgeClass = isOwner ? "owner-badge" : (isAdminRole(role) ? "pill danger" : (role === ROLES.DOCTOR ? "pill ok" : "pill info"));
+        const role = u.role && VALID_ROLES.includes(u.role) ? u.role : (isOwner ? ROLES.SUPER_ADMIN : ROLES.PATIENT);
+        const roleBadgeClass = role === ROLES.SUPER_ADMIN ? "owner-badge" : (isAdminRole(role) ? "pill danger" : (role === ROLES.DOCTOR ? "pill ok" : "pill info"));
         const roleText = isEn ? (englishRoleLabels[role] || role) : (roleLabels[role] || role);
 
         const isVerified = Boolean(u.emailVerified || isOwner);
@@ -9565,7 +9557,6 @@ async function renderAdminUsers() {
           : `<span class="pill ok" style="font-size: 10.5px; padding: 2px 7px; opacity: 0.85;">${isEn ? "Active" : "نشط"}</span>`;
 
         const userNameStr = u.name || u.displayName || (u.email ? u.email.split('@')[0] : 'مستخدم');
-        const roleManagedByApplication = role === ROLES.DOCTOR_PENDING;
 
         html += `
           <tr style="border-bottom: 1px solid var(--line); ${isUserSuspended ? 'background: rgba(239, 68, 68, 0.04);' : ''}">
@@ -9607,15 +9598,13 @@ async function renderAdminUsers() {
               </div>
             </td>
             <td style="padding: 12px; text-align: end;">
-              ${isOwner || roleManagedByApplication ? `<span style="font-size: 12px; color: var(--muted);">${isOwner ? (isEn ? "Protected (Super Admin)" : "محمي (مدير عام)") : roleText}</span>` : `
-                <select onchange="changeUserRole('${u.id}', this.value, '${userNameStr}')" style="padding: 5px 9px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 12px; cursor: pointer;">
-                  <option value="patient" ${role === 'patient' ? 'selected' : ''}>${isEn ? 'Patient (مريض)' : 'حساب مريض'}</option>
-                  <option value="clinic_admin" ${role === 'clinic_admin' ? 'selected' : ''}>${isEn ? 'Clinic admin' : 'مدير عيادة'}</option>
-                  <option value="doctor" ${role === 'doctor' ? 'selected' : ''}>${isEn ? 'Doctor' : 'طبيب موثق'}</option>
-                  <option value="support" ${role === 'support' ? 'selected' : ''}>${isEn ? 'Support (Restricted - No Clinical Data)' : 'دعم فني (محدود - بدون بيانات طبية)'}</option>
-                  <option value="super_admin" ${role === 'super_admin' ? 'selected' : ''}>${isEn ? 'Super admin' : 'مدير عام للنظام'}</option>
-                </select>
-              `}
+              <select onchange="changeUserRole('${u.id}', this.value, '${userNameStr}', '${u.email}')" class="admin-role-select" style="padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 12px; font-weight: 600; cursor: pointer;">
+                <option value="patient" ${role === 'patient' ? 'selected' : ''}>👤 ${isEn ? 'Patient (مريض)' : 'حساب مريض'}</option>
+                <option value="doctor" ${role === 'doctor' ? 'selected' : ''}>🩺 ${isEn ? 'Doctor (طبيب موثق)' : 'طبيب موثق'}</option>
+                <option value="clinic_admin" ${role === 'clinic_admin' ? 'selected' : ''}>🏥 ${isEn ? 'Clinic admin (مدير عيادة)' : 'مدير عيادة'}</option>
+                <option value="support" ${role === 'support' ? 'selected' : ''}>🎧 ${isEn ? 'Support (دعم فني)' : 'دعم فني (محدود)'}</option>
+                <option value="super_admin" ${role === 'super_admin' ? 'selected' : ''}>👑 ${isEn ? 'Super admin (مدير عام)' : 'مدير عام للنظام'}</option>
+              </select>
             </td>
           </tr>
         `;
@@ -9634,40 +9623,53 @@ async function renderAdminUsers() {
   }
 }
 
-async function changeUserRole(userId, newRole, userName) {
+async function changeUserRole(userId, newRole, userName, userEmail) {
   const isEn = currentLanguage === "en";
   try {
-    showToast(isEn ? `Updating role for ${userName}...` : `جاري تحديث دور ${userName}...`);
+    showToast(isEn ? `Updating role to ${englishRoleLabels[newRole] || newRole} for ${userName}...` : `جاري تحديث دور ${userName} إلى ${roleLabels[newRole] || newRole}...`);
 
+    // 1. Server-authoritative role update via Backend Admin SDK
+    let backendSuccess = false;
     if (typeof callBackend === "function") {
       try {
-        await callBackend("/api/admin/set-user-role", {
+        const resp = await callBackend("/api/admin/set-user-role", {
           method: "POST",
           body: JSON.stringify({
             targetUserId: userId,
             newRole: newRole
           })
         });
+        if (resp && resp.success) backendSuccess = true;
       } catch (beErr) {
-        console.warn("Backend API unavailable for role update, updating directly:", beErr.message);
+        console.warn("Backend API role update returned error, attempting direct sync:", beErr.message);
       }
     }
 
-    await db.collection("users").doc(userId).set({
-      role: newRole,
-      verifiedDoctor: newRole === ROLES.DOCTOR
-    }, { merge: true }).catch(() => {});
+    // 2. Direct Firestore update as fallback/sync
+    if (db) {
+      await db.collection("users").doc(userId).set({
+        role: newRole,
+        verifiedDoctor: newRole === ROLES.DOCTOR
+      }, { merge: true }).catch(() => {});
+    }
 
-    // Update in local registry
+    // 3. Update in local registry
     const list = getLocalAccountsRegistry();
-    const u = list.find(x => x.id === userId);
+    const u = list.find(x => x.id === userId || (userEmail && x.email && x.email.toLowerCase() === userEmail.toLowerCase()));
     if (u) {
       u.role = newRole;
       if (newRole === ROLES.DOCTOR) u.verifiedDoctor = true;
       try { localStorage.setItem(ACCOUNTS_REGISTRY_KEY, JSON.stringify(list)); } catch(e) {}
     }
 
-    showToast(isEn ? `Role updated to ${newRole} for ${userName}!` : `تم تغيير دور ${userName} إلى ${roleLabels[newRole] || newRole}!`);
+    // 4. If current logged-in user changed their own role, update session and UI!
+    if (auth && auth.currentUser && (auth.currentUser.uid === userId || (userEmail && auth.currentUser.email.toLowerCase() === userEmail.toLowerCase()))) {
+      selectedRole = newRole;
+      saveActiveSession(auth.currentUser, newRole);
+      if (typeof updateNavVisibility === "function") updateNavVisibility(auth.currentUser);
+    }
+
+    showToast(isEn ? `Role successfully updated to ${englishRoleLabels[newRole] || newRole} for ${userName}!` : `تم تغيير دور ${userName} إلى ${roleLabels[newRole] || newRole} بنجاح!`);
     await renderAdminUsers();
     await renderAdminMetrics();
   } catch(err) {
@@ -11871,19 +11873,13 @@ function initHVAuthListener() {
             window._isUserVerified = true;
             window._verifiedPhone = udata.phoneNumber || "";
           }
-          if (isOwner) {
+          // Server-authoritative role from user document
+          if (udata.role && VALID_ROLES.includes(udata.role)) {
+            selectedRole = udata.role;
+          } else if (isOwner) {
             selectedRole = ROLES.SUPER_ADMIN;
-            if (normalizeRole(udata.role, true) !== ROLES.SUPER_ADMIN || !udata.isOwner) {
-              await callBackend("/api/admin/set-user-role", {
-                method: "POST",
-                body: JSON.stringify({
-                  targetUserId: user.uid,
-                  newRole: ROLES.SUPER_ADMIN
-                })
-              }).catch(() => {});
-            }
           } else {
-            selectedRole = normalizeRole(udata.role || ROLES.PATIENT);
+            selectedRole = ROLES.PATIENT;
           }
           if (udata.name) displayName = udata.name;
         } else {
@@ -11892,9 +11888,25 @@ function initHVAuthListener() {
           await db.collection("users").doc(user.uid).set({
             name: displayName || user.email.split('@')[0],
             email: user.email,
+            role: safeRole,
+            isOwner: isOwner,
             emailVerified: verificationRevoked ? false : (user.emailVerified || false),
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
           }, { merge: true });
+        }
+
+        // Asynchronously sync authoritative role and custom claims from Backend
+        if (typeof callBackend === "function") {
+          callBackend("/api/user/sync-role", { method: "POST" })
+            .then(syncRes => {
+              if (syncRes && syncRes.role && syncRes.role !== selectedRole) {
+                console.log(`[Health Vibes] Synced authoritative role from Backend: ${syncRes.role}`);
+                selectedRole = syncRes.role;
+                saveActiveSession(user, selectedRole);
+                if (typeof updateNavVisibility === "function") updateNavVisibility(user);
+              }
+            })
+            .catch(err => console.warn("Backend sync-role error:", err.message));
         }
       } catch (e) {
         console.warn("Firestore role fetch failed, defaulting to patient:", e);
