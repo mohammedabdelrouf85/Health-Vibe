@@ -133,58 +133,6 @@ function maskUnapprovedPatientCase(c) {
   return masked;
 }
 
-function synthesizeClinicalAssessment(c, isEn = false) {
-  if (!c) c = {};
-  const o2 = Number(c.oxygenLevel || c.o2 || 95);
-  const dyspnea = Boolean(
-    c.breathingDifficulty && (
-      c.breathingDifficulty === "نعم" || 
-      String(c.breathingDifficulty).toLowerCase() === "yes" || 
-      String(c.breathingDifficulty).includes("ضيق")
-    )
-  );
-  const cough = c.coughLevel || (isEn ? "mild" : "خفيفة");
-  const duration = c.symptomDuration || c.duration || (isEn ? "recent onset" : "حديثة");
-
-  let diag = "";
-  let meds = "";
-  let recs = [];
-
-  if (o2 < 90) {
-    diag = isEn 
-      ? `Critical Acute Hypoxemia (SpO2: ${o2}%). Severe dyspnea and cough. Urgent clinical intervention required.` 
-      : `نقص حاد وحرج في تشبع الأكسجين (SpO2: ${o2}%). صعوبة تنفس حادة وسعال. تستدعي التدخل الطبي الإسعافي الفوري.`;
-    meds = isEn 
-      ? "1. Emergency Oxygen Therapy (Target SpO2 >= 94%)\n2. Nebulized Short-acting Bronchodilator" 
-      : "1. جلسات أكسجين إسعافي فوري\n2. جلسات استنشاق موسع للشعب الهوائية عبر النيبولايزر";
-    recs = isEn 
-      ? ["Immediate transfer to the nearest Emergency Room (ER)."] 
-      : ["التوجه الفوري لأقرب قسم طوارئ في مستشفى مجهز."];
-  } else if (o2 <= 94) {
-    diag = isEn 
-      ? `Mild Acute Bronchial Inflammation / Bronchitis with moderate relative hypoxemia (SpO2: ${o2}%). Dyspnea: ${dyspnea ? "Present" : "Absent"}.` 
-      : `نزلة صدرية حادة مع نقص نسبي معتدل في تشبع الأكسجين (SpO2: ${o2}%). صعوبة تنفس: ${dyspnea ? "موجودة" : "غير ملحوظة"}.`;
-    meds = isEn 
-      ? "1. Bronchodilator Inhaler (Salbutamol 100mcg) - 2 puffs PRN\n2. Mucolytic Syrup - 10ml twice daily" 
-      : "1. بخاخ موسع للشعب (سالبوتامول 100 ميكروجرام) - بختان عند اللزوم\n2. شراب مذيب للبلغم - ملعقة كبيرة مرتين يومياً";
-    recs = isEn 
-      ? ["Pulse oximetry monitoring twice daily.", "Avoid cold air and smoking."] 
-      : ["قياس نسبة تشبع الأكسجين مرتين يومياً.", "الابتعاد التام عن التدخين وتيارات الهواء البارد."];
-  } else {
-    diag = isEn 
-      ? `Stable Respiratory Assessment (SpO2: ${o2}%). Mild seasonal bronchial sensitivity.` 
-      : `تقييم تنفسي مستقر (تشبع الأكسجين: ${o2}%). أعراض حساسية صدرية موسمية خفيفة.`;
-    meds = isEn 
-      ? "1. Antihistamine (Levocetirizine 5mg) - 1 tab daily at bedtime\n2. Warm herbal fluids" 
-      : "1. مضاد للحساسية (ليفوسيتريزين 5 مجم) - قرص واحد مساءً\n2. سوائل دافئة وراحة";
-    recs = isEn 
-      ? ["Stay well hydrated.", "Follow up if symptoms persist after 5 days."] 
-      : ["شرب كميات كافية من السوائل الدافئة.", "مراجعة الطبيب في حال استمرار الأعراض بعد 5 أيام."];
-  }
-
-  return { diag, meds, recs };
-}
-
 // ─────────────────────────────────────────────────────────────────
 // EXECUTION: STEP-BY-STEP E2E HAPPY PATH
 // ─────────────────────────────────────────────────────────────────
@@ -282,7 +230,7 @@ async function runE2EHappyPath() {
     email: "dr.mona.samy@healthvibe.ai",
     displayName: "د. منى سامي",
     role: "doctor",
-    doctorLicense: "EGY-MED-20491",
+    doctorLicense: "TEST-LICENSE-20491",
     specialty: "استشاري الأمراض الصدرية"
   };
 
@@ -293,11 +241,12 @@ async function runE2EHappyPath() {
   assert.strictEqual(caseToReview.patientName, "طارق محمود");
   console.log(`  ✓ Doctor received case #${caseId.slice(-6).toUpperCase()} in clinical queue.`);
 
-  // Doctor reviews actual vitals and synthesizes clinical findings
-  const clinicalSynth = synthesizeClinicalAssessment(caseToReview, false);
-  assert(clinicalSynth.diag.includes("93%"), "Diagnosis must incorporate actual SpO2 (93%)");
-  assert(clinicalSynth.meds.includes("سالبوتامول"), "Medications must incorporate bronchodilator for SpO2 93%");
-  console.log("  ✓ Doctor synthesized actual clinical diagnosis:", clinicalSynth.diag);
+  // Explicit physician-entered fixture; no automatic prescription from vitals.
+  const clinicianRecord = {
+    diag: "تشخيص سجله الطبيب بعد المراجعة",
+    meds: "",
+    recs: ["تعليمات سجّلها الطبيب بعد المراجعة"]
+  };
 
   // Doctor executes approval
   const approvalPayload = {
@@ -308,10 +257,10 @@ async function runE2EHappyPath() {
     approvingDoctorEmail: doctorAuth.email,
     doctorLicense: doctorAuth.doctorLicense,
     doctorSpecialty: doctorAuth.specialty,
-    clinicalDiagnosis: clinicalSynth.diag,
-    clinicalNotes: clinicalSynth.diag,
-    medications: clinicalSynth.meds,
-    recommendations: clinicalSynth.recs,
+    clinicalDiagnosis: clinicianRecord.diag,
+    clinicalNotes: clinicianRecord.diag,
+    medications: clinicianRecord.meds,
+    recommendations: clinicianRecord.recs,
     approvedAt: new Date().toISOString(),
     reportRef: `HV-REP-${caseId.slice(-8).toUpperCase()}`
   };
@@ -338,9 +287,9 @@ async function runE2EHappyPath() {
   assert.strictEqual(approvedCaseData.patientAge, 38, "Report must contain real patient age");
   assert.strictEqual(approvedCaseData.oxygenLevel, 93, "Report must display real SpO2 (93%)");
   assert.strictEqual(approvedCaseData.approvingDoctorName, "د. منى سامي", "Report must display attending physician");
-  assert.strictEqual(approvedCaseData.doctorLicense, "EGY-MED-20491", "Report must display valid doctor license");
-  assert.strictEqual(approvedCaseData.clinicalDiagnosis, clinicalSynth.diag, "Report must show certified diagnosis");
-  assert.strictEqual(approvedCaseData.medications, clinicalSynth.meds, "Report must show certified Rx");
+  assert.strictEqual(approvedCaseData.doctorLicense, "TEST-LICENSE-20491", "Report must display valid doctor license");
+  assert.strictEqual(approvedCaseData.clinicalDiagnosis, clinicianRecord.diag, "Report must show certified diagnosis");
+  assert.strictEqual(approvedCaseData.medications, clinicianRecord.meds, "Report must show certified Rx");
   assert(Array.isArray(approvedCaseData.recommendations) && approvedCaseData.recommendations.length > 0, "Report must contain action recommendations");
 
   console.log("  ✓ Certified Report Verified:");

@@ -265,7 +265,7 @@ service cloud.firestore {
              !('officialDiagnosis' in data) &&
              (!('doctorApproved' in data) || data.doctorApproved == false) &&
              !('approvedAt' in data) &&
-             !('assignedDoctorId' in data);
+             !('assignedDoctorId' in data) && !('doctorIdentity' in data) && !('approvingDoctorId' in data);
     }
 
     function isPatientMoreInfoResponse() {
@@ -314,6 +314,19 @@ service cloud.firestore {
     // =========================================================================
     // 3. 📋 CLINICAL CASES (/cases/{caseId})
     // =========================================================================
+    // Approval and verified identity are written only by the Admin SDK backend.
+    function preservesServerApproval() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        'doctorApproved', 'approvingDoctorId', 'approvingDoctorEmail',
+        'approvingDoctorName', 'doctorLicense', 'doctorSpecialty', 'clinicName',
+        'doctorIdentity', 'approvedAt', 'reportGeneratedAt', 'generatedAt'
+      ]) && (request.resource.data.status != 'approved' || resource.data.status == 'approved') &&
+      (!('doctorApproved' in resource.data) || resource.data.doctorApproved != true ||
+       !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+         'clinicalDiagnosis', 'clinicalNotes', 'medications', 'recommendation', 'recommendations'
+       ]));
+    }
+
     match /cases/{caseId} {
       allow read: if isOwner() || (isAuthenticated() && 
                      ((resource.data.patientId == request.auth.uid &&
@@ -321,17 +334,17 @@ service cloud.firestore {
                       isAssignedDoctor() ||
                       isAdmin()));
 
-      allow create: if isOwner() || (isEmailVerified() && 
+      allow create: if (isOwner() || isEmailVerified()) && (
                        request.resource.data.patientId == request.auth.uid &&
                        request.resource.data.status in ['draft', 'submitted', 'triaged', 'assigned', 'pending'] &&
                        hasNoPatientForgedClinicalResult(request.resource.data) &&
                        isValidAssessment(request.resource.data));
 
-      allow update: if isOwner() || (isAuthenticated() &&
+      allow update: if preservesServerApproval() && (isOwner() || (isAuthenticated() &&
                         (isAssignedDoctor() || isAdmin() || isPatientMoreInfoResponse()) &&
                         request.resource.data.patientId == resource.data.patientId &&
                         isValidCaseStatus(request.resource.data.status) &&
-                        isValidAssessment(request.resource.data));
+                        isValidAssessment(request.resource.data)));
 
       allow delete: if isOwner() || isAdmin();
     }

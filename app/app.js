@@ -3043,6 +3043,20 @@ async function updateCaseStatus(id, newStatus, note, extraFields = {}) {
   const isEn = currentLanguage === "en";
 
   try {
+    if (newStatus === CASE_STATUS.APPROVED) {
+      await callBackend("/api/doctor/approve-clinical-case", {
+        method: "POST",
+        body: JSON.stringify({
+          caseId: id,
+          clinicalDiagnosis: extraFields.clinicalDiagnosis || "",
+          clinicalNotes: extraFields.clinicalNotes || note || "",
+          medications: extraFields.medications || "",
+          recommendations: extraFields.recommendations || [],
+          recommendation: extraFields.recommendation || ""
+        })
+      });
+      return true;
+    }
     const statusMeta = getCaseStatusMeta(newStatus);
     const historyItem = {
       status: newStatus,
@@ -3064,26 +3078,7 @@ async function updateCaseStatus(id, newStatus, note, extraFields = {}) {
       ...extraFields
     };
 
-    if (newStatus === CASE_STATUS.APPROVED) {
-      updatePayload.doctorApproved = true;
-      updatePayload.approvingDoctorId = user ? user.uid : (extraFields.approvingDoctorId || null);
-      updatePayload.approvingDoctorEmail = user ? user.email : (extraFields.approvingDoctorEmail || null);
-      updatePayload.approvingDoctorName = extraFields.approvingDoctorName || (user ? (user.displayName || user.email) : "Dr. Mona Samy");
-      updatePayload.doctorSpecialty = extraFields.doctorSpecialty || (isEn ? "Pulmonology & Respiratory Medicine" : "استشاري الأمراض الصدرية والرعاية المركزة");
-      updatePayload.doctorLicense = extraFields.doctorLicense || "EGY-MED-20491";
-      updatePayload.clinicName = extraFields.clinicName || (isEn ? "Health Vibes Specialized Clinics" : "عيادات هيلث فايبز التخصصية");
-      updatePayload.reportRef = extraFields.reportRef || `HV-REP-${id.slice(-8).toUpperCase()}`;
-      updatePayload.reportGeneratedAt = extraFields.reportGeneratedAt || new Date().toISOString();
-      updatePayload.approvedAt = firebase.firestore.FieldValue.serverTimestamp();
-      updatePayload.generatedAt = firebase.firestore.FieldValue.serverTimestamp();
-      updatePayload.reportVersion = updatePayload.reportVersion || REPORT_VERSION;
-      updatePayload.modelVersion = updatePayload.modelVersion || MODEL_VERSION;
-      if (extraFields.clinicalDiagnosis) updatePayload.clinicalDiagnosis = extraFields.clinicalDiagnosis;
-      if (extraFields.clinicalNotes) updatePayload.clinicalNotes = extraFields.clinicalNotes;
-      if (extraFields.recommendations) updatePayload.recommendations = extraFields.recommendations;
-      if (extraFields.recommendation) updatePayload.recommendation = extraFields.recommendation;
-      if (extraFields.medications) updatePayload.medications = extraFields.medications;
-    } else if (newStatus === CASE_STATUS.REJECTED) {
+    if (newStatus === CASE_STATUS.REJECTED) {
       updatePayload.doctorApproved = false;
       updatePayload.rejectedAt = firebase.firestore.FieldValue.serverTimestamp();
       updatePayload.rejectedBy = user ? user.uid : null;
@@ -3158,93 +3153,52 @@ async function updateCaseStatus(id, newStatus, note, extraFields = {}) {
 let activeCaseId = null;
 let currentDoctorQueueFilter = 'all';
 
-function synthesizeClinicalAssessment(c, isEn) {
-  if (!c) c = {};
-  const o2 = Number(c.oxygenLevel || c.o2 || 95);
-  const dyspnea = Boolean(
-    c.breathingDifficulty && (
-      c.breathingDifficulty === "نعم" ||
-      String(c.breathingDifficulty).toLowerCase() === "yes" ||
-      String(c.breathingDifficulty).includes("ضيق")
-    )
-  );
-  const cough = c.coughLevel || (isEn ? "mild" : "خفيفة");
-  const duration = c.symptomDuration || c.duration || (isEn ? "recent onset" : "حديثة");
-  const rfList = Array.isArray(c.riskFactors) && c.riskFactors.length > 0
-    ? c.riskFactors.filter(r => r && r !== "None" && r !== "لا يوجد")
-    : [];
-  const rf = rfList.length > 0 ? rfList.join("، ") : (isEn ? "None" : "لا توجد");
-  const patientReply = c.patientResponse
-    ? (isEn ? ` [Patient Response: ${c.patientResponse}]` : ` [إفادة المريض الإضافية: ${c.patientResponse}]`)
-    : "";
+// Missing approved fields remain missing; never synthesize clinical content.
+function recordedClinicalText(value, isEn) {
+  return typeof value === "string" && value.trim() ? value.trim() : (isEn ? "Not recorded" : "غير مسجل");
+}
 
-  let diag = "";
-  let meds = "";
-  let recs = [];
+function getRecordedClinicalContent(record, isEn) {
+  const c = record || {};
+  const saved = Array.isArray(c.recommendations)
+    ? c.recommendations.filter(value => typeof value === "string" && value.trim()).map(value => value.trim())
+    : parseDoctorRecommendations(c.recommendation);
+  return {
+    diag: recordedClinicalText(c.clinicalDiagnosis, isEn),
+    meds: recordedClinicalText(c.medications, isEn),
+    recs: saved.length ? saved : [recordedClinicalText(null, isEn)]
+  };
+}
 
-  if (o2 < 90) {
-    diag = isEn
-      ? `Critical respiratory assessment: Severe hypoxemia (SpO2: ${o2}%). Marked dyspnea and ${cough} cough present for ${duration}.${rf !== "None" ? " Documented risk factors: " + rf + "." : ""}${patientReply} Urgent clinical oxygenation and emergency medical stabilization required.`
-      : `تقييم سريري حرج: نقص حاد في تشبع الأكسجين (SpO2: ${o2}%). ضيق تنفس ملحوظ مع كحة ${cough} مستمرة منذ ${duration}.${rf !== "لا توجد" ? " عوامل خطورة مصاحبة: " + rf + "." : ""}${patientReply} تستدعي الحالة تدخلاً علاجياً عاجلاً ودعماً فورياً بالأكسجين.`;
-    meds = isEn
-      ? "1. Medical Oxygen Therapy (titrated to SpO2 > 94%)\n2. Nebulized Salbutamol (2.5mg) + Ipratropium Bromide (0.5mg) stat\n3. Systemic Corticosteroid (Hydrocortisone 100mg IV or Prednisolone 40mg PO)"
-      : "1. جلسات أكسجين طبي عاجلة (لرفع نسبة الأكسجين أعلى من 94%)\n2. جلسة استنشاق (فاركولين + أتروفنت) موسعة للشعب فوراً\n3. كورتيزون جهازي مضاد للالتهاب (سوليوكورتيف أو بريدنيزولون) تحت إشراف طبي";
-    recs = isEn
-      ? [
-          "Immediate emergency medical attention (Ambulance 123 or nearest ER).",
-          "Continuous SpO2 pulse oximetry monitoring every 30 minutes.",
-          "Maintain upright high-Fowler sitting position to ease breathing work.",
-          "Avoid any physical exertion or unprescribed sedatives."
-        ]
-      : [
-          "التوجه الفوري إلى قسم الطوارئ أو الاتصال بالإسعاف (123) دون تأخير.",
-          "مراقبة مستمرة ودورية لنسبة تشبع الأكسجين كل نصف ساعة.",
-          "الجلوس في وضع قائم ومريح لتسهيل حركة الحجاب الحاجز والتنفس.",
-          "تجنب المجهود البدني تماماً والامتناع عن تناول مهدئات دون إشراف طبي."
-        ];
-  } else if (o2 < 94) {
-    diag = isEn
-      ? `Moderate respiratory assessment: Borderline hypoxemia (SpO2: ${o2}%). Symptoms indicate active bronchial irritation and ${cough} cough lasting ${duration}.${rf !== "None" ? " Co-existing risk factors: " + rf + "." : ""}${patientReply} Requires bronchodilation therapy and tight oxygen surveillance.`
-      : `تقييم سريري متوسط: انخفاض طفيف في تشبع الأكسجين (SpO2: ${o2}%). تشير العلامات إلى تهيج بالشعب الهوائية وكحة ${cough} مستمرة منذ ${duration}.${rf !== "لا توجد" ? " عوامل خطورة: " + rf + "." : ""}${patientReply} تستوجب الحالة موسعات للشعب ومتابعة دقيقة لمستوى الأكسجين.`;
-    meds = isEn
-      ? "1. Inhaled Bronchodilator (Salbutamol 100mcg) - 2 puffs every 6 hours as needed\n2. Inhaled Corticosteroid (Budesonide 200mcg) - 1 inhalation twice daily\n3. Mucolytic / Expectorant (Acetylcysteine 600mg) - 1 sachet daily in water\n4. Paracetamol 500mg - 1 tablet every 8 hours PRN for fever or pain"
-      : "1. بخاخ موسع للشعب (سالبوتامول 100 ميكروجرام) - بختان كل 6 ساعات عند اللزوم\n2. بخاخ مضاد لالتهاب الشعب (بوديزونايد 200) - استنشاقة واحدة مرتين يومياً\n3. فوار مذيب للبلغم (أستيل سيستايين 600 مجم) - كيس على نصف كوب ماء مرة يومياً\n4. باراسيتامول 500 مجم - قرص كل 8 ساعات عند اللزوم للحرارة أو الصداع";
-    recs = isEn
-      ? [
-          "Check and log SpO2 twice daily (morning and evening) with a reliable oximeter.",
-          "Practice daily diaphragmatic deep breathing exercises and drink warm fluids.",
-          "Clinic or teleconsultation follow-up within 48 hours.",
-          "Seek emergency care immediately if SpO2 drops below 90% or breathing worsens."
-        ]
-      : [
-          "قياس وتوثيق نسبة الأكسجين SpO2 مرتين يومياً بجهاز نبض معتمد.",
-          "الحرص على شرب السوائل الدافئة وتمارين التنفس العميق والتهوية الجيدة.",
-          "مراجعة الطبيب المعالج بالعيادة أو عن بُعد خلال 48 ساعة لمتابعة الاستجابة.",
-          "التوجه للطوارئ فوراً في حال هبوط الأكسجين عن 90% أو زيادة النهجان."
-        ];
-  } else {
-    diag = isEn
-      ? `Stable respiratory evaluation: Normal physiological oxygenation (SpO2: ${o2}%). ${dyspnea ? "Mild dyspnea reported" : "No resting dyspnea"}, ${cough} cough ongoing for ${duration}.${rf !== "None" ? " Patient risk factors: " + rf + "." : ""}${patientReply} Clinical picture consistent with mild reactive or seasonal airway irritation without hypoxemia.`
-      : `تقييم سريري مستقر ومطمئن: تشبع الأكسجين طبيعي ومثالي (SpO2: ${o2}%). ${dyspnea ? "شكوى من إجهاد تنفسي خفيف" : "لا يوجد ضيق تنفس حاد أثناء الراحة"}، مع كحة ${cough} مستمرة منذ ${duration}.${rf !== "لا توجد" ? " عوامل خطورة مسجلة: " + rf + "." : ""}${patientReply} الحالة تتوافق مع حساسية أو نزلة تنفسية خفيفة إلى متوسطة دون نقص بالأكسجين.`;
-    meds = isEn
-      ? "1. Antihistamine / Anti-allergy (Levocetirizine 5mg) - 1 tablet once daily before sleep\n2. Natural Herbal Cough Syrup (Ivy leaf extract) - 10ml 3 times daily\n3. Saline Nasal Rinse - 2 sprays per nostril 3 times daily"
-      : "1. مضاد للحساسية (ليفوسيتريزين 5 مجم) - قرص واحد مساءً قبل النوم\n2. شراب مهدئ للسعال بمستخلص أوراق اللبلاب - ملعقة كبيرة 3 مرات يومياً بعد الأكل\n3. بخاخ ماء بحر أو محلول ملحي للأنف - بختان في كل فتحة أنف 3 مرات يومياً";
-    recs = isEn
-      ? [
-          "Maintain generous fluid intake (warm herbal teas, honey and lemon).",
-          "Ensure adequate rest and avoid exposure to tobacco smoke, dust, and cold drafts.",
-          "Routine follow-up in 5-7 days if symptoms fail to improve gradually.",
-          "Re-assess if new symptoms appear such as high fever or persistent chest pain."
-        ]
-      : [
-          "شرب السوائل الدافئة بوفرة (عسل النحل مع الليمون، الزنجبيل والينسون).",
-          "أخذ قسط كافٍ من النوم والراحة، والابتعاد التام عن أدخنة السجائر والغبار.",
-          "مراجعة الطبيب بعد 5 إلى 7 أيام إذا لم تتماثل الأعراض للشفاء التدريجي.",
-          "إعادة التقييم في حال ظهور أعراض جديدة مثل ارتفاع الحرارة أو ألم بالصدر."
-        ];
+function getRecordedDoctorIdentity(record, isEn) {
+  const identity = record && record.doctorIdentity;
+  const verified = identity && identity.uid === record.approvingDoctorId && identity.applicationId ? identity : {};
+  return {
+    name: recordedClinicalText(verified.name, isEn),
+    licenseNumber: recordedClinicalText(verified.licenseNumber, isEn),
+    specialty: recordedClinicalText(verified.specialty, isEn),
+    clinic: recordedClinicalText(verified.clinic, isEn)
+  };
+}
+
+async function loadReportDoctorIdentity(record) {
+  // Refresh legacy reports from the verified record too; never trust old
+  // free-text names or licenses. A failed lookup renders "Not recorded".
+  try {
+    const result = await callBackend(`/api/reports/${encodeURIComponent(record.id)}/doctor-identity`);
+    return { ...record, doctorIdentity: result.doctorIdentity || null };
+  } catch (err) {
+    return { ...record, doctorIdentity: null };
   }
+}
 
-  return { diag, meds, recs };
+async function getCurrentVerifiedDoctorIdentity() {
+  try {
+    const result = await callBackend("/api/doctor/verified-profile");
+    return result.doctorIdentity || {};
+  } catch (err) {
+    return {};
+  }
 }
 
 function parseDoctorRecommendations(rawText) {
@@ -3299,7 +3253,7 @@ window.applyDiagPreset = function(presetKey) {
   }
 };
 
-window.previewCaseReport = function(id) {
+window.previewCaseReport = async function(id) {
   const isEn = currentLanguage === "en";
   const queue = state.doctorQueue || [];
   const c = queue.find(item => item.id === id);
@@ -3311,10 +3265,7 @@ window.previewCaseReport = function(id) {
   const diagInput = document.getElementById("doctorDiagnosisInput") || document.getElementById("doctorNoteInput");
   const medInput = document.getElementById("doctorMedicationsInput");
   const recInput = document.getElementById("doctorRecommendationsInput");
-  const nameInput = document.getElementById("doctorNameInput");
-  const specInput = document.getElementById("doctorSpecialtyInput");
-  const licInput = document.getElementById("doctorLicenseInput");
-  const clinicInput = document.getElementById("doctorClinicInput");
+  const doctorIdentity = await getCurrentVerifiedDoctorIdentity();
 
   const clinicalDiagnosis = diagInput ? diagInput.value.trim() : (c.clinicalDiagnosis || c.doctorNote || "");
   const medications = medInput ? medInput.value.trim() : (c.medications || "");
@@ -3328,10 +3279,8 @@ window.previewCaseReport = function(id) {
     medications,
     recommendations,
     recommendation: recommendations.join("\n"),
-    approvingDoctorName: nameInput && nameInput.value.trim() ? nameInput.value.trim() : (c.approvingDoctorName || (auth.currentUser ? (auth.currentUser.displayName || auth.currentUser.email) : "Dr. Mona Samy")),
-    doctorSpecialty: specInput && specInput.value.trim() ? specInput.value.trim() : (c.doctorSpecialty || (isEn ? "Pulmonology & Respiratory Medicine" : "استشاري الأمراض الصدرية")),
-    doctorLicense: licInput && licInput.value.trim() ? licInput.value.trim() : (c.doctorLicense || "EGY-MED-20491"),
-    clinicName: clinicInput && clinicInput.value.trim() ? clinicInput.value.trim() : (c.clinicName || (isEn ? "Health Vibes Specialized Clinics" : "عيادات هيلث فايبز التخصصية")),
+    doctorIdentity,
+    approvingDoctorId: auth.currentUser.uid,
     reportGeneratedAt: new Date().toISOString(),
     approvedAt: new Date().toISOString(),
     isDoctorPreview: true,
@@ -3349,34 +3298,15 @@ window.generateAndApproveReport = async function(id) {
   const diagInput = document.getElementById("doctorDiagnosisInput") || document.getElementById("doctorNoteInput");
   const medInput = document.getElementById("doctorMedicationsInput");
   const recInput = document.getElementById("doctorRecommendationsInput");
-  const nameInput = document.getElementById("doctorNameInput");
-  const specInput = document.getElementById("doctorSpecialtyInput");
-  const licInput = document.getElementById("doctorLicenseInput");
-  const clinicInput = document.getElementById("doctorClinicInput");
-
-  // Fetch actual case data to ensure synthesis reflects real clinical indicators
-  const allCases = await getCases({ includeTest: true });
-  const actualCase = allCases.find(c => c.id === id) || (window._currentDetailedCase && window._currentDetailedCase.id === id ? window._currentDetailedCase : {});
-  const synthesized = synthesizeClinicalAssessment(actualCase, isEn);
-
   let clinicalDiagnosis = diagInput ? diagInput.value.trim() : "";
   let medications = medInput ? medInput.value.trim() : "";
   let recommendations = parseDoctorRecommendations(recInput ? recInput.value : "");
 
-  if (!clinicalDiagnosis) {
-    clinicalDiagnosis = synthesized.diag;
-  }
-  if (!medications) {
-    medications = synthesized.meds;
-  }
-  if (recommendations.length === 0) {
-    recommendations = synthesized.recs;
+  if (!clinicalDiagnosis || recommendations.length === 0) {
+    showToast(isEn ? "Record a diagnosis and recommendations before approval." : "سجّل التشخيص والتوصيات قبل الاعتماد.");
+    return;
   }
 
-  const approvingDoctorName = nameInput && nameInput.value.trim() ? nameInput.value.trim() : (auth.currentUser ? (auth.currentUser.displayName || auth.currentUser.email) : "Dr. Mona Samy");
-  const doctorSpecialty = specInput && specInput.value.trim() ? specInput.value.trim() : (isEn ? "Pulmonology & Respiratory Medicine" : "استشاري الأمراض الصدرية والرعاية المركزة");
-  const doctorLicense = licInput && licInput.value.trim() ? licInput.value.trim() : "EGY-MED-20491";
-  const clinicName = clinicInput && clinicInput.value.trim() ? clinicInput.value.trim() : (isEn ? "Health Vibes Specialized Clinics" : "عيادات هيلث فايبز التخصصية");
   const reportRef = `HV-REP-${id.slice(-8).toUpperCase()}`;
 
   const payload = {
@@ -3386,10 +3316,6 @@ window.generateAndApproveReport = async function(id) {
     medications,
     recommendations,
     recommendation: recommendations.join("\n"),
-    approvingDoctorName,
-    doctorSpecialty,
-    doctorLicense,
-    clinicName,
     reportRef,
     reportGeneratedAt: new Date().toISOString()
   };
@@ -4026,18 +3952,18 @@ if (isUnderReview) {
     `;
   }
 
-  const synthesized = synthesizeClinicalAssessment(c, isEn);
-  const existingDoctorNote = c.clinicalDiagnosis || c.doctorNote || c.clinicalNotes || synthesized.diag;
+  const existingDoctorNote = c.clinicalDiagnosis || "";
   const existingRecommendations = Array.isArray(c.recommendations) && c.recommendations.length > 0
     ? c.recommendations.join("\n")
-    : (c.recommendation || synthesized.recs.join("\n"));
-  const existingMedications = c.medications || synthesized.meds;
+    : (c.recommendation || "");
+  const existingMedications = c.medications || "";
 
-  // Current doctor credentials
-  const currentDocName = c.approvingDoctorName || c.assignedDoctorName || (auth.currentUser ? (auth.currentUser.displayName || auth.currentUser.email.split('@')[0]) : (isEn ? "Dr. Mona Samy" : "د. منى سامي"));
-  const currentDocSpec = c.doctorSpecialty || (isEn ? "Pulmonology & Respiratory Medicine" : "استشاري الأمراض الصدرية والرعاية المركزة");
-  const currentDocLic = c.doctorLicense || "EGY-MED-20491";
-  const currentDocClinic = c.clinicName || (isEn ? "Health Vibes Specialized Clinics" : "عيادات هيلث فايبز التخصصية");
+  // Display credentials from the verified application; they are not editable.
+  const verifiedIdentity = await getCurrentVerifiedDoctorIdentity();
+  const currentDocName = recordedClinicalText(verifiedIdentity.name, isEn);
+  const currentDocSpec = recordedClinicalText(verifiedIdentity.specialty, isEn);
+  const currentDocLic = recordedClinicalText(verifiedIdentity.licenseNumber, isEn);
+  const currentDocClinic = recordedClinicalText(verifiedIdentity.clinic, isEn);
 
   // Clinical Risk Rules evaluation data & versioning
   const caseRuleVersion = (c.assessment && c.assessment.aiTriage && c.assessment.aiTriage.ruleEngineVersion) || c.ruleEngineVersion || (typeof RULE_ENGINE_VERSION !== 'undefined' ? RULE_ENGINE_VERSION : "HealthVibe-Rules-v1.0");
@@ -4161,7 +4087,7 @@ if (isUnderReview) {
           ${isEn ? '1. Physician Clinical Diagnosis & Assessment *' : '1. التشخيص الطبي السريري المعتمد *'}
         </label>
         <textarea id="doctorDiagnosisInput" ${isClosed ? 'disabled' : ''} placeholder="${isEn ? 'Enter verified clinical diagnosis...' : 'اكتب التشخيص الطبي والملاحظات السريرية المعتمدة...'}" style="width: 100%; min-height: 75px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 10px; font-family: inherit; font-size: 13px;">${existingDoctorNote || (isEn ? 'Patient assessment verified. Normal breathing sounds with mild bronchial irritation.' : 'تمت المراجعة والتدقيق السريري. أعراض حساسية صدرية موسمية مع كحة خفيفة واستقرار تشبع الأكسجين.')}</textarea>
-        <input type="hidden" id="doctorNoteInput" value="${existingDoctorNote}" />
+        <input type="hidden" id="doctorNoteInput" value="${escapeHtml(existingDoctorNote)}" />
       </div>
 
       <!-- Prescriptions & Medications -->
@@ -4169,7 +4095,7 @@ if (isUnderReview) {
         <label for="doctorMedicationsInput" style="font-weight: 800; font-size: 13px; display: block; margin-bottom: 4px;">
           ${isEn ? '2. Prescription & Treatment Regimen (Rx)' : '2. الخطة العلاجية والروشتة الدوائية (Rx)'}
         </label>
-        <textarea id="doctorMedicationsInput" ${isClosed ? 'disabled' : ''} placeholder="${isEn ? 'List prescribed medications, dosage and instructions...' : 'أدخل أسماء الأدوية، الجرعات، وطريقة الاستخدام...'}" style="width: 100%; min-height: 80px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 10px; font-family: inherit; font-size: 13px;">${existingMedications}</textarea>
+        <textarea id="doctorMedicationsInput" ${isClosed ? 'disabled' : ''} placeholder="${isEn ? 'List prescribed medications, dosage and instructions...' : 'أدخل أسماء الأدوية، الجرعات، وطريقة الاستخدام...'}" style="width: 100%; min-height: 80px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 10px; font-family: inherit; font-size: 13px;">${escapeHtml(existingMedications)}</textarea>
       </div>
 
       <!-- Care Plan & Recommendations -->
@@ -4188,19 +4114,19 @@ if (isUnderReview) {
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px;">
           <div>
             <label style="font-size: 11px; color: var(--muted);">${isEn ? 'Doctor Name' : 'اسم الطبيب'}</label>
-            <input type="text" id="doctorNameInput" value="${currentDocName}" style="width: 100%; padding: 6px 10px; font-size: 12.5px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);" />
+            <input type="text" id="doctorNameInput" readonly value="${escapeHtml(currentDocName)}" style="width: 100%; padding: 6px 10px; font-size: 12.5px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);" />
           </div>
           <div>
             <label style="font-size: 11px; color: var(--muted);">${isEn ? 'Specialty' : 'التخصص'}</label>
-            <input type="text" id="doctorSpecialtyInput" value="${currentDocSpec}" style="width: 100%; padding: 6px 10px; font-size: 12.5px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);" />
+            <input type="text" id="doctorSpecialtyInput" readonly value="${escapeHtml(currentDocSpec)}" style="width: 100%; padding: 6px 10px; font-size: 12.5px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);" />
           </div>
           <div>
             <label style="font-size: 11px; color: var(--muted);">${isEn ? 'Syndicate License #' : 'ترخيص النقابة'}</label>
-            <input type="text" id="doctorLicenseInput" value="${currentDocLic}" style="width: 100%; padding: 6px 10px; font-size: 12.5px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);" />
+            <input type="text" id="doctorLicenseInput" readonly value="${escapeHtml(currentDocLic)}" style="width: 100%; padding: 6px 10px; font-size: 12.5px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);" />
           </div>
           <div>
             <label style="font-size: 11px; color: var(--muted);">${isEn ? 'Clinic / Hospital' : 'العيادة / المستشفى'}</label>
-            <input type="text" id="doctorClinicInput" value="${currentDocClinic}" style="width: 100%; padding: 6px 10px; font-size: 12.5px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);" />
+            <input type="text" id="doctorClinicInput" readonly value="${escapeHtml(currentDocClinic)}" style="width: 100%; padding: 6px 10px; font-size: 12.5px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);" />
           </div>
         </div>
       </div>
@@ -6437,7 +6363,8 @@ async function renderReportScreen(targetCaseId = null) {
   `;
 
   try {
-    let caseData = null;
+    const isPreview = targetCaseId === "preview" && normalizeRole(selectedRole) === ROLES.DOCTOR && Boolean(window.__doctorPreviewCase);
+    let caseData = isPreview ? window.__doctorPreviewCase : null;
     let caseId = targetCaseId || window._selectedReportCaseId;
 
     if (targetCaseId === "history-record" && window.__selectedHistoryRecord) {
@@ -6518,7 +6445,7 @@ async function renderReportScreen(targetCaseId = null) {
     }
 
     // Check genuine approval: both case status and doctor approval flag must be released.
-    const isApproved = isCaseApprovedForPatient(caseData);
+    const isApproved = isPreview || isCaseApprovedForPatient(caseData);
 
     // STATE 2: CASE EXISTS BUT NOT APPROVED (LOCKED CLINICAL GATEWAY)
     // 🛡️ SECURITY & CLINICAL SAFETY RULE: Under NO circumstances should unapproved reports display clinical diagnoses to the patient!
@@ -6649,7 +6576,7 @@ async function renderReportScreen(targetCaseId = null) {
             </div>
             <div class="meta-row">
               <span class="label">${isEn ? "Recorded SpO2" : "نسبة الأكسجين"}</span>
-              <strong class="val" style="${isCriticalO2 ? 'color: #ef4444;' : ''}">${o2Val}%</strong>
+              <strong class="val" style="${isCriticalO2 ? 'color: #ef4444;' : ''}">${o2Display}</strong>
             </div>
             <div class="meta-row">
               <span class="label">${isEn ? "Reviewing Doctor" : "الطبيب المعالج"}</span>
@@ -6699,83 +6626,66 @@ async function renderReportScreen(targetCaseId = null) {
     }
 
 // STATE 3: GENUINE DOCTOR APPROVAL OR DOCTOR PREVIEW -> RENDER OFFICIAL CERTIFIED REPORT
-    const isPreview = (targetCaseId === "preview" && window.__doctorPreviewCase) || caseData.isDoctorPreview;
     if (isPreview && window.__doctorPreviewCase) {
       caseData = window.__doctorPreviewCase;
     }
 
-    const approvedDate = caseData.approvedAt
-      ? (caseData.approvedAt.toDate ? caseData.approvedAt.toDate() : new Date(caseData.approvedAt))
-      : (caseData.reviewedAt ? (caseData.reviewedAt.toDate ? caseData.reviewedAt.toDate() : new Date(caseData.reviewedAt)) : new Date());
-    const generatedDate = caseData.reportGeneratedAt || caseData.generatedAt
-      ? (caseData.reportGeneratedAt ? new Date(caseData.reportGeneratedAt) : (caseData.generatedAt.toDate ? caseData.generatedAt.toDate() : new Date(caseData.generatedAt)))
-      : approvedDate;
-    const submittedDate = caseData.submittedAt
-      ? (caseData.submittedAt.toDate ? caseData.submittedAt.toDate() : new Date(caseData.submittedAt))
-      : approvedDate;
-
-    const dateFormatted = approvedDate.toLocaleDateString(isEn ? "en-US" : "ar-EG", {
-      year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit"
-    });
-    const generatedDateFormatted = generatedDate.toLocaleDateString(isEn ? "en-US" : "ar-EG", {
-      year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit"
-    });
-    const submittedDateFormatted = submittedDate.toLocaleDateString(isEn ? "en-US" : "ar-EG", {
-      year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
-    });
+    const missing = recordedClinicalText(null, isEn);
+    const formatRecordedDate = value => {
+      if (!value) return missing;
+      const date = value.toDate ? value.toDate() : new Date(value);
+      return Number.isNaN(date.getTime()) ? missing : date.toLocaleString(isEn ? "en-US" : "ar-EG");
+    };
+    const dateFormatted = formatRecordedDate(caseData.approvedAt);
+    const generatedDateFormatted = formatRecordedDate(caseData.reportGeneratedAt || caseData.generatedAt);
+    const submittedDateFormatted = formatRecordedDate(caseData.submittedAt);
 
     const isSupport = isSupportUser();
 
-    const o2Val = Number(caseData.oxygenLevel || caseData.o2 || 95);
+    const o2Val = caseData.oxygenLevel ?? caseData.o2 ?? null;
     const o2Color = isSupport ? "#64748b" : (o2Val < 90 ? "#ef4444" : (o2Val < 95 ? "#f59e0b" : "#16a34a"));
-    const o2StatusText = isSupport
-      ? (isEn ? "Concealed (Support Privacy Mode)" : "محجوب لحماية خصوصية المريض")
-      : (o2Val < 90
-        ? (isEn ? "Hypoxemia / Critical" : "نقص أكسجين حاد / حرج")
-        : (o2Val < 95 ? (isEn ? "Mild Borderline" : "انخفاض طفيف / مراقبة") : (isEn ? "Optimal Normal" : "مثالي وطبيعي")));
-    const o2Display = isSupport ? "**%" : `${o2Val}%`;
+    const o2StatusText = isSupport ? (isEn ? "Concealed" : "محجوب") : (isEn ? "Recorded measurement" : "القياس المسجل");
+    const o2Display = isSupport ? "**%" : (o2Val === null || o2Val === "" ? missing : `${escapeHtml(String(o2Val))}%`);
 
-    const doctorName = caseData.approvingDoctorName || caseData.assignedDoctorName || caseData.reviewedBy || (isEn ? "Dr. Mona Samy" : "د. منى سامي");
-    const doctorSpecialty = caseData.doctorSpecialty || (isEn ? "Pulmonology & Respiratory Medicine" : "استشاري الأمراض الصدرية والرعاية المركزة");
-    const doctorLicense = caseData.doctorLicense || "EGY-MED-20491";
-    const clinicName = caseData.clinicName || (isEn ? "Health Vibes Specialized Clinics" : "عيادات هيلث فايبز التخصصية");
+    if (!isPreview) caseData = await loadReportDoctorIdentity(caseData);
+    const identity = getRecordedDoctorIdentity(caseData, isEn);
+    const doctorName = escapeHtml(identity.name);
+    const doctorSpecialty = escapeHtml(identity.specialty);
+    const doctorLicense = escapeHtml(identity.licenseNumber);
+    const clinicName = escapeHtml(identity.clinic);
     const reportRef = caseData.reportRef || `HV-REP-${caseData.id.slice(-8).toUpperCase()}`;
-    const reportVersion = caseData.reportVersion || REPORT_VERSION;
-    const modelVersion = caseData.modelVersion || caseData.assessment?.aiTriage?.modelVersion || MODEL_VERSION;
-    const ruleEngineVersion = caseData.assessment?.aiTriage?.ruleEngineVersion || caseData.ruleEngineVersion || (typeof RULE_ENGINE_VERSION !== 'undefined' ? RULE_ENGINE_VERSION : "HealthVibe-Rules-v1.0");
+    const reportVersion = caseData.reportVersion || missing;
+    const modelVersion = caseData.modelVersion || caseData.assessment?.aiTriage?.modelVersion || missing;
+    const ruleEngineVersion = caseData.assessment?.aiTriage?.ruleEngineVersion || caseData.ruleEngineVersion || missing;
     const ruleScorePoints = typeof caseData.assessment?.aiTriage?.ruleScorePoints === 'number'
       ? caseData.assessment.aiTriage.ruleScorePoints
-      : (typeof caseData.ruleScorePoints === 'number' ? caseData.ruleScorePoints : 0);
+      : (typeof caseData.ruleScorePoints === 'number' ? caseData.ruleScorePoints : missing);
     const rawPatientName = caseData.name || caseData.patientName || (user ? (user.displayName || user.email) : (isEn ? "Patient" : "مريض"));
     const patientName = isSupport
       ? (isEn ? `Patient #${caseData.id.slice(-6).toUpperCase()} (Identity Masked)` : `مريض #${caseData.id.slice(-6).toUpperCase()} (الاسم محجوب لدواعي الخصوصية)`)
       : rawPatientName;
 
-    // Synthesize tailored clinical findings from actual case indicators if not explicitly set
-    const reportSynth = synthesizeClinicalAssessment(caseData, isEn);
-    const clinicalDiagnosis = caseData.clinicalDiagnosis || caseData.doctorNote || caseData.clinicalNotes || reportSynth.diag;
+    const recorded = getRecordedClinicalContent(caseData, isEn);
+    const clinicalDiagnosis = escapeHtml(recorded.diag);
 
-    // Medications list parsing (from actual case or tailored synthesis)
-    const rawMeds = caseData.medications || reportSynth.meds;
+    // Medications are exactly what the doctor saved, including an empty prescription.
+    const rawMeds = recorded.meds;
     const medItems = String(rawMeds)
       .split("\n")
-      .map(line => line.trim())
+      .map(line => escapeHtml(line.trim()))
       .filter(line => line.length > 0);
 
-    const savedRecommendations = Array.isArray(caseData.recommendations) && caseData.recommendations.length > 0
-      ? caseData.recommendations
-      : parseDoctorRecommendations(caseData.recommendation);
-    const doctorRecommendations = savedRecommendations.length > 0 ? savedRecommendations : reportSynth.recs;
+    const doctorRecommendations = recorded.recs.map(escapeHtml);
 
-    const breathingDifficultyDisplay = isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوب") : (caseData.breathingDifficulty || caseData.difficulty || (isEn ? "Moderate" : "متوسط"));
-    const coughLevelDisplay = isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوبة") : (caseData.coughLevel || (isEn ? "Moderate" : "متوسطة"));
-    const durationDisplay = isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوب") : (caseData.symptomDuration || caseData.duration || (isEn ? "3 Days" : "3 أيام"));
+    const breathingDifficultyDisplay = isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوب") : (recordedClinicalText(caseData.breathingDifficulty || caseData.difficulty, isEn));
+    const coughLevelDisplay = isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوبة") : (recordedClinicalText(caseData.coughLevel, isEn));
+    const durationDisplay = isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوب") : (recordedClinicalText(caseData.symptomDuration || caseData.duration, isEn));
     const riskFactorsDisplay = isSupport
       ? (isEn ? "🔒 Medical data redacted" : "🔒 بيانات سريرية محجوبة")
-      : (Array.isArray(caseData.riskFactors) && caseData.riskFactors.length > 0 ? caseData.riskFactors.join('، ') : (isEn ? "None declared" : "لا توجد"));
+      : (Array.isArray(caseData.riskFactors) && caseData.riskFactors.length > 0 ? caseData.riskFactors.join('، ') : recordedClinicalText(null, isEn));
     const aiScoreDisplay = isSupport
       ? (isEn ? "🔒 Triage score redacted" : "🔒 تصنيف الفرز محجوب للدعم")
-      : (isEn ? (caseData.aiScoreEn || caseData.aiScore || "Low Risk") : (caseData.aiScore || "خطورة منخفضة"));
+      : (isEn ? (caseData.aiScoreEn || caseData.aiScore || missing) : (caseData.aiScore || missing));
     const ruleScorePointsDisplay = isSupport
       ? (isEn ? "🔒 Masked" : "🔒 محجوب")
       : `${ruleScorePoints} ${isEn ? "pts" : "نقطة"}`;
@@ -7229,18 +7139,21 @@ async function renderResultScreen() {
     }
 
     // APPROVED RESULT VIEW
-    const o2Val = latest.oxygenLevel || latest.o2 || 95;
-    const doctorDisplay = latest.assignedDoctorName || latest.reviewedBy || (isEn ? "Dr. Mona Samy" : "د. منى سامي");
+    const approvedRecord = await loadReportDoctorIdentity(latest);
+    const recorded = getRecordedClinicalContent(approvedRecord, isEn);
+    const o2Val = latest.oxygenLevel ?? latest.o2;
+    const o2Display = o2Val == null ? recordedClinicalText(null, isEn) : `${escapeHtml(String(o2Val))}%`;
+    const doctorDisplay = escapeHtml(getRecordedDoctorIdentity(approvedRecord, isEn).name);
 
     container.innerHTML = `
       <div class="result-layout">
         <article class="panel result-main">
           <span class="pill ok">✓ ${isEn ? "Physician Approved Result" : "نتيجة معتمدة من الطبيب"}</span>
-          <h1>${latest.risk || latest.aiScore || (isEn ? "Medium Risk - Follow-up Recommended" : "خطر متوسط ويحتاج متابعة")}</h1>
-          <p>${latest.doctorNote || (isEn ? "Doctor recommends close monitoring and follow-up within 48 hours." : "يوصى بمتابعة الطبيب خلال 24-48 ساعة ومراقبة الأعراض.")}</p>
+          <h1>${escapeHtml(recorded.diag)}</h1>
+          <p>${escapeHtml(recordedClinicalText(latest.clinicalNotes, isEn))}</p>
           <div class="risk-meter"><span></span></div>
           <div class="summary-list">
-            <div><span>${isEn ? "Oxygen Saturation" : "نسبة الأكسجين"}</span><strong style="color: #16a34a;">${o2Val}%</strong></div>
+            <div><span>${isEn ? "Oxygen Saturation" : "نسبة الأكسجين"}</span><strong style="color: #16a34a;">${o2Display}</strong></div>
             <div><span>${isEn ? "Reviewing Doctor" : "الطبيب المعالج"}</span><strong>${doctorDisplay}</strong></div>
             <div><span>${isEn ? "Status" : "الحالة"}</span><strong style="color: #16a34a;">${isEn ? "Clinically Approved" : "معتمد سريرياً ✓"}</strong></div>
           </div>
@@ -7248,9 +7161,7 @@ async function renderResultScreen() {
         <article class="panel">
           <div class="panel-head"><h3>${isEn ? "Care Recommendations" : "التوصيات"}</h3><span class="pill ok">${isEn ? "Ready" : "معتمد"}</span></div>
           <ul class="recommendations">
-            <li>${isEn ? "Monitor oxygen level twice daily." : "قياس الأكسجين عند توفر جهاز موثوق."}</li>
-            <li>${isEn ? "Follow-up with your doctor within 24-48 hours." : "مراجعة الطبيب خلال 24-48 ساعة."}</li>
-            <li>${isEn ? "Seek urgent care if shortness of breath worsens." : "طلب رعاية عاجلة إذا زاد ضيق التنفس."}</li>
+            ${recorded.recs.map(rec => `<li>${escapeHtml(rec)}</li>`).join("")}
           </ul>
           <div class="safety-note">${isEn ? "Medical notice: Health Vibes supports clinical workflows and does not replace qualified emergency care." : "تنبيه طبي: Health Vibes يساعد في دعم القرار الطبي ولا يستبدل التقييم الطبي المؤهل أو رعاية الطوارئ."}</div>
           <button class="solid-button full" onclick="openCaseReport('${latest.id}')">
@@ -8858,7 +8769,7 @@ async function renderVerificationScreen() {
           </div>
           <div class="summary-list" style="margin: 24px 0;">
             <div><span>${isEn ? "Doctor Name" : "اسم الطبيب"}</span><strong>${userData.doctorAppName || userData.name || user.displayName || user.email}</strong></div>
-            <div><span>${isEn ? "Syndicate License #" : "رقم ترخيص النقابة"}</span><strong style="color: var(--teal);">${userData.licenseNumber || "EGY-MED-20491"}</strong></div>
+            <div><span>${isEn ? "Syndicate License #" : "رقم ترخيص النقابة"}</span><strong style="color: var(--teal);">${recordedClinicalText(userData.licenseNumber, isEn)}</strong></div>
             <div><span>${isEn ? "Specialty" : "التخصص الطبي"}</span><strong>${userData.specialty || (isEn ? "Pulmonology & Respiratory" : "أمراض الصدر والجهاز التنفسي")}</strong></div>
             <div><span>${isEn ? "Hospital / Clinic" : "الجهة الطبية"}</span><strong>${userData.clinic || (isEn ? "Kasr Al-Ainy Hospital" : "مستشفى القصر العيني التعليمي")}</strong></div>
             <div><span>${isEn ? "Account Status" : "حالة الاعتماد"}</span><strong style="color: #18a058;">${isEn ? "Active & Verified" : "نشط ومكتمل التوثيق ✓"}</strong></div>
@@ -8976,7 +8887,7 @@ async function renderVerificationScreen() {
               </div>
               <div class="form-group">
                 <label for="doctorAppLicense">${isEn ? "Syndicate License Number *" : "رقم ترخيص مزاولة المهنة / رقم القيد بالنقابة *"}</label>
-                <input type="text" id="doctorAppLicense" placeholder="EGY-MED-12345" required />
+                <input type="text" id="doctorAppLicense" placeholder="رقم الترخيص" required />
               </div>
             </div>
 
@@ -9047,7 +8958,7 @@ async function promptAddDoctorVerificationToQueue() {
     alert(isEn ? "Please enter a valid email." : "يرجى إدخال بريد إلكتروني صالح.");
     return;
   }
-  const licenseNumber = prompt(isEn ? "Enter syndicate license number:" : "أدخل رقم ترخيص مزاولة المهنة / النقابة:", "EG-" + Math.floor(100000 + Math.random() * 900000)) || "";
+  const licenseNumber = prompt(isEn ? "Enter syndicate license number:" : "أدخل رقم ترخيص مزاولة المهنة / النقابة:", "") || "";
   const specialty = prompt(isEn ? "Enter medical specialty:" : "أدخل التخصص الطبي:", isEn ? "Pulmonology & Respiratory Care" : "أمراض الصدر والجهاز التنفسي") || "";
   const clinic = prompt(isEn ? "Enter clinic / hospital affiliation:" : "أدخل اسم المستشفى أو العيادة التابع لها:", isEn ? "Kasr Al-Ainy Hospital" : "مستشفى القصر العيني") || "";
 
@@ -11636,7 +11547,7 @@ async function getLatestApprovedReportForAssistant(user) {
     const approved = records.filter(r => isCaseApprovedForPatient(r));
     if (approved.length > 0) {
       // Return the latest approved report
-      return { status: "approved", report: approved[0] };
+      return { status: "approved", report: await loadReportDoctorIdentity(approved[0]) };
     }
 
     // If no approved report, identify pending or under-review case
@@ -11665,7 +11576,7 @@ async function renderAssistantScreen() {
 
   if (caseStatusInfo.status === "approved") {
     const r = caseStatusInfo.report;
-    const docName = r.approvingDoctorName || r.assignedDoctorName || (isEn ? "Dr. Mona Samy" : "د. منى سامي");
+    const docName = escapeHtml(getRecordedDoctorIdentity(r, isEn).name);
     messagesEl.innerHTML = `
       <div class="bot">
         ${isEn
@@ -11786,9 +11697,9 @@ async function handleSendChatMessage() {
       botResponse = guardrail.message;
       if (hasApprovedReport) {
         const r = caseStatusInfo.report;
-        const synth = synthesizeClinicalAssessment(r, isEn);
-        const meds = r.medications || synth.meds;
-        const docName = r.approvingDoctorName || r.assignedDoctorName || (isEn ? "Dr. Mona Samy" : "د. منى سامي");
+        const recorded = getRecordedClinicalContent(r, isEn);
+        const meds = escapeHtml(recorded.meds);
+        const docName = escapeHtml(getRecordedDoctorIdentity(r, isEn).name);
         botResponse += isEn
           ? `<br><br>📋 <strong>Only the following medications were certified for your case by ${docName}:</strong><br><br>${meds.replace(/\n/g, '<br>')}`
           : `<br><br>📋 <strong>الأدوية الوحيدة المعتمدة لحالتك من قِبل ${docName} هي:</strong><br><br>${meds.replace(/\n/g, '<br>')}`;
@@ -11807,9 +11718,9 @@ async function handleSendChatMessage() {
       botResponse = guardrail.message;
       if (hasApprovedReport) {
         const r = caseStatusInfo.report;
-        const synth = synthesizeClinicalAssessment(r, isEn);
-        const diag = r.clinicalDiagnosis || r.doctorNote || r.clinicalNotes || synth.diag;
-        const docName = r.approvingDoctorName || r.assignedDoctorName || (isEn ? "Dr. Mona Samy" : "د. منى سامي");
+        const recorded = getRecordedClinicalContent(r, isEn);
+        const diag = escapeHtml(recorded.diag);
+        const docName = escapeHtml(getRecordedDoctorIdentity(r, isEn).name);
         botResponse += isEn
           ? `<br><br>🩺 <strong>The certified diagnosis established by ${docName} is:</strong><br><br>${diag}`
           : `<br><br>🩺 <strong>التشخيص السريري المعتمد الوحيد لك من قِبل ${docName} هو:</strong><br><br>${diag}`;
@@ -11852,13 +11763,13 @@ async function handleSendChatMessage() {
 
   // 3. CASE IS GENUINELY APPROVED - EXPLAIN ONLY WHAT THE DOCTOR RECORDED
   const r = caseStatusInfo.report;
-  const synth = synthesizeClinicalAssessment(r, isEn);
-  const diag = r.clinicalDiagnosis || r.doctorNote || r.clinicalNotes || synth.diag;
-  const meds = r.medications || synth.meds;
-  const recs = (Array.isArray(r.recommendations) && r.recommendations.length > 0) ? r.recommendations : synth.recs;
-  const docName = r.approvingDoctorName || r.assignedDoctorName || (isEn ? "Dr. Mona Samy" : "د. منى سامي");
-  const docLicense = r.doctorLicense || "EGY-MED-84920";
-  const o2 = r.oxygenLevel || r.o2 || "--";
+  const recorded = getRecordedClinicalContent(r, isEn);
+  const diag = escapeHtml(recorded.diag);
+  const meds = escapeHtml(recorded.meds);
+  const recs = recorded.recs.map(escapeHtml);
+  const docName = escapeHtml(getRecordedDoctorIdentity(r, isEn).name);
+  const docLicense = escapeHtml(getRecordedDoctorIdentity(r, isEn).licenseNumber);
+  const o2 = recordedClinicalText(String(r.oxygenLevel ?? r.o2 ?? ""), isEn);
 
   const q = query.toLowerCase();
   const isMedQuery = /دواء|علاج|روشتة|جرعة|أدوية|بخاخ|مضاد|مسكن|medication|medicine|drug|prescription|dose|rx/i.test(q);

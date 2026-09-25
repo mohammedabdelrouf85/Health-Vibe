@@ -64,9 +64,11 @@ function buildResultReadyEmail({
   const portalUrl = appUrl || process.env.APP_BASE_URL || 'https://app.healthvibe.ai';
   const reportLink = `${portalUrl}/app/index.html?screen=report&caseId=${encodeURIComponent(caseId)}`;
 
-  const recItems = Array.isArray(recommendations)
-    ? recommendations.map(r => `<li style="margin-bottom:6px;">${r}</li>`).join('')
-    : (recommendations ? `<li>${recommendations}</li>` : '<li>متابعة العلامات الحيوية والراحة التامة.</li>');
+  const savedRecommendations = (Array.isArray(recommendations) ? recommendations : [recommendations])
+    .filter(value => typeof value === 'string' && value.trim());
+  const recItems = savedRecommendations.length
+    ? savedRecommendations.map(r => `<li style="margin-bottom:6px;">${r}</li>`).join('')
+    : '<li>غير مسجل</li>';
 
   const html = `
 <!DOCTYPE html>
@@ -102,17 +104,16 @@ function buildResultReadyEmail({
         </div>
         <div style="margin-bottom: 8px; font-size: 13.5px;">
           <strong style="color: #0f766e;">الطبيب المعتمد:</strong>
-          <span style="margin-right: 6px;">${doctorName || 'د. منى سامي'} (${doctorSpecialty || 'استشاري الأمراض الصدرية'})</span>
+          <span style="margin-right: 6px;">${doctorName || 'غير مسجل'} (${doctorSpecialty || 'غير مسجل'})</span>
         </div>
         <div style="margin-bottom: 8px; font-size: 13.5px;">
           <strong style="color: #0f766e;">التشخيص السريري:</strong>
-          <p style="margin: 4px 0 0; color: #1e293b; font-weight: 600; line-height: 1.5;">${clinicalDiagnosis || 'تم اعتماد الحالة وتقديم التوجيهات الطبية.'}</p>
+          <p style="margin: 4px 0 0; color: #1e293b; font-weight: 600; line-height: 1.5;">${clinicalDiagnosis || 'غير مسجل'}</p>
         </div>
-        ${medications ? `
         <div style="margin-top: 8px; font-size: 13.5px;">
-          <strong style="color: #0f766e;">العلاج المقترح:</strong>
-          <p style="margin: 4px 0 0; color: #1e293b;">${medications}</p>
-        </div>` : ''}
+          <strong style="color: #0f766e;">الأدوية المسجلة:</strong>
+          <p style="margin: 4px 0 0; color: #1e293b;">${medications || 'غير مسجل'}</p>
+        </div>
       </div>
 
       <!-- Recommendations -->
@@ -147,11 +148,11 @@ Health Vibes AI - نتيجة الفحص التنفسي السريري
 ==============================================
 عزيزي المريض / ${patientName || 'المحترم'}،
 
-تم اعتماد تقرير فحصك السريري من قبل ${doctorName || 'الطبيب المعالج'} (${doctorSpecialty || 'استشاري أمراض صدرية'}).
+تم اعتماد تقرير فحصك السريري من قبل ${doctorName || 'غير مسجل'} (${doctorSpecialty || 'غير مسجل'}).
 
 رقم التقرير: ${reportRef || ('HV-REP-' + caseId.slice(-8).toUpperCase())}
-التشخيص السريري: ${clinicalDiagnosis || 'معتمد'}
-الأدوية والتوصيات: ${medications || ''}
+التشخيص السريري: ${clinicalDiagnosis || 'غير مسجل'}
+الأدوية والتوصيات: ${medications || 'غير مسجل'}
 
 يمكنك الاطلاع على التقرير الطبي الكامل عبر الرابط:
 ${reportLink}
@@ -199,7 +200,7 @@ function buildMoreInfoEmail({
     <div style="padding: 28px 24px;">
       <p style="font-size: 16px; font-weight: 600; margin-top: 0;">عزيزي المريض / ${patientName || 'المحترم'}،</p>
       <p style="font-size: 14.5px; line-height: 1.6; color: #334155;">
-        قام ${doctorName || 'الطبيب المعالج'} بمراجعة بيانات فحصك التنفسي، ويطلب منك تزويده بمعلومات أو قياسات سريرية إضافية لإتمام التشخيص بدقة:
+        قام ${doctorName || 'غير مسجل'} بمراجعة بيانات فحصك التنفسي، ويطلب منك تزويده بمعلومات أو قياسات سريرية إضافية لإتمام التشخيص بدقة:
       </p>
 
       <!-- Note Box -->
@@ -237,7 +238,7 @@ Health Vibes AI - مطلوب استكمال بيانات لفحصك الطبي
 ===================================================
 عزيزي المريض / ${patientName || 'المحترم'}،
 
-طلب ${doctorName || 'الطبيب المعالج'} تزويده ببيانات إضافية لإتمام فحصك السريري #${caseId.slice(-6).toUpperCase()}:
+طلب ${doctorName || 'غير مسجل'} تزويده ببيانات إضافية لإتمام فحصك السريري #${caseId.slice(-6).toUpperCase()}:
 
 المطلوب:
 "${moreInfoNote || 'إعادة قياس نسبة الأكسجين وتوضيح تطور الأعراض.'}"

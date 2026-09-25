@@ -1298,6 +1298,53 @@ app.post('/api/admin/approve-doctor-application', requireAuth, requireVerifiedEm
   }
 });
 
+// Credential values come from an administrator-approved application, not the
+// editable user profile, ID token display name, or report request body.
+async function getVerifiedDoctorIdentity(uid) {
+  if (!db) return null;
+  const applications = await db.collection('doctor_applications').where('userId', '==', uid).get();
+  const approved = applications.docs.find(doc => doc.data().status === 'approved');
+  if (!approved) return null;
+  const data = approved.data();
+  const text = value => typeof value === 'string' ? value.trim() : '';
+  return {
+    uid,
+    applicationId: approved.id,
+    name: text(data.name),
+    licenseNumber: text(data.licenseNumber),
+    specialty: text(data.specialty),
+    clinic: text(data.clinic)
+  };
+}
+
+app.get('/api/doctor/verified-profile', requireAuth, requireDoctor, async (req, res) => {
+  try {
+    const doctorIdentity = await getVerifiedDoctorIdentity(req.user.uid);
+    if (!doctorIdentity) return res.status(403).json({ error: 'DOCTOR_CREDENTIALS_NOT_VERIFIED' });
+    return res.json({ doctorIdentity });
+  } catch (err) {
+    return res.status(503).json({ error: 'DOCTOR_CREDENTIALS_UNAVAILABLE' });
+  }
+});
+
+app.get('/api/reports/:caseId/doctor-identity', requireAuth, async (req, res) => {
+  try {
+    const snapshot = await db.collection('cases').doc(req.params.caseId).get();
+    if (!snapshot.exists) return res.status(404).json({ error: 'NOT_FOUND' });
+    const record = snapshot.data();
+    if (record.patientId !== req.user.uid && record.approvingDoctorId !== req.user.uid && !hasTrustedAdminClaim(req.user)) {
+      return res.status(403).json({ error: 'ACCESS_DENIED' });
+    }
+    if (record.status !== 'approved' || record.doctorApproved !== true) {
+      return res.status(403).json({ error: 'REPORT_NOT_APPROVED' });
+    }
+    const doctorIdentity = record.approvingDoctorId ? await getVerifiedDoctorIdentity(record.approvingDoctorId) : null;
+    return res.json({ doctorIdentity });
+  } catch (err) {
+    return res.status(503).json({ error: 'DOCTOR_CREDENTIALS_UNAVAILABLE' });
+  }
+});
+
 /**
  * Helper: Authoritative Doctor Case Transition Executor
  */
@@ -1407,20 +1454,25 @@ async function executeDoctorTransition({
         updateData.doctorApproved = true;
         updateData.approvingDoctorId = req.user.uid;
         updateData.approvingDoctorEmail = req.user.email;
-        updateData.approvingDoctorName = approvingDoctorName || req.user.displayName || req.user.name || 'Doctor';
-        updateData.doctorSpecialty = doctorSpecialty || 'Pulmonology & Respiratory Medicine';
-        updateData.doctorLicense = doctorLicense || 'EGY-MED-20491';
-        updateData.clinicName = clinicName || 'Health Vibes Specialized Clinics';
+        const doctorIdentity = await getVerifiedDoctorIdentity(req.user.uid);
+        if (!doctorIdentity) {
+          return res.status(403).json({ error: 'DOCTOR_CREDENTIALS_NOT_VERIFIED' });
+        }
+        updateData.doctorIdentity = doctorIdentity;
+        updateData.approvingDoctorName = doctorIdentity.name;
+        updateData.doctorSpecialty = doctorIdentity.specialty;
+        updateData.doctorLicense = doctorIdentity.licenseNumber;
+        updateData.clinicName = doctorIdentity.clinic;
         updateData.reportRef = reportRef || `HV-REP-${caseId.slice(-8).toUpperCase()}`;
         updateData.reportGeneratedAt = reportGeneratedAt || new Date().toISOString();
         updateData.approvedAt = admin.firestore.FieldValue.serverTimestamp();
         updateData.generatedAt = admin.firestore.FieldValue.serverTimestamp();
         updateData.reportVersion = REPORT_VERSION;
         updateData.modelVersion = MODEL_VERSION;
-        updateData.clinicalDiagnosis = clinicalDiagnosis || normalizedClinicalNotes;
-        updateData.doctorNote = clinicalDiagnosis || normalizedClinicalNotes;
-        updateData.clinicalNotes = clinicalDiagnosis || normalizedClinicalNotes;
-        updateData.medications = medications || '';
+        updateData.clinicalDiagnosis = typeof clinicalDiagnosis === 'string' ? clinicalDiagnosis.trim() : '';
+        updateData.doctorNote = normalizedClinicalNotes;
+        updateData.clinicalNotes = normalizedClinicalNotes;
+        updateData.medications = typeof medications === 'string' ? medications.trim() : '';
         updateData.recommendation = normalizedRecommendations.join('\n');
         updateData.recommendations = normalizedRecommendations;
       } else if (targetStatus === 'more_info_requested') {
@@ -1500,11 +1552,7 @@ async function executeDoctorTransition({
       });
     }
 
-    return res.json({
-      success: true,
-      message: `Case status successfully updated to ${targetStatus}.`,
-      targetStatus
-    });
+    return res.status(503).json({ error: 'CLINICAL_STORAGE_UNAVAILABLE' });
   } catch (err) {
     console.error(`[SERVER DOCTOR TRANSITION ERROR (${targetStatus})]:`, err);
     return res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
