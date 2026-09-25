@@ -6,6 +6,7 @@ const toast = document.getElementById("toast");
 const screenTitle = document.getElementById("screenTitle");
 const themeToggle = document.getElementById("themeToggle");
 const siteThemeToggle = document.getElementById("siteThemeToggle") || null;
+const topbarThemeToggle = document.getElementById("topbarThemeToggle") || null;
 const languageToggle = document.getElementById("languageToggle");
 const menuToggle = document.getElementById("menuToggle");
 const logoutButton = document.getElementById("logoutButton");
@@ -1128,9 +1129,8 @@ function applyLanguage(language) {
     }
   }
 
-  // 8. Theme toggle label
-  const themeLabel = document.body.classList.contains("dark") ? "الوضع الداكن" : "الوضع الفاتح";
-  if (siteThemeToggle) siteThemeToggle.textContent = localized(themeLabel);
+  // 8. Refresh theme UI labels with localized text
+  applyTheme(document.body.classList.contains("dark") ? "dark" : "light");
 
   // 9. Screen Title
   const activeScreenEl = document.querySelector(".screen.active");
@@ -10192,20 +10192,67 @@ function applyTheme(theme) {
   document.body.classList.toggle("dark", isDark);
   if (!isDark) {
     document.documentElement.classList.add("hv-theme-light");
+    document.documentElement.classList.remove("hv-theme-dark");
   } else {
     document.documentElement.classList.remove("hv-theme-light");
+    document.documentElement.classList.add("hv-theme-dark");
   }
   try {
     localStorage.setItem("hv_theme", isDark ? "dark" : "light");
   } catch(e) {}
-  const label = isDark ? "الوضع الداكن" : "الوضع الفاتح";
-  if (siteThemeToggle) siteThemeToggle.textContent = localized(label);
-  const fabIcon = themeToggle ? themeToggle.querySelector(".theme-fab-icon") : null;
-  if (fabIcon) fabIcon.textContent = isDark ? "☀️" : "🌙";
+
+  const isAr = typeof currentLanguage !== "undefined" ? currentLanguage === "ar" : true;
+  const nextModeText = isDark
+    ? (window.i18n ? window.i18n.t("common.lightMode") : (isAr ? "الوضع الفاتح" : "Light Mode"))
+    : (window.i18n ? window.i18n.t("common.darkMode") : (isAr ? "الوضع الداكن" : "Dark Mode"));
+
+  const tooltip = isDark
+    ? (isAr ? "تفعيل الوضع الفاتح" : "Switch to Light Mode")
+    : (isAr ? "تفعيل الوضع الداكن" : "Switch to Dark Mode");
+
+  // 1. Floating FAB
+  if (themeToggle) {
+    const fabIcon = themeToggle.querySelector(".theme-fab-icon");
+    if (fabIcon) fabIcon.textContent = isDark ? "☀️" : "🌙";
+    themeToggle.title = tooltip;
+    themeToggle.setAttribute("aria-label", tooltip);
+  }
+
+  // 2. Topbar Theme Toggle
+  const topToggle = document.getElementById("topbarThemeToggle") || (typeof topbarThemeToggle !== "undefined" ? topbarThemeToggle : null);
+  if (topToggle) {
+    const icon = topToggle.querySelector(".theme-toggle-icon");
+    const label = topToggle.querySelector(".theme-toggle-label");
+    if (icon) icon.textContent = isDark ? "☀️" : "🌙";
+    if (label) label.textContent = nextModeText;
+    topToggle.title = tooltip;
+    topToggle.setAttribute("aria-label", tooltip);
+  }
+
+  // 3. Site Nav Theme Toggle
+  const siteToggle = document.getElementById("siteThemeToggle") || (typeof siteThemeToggle !== "undefined" ? siteThemeToggle : null);
+  if (siteToggle) {
+    const siteIcon = siteToggle.querySelector(".site-theme-icon");
+    const siteLabel = siteToggle.querySelector(".site-theme-label");
+    if (siteIcon) siteIcon.textContent = isDark ? "☀️" : "🌙";
+    if (siteLabel) {
+      siteLabel.textContent = nextModeText;
+    } else {
+      siteToggle.textContent = nextModeText;
+    }
+    siteToggle.title = tooltip;
+    siteToggle.setAttribute("aria-label", tooltip);
+  }
+
   updateThemeLogos();
 }
 
+let _themeToggling = false;
 function toggleTheme() {
+  if (_themeToggling) return;
+  _themeToggling = true;
+  window.setTimeout(() => { _themeToggling = false; }, 250);
+
   const willBeDark = !document.body.classList.contains("dark");
   applyTheme(willBeDark ? "dark" : "light");
 }
@@ -11524,8 +11571,16 @@ if (chatInputField) {
   });
 }
 
-themeToggle.addEventListener("click", toggleTheme);
-if (siteThemeToggle) siteThemeToggle.addEventListener("click", toggleTheme);
+if (themeToggle) {
+  themeToggle.addEventListener("click", toggleTheme);
+}
+if (siteThemeToggle) {
+  siteThemeToggle.addEventListener("click", toggleTheme);
+}
+const topbarThemeToggleBtn = document.getElementById("topbarThemeToggle");
+if (topbarThemeToggleBtn) {
+  topbarThemeToggleBtn.addEventListener("click", toggleTheme);
+}
 
 languageToggle.addEventListener("click", () => {
   const nextLanguage = currentLanguage === "ar" ? "en" : "ar";
