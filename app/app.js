@@ -1136,7 +1136,15 @@ function applyLanguage(language) {
   const activeScreenEl = document.querySelector(".screen.active");
   const activeScreenName = activeScreenEl ? activeScreenEl.id.replace("screen-", "") : "patient";
   if (screenTitle) {
-    screenTitle.textContent = (window.i18n && window.i18n.t(`nav.${activeScreenName}`)) || (language === "en" ? (englishTitles[activeScreenName] || "Home") : (titles[activeScreenName] || "الرئيسية"));
+    const navKey = activeScreenName === "patient" ? "home" : activeScreenName;
+    let title = window.i18n ? window.i18n.t(`nav.${activeScreenName}`) : "";
+    if (!title || title.startsWith("nav.")) {
+      title = window.i18n ? window.i18n.t(`nav.${navKey}`) : "";
+    }
+    if (!title || title.startsWith("nav.")) {
+      title = language === "en" ? (englishTitles[activeScreenName] || "Home") : (titles[activeScreenName] || "الرئيسية");
+    }
+    screenTitle.textContent = title;
   }
   if (typeof updateVerificationSoonState === "function") {
     updateVerificationSoonState();
@@ -10260,7 +10268,7 @@ function toggleTheme() {
 function initTheme() {
   let theme = "dark";
   try {
-    const themeDefaultVersion = "2026-09-25-dark-default";
+    const themeDefaultVersion = "2026-09-25-dark-v5";
     if (localStorage.getItem("hv_theme_default_version") !== themeDefaultVersion) {
       localStorage.setItem("hv_theme_default_version", themeDefaultVersion);
       localStorage.setItem("hv_theme", "dark");
@@ -10273,6 +10281,14 @@ function initTheme() {
 window.toggleTheme = toggleTheme;
 window.applyTheme = applyTheme;
 window.initTheme = initTheme;
+
+// Global theme toggle delegation to guarantee clicks always register
+document.addEventListener("click", (event) => {
+  const toggleBtn = event.target.closest("#themeToggle, #topbarThemeToggle, #siteThemeToggle, .theme-fab");
+  if (toggleBtn) {
+    toggleTheme();
+  }
+});
 
 window.addEventListener("load", () => {
   initTheme();

@@ -49,6 +49,7 @@
       },
       nav: {
         home: "الرئيسية",
+        patient: "الرئيسية",
         consent: "الموافقة والخصوصية",
         profile: "الملف الطبي",
         assessment: "تقييم التنفس",
@@ -221,6 +222,7 @@
       },
       nav: {
         home: "Home",
+        patient: "Home",
         consent: "Consent & Privacy",
         profile: "Medical Profile",
         assessment: "Breathing Assessment",

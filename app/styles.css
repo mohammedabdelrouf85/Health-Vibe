@@ -1,27 +1,28 @@
 [hidden] { display: none !important; }
 
 :root {
-  --teal: #006d6f;
-  --teal-2: #03484a;
+  --teal: #09b8b6;
+  --teal-2: #5dd6d4;
   --teal-3: #09b8b6;
-  --cyan: #e7f7f7;
+  --cyan: #0e2e31;
   --blue: #2b7de9;
-  --green: #18a058;
-  --amber: #d99a16;
-  --red: #d64545;
-  --ink: #13272a;
-  --muted: #607477;
-  --bg: #f5fbfa;
-  --surface: #ffffff;
-  --surface-2: #f8fdfc;
-  --line: #dcebea;
-  --shadow: 0 24px 70px rgba(3, 72, 74, .12);
-  --hero-grad-1: #006d6f;
-  --hero-grad-2: #03484a;
-  color-scheme: light;
+  --green: #2cc570;
+  --amber: #f0b429;
+  --red: #f06060;
+  --ink: #e2f0ee;
+  --muted: #7fa8a6;
+  --bg: #07191b;
+  --surface: #0d2427;
+  --surface-2: #112d30;
+  --line: #1e3f42;
+  --shadow: 0 24px 70px rgba(0, 0, 0, .45);
+  --hero-grad-1: #072628;
+  --hero-grad-2: #051618;
+  color-scheme: dark;
   font-family: "Cairo", "IBM Plex Sans Arabic", "Segoe UI", Tahoma, sans-serif;
 }
 
+html.hv-theme-dark body,
 body.dark {
   --bg: #07191b;
   --surface: #0d2427;
@@ -70,18 +71,18 @@ body {
   -webkit-overflow-scrolling: touch;
   color: var(--ink);
   background:
-    radial-gradient(circle at 88% 9%, rgba(9, 184, 182, .22), transparent 28%),
-    radial-gradient(circle at 8% 26%, rgba(24, 160, 88, .16), transparent 24%),
-    linear-gradient(180deg, #ffffff 0%, var(--bg) 42%, #eef8f6 100%);
+    radial-gradient(circle at 88% 9%, rgba(9, 184, 182, .18), transparent 28%),
+    radial-gradient(circle at 8% 26%, rgba(24, 160, 88, .10), transparent 24%),
+    linear-gradient(180deg, #061517 0%, var(--bg) 100%);
 }
 
+html.hv-theme-dark body,
 body.dark {
   background:
     radial-gradient(circle at 88% 9%, rgba(9, 184, 182, .18), transparent 28%),
     radial-gradient(circle at 8% 26%, rgba(24, 160, 88, .10), transparent 24%),
     linear-gradient(180deg, #061517 0%, var(--bg) 100%) !important;
 }
-
 button, input, textarea { font: inherit; }
 button { cursor: pointer; }
 a { color: inherit; text-decoration: none; }
