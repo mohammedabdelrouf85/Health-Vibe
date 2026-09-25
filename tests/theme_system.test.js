@@ -29,13 +29,13 @@ console.log('  ✓ Immediate theme sync script present in body head to prevent l
 // 3. Theme Toggle Controls & Event Handlers
 console.log('▶ TEST 3: Theme Toggle Elements & Handlers');
 assert(htmlContent.includes('id="themeToggle"'), 'Floating theme toggle FAB present');
-assert(htmlContent.includes('id="topbarThemeToggle"'), 'Topbar theme toggle present');
+assert(!htmlContent.includes('id="topbarThemeToggle"'), 'Topbar theme toggle removed per user request');
 assert(htmlContent.includes('id="siteThemeToggle"'), 'Site nav theme toggle present');
 assert(htmlContent.includes('onclick="toggleTheme()"'), 'Theme toggle has onclick handler');
 assert(appJsContent.includes('window.toggleTheme = toggleTheme;'), 'toggleTheme exposed on window');
 assert(appJsContent.includes('window.applyTheme = applyTheme;'), 'applyTheme exposed on window');
 assert(appJsContent.includes('window.initTheme = initTheme;'), 'initTheme exposed on window');
-console.log('  ✓ All 3 theme toggles wired with onclick handlers and global exports.\n');
+console.log('  ✓ Topbar toggle removed; floating FAB and site toggle active with global exports.\n');
 
 // 4. i18n Key Resolution for Patient Home Screen
 console.log('▶ TEST 4: i18n Key Resolution for Screen Title');
