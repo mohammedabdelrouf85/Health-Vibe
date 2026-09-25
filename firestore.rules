@@ -6,8 +6,39 @@ service cloud.firestore {
     // 🔐 HELPER FUNCTIONS (Zero-Trust Authentication & Strict RBAC)
     // =========================================================================
 
-    function isAuthenticated() {
+    function isUserAuthenticated() {
       return request.auth != null;
+    }
+
+    function hasUserDoc() {
+      return isUserAuthenticated() && 
+             exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    // 🛑 BLOCK SUSPENDED ACCOUNTS
+    // Blocks all operations for accounts flagged as suspended in Auth claims or user documents
+    function isSuspended() {
+      return isUserAuthenticated() && (
+        ('suspended' in request.auth.token && request.auth.token.suspended == true) ||
+        ('status' in request.auth.token && request.auth.token.status == 'suspended') ||
+        ('disabled' in request.auth.token && request.auth.token.disabled == true) ||
+        ('isSuspended' in request.auth.token && request.auth.token.isSuspended == true) ||
+        (hasUserDoc() && (
+          ('suspended' in getUserData() && getUserData().suspended == true) ||
+          ('status' in getUserData() && getUserData().status == 'suspended') ||
+          ('accountStatus' in getUserData() && getUserData().accountStatus == 'suspended') ||
+          ('disabled' in getUserData() && getUserData().disabled == true) ||
+          ('isSuspended' in getUserData() && getUserData().isSuspended == true)
+        ))
+      );
+    }
+
+    function isAuthenticated() {
+      return isUserAuthenticated() && !isSuspended();
     }
 
     function isVerificationRevoked() {
@@ -47,15 +78,6 @@ service cloud.firestore {
           ('phoneVerified' in getUserData() && getUserData().phoneVerified == true)
         ))
       );
-    }
-
-    function hasUserDoc() {
-      return isAuthenticated() && 
-             exists(/databases/$(database)/documents/users/$(request.auth.uid));
-    }
-
-    function getUserData() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
     // Role extraction: Custom Claims (tamper-proof JWT) take precedence over Firestore doc
@@ -103,9 +125,6 @@ service cloud.firestore {
     // =========================================================================
     // 1. 👥 USERS COLLECTION (/users/{userId})
     // =========================================================================
-    // - OWNER OVERRIDE: Owner has unrestricted full read/write/delete access.
-    // - Self can read their own profile; Admins can view other user accounts.
-    // - Non-owners cannot elevate privileged fields (role, isOwner, etc.).
     match /users/{userId} {
       allow read: if isOwner() || (isAuthenticated() && (isSelf(userId) || isAdmin()));
 
@@ -117,7 +136,8 @@ service cloud.firestore {
 
       allow update: if isOwner() || (isAuthenticated() && (
         (isSelf(userId) && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-          'role', 'isOwner', 'doctorVerified', 'verifiedDoctor', 'doctorApplicationStatus'
+          'role', 'isOwner', 'doctorVerified', 'verifiedDoctor', 'doctorApplicationStatus',
+          'suspended', 'isSuspended', 'status', 'accountStatus', 'disabled'
         ])) ||
         (isAdmin() && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
           'role', 'isOwner'
@@ -166,7 +186,6 @@ service cloud.firestore {
     // 🩺 CLINICAL ASSESSMENT VALIDATION HELPERS
     // =========================================================================
     
-    // Pulse Oximetry Physiological Validation (SpO2: 50% - 100%)
     function isValidOxygen(data) {
       return (!('oxygenLevel' in data) || (data.oxygenLevel is number && data.oxygenLevel >= 50 && data.oxygenLevel <= 100)) &&
              (!('o2' in data) || (data.o2 is number && data.o2 >= 50 && data.o2 <= 100));
@@ -265,8 +284,6 @@ service cloud.firestore {
     // =========================================================================
     // 3. 📋 CLINICAL CASES (/cases/{caseId})
     // =========================================================================
-    // - OWNER OVERRIDE: Owner has unrestricted full read/write/delete access.
-    // - Patient reads their own cases; Assigned Doctors and Admins read assigned cases.
     match /cases/{caseId} {
       allow read: if isOwner() || (isAuthenticated() && 
                      ((resource.data.patientId == request.auth.uid &&
@@ -424,8 +441,6 @@ service cloud.firestore {
     // =========================================================================
     // 11. 👑 MASTER CATCH-ALL OVERRIDE
     // =========================================================================
-    // Owner has unrestricted access to all documents across the entire Firestore database.
-    // All other unauthenticated or unauthorized requests are strictly denied.
     match /{document=**} {
       allow read, write: if isOwner();
     }

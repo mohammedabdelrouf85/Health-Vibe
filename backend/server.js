@@ -572,6 +572,29 @@ async function requireAuth(req, res, next) {
   try {
     const decodedToken = await admin.auth().verifyIdToken(idToken);
     req.user = decodedToken;
+
+    // 🛑 Block suspended accounts via Custom Claims
+    if (decodedToken.suspended === true || decodedToken.status === 'suspended' || decodedToken.disabled === true || decodedToken.isSuspended === true) {
+      return res.status(403).json({
+        error: 'ACCOUNT_SUSPENDED',
+        message: 'This account has been suspended by platform administration.'
+      });
+    }
+
+    // 🛑 Block suspended accounts via Firestore user doc
+    if (db) {
+      const userDoc = await db.collection('users').doc(decodedToken.uid).get();
+      if (userDoc.exists) {
+        const udata = userDoc.data();
+        if (udata.suspended === true || udata.status === 'suspended' || udata.accountStatus === 'suspended' || udata.disabled === true || udata.isSuspended === true) {
+          return res.status(403).json({
+            error: 'ACCOUNT_SUSPENDED',
+            message: 'This account has been suspended by platform administration.'
+          });
+        }
+      }
+    }
+
     next();
   } catch (err) {
     console.error("[SERVER AUTH ERROR] Invalid token:", err.message);
@@ -1052,6 +1075,72 @@ app.post('/api/admin/set-user-role', requireAuth, requireVerifiedEmail, requireS
     res.json({ success: true, message: `Successfully updated user role to ${normalizeRole(newRole, targetIsOwner)} on server.` });
   } catch (err) {
     console.error("[SERVER ROLE UPDATE ERROR]:", err);
+    res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/admin/toggle-user-suspension
+ * Server-authoritative endpoint to suspend or unsuspend a user account and revoke tokens
+ */
+app.post('/api/admin/toggle-user-suspension', requireAuth, requireVerifiedEmail, requireAdmin, async (req, res) => {
+  const { targetUserId, suspend, reason } = req.body;
+  if (!targetUserId || typeof suspend !== 'boolean') {
+    return res.status(400).json({ error: 'INVALID_REQUEST', message: 'targetUserId and boolean suspend status required.' });
+  }
+
+  try {
+    const targetUser = await admin.auth().getUser(targetUserId);
+    if (isOwnerEmail(targetUser.email)) {
+      return res.status(403).json({ error: 'CANNOT_SUSPEND_OWNER', message: 'System owner accounts cannot be suspended.' });
+    }
+
+    // 1. Update Custom Claims
+    const currentClaims = targetUser.customClaims || {};
+    await admin.auth().setCustomUserClaims(targetUserId, {
+      ...currentClaims,
+      suspended: suspend,
+      isSuspended: suspend
+    });
+
+    // 2. Disable in Auth & Revoke tokens if suspended
+    await admin.auth().updateUser(targetUserId, {
+      disabled: suspend
+    });
+    if (suspend) {
+      await admin.auth().revokeRefreshTokens(targetUserId);
+    }
+
+    // 3. Update Firestore document
+    if (db) {
+      await db.collection('users').doc(targetUserId).set({
+        suspended: suspend,
+        isSuspended: suspend,
+        status: suspend ? 'suspended' : 'active',
+        accountStatus: suspend ? 'suspended' : 'active',
+        suspendedAt: suspend ? admin.firestore.FieldValue.serverTimestamp() : null,
+        suspendedBy: suspend ? req.user.email : null,
+        suspensionReason: suspend ? (reason || 'Administrative action') : null
+      }, { merge: true });
+
+      // 4. Audit Log
+      await db.collection('audit_events').add({
+        type: suspend ? 'ACCOUNT_SUSPENDED' : 'ACCOUNT_UNSUSPENDED',
+        targetUserId: targetUserId,
+        targetEmail: targetUser.email,
+        executedBy: req.user.email,
+        reason: reason || null,
+        timestamp: admin.firestore.FieldValue.serverTimestamp()
+      });
+    }
+
+    res.json({
+      success: true,
+      suspended: suspend,
+      message: `Account ${targetUser.email} has been ${suspend ? 'suspended' : 're-activated'}.`
+    });
+  } catch (err) {
+    console.error("[SERVER SUSPEND USER ERROR]:", err);
     res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
   }
 });

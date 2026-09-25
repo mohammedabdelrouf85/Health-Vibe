@@ -9442,14 +9442,20 @@ async function renderAdminUsers() {
           ? `<span class="pill ok" style="font-size: 11px; padding: 3px 8px;">${isEn ? "Verified ✓" : "بريد مؤكد ✓"}</span>`
           : `<span class="pill pending" style="font-size: 11px; padding: 3px 8px; background: rgba(245, 158, 11, 0.12); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3);">${isEn ? "Regular (Unverified) ⚠️" : "حساب عادي (غير مؤكد) ⚠️"}</span>`;
 
+        const isUserSuspended = Boolean(u.suspended === true || u.isSuspended === true || u.status === "suspended" || u.accountStatus === "suspended" || u.disabled === true);
+        const suspendedBadgeHtml = isUserSuspended
+          ? `<span class="pill danger" style="font-size: 11px; padding: 3px 8px; background: rgba(239, 68, 68, 0.18); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.4);">🛑 ${isEn ? "Suspended" : "موقوف"}</span>`
+          : `<span class="pill ok" style="font-size: 10.5px; padding: 2px 7px; opacity: 0.85;">${isEn ? "Active" : "نشط"}</span>`;
+
         const userNameStr = u.name || u.displayName || (u.email ? u.email.split('@')[0] : 'مستخدم');
         const roleManagedByApplication = role === ROLES.DOCTOR_PENDING;
 
         html += `
-          <tr style="border-bottom: 1px solid var(--line);">
+          <tr style="border-bottom: 1px solid var(--line); ${isUserSuspended ? 'background: rgba(239, 68, 68, 0.04);' : ''}">
             <td style="padding: 12px; font-weight: 600; color: var(--ink);">
               ${userNameStr}
               ${isOwner ? `<span class="owner-badge" style="margin-inline-start: 6px;">${isEn ? "Super Admin" : "مدير عام"}</span>` : ''}
+              ${isUserSuspended ? `<span style="margin-inline-start: 6px; font-size: 11px; color: #ef4444; font-weight: bold;">[BLOCKED]</span>` : ''}
             </td>
             <td style="padding: 12px; color: var(--muted); font-family: monospace;">${u.email}</td>
             <td style="padding: 12px;">
@@ -9458,15 +9464,29 @@ async function renderAdminUsers() {
             <td style="padding: 12px;">
               <div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start;">
                 ${isEmailVerifiedHtml}
-                ${!isOwner ? (isVerified ? `
-                  <button type="button" onclick="toggleUserVerification('${u.id}', true, '${userNameStr}', '${u.email}')" class="soft-button" style="padding: 2px 7px; font-size: 10.5px; opacity: 0.75; color: #ef4444; border-color: rgba(239,68,68,0.3);" title="${isEn ? 'Revoke verification' : 'إلغاء التوثيق'}">
-                    ${isEn ? 'Unverify' : 'إلغاء التوثيق'}
-                  </button>
-                ` : `
-                  <button type="button" onclick="toggleUserVerification('${u.id}', false, '${userNameStr}', '${u.email}')" class="soft-button" style="padding: 3px 8px; font-size: 11px; background: rgba(16,185,129,0.12); border-color: #10b981; color: #10b981; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;" title="${isEn ? 'Verify and register account on system' : 'توثيق وتأكيد الحساب على السيستم'}">
-                    <span>⚡</span> ${isEn ? 'Verify on System' : 'توثيق على السيستم'}
-                  </button>
-                `) : ''}
+                ${suspendedBadgeHtml}
+                ${!isOwner ? `
+                  <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px;">
+                    ${isVerified ? `
+                      <button type="button" onclick="toggleUserVerification('${u.id}', true, '${userNameStr}', '${u.email}')" class="soft-button" style="padding: 2px 7px; font-size: 10px; opacity: 0.75; color: #ef4444; border-color: rgba(239,68,68,0.3);" title="${isEn ? 'Revoke verification' : 'إلغاء التوثيق'}">
+                        ${isEn ? 'Unverify' : 'إلغاء التوثيق'}
+                      </button>
+                    ` : `
+                      <button type="button" onclick="toggleUserVerification('${u.id}', false, '${userNameStr}', '${u.email}')" class="soft-button" style="padding: 2px 7px; font-size: 10px; background: rgba(16,185,129,0.12); border-color: #10b981; color: #10b981; font-weight: 600;" title="${isEn ? 'Verify and register account on system' : 'توثيق وتأكيد الحساب على السيستم'}">
+                        ⚡ ${isEn ? 'Verify' : 'توثيق'}
+                      </button>
+                    `}
+                    ${isUserSuspended ? `
+                      <button type="button" onclick="toggleUserSuspension('${u.id}', true, '${userNameStr}', '${u.email}')" class="soft-button" style="padding: 2px 7px; font-size: 10px; background: rgba(16,185,129,0.12); color: #10b981; border-color: #10b981; font-weight: 600;" title="${isEn ? 'Re-activate account' : 'إلغاء الإيقاف والتفعيل'}">
+                        ✅ ${isEn ? 'Unsuspend' : 'تفعيل'}
+                      </button>
+                    ` : `
+                      <button type="button" onclick="toggleUserSuspension('${u.id}', false, '${userNameStr}', '${u.email}')" class="soft-button" style="padding: 2px 7px; font-size: 10px; color: #ef4444; border-color: rgba(239,68,68,0.4); font-weight: 600;" title="${isEn ? 'Suspend account' : 'إيقاف الحساب'}">
+                        🛑 ${isEn ? 'Suspend' : 'إيقاف'}
+                      </button>
+                    `}
+                  </div>
+                ` : ''}
               </div>
             </td>
             <td style="padding: 12px; text-align: end;">
@@ -9591,6 +9611,66 @@ async function toggleUserVerification(userId, currentStatus, userName, userEmail
   }
 }
 window.toggleUserVerification = toggleUserVerification;
+
+async function toggleUserSuspension(userId, currentSuspended, userName, userEmail) {
+  const isEn = currentLanguage === "en";
+  const targetSuspend = !currentSuspended;
+  const promptMsg = targetSuspend
+    ? (isEn ? `Are you sure you want to SUSPEND account ${userName} (${userEmail})?\nThis will immediately block all database and application access.` : `هل أنت متأكد من إيقاف وتجميد حساب ${userName} (${userEmail})؟\nسيتم حظر وصول هذا الحساب لقاعدة البيانات والنظام فوراً.`)
+    : (isEn ? `Are you sure you want to RE-ACTIVATE account ${userName} (${userEmail})?` : `هل أنت متأكد من إعادة تفعيل حساب ${userName} (${userEmail})؟`);
+
+  if (!confirm(promptMsg)) return;
+
+  try {
+    showToast(isEn ? "Updating account suspension status..." : "جاري تحديث حالة إيقاف الحساب...");
+
+    // 1. Authoritative Backend Call
+    await callBackend("/api/admin/toggle-user-suspension", {
+      method: "POST",
+      body: JSON.stringify({
+        targetUserId: userId,
+        suspend: targetSuspend,
+        reason: targetSuspend ? "Suspended via Admin Dashboard" : "Re-activated via Admin Dashboard"
+      })
+    }).catch(err => {
+      console.warn("Backend toggle-user-suspension error:", err);
+    });
+
+    // 2. Direct Firestore fallback/sync
+    if (typeof db !== "undefined" && db) {
+      await db.collection("users").doc(userId).set({
+        suspended: targetSuspend,
+        isSuspended: targetSuspend,
+        status: targetSuspend ? "suspended" : "active",
+        accountStatus: targetSuspend ? "suspended" : "active",
+        suspendedAt: targetSuspend ? firebase.firestore.FieldValue.serverTimestamp() : null,
+        suspendedBy: targetSuspend ? (auth?.currentUser?.email || "admin") : null
+      }, { merge: true });
+    }
+
+    // 3. Local registry update
+    const list = getLocalAccountsRegistry();
+    const u = list.find(x => x.id === userId || (x.email && x.email.toLowerCase() === (userEmail || '').toLowerCase()));
+    if (u) {
+      u.suspended = targetSuspend;
+      u.isSuspended = targetSuspend;
+      u.status = targetSuspend ? "suspended" : "active";
+      try { localStorage.setItem(ACCOUNTS_REGISTRY_KEY, JSON.stringify(list)); } catch(e) {}
+    }
+
+    showToast(isEn ? `Account ${userName} is now ${targetSuspend ? 'SUSPENDED 🛑' : 'ACTIVE ✅'}!` : `تم ${targetSuspend ? 'إيقاف وحظر 🛑' : 'إعادة تفعيل ✅'} حساب ${userName} بنجاح!`);
+    await renderAdminUsers();
+    await renderAdminMetrics();
+    if (window._adminReportView === "accounts") {
+      renderReportScreen();
+    }
+  } catch (err) {
+    console.error("toggleUserSuspension error:", err);
+    showToast(getAuthErrorMessage(err));
+  }
+}
+window.toggleUserSuspension = toggleUserSuspension;
+
 
 async function syncAllAccountsToFirestore() {
   const isEn = currentLanguage === "en";
@@ -11640,6 +11720,25 @@ function initHVAuthListener() {
         if (userDoc.exists) {
           const udata = userDoc.data();
           window._cachedUserDoc = udata;
+
+          // 🛑 Check if user account is suspended by administration
+          const isUserSuspended = Boolean(udata.suspended === true || udata.isSuspended === true || udata.status === "suspended" || udata.accountStatus === "suspended" || udata.disabled === true);
+          if (isUserSuspended && !isOwner) {
+            console.warn("[Health Vibes] Account suspended by administration. Blocking access:", user.email);
+            clearActiveSession();
+            window._isSigningOut = true;
+            await auth.signOut();
+            showToast(currentLanguage === "en" ? "This account has been suspended by platform administration." : "تم إيقاف هذا الحساب بواسطة إدارة المنصة لمراجعة أمنية.");
+            if (typeof showCentralErrorModal === "function") {
+              showCentralErrorModal({
+                category: currentLanguage === "en" ? "Account Status" : "حالة الحساب",
+                title: currentLanguage === "en" ? "Account Suspended" : "الحساب موقوف",
+                message: currentLanguage === "en" ? "This account has been disabled by platform administration." : "تم تعطيل هذا الحساب بواسطة إدارة المنصة لمراجعة أمنية أو إدارية.",
+                action: currentLanguage === "en" ? "Please contact support if you believe this is in error." : "يرجى التواصل مع الدعم الفني للاستفسار والمراجعة."
+              });
+            }
+            return;
+          }
           if (verificationRevoked) {
             window._isUserVerified = false;
             window._verifiedPhone = "";

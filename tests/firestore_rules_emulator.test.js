@@ -34,6 +34,7 @@ for (const m of requiredMatches) {
 }
 
 const requiredFunctions = [
+  "function isSuspended",
   "function isDoctorApprovedCase",
   "function hasNoPatientForgedClinicalResult",
   "function hasNoUnreleasedClinicalResult",
@@ -63,7 +64,11 @@ class RulesSimulator {
         email: auth.email || null,
         email_verified: Boolean(auth.email_verified),
         isOwner: Boolean(auth.isOwner),
-        role: auth.role || null
+        role: auth.role || null,
+        suspended: Boolean(auth.suspended),
+        isSuspended: Boolean(auth.isSuspended),
+        status: auth.status || null,
+        disabled: Boolean(auth.disabled)
       }
     };
   }
@@ -74,8 +79,19 @@ class RulesSimulator {
     return email === 'devilunderurwater@gmail.com';
   }
 
+  isSuspended(request) {
+    if (!request.auth) return false;
+    if (request.auth.token.suspended === true || request.auth.token.isSuspended === true || request.auth.token.status === 'suspended' || request.auth.token.disabled === true) return true;
+    const udata = this.getUserData(request);
+    return Boolean(udata.suspended === true || udata.isSuspended === true || udata.status === 'suspended' || udata.accountStatus === 'suspended' || udata.disabled === true);
+  }
+
+  isAuthenticated(request) {
+    return Boolean(request.auth && !this.isSuspended(request));
+  }
+
   isOwner(request) {
-    if (!request.auth || this.isVerificationRevoked(request)) return false;
+    if (!this.isAuthenticated(request) || this.isVerificationRevoked(request)) return false;
     if (request.auth.token.isOwner === true) return true;
     if (request.auth.token.role === 'owner' || request.auth.token.role === 'super_admin') return true;
     const email = (request.auth.token.email || '').toLowerCase();
@@ -93,7 +109,7 @@ class RulesSimulator {
   }
 
   isEmailVerified(request) {
-    if (!request.auth || this.isVerificationRevoked(request)) return false;
+    if (!this.isAuthenticated(request) || this.isVerificationRevoked(request)) return false;
     if (request.auth.token.email_verified === true) return true;
     if (this.isOwner(request)) return true;
     const udata = this.getUserData(request);
@@ -101,7 +117,7 @@ class RulesSimulator {
   }
 
   getUserRole(request) {
-    if (!request.auth) return 'unauthenticated';
+    if (!this.isAuthenticated(request)) return 'unauthenticated';
     if (request.auth.token.role) return request.auth.token.role;
     const udata = this.getUserData(request);
     return udata.role || 'patient';
@@ -109,13 +125,13 @@ class RulesSimulator {
 
   isAdmin(request) {
     if (this.isOwner(request)) return true;
-    if (!request.auth) return false;
+    if (!this.isAuthenticated(request)) return false;
     const role = this.getUserRole(request);
     return role === 'clinic_admin' || role === 'super_admin';
   }
 
   isDoctor(request) {
-    if (!request.auth) return false;
+    if (!this.isAuthenticated(request)) return false;
     if (this.isOwner(request)) return true;
     const role = this.getUserRole(request);
     if (role === 'doctor') return true;
@@ -222,7 +238,7 @@ class RulesSimulator {
   }
 
   canUpdateCase(request, currentData, updatedData) {
-    if (!request.auth) return false;
+    if (!this.isAuthenticated(request)) return false;
     if (updatedData.patientId !== currentData.patientId) return false;
     const validStatuses = ['draft', 'submitted', 'triaged', 'assigned', 'under_review', 'more_info_requested', 'approved', 'rejected', 'escalated', 'closed', 'pending'];
     if (!validStatuses.includes(updatedData.status)) return false;
@@ -244,8 +260,8 @@ class RulesSimulator {
 
   // Evaluate /users/{userId}
   canReadUser(request, userId) {
-    if (!request.auth) return false;
-    return request.auth.uid === userId || this.isAdmin(request);
+    if (!this.isAuthenticated(request)) return false;
+    return this.isOwner(request) || request.auth.uid === userId || this.isAdmin(request);
   }
 
   canCreateUser(request, userId, data) {
@@ -952,6 +968,52 @@ runTest("Owner can read ANY medical/clinical report -> ALLOW", () => {
     doctorApproved: false
   };
   assert.strictEqual(sim.canReadReport(req, unreleasedReport), true);
+});
+
+// SECTION K: 🛑 BLOCK SUSPENDED ACCOUNTS
+runTest("Suspended patient cannot read user profile -> DENY", () => {
+  const simSusp = new RulesSimulator({
+    users: {
+      suspended_p1: { role: "patient", email: "p@example.com", suspended: true }
+    }
+  });
+  const req = { auth: simSusp.evalAuth({ uid: "suspended_p1", email: "p@example.com", suspended: true }) };
+  assert.strictEqual(simSusp.canReadUser(req, "suspended_p1"), false);
+});
+
+runTest("Suspended patient cannot create case/assessment -> DENY", () => {
+  const simSusp = new RulesSimulator({
+    users: {
+      suspended_p1: { role: "patient", email: "p@example.com", isSuspended: true }
+    }
+  });
+  const req = {
+    auth: simSusp.evalAuth({ uid: "suspended_p1", email: "p@example.com" }),
+    resource: { data: { patientId: "suspended_p1", oxygenLevel: 98, status: "draft" } }
+  };
+  assert.strictEqual(simSusp.canCreateCase(req), false);
+});
+
+runTest("Suspended doctor cannot review or update cases -> DENY", () => {
+  const simSusp = new RulesSimulator({
+    users: {
+      suspended_doc: { role: "doctor", email: "doc@example.com", status: "suspended" }
+    }
+  });
+  const req = { auth: simSusp.evalAuth({ uid: "suspended_doc", email: "doc@example.com", role: "doctor" }) };
+  const oldData = { patientId: "p_10", status: "submitted", assignedDoctorId: "suspended_doc", oxygenLevel: 98 };
+  const updatedData = { patientId: "p_10", status: "triaged", assignedDoctorId: "suspended_doc", oxygenLevel: 98 };
+  assert.strictEqual(simSusp.canUpdateCase(req, oldData, updatedData), false);
+});
+
+runTest("Active non-suspended patient can read profile -> ALLOW", () => {
+  const simActive = new RulesSimulator({
+    users: {
+      active_p1: { role: "patient", email: "act@example.com", emailVerified: true }
+    }
+  });
+  const req = { auth: simActive.evalAuth({ uid: "active_p1", email: "act@example.com", email_verified: true }) };
+  assert.strictEqual(simActive.canReadUser(req, "active_p1"), true);
 });
 
 console.log(`\n========================================`);
