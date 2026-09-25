@@ -276,6 +276,128 @@ function handleOpenDoctorApply() {
 }
 window.handleOpenDoctorApply = handleOpenDoctorApply;
 
+// =========================================================================
+// 🛡️ CENTRALIZED ROUTE GUARD ENGINE
+// Declarative per-screen guards executed sequentially in showScreen().
+// Each guard returns { allow: true } or { allow: false, redirect: string }
+// =========================================================================
+
+/**
+ * Screens that require an authenticated session.
+ * All screens except these are considered public (e.g. initial patient splash).
+ */
+const AUTH_REQUIRED_SCREENS = [
+  "consent", "profile", "assessment", "pending", "result",
+  "history", "appointments", "feedback", "assistant", "report",
+  "verification", "doctor", "kpi", "admin", "audit"
+];
+
+/**
+ * Screens that require a verified (OTP / admin-verified) account.
+ * Unverified users are redirected to their role default and prompted to verify.
+ */
+const VERIFICATION_REQUIRED_SCREENS = [
+  "assessment", "result", "doctor", "admin", "audit", "kpi", "report"
+];
+
+/**
+ * Screens that require the Medical Privacy Consent to have been accepted.
+ */
+const CONSENT_REQUIRED_SCREENS = ["assessment"];
+
+/**
+ * applyRouteGuards(targetScreen) — runs all guards in priority order.
+ * Returns the screen to actually show (possibly redirected).
+ *
+ * Guard priority order:
+ *   1. Auth guard       — must be logged in
+ *   2. Role guard       — canAccessScreen() RBAC check
+ *   3. Verification     — account must be verified for sensitive screens
+ *   4. Consent          — medical privacy consent for assessment
+ *
+ * All guard results are logged to console for auditability.
+ */
+function applyRouteGuards(targetScreen) {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+
+  // ── GUARD 1: Authentication ────────────────────────────────────────────────
+  const user = (typeof getActiveUser === "function") ? getActiveUser() : (auth && auth.currentUser);
+  if (!user && AUTH_REQUIRED_SCREENS.includes(targetScreen)) {
+    console.warn(`[RouteGuard] 🔒 Auth required for '${targetScreen}'. Redirecting to login.`);
+    if (typeof showToast === "function") {
+      showToast(isEn
+        ? "🔒 Please sign in to access this section."
+        : "🔒 يجب تسجيل الدخول للوصول إلى هذا القسم."
+      );
+    }
+    // Show auth modal / login instead of the screen
+    if (typeof setAuthMode === "function") setAuthMode("signin");
+    if (typeof showAuthModal === "function") showAuthModal();
+    return getRoleDefaultScreen(selectedRole); // stay on safest screen
+  }
+
+  // ── GUARD 2: Role-Based Access Control ────────────────────────────────────
+  if (!canAccessScreen(targetScreen)) {
+    const roleDefault = getRoleDefaultScreen(selectedRole);
+    const screenLabel = (isEn
+      ? (typeof englishTitles !== "undefined" && englishTitles[targetScreen])
+      : (typeof titles !== "undefined" && titles[targetScreen])) || targetScreen;
+    const roleLabel = (isEn
+      ? (typeof englishRoleLabels !== "undefined" && englishRoleLabels[selectedRole])
+      : (typeof roleLabels !== "undefined" && roleLabels[selectedRole])) || selectedRole;
+    console.warn(`[RouteGuard] 🚫 RBAC blocked '${targetScreen}' for role '${selectedRole}'. Redirecting to '${roleDefault}'.`);
+    if (typeof showToast === "function") {
+      showToast(isEn
+        ? `Access denied: '${screenLabel}' is restricted for '${roleLabel}'.`
+        : `تم رفض الوصول: قسم '${screenLabel}' غير مصرح به لدور '${roleLabel}'.`
+      );
+    }
+    return roleDefault;
+  }
+
+  // ── GUARD 3: Account Verification ─────────────────────────────────────────
+  if (VERIFICATION_REQUIRED_SCREENS.includes(targetScreen)) {
+    const isVerified = Boolean(window._isUserVerified);
+    const isOwner = user && (typeof isOwnerUser === "function") && isOwnerUser(user.email || user);
+    if (!isVerified && !isOwner) {
+      console.warn(`[RouteGuard] ⚠️ Verification required for '${targetScreen}'.`);
+      if (typeof openVerifyRequiredModal === "function") {
+        const actionAr = typeof titles !== "undefined" ? (titles[targetScreen] || targetScreen) : targetScreen;
+        const actionEn = typeof englishTitles !== "undefined" ? (englishTitles[targetScreen] || targetScreen) : targetScreen;
+        openVerifyRequiredModal(actionAr, actionEn, "otp");
+      } else if (typeof showToast === "function") {
+        showToast(isEn
+          ? "🔒 Account verification is required to access this section."
+          : "🔒 توثيق وتفعيل الحساب إجباري للوصول إلى هذا القسم."
+        );
+      }
+      return getRoleDefaultScreen(selectedRole);
+    }
+  }
+
+  // ── GUARD 4: Medical Privacy Consent ──────────────────────────────────────
+  if (CONSENT_REQUIRED_SCREENS.includes(targetScreen)) {
+    if (typeof updateAssessmentConsentBadge === "function") updateAssessmentConsentBadge();
+    const hasConsent = (typeof hasAcceptedPrivacyConsent === "function") && hasAcceptedPrivacyConsent();
+    if (!hasConsent) {
+      console.warn("[RouteGuard] 📋 Medical consent required for assessment. Redirecting to consent.");
+      if (typeof showToast === "function") {
+        showToast(isEn
+          ? "Medical Privacy Consent is required before starting assessment."
+          : "الموافقة الطبية وسياسة الخصوصية مطلوبة قبل بدء فحص التنفس."
+        );
+      }
+      return "consent";
+    }
+  }
+
+  // All guards passed — screen is allowed.
+  console.debug(`[RouteGuard] ✅ '${targetScreen}' granted for role '${selectedRole}'.`);
+  return targetScreen;
+}
+window.applyRouteGuards = applyRouteGuards;
+
+
 let verifiedServerRole = null;
 
 async function getVerifiedServerRole(forceRefresh = false) {
@@ -5779,28 +5901,16 @@ window.loadUserProfileData = loadUserProfileData;
 window.saveUserProfileData = saveUserProfileData;
 
 function showScreen(name) {
+  // Reset tempAllowDoctorApplication unless we're going to verification
   if (name !== "verification") {
     tempAllowDoctorApplication = false;
   }
 
-  // Privacy Consent Prerequisite: Assessment strictly requires active consent
-  if (name === "assessment") {
-    updateAssessmentConsentBadge();
-    if (!hasAcceptedPrivacyConsent()) {
-      showToast(currentLanguage === "en"
-        ? "Medical Privacy Consent is required before starting assessment."
-        : "الموافقة الطبية وسياسة الخصوصية مطلوبة قبل بدء فحص التنفس.");
-      name = "consent";
-    }
-  }
-
-  if (!canAccessScreen(name)) {
-    const roleDefaultScreen = getRoleDefaultScreen(selectedRole);
-    const msgEn = `Access Denied: Screen '${englishTitles[name] || name}' is restricted for role '${englishRoleLabels[selectedRole] || selectedRole}'.`;
-    const msgAr = `تم رفض الوصول: قسم '${titles[name] || name}' غير مصرح به لدور '${roleLabels[selectedRole] || selectedRole}'.`;
-    showToast(currentLanguage === "en" ? msgEn : msgAr);
-    console.warn(`[RBAC] Blocked access to screen '${name}' for role '${selectedRole}'. Redirecting to '${roleDefaultScreen}'.`);
-    name = roleDefaultScreen;
+  // ── Run all centralized route guards ──────────────────────────────────────
+  const resolvedName = applyRouteGuards(name);
+  if (resolvedName !== name) {
+    console.warn(`[showScreen] Redirected '${name}' → '${resolvedName}' by route guard.`);
+    name = resolvedName;
   }
 
   try {
@@ -12014,6 +12124,38 @@ showScreen("patient");
 bindScreenNavigation();
 applyLanguage(currentLanguage);
 checkUrlAuthAction();
+
+// ── Hash-Based Deep Link Route Guard ─────────────────────────────────────────
+// Supports URL patterns like index.html#screen=doctor for external deep links.
+// All navigation through hash goes through applyRouteGuards() so guards cannot
+// be bypassed by manually typing a hash into the address bar.
+(function initHashRouting() {
+  function handleHashChange() {
+    const hash = window.location.hash; // e.g. "#screen=doctor" or "#doctor"
+    if (!hash || hash.length <= 1) return;
+    const screenFromHash = hash.startsWith("#screen=")
+      ? hash.slice(8)
+      : hash.slice(1); // strip leading #
+    const knownScreens = Object.keys(
+      typeof ROLE_ALLOWED_SCREENS !== "undefined" ? ROLE_ALLOWED_SCREENS[ROLES.SUPER_ADMIN] || {} : {}
+    );
+    // Only navigate if it looks like a known screen name (not an anchor ID)
+    const allScreenNames = [
+      "patient","consent","profile","assessment","pending","result",
+      "history","appointments","feedback","assistant","report",
+      "verification","doctor","kpi","admin","audit"
+    ];
+    if (allScreenNames.includes(screenFromHash)) {
+      console.info(`[HashRouter] Hash navigation to '${screenFromHash}'.`);
+      showScreen(screenFromHash);
+      // Clear the hash so repeated back-button presses don't re-trigger
+      history.replaceState(null, "", window.location.pathname + window.location.search);
+    }
+  }
+  window.addEventListener("hashchange", handleHashChange, false);
+  // Run once on load in case URL already has a hash
+  if (window.location.hash) handleHashChange();
+})();
 
 function updateAvatar(user) {
   const sidebarAvatar = document.getElementById("sidebarAvatar");
