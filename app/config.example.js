@@ -16,6 +16,14 @@ window.HEALTH_VIBE_CONFIG = {
   // Debug logging
   debug: true,
 
+  // Admin access configuration
+  adminAccess: {
+    ownerEmails: [
+      "admin@example.com"
+    ],
+    revokedVerificationEmails: []
+  },
+
   // Local Firebase Emulators (development only)
   emulators: {
     enabled: false,

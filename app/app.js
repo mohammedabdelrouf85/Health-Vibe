@@ -521,21 +521,39 @@ function handleServerPermissionDenied(err, actionContext = "") {
   return false;
 }
 
-const OWNER_EMAILS = [
+const DEFAULT_OWNER_EMAILS = [
   "mohammedabdelrouf85@gmail.com",
   "raouf.work@gmail.com",
   "admin@healthvibe.ai",
   "badr.ahmed.biotech@gmail.com"
 ];
 
-const REVOKED_VERIFICATION_EMAILS = [
+const DEFAULT_REVOKED_VERIFICATION_EMAILS = [
   "devilunderurwater@gmail.com"
 ];
+
+function getConfiguredEmailList(configKey, fallback) {
+  const config = typeof window !== "undefined" ? window.HEALTH_VIBE_CONFIG : null;
+  const values = config && config.adminAccess && Array.isArray(config.adminAccess[configKey])
+    ? config.adminAccess[configKey]
+    : fallback;
+  return values
+    .map(email => String(email || "").trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function getOwnerEmails() {
+  return getConfiguredEmailList("ownerEmails", DEFAULT_OWNER_EMAILS);
+}
+
+function getRevokedVerificationEmails() {
+  return getConfiguredEmailList("revokedVerificationEmails", DEFAULT_REVOKED_VERIFICATION_EMAILS);
+}
 
 function isOwnerUser(userOrEmail) {
   if (!userOrEmail) return false;
   const email = (typeof userOrEmail === "string" ? userOrEmail : (userOrEmail.email || "")).trim().toLowerCase();
-  if (OWNER_EMAILS.some(o => o.toLowerCase() === email)) return true;
+  if (getOwnerEmails().includes(email)) return true;
   if (typeof userOrEmail === "object" && userOrEmail) {
     if (userOrEmail.isOwner === true) return true;
     if (userOrEmail.role === "owner" || userOrEmail.role === "super_admin") return true;
@@ -546,7 +564,7 @@ function isOwnerUser(userOrEmail) {
 function isVerificationRevoked(userOrEmail) {
   if (!userOrEmail) return false;
   const email = (typeof userOrEmail === "string" ? userOrEmail : (userOrEmail.email || "")).trim().toLowerCase();
-  return REVOKED_VERIFICATION_EMAILS.includes(email);
+  return getRevokedVerificationEmails().includes(email);
 }
 
 const roleLabels = {

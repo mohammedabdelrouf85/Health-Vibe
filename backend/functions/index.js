@@ -10,12 +10,33 @@ if (!admin.apps.length) {
   admin.initializeApp();
 }
 
-const OWNER_EMAILS = [
+const DEFAULT_OWNER_EMAILS = [
   'mohammedabdelrouf85@gmail.com',
   'raouf.work@gmail.com',
   'admin@healthvibe.ai',
   'badr.ahmed.biotech@gmail.com'
 ];
+
+function parseEmailList(value, fallback) {
+  const source = value ? String(value).split(',') : fallback;
+  return source
+    .map(email => String(email || '').trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function getFunctionsConfigValue(path, fallback = '') {
+  try {
+    const config = functions.config();
+    return path.split('.').reduce((acc, key) => (acc && acc[key] !== undefined ? acc[key] : undefined), config) || fallback;
+  } catch (err) {
+    return fallback;
+  }
+}
+
+const OWNER_EMAILS = parseEmailList(
+  process.env.OWNER_EMAILS || process.env.ADMIN_OWNER_EMAILS || getFunctionsConfigValue('admin.owner_emails'),
+  DEFAULT_OWNER_EMAILS
+);
 const ROLES = {
   PATIENT: 'patient',
   DOCTOR_PENDING: 'doctor_pending',

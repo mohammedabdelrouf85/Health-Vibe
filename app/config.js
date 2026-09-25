@@ -95,6 +95,18 @@
   const activeEnvName = resolveEnvironment();
   const activeConfig = ENVIRONMENTS[activeEnvName] || ENVIRONMENTS.production;
 
+  const ADMIN_ACCESS = {
+    ownerEmails: [
+      "mohammedabdelrouf85@gmail.com",
+      "raouf.work@gmail.com",
+      "admin@healthvibe.ai",
+      "badr.ahmed.biotech@gmail.com"
+    ],
+    revokedVerificationEmails: [
+      "devilunderurwater@gmail.com"
+    ]
+  };
+
   // Check emulator toggle via URL param or localStorage in dev
   if (typeof window !== "undefined" && activeEnvName === "development") {
     try {
@@ -114,6 +126,7 @@
     debug: activeConfig.debug,
     emulators: activeConfig.emulators,
     appCheck: activeConfig.appCheck,
+    adminAccess: ADMIN_ACCESS,
     firebase: activeConfig.firebase,
 
     // Environment dictionary & details

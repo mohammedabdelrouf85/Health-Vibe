@@ -19,6 +19,29 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
+    function adminAccessConfigExists() {
+      return exists(/databases/$(database)/documents/system_config/admin_access);
+    }
+
+    function getAdminAccessConfig() {
+      return get(/databases/$(database)/documents/system_config/admin_access).data;
+    }
+
+    function isConfiguredOwnerEmail() {
+      return isAuthenticated() &&
+             'email' in request.auth.token &&
+             ((adminAccessConfigExists() &&
+               'ownerEmails' in getAdminAccessConfig() &&
+               getAdminAccessConfig().ownerEmails is list &&
+               request.auth.token.email.lower() in getAdminAccessConfig().ownerEmails) ||
+              request.auth.token.email.lower() in [
+                'mohammedabdelrouf85@gmail.com',
+                'raouf.work@gmail.com',
+                'admin@healthvibe.ai',
+                'badr.ahmed.biotech@gmail.com'
+              ]);
+    }
+
     // 🛑 BLOCK SUSPENDED ACCOUNTS
     // Blocks all operations for accounts flagged as suspended in Auth claims or user documents
     function isSuspended() {
@@ -56,12 +79,7 @@ service cloud.firestore {
              !isVerificationRevoked() &&
              (('isOwner' in request.auth.token && request.auth.token.isOwner == true) ||
               ('role' in request.auth.token && (request.auth.token.role == 'owner' || request.auth.token.role == 'super_admin')) ||
-              ('email' in request.auth.token && (
-                request.auth.token.email.lower() == 'mohammedabdelrouf85@gmail.com' ||
-                request.auth.token.email.lower() == 'raouf.work@gmail.com' ||
-                request.auth.token.email.lower() == 'admin@healthvibe.ai' ||
-                request.auth.token.email.lower() == 'badr.ahmed.biotech@gmail.com'
-              )) ||
+              isConfiguredOwnerEmail() ||
               (hasUserDoc() && (
                 ('isOwner' in getUserData() && getUserData().isOwner == true) ||
                 ('role' in getUserData() && (getUserData().role == 'owner' || getUserData().role == 'super_admin'))
@@ -479,6 +497,10 @@ service cloud.firestore {
     match /clinic_leads/{leadId} {
       allow read, write: if isOwner() || isAdmin();
       allow create: if true;
+    }
+
+    match /system_config/admin_access {
+      allow read, write: if isOwner();
     }
 
     // =========================================================================

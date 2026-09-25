@@ -26,6 +26,7 @@ const requiredMatches = [
   "match /ai_model_metrics/{metricId}",
   "match /appointments/{appointmentId}",
   "match /email_notifications/{notificationId}",
+  "match /system_config/admin_access",
   "match /{document=**}"
 ];
 
@@ -54,6 +55,7 @@ console.log("✓ static rule structure check: firestore.rules contains all requi
 class RulesSimulator {
   constructor(dbState = {}) {
     this.users = dbState.users || {};
+    this.systemConfig = dbState.system_config || {};
   }
 
   evalAuth(auth) {
@@ -96,8 +98,7 @@ class RulesSimulator {
     if (!this.isAuthenticated(request) || this.isVerificationRevoked(request)) return false;
     if (request.auth.token.isOwner === true) return true;
     if (request.auth.token.role === 'owner' || request.auth.token.role === 'super_admin') return true;
-    const email = (request.auth.token.email || '').toLowerCase();
-    if (['mohammedabdelrouf85@gmail.com', 'raouf.work@gmail.com', 'admin@healthvibe.ai', 'badr.ahmed.biotech@gmail.com'].includes(email)) return true;
+    if (this.isConfiguredOwnerEmail(request)) return true;
     const udata = this.getUserData(request);
     return udata.isOwner === true || udata.role === 'owner' || udata.role === 'super_admin';
   }
@@ -108,6 +109,18 @@ class RulesSimulator {
 
   getUserData(request) {
     return (request.auth && this.users[request.auth.uid]) || {};
+  }
+
+  getAdminAccessConfig() {
+    return this.systemConfig.admin_access || {};
+  }
+
+  isConfiguredOwnerEmail(request) {
+    if (!request.auth) return false;
+    const email = (request.auth.token.email || '').toLowerCase();
+    const configured = this.getAdminAccessConfig().ownerEmails;
+    if (Array.isArray(configured) && configured.map(item => String(item).toLowerCase()).includes(email)) return true;
+    return ['mohammedabdelrouf85@gmail.com', 'raouf.work@gmail.com', 'admin@healthvibe.ai', 'badr.ahmed.biotech@gmail.com'].includes(email);
   }
 
   isEmailVerified(request) {
@@ -1036,6 +1049,25 @@ runTest("Owner can read ANY clinical case without restriction -> ALLOW", () => {
     officialDiagnosis: "Confidential Finding"
   };
   assert.strictEqual(sim.canReadCase(req, unapprovedCase), true);
+});
+
+runTest("Configured owner email can read ANY clinical case -> ALLOW", () => {
+  const simConfigured = new RulesSimulator({
+    system_config: {
+      admin_access: {
+        ownerEmails: ["ops.owner@example.com"]
+      }
+    }
+  });
+  const req = {
+    auth: simConfigured.evalAuth({ uid: "configured_owner", email: "ops.owner@example.com" })
+  };
+  const unapprovedCase = {
+    patientId: "random_patient_99",
+    status: "draft",
+    officialDiagnosis: "Confidential Finding"
+  };
+  assert.strictEqual(simConfigured.canReadCase(req, unapprovedCase), true);
 });
 
 runTest("Owner can update privileged role and isOwner fields on any user doc -> ALLOW", () => {

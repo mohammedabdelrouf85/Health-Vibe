@@ -19,6 +19,29 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
+    function adminAccessConfigExists() {
+      return exists(/databases/$(database)/documents/system_config/admin_access);
+    }
+
+    function getAdminAccessConfig() {
+      return get(/databases/$(database)/documents/system_config/admin_access).data;
+    }
+
+    function isConfiguredOwnerEmail() {
+      return isAuthenticated() &&
+             'email' in request.auth.token &&
+             ((adminAccessConfigExists() &&
+               'ownerEmails' in getAdminAccessConfig() &&
+               getAdminAccessConfig().ownerEmails is list &&
+               request.auth.token.email.lower() in getAdminAccessConfig().ownerEmails) ||
+              request.auth.token.email.lower() in [
+                'mohammedabdelrouf85@gmail.com',
+                'raouf.work@gmail.com',
+                'admin@healthvibe.ai',
+                'badr.ahmed.biotech@gmail.com'
+              ]);
+    }
+
     // 🛑 BLOCK SUSPENDED ACCOUNTS
     // Blocks all operations for accounts flagged as suspended in Auth claims or user documents
     function isSuspended() {
@@ -56,12 +79,7 @@ service cloud.firestore {
              !isVerificationRevoked() &&
              (('isOwner' in request.auth.token && request.auth.token.isOwner == true) ||
               ('role' in request.auth.token && (request.auth.token.role == 'owner' || request.auth.token.role == 'super_admin')) ||
-              ('email' in request.auth.token && (
-                request.auth.token.email.lower() == 'mohammedabdelrouf85@gmail.com' ||
-                request.auth.token.email.lower() == 'raouf.work@gmail.com' ||
-                request.auth.token.email.lower() == 'admin@healthvibe.ai' ||
-                request.auth.token.email.lower() == 'badr.ahmed.biotech@gmail.com'
-              )) ||
+              isConfiguredOwnerEmail() ||
               (hasUserDoc() && (
                 ('isOwner' in getUserData() && getUserData().isOwner == true) ||
                 ('role' in getUserData() && (getUserData().role == 'owner' || getUserData().role == 'super_admin'))
@@ -92,6 +110,18 @@ service cloud.firestore {
       return isOwner() || (isAuthenticated() && (getUserRole() == 'clinic_admin' || getUserRole() == 'super_admin'));
     }
 
+    function isPatient() {
+      return isAuthenticated() && getUserRole() == 'patient';
+    }
+
+    function isClinicAdmin() {
+      return isAuthenticated() && getUserRole() == 'clinic_admin';
+    }
+
+    function isSuperAdmin() {
+      return isOwner() || (isAuthenticated() && getUserRole() == 'super_admin');
+    }
+
     function isSupport() {
       return isAuthenticated() && getUserRole() == 'support';
     }
@@ -108,9 +138,22 @@ service cloud.firestore {
       );
     }
 
+    function isVerifiedDoctor() {
+      return isDoctor() && (
+        isOwner() ||
+        ('verifiedDoctor' in request.auth.token && request.auth.token.verifiedDoctor == true) ||
+        ('doctorVerified' in request.auth.token && request.auth.token.doctorVerified == true) ||
+        (hasUserDoc() && (
+          ('verifiedDoctor' in getUserData() && getUserData().verifiedDoctor == true) ||
+          ('doctorVerified' in getUserData() && getUserData().doctorVerified == true) ||
+          ('doctorApplicationStatus' in getUserData() && getUserData().doctorApplicationStatus == 'approved')
+        ))
+      );
+    }
+
     // Doctor can access cases assigned to their UID or Owner has universal access
     function isAssignedDoctor() {
-      return isOwner() || (isDoctor() && (
+      return isOwner() || (isVerifiedDoctor() && (
         ('assignedDoctorId' in resource.data && resource.data.assignedDoctorId == request.auth.uid) ||
         ('doctorId' in resource.data && resource.data.doctorId == request.auth.uid) ||
         ('doctorUid' in resource.data && resource.data.doctorUid == request.auth.uid) ||
@@ -250,7 +293,7 @@ service cloud.firestore {
       return !('doctorNotes' in data) &&
              !('clinicalImpression' in data) &&
              !('officialDiagnosis' in data) &&
-             !('doctorApproved' in data || data.doctorApproved == false) &&
+             (!('doctorApproved' in data) || data.doctorApproved == false) &&
              !('approvedAt' in data) &&
              !('assignedDoctorId' in data);
     }
@@ -279,6 +322,23 @@ service cloud.firestore {
         'closed',
         'pending'
       ];
+    }
+
+    function isRoleMatchedToRequester(data) {
+      return ('role' in data) &&
+             ((data.role == 'patient' && isPatient()) ||
+              (data.role == 'doctor' && isVerifiedDoctor()) ||
+              (data.role == 'clinic_admin' && isClinicAdmin()) ||
+              (data.role == 'super_admin' && isSuperAdmin()));
+    }
+
+    function isDoctorLinkedRecord(data) {
+      return isOwner() || (isVerifiedDoctor() && (
+        ('assignedDoctorId' in data && data.assignedDoctorId == request.auth.uid) ||
+        ('doctorId' in data && data.doctorId == request.auth.uid) ||
+        ('doctorUid' in data && data.doctorUid == request.auth.uid) ||
+        ('approvingDoctorId' in data && data.approvingDoctorId == request.auth.uid)
+      ));
     }
 
     // =========================================================================
@@ -371,7 +431,7 @@ service cloud.firestore {
       allow read, write: if isOwner();
       allow read: if isAuthenticated() && (
         isAdmin() ||
-        isDoctor() ||
+        isDoctorLinkedRecord(resource.data) ||
         resource.data.patientId == request.auth.uid
       );
 
@@ -381,7 +441,7 @@ service cloud.firestore {
 
       allow update: if isAuthenticated() && (
         isAdmin() ||
-        isDoctor() ||
+        isDoctorLinkedRecord(resource.data) ||
         (resource.data.patientId == request.auth.uid && request.resource.data.patientId == request.auth.uid)
       );
 
@@ -398,7 +458,7 @@ service cloud.firestore {
       allow read, write: if isOwner();
       allow read: if isAuthenticated() && (
         isAdmin() ||
-        isDoctor() ||
+        isDoctorLinkedRecord(resource.data) ||
         resource.data.patientId == request.auth.uid ||
         (request.auth.token.email != null && resource.data.recipient == request.auth.token.email)
       );
@@ -412,7 +472,7 @@ service cloud.firestore {
       allow read, write: if isOwner();
       allow read: if isAuthenticated() && (
         isAdmin() ||
-        isDoctor() ||
+        isDoctorLinkedRecord(resource.data) ||
         resource.data.userId == request.auth.uid ||
         resource.data.isPublic == true
       );
@@ -423,6 +483,7 @@ service cloud.firestore {
                     request.resource.data.rating >= 1 &&
                     request.resource.data.rating <= 5 &&
                     request.resource.data.role in ['patient', 'doctor', 'clinic_admin', 'super_admin'] &&
+                    isRoleMatchedToRequester(request.resource.data) &&
                     request.resource.data.comment is string &&
                     request.resource.data.comment.size() > 0 &&
                     request.resource.data.comment.size() <= 2000;
@@ -436,6 +497,10 @@ service cloud.firestore {
     match /clinic_leads/{leadId} {
       allow read, write: if isOwner() || isAdmin();
       allow create: if true;
+    }
+
+    match /system_config/admin_access {
+      allow read, write: if isOwner();
     }
 
     // =========================================================================

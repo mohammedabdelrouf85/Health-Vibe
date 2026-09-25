@@ -506,21 +506,30 @@ if (!admin.apps.length) {
 
 const db = admin.apps.length ? admin.firestore() : null;
 
+function parseEmailList(value, fallback) {
+  const source = value ? String(value).split(',') : fallback;
+  return source
+    .map(email => String(email || '').trim().toLowerCase())
+    .filter(Boolean);
+}
+
 // System Owner Emails (Supreme administrative rights across all clinical, system, and user surfaces)
-const OWNER_EMAIL = "mohammedabdelrouf85@gmail.com";
-const OWNER_EMAILS = [
+const DEFAULT_OWNER_EMAILS = [
   "mohammedabdelrouf85@gmail.com",
   "raouf.work@gmail.com",
   "admin@healthvibe.ai",
   "badr.ahmed.biotech@gmail.com"
 ];
+const OWNER_EMAILS = parseEmailList(process.env.OWNER_EMAILS || process.env.ADMIN_OWNER_EMAILS, DEFAULT_OWNER_EMAILS);
+const OWNER_EMAIL = OWNER_EMAILS[0] || "";
 function isOwnerEmail(email) {
   if (!email) return false;
   return OWNER_EMAILS.includes(String(email).trim().toLowerCase());
 }
-const REVOKED_VERIFICATION_EMAILS = new Set([
+const DEFAULT_REVOKED_VERIFICATION_EMAILS = [
   "devilunderurwater@gmail.com"
-]);
+];
+const REVOKED_VERIFICATION_EMAILS = new Set(parseEmailList(process.env.REVOKED_VERIFICATION_EMAILS, DEFAULT_REVOKED_VERIFICATION_EMAILS));
 const REPORT_VERSION = '1.0.0';
 const MODEL_VERSION = 'HealthVibe-AI-v1.0';
 const ROLES = {
