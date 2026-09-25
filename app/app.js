@@ -10258,12 +10258,12 @@ function toggleTheme() {
 }
 
 function initTheme() {
-  let theme = "light";
+  let theme = "dark";
   try {
-    const themeDefaultVersion = "2026-09-25-light-default";
+    const themeDefaultVersion = "2026-09-25-dark-default";
     if (localStorage.getItem("hv_theme_default_version") !== themeDefaultVersion) {
       localStorage.setItem("hv_theme_default_version", themeDefaultVersion);
-      localStorage.setItem("hv_theme", "light");
+      localStorage.setItem("hv_theme", "dark");
     }
     const saved = localStorage.getItem("hv_theme");
     if (saved) theme = saved;
