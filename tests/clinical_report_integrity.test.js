@@ -10,7 +10,7 @@ const record = { id: 'case-clinical', patientId: 'patient-1', assignedDoctorId: 
 let application = { userId: 'doctor-1', status: 'approved', name: 'Verified Doctor', licenseNumber: 'VERIFIED-LICENSE', specialty: 'Recorded specialty', clinic: 'Recorded clinic' };
 let writes = 0;
 const database = { collection: name => ({
-  where: (field, op, uid) => ({ get: async () => ({ docs: application && application.userId === uid ? [{ id: 'verified-app', data: () => application }] : [] }) }),
+  where: (field, op, uid) => ({ get: async () => ({ docs: name === 'cases' ? [{ id: record.id, data: () => record }] : (application && application.userId === uid ? [{ id: 'verified-app', data: () => application }] : []) }) }),
   doc: id => ({
     get: async () => ({ exists: name === 'cases' && id === record.id, data: () => record }),
     update: async data => { writes++; Object.assign(record, data); }
@@ -31,7 +31,7 @@ vm.createContext(serverContext);
 vm.runInContext(fs.readFileSync(serverPath, 'utf8'), serverContext);
 const escapeHtml = value => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const elements = {};
-for (const name of ['reportContainer', 'chatInput', 'chatMessages']) elements[name] = { innerHTML: '', value: '', children: [], appendChild(child) { this.children.push(child); } };
+for (const name of ['reportContainer', 'resultContainer', 'chatInput', 'chatMessages']) elements[name] = { innerHTML: '', value: '', children: [], appendChild(child) { this.children.push(child); } };
 const client = {
   console, URL, currentLanguage: 'ar', selectedRole: 'patient',
   auth: { currentUser: { uid: 'patient-1', email: 'patient@example.test' } },
@@ -41,7 +41,7 @@ const client = {
   db: database, escapeHtml, normalizeRole: value => value,
   ROLES: { DOCTOR: 'doctor', PATIENT: 'patient', SUPER_ADMIN: 'super_admin' },
   CASE_STATUS: { APPROVED: 'approved', SUBMITTED: 'submitted', REJECTED: 'rejected', MORE_INFO_REQUESTED: 'more_info_requested' },
-  isTestOrDemoRecord: () => false, isOwnerUser: () => false, isAdminRole: () => false, isSupportRole: () => false, isSupportUser: () => false,
+  isRealProductionRecord: () => true, toMillis: () => 0, getCaseStatusMeta: () => ({ icon: '', en: 'Pending', ar: 'قيد المراجعة' }), isTestOrDemoRecord: () => false, isOwnerUser: () => false, isAdminRole: () => false, isSupportRole: () => false, isSupportUser: () => false,
   isCaseApprovedForPatient: c => c.status === 'approved' && c.doctorApproved === true,
   maskUnapprovedPatientCase: c => c,
   REPORT_VERSION: '1', MODEL_VERSION: '1',
@@ -59,6 +59,7 @@ function include(start, end) {
 }
 include('function recordedClinicalText', 'window.setDoctorQueueFilter');
 include('async function renderReportScreen', 'async function renderResultScreen');
+include('async function renderResultScreen', 'async function renderPatientHistory');
 include('async function getLatestApprovedReportForAssistant', 'async function renderAssistantScreen');
 include('async function handleSendChatMessage', 'window.sendAssistantQuickPrompt');
 include('window.generateAndApproveReport =', 'window.openCaseReport =');
@@ -114,6 +115,12 @@ include('window.generateAndApproveReport =', 'window.openCaseReport =');
     record.recommendations = [];
     assert.equal(client.getRecordedClinicalContent(record, false).diag, 'غير مسجل');
     assert.equal(client.getRecordedClinicalContent(record, false).recs[0], 'غير مسجل');
+    await client.renderResultScreen();
+    assert.ok(elements.resultContainer.innerHTML.includes('Not recorded'));
+    assert.doesNotMatch(elements.resultContainer.innerHTML, /Monitor oxygen level twice daily|Follow-up with your doctor within 24-48/);
+    delete record.oxygenLevel;
+    await client.renderReportScreen(record.id);
+    assert.doesNotMatch(elements.reportContainer.innerHTML, /95%|3 Days|Optimal Normal/);
     record.medications = 'Doctor recorded medication only';
     await client.renderReportScreen(record.id);
     assert.ok(elements.reportContainer.innerHTML.includes(record.medications));
@@ -126,6 +133,11 @@ include('window.generateAndApproveReport =', 'window.openCaseReport =');
     result = await request('/api/doctor/approve-clinical-case', 'doctor-1', approval);
     assert.equal(result.status, 403);
     assert.equal(writes, before);
+    // Unapproved records cannot expose diagnosis or medication in the assistant.
+    client.evaluateClinicalGuardrails = () => ({ triggered: false });
+    elements.chatInput.value = 'medication';
+    await client.handleSendChatMessage();
+    assert.ok(!elements.chatMessages.children.at(-1).innerHTML.includes('Doctor recorded medication only'));
     // Approval UI never fills empty medication fields automatically.
     let submitted;
     Object.assign(client, { enforcePermission: () => true, PERMISSIONS: { APPROVE_CASE: 'approve' }, showToast() {}, updateCaseStatus: async (...args) => { submitted = args; return false; } });
@@ -134,6 +146,15 @@ include('window.generateAndApproveReport =', 'window.openCaseReport =');
     elements.doctorRecommendationsInput = { value: 'Recorded recommendation' };
     await client.window.generateAndApproveReport(record.id);
     assert.equal(submitted[3].medications, '');
+    // Backend failure must never fall back to a direct client approval write.
+    include('async function updateCaseStatus', 'let activeCaseId');
+    client.PERMISSIONS.REVIEW_CASE = 'review';
+    client.callBackend = async () => { throw new Error('Backend unavailable'); };
+    client.handleServerPermissionDenied = () => false;
+    client.getAuthErrorMessage = err => err.message;
+    const beforeFailure = writes;
+    assert.equal(await client.updateCaseStatus(record.id, 'approved', 'Recorded note', { clinicalDiagnosis: 'Recorded diagnosis', recommendations: ['Recorded instruction'] }), false);
+    assert.equal(writes, beforeFailure);
     const { buildResultReadyEmail } = backendRequire('./notification-service');
     const email = buildResultReadyEmail({ caseId: record.id, medications: '', recommendations: [] });
     assert.ok(email.html.includes('غير مسجل'));

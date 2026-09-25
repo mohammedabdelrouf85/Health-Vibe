@@ -6409,7 +6409,7 @@ async function renderReportScreen(targetCaseId = null) {
         docs = fallbackCases;
       }
       const validDocs = docs
-        .filter(c => isRealProductionRecord(c) && (typeof c.o2 === "number" || typeof c.oxygenLevel === "number"))
+        .filter(c => isRealProductionRecord(c))
         .sort((a, b) => (toMillis(b.submittedAt || b.createdAt || b.updatedAt) || 0) - (toMillis(a.submittedAt || a.createdAt || a.updatedAt) || 0));
 
       if (validDocs.length > 0) {
@@ -6660,7 +6660,7 @@ async function renderReportScreen(targetCaseId = null) {
     const ruleScorePoints = typeof caseData.assessment?.aiTriage?.ruleScorePoints === 'number'
       ? caseData.assessment.aiTriage.ruleScorePoints
       : (typeof caseData.ruleScorePoints === 'number' ? caseData.ruleScorePoints : missing);
-    const rawPatientName = caseData.name || caseData.patientName || (user ? (user.displayName || user.email) : (isEn ? "Patient" : "مريض"));
+    const rawPatientName = recordedClinicalText(caseData.name || caseData.patientName, isEn);
     const patientName = isSupport
       ? (isEn ? `Patient #${caseData.id.slice(-6).toUpperCase()} (Identity Masked)` : `مريض #${caseData.id.slice(-6).toUpperCase()} (الاسم محجوب لدواعي الخصوصية)`)
       : rawPatientName;
@@ -6810,12 +6810,12 @@ async function renderReportScreen(targetCaseId = null) {
           <div>
             <span style="font-size: 11.5px; color: var(--muted); display: block;">${isEn ? "Patient Name" : "اسم المريض"}</span>
             <strong style="font-size: 13.5px; color: var(--ink);">${patientName}</strong>
-            ${caseData.patientAge || caseData.age ? `<small style="display: block; color: var(--muted); font-size: 11px;">${isEn ? "Age:" : "العمر:"} ${caseData.patientAge || caseData.age} ${isEn ? "yrs" : "سنة"}</small>` : ''}
+            ${`<small style="display: block; color: var(--muted); font-size: 11px;">${isEn ? "Age:" : "العمر:"} ${escapeHtml(recordedClinicalText(String(caseData.patientAge ?? caseData.age ?? ""), isEn))} ${caseData.patientAge != null || caseData.age != null ? (isEn ? "yrs" : "سنة") : ""}</small>`}
           </div>
           <div>
             <span style="font-size: 11.5px; color: var(--muted); display: block;">${isEn ? "Patient Phone / Contact" : "هاتف المريض"}</span>
-            <strong style="font-size: 13px; color: var(--ink);">${isSupport ? '🔒' : (caseData.patientPhone || caseData.phone || (user && user.phoneNumber) || '--')}</strong>
-            <small style="display: block; color: var(--muted); font-size: 11px;">${isSupport ? '' : (caseData.patientEmail || caseData.userEmail || (user && user.email) || '')}</small>
+            <strong style="font-size: 13px; color: var(--ink);">${isSupport ? '🔒' : escapeHtml(recordedClinicalText(caseData.patientPhone || caseData.phone, isEn))}</strong>
+            <small style="display: block; color: var(--muted); font-size: 11px;">${isSupport ? '' : escapeHtml(recordedClinicalText(caseData.patientEmail || caseData.userEmail, isEn))}</small>
           </div>
           <div>
             <span style="font-size: 11.5px; color: var(--muted); display: block;">${isEn ? "Attending Physician" : "الطبيب المعتمد"}</span>
@@ -7091,7 +7091,7 @@ async function renderResultScreen() {
     }
 
     const validDocs = docs
-      .filter(c => isRealProductionRecord(c) && (typeof c.o2 === "number" || typeof c.oxygenLevel === "number"))
+      .filter(c => isRealProductionRecord(c))
       .sort((a, b) => (toMillis(b.submittedAt || b.createdAt || b.updatedAt) || 0) - (toMillis(a.submittedAt || a.createdAt || a.updatedAt) || 0));
 
     if (validDocs.length === 0) {
