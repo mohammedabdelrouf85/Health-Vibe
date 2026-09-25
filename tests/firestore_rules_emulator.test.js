@@ -65,6 +65,8 @@ class RulesSimulator {
         email_verified: Boolean(auth.email_verified),
         isOwner: Boolean(auth.isOwner),
         role: auth.role || null,
+        verifiedDoctor: Boolean(auth.verifiedDoctor),
+        doctorVerified: Boolean(auth.doctorVerified),
         suspended: Boolean(auth.suspended),
         isSuspended: Boolean(auth.isSuspended),
         status: auth.status || null,
@@ -130,6 +132,18 @@ class RulesSimulator {
     return role === 'clinic_admin' || role === 'super_admin';
   }
 
+  isPatient(request) {
+    return this.isAuthenticated(request) && this.getUserRole(request) === 'patient';
+  }
+
+  isClinicAdmin(request) {
+    return this.isAuthenticated(request) && this.getUserRole(request) === 'clinic_admin';
+  }
+
+  isSuperAdmin(request) {
+    return this.isOwner(request) || (this.isAuthenticated(request) && this.getUserRole(request) === 'super_admin');
+  }
+
   isDoctor(request) {
     if (!this.isAuthenticated(request)) return false;
     if (this.isOwner(request)) return true;
@@ -139,13 +153,34 @@ class RulesSimulator {
     return udata.role === 'doctor' || udata.verifiedDoctor === true;
   }
 
-  isAssignedDoctor(request, resourceData) {
+  isVerifiedDoctor(request) {
     if (!this.isDoctor(request)) return false;
+    if (this.isOwner(request)) return true;
+    if (request.auth.token.verifiedDoctor === true || request.auth.token.doctorVerified === true) return true;
+    const udata = this.getUserData(request);
+    return udata.verifiedDoctor === true || udata.doctorVerified === true || udata.doctorApplicationStatus === 'approved';
+  }
+
+  isAssignedDoctor(request, resourceData) {
+    if (!this.isVerifiedDoctor(request)) return false;
     const uid = request.auth.uid;
     return resourceData.assignedDoctorId === uid ||
            resourceData.doctorId === uid ||
            resourceData.doctorUid === uid ||
            resourceData.approvingDoctorId === uid;
+  }
+
+  isDoctorLinkedRecord(request, resourceData) {
+    return this.isAssignedDoctor(request, resourceData);
+  }
+
+  isRoleMatchedToRequester(request, data) {
+    if (!data.role) return false;
+    if (data.role === 'patient') return this.isPatient(request);
+    if (data.role === 'doctor') return this.isVerifiedDoctor(request);
+    if (data.role === 'clinic_admin') return this.isClinicAdmin(request);
+    if (data.role === 'super_admin') return this.isSuperAdmin(request);
+    return false;
   }
 
   isValidOxygen(data) {
@@ -303,7 +338,7 @@ class RulesSimulator {
   // Evaluate /appointments/{appointmentId}
   canReadAppointment(request, resourceData) {
     if (!request.auth) return false;
-    if (this.isAdmin(request) || this.isDoctor(request)) return true;
+    if (this.isAdmin(request) || this.isDoctorLinkedRecord(request, resourceData)) return true;
     return resourceData.patientId === request.auth.uid;
   }
 
@@ -315,7 +350,7 @@ class RulesSimulator {
 
   canUpdateAppointment(request, resourceData, updatedData) {
     if (!request.auth) return false;
-    if (this.isAdmin(request) || this.isDoctor(request)) return true;
+    if (this.isAdmin(request) || this.isDoctorLinkedRecord(request, resourceData)) return true;
     return resourceData.patientId === request.auth.uid && updatedData.patientId === request.auth.uid;
   }
 
@@ -328,7 +363,7 @@ class RulesSimulator {
   // Evaluate /email_notifications/{notificationId}
   canReadEmailNotification(request, resourceData) {
     if (!request.auth) return false;
-    if (this.isAdmin(request) || this.isDoctor(request)) return true;
+    if (this.isAdmin(request) || this.isDoctorLinkedRecord(request, resourceData)) return true;
     return resourceData.patientId === request.auth.uid || Boolean(request.auth.token && request.auth.token.email && resourceData.recipient === request.auth.token.email);
   }
 
@@ -339,7 +374,7 @@ class RulesSimulator {
   // Evaluate /feedbacks/{feedbackId}
   canReadFeedback(request, resourceData) {
     if (!request.auth) return false;
-    if (this.isAdmin(request) || this.isDoctor(request)) return true;
+    if (this.isAdmin(request) || this.isDoctorLinkedRecord(request, resourceData)) return true;
     if (resourceData.userId === request.auth.uid) return true;
     return resourceData.isPublic === true;
   }
@@ -349,6 +384,7 @@ class RulesSimulator {
     if (resourceData.userId !== request.auth.uid) return false;
     if (typeof resourceData.rating !== "number" || resourceData.rating < 1 || resourceData.rating > 5) return false;
     if (!["patient", "doctor", "clinic_admin", "super_admin"].includes(resourceData.role)) return false;
+    if (!this.isRoleMatchedToRequester(request, resourceData)) return false;
     if (typeof resourceData.comment !== "string" || resourceData.comment.length === 0 || resourceData.comment.length > 2000) return false;
     return true;
   }
@@ -764,16 +800,29 @@ runTest("Patient attempts to read another patient's appointment -> DENY", () => 
   assert.strictEqual(sim.canReadAppointment(req, apptDoc), false);
 });
 
-runTest("Doctor reads any clinical appointment -> ALLOW", () => {
+runTest("Assigned doctor reads linked clinical appointment -> ALLOW", () => {
   const req = {
     auth: sim.evalAuth({ uid: "user_doctor_assigned", role: "doctor", verifiedDoctor: true })
   };
   const apptDoc = {
     patientId: "user_patient",
+    doctorId: "user_doctor_assigned",
     doctorName: "د. منى سامي",
     status: "confirmed"
   };
   assert.strictEqual(sim.canReadAppointment(req, apptDoc), true);
+});
+
+runTest("Unassigned doctor reads another doctor's appointment -> DENY", () => {
+  const req = {
+    auth: sim.evalAuth({ uid: "user_doctor_unassigned", role: "doctor", verifiedDoctor: true })
+  };
+  const apptDoc = {
+    patientId: "user_patient",
+    doctorId: "user_doctor_assigned",
+    status: "confirmed"
+  };
+  assert.strictEqual(sim.canReadAppointment(req, apptDoc), false);
 });
 
 runTest("Patient cancels/updates their own appointment -> ALLOW", () => {
@@ -818,16 +867,30 @@ runTest("Patient attempts to read another patient's email notification -> DENY",
   assert.strictEqual(sim.canReadEmailNotification(req, notificationDoc), false);
 });
 
-runTest("Doctor reads clinical email notification -> ALLOW", () => {
+runTest("Assigned doctor reads linked clinical email notification -> ALLOW", () => {
   const req = {
     auth: sim.evalAuth({ uid: "user_doctor_assigned", role: "doctor", verifiedDoctor: true })
   };
   const notificationDoc = {
     patientId: "user_patient",
+    doctorId: "user_doctor_assigned",
     recipient: "patient@test.com",
     type: "result_ready"
   };
   assert.strictEqual(sim.canReadEmailNotification(req, notificationDoc), true);
+});
+
+runTest("Unassigned doctor reads another doctor's email notification -> DENY", () => {
+  const req = {
+    auth: sim.evalAuth({ uid: "user_doctor_unassigned", role: "doctor", verifiedDoctor: true })
+  };
+  const notificationDoc = {
+    patientId: "user_patient",
+    doctorId: "user_doctor_assigned",
+    recipient: "patient@test.com",
+    type: "result_ready"
+  };
+  assert.strictEqual(sim.canReadEmailNotification(req, notificationDoc), false);
 });
 
 runTest("Client attempts to write directly to /email_notifications -> DENY", () => {
@@ -889,6 +952,19 @@ runTest("User attempts to submit feedback with invalid rating (6 stars) -> DENY"
   assert.strictEqual(sim.canCreateFeedback(req, feedbackData), false);
 });
 
+runTest("Patient attempts to submit feedback as doctor role -> DENY", () => {
+  const req = {
+    auth: sim.evalAuth({ uid: "user_patient", email: "patient@test.com", email_verified: true })
+  };
+  const feedbackData = {
+    userId: "user_patient",
+    role: "doctor",
+    rating: 5,
+    comment: "Forged doctor feedback"
+  };
+  assert.strictEqual(sim.canCreateFeedback(req, feedbackData), false);
+});
+
 runTest("Patient reads their own feedback -> ALLOW", () => {
   const req = {
     auth: sim.evalAuth({ uid: "user_patient", email: "patient@test.com", email_verified: true })
@@ -911,15 +987,28 @@ runTest("Patient attempts to read private feedback of another user -> DENY", () 
   assert.strictEqual(sim.canReadFeedback(req, feedbackDoc), false);
 });
 
-runTest("Doctor reads patient feedback -> ALLOW", () => {
+runTest("Assigned doctor reads linked patient feedback -> ALLOW", () => {
   const req = {
     auth: sim.evalAuth({ uid: "user_doctor_assigned", role: "doctor", verifiedDoctor: true })
   };
   const feedbackDoc = {
     userId: "user_patient",
+    doctorId: "user_doctor_assigned",
     isPublic: false
   };
   assert.strictEqual(sim.canReadFeedback(req, feedbackDoc), true);
+});
+
+runTest("Unassigned doctor reads private patient feedback -> DENY", () => {
+  const req = {
+    auth: sim.evalAuth({ uid: "user_doctor_unassigned", role: "doctor", verifiedDoctor: true })
+  };
+  const feedbackDoc = {
+    userId: "user_patient",
+    doctorId: "user_doctor_assigned",
+    isPublic: false
+  };
+  assert.strictEqual(sim.canReadFeedback(req, feedbackDoc), false);
 });
 
 runTest("Patient attempts to update/delete feedback -> DENY (Admin only)", () => {
