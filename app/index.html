@@ -256,6 +256,18 @@
           <button type="button" id="authTabSignUp" class="auth-tab" onclick="setAuthMode('signup')" data-i18n="auth.createAccount">Create Account</button>
         </div>
 
+        <!-- Saved Accounts Quick Switcher -->
+        <div id="savedAccountsSwitcher" class="saved-accounts-switcher" style="display: none; margin-bottom: 14px;">
+          <div style="font-size: 12px; font-weight: 700; color: var(--muted); margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between;">
+            <span style="display: flex; align-items: center; gap: 6px;">
+              <span>🔄</span>
+              <span data-i18n="auth.switchAccount">تبديل الحساب</span>
+            </span>
+            <span style="font-size: 11px; opacity: 0.8;" data-i18n="auth.switchAccountDesc">يرجى تسجيل الدخول بالحساب الآخر</span>
+          </div>
+          <div id="savedAccountsList" style="display: flex; flex-direction: column; gap: 6px;"></div>
+        </div>
+
         <form id="authEmailForm" autocomplete="on" onsubmit="event.preventDefault(); handleEmailAuth(event);">
           <div id="authNameGroup" class="form-group" style="display:none;">
             <label for="authName" data-i18n="auth.fullName">Full Name</label>
@@ -409,7 +421,17 @@
           </div>
         </div>
       </div>
-      <button id="logoutButton" class="logout-button" type="button" onclick="leaveApp(event)" data-i18n="nav.signOut">Sign out</button>
+      <div class="sidebar-account-actions">
+        <button id="switchAccountButton" class="outline-button switch-account-button" type="button" onclick="switchAccount(event)" data-i18n-title="nav.switchAccount" title="Switch account">
+          <span style="font-size: 13px;">🔄</span>
+          <span data-i18n="nav.switchAccount">Switch account</span>
+        </button>
+        <button id="logoutButton" class="logout-button" type="button" onclick="leaveApp(event)" data-i18n-title="nav.signOut" title="Sign out" data-i18n="nav.signOut">Sign out</button>
+      </div>
+      <button id="sidebarDeleteAccountBtn" class="sidebar-delete-btn" type="button" onclick="openDeleteAccountModal()" data-i18n-title="nav.deleteAccount" title="Delete account">
+        <span style="font-size: 11px;">🗑️</span>
+        <span data-i18n="nav.deleteAccount">Delete account</span>
+      </button>
     </aside>
 
     <section class="workspace">
@@ -602,6 +624,9 @@
                 </p>
               </div>
               <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <button type="button" class="soft-button" onclick="switchAccount(event)" style="font-size: 13px; padding: 8px 14px; display: inline-flex; align-items: center; gap: 6px;" data-i18n-title="nav.switchAccount">
+                  <span>🔄</span> <span data-i18n="nav.switchAccount">تبديل الحساب</span>
+                </button>
                 <button type="button" class="soft-button" onclick="exportUserData()" style="font-size: 13px; padding: 8px 14px;">
                   📥 تصدير بياناتي (JSON)
                 </button>
@@ -2123,7 +2148,7 @@
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
         <div style="display: flex; align-items: center; gap: 8px;">
           <span style="font-size: 22px;">⚠️</span>
-          <h3 style="margin: 0; font-size: 18px; color: #ef4444;">حذف الحساب والبيانات السريرية</h3>
+          <h3 style="margin: 0; font-size: 18px; color: #ef4444;" data-i18n="auth.deleteAccountTitle">حذف الحساب والبيانات السريرية</h3>
         </div>
         <button type="button" class="close-button" onclick="closeDeleteAccountModal()" aria-label="Close">×</button>
       </div>
@@ -2214,6 +2239,10 @@
         <button type="button" id="resumeSessionBtn" class="solid-button large" onclick="resumeLockedSession()" style="width: 100%; font-weight: 700; font-size: 14.5px; display: flex; align-items: center; justify-content: center; gap: 8px;">
           <span>🔓</span>
           <span data-i18n="auth.resumeSession">استئناف الجلسة</span>
+        </button>
+        <button type="button" class="outline-button" onclick="switchAccount(event)" style="width: 100%; font-size: 13.5px; border-color: var(--line); color: var(--teal); display: flex; align-items: center; justify-content: center; gap: 8px;">
+          <span>🔄</span>
+          <span data-i18n="nav.switchAccount">تبديل الحساب</span>
         </button>
         <button type="button" class="outline-button" onclick="leaveApp()" style="width: 100%; font-size: 13.5px; border-color: rgba(239, 68, 68, 0.3); color: #ef4444;" data-i18n="nav.signOut">
           تسجيل الخروج بالكامل

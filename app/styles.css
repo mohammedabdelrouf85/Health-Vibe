@@ -1456,11 +1456,183 @@ html[dir="ltr"] .nav-item {
   direction: ltr;
 }
 
-.logout-button {
+.sidebar-account-actions {
+  display: flex;
+  gap: 8px;
   margin-top: 10px;
+}
+
+.sidebar-account-actions button {
+  flex: 1;
+  min-height: 38px;
+  padding: 0 8px;
+  font-size: 12px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.switch-account-button {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--teal);
+  font-weight: 700;
+  cursor: pointer;
+  transition: all .2s ease;
+}
+
+.switch-account-button:hover {
+  background: var(--cyan);
+  border-color: var(--teal);
+  transform: translateY(-1px);
+}
+
+body.dark .switch-account-button {
+  background: var(--surface-2);
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+body.dark .switch-account-button:hover {
+  background: var(--surface);
+  border-color: var(--teal);
+  color: var(--teal);
+}
+
+.logout-button {
   color: var(--red);
   background: #fdecec;
-  flex: 0 0 auto;
+  flex: 1;
+  cursor: pointer;
+  transition: all .2s ease;
+}
+
+.sidebar-account-actions .logout-button {
+  margin-top: 0;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+body.dark .logout-button {
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+body.dark .logout-button:hover {
+  background: rgba(239, 68, 68, 0.22);
+}
+
+.sidebar-delete-btn {
+  background: transparent;
+  border: none;
+  color: #ef4444;
+  opacity: 0.72;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 5px 8px;
+  margin-top: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border-radius: 8px;
+  transition: opacity .2s ease, background .2s ease;
+}
+
+.sidebar-delete-btn:hover {
+  opacity: 1;
+  background: rgba(239, 68, 68, 0.08);
+}
+
+/* Saved Accounts Quick Switcher in Auth Modal */
+.saved-accounts-switcher {
+  background: color-mix(in srgb, var(--surface-2) 65%, transparent);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 10px 12px;
+}
+
+.saved-account-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  cursor: pointer;
+  text-align: start;
+  transition: all .18s ease;
+}
+
+.saved-account-chip:hover {
+  border-color: var(--teal);
+  background: var(--cyan);
+}
+
+body.dark .saved-account-chip {
+  background: var(--surface-2);
+}
+
+body.dark .saved-account-chip:hover {
+  background: color-mix(in srgb, var(--teal) 15%, var(--surface-2));
+}
+
+.saved-account-chip .chip-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--teal);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.saved-account-chip .chip-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.saved-account-chip .chip-info strong {
+  font-size: 12.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.saved-account-chip .chip-info span {
+  font-size: 11px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: ltr;
+}
+
+.saved-account-chip .chip-arrow {
+  color: var(--muted);
+  font-size: 13px;
+  transition: transform .18s ease;
+}
+
+.saved-account-chip:hover .chip-arrow {
+  transform: translateX(-3px);
+  color: var(--teal);
+}
+
+body[dir="ltr"] .saved-account-chip:hover .chip-arrow {
+  transform: translateX(3px);
 }
 
 .workspace {

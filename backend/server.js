@@ -1962,7 +1962,13 @@ app.post('/api/user/delete-account', requireAuth, async (req, res) => {
         batch.delete(docSnap.ref);
       });
 
-      // 4. Delete user document from Firestore
+      // 4. Purge appointments if any
+      const apptsSnapshot = await db.collection('appointments').where('patientId', '==', userId).get();
+      apptsSnapshot.forEach(docSnap => {
+        batch.delete(docSnap.ref);
+      });
+
+      // 5. Delete user document from Firestore
       const userRef = db.collection('users').doc(userId);
       batch.delete(userRef);
 

@@ -67,6 +67,8 @@
         kpi: "لوحة المؤشرات",
         clinicsSales: "حلول العيادات (Sales)",
         signOut: "تسجيل الخروج",
+        switchAccount: "تبديل الحساب",
+        deleteAccount: "حذف الحساب",
         menu: "المزيد"
       },
       roles: {
@@ -110,7 +112,9 @@
         welcomeUser: "مرحباً، {name}!",
         signOutConfirm: "هل أنت متأكد من تسجيل الخروج؟",
         deleteAccountTitle: "حذف الحساب والبيانات السريرية",
-        deleteAccountPermanent: "تنبيه هام: هذا الإجراء نهائي ولا يمكن التراجع عنه!"
+        deleteAccountPermanent: "تنبيه هام: هذا الإجراء نهائي ولا يمكن التراجع عنه!",
+        switchAccount: "تبديل الحساب",
+        switchAccountDesc: "يرجى تسجيل الدخول بالحساب الآخر"
       },
       patient: {
         welcome: "أهلاً بك",
@@ -240,6 +244,8 @@
         kpi: "KPI Dashboard",
         clinicsSales: "Clinic Solutions (Sales)",
         signOut: "Sign out",
+        switchAccount: "Switch account",
+        deleteAccount: "Delete account",
         menu: "Menu"
       },
       roles: {
@@ -283,7 +289,9 @@
         welcomeUser: "Welcome, {name}!",
         signOutConfirm: "Are you sure you want to sign out?",
         deleteAccountTitle: "Delete Account & Clinical Data",
-        deleteAccountPermanent: "Important Notice: This action is permanent and irreversible!"
+        deleteAccountPermanent: "Important Notice: This action is permanent and irreversible!",
+        switchAccount: "Switch Account",
+        switchAccountDesc: "Please sign in with another account"
       },
       patient: {
         welcome: "Welcome",

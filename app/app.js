@@ -2226,6 +2226,53 @@ function saveToAccountsRegistry(userObj) {
   } catch(e) {}
 }
 
+function renderSavedAccountsSwitcher() {
+  const container = document.getElementById("savedAccountsSwitcher");
+  const listEl = document.getElementById("savedAccountsList");
+  if (!container || !listEl) return;
+
+  const accounts = typeof getLocalAccountsRegistry === "function" ? getLocalAccountsRegistry() : [];
+  const currentEmail = auth && auth.currentUser ? (auth.currentUser.email || "").toLowerCase() : null;
+  const available = accounts.filter(a => a && a.email && a.email.toLowerCase() !== currentEmail);
+
+  if (available.length === 0) {
+    container.style.display = "none";
+    return;
+  }
+
+  container.style.display = "block";
+  listEl.innerHTML = "";
+
+  available.slice(0, 4).forEach(acc => {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = "saved-account-chip";
+    const isOwner = typeof isOwnerUser === "function" && isOwnerUser(acc.email);
+    const roleIcon = isOwner ? "👑" : (acc.role === "doctor" ? "🩺" : "👤");
+    const initial = (acc.name || acc.displayName || acc.email || "U").charAt(0).toUpperCase();
+    const displayName = acc.name || acc.displayName || acc.email.split('@')[0];
+
+    item.innerHTML = `
+      <span class="chip-avatar">${initial}</span>
+      <span class="chip-info">
+        <strong>${roleIcon} ${displayName}</strong>
+        <span>${acc.email}</span>
+      </span>
+      <span class="chip-arrow">→</span>
+    `;
+    item.addEventListener("click", () => {
+      const emailInput = document.getElementById("authEmail");
+      const pwdInput = document.getElementById("authPassword");
+      if (emailInput) {
+        emailInput.value = acc.email;
+        if (pwdInput) pwdInput.focus();
+      }
+    });
+    listEl.appendChild(item);
+  });
+}
+window.renderSavedAccountsSwitcher = renderSavedAccountsSwitcher;
+
 async function getAllKnownAccounts() {
   const accountMap = new Map();
 
@@ -4041,6 +4088,9 @@ function showAuth() {
   } else {
     showSignInView();
   }
+  if (typeof renderSavedAccountsSwitcher === "function") {
+    renderSavedAccountsSwitcher();
+  }
 }
 
 function hideAuth() {
@@ -4783,6 +4833,73 @@ async function leaveApp(event) {
 }
 
 window.leaveApp = leaveApp;
+
+async function switchAccount(event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  showToast(isEn ? "Switching accounts..." : "جاري تبديل الحساب...");
+
+  window._isSigningOut = true;
+  window._restoredSessionUser = null;
+  const lockScreen = document.getElementById("idleLockScreen");
+  if (lockScreen) lockScreen.style.display = "none";
+  window._isIdleLocked = false;
+  clearActiveSession();
+
+  if (window._patientCasesUnsub) {
+    window._patientCasesUnsub();
+    window._patientCasesUnsub = null;
+  }
+  window._currentCaseId = null;
+  window._isUserVerified = false;
+  window._verifiedPhone = "";
+  window._cachedUserDoc = null;
+  try {
+    sessionStorage.removeItem("health_vibe_phone_verified");
+    sessionStorage.removeItem("hv_active_session");
+    localStorage.removeItem("hv_active_session");
+    localStorage.removeItem("hv_user_logged_in");
+  } catch(e) {}
+
+  showSignedOutUI();
+
+  try {
+    if (auth) await auth.signOut();
+  } catch(e) {
+    console.error("Sign out error during switch account:", e);
+  }
+  await clearFirebaseAuthStorage();
+  showSignedOutUI();
+
+  window.setTimeout(() => {
+    window._isSigningOut = false;
+  }, 300);
+
+  // Clear previous credentials
+  const emailInput = document.getElementById("authEmail");
+  const pwdInput = document.getElementById("authPassword");
+  if (emailInput) emailInput.value = "";
+  if (pwdInput) pwdInput.value = "";
+
+  // Switch to signin view and display auth modal
+  if (typeof setAuthMode === "function") setAuthMode("signin");
+  if (typeof showAuth === "function") showAuth();
+
+  if (typeof renderSavedAccountsSwitcher === "function") {
+    renderSavedAccountsSwitcher();
+  }
+
+  setTimeout(() => {
+    if (emailInput) emailInput.focus();
+  }, 200);
+
+  showToast(isEn ? "Please sign in with another account" : "يرجى تسجيل الدخول بالحساب الآخر");
+}
+
+window.switchAccount = switchAccount;
 
 let resendCooldown = false;
 let resendTimer = null;
@@ -11977,6 +12094,14 @@ window.exportUserData = async function() {
 window.openDeleteAccountModal = function() {
   const modal = document.getElementById("deleteAccountModal");
   if (!modal) return;
+  const user = auth ? auth.currentUser : null;
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+
+  if (user && typeof isOwnerUser === "function" && isOwnerUser(user.email)) {
+    showToast(isEn ? "System owner account cannot be deleted." : "حساب مالك النظام محمي ولا يمكن حذفه.");
+    return;
+  }
+
   const input = document.getElementById("deleteConfirmationInput");
   if (input) input.value = "";
   const pwdInput = document.getElementById("deletePasswordInput");
@@ -11986,11 +12111,13 @@ window.openDeleteAccountModal = function() {
     btn.disabled = true;
     btn.style.opacity = "0.5";
     btn.style.cursor = "not-allowed";
+    btn.textContent = isEn ? "🗑️ Confirm & Delete Account" : "🗑️ تأكيد وحذف الحساب نهائياً";
   }
   const reauth = document.getElementById("deleteReauthGroup");
   if (reauth) reauth.style.display = "none";
   modal.classList.add("open");
   modal.setAttribute("aria-hidden", "false");
+  if (input) setTimeout(() => input.focus(), 150);
 };
 
 window.closeDeleteAccountModal = function() {
@@ -12029,10 +12156,16 @@ document.addEventListener("DOMContentLoaded", () => {
         let backendSuccess = false;
         try {
           if (typeof callBackend === "function") {
-            await callBackend("/api/user/delete-account", { method: "POST" });
+            const resp = await callBackend("/api/user/delete-account", { method: "POST" });
+            if (resp && resp.error === "FORBIDDEN") {
+              throw new Error(resp.message || "Forbidden");
+            }
             backendSuccess = true;
           }
         } catch (backendErr) {
+          if (backendErr.message && backendErr.message.includes("owner")) {
+            throw backendErr;
+          }
           console.warn("Backend deletion call returned error, proceeding to client deletion fallback:", backendErr);
         }
 
@@ -12087,12 +12220,23 @@ document.addEventListener("DOMContentLoaded", () => {
           }
         }
 
-        // Step C: Cleanup Local Storage & State
+        // Step C: Cleanup Local Storage, Registry & State
         try {
           if (typeof getConsentStorageKey === "function") {
             localStorage.removeItem(getConsentStorageKey());
           }
           localStorage.removeItem(`hv_privacy_consent_${user.uid}`);
+          if (typeof getLocalAccountsRegistry === "function") {
+            const list = getLocalAccountsRegistry();
+            const filtered = list.filter(u => u.id !== user.uid && u.email?.toLowerCase() !== user.email?.toLowerCase());
+            localStorage.setItem(ACCOUNTS_REGISTRY_KEY, JSON.stringify(filtered));
+          }
+          if (typeof clearActiveSession === "function") clearActiveSession();
+          localStorage.removeItem("hv_active_session");
+          sessionStorage.removeItem("hv_active_session");
+          localStorage.removeItem("hv_user_logged_in");
+          localStorage.removeItem(REMEMBER_ME_KEY);
+          sessionStorage.removeItem("health_vibe_phone_verified");
         } catch {}
 
         closeDeleteAccountModal();
