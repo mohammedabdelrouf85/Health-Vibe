@@ -1071,8 +1071,10 @@ function applyLanguage(language) {
   // 2. Direct update for navigation buttons
   document.querySelectorAll(".nav-item").forEach((btn) => {
     const scr = btn.dataset.screen;
+    if (!scr) return;
     const labelSpan = btn.querySelector(".nav-label");
-    const trans = (window.i18n && window.i18n.t(`nav.${scr}`)) || (navTranslations[scr] && (navTranslations[scr][language] || navTranslations[scr].en));
+    const i18nTrans = window.i18n && window.i18n.t(`nav.${scr}`);
+    const trans = (i18nTrans && i18nTrans !== `nav.${scr}` ? i18nTrans : null) || (navTranslations[scr] && (navTranslations[scr][language] || navTranslations[scr].en));
     if (trans) {
       if (labelSpan) {
         labelSpan.textContent = trans;
@@ -1160,6 +1162,9 @@ function applyLanguage(language) {
 }
 
 function showToast(message) {
+  if (!message || String(message).trim() === "" || String(message).includes("undefined")) {
+    return;
+  }
   toast.textContent = localized(message);
   toast.classList.add("show");
   window.clearTimeout(showToast.timer);
@@ -4280,6 +4285,10 @@ function toFriendlyAppError(err, context = "") {
 }
 
 function showAppError(err, options = {}) {
+  const rawMessage = typeof err === "string" ? err : (err && (err.message || err.code));
+  if (!rawMessage || String(rawMessage).trim() === "" || String(rawMessage).includes("undefined")) {
+    return null;
+  }
   const friendly = toFriendlyAppError(err, options.context);
   const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
 
@@ -10202,7 +10211,7 @@ function toggleTheme() {
 }
 
 function initTheme() {
-  let theme = "dark";
+  let theme = "light";
   try {
     const saved = localStorage.getItem("hv_theme");
     if (saved) theme = saved;
@@ -10247,9 +10256,11 @@ document.addEventListener("click", (event) => {
 
   const screenButton = event.target.closest("[data-screen]");
   if (screenButton) {
+    const targetScreen = screenButton.dataset.screen;
+    if (!targetScreen) return;
     event.preventDefault();
     event.stopPropagation();
-    showScreen(screenButton.dataset.screen);
+    showScreen(targetScreen);
   }
 });
 
@@ -11618,19 +11629,20 @@ function initHVAuthListener() {
       window._verifiedPhone = "";
       window._cachedUserDoc = null;
       updateEmailVerificationUI(null);
-      if (app) {
-        app.hidden = true;
-        app.setAttribute("hidden", "true");
-        app.style.display = "none";
-      }
+      selectedRole = ROLES.PATIENT;
       if (publicSite) {
-        publicSite.hidden = false;
-        publicSite.removeAttribute("hidden");
-        publicSite.style.display = "block";
+        publicSite.hidden = true;
+        publicSite.setAttribute("hidden", "true");
+        publicSite.style.display = "none";
+      }
+      if (app) {
+        app.hidden = false;
+        app.removeAttribute("hidden");
+        app.style.display = "grid";
       }
       window.setTimeout(() => {
         if (loader) loader.classList.add("is-done");
-        if (publicSite) publicSite.classList.remove("is-hidden");
+        showScreen("patient");
       }, 250);
     }
   });

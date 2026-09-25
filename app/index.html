@@ -10,8 +10,8 @@
   <script>
     (function() {
       try {
-        var savedTheme = localStorage.getItem("hv_theme");
-        if (savedTheme === "light") {
+        var savedTheme = localStorage.getItem("hv_theme") || "light";
+        if (savedTheme !== "dark") {
           document.documentElement.classList.add("hv-theme-light");
         }
         var hasSession = localStorage.getItem("hv_user_logged_in") === "true" || !!localStorage.getItem("hv_active_session");
@@ -53,7 +53,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-storage-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-app-check-compat.js"></script>
 </head>
-<body class="dark">
+<body>
   <div id="loader" class="loader" aria-live="polite">
     <div class="loader-card">
       <div class="loader-media" aria-hidden="true">
@@ -76,7 +76,6 @@
   <main id="publicSite" class="site-shell is-hidden">
     <header class="site-nav">
       <div class="brand">
-        <img src="./logo-dark-mark.png" alt="Health Vibes Logo" class="brand-logo" data-logo-mark />
         <div>
           <strong>Health Vibes</strong>
           <span>AI-supported healthcare reviewed by doctors</span>
