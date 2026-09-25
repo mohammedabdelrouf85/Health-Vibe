@@ -178,3 +178,42 @@ Every generated backup bundle produces a cryptographic manifest:
 - `GET /api/admin/backup/list`: Lists available snapshots, record counts, and status.
 - `POST /api/admin/backup/verify`: Cryptographically validates snapshot integrity against corruption or tampering.
 - `POST /api/admin/backup/restore`: Executes a staged or live restoration guarded by authentication and confirmation tokens.
+
+
+## Enforced API access policy
+
+All seven backup and monitoring routes in `backend/server.js` require a Firebase
+ID token in `Authorization: Bearer <token>`. App Check is not a user identity.
+Roles and owner status come only from verified token claims, never request bodies
+or editable user profiles. Existing suspended-account checks also apply.
+
+| Endpoint | Allowed identity |
+| --- | --- |
+| POST /api/monitoring/errors | Any authenticated, non-suspended user |
+| GET /api/monitoring/errors/summary | super_admin or trusted isOwner: true |
+| POST /api/monitoring/errors/clear | super_admin or trusted isOwner: true |
+| POST /api/admin/backup/create | super_admin or trusted isOwner: true |
+| GET /api/admin/backup/list | super_admin or trusted isOwner: true |
+| POST /api/admin/backup/verify | super_admin or trusted isOwner: true |
+| POST /api/admin/backup/restore | super_admin or trusted isOwner: true |
+
+Clinic administrators, doctors, patients, and support users cannot administer
+these resources because snapshots and error logs cover the entire platform,
+without clinic-level filtering. Dry-run restoration has the same access rules
+as actual restoration; existing confirmation and integrity checks still apply.
+Anonymous telemetry stays local in the browser; server ingestion requires login.
+
+Backup initiators and telemetry userId/userRole are derived from verified tokens.
+Administrative reads, mutations, dry runs, and role denials are logged with the
+verified actor, action, HTTP outcome, and backup ID where available. Audit events
+are written to server logs and asynchronously to Firestore audit_events. Clearing
+the in-memory error buffer does not delete the audit trail. Firestore persistence
+failures produce a server warning; the response does not guarantee persistence.
+Requests rejected before authentication have no verified actor and do not create
+these operational audit events.
+
+Run `npm run test:operations` for HTTP-level authorization regression coverage.
+Firebase verification and storage are stubbed at the SDK boundary, while the
+actual Express routes and middleware run. This test does not validate real token
+signatures or perform production restores. Existing backup tests separately
+exercise checksum and restoration confirmation guards.

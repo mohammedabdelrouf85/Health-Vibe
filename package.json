@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Health Vibes AI - Smart Respiratory Clinical Assessment",
   "scripts": {
-    "test": "node tests/firestore_rules_emulator.test.js && node tests/e2e_happy_path.test.js && node tests/data_isolation.test.js && node tests/environment_config.test.js && node tests/appointments_booking.test.js && node tests/email_notifications.test.js && node tests/feedback_system.test.js && node tests/kpi_dashboard.test.js && node tests/mobile_ux.test.js && node tests/security_scan.test.js && node tests/app_check.test.js && node tests/csp_security_headers.test.js && node tests/error_monitoring.test.js && node tests/backup_restore.test.js && node tests/i18n_system.test.js && node tests/clinic_sales_landing.test.js && node tests/remember_me_security.test.js && node tests/theme_system.test.js && node tests/account_lifecycle.test.js && node tests/route_guards.test.js",
+    "test": "node tests/firestore_rules_emulator.test.js && node tests/e2e_happy_path.test.js && node tests/data_isolation.test.js && node tests/environment_config.test.js && node tests/appointments_booking.test.js && node tests/email_notifications.test.js && node tests/feedback_system.test.js && node tests/kpi_dashboard.test.js && node tests/mobile_ux.test.js && node tests/security_scan.test.js && node tests/app_check.test.js && node tests/csp_security_headers.test.js && node tests/error_monitoring.test.js && node tests/backup_restore.test.js && node tests/i18n_system.test.js && node tests/clinic_sales_landing.test.js && node tests/remember_me_security.test.js && node tests/theme_system.test.js && node tests/account_lifecycle.test.js && node tests/route_guards.test.js && node tests/operational_access.test.js",
     "test:rules": "node tests/firestore_rules_emulator.test.js",
     "test:e2e": "node tests/e2e_happy_path.test.js",
     "test:isolation": "node tests/data_isolation.test.js",
@@ -24,7 +24,8 @@
     "test:lifecycle": "node tests/account_lifecycle.test.js",
     "test:guards": "node tests/route_guards.test.js",
     "dev:backend": "cd backend && node server.js",
-    "prod:backend": "cd backend && node server.js"
+    "prod:backend": "cd backend && node server.js",
+    "test:operations": "node tests/operational_access.test.js"
   },
   "keywords": [
     "health-vibe",

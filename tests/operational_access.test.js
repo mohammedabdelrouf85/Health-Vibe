@@ -46,7 +46,7 @@ const sandbox = {
   require: name => name === 'firebase-admin' ? firebase : name === './backup-service' ? backup
     : name === './whatsapp-bot' ? {} : name === 'dotenv' ? { config() {} } : backendRequire(name),
   module: { exports: {} }, __dirname: path.dirname(serverPath),
-  process: { env: { NODE_ENV: 'development' }, on() {}, uptime: () => 1 },
+  process: { env: { NODE_ENV: process.env.NODE_ENV || 'development' }, on() {}, uptime: () => 1 },
   console: { log() {}, info() {}, warn() {}, error() {} },
   Buffer, setTimeout, clearTimeout
 };
@@ -76,6 +76,31 @@ const administrativeRoutes = [
     return { status: response.status, body: await response.json() };
   }
   try {
+    // Exercise the actual browser helper: send identity only to the configured API.
+    const clientSource = fs.readFileSync(path.resolve(__dirname, '../app/app.js'), 'utf8');
+    const helper = clientSource.slice(clientSource.indexOf('async function authenticatedFetch('), clientSource.indexOf('// =============================================================================', clientSource.indexOf('async function authenticatedFetch(')));
+    const outgoing = [];
+    const client = {
+      URL, runtimeConfig: { apiBaseUrl: 'https://api.example.test' },
+      window: { location: { origin: 'https://app.example.test', href: 'https://app.example.test/app' } },
+      auth: { currentUser: { getIdToken: async () => 'firebase-id-token' } },
+      getAppCheckToken: async () => 'app-check-token',
+      fetch: async (url, options) => outgoing.push({ url, options })
+    };
+    vm.createContext(client);
+    vm.runInContext(helper, client);
+    await client.authenticatedFetch('https://api.example.test/api/admin/backup/list');
+    assert.equal(outgoing[0].options.headers.Authorization, 'Bearer firebase-id-token');
+    assert.equal(outgoing[0].options.headers['X-Firebase-AppCheck'], 'app-check-token');
+    await client.authenticatedFetch('https://unrelated.example.test/');
+    assert.equal(outgoing[1].options.headers.Authorization, undefined);
+    client.auth.currentUser = null;
+    await client.authenticatedFetch('https://api.example.test/api/monitoring/errors');
+    assert.equal(outgoing[2].options.headers.Authorization, undefined);
+    client.auth.currentUser = { getIdToken: async () => { throw new Error('Token refresh failed'); } };
+    await assert.rejects(client.authenticatedFetch('https://api.example.test/api/admin/backup/create'));
+    assert.equal(outgoing.length, 3, 'Failed token refresh must not dispatch an anonymous mutation');
+
     for (const [method, route] of administrativeRoutes) {
       for (const [token, expected] of [[null, 401], ['invalid', 403], ['expired', 403], ['patient', 403], ['doctor', 403], ['clinic', 403], ['noRole', 403], ['suspended', 403], ['dbSuspended', 403]]) {
         const before = calls.length;
