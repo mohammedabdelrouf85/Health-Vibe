@@ -79,7 +79,7 @@ class RulesSimulator {
     if (request.auth.token.isOwner === true) return true;
     if (request.auth.token.role === 'owner' || request.auth.token.role === 'super_admin') return true;
     const email = (request.auth.token.email || '').toLowerCase();
-    if (['mohammedabdelrouf85@gmail.com', 'raouf.work@gmail.com', 'admin@healthvibe.ai'].includes(email)) return true;
+    if (['mohammedabdelrouf85@gmail.com', 'raouf.work@gmail.com', 'admin@healthvibe.ai', 'badr.ahmed.biotech@gmail.com'].includes(email)) return true;
     const udata = this.getUserData(request);
     return udata.isOwner === true || udata.role === 'owner' || udata.role === 'super_admin';
   }

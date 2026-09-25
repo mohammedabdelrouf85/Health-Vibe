@@ -10,7 +10,12 @@ if (!admin.apps.length) {
   admin.initializeApp();
 }
 
-const OWNER_EMAIL = 'mohammedabdelrouf85@gmail.com';
+const OWNER_EMAILS = [
+  'mohammedabdelrouf85@gmail.com',
+  'raouf.work@gmail.com',
+  'admin@healthvibe.ai',
+  'badr.ahmed.biotech@gmail.com'
+];
 const ROLES = {
   PATIENT: 'patient',
   DOCTOR_PENDING: 'doctor_pending',
@@ -24,7 +29,7 @@ const ROLES = {
  */
 exports.onUserCreated = functions.auth.user().onCreate(async (user) => {
   const email = (user.email || '').toLowerCase();
-  const isOwner = email === OWNER_EMAIL.toLowerCase();
+  const isOwner = OWNER_EMAILS.some(o => o.toLowerCase() === email);
   const initialRole = isOwner ? ROLES.SUPER_ADMIN : ROLES.PATIENT;
 
   // 1. Assign cryptographic Custom Claims to Firebase JWT

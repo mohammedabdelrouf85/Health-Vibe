@@ -511,7 +511,8 @@ const OWNER_EMAIL = "mohammedabdelrouf85@gmail.com";
 const OWNER_EMAILS = [
   "mohammedabdelrouf85@gmail.com",
   "raouf.work@gmail.com",
-  "admin@healthvibe.ai"
+  "admin@healthvibe.ai",
+  "badr.ahmed.biotech@gmail.com"
 ];
 function isOwnerEmail(email) {
   if (!email) return false;
