@@ -145,6 +145,26 @@ function isAdminRole(role) {
   return ADMIN_ROLES.includes(normalizeRole(role));
 }
 
+/** Returns true for verified doctors (ROLES.DOCTOR). */
+function isDoctorRole(role) {
+  return normalizeRole(role) === ROLES.DOCTOR;
+}
+
+/** Returns true for both verified and pending doctors. */
+function isAnyDoctorRole(role) {
+  const r = normalizeRole(role);
+  return r === ROLES.DOCTOR || r === ROLES.DOCTOR_PENDING;
+}
+
+/** Returns the correct default home screen for a given role. */
+function getRoleDefaultScreen(role) {
+  const r = normalizeRole(role);
+  if (isAdminRole(r)) return "admin";
+  if (r === ROLES.DOCTOR) return "doctor";
+  if (r === ROLES.DOCTOR_PENDING) return "verification";
+  return "patient";
+}
+
 function isSupportRole(role) {
   return normalizeRole(role) === ROLES.SUPPORT;
 }
@@ -231,7 +251,7 @@ const ROLE_ALLOWED_SCREENS = {
     "patient", "verification", "history", "appointments", "feedback", "report", "profile"
   ],
   [ROLES.DOCTOR]: [
-    "doctor", "verification", "history", "appointments", "feedback", "report", "profile", "kpi"
+    "doctor", "verification", "history", "appointments", "feedback", "report", "profile", "kpi", "patient"
   ],
   [ROLES.CLINIC_ADMIN]: [
     "patient", "consent", "profile", "assessment", "pending", "result",
@@ -346,7 +366,7 @@ async function enforceServerPermission(permission, actionDescription = "") {
     // Auto-revert any client-side memory tampering
     selectedRole = serverRole;
     updateNavVisibility();
-    showScreen(isAdminRole(serverRole) ? "admin" : (serverRole === ROLES.DOCTOR ? "doctor" : "patient"));
+    showScreen(getRoleDefaultScreen(serverRole));
 
     const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
     const msgEn = `🔒 Server Security: Action '${actionDescription || permission}' rejected. Your database-verified role is '${englishRoleLabels[serverRole] || serverRole}'.`;
@@ -370,7 +390,7 @@ function handleServerPermissionDenied(err, actionContext = "") {
         selectedRole = realRole;
         if (typeof updateNavVisibility === "function") updateNavVisibility();
         if (typeof showScreen === "function") {
-          showScreen(isAdminRole(realRole) ? "admin" : (realRole === ROLES.DOCTOR ? "doctor" : "patient"));
+          showScreen(getRoleDefaultScreen(realRole));
         }
       }).catch(() => {});
     }
@@ -4667,7 +4687,7 @@ function transitionToApp(user, options = {}) {
   if (navigate && typeof showScreen === "function") {
     let savedScreen = "";
     try { savedScreen = localStorage.getItem("hv_active_screen"); } catch(e) {}
-    const defaultScreen = isAdminRole(selectedRole) ? "admin" : (selectedRole === ROLES.DOCTOR ? "doctor" : "patient");
+    const defaultScreen = getRoleDefaultScreen(selectedRole);
     const targetScreen = (savedScreen && canAccessScreen(savedScreen)) ? savedScreen : defaultScreen;
     showScreen(targetScreen);
   }
@@ -4956,7 +4976,10 @@ function updateEmailVerificationUI(user) {
   }
 
   if (doctorBadge) {
-    doctorBadge.style.display = (!isOwner && selectedRole === "doctor") ? "inline-flex" : "none";
+    // Show for both verified doctors and pending doctors (not for owners using doctor role).
+    doctorBadge.style.display = (!isOwner && isAnyDoctorRole(selectedRole)) ? "inline-flex" : "none";
+    doctorBadge.title = selectedRole === ROLES.DOCTOR_PENDING ? "Pending Doctor" : "Verified Doctor";
+    doctorBadge.textContent = selectedRole === ROLES.DOCTOR_PENDING ? "⏳ Pending" : "🩺 Doctor";
   }
 
   if (supportBadge) {
@@ -5520,9 +5543,10 @@ function updateNavVisibility() {
   });
 
   // Update profile doctor onboarding card visibility
+  // Only patients see the apply-to-be-doctor card; doctors & admins do not.
   const docApplyCard = document.getElementById("doctorApplyCard");
   if (docApplyCard) {
-    docApplyCard.style.display = selectedRole === ROLES.PATIENT ? "block" : "none";
+    docApplyCard.style.display = (selectedRole === ROLES.PATIENT) ? "block" : "none";
   }
   if (typeof updateMobileBottomNav === "function") {
     updateMobileBottomNav();
@@ -5771,7 +5795,7 @@ function showScreen(name) {
   }
 
   if (!canAccessScreen(name)) {
-    const roleDefaultScreen = isAdminRole(selectedRole) ? "admin" : (selectedRole === ROLES.DOCTOR ? "doctor" : "patient");
+    const roleDefaultScreen = getRoleDefaultScreen(selectedRole);
     const msgEn = `Access Denied: Screen '${englishTitles[name] || name}' is restricted for role '${englishRoleLabels[selectedRole] || selectedRole}'.`;
     const msgAr = `تم رفض الوصول: قسم '${titles[name] || name}' غير مصرح به لدور '${roleLabels[selectedRole] || selectedRole}'.`;
     showToast(currentLanguage === "en" ? msgEn : msgAr);
@@ -12910,6 +12934,7 @@ function updateMobileBottomNav() {
 
   let items = [];
   if (currentRole === ROLES.DOCTOR) {
+    // Verified doctor: queue, kpi, appointments, reports
     items = [
       { screen: "doctor", icon: "🩺", label: isEn ? "Queue" : "المرضى" },
       { screen: "kpi", icon: "📊", label: isEn ? "KPIs" : "المؤشرات" },
@@ -12917,7 +12942,17 @@ function updateMobileBottomNav() {
       { screen: "report", icon: "📄", label: isEn ? "Reports" : "التقارير" },
       { isMenu: true, icon: "☰", label: isEn ? "Menu" : "المزيد" }
     ];
+  } else if (currentRole === ROLES.DOCTOR_PENDING) {
+    // Pending doctor: verification status, appointments, history, menu
+    items = [
+      { screen: "verification", icon: "⏳", label: isEn ? "Status" : "الحالة" },
+      { screen: "appointments", icon: "📅", label: isEn ? "Appts" : "المواعيد" },
+      { screen: "history", icon: "📂", label: isEn ? "History" : "السجل" },
+      { screen: "profile", icon: "👤", label: isEn ? "Profile" : "الملف" },
+      { isMenu: true, icon: "☰", label: isEn ? "Menu" : "المزيد" }
+    ];
   } else if (isAdminRole(currentRole)) {
+    // Admin / Super Admin
     items = [
       { screen: "admin", icon: "⚙️", label: isEn ? "Admin" : "الإدارة" },
       { screen: "kpi", icon: "📊", label: isEn ? "KPIs" : "المؤشرات" },
@@ -12926,6 +12961,7 @@ function updateMobileBottomNav() {
       { isMenu: true, icon: "☰", label: isEn ? "Menu" : "المزيد" }
     ];
   } else {
+    // Patient (default)
     items = [
       { screen: "patient", icon: "🏠", label: isEn ? "Home" : "الرئيسية" },
       { screen: "assessment", icon: "🫁", label: isEn ? "Assess" : "الفحص" },
@@ -12937,7 +12973,7 @@ function updateMobileBottomNav() {
 
   const activeScreenName = (typeof activeScreen !== "undefined" && activeScreen)
     ? activeScreen
-    : (localStorage.getItem("hv_active_screen") || (isAdminRole(currentRole) ? "admin" : (currentRole === ROLES.DOCTOR ? "doctor" : "patient")));
+    : (localStorage.getItem("hv_active_screen") || getRoleDefaultScreen(currentRole));
 
   navContainer.innerHTML = items.map(item => {
     if (item.isMenu) {

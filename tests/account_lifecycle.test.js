@@ -165,6 +165,81 @@ assert(
 );
 console.log('  ✓ canAccessScreen grants full access only when selectedRole resolves to SUPER_ADMIN.');
 
+// -----------------------------------------------------------------------------
+// TEST 11: Doctor Role Helper Functions
+// -----------------------------------------------------------------------------
+console.log('\n▶ TEST 11: Doctor role helper functions (isDoctorRole, isAnyDoctorRole, getRoleDefaultScreen)');
+assert(
+  appJs.includes('function isDoctorRole(role)'),
+  'app.js must define isDoctorRole() helper function'
+);
+assert(
+  appJs.includes('function isAnyDoctorRole(role)'),
+  'app.js must define isAnyDoctorRole() for both doctor and doctor_pending'
+);
+assert(
+  appJs.includes('function getRoleDefaultScreen(role)'),
+  'app.js must define getRoleDefaultScreen() to centralise default screen logic'
+);
+// getRoleDefaultScreen must return "verification" for doctor_pending
+const getRoleDefaultSource = appJs.slice(
+  appJs.indexOf('function getRoleDefaultScreen('),
+  appJs.indexOf('function isSupportRole(')
+);
+assert(
+  getRoleDefaultSource.includes('ROLES.DOCTOR_PENDING') && getRoleDefaultSource.includes('"verification"'),
+  'getRoleDefaultScreen must return "verification" for DOCTOR_PENDING role'
+);
+console.log('  ✓ isDoctorRole, isAnyDoctorRole, and getRoleDefaultScreen helpers correctly defined.');
+
+// -----------------------------------------------------------------------------
+// TEST 12: Doctor Allowed Screens Include Patient Home
+// -----------------------------------------------------------------------------
+console.log('\n▶ TEST 12: ROLE_ALLOWED_SCREENS for doctor includes patient home screen');
+const roleScreensSource = appJs.slice(
+  appJs.indexOf('const ROLE_ALLOWED_SCREENS'),
+  appJs.indexOf('let tempAllowDoctorApplication')
+);
+const doctorBlock = roleScreensSource.slice(
+  roleScreensSource.indexOf('[ROLES.DOCTOR]:'),
+  roleScreensSource.indexOf('[ROLES.CLINIC_ADMIN]:')
+);
+assert(
+  doctorBlock.includes('"patient"'),
+  'ROLE_ALLOWED_SCREENS[ROLES.DOCTOR] must include "patient" so doctors can view home dashboard'
+);
+assert(
+  doctorBlock.includes('"doctor"') && doctorBlock.includes('"kpi"') && doctorBlock.includes('"verification"'),
+  'ROLE_ALLOWED_SCREENS[ROLES.DOCTOR] must include doctor, kpi, and verification screens'
+);
+console.log('  ✓ Doctor allowed screens include patient home + doctor queue + kpi + verification.');
+
+// -----------------------------------------------------------------------------
+// TEST 13: Mobile Bottom Nav Has Doctor-Pending Branch
+// -----------------------------------------------------------------------------
+console.log('\n▶ TEST 13: updateMobileBottomNav has distinct DOCTOR_PENDING nav branch');
+const mobileNavSource = appJs.slice(
+  appJs.indexOf('function updateMobileBottomNav()'),
+  appJs.indexOf('function initMobileTouchGestures()')
+);
+assert(
+  mobileNavSource.includes('ROLES.DOCTOR_PENDING'),
+  'updateMobileBottomNav must have a dedicated DOCTOR_PENDING branch'
+);
+assert(
+  mobileNavSource.includes('"verification"') && mobileNavSource.includes('ROLES.DOCTOR_PENDING'),
+  'DOCTOR_PENDING mobile nav must include the verification screen'
+);
+assert(
+  !mobileNavSource.includes('if (isOwner)'),
+  'updateMobileBottomNav must not contain an isOwner bypass'
+);
+assert(
+  mobileNavSource.includes('getRoleDefaultScreen'),
+  'updateMobileBottomNav must use getRoleDefaultScreen() for active screen resolution'
+);
+console.log('  ✓ DOCTOR_PENDING mobile nav shows verification/appointments/history/profile — not patient assessment flow.');
+
 console.log('\n==================================================================');
-console.log('🎉 ALL 10 ACCOUNT & ROLE LIFECYCLE TESTS PASSED WITH 100% SUCCESS!');
+console.log('🎉 ALL 13 ACCOUNT & ROLE LIFECYCLE TESTS PASSED WITH 100% SUCCESS!');
 console.log('==================================================================');
