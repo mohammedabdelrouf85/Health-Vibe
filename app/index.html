@@ -10,6 +10,11 @@
   <script>
     (function() {
       try {
+        var themeDefaultVersion = "2026-09-25-light-default";
+        if (localStorage.getItem("hv_theme_default_version") !== themeDefaultVersion) {
+          localStorage.setItem("hv_theme_default_version", themeDefaultVersion);
+          localStorage.setItem("hv_theme", "light");
+        }
         var savedTheme = localStorage.getItem("hv_theme") || "light";
         if (savedTheme !== "dark") {
           document.documentElement.classList.add("hv-theme-light");

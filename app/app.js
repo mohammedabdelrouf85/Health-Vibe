@@ -10213,6 +10213,11 @@ function toggleTheme() {
 function initTheme() {
   let theme = "light";
   try {
+    const themeDefaultVersion = "2026-09-25-light-default";
+    if (localStorage.getItem("hv_theme_default_version") !== themeDefaultVersion) {
+      localStorage.setItem("hv_theme_default_version", themeDefaultVersion);
+      localStorage.setItem("hv_theme", "light");
+    }
     const saved = localStorage.getItem("hv_theme");
     if (saved) theme = saved;
   } catch(e) {}
