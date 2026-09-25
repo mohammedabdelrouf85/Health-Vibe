@@ -1585,6 +1585,12 @@ async function getAppCheckToken(forceRefresh = false) {
 
 async function authenticatedFetch(url, options = {}) {
   const headers = Object.assign({}, options.headers || {});
+  const apiBaseUrl = runtimeConfig && runtimeConfig.apiBaseUrl ? runtimeConfig.apiBaseUrl : window.location.origin;
+  const destination = new URL(url, window.location.href);
+  const apiOrigin = new URL(apiBaseUrl, window.location.href).origin;
+  if (destination.origin === apiOrigin && auth.currentUser) {
+    headers.Authorization = `Bearer ${await auth.currentUser.getIdToken()}`;
+  }
   try {
     const token = await getAppCheckToken();
     if (token) {

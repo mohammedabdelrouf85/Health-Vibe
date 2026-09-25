@@ -305,9 +305,41 @@ process.on('unhandledRejection', (reason) => {
   });
 });
 
+// All backup data and monitoring summaries span the entire platform, so only
+// trusted super_admin / isOwner claims may administer them (including reads).
+// Keep audit events separate from the clearable in-memory error buffer.
+function auditOperationalAccess(action) {
+  return (req, res, next) => {
+    res.once('finish', () => {
+      const event = {
+        type: action,
+        ...res.locals.auditDetails,
+        userId: req.user.uid,
+        userRole: getTrustedClaimRole(req.user),
+        method: req.method,
+        path: req.path,
+        statusCode: res.statusCode,
+        outcome: res.statusCode < 400 ? 'SUCCESS' : 'REJECTED',
+        backupId: res.locals.backupId || (typeof req.body?.backupId === 'string' ? req.body.backupId : null),
+        dryRun: Boolean(req.body?.dryRun),
+        timestamp: new Date().toISOString()
+      };
+      // Structured server log also retains evidence if Firestore is unavailable.
+      console.info('[OPERATION AUDIT]', JSON.stringify(event));
+      if (db) {
+        Promise.resolve().then(() => db.collection('audit_events').add({
+          ...event,
+          timestamp: admin.firestore.FieldValue.serverTimestamp()
+        })).catch(err => console.warn('[OPERATION AUDIT] Persistence failed:', err.message));
+      }
+    });
+    next();
+  };
+}
+
 // Endpoint: Ingest client/frontend error events
-app.post('/api/monitoring/errors', (req, res) => {
-  const { type, message, stack, source, lineno, colno, url, userId, userRole, screen, severity, metadata } = req.body || {};
+app.post('/api/monitoring/errors', requireAuth, (req, res) => {
+  const { type, message, stack, source, lineno, colno, url, screen, severity, metadata } = req.body || {};
 
   if (!message && !type) {
     return res.status(400).json({ error: 'INVALID_PAYLOAD', message: 'Error type or message is required.' });
@@ -321,8 +353,8 @@ app.post('/api/monitoring/errors', (req, res) => {
     lineno,
     colno,
     url,
-    userId: userId || 'anonymous',
-    userRole: userRole || 'unknown',
+    userId: req.user.uid,
+    userRole: getTrustedClaimRole(req.user),
     screen: screen || 'unknown',
     severity: severity || 'ERROR',
     metadata: metadata || {}
@@ -336,7 +368,7 @@ app.post('/api/monitoring/errors', (req, res) => {
 });
 
 // Endpoint: Error telemetry summary & metrics
-app.get('/api/monitoring/errors/summary', (req, res) => {
+app.get('/api/monitoring/errors/summary', requireAuth, auditOperationalAccess('MONITORING_SUMMARY_READ'), requireSuperAdmin, (req, res) => {
   const byType = {};
   const bySeverity = {};
   let criticalCount = 0;
@@ -364,8 +396,8 @@ app.get('/api/monitoring/errors/summary', (req, res) => {
   });
 });
 
-// Endpoint: Clear in-memory error buffer (Admin only or dev)
-app.post('/api/monitoring/errors/clear', (req, res) => {
+// Endpoint: Clear in-memory error buffer (platform administrators only)
+app.post('/api/monitoring/errors/clear', requireAuth, auditOperationalAccess('MONITORING_ERRORS_CLEARED'), requireSuperAdmin, (req, res) => {
   errorLogsRingBuffer.length = 0;
   res.json({ success: true, message: 'In-memory error logs successfully cleared.' });
 });
@@ -375,25 +407,17 @@ app.post('/api/monitoring/errors/clear', (req, res) => {
 // =============================================================================
 
 // Endpoint: Trigger on-demand backup snapshot
-app.post('/api/admin/backup/create', async (req, res) => {
+app.post('/api/admin/backup/create', requireAuth, auditOperationalAccess('BACKUP_SNAPSHOT_CREATED'), requireSuperAdmin, async (req, res) => {
   try {
-    const initiator = req.body && req.body.initiator ? req.body.initiator : 'admin_manual';
+    const initiator = req.user.uid;
     const manifest = await backupService.createBackupSnapshot({
       initiator,
       environment: NODE_ENV,
       firestoreDb: db
     });
 
-    if (db) {
-      db.collection('audit_events').add({
-        type: 'BACKUP_SNAPSHOT_CREATED',
-        backupId: manifest.backupId,
-        initiator,
-        totalRecords: manifest.totalRecords,
-        checksum: manifest.checksum.hash,
-        timestamp: admin.firestore.FieldValue.serverTimestamp()
-      }).catch(() => {});
-    }
+    res.locals.backupId = manifest.backupId;
+    res.locals.auditDetails = { initiator, totalRecords: manifest.totalRecords || 0, checksum: manifest.checksum?.hash || null };
 
     res.status(201).json({
       success: true,
@@ -406,7 +430,7 @@ app.post('/api/admin/backup/create', async (req, res) => {
 });
 
 // Endpoint: List available backup snapshots
-app.get('/api/admin/backup/list', (req, res) => {
+app.get('/api/admin/backup/list', requireAuth, auditOperationalAccess('BACKUP_SNAPSHOTS_LISTED'), requireSuperAdmin, (req, res) => {
   try {
     const snapshots = backupService.listBackupSnapshots();
     res.json({
@@ -422,13 +446,14 @@ app.get('/api/admin/backup/list', (req, res) => {
 });
 
 // Endpoint: Verify backup integrity
-app.post('/api/admin/backup/verify', (req, res) => {
+app.post('/api/admin/backup/verify', requireAuth, auditOperationalAccess('BACKUP_INTEGRITY_VERIFIED'), requireSuperAdmin, (req, res) => {
   try {
     const { backupId } = req.body || {};
     if (!backupId) {
       return res.status(400).json({ error: 'MISSING_BACKUP_ID', message: 'backupId is required for verification.' });
     }
     const result = backupService.verifyBackupIntegrity(backupId);
+    res.locals.auditDetails = { valid: result.valid };
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: 'VERIFY_FAILED', message: err.message });
@@ -436,7 +461,7 @@ app.post('/api/admin/backup/verify', (req, res) => {
 });
 
 // Endpoint: Execute guarded restoration
-app.post('/api/admin/backup/restore', async (req, res) => {
+app.post('/api/admin/backup/restore', requireAuth, auditOperationalAccess('DATABASE_RESTORE_EXECUTED'), requireSuperAdmin, async (req, res) => {
   try {
     const { backupId, confirmToken, dryRun } = req.body || {};
     if (!backupId) {
@@ -448,15 +473,7 @@ app.post('/api/admin/backup/restore', async (req, res) => {
       firestoreDb: db
     });
 
-    if (result.success && !result.dryRun && db) {
-      db.collection('audit_events').add({
-        type: 'DATABASE_RESTORE_EXECUTED',
-        backupId,
-        restoredRecords: result.restoredRecords,
-        timestamp: admin.firestore.FieldValue.serverTimestamp()
-      }).catch(() => {});
-    }
-
+    res.locals.auditDetails = { restoredRecords: result.restoredRecords || 0 };
     if (!result.success) {
       return res.status(400).json(result);
     }
