@@ -513,19 +513,6 @@ function parseEmailList(value, fallback) {
     .filter(Boolean);
 }
 
-// System Owner Emails (Supreme administrative rights across all clinical, system, and user surfaces)
-const DEFAULT_OWNER_EMAILS = [
-  "mohammedabdelrouf85@gmail.com",
-  "raouf.work@gmail.com",
-  "admin@healthvibe.ai",
-  "badr.ahmed.biotech@gmail.com"
-];
-const OWNER_EMAILS = parseEmailList(process.env.OWNER_EMAILS || process.env.ADMIN_OWNER_EMAILS, DEFAULT_OWNER_EMAILS);
-const OWNER_EMAIL = OWNER_EMAILS[0] || "";
-function isOwnerEmail(email) {
-  if (!email) return false;
-  return OWNER_EMAILS.includes(String(email).trim().toLowerCase());
-}
 const DEFAULT_REVOKED_VERIFICATION_EMAILS = [
   "devilunderurwater@gmail.com"
 ];
@@ -558,6 +545,19 @@ function normalizeRole(role, isOwner = false) {
   if (isOwner) return ROLES.SUPER_ADMIN;
   if (role === 'admin' || role === 'owner') return ROLES.CLINIC_ADMIN;
   return VALID_ROLES.includes(role) ? role : ROLES.PATIENT;
+}
+
+function hasTrustedOwnerClaim(user = {}) {
+  return user.isOwner === true || user.role === ROLES.SUPER_ADMIN;
+}
+
+function hasTrustedAdminClaim(user = {}) {
+  return ADMIN_ROLES.includes(normalizeRole(user.role)) || hasTrustedOwnerClaim(user);
+}
+
+function getTrustedClaimRole(user = {}) {
+  if (hasTrustedOwnerClaim(user)) return ROLES.SUPER_ADMIN;
+  return VALID_ROLES.includes(user.role) ? user.role : ROLES.PATIENT;
 }
 
 function isVerificationRevoked(email) {
@@ -616,11 +616,12 @@ async function requireAuth(req, res, next) {
 
 /**
  * Middleware: Enforce Verified Email for Sensitive Actions
- * Verifies that the user's email is verified (or the user is the system owner)
+ * Verifies that the user's email is verified. Privileged email lists are not
+ * authorization sources; only trusted custom claims can bypass verification.
  */
 function requireVerifiedEmail(req, res, next) {
   const email = (req.user.email || '').toLowerCase();
-  if (isOwnerEmail(email)) {
+  if (hasTrustedOwnerClaim(req.user)) {
     return next();
   }
 
@@ -636,30 +637,11 @@ function requireVerifiedEmail(req, res, next) {
 
 /**
  * Middleware: Enforce Server-Verified Admin Role
- * Verifies that the authenticated user holds the Admin role in Firestore or via Custom Claims.
+ * Verifies that the authenticated user holds an admin custom claim.
  */
 async function requireAdmin(req, res, next) {
-  const uid = req.user.uid;
-  const email = (req.user.email || '').toLowerCase();
-
-  // Automatic Owner validation
-  if (isOwnerEmail(email)) {
+  if (hasTrustedAdminClaim(req.user)) {
     return next();
-  }
-
-  // Check custom claims
-  if (ADMIN_ROLES.includes(normalizeRole(req.user.role))) {
-    return next();
-  }
-
-  // Fallback to Firestore server document check (bypassing any client memory)
-  try {
-    const userDoc = await db.collection('users').doc(uid).get();
-    if (userDoc.exists && ADMIN_ROLES.includes(normalizeRole(userDoc.data().role))) {
-      return next();
-    }
-  } catch (err) {
-    console.error("[SERVER RBAC ERROR] Database role query failed:", err.message);
   }
 
   return res.status(403).json({
@@ -669,20 +651,8 @@ async function requireAdmin(req, res, next) {
 }
 
 async function requireSuperAdmin(req, res, next) {
-  const uid = req.user.uid;
-  const email = (req.user.email || '').toLowerCase();
-
-  if (isOwnerEmail(email) || normalizeRole(req.user.role) === ROLES.SUPER_ADMIN) {
+  if (hasTrustedOwnerClaim(req.user)) {
     return next();
-  }
-
-  try {
-    const userDoc = await db.collection('users').doc(uid).get();
-    if (userDoc.exists && normalizeRole(userDoc.data().role) === ROLES.SUPER_ADMIN) {
-      return next();
-    }
-  } catch (err) {
-    console.error("[SERVER RBAC ERROR] Database super admin verification query failed:", err.message);
   }
 
   return res.status(403).json({
@@ -728,13 +698,13 @@ async function requireDoctor(req, res, next) {
  * Returns the true server-authoritative role and permissions for the authenticated user
  */
 app.get('/api/auth/profile', requireAuth, async (req, res) => {
-  const isOwner = isOwnerEmail(req.user.email);
-  let role = normalizeRole(req.user.role, isOwner);
+  const isOwner = hasTrustedOwnerClaim(req.user);
+  let role = getTrustedClaimRole(req.user);
 
-  if (db && !isOwner) {
+  if (db && !hasTrustedAdminClaim(req.user)) {
     const doc = await db.collection('users').doc(req.user.uid).get();
-    if (doc.exists && doc.data().role) {
-      role = normalizeRole(doc.data().role, isOwner);
+    if (doc.exists && doc.data().role && !ADMIN_ROLES.includes(normalizeRole(doc.data().role))) {
+      role = normalizeRole(doc.data().role, false);
     }
   }
 
@@ -921,9 +891,7 @@ app.get('/api/admin/metrics', requireAuth, requireAdmin, async (req, res) => {
 app.get('/api/kpi/metrics', requireAuth, async (req, res) => {
   try {
     const userRole = normalizeRole(req.user.role);
-    const email = (req.user.email || '').toLowerCase();
-    const isOwner = isOwnerEmail(email);
-    const canView = isOwner || [...ADMIN_ROLES, ROLES.DOCTOR, ROLES.SUPPORT].includes(userRole);
+    const canView = hasTrustedAdminClaim(req.user) || [ROLES.DOCTOR, ROLES.SUPPORT].includes(userRole);
     if (!canView) {
       return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Clinical or Admin privileges required.' });
     }
@@ -1041,11 +1009,12 @@ app.get('/api/kpi/metrics', requireAuth, async (req, res) => {
 app.post('/api/user/sync-role', requireAuth, async (req, res) => {
   const uid = req.user.uid;
   const email = (req.user.email || '').toLowerCase();
-  const isOwner = isOwnerEmail(email);
+  const isOwner = hasTrustedOwnerClaim(req.user);
 
   try {
-    let role = ROLES.PATIENT;
+    let role = getTrustedClaimRole(req.user);
     let verifiedDoctor = false;
+    let privilegedAccountReviewRequired = false;
 
     if (db) {
       const userRef = db.collection('users').doc(uid);
@@ -1053,11 +1022,20 @@ app.post('/api/user/sync-role', requireAuth, async (req, res) => {
 
       if (userDoc.exists) {
         const data = userDoc.data();
-        if (data.role && VALID_ROLES.includes(data.role)) {
+        if (hasTrustedAdminClaim(req.user)) {
+          role = getTrustedClaimRole(req.user);
+          await userRef.set({ role, isOwner }, { merge: true });
+        } else if (data.role && ADMIN_ROLES.includes(normalizeRole(data.role))) {
+          privilegedAccountReviewRequired = true;
+          role = ROLES.PATIENT;
+          await userRef.set({
+            role,
+            isOwner: false,
+            privilegedRoleQuarantined: data.role,
+            privilegedRoleQuarantinedAt: admin.firestore.FieldValue.serverTimestamp()
+          }, { merge: true });
+        } else if (data.role && VALID_ROLES.includes(data.role)) {
           role = data.role;
-        } else if (isOwner) {
-          role = ROLES.SUPER_ADMIN;
-          await userRef.set({ role, isOwner: true }, { merge: true });
         } else {
           role = ROLES.PATIENT;
           await userRef.set({ role, isOwner: false }, { merge: true });
@@ -1065,7 +1043,7 @@ app.post('/api/user/sync-role', requireAuth, async (req, res) => {
         verifiedDoctor = Boolean(data.verifiedDoctor || role === ROLES.DOCTOR);
       } else {
         // Initialize new user on the backend
-        role = isOwner ? ROLES.SUPER_ADMIN : ROLES.PATIENT;
+        role = hasTrustedAdminClaim(req.user) ? getTrustedClaimRole(req.user) : ROLES.PATIENT;
         verifiedDoctor = role === ROLES.DOCTOR;
         await userRef.set({
           name: req.user.name || email.split('@')[0],
@@ -1078,7 +1056,7 @@ app.post('/api/user/sync-role', requireAuth, async (req, res) => {
         }, { merge: true });
       }
     } else {
-      role = isOwner ? ROLES.SUPER_ADMIN : ROLES.PATIENT;
+      role = hasTrustedAdminClaim(req.user) ? getTrustedClaimRole(req.user) : ROLES.PATIENT;
       verifiedDoctor = role === ROLES.DOCTOR;
     }
 
@@ -1088,6 +1066,16 @@ app.post('/api/user/sync-role', requireAuth, async (req, res) => {
       isOwner: isOwner,
       verifiedDoctor: verifiedDoctor
     }).catch(() => {});
+
+    if (privilegedAccountReviewRequired && db) {
+      await db.collection('audit_events').add({
+        type: 'PRIVILEGED_ROLE_QUARANTINED',
+        userId: uid,
+        userEmail: email || null,
+        reason: 'Firestore user document contained an administrative role without matching trusted custom claims.',
+        timestamp: admin.firestore.FieldValue.serverTimestamp()
+      }).catch(() => {});
+    }
 
     res.json({
       success: true,
@@ -1116,7 +1104,7 @@ app.post('/api/admin/set-user-role', requireAuth, requireVerifiedEmail, requireS
 
   try {
     const targetUser = await admin.auth().getUser(targetUserId);
-    const targetIsOwner = isOwnerEmail(targetUser.email);
+    const targetIsOwner = newRole === ROLES.SUPER_ADMIN;
     const isDoctor = newRole === ROLES.DOCTOR;
 
     // 1. Set cryptographic custom claims on Firebase Auth
@@ -1167,7 +1155,7 @@ app.post('/api/admin/toggle-user-suspension', requireAuth, requireVerifiedEmail,
 
   try {
     const targetUser = await admin.auth().getUser(targetUserId);
-    if (isOwnerEmail(targetUser.email)) {
+    if (hasTrustedOwnerClaim(targetUser.customClaims || {})) {
       return res.status(403).json({ error: 'CANNOT_SUSPEND_OWNER', message: 'System owner accounts cannot be suspended.' });
     }
 
@@ -1727,7 +1715,7 @@ app.post('/api/feedback/submit', requireAuth, async (req, res) => {
 app.get('/api/feedback/list', requireAuth, async (req, res) => {
   try {
     const userRole = req.user.role || 'patient';
-    const isDocOrAdmin = ['doctor', 'clinic_admin', 'super_admin'].includes(userRole) || (req.user.email && isSuperAdminUser(req.user.email));
+    const isDocOrAdmin = userRole === ROLES.DOCTOR || hasTrustedAdminClaim(req.user);
 
     if (!db || typeof db.collection !== 'function') {
       return res.json({ success: true, feedbacks: [], total: 0 });
@@ -2000,7 +1988,7 @@ app.post('/api/user/delete-account', requireAuth, async (req, res) => {
 
   try {
     // 1. Safeguard system owner from automated deletion
-    const isOwner = isOwnerEmail(userEmail);
+    const isOwner = hasTrustedOwnerClaim(req.user);
     if (isOwner) {
       return res.status(403).json({
         error: 'FORBIDDEN',

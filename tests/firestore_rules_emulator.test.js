@@ -97,10 +97,7 @@ class RulesSimulator {
   isOwner(request) {
     if (!this.isAuthenticated(request) || this.isVerificationRevoked(request)) return false;
     if (request.auth.token.isOwner === true) return true;
-    if (request.auth.token.role === 'owner' || request.auth.token.role === 'super_admin') return true;
-    if (this.isConfiguredOwnerEmail(request)) return true;
-    const udata = this.getUserData(request);
-    return udata.isOwner === true || udata.role === 'owner' || udata.role === 'super_admin';
+    return request.auth.token.role === 'super_admin';
   }
 
   hasUserDoc(request) {
@@ -111,22 +108,9 @@ class RulesSimulator {
     return (request.auth && this.users[request.auth.uid]) || {};
   }
 
-  getAdminAccessConfig() {
-    return this.systemConfig.admin_access || {};
-  }
-
-  isConfiguredOwnerEmail(request) {
-    if (!request.auth) return false;
-    const email = (request.auth.token.email || '').toLowerCase();
-    const configured = this.getAdminAccessConfig().ownerEmails;
-    if (Array.isArray(configured) && configured.map(item => String(item).toLowerCase()).includes(email)) return true;
-    return ['mohammedabdelrouf85@gmail.com', 'raouf.work@gmail.com', 'admin@healthvibe.ai', 'badr.ahmed.biotech@gmail.com'].includes(email);
-  }
-
   isEmailVerified(request) {
     if (!this.isAuthenticated(request) || this.isVerificationRevoked(request)) return false;
     if (request.auth.token.email_verified === true) return true;
-    if (this.isOwner(request)) return true;
     const udata = this.getUserData(request);
     return udata.emailVerified === true || udata.phoneVerified === true;
   }
@@ -135,6 +119,7 @@ class RulesSimulator {
     if (!this.isAuthenticated(request)) return 'unauthenticated';
     if (request.auth.token.role) return request.auth.token.role;
     const udata = this.getUserData(request);
+    if (['clinic_admin', 'super_admin', 'owner', 'admin'].includes(udata.role)) return 'patient';
     return udata.role || 'patient';
   }
 
@@ -159,7 +144,6 @@ class RulesSimulator {
 
   isDoctor(request) {
     if (!this.isAuthenticated(request)) return false;
-    if (this.isOwner(request)) return true;
     const role = this.getUserRole(request);
     if (role === 'doctor') return true;
     const udata = this.getUserData(request);
@@ -168,7 +152,6 @@ class RulesSimulator {
 
   isVerifiedDoctor(request) {
     if (!this.isDoctor(request)) return false;
-    if (this.isOwner(request)) return true;
     if (request.auth.token.verifiedDoctor === true || request.auth.token.doctorVerified === true) return true;
     const udata = this.getUserData(request);
     return udata.verifiedDoctor === true || udata.doctorVerified === true || udata.doctorApplicationStatus === 'approved';
@@ -1038,10 +1021,10 @@ runTest("Admin can update/delete feedback -> ALLOW", () => {
   assert.strictEqual(sim.canUpdateOrDeleteFeedback(req), true);
 });
 
-// SECTION J: 👑 SUPREME OWNER UNRESTRICTED PERMISSIONS
-runTest("Owner can read ANY clinical case without restriction -> ALLOW", () => {
+// SECTION J: Trusted custom claims and legacy privileged email hardening
+runTest("Trusted super_admin custom claim can read ANY clinical case -> ALLOW", () => {
   const req = {
-    auth: sim.evalAuth({ uid: "user_owner", email: "mohammedabdelrouf85@gmail.com", role: "super_admin" })
+    auth: sim.evalAuth({ uid: "user_owner", email: "owner@example.com", role: "super_admin" })
   };
   const unapprovedCase = {
     patientId: "random_patient_99",
@@ -1051,7 +1034,7 @@ runTest("Owner can read ANY clinical case without restriction -> ALLOW", () => {
   assert.strictEqual(sim.canReadCase(req, unapprovedCase), true);
 });
 
-runTest("Configured owner email can read ANY clinical case -> ALLOW", () => {
+runTest("Configured owner email without trusted claim cannot read another user's clinical case -> DENY", () => {
   const simConfigured = new RulesSimulator({
     system_config: {
       admin_access: {
@@ -1060,28 +1043,57 @@ runTest("Configured owner email can read ANY clinical case -> ALLOW", () => {
     }
   });
   const req = {
-    auth: simConfigured.evalAuth({ uid: "configured_owner", email: "ops.owner@example.com" })
+    auth: simConfigured.evalAuth({ uid: "configured_owner", email: "ops.owner@example.com", email_verified: false })
   };
   const unapprovedCase = {
     patientId: "random_patient_99",
     status: "draft",
     officialDiagnosis: "Confidential Finding"
   };
-  assert.strictEqual(simConfigured.canReadCase(req, unapprovedCase), true);
+  assert.strictEqual(simConfigured.canReadCase(req, unapprovedCase), false);
 });
 
-runTest("Owner can update privileged role and isOwner fields on any user doc -> ALLOW", () => {
+runTest("Static legacy admin email without trusted claim cannot read arbitrary clinical case -> DENY", () => {
   const req = {
-    auth: sim.evalAuth({ uid: "user_owner", email: "mohammedabdelrouf85@gmail.com", role: "super_admin" })
+    auth: sim.evalAuth({ uid: "legacy_email_signup", email: "admin@healthvibe.ai", email_verified: false })
+  };
+  const unapprovedCase = {
+    patientId: "random_patient_99",
+    status: "draft",
+    officialDiagnosis: "Confidential Finding"
+  };
+  assert.strictEqual(sim.canReadCase(req, unapprovedCase), false);
+});
+
+runTest("User document with forged administrative role but no custom claim is treated as patient -> DENY", () => {
+  const simForgedDoc = new RulesSimulator({
+    users: {
+      forged_admin_doc: { role: "super_admin", isOwner: true, emailVerified: true }
+    }
+  });
+  const req = {
+    auth: simForgedDoc.evalAuth({ uid: "forged_admin_doc", email: "patient@example.com", email_verified: true })
+  };
+  const unapprovedCase = {
+    patientId: "random_patient_99",
+    status: "draft",
+    officialDiagnosis: "Confidential Finding"
+  };
+  assert.strictEqual(simForgedDoc.canReadCase(req, unapprovedCase), false);
+});
+
+runTest("Trusted super_admin custom claim can update privileged role and isOwner fields -> ALLOW", () => {
+  const req = {
+    auth: sim.evalAuth({ uid: "user_owner", email: "owner@example.com", role: "super_admin" })
   };
   const currentDoc = { name: "Doctor Ali", role: "doctor" };
   const updatedDoc = { name: "Doctor Ali", role: "clinic_admin", isOwner: true };
   assert.strictEqual(sim.canUpdateUser(req, "target_user_123", currentDoc, updatedDoc), true);
 });
 
-runTest("Owner can read ANY medical/clinical report -> ALLOW", () => {
+runTest("Trusted super_admin custom claim can read ANY medical/clinical report -> ALLOW", () => {
   const req = {
-    auth: sim.evalAuth({ uid: "user_owner", email: "mohammedabdelrouf85@gmail.com", role: "super_admin" })
+    auth: sim.evalAuth({ uid: "user_owner", email: "owner@example.com", role: "super_admin" })
   };
   const unreleasedReport = {
     patientId: "patient_secret",

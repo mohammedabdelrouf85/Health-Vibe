@@ -24,11 +24,7 @@ service firebase.storage {
 
     function isAdmin() {
       return isAuthenticated() &&
-             firestore.exists(/databases/(default)/documents/users/$(request.auth.uid)) &&
-             (
-               userDoc(request.auth.uid).data.role in ['clinic_admin', 'super_admin', 'admin', 'owner'] ||
-               userDoc(request.auth.uid).data.isOwner == true
-             );
+             request.auth.token.role in ['clinic_admin', 'super_admin'];
     }
 
     function ownerCanWriteDoctorApplicationFile(userId, appId) {

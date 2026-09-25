@@ -403,7 +403,6 @@ let verifiedServerRole = null;
 async function getVerifiedServerRole(forceRefresh = false) {
   const user = auth ? auth.currentUser : null;
   if (!user) return ROLES.PATIENT;
-  if (isOwnerUser(user.email)) return ROLES.SUPER_ADMIN;
 
   if (verifiedServerRole && !forceRefresh) {
     return verifiedServerRole;
@@ -413,18 +412,18 @@ async function getVerifiedServerRole(forceRefresh = false) {
     // Read directly from Firestore database, never trusting mutable client memory
     const userDoc = await db.collection("users").doc(user.uid).get(forceRefresh ? { source: "server" } : undefined);
     if (userDoc.exists && userDoc.data().role) {
-      verifiedServerRole = normalizeRole(userDoc.data().role, isOwnerUser(user.email));
+      verifiedServerRole = normalizeRole(userDoc.data().role, false);
       return verifiedServerRole;
     }
   } catch (err) {
     console.warn("[RBAC] Server role verification query failed:", err);
   }
-  return normalizeRole(verifiedServerRole || selectedRole || ROLES.PATIENT, isOwnerUser(user.email));
+  return normalizeRole(verifiedServerRole || selectedRole || ROLES.PATIENT, false);
 }
 
 function hasPermission(permission) {
   const user = (typeof auth !== "undefined" && auth) ? auth.currentUser : null;
-  const isOwner = Boolean(user && (isOwnerUser(user.email) || isOwnerUser(user)));
+  const isOwner = Boolean(user && isOwnerUser(user));
   if (isOwner) return true;
   const role = normalizeRole((typeof selectedRole !== "undefined" && selectedRole) ? selectedRole : ROLES.PATIENT, isOwner);
   if (role === ROLES.SUPER_ADMIN) return true;
@@ -434,14 +433,11 @@ function hasPermission(permission) {
 
 function canAccessScreen(screenName) {
   const user = (typeof auth !== "undefined" && auth) ? auth.currentUser : null;
-  const isOwner = Boolean(user && (isOwnerUser(user.email) || isOwnerUser(user)));
+  const isOwner = Boolean(user && isOwnerUser(user));
   // Resolve the active role: respect selectedRole (owner may be testing as patient/doctor).
   const role = normalizeRole((typeof selectedRole !== "undefined" && selectedRole) ? selectedRole : ROLES.PATIENT, isOwner);
   // Full access only when the active role is SUPER_ADMIN (not merely isOwner).
   if (role === ROLES.SUPER_ADMIN) return true;
-  if ((screenName === "admin" || screenName === "audit" || screenName === "kpi") && (window.location.search.includes("admin=true") || (typeof APP_ENV !== "undefined" && APP_ENV.isLocalhost))) {
-    return true;
-  }
   if (screenName === "verification" && tempAllowDoctorApplication) {
     return true;
   }
@@ -452,7 +448,7 @@ function canAccessScreen(screenName) {
 // Client-side quick check for UI feedback only
 function enforcePermission(permission, actionDescription = "") {
   const user = (typeof auth !== "undefined" && auth) ? auth.currentUser : null;
-  if (user && (isOwnerUser(user.email) || isOwnerUser(user))) return true;
+  if (user && isOwnerUser(user)) return true;
   if (typeof activeScreen !== "undefined" && activeScreen === "doctor" && [PERMISSIONS.REVIEW_CASE, PERMISSIONS.APPROVE_CASE, PERMISSIONS.REJECT_CASE, PERMISSIONS.VIEW_DOCTOR_QUEUE].includes(permission)) {
     return true;
   }
@@ -477,7 +473,7 @@ async function enforceServerPermission(permission, actionDescription = "") {
     showToast(currentLanguage === "en" ? "Authentication required." : "يجب تسجيل الدخول أولاً.");
     return false;
   }
-  if (isOwnerUser(user.email) || isOwnerUser(user)) return true;
+  if (isOwnerUser(user)) return true;
 
   const serverRole = await getVerifiedServerRole(true);
   const perms = ROLE_PERMISSIONS_MAP[serverRole] || [];
@@ -521,13 +517,6 @@ function handleServerPermissionDenied(err, actionContext = "") {
   return false;
 }
 
-const DEFAULT_OWNER_EMAILS = [
-  "mohammedabdelrouf85@gmail.com",
-  "raouf.work@gmail.com",
-  "admin@healthvibe.ai",
-  "badr.ahmed.biotech@gmail.com"
-];
-
 const DEFAULT_REVOKED_VERIFICATION_EMAILS = [
   "devilunderurwater@gmail.com"
 ];
@@ -542,23 +531,16 @@ function getConfiguredEmailList(configKey, fallback) {
     .filter(Boolean);
 }
 
-function getOwnerEmails() {
-  return getConfiguredEmailList("ownerEmails", DEFAULT_OWNER_EMAILS);
-}
-
 function getRevokedVerificationEmails() {
   return getConfiguredEmailList("revokedVerificationEmails", DEFAULT_REVOKED_VERIFICATION_EMAILS);
 }
 
 function isOwnerUser(userOrEmail) {
-  if (!userOrEmail) return false;
-  const email = (typeof userOrEmail === "string" ? userOrEmail : (userOrEmail.email || "")).trim().toLowerCase();
-  if (getOwnerEmails().includes(email)) return true;
-  if (typeof userOrEmail === "object" && userOrEmail) {
-    if (userOrEmail.isOwner === true) return true;
-    if (userOrEmail.role === "owner" || userOrEmail.role === "super_admin") return true;
-  }
-  return false;
+  return Boolean(
+    typeof userOrEmail === "object" &&
+    userOrEmail &&
+    (userOrEmail.isOwner === true || userOrEmail.role === "super_admin")
+  );
 }
 
 function isVerificationRevoked(userOrEmail) {

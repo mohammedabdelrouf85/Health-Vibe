@@ -170,6 +170,27 @@ assert.ok(firestoreRules.includes("function isOwner()"), "Security rules must de
 assert.ok(firestoreRules.includes("function isDoctor()"), "Security rules must define verified doctor RBAC role.");
 assert.ok(firestoreRules.includes("function isAdmin()"), "Security rules must define administrator RBAC role.");
 assert.ok(firestoreRules.includes("function isSelf(userId)"), "Security rules must enforce strict per-user ownership.");
+assert.ok(!firestoreRules.includes("function isConfiguredOwnerEmail"), "Firestore rules must not grant owner/admin access from configured email lists.");
+const ownerFunctionSource = firestoreRules.slice(firestoreRules.indexOf("function isOwner()"), firestoreRules.indexOf("// Strict Email Verification check"));
+assert.ok(!ownerFunctionSource.includes("request.auth.token.email.lower() in"), "Firestore rules must not grant owner/admin privileges by email allowlist.");
+assert.ok(
+  !/getUserData\(\)\.role\s*==\s*['"](clinic_admin|super_admin|owner|admin)['"]/.test(firestoreRules),
+  "Firestore rules must not treat mutable user document roles as administrative authority."
+);
+
+const storageRules = fs.readFileSync(path.join(ROOT_DIR, 'storage.rules'), 'utf-8');
+assert.ok(storageRules.includes("request.auth.token.role in ['clinic_admin', 'super_admin']"), "Storage admin access must rely on trusted custom claims.");
+assert.ok(!/userDoc\(request\.auth\.uid\)\.data\.role in \[/.test(storageRules), "Storage rules must not grant admin access from user document role.");
+
+const serverCodeForAuth = fs.readFileSync(path.join(ROOT_DIR, 'backend/server.js'), 'utf-8');
+const syncRoleSlice = serverCodeForAuth.slice(serverCodeForAuth.indexOf("app.post('/api/user/sync-role'"), serverCodeForAuth.indexOf("app.post('/api/admin/set-user-role'"));
+assert.ok(!syncRoleSlice.includes('req.body'), "sync-role must not trust browser-provided role fields.");
+assert.ok(syncRoleSlice.includes('privilegedRoleQuarantined'), "sync-role must quarantine existing admin roles that lack trusted custom claims.");
+assert.ok(serverCodeForAuth.includes('function hasTrustedAdminClaim'), "Backend must centralize trusted custom-claim admin checks.");
+
+const functionsCode = fs.readFileSync(path.join(ROOT_DIR, 'backend/functions/index.js'), 'utf-8');
+assert.ok(!functionsCode.includes('DEFAULT_OWNER_EMAILS'), "Cloud Functions must not bootstrap admin claims from a static email list.");
+assert.ok(functionsCode.includes("const initialRole = ROLES.PATIENT"), "New Auth users must be initialized as patients regardless of email.");
 
 // Check collections coverage
 const collections = ['users', 'cases', 'appointments', 'feedbacks', 'audit_events', 'email_notifications'];

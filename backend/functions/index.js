@@ -10,33 +10,6 @@ if (!admin.apps.length) {
   admin.initializeApp();
 }
 
-const DEFAULT_OWNER_EMAILS = [
-  'mohammedabdelrouf85@gmail.com',
-  'raouf.work@gmail.com',
-  'admin@healthvibe.ai',
-  'badr.ahmed.biotech@gmail.com'
-];
-
-function parseEmailList(value, fallback) {
-  const source = value ? String(value).split(',') : fallback;
-  return source
-    .map(email => String(email || '').trim().toLowerCase())
-    .filter(Boolean);
-}
-
-function getFunctionsConfigValue(path, fallback = '') {
-  try {
-    const config = functions.config();
-    return path.split('.').reduce((acc, key) => (acc && acc[key] !== undefined ? acc[key] : undefined), config) || fallback;
-  } catch (err) {
-    return fallback;
-  }
-}
-
-const OWNER_EMAILS = parseEmailList(
-  process.env.OWNER_EMAILS || process.env.ADMIN_OWNER_EMAILS || getFunctionsConfigValue('admin.owner_emails'),
-  DEFAULT_OWNER_EMAILS
-);
 const ROLES = {
   PATIENT: 'patient',
   DOCTOR_PENDING: 'doctor_pending',
@@ -49,14 +22,12 @@ const ROLES = {
  * Automatically sets safe default custom claims without relying on frontend
  */
 exports.onUserCreated = functions.auth.user().onCreate(async (user) => {
-  const email = (user.email || '').toLowerCase();
-  const isOwner = OWNER_EMAILS.some(o => o.toLowerCase() === email);
-  const initialRole = isOwner ? ROLES.SUPER_ADMIN : ROLES.PATIENT;
+  const initialRole = ROLES.PATIENT;
 
   // 1. Assign cryptographic Custom Claims to Firebase JWT
   await admin.auth().setCustomUserClaims(user.uid, {
     role: initialRole,
-    isOwner: isOwner
+    isOwner: false
   });
 
   // 2. Initialize Firestore user record
@@ -64,7 +35,7 @@ exports.onUserCreated = functions.auth.user().onCreate(async (user) => {
     email: user.email,
     name: user.displayName || (user.email ? user.email.split('@')[0] : user.uid),
     role: initialRole,
-    isOwner: isOwner,
+    isOwner: false,
     createdAt: admin.firestore.FieldValue.serverTimestamp()
   }, { merge: true });
 

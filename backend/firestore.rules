@@ -19,29 +19,6 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
-    function adminAccessConfigExists() {
-      return exists(/databases/$(database)/documents/system_config/admin_access);
-    }
-
-    function getAdminAccessConfig() {
-      return get(/databases/$(database)/documents/system_config/admin_access).data;
-    }
-
-    function isConfiguredOwnerEmail() {
-      return isAuthenticated() &&
-             'email' in request.auth.token &&
-             ((adminAccessConfigExists() &&
-               'ownerEmails' in getAdminAccessConfig() &&
-               getAdminAccessConfig().ownerEmails is list &&
-               request.auth.token.email.lower() in getAdminAccessConfig().ownerEmails) ||
-              request.auth.token.email.lower() in [
-                'mohammedabdelrouf85@gmail.com',
-                'raouf.work@gmail.com',
-                'admin@healthvibe.ai',
-                'badr.ahmed.biotech@gmail.com'
-              ]);
-    }
-
     // 🛑 BLOCK SUSPENDED ACCOUNTS
     // Blocks all operations for accounts flagged as suspended in Auth claims or user documents
     function isSuspended() {
@@ -73,24 +50,18 @@ service cloud.firestore {
     }
 
     // 👑 MASTER OWNER PRIVILEGE
-    // Unrestricted super-admin & owner check across authentication claims, emails, and user docs
+    // Only trusted Firebase custom claims can grant owner/super-admin access.
     function isOwner() {
       return isAuthenticated() &&
              !isVerificationRevoked() &&
              (('isOwner' in request.auth.token && request.auth.token.isOwner == true) ||
-              ('role' in request.auth.token && (request.auth.token.role == 'owner' || request.auth.token.role == 'super_admin')) ||
-              isConfiguredOwnerEmail() ||
-              (hasUserDoc() && (
-                ('isOwner' in getUserData() && getUserData().isOwner == true) ||
-                ('role' in getUserData() && (getUserData().role == 'owner' || getUserData().role == 'super_admin'))
-              )));
+              ('role' in request.auth.token && request.auth.token.role == 'super_admin'));
     }
 
     // Strict Email Verification check
     function isEmailVerified() {
       return isAuthenticated() && !isVerificationRevoked() && (
-        request.auth.token.email_verified == true || 
-        isOwner() ||
+        request.auth.token.email_verified == true ||
         (hasUserDoc() && (
           ('emailVerified' in getUserData() && getUserData().emailVerified == true) ||
           ('phoneVerified' in getUserData() && getUserData().phoneVerified == true)
@@ -101,9 +72,10 @@ service cloud.firestore {
     // Role extraction: Custom Claims (tamper-proof JWT) take precedence over Firestore doc
     function getUserRole() {
       return !isAuthenticated() ? 'unauthenticated' :
-             isOwner() ? 'super_admin' :
              ('role' in request.auth.token) ? request.auth.token.role :
-             (hasUserDoc() && ('role' in getUserData())) ? getUserData().role : 'patient';
+             (hasUserDoc() &&
+              ('role' in getUserData()) &&
+              !(getUserData().role in ['clinic_admin', 'super_admin', 'owner', 'admin'])) ? getUserData().role : 'patient';
     }
 
     function isAdmin() {
@@ -129,7 +101,6 @@ service cloud.firestore {
     // Doctor role is strictly clinical and separated from administrative access
     function isDoctor() {
       return isAuthenticated() && (
-        isOwner() ||
         getUserRole() == 'doctor' ||
         (hasUserDoc() && (
           ('role' in getUserData() && getUserData().role == 'doctor') ||
@@ -140,7 +111,6 @@ service cloud.firestore {
 
     function isVerifiedDoctor() {
       return isDoctor() && (
-        isOwner() ||
         ('verifiedDoctor' in request.auth.token && request.auth.token.verifiedDoctor == true) ||
         ('doctorVerified' in request.auth.token && request.auth.token.doctorVerified == true) ||
         (hasUserDoc() && (

@@ -16,11 +16,8 @@ window.HEALTH_VIBE_CONFIG = {
   // Debug logging
   debug: true,
 
-  // Admin access configuration
+  // Account verification overrides. Administrative access is assigned by backend custom claims only.
   adminAccess: {
-    ownerEmails: [
-      "admin@example.com"
-    ],
     revokedVerificationEmails: []
   },
 

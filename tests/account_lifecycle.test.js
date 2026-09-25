@@ -61,7 +61,7 @@ console.log('  ✓ Delete account modal contains required input guard and access
 // -----------------------------------------------------------------------------
 console.log('\n▶ TEST 4: Delete Account Backend API in server.js');
 assert(serverJs.includes("app.post('/api/user/delete-account'"), 'Backend must have /api/user/delete-account route');
-assert(serverJs.includes('isOwnerEmail(userEmail)'), 'Deletion route must protect platform owner accounts');
+assert(serverJs.includes('hasTrustedOwnerClaim(req.user)'), 'Deletion route must protect only trusted owner custom-claim accounts');
 assert(serverJs.includes("collection('appointments')"), 'Deletion route must purge user appointments');
 assert(serverJs.includes("collection('users').doc(userId)"), 'Deletion route must delete user document');
 assert(serverJs.includes('admin.auth().deleteUser(userId)'), 'Deletion route must delete user from Firebase Auth');
@@ -74,7 +74,7 @@ console.log('  ✓ Backend GDPR/HIPAA account deletion verified with owner prote
 console.log('\n▶ TEST 5: Client-Side Deletion & Local Registry Purging in app.js');
 assert(appJs.includes('window.openDeleteAccountModal = function'), 'openDeleteAccountModal must be on window');
 assert(appJs.includes('window.closeDeleteAccountModal = function'), 'closeDeleteAccountModal must be on window');
-assert(appJs.includes('isOwnerUser(user.email)'), 'Client modal must warn and block deleting owner account');
+assert(appJs.includes('isOwnerUser(user)'), 'Client modal must warn and block deleting trusted owner account');
 assert(appJs.includes('localStorage.setItem(ACCOUNTS_REGISTRY_KEY'), 'Account deletion must purge user from local registry');
 console.log('  ✓ Client deletion ensures local accounts registry and session keys are sanitized.');
 

@@ -96,12 +96,6 @@
   const activeConfig = ENVIRONMENTS[activeEnvName] || ENVIRONMENTS.production;
 
   const ADMIN_ACCESS = {
-    ownerEmails: [
-      "mohammedabdelrouf85@gmail.com",
-      "raouf.work@gmail.com",
-      "admin@healthvibe.ai",
-      "badr.ahmed.biotech@gmail.com"
-    ],
     revokedVerificationEmails: [
       "devilunderurwater@gmail.com"
     ]
