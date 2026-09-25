@@ -112,6 +112,59 @@ assert(appJs.includes("changeUserRole('${u.id}', this.value"), 'Role select must
 assert(appJs.includes('/api/user/sync-role'), 'app.js onAuthStateChanged must sync authoritative role with backend');
 console.log('  ✓ Admin table renders role dropdown for accounts and syncs with backend.');
 
+
+// -----------------------------------------------------------------------------
+// TEST 9: Patient Navigation Role Isolation (normalizeRole)
+// -----------------------------------------------------------------------------
+console.log('\n▶ TEST 9: Patient Navigation Role Isolation - normalizeRole respects explicit role');
+// normalizeRole must prioritise a valid passed role over the isOwner flag.
+// This ensures owner accounts testing as 'patient' do not receive SUPER_ADMIN navigation.
+const normalizeRoleSource = appJs.slice(
+  appJs.indexOf('function normalizeRole('),
+  appJs.indexOf('function isAdminRole(')
+);
+assert(
+  normalizeRoleSource.includes('VALID_ROLES.includes(role)') &&
+  normalizeRoleSource.indexOf('VALID_ROLES.includes(role)') < normalizeRoleSource.indexOf('if (isOwner)'),
+  'normalizeRole must check VALID_ROLES.includes(role) BEFORE the isOwner guard so explicit roles are never overwritten'
+);
+console.log('  ✓ normalizeRole honours explicit role (patient/doctor) even when called with isOwner=true.');
+
+// -----------------------------------------------------------------------------
+// TEST 10: updateNavVisibility Must Use canAccessScreen, Not isOwner Shortcut
+// -----------------------------------------------------------------------------
+console.log('\n▶ TEST 10: updateNavVisibility uses role-based canAccessScreen, not isOwner bypass');
+const updateNavSource = appJs.slice(
+  appJs.indexOf('function updateNavVisibility()'),
+  appJs.indexOf('function bindScreenNavigation()')
+);
+// Must NOT contain the old "if (isOwner) { btn.style.display = 'flex'" bypass
+assert(
+  !updateNavSource.includes('if (isOwner)'),
+  'updateNavVisibility must NOT contain isOwner shortcut that force-shows all nav items'
+);
+// Must delegate to canAccessScreen for every nav item
+assert(
+  updateNavSource.includes('canAccessScreen(screen)'),
+  'updateNavVisibility must call canAccessScreen(screen) for each nav-item'
+);
+console.log('  ✓ updateNavVisibility strictly delegates to canAccessScreen — patient navigation is role-isolated.');
+
+// canAccessScreen must resolve role before owner bypass
+const canAccessSource = appJs.slice(
+  appJs.indexOf('function canAccessScreen('),
+  appJs.indexOf('// Client-side quick check')
+);
+assert(
+  !canAccessSource.includes('if (isOwner) return true'),
+  'canAccessScreen must NOT contain bare isOwner bypass — it must check role === SUPER_ADMIN instead'
+);
+assert(
+  canAccessSource.includes("role === ROLES.SUPER_ADMIN) return true"),
+  'canAccessScreen must allow access when active role resolves to SUPER_ADMIN (not merely isOwner)'
+);
+console.log('  ✓ canAccessScreen grants full access only when selectedRole resolves to SUPER_ADMIN.');
+
 console.log('\n==================================================================');
-console.log('🎉 ALL 8 ACCOUNT & ROLE LIFECYCLE TESTS PASSED WITH 100% SUCCESS!');
+console.log('🎉 ALL 10 ACCOUNT & ROLE LIFECYCLE TESTS PASSED WITH 100% SUCCESS!');
 console.log('==================================================================');

@@ -133,9 +133,12 @@ const ADMIN_ROLES = [ROLES.CLINIC_ADMIN, ROLES.SUPER_ADMIN];
 const VALID_ROLES = Object.values(ROLES);
 
 function normalizeRole(role, isOwner = false) {
-  if (isOwner) return ROLES.SUPER_ADMIN;
+  // Only default to SUPER_ADMIN when role is absent/invalid and user is owner.
+  // If a valid role is explicitly provided (e.g. owner testing as patient), honour it.
+  if (VALID_ROLES.includes(role)) return role;
   if (role === "admin" || role === "owner") return ROLES.CLINIC_ADMIN;
-  return VALID_ROLES.includes(role) ? role : ROLES.PATIENT;
+  if (isOwner) return ROLES.SUPER_ADMIN;
+  return ROLES.PATIENT;
 }
 
 function isAdminRole(role) {
@@ -290,11 +293,13 @@ function hasPermission(permission) {
 function canAccessScreen(screenName) {
   const user = (typeof auth !== "undefined" && auth) ? auth.currentUser : null;
   const isOwner = Boolean(user && (isOwnerUser(user.email) || isOwnerUser(user)));
-  if (isOwner) return true;
+  // Resolve the active role: respect selectedRole (owner may be testing as patient/doctor).
+  const role = normalizeRole((typeof selectedRole !== "undefined" && selectedRole) ? selectedRole : ROLES.PATIENT, isOwner);
+  // Full access only when the active role is SUPER_ADMIN (not merely isOwner).
+  if (role === ROLES.SUPER_ADMIN) return true;
   if ((screenName === "admin" || screenName === "audit" || screenName === "kpi") && (window.location.search.includes("admin=true") || (typeof APP_ENV !== "undefined" && APP_ENV.isLocalhost))) {
     return true;
   }
-  const role = normalizeRole((typeof selectedRole !== "undefined" && selectedRole) ? selectedRole : ROLES.PATIENT, isOwner);
   if (screenName === "verification" && tempAllowDoctorApplication) {
     return true;
   }
@@ -4641,9 +4646,11 @@ function transitionToApp(user, options = {}) {
   if (userName) userName.textContent = displayName;
   if (userEmail) userEmail.textContent = user.email;
   if (accountLabel) {
+    // Display the label for the active selectedRole, not the owner's maximum role.
+    const displayRole = normalizeRole(selectedRole);
     accountLabel.textContent = currentLanguage === "en"
-      ? (englishRoleLabels[normalizeRole(selectedRole, isOwner)] || englishRoleLabels.patient)
-      : (roleLabels[normalizeRole(selectedRole, isOwner)] || roleLabels.patient);
+      ? (englishRoleLabels[displayRole] || englishRoleLabels.patient)
+      : (roleLabels[displayRole] || roleLabels.patient);
   }
 
   if (publicSite) {
@@ -4721,9 +4728,10 @@ async function enterApp(source = "google") {
 
       userName.textContent = user.displayName || user.email.split('@')[0];
       userEmail.textContent = user.email;
+      const displayRole2 = normalizeRole(selectedRole);
       accountLabel.textContent = currentLanguage === "en"
-        ? (englishRoleLabels[normalizeRole(selectedRole, isOwner)] || englishRoleLabels.patient)
-        : (roleLabels[normalizeRole(selectedRole, isOwner)] || roleLabels.patient);
+        ? (englishRoleLabels[displayRole2] || englishRoleLabels.patient)
+        : (roleLabels[displayRole2] || roleLabels.patient);
 
       updateAvatar(user);
       updateEmailVerificationUI(user);
@@ -5503,20 +5511,11 @@ async function enforceEmailVerification(actionNameAr = "هذا الإجراء", 
 }
 
 function updateNavVisibility() {
-  const user = (typeof auth !== "undefined" && auth) ? auth.currentUser : null;
-  const isOwner = Boolean(user && (isOwnerUser(user.email) || isOwnerUser(user)));
-
+  // Navigation visibility is strictly driven by the active selectedRole.
+  // isOwner does NOT auto-show all screens — it only matters when selectedRole is SUPER_ADMIN.
   document.querySelectorAll(".nav-item").forEach((btn) => {
     const screen = btn.dataset.screen;
-    if (isOwner) {
-      btn.style.display = "flex";
-      return;
-    }
-    // Patients must never see doctor, admin, audit, or verification in navigation
-    if (screen === "verification") {
-      btn.style.display = (selectedRole === ROLES.DOCTOR || selectedRole === ROLES.DOCTOR_PENDING || isAdminRole(selectedRole)) ? "flex" : "none";
-      return;
-    }
+    if (!screen) return;
     btn.style.display = canAccessScreen(screen) ? "flex" : "none";
   });
 
