@@ -3093,80 +3093,26 @@ async function updateCaseStatus(id, newStatus, note, extraFields = {}) {
       });
       return true;
     }
-    const statusMeta = getCaseStatusMeta(newStatus);
-    const historyItem = {
-      status: newStatus,
-      changedAt: new Date().toISOString(),
-      changedBy: user ? user.uid : "doctor",
-      changedByName: user ? (user.displayName || (user.email ? user.email.split('@')[0] : "Doctor")) : "Doctor",
-      changedByEmail: user ? (user.email || "") : "",
-      changedByRole: selectedRole || "doctor",
-      note: note || (newStatus === CASE_STATUS.APPROVED ? (isEn ? "Approved by physician" : "تم الاعتماد السريري من الطبيب") : `${isEn ? statusMeta.en : statusMeta.ar}`)
-    };
-
-    const updatePayload = {
-      status: newStatus,
-      doctorNote: note || "",
-      lastUpdatedBy: user ? user.uid : null,
-      reviewedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      statusHistory: firebase.firestore.FieldValue.arrayUnion(historyItem),
-      ...extraFields
-    };
-
-    if (newStatus === CASE_STATUS.REJECTED) {
-      updatePayload.doctorApproved = false;
-      updatePayload.rejectedAt = firebase.firestore.FieldValue.serverTimestamp();
-      updatePayload.rejectedBy = user ? user.uid : null;
-      updatePayload.rejectingDoctorId = user ? user.uid : null;
-      updatePayload.rejectingDoctorName = extraFields.rejectingDoctorName || (user ? (user.displayName || (user.email ? user.email.split('@')[0] : "Doctor")) : "Doctor");
-      updatePayload.rejectingDoctorEmail = user ? user.email : null;
-      updatePayload.rejectionReason = note || extraFields.rejectionReason || (isEn ? "Non-clinical data or duplicate submission" : "بيانات غير طبية أو تقييم مكرر");
-      updatePayload.doctorNote = updatePayload.rejectionReason;
-    } else if (newStatus === CASE_STATUS.MORE_INFO_REQUESTED) {
-      updatePayload.doctorApproved = false;
-      updatePayload.moreInfoRequestedAt = firebase.firestore.FieldValue.serverTimestamp();
-      updatePayload.moreInfoNote = note || extraFields.moreInfoNote || "";
-      updatePayload.doctorNote = updatePayload.moreInfoNote;
-      updatePayload.requestingDoctorId = user ? user.uid : null;
-      updatePayload.requestingDoctorName = extraFields.requestingDoctorName || (user ? (user.displayName || (user.email ? user.email.split('@')[0] : "Doctor")) : "Doctor");
-      updatePayload.requestingDoctorEmail = user ? user.email : null;
-    } else if (newStatus === CASE_STATUS.ESCALATED) {
-      updatePayload.escalatedAt = firebase.firestore.FieldValue.serverTimestamp();
-      updatePayload.escalationReason = note || "";
-    } else if (newStatus === CASE_STATUS.CLOSED) {
-      updatePayload.closedAt = firebase.firestore.FieldValue.serverTimestamp();
-      updatePayload.closedBy = user ? user.uid : null;
-    }
-
-    // Direct authentic update to Firestore
-    await db.collection("cases").doc(id).update(updatePayload);
-    console.info(`✅ [Firestore] Case ${id} successfully transitioned to ${newStatus}`);
-
-    // If backend endpoint is configured, notify it in the background without blocking
-    if (typeof API_BASE_URL !== "undefined" && API_BASE_URL) {
-      callBackend("/api/doctor/transition-case-status", {
-        method: "POST",
-        body: JSON.stringify({
-          caseId: id,
-          targetStatus: newStatus,
-          note: note || "",
-          clinicalNotes: extraFields.clinicalNotes || note || "",
-          clinicalDiagnosis: extraFields.clinicalDiagnosis || extraFields.clinicalNotes || note || "",
-          medications: extraFields.medications || "",
-          recommendation: extraFields.recommendation || "",
-          recommendations: extraFields.recommendations || [],
-          approvingDoctorName: extraFields.approvingDoctorName || "",
-          doctorSpecialty: extraFields.doctorSpecialty || "",
-          doctorLicense: extraFields.doctorLicense || "",
-          clinicName: extraFields.clinicName || "",
-          reportRef: extraFields.reportRef || ""
-        })
-      }).then(res => {
-        if (res && res.notification && res.notification.success) {
-          console.info(`[Email Notification] Successfully dispatched ${res.notification.type} to ${res.notification.recipient}`);
-        }
-      }).catch(err => console.warn("Backend notification failed (non-critical):", err.message));
+    const res = await callBackend("/api/doctor/transition-case-status", {
+      method: "POST",
+      body: JSON.stringify({
+        caseId: id,
+        targetStatus: newStatus,
+        note: note || "",
+        clinicalNotes: extraFields.clinicalNotes || note || "",
+        clinicalDiagnosis: extraFields.clinicalDiagnosis || extraFields.clinicalNotes || note || "",
+        medications: extraFields.medications || "",
+        recommendation: extraFields.recommendation || "",
+        recommendations: extraFields.recommendations || [],
+        approvingDoctorName: extraFields.approvingDoctorName || "",
+        doctorSpecialty: extraFields.doctorSpecialty || "",
+        doctorLicense: extraFields.doctorLicense || "",
+        clinicName: extraFields.clinicName || "",
+        reportRef: extraFields.reportRef || ""
+      })
+    });
+    if (res && res.notification && res.notification.success) {
+      console.info(`[Email Notification] Successfully dispatched ${res.notification.type} to ${res.notification.recipient}`);
     }
 
     await writeClientAuditLog("CASE_STATUS_TRANSITIONED", {
@@ -3174,12 +3120,12 @@ async function updateCaseStatus(id, newStatus, note, extraFields = {}) {
       targetStatus: newStatus,
       auditCategory: newStatus === CASE_STATUS.APPROVED ? "approval" : (newStatus === CASE_STATUS.REJECTED ? "rejection" : "edit"),
       note: note || "",
-      backendAuthoritative: false
+      backendAuthoritative: true
     });
 
     return true;
   } catch (err) {
-    console.error("❌ Error updating case status in Firestore:", err);
+    console.error("❌ Error updating case status through backend:", err);
     if (handleServerPermissionDenied(err, "Update Case Status")) return false;
     showToast(getAuthErrorMessage(err) || (isEn ? "Failed to update case status." : "فشل تحديث حالة الملف الطبي."));
     return false;
@@ -6494,6 +6440,10 @@ async function renderReportScreen(targetCaseId = null) {
 
       const o2Val = caseData.oxygenLevel || caseData.o2 || 0;
       const isCriticalO2 = o2Val > 0 && o2Val < 90;
+      const lockedMissing = recordedClinicalText(null, isEn);
+      const o2Display = o2Val === null || o2Val === "" || o2Val === 0
+        ? lockedMissing
+        : `${escapeHtml(String(o2Val))}%`;
 
       const emergencyNoticeHtml = isCriticalO2 ? `
         <div class="emergency-pending-banner" style="margin-bottom: 20px;">

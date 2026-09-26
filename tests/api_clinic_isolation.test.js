@@ -11,14 +11,19 @@ const docs = {
   users: new Map([
     ['clinic-admin-a', { role: 'clinic_admin', clinicId: 'clinic-a', emailVerified: true }],
     ['clinic-admin-b', { role: 'clinic_admin', clinicId: 'clinic-b', emailVerified: true }],
-    ['doctor-a', { role: 'doctor', clinicId: 'clinic-a', verifiedDoctor: true }],
-    ['doctor-b', { role: 'doctor', clinicId: 'clinic-b', verifiedDoctor: true }]
+    ['doctor-a', { role: 'doctor', clinicId: 'clinic-a', verifiedDoctor: true, doctorApplicationStatus: 'approved' }],
+    ['doctor-b', { role: 'doctor', clinicId: 'clinic-b', verifiedDoctor: true, doctorApplicationStatus: 'approved' }],
+    ['doctor-unapproved', { role: 'doctor', clinicId: 'clinic-a', verifiedDoctor: false, doctorApplicationStatus: 'pending' }]
   ]),
   cases: new Map([
     ['case-a', { patientId: 'patient-a', clinicId: 'clinic-a', status: 'submitted', submittedAt: Date.now() - 60000 }],
     ['case-b', { patientId: 'patient-b', clinicId: 'clinic-b', status: 'approved', doctorApproved: true, submittedAt: Date.now() - 120000, approvedAt: Date.now() - 30000 }]
   ]),
-  audit_events: new Map()
+  audit_events: new Map(),
+  doctor_applications: new Map([
+    ['app-doctor-a', { userId: 'doctor-a', status: 'approved', name: 'Doctor A', licenseNumber: 'A-1', specialty: 'Pulmonology', clinic: 'Clinic A' }],
+    ['app-doctor-b', { userId: 'doctor-b', status: 'approved', name: 'Doctor B', licenseNumber: 'B-1', specialty: 'Pulmonology', clinic: 'Clinic B' }]
+  ])
 };
 
 function collection(name) {
@@ -147,6 +152,13 @@ vm.runInNewContext(fs.readFileSync(serverPath, 'utf8'), sandbox, { filename: ser
     });
     assert.equal(allowed.status, 200, JSON.stringify(allowed.body));
     assert.equal(docs.cases.get('case-a').clinicId, 'clinic-a');
+
+    const unapprovedDoctor = await request('POST', '/api/admin/assign-case', 'clinic-a-token', {
+      caseId: 'case-a',
+      doctorId: 'doctor-unapproved',
+      doctorName: 'Unapproved Doctor'
+    });
+    assert.equal(unapprovedDoctor.status, 403);
 
     console.log('PASS: API clinic isolation blocks foreign clinic IDs for KPI and case assignment.');
   } finally {

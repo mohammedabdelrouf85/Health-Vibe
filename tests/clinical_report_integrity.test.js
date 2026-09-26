@@ -9,17 +9,26 @@ const backendRequire = createRequire(serverPath);
 const record = { id: 'case-clinical', patientId: 'patient-1', assignedDoctorId: 'doctor-1', status: 'under_review', oxygenLevel: 85 };
 let application = { userId: 'doctor-1', status: 'approved', name: 'Verified Doctor', licenseNumber: 'VERIFIED-LICENSE', specialty: 'Recorded specialty', clinic: 'Recorded clinic' };
 let writes = 0;
+const profiles = {
+  'doctor-1': { role: 'doctor', doctorApplicationStatus: 'approved', verifiedDoctor: true, clinicId: 'clinic-a', status: 'active' },
+  'doctor-2': { role: 'doctor', doctorApplicationStatus: 'approved', verifiedDoctor: true, clinicId: 'clinic-a', status: 'active' },
+  'suspended-doctor': { role: 'doctor', doctorApplicationStatus: 'approved', verifiedDoctor: true, clinicId: 'clinic-a', status: 'suspended', suspended: true },
+  'patient-1': { role: 'patient', clinicId: 'clinic-a', status: 'active' }
+};
 const database = { collection: name => ({
   where: (field, op, uid) => ({ get: async () => ({ docs: name === 'cases' ? [{ id: record.id, data: () => record }] : (application && application.userId === uid ? [{ id: 'verified-app', data: () => application }] : []) }) }),
   doc: id => ({
-    get: async () => ({ exists: name === 'cases' && id === record.id, data: () => record }),
+    get: async () => ({
+      exists: (name === 'cases' && id === record.id) || (name === 'users' && Boolean(profiles[id])),
+      data: () => name === 'users' ? profiles[id] : record
+    }),
     update: async data => { writes++; Object.assign(record, data); }
   }),
   add: async () => ({ id: 'audit-1' })
 }) };
 const firestore = () => database;
 firestore.FieldValue = { serverTimestamp: () => '2026-09-26T10:00:00Z', arrayUnion: value => [value] };
-const firebase = { apps: [{}], firestore, auth: () => ({ verifyIdToken: async token => ({ uid: token, email: `${token}@example.test`, role: token === 'doctor-1' ? 'doctor' : 'patient', email_verified: true }) }) };
+const firebase = { apps: [{}], firestore, auth: () => ({ verifyIdToken: async token => ({ uid: token, email: `${token}@example.test`, role: profiles[token]?.role || 'patient', email_verified: true }) }) };
 const serverContext = {
   require: name => name === 'firebase-admin' ? firebase : name === 'dotenv' ? { config() {} }
     : name === './whatsapp-bot' || name === './backup-service' ? {} : backendRequire(name),
@@ -98,6 +107,26 @@ include('window.generateAndApproveReport =', 'window.openCaseReport =');
     assert.equal(record.approvingDoctorName, 'Verified Doctor');
     assert.equal(record.doctorIdentity.applicationId, 'verified-app');
     assert.equal((await request(`/api/reports/${record.id}/doctor-identity`, 'unrelated-patient')).status, 403);
+    record.status = 'under_review';
+    const assignedWrites = writes;
+    result = await request('/api/doctor/request-more-info', 'doctor-2', { caseId: record.id, note: 'Need more data' });
+    assert.equal(result.status, 403);
+    assert.equal(writes, assignedWrites, 'Unassigned doctor must not mutate a directly supplied caseId');
+    const assignedDoctor = record.assignedDoctorId;
+    delete record.assignedDoctorId;
+    result = await request('/api/doctor/request-more-info', 'doctor-1', { caseId: record.id, note: 'Need more data' });
+    assert.equal(result.status, 403);
+    assert.equal(writes, assignedWrites, 'Assigned doctor claim is required on the case before processing');
+    record.assignedDoctorId = assignedDoctor;
+    profiles['doctor-1'].status = 'suspended';
+    profiles['doctor-1'].suspended = true;
+    result = await request('/api/doctor/request-more-info', 'doctor-1', { caseId: record.id, note: 'Need more data' });
+    assert.equal(result.status, 403);
+    assert.equal(writes, assignedWrites, 'Suspended doctor must not mutate a directly supplied caseId');
+    profiles['doctor-1'].status = 'active';
+    profiles['doctor-1'].suspended = false;
+    record.status = 'approved';
+    record.doctorApproved = true;
     for (const language of ['ar', 'en']) {
       client.currentLanguage = language;
       const missing = language === 'ar' ? 'غير مسجل' : 'Not recorded';

@@ -641,6 +641,14 @@ function recordClinicId(data = {}) {
   return data.clinicId || data.clinic || data.branchId || null;
 }
 
+function isSuspendedProfile(data = {}) {
+  return data.suspended === true ||
+    data.isSuspended === true ||
+    data.status === 'suspended' ||
+    data.accountStatus === 'suspended' ||
+    data.disabled === true;
+}
+
 async function getServerUserProfile(uid) {
   if (!db || !uid) return null;
   const userDoc = await db.collection('users').doc(uid).get();
@@ -777,15 +785,16 @@ async function requireSuperAdmin(req, res, next) {
 async function requireDoctor(req, res, next) {
   const uid = req.user.uid;
 
-  // Check custom claims
-  if (req.user.role === 'doctor') {
-    return next();
-  }
-
-  // Check server document
   try {
-    const userDoc = await db.collection('users').doc(uid).get();
-    if (userDoc.exists && userDoc.data().role === 'doctor' && userDoc.data().doctorApplicationStatus === 'approved') {
+    const profile = await getServerUserProfile(uid);
+    const doctorIdentity = await getVerifiedDoctorIdentity(uid);
+    if (profile &&
+        !isSuspendedProfile(profile) &&
+        profile.role === 'doctor' &&
+        profile.doctorApplicationStatus === 'approved' &&
+        doctorIdentity) {
+      req.doctorProfile = profile;
+      req.doctorIdentity = doctorIdentity;
       return next();
     }
   } catch (err) {
@@ -1511,7 +1520,13 @@ async function executeDoctorTransition({
 
       // Zero-trust assigned physician check
       const assignedDoctor = caseData.assignedDoctorId || caseData.doctorId || caseData.doctorUid;
-      if (assignedDoctor && assignedDoctor !== req.user.uid) {
+      if (!assignedDoctor) {
+        return res.status(403).json({
+          error: 'CASE_NOT_ASSIGNED',
+          message: 'This clinical case must be assigned by an authorized administrator before a doctor can process it.'
+        });
+      }
+      if (assignedDoctor !== req.user.uid) {
         return res.status(403).json({
           error: 'ACCESS_DENIED',
           message: 'Zero-Trust enforcement: This clinical case is assigned to another physician.'
@@ -1562,7 +1577,7 @@ async function executeDoctorTransition({
         updateData.doctorApproved = true;
         updateData.approvingDoctorId = req.user.uid;
         updateData.approvingDoctorEmail = req.user.email;
-        const doctorIdentity = await getVerifiedDoctorIdentity(req.user.uid);
+        const doctorIdentity = req.doctorIdentity || await getVerifiedDoctorIdentity(req.user.uid);
         if (!doctorIdentity) {
           return res.status(403).json({ error: 'DOCTOR_CREDENTIALS_NOT_VERIFIED' });
         }
@@ -1759,6 +1774,19 @@ app.post('/api/notifications/send-email', requireAuth, requireVerifiedEmail, req
       return res.status(404).json({ error: 'CASE_NOT_FOUND', message: `Case ${caseId} does not exist.` });
     }
     const c = caseDoc.data();
+    const assignedDoctor = c.assignedDoctorId || c.doctorId || c.doctorUid;
+    if (!assignedDoctor) {
+      return res.status(403).json({
+        error: 'CASE_NOT_ASSIGNED',
+        message: 'This clinical case must be assigned before a doctor can send clinical notifications.'
+      });
+    }
+    if (assignedDoctor !== req.user.uid) {
+      return res.status(403).json({
+        error: 'ACCESS_DENIED',
+        message: 'Zero-Trust enforcement: This clinical case is assigned to another physician.'
+      });
+    }
     let recipient = overrideRecipient || c.patientEmail || c.email;
     let patientName = c.patientName || c.name;
 
@@ -1952,14 +1980,24 @@ app.post('/api/admin/assign-case', requireAuth, requireVerifiedEmail, requireAdm
         });
       }
 
-      if (scope.role === ROLES.CLINIC_ADMIN) {
-        const doctorProfile = await getServerUserProfile(doctorId);
-        if (!doctorProfile || recordClinicId(doctorProfile) !== scope.clinicId) {
-          return res.status(403).json({
-            error: 'DOCTOR_CLINIC_MISMATCH',
-            message: 'Clinic Admin can assign only doctors from the same clinic.'
-          });
-        }
+      const doctorProfile = await getServerUserProfile(doctorId);
+      const doctorIdentity = await getVerifiedDoctorIdentity(doctorId);
+      if (!doctorProfile ||
+          isSuspendedProfile(doctorProfile) ||
+          doctorProfile.role !== 'doctor' ||
+          doctorProfile.doctorApplicationStatus !== 'approved' ||
+          !doctorIdentity) {
+        return res.status(403).json({
+          error: 'DOCTOR_NOT_APPROVED',
+          message: 'Cases can be assigned only to active, approved doctors.'
+        });
+      }
+
+      if (scope.role === ROLES.CLINIC_ADMIN && recordClinicId(doctorProfile) !== scope.clinicId) {
+        return res.status(403).json({
+          error: 'DOCTOR_CLINIC_MISMATCH',
+          message: 'Clinic Admin can assign only active, approved doctors from the same clinic.'
+        });
       }
 
       const currentStatus = caseData.status || 'pending';

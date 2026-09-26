@@ -109,6 +109,12 @@ async function seed(env) {
       verifiedDoctor: true,
       doctorApplicationStatus: "approved"
     }));
+    batch.set(adb.collection("users").doc("doctor-unapproved"), user("doctor-unapproved", {
+      role: "doctor",
+      clinicId: "clinic-a",
+      verifiedDoctor: false,
+      doctorApplicationStatus: "pending"
+    }));
     batch.set(adb.collection("users").doc("clinic-admin-a"), user("clinic-admin-a", {
       role: "clinic_admin",
       clinicId: "clinic-a"
@@ -138,6 +144,9 @@ async function seed(env) {
     }));
     batch.set(adb.collection("cases").doc("case-b-assigned"), caseDoc("patient-b", "clinic-b", {
       assignedDoctorId: "doctor-b"
+    }));
+    batch.set(adb.collection("cases").doc("case-a-unassigned"), caseDoc("patient-a", "clinic-a", {
+      status: "submitted"
     }));
     batch.set(adb.collection("cases").doc("case-a-approved"), caseDoc("patient-a", "clinic-a", {
       status: "approved",
@@ -309,8 +318,30 @@ async function run(name, fn) {
     await run("assigned doctors can read their case while unassigned doctors cannot", async () => {
       const assignedDb = db(env, "doctor-a", { email_verified: true, role: "doctor", verifiedDoctor: true, clinicId: "clinic-a" });
       const otherDb = db(env, "doctor-b", { email_verified: true, role: "doctor", verifiedDoctor: true, clinicId: "clinic-b" });
+      const unapprovedDb = db(env, "doctor-unapproved", { email_verified: true, role: "doctor", verifiedDoctor: false, clinicId: "clinic-a" });
       await assertSucceeds(assignedDb.collection("cases").doc("case-a-assigned").get());
       await assertFails(otherDb.collection("cases").doc("case-a-assigned").get());
+      await assertFails(unapprovedDb.collection("cases").doc("case-a-assigned").get());
+      await assertFails(assignedDb.collection("cases").doc("case-a-unassigned").get());
+      await assertSucceeds(assignedDb.collection("cases").doc("case-a-assigned").update({
+        patientId: "patient-a",
+        clinicId: "clinic-a",
+        assignedDoctorId: "doctor-a",
+        status: "under_review",
+        oxygenLevel: 96,
+        breathingDifficulty: "mild",
+        coughLevel: "low",
+        riskFactors: []
+      }));
+      await assertFails(assignedDb.collection("cases").doc("case-a-unassigned").update({
+        patientId: "patient-a",
+        clinicId: "clinic-a",
+        status: "under_review",
+        oxygenLevel: 96,
+        breathingDifficulty: "mild",
+        coughLevel: "low",
+        riskFactors: []
+      }));
     });
 
     await run("two clinic admins are isolated to their own clinics", async () => {
