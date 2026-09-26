@@ -22,7 +22,18 @@ const backupService = require('./backup-service');
 // =============================================================================
 const NODE_ENV = (process.env.NODE_ENV || 'development').trim().toLowerCase();
 const isDevelopment = NODE_ENV === 'development';
+const isStaging = NODE_ENV === 'staging';
 const isProduction = NODE_ENV === 'production';
+const VALID_ENVIRONMENTS = new Set(['development', 'staging', 'production']);
+const FIREBASE_PROJECTS = {
+  development: 'health-vibes-dev',
+  staging: 'health-vibes-staging',
+  production: 'health-vibes-a4b3b'
+};
+
+if (!VALID_ENVIRONMENTS.has(NODE_ENV)) {
+  throw new Error(`Invalid NODE_ENV '${NODE_ENV}'. Expected development, staging, or production.`);
+}
 
 // Cascading 12-factor environment loader
 const candidateEnvFiles = [
@@ -38,6 +49,50 @@ for (const envFile of candidateEnvFiles) {
   }
 }
 dotenv.config();
+
+function resolveBoolean(value) {
+  return String(value || '').trim().toLowerCase() === 'true';
+}
+
+function isFirebaseEmulatorRequested() {
+  return resolveBoolean(process.env.USE_FIREBASE_EMULATOR) ||
+    Boolean(process.env.FIRESTORE_EMULATOR_HOST || process.env.FIREBASE_AUTH_EMULATOR_HOST || process.env.FIREBASE_STORAGE_EMULATOR_HOST);
+}
+
+function validateBackendEnvironmentConfig() {
+  const configuredProjectId = (process.env.FIREBASE_PROJECT_ID || process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || '').trim();
+  const expectedProjectId = (process.env.EXPECTED_FIREBASE_PROJECT_ID || FIREBASE_PROJECTS[NODE_ENV] || '').trim();
+  const emulatorRequested = isFirebaseEmulatorRequested();
+
+  if (!configuredProjectId) {
+    throw new Error(`FIREBASE_PROJECT_ID is required for ${NODE_ENV}. Refusing to start without an explicit project binding.`);
+  }
+  if (expectedProjectId && configuredProjectId !== expectedProjectId) {
+    throw new Error(`Firebase project mismatch for ${NODE_ENV}: expected '${expectedProjectId}', got '${configuredProjectId}'.`);
+  }
+  if (isDevelopment && configuredProjectId === FIREBASE_PROJECTS.production && !emulatorRequested) {
+    throw new Error('Development cannot connect to the production Firebase project unless Firebase emulators are enabled.');
+  }
+  if (isStaging && configuredProjectId === FIREBASE_PROJECTS.production) {
+    throw new Error('Staging cannot connect to the production Firebase project.');
+  }
+  if (isProduction) {
+    if (configuredProjectId !== FIREBASE_PROJECTS.production) {
+      throw new Error(`Production must use Firebase project '${FIREBASE_PROJECTS.production}'.`);
+    }
+    if (emulatorRequested) {
+      throw new Error('Firebase emulators are forbidden in production.');
+    }
+    if (resolveBoolean(process.env.ALLOW_DEMO_DATA) || resolveBoolean(process.env.ALLOW_DEVELOPMENT_MODE)) {
+      throw new Error('Production cannot enable demo data or development mode flags.');
+    }
+  }
+
+  process.env.FIREBASE_PROJECT_ID = configuredProjectId;
+  process.env.EXPECTED_FIREBASE_PROJECT_ID = expectedProjectId;
+}
+
+validateBackendEnvironmentConfig();
 
 const app = express();
 
@@ -62,7 +117,9 @@ const configuredOrigins = (process.env.CORS_ORIGINS || '')
 
 const allowedOrigins = isDevelopment
   ? Array.from(new Set([...devDefaultOrigins, ...configuredOrigins]))
-  : (configuredOrigins.length > 0 ? configuredOrigins : ['https://healthvibe.ai', 'https://app.healthvibe.ai']);
+  : (configuredOrigins.length > 0
+    ? configuredOrigins
+    : (isStaging ? ['https://staging.healthvibe.ai'] : ['https://healthvibe.ai', 'https://app.healthvibe.ai']));
 
 // =============================================================================
 // 🛡️ SECURITY HARDENING & OWASP COMPLIANCE
@@ -491,29 +548,32 @@ app.get(['/health', '/api/health'], (req, res) => {
     service: 'Health Vibes AI Server-Authoritative Backend',
     environment: NODE_ENV,
     isDevelopment,
+    isStaging,
     isProduction,
     uptimeSeconds: Math.floor(process.uptime()),
     timestamp: new Date().toISOString(),
     corsAllowed: allowedOrigins,
     firebase: {
       initialized: Boolean(admin.apps.length),
-      projectId: process.env.FIREBASE_PROJECT_ID || 'health-vibes-a4b3b',
+      projectId: process.env.FIREBASE_PROJECT_ID,
+      expectedProjectId: process.env.EXPECTED_FIREBASE_PROJECT_ID,
       emulatorActive: Boolean(process.env.FIRESTORE_EMULATOR_HOST)
     }
   });
 });
 
 // Emulator Support (Development ONLY)
-if (isDevelopment && (process.env.USE_FIREBASE_EMULATOR === 'true' || process.env.FIRESTORE_EMULATOR_HOST)) {
+if (isDevelopment && isFirebaseEmulatorRequested()) {
   process.env.FIRESTORE_EMULATOR_HOST = process.env.FIRESTORE_EMULATOR_HOST || 'localhost:8080';
   process.env.FIREBASE_AUTH_EMULATOR_HOST = process.env.FIREBASE_AUTH_EMULATOR_HOST || 'localhost:9099';
+  process.env.FIREBASE_STORAGE_EMULATOR_HOST = process.env.FIREBASE_STORAGE_EMULATOR_HOST || 'localhost:9199';
   console.log(`[BACKEND DEV] Using local Firebase Emulators: Firestore (${process.env.FIRESTORE_EMULATOR_HOST}), Auth (${process.env.FIREBASE_AUTH_EMULATOR_HOST})`);
 }
 
 // Initialize Firebase Admin SDK
 if (!admin.apps.length) {
   try {
-    const projectId = process.env.FIREBASE_PROJECT_ID || 'health-vibes-a4b3b';
+    const projectId = process.env.FIREBASE_PROJECT_ID;
     admin.initializeApp({ projectId });
     console.log(`[BACKEND] Firebase Admin initialized for [${projectId}] in [${NODE_ENV}] mode.`);
   } catch (err) {

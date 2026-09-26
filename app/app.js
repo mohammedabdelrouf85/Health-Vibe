@@ -1342,6 +1342,32 @@ const firebaseConfig = (runtimeConfig.firebase && runtimeConfig.firebase.project
   ? runtimeConfig.firebase
   : DEFAULT_FIREBASE_CONFIG;
 
+function validateClientRuntimeConfig(config, firebaseClientConfig) {
+  const env = String(config.environment || "production").toLowerCase();
+  const projectId = String(firebaseClientConfig.projectId || "");
+  const expectedProjectId = String(config.expectedFirebaseProjectId || (config.current && config.current.expectedFirebaseProjectId) || "");
+  const emulatorsEnabled = Boolean(config.emulators && config.emulators.enabled);
+  const productionProjectId = "health-vibes-a4b3b";
+
+  if (!projectId) {
+    throw new Error("[Health Vibes] Firebase projectId is required.");
+  }
+  if (expectedProjectId && projectId !== expectedProjectId) {
+    throw new Error(`[Health Vibes] ${env} expected Firebase project ${expectedProjectId}; got ${projectId}.`);
+  }
+  if (env === "production" && (emulatorsEnabled || config.allowDemoSeed === true || config.debug === true)) {
+    throw new Error("[Health Vibes] Production cannot enable emulators, demo data, or debug mode.");
+  }
+  if (env === "production" && projectId !== productionProjectId) {
+    throw new Error(`[Health Vibes] Production must use Firebase project ${productionProjectId}; got ${projectId}.`);
+  }
+  if (env === "development" && projectId === productionProjectId && !emulatorsEnabled) {
+    throw new Error("[Health Vibes] Development cannot use the production Firebase project unless emulators are enabled.");
+  }
+}
+
+validateClientRuntimeConfig(runtimeConfig, firebaseConfig);
+
 // ── Session Persistence Manager ─────────────────────────────
 function getActiveSession() {
   try {
@@ -1971,6 +1997,16 @@ if (runtimeConfig.environment === "development" && runtimeConfig.emulators && ru
     console.log(`[DEV EMULATOR] Auth connected to emulator at ${authUrl}`);
   } catch (e) {
     console.warn("Auth emulator connection note:", e.message);
+  }
+  try {
+    if (storage && typeof storage.useEmulator === "function") {
+      const storageHost = runtimeConfig.emulators.storageHost || "localhost";
+      const storagePort = runtimeConfig.emulators.storagePort || 9199;
+      storage.useEmulator(storageHost, storagePort);
+      console.log(`[DEV EMULATOR] Storage connected to emulator at ${storageHost}:${storagePort}`);
+    }
+  } catch (e) {
+    console.warn("Storage emulator connection note:", e.message);
   }
 }
 
@@ -13088,6 +13124,7 @@ window.initMobileTouchGestures = initMobileTouchGestures;
 window.initAppCheck = initAppCheck;
 window.getAppCheckToken = getAppCheckToken;
 window.authenticatedFetch = authenticatedFetch;
+window.validateClientRuntimeConfig = validateClientRuntimeConfig;
 window.initErrorMonitoring = initErrorMonitoring;
 window.captureError = captureError;
 window.reportManualError = reportManualError;

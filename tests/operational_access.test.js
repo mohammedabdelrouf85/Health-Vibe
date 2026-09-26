@@ -46,7 +46,19 @@ const sandbox = {
   require: name => name === 'firebase-admin' ? firebase : name === './backup-service' ? backup
     : name === './whatsapp-bot' ? {} : name === 'dotenv' ? { config() {} } : backendRequire(name),
   module: { exports: {} }, __dirname: path.dirname(serverPath),
-  process: { env: { NODE_ENV: process.env.NODE_ENV || 'development' }, on() {}, uptime: () => 1 },
+  process: {
+    env: {
+      NODE_ENV: process.env.NODE_ENV || 'development',
+      FIREBASE_PROJECT_ID: 'health-vibes-dev',
+      EXPECTED_FIREBASE_PROJECT_ID: 'health-vibes-dev',
+      USE_FIREBASE_EMULATOR: 'true',
+      FIRESTORE_EMULATOR_HOST: 'localhost:8080',
+      FIREBASE_AUTH_EMULATOR_HOST: 'localhost:9099',
+      FIREBASE_STORAGE_EMULATOR_HOST: 'localhost:9199'
+    },
+    on() {},
+    uptime: () => 1
+  },
   console: { log() {}, info() {}, warn() {}, error() {} },
   Buffer, setTimeout, clearTimeout
 };
