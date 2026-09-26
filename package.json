@@ -3,8 +3,9 @@
   "version": "1.0.0",
   "description": "Health Vibes AI - Smart Respiratory Clinical Assessment",
   "scripts": {
-    "test": "node tests/firestore_rules_emulator.test.js && node tests/e2e_happy_path.test.js && node tests/data_isolation.test.js && node tests/environment_config.test.js && node tests/appointments_booking.test.js && node tests/email_notifications.test.js && node tests/feedback_system.test.js && node tests/kpi_dashboard.test.js && node tests/mobile_ux.test.js && node tests/security_scan.test.js && node tests/app_check.test.js && node tests/csp_security_headers.test.js && node tests/error_monitoring.test.js && node tests/backup_restore.test.js && node tests/i18n_system.test.js && node tests/clinic_sales_landing.test.js && node tests/remember_me_security.test.js && node tests/theme_system.test.js && node tests/account_lifecycle.test.js && node tests/route_guards.test.js && node tests/operational_access.test.js && node tests/clinical_report_integrity.test.js",
-    "test:rules": "node tests/firestore_rules_emulator.test.js",
+    "test": "npm run test:rules && node tests/api_clinic_isolation.test.js && node tests/e2e_happy_path.test.js && node tests/data_isolation.test.js && node tests/environment_config.test.js && node tests/appointments_booking.test.js && node tests/email_notifications.test.js && node tests/feedback_system.test.js && node tests/kpi_dashboard.test.js && node tests/mobile_ux.test.js && node tests/security_scan.test.js && node tests/app_check.test.js && node tests/csp_security_headers.test.js && node tests/error_monitoring.test.js && node tests/backup_restore.test.js && node tests/i18n_system.test.js && node tests/clinic_sales_landing.test.js && node tests/remember_me_security.test.js && node tests/theme_system.test.js && node tests/account_lifecycle.test.js && node tests/route_guards.test.js && node tests/operational_access.test.js && node tests/clinical_report_integrity.test.js",
+    "test:rules": "node tests/run_rules_emulator.js",
+    "test:api-isolation": "node tests/api_clinic_isolation.test.js",
     "test:e2e": "node tests/e2e_happy_path.test.js",
     "test:isolation": "node tests/data_isolation.test.js",
     "test:env": "node tests/environment_config.test.js",
@@ -35,5 +36,10 @@
     "security"
   ],
   "author": "Health Vibe Team",
-  "license": "ISC"
+  "license": "ISC",
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
+    "firebase": "^12.19.0",
+    "firebase-tools": "^15.31.0"
+  }
 }

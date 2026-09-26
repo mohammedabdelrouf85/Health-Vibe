@@ -90,6 +90,37 @@ service cloud.firestore {
       return isAuthenticated() && getUserRole() == 'clinic_admin';
     }
 
+    function authClinicId() {
+      return isAuthenticated() && 'clinicId' in request.auth.token ? request.auth.token.clinicId :
+             (hasUserDoc() && 'clinicId' in getUserData()) ? getUserData().clinicId :
+             (hasUserDoc() && 'clinic' in getUserData()) ? getUserData().clinic :
+             null;
+    }
+
+    function hasSameClinic(data) {
+      return isClinicAdmin() &&
+             authClinicId() != null &&
+             (
+               ('clinicId' in data && data.clinicId == authClinicId()) ||
+               ('clinic' in data && data.clinic == authClinicId()) ||
+               ('branchId' in data && data.branchId == authClinicId())
+             );
+    }
+
+    function isClinicAdminFor(data) {
+      return isClinicAdmin() && hasSameClinic(data);
+    }
+
+    function requesterClinicMatchesCreate(data) {
+      return authClinicId() == null ||
+             !('clinicId' in data) ||
+             data.clinicId == authClinicId();
+    }
+
+    function isPlatformAdmin() {
+      return isOwner() || (isAuthenticated() && getUserRole() == 'super_admin');
+    }
+
     function isSuperAdmin() {
       return isOwner() || (isAuthenticated() && getUserRole() == 'super_admin');
     }
@@ -139,7 +170,7 @@ service cloud.firestore {
     // 1. 👥 USERS COLLECTION (/users/{userId})
     // =========================================================================
     match /users/{userId} {
-      allow read: if isOwner() || (isAuthenticated() && (isSelf(userId) || isAdmin()));
+      allow read: if isOwner() || (isAuthenticated() && (isSelf(userId) || isPlatformAdmin() || isClinicAdminFor(resource.data)));
 
       allow create: if isOwner() || (isAuthenticated() &&
                     isSelf(userId) &&
@@ -152,12 +183,12 @@ service cloud.firestore {
           'role', 'isOwner', 'doctorVerified', 'verifiedDoctor', 'doctorApplicationStatus',
           'suspended', 'isSuspended', 'status', 'accountStatus', 'disabled'
         ])) ||
-        (isAdmin() && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        ((isPlatformAdmin() || isClinicAdminFor(resource.data)) && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
           'role', 'isOwner'
         ]))
       ));
 
-      allow delete: if isOwner() || isAdmin();
+      allow delete: if isOwner() || isPlatformAdmin() || isClinicAdminFor(resource.data);
     }
 
     // =========================================================================
@@ -176,14 +207,14 @@ service cloud.firestore {
     }
 
     match /doctor_applications/{appId} {
-      allow read: if isOwner() || (isAuthenticated() && (isAdmin() || resource.data.userId == request.auth.uid));
+      allow read: if isOwner() || (isAuthenticated() && (isPlatformAdmin() || isClinicAdminFor(resource.data) || resource.data.userId == request.auth.uid));
 
       allow create: if isOwner() || (isEmailVerified() &&
                     request.resource.data.userId == request.auth.uid &&
                     request.resource.data.status == 'pending' &&
                     hasValidDoctorApplicationDocument(request.resource.data));
 
-      allow update: if isOwner() || ((isAdmin() && isEmailVerified() &&
+      allow update: if isOwner() || (((isPlatformAdmin() || isClinicAdminFor(resource.data)) && isEmailVerified() &&
                        resource.data.status == 'pending' &&
                        request.resource.data.userId == resource.data.userId &&
                        request.resource.data.status in ['approved', 'rejected']) ||
@@ -192,7 +223,7 @@ service cloud.firestore {
                        request.resource.data.userId == resource.data.userId &&
                        request.resource.data.status == 'cancelled'));
 
-      allow delete: if isOwner() || isAdmin();
+      allow delete: if isOwner() || isPlatformAdmin() || isClinicAdminFor(resource.data);
     }
 
     // =========================================================================
@@ -332,21 +363,23 @@ service cloud.firestore {
                      ((resource.data.patientId == request.auth.uid &&
                        (isDoctorApprovedCase(resource.data) || hasNoUnreleasedClinicalResult(resource.data))) ||
                       isAssignedDoctor() ||
-                      isAdmin()));
+                      isPlatformAdmin() ||
+                      isClinicAdminFor(resource.data))));
 
       allow create: if (isOwner() || isEmailVerified()) && (
                        request.resource.data.patientId == request.auth.uid &&
+                       requesterClinicMatchesCreate(request.resource.data) &&
                        request.resource.data.status in ['draft', 'submitted', 'triaged', 'assigned', 'pending'] &&
                        hasNoPatientForgedClinicalResult(request.resource.data) &&
                        isValidAssessment(request.resource.data));
 
       allow update: if preservesServerApproval() && (isOwner() || (isAuthenticated() &&
-                        (isAssignedDoctor() || isAdmin() || isPatientMoreInfoResponse()) &&
+                        (isAssignedDoctor() || isPlatformAdmin() || isClinicAdminFor(resource.data) || isPatientMoreInfoResponse()) &&
                         request.resource.data.patientId == resource.data.patientId &&
                         isValidCaseStatus(request.resource.data.status) &&
                         isValidAssessment(request.resource.data)));
 
-      allow delete: if isOwner() || isAdmin();
+      allow delete: if isOwner() || isPlatformAdmin() || isClinicAdminFor(resource.data);
     }
 
     match /assessments/{assessmentId} {
@@ -354,28 +387,32 @@ service cloud.firestore {
       allow read: if isAuthenticated() &&
                     ((isPatientOwnedRecord(resource.data) &&
                       (isDoctorApprovedCase(resource.data) || hasNoUnreleasedClinicalResult(resource.data))) ||
-                     isAdmin());
+                     isPlatformAdmin() ||
+                     isClinicAdminFor(resource.data));
     }
 
     match /reports/{reportId} {
       allow read, write: if isOwner();
       allow read: if isAuthenticated() &&
                     ((isPatientOwnedRecord(resource.data) && isPublishedReport(resource.data)) ||
-                     isAdmin());
+                     isPlatformAdmin() ||
+                     isClinicAdminFor(resource.data));
     }
 
     match /medical_reports/{reportId} {
       allow read, write: if isOwner();
       allow read: if isAuthenticated() &&
                     ((isPatientOwnedRecord(resource.data) && isPublishedReport(resource.data)) ||
-                     isAdmin());
+                     isPlatformAdmin() ||
+                     isClinicAdminFor(resource.data));
     }
 
     match /clinical_reports/{reportId} {
       allow read, write: if isOwner();
       allow read: if isAuthenticated() &&
                     ((isPatientOwnedRecord(resource.data) && isPublishedReport(resource.data)) ||
-                     isAdmin());
+                     isPlatformAdmin() ||
+                     isClinicAdminFor(resource.data));
     }
 
     // =========================================================================
@@ -383,7 +420,7 @@ service cloud.firestore {
     // =========================================================================
     match /audit_events/{eventId} {
       allow read, write: if isOwner();
-      allow read: if isAdmin();
+      allow read: if isPlatformAdmin() || isClinicAdminFor(resource.data);
     }
 
     // =========================================================================
@@ -391,7 +428,7 @@ service cloud.firestore {
     // =========================================================================
     match /auditLog/{logId} {
       allow read, write: if isOwner();
-      allow read: if isAdmin();
+      allow read: if isPlatformAdmin() || isClinicAdminFor(resource.data);
       allow create: if isAuthenticated() && (
         ('patientId' in request.resource.data && request.resource.data.patientId == request.auth.uid) ||
         ('userId' in request.resource.data && request.resource.data.userId == request.auth.uid)
@@ -403,8 +440,8 @@ service cloud.firestore {
     // =========================================================================
     match /ai_model_metrics/{metricId} {
       allow read, write: if isOwner();
-      allow read: if isAuthenticated() && (isAdmin() || isDoctor());
-      allow write: if isAdmin();
+      allow read: if isAuthenticated() && (isPlatformAdmin() || isClinicAdminFor(resource.data) || isDoctor());
+      allow write: if isPlatformAdmin() || isClinicAdminFor(resource.data);
     }
 
     // =========================================================================
@@ -413,23 +450,27 @@ service cloud.firestore {
     match /appointments/{appointmentId} {
       allow read, write: if isOwner();
       allow read: if isAuthenticated() && (
-        isAdmin() ||
+        isPlatformAdmin() ||
+        isClinicAdminFor(resource.data) ||
         isDoctorLinkedRecord(resource.data) ||
         resource.data.patientId == request.auth.uid
       );
 
       allow create: if isAuthenticated() &&
                     request.resource.data.patientId == request.auth.uid &&
+                    requesterClinicMatchesCreate(request.resource.data) &&
                     request.resource.data.status in ['confirmed', 'pending'];
 
       allow update: if isAuthenticated() && (
-        isAdmin() ||
+        isPlatformAdmin() ||
+        isClinicAdminFor(resource.data) ||
         isDoctorLinkedRecord(resource.data) ||
         (resource.data.patientId == request.auth.uid && request.resource.data.patientId == request.auth.uid)
       );
 
       allow delete: if isAuthenticated() && (
-        isAdmin() ||
+        isPlatformAdmin() ||
+        isClinicAdminFor(resource.data) ||
         resource.data.patientId == request.auth.uid
       );
     }
@@ -440,7 +481,8 @@ service cloud.firestore {
     match /email_notifications/{notificationId} {
       allow read, write: if isOwner();
       allow read: if isAuthenticated() && (
-        isAdmin() ||
+        isPlatformAdmin() ||
+        isClinicAdminFor(resource.data) ||
         isDoctorLinkedRecord(resource.data) ||
         resource.data.patientId == request.auth.uid ||
         (request.auth.token.email != null && resource.data.recipient == request.auth.token.email)
@@ -454,7 +496,8 @@ service cloud.firestore {
     match /feedbacks/{feedbackId} {
       allow read, write: if isOwner();
       allow read: if isAuthenticated() && (
-        isAdmin() ||
+        isPlatformAdmin() ||
+        isClinicAdminFor(resource.data) ||
         isDoctorLinkedRecord(resource.data) ||
         resource.data.userId == request.auth.uid ||
         resource.data.isPublic == true
@@ -462,6 +505,7 @@ service cloud.firestore {
 
       allow create: if isAuthenticated() &&
                     request.resource.data.userId == request.auth.uid &&
+                    requesterClinicMatchesCreate(request.resource.data) &&
                     request.resource.data.rating is number &&
                     request.resource.data.rating >= 1 &&
                     request.resource.data.rating <= 5 &&
@@ -471,14 +515,14 @@ service cloud.firestore {
                     request.resource.data.comment.size() > 0 &&
                     request.resource.data.comment.size() <= 2000;
 
-      allow update, delete: if isAdmin();
+      allow update, delete: if isPlatformAdmin() || isClinicAdminFor(resource.data);
     }
 
     // =========================================================================
     // 10. 🏥 CLINIC LEADS & DEMO REQUESTS (/clinic_leads/{leadId})
     // =========================================================================
     match /clinic_leads/{leadId} {
-      allow read, write: if isOwner() || isAdmin();
+      allow read, write: if isOwner() || isPlatformAdmin() || isClinicAdminFor(resource.data);
       allow create: if true;
     }
 

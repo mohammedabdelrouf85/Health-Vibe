@@ -637,6 +637,38 @@ function getTrustedClaimRole(user = {}) {
   return VALID_ROLES.includes(user.role) ? user.role : ROLES.PATIENT;
 }
 
+function recordClinicId(data = {}) {
+  return data.clinicId || data.clinic || data.branchId || null;
+}
+
+async function getServerUserProfile(uid) {
+  if (!db || !uid) return null;
+  const userDoc = await db.collection('users').doc(uid).get();
+  return userDoc.exists ? userDoc.data() : null;
+}
+
+async function resolveRequesterClinic(req) {
+  if (hasTrustedOwnerClaim(req.user)) return { role: ROLES.SUPER_ADMIN, clinicId: null, profile: null };
+
+  const role = getTrustedClaimRole(req.user);
+  const profile = await getServerUserProfile(req.user.uid);
+  const clinicId = recordClinicId(profile || {});
+
+  return { role, clinicId, profile };
+}
+
+function isSameClinicResource(scope, data = {}) {
+  if (scope.role === ROLES.SUPER_ADMIN) return true;
+  if (scope.role !== ROLES.CLINIC_ADMIN || !scope.clinicId) return false;
+  return recordClinicId(data) === scope.clinicId;
+}
+
+function filterScopedDocs(snapshot, scope) {
+  return snapshot.docs
+    .map(d => ({ id: d.id, ...d.data() }))
+    .filter(item => isSameClinicResource(scope, item));
+}
+
 function isVerificationRevoked(email) {
   return REVOKED_VERIFICATION_EMAILS.has(String(email || '').trim().toLowerCase());
 }
@@ -868,6 +900,7 @@ app.get('/api/clinical/rules/versions', (req, res) => {
  */
 app.get('/api/admin/metrics', requireAuth, requireAdmin, async (req, res) => {
   try {
+    const scope = await resolveRequesterClinic(req);
     let authUsersCount = 0;
     let authUsersToday = 0;
     let approvedDoctors = 0;
@@ -875,20 +908,22 @@ app.get('/api/admin/metrics', requireAuth, requireAdmin, async (req, res) => {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
 
-    do {
-      const result = await admin.auth().listUsers(1000, nextPageToken);
-      result.users.forEach((user) => {
-        authUsersCount += 1;
-        if (user.customClaims && user.customClaims.role === 'doctor') {
-          approvedDoctors += 1;
-        }
-        const createdAt = user.metadata && user.metadata.creationTime
-          ? new Date(user.metadata.creationTime).getTime()
-          : 0;
-        if (createdAt >= todayStart.getTime()) authUsersToday += 1;
-      });
-      nextPageToken = result.pageToken;
-    } while (nextPageToken);
+    if (scope.role === ROLES.SUPER_ADMIN) {
+      do {
+        const result = await admin.auth().listUsers(1000, nextPageToken);
+        result.users.forEach((user) => {
+          authUsersCount += 1;
+          if (user.customClaims && user.customClaims.role === 'doctor') {
+            approvedDoctors += 1;
+          }
+          const createdAt = user.metadata && user.metadata.creationTime
+            ? new Date(user.metadata.creationTime).getTime()
+            : 0;
+          if (createdAt >= todayStart.getTime()) authUsersToday += 1;
+        });
+        nextPageToken = result.pageToken;
+      } while (nextPageToken);
+    }
 
     let pendingDoctorApplications = 0;
     let branchCount = 0;
@@ -904,9 +939,17 @@ app.get('/api/admin/metrics', requireAuth, requireAdmin, async (req, res) => {
         db.collection('ai_model_metrics').orderBy('createdAt', 'desc').limit(1).get().catch(() => null)
       ]);
 
-      const users = usersSnapshot.docs.map((doc) => doc.data());
-      const apps = appsSnapshot.docs.map((doc) => doc.data());
-      const cases = casesSnapshot.docs.map((doc) => doc.data());
+      const users = filterScopedDocs(usersSnapshot, scope);
+      const apps = filterScopedDocs(appsSnapshot, scope);
+      const cases = filterScopedDocs(casesSnapshot, scope);
+
+      if (scope.role === ROLES.CLINIC_ADMIN) {
+        authUsersCount = users.length;
+        authUsersToday = users.filter((user) => {
+          const createdAt = user.createdAt?.toMillis ? user.createdAt.toMillis() : Date.parse(user.createdAt || user.created_at || 0);
+          return createdAt >= todayStart.getTime();
+        }).length;
+      }
 
       approvedDoctors = Math.max(
         approvedDoctors,
@@ -988,9 +1031,12 @@ app.get('/api/kpi/metrics', requireAuth, async (req, res) => {
       });
     }
 
+    const scope = await resolveRequesterClinic(req);
     const casesSnapshot = await db.collection('cases').get();
     const cases = casesSnapshot.docs
       .map(d => ({ id: d.id, ...d.data() }))
+      .filter(c => userRole === ROLES.CLINIC_ADMIN ? isSameClinicResource(scope, c) : true)
+      .filter(c => userRole === ROLES.DOCTOR ? [c.assignedDoctorId, c.doctorId, c.doctorUid, c.approvingDoctorId].includes(req.user.uid) : true)
       .filter(c => !c.isDemo && !String(c.id || '').startsWith('demo_'));
 
     const timeRange = (req.query.range || 'all').toLowerCase();
@@ -1392,7 +1438,9 @@ app.get('/api/reports/:caseId/doctor-identity', requireAuth, async (req, res) =>
     const snapshot = await db.collection('cases').doc(req.params.caseId).get();
     if (!snapshot.exists) return res.status(404).json({ error: 'NOT_FOUND' });
     const record = snapshot.data();
-    if (record.patientId !== req.user.uid && record.approvingDoctorId !== req.user.uid && !hasTrustedAdminClaim(req.user)) {
+    const scope = await resolveRequesterClinic(req);
+    const canReadAsAdmin = hasTrustedAdminClaim(req.user) && isSameClinicResource(scope, record);
+    if (record.patientId !== req.user.uid && record.approvingDoctorId !== req.user.uid && !canReadAsAdmin) {
       return res.status(403).json({ error: 'ACCESS_DENIED' });
     }
     if (record.status !== 'approved' || record.doctorApproved !== true) {
@@ -1841,6 +1889,7 @@ app.get('/api/feedback/list', requireAuth, async (req, res) => {
   try {
     const userRole = req.user.role || 'patient';
     const isDocOrAdmin = userRole === ROLES.DOCTOR || hasTrustedAdminClaim(req.user);
+    const scope = await resolveRequesterClinic(req);
 
     if (!db || typeof db.collection !== 'function') {
       return res.json({ success: true, feedbacks: [], total: 0 });
@@ -1856,7 +1905,10 @@ app.get('/api/feedback/list', requireAuth, async (req, res) => {
     const snapshot = await query.get();
     const feedbacks = [];
     snapshot.forEach(doc => {
-      feedbacks.push(doc.data());
+      const item = doc.data();
+      if (!hasTrustedAdminClaim(req.user) || isSameClinicResource(scope, item)) {
+        feedbacks.push(item);
+      }
     });
 
     // Sort newest first
@@ -1892,6 +1944,24 @@ app.post('/api/admin/assign-case', requireAuth, requireVerifiedEmail, requireAdm
       }
 
       const caseData = caseDoc.data();
+      const scope = await resolveRequesterClinic(req);
+      if (!isSameClinicResource(scope, caseData)) {
+        return res.status(403).json({
+          error: 'ACCESS_DENIED',
+          message: 'Clinic Admin cannot assign cases outside their clinic.'
+        });
+      }
+
+      if (scope.role === ROLES.CLINIC_ADMIN) {
+        const doctorProfile = await getServerUserProfile(doctorId);
+        if (!doctorProfile || recordClinicId(doctorProfile) !== scope.clinicId) {
+          return res.status(403).json({
+            error: 'DOCTOR_CLINIC_MISMATCH',
+            message: 'Clinic Admin can assign only doctors from the same clinic.'
+          });
+        }
+      }
+
       const currentStatus = caseData.status || 'pending';
       const targetStatus = ['draft', 'submitted', 'triaged', 'pending'].includes(currentStatus) ? 'assigned' : currentStatus;
 
@@ -1915,7 +1985,7 @@ app.post('/api/admin/assign-case', requireAuth, requireVerifiedEmail, requireAdm
           note: `Case assigned to Dr. ${doctorName || doctorId}`
         })
       };
-      if (clinicId) updateData.clinicId = clinicId;
+      if (clinicId && scope.role === ROLES.SUPER_ADMIN) updateData.clinicId = clinicId;
       if (clinicName) updateData.clinicName = clinicName;
 
       await db.collection('cases').doc(caseId).update(updateData);
@@ -1924,7 +1994,7 @@ app.post('/api/admin/assign-case', requireAuth, requireVerifiedEmail, requireAdm
         type: 'CASE_ASSIGNED_TO_DOCTOR',
         caseId: caseId,
         assignedDoctorId: doctorId,
-        clinicId: clinicId || caseDoc.data().clinicId || null,
+        clinicId: recordClinicId(caseData),
         assignedBy: req.user.email,
         timestamp: admin.firestore.FieldValue.serverTimestamp()
       });

@@ -168,7 +168,10 @@ runTest("Firestore Security Rules Coverage for /feedbacks/{feedbackId}", () => {
   assert.ok(rules.includes("match /feedbacks/{feedbackId}"), "Must define match /feedbacks/{feedbackId}");
   assert.ok(rules.includes("request.resource.data.rating >= 1") && rules.includes("request.resource.data.rating <= 5"), "Must validate rating 1-5");
   assert.ok(rules.includes("request.resource.data.userId == request.auth.uid"), "Must enforce ownership of userId");
-  assert.ok(rules.includes("allow update, delete: if isAdmin();"), "Only admin can update or delete");
+  assert.ok(
+    rules.includes("allow update, delete: if isPlatformAdmin() || isClinicAdminFor(resource.data);"),
+    "Only platform admin or same-clinic admin can update or delete"
+  );
 
   console.log("  ✓ firestore.rules enforces client validation, uid ownership, and admin-only deletion.");
 });

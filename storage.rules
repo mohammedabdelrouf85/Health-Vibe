@@ -27,8 +27,45 @@ service firebase.storage {
              request.auth.token.role in ['clinic_admin', 'super_admin'];
     }
 
+    function isSuspended() {
+      return isAuthenticated() && (
+        ('suspended' in request.auth.token && request.auth.token.suspended == true) ||
+        ('isSuspended' in request.auth.token && request.auth.token.isSuspended == true) ||
+        ('status' in request.auth.token && request.auth.token.status == 'suspended') ||
+        ('disabled' in request.auth.token && request.auth.token.disabled == true) ||
+        userDoc(request.auth.uid).data.suspended == true ||
+        userDoc(request.auth.uid).data.isSuspended == true ||
+        userDoc(request.auth.uid).data.status == 'suspended' ||
+        userDoc(request.auth.uid).data.accountStatus == 'suspended' ||
+        userDoc(request.auth.uid).data.disabled == true
+      );
+    }
+
+    function authClinicId() {
+      return isAuthenticated() && 'clinicId' in request.auth.token ? request.auth.token.clinicId :
+             'clinicId' in userDoc(request.auth.uid).data ? userDoc(request.auth.uid).data.clinicId :
+             'clinic' in userDoc(request.auth.uid).data ? userDoc(request.auth.uid).data.clinic :
+             null;
+    }
+
+    function isPlatformAdmin() {
+      return isAuthenticated() && request.auth.token.role == 'super_admin';
+    }
+
+    function isClinicAdminForApplication(appId) {
+      return isAuthenticated() &&
+             request.auth.token.role == 'clinic_admin' &&
+             authClinicId() != null &&
+             appExists(appId) &&
+             (
+               appDoc(appId).data.clinicId == authClinicId() ||
+               appDoc(appId).data.clinic == authClinicId()
+             );
+    }
+
     function ownerCanWriteDoctorApplicationFile(userId, appId) {
       return isOwner(userId) &&
+             !isSuspended() &&
              appId == 'app_' + userId &&
              (
                !appExists(appId) ||
@@ -41,9 +78,11 @@ service firebase.storage {
 
     function adminCanReadDoctorApplicationFile(userId, appId) {
       return isAdmin() &&
+             !isSuspended() &&
              appExists(appId) &&
              appDoc(appId).data.userId == userId &&
-             appDoc(appId).data.status in ['pending', 'approved', 'rejected'];
+             appDoc(appId).data.status in ['pending', 'approved', 'rejected'] &&
+             (isPlatformAdmin() || isClinicAdminForApplication(appId));
     }
 
     function hasAllowedDoctorApplicationExtension(fileName) {
