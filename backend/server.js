@@ -877,11 +877,11 @@ app.get('/api/clinical/rules/versions', (req, res) => {
         status: 'active',
         effectiveFrom: '2026-09-21',
         deprecatedAt: null,
-        reviewedBy: 'Clinical Governance & Pulmonology Board',
-        reviewStatus: 'clinician-reviewed-rules',
+        reviewedBy: null,
+        reviewStatus: 'pending-qualified-clinical-and-regulatory-review',
         changelog: {
-          ar: 'الإصدار السريري الأساسي المعتمد: فرز مبني على عتبات SpO2، ضيق التنفس، شدة السعال، ومدة الأعراض.',
-          en: 'Baseline certified clinical release: rule-based triage based on SpO2 thresholds, dyspnea, cough severity, and symptom duration.'
+          ar: 'إصدار تشغيلي أولي غير معتمد سريرياً بعد: فرز مبني على عتبات SpO2، ضيق التنفس، شدة السعال، ومدة الأعراض. الموافقة معلقة لحين مراجعة مختص طبي ومختص تنظيمي في مصر.',
+          en: 'Initial operational release, not clinically certified yet: rule-based triage based on SpO2 thresholds, dyspnea, cough severity, and symptom duration. Approval is pending review by qualified medical and Egyptian regulatory specialists.'
         },
         scoreThresholds: { urgent: 6, high: 3 },
         spo2Thresholds: { urgentBelow: 90, highBelow: 93, closeFollowUpMin: 93, closeFollowUpMax: 94 },
@@ -901,11 +901,11 @@ app.get('/api/clinical/rules/versions', (req, res) => {
         status: 'candidate',
         effectiveFrom: '2026-10-01',
         deprecatedAt: null,
-        reviewedBy: 'Clinical Governance & Pulmonology Board',
-        reviewStatus: 'clinician-reviewed-rules',
+        reviewedBy: null,
+        reviewStatus: 'pending-qualified-clinical-and-regulatory-review',
         changelog: {
-          ar: 'تحديث سريري مرتقب: تعزيز حساسية عوامل الخطورة التنفسية المزمنة ومطابقة معايير الفرز الرئوي الإقليمية.',
-          en: 'Candidate clinical update: enhanced sensitivity for chronic respiratory risk factors and aligned regional pulmonology triage.'
+          ar: 'تحديث مرشح غير معتمد: تعزيز حساسية عوامل الخطورة التنفسية المزمنة. لا يُفعّل كاعتماد طبي قبل مراجعة مختص طبي ومختص تنظيمي في مصر.',
+          en: 'Unapproved candidate update: enhanced sensitivity for chronic respiratory risk factors. It must not be treated as medically approved before qualified medical and Egyptian regulatory review.'
         },
         scoreThresholds: { urgent: 6, high: 3 },
         spo2Thresholds: { urgentBelow: 90, highBelow: 93, closeFollowUpMin: 93, closeFollowUpMax: 94 },
