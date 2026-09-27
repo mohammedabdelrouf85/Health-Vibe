@@ -1580,15 +1580,9 @@ async function executeDoctorTransition({
 
   try {
     if (db) {
-      const caseDoc = await db.collection('cases').doc(caseId).get();
-      if (!caseDoc.exists) {
-        return res.status(404).json({ error: 'NOT_FOUND', message: 'Case not found.' });
-      }
-
-      const caseData = caseDoc.data();
-      const currentStatus = caseData.status || 'pending';
       const normalizedClinicalNotes = String(clinicalNotes || note || '').trim();
       const normalizedRecommendations = normalizeRecommendations(recommendations, recommendation);
+      const transitionReason = String(note || normalizedClinicalNotes || recommendation || `Status transitioned to ${targetStatus}`).trim();
 
       if (targetStatus === 'approved' && (!normalizedClinicalNotes || normalizedRecommendations.length === 0)) {
         return res.status(400).json({
@@ -1597,22 +1591,6 @@ async function executeDoctorTransition({
         });
       }
 
-      // Zero-trust assigned physician check
-      const assignedDoctor = caseData.assignedDoctorId || caseData.doctorId || caseData.doctorUid;
-      if (!assignedDoctor) {
-        return res.status(403).json({
-          error: 'CASE_NOT_ASSIGNED',
-          message: 'This clinical case must be assigned by an authorized administrator before a doctor can process it.'
-        });
-      }
-      if (assignedDoctor !== req.user.uid) {
-        return res.status(403).json({
-          error: 'ACCESS_DENIED',
-          message: 'Zero-Trust enforcement: This clinical case is assigned to another physician.'
-        });
-      }
-
-      // Valid State Machine Transitions
       const VALID_TRANSITIONS = {
         draft: ['submitted'],
         submitted: ['triaged', 'assigned', 'under_review'],
@@ -1627,81 +1605,163 @@ async function executeDoctorTransition({
         closed: []
       };
 
-      const allowedNext = VALID_TRANSITIONS[currentStatus] || [];
-      if (!allowedNext.includes(targetStatus)) {
-        return res.status(400).json({
-          error: 'INVALID_STATUS_TRANSITION',
-          message: `Cannot transition from '${currentStatus}' to '${targetStatus}'. Allowed: [${allowedNext.join(', ')}]`
-        });
-      }
-
-      const updateData = {
-        status: targetStatus,
-        statusUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        lastUpdatedBy: req.user.uid,
-        lastUpdatedByEmail: req.user.email,
-        statusHistory: admin.firestore.FieldValue.arrayUnion({
-          status: targetStatus,
-          previousStatus: currentStatus,
-          changedAt: new Date().toISOString(),
-          changedBy: req.user.uid,
-          changedByEmail: req.user.email,
-          changedByName: req.user.name || req.user.displayName || 'Doctor',
-          changedByRole: 'doctor',
-          note: note || normalizedClinicalNotes || recommendation || `Status transitioned to ${targetStatus}`
-        })
-      };
-
+      const caseRef = db.collection('cases').doc(caseId);
       if (targetStatus === 'approved') {
-        updateData.doctorApproved = true;
-        updateData.approvingDoctorId = req.user.uid;
-        updateData.approvingDoctorEmail = req.user.email;
         const doctorIdentity = req.doctorIdentity || await getVerifiedDoctorIdentity(req.user.uid);
         if (!doctorIdentity) {
           return res.status(403).json({ error: 'DOCTOR_CREDENTIALS_NOT_VERIFIED' });
         }
-        updateData.doctorIdentity = doctorIdentity;
-        updateData.approvingDoctorName = doctorIdentity.name;
-        updateData.doctorSpecialty = doctorIdentity.specialty;
-        updateData.doctorLicense = doctorIdentity.licenseNumber;
-        updateData.clinicName = doctorIdentity.clinic;
-        updateData.reportRef = reportRef || `HV-REP-${caseId.slice(-8).toUpperCase()}`;
-        updateData.reportGeneratedAt = reportGeneratedAt || new Date().toISOString();
-        updateData.approvedAt = admin.firestore.FieldValue.serverTimestamp();
-        updateData.generatedAt = admin.firestore.FieldValue.serverTimestamp();
-        updateData.reportVersion = REPORT_VERSION;
-        updateData.modelVersion = MODEL_VERSION;
-        updateData.clinicalDiagnosis = typeof clinicalDiagnosis === 'string' ? clinicalDiagnosis.trim() : '';
-        updateData.doctorNote = normalizedClinicalNotes;
-        updateData.clinicalNotes = normalizedClinicalNotes;
-        updateData.medications = typeof medications === 'string' ? medications.trim() : '';
-        updateData.recommendation = normalizedRecommendations.join('\n');
-        updateData.recommendations = normalizedRecommendations;
-      } else if (targetStatus === 'more_info_requested') {
-        updateData.moreInfoRequestedAt = admin.firestore.FieldValue.serverTimestamp();
-        updateData.moreInfoNote = note || '';
-      } else if (targetStatus === 'escalated') {
-        updateData.escalatedAt = admin.firestore.FieldValue.serverTimestamp();
-        updateData.escalationReason = note || '';
-      } else if (targetStatus === 'closed') {
-        updateData.closedAt = admin.firestore.FieldValue.serverTimestamp();
-        updateData.closedBy = req.user.uid;
+        req.doctorIdentity = doctorIdentity;
       }
 
-      await db.collection('cases').doc(caseId).update(updateData);
+      let transitionResult;
+      try {
+        transitionResult = await db.runTransaction(async transaction => {
+          const caseDoc = await transaction.get(caseRef);
+          if (!caseDoc.exists) {
+            return { statusCode: 404, body: { error: 'NOT_FOUND', message: 'Case not found.' } };
+          }
 
-      await db.collection('audit_events').add({
-        type: `CLINICAL_CASE_${targetStatus.toUpperCase()}`,
-        caseId: caseId,
-        doctorId: req.user.uid,
-        fromStatus: currentStatus,
-        toStatus: targetStatus,
-        note: note || normalizedClinicalNotes || '',
-        timestamp: admin.firestore.FieldValue.serverTimestamp()
-      });
+          const caseData = caseDoc.data();
+          const currentStatus = caseData.status || 'pending';
+          const assignedDoctor = caseData.assignedDoctorId || caseData.doctorId || caseData.doctorUid;
+
+          if (!assignedDoctor) {
+            return {
+              statusCode: 403,
+              body: {
+                error: 'CASE_NOT_ASSIGNED',
+                message: 'This clinical case must be assigned by an authorized administrator before a doctor can process it.'
+              }
+            };
+          }
+          if (assignedDoctor !== req.user.uid) {
+            return {
+              statusCode: 403,
+              body: {
+                error: 'ACCESS_DENIED',
+                message: 'Zero-Trust enforcement: This clinical case is assigned to another physician.'
+              }
+            };
+          }
+
+          if (currentStatus === targetStatus) {
+            return { duplicate: true, caseData, currentStatus, updateData: null };
+          }
+
+          const allowedNext = VALID_TRANSITIONS[currentStatus] || [];
+          if (!allowedNext.includes(targetStatus)) {
+            return {
+              statusCode: 400,
+              body: {
+                error: currentStatus === 'closed' ? 'CASE_CLOSED' : 'INVALID_STATUS_TRANSITION',
+                message: `Cannot transition from '${currentStatus}' to '${targetStatus}'. Allowed: [${allowedNext.join(', ')}]`
+              }
+            };
+          }
+
+          const nowIso = new Date().toISOString();
+          const historyItem = {
+            oldStatus: currentStatus,
+            newStatus: targetStatus,
+            actor: {
+              uid: req.user.uid,
+              email: req.user.email || '',
+              name: req.user.name || req.user.displayName || 'Doctor',
+              role: 'doctor'
+            },
+            reason: transitionReason,
+            timestamp: nowIso,
+            changedAt: nowIso,
+            changedBy: req.user.uid,
+            changedByEmail: req.user.email || '',
+            changedByRole: 'doctor'
+          };
+
+          const updateData = {
+            status: targetStatus,
+            statusUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            lastUpdatedBy: req.user.uid,
+            lastUpdatedByEmail: req.user.email || '',
+            statusHistory: admin.firestore.FieldValue.arrayUnion(historyItem)
+          };
+
+          if (targetStatus === 'approved') {
+            const doctorIdentity = req.doctorIdentity;
+            updateData.doctorApproved = true;
+            updateData.approvingDoctorId = req.user.uid;
+            updateData.approvingDoctorEmail = req.user.email || '';
+            updateData.doctorIdentity = doctorIdentity;
+            updateData.approvingDoctorName = doctorIdentity.name;
+            updateData.doctorSpecialty = doctorIdentity.specialty;
+            updateData.doctorLicense = doctorIdentity.licenseNumber;
+            updateData.clinicName = doctorIdentity.clinic;
+            updateData.reportRef = reportRef || `HV-REP-${caseId.slice(-8).toUpperCase()}`;
+            updateData.reportGeneratedAt = reportGeneratedAt || nowIso;
+            updateData.approvedAt = admin.firestore.FieldValue.serverTimestamp();
+            updateData.generatedAt = admin.firestore.FieldValue.serverTimestamp();
+            updateData.reportVersion = REPORT_VERSION;
+            updateData.modelVersion = MODEL_VERSION;
+            updateData.clinicalDiagnosis = typeof clinicalDiagnosis === 'string' ? clinicalDiagnosis.trim() : '';
+            updateData.doctorNote = normalizedClinicalNotes;
+            updateData.clinicalNotes = normalizedClinicalNotes;
+            updateData.medications = typeof medications === 'string' ? medications.trim() : '';
+            updateData.recommendation = normalizedRecommendations.join('\n');
+            updateData.recommendations = normalizedRecommendations;
+          } else if (targetStatus === 'more_info_requested') {
+            updateData.moreInfoRequestedAt = admin.firestore.FieldValue.serverTimestamp();
+            updateData.moreInfoNote = transitionReason;
+          } else if (targetStatus === 'escalated') {
+            updateData.escalatedAt = admin.firestore.FieldValue.serverTimestamp();
+            updateData.escalationReason = transitionReason;
+          } else if (targetStatus === 'closed') {
+            updateData.closedAt = admin.firestore.FieldValue.serverTimestamp();
+            updateData.closedBy = req.user.uid;
+          }
+
+          transaction.update(caseRef, updateData);
+          const auditRef = db.collection('audit_events').doc();
+          transaction.set(auditRef, {
+            type: `CLINICAL_CASE_${targetStatus.toUpperCase()}`,
+            caseId,
+            doctorId: req.user.uid,
+            actor: historyItem.actor,
+            oldStatus: currentStatus,
+            newStatus: targetStatus,
+            reason: transitionReason,
+            duplicate: false,
+            timestamp: admin.firestore.FieldValue.serverTimestamp()
+          });
+
+          return { caseData, currentStatus, updateData, duplicate: false };
+        });
+      } catch (err) {
+        if (err && err.code === 10) {
+          return res.status(409).json({
+            error: 'CONCURRENT_STATUS_UPDATE',
+            message: 'The case was updated concurrently. Please refresh and retry.'
+          });
+        }
+        throw err;
+      }
+
+      if (transitionResult.statusCode) {
+        return res.status(transitionResult.statusCode).json(transitionResult.body);
+      }
+      if (transitionResult.duplicate) {
+        return res.json({
+          success: true,
+          duplicate: true,
+          message: `Case status is already ${targetStatus}.`,
+          targetStatus,
+          notification: null
+        });
+      }
 
       // 📧 CLINICAL NOTIFICATION DISPATCH (Result Ready / More Info Requested)
       let notificationResult = null;
+      const caseData = transitionResult.caseData;
+      const updateData = transitionResult.updateData;
       let targetRecipient = caseData.patientEmail || caseData.email || null;
       let targetPatientName = caseData.patientName || caseData.name || null;
 

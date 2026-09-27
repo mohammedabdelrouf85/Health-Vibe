@@ -323,7 +323,7 @@ async function run(name, fn) {
       await assertFails(otherDb.collection("cases").doc("case-a-assigned").get());
       await assertFails(unapprovedDb.collection("cases").doc("case-a-assigned").get());
       await assertFails(assignedDb.collection("cases").doc("case-a-unassigned").get());
-      await assertSucceeds(assignedDb.collection("cases").doc("case-a-assigned").update({
+      await assertFails(assignedDb.collection("cases").doc("case-a-assigned").update({
         patientId: "patient-a",
         clinicId: "clinic-a",
         assignedDoctorId: "doctor-a",

@@ -378,6 +378,7 @@ service cloud.firestore {
                         !('role' in request.auth.token && request.auth.token.role == 'support') &&
                         ((('role' in request.auth.token && request.auth.token.role == 'doctor') &&
                           ('verifiedDoctor' in request.auth.token && request.auth.token.verifiedDoctor == true) &&
+                          request.resource.data.status == resource.data.status &&
                           ((('assignedDoctorId' in resource.data) && resource.data.assignedDoctorId == request.auth.uid) ||
                            (('doctorId' in resource.data) && resource.data.doctorId == request.auth.uid) ||
                            (('doctorUid' in resource.data) && resource.data.doctorUid == request.auth.uid) ||

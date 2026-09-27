@@ -22,10 +22,16 @@ const database = { collection: name => ({
       exists: (name === 'cases' && id === record.id) || (name === 'users' && Boolean(profiles[id])),
       data: () => name === 'users' ? profiles[id] : record
     }),
-    update: async data => { writes++; Object.assign(record, data); }
+    update: async data => { writes++; Object.assign(record, data); },
+    set: async () => {}
   }),
   add: async () => ({ id: 'audit-1' })
 }) };
+database.runTransaction = async fn => fn({
+  get: ref => ref.get(),
+  update: (ref, data) => ref.update(data),
+  set: async () => {}
+});
 const firestore = () => database;
 firestore.FieldValue = { serverTimestamp: () => '2026-09-26T10:00:00Z', arrayUnion: value => [value] };
 const firebase = { apps: [{}], firestore, auth: () => ({ verifyIdToken: async token => ({ uid: token, email: `${token}@example.test`, role: profiles[token]?.role || 'patient', email_verified: true }) }) };
@@ -106,6 +112,24 @@ include('window.generateAndApproveReport =', 'window.openCaseReport =');
     assert.equal(record.doctorLicense, 'VERIFIED-LICENSE');
     assert.equal(record.approvingDoctorName, 'Verified Doctor');
     assert.equal(record.doctorIdentity.applicationId, 'verified-app');
+    assert.equal(record.statusHistory[0].oldStatus, 'under_review');
+    assert.equal(record.statusHistory[0].newStatus, 'approved');
+    assert.equal(record.statusHistory[0].actor.uid, 'doctor-1');
+    assert.equal(record.statusHistory[0].reason, 'Recorded note');
+    assert.ok(record.statusHistory[0].timestamp);
+    const approvedWrites = writes;
+    result = await request('/api/doctor/approve-clinical-case', 'doctor-1', approval);
+    assert.equal(result.status, 200, JSON.stringify(result.data));
+    assert.equal(result.data.duplicate, true);
+    assert.equal(writes, approvedWrites, 'Duplicate same-status approval must be idempotent');
+    result = await request('/api/doctor/request-more-info', 'doctor-1', { caseId: record.id, note: 'Need more data' });
+    assert.equal(result.status, 400);
+    assert.equal(writes, approvedWrites, 'Invalid approved -> more_info_requested transition must not write');
+    record.status = 'closed';
+    result = await request('/api/doctor/request-more-info', 'doctor-1', { caseId: record.id, note: 'Need more data' });
+    assert.equal(result.status, 400);
+    assert.equal(result.data.error, 'CASE_CLOSED');
+    assert.equal(writes, approvedWrites, 'Closed case must not be mutated');
     assert.equal((await request(`/api/reports/${record.id}/doctor-identity`, 'unrelated-patient')).status, 403);
     record.status = 'under_review';
     const assignedWrites = writes;
