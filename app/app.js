@@ -1613,11 +1613,14 @@ function initAppCheck() {
           appCheckCfg.isTokenAutoRefreshEnabled !== false
         );
       } else {
-        appCheckInstance.activate(appCheckCfg.siteKey || "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI", true);
+        appCheckInstance.activate(appCheckCfg.siteKey, appCheckCfg.isTokenAutoRefreshEnabled !== false);
       }
       console.log("[APP CHECK] Initialized in Development mode (Debug Provider active).");
     } else {
-      const siteKey = appCheckCfg.siteKey || (typeof window !== "undefined" && window.HV_RECAPTCHA_KEY) || "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI";
+      const siteKey = appCheckCfg.siteKey || (typeof window !== "undefined" && window.HV_RECAPTCHA_KEY);
+      if (!siteKey) {
+        throw new Error("Missing App Check reCAPTCHA v3 site key.");
+      }
       appCheckInstance = firebase.appCheck();
       if (firebase.appCheck.ReCaptchaV3Provider) {
         appCheckInstance.activate(

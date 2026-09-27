@@ -203,22 +203,32 @@ app.use([
 // =============================================================================
 // 🛡️ FIREBASE APP CHECK ATTESTATION ENGINE (Anti-Abuse & Bot Mitigation)
 // =============================================================================
-const ENFORCE_APP_CHECK = process.env.ENFORCE_APP_CHECK === 'true';
+const ENFORCE_APP_CHECK = isProduction || process.env.ENFORCE_APP_CHECK === 'true';
+const APP_CHECK_PUBLIC_API_PATHS = new Set([
+  '/api/health',
+  '/api/app-check/status',
+  '/api/clinical/rules/versions',
+  '/api/bot/status',
+  '/api/bot/webhook'
+]);
+
+function shouldVerifyAppCheckForApi(req) {
+  const cleanPath = `${req.baseUrl || ''}${req.path || ''}`.split('?')[0];
+  return cleanPath.startsWith('/api/') && !APP_CHECK_PUBLIC_API_PATHS.has(cleanPath);
+}
 
 async function verifyAppCheck(req, res, next) {
   const appCheckToken = req.header('X-Firebase-AppCheck');
 
-  // Development bypass / debug token validation
-  if (isDevelopment) {
-    if (!appCheckToken || appCheckToken.startsWith('healthvibe-dev-') || appCheckToken === 'test-valid-app-check-token') {
-      req.appCheck = { verified: true, mode: 'dev-debug', token: appCheckToken || 'dev-bypass' };
-      return next();
-    }
+  // Development only: allow local emulator traffic to proceed without remote attestation.
+  if (isDevelopment && !ENFORCE_APP_CHECK && !appCheckToken) {
+    req.appCheck = { verified: true, mode: 'dev-emulator-bypass' };
+    return next();
   }
 
   // Token missing
   if (!appCheckToken) {
-    if (ENFORCE_APP_CHECK || (isProduction && process.env.ENFORCE_APP_CHECK === 'true')) {
+    if (ENFORCE_APP_CHECK) {
       return res.status(401).json({
         error: 'APP_CHECK_REQUIRED',
         message: 'Unauthorized client: Missing X-Firebase-AppCheck attestation token.'
@@ -234,20 +244,10 @@ async function verifyAppCheck(req, res, next) {
       const appCheckClaims = await admin.appCheck().verifyToken(appCheckToken);
       req.appCheck = { verified: true, appId: appCheckClaims.appId, claims: appCheckClaims };
       return next();
-    } else {
-      // Mock / fallback attestation verification for testing
-      if (appCheckToken === 'test-valid-app-check-token' || appCheckToken.startsWith('valid-') || appCheckToken.startsWith('healthvibe-')) {
-        req.appCheck = { verified: true, mode: 'mock-valid', appId: 'health-vibe-web' };
-        return next();
-      }
-      if (appCheckToken === 'test-invalid-app-check-token') {
-        throw new Error('Invalid App Check token signature.');
-      }
-      req.appCheck = { verified: true, mode: 'unverified-admin-fallback' };
-      return next();
     }
+    throw new Error('Firebase Admin App Check verifier is unavailable.');
   } catch (err) {
-    if (ENFORCE_APP_CHECK || (isProduction && process.env.ENFORCE_APP_CHECK === 'true')) {
+    if (ENFORCE_APP_CHECK) {
       return res.status(401).json({
         error: 'APP_CHECK_INVALID',
         message: `Unauthorized client: ${err.message}`
@@ -269,6 +269,11 @@ app.get(['/app-check/status', '/api/app-check/status'], verifyAppCheck, (req, re
     adminSdkAvailable: Boolean(admin.apps.length && typeof admin.appCheck === 'function'),
     timestamp: new Date().toISOString()
   });
+});
+
+app.use('/api', (req, res, next) => {
+  if (!shouldVerifyAppCheckForApi(req)) return next();
+  return verifyAppCheck(req, res, next);
 });
 
 // =============================================================================
