@@ -154,35 +154,226 @@ app.use(cors({
   }
 }));
 
-// Body size limit to prevent memory exhaustion / DoS attacks
-app.use(express.json({ limit: '1mb' }));
+// =============================================================================
+// 🌐 PROXY CONFIGURATION & SECURE CLIENT IP RESOLUTION
+// =============================================================================
+function resolveTrustProxy() {
+  if (process.env.TRUST_PROXY !== undefined) {
+    const val = process.env.TRUST_PROXY.trim().toLowerCase();
+    if (val === 'true') return true;
+    if (val === 'false') return false;
+    const num = parseInt(val, 10);
+    if (!isNaN(num)) return num;
+    return process.env.TRUST_PROXY;
+  }
+  if (isProduction || isStaging) {
+    return 1; // Trust 1 hop (Cloud Run / GAE / Reverse Proxy)
+  }
+  return 'loopback';
+}
 
-// In-Memory Sliding Window Rate Limiter
-function createRateLimiter({ windowMs = 60000, maxRequests = 100, message = 'Too many requests. Please slow down.' } = {}) {
+app.set('trust proxy', resolveTrustProxy());
+
+function getClientIp(req) {
+  if (!req) return '127.0.0.1';
+  let ip = req.ip || req.socket?.remoteAddress || '127.0.0.1';
+  if (ip.startsWith('::ffff:')) {
+    ip = ip.replace('::ffff:', '');
+  }
+  if (ip.includes('.') && ip.includes(':')) {
+    ip = ip.split(':')[0];
+  }
+  return ip.trim();
+}
+
+// =============================================================================
+// 🔒 SERVER SECRETS ISOLATION & REDACTION ENGINE
+// =============================================================================
+function maskServerSecrets(value) {
+  if (value === null || value === undefined) return value;
+  if (value instanceof Error) {
+    const sanitized = new Error(maskServerSecrets(value.message));
+    if (value.stack) sanitized.stack = maskServerSecrets(value.stack);
+    if (value.code) sanitized.code = value.code;
+    return sanitized;
+  }
+  if (Array.isArray(value)) {
+    return value.map(v => maskServerSecrets(v));
+  }
+  if (typeof value !== 'string') {
+    if (typeof value === 'object') {
+      try {
+        const maskedObj = {};
+        for (const [k, v] of Object.entries(value)) {
+          if (/password|secret|token|apiKey|private_?key|auth_?salt/i.test(k)) {
+            maskedObj[k] = '[REDACTED]';
+          } else {
+            maskedObj[k] = maskServerSecrets(v);
+          }
+        }
+        return maskedObj;
+      } catch (_) {
+        return value;
+      }
+    }
+    return String(value);
+  }
+
+  let text = value;
+  const sensitiveEnvKeys = [
+    'FIREBASE_PRIVATE_KEY',
+    'FIREBASE_CLIENT_EMAIL',
+    'FIREBASE_API_KEY',
+    'WHATSAPP_API_TOKEN',
+    'WHATSAPP_WEBHOOK_VERIFY_TOKEN',
+    'AUDIT_SALT',
+    'JWT_SECRET',
+    'APP_CHECK_SECRET',
+    'STORAGE_SIGNING_KEY',
+    'ENCRYPTION_KEY'
+  ];
+
+  for (const envKey of sensitiveEnvKeys) {
+    const secretVal = process.env[envKey];
+    if (secretVal && typeof secretVal === 'string' && secretVal.trim().length > 6) {
+      text = text.split(secretVal.trim()).join('[REDACTED_SECRET]');
+    }
+  }
+
+  text = text.replace(/-----BEGIN[ A-Z0-9_-]+PRIVATE KEY-----[\s\S]*?-----END[ A-Z0-9_-]+PRIVATE KEY-----/gi, '[REDACTED_PRIVATE_KEY]');
+  text = text.replace(/AIza[0-9A-Za-z-_]{35}/g, '[REDACTED_API_KEY]');
+  text = text.replace(/Bearer\s+([A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+)/gi, 'Bearer [REDACTED_JWT]');
+  text = text.replace(/(password|secret|token|apiKey|auth)=([^& \r\n]+)/gi, '$1=[REDACTED]');
+  text = text.replace(/("password"|"secret"|"token"|"apiKey"|"private_key"):\s*"[^"]+"/gi, '$1:"[REDACTED]"');
+
+  return text;
+}
+
+// 🛡️ Intercept server console outputs to ensure secrets never leak to logs or stdout/stderr
+const _origConsoleLog = console.log;
+const _origConsoleWarn = console.warn;
+const _origConsoleError = console.error;
+const _origConsoleInfo = console.info;
+
+console.log = (...args) => _origConsoleLog(...args.map(a => maskServerSecrets(a)));
+console.warn = (...args) => _origConsoleWarn(...args.map(a => maskServerSecrets(a)));
+console.error = (...args) => _origConsoleError(...args.map(a => maskServerSecrets(a)));
+console.info = (...args) => _origConsoleInfo(...args.map(a => maskServerSecrets(a)));
+
+function sanitizeClientErrorMessage(err) {
+  if (!err) return 'An unexpected error occurred.';
+  const rawMsg = typeof err === 'string' ? err : (err.message || String(err));
+  const msg = maskServerSecrets(rawMsg);
+
+  const leaksInternalDetails =
+    /projects\/|databases\/|firestore\.googleapis\.com|firebase|google-gax|grpc|ECONNREFUSED|ENOTFOUND|ETIMEDOUT|node:internal|\.js:\d+|at\s+[\w.<>]+\s+\(/i.test(msg) ||
+    /7\s+PERMISSION_DENIED|14\s+UNAVAILABLE|DEADLINE_EXCEEDED|RESOURCE_EXHAUSTED/i.test(msg) ||
+    /SELECT\s+|INSERT\s+|DELETE\s+|FROM\s+|WHERE\s+/i.test(msg) ||
+    /\[REDACTED_/i.test(msg);
+
+  if (leaksInternalDetails || msg.length > 200 || msg.includes('\n') || msg.includes('\r')) {
+    return 'An internal service error occurred. Please try again later.';
+  }
+
+  return msg;
+}
+
+// 🛡️ Global JSON response sanitizer: never expose stack traces or internal Firebase errors to client
+app.use((req, res, next) => {
+  const originalJson = res.json.bind(res);
+  res.json = function(data) {
+    if (data && typeof data === 'object') {
+      if (data.stack) {
+        delete data.stack;
+      }
+      if (data.details && typeof data.details === 'object' && data.details.stack) {
+        delete data.details.stack;
+      }
+      if (res.statusCode >= 500) {
+        if (typeof data.message === 'string') {
+          data.message = sanitizeClientErrorMessage(data.message);
+        }
+      } else if (typeof data.message === 'string') {
+        data.message = maskServerSecrets(data.message);
+      }
+    }
+    return originalJson(data);
+  };
+  next();
+});
+
+// =============================================================================
+// 📦 REQUEST BODY PARSING & SIZE LIMITS (DoS Exhaustion Defense)
+// =============================================================================
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '100kb' }));
+
+// Catch Body-Parser syntax and payload size errors before hitting routes
+app.use((err, req, res, next) => {
+  if (err.type === 'entity.too.large' || err.status === 413) {
+    return res.status(413).json({
+      error: 'PAYLOAD_TOO_LARGE',
+      message: 'Request payload exceeds allowable limit (1MB max).'
+    });
+  }
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    return res.status(400).json({
+      error: 'INVALID_JSON_PAYLOAD',
+      message: 'Malformed JSON payload in request body.'
+    });
+  }
+  next(err);
+});
+
+// =============================================================================
+// ⏱️ SLIDING WINDOW RATE LIMITER & SENSITIVE ROUTE DEFENSE
+// =============================================================================
+function createRateLimiter({
+  windowMs = 60000,
+  maxRequests = 100,
+  message = 'Too many requests. Please slow down.',
+  keyGenerator = null,
+  skip = null
+} = {}) {
   const requests = new Map();
 
   return (req, res, next) => {
-    const ip = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown-client';
+    if (typeof skip === 'function' && skip(req)) {
+      return next();
+    }
+
+    const clientIp = getClientIp(req);
+    let key;
+    if (typeof keyGenerator === 'function') {
+      key = keyGenerator(req);
+    } else if (req.user && req.user.uid) {
+      key = `user:${req.user.uid}`;
+    } else {
+      key = `ip:${clientIp}`;
+    }
+
     const now = Date.now();
     const windowStart = now - windowMs;
 
-    const timestamps = (requests.get(ip) || []).filter(ts => ts > windowStart);
+    const timestamps = (requests.get(key) || []).filter(ts => ts > windowStart);
     if (timestamps.length >= maxRequests) {
-      res.setHeader('Retry-After', Math.ceil(windowMs / 1000));
+      const retryAfterSec = Math.max(Math.ceil((timestamps[0] + windowMs - now) / 1000), 1);
+      res.setHeader('Retry-After', retryAfterSec);
       return res.status(429).json({
         error: 'RATE_LIMIT_EXCEEDED',
-        message
+        message,
+        retryAfterSeconds: retryAfterSec
       });
     }
 
     timestamps.push(now);
-    requests.set(ip, timestamps);
+    requests.set(key, timestamps);
 
     if (requests.size > 5000) {
-      for (const [key, tsList] of requests.entries()) {
+      for (const [k, tsList] of requests.entries()) {
         const fresh = tsList.filter(ts => ts > windowStart);
-        if (fresh.length === 0) requests.delete(key);
-        else requests.set(key, fresh);
+        if (fresh.length === 0) requests.delete(k);
+        else requests.set(k, fresh);
       }
     }
 
@@ -191,10 +382,21 @@ function createRateLimiter({ windowMs = 60000, maxRequests = 100, message = 'Too
 }
 
 // Global API rate limiter (120 req / minute)
-app.use('/api/', createRateLimiter({ windowMs: 60000, maxRequests: 120, message: 'API rate limit exceeded. Please try again shortly.' }));
+app.use('/api/', createRateLimiter({
+  windowMs: 60000,
+  maxRequests: 120,
+  message: 'API rate limit exceeded. Please try again shortly.',
+  keyGenerator: req => req.user?.uid ? `user:${req.user.uid}` : `ip:${getClientIp(req)}`
+}));
 
 // Strict rate limiter for sensitive mutation endpoints (20 req / minute)
-const strictMutationLimiter = createRateLimiter({ windowMs: 60000, maxRequests: 20, message: 'Too many mutation attempts. Please wait 1 minute.' });
+const strictMutationLimiter = createRateLimiter({
+  windowMs: 60000,
+  maxRequests: 20,
+  message: 'Too many mutation attempts. Please wait 1 minute.',
+  keyGenerator: req => req.user?.uid ? `mut_user:${req.user.uid}` : `mut_ip:${getClientIp(req)}`
+});
+
 app.use([
   '/api/notifications/send-email',
   '/api/feedback/submit',
@@ -206,6 +408,86 @@ app.use([
   '/api/user/data-export',
   '/api/user/access-request'
 ], strictMutationLimiter);
+
+// Auth login / token synchronization rate limiter (25 req / minute)
+const authLoginLimiter = createRateLimiter({
+  windowMs: 60000,
+  maxRequests: 25,
+  message: 'Too many login attempts. Please wait before retrying.',
+  keyGenerator: req => req.user?.uid ? `auth_user:${req.user.uid}` : `auth_ip:${getClientIp(req)}`
+});
+app.use('/api/user/sync-role', authLoginLimiter);
+
+// OTP Request rate limiter (5 req / 10 minutes)
+const otpRequestLimiter = createRateLimiter({
+  windowMs: 10 * 60 * 1000,
+  maxRequests: 5,
+  message: 'Too many verification code requests. Please wait 10 minutes.',
+  keyGenerator: req => req.user?.uid ? `otp_req_user:${req.user.uid}` : `otp_req_ip:${getClientIp(req)}`
+});
+app.use('/api/bot/request-code', otpRequestLimiter);
+
+// OTP Verification attempt rate limiter (5 attempts / 15 minutes)
+const otpVerifyLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  maxRequests: 5,
+  message: 'Too many failed verification attempts. Please wait 15 minutes before retrying.',
+  keyGenerator: req => req.user?.uid ? `otp_ver_user:${req.user.uid}` : `otp_ver_ip:${getClientIp(req)}`
+});
+app.use('/api/bot/verify-code', otpVerifyLimiter);
+
+// Public form submissions limiter (5 req / 15 minutes per IP)
+const publicFormLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  maxRequests: 5,
+  message: 'Too many submissions. Please wait before submitting another request.',
+  keyGenerator: req => `form_ip:${getClientIp(req)}`
+});
+app.use('/api/clinics/demo-request', publicFormLimiter);
+
+// Webhook ingestion rate limiter (100 req / minute per IP)
+const webhookLimiter = createRateLimiter({
+  windowMs: 60000,
+  maxRequests: 100,
+  message: 'Too many webhook events.',
+  keyGenerator: req => `webhook_ip:${getClientIp(req)}`
+});
+app.use('/api/bot/webhook', webhookLimiter);
+
+// Client Error monitoring report limiter (60 req / minute)
+const clientErrorLimiter = createRateLimiter({
+  windowMs: 60000,
+  maxRequests: 60,
+  message: 'Error monitoring ingestion rate limit exceeded.',
+  keyGenerator: req => `err_ip:${getClientIp(req)}`
+});
+app.use('/api/monitoring/errors', clientErrorLimiter);
+
+// OTP Lockout Tracking Registry (Anti-Brute Force)
+const otpLockouts = new Map();
+
+function checkOtpLockout(key) {
+  const record = otpLockouts.get(key);
+  if (record && record.lockedUntil && Date.now() < record.lockedUntil) {
+    const waitSec = Math.max(Math.ceil((record.lockedUntil - Date.now()) / 1000), 1);
+    return { locked: true, waitSec };
+  }
+  return { locked: false, waitSec: 0 };
+}
+
+function recordOtpFailure(key) {
+  const record = otpLockouts.get(key) || { attempts: 0, lockedUntil: 0 };
+  record.attempts = (record.attempts || 0) + 1;
+  if (record.attempts >= 5) {
+    record.lockedUntil = Date.now() + 15 * 60 * 1000; // 15 minutes lockout
+  }
+  otpLockouts.set(key, record);
+  return record;
+}
+
+function clearOtpLockout(key) {
+  otpLockouts.delete(key);
+}
 
 // =============================================================================
 // 🛡️ FIREBASE APP CHECK ATTESTATION ENGINE (Anti-Abuse & Bot Mitigation)
@@ -308,8 +590,8 @@ function recordSystemError({
   const record = {
     errorId,
     type,
-    message: String(message || '').substring(0, 1000),
-    stack: stack ? String(stack).substring(0, 4000) : null,
+    message: maskServerSecrets(String(message || '').substring(0, 1000)),
+    stack: stack ? maskServerSecrets(String(stack).substring(0, 4000)) : null,
     source,
     lineno,
     colno,
@@ -2597,6 +2879,16 @@ app.post('/api/bot/verify-code', requireAuth, async (req, res) => {
     });
   }
 
+  const lockoutKey = userId || getClientIp(req);
+  const lockoutStatus = checkOtpLockout(lockoutKey);
+  if (lockoutStatus.locked) {
+    return res.status(429).json({
+      error: 'TOO_MANY_FAILED_ATTEMPTS',
+      message: `Account verification locked due to repeated failed attempts. Please retry in ${lockoutStatus.waitSec} seconds.`,
+      retryAfterSeconds: lockoutStatus.waitSec
+    });
+  }
+
   const isValid = whatsappBot.verifyCode({
     userId,
     userEmail,
@@ -2605,11 +2897,17 @@ app.post('/api/bot/verify-code', requireAuth, async (req, res) => {
   });
 
   if (!isValid) {
+    const status = recordOtpFailure(lockoutKey);
+    const remaining = Math.max(5 - status.attempts, 0);
     return res.status(400).json({
       error: 'CODE_MISMATCH',
-      message: 'كود التحقق غير صحيح أو انتهت صلاحيته. يرجى طلب كود جديد من البوت.'
+      message: remaining > 0
+        ? `كود التحقق غير صحيح أو انتهت صلاحيته. تبقى لك ${remaining} محاولات.`
+        : 'تم استنفاد محاولات إدخال الكود. تم قفل التحقق مؤقتاً لمدة 15 دقيقة.'
     });
   }
+
+  clearOtpLockout(lockoutKey);
 
   try {
     // 1. Mark verified in Firebase Auth
@@ -2684,6 +2982,9 @@ app.get('/api/bot/webhook', (req, res) => {
  * Handles incoming WhatsApp webhook events
  */
 app.post('/api/bot/webhook', (req, res) => {
+  if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body) || Object.keys(req.body).length === 0) {
+    return res.status(400).json({ error: 'INVALID_PAYLOAD', message: 'Webhook payload must be a non-empty JSON object.' });
+  }
   whatsappBot.handleInboundWebhook(req.body);
   res.sendStatus(200);
 });
@@ -3030,8 +3331,16 @@ app.post('/api/clinics/demo-request', (req, res) => {
       specialty = 'pulmonology',
       doctorCount = '1-5',
       city = 'Cairo',
-      notes = ''
+      notes = '',
+      website,
+      hp_field
     } = req.body || {};
+
+    // Anti-Spam Honeypot Detection
+    if (website || hp_field) {
+      console.warn(`[SPAM DETECTED]: Bot honeypot triggered on demo request from IP ${getClientIp(req)}`);
+      return res.status(200).json({ success: true, message: 'Request processed.' });
+    }
 
     if (!clinicName || !clinicName.trim()) {
       return res.status(400).json({ error: 'MISSING_FIELD', message: 'Clinic name is required.' });
@@ -3044,6 +3353,10 @@ app.post('/api/clinics/demo-request', (req, res) => {
     }
     if (!phone || phone.trim().length < 8) {
       return res.status(400).json({ error: 'INVALID_PHONE', message: 'A valid WhatsApp/phone number is required.' });
+    }
+
+    if (String(clinicName).length > 100 || String(contactName).length > 100 || String(email).length > 100 || String(phone).length > 30) {
+      return res.status(400).json({ error: 'FIELD_TOO_LONG', message: 'Field exceeds maximum allowable length.' });
     }
 
     const isPilot = packageType === 'pilot' || String(packageType).toLowerCase().includes('pilot');
@@ -3098,11 +3411,62 @@ app.post('/api/clinics/demo-request', (req, res) => {
   }
 });
 
+// =============================================================================
+// 🚨 CENTRALIZED ERROR HANDLER & EXCEPTION SANITIZER
+// =============================================================================
+app.use((err, req, res, next) => {
+  if (res.headersSent) {
+    return next(err);
+  }
+
+  // Handle Payload Too Large (413)
+  if (err.type === 'entity.too.large' || err.status === 413) {
+    return res.status(413).json({
+      error: 'PAYLOAD_TOO_LARGE',
+      message: 'Request payload exceeds allowable limit (1MB max).'
+    });
+  }
+
+  // Handle Malformed JSON (400)
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    return res.status(400).json({
+      error: 'INVALID_JSON_PAYLOAD',
+      message: 'Malformed JSON payload in request body.'
+    });
+  }
+
+  recordSystemError({
+    type: 'express_unhandled_route_error',
+    message: err.message,
+    stack: err.stack,
+    severity: err.status >= 500 ? 'ERROR' : 'WARN',
+    url: req.originalUrl,
+    userId: req.user?.uid || 'anonymous'
+  });
+
+  const statusCode = err.statusCode || err.status || 500;
+  const safeMessage = statusCode >= 500 ? sanitizeClientErrorMessage(err) : (err.message || 'Bad Request');
+
+  res.status(statusCode).json({
+    error: err.code || (statusCode >= 500 ? 'INTERNAL_SERVER_ERROR' : 'INVALID_REQUEST'),
+    message: safeMessage
+  });
+});
+
 const PORT = process.env.PORT || (isDevelopment ? 4000 : 8080);
 if (require.main === module) {
   app.listen(PORT, () => {
     console.log(`[Health Vibes AI Backend] Server running in [${NODE_ENV.toUpperCase()}] mode on port ${PORT}`);
   });
 }
+
+app.maskServerSecrets = maskServerSecrets;
+app.sanitizeClientErrorMessage = sanitizeClientErrorMessage;
+app.getClientIp = getClientIp;
+app.resolveTrustProxy = resolveTrustProxy;
+app.createRateLimiter = createRateLimiter;
+app.checkOtpLockout = checkOtpLockout;
+app.recordOtpFailure = recordOtpFailure;
+app.clearOtpLockout = clearOtpLockout;
 
 module.exports = app;
