@@ -475,7 +475,8 @@ app.post('/api/admin/backup/create', requireAuth, auditOperationalAccess('BACKUP
     const manifest = await backupService.createBackupSnapshot({
       initiator,
       environment: NODE_ENV,
-      firestoreDb: db
+      firestoreDb: db,
+      storageBucket: backupStorageBucket
     });
 
     res.locals.backupId = manifest.backupId;
@@ -498,8 +499,14 @@ app.get('/api/admin/backup/list', requireAuth, auditOperationalAccess('BACKUP_SN
     res.json({
       status: 'ok',
       count: snapshots.length,
-      rpoCompliance: '< 15 minutes (PITR active)',
-      rtoTarget: '< 30 minutes',
+      measuredLatestRpoSeconds: snapshots[0]?.metrics?.measuredRpoSeconds ?? null,
+      measuredLatestBackupDurationSeconds: snapshots[0]?.metrics?.backupDurationMs != null
+        ? Number((snapshots[0].metrics.backupDurationMs / 1000).toFixed(3))
+        : null,
+      rpoCompliance: snapshots[0]?.metrics?.measuredRpoSeconds != null
+        ? `${snapshots[0].metrics.measuredRpoSeconds}s measured on latest snapshot`
+        : 'No measured snapshot available',
+      rtoTarget: 'Measured during dry-run/live restore responses',
       snapshots
     });
   } catch (err) {
@@ -532,7 +539,8 @@ app.post('/api/admin/backup/restore', requireAuth, auditOperationalAccess('DATAB
     const result = await backupService.restoreBackupSnapshot(backupId, {
       confirmToken,
       dryRun: Boolean(dryRun),
-      firestoreDb: db
+      firestoreDb: db,
+      storageBucket: backupStorageBucket
     });
 
     res.locals.auditDetails = { restoredRecords: result.restoredRecords || 0 };
@@ -587,6 +595,16 @@ if (!admin.apps.length) {
 }
 
 const db = admin.apps.length ? admin.firestore() : null;
+let backupStorageBucket = null;
+if (admin.apps.length && typeof admin.storage === 'function') {
+  try {
+    backupStorageBucket = process.env.BACKUP_STORAGE_BUCKET
+      ? admin.storage().bucket(process.env.BACKUP_STORAGE_BUCKET)
+      : admin.storage().bucket();
+  } catch (err) {
+    backupStorageBucket = null;
+  }
+}
 
 function parseEmailList(value, fallback) {
   const source = value ? String(value).split(',') : fallback;
