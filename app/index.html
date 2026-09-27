@@ -902,8 +902,37 @@
             <label>نسبة الأكسجين (50% - 100%)</label>
             <input id="oxygenInput" type="number" min="50" max="100" value="95" aria-label="نسبة الأكسجين" placeholder="95">
             <div id="oxygenWarning" class="field-warning" hidden></div>
+            <label>درجة الحرارة (اختياري)</label>
+            <input id="temperatureInput" inputmode="decimal" aria-label="درجة الحرارة" placeholder="37.0 °C أو unknown">
+            <label>معدل التنفس (اختياري)</label>
+            <input id="respiratoryRateInput" type="number" min="5" max="60" aria-label="معدل التنفس في الدقيقة" placeholder="مثال: 18">
+            <label>ألم بالصدر</label>
+            <div id="chestPainChoices" class="choice-row three">
+              <button class="choice">نعم</button>
+              <button class="choice active">لا</button>
+              <button class="choice">غير معروف</button>
+            </div>
             <label>مدة الأعراض</label>
             <input id="symptomDuration" value="3 أيام" aria-label="مدة الأعراض">
+            <label>تطور الأعراض</label>
+            <div id="symptomProgressionChoices" class="choice-row three">
+              <button class="choice">تتحسن</button>
+              <button class="choice active">ثابتة</button>
+              <button class="choice">تسوء</button>
+              <button class="choice">غير معروف</button>
+            </div>
+            <label>عدوى حديثة</label>
+            <div id="recentInfectionChoices" class="choice-row three">
+              <button class="choice">نعم</button>
+              <button class="choice active">لا</button>
+              <button class="choice">غير معروف</button>
+            </div>
+            <label>ربو أو COPD</label>
+            <div id="asthmaCopdChoices" class="choice-row three">
+              <button class="choice">نعم</button>
+              <button class="choice active">لا</button>
+              <button class="choice">غير معروف</button>
+            </div>
             <label>عوامل خطورة</label>
             <div id="riskChoices" class="choice-row four">
               <button class="choice">ربو</button>
@@ -911,6 +940,10 @@
               <button class="choice">حمل</button>
               <button class="choice active">لا يوجد</button>
             </div>
+            <label>الأدوية الحالية (اختياري)</label>
+            <textarea id="currentMedicationsInput" rows="2" maxlength="500" aria-label="الأدوية الحالية" placeholder="اكتب الأدوية أو اتركها فارغة إذا لم يتم تقديمها"></textarea>
+            <label>ملاحظات إضافية (اختياري)</label>
+            <textarea id="assessmentNotesInput" rows="2" maxlength="1000" aria-label="ملاحظات إضافية" placeholder="أي تفاصيل يريد المريض إضافتها"></textarea>
             <div class="safety-note">لن تظهر نتيجة نهائية للمريض قبل مراجعة الطبيب للحالة.</div>
             
             <!-- Privacy Consent Gate Box (Before Assessment Submission) -->

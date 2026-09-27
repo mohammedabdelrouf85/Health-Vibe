@@ -1,4 +1,4 @@
-# Health Vibe AI - مواصفات مخطط التقييم السريري (Clinical Assessment Schema v1.0.0)
+# Health Vibe AI - مواصفات مخطط التقييم السريري (Clinical Assessment Schema v1.1.0)
 
 ## 📌 الهدف والمبدأ الأساسي
 توحيد بيانات التقييم التنفسي والسريري في مخطط بيانات (**Schema**) واضح، ثابت، ومحكم بين:
@@ -39,7 +39,13 @@
       "oxygenLevel": 95,
       "isLowOxygen": false,
       "isCriticalOxygen": false,
-      "unit": "%"
+      "unit": "%",
+      "temperature": 37.2,
+      "temperatureUnit": "°C",
+      "temperatureStatus": "recorded",
+      "respiratoryRate": 18,
+      "respiratoryRateUnit": "breaths/min",
+      "respiratoryRateStatus": "recorded"
     },
     "symptoms": {
       "breathingDifficulty": "no",
@@ -50,8 +56,25 @@
       "coughSeverityLabelEn": "Moderate",
       "durationDays": 3,
       "durationText": "3 أيام",
-      "durationTextEn": "3 days"
+      "durationTextEn": "3 days",
+      "chestPain": "no",
+      "chestPainLabelAr": "لا",
+      "chestPainLabelEn": "No",
+      "symptomProgression": "stable",
+      "symptomProgressionLabelAr": "ثابتة",
+      "symptomProgressionLabelEn": "Stable",
+      "recentInfection": "no",
+      "recentInfectionLabelAr": "لا",
+      "recentInfectionLabelEn": "No",
+      "asthmaCopd": "unknown",
+      "asthmaCopdLabelAr": "غير معروف",
+      "asthmaCopdLabelEn": "Unknown"
     },
+    "medications": {
+      "current": "Salbutamol inhaler as reported by patient",
+      "status": "provided"
+    },
+    "notes": "Patient-reported free text note.",
     "riskFactors": {
       "keys": ["asthma"],
       "labelsAr": ["ربو"],
@@ -89,11 +112,28 @@
 
   "oxygenLevel": 95,
   "o2": 95,
+  "temperature": 37.2,
+  "temperatureUnit": "°C",
+  "temperatureStatus": "recorded",
+  "respiratoryRate": 18,
+  "respiratoryRateUnit": "breaths/min",
+  "respiratoryRateStatus": "recorded",
   "breathingDifficulty": "لا (تنفس طبيعي)",
   "coughLevel": "متوسطة",
   "symptomDuration": "3 أيام",
   "duration": "3 أيام",
   "durationEn": "3 days",
+  "chestPainKey": "no",
+  "chestPain": "لا",
+  "symptomProgressionKey": "stable",
+  "symptomProgression": "ثابتة",
+  "recentInfectionKey": "no",
+  "recentInfection": "لا",
+  "asthmaCopdKey": "unknown",
+  "asthmaCopd": "غير معروف",
+  "currentMedications": "Salbutamol inhaler as reported by patient",
+  "patientNotes": "Patient-reported free text note.",
+  "calculatedAge": 34,
   "riskFactors": ["ربو"],
   "symptoms": "كحة متوسطة",
   "symptomsEn": "Moderate cough",
@@ -177,16 +217,32 @@
 * `notifications`: قيمة بوليان اختيارية لتلقي تحديثات الحالة وإشعارات المراجعة الطبية.
 
 ### 1. المؤشرات الحيوية (`assessment.vitals`):
-* `oxygenLevel`: رقم صحيح موجب (`0` إلى `100`).
+* `oxygenLevel`: حقل إلزامي، رقم صحيح موجب (`50` إلى `100`) بوحدة `%`.
 * `isLowOxygen`: بوليان (`true` إذا كانت نسبة الأكسجين `< 93%`).
 * `isCriticalOxygen`: بوليان (`true` إذا كانت نسبة الأكسجين `< 90%`).
 * `unit`: نص ثابت `"%"`
+* `temperature`: حقل اختياري؛ رقم عشري مئوي بين `34.0` و`43.0` أو `null` إذا لم يقدمه المريض أو اختار `unknown`.
+* `temperatureUnit`: نص ثابت `"°C"`.
+* `temperatureStatus`: إحدى القيم `"recorded"` | `"not-provided"` | `"unknown"`، ويمنع استنتاج درجة حرارة غير مسجلة.
+* `respiratoryRate`: حقل اختياري؛ رقم صحيح بين `5` و`60` بوحدة نفس/دقيقة أو `null` إذا لم يقدمه المريض أو اختار `unknown`.
+* `respiratoryRateUnit`: نص ثابت `"breaths/min"`.
+* `respiratoryRateStatus`: إحدى القيم `"recorded"` | `"not-provided"` | `"unknown"`.
 
 ### 2. الأعراض السريرية (`assessment.symptoms`):
 * `breathingDifficulty`: قائمة خيارات مغلقة (`"yes"` | `"no"`).
 * `coughSeverity`: قائمة خيارات مغلقة (`"none"` | `"mild"` | `"moderate"` | `"severe"`).
 * `durationDays`: عدد الأيام كقيمة عددية صحيحة للتصنيف الإحصائي.
 * `durationText`: نص تمثيل المدة بالعربية (مثل: `"3 أيام"`).
+* `chestPain`: حقل إلزامي كاختيار مغلق `"yes"` | `"no"` | `"unknown"`.
+* `symptomProgression`: حقل إلزامي كاختيار مغلق `"improving"` | `"stable"` | `"worsening"` | `"unknown"`.
+* `recentInfection`: حقل إلزامي كاختيار مغلق `"yes"` | `"no"` | `"unknown"`.
+* `asthmaCopd`: حقل إلزامي كاختيار مغلق `"yes"` | `"no"` | `"unknown"`، مستقل عن عامل الخطورة القديم `asthma` للحفاظ على وضوح الربو/COPD وعدم افتراض التشخيص.
+
+### 2.1 الأدوية والملاحظات التي يقدمها المريض (`assessment.medications` / `assessment.notes`):
+* `assessment.medications.current`: نص اختياري حتى `500` حرف، أو `null` عند عدم تقديم بيانات.
+* `assessment.medications.status`: `"provided"` أو `"not-provided"`، ويجب عدم عرض `not-provided` كأنه ينفي استخدام الأدوية.
+* `assessment.notes`: نص اختياري حتى `1000` حرف، أو `null`.
+* `calculatedAge`: عمر محسوب من `dateOfBirth` عند توفره؛ إن لم يقدّم المريض تاريخ ميلاد صالحاً يبقى `null` ولا يستبدل بعمر مفترض.
 
 ### 3. عوامل الخطورة (`assessment.riskFactors`):
 * `keys`: مصفوفة من القيم المعيارية الموحدة:
@@ -273,9 +329,17 @@
 | الحقل السريري | النوع والمدى المقبول | شروط التحقق في الواجهة (Client Validation) | قواعد أمان الخادم (Firestore Rules) |
 | :--- | :--- | :--- | :--- |
 | **`oxygenLevel` / `o2`** | رقم صحيح `50 - 100` | حظر القيم خارج النطاق، تمييز الحقل بالأحمر، ومنع الإرسال | `isValidOxygen`: حظر أي قيمة خارج `[50, 100]` بـ `permission-denied` |
+| **`temperature`** | اختياري `34.0 - 43.0 °C` أو `unknown`/فارغ | قبول المدى أو عدم التسجيل الصريح، ورفض القيم غير الطبية | `isValidOptionalTemperature`: رقم ضمن المدى أو `null` |
+| **`respiratoryRate`** | اختياري `5 - 60 breaths/min` أو `unknown`/فارغ | قبول عدد صحيح فقط أو عدم التسجيل الصريح | `isValidOptionalRespiratoryRate`: رقم ضمن المدى أو `null` |
 | **`breathingDifficulty`** | خيار إلزامي من `["نعم", "لا", "yes", "no"]` | منع قيمة "غير محدد" وإلزام المستخدم بتحديد الحالة | `isValidBreathing`: التأكد من وجود نص صحيح محدد |
 | **`coughSeverity`** | خيار إلزامي من `["خفيفة", "متوسطة", "شديدة", "لا توجد"]` | إلزام المستخدم باختيار درجة الكحة بدقة | `isValidCough`: التأكد من نص شدة كحة صحيح |
 | **`symptomDuration`** | نص يحتوي على عدد أيام بين `1` و `365` | حظر القيم الصفرية، السالبة، أو غير المحددة أو التي تزيد عن 365 يوماً | `isValidDuration`: نص غير فارغ محدد الطول |
+| **`chestPainKey`** | `"yes"` / `"no"` / `"unknown"` | اختيار إلزامي مع قيمة unknown صريحة | `isValidUnknownStatus` |
+| **`symptomProgressionKey`** | `"improving"` / `"stable"` / `"worsening"` / `"unknown"` | اختيار إلزامي مع قيمة unknown صريحة | `isValidProgression` |
+| **`recentInfectionKey`** | `"yes"` / `"no"` / `"unknown"` | اختيار إلزامي مع قيمة unknown صريحة | `isValidUnknownStatus` |
+| **`asthmaCopdKey`** | `"yes"` / `"no"` / `"unknown"` | اختيار إلزامي مع قيمة unknown صريحة | `isValidUnknownStatus` |
+| **`currentMedications`** | نص اختياري حتى `500` حرف | حفظ ما كتبه المريض فقط أو `null` | `isValidPatientText` |
+| **`patientNotes`** | نص اختياري حتى `1000` حرف | حفظ ما كتبه المريض فقط أو `null` | `isValidPatientText` |
 | **`riskFactors`** | مصفوفة غير فارغة بعوامل مصرح بها | التحقق من الخيارات المصرح بها أو اختيار "لا يوجد" | `isValidRiskFactors`: مصفوفة لا تتجاوز 10 عناصر |
 | **`priority`** | أحد الخيارات: `["normal", "high", "urgent"]` | حساب آلي يعتمد على نسبة الأكسجين والأعراض | `isValidPriority`: التحقق الصارم من صحة التصنيف |
 | **`status`** | إحدى الحالات العشر المعتمدة في آلة الحالات | إدارة انتقالات الحالة حسب الصلاحيات السريرية | `isValidCaseStatus`: التحقق الصارم من صحة الحالة والانتقال |
@@ -342,6 +406,10 @@ stateDiagram-v2
 ## 🔒 التوافقية والأمان (Backward Compatibility & Security)
 * **دعم الواجهات السابقة (Top-Level Aliases)**:
   تم الحفاظ على الحقول السطحية مثل `o2`, `risk`, `symptoms`, `aiScore`, `confidence`, `duration` لضمان عمل كافة الشاشات والقوائم السابقة دون أدنى كسر توافقي، بالإضافة لدعم الاسم الرديف `pending` في قواعد الأمان.
+* **عدم افتراض بيانات غير مقدمة**:
+  السجلات القديمة التي لا تحتوي على درجة الحرارة أو ألم الصدر أو معدل التنفس أو العدوى الحديثة أو الربو/COPD أو الأدوية أو الملاحظات تعرض كـ `"غير مسجل"`/`"Not recorded"`، ولا يتم تحويل الغياب إلى `"no"` أو قيمة طبيعية. قيم `"unknown"` تسجل فقط عندما يختارها المريض صراحة.
+* **تنسيق المراجعة الطبية**:
+  تمت إضافة الحقول الجديدة كمدخلات جمع بيانات وفرز إرشادي بانتظار مراجعة واعتماد مختص طبي مؤهل. أي تعديل مستقبلي في إلزامية الحقول أو حدودها يجب أن يسجل في سجل المراجعة الطبية قبل تفعيل قواعد سريرية جديدة.
 * **ثبات الهوية (Immutability)**:
   تمنع قواعد أمان Firestore أي تعديل لحقول `patientId` أو `assignedDoctorId` أو `clinicId` عند تحديث الحالة الطبية من قبل الأطباء.
 * **أصالة وتتبع الحالة (Audit & Traceability)**:

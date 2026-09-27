@@ -242,9 +242,38 @@ service cloud.firestore {
              (data.riskFactors is list && data.riskFactors.size() <= 10);
     }
 
+    function isValidOptionalTemperature(data) {
+      return !('temperature' in data) ||
+             data.temperature == null ||
+             (data.temperature is number && data.temperature >= 34 && data.temperature <= 43);
+    }
+
+    function isValidOptionalRespiratoryRate(data) {
+      return !('respiratoryRate' in data) ||
+             data.respiratoryRate == null ||
+             (data.respiratoryRate is number && data.respiratoryRate >= 5 && data.respiratoryRate <= 60);
+    }
+
+    function isValidUnknownStatus(data, field) {
+      return !(field in data) ||
+             data[field] == null ||
+             (data[field] is string && data[field] in ['yes', 'no', 'unknown']);
+    }
+
+    function isValidProgression(data) {
+      return !('symptomProgressionKey' in data) ||
+             data.symptomProgressionKey == null ||
+             (data.symptomProgressionKey is string && data.symptomProgressionKey in ['improving', 'stable', 'worsening', 'unknown']);
+    }
+
+    function isValidPatientText(data) {
+      return (!('currentMedications' in data) || data.currentMedications == null || (data.currentMedications is string && data.currentMedications.size() <= 500)) &&
+             (!('patientNotes' in data) || data.patientNotes == null || (data.patientNotes is string && data.patientNotes.size() <= 1000));
+    }
+
     function isValidPriority(data) {
       return !('priority' in data) || 
-             (data.priority is string && data.priority in ['routine', 'urgent', 'emergency', 'low', 'medium', 'high']);
+             (data.priority is string && data.priority in ['normal', 'routine', 'urgent', 'emergency', 'low', 'medium', 'high']);
     }
 
     function isValidAssessment(data) {
@@ -253,6 +282,13 @@ service cloud.firestore {
              isValidCough(data) &&
              isValidDuration(data) &&
              isValidRiskFactors(data) &&
+             isValidOptionalTemperature(data) &&
+             isValidOptionalRespiratoryRate(data) &&
+             isValidUnknownStatus(data, 'chestPainKey') &&
+             isValidUnknownStatus(data, 'recentInfectionKey') &&
+             isValidUnknownStatus(data, 'asthmaCopdKey') &&
+             isValidProgression(data) &&
+             isValidPatientText(data) &&
              isValidPriority(data);
     }
 

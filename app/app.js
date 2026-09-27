@@ -7009,6 +7009,29 @@ async function renderReportScreen(targetCaseId = null) {
     const breathingDifficultyDisplay = escapeHtml(isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوب") : (recordedClinicalText(caseData.breathingDifficulty || caseData.difficulty, isEn)));
     const coughLevelDisplay = escapeHtml(isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوبة") : (recordedClinicalText(caseData.coughLevel, isEn)));
     const durationDisplay = escapeHtml(isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوب") : (recordedClinicalText(caseData.symptomDuration || caseData.duration, isEn)));
+    const formatOptionalMetric = (value, unit, status) => {
+      if (isSupport) return isEn ? "🔒 Masked" : "🔒 محجوب";
+      if (status === "unknown") return isEn ? "Unknown" : "غير معروف";
+      if (value === null || value === undefined || value === "") return recordedClinicalText(null, isEn);
+      return `${escapeHtml(String(value))}${unit ? ` ${escapeHtml(unit)}` : ""}`;
+    };
+    const temperatureDisplay = formatOptionalMetric(
+      caseData.assessment?.vitals?.temperature ?? caseData.temperature,
+      caseData.assessment?.vitals?.temperatureUnit || caseData.temperatureUnit || "°C",
+      caseData.assessment?.vitals?.temperatureStatus || caseData.temperatureStatus
+    );
+    const respiratoryRateDisplay = formatOptionalMetric(
+      caseData.assessment?.vitals?.respiratoryRate ?? caseData.respiratoryRate,
+      caseData.assessment?.vitals?.respiratoryRateUnit || caseData.respiratoryRateUnit || (isEn ? "breaths/min" : "نفس/دقيقة"),
+      caseData.assessment?.vitals?.respiratoryRateStatus || caseData.respiratoryRateStatus
+    );
+    const symptomsObj = caseData.assessment?.symptoms || {};
+    const chestPainDisplay = escapeHtml(isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوب") : recordedClinicalText(isEn ? symptomsObj.chestPainLabelEn : (symptomsObj.chestPainLabelAr || caseData.chestPain), isEn));
+    const progressionDisplay = escapeHtml(isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوب") : recordedClinicalText(isEn ? symptomsObj.symptomProgressionLabelEn : (symptomsObj.symptomProgressionLabelAr || caseData.symptomProgression), isEn));
+    const infectionDisplay = escapeHtml(isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوب") : recordedClinicalText(isEn ? symptomsObj.recentInfectionLabelEn : (symptomsObj.recentInfectionLabelAr || caseData.recentInfection), isEn));
+    const asthmaCopdDisplay = escapeHtml(isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوب") : recordedClinicalText(isEn ? symptomsObj.asthmaCopdLabelEn : (symptomsObj.asthmaCopdLabelAr || caseData.asthmaCopd), isEn));
+    const currentMedicationsDisplay = escapeHtml(isSupport ? (isEn ? "🔒 Medical data redacted" : "🔒 بيانات سريرية محجوبة") : recordedClinicalText(caseData.assessment?.medications?.current || caseData.currentMedications, isEn));
+    const patientNotesDisplay = escapeHtml(isSupport ? (isEn ? "🔒 Medical data redacted" : "🔒 بيانات سريرية محجوبة") : recordedClinicalText(caseData.assessment?.notes || caseData.patientNotes || caseData.notes, isEn));
     const riskFactorsDisplay = isSupport
       ? escapeHtml(isEn ? "🔒 Medical data redacted" : "🔒 بيانات سريرية محجوبة")
       : escapeHtml(Array.isArray(caseData.riskFactors) && caseData.riskFactors.length > 0 ? caseData.riskFactors.join('، ') : recordedClinicalText(null, isEn));
@@ -7205,6 +7228,26 @@ async function renderReportScreen(targetCaseId = null) {
               <span style="font-size: 11.5px; color: var(--muted); display: block; margin-bottom: 4px;">${isEn ? "Duration" : "مدة الأعراض"}</span>
               <strong style="font-size: 15px; color: var(--ink); display: block; margin-top: 6px;">${durationDisplay}</strong>
             </div>
+
+            <div style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px; text-align: center;">
+              <span style="font-size: 11.5px; color: var(--muted); display: block; margin-bottom: 4px;">${isEn ? "Temperature" : "درجة الحرارة"}</span>
+              <strong style="font-size: 15px; color: var(--ink); display: block; margin-top: 6px;">${temperatureDisplay}</strong>
+            </div>
+
+            <div style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px; text-align: center;">
+              <span style="font-size: 11.5px; color: var(--muted); display: block; margin-bottom: 4px;">${isEn ? "Respiratory Rate" : "معدل التنفس"}</span>
+              <strong style="font-size: 15px; color: var(--ink); display: block; margin-top: 6px;">${respiratoryRateDisplay}</strong>
+            </div>
+
+            <div style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px; text-align: center;">
+              <span style="font-size: 11.5px; color: var(--muted); display: block; margin-bottom: 4px;">${isEn ? "Chest Pain" : "ألم الصدر"}</span>
+              <strong style="font-size: 15px; color: var(--ink); display: block; margin-top: 6px;">${chestPainDisplay}</strong>
+            </div>
+
+            <div style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px; text-align: center;">
+              <span style="font-size: 11.5px; color: var(--muted); display: block; margin-bottom: 4px;">${isEn ? "Progression" : "تطور الأعراض"}</span>
+              <strong style="font-size: 15px; color: var(--ink); display: block; margin-top: 6px;">${progressionDisplay}</strong>
+            </div>
           </div>
 
           <!-- RISK FACTORS & AI EVALUATION COMPARISON -->
@@ -7216,6 +7259,25 @@ async function renderReportScreen(targetCaseId = null) {
             <div>
               <span style="color: var(--muted);">${isEn ? "AI Risk Classification:" : "تصنيف الذكاء الاصطناعي:"}</span>
               <strong style="margin-inline-start: 6px; color: var(--teal);">${aiScoreDisplay}</strong>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 10px; font-size: 12.5px;">
+            <div style="background: var(--surface-2); border-radius: 10px; padding: 10px 12px;">
+              <span style="color: var(--muted);">${isEn ? "Recent infection" : "عدوى حديثة"}</span>
+              <strong style="display: block; color: var(--ink); margin-top: 4px;">${infectionDisplay}</strong>
+            </div>
+            <div style="background: var(--surface-2); border-radius: 10px; padding: 10px 12px;">
+              <span style="color: var(--muted);">${isEn ? "Asthma/COPD" : "ربو أو COPD"}</span>
+              <strong style="display: block; color: var(--ink); margin-top: 4px;">${asthmaCopdDisplay}</strong>
+            </div>
+            <div style="background: var(--surface-2); border-radius: 10px; padding: 10px 12px;">
+              <span style="color: var(--muted);">${isEn ? "Current medications" : "الأدوية الحالية"}</span>
+              <strong style="display: block; color: var(--ink); margin-top: 4px;">${currentMedicationsDisplay}</strong>
+            </div>
+            <div style="background: var(--surface-2); border-radius: 10px; padding: 10px 12px;">
+              <span style="color: var(--muted);">${isEn ? "Patient notes" : "ملاحظات المريض"}</span>
+              <strong style="display: block; color: var(--ink); margin-top: 4px;">${patientNotesDisplay}</strong>
             </div>
           </div>
 
@@ -10281,6 +10343,73 @@ function parseStrictSymptomDurationInput(value) {
   return { ok: true, value: days, text: raw, reason: null };
 }
 
+function parseOptionalTemperatureInput(value) {
+  const raw = String(value ?? "").trim();
+  const normalized = normalizeArabicIndicDigits(raw).replace(/°/g, "").replace(/\s*c$/i, "").trim();
+  if (!normalized) return { ok: true, value: null, unit: "°C", reason: "not-provided" };
+  if (/^(unknown|غير معروف|غير معلوم|لا اعرف)$/i.test(normalized)) {
+    return { ok: true, value: null, unit: "°C", reason: "unknown" };
+  }
+  const match = normalized.match(/^(\d{2})(?:[.,](\d))?$/);
+  if (!match) return { ok: false, value: null, unit: "°C", reason: "format" };
+  const parsed = Number(`${match[1]}.${match[2] || "0"}`);
+  if (parsed < 34 || parsed > 43) {
+    return { ok: false, value: parsed, unit: "°C", reason: parsed > 43 ? "above-range" : "below-range" };
+  }
+  return { ok: true, value: parsed, unit: "°C", reason: null };
+}
+
+function parseOptionalRespiratoryRateInput(value) {
+  const raw = String(value ?? "").trim();
+  const normalized = normalizeArabicIndicDigits(raw).trim();
+  if (!normalized) return { ok: true, value: null, unit: "breaths/min", reason: "not-provided" };
+  if (/^(unknown|غير معروف|غير معلوم|لا اعرف)$/i.test(normalized)) {
+    return { ok: true, value: null, unit: "breaths/min", reason: "unknown" };
+  }
+  if (!/^\d{1,2}$/.test(normalized)) return { ok: false, value: null, unit: "breaths/min", reason: "format" };
+  const parsed = Number.parseInt(normalized, 10);
+  if (parsed < 5 || parsed > 60) {
+    return { ok: false, value: parsed, unit: "breaths/min", reason: parsed > 60 ? "above-range" : "below-range" };
+  }
+  return { ok: true, value: parsed, unit: "breaths/min", reason: null };
+}
+
+function normalizeYesNoUnknown(value) {
+  const clean = String(value ?? "").trim().toLowerCase();
+  if (clean === "نعم" || clean === "yes") return "yes";
+  if (clean === "لا" || clean === "no") return "no";
+  if (clean === "غير معروف" || clean === "unknown") return "unknown";
+  return "";
+}
+
+function normalizeSymptomProgression(value) {
+  const clean = String(value ?? "").trim().toLowerCase();
+  if (clean === "تتحسن" || clean === "improving") return "improving";
+  if (clean === "ثابتة" || clean === "stable") return "stable";
+  if (clean === "تسوء" || clean === "worsening") return "worsening";
+  if (clean === "غير معروف" || clean === "unknown") return "unknown";
+  return "";
+}
+
+function yesNoUnknownLabel(key, isEn = false) {
+  const labels = {
+    yes: { ar: "نعم", en: "Yes" },
+    no: { ar: "لا", en: "No" },
+    unknown: { ar: "غير معروف", en: "Unknown" }
+  };
+  return labels[key]?.[isEn ? "en" : "ar"] || recordedClinicalText(null, isEn);
+}
+
+function symptomProgressionLabel(key, isEn = false) {
+  const labels = {
+    improving: { ar: "تتحسن", en: "Improving" },
+    stable: { ar: "ثابتة", en: "Stable" },
+    worsening: { ar: "تسوء", en: "Worsening" },
+    unknown: { ar: "غير معروف", en: "Unknown" }
+  };
+  return labels[key]?.[isEn ? "en" : "ar"] || recordedClinicalText(null, isEn);
+}
+
 function readOxygenRawValue() {
   const field = document.getElementById("oxygenInput");
   return field ? field.value : "";
@@ -10289,6 +10418,14 @@ function readOxygenRawValue() {
 function readOxygenValue() {
   const parsed = parseStrictOxygenInput(readOxygenRawValue());
   return parsed.ok ? parsed.value : 0;
+}
+
+function readActiveChoiceText(containerId, fallback = "غير معروف") {
+  let value = fallback;
+  document.querySelectorAll(`#${containerId} .choice`).forEach((btn) => {
+    if (btn.classList.contains("active")) value = btn.textContent.trim();
+  });
+  return value;
 }
 
 function updateOxygenWarning() {
@@ -10968,6 +11105,14 @@ function buildAssessmentModel({
   breathingRaw,
   coughRaw,
   symptomDurationRaw,
+  temperatureRaw = "",
+  respiratoryRateRaw = "",
+  chestPainRaw = "غير معروف",
+  symptomProgressionRaw = "غير معروف",
+  recentInfectionRaw = "غير معروف",
+  asthmaCopdRaw = "غير معروف",
+  currentMedicationsRaw = "",
+  notesRaw = "",
   riskFactorsRaw = [],
   assignedDoctorId = null,
   assignedDoctorName = null,
@@ -11009,6 +11154,25 @@ function buildAssessmentModel({
   const durationStr = parsedDuration.text;
   const durationDays = parsedDuration.value;
   const durationEn = durationDays > 0 ? `${durationDays} ${durationDays === 1 ? 'day' : 'days'}` : "Unspecified";
+
+  const parsedTemperature = parseOptionalTemperatureInput(temperatureRaw);
+  if (!parsedTemperature.ok) {
+    throw new Error(currentLanguage === "en"
+      ? "Invalid temperature: enter Celsius between 34.0 and 43.0, leave blank, or write unknown."
+      : "درجة الحرارة غير صحيحة: أدخل قيمة مئوية بين 34.0 و 43.0 أو اتركها فارغة أو اكتب غير معروف.");
+  }
+  const parsedRespiratoryRate = parseOptionalRespiratoryRateInput(respiratoryRateRaw);
+  if (!parsedRespiratoryRate.ok) {
+    throw new Error(currentLanguage === "en"
+      ? "Invalid respiratory rate: enter a whole number between 5 and 60 breaths/min, leave blank, or write unknown."
+      : "معدل التنفس غير صحيح: أدخل رقماً صحيحاً بين 5 و 60 نفس/دقيقة أو اتركه فارغاً أو اكتب غير معروف.");
+  }
+  const chestPain = normalizeYesNoUnknown(chestPainRaw) || "unknown";
+  const symptomProgression = normalizeSymptomProgression(symptomProgressionRaw) || "unknown";
+  const recentInfection = normalizeYesNoUnknown(recentInfectionRaw) || "unknown";
+  const asthmaCopd = normalizeYesNoUnknown(asthmaCopdRaw) || "unknown";
+  const currentMedications = String(currentMedicationsRaw || "").trim().slice(0, 500);
+  const patientNotes = String(notesRaw || "").trim().slice(0, 1000);
 
   // 6. Risk Factors Normalization
   const rfKeys = [];
@@ -11117,7 +11281,13 @@ function buildAssessmentModel({
         oxygenLevel: o2,
         isLowOxygen: isHighRisk,
         isCriticalOxygen: isCritical,
-        unit: "%"
+        unit: "%",
+        temperature: parsedTemperature.value,
+        temperatureUnit: parsedTemperature.unit,
+        temperatureStatus: parsedTemperature.reason || "recorded",
+        respiratoryRate: parsedRespiratoryRate.value,
+        respiratoryRateUnit: parsedRespiratoryRate.unit,
+        respiratoryRateStatus: parsedRespiratoryRate.reason || "recorded"
       },
       symptoms: {
         breathingDifficulty: breathingKey,
@@ -11128,8 +11298,25 @@ function buildAssessmentModel({
         coughSeverityLabelEn: coughMeta.en,
         durationDays: durationDays,
         durationText: durationStr,
-        durationTextEn: durationEn
+        durationTextEn: durationEn,
+        chestPain,
+        chestPainLabelAr: yesNoUnknownLabel(chestPain, false),
+        chestPainLabelEn: yesNoUnknownLabel(chestPain, true),
+        symptomProgression,
+        symptomProgressionLabelAr: symptomProgressionLabel(symptomProgression, false),
+        symptomProgressionLabelEn: symptomProgressionLabel(symptomProgression, true),
+        recentInfection,
+        recentInfectionLabelAr: yesNoUnknownLabel(recentInfection, false),
+        recentInfectionLabelEn: yesNoUnknownLabel(recentInfection, true),
+        asthmaCopd,
+        asthmaCopdLabelAr: yesNoUnknownLabel(asthmaCopd, false),
+        asthmaCopdLabelEn: yesNoUnknownLabel(asthmaCopd, true)
       },
+      medications: {
+        current: currentMedications || null,
+        status: currentMedications ? "provided" : "not-provided"
+      },
+      notes: patientNotes || null,
       riskFactors: {
         keys: rfKeys,
         labelsAr: rfLabelsAr,
@@ -11162,11 +11349,28 @@ function buildAssessmentModel({
     priority: priority,
     oxygenLevel: o2,
     o2: o2,
+    temperature: parsedTemperature.value,
+    temperatureUnit: parsedTemperature.unit,
+    temperatureStatus: parsedTemperature.reason || "recorded",
+    respiratoryRate: parsedRespiratoryRate.value,
+    respiratoryRateUnit: parsedRespiratoryRate.unit,
+    respiratoryRateStatus: parsedRespiratoryRate.reason || "recorded",
     breathingDifficulty: breathingMeta.ar,
     coughLevel: coughMeta.ar,
     symptomDuration: durationStr,
     duration: durationStr,
     durationEn: durationEn,
+    chestPain: yesNoUnknownLabel(chestPain, false),
+    chestPainKey: chestPain,
+    symptomProgression: symptomProgressionLabel(symptomProgression, false),
+    symptomProgressionKey: symptomProgression,
+    recentInfection: yesNoUnknownLabel(recentInfection, false),
+    recentInfectionKey: recentInfection,
+    asthmaCopd: yesNoUnknownLabel(asthmaCopd, false),
+    asthmaCopdKey: asthmaCopd,
+    currentMedications: currentMedications || null,
+    patientNotes: patientNotes || null,
+    calculatedAge: calculatedAge,
     riskFactors: rfLabelsAr,
     symptoms: symptomsSummaryAr,
     symptomsEn: symptomsSummaryEn,
@@ -11252,6 +11456,14 @@ function validateAssessmentFields({
   breathingDifficulty,
   coughLevel,
   symptomDuration,
+  temperature,
+  respiratoryRate,
+  chestPain,
+  symptomProgression,
+  recentInfection,
+  asthmaCopd,
+  currentMedications,
+  notes,
   riskFactors,
   isEn = false
 }) {
@@ -11302,6 +11514,51 @@ function validateAssessmentFields({
       message: isEn
         ? "Please enter symptom duration as a whole number of days between 1 and 365."
         : "يرجى إدخال مدة الأعراض كعدد أيام صحيح بين 1 و 365."
+    });
+  }
+
+  const parsedTemperature = parseOptionalTemperatureInput(temperature);
+  if (!parsedTemperature.ok) {
+    errors.push({
+      field: "temperatureInput",
+      message: isEn
+        ? "Temperature must be Celsius between 34.0 and 43.0, blank, or unknown."
+        : "درجة الحرارة يجب أن تكون مئوية بين 34.0 و 43.0 أو فارغة أو غير معروف."
+    });
+  }
+
+  const parsedRespiratoryRate = parseOptionalRespiratoryRateInput(respiratoryRate);
+  if (!parsedRespiratoryRate.ok) {
+    errors.push({
+      field: "respiratoryRateInput",
+      message: isEn
+        ? "Respiratory rate must be a whole number between 5 and 60 breaths/min, blank, or unknown."
+        : "معدل التنفس يجب أن يكون رقماً صحيحاً بين 5 و 60 نفس/دقيقة أو فارغاً أو غير معروف."
+    });
+  }
+
+  [
+    ["chestPainChoices", chestPain, normalizeYesNoUnknown, isEn ? "Please record chest pain as Yes, No, or Unknown." : "يرجى تسجيل ألم الصدر: نعم أو لا أو غير معروف."],
+    ["recentInfectionChoices", recentInfection, normalizeYesNoUnknown, isEn ? "Please record recent infection as Yes, No, or Unknown." : "يرجى تسجيل العدوى الحديثة: نعم أو لا أو غير معروف."],
+    ["asthmaCopdChoices", asthmaCopd, normalizeYesNoUnknown, isEn ? "Please record asthma/COPD as Yes, No, or Unknown." : "يرجى تسجيل الربو/COPD: نعم أو لا أو غير معروف."],
+    ["symptomProgressionChoices", symptomProgression, normalizeSymptomProgression, isEn ? "Please record symptom progression." : "يرجى تسجيل تطور الأعراض."]
+  ].forEach(([field, raw, normalizer, message]) => {
+    if (!normalizer(raw)) {
+      errors.push({ field, message });
+    }
+  });
+
+  if (String(currentMedications || "").length > 500) {
+    errors.push({
+      field: "currentMedicationsInput",
+      message: isEn ? "Current medications must be 500 characters or fewer." : "الأدوية الحالية يجب ألا تتجاوز 500 حرف."
+    });
+  }
+
+  if (String(notes || "").length > 1000) {
+    errors.push({
+      field: "assessmentNotesInput",
+      message: isEn ? "Notes must be 1000 characters or fewer." : "الملاحظات يجب ألا تتجاوز 1000 حرف."
     });
   }
 
@@ -11386,6 +11643,14 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
     // مدة الأعراض
     const durationField = document.getElementById("symptomDuration");
     const symptomDuration = durationField ? durationField.value.trim() : "غير محدد";
+    const temperatureRaw = document.getElementById("temperatureInput")?.value.trim() || "";
+    const respiratoryRateRaw = document.getElementById("respiratoryRateInput")?.value.trim() || "";
+    const chestPain = readActiveChoiceText("chestPainChoices");
+    const symptomProgression = readActiveChoiceText("symptomProgressionChoices");
+    const recentInfection = readActiveChoiceText("recentInfectionChoices");
+    const asthmaCopd = readActiveChoiceText("asthmaCopdChoices");
+    const currentMedications = document.getElementById("currentMedicationsInput")?.value.trim() || "";
+    const notes = document.getElementById("assessmentNotesInput")?.value.trim() || "";
 
     // عوامل الخطورة (يمكن أكثر من واحد)
     const riskChoices = document.querySelectorAll("#riskChoices .choice");
@@ -11400,17 +11665,25 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
       breathingDifficulty,
       coughLevel,
       symptomDuration,
+      temperature: temperatureRaw,
+      respiratoryRate: respiratoryRateRaw,
+      chestPain,
+      symptomProgression,
+      recentInfection,
+      asthmaCopd,
+      currentMedications,
+      notes,
       riskFactors,
       isEn
     });
 
     if (!validation.isValid) {
       // تنظيف الحدود السابقة
-      ["oxygenInput", "symptomDuration"].forEach(id => {
+      ["oxygenInput", "symptomDuration", "temperatureInput", "respiratoryRateInput", "currentMedicationsInput", "assessmentNotesInput"].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.borderColor = "";
       });
-      ["breathingChoices", "coughChoices", "riskChoices"].forEach(id => {
+      ["breathingChoices", "coughChoices", "riskChoices", "chestPainChoices", "symptomProgressionChoices", "recentInfectionChoices", "asthmaCopdChoices"].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.outline = "";
       });
@@ -11464,6 +11737,14 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
       breathingDifficulty,
       coughLevel,
       symptomDuration,
+      temperature: temperatureRaw || (isEn ? "Not provided" : "غير مسجل"),
+      respiratoryRate: respiratoryRateRaw || (isEn ? "Not provided" : "غير مسجل"),
+      chestPain,
+      symptomProgression,
+      recentInfection,
+      asthmaCopd,
+      currentMedications: currentMedications || (isEn ? "Not provided" : "غير مسجل"),
+      notes: notes || (isEn ? "Not provided" : "غير مسجل"),
       riskFactors,
       assignedDoctorName: linkedDoctorName,
       clinicName,
@@ -11481,6 +11762,14 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
           breathingRaw: breathingDifficulty,
           coughRaw: coughLevel,
           symptomDurationRaw: symptomDuration,
+          temperatureRaw,
+          respiratoryRateRaw,
+          chestPainRaw: chestPain,
+          symptomProgressionRaw: symptomProgression,
+          recentInfectionRaw: recentInfection,
+          asthmaCopdRaw: asthmaCopd,
+          currentMedicationsRaw: currentMedications,
+          notesRaw: notes,
           riskFactorsRaw: riskFactors,
           assignedDoctorId: window._patientAssignedDoctorId || null,
           assignedDoctorName: linkedDoctorName || null,

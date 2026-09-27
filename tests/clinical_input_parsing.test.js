@@ -27,6 +27,10 @@ const validCommon = {
   breathingDifficulty: 'نعم',
   coughLevel: 'متوسطة',
   symptomDuration: '3 أيام',
+  chestPain: 'لا',
+  symptomProgression: 'ثابتة',
+  recentInfection: 'لا',
+  asthmaCopd: 'لا',
   riskFactors: ['لا يوجد']
 };
 
@@ -64,6 +68,19 @@ assert.equal(context.parseStrictSymptomDurationInput('0 أيام').reason, 'belo
 assert.equal(context.parseStrictSymptomDurationInput('366 أيام').reason, 'above-range');
 assert.equal(context.parseStrictSymptomDurationInput('365 يوم').ok, true);
 
+assert.deepEqual(plain(context.parseOptionalTemperatureInput('٣٧.٥ C')), { ok: true, value: 37.5, unit: '°C', reason: null });
+assert.equal(context.parseOptionalTemperatureInput('').reason, 'not-provided');
+assert.equal(context.parseOptionalTemperatureInput('unknown').reason, 'unknown');
+assert.equal(context.parseOptionalTemperatureInput('33').reason, 'below-range');
+assert.equal(context.parseOptionalTemperatureInput('44').reason, 'above-range');
+assert.deepEqual(plain(context.parseOptionalRespiratoryRateInput('١٨')), { ok: true, value: 18, unit: 'breaths/min', reason: null });
+assert.equal(context.parseOptionalRespiratoryRateInput('').reason, 'not-provided');
+assert.equal(context.parseOptionalRespiratoryRateInput('غير معروف').reason, 'unknown');
+assert.equal(context.parseOptionalRespiratoryRateInput('4').reason, 'below-range');
+assert.equal(context.parseOptionalRespiratoryRateInput('61').reason, 'above-range');
+assert.equal(context.normalizeYesNoUnknown('غير معروف'), 'unknown');
+assert.equal(context.normalizeSymptomProgression('تسوء'), 'worsening');
+
 assert.equal(validate({ oxygenLevel: '95abc' }).isValid, false);
 assert.equal(validate({ oxygenLevel: '200' }).errors[0].field, 'oxygenInput');
 assert.equal(validate({ oxygenLevel: '٩٥' }).isValid, true);
@@ -72,5 +89,11 @@ assert.equal(validate({ symptomDuration: '٧ أيام' }).isValid, true);
 assert.equal(validate({ symptomDuration: '7/2 أيام' }).isValid, false);
 assert.equal(validate({ symptomDuration: '365 days' }).isValid, true);
 assert.equal(validate({ symptomDuration: '366 days' }).isValid, false);
+assert.equal(validate({ temperature: '37.1' }).isValid, true);
+assert.equal(validate({ temperature: '44' }).isValid, false);
+assert.equal(validate({ respiratoryRate: '18' }).isValid, true);
+assert.equal(validate({ respiratoryRate: '70' }).isValid, false);
+assert.equal(validate({ chestPain: 'غير معروف', recentInfection: 'لا', asthmaCopd: 'نعم', symptomProgression: 'ثابتة' }).isValid, true);
+assert.equal(validate({ symptomProgression: 'rapidly' }).isValid, false);
 
 console.log('PASS: strict clinical input parsing rejects unsafe coercion and handles Arabic digits, empty values, bounds, and fractions.');

@@ -2052,6 +2052,7 @@ body.dark .slot-list strong {
   gap: 10px;
 }
 
+.choice-row.three { grid-template-columns: repeat(3, 1fr); }
 .choice-row.four { grid-template-columns: repeat(4, 1fr); }
 
 .choice.active {
@@ -2561,6 +2562,7 @@ body.sidebar-open .sidebar { transform: translateX(0); }
   .chip { display: none; }
   .screen { padding: 14px; }
   .hero-panel { padding: 22px; border-radius: 22px; }
+  .choice-row.three,
   .choice-row.four,
   .week { grid-template-columns: repeat(2, 1fr); }
   .chat-compose,
@@ -4635,6 +4637,7 @@ body.dark .mobile-bottom-nav {
   }
 
   /* Choice rows and options on phone */
+  .choice-row.three,
   .choice-row.four {
     grid-template-columns: repeat(2, 1fr) !important;
   }
