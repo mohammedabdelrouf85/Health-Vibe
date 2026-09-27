@@ -583,6 +583,33 @@
               </div>
             </div>
           </article>
+
+          <!-- Security, Active Sessions & Credentials Management -->
+          <article class="panel" id="securitySessionsCard" style="grid-column: 1 / -1; margin-top: 14px; border: 1px solid var(--border-color, rgba(0,0,0,0.08)); background: var(--panel-bg, #ffffff);">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; margin-bottom: 12px;">
+              <div>
+                <strong style="color: var(--teal, #0ea5a4); font-size: 15px; display: flex; align-items: center; gap: 6px;">
+                  <span>🛡️</span> أمان الحساب وإدارة الجلسات والأجهزة (Active Sessions & Security)
+                </strong>
+                <p style="margin: 4px 0 0; font-size: 13px; color: var(--muted); line-height: 1.5;">
+                  متابعة الأجهزة النشطة، تغيير بيانات الاعتماد مع إعادة التحقق، وتسجيل الخروج من كافة الأجهزة بإبطال خادمي موثوق.
+                </p>
+              </div>
+              <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <button type="button" class="soft-button" onclick="loadUserSessions()" style="font-size: 13px; padding: 8px 14px;">
+                  🔄 تحديث الجلسات
+                </button>
+                <button type="button" class="outline-button" onclick="revokeAllUserSessions()" style="border-color: rgba(239, 68, 68, 0.5); color: #ef4444; font-size: 13px; padding: 8px 14px;">
+                  🛑 خروج من كل الأجهزة
+                </button>
+              </div>
+            </div>
+            <div id="activeSessionsContainer" style="border: 1px solid var(--border-color, rgba(0,0,0,0.06)); border-radius: 8px; background: rgba(0,0,0,0.01); margin-top: 8px;">
+              <div id="activeSessionsList">
+                <div style="padding: 12px; color: var(--muted); font-size: 13px;">انقر "تحديث الجلسات" لعرض الأجهزة المتصلة بحسابك.</div>
+              </div>
+            </div>
+          </article>
         </div>
       </section>
 

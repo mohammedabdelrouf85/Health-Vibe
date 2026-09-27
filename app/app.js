@@ -2151,6 +2151,17 @@ async function callBackend(path, options = {}) {
 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
+    if (response.status === 401 && payload.error === 'TOKEN_REVOKED') {
+      console.warn('[AUTH REVOKED] Server revoked active session/token. Forcing clean sign-out.');
+      if (typeof leaveApp === 'function') {
+        leaveApp();
+      }
+      if (typeof showToast === 'function') {
+        showToast(currentLanguage === 'en'
+          ? 'Your session was revoked across all devices. Please sign in again.'
+          : 'تم إنهاء جلستك من كافة الأجهزة. يرجى تسجيل الدخول مجدداً.');
+      }
+    }
     throw new Error(payload.message || payload.error || `Backend request failed (${response.status})`);
   }
 
@@ -12404,7 +12415,189 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 });
 
+// =========================================================================
+// 🔒 USER SESSIONS, CREDENTIAL RE-AUTHENTICATION & SECURITY MANAGEMENT
+// =========================================================================
 
+async function changeUserPassword(newPassword, confirmPassword) {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  if (!auth?.currentUser) {
+    showToast(isEn ? "Authentication required." : "يجب تسجيل الدخول أولاً.");
+    return false;
+  }
+  if (!newPassword || newPassword.length < 8) {
+    showToast(isEn ? "Password must be at least 8 characters long." : "كلمة المرور يجب أن تتكون من 8 أحرف على الأقل.");
+    return false;
+  }
+  if (confirmPassword && newPassword !== confirmPassword) {
+    showToast(isEn ? "Passwords do not match." : "كلمتا المرور غير متطابقتين.");
+    return false;
+  }
+
+  try {
+    const res = await callBackend("/api/user/change-password", {
+      method: "POST",
+      body: JSON.stringify({ newPassword, confirmPassword })
+    });
+    showToast(isEn ? "Password changed successfully. Other sessions terminated." : "تم تغيير كلمة المرور بنجاح وإنهاء كافة الجلسات الأخرى.");
+    return true;
+  } catch (err) {
+    if (err.message && err.message.includes("REQUIRES_RECENT_LOGIN")) {
+      showToast(isEn ? "Security check: Please re-authenticate before changing credentials." : "فحص أمني: يرجى إعادة تسجيل الدخول لتغيير كلمة المرور.");
+    } else {
+      showToast((isEn ? "Failed to change password: " : "فشل تغيير كلمة المرور: ") + err.message);
+    }
+    return false;
+  }
+}
+
+async function changeUserEmail(newEmail) {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  if (!auth?.currentUser) {
+    showToast(isEn ? "Authentication required." : "يجب تسجيل الدخول أولاً.");
+    return false;
+  }
+  if (!newEmail || !newEmail.includes("@")) {
+    showToast(isEn ? "Please enter a valid email address." : "يرجى إدخال بريد إلكتروني صالح.");
+    return false;
+  }
+
+  try {
+    const res = await callBackend("/api/user/change-email", {
+      method: "POST",
+      body: JSON.stringify({ newEmail })
+    });
+    showToast(isEn ? "Email updated successfully. Please verify your new address." : "تم تحديث البريد الإلكتروني بنجاح. يرجى تفعيل البريد الجديد.");
+    return true;
+  } catch (err) {
+    if (err.message && err.message.includes("REQUIRES_RECENT_LOGIN")) {
+      showToast(isEn ? "Security check: Please re-authenticate before changing your email." : "فحص أمني: يرجى إعادة تسجيل الدخول لتحديث البريد الإلكتروني.");
+    } else {
+      showToast((isEn ? "Failed to change email: " : "فشل تغيير البريد: ") + err.message);
+    }
+    return false;
+  }
+}
+
+async function revokeAllUserSessions() {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  if (!auth?.currentUser) return false;
+
+  const confirmed = confirm(isEn
+    ? "Are you sure you want to sign out from all other devices and terminate all active sessions?"
+    : "هل أنت متأكد من رغبتك في تسجيل الخروج من كافة الأجهزة الأخرى وإلغاء كافة الجلسات النشطة؟");
+  if (!confirmed) return false;
+
+  try {
+    const res = await callBackend("/api/user/revoke-all-sessions", { method: "POST" });
+    showToast(isEn ? "All sessions and device tokens have been revoked." : "تم إبطال جميع الجلسات والأجهزة بنجاح.");
+    await loadUserSessions();
+    return true;
+  } catch (err) {
+    if (err.message && err.message.includes("REQUIRES_RECENT_LOGIN")) {
+      showToast(isEn ? "Security check: Please re-authenticate before revoking all sessions." : "فحص أمني: يرجى إعادة تسجيل الدخول لإبطال الجلسات.");
+    } else {
+      showToast((isEn ? "Revocation failed: " : "فشل إبطال الجلسات: ") + err.message);
+    }
+    return false;
+  }
+}
+
+async function loadUserSessions() {
+  const container = document.getElementById("activeSessionsContainer");
+  if (!container || !auth?.currentUser) return [];
+
+  try {
+    const res = await callBackend("/api/user/sessions", { method: "GET" });
+    const sessions = res.sessions || [];
+    renderSessionsList(sessions);
+    return sessions;
+  } catch (err) {
+    console.warn("Could not load user sessions:", err.message);
+    return [];
+  }
+}
+
+function renderSessionsList(sessions) {
+  const listEl = document.getElementById("activeSessionsList");
+  if (!listEl) return;
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+
+  if (!sessions || sessions.length === 0) {
+    listEl.innerHTML = `<div style="padding: 12px; color: var(--muted); font-size: 13px;">${isEn ? "No active sessions found." : "لا توجد جلسات نشطة مسجلة."}</div>`;
+    return;
+  }
+
+  listEl.innerHTML = sessions.map(s => {
+    const isCurrent = s.isCurrent;
+    const isRevoked = s.revoked;
+    const badgeHtml = isCurrent
+      ? `<span class="pill ok" style="font-size: 11px;">${isEn ? "This Device (Current)" : "هذا الجهاز (الحالي)"}</span>`
+      : (isRevoked
+        ? `<span class="pill" style="font-size: 11px; opacity: 0.6;">${isEn ? "Revoked" : "ملغية"}</span>`
+        : `<button type="button" class="soft-button" style="padding: 4px 8px; font-size: 12px;" onclick="terminateUserSession('${s.sessionId}')">${isEn ? "Terminate" : "إنهاء"}</button>`);
+
+    const icon = s.isMobile ? "📱" : (s.platform === "macOS" || s.platform === "Windows" || s.platform === "Linux" ? "💻" : "🖥️");
+    const dateFormatted = new Date(s.lastActiveAt || s.loginAt).toLocaleDateString(isEn ? "en-US" : "ar-EG", {
+      month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
+    });
+
+    return `
+      <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--border-color, rgba(0,0,0,0.06)); font-size: 13px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 18px;">${icon}</span>
+          <div>
+            <strong>${s.platform} · ${s.browser}</strong>
+            <div style="font-size: 11px; color: var(--muted);">IP: ${s.subnetMask} · ${dateFormatted}</div>
+          </div>
+        </div>
+        <div>${badgeHtml}</div>
+      </div>
+    `;
+  }).join("");
+}
+
+async function terminateUserSession(sessionId) {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  try {
+    await callBackend("/api/user/sessions/terminate", {
+      method: "POST",
+      body: JSON.stringify({ sessionId })
+    });
+    showToast(isEn ? "Session terminated." : "تم إنهاء الجلسة بنجاح.");
+    await loadUserSessions();
+  } catch (err) {
+    showToast((isEn ? "Failed to terminate session: " : "فشل إنهاء الجلسة: ") + err.message);
+  }
+}
+
+async function requestAccountRecovery(email) {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  if (!email || !email.includes("@")) {
+    showToast(isEn ? "Please enter a valid email address." : "يرجى إدخال بريد إلكتروني صالح.");
+    return false;
+  }
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/recover-account`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email })
+    });
+    const data = await res.json().catch(() => ({}));
+    showToast(data.message || (isEn ? "If this email is registered, recovery instructions have been sent." : "إذا كان هذا البريد مسجلاً، فقد تم إرسال تعليمات الاستعادة."));
+    return true;
+  } catch (err) {
+    showToast(isEn ? "Account recovery request failed. Please try again." : "فشل طلب استعادة الحساب. حاول مرة أخرى.");
+    return false;
+  }
+}
+
+window.changeUserPassword = changeUserPassword;
+window.changeUserEmail = changeUserEmail;
+window.revokeAllUserSessions = revokeAllUserSessions;
+window.loadUserSessions = loadUserSessions;
+window.terminateUserSession = terminateUserSession;
+window.requestAccountRecovery = requestAccountRecovery;
 
 window.submitPatientMoreInfo = async function(caseId) {
   const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";

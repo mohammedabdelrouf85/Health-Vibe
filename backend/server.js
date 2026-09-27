@@ -406,7 +406,11 @@ app.use([
   '/api/user/delete-account',
   '/api/user/privacy/retry-deletion',
   '/api/user/data-export',
-  '/api/user/access-request'
+  '/api/user/access-request',
+  '/api/user/change-password',
+  '/api/user/change-email',
+  '/api/user/revoke-all-sessions',
+  '/api/user/sessions/terminate'
 ], strictMutationLimiter);
 
 // Auth login / token synchronization rate limiter (25 req / minute)
@@ -444,6 +448,15 @@ const publicFormLimiter = createRateLimiter({
   keyGenerator: req => `form_ip:${getClientIp(req)}`
 });
 app.use('/api/clinics/demo-request', publicFormLimiter);
+
+// Account recovery rate limiter (3 requests / 15 minutes per IP)
+const accountRecoveryLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  maxRequests: 3,
+  message: 'Too many recovery requests. Please wait 15 minutes.',
+  keyGenerator: req => `rec_ip:${getClientIp(req)}`
+});
+app.use('/api/auth/recover-account', accountRecoveryLimiter);
 
 // Webhook ingestion rate limiter (100 req / minute per IP)
 const webhookLimiter = createRateLimiter({
@@ -993,6 +1006,60 @@ function isVerificationRevoked(email) {
   return REVOKED_VERIFICATION_EMAILS.has(String(email || '').trim().toLowerCase());
 }
 
+// =============================================================================
+// 📱 ACTIVE USER SESSIONS & SERVER-SIDE TOKEN REVOCATION REGISTRY
+// =============================================================================
+const activeUserSessions = new Map(); // uid -> Array<SessionRecord> & _sessionsRevokedAt
+
+async function recordUserSession(req, userId, userEmail) {
+  const device = auditService.extractDeviceMetadata(req);
+  const ipInfo = auditService.sanitizeIp(getClientIp(req));
+  const sessionId = `sess_${userId.substring(0, 8)}_${Buffer.from(ipInfo.ipHash + device.platform + device.browser).toString('hex').substring(0, 10)}`;
+
+  let sessions = activeUserSessions.get(userId) || [];
+  let isSuspicious = false;
+
+  if (sessions.length > 0) {
+    const knownSubnet = sessions.some(s => s.subnetMask === ipInfo.subnetMask);
+    const knownPlatform = sessions.some(s => s.platform === device.platform);
+    if (!knownSubnet && !knownPlatform) {
+      isSuspicious = true;
+    }
+  }
+
+  const existingIdx = sessions.findIndex(s => s.sessionId === sessionId);
+  const nowIso = new Date().toISOString();
+  const sessionRecord = {
+    sessionId,
+    userId,
+    userEmail: auditService.maskEmail(userEmail),
+    platform: device.platform,
+    browser: device.browser,
+    isMobile: device.isMobile,
+    subnetMask: ipInfo.subnetMask,
+    ipHash: ipInfo.ipHash,
+    loginAt: existingIdx >= 0 ? sessions[existingIdx].loginAt : nowIso,
+    lastActiveAt: nowIso,
+    revoked: false
+  };
+
+  if (existingIdx >= 0) {
+    sessions[existingIdx] = sessionRecord;
+  } else {
+    sessions.push(sessionRecord);
+    if (sessions.length > 20) sessions.shift();
+  }
+  activeUserSessions.set(userId, sessions);
+
+  if (db) {
+    db.collection('user_sessions').doc(sessionId).set(sessionRecord, { merge: true }).catch((err) => {
+      console.warn('[SESSION FIRESTORE SYNC WARNING]:', err.message);
+    });
+  }
+
+  return { session: sessionRecord, isSuspicious };
+}
+
 /**
  * Middleware: Verify Firebase ID Token
  * Validates cryptographically signed JWT header: "Authorization: Bearer <ID_TOKEN>"
@@ -1011,6 +1078,19 @@ async function requireAuth(req, res, next) {
     const decodedToken = await admin.auth().verifyIdToken(idToken, true);
     req.user = decodedToken;
 
+    // 🛑 Check Server-Authoritative Token Revocation in In-Memory Registry
+    const memorySessions = activeUserSessions.get(decodedToken.uid);
+    if (memorySessions && memorySessions._sessionsRevokedAt) {
+      const revokedSec = Math.floor(new Date(memorySessions._sessionsRevokedAt).getTime() / 1000);
+      const tokenAuthTime = decodedToken.auth_time || decodedToken.iat;
+      if (tokenAuthTime && tokenAuthTime < revokedSec) {
+        return res.status(401).json({
+          error: 'TOKEN_REVOKED',
+          message: 'Your session has been terminated across all devices. Please sign in again.'
+        });
+      }
+    }
+
     // 🛑 Block suspended accounts via Custom Claims
     if (decodedToken.suspended === true || decodedToken.status === 'suspended' || decodedToken.disabled === true || decodedToken.isSuspended === true) {
       return res.status(403).json({
@@ -1019,11 +1099,21 @@ async function requireAuth(req, res, next) {
       });
     }
 
-    // 🛑 Block suspended accounts via Firestore user doc
+    // 🛑 Block suspended accounts & revoked sessions via Firestore user doc
     if (db) {
       const userDoc = await db.collection('users').doc(decodedToken.uid).get();
       if (userDoc.exists) {
         const udata = userDoc.data();
+        if (udata.sessionsRevokedAt) {
+          const revokedSec = Math.floor(new Date(udata.sessionsRevokedAt).getTime() / 1000);
+          const tokenAuthTime = decodedToken.auth_time || decodedToken.iat;
+          if (tokenAuthTime && tokenAuthTime < revokedSec) {
+            return res.status(401).json({
+              error: 'TOKEN_REVOKED',
+              message: 'Your session has been terminated across all devices. Please sign in again.'
+            });
+          }
+        }
         if (udata.authzVersion && udata.authzVersion !== decodedToken.authzVersion) {
           return res.status(403).json({ error: 'STALE_PERMISSIONS', message: 'Refresh your sign-in token.' });
         }
@@ -1039,11 +1129,56 @@ async function requireAuth(req, res, next) {
     next();
   } catch (err) {
     console.error("[SERVER AUTH ERROR] Invalid token:", err.message);
+    if (err.code === 'auth/id-token-revoked') {
+      return res.status(401).json({
+        error: 'TOKEN_REVOKED',
+        message: 'Your sign-in token was revoked by the server. Please sign in again.'
+      });
+    }
+    if (err.code === 'auth/id-token-expired') {
+      return res.status(401).json({
+        error: 'TOKEN_EXPIRED',
+        message: 'Your sign-in token has expired. Please refresh your session.'
+      });
+    }
     return res.status(403).json({
       error: 'FORBIDDEN',
       message: 'Cryptographically invalid or expired Firebase ID token.'
     });
   }
+}
+
+/**
+ * Middleware: Enforce Fresh Sign-In for Highly Sensitive Operations (Re-authentication)
+ * Ensures credential modification, email updates, and device revocation require recent login.
+ */
+function requireRecentAuth(maxAgeSeconds = 900) {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ error: 'UNAUTHORIZED', message: 'Authentication required.' });
+    }
+    const authTime = req.user.auth_time || req.user.iat;
+    if (!authTime) {
+      return res.status(401).json({
+        error: 'REQUIRES_RECENT_LOGIN',
+        message: 'Authentication timestamp is missing. Fresh sign-in required.'
+      });
+    }
+
+    const nowSec = Math.floor(Date.now() / 1000);
+    const ageSec = nowSec - authTime;
+
+    if (ageSec > maxAgeSeconds) {
+      return res.status(401).json({
+        error: 'REQUIRES_RECENT_LOGIN',
+        message: `This sensitive operation requires recent sign-in (within ${Math.floor(maxAgeSeconds / 60)} minutes). Last login was ${Math.floor(ageSec / 60)} minutes ago.`,
+        authAgeSeconds: ageSec,
+        maxAgeSeconds
+      });
+    }
+
+    next();
+  };
 }
 
 /**
@@ -1534,17 +1669,378 @@ app.post('/api/user/sync-role', requireAuth, async (req, res) => {
       }).catch(err => console.warn('[AUDIT SIGNIN WARNING]:', err.message));
     }
 
+    let session = null;
+    let isSuspicious = false;
+    try {
+      const sessionResult = await recordUserSession(req, uid, email);
+      session = sessionResult.session;
+      isSuspicious = sessionResult.isSuspicious;
+
+      if (isSuspicious) {
+        if (db) {
+          auditService.recordAuditEvent(db, {
+            type: auditService.AUDIT_EVENT_TYPES.SUSPICIOUS_LOGIN_DETECTED,
+            req,
+            details: {
+              reason: 'Unrecognized IP subnet and device platform combination',
+              subnetMask: session.subnetMask,
+              platform: session.platform,
+              browser: session.browser
+            }
+          }).catch(() => {});
+        }
+        sendClinicalNotificationEmail({
+          to: email,
+          subject: 'Security Alert: New Sign-in Detected',
+          recipientName: email.split('@')[0],
+          role: role,
+          caseId: 'SECURITY_ALERT',
+          patientName: 'Account Owner',
+          status: 'suspicious_login',
+          clinicName: 'Health Vibes Security',
+          notes: `A new sign-in was detected from ${session.platform} (${session.browser}) at IP subnet ${session.subnetMask}. If this was not you, please sign out of all devices immediately.`
+        }).catch(() => {});
+      }
+    } catch (sessionErr) {
+      console.warn('[SESSION RECORD WARNING]:', sessionErr.message);
+    }
+
     res.json({
       success: true,
       uid,
       email,
       role,
       isOwner,
-      verifiedDoctor
+      verifiedDoctor,
+      sessionId: session?.sessionId || null,
+      suspiciousLogin: isSuspicious
     });
   } catch (err) {
     console.error("[SERVER ROLE SYNC ERROR]:", err);
     res.status(500).json({ error: 'SYNC_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/user/sessions
+ * List active devices and sign-in sessions for the authenticated user
+ */
+app.get('/api/user/sessions', requireAuth, async (req, res) => {
+  const userId = req.user.uid;
+  const currentIpInfo = auditService.sanitizeIp(getClientIp(req));
+  const currentDevice = auditService.extractDeviceMetadata(req);
+
+  let sessions = activeUserSessions.get(userId) || [];
+  if (db && sessions.length === 0) {
+    try {
+      const snap = await db.collection('user_sessions').where('userId', '==', userId).get();
+      sessions = snap.docs.map(doc => doc.data());
+      activeUserSessions.set(userId, sessions);
+    } catch (_) {}
+  }
+
+  const formatted = sessions.map(s => ({
+    sessionId: s.sessionId,
+    platform: s.platform,
+    browser: s.browser,
+    isMobile: Boolean(s.isMobile),
+    subnetMask: s.subnetMask,
+    loginAt: s.loginAt,
+    lastActiveAt: s.lastActiveAt,
+    revoked: Boolean(s.revoked),
+    isCurrent: s.subnetMask === currentIpInfo.subnetMask && s.platform === currentDevice.platform && s.browser === currentDevice.browser
+  }));
+
+  res.json({
+    success: true,
+    totalSessions: formatted.length,
+    sessions: formatted
+  });
+});
+
+/**
+ * POST /api/user/sessions/terminate
+ * Terminate a specific remote session by sessionId
+ */
+app.post('/api/user/sessions/terminate', requireAuth, async (req, res) => {
+  const userId = req.user.uid;
+  const { sessionId } = req.body || {};
+
+  if (!sessionId || typeof sessionId !== 'string') {
+    return res.status(400).json({ error: 'INVALID_SESSION_ID', message: 'A valid sessionId is required.' });
+  }
+
+  const sessions = activeUserSessions.get(userId) || [];
+  const target = sessions.find(s => s.sessionId === sessionId);
+  if (target) {
+    target.revoked = true;
+    target.terminatedAt = new Date().toISOString();
+  }
+
+  if (db) {
+    db.collection('user_sessions').doc(sessionId).set({
+      revoked: true,
+      terminatedAt: new Date().toISOString()
+    }, { merge: true }).catch((err) => console.warn('[SESSION TERMINATE WARNING]:', err.message));
+    auditService.recordAuditEvent(db, {
+      type: auditService.AUDIT_EVENT_TYPES.SESSION_TERMINATED,
+      req,
+      details: { targetSessionId: sessionId }
+    }).catch(() => {});
+  }
+
+  res.json({
+    success: true,
+    message: 'Session terminated successfully.',
+    terminatedSessionId: sessionId
+  });
+});
+
+/**
+ * POST /api/user/revoke-all-sessions
+ * Server-authoritative global session revocation across all devices (Sign out from all devices)
+ */
+app.post('/api/user/revoke-all-sessions', requireAuth, requireRecentAuth(900), async (req, res) => {
+  const userId = req.user.uid;
+  const nowIso = new Date().toISOString();
+
+  // 1. Authoritative Firebase Admin revocation of all refresh tokens
+  try {
+    await admin.auth().revokeRefreshTokens(userId);
+  } catch (err) {
+    console.error('[REVOKE ALL SESSIONS FIREBASE ERROR]:', err.message);
+  }
+
+  // 2. Mark sessionsRevokedAt in user document and memory registry to invalidate in-flight tokens
+  if (db) {
+    db.collection('users').doc(userId).set({
+      sessionsRevokedAt: nowIso
+    }, { merge: true }).catch((err) => console.warn('[REVOKE ALL SESSIONS USER DOC WARNING]:', err.message));
+  }
+
+  const sessions = activeUserSessions.get(userId) || [];
+  sessions.forEach(s => { s.revoked = true; s.terminatedAt = nowIso; });
+  sessions._sessionsRevokedAt = nowIso;
+  activeUserSessions.set(userId, sessions);
+
+  if (db) {
+    auditService.recordAuditEvent(db, {
+      type: auditService.AUDIT_EVENT_TYPES.ALL_SESSIONS_REVOKED,
+      req,
+      details: { revokedAt: nowIso }
+    }).catch(() => {});
+  }
+
+  res.json({
+    success: true,
+    revokedAt: nowIso,
+    message: 'All active sessions and device tokens have been revoked. Fresh sign-in required.'
+  });
+});
+
+/**
+ * POST /api/user/change-password
+ * Secure password change requiring recent re-authentication and revoking other active sessions
+ */
+app.post('/api/user/change-password', requireAuth, requireRecentAuth(900), async (req, res) => {
+  const userId = req.user.uid;
+  const { newPassword, confirmPassword } = req.body || {};
+
+  if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 8) {
+    return res.status(400).json({
+      error: 'INVALID_PASSWORD',
+      message: 'Password must be at least 8 characters long.'
+    });
+  }
+
+  const hasUpper = /[A-Z]/.test(newPassword);
+  const hasLower = /[a-z]/.test(newPassword);
+  const hasDigit = /[0-9]/.test(newPassword);
+  if (!hasUpper || !hasLower || !hasDigit) {
+    return res.status(400).json({
+      error: 'WEAK_PASSWORD',
+      message: 'Password must contain at least one uppercase letter, one lowercase letter, and one number.'
+    });
+  }
+
+  if (confirmPassword !== undefined && newPassword !== confirmPassword) {
+    return res.status(400).json({
+      error: 'PASSWORD_MISMATCH',
+      message: 'Password confirmation does not match.'
+    });
+  }
+
+  try {
+    await admin.auth().updateUser(userId, {
+      password: newPassword
+    });
+
+    // Revoke refresh tokens on other devices to force re-authentication with the new password
+    await admin.auth().revokeRefreshTokens(userId).catch(() => {});
+    const nowIso = new Date().toISOString();
+
+    const sessions = activeUserSessions.get(userId) || [];
+    sessions.forEach(s => { s.revoked = true; s.terminatedAt = nowIso; });
+    sessions._sessionsRevokedAt = nowIso;
+    activeUserSessions.set(userId, sessions);
+
+    if (db) {
+      db.collection('users').doc(userId).set({
+        sessionsRevokedAt: nowIso,
+        passwordLastChangedAt: nowIso
+      }, { merge: true }).catch(() => {});
+
+      auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.PASSWORD_CHANGED,
+        req,
+        details: { changedAt: nowIso }
+      }).catch(() => {});
+    }
+
+    res.json({
+      success: true,
+      message: 'Password changed successfully. For your security, all other active sessions have been terminated.'
+    });
+  } catch (err) {
+    console.error('[CHANGE PASSWORD ERROR]:', err);
+    res.status(500).json({
+      error: 'PASSWORD_CHANGE_FAILED',
+      message: 'Failed to update password. Please try again.'
+    });
+  }
+});
+
+/**
+ * POST /api/user/change-email
+ * Secure email change requiring recent re-authentication
+ */
+app.post('/api/user/change-email', requireAuth, requireRecentAuth(900), async (req, res) => {
+  const userId = req.user.uid;
+  const currentEmail = (req.user.email || '').toLowerCase();
+  const { newEmail } = req.body || {};
+
+  if (!newEmail || typeof newEmail !== 'string' || !newEmail.includes('@') || newEmail.length > 100) {
+    return res.status(400).json({
+      error: 'INVALID_EMAIL',
+      message: 'A valid email address is required (maximum 100 characters).'
+    });
+  }
+
+  const cleanEmail = newEmail.trim().toLowerCase();
+  if (cleanEmail === currentEmail) {
+    return res.status(400).json({
+      error: 'SAME_EMAIL',
+      message: 'New email cannot be the same as your current email.'
+    });
+  }
+
+  try {
+    await admin.auth().updateUser(userId, {
+      email: cleanEmail,
+      emailVerified: false
+    });
+
+    await admin.auth().revokeRefreshTokens(userId).catch(() => {});
+    const nowIso = new Date().toISOString();
+
+    const sessions = activeUserSessions.get(userId) || [];
+    sessions.forEach(s => { s.revoked = true; s.terminatedAt = nowIso; });
+    sessions._sessionsRevokedAt = nowIso;
+    activeUserSessions.set(userId, sessions);
+
+    if (db) {
+      db.collection('users').doc(userId).set({
+        email: cleanEmail,
+        emailVerified: false,
+        sessionsRevokedAt: nowIso,
+        emailLastChangedAt: nowIso
+      }, { merge: true }).catch(() => {});
+
+      auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.EMAIL_CHANGED,
+        req,
+        details: { oldEmail: auditService.maskEmail(currentEmail), newEmail: auditService.maskEmail(cleanEmail), changedAt: nowIso }
+      }).catch(() => {});
+    }
+
+    res.json({
+      success: true,
+      newEmail: cleanEmail,
+      message: 'Email address updated successfully. Please verify your new email.'
+    });
+  } catch (err) {
+    console.error('[CHANGE EMAIL ERROR]:', err);
+    res.status(500).json({
+      error: 'EMAIL_CHANGE_FAILED',
+      message: err.code === 'auth/email-already-exists'
+        ? 'This email address is already in use by another account.'
+        : 'Failed to update email address. Please try again.'
+    });
+  }
+});
+
+/**
+ * POST /api/auth/recover-account
+ * Secure account recovery without revealing account existence or bypassing cryptographic verification
+ */
+app.post('/api/auth/recover-account', async (req, res) => {
+  const { email } = req.body || {};
+
+  if (!email || typeof email !== 'string' || !email.includes('@') || email.length > 100) {
+    return res.status(400).json({
+      error: 'INVALID_EMAIL',
+      message: 'A valid email address is required.'
+    });
+  }
+
+  const cleanEmail = email.trim().toLowerCase();
+
+  try {
+    let userRecord = null;
+    try {
+      userRecord = await admin.auth().getUserByEmail(cleanEmail);
+    } catch (e) {
+      if (e.code !== 'auth/user-not-found') {
+        console.warn('[RECOVER ACCOUNT CHECK WARNING]:', e.message);
+      }
+    }
+
+    if (userRecord && userRecord.uid) {
+      const resetLink = await admin.auth().generatePasswordResetLink(cleanEmail).catch(() => null);
+
+      if (db) {
+        auditService.recordAuditEvent(db, {
+          type: auditService.AUDIT_EVENT_TYPES.ACCOUNT_RECOVERY_REQUESTED,
+          req,
+          details: { emailMasked: auditService.maskEmail(cleanEmail) }
+        }).catch(() => {});
+      }
+
+      if (resetLink) {
+        sendClinicalNotificationEmail({
+          to: cleanEmail,
+          subject: 'Health Vibes - Account Recovery Link',
+          recipientName: userRecord.displayName || cleanEmail.split('@')[0],
+          role: 'patient',
+          caseId: 'ACCOUNT_RECOVERY',
+          patientName: 'Account Owner',
+          status: 'password_reset',
+          clinicName: 'Health Vibes Security',
+          notes: `A request was made to recover your account. Click the secure link to reset your password: ${resetLink}. If you did not request this, please ignore this email.`
+        }).catch(() => {});
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'If an account exists with this email, recovery instructions have been sent.'
+    });
+  } catch (err) {
+    console.error('[RECOVER ACCOUNT ERROR]:', err);
+    res.status(500).json({
+      error: 'RECOVERY_REQUEST_FAILED',
+      message: 'Unable to process account recovery request. Please try again later.'
+    });
   }
 });
 
@@ -3468,5 +3964,8 @@ app.createRateLimiter = createRateLimiter;
 app.checkOtpLockout = checkOtpLockout;
 app.recordOtpFailure = recordOtpFailure;
 app.clearOtpLockout = clearOtpLockout;
+app.requireRecentAuth = requireRecentAuth;
+app.activeUserSessions = activeUserSessions;
+app.recordUserSession = recordUserSession;
 
 module.exports = app;
