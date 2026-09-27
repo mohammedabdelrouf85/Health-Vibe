@@ -1163,6 +1163,355 @@ function isVerificationRevoked(email) {
 }
 
 // =============================================================================
+// 🩺 PATIENT MEDICAL PROFILE: DOB, CLINICAL RELEVANCE, PROVENANCE & LINKAGE
+// =============================================================================
+
+const VALID_BLOOD_TYPES = new Set(['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-', 'UNKNOWN', 'unknown']);
+const VALID_SEX_VALUES = new Set(['male', 'female', 'other', 'not_specified']);
+
+/**
+ * Helper: Calculate exact age in years from Date of Birth
+ * Disallows free-text ambiguity; strictly computes age based on calendar birth date.
+ */
+function calculateAge(dateOfBirth, referenceDate = new Date()) {
+  if (!dateOfBirth) return null;
+  const dob = (dateOfBirth instanceof Date) ? dateOfBirth : new Date(dateOfBirth);
+  if (isNaN(dob.getTime())) return null;
+
+  const ref = (referenceDate instanceof Date) ? referenceDate : new Date(referenceDate);
+  if (isNaN(ref.getTime())) return null;
+
+  let age = ref.getFullYear() - dob.getFullYear();
+  const m = ref.getMonth() - dob.getMonth();
+  if (m < 0 || (m === 0 && ref.getDate() < dob.getDate())) {
+    age--;
+  }
+  return age >= 0 ? age : 0;
+}
+
+/**
+ * Helper: Calculate Body Mass Index (BMI)
+ */
+function calculateBmi(heightCm, weightKg) {
+  const h = Number(heightCm);
+  const w = Number(weightKg);
+  if (!h || !w || h <= 0 || w <= 0) return null;
+  const heightM = h / 100;
+  const bmi = w / (heightM * heightM);
+  return Math.round(bmi * 10) / 10;
+}
+
+/**
+ * Helper: Clinical Relevance for Sex and Pregnancy
+ * Pregnancy is clinically relevant strictly for biological females in reproductive age (12-55).
+ * Suppressed/omitted for males, non-reproductive age brackets, or irrelevant contexts.
+ */
+function evaluatePregnancyClinicalRelevance(sex, age) {
+  const cleanSex = String(sex || '').trim().toLowerCase();
+  const isFemale = cleanSex === 'female';
+  const numericAge = typeof age === 'number' ? age : null;
+  const isReproductiveAge = numericAge !== null && numericAge >= 12 && numericAge <= 55;
+  const isClinicallyRelevant = isFemale && isReproductiveAge;
+
+  let reason = 'Clinically relevant (Female aged 12-55).';
+  if (!isFemale) {
+    reason = 'Biological sex is not female; pregnancy status is clinically non-applicable.';
+  } else if (numericAge === null) {
+    reason = 'Age is not determined; pregnancy relevance cannot be confirmed.';
+  } else if (numericAge < 12) {
+    reason = 'Pediatric patient under reproductive age bracket (<12).';
+  } else if (numericAge > 55) {
+    reason = 'Post-menopausal age bracket (>55).';
+  }
+
+  return {
+    isClinicallyRelevant,
+    reason
+  };
+}
+
+/**
+ * Helper: Validate and organize patient medical profile attributes
+ */
+function validatePatientMedicalProfile(raw = {}) {
+  const errors = [];
+  const clean = {};
+
+  // 1. Name
+  if (raw.name || raw.fullName) {
+    clean.fullName = String(raw.fullName || raw.name).trim();
+  }
+
+  // 2. Phone
+  if (raw.phone || raw.phoneNumber) {
+    clean.phoneNumber = String(raw.phone || raw.phoneNumber).trim();
+  }
+
+  // 3. Date of Birth & Dynamically Calculated Age
+  if (raw.dateOfBirth || raw.dob) {
+    const dobStr = String(raw.dateOfBirth || raw.dob).trim();
+    const dobDate = new Date(dobStr);
+    if (isNaN(dobDate.getTime())) {
+      errors.push('Invalid dateOfBirth format. Expected ISO YYYY-MM-DD.');
+    } else if (dobDate > new Date()) {
+      errors.push('Date of birth cannot be in the future.');
+    } else {
+      const calculatedAge = calculateAge(dobDate);
+      if (calculatedAge > 130) {
+        errors.push('Date of birth results in an improbable age (>130).');
+      } else {
+        clean.dateOfBirth = dobStr.split('T')[0];
+        clean.calculatedAge = calculatedAge;
+      }
+    }
+  }
+
+  // 4. Emergency Contact Details
+  if (raw.emergencyContact && typeof raw.emergencyContact === 'object') {
+    clean.emergencyContact = {
+      name: String(raw.emergencyContact.name || '').trim(),
+      relationship: String(raw.emergencyContact.relationship || raw.emergencyContact.relation || '').trim(),
+      phone: String(raw.emergencyContact.phone || '').trim()
+    };
+  } else {
+    clean.emergencyContact = {
+      name: String(raw.emergencyContactName || '').trim(),
+      relationship: String(raw.emergencyContactRelation || raw.emergencyContactRelationship || '').trim(),
+      phone: String(raw.emergencyContactPhone || '').trim()
+    };
+  }
+
+  // 5. Biometrics (Blood Type, Height, Weight, BMI)
+  clean.biometrics = {};
+  const bt = String(raw.bloodType || raw.biometrics?.bloodType || 'unknown').trim().toUpperCase();
+  if (VALID_BLOOD_TYPES.has(bt)) {
+    clean.biometrics.bloodType = bt;
+  } else {
+    errors.push(`Invalid bloodType '${bt}'. Allowed: ${Array.from(VALID_BLOOD_TYPES).join(', ')}`);
+  }
+
+  const heightVal = raw.heightCm ?? raw.height ?? raw.biometrics?.heightCm ?? raw.biometrics?.height;
+  if (heightVal !== undefined && heightVal !== null && heightVal !== '') {
+    const h = Number(heightVal);
+    if (isNaN(h) || h < 20 || h > 260) {
+      errors.push('Height must be a valid number between 20 cm and 260 cm.');
+    } else {
+      clean.biometrics.heightCm = h;
+    }
+  }
+
+  const weightVal = raw.weightKg ?? raw.weight ?? raw.biometrics?.weightKg ?? raw.biometrics?.weight;
+  if (weightVal !== undefined && weightVal !== null && weightVal !== '') {
+    const w = Number(weightVal);
+    if (isNaN(w) || w < 1 || w > 400) {
+      errors.push('Weight must be a valid number between 1 kg and 400 kg.');
+    } else {
+      clean.biometrics.weightKg = w;
+    }
+  }
+
+  if (clean.biometrics.heightCm && clean.biometrics.weightKg) {
+    clean.biometrics.bmi = calculateBmi(clean.biometrics.heightCm, clean.biometrics.weightKg);
+  }
+
+  // 6. Biological Sex & Conditional Pregnancy Clinical Relevance
+  let biologicalSex = 'not_specified';
+  if (raw.sex || raw.biologicalSex) {
+    const s = String(raw.sex || raw.biologicalSex).trim().toLowerCase();
+    if (VALID_SEX_VALUES.has(s)) {
+      biologicalSex = s;
+    } else {
+      errors.push(`Invalid sex value. Allowed: ${Array.from(VALID_SEX_VALUES).join(', ')}`);
+    }
+  }
+  clean.biologicalSex = biologicalSex;
+
+  const pregnancyRelevance = evaluatePregnancyClinicalRelevance(biologicalSex, clean.calculatedAge);
+  clean.pregnancy = {
+    isClinicallyRelevant: pregnancyRelevance.isClinicallyRelevant,
+    relevanceReason: pregnancyRelevance.reason
+  };
+
+  if (pregnancyRelevance.isClinicallyRelevant) {
+    const pregRaw = raw.pregnancy || {};
+    clean.pregnancy.status = pregRaw.status || (raw.isPregnant ? 'pregnant' : 'not_pregnant');
+    clean.pregnancy.trimester = pregRaw.trimester ? Number(pregRaw.trimester) : null;
+    clean.pregnancy.dueDate = pregRaw.dueDate ? String(pregRaw.dueDate).split('T')[0] : null;
+  } else {
+    clean.pregnancy.status = 'not_applicable';
+    clean.pregnancy.trimester = null;
+    clean.pregnancy.dueDate = null;
+  }
+
+  // 7. Organized Medical History
+  const parseList = (item) => {
+    if (!item) return [];
+    if (Array.isArray(item)) return item.map(x => (typeof x === 'string' ? x.trim() : x)).filter(Boolean);
+    if (typeof item === 'string') return item.split(/[\n,;]+/).map(s => s.trim()).filter(Boolean);
+    return [];
+  };
+
+  clean.medicalHistory = {
+    allergies: parseList(raw.allergies || raw.medicalHistory?.allergies),
+    chronicConditions: parseList(raw.chronicConditions || raw.medicalHistory?.chronicConditions),
+    medications: parseList(raw.medications || raw.medicalHistory?.medications),
+    surgeries: parseList(raw.surgeries || raw.medicalHistory?.surgeries),
+    smoking: typeof raw.smoking === 'object' && raw.smoking !== null ? {
+      status: ['never', 'former', 'current', 'passive'].includes(raw.smoking.status) ? raw.smoking.status : 'never',
+      packYears: Number(raw.smoking.packYears) || null,
+      details: String(raw.smoking.details || '').trim()
+    } : {
+      status: ['never', 'former', 'current', 'passive'].includes(raw.smokingStatus) ? raw.smokingStatus : 'never',
+      packYears: Number(raw.packYears) || null,
+      details: typeof raw.smoking === 'string' ? raw.smoking.trim() : ''
+    },
+    familyHistory: parseList(raw.familyHistory || raw.medicalHistory?.familyHistory),
+    hospitalAdmissions: parseList(raw.hospitalAdmissions || raw.medicalHistory?.hospitalAdmissions)
+  };
+
+  // 8. Health Insurance (Strictly Optional)
+  clean.insurance = {
+    hasInsurance: Boolean(raw.insurance?.hasInsurance || raw.hasInsurance || false),
+    provider: String(raw.insurance?.provider || raw.insuranceProvider || '').trim(),
+    policyNumber: String(raw.insurance?.policyNumber || raw.insurancePolicyNumber || '').trim(),
+    groupNumber: String(raw.insurance?.groupNumber || raw.insuranceGroupNumber || '').trim(),
+    expiryDate: raw.insurance?.expiryDate ? String(raw.insurance.expiryDate).split('T')[0] : (raw.insuranceExpiry ? String(raw.insuranceExpiry).split('T')[0] : null),
+    notes: String(raw.insurance?.notes || raw.insuranceNotes || '').trim()
+  };
+
+  // 9. Trusted Clinic & Doctor Linkage
+  clean.clinicLinkage = {
+    clinicId: raw.clinicId ? String(raw.clinicId).trim() : (raw.clinicLinkage?.clinicId ? String(raw.clinicLinkage.clinicId).trim() : null),
+    clinicName: raw.clinicName ? String(raw.clinicName).trim() : (raw.clinicLinkage?.clinicName ? String(raw.clinicLinkage.clinicName).trim() : null),
+    linkedDoctorId: raw.linkedDoctorId ? String(raw.linkedDoctorId).trim() : (raw.clinicLinkage?.linkedDoctorId ? String(raw.clinicLinkage.linkedDoctorId).trim() : (raw.linkedDoctor ? String(raw.linkedDoctor).trim() : null)),
+    linkedDoctorName: raw.linkedDoctorName ? String(raw.linkedDoctorName).trim() : (raw.clinicLinkage?.linkedDoctorName ? String(raw.clinicLinkage.linkedDoctorName).trim() : null)
+  };
+
+  return {
+    isValid: errors.length === 0,
+    errors,
+    data: clean
+  };
+}
+
+/**
+ * Helper: Manage data provenance, versioning, timestamps, and correction history
+ */
+function buildPatientProfileProvenance(actor = {}, existingDoc = {}, source = 'web_portal', correctionReason = null) {
+  const now = new Date().toISOString();
+  const existingProvenance = existingDoc.dataProvenance || {};
+  const currentVersion = Number(existingProvenance.version || 0);
+  const currentCorrectionsCount = Number(existingProvenance.correctionsCount || 0);
+
+  const isCorrection = Boolean(correctionReason);
+  const version = currentVersion + 1;
+  const correctionsCount = isCorrection ? currentCorrectionsCount + 1 : currentCorrectionsCount;
+
+  const provenance = {
+    createdBy: existingProvenance.createdBy || actor.uid || 'system',
+    createdByType: existingProvenance.createdByType || actor.role || 'patient',
+    createdAt: existingProvenance.createdAt || now,
+    updatedBy: actor.uid || 'system',
+    updatedByType: actor.role || 'patient',
+    updatedAt: now,
+    source: source || existingProvenance.source || 'web_portal',
+    version,
+    correctionsCount
+  };
+
+  let correctionHistory = Array.isArray(existingDoc.correctionHistory) ? [...existingDoc.correctionHistory] : [];
+  if (isCorrection) {
+    correctionHistory.push({
+      correctionId: `corr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      timestamp: now,
+      correctedBy: actor.uid || 'system',
+      correctedByType: actor.role || 'patient',
+      reason: String(correctionReason).trim(),
+      previousVersion: currentVersion
+    });
+  }
+
+  return { provenance, correctionHistory };
+}
+
+/**
+ * Helper: Verify Trusted Clinic & Doctor Linkage
+ */
+async function verifyPatientClinicAndDoctorLinkage(clinicLinkage = {}, options = {}) {
+  const result = {
+    clinicId: null,
+    clinicName: null,
+    linkedDoctorId: null,
+    linkedDoctorName: null,
+    verified: false,
+    warnings: []
+  };
+
+  const { clinicId, linkedDoctorId, clinicName, linkedDoctorName } = clinicLinkage;
+
+  if (clinicId) {
+    result.clinicId = String(clinicId).trim();
+    result.clinicName = clinicName ? String(clinicName).trim() : result.clinicId;
+  }
+
+  if (linkedDoctorId) {
+    result.linkedDoctorId = String(linkedDoctorId).trim();
+    result.linkedDoctorName = linkedDoctorName ? String(linkedDoctorName).trim() : null;
+
+    if (options.doctorIdentity || options.doctorProfile) {
+      const doctorIdentity = options.doctorIdentity;
+      const doctorProfile = options.doctorProfile;
+      result.linkedDoctorName = doctorIdentity?.fullName || doctorProfile?.name || result.linkedDoctorName || 'Verified Practitioner';
+      if (result.clinicId) {
+        const isApproved = isDoctorApprovedMemberOfClinic(doctorIdentity, doctorProfile, result.clinicId);
+        if (!isApproved) {
+          result.warnings.push(`Doctor is not an approved member of clinic ${result.clinicId}.`);
+        } else {
+          result.verified = true;
+        }
+      } else {
+        result.verified = true;
+      }
+    } else if (db && !options.skipDbCheck) {
+      try {
+        const fetchPromise = Promise.all([
+          getVerifiedDoctorIdentity(result.linkedDoctorId),
+          getServerUserProfile(result.linkedDoctorId)
+        ]);
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 1000));
+        const [doctorIdentity, doctorProfile] = await Promise.race([fetchPromise, timeoutPromise]);
+
+        if (!doctorIdentity && !doctorProfile) {
+          result.warnings.push(`Doctor ID ${result.linkedDoctorId} was not found in verified practitioner records.`);
+          result.verified = Boolean(result.clinicId);
+        } else {
+          result.linkedDoctorName = doctorIdentity?.fullName || doctorProfile?.name || doctorProfile?.displayName || result.linkedDoctorName || 'Verified Practitioner';
+
+          if (result.clinicId) {
+            const isApproved = isDoctorApprovedMemberOfClinic(doctorIdentity, doctorProfile, result.clinicId);
+            if (!isApproved) {
+              result.warnings.push(`Doctor is not an approved member of clinic ${result.clinicId}.`);
+            } else {
+              result.verified = true;
+            }
+          } else {
+            result.verified = true;
+          }
+        }
+      } catch (err) {
+        result.verified = Boolean(result.clinicId || result.linkedDoctorId);
+      }
+    } else {
+      result.verified = true;
+    }
+  } else if (result.clinicId) {
+    result.verified = true;
+  }
+
+  return result;
+}
+
+// =============================================================================
 // 📱 ACTIVE USER SESSIONS & SERVER-SIDE TOKEN REVOCATION REGISTRY
 // =============================================================================
 const activeUserSessions = new Map(); // uid -> Array<SessionRecord> & _sessionsRevokedAt
@@ -1531,6 +1880,372 @@ app.get('/api/auth/profile', requireAuth, async (req, res) => {
     isOwner: isOwner,
     emailVerified: req.user.email_verified || false
   });
+});
+
+// =============================================================================
+// 🩺 PATIENT MEDICAL PROFILE REST ENDPOINTS
+// =============================================================================
+
+const patientProfileLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  maxRequests: 30,
+  message: 'Too many profile operations. Please wait a moment before trying again.',
+  keyGenerator: req => (req.user?.uid ? `prof_${req.user.uid}` : `prof_ip_${getClientIp(req)}`)
+});
+
+/**
+ * GET /api/patient/medical-profile
+ * Retrieve organized patient medical profile, dynamically computed age, BMI, and clinical relevance
+ */
+app.get('/api/patient/medical-profile', requireAuth, patientProfileLimiter, async (req, res) => {
+  try {
+    let targetUid = req.user.uid;
+    const requestedUid = req.query.patientId || req.query.uid;
+
+    if (requestedUid && requestedUid !== req.user.uid) {
+      const userRole = getTrustedClaimRole(req.user);
+      const isClinicianOrAdmin = ADMIN_ROLES.includes(userRole) || userRole === ROLES.DOCTOR_VERIFIED || hasTrustedOwnerClaim(req.user);
+      if (!isClinicianOrAdmin) {
+        return res.status(403).json({
+          error: 'FORBIDDEN',
+          message: 'Accessing other patient profiles requires verified clinician or administrator credentials.'
+        });
+      }
+      targetUid = requestedUid;
+    }
+
+    let userDoc = {};
+    if (db) {
+      const snap = await db.collection('users').doc(targetUid).get();
+      if (snap.exists) {
+        userDoc = snap.data() || {};
+      }
+    }
+
+    const storedProfile = userDoc.medicalProfile || {};
+    const rawDob = storedProfile.dateOfBirth || userDoc.dateOfBirth || userDoc.dob || null;
+    const computedAge = rawDob ? calculateAge(rawDob) : (storedProfile.calculatedAge || (userDoc.age ? parseInt(userDoc.age, 10) : null));
+
+    const height = storedProfile.biometrics?.heightCm ?? userDoc.height ?? null;
+    const weight = storedProfile.biometrics?.weightKg ?? userDoc.weight ?? null;
+    const computedBmi = (height && weight) ? calculateBmi(height, weight) : (storedProfile.biometrics?.bmi ?? null);
+
+    const biologicalSex = storedProfile.biologicalSex || userDoc.sex || userDoc.biologicalSex || 'not_specified';
+    const pregnancyRelevance = evaluatePregnancyClinicalRelevance(biologicalSex, computedAge);
+
+    const fullProfile = {
+      uid: targetUid,
+      fullName: storedProfile.fullName || userDoc.name || userDoc.displayName || '',
+      phoneNumber: storedProfile.phoneNumber || userDoc.phoneNumber || '',
+      dateOfBirth: rawDob ? String(rawDob).split('T')[0] : null,
+      calculatedAge: computedAge,
+      emergencyContact: storedProfile.emergencyContact || {
+        name: userDoc.emergencyContactName || '',
+        relationship: userDoc.emergencyContactRelation || '',
+        phone: userDoc.emergencyContactPhone || ''
+      },
+      biometrics: {
+        bloodType: storedProfile.biometrics?.bloodType || userDoc.bloodType || 'unknown',
+        heightCm: height ? Number(height) : null,
+        weightKg: weight ? Number(weight) : null,
+        bmi: computedBmi
+      },
+      biologicalSex,
+      pregnancy: {
+        isClinicallyRelevant: pregnancyRelevance.isClinicallyRelevant,
+        relevanceReason: pregnancyRelevance.reason,
+        status: pregnancyRelevance.isClinicallyRelevant ? (storedProfile.pregnancy?.status || 'not_pregnant') : 'not_applicable',
+        trimester: pregnancyRelevance.isClinicallyRelevant ? (storedProfile.pregnancy?.trimester || null) : null,
+        dueDate: pregnancyRelevance.isClinicallyRelevant ? (storedProfile.pregnancy?.dueDate || null) : null
+      },
+      medicalHistory: storedProfile.medicalHistory || {
+        allergies: Array.isArray(userDoc.allergies) ? userDoc.allergies : (userDoc.medicalHistory ? [userDoc.medicalHistory] : []),
+        chronicConditions: Array.isArray(userDoc.chronicConditions) ? userDoc.chronicConditions : [],
+        medications: Array.isArray(userDoc.medications) ? userDoc.medications : [],
+        surgeries: Array.isArray(userDoc.surgeries) ? userDoc.surgeries : [],
+        smoking: typeof userDoc.smoking === 'object' ? userDoc.smoking : { status: userDoc.smokingStatus || 'never', packYears: null, details: '' },
+        familyHistory: Array.isArray(userDoc.familyHistory) ? userDoc.familyHistory : [],
+        hospitalAdmissions: Array.isArray(userDoc.hospitalAdmissions) ? userDoc.hospitalAdmissions : []
+      },
+      insurance: storedProfile.insurance || {
+        hasInsurance: Boolean(userDoc.insuranceProvider || userDoc.hasInsurance),
+        provider: userDoc.insuranceProvider || '',
+        policyNumber: userDoc.insurancePolicyNumber || '',
+        groupNumber: userDoc.insuranceGroupNumber || '',
+        expiryDate: userDoc.insuranceExpiry || null,
+        notes: userDoc.insuranceNotes || ''
+      },
+      clinicLinkage: storedProfile.clinicLinkage || {
+        clinicId: userDoc.clinicId || null,
+        clinicName: userDoc.clinicName || null,
+        linkedDoctorId: userDoc.linkedDoctorId || null,
+        linkedDoctorName: userDoc.linkedDoctor || userDoc.linkedDoctorName || null
+      },
+      dataProvenance: storedProfile.dataProvenance || userDoc.dataProvenance || {
+        createdBy: userDoc.createdBy || targetUid,
+        createdByType: 'patient',
+        createdAt: userDoc.createdAt || new Date().toISOString(),
+        updatedBy: targetUid,
+        updatedByType: 'patient',
+        updatedAt: userDoc.updatedAt || new Date().toISOString(),
+        source: 'initial_registration',
+        version: 1,
+        correctionsCount: 0
+      },
+      correctionHistory: storedProfile.correctionHistory || userDoc.correctionHistory || []
+    };
+
+    res.json({ ok: true, profile: fullProfile });
+  } catch (err) {
+    console.error('[PATIENT PROFILE GET ERROR]:', err);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to retrieve patient medical profile.' });
+  }
+});
+
+/**
+ * POST /api/patient/medical-profile
+ * Save/update organized patient medical profile with server-verified provenance and trusted linkages
+ */
+app.post('/api/patient/medical-profile', requireAuth, patientProfileLimiter, async (req, res) => {
+  try {
+    let targetUid = req.user.uid;
+    const requestedUid = req.body.patientId || req.body.uid;
+
+    if (requestedUid && requestedUid !== req.user.uid) {
+      const userRole = getTrustedClaimRole(req.user);
+      const isClinicianOrAdmin = ADMIN_ROLES.includes(userRole) || userRole === ROLES.DOCTOR_VERIFIED || hasTrustedOwnerClaim(req.user);
+      if (!isClinicianOrAdmin) {
+        return res.status(403).json({
+          error: 'FORBIDDEN',
+          message: 'Modifying other patient profiles requires verified clinician or administrator credentials.'
+        });
+      }
+      targetUid = requestedUid;
+    }
+
+    const validation = validatePatientMedicalProfile(req.body);
+    if (!validation.isValid) {
+      return res.status(400).json({
+        error: 'VALIDATION_FAILED',
+        message: 'Patient profile validation failed.',
+        errors: validation.errors
+      });
+    }
+
+    const cleanData = validation.data;
+
+    // Verify trusted clinic and doctor linkage
+    const linkageVerification = await verifyPatientClinicAndDoctorLinkage(cleanData.clinicLinkage);
+    cleanData.clinicLinkage = {
+      clinicId: linkageVerification.clinicId,
+      clinicName: linkageVerification.clinicName,
+      linkedDoctorId: linkageVerification.linkedDoctorId,
+      linkedDoctorName: linkageVerification.linkedDoctorName,
+      verified: linkageVerification.verified
+    };
+
+    let existingDoc = {};
+    if (db) {
+      const snap = await db.collection('users').doc(targetUid).get();
+      if (snap.exists) {
+        existingDoc = snap.data() || {};
+      }
+    }
+
+    const actor = {
+      uid: req.user.uid,
+      role: getTrustedClaimRole(req.user) || 'patient'
+    };
+
+    const source = req.body.source || (req.headers['x-client-source'] ? String(req.headers['x-client-source']) : 'web_portal');
+    const { provenance, correctionHistory } = buildPatientProfileProvenance(actor, existingDoc.medicalProfile || existingDoc, source, null);
+
+    const completeMedicalProfile = {
+      ...cleanData,
+      dataProvenance: provenance,
+      correctionHistory
+    };
+
+    if (db) {
+      const updatePayload = {
+        medicalProfile: completeMedicalProfile,
+        dataProvenance: provenance,
+        updatedAt: provenance.updatedAt
+      };
+
+      if (cleanData.fullName) {
+        updatePayload.name = cleanData.fullName;
+        updatePayload.displayName = cleanData.fullName;
+      }
+      if (cleanData.phoneNumber) updatePayload.phoneNumber = cleanData.phoneNumber;
+      if (cleanData.dateOfBirth) updatePayload.dateOfBirth = cleanData.dateOfBirth;
+      if (cleanData.calculatedAge !== undefined) {
+        updatePayload.age = String(cleanData.calculatedAge);
+        updatePayload.patientAge = String(cleanData.calculatedAge);
+      }
+      if (cleanData.biometrics.bloodType) updatePayload.bloodType = cleanData.biometrics.bloodType;
+      if (cleanData.biometrics.heightCm) updatePayload.height = cleanData.biometrics.heightCm;
+      if (cleanData.biometrics.weightKg) updatePayload.weight = cleanData.biometrics.weightKg;
+      if (cleanData.clinicLinkage.clinicId) updatePayload.clinicId = cleanData.clinicLinkage.clinicId;
+      if (cleanData.clinicLinkage.linkedDoctorName || cleanData.clinicLinkage.linkedDoctorId) {
+        updatePayload.linkedDoctor = cleanData.clinicLinkage.linkedDoctorName || cleanData.clinicLinkage.linkedDoctorId;
+      }
+
+      await db.collection('users').doc(targetUid).set(updatePayload, { merge: true });
+    }
+
+    auditService.recordAuditEvent({
+      eventType: auditService.EVENT_TYPES.PATIENT_PROFILE_UPDATED,
+      userId: req.user.uid,
+      targetUserId: targetUid,
+      ip: getClientIp(req),
+      req,
+      details: {
+        version: provenance.version,
+        source: provenance.source,
+        calculatedAge: cleanData.calculatedAge,
+        biologicalSex: cleanData.biologicalSex,
+        pregnancyClinicallyRelevant: cleanData.pregnancy.isClinicallyRelevant,
+        clinicId: cleanData.clinicLinkage.clinicId,
+        linkedDoctorId: cleanData.clinicLinkage.linkedDoctorId
+      }
+    });
+
+    res.json({
+      ok: true,
+      message: 'Patient medical profile updated successfully.',
+      profile: completeMedicalProfile,
+      linkageWarnings: linkageVerification.warnings.length > 0 ? linkageVerification.warnings : undefined
+    });
+  } catch (err) {
+    console.error('[PATIENT PROFILE POST ERROR]:', err);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to update patient medical profile.' });
+  }
+});
+
+/**
+ * POST /api/patient/medical-profile/correct
+ * Submit a formal medical profile correction with required clinical rationale and history tracking
+ */
+app.post('/api/patient/medical-profile/correct', requireAuth, patientProfileLimiter, async (req, res) => {
+  try {
+    const correctionReason = String(req.body.correctionReason || '').trim();
+    if (!correctionReason || correctionReason.length < 5) {
+      return res.status(400).json({
+        error: 'CORRECTION_REASON_REQUIRED',
+        message: 'A detailed clinical correction reason (at least 5 characters) is required to correct a medical record.'
+      });
+    }
+
+    let targetUid = req.user.uid;
+    const requestedUid = req.body.patientId || req.body.uid;
+
+    if (requestedUid && requestedUid !== req.user.uid) {
+      const userRole = getTrustedClaimRole(req.user);
+      const isClinicianOrAdmin = ADMIN_ROLES.includes(userRole) || userRole === ROLES.DOCTOR_VERIFIED || hasTrustedOwnerClaim(req.user);
+      if (!isClinicianOrAdmin) {
+        return res.status(403).json({
+          error: 'FORBIDDEN',
+          message: 'Correcting other patient profiles requires verified clinician or administrator credentials.'
+        });
+      }
+      targetUid = requestedUid;
+    }
+
+    const validation = validatePatientMedicalProfile(req.body);
+    if (!validation.isValid) {
+      return res.status(400).json({
+        error: 'VALIDATION_FAILED',
+        message: 'Patient profile correction validation failed.',
+        errors: validation.errors
+      });
+    }
+
+    const cleanData = validation.data;
+    const linkageVerification = await verifyPatientClinicAndDoctorLinkage(cleanData.clinicLinkage);
+    cleanData.clinicLinkage = {
+      clinicId: linkageVerification.clinicId,
+      clinicName: linkageVerification.clinicName,
+      linkedDoctorId: linkageVerification.linkedDoctorId,
+      linkedDoctorName: linkageVerification.linkedDoctorName,
+      verified: linkageVerification.verified
+    };
+
+    let existingDoc = {};
+    if (db) {
+      const snap = await db.collection('users').doc(targetUid).get();
+      if (snap.exists) {
+        existingDoc = snap.data() || {};
+      }
+    }
+
+    const actor = {
+      uid: req.user.uid,
+      role: getTrustedClaimRole(req.user) || 'patient'
+    };
+
+    const source = req.body.source || 'correction_request';
+    const { provenance, correctionHistory } = buildPatientProfileProvenance(actor, existingDoc.medicalProfile || existingDoc, source, correctionReason);
+
+    const completeMedicalProfile = {
+      ...cleanData,
+      dataProvenance: provenance,
+      correctionHistory
+    };
+
+    if (db) {
+      const updatePayload = {
+        medicalProfile: completeMedicalProfile,
+        dataProvenance: provenance,
+        correctionHistory,
+        updatedAt: provenance.updatedAt
+      };
+
+      if (cleanData.fullName) {
+        updatePayload.name = cleanData.fullName;
+        updatePayload.displayName = cleanData.fullName;
+      }
+      if (cleanData.phoneNumber) updatePayload.phoneNumber = cleanData.phoneNumber;
+      if (cleanData.dateOfBirth) updatePayload.dateOfBirth = cleanData.dateOfBirth;
+      if (cleanData.calculatedAge !== undefined) {
+        updatePayload.age = String(cleanData.calculatedAge);
+        updatePayload.patientAge = String(cleanData.calculatedAge);
+      }
+      if (cleanData.biometrics.bloodType) updatePayload.bloodType = cleanData.biometrics.bloodType;
+      if (cleanData.biometrics.heightCm) updatePayload.height = cleanData.biometrics.heightCm;
+      if (cleanData.biometrics.weightKg) updatePayload.weight = cleanData.biometrics.weightKg;
+      if (cleanData.clinicLinkage.clinicId) updatePayload.clinicId = cleanData.clinicLinkage.clinicId;
+      if (cleanData.clinicLinkage.linkedDoctorName || cleanData.clinicLinkage.linkedDoctorId) {
+        updatePayload.linkedDoctor = cleanData.clinicLinkage.linkedDoctorName || cleanData.clinicLinkage.linkedDoctorId;
+      }
+
+      await db.collection('users').doc(targetUid).set(updatePayload, { merge: true });
+    }
+
+    auditService.recordAuditEvent({
+      eventType: auditService.EVENT_TYPES.PATIENT_PROFILE_CORRECTED,
+      userId: req.user.uid,
+      targetUserId: targetUid,
+      ip: getClientIp(req),
+      req,
+      details: {
+        version: provenance.version,
+        correctionsCount: provenance.correctionsCount,
+        correctionReason,
+        source: provenance.source
+      }
+    });
+
+    res.json({
+      ok: true,
+      message: 'Patient medical record corrected successfully.',
+      profile: completeMedicalProfile,
+      linkageWarnings: linkageVerification.warnings.length > 0 ? linkageVerification.warnings : undefined
+    });
+  } catch (err) {
+    console.error('[PATIENT PROFILE CORRECTION ERROR]:', err);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to correct patient medical profile.' });
+  }
 });
 
 /**
@@ -4887,5 +5602,11 @@ app.validateNationalIdCollection = validateNationalIdCollection;
 app.verifyDoctorAuthorization = verifyDoctorAuthorization;
 app.isDoctorApprovedMemberOfClinic = isDoctorApprovedMemberOfClinic;
 app.getVerifiedDoctorIdentity = getVerifiedDoctorIdentity;
+app.calculateAge = calculateAge;
+app.calculateBmi = calculateBmi;
+app.evaluatePregnancyClinicalRelevance = evaluatePregnancyClinicalRelevance;
+app.validatePatientMedicalProfile = validatePatientMedicalProfile;
+app.buildPatientProfileProvenance = buildPatientProfileProvenance;
+app.verifyPatientClinicAndDoctorLinkage = verifyPatientClinicAndDoctorLinkage;
 
 module.exports = app;

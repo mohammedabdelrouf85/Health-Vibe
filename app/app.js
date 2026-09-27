@@ -3984,7 +3984,7 @@ if (isUnderReview) {
       <div><span style="color: var(--muted);">${isEn ? 'Patient:' : 'المريض:'}</span> <strong>${c.patientName || c.name || '--'}${isDemoCase ? ' (Demo)' : ''}</strong></div>
       <div><span style="color: var(--muted);">${isEn ? 'Email:' : 'البريد:'}</span> <strong>${c.patientEmail || c.userEmail || '--'}</strong></div>
       ${c.patientPhone || c.phone ? `<div><span style="color: var(--muted);">${isEn ? 'Phone:' : 'الهاتف:'}</span> <strong>${c.patientPhone || c.phone}</strong></div>` : ''}
-      ${c.patientAge || c.age ? `<div><span style="color: var(--muted);">${isEn ? 'Age:' : 'العمر:'}</span> <strong>${c.patientAge || c.age}</strong></div>` : ''}
+      ${(c.dateOfBirth || c.dob || c.patientAge || c.age) ? `<div><span style="color: var(--muted);">${isEn ? 'Age:' : 'العمر:'}</span> <strong>${(c.dateOfBirth || c.dob) ? (calculateAge(c.dateOfBirth || c.dob) + (isEn ? ' yrs' : ' سنة')) : (c.patientAge || c.age)}</strong></div>` : ''}
       <div><span style="color: var(--muted);">${isEn ? 'Patient ID:' : 'معرّف المريض:'}</span> <code style="font-size: 11px;">${(c.patientId || c.userId || '--').slice(0, 10)}...</code></div>
     </div>
     ${emergencyDoctorBanner}
@@ -5750,61 +5750,350 @@ function updateAssessmentConsentBadge() {
 }
 
 
-// ── Medical Profile Loading & Saving ──
+// ── Medical Profile Helpers, Calculations, Loading & Saving ──
+
+/**
+ * Calculate exact age in years from Date of Birth
+ */
+function calculateAge(dateOfBirth, referenceDate = new Date()) {
+  if (!dateOfBirth) return null;
+  const dob = (dateOfBirth instanceof Date) ? dateOfBirth : new Date(dateOfBirth);
+  if (isNaN(dob.getTime())) return null;
+
+  const ref = (referenceDate instanceof Date) ? referenceDate : new Date(referenceDate);
+  if (isNaN(ref.getTime())) return null;
+
+  let age = ref.getFullYear() - dob.getFullYear();
+  const m = ref.getMonth() - dob.getMonth();
+  if (m < 0 || (m === 0 && ref.getDate() < dob.getDate())) {
+    age--;
+  }
+  return age >= 0 ? age : 0;
+}
+
+/**
+ * Calculate Body Mass Index (BMI)
+ */
+function calculateBmi(heightCm, weightKg) {
+  const h = Number(heightCm);
+  const w = Number(weightKg);
+  if (!h || !w || h <= 0 || w <= 0) return null;
+  const heightM = h / 100;
+  const bmi = w / (heightM * heightM);
+  return Math.round(bmi * 10) / 10;
+}
+
+function updateProfileCalculatedAge() {
+  const dobEl = document.getElementById("profileDob");
+  const ageBadge = document.getElementById("profileCalculatedAgeBadge");
+  const hiddenAgeEl = document.getElementById("profileAge");
+  if (!dobEl) return;
+
+  const dobVal = dobEl.value;
+  if (!dobVal) {
+    if (ageBadge) ageBadge.textContent = currentLanguage === "en" ? "Age: --" : "العمر: --";
+    return;
+  }
+
+  const age = calculateAge(dobVal);
+  if (age !== null) {
+    if (ageBadge) {
+      ageBadge.textContent = currentLanguage === "en" ? `Age: ${age} yrs` : `العمر: ${age} سنة`;
+    }
+    if (hiddenAgeEl) hiddenAgeEl.value = String(age);
+  }
+}
+
+function updateProfileBmi() {
+  const heightEl = document.getElementById("profileHeight");
+  const weightEl = document.getElementById("profileWeight");
+  const bmiBadge = document.getElementById("profileBmiBadge");
+  if (!heightEl || !weightEl || !bmiBadge) return;
+
+  const h = parseFloat(heightEl.value);
+  const w = parseFloat(weightEl.value);
+  const bmi = calculateBmi(h, w);
+  if (bmi !== null && !isNaN(bmi)) {
+    let category = "";
+    if (bmi < 18.5) category = currentLanguage === "en" ? "Underweight" : "نقص وزن";
+    else if (bmi < 25) category = currentLanguage === "en" ? "Normal" : "طبيعي";
+    else if (bmi < 30) category = currentLanguage === "en" ? "Overweight" : "زيادة وزن";
+    else category = currentLanguage === "en" ? "Obese" : "سمنة";
+
+    bmiBadge.textContent = currentLanguage === "en" ? `BMI: ${bmi} (${category})` : `مؤشر الكتلة: ${bmi} (${category})`;
+  } else {
+    bmiBadge.textContent = currentLanguage === "en" ? "BMI: --" : "مؤشر الكتلة (BMI): --";
+  }
+}
+
+function handleSexOrDobChange() {
+  updateProfileCalculatedAge();
+  const dobEl = document.getElementById("profileDob");
+  const sexEl = document.getElementById("profileSex");
+  const pregContainer = document.getElementById("profilePregnancyContainer");
+  if (!pregContainer) return;
+
+  const sex = sexEl ? sexEl.value : "not_specified";
+  const age = dobEl?.value ? calculateAge(dobEl.value) : null;
+
+  // Clinical relevance guard: biological female in reproductive age (12 to 55)
+  const isClinicallyRelevant = (sex === "female") && (age !== null && age >= 12 && age <= 55);
+
+  if (isClinicallyRelevant) {
+    pregContainer.style.display = "block";
+  } else {
+    pregContainer.style.display = "none";
+  }
+}
+
+function handleDobChange() {
+  handleSexOrDobChange();
+}
+
+function gatherMedicalProfileFormData() {
+  const nameEl = document.getElementById("profileName");
+  const dobEl = document.getElementById("profileDob");
+  const phoneEl = document.getElementById("profilePhone");
+  const emergencyNameEl = document.getElementById("profileEmergencyName");
+  const emergencyRelationEl = document.getElementById("profileEmergencyRelation");
+  const emergencyPhoneEl = document.getElementById("profileEmergencyPhone");
+  const bloodTypeEl = document.getElementById("profileBloodType");
+  const heightEl = document.getElementById("profileHeight");
+  const weightEl = document.getElementById("profileWeight");
+  const sexEl = document.getElementById("profileSex");
+  const pregStatusEl = document.getElementById("profilePregnancyStatus");
+  const pregTrimesterEl = document.getElementById("profilePregnancyTrimester");
+  const pregDueDateEl = document.getElementById("profilePregnancyDueDate");
+  const allergiesEl = document.getElementById("profileAllergies");
+  const chronicEl = document.getElementById("profileChronicConditions");
+  const medEl = document.getElementById("profileMedications");
+  const surgeriesEl = document.getElementById("profileSurgeries");
+  const familyEl = document.getElementById("profileFamilyHistory");
+  const admissionsEl = document.getElementById("profileHospitalAdmissions");
+  const smokingStatusEl = document.getElementById("profileSmokingStatus");
+  const smokingDetailsEl = document.getElementById("profileSmokingDetails");
+  const insProviderEl = document.getElementById("profileInsuranceProvider");
+  const insPolicyEl = document.getElementById("profileInsurancePolicyNumber");
+  const insGroupEl = document.getElementById("profileInsuranceGroupNumber");
+  const insExpiryEl = document.getElementById("profileInsuranceExpiry");
+  const clinicSelectEl = document.getElementById("profileClinicSelect");
+  const doctorEl = document.getElementById("profileLinkedDoctor");
+  const doctorIdEl = document.getElementById("profileLinkedDoctorId");
+
+  const splitList = (val) => String(val || "").split(/[\n,;]+/).map(s => s.trim()).filter(Boolean);
+
+  const payload = {
+    fullName: nameEl ? nameEl.value.trim() : "",
+    dateOfBirth: dobEl ? dobEl.value : null,
+    phone: phoneEl ? phoneEl.value.trim() : "",
+    emergencyContact: {
+      name: emergencyNameEl ? emergencyNameEl.value.trim() : "",
+      relationship: emergencyRelationEl ? emergencyRelationEl.value.trim() : "",
+      phone: emergencyPhoneEl ? emergencyPhoneEl.value.trim() : ""
+    },
+    bloodType: bloodTypeEl ? bloodTypeEl.value : "unknown",
+    heightCm: heightEl && heightEl.value ? Number(heightEl.value) : null,
+    weightKg: weightEl && weightEl.value ? Number(weightEl.value) : null,
+    biologicalSex: sexEl ? sexEl.value : "not_specified",
+    pregnancy: {
+      status: pregStatusEl ? pregStatusEl.value : "not_pregnant",
+      trimester: pregTrimesterEl && pregTrimesterEl.value ? Number(pregTrimesterEl.value) : null,
+      dueDate: pregDueDateEl && pregDueDateEl.value ? pregDueDateEl.value : null
+    },
+    allergies: splitList(allergiesEl ? allergiesEl.value : ""),
+    chronicConditions: splitList(chronicEl ? chronicEl.value : ""),
+    medications: splitList(medEl ? medEl.value : ""),
+    surgeries: splitList(surgeriesEl ? surgeriesEl.value : ""),
+    familyHistory: splitList(familyEl ? familyEl.value : ""),
+    hospitalAdmissions: splitList(admissionsEl ? admissionsEl.value : ""),
+    smoking: {
+      status: smokingStatusEl ? smokingStatusEl.value : "never",
+      details: smokingDetailsEl ? smokingDetailsEl.value.trim() : ""
+    },
+    insurance: {
+      hasInsurance: Boolean(insProviderEl?.value?.trim() || insPolicyEl?.value?.trim()),
+      provider: insProviderEl ? insProviderEl.value.trim() : "",
+      policyNumber: insPolicyEl ? insPolicyEl.value.trim() : "",
+      groupNumber: insGroupEl ? insGroupEl.value.trim() : "",
+      expiryDate: insExpiryEl ? insExpiryEl.value : null
+    },
+    clinicLinkage: {
+      clinicId: clinicSelectEl ? clinicSelectEl.value : null,
+      clinicName: clinicSelectEl && clinicSelectEl.selectedOptions && clinicSelectEl.selectedOptions[0] ? clinicSelectEl.selectedOptions[0].text : null,
+      linkedDoctorId: doctorIdEl ? doctorIdEl.value.trim() : null,
+      linkedDoctorName: doctorEl ? doctorEl.value.trim() : null
+    },
+    source: "web_portal"
+  };
+
+  return payload;
+}
+
 async function loadUserProfileData() {
   const user = getActiveUser();
   if (!user) return;
 
+  let profileData = null;
+
+  try {
+    const res = await authenticatedFetch('/api/patient/medical-profile');
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.profile) {
+        profileData = data.profile;
+      }
+    }
+  } catch (err) {
+    console.warn("Could not fetch profile from server, using local cache:", err);
+  }
+
   const cachedDoc = window._cachedUserDoc || {};
+
   const nameEl = document.getElementById("profileName");
+  const dobEl = document.getElementById("profileDob");
   const ageEl = document.getElementById("profileAge");
   const phoneEl = document.getElementById("profilePhone");
-  const historyEl = document.getElementById("profileMedicalHistory");
+  const emergencyNameEl = document.getElementById("profileEmergencyName");
+  const emergencyRelationEl = document.getElementById("profileEmergencyRelation");
+  const emergencyPhoneEl = document.getElementById("profileEmergencyPhone");
+  const bloodTypeEl = document.getElementById("profileBloodType");
+  const heightEl = document.getElementById("profileHeight");
+  const weightEl = document.getElementById("profileWeight");
+  const sexEl = document.getElementById("profileSex");
+  const pregStatusEl = document.getElementById("profilePregnancyStatus");
+  const pregTrimesterEl = document.getElementById("profilePregnancyTrimester");
+  const pregDueDateEl = document.getElementById("profilePregnancyDueDate");
+  const allergiesEl = document.getElementById("profileAllergies");
+  const chronicEl = document.getElementById("profileChronicConditions");
+  const medEl = document.getElementById("profileMedications");
+  const surgeriesEl = document.getElementById("profileSurgeries");
+  const familyEl = document.getElementById("profileFamilyHistory");
+  const admissionsEl = document.getElementById("profileHospitalAdmissions");
+  const smokingStatusEl = document.getElementById("profileSmokingStatus");
+  const smokingDetailsEl = document.getElementById("profileSmokingDetails");
+  const insProviderEl = document.getElementById("profileInsuranceProvider");
+  const insPolicyEl = document.getElementById("profileInsurancePolicyNumber");
+  const insGroupEl = document.getElementById("profileInsuranceGroupNumber");
+  const insExpiryEl = document.getElementById("profileInsuranceExpiry");
+  const clinicSelectEl = document.getElementById("profileClinicSelect");
   const doctorEl = document.getElementById("profileLinkedDoctor");
+  const doctorIdEl = document.getElementById("profileLinkedDoctorId");
+  const provenanceBadge = document.getElementById("profileProvenanceBadge");
+  const provenanceDetailText = document.getElementById("profileProvenanceDetailText");
 
-  const nameVal = cachedDoc.name || cachedDoc.displayName || user.displayName || user.name || (user.email ? user.email.split('@')[0] : "");
-  const ageVal = cachedDoc.age || "";
-  const phoneVal = cachedDoc.phoneNumber || window._verifiedPhone || user.phoneNumber || "";
-  const historyVal = cachedDoc.medicalHistory || "";
-  const docVal = cachedDoc.linkedDoctor || "";
+  const p = profileData || {};
+  const medHistory = p.medicalHistory || {};
+  const biometrics = p.biometrics || {};
+  const emergency = p.emergencyContact || {};
+  const insurance = p.insurance || {};
+  const linkage = p.clinicLinkage || {};
+  const provenance = p.dataProvenance || {};
 
-  if (nameEl && (!nameEl.value || nameEl.value === "اسم المريض")) nameEl.value = nameVal;
-  if (ageEl && (!ageEl.value || ageEl.value === "34 سنة")) ageEl.value = ageVal;
-  if (phoneEl && !phoneEl.value) phoneEl.value = phoneVal;
-  if (historyEl && (!historyEl.value || historyEl.value.includes("لا يوجد حساسية معروفة"))) historyEl.value = historyVal;
-  if (doctorEl && !doctorEl.value) doctorEl.value = docVal;
+  if (nameEl) nameEl.value = p.fullName || cachedDoc.name || cachedDoc.displayName || user.displayName || user.name || (user.email ? user.email.split('@')[0] : "");
+  if (dobEl) dobEl.value = p.dateOfBirth || cachedDoc.dateOfBirth || cachedDoc.dob || "";
+  if (ageEl) ageEl.value = p.calculatedAge ? String(p.calculatedAge) : (cachedDoc.age || "");
+  if (phoneEl) phoneEl.value = p.phoneNumber || cachedDoc.phoneNumber || window._verifiedPhone || user.phoneNumber || "";
+
+  if (emergencyNameEl) emergencyNameEl.value = emergency.name || cachedDoc.emergencyContactName || "";
+  if (emergencyRelationEl) emergencyRelationEl.value = emergency.relationship || cachedDoc.emergencyContactRelation || "";
+  if (emergencyPhoneEl) emergencyPhoneEl.value = emergency.phone || cachedDoc.emergencyContactPhone || "";
+
+  if (bloodTypeEl) bloodTypeEl.value = biometrics.bloodType || cachedDoc.bloodType || "unknown";
+  if (heightEl) heightEl.value = biometrics.heightCm || cachedDoc.height || "";
+  if (weightEl) weightEl.value = biometrics.weightKg || cachedDoc.weight || "";
+
+  if (sexEl) sexEl.value = p.biologicalSex || cachedDoc.biologicalSex || cachedDoc.sex || "not_specified";
+
+  if (p.pregnancy) {
+    if (pregStatusEl) pregStatusEl.value = p.pregnancy.status || "not_pregnant";
+    if (pregTrimesterEl) pregTrimesterEl.value = p.pregnancy.trimester ? String(p.pregnancy.trimester) : "";
+    if (pregDueDateEl) pregDueDateEl.value = p.pregnancy.dueDate || "";
+  }
+
+  const joinList = (arr) => Array.isArray(arr) ? arr.join(", ") : (arr || "");
+  if (allergiesEl) allergiesEl.value = joinList(medHistory.allergies) || cachedDoc.allergies || "";
+  if (chronicEl) chronicEl.value = joinList(medHistory.chronicConditions) || cachedDoc.chronicConditions || cachedDoc.medicalHistory || "";
+  if (medEl) medEl.value = joinList(medHistory.medications) || cachedDoc.medications || "";
+  if (surgeriesEl) surgeriesEl.value = joinList(medHistory.surgeries) || cachedDoc.surgeries || "";
+  if (familyEl) familyEl.value = joinList(medHistory.familyHistory) || cachedDoc.familyHistory || "";
+  if (admissionsEl) admissionsEl.value = joinList(medHistory.hospitalAdmissions) || cachedDoc.hospitalAdmissions || "";
+
+  if (smokingStatusEl) smokingStatusEl.value = medHistory.smoking?.status || cachedDoc.smokingStatus || "never";
+  if (smokingDetailsEl) smokingDetailsEl.value = medHistory.smoking?.details || cachedDoc.smokingDetails || "";
+
+  if (insProviderEl) insProviderEl.value = insurance.provider || cachedDoc.insuranceProvider || "";
+  if (insPolicyEl) insPolicyEl.value = insurance.policyNumber || cachedDoc.insurancePolicyNumber || "";
+  if (insGroupEl) insGroupEl.value = insurance.groupNumber || cachedDoc.insuranceGroupNumber || "";
+  if (insExpiryEl) insExpiryEl.value = insurance.expiryDate || cachedDoc.insuranceExpiry || "";
+
+  if (clinicSelectEl) clinicSelectEl.value = linkage.clinicId || cachedDoc.clinicId || "";
+  if (doctorEl) doctorEl.value = linkage.linkedDoctorName || linkage.linkedDoctorId || cachedDoc.linkedDoctor || "";
+  if (doctorIdEl) doctorIdEl.value = linkage.linkedDoctorId || cachedDoc.linkedDoctorId || "";
+
+  if (provenanceBadge && provenance.version) {
+    provenanceBadge.textContent = currentLanguage === "en" ? `Version v${provenance.version}` : `الإصدار v${provenance.version}`;
+  }
+  if (provenanceDetailText && provenance.updatedAt) {
+    const d = new Date(provenance.updatedAt).toLocaleDateString(currentLanguage === "en" ? "en-US" : "ar-EG");
+    provenanceDetailText.textContent = currentLanguage === "en" ? `Last updated: ${d} | Source: ${provenance.source || 'web_portal'}` : `آخر تحديث: ${d} | المصدر: ${provenance.source || 'بوابة الويب'}`;
+  }
+
+  handleSexOrDobChange();
+  updateProfileBmi();
 }
 
 async function saveUserProfileData() {
   const user = getActiveUser();
-  const nameEl = document.getElementById("profileName");
-  const ageEl = document.getElementById("profileAge");
-  const phoneEl = document.getElementById("profilePhone");
-  const historyEl = document.getElementById("profileMedicalHistory");
-  const doctorEl = document.getElementById("profileLinkedDoctor");
+  const payload = gatherMedicalProfileFormData();
 
-  const name = nameEl ? nameEl.value.trim() : "";
-  const age = ageEl ? ageEl.value.trim() : "";
-  const phone = phoneEl ? phoneEl.value.trim() : "";
-  const medicalHistory = historyEl ? historyEl.value.trim() : "";
-  const linkedDoctor = doctorEl ? doctorEl.value.trim() : "";
-
+  const calculatedAge = payload.dateOfBirth ? calculateAge(payload.dateOfBirth) : null;
   if (!window._cachedUserDoc) window._cachedUserDoc = {};
-  if (name) window._cachedUserDoc.name = name;
-  if (age) window._cachedUserDoc.age = age;
-  if (phone) window._cachedUserDoc.phoneNumber = phone;
-  if (medicalHistory) window._cachedUserDoc.medicalHistory = medicalHistory;
-  if (linkedDoctor) window._cachedUserDoc.linkedDoctor = linkedDoctor;
+  window._cachedUserDoc.name = payload.fullName;
+  window._cachedUserDoc.dateOfBirth = payload.dateOfBirth;
+  window._cachedUserDoc.dob = payload.dateOfBirth;
+  window._cachedUserDoc.age = calculatedAge !== null ? String(calculatedAge) : "";
+  window._cachedUserDoc.phoneNumber = payload.phone;
+  window._cachedUserDoc.bloodType = payload.bloodType;
+  window._cachedUserDoc.height = payload.heightCm;
+  window._cachedUserDoc.weight = payload.weightKg;
+  window._cachedUserDoc.sex = payload.biologicalSex;
+  window._cachedUserDoc.biologicalSex = payload.biologicalSex;
+  window._cachedUserDoc.clinicId = payload.clinicLinkage.clinicId;
+  window._cachedUserDoc.linkedDoctor = payload.clinicLinkage.linkedDoctorName;
 
-  if (user && user.uid && typeof db !== "undefined" && db) {
+  let savedOnBackend = false;
+  try {
+    const res = await authenticatedFetch('/api/patient/medical-profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (res.ok) {
+      savedOnBackend = true;
+      const data = await res.json();
+      if (data.profile?.dataProvenance) {
+        const badge = document.getElementById("profileProvenanceBadge");
+        if (badge) badge.textContent = currentLanguage === "en" ? `Version v${data.profile.dataProvenance.version}` : `الإصدار v${data.profile.dataProvenance.version}`;
+      }
+    }
+  } catch (err) {
+    console.warn("Backend save error, attempting direct Firestore save:", err);
+  }
+
+  if (!savedOnBackend && user && user.uid && typeof db !== "undefined" && db) {
     try {
       await db.collection("users").doc(user.uid).set({
-        name: name || user.displayName || (user.email ? user.email.split('@')[0] : "مريض"),
-        displayName: name || user.displayName || (user.email ? user.email.split('@')[0] : "مريض"),
-        age: age || null,
-        phoneNumber: phone || null,
-        medicalHistory: medicalHistory || null,
-        linkedDoctor: linkedDoctor || null,
+        name: payload.fullName || user.displayName || "مريض",
+        displayName: payload.fullName || user.displayName || "مريض",
+        dateOfBirth: payload.dateOfBirth || null,
+        age: calculatedAge !== null ? String(calculatedAge) : null,
+        phoneNumber: payload.phone || null,
+        bloodType: payload.bloodType || 'unknown',
+        height: payload.heightCm || null,
+        weight: payload.weightKg || null,
+        sex: payload.biologicalSex || 'not_specified',
+        clinicId: payload.clinicLinkage.clinicId || null,
+        linkedDoctor: payload.clinicLinkage.linkedDoctorName || null,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
     } catch(err) {
@@ -5813,9 +6102,52 @@ async function saveUserProfileData() {
   }
 
   purgeSensitiveLegacyStorage();
-
   showToast(currentLanguage === "en" ? "Medical profile updated successfully!" : "تم حفظ وتحديث الملف الطبي بنجاح!");
 }
+
+async function handleCorrectProfileClick() {
+  const reasonEl = document.getElementById("profileCorrectionReason");
+  const reason = reasonEl ? reasonEl.value.trim() : "";
+
+  if (!reason || reason.length < 5) {
+    showToast(currentLanguage === "en" ? "Please enter a clinical correction reason (min 5 characters)." : "يرجى كتابة سبب التصحيح السريري بالتفصيل (5 أحرف على الأقل).");
+    if (reasonEl) reasonEl.focus();
+    return;
+  }
+
+  const payload = gatherMedicalProfileFormData();
+  payload.correctionReason = reason;
+
+  try {
+    const res = await authenticatedFetch('/api/patient/medical-profile/correct', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.profile?.dataProvenance) {
+        const badge = document.getElementById("profileProvenanceBadge");
+        if (badge) badge.textContent = currentLanguage === "en" ? `Version v${data.profile.dataProvenance.version}` : `الإصدار v${data.profile.dataProvenance.version}`;
+      }
+      if (reasonEl) reasonEl.value = "";
+      showToast(currentLanguage === "en" ? "Clinical correction recorded and audited successfully!" : "تم تسجيل وتوثيق التصحيح الطبي السريري بنجاح!");
+    } else {
+      const errData = await res.json().catch(() => ({}));
+      showToast(errData.message || (currentLanguage === "en" ? "Correction failed." : "تعذر تسجيل التصحيح."));
+    }
+  } catch (err) {
+    showToast(currentLanguage === "en" ? "Correction error. Please try again." : "حدث خطأ أثناء حفظ التصحيح.");
+  }
+}
+
+window.calculateAge = calculateAge;
+window.calculateBmi = calculateBmi;
+window.handleDobChange = handleDobChange;
+window.handleSexOrDobChange = handleSexOrDobChange;
+window.updateProfileBmi = updateProfileBmi;
+window.handleCorrectProfileClick = handleCorrectProfileClick;
 window.loadUserProfileData = loadUserProfileData;
 window.saveUserProfileData = saveUserProfileData;
 
@@ -6807,7 +7139,12 @@ async function renderReportScreen(targetCaseId = null) {
           <div>
             <span style="font-size: 11.5px; color: var(--muted); display: block;">${isEn ? "Patient Name" : "اسم المريض"}</span>
             <strong style="font-size: 13.5px; color: var(--ink);">${patientName}</strong>
-            ${`<small style="display: block; color: var(--muted); font-size: 11px;">${isEn ? "Age:" : "العمر:"} ${escapeHtml(recordedClinicalText(String(caseData.patientAge ?? caseData.age ?? ""), isEn))} ${caseData.patientAge != null || caseData.age != null ? (isEn ? "yrs" : "سنة") : ""}</small>`}
+            ${(() => {
+              const dob = caseData.dateOfBirth || caseData.dob;
+              const computedAge = dob ? calculateAge(dob) : (caseData.patientAge ?? caseData.age ?? "");
+              const hasAge = computedAge !== "" && computedAge !== null && computedAge !== undefined;
+              return hasAge ? `<small style="display: block; color: var(--muted); font-size: 11px;">${isEn ? "Age:" : "العمر:"} ${escapeHtml(recordedClinicalText(String(computedAge), isEn))} ${isEn ? "yrs" : "سنة"}</small>` : '';
+            })()}
           </div>
           <div>
             <span style="font-size: 11.5px; color: var(--muted); display: block;">${isEn ? "Patient Phone / Contact" : "هاتف المريض"}</span>
@@ -10709,6 +11046,7 @@ function buildAssessmentModel({
   // Resolve authentic patient identity
   const cachedDoc = window._cachedUserDoc || {};
   const profileNameInput = document.getElementById("profileName");
+  const profileDobInput = document.getElementById("profileDob");
   const profileAgeInput = document.getElementById("profileAge");
   const profilePhoneInput = document.getElementById("profilePhone");
   const profileHistoryInput = document.getElementById("profileMedicalHistory");
@@ -10720,7 +11058,9 @@ function buildAssessmentModel({
   const patientEmail = (user && user.email) || cachedDoc.email || "";
   const patientUid = (user && user.uid) || "";
   const patientPhone = (profilePhoneInput && profilePhoneInput.value.trim()) || window._verifiedPhone || cachedDoc.phoneNumber || user?.phoneNumber || "";
-  const patientAge = (profileAgeInput && profileAgeInput.value.trim()) || cachedDoc.age || "";
+  const patientDob = (profileDobInput && profileDobInput.value) || cachedDoc.dateOfBirth || cachedDoc.dob || "";
+  const calculatedAge = patientDob ? calculateAge(patientDob) : null;
+  const patientAge = calculatedAge !== null ? String(calculatedAge) : ((profileAgeInput && profileAgeInput.value.trim()) || cachedDoc.age || "");
   const patientHistory = (profileHistoryInput && profileHistoryInput.value.trim()) || cachedDoc.medicalHistory || "";
 
   return {
@@ -10743,6 +11083,9 @@ function buildAssessmentModel({
     nameEn: patientName,
     patientPhone: patientPhone,
     phone: patientPhone,
+    patientDob: patientDob || null,
+    dateOfBirth: patientDob || null,
+    dob: patientDob || null,
     patientAge: patientAge,
     age: patientAge,
     patientMedicalHistory: patientHistory,

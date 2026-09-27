@@ -515,19 +515,288 @@
 
       <section id="screen-profile" class="screen">
         <div class="form-layout">
-          <article class="panel form-panel">
-            <div class="panel-head"><h3>الملف الطبي</h3><span class="pill ok" id="profileCompletionBadge">92% مكتمل</span></div>
-            <label>الاسم بالكامل</label>
-            <input id="profileName" placeholder="اسم المريض بالكامل">
-            <label>العمر</label>
-            <input id="profileAge" placeholder="العمر (مثال: 34 سنة)">
-            <label>رقم الهاتف</label>
-            <input id="profilePhone" placeholder="رقم الهاتف للتواصل">
-            <label>الطبيب المرتبط</label>
-            <input id="profileLinkedDoctor" placeholder="لا يوجد طبيب مرتبط حتى الآن">
-            <label>أمراض مزمنة أو حساسية</label>
-            <textarea id="profileMedicalHistory" placeholder="أمراض مزمنة أو حساسية إن وجدت"></textarea>
-            <button class="solid-button full" id="btnSaveProfile" data-screen="assessment">حفظ وبدء تقييم التنفس</button>
+          <article class="panel form-panel" style="grid-column: 1 / -1;">
+            <div class="panel-head">
+              <div>
+                <h3 style="margin: 0; display: flex; align-items: center; gap: 8px;">
+                  <span>📋</span> <span data-i18n="profile.title">الملف الطبي السريري للمريض</span>
+                </h3>
+                <small style="color: var(--muted); font-size: 12px;" data-i18n="profile.subtitle">السجل الطبي المعتمد مع حساب العمر وتوثيق المنشأ والتصحيحات المعتمدة</small>
+              </div>
+              <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                <span class="pill info" id="profileProvenanceBadge">الإصدار v1</span>
+                <span class="pill ok" id="profileCompletionBadge">92% مكتمل</span>
+              </div>
+            </div>
+
+            <!-- SECTION 1: Personal Details & Date of Birth -->
+            <div class="profile-section-card" style="background: var(--surface-2, rgba(0,0,0,0.02)); border: 1px solid var(--line, rgba(0,0,0,0.08)); border-radius: 12px; padding: 14px; margin-top: 12px;">
+              <h4 style="margin: 0 0 10px; font-size: 14px; color: var(--teal); display: flex; align-items: center; gap: 6px;">
+                <span>👤</span> <span data-i18n="profile.personalInfo">البيانات الشخصية وتاريخ الميلاد</span>
+              </h4>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;">
+                <div>
+                  <label for="profileName" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;" data-i18n="profile.fullName">الاسم بالكامل</label>
+                  <input id="profileName" placeholder="اسم المريض بالكامل" style="width: 100%; box-sizing: border-box;">
+                </div>
+                <div>
+                  <label for="profileDob" style="font-size: 12px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                    <span data-i18n="profile.dob">تاريخ الميلاد (Date of Birth)</span>
+                    <span class="pill ok" id="profileCalculatedAgeBadge" style="font-size: 11px; padding: 2px 8px;">العمر: --</span>
+                  </label>
+                  <input id="profileDob" type="date" style="width: 100%; box-sizing: border-box;" onchange="handleDobChange()">
+                  <!-- Hidden legacy input for backward compatibility -->
+                  <input id="profileAge" type="hidden">
+                </div>
+                <div>
+                  <label for="profilePhone" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;" data-i18n="profile.phone">رقم الهاتف للتواصل</label>
+                  <input id="profilePhone" type="tel" placeholder="05XXXXXXXX" style="width: 100%; box-sizing: border-box;">
+                </div>
+              </div>
+            </div>
+
+            <!-- SECTION 2: Emergency Contact -->
+            <div class="profile-section-card" style="background: var(--surface-2, rgba(0,0,0,0.02)); border: 1px solid var(--line, rgba(0,0,0,0.08)); border-radius: 12px; padding: 14px; margin-top: 12px;">
+              <h4 style="margin: 0 0 10px; font-size: 14px; color: var(--teal); display: flex; align-items: center; gap: 6px;">
+                <span>🚨</span> <span data-i18n="profile.emergencyContact">بيانات الاتصال في حالات الطوارئ</span>
+              </h4>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+                <div>
+                  <label for="profileEmergencyName" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;" data-i18n="profile.emergencyName">اسم جهة الطوارئ</label>
+                  <input id="profileEmergencyName" placeholder="الاسم ثلاثي" style="width: 100%; box-sizing: border-box;">
+                </div>
+                <div>
+                  <label for="profileEmergencyRelation" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;" data-i18n="profile.emergencyRelation">صلة القرابة</label>
+                  <input id="profileEmergencyRelation" placeholder="أب / أم / زوج / أخ..." style="width: 100%; box-sizing: border-box;">
+                </div>
+                <div>
+                  <label for="profileEmergencyPhone" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;" data-i18n="profile.emergencyPhone">هاتف الطوارئ</label>
+                  <input id="profileEmergencyPhone" type="tel" placeholder="رقم هاتف الطوارئ" style="width: 100%; box-sizing: border-box;">
+                </div>
+              </div>
+            </div>
+
+            <!-- SECTION 3: Biometrics & Baselines -->
+            <div class="profile-section-card" style="background: var(--surface-2, rgba(0,0,0,0.02)); border: 1px solid var(--line, rgba(0,0,0,0.08)); border-radius: 12px; padding: 14px; margin-top: 12px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+                <h4 style="margin: 0; font-size: 14px; color: var(--teal); display: flex; align-items: center; gap: 6px;">
+                  <span>📏</span> <span data-i18n="profile.biometrics">القياسات الحيوية والبدنية</span>
+                </h4>
+                <span class="pill info" id="profileBmiBadge" style="font-size: 11px; padding: 2px 8px;">مؤشر الكتلة (BMI): --</span>
+              </div>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+                <div>
+                  <label for="profileBloodType" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;" data-i18n="profile.bloodType">فصيلة الدم</label>
+                  <select id="profileBloodType" style="width: 100%; box-sizing: border-box; height: 38px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);">
+                    <option value="unknown">غير محدد (Unknown)</option>
+                    <option value="A+">A+</option>
+                    <option value="A-">A-</option>
+                    <option value="B+">B+</option>
+                    <option value="B-">B-</option>
+                    <option value="AB+">AB+</option>
+                    <option value="AB-">AB-</option>
+                    <option value="O+">O+</option>
+                    <option value="O-">O-</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="profileHeight" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;" data-i18n="profile.height">الطول (سم)</label>
+                  <input id="profileHeight" type="number" min="30" max="250" placeholder="170" style="width: 100%; box-sizing: border-box;" oninput="updateProfileBmi()">
+                </div>
+                <div>
+                  <label for="profileWeight" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;" data-i18n="profile.weight">الوزن (كجم)</label>
+                  <input id="profileWeight" type="number" min="2" max="300" placeholder="70" style="width: 100%; box-sizing: border-box;" oninput="updateProfileBmi()">
+                </div>
+              </div>
+            </div>
+
+            <!-- SECTION 4: Biological Sex & Conditional Pregnancy Relevance -->
+            <div class="profile-section-card" style="background: var(--surface-2, rgba(0,0,0,0.02)); border: 1px solid var(--line, rgba(0,0,0,0.08)); border-radius: 12px; padding: 14px; margin-top: 12px;">
+              <h4 style="margin: 0 0 6px; font-size: 14px; color: var(--teal); display: flex; align-items: center; gap: 6px;">
+                <span>🧬</span> <span data-i18n="profile.clinicalSexTitle">البيانات السريرية للجنس والوظائف الحيوية</span>
+              </h4>
+              <p style="margin: 0 0 10px; font-size: 11.5px; color: var(--muted); line-height: 1.4;" data-i18n="profile.clinicalSexNote">
+                تُجمع هذه البيانات حصرياً لأغراض الفرز السريري، ومعادلات وظائف الرئة المرجعية (FEV1/FVC)، وحسابات الجرعات الدوائية.
+              </p>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+                <div>
+                  <label for="profileSex" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;" data-i18n="profile.biologicalSex">الجنس البيولوجي السريري</label>
+                  <select id="profileSex" style="width: 100%; box-sizing: border-box; height: 38px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);" onchange="handleSexOrDobChange()">
+                    <option value="not_specified">غير محدد (Not Specified)</option>
+                    <option value="male">ذكر (Male)</option>
+                    <option value="female">أنثى (Female)</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- CONDITIONAL PREGNANCY SECTION: Displayed strictly when clinically relevant (Female aged 12-55) -->
+              <div id="profilePregnancyContainer" style="display: none; margin-top: 12px; padding: 12px; background: rgba(14, 165, 164, 0.05); border: 1px dashed var(--teal); border-radius: 10px;">
+                <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
+                  <strong style="font-size: 13px; color: var(--teal);">🤰 حالة الحمل والولادة (مطلوبة سريرياً لفئة المريضة)</strong>
+                  <span class="pill info" style="font-size: 10px;">سريرياً ملائم</span>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px;">
+                  <div>
+                    <label for="profilePregnancyStatus" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;">حالة الحمل الحالية</label>
+                    <select id="profilePregnancyStatus" style="width: 100%; box-sizing: border-box; height: 36px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);">
+                      <option value="not_pregnant">غير حامل (Not Pregnant)</option>
+                      <option value="pregnant">حامل حالياً (Currently Pregnant)</option>
+                      <option value="postpartum">فترة النفاس (Postpartum)</option>
+                      <option value="unknown">غير متأكدة (Unknown)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label for="profilePregnancyTrimester" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;">الثلث الحالي للحمل</label>
+                    <select id="profilePregnancyTrimester" style="width: 100%; box-sizing: border-box; height: 36px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);">
+                      <option value="">لا ينطبق</option>
+                      <option value="1">الثلث الأول (الأشهر 1 - 3)</option>
+                      <option value="2">الثلث الثاني (الأشهر 4 - 6)</option>
+                      <option value="3">الثلث الثالث (الأشهر 7 - 9)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label for="profilePregnancyDueDate" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;">تاريخ الولادة المتوقع (EDD)</label>
+                    <input id="profilePregnancyDueDate" type="date" style="width: 100%; box-sizing: border-box; height: 36px;">
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- SECTION 5: Structured Medical History -->
+            <div class="profile-section-card" style="background: var(--surface-2, rgba(0,0,0,0.02)); border: 1px solid var(--line, rgba(0,0,0,0.08)); border-radius: 12px; padding: 14px; margin-top: 12px;">
+              <h4 style="margin: 0 0 10px; font-size: 14px; color: var(--teal); display: flex; align-items: center; gap: 6px;">
+                <span>🩺</span> <span data-i18n="profile.medicalHistoryTitle">التاريخ الطبي المنظم والأدوية والحساسية</span>
+              </h4>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px;">
+                <div>
+                  <label for="profileAllergies" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;" data-i18n="profile.allergies">الحساسية (أدوية، أطعمة، عوامل بيئية)</label>
+                  <input id="profileAllergies" placeholder="مثال: بنسلين، حساسية حبوب اللقاح..." style="width: 100%; box-sizing: border-box;">
+                </div>
+                <div>
+                  <label for="profileChronicConditions" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;" data-i18n="profile.chronic">الأمراض المزمنة</label>
+                  <input id="profileChronicConditions" placeholder="مثال: ربو شعبي، ضغط الدم، سكري..." style="width: 100%; box-sizing: border-box;">
+                </div>
+                <div>
+                  <label for="profileMedications" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;" data-i18n="profile.medications">الأدوية المستخدمة حالياً والجرعات</label>
+                  <input id="profileMedications" placeholder="مثال: بخاخ فنتولين، دواء ضغط..." style="width: 100%; box-sizing: border-box;">
+                </div>
+                <div>
+                  <label for="profileSurgeries" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;" data-i18n="profile.surgeries">العمليات الجراحية السابقة وسنواتها</label>
+                  <input id="profileSurgeries" placeholder="مثال: استئصال الزائدة الدودية 2021..." style="width: 100%; box-sizing: border-box;">
+                </div>
+                <div>
+                  <label for="profileFamilyHistory" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;" data-i18n="profile.familyHistory">التاريخ العائلي للأمراض</label>
+                  <input id="profileFamilyHistory" placeholder="مثال: أمراض صدرية وراثية، ربو عائلي..." style="width: 100%; box-sizing: border-box;">
+                </div>
+                <div>
+                  <label for="profileHospitalAdmissions" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;" data-i18n="profile.hospitalAdmissions">حالات التنويم ودخول المستشفى السابقة</label>
+                  <input id="profileHospitalAdmissions" placeholder="سبب التنويم، التاريخ، المدة..." style="width: 100%; box-sizing: border-box;">
+                </div>
+              </div>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 10px;">
+                <div>
+                  <label for="profileSmokingStatus" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;" data-i18n="profile.smokingStatus">حالة التدخين</label>
+                  <select id="profileSmokingStatus" style="width: 100%; box-sizing: border-box; height: 38px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);">
+                    <option value="never">غير مدخن تماماً (Never smoked)</option>
+                    <option value="former">مدخن سابق وأقلع (Former smoker)</option>
+                    <option value="current">مدخن حالي (Current smoker)</option>
+                    <option value="passive">تدخين سلبي / مخالط (Passive smoking)</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="profileSmokingDetails" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;" data-i18n="profile.smokingDetails">تفاصيل التدخين (النوع، المدة، عدد السجائر)</label>
+                  <input id="profileSmokingDetails" placeholder="مثال: علبة يومياً لمدة 5 سنوات، شيشة إلكترونية..." style="width: 100%; box-sizing: border-box;">
+                </div>
+              </div>
+              <!-- Hidden compatibility textarea -->
+              <textarea id="profileMedicalHistory" style="display: none;"></textarea>
+            </div>
+
+            <!-- SECTION 6: Health Insurance (Strictly Optional) -->
+            <div class="profile-section-card" style="background: var(--surface-2, rgba(0,0,0,0.02)); border: 1px solid var(--line, rgba(0,0,0,0.08)); border-radius: 12px; padding: 14px; margin-top: 12px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+                <h4 style="margin: 0; font-size: 14px; color: var(--teal); display: flex; align-items: center; gap: 6px;">
+                  <span>💳</span> <span data-i18n="profile.insuranceTitle">التأمين الصحي</span>
+                </h4>
+                <span class="pill info" data-i18n="profile.insuranceOptional">اختياري تماماً (Optional)</span>
+              </div>
+              <p style="margin: 0 0 10px; font-size: 11.5px; color: var(--muted);" data-i18n="profile.insuranceNote">
+                لا يشترط وجود تأمين صحي للاستفادة من تقييم الحالة أو المراجعة الطبية.
+              </p>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+                <div>
+                  <label for="profileInsuranceProvider" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;" data-i18n="profile.insuranceProvider">شركة التأمين</label>
+                  <input id="profileInsuranceProvider" placeholder="مثال: بوبا، التعاونية، ميدغلف..." style="width: 100%; box-sizing: border-box;">
+                </div>
+                <div>
+                  <label for="profileInsurancePolicyNumber" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;" data-i18n="profile.insurancePolicy">رقم البوليصة / العضوية</label>
+                  <input id="profileInsurancePolicyNumber" placeholder="رقم العضوية أو البوليصة" style="width: 100%; box-sizing: border-box;">
+                </div>
+                <div>
+                  <label for="profileInsuranceGroupNumber" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;" data-i18n="profile.insuranceGroup">رقم المجموعة</label>
+                  <input id="profileInsuranceGroupNumber" placeholder="رقم المجموعة (إن وجد)" style="width: 100%; box-sizing: border-box;">
+                </div>
+                <div>
+                  <label for="profileInsuranceExpiry" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;" data-i18n="profile.insuranceExpiry">تاريخ انتهاء الوثيقة</label>
+                  <input id="profileInsuranceExpiry" type="date" style="width: 100%; box-sizing: border-box;">
+                </div>
+              </div>
+            </div>
+
+            <!-- SECTION 7: Trusted Clinic & Doctor Linkage -->
+            <div class="profile-section-card" style="background: var(--surface-2, rgba(0,0,0,0.02)); border: 1px solid var(--line, rgba(0,0,0,0.08)); border-radius: 12px; padding: 14px; margin-top: 12px;">
+              <h4 style="margin: 0 0 6px; font-size: 14px; color: var(--teal); display: flex; align-items: center; gap: 6px;">
+                <span>🏥</span> <span data-i18n="profile.trustedLinkageTitle">الربط المعتمد بالعيادة والطبيب المعالج</span>
+              </h4>
+              <p style="margin: 0 0 10px; font-size: 11.5px; color: var(--muted);" data-i18n="profile.trustedLinkageNote">
+                يتم ربط الحالة بالعيادة والطبيب من خلال معرفات موثوقة ومثبتة خادمياً لمنع انتحال الهويات.
+              </p>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;">
+                <div>
+                  <label for="profileClinicSelect" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;" data-i18n="profile.clinicLabel">العيادة المعتمدة</label>
+                  <select id="profileClinicSelect" style="width: 100%; box-sizing: border-box; height: 38px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);">
+                    <option value="">لا يوجد عيادة محددة (مستقل)</option>
+                    <option value="clinic-central-01">مركز الحياة الطبي العام (معتمد)</option>
+                    <option value="clinic-pulmo-care">مركز رعاية الجهاز التنفسي التخصصي (معتمد)</option>
+                    <option value="clinic-wellness-hub">عيادات ويلنس الصحية الشاملة (معتمد)</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="profileLinkedDoctor" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;" data-i18n="profile.doctorLabel">الطبيب المعتمد</label>
+                  <input id="profileLinkedDoctor" placeholder="اسم أو معرّف الطبيب المعتمد" style="width: 100%; box-sizing: border-box;">
+                  <input id="profileLinkedDoctorId" type="hidden">
+                </div>
+              </div>
+            </div>
+
+            <!-- SECTION 8: Data Provenance & Clinical Record Corrections -->
+            <div class="profile-section-card" style="background: rgba(14, 165, 164, 0.03); border: 1px dashed var(--teal); border-radius: 12px; padding: 14px; margin-top: 12px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+                <h4 style="margin: 0; font-size: 14px; color: var(--teal); display: flex; align-items: center; gap: 6px;">
+                  <span>📝</span> <span>توثيق المنشأ والتصحيح السريري المعتمد</span>
+                </h4>
+                <div style="font-size: 11px; color: var(--muted);" id="profileProvenanceDetailText">
+                  آخر تحديث: الآن | المصدر: بوابة المريض
+                </div>
+              </div>
+              <p style="margin: 0 0 10px; font-size: 11.5px; color: var(--muted); line-height: 1.4;">
+                لتعديل بيانات طبية حرجة سابقة (مثل فصيلة الدم أو الحساسية أو تاريخ الميلاد)، أدخل سبب التصحيح السريري لحفظه في سجل التدقيق الموثق.
+              </p>
+              <div>
+                <label for="profileCorrectionReason" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;">سبب التصحيح الطبي (مطلوب عند طلب إجراء تصحيح رسمي)</label>
+                <input id="profileCorrectionReason" placeholder="مثال: تصحيح قياس الطول بعد الفحص السريري، أو تحديث قائمة الحساسية بعد مراجعة الاستشاري..." style="width: 100%; box-sizing: border-box;">
+              </div>
+            </div>
+
+            <!-- ACTION BUTTONS -->
+            <div style="display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap;">
+              <button class="solid-button full" id="btnSaveProfile" data-screen="assessment" style="flex: 2; min-width: 200px;">
+                💾 حفظ وتحديث الملف الطبي وبدء التقييم
+              </button>
+              <button type="button" class="soft-button" id="btnCorrectProfile" onclick="handleCorrectProfileClick()" style="flex: 1; min-width: 160px;">
+                ✍️ حفظ كإجراء تصحيحي موثق
+              </button>
+            </div>
           </article>
           <article class="panel">
             <div class="panel-head"><h3>ملفات طبية</h3><span class="pill info">اختياري</span></div>

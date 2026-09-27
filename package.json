@@ -34,7 +34,8 @@
     "test:hardening": "node tests/validation_hardening.test.js",
     "test:session": "node tests/session_management_security.test.js",
     "test:mfa": "node tests/mfa_security.test.js",
-    "test:licensing": "node tests/doctor_licensing_membership.test.js"
+    "test:licensing": "node tests/doctor_licensing_membership.test.js",
+    "test:patient-profile": "node tests/patient_profile_provenance.test.js"
   },
   "keywords": [
     "health-vibe",
