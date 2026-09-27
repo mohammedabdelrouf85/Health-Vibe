@@ -3035,23 +3035,25 @@ async function writeClientAuditLog(action, details = {}) {
 
 async function updateCaseStatus(id, newStatus, note, extraFields = {}) {
   if (!enforcePermission(PERMISSIONS.REVIEW_CASE, "Update Case Status")) return false;
-  const user = auth ? auth.currentUser : null;
   const isEn = currentLanguage === "en";
+  const transitionKey = `${id}:${newStatus}`;
+  const transitionLocks = window.__activeDoctorTransitions || new Set();
+  window.__activeDoctorTransitions = transitionLocks;
+
+  if (transitionLocks.has(transitionKey)) {
+    showToast(isEn ? "This clinical action is already being saved." : "جاري حفظ هذا الإجراء السريري بالفعل.");
+    return false;
+  }
 
   try {
-    if (newStatus === CASE_STATUS.APPROVED) {
-      await callBackend("/api/doctor/approve-clinical-case", {
-        method: "POST",
-        body: JSON.stringify({
-          caseId: id,
-          clinicalDiagnosis: extraFields.clinicalDiagnosis || "",
-          clinicalNotes: extraFields.clinicalNotes || note || "",
-          medications: extraFields.medications || "",
-          recommendations: extraFields.recommendations || [],
-          recommendation: extraFields.recommendation || ""
-        })
-      });
-      return true;
+    transitionLocks.add(transitionKey);
+    if (newStatus === CASE_STATUS.APPROVED && (!(extraFields.clinicalNotes || note || "").trim() || !((extraFields.recommendations || []).length || (extraFields.recommendation || "").trim()))) {
+      showToast(isEn ? "Clinical notes and at least one recommendation are required before approval." : "يجب تسجيل الملاحظات السريرية وتوصية واحدة على الأقل قبل الاعتماد.");
+      return false;
+    }
+    if ([CASE_STATUS.REJECTED, CASE_STATUS.MORE_INFO_REQUESTED, CASE_STATUS.ESCALATED].includes(newStatus) && !String(note || "").trim()) {
+      showToast(isEn ? "A note or reason is required before saving this action." : "يجب تسجيل ملاحظة أو سبب قبل حفظ هذا الإجراء.");
+      return false;
     }
     const res = await callBackend("/api/doctor/transition-case-status", {
       method: "POST",
@@ -3071,17 +3073,22 @@ async function updateCaseStatus(id, newStatus, note, extraFields = {}) {
         reportRef: extraFields.reportRef || ""
       })
     });
+    if (!res || res.success !== true || res.saved !== true) {
+      throw new Error(isEn ? "The server did not confirm that the clinical action was saved." : "لم يؤكد الخادم حفظ الإجراء السريري.");
+    }
     if (res && res.notification && res.notification.success) {
       console.info(`[Email Notification] Successfully dispatched ${res.notification.type} to ${res.notification.recipient}`);
     }
 
-    await writeClientAuditLog("CASE_STATUS_TRANSITIONED", {
-      caseId: id,
-      targetStatus: newStatus,
-      auditCategory: newStatus === CASE_STATUS.APPROVED ? "approval" : (newStatus === CASE_STATUS.REJECTED ? "rejection" : "edit"),
-      note: note || "",
-      backendAuthoritative: true
-    });
+    if (typeof writeClientAuditLog === "function") {
+      await writeClientAuditLog("CASE_STATUS_TRANSITIONED", {
+        caseId: id,
+        targetStatus: newStatus,
+        auditCategory: newStatus === CASE_STATUS.APPROVED ? "approval" : (newStatus === CASE_STATUS.REJECTED ? "rejection" : "edit"),
+        note: note || "",
+        backendAuthoritative: true
+      });
+    }
 
     return true;
   } catch (err) {
@@ -3089,6 +3096,8 @@ async function updateCaseStatus(id, newStatus, note, extraFields = {}) {
     if (handleServerPermissionDenied(err, "Update Case Status")) return false;
     showToast(getAuthErrorMessage(err) || (isEn ? "Failed to update case status." : "فشل تحديث حالة الملف الطبي."));
     return false;
+  } finally {
+    transitionLocks.delete(transitionKey);
   }
 }
 
@@ -3264,11 +3273,16 @@ window.generateAndApproveReport = async function(id) {
 
   const success = await updateCaseStatus(id, CASE_STATUS.APPROVED, clinicalDiagnosis, payload);
   if (success) {
-    showToast(isEn ? "Official Certified Medical Report Generated & Approved!" : "تم توليد واعتماد التقرير الطبي السريري بنجاح!");
     await renderDoctorQueue();
     selectDoctorCase(id);
-    showScreen("report");
-    renderReportScreen(id);
+    const refreshed = (await getCases({ includeTest: true })).find(item => item.id === id);
+    if (refreshed && isCaseApprovedForPatient(refreshed)) {
+      showToast(isEn ? "Official certified medical report saved and approved." : "تم حفظ واعتماد التقرير الطبي السريري بنجاح.");
+      showScreen("report");
+      renderReportScreen(id);
+    } else {
+      showToast(isEn ? "Approval was saved, but the approved report is not available yet. Please reopen the case." : "تم حفظ الإجراء، لكن التقرير المعتمد لم يظهر بعد. يرجى إعادة فتح الحالة.");
+    }
   }
 };
 
@@ -13010,5 +13024,3 @@ if (document.readyState === "loading") {
   initMobileTouchGestures();
   updateMobileBottomNav();
 }
-
-

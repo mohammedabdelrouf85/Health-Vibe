@@ -1590,6 +1590,12 @@ async function executeDoctorTransition({
           message: 'Doctor clinical notes and at least one patient recommendation are required before approving a report.'
         });
       }
+      if (['rejected', 'more_info_requested', 'escalated'].includes(targetStatus) && !transitionReason) {
+        return res.status(400).json({
+          error: 'MISSING_TRANSITION_NOTE',
+          message: 'A doctor note or reason is required for rejection, escalation, and requests for more information.'
+        });
+      }
 
       const VALID_TRANSITIONS = {
         draft: ['submitted'],
@@ -1754,6 +1760,7 @@ async function executeDoctorTransition({
           duplicate: true,
           message: `Case status is already ${targetStatus}.`,
           targetStatus,
+          saved: true,
           notification: null
         });
       }
@@ -1810,6 +1817,7 @@ async function executeDoctorTransition({
         success: true,
         message: `Case status successfully updated to ${targetStatus}.`,
         targetStatus,
+        saved: true,
         notification: notificationResult
       });
     }
