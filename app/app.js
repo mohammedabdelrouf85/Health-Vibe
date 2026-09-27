@@ -9751,10 +9751,57 @@ function getActiveScreen() {
   return document.querySelector(".screen.active")?.id.replace("screen-", "") || "patient";
 }
 
-function readOxygenValue() {
+function normalizeArabicIndicDigits(value) {
+  return String(value ?? "")
+    .replace(/[\u0660-\u0669]/g, digit => String(digit.charCodeAt(0) - 0x0660))
+    .replace(/[\u06F0-\u06F9]/g, digit => String(digit.charCodeAt(0) - 0x06F0));
+}
+
+function parseStrictOxygenInput(value) {
+  const raw = String(value ?? "").trim();
+  const normalized = normalizeArabicIndicDigits(raw).trim();
+  if (!normalized) {
+    return { ok: false, value: null, reason: "empty" };
+  }
+  const match = normalized.match(/^(\d{1,3})\s*%?$/);
+  if (!match) {
+    return { ok: false, value: null, reason: "format" };
+  }
+  const parsed = Number.parseInt(match[1], 10);
+  if (!Number.isInteger(parsed)) {
+    return { ok: false, value: null, reason: "format" };
+  }
+  if (parsed < 50 || parsed > 100) {
+    return { ok: false, value: parsed, reason: parsed > 100 ? "above-range" : "below-range" };
+  }
+  return { ok: true, value: parsed, reason: null };
+}
+
+function parseStrictSymptomDurationInput(value) {
+  const raw = String(value ?? "").trim();
+  const normalized = normalizeArabicIndicDigits(raw).trim();
+  if (!normalized || normalized === "غير محدد") {
+    return { ok: false, value: null, text: raw, reason: "empty" };
+  }
+  const match = normalized.match(/^(\d{1,3})\s*(?:days?|day|d|يوم|أيام|ايام|يوما|يوماً)?$/i);
+  if (!match) {
+    return { ok: false, value: null, text: raw, reason: "format" };
+  }
+  const days = Number.parseInt(match[1], 10);
+  if (!Number.isInteger(days) || days < 1 || days > 365) {
+    return { ok: false, value: days, text: raw, reason: days > 365 ? "above-range" : "below-range" };
+  }
+  return { ok: true, value: days, text: raw, reason: null };
+}
+
+function readOxygenRawValue() {
   const field = document.getElementById("oxygenInput");
-  if (!field) return 0;
-  return Number.parseInt((field.value || "").replace(/[^\d]/g, ""), 10) || 0;
+  return field ? field.value : "";
+}
+
+function readOxygenValue() {
+  const parsed = parseStrictOxygenInput(readOxygenRawValue());
+  return parsed.ok ? parsed.value : 0;
 }
 
 function updateOxygenWarning() {
@@ -9763,10 +9810,33 @@ function updateOxygenWarning() {
   if (!warning) return;
 
   const isEn = currentLanguage === "en";
-  const oxygen = readOxygenValue();
+  const parsedOxygen = parseStrictOxygenInput(readOxygenRawValue());
+  const oxygen = parsedOxygen.value;
   if (field) field.style.borderColor = "";
 
-  if (oxygen > 100) {
+  if (parsedOxygen.reason === "format" || parsedOxygen.reason === "empty") {
+    if (parsedOxygen.reason === "empty") {
+      warning.hidden = true;
+      warning.className = "field-warning";
+      warning.innerHTML = "";
+      return;
+    }
+    warning.hidden = false;
+    warning.className = "field-warning has-emergency-card";
+    warning.innerHTML = `
+      <div class="emergency-alert-card invalid-reading">
+        <div class="emergency-header">
+          <span class="emergency-warning-badge">⚠️ ${isEn ? 'Cannot Measure SpO2' : 'تعذر قياس الأكسجين'}</span>
+          <h4>${isEn ? 'Please enter the reading exactly as shown' : 'يرجى إدخال القراءة كما تظهر على الجهاز'}</h4>
+        </div>
+        <p class="emergency-lead">${isEn ? 'Use a whole-number SpO2 value from 50 to 100. Fractions, negative values, and mixed text cannot be interpreted safely.' : 'أدخل رقم تشبع أكسجين صحيحاً بين 50 و100. الكسور والقيم السالبة والنصوص المختلطة لا يمكن تفسيرها بأمان.'}</p>
+      </div>
+    `;
+    if (field) field.style.borderColor = "var(--red)";
+    return;
+  }
+
+  if (parsedOxygen.reason === "above-range") {
     warning.hidden = false;
     warning.className = "field-warning has-emergency-card";
     warning.innerHTML = `
@@ -9781,7 +9851,7 @@ function updateOxygenWarning() {
     if (field) field.style.borderColor = "var(--red)";
     return;
   }
-  if (oxygen > 0 && oxygen < 50) {
+  if (parsedOxygen.reason === "below-range") {
     warning.hidden = false;
     warning.className = "field-warning has-emergency-card";
     warning.innerHTML = `
@@ -10418,13 +10488,13 @@ function buildAssessmentModel({
   clinicName = "عيادة مدينة نصر"
 }) {
   // 1. Oxygen Vitals (Strict Physiological Validation)
-  const o2Raw = Number.parseInt(String(oxygenLevel).replace(/[^\d]/g, ""), 10) || 0;
-  if (o2Raw > 100 || (o2Raw < 50 && o2Raw > 0)) {
+  const parsedOxygen = parseStrictOxygenInput(oxygenLevel);
+  if (!parsedOxygen.ok) {
     throw new Error(currentLanguage === "en"
       ? "Invalid oxygen level: SpO2 must be between 50% and 100%."
       : "نسبة الأكسجين غير صحيحة: يجب أن تكون بين 50% و 100%.");
   }
-  const o2 = o2Raw;
+  const o2 = parsedOxygen.value;
   const isCritical = o2 > 0 && o2 < 90;
   const isHighRisk = o2 > 0 && o2 < 93;
 
@@ -10443,9 +10513,14 @@ function buildAssessmentModel({
   const coughMeta = AssessmentDictionaries.cough[coughKey];
 
   // 5. Symptom Duration Normalization
-  const durationStr = String(symptomDurationRaw || "غير محدد").trim();
-  const daysMatch = durationStr.match(/\d+/);
-  const durationDays = daysMatch ? Number.parseInt(daysMatch[0], 10) : 0;
+  const parsedDuration = parseStrictSymptomDurationInput(symptomDurationRaw);
+  if (!parsedDuration.ok) {
+    throw new Error(currentLanguage === "en"
+      ? "Invalid symptom duration: enter a whole number of days between 1 and 365."
+      : "مدة الأعراض غير صحيحة: أدخل عدد أيام صحيحاً بين 1 و 365.");
+  }
+  const durationStr = parsedDuration.text;
+  const durationDays = parsedDuration.value;
   const durationEn = durationDays > 0 ? `${durationDays} ${durationDays === 1 ? 'day' : 'days'}` : "Unspecified";
 
   // 6. Risk Factors Normalization
@@ -10690,13 +10765,15 @@ function validateAssessmentFields({
   const errors = [];
 
   // 1. Oxygen Level (SpO2: 50% - 100%)
-  const o2 = Number.parseInt(String(oxygenLevel).replace(/[^\d]/g, ""), 10);
-  if (isNaN(o2) || o2 < 50 || o2 > 100) {
+  const parsedOxygen = parseStrictOxygenInput(oxygenLevel);
+  if (!parsedOxygen.ok) {
     errors.push({
       field: "oxygenInput",
-      message: o2 > 100
+      message: parsedOxygen.reason === "above-range"
         ? (isEn ? "Oxygen level cannot exceed 100%." : "نسبة الأكسجين لا يمكن أن تتجاوز 100%.")
-        : (isEn ? "Please enter a valid oxygen level between 50% and 100%." : "نسبة الأكسجين يجب أن تكون قيمة صحيحة بين 50% و 100%.")
+        : parsedOxygen.reason === "below-range"
+          ? (isEn ? "SpO2 below 50% cannot be recorded reliably. Please re-check the device or seek urgent care if symptoms are severe." : "قراءة الأكسجين أقل من 50% لا يمكن تسجيلها كقياس موثوق. يرجى إعادة القياس أو طلب الطوارئ عند وجود أعراض شديدة.")
+          : (isEn ? "Unable to measure SpO2 from this input. Enter a whole number between 50 and 100." : "تعذر قياس الأكسجين من هذا الإدخال. أدخل رقماً صحيحاً بين 50 و 100.")
     });
   }
 
@@ -10725,15 +10802,13 @@ function validateAssessmentFields({
   }
 
   // 4. Symptom Duration (Must contain valid day count: 1 - 365)
-  const durationStr = String(symptomDuration || "").trim();
-  const daysMatch = durationStr.match(/\d+/);
-  const days = daysMatch ? Number.parseInt(daysMatch[0], 10) : 0;
-  if (!durationStr || durationStr === "غير محدد" || days <= 0 || days > 365) {
+  const parsedDuration = parseStrictSymptomDurationInput(symptomDuration);
+  if (!parsedDuration.ok) {
     errors.push({
       field: "symptomDuration",
       message: isEn
-        ? "Please enter a valid symptom duration (between 1 and 365 days)."
-        : "يرجى إدخال مدة أعراض صحيحة (بين 1 و 365 يوماً)."
+        ? "Please enter symptom duration as a whole number of days between 1 and 365."
+        : "يرجى إدخال مدة الأعراض كعدد أيام صحيح بين 1 و 365."
     });
   }
 
@@ -10799,7 +10874,7 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
 
   try {
     // ── جمع بيانات النموذج ──────────────────────────────────────────
-    const oxygenLevel = readOxygenValue();
+    const oxygenRaw = readOxygenRawValue();
 
     // ضيق التنفس (نعم/لا)
     const breathingChoices = document.querySelectorAll("#breathingChoices .choice");
@@ -10828,7 +10903,7 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
 
     // ── التحقق الشامل الصارم من كافة حقول التقييم (Full Assessment Validation) ──
     const validation = validateAssessmentFields({
-      oxygenLevel,
+      oxygenLevel: oxygenRaw,
       breathingDifficulty,
       coughLevel,
       symptomDuration,
@@ -10867,6 +10942,7 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
       submitBtn.textContent = isEn ? "Send to Doctor" : "إرسال للطبيب";
       return;
     }
+    const oxygenLevel = parseStrictOxygenInput(oxygenRaw).value;
 
     // ── اعتراض الحالات الحرجة جداً للتأكد من التوجه للطوارئ ─────────
     if (oxygenLevel > 0 && oxygenLevel < 90 && !window._emergencySubmissionConfirmed) {
@@ -12024,16 +12100,25 @@ window.submitPatientMoreInfo = async function(caseId) {
   const responseEl = document.getElementById("patientResponseInput");
   const newO2El = document.getElementById("patientNewO2Input");
   const responseText = responseEl ? responseEl.value.trim() : "";
-  const rawO2 = newO2El ? parseInt(newO2El.value.trim(), 10) : NaN;
+  const parsedO2 = newO2El && newO2El.value.trim() ? parseStrictOxygenInput(newO2El.value) : { ok: false, value: null, reason: "empty" };
 
-  if (!responseText && isNaN(rawO2)) {
+  if (!responseText && !parsedO2.ok) {
     showToast(isEn ? "Please write your response or provide updated measurements." : "يرجى كتابة ردك أو تزويدنا بالقياسات المطلوبة.");
-    if (responseEl) responseEl.focus();
+    if (parsedO2.reason !== "empty" && newO2El) newO2El.focus();
+    else if (responseEl) responseEl.focus();
+    return;
+  }
+
+  if (newO2El && newO2El.value.trim() && !parsedO2.ok) {
+    showToast(isEn
+      ? "Unable to measure SpO2 from this input. Enter a whole number between 50 and 100."
+      : "تعذر قياس الأكسجين من هذا الإدخال. أدخل رقماً صحيحاً بين 50 و 100.");
+    newO2El.focus();
     return;
   }
 
   try {
-    const finalResponseText = responseText || (isEn ? `Updated vitals submitted: SpO2 ${rawO2}%` : `تم تسجيل نسبة أكسجين محدثة: ${rawO2}%`);
+    const finalResponseText = responseText || (isEn ? `Updated vitals submitted: SpO2 ${parsedO2.value}%` : `تم تسجيل نسبة أكسجين محدثة: ${parsedO2.value}%`);
     const historyItem = {
       status: CASE_STATUS.UNDER_REVIEW,
       changedAt: new Date().toISOString(),
@@ -12052,9 +12137,9 @@ window.submitPatientMoreInfo = async function(caseId) {
       statusHistory: firebase.firestore.FieldValue.arrayUnion(historyItem)
     };
 
-    if (!isNaN(rawO2) && rawO2 >= 50 && rawO2 <= 100) {
-      updatePayload.oxygenLevel = rawO2;
-      updatePayload.o2 = rawO2;
+    if (parsedO2.ok) {
+      updatePayload.oxygenLevel = parsedO2.value;
+      updatePayload.o2 = parsedO2.value;
     }
 
     await db.collection("cases").doc(caseId).update(updatePayload);

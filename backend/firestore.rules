@@ -231,7 +231,10 @@ service cloud.firestore {
 
     function isValidDuration(data) {
       return !('symptomDuration' in data) || 
-             (data.symptomDuration is string && data.symptomDuration.size() > 0 && data.symptomDuration.size() <= 50);
+             (data.symptomDuration is string &&
+              data.symptomDuration.size() > 0 &&
+              data.symptomDuration.size() <= 50 &&
+              data.symptomDuration.matches('^\\s*([1-9]|[1-9][0-9]|[1-2][0-9][0-9]|3[0-5][0-9]|36[0-5]|[١-٩]|[١-٩][٠-٩]|[١-٢][٠-٩][٠-٩]|٣[٠-٥][٠-٩]|٣٦[٠-٥]|[۱-۹]|[۱-۹][۰-۹]|[۱-۲][۰-۹][۰-۹]|۳[۰-۵][۰-۹]|۳۶[۰-۵])\\s*(days?|day|d|يوم|أيام|ايام|يوما|يوماً)?\\s*$'));
     }
 
     function isValidRiskFactors(data) {
