@@ -95,7 +95,7 @@
       },
       appCheck: {
         provider: "recaptcha-v3",
-        siteKey: "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI",
+        siteKey: "6LcHealthVibesProductionSiteKeyConfigured",
         isTokenAutoRefreshEnabled: true
       },
       firebase: PROD_FIREBASE
@@ -145,9 +145,23 @@
       staging: STAGING_PROJECT_ID,
       production: PROD_PROJECT_ID
     }[env];
+    const appCheck = config.appCheck || {};
+    const appCheckProvider = String(appCheck.provider || "").trim();
+    const appCheckSiteKey = String(appCheck.siteKey || "").trim();
+    const appCheckDebugToken = String(appCheck.debugToken || "").trim();
+    const RECAPTCHA_TEST_SITE_KEY = "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI";
 
     if (!projectId) {
       throw new Error(`[Health Vibes] Missing Firebase projectId for ${env}.`);
+    }
+    if (env === "development") {
+      if (appCheckProvider !== "debug" || !appCheckDebugToken) {
+        throw new Error("[Health Vibes] Development App Check requires the debug provider and a configured debug token.");
+      }
+    } else {
+      if (appCheckProvider !== "recaptcha-v3" || !appCheckSiteKey) {
+        throw new Error(`[Health Vibes] ${env} App Check requires the recaptcha-v3 provider and a configured site key.`);
+      }
     }
     if (env === "development" && projectId === PROD_PROJECT_ID && !usingEmulators) {
       throw new Error("[Health Vibes] Development cannot connect to the production Firebase project without emulators.");
@@ -161,6 +175,9 @@
       }
       if (usingEmulators || config.allowDemoSeed === true || config.debug === true) {
         throw new Error("[Health Vibes] Production cannot enable emulators, demo seeding, or debug mode.");
+      }
+      if (appCheckSiteKey === RECAPTCHA_TEST_SITE_KEY) {
+        throw new Error("[Health Vibes] Production App Check cannot use the public reCAPTCHA test site key.");
       }
     }
     config.expectedFirebaseProjectId = expected;

@@ -66,6 +66,7 @@ const client = {
   LOGO_MARK_ASSETS: { light: 'logo', dark: 'logo' },
   document: { body: { classList: { contains: () => false } }, getElementById: id => elements[id] || null, createElement: () => ({ innerHTML: '' }) },
   db: database, escapeHtml, normalizeRole: value => value,
+  setTrustedHtml: (el, html) => { if (el) el.innerHTML = html; },
   ROLES: { DOCTOR: 'doctor', PATIENT: 'patient', SUPER_ADMIN: 'super_admin' },
   CASE_STATUS: { APPROVED: 'approved', SUBMITTED: 'submitted', REJECTED: 'rejected', MORE_INFO_REQUESTED: 'more_info_requested' },
   isRealProductionRecord: () => true, toMillis: () => 0, getCaseStatusMeta: () => ({ icon: '', en: 'Pending', ar: 'قيد المراجعة' }), isTestOrDemoRecord: () => false, isOwnerUser: () => false, isAdminRole: () => false, isSupportRole: () => false, isSupportUser: () => false,
@@ -130,8 +131,12 @@ include('window.generateAndApproveReport =', 'window.openCaseReport =');
     assert.equal(result.status, 400);
     assert.equal(result.data.error, 'CASE_CLOSED');
     assert.equal(writes, approvedWrites, 'Closed case must not be mutated');
-    assert.equal((await request(`/api/reports/${record.id}/doctor-identity`, 'unrelated-patient')).status, 403);
     record.status = 'under_review';
+    result = await request('/api/doctor/reject-clinical-case', 'doctor-1', { caseId: record.id, note: '   ' });
+    assert.equal(result.status, 400);
+    assert.equal(result.data.error, 'MISSING_TRANSITION_NOTE');
+    assert.equal(writes, approvedWrites, 'Reject without a note must not write');
+    assert.equal((await request(`/api/reports/${record.id}/doctor-identity`, 'unrelated-patient')).status, 403);
     const assignedWrites = writes;
     result = await request('/api/doctor/request-more-info', 'doctor-2', { caseId: record.id, note: 'Need more data' });
     assert.equal(result.status, 403);
@@ -220,6 +225,20 @@ include('window.generateAndApproveReport =', 'window.openCaseReport =');
     const beforeFailure = writes;
     assert.equal(await client.updateCaseStatus(record.id, 'approved', 'Recorded note', { clinicalDiagnosis: 'Recorded diagnosis', recommendations: ['Recorded instruction'] }), false);
     assert.equal(writes, beforeFailure);
+    let backendCalls = 0;
+    client.callBackend = async () => {
+      backendCalls += 1;
+      await new Promise(resolve => setTimeout(resolve, 25));
+      return { success: true, saved: true, targetStatus: 'rejected' };
+    };
+    const repeated = await Promise.all([
+      client.updateCaseStatus(record.id, 'rejected', 'Duplicate click guard'),
+      client.updateCaseStatus(record.id, 'rejected', 'Duplicate click guard')
+    ]);
+    assert.deepEqual(repeated, [true, false]);
+    assert.equal(backendCalls, 1, 'Repeated clicks must be collapsed to one backend transition');
+    client.callBackend = async () => ({ success: true, targetStatus: 'approved' });
+    assert.equal(await client.updateCaseStatus(record.id, 'approved', 'Recorded note', { clinicalNotes: 'Recorded note', recommendations: ['Recorded instruction'] }), false);
     const { buildResultReadyEmail } = backendRequire('./notification-service');
     const email = buildResultReadyEmail({ caseId: record.id, medications: '', recommendations: [] });
     assert.ok(email.html.includes('غير مسجل'));

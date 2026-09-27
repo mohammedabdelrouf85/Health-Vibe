@@ -60,14 +60,11 @@ service cloud.firestore {
               ('role' in request.auth.token && request.auth.token.role == 'super_admin'));
     }
 
-    // Strict Email Verification check
+    // Strict Email Verification check. Phone verification is not a substitute
+    // for Firebase Auth email_verified unless a future explicit policy adds it.
     function isEmailVerified() {
       return isAuthenticated() && !isVerificationRevoked() && (
-        request.auth.token.email_verified == true ||
-        (hasUserDoc() && (
-          ('emailVerified' in getUserData() && getUserData().emailVerified == true) ||
-          ('phoneVerified' in getUserData() && getUserData().phoneVerified == true)
-        ))
+        request.auth.token.email_verified == true
       );
     }
 
@@ -234,7 +231,10 @@ service cloud.firestore {
 
     function isValidDuration(data) {
       return !('symptomDuration' in data) || 
-             (data.symptomDuration is string && data.symptomDuration.size() > 0 && data.symptomDuration.size() <= 50);
+             (data.symptomDuration is string &&
+              data.symptomDuration.size() > 0 &&
+              data.symptomDuration.size() <= 50 &&
+              data.symptomDuration.matches('^\\s*([1-9]|[1-9][0-9]|[1-2][0-9][0-9]|3[0-5][0-9]|36[0-5]|[١-٩]|[١-٩][٠-٩]|[١-٢][٠-٩][٠-٩]|٣[٠-٥][٠-٩]|٣٦[٠-٥]|[۱-۹]|[۱-۹][۰-۹]|[۱-۲][۰-۹][۰-۹]|۳[۰-۵][۰-۹]|۳۶[۰-۵])\\s*(days?|day|d|يوم|أيام|ايام|يوما|يوماً)?\\s*$'));
     }
 
     function isValidRiskFactors(data) {
@@ -428,21 +428,21 @@ service cloud.firestore {
     // 4. 🛡️ SERVER AUDIT EVENTS (/audit_events/{eventId})
     // =========================================================================
     match /audit_events/{eventId} {
-      allow read: if isOwner();
+      allow read: if isOwner() || isPlatformAdmin() || isClinicAdminFor(resource.data);
+      allow create, update, delete: if false;
       allow write: if false;
-      allow read: if isPlatformAdmin() || isClinicAdminFor(resource.data);
     }
 
     // =========================================================================
     // 5. 📝 CLIENT AUDIT LOG (/auditLog/{logId})
     // =========================================================================
     match /auditLog/{logId} {
-      allow read: if isOwner();
-      allow read: if isPlatformAdmin() || isClinicAdminFor(resource.data);
+      allow read: if isOwner() || isPlatformAdmin() || isClinicAdminFor(resource.data);
       allow create: if isAuthenticated() && (
         ('patientId' in request.resource.data && request.resource.data.patientId == request.auth.uid) ||
         ('userId' in request.resource.data && request.resource.data.userId == request.auth.uid)
       );
+      allow update, delete: if false;
     }
 
     // =========================================================================
@@ -547,6 +547,15 @@ service cloud.firestore {
 
     match /system_config/admin_access {
       allow read, write: if isOwner();
+    }
+
+    // =========================================================================
+    // 🛡️ PRIVACY TOMBSTONES (/privacy_tombstones/{tombstoneId})
+    // Server Admin SDK authoritative suppression for GDPR / HIPAA compliance
+    // =========================================================================
+    match /privacy_tombstones/{tombstoneId} {
+      allow read: if isOwner() || isPlatformAdmin();
+      allow write: if false;
     }
 
     // =========================================================================

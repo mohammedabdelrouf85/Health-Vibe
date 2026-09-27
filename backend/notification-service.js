@@ -8,10 +8,38 @@ const nodemailer = require('nodemailer');
 // In-memory log for local testing and emulator inspection
 const sentEmailsLog = [];
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function normalizeAppBaseUrl(value) {
+  const fallback = 'https://app.healthvibe.ai';
+  try {
+    const url = new URL(value || fallback);
+    return ['https:', 'http:'].includes(url.protocol) ? url.origin : fallback;
+  } catch (error) {
+    return fallback;
+  }
+}
+
 /**
  * Configure email transporter
  */
 function createTransporter() {
+  if (process.env.SIMULATE_EMAIL_FAILURE === 'true') {
+    return {
+      isMock: true,
+      sendMail: async () => {
+        throw new Error('Simulated email transport failure.');
+      }
+    };
+  }
+
   const host = process.env.SMTP_HOST;
   const port = Number(process.env.SMTP_PORT) || 587;
   const user = process.env.SMTP_USER;
@@ -61,13 +89,19 @@ function buildResultReadyEmail({
   recommendations,
   appUrl
 }) {
-  const portalUrl = appUrl || process.env.APP_BASE_URL || 'https://app.healthvibe.ai';
+  const portalUrl = normalizeAppBaseUrl(appUrl || process.env.APP_BASE_URL);
   const reportLink = `${portalUrl}/app/index.html?screen=report&caseId=${encodeURIComponent(caseId)}`;
+  const safePatientName = escapeHtml(patientName || 'المحترم');
+  const safeReportRef = escapeHtml(reportRef || ('HV-REP-' + caseId.slice(-8).toUpperCase()));
+  const safeDoctorName = escapeHtml(doctorName || 'غير مسجل');
+  const safeDoctorSpecialty = escapeHtml(doctorSpecialty || 'غير مسجل');
+  const safeClinicalDiagnosis = escapeHtml(clinicalDiagnosis || 'غير مسجل');
+  const safeMedications = escapeHtml(medications || 'غير مسجل');
 
   const savedRecommendations = (Array.isArray(recommendations) ? recommendations : [recommendations])
     .filter(value => typeof value === 'string' && value.trim());
   const recItems = savedRecommendations.length
-    ? savedRecommendations.map(r => `<li style="margin-bottom:6px;">${r}</li>`).join('')
+    ? savedRecommendations.map(r => `<li style="margin-bottom:6px;">${escapeHtml(r)}</li>`).join('')
     : '<li>غير مسجل</li>';
 
   const html = `
@@ -91,7 +125,7 @@ function buildResultReadyEmail({
 
     <!-- Content -->
     <div style="padding: 28px 24px;">
-      <p style="font-size: 16px; font-weight: 600; margin-top: 0;">عزيزي المريض / ${patientName || 'المحترم'}،</p>
+      <p style="font-size: 16px; font-weight: 600; margin-top: 0;">عزيزي المريض / ${safePatientName}،</p>
       <p style="font-size: 14.5px; line-height: 1.6; color: #334155;">
         نود إعلامك بأن الطبيب المعالج قد أتم مراجعة فحصك التنفسي واعتمد التقرير الطبي السريري النهائي لحالتك.
       </p>
@@ -100,19 +134,19 @@ function buildResultReadyEmail({
       <div style="background: #f1f5f9; border-radius: 12px; padding: 18px; margin: 20px 0; border: 1px solid #cbd5e1;">
         <div style="margin-bottom: 8px; font-size: 13.5px;">
           <strong style="color: #0f766e;">رقم التقرير المعتمد:</strong>
-          <span style="font-family: monospace; font-weight: bold; margin-right: 6px;">${reportRef || ('HV-REP-' + caseId.slice(-8).toUpperCase())}</span>
+          <span style="font-family: monospace; font-weight: bold; margin-right: 6px;">${safeReportRef}</span>
         </div>
         <div style="margin-bottom: 8px; font-size: 13.5px;">
           <strong style="color: #0f766e;">الطبيب المعتمد:</strong>
-          <span style="margin-right: 6px;">${doctorName || 'غير مسجل'} (${doctorSpecialty || 'غير مسجل'})</span>
+          <span style="margin-right: 6px;">${safeDoctorName} (${safeDoctorSpecialty})</span>
         </div>
         <div style="margin-bottom: 8px; font-size: 13.5px;">
           <strong style="color: #0f766e;">التشخيص السريري:</strong>
-          <p style="margin: 4px 0 0; color: #1e293b; font-weight: 600; line-height: 1.5;">${clinicalDiagnosis || 'غير مسجل'}</p>
+          <p style="margin: 4px 0 0; color: #1e293b; font-weight: 600; line-height: 1.5;">${safeClinicalDiagnosis}</p>
         </div>
         <div style="margin-top: 8px; font-size: 13.5px;">
           <strong style="color: #0f766e;">الأدوية المسجلة:</strong>
-          <p style="margin: 4px 0 0; color: #1e293b;">${medications || 'غير مسجل'}</p>
+          <p style="margin: 4px 0 0; color: #1e293b;">${safeMedications}</p>
         </div>
       </div>
 
@@ -126,7 +160,7 @@ function buildResultReadyEmail({
 
       <!-- CTA Button -->
       <div style="text-align: center; margin: 32px 0 20px;">
-        <a href="${reportLink}" target="_blank" style="background: #0d9488; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 12px; font-weight: 700; font-size: 15px; display: inline-block; box-shadow: 0 4px 10px rgba(13,148,136,0.3);">
+        <a href="${escapeHtml(reportLink)}" target="_blank" rel="noopener noreferrer" style="background: #0d9488; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 12px; font-weight: 700; font-size: 15px; display: inline-block; box-shadow: 0 4px 10px rgba(13,148,136,0.3);">
           📄 عرض التقرير السريري والوصفة الطبية الكاملة
         </a>
       </div>
@@ -174,8 +208,12 @@ function buildMoreInfoEmail({
   moreInfoNote,
   appUrl
 }) {
-  const portalUrl = appUrl || process.env.APP_BASE_URL || 'https://app.healthvibe.ai';
+  const portalUrl = normalizeAppBaseUrl(appUrl || process.env.APP_BASE_URL);
   const reviewLink = `${portalUrl}/app/index.html?screen=pending&caseId=${encodeURIComponent(caseId)}`;
+  const safePatientName = escapeHtml(patientName || 'المحترم');
+  const safeDoctorName = escapeHtml(doctorName || 'غير مسجل');
+  const safeMoreInfoNote = escapeHtml(moreInfoNote || 'يرجى إعادة قياس نسبة الأكسجين SpO2 وإرفاق الروشتة السابقة أو توضيح تطور الأعراض.');
+  const safeCaseRef = escapeHtml(caseId.slice(-6).toUpperCase());
 
   const html = `
 <!DOCTYPE html>
@@ -193,21 +231,21 @@ function buildMoreInfoEmail({
         <h1 style="margin: 0; font-size: 20px; font-weight: 700;">Health Vibes AI ⚠️</h1>
         <span style="background: rgba(255,255,255,0.25); padding: 4px 12px; border-radius: 999px; font-size: 12px;">مطلوب بيانات</span>
       </div>
-      <p style="margin: 8px 0 0; font-size: 14px; opacity: 0.95;">تحديث بخصوص فحصك السريري رقم #${caseId.slice(-6).toUpperCase()}</p>
+      <p style="margin: 8px 0 0; font-size: 14px; opacity: 0.95;">تحديث بخصوص فحصك السريري رقم #${safeCaseRef}</p>
     </div>
 
     <!-- Content -->
     <div style="padding: 28px 24px;">
-      <p style="font-size: 16px; font-weight: 600; margin-top: 0;">عزيزي المريض / ${patientName || 'المحترم'}،</p>
+      <p style="font-size: 16px; font-weight: 600; margin-top: 0;">عزيزي المريض / ${safePatientName}،</p>
       <p style="font-size: 14.5px; line-height: 1.6; color: #334155;">
-        قام ${doctorName || 'غير مسجل'} بمراجعة بيانات فحصك التنفسي، ويطلب منك تزويده بمعلومات أو قياسات سريرية إضافية لإتمام التشخيص بدقة:
+        قام ${safeDoctorName} بمراجعة بيانات فحصك التنفسي، ويطلب منك تزويده بمعلومات أو قياسات سريرية إضافية لإتمام التشخيص بدقة:
       </p>
 
       <!-- Note Box -->
       <div style="background: #fff7ed; border-right: 4px solid #ea580c; border-radius: 8px; padding: 18px; margin: 20px 0; border-top: 1px solid #fed7aa; border-bottom: 1px solid #fed7aa; border-left: 1px solid #fed7aa;">
         <strong style="color: #9a3412; font-size: 14px; display: block; margin-bottom: 6px;">ملاحظات الطبيب والمعلومات المطلوبة:</strong>
         <p style="margin: 0; color: #7c2d12; font-size: 14px; line-height: 1.6; font-weight: 500;">
-          "${moreInfoNote || 'يرجى إعادة قياس نسبة الأكسجين SpO2 وإرفاق الروشتة السابقة أو توضيح تطور الأعراض.'}"
+          "${safeMoreInfoNote}"
         </p>
       </div>
 
@@ -217,7 +255,7 @@ function buildMoreInfoEmail({
 
       <!-- CTA Button -->
       <div style="text-align: center; margin: 32px 0 20px;">
-        <a href="${reviewLink}" target="_blank" style="background: #ea580c; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 12px; font-weight: 700; font-size: 15px; display: inline-block; box-shadow: 0 4px 10px rgba(234,88,12,0.3);">
+        <a href="${escapeHtml(reviewLink)}" target="_blank" rel="noopener noreferrer" style="background: #ea580c; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 12px; font-weight: 700; font-size: 15px; display: inline-block; box-shadow: 0 4px 10px rgba(234,88,12,0.3);">
           📝 إرسال البيانات المطلوبة الآن
         </a>
       </div>

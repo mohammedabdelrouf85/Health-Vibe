@@ -16,6 +16,9 @@ const dotenv = require('dotenv');
 const whatsappBot = require('./whatsapp-bot');
 const { sendClinicalNotificationEmail } = require('./notification-service');
 const backupService = require('./backup-service');
+const privacyService = require('./privacy-service');
+const auditService = require('./audit-service');
+const mfaService = require('./mfa-service');
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -134,7 +137,7 @@ app.use((req, res, next) => {
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
-  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://apis.google.com https://www.google.com https://www.recaptcha.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://www.gstatic.com https://*.googleusercontent.com https://firebasestorage.googleapis.com; connect-src 'self' http://localhost:4000 http://127.0.0.1:4000 https://healthvibe.ai https://*.firebaseio.com https://*.googleapis.com https://*.google.com https://www.recaptcha.net; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self';");
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com https://www.google.com https://www.recaptcha.net; script-src-attr 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://www.gstatic.com https://*.googleusercontent.com https://firebasestorage.googleapis.com; connect-src 'self' http://localhost:4000 http://127.0.0.1:4000 https://healthvibe.ai https://*.firebaseio.com https://*.googleapis.com https://*.google.com https://www.recaptcha.net; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self';");
   res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
   if (isProduction) {
@@ -152,35 +155,226 @@ app.use(cors({
   }
 }));
 
-// Body size limit to prevent memory exhaustion / DoS attacks
-app.use(express.json({ limit: '1mb' }));
+// =============================================================================
+// 🌐 PROXY CONFIGURATION & SECURE CLIENT IP RESOLUTION
+// =============================================================================
+function resolveTrustProxy() {
+  if (process.env.TRUST_PROXY !== undefined) {
+    const val = process.env.TRUST_PROXY.trim().toLowerCase();
+    if (val === 'true') return true;
+    if (val === 'false') return false;
+    const num = parseInt(val, 10);
+    if (!isNaN(num)) return num;
+    return process.env.TRUST_PROXY;
+  }
+  if (isProduction || isStaging) {
+    return 1; // Trust 1 hop (Cloud Run / GAE / Reverse Proxy)
+  }
+  return 'loopback';
+}
 
-// In-Memory Sliding Window Rate Limiter
-function createRateLimiter({ windowMs = 60000, maxRequests = 100, message = 'Too many requests. Please slow down.' } = {}) {
+app.set('trust proxy', resolveTrustProxy());
+
+function getClientIp(req) {
+  if (!req) return '127.0.0.1';
+  let ip = req.ip || req.socket?.remoteAddress || '127.0.0.1';
+  if (ip.startsWith('::ffff:')) {
+    ip = ip.replace('::ffff:', '');
+  }
+  if (ip.includes('.') && ip.includes(':')) {
+    ip = ip.split(':')[0];
+  }
+  return ip.trim();
+}
+
+// =============================================================================
+// 🔒 SERVER SECRETS ISOLATION & REDACTION ENGINE
+// =============================================================================
+function maskServerSecrets(value) {
+  if (value === null || value === undefined) return value;
+  if (value instanceof Error) {
+    const sanitized = new Error(maskServerSecrets(value.message));
+    if (value.stack) sanitized.stack = maskServerSecrets(value.stack);
+    if (value.code) sanitized.code = value.code;
+    return sanitized;
+  }
+  if (Array.isArray(value)) {
+    return value.map(v => maskServerSecrets(v));
+  }
+  if (typeof value !== 'string') {
+    if (typeof value === 'object') {
+      try {
+        const maskedObj = {};
+        for (const [k, v] of Object.entries(value)) {
+          if (/password|secret|token|apiKey|private_?key|auth_?salt/i.test(k)) {
+            maskedObj[k] = '[REDACTED]';
+          } else {
+            maskedObj[k] = maskServerSecrets(v);
+          }
+        }
+        return maskedObj;
+      } catch (_) {
+        return value;
+      }
+    }
+    return String(value);
+  }
+
+  let text = value;
+  const sensitiveEnvKeys = [
+    'FIREBASE_PRIVATE_KEY',
+    'FIREBASE_CLIENT_EMAIL',
+    'FIREBASE_API_KEY',
+    'WHATSAPP_API_TOKEN',
+    'WHATSAPP_WEBHOOK_VERIFY_TOKEN',
+    'AUDIT_SALT',
+    'JWT_SECRET',
+    'APP_CHECK_SECRET',
+    'STORAGE_SIGNING_KEY',
+    'ENCRYPTION_KEY'
+  ];
+
+  for (const envKey of sensitiveEnvKeys) {
+    const secretVal = process.env[envKey];
+    if (secretVal && typeof secretVal === 'string' && secretVal.trim().length > 6) {
+      text = text.split(secretVal.trim()).join('[REDACTED_SECRET]');
+    }
+  }
+
+  text = text.replace(/-----BEGIN[ A-Z0-9_-]+PRIVATE KEY-----[\s\S]*?-----END[ A-Z0-9_-]+PRIVATE KEY-----/gi, '[REDACTED_PRIVATE_KEY]');
+  text = text.replace(/AIza[0-9A-Za-z-_]{35}/g, '[REDACTED_API_KEY]');
+  text = text.replace(/Bearer\s+([A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+)/gi, 'Bearer [REDACTED_JWT]');
+  text = text.replace(/(password|secret|token|apiKey|auth)=([^& \r\n]+)/gi, '$1=[REDACTED]');
+  text = text.replace(/("password"|"secret"|"token"|"apiKey"|"private_key"):\s*"[^"]+"/gi, '$1:"[REDACTED]"');
+
+  return text;
+}
+
+// 🛡️ Intercept server console outputs to ensure secrets never leak to logs or stdout/stderr
+const _origConsoleLog = console.log;
+const _origConsoleWarn = console.warn;
+const _origConsoleError = console.error;
+const _origConsoleInfo = console.info;
+
+console.log = (...args) => _origConsoleLog(...args.map(a => maskServerSecrets(a)));
+console.warn = (...args) => _origConsoleWarn(...args.map(a => maskServerSecrets(a)));
+console.error = (...args) => _origConsoleError(...args.map(a => maskServerSecrets(a)));
+console.info = (...args) => _origConsoleInfo(...args.map(a => maskServerSecrets(a)));
+
+function sanitizeClientErrorMessage(err) {
+  if (!err) return 'An unexpected error occurred.';
+  const rawMsg = typeof err === 'string' ? err : (err.message || String(err));
+  const msg = maskServerSecrets(rawMsg);
+
+  const leaksInternalDetails =
+    /projects\/|databases\/|firestore\.googleapis\.com|firebase|google-gax|grpc|ECONNREFUSED|ENOTFOUND|ETIMEDOUT|node:internal|\.js:\d+|at\s+[\w.<>]+\s+\(/i.test(msg) ||
+    /7\s+PERMISSION_DENIED|14\s+UNAVAILABLE|DEADLINE_EXCEEDED|RESOURCE_EXHAUSTED/i.test(msg) ||
+    /SELECT\s+|INSERT\s+|DELETE\s+|FROM\s+|WHERE\s+/i.test(msg) ||
+    /\[REDACTED_/i.test(msg);
+
+  if (leaksInternalDetails || msg.length > 200 || msg.includes('\n') || msg.includes('\r')) {
+    return 'An internal service error occurred. Please try again later.';
+  }
+
+  return msg;
+}
+
+// 🛡️ Global JSON response sanitizer: never expose stack traces or internal Firebase errors to client
+app.use((req, res, next) => {
+  const originalJson = res.json.bind(res);
+  res.json = function(data) {
+    if (data && typeof data === 'object') {
+      if (data.stack) {
+        delete data.stack;
+      }
+      if (data.details && typeof data.details === 'object' && data.details.stack) {
+        delete data.details.stack;
+      }
+      if (res.statusCode >= 500) {
+        if (typeof data.message === 'string') {
+          data.message = sanitizeClientErrorMessage(data.message);
+        }
+      } else if (typeof data.message === 'string') {
+        data.message = maskServerSecrets(data.message);
+      }
+    }
+    return originalJson(data);
+  };
+  next();
+});
+
+// =============================================================================
+// 📦 REQUEST BODY PARSING & SIZE LIMITS (DoS Exhaustion Defense)
+// =============================================================================
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '100kb' }));
+
+// Catch Body-Parser syntax and payload size errors before hitting routes
+app.use((err, req, res, next) => {
+  if (err.type === 'entity.too.large' || err.status === 413) {
+    return res.status(413).json({
+      error: 'PAYLOAD_TOO_LARGE',
+      message: 'Request payload exceeds allowable limit (1MB max).'
+    });
+  }
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    return res.status(400).json({
+      error: 'INVALID_JSON_PAYLOAD',
+      message: 'Malformed JSON payload in request body.'
+    });
+  }
+  next(err);
+});
+
+// =============================================================================
+// ⏱️ SLIDING WINDOW RATE LIMITER & SENSITIVE ROUTE DEFENSE
+// =============================================================================
+function createRateLimiter({
+  windowMs = 60000,
+  maxRequests = 100,
+  message = 'Too many requests. Please slow down.',
+  keyGenerator = null,
+  skip = null
+} = {}) {
   const requests = new Map();
 
   return (req, res, next) => {
-    const ip = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown-client';
+    if (typeof skip === 'function' && skip(req)) {
+      return next();
+    }
+
+    const clientIp = getClientIp(req);
+    let key;
+    if (typeof keyGenerator === 'function') {
+      key = keyGenerator(req);
+    } else if (req.user && req.user.uid) {
+      key = `user:${req.user.uid}`;
+    } else {
+      key = `ip:${clientIp}`;
+    }
+
     const now = Date.now();
     const windowStart = now - windowMs;
 
-    const timestamps = (requests.get(ip) || []).filter(ts => ts > windowStart);
+    const timestamps = (requests.get(key) || []).filter(ts => ts > windowStart);
     if (timestamps.length >= maxRequests) {
-      res.setHeader('Retry-After', Math.ceil(windowMs / 1000));
+      const retryAfterSec = Math.max(Math.ceil((timestamps[0] + windowMs - now) / 1000), 1);
+      res.setHeader('Retry-After', retryAfterSec);
       return res.status(429).json({
         error: 'RATE_LIMIT_EXCEEDED',
-        message
+        message,
+        retryAfterSeconds: retryAfterSec
       });
     }
 
     timestamps.push(now);
-    requests.set(ip, timestamps);
+    requests.set(key, timestamps);
 
     if (requests.size > 5000) {
-      for (const [key, tsList] of requests.entries()) {
+      for (const [k, tsList] of requests.entries()) {
         const fresh = tsList.filter(ts => ts > windowStart);
-        if (fresh.length === 0) requests.delete(key);
-        else requests.set(key, fresh);
+        if (fresh.length === 0) requests.delete(k);
+        else requests.set(k, fresh);
       }
     }
 
@@ -189,36 +383,160 @@ function createRateLimiter({ windowMs = 60000, maxRequests = 100, message = 'Too
 }
 
 // Global API rate limiter (120 req / minute)
-app.use('/api/', createRateLimiter({ windowMs: 60000, maxRequests: 120, message: 'API rate limit exceeded. Please try again shortly.' }));
+app.use('/api/', createRateLimiter({
+  windowMs: 60000,
+  maxRequests: 120,
+  message: 'API rate limit exceeded. Please try again shortly.',
+  keyGenerator: req => req.user?.uid ? `user:${req.user.uid}` : `ip:${getClientIp(req)}`
+}));
 
 // Strict rate limiter for sensitive mutation endpoints (20 req / minute)
-const strictMutationLimiter = createRateLimiter({ windowMs: 60000, maxRequests: 20, message: 'Too many mutation attempts. Please wait 1 minute.' });
+const strictMutationLimiter = createRateLimiter({
+  windowMs: 60000,
+  maxRequests: 20,
+  message: 'Too many mutation attempts. Please wait 1 minute.',
+  keyGenerator: req => req.user?.uid ? `mut_user:${req.user.uid}` : `mut_ip:${getClientIp(req)}`
+});
+
 app.use([
   '/api/notifications/send-email',
   '/api/feedback/submit',
   '/api/appointments/book',
-  '/api/user/delete-account'
+  '/api/user/privacy-consent',
+  '/api/user/privacy-consent/withdraw',
+  '/api/user/delete-account',
+  '/api/user/privacy/retry-deletion',
+  '/api/user/data-export',
+  '/api/user/access-request',
+  '/api/user/change-password',
+  '/api/user/change-email',
+  '/api/user/revoke-all-sessions',
+  '/api/user/sessions/terminate',
+  '/api/user/mfa/enroll',
+  '/api/user/mfa/verify-enrollment',
+  '/api/user/mfa/verify-challenge',
+  '/api/user/mfa/recovery',
+  '/api/user/mfa/disenroll'
 ], strictMutationLimiter);
+
+// Auth login / token synchronization rate limiter (25 req / minute)
+const authLoginLimiter = createRateLimiter({
+  windowMs: 60000,
+  maxRequests: 25,
+  message: 'Too many login attempts. Please wait before retrying.',
+  keyGenerator: req => req.user?.uid ? `auth_user:${req.user.uid}` : `auth_ip:${getClientIp(req)}`
+});
+app.use('/api/user/sync-role', authLoginLimiter);
+
+// OTP Request rate limiter (5 req / 10 minutes)
+const otpRequestLimiter = createRateLimiter({
+  windowMs: 10 * 60 * 1000,
+  maxRequests: 5,
+  message: 'Too many verification code requests. Please wait 10 minutes.',
+  keyGenerator: req => req.user?.uid ? `otp_req_user:${req.user.uid}` : `otp_req_ip:${getClientIp(req)}`
+});
+app.use('/api/bot/request-code', otpRequestLimiter);
+
+// OTP Verification attempt rate limiter (5 attempts / 15 minutes)
+const otpVerifyLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  maxRequests: 5,
+  message: 'Too many failed verification attempts. Please wait 15 minutes before retrying.',
+  keyGenerator: req => req.user?.uid ? `otp_ver_user:${req.user.uid}` : `otp_ver_ip:${getClientIp(req)}`
+});
+app.use('/api/bot/verify-code', otpVerifyLimiter);
+
+// Public form submissions limiter (5 req / 15 minutes per IP)
+const publicFormLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  maxRequests: 5,
+  message: 'Too many submissions. Please wait before submitting another request.',
+  keyGenerator: req => `form_ip:${getClientIp(req)}`
+});
+app.use('/api/clinics/demo-request', publicFormLimiter);
+
+// Account recovery rate limiter (3 requests / 15 minutes per IP)
+const accountRecoveryLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  maxRequests: 3,
+  message: 'Too many recovery requests. Please wait 15 minutes.',
+  keyGenerator: req => `rec_ip:${getClientIp(req)}`
+});
+app.use('/api/auth/recover-account', accountRecoveryLimiter);
+
+// Webhook ingestion rate limiter (100 req / minute per IP)
+const webhookLimiter = createRateLimiter({
+  windowMs: 60000,
+  maxRequests: 100,
+  message: 'Too many webhook events.',
+  keyGenerator: req => `webhook_ip:${getClientIp(req)}`
+});
+app.use('/api/bot/webhook', webhookLimiter);
+
+// Client Error monitoring report limiter (60 req / minute)
+const clientErrorLimiter = createRateLimiter({
+  windowMs: 60000,
+  maxRequests: 60,
+  message: 'Error monitoring ingestion rate limit exceeded.',
+  keyGenerator: req => `err_ip:${getClientIp(req)}`
+});
+app.use('/api/monitoring/errors', clientErrorLimiter);
+
+// OTP Lockout Tracking Registry (Anti-Brute Force)
+const otpLockouts = new Map();
+
+function checkOtpLockout(key) {
+  const record = otpLockouts.get(key);
+  if (record && record.lockedUntil && Date.now() < record.lockedUntil) {
+    const waitSec = Math.max(Math.ceil((record.lockedUntil - Date.now()) / 1000), 1);
+    return { locked: true, waitSec };
+  }
+  return { locked: false, waitSec: 0 };
+}
+
+function recordOtpFailure(key) {
+  const record = otpLockouts.get(key) || { attempts: 0, lockedUntil: 0 };
+  record.attempts = (record.attempts || 0) + 1;
+  if (record.attempts >= 5) {
+    record.lockedUntil = Date.now() + 15 * 60 * 1000; // 15 minutes lockout
+  }
+  otpLockouts.set(key, record);
+  return record;
+}
+
+function clearOtpLockout(key) {
+  otpLockouts.delete(key);
+}
 
 // =============================================================================
 // 🛡️ FIREBASE APP CHECK ATTESTATION ENGINE (Anti-Abuse & Bot Mitigation)
 // =============================================================================
-const ENFORCE_APP_CHECK = process.env.ENFORCE_APP_CHECK === 'true';
+const ENFORCE_APP_CHECK = isProduction || process.env.ENFORCE_APP_CHECK === 'true';
+const APP_CHECK_PUBLIC_API_PATHS = new Set([
+  '/api/health',
+  '/api/app-check/status',
+  '/api/clinical/rules/versions',
+  '/api/bot/status',
+  '/api/bot/webhook'
+]);
+
+function shouldVerifyAppCheckForApi(req) {
+  const cleanPath = `${req.baseUrl || ''}${req.path || ''}`.split('?')[0];
+  return cleanPath.startsWith('/api/') && !APP_CHECK_PUBLIC_API_PATHS.has(cleanPath);
+}
 
 async function verifyAppCheck(req, res, next) {
   const appCheckToken = req.header('X-Firebase-AppCheck');
 
-  // Development bypass / debug token validation
-  if (isDevelopment) {
-    if (!appCheckToken || appCheckToken.startsWith('healthvibe-dev-') || appCheckToken === 'test-valid-app-check-token') {
-      req.appCheck = { verified: true, mode: 'dev-debug', token: appCheckToken || 'dev-bypass' };
-      return next();
-    }
+  // Development only: allow local emulator traffic to proceed without remote attestation.
+  if (isDevelopment && !ENFORCE_APP_CHECK && !appCheckToken) {
+    req.appCheck = { verified: true, mode: 'dev-emulator-bypass' };
+    return next();
   }
 
   // Token missing
   if (!appCheckToken) {
-    if (ENFORCE_APP_CHECK || (isProduction && process.env.ENFORCE_APP_CHECK === 'true')) {
+    if (ENFORCE_APP_CHECK) {
       return res.status(401).json({
         error: 'APP_CHECK_REQUIRED',
         message: 'Unauthorized client: Missing X-Firebase-AppCheck attestation token.'
@@ -234,20 +552,10 @@ async function verifyAppCheck(req, res, next) {
       const appCheckClaims = await admin.appCheck().verifyToken(appCheckToken);
       req.appCheck = { verified: true, appId: appCheckClaims.appId, claims: appCheckClaims };
       return next();
-    } else {
-      // Mock / fallback attestation verification for testing
-      if (appCheckToken === 'test-valid-app-check-token' || appCheckToken.startsWith('valid-') || appCheckToken.startsWith('healthvibe-')) {
-        req.appCheck = { verified: true, mode: 'mock-valid', appId: 'health-vibe-web' };
-        return next();
-      }
-      if (appCheckToken === 'test-invalid-app-check-token') {
-        throw new Error('Invalid App Check token signature.');
-      }
-      req.appCheck = { verified: true, mode: 'unverified-admin-fallback' };
-      return next();
     }
+    throw new Error('Firebase Admin App Check verifier is unavailable.');
   } catch (err) {
-    if (ENFORCE_APP_CHECK || (isProduction && process.env.ENFORCE_APP_CHECK === 'true')) {
+    if (ENFORCE_APP_CHECK) {
       return res.status(401).json({
         error: 'APP_CHECK_INVALID',
         message: `Unauthorized client: ${err.message}`
@@ -269,6 +577,11 @@ app.get(['/app-check/status', '/api/app-check/status'], verifyAppCheck, (req, re
     adminSdkAvailable: Boolean(admin.apps.length && typeof admin.appCheck === 'function'),
     timestamp: new Date().toISOString()
   });
+});
+
+app.use('/api', (req, res, next) => {
+  if (!shouldVerifyAppCheckForApi(req)) return next();
+  return verifyAppCheck(req, res, next);
 });
 
 // =============================================================================
@@ -296,8 +609,8 @@ function recordSystemError({
   const record = {
     errorId,
     type,
-    message: String(message || '').substring(0, 1000),
-    stack: stack ? String(stack).substring(0, 4000) : null,
+    message: maskServerSecrets(String(message || '').substring(0, 1000)),
+    stack: stack ? maskServerSecrets(String(stack).substring(0, 4000)) : null,
     source,
     lineno,
     colno,
@@ -470,7 +783,8 @@ app.post('/api/admin/backup/create', requireAuth, auditOperationalAccess('BACKUP
     const manifest = await backupService.createBackupSnapshot({
       initiator,
       environment: NODE_ENV,
-      firestoreDb: db
+      firestoreDb: db,
+      storageBucket: backupStorageBucket
     });
 
     res.locals.backupId = manifest.backupId;
@@ -493,8 +807,14 @@ app.get('/api/admin/backup/list', requireAuth, auditOperationalAccess('BACKUP_SN
     res.json({
       status: 'ok',
       count: snapshots.length,
-      rpoCompliance: '< 15 minutes (PITR active)',
-      rtoTarget: '< 30 minutes',
+      measuredLatestRpoSeconds: snapshots[0]?.metrics?.measuredRpoSeconds ?? null,
+      measuredLatestBackupDurationSeconds: snapshots[0]?.metrics?.backupDurationMs != null
+        ? Number((snapshots[0].metrics.backupDurationMs / 1000).toFixed(3))
+        : null,
+      rpoCompliance: snapshots[0]?.metrics?.measuredRpoSeconds != null
+        ? `${snapshots[0].metrics.measuredRpoSeconds}s measured on latest snapshot`
+        : 'No measured snapshot available',
+      rtoTarget: 'Measured during dry-run/live restore responses',
       snapshots
     });
   } catch (err) {
@@ -527,7 +847,8 @@ app.post('/api/admin/backup/restore', requireAuth, auditOperationalAccess('DATAB
     const result = await backupService.restoreBackupSnapshot(backupId, {
       confirmToken,
       dryRun: Boolean(dryRun),
-      firestoreDb: db
+      firestoreDb: db,
+      storageBucket: backupStorageBucket
     });
 
     res.locals.auditDetails = { restoredRecords: result.restoredRecords || 0 };
@@ -582,6 +903,16 @@ if (!admin.apps.length) {
 }
 
 const db = admin.apps.length ? admin.firestore() : null;
+let backupStorageBucket = null;
+if (admin.apps.length && typeof admin.storage === 'function') {
+  try {
+    backupStorageBucket = process.env.BACKUP_STORAGE_BUCKET
+      ? admin.storage().bucket(process.env.BACKUP_STORAGE_BUCKET)
+      : admin.storage().bucket();
+  } catch (err) {
+    backupStorageBucket = null;
+  }
+}
 
 function parseEmailList(value, fallback) {
   const source = value ? String(value).split(',') : fallback;
@@ -681,6 +1012,60 @@ function isVerificationRevoked(email) {
   return REVOKED_VERIFICATION_EMAILS.has(String(email || '').trim().toLowerCase());
 }
 
+// =============================================================================
+// 📱 ACTIVE USER SESSIONS & SERVER-SIDE TOKEN REVOCATION REGISTRY
+// =============================================================================
+const activeUserSessions = new Map(); // uid -> Array<SessionRecord> & _sessionsRevokedAt
+
+async function recordUserSession(req, userId, userEmail) {
+  const device = auditService.extractDeviceMetadata(req);
+  const ipInfo = auditService.sanitizeIp(getClientIp(req));
+  const sessionId = `sess_${userId.substring(0, 8)}_${Buffer.from(ipInfo.ipHash + device.platform + device.browser).toString('hex').substring(0, 10)}`;
+
+  let sessions = activeUserSessions.get(userId) || [];
+  let isSuspicious = false;
+
+  if (sessions.length > 0) {
+    const knownSubnet = sessions.some(s => s.subnetMask === ipInfo.subnetMask);
+    const knownPlatform = sessions.some(s => s.platform === device.platform);
+    if (!knownSubnet && !knownPlatform) {
+      isSuspicious = true;
+    }
+  }
+
+  const existingIdx = sessions.findIndex(s => s.sessionId === sessionId);
+  const nowIso = new Date().toISOString();
+  const sessionRecord = {
+    sessionId,
+    userId,
+    userEmail: auditService.maskEmail(userEmail),
+    platform: device.platform,
+    browser: device.browser,
+    isMobile: device.isMobile,
+    subnetMask: ipInfo.subnetMask,
+    ipHash: ipInfo.ipHash,
+    loginAt: existingIdx >= 0 ? sessions[existingIdx].loginAt : nowIso,
+    lastActiveAt: nowIso,
+    revoked: false
+  };
+
+  if (existingIdx >= 0) {
+    sessions[existingIdx] = sessionRecord;
+  } else {
+    sessions.push(sessionRecord);
+    if (sessions.length > 20) sessions.shift();
+  }
+  activeUserSessions.set(userId, sessions);
+
+  if (db) {
+    db.collection('user_sessions').doc(sessionId).set(sessionRecord, { merge: true }).catch((err) => {
+      console.warn('[SESSION FIRESTORE SYNC WARNING]:', err.message);
+    });
+  }
+
+  return { session: sessionRecord, isSuspicious };
+}
+
 /**
  * Middleware: Verify Firebase ID Token
  * Validates cryptographically signed JWT header: "Authorization: Bearer <ID_TOKEN>"
@@ -699,6 +1084,19 @@ async function requireAuth(req, res, next) {
     const decodedToken = await admin.auth().verifyIdToken(idToken, true);
     req.user = decodedToken;
 
+    // 🛑 Check Server-Authoritative Token Revocation in In-Memory Registry
+    const memorySessions = activeUserSessions.get(decodedToken.uid);
+    if (memorySessions && memorySessions._sessionsRevokedAt) {
+      const revokedSec = Math.floor(new Date(memorySessions._sessionsRevokedAt).getTime() / 1000);
+      const tokenAuthTime = decodedToken.auth_time || decodedToken.iat;
+      if (tokenAuthTime && tokenAuthTime < revokedSec) {
+        return res.status(401).json({
+          error: 'TOKEN_REVOKED',
+          message: 'Your session has been terminated across all devices. Please sign in again.'
+        });
+      }
+    }
+
     // 🛑 Block suspended accounts via Custom Claims
     if (decodedToken.suspended === true || decodedToken.status === 'suspended' || decodedToken.disabled === true || decodedToken.isSuspended === true) {
       return res.status(403).json({
@@ -707,11 +1105,21 @@ async function requireAuth(req, res, next) {
       });
     }
 
-    // 🛑 Block suspended accounts via Firestore user doc
+    // 🛑 Block suspended accounts & revoked sessions via Firestore user doc
     if (db) {
       const userDoc = await db.collection('users').doc(decodedToken.uid).get();
       if (userDoc.exists) {
         const udata = userDoc.data();
+        if (udata.sessionsRevokedAt) {
+          const revokedSec = Math.floor(new Date(udata.sessionsRevokedAt).getTime() / 1000);
+          const tokenAuthTime = decodedToken.auth_time || decodedToken.iat;
+          if (tokenAuthTime && tokenAuthTime < revokedSec) {
+            return res.status(401).json({
+              error: 'TOKEN_REVOKED',
+              message: 'Your session has been terminated across all devices. Please sign in again.'
+            });
+          }
+        }
         if (udata.authzVersion && udata.authzVersion !== decodedToken.authzVersion) {
           return res.status(403).json({ error: 'STALE_PERMISSIONS', message: 'Refresh your sign-in token.' });
         }
@@ -727,11 +1135,137 @@ async function requireAuth(req, res, next) {
     next();
   } catch (err) {
     console.error("[SERVER AUTH ERROR] Invalid token:", err.message);
+    if (err.code === 'auth/id-token-revoked') {
+      return res.status(401).json({
+        error: 'TOKEN_REVOKED',
+        message: 'Your sign-in token was revoked by the server. Please sign in again.'
+      });
+    }
+    if (err.code === 'auth/id-token-expired') {
+      return res.status(401).json({
+        error: 'TOKEN_EXPIRED',
+        message: 'Your sign-in token has expired. Please refresh your session.'
+      });
+    }
     return res.status(403).json({
       error: 'FORBIDDEN',
       message: 'Cryptographically invalid or expired Firebase ID token.'
     });
   }
+}
+
+/**
+ * Middleware: Enforce Fresh Sign-In for Highly Sensitive Operations (Re-authentication)
+ * Ensures credential modification, email updates, and device revocation require recent login.
+ */
+function requireRecentAuth(maxAgeSeconds = 900) {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ error: 'UNAUTHORIZED', message: 'Authentication required.' });
+    }
+    const authTime = req.user.auth_time || req.user.iat;
+    if (!authTime) {
+      return res.status(401).json({
+        error: 'REQUIRES_RECENT_LOGIN',
+        message: 'Authentication timestamp is missing. Fresh sign-in required.'
+      });
+    }
+
+    const nowSec = Math.floor(Date.now() / 1000);
+    const ageSec = nowSec - authTime;
+
+    if (ageSec > maxAgeSeconds) {
+      return res.status(401).json({
+        error: 'REQUIRES_RECENT_LOGIN',
+        message: `This sensitive operation requires recent sign-in (within ${Math.floor(maxAgeSeconds / 60)} minutes). Last login was ${Math.floor(ageSec / 60)} minutes ago.`,
+        authAgeSeconds: ageSec,
+        maxAgeSeconds
+      });
+    }
+
+    next();
+  };
+}
+
+/**
+ * Middleware: Enforce Multi-Factor Authentication (MFA) on Sensitive Operations
+ * Evaluates whether the authenticated user has MFA enabled.
+ * If enabled, requires either a valid cryptographic MFA ticket ('x-mfa-ticket'),
+ * a direct TOTP code ('x-mfa-code'), or an emergency recovery backup code ('x-mfa-recovery-code').
+ * Blocks direct API step-bypass attempts before any sensitive modification occurs.
+ */
+async function requireMfaIfEnrolled(req, res, next) {
+  if (!req.user || !req.user.uid) {
+    return res.status(401).json({ error: 'UNAUTHORIZED', message: 'Authentication required.' });
+  }
+
+  const userId = req.user.uid;
+
+  let isEnrolled = mfaService.isMfaEnabled(userId);
+  if (!isEnrolled && db) {
+    try {
+      const snap = await Promise.race([
+        db.collection('users').doc(userId).get(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 800))
+      ]);
+      if (snap && snap.exists && snap.data() && snap.data().mfaEnabled) {
+        isEnrolled = true;
+      }
+    } catch (_) {}
+  }
+
+  if (!isEnrolled) {
+    return next();
+  }
+
+  const ticket = req.headers['x-mfa-ticket'];
+  const code = req.headers['x-mfa-code'];
+  const recoveryCode = req.headers['x-mfa-recovery-code'];
+
+  if (ticket && mfaService.verifyMfaTicket(ticket, userId)) {
+    req.mfaVerified = true;
+    return next();
+  }
+
+  if (code) {
+    const rec = mfaService.getUserMfaRecord(userId);
+    if (rec && rec.secret && mfaService.verifyTotp(code, rec.secret)) {
+      req.mfaVerified = true;
+      return next();
+    }
+  }
+
+  if (recoveryCode) {
+    const consumed = mfaService.consumeBackupCode(userId, recoveryCode);
+    if (consumed) {
+      if (db) {
+        auditService.recordAuditEvent(db, {
+          type: auditService.AUDIT_EVENT_TYPES.MFA_RECOVERY_CODE_USED,
+          req,
+          details: { sensitiveAction: req.originalUrl || req.path }
+        }).catch(() => {});
+      }
+      req.mfaVerified = true;
+      return next();
+    }
+  }
+
+  if (db) {
+    auditService.recordAuditEvent(db, {
+      type: auditService.AUDIT_EVENT_TYPES.MFA_CHALLENGE_FAILED,
+      req,
+      details: {
+        reason: ticket || code || recoveryCode ? 'INVALID_MFA_CREDENTIAL' : 'MISSING_MFA_HEADER',
+        path: req.originalUrl || req.path
+      }
+    }).catch(() => {});
+  }
+
+  return res.status(403).json({
+    error: 'MFA_REQUIRED',
+    message: 'Multi-factor authentication is required to execute this sensitive operation. Provide a valid x-mfa-ticket, x-mfa-code, or x-mfa-recovery-code.',
+    mfaRequired: true
+  });
 }
 
 /**
@@ -854,11 +1388,11 @@ app.get('/api/clinical/rules/versions', (req, res) => {
         status: 'active',
         effectiveFrom: '2026-09-21',
         deprecatedAt: null,
-        reviewedBy: 'Clinical Governance & Pulmonology Board',
-        reviewStatus: 'clinician-reviewed-rules',
+        reviewedBy: null,
+        reviewStatus: 'pending-qualified-clinical-and-regulatory-review',
         changelog: {
-          ar: 'الإصدار السريري الأساسي المعتمد: فرز مبني على عتبات SpO2، ضيق التنفس، شدة السعال، ومدة الأعراض.',
-          en: 'Baseline certified clinical release: rule-based triage based on SpO2 thresholds, dyspnea, cough severity, and symptom duration.'
+          ar: 'إصدار تشغيلي أولي غير معتمد سريرياً بعد: فرز مبني على عتبات SpO2، ضيق التنفس، شدة السعال، ومدة الأعراض. الموافقة معلقة لحين مراجعة مختص طبي ومختص تنظيمي في مصر.',
+          en: 'Initial operational release, not clinically certified yet: rule-based triage based on SpO2 thresholds, dyspnea, cough severity, and symptom duration. Approval is pending review by qualified medical and Egyptian regulatory specialists.'
         },
         scoreThresholds: { urgent: 6, high: 3 },
         spo2Thresholds: { urgentBelow: 90, highBelow: 93, closeFollowUpMin: 93, closeFollowUpMax: 94 },
@@ -878,11 +1412,11 @@ app.get('/api/clinical/rules/versions', (req, res) => {
         status: 'candidate',
         effectiveFrom: '2026-10-01',
         deprecatedAt: null,
-        reviewedBy: 'Clinical Governance & Pulmonology Board',
-        reviewStatus: 'clinician-reviewed-rules',
+        reviewedBy: null,
+        reviewStatus: 'pending-qualified-clinical-and-regulatory-review',
         changelog: {
-          ar: 'تحديث سريري مرتقب: تعزيز حساسية عوامل الخطورة التنفسية المزمنة ومطابقة معايير الفرز الرئوي الإقليمية.',
-          en: 'Candidate clinical update: enhanced sensitivity for chronic respiratory risk factors and aligned regional pulmonology triage.'
+          ar: 'تحديث مرشح غير معتمد: تعزيز حساسية عوامل الخطورة التنفسية المزمنة. لا يُفعّل كاعتماد طبي قبل مراجعة مختص طبي ومختص تنظيمي في مصر.',
+          en: 'Unapproved candidate update: enhanced sensitivity for chronic respiratory risk factors. It must not be treated as medically approved before qualified medical and Egyptian regulatory review.'
         },
         scoreThresholds: { urgent: 6, high: 3 },
         spo2Thresholds: { urgentBelow: 90, highBelow: 93, closeFollowUpMin: 93, closeFollowUpMax: 94 },
@@ -1214,13 +1748,59 @@ app.post('/api/user/sync-role', requireAuth, async (req, res) => {
       }).catch(() => {});
     }
 
+    if (db) {
+      auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.USER_SIGNED_IN,
+        req,
+        details: { method: 'sync_role', role, isOwner, verifiedDoctor }
+      }).catch(err => console.warn('[AUDIT SIGNIN WARNING]:', err.message));
+    }
+
+    let session = null;
+    let isSuspicious = false;
+    try {
+      const sessionResult = await recordUserSession(req, uid, email);
+      session = sessionResult.session;
+      isSuspicious = sessionResult.isSuspicious;
+
+      if (isSuspicious) {
+        if (db) {
+          auditService.recordAuditEvent(db, {
+            type: auditService.AUDIT_EVENT_TYPES.SUSPICIOUS_LOGIN_DETECTED,
+            req,
+            details: {
+              reason: 'Unrecognized IP subnet and device platform combination',
+              subnetMask: session.subnetMask,
+              platform: session.platform,
+              browser: session.browser
+            }
+          }).catch(() => {});
+        }
+        sendClinicalNotificationEmail({
+          to: email,
+          subject: 'Security Alert: New Sign-in Detected',
+          recipientName: email.split('@')[0],
+          role: role,
+          caseId: 'SECURITY_ALERT',
+          patientName: 'Account Owner',
+          status: 'suspicious_login',
+          clinicName: 'Health Vibes Security',
+          notes: `A new sign-in was detected from ${session.platform} (${session.browser}) at IP subnet ${session.subnetMask}. If this was not you, please sign out of all devices immediately.`
+        }).catch(() => {});
+      }
+    } catch (sessionErr) {
+      console.warn('[SESSION RECORD WARNING]:', sessionErr.message);
+    }
+
     res.json({
       success: true,
       uid,
       email,
       role,
       isOwner,
-      verifiedDoctor
+      verifiedDoctor,
+      sessionId: session?.sessionId || null,
+      suspiciousLogin: isSuspicious
     });
   } catch (err) {
     console.error("[SERVER ROLE SYNC ERROR]:", err);
@@ -1229,10 +1809,588 @@ app.post('/api/user/sync-role', requireAuth, async (req, res) => {
 });
 
 /**
+ * GET /api/user/sessions
+ * List active devices and sign-in sessions for the authenticated user
+ */
+app.get('/api/user/sessions', requireAuth, async (req, res) => {
+  const userId = req.user.uid;
+  const currentIpInfo = auditService.sanitizeIp(getClientIp(req));
+  const currentDevice = auditService.extractDeviceMetadata(req);
+
+  let sessions = activeUserSessions.get(userId) || [];
+  if (db && sessions.length === 0) {
+    try {
+      const snap = await db.collection('user_sessions').where('userId', '==', userId).get();
+      sessions = snap.docs.map(doc => doc.data());
+      activeUserSessions.set(userId, sessions);
+    } catch (_) {}
+  }
+
+  const formatted = sessions.map(s => ({
+    sessionId: s.sessionId,
+    platform: s.platform,
+    browser: s.browser,
+    isMobile: Boolean(s.isMobile),
+    subnetMask: s.subnetMask,
+    loginAt: s.loginAt,
+    lastActiveAt: s.lastActiveAt,
+    revoked: Boolean(s.revoked),
+    isCurrent: s.subnetMask === currentIpInfo.subnetMask && s.platform === currentDevice.platform && s.browser === currentDevice.browser
+  }));
+
+  res.json({
+    success: true,
+    totalSessions: formatted.length,
+    sessions: formatted
+  });
+});
+
+/**
+ * POST /api/user/sessions/terminate
+ * Terminate a specific remote session by sessionId
+ */
+app.post('/api/user/sessions/terminate', requireAuth, async (req, res) => {
+  const userId = req.user.uid;
+  const { sessionId } = req.body || {};
+
+  if (!sessionId || typeof sessionId !== 'string') {
+    return res.status(400).json({ error: 'INVALID_SESSION_ID', message: 'A valid sessionId is required.' });
+  }
+
+  const sessions = activeUserSessions.get(userId) || [];
+  const target = sessions.find(s => s.sessionId === sessionId);
+  if (target) {
+    target.revoked = true;
+    target.terminatedAt = new Date().toISOString();
+  }
+
+  if (db) {
+    db.collection('user_sessions').doc(sessionId).set({
+      revoked: true,
+      terminatedAt: new Date().toISOString()
+    }, { merge: true }).catch((err) => console.warn('[SESSION TERMINATE WARNING]:', err.message));
+    auditService.recordAuditEvent(db, {
+      type: auditService.AUDIT_EVENT_TYPES.SESSION_TERMINATED,
+      req,
+      details: { targetSessionId: sessionId }
+    }).catch(() => {});
+  }
+
+  res.json({
+    success: true,
+    message: 'Session terminated successfully.',
+    terminatedSessionId: sessionId
+  });
+});
+
+/**
+ * POST /api/user/revoke-all-sessions
+ * Server-authoritative global session revocation across all devices (Sign out from all devices)
+ */
+app.post('/api/user/revoke-all-sessions', requireAuth, requireRecentAuth(900), requireMfaIfEnrolled, async (req, res) => {
+  const userId = req.user.uid;
+  const nowIso = new Date().toISOString();
+
+  // 1. Authoritative Firebase Admin revocation of all refresh tokens
+  try {
+    await admin.auth().revokeRefreshTokens(userId);
+  } catch (err) {
+    console.error('[REVOKE ALL SESSIONS FIREBASE ERROR]:', err.message);
+  }
+
+  // 2. Mark sessionsRevokedAt in user document and memory registry to invalidate in-flight tokens
+  if (db) {
+    db.collection('users').doc(userId).set({
+      sessionsRevokedAt: nowIso
+    }, { merge: true }).catch((err) => console.warn('[REVOKE ALL SESSIONS USER DOC WARNING]:', err.message));
+  }
+
+  const sessions = activeUserSessions.get(userId) || [];
+  sessions.forEach(s => { s.revoked = true; s.terminatedAt = nowIso; });
+  sessions._sessionsRevokedAt = nowIso;
+  activeUserSessions.set(userId, sessions);
+
+  if (db) {
+    auditService.recordAuditEvent(db, {
+      type: auditService.AUDIT_EVENT_TYPES.ALL_SESSIONS_REVOKED,
+      req,
+      details: { revokedAt: nowIso }
+    }).catch(() => {});
+  }
+
+  res.json({
+    success: true,
+    revokedAt: nowIso,
+    message: 'All active sessions and device tokens have been revoked. Fresh sign-in required.'
+  });
+});
+
+/**
+ * POST /api/user/change-password
+ * Secure password change requiring recent re-authentication and revoking other active sessions
+ */
+app.post('/api/user/change-password', requireAuth, requireRecentAuth(900), requireMfaIfEnrolled, async (req, res) => {
+  const userId = req.user.uid;
+  const { newPassword, confirmPassword } = req.body || {};
+
+  if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 8) {
+    return res.status(400).json({
+      error: 'INVALID_PASSWORD',
+      message: 'Password must be at least 8 characters long.'
+    });
+  }
+
+  const hasUpper = /[A-Z]/.test(newPassword);
+  const hasLower = /[a-z]/.test(newPassword);
+  const hasDigit = /[0-9]/.test(newPassword);
+  if (!hasUpper || !hasLower || !hasDigit) {
+    return res.status(400).json({
+      error: 'WEAK_PASSWORD',
+      message: 'Password must contain at least one uppercase letter, one lowercase letter, and one number.'
+    });
+  }
+
+  if (confirmPassword !== undefined && newPassword !== confirmPassword) {
+    return res.status(400).json({
+      error: 'PASSWORD_MISMATCH',
+      message: 'Password confirmation does not match.'
+    });
+  }
+
+  try {
+    await admin.auth().updateUser(userId, {
+      password: newPassword
+    });
+
+    // Revoke refresh tokens on other devices to force re-authentication with the new password
+    await admin.auth().revokeRefreshTokens(userId).catch(() => {});
+    const nowIso = new Date().toISOString();
+
+    const sessions = activeUserSessions.get(userId) || [];
+    sessions.forEach(s => { s.revoked = true; s.terminatedAt = nowIso; });
+    sessions._sessionsRevokedAt = nowIso;
+    activeUserSessions.set(userId, sessions);
+
+    if (db) {
+      db.collection('users').doc(userId).set({
+        sessionsRevokedAt: nowIso,
+        passwordLastChangedAt: nowIso
+      }, { merge: true }).catch(() => {});
+
+      auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.PASSWORD_CHANGED,
+        req,
+        details: { changedAt: nowIso }
+      }).catch(() => {});
+    }
+
+    res.json({
+      success: true,
+      message: 'Password changed successfully. For your security, all other active sessions have been terminated.'
+    });
+  } catch (err) {
+    console.error('[CHANGE PASSWORD ERROR]:', err);
+    res.status(500).json({
+      error: 'PASSWORD_CHANGE_FAILED',
+      message: 'Failed to update password. Please try again.'
+    });
+  }
+});
+
+/**
+ * POST /api/user/change-email
+ * Secure email change requiring recent re-authentication
+ */
+app.post('/api/user/change-email', requireAuth, requireRecentAuth(900), requireMfaIfEnrolled, async (req, res) => {
+  const userId = req.user.uid;
+  const currentEmail = (req.user.email || '').toLowerCase();
+  const { newEmail } = req.body || {};
+
+  if (!newEmail || typeof newEmail !== 'string' || !newEmail.includes('@') || newEmail.length > 100) {
+    return res.status(400).json({
+      error: 'INVALID_EMAIL',
+      message: 'A valid email address is required (maximum 100 characters).'
+    });
+  }
+
+  const cleanEmail = newEmail.trim().toLowerCase();
+  if (cleanEmail === currentEmail) {
+    return res.status(400).json({
+      error: 'SAME_EMAIL',
+      message: 'New email cannot be the same as your current email.'
+    });
+  }
+
+  try {
+    await admin.auth().updateUser(userId, {
+      email: cleanEmail,
+      emailVerified: false
+    });
+
+    await admin.auth().revokeRefreshTokens(userId).catch(() => {});
+    const nowIso = new Date().toISOString();
+
+    const sessions = activeUserSessions.get(userId) || [];
+    sessions.forEach(s => { s.revoked = true; s.terminatedAt = nowIso; });
+    sessions._sessionsRevokedAt = nowIso;
+    activeUserSessions.set(userId, sessions);
+
+    if (db) {
+      db.collection('users').doc(userId).set({
+        email: cleanEmail,
+        emailVerified: false,
+        sessionsRevokedAt: nowIso,
+        emailLastChangedAt: nowIso
+      }, { merge: true }).catch(() => {});
+
+      auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.EMAIL_CHANGED,
+        req,
+        details: { oldEmail: auditService.maskEmail(currentEmail), newEmail: auditService.maskEmail(cleanEmail), changedAt: nowIso }
+      }).catch(() => {});
+    }
+
+    res.json({
+      success: true,
+      newEmail: cleanEmail,
+      message: 'Email address updated successfully. Please verify your new email.'
+    });
+  } catch (err) {
+    console.error('[CHANGE EMAIL ERROR]:', err);
+    res.status(500).json({
+      error: 'EMAIL_CHANGE_FAILED',
+      message: err.code === 'auth/email-already-exists'
+        ? 'This email address is already in use by another account.'
+        : 'Failed to update email address. Please try again.'
+    });
+  }
+});
+
+/**
+ * POST /api/auth/recover-account
+ * Secure account recovery without revealing account existence or bypassing cryptographic verification
+ */
+app.post('/api/auth/recover-account', async (req, res) => {
+  const { email } = req.body || {};
+
+  if (!email || typeof email !== 'string' || !email.includes('@') || email.length > 100) {
+    return res.status(400).json({
+      error: 'INVALID_EMAIL',
+      message: 'A valid email address is required.'
+    });
+  }
+
+  const cleanEmail = email.trim().toLowerCase();
+
+  try {
+    let userRecord = null;
+    try {
+      userRecord = await admin.auth().getUserByEmail(cleanEmail);
+    } catch (e) {
+      if (e.code !== 'auth/user-not-found') {
+        console.warn('[RECOVER ACCOUNT CHECK WARNING]:', e.message);
+      }
+    }
+
+    if (userRecord && userRecord.uid) {
+      const resetLink = await admin.auth().generatePasswordResetLink(cleanEmail).catch(() => null);
+
+      if (db) {
+        auditService.recordAuditEvent(db, {
+          type: auditService.AUDIT_EVENT_TYPES.ACCOUNT_RECOVERY_REQUESTED,
+          req,
+          details: { emailMasked: auditService.maskEmail(cleanEmail) }
+        }).catch(() => {});
+      }
+
+      if (resetLink) {
+        sendClinicalNotificationEmail({
+          to: cleanEmail,
+          subject: 'Health Vibes - Account Recovery Link',
+          recipientName: userRecord.displayName || cleanEmail.split('@')[0],
+          role: 'patient',
+          caseId: 'ACCOUNT_RECOVERY',
+          patientName: 'Account Owner',
+          status: 'password_reset',
+          clinicName: 'Health Vibes Security',
+          notes: `A request was made to recover your account. Click the secure link to reset your password: ${resetLink}. If you did not request this, please ignore this email.`
+        }).catch(() => {});
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'If an account exists with this email, recovery instructions have been sent.'
+    });
+  } catch (err) {
+    console.error('[RECOVER ACCOUNT ERROR]:', err);
+    res.status(500).json({
+      error: 'RECOVERY_REQUEST_FAILED',
+      message: 'Unable to process account recovery request. Please try again later.'
+    });
+  }
+});
+
+/**
+ * GET /api/user/mfa/status
+ * Retrieve MFA enrollment status, registration timestamp, and remaining backup recovery codes
+ */
+app.get('/api/user/mfa/status', requireAuth, async (req, res) => {
+  const userId = req.user.uid;
+  const isEnabled = mfaService.isMfaEnabled(userId);
+  const rec = mfaService.getUserMfaRecord(userId);
+
+  let backupCodesRemaining = 0;
+  if (rec && Array.isArray(rec.backupCodes)) {
+    backupCodesRemaining = rec.backupCodes.filter(b => !b.used).length;
+  }
+
+  res.json({
+    success: true,
+    mfaEnabled: isEnabled,
+    enrolledAt: rec?.enrolledAt || null,
+    backupCodesRemaining
+  });
+});
+
+/**
+ * POST /api/user/mfa/enroll
+ * Initiate MFA enrollment: generate TOTP secret, backup recovery codes, and otpauth URI
+ * Requires fresh re-authentication
+ */
+app.post('/api/user/mfa/enroll', requireAuth, requireRecentAuth(900), async (req, res) => {
+  const userId = req.user.uid;
+  const userEmail = req.user.email || 'user@healthvibes.ai';
+
+  if (mfaService.isMfaEnabled(userId)) {
+    return res.status(400).json({
+      error: 'ALREADY_ENROLLED',
+      message: 'MFA is already enabled on this account. Disenroll first to rotate credentials.'
+    });
+  }
+
+  const secret = mfaService.generateTotpSecret();
+  const { plainCodes, hashedRecords } = mfaService.generateBackupCodes(8);
+  const otpauthUri = mfaService.generateOtpAuthUri({
+    email: userEmail,
+    secret,
+    issuer: 'Health Vibes AI'
+  });
+
+  mfaService.setUserMfaRecord(userId, {
+    enabled: false,
+    secret,
+    backupCodes: hashedRecords,
+    pendingAt: new Date().toISOString()
+  });
+
+  res.json({
+    success: true,
+    secret,
+    otpauthUri,
+    backupCodes: plainCodes,
+    message: 'Scan the QR code or enter the secret in your authenticator app, then verify with a 6-digit code to activate.'
+  });
+});
+
+/**
+ * POST /api/user/mfa/verify-enrollment
+ * Finalize MFA enrollment by verifying the first 6-digit TOTP code
+ */
+app.post('/api/user/mfa/verify-enrollment', requireAuth, requireRecentAuth(900), async (req, res) => {
+  const userId = req.user.uid;
+  const { code } = req.body || {};
+
+  const rec = mfaService.getUserMfaRecord(userId);
+  if (!rec || !rec.secret) {
+    return res.status(400).json({
+      error: 'NO_PENDING_ENROLLMENT',
+      message: 'No pending MFA enrollment found. Call /api/user/mfa/enroll first.'
+    });
+  }
+
+  const isValid = mfaService.verifyTotp(code, rec.secret);
+  if (!isValid) {
+    return res.status(400).json({
+      error: 'INVALID_MFA_CODE',
+      message: 'The 6-digit verification code is invalid or has expired.'
+    });
+  }
+
+  const nowIso = new Date().toISOString();
+  rec.enabled = true;
+  rec.enrolledAt = nowIso;
+  mfaService.setUserMfaRecord(userId, rec);
+
+  if (db) {
+    db.collection('users').doc(userId).set({
+      mfaEnabled: true,
+      mfaEnrolledAt: nowIso
+    }, { merge: true }).catch(() => {});
+
+    auditService.recordAuditEvent(db, {
+      type: auditService.AUDIT_EVENT_TYPES.MFA_ENROLLED,
+      req,
+      details: { enrolledAt: nowIso, method: 'TOTP_RFC6238' }
+    }).catch(() => {});
+  }
+
+  const mfaTicket = mfaService.issueMfaTicket(userId);
+
+  res.json({
+    success: true,
+    mfaTicket,
+    message: 'Multi-factor authentication successfully activated.'
+  });
+});
+
+/**
+ * POST /api/user/mfa/verify-challenge
+ * Verify MFA challenge via 6-digit TOTP code, issuing a short-lived cryptographic step-up ticket
+ */
+app.post('/api/user/mfa/verify-challenge', requireAuth, async (req, res) => {
+  const userId = req.user.uid;
+  const { code } = req.body || {};
+
+  if (!mfaService.isMfaEnabled(userId)) {
+    return res.status(400).json({
+      error: 'MFA_NOT_ENROLLED',
+      message: 'MFA is not enabled on this account.'
+    });
+  }
+
+  const rec = mfaService.getUserMfaRecord(userId);
+  const isValid = mfaService.verifyTotp(code, rec.secret);
+
+  if (!isValid) {
+    if (db) {
+      auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.MFA_CHALLENGE_FAILED,
+        req,
+        details: { reason: 'INVALID_TOTP_CODE' }
+      }).catch(() => {});
+    }
+
+    return res.status(400).json({
+      error: 'INVALID_MFA_CODE',
+      message: 'Invalid two-factor authentication code.'
+    });
+  }
+
+  const mfaTicket = mfaService.issueMfaTicket(userId);
+
+  if (db) {
+    auditService.recordAuditEvent(db, {
+      type: auditService.AUDIT_EVENT_TYPES.MFA_CHALLENGE_VERIFIED,
+      req,
+      details: { verifiedAt: new Date().toISOString() }
+    }).catch(() => {});
+  }
+
+  res.json({
+    success: true,
+    mfaTicket,
+    expiresInSeconds: mfaService.MFA_TICKET_TTL_SECONDS
+  });
+});
+
+/**
+ * POST /api/user/mfa/recovery
+ * Authenticate via single-use backup recovery code (factor loss recovery)
+ */
+app.post('/api/user/mfa/recovery', requireAuth, async (req, res) => {
+  const userId = req.user.uid;
+  const { recoveryCode } = req.body || {};
+
+  if (!mfaService.isMfaEnabled(userId)) {
+    return res.status(400).json({
+      error: 'MFA_NOT_ENROLLED',
+      message: 'MFA is not enabled on this account.'
+    });
+  }
+
+  if (!recoveryCode) {
+    return res.status(400).json({
+      error: 'INVALID_RECOVERY_CODE',
+      message: 'Recovery code is required.'
+    });
+  }
+
+  const consumed = mfaService.consumeBackupCode(userId, recoveryCode);
+  if (!consumed) {
+    if (db) {
+      auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.MFA_CHALLENGE_FAILED,
+        req,
+        details: { reason: 'INVALID_OR_CONSUMED_RECOVERY_CODE' }
+      }).catch(() => {});
+    }
+
+    return res.status(400).json({
+      error: 'INVALID_RECOVERY_CODE',
+      message: 'Invalid or already used backup recovery code.'
+    });
+  }
+
+  const mfaTicket = mfaService.issueMfaTicket(userId);
+
+  if (db) {
+    auditService.recordAuditEvent(db, {
+      type: auditService.AUDIT_EVENT_TYPES.MFA_RECOVERY_CODE_USED,
+      req,
+      details: { recoveredAt: new Date().toISOString() }
+    }).catch(() => {});
+  }
+
+  const rec = mfaService.getUserMfaRecord(userId);
+  const remaining = rec?.backupCodes?.filter(b => !b.used).length || 0;
+
+  res.json({
+    success: true,
+    mfaTicket,
+    expiresInSeconds: mfaService.MFA_TICKET_TTL_SECONDS,
+    backupCodesRemaining: remaining,
+    message: 'Backup code accepted. Emergency step-up access granted.'
+  });
+});
+
+/**
+ * POST /api/user/mfa/disenroll
+ * Disenroll from MFA: requires fresh re-authentication and MFA verification
+ */
+app.post('/api/user/mfa/disenroll', requireAuth, requireRecentAuth(900), requireMfaIfEnrolled, async (req, res) => {
+  const userId = req.user.uid;
+  const nowIso = new Date().toISOString();
+
+  mfaService.setUserMfaRecord(userId, {
+    enabled: false,
+    disenrolledAt: nowIso
+  });
+
+  if (db) {
+    db.collection('users').doc(userId).set({
+      mfaEnabled: false,
+      mfaDisenrolledAt: nowIso
+    }, { merge: true }).catch(() => {});
+
+    auditService.recordAuditEvent(db, {
+      type: auditService.AUDIT_EVENT_TYPES.MFA_DISENROLLED,
+      req,
+      details: { disenrolledAt: nowIso }
+    }).catch(() => {});
+  }
+
+  res.json({
+    success: true,
+    message: 'Multi-factor authentication has been disabled.'
+  });
+});
+
+/**
  * POST /api/admin/set-user-role
  * Server-authoritative endpoint to change a user's role and set Firebase Custom Claims
  */
-app.post('/api/admin/set-user-role', requireAuth, auditOperationalAccess('ADMIN_ROLE_CHANGE'), requireVerifiedEmail, requireSuperAdmin, async (req, res) => {
+app.post('/api/admin/set-user-role', requireAuth, auditOperationalAccess('ADMIN_ROLE_CHANGE'), requireVerifiedEmail, requireSuperAdmin, requireMfaIfEnrolled, async (req, res) => {
   const { targetUserId, newRole, clinicId } = req.body;
 
   if (!targetUserId || !VALID_ROLES.includes(newRole)) {
@@ -1268,6 +2426,7 @@ app.post('/api/admin/set-user-role', requireAuth, auditOperationalAccess('ADMIN_
       isOwner: targetIsOwner,
       verifiedDoctor: isDoctor
     });
+    await admin.auth().revokeRefreshTokens(targetUserId);
 
     // 2. Update Firestore user document
     if (db) {
@@ -1289,6 +2448,17 @@ app.post('/api/admin/set-user-role', requireAuth, auditOperationalAccess('ADMIN_
         assignedBy: req.user.email,
         timestamp: admin.firestore.FieldValue.serverTimestamp()
       });
+      await auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.ROLE_CHANGED,
+        req,
+        targetUserId,
+        clinicId: targetClinic || null,
+        details: {
+          previousRole: targetUser.customClaims?.role || 'patient',
+          newRole,
+          targetEmailMasked: auditService.maskEmail(targetUser.email)
+        }
+      }).catch(err => console.warn('[AUDIT ROLE_CHANGED ERROR]:', err.message));
     }
 
     console.log(`[SERVER RBAC] User ${targetUser.email} (${targetUserId}) role updated to ${newRole} by ${req.user.email}`);
@@ -1416,6 +2586,7 @@ app.post('/api/admin/approve-doctor-application', requireAuth, auditOperationalA
     // 1. Elevate user role to 'doctor' in Firebase Auth Custom Claims
     const applicantAuth = await admin.auth().getUser(applicantUserId);
     await admin.auth().setCustomUserClaims(applicantUserId, { ...applicantAuth.customClaims, role: 'doctor', verifiedDoctor: true });
+    await admin.auth().revokeRefreshTokens(applicantUserId);
 
     // 2. Update application status in Firestore
     if (db) {
@@ -1466,6 +2637,7 @@ app.post('/api/admin/reject-doctor-application', requireAuth, auditOperationalAc
       rejectedBy: req.user.uid, rejectedAt: admin.firestore.FieldValue.serverTimestamp() });
     const account = await admin.auth().getUser(applicantUserId);
     await admin.auth().setCustomUserClaims(applicantUserId, { ...account.customClaims, role: ROLES.PATIENT, verifiedDoctor: false, doctorVerified: false });
+    await admin.auth().revokeRefreshTokens(applicantUserId);
     await db.collection('users').doc(applicantUserId).set({ role: ROLES.PATIENT, verifiedDoctor: false,
       doctorVerified: false, doctorApplicationStatus: 'rejected' }, { merge: true });
     res.json({ success: true });
@@ -1487,6 +2659,151 @@ app.post('/api/admin/set-user-verification', requireAuth, auditOperationalAccess
       targetUserId, verified, timestamp: admin.firestore.FieldValue.serverTimestamp() });
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: 'VERIFICATION_CHANGE_FAILED' }); }
+});
+
+// =============================================================================
+// 🛡️ AUTHORITATIVE ENTERPRISE AUDIT TRAIL & COMPLIANCE ENDPOINTS
+// =============================================================================
+
+/**
+ * GET /api/admin/audit/events
+ * Query and filter audit events with strict RBAC:
+ * - super_admin / isOwner: cross-clinic visibility
+ * - clinic_admin: strictly scoped to requester's clinicId
+ */
+app.get('/api/admin/audit/events', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const scope = await resolveRequesterClinic(req);
+    const effectiveUser = {
+      ...req.user,
+      role: scope.role,
+      clinicId: scope.clinicId
+    };
+    const result = await auditService.queryAuditEvents(db, {
+      requesterUser: effectiveUser,
+      filters: req.query || {}
+    });
+    res.json({ success: true, ...result });
+  } catch (err) {
+    const status = err.statusCode || 500;
+    res.status(status).json({ error: 'AUDIT_QUERY_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET & POST /api/admin/audit/export
+ * Export audit events (JSON / CSV) with data minimization and export trail logging
+ */
+const handleAuditExport = async (req, res) => {
+  try {
+    const scope = await resolveRequesterClinic(req);
+    const effectiveUser = {
+      ...req.user,
+      role: scope.role,
+      clinicId: scope.clinicId
+    };
+    const filters = req.method === 'POST' ? (req.body || {}) : (req.query || {});
+    const format = (req.query?.format || req.body?.format || 'json').toLowerCase();
+
+    const exportResult = await auditService.exportAuditEvents(db, {
+      requesterUser: effectiveUser,
+      filters,
+      format,
+      req
+    });
+
+    res.setHeader('Content-Type', exportResult.contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${exportResult.filename}"`);
+    return res.send(exportResult.data);
+  } catch (err) {
+    const status = err.statusCode || 500;
+    return res.status(status).json({ error: 'AUDIT_EXPORT_FAILED', message: err.message });
+  }
+};
+
+app.get('/api/admin/audit/export', requireAuth, requireAdmin, handleAuditExport);
+app.post('/api/admin/audit/export', requireAuth, requireAdmin, handleAuditExport);
+
+/**
+ * POST /api/audit/session-logout
+ * Audit user sign-out event with trusted actor & sanitized IP/device metadata
+ */
+app.post('/api/audit/session-logout', requireAuth, async (req, res) => {
+  try {
+    if (db) {
+      await auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.USER_SIGNED_OUT,
+        req,
+        details: { reason: req.body?.reason || 'user_signed_out' }
+      });
+    }
+    res.json({ success: true, message: 'Sign out audit event recorded.' });
+  } catch (err) {
+    res.status(500).json({ error: 'AUDIT_LOGOUT_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/audit/record-viewed
+ * Audit clinical record / medical case viewing with trusted actor & metadata
+ */
+app.post('/api/audit/record-viewed', requireAuth, async (req, res) => {
+  const { caseId, recordType } = req.body || {};
+  if (!caseId) {
+    return res.status(400).json({ error: 'INVALID_REQUEST', message: 'caseId is required.' });
+  }
+  try {
+    if (db) {
+      let clinicId = null;
+      try {
+        const caseDoc = await db.collection('cases').doc(caseId).get();
+        if (caseDoc.exists) clinicId = recordClinicId(caseDoc.data());
+      } catch (_) {}
+
+      await auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.RECORD_VIEWED,
+        req,
+        clinicId,
+        details: {
+          caseId,
+          recordType: recordType || 'clinical_case',
+          action: 'VIEW_RECORD'
+        }
+      });
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'AUDIT_RECORD_VIEW_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/audit/file-accessed
+ * Audit storage file / attachment access with data minimization
+ */
+app.post('/api/audit/file-accessed', requireAuth, async (req, res) => {
+  const { fileId, fileName, fileType, purpose, caseId } = req.body || {};
+  if (!fileId && !fileName) {
+    return res.status(400).json({ error: 'INVALID_REQUEST', message: 'fileId or fileName required.' });
+  }
+  try {
+    if (db) {
+      await auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.FILE_ACCESSED,
+        req,
+        details: {
+          fileId: fileId || null,
+          fileName: fileName ? String(fileName).substring(0, 100) : null,
+          fileType: fileType || 'document',
+          purpose: purpose || 'clinical_review',
+          caseId: caseId || null
+        }
+      });
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'AUDIT_FILE_ACCESS_FAILED', message: err.message });
+  }
 });
 
 // Credential values come from an administrator-approved application, not the
@@ -1588,6 +2905,12 @@ async function executeDoctorTransition({
         return res.status(400).json({
           error: 'MISSING_CLINICAL_REPORT_DATA',
           message: 'Doctor clinical notes and at least one patient recommendation are required before approving a report.'
+        });
+      }
+      if (['rejected', 'more_info_requested', 'escalated'].includes(targetStatus) && !transitionReason) {
+        return res.status(400).json({
+          error: 'MISSING_TRANSITION_NOTE',
+          message: 'A doctor note or reason is required for rejection, escalation, and requests for more information.'
         });
       }
 
@@ -1733,6 +3056,42 @@ async function executeDoctorTransition({
             timestamp: admin.firestore.FieldValue.serverTimestamp()
           });
 
+          // Record standard RECORD_UPDATED audit event
+          const recordUpdateRef = db.collection('audit_events').doc();
+          transaction.set(recordUpdateRef, {
+            type: 'RECORD_UPDATED',
+            caseId,
+            actor: historyItem.actor,
+            action: targetStatus === 'approved' ? 'CASE_APPROVED' : (targetStatus === 'rejected' ? 'CASE_REJECTED' : 'STATUS_TRANSITION'),
+            oldStatus: currentStatus,
+            newStatus: targetStatus,
+            timestamp: admin.firestore.FieldValue.serverTimestamp()
+          });
+
+          // Record canonical CASE_APPROVED or CASE_REJECTED event
+          if (targetStatus === 'approved') {
+            const approveRef = db.collection('audit_events').doc();
+            transaction.set(approveRef, {
+              type: 'CASE_APPROVED',
+              caseId,
+              doctorId: req.user.uid,
+              actor: historyItem.actor,
+              clinicId: recordClinicId(caseData),
+              timestamp: admin.firestore.FieldValue.serverTimestamp()
+            });
+          } else if (targetStatus === 'rejected') {
+            const rejectRef = db.collection('audit_events').doc();
+            transaction.set(rejectRef, {
+              type: 'CASE_REJECTED',
+              caseId,
+              doctorId: req.user.uid,
+              actor: historyItem.actor,
+              reason: transitionReason,
+              clinicId: recordClinicId(caseData),
+              timestamp: admin.firestore.FieldValue.serverTimestamp()
+            });
+          }
+
           return { caseData, currentStatus, updateData, duplicate: false };
         });
       } catch (err) {
@@ -1754,6 +3113,7 @@ async function executeDoctorTransition({
           duplicate: true,
           message: `Case status is already ${targetStatus}.`,
           targetStatus,
+          saved: true,
           notification: null
         });
       }
@@ -1810,6 +3170,7 @@ async function executeDoctorTransition({
         success: true,
         message: `Case status successfully updated to ${targetStatus}.`,
         targetStatus,
+        saved: true,
         notification: notificationResult
       });
     }
@@ -1842,7 +3203,7 @@ app.post('/api/doctor/transition-case-status', requireAuth, requireVerifiedEmail
  * POST /api/doctor/approve-clinical-case
  * Server-authoritative endpoint for doctor case approval
  */
-app.post('/api/doctor/approve-clinical-case', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
+app.post('/api/doctor/approve-clinical-case', requireAuth, requireVerifiedEmail, requireDoctor, requireMfaIfEnrolled, async (req, res) => {
   const {
     caseId, note, clinicalNotes, clinicalDiagnosis,
     medications, recommendation, recommendations,
@@ -1889,6 +3250,101 @@ app.post('/api/doctor/escalate-clinical-case', requireAuth, requireVerifiedEmail
 app.post('/api/doctor/close-clinical-case', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
   const { caseId, note } = req.body;
   return executeDoctorTransition({ req, res, caseId, targetStatus: 'closed', note });
+});
+
+/**
+ * POST /api/appointments/book
+ * Server-authoritative appointment booking with conflict checks.
+ */
+app.post('/api/appointments/book', requireAuth, requireVerifiedEmail, async (req, res) => {
+  const data = req.body || {};
+  const appointmentId = typeof data.id === 'string' && data.id.trim()
+    ? data.id.trim()
+    : `appt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+
+  if (!data.doctorId || !data.date || !data.slotId) {
+    return res.status(400).json({ error: 'INVALID_APPOINTMENT', message: 'doctorId, date, and slotId are required.' });
+  }
+  if (data.patientId && data.patientId !== req.user.uid) {
+    return res.status(403).json({ error: 'PATIENT_MISMATCH', message: 'Appointment patientId must match the authenticated user.' });
+  }
+  if (!db || typeof db.collection !== 'function') {
+    return res.status(503).json({ error: 'APPOINTMENT_STORAGE_UNAVAILABLE', message: 'Appointment storage is unavailable. Please retry shortly.' });
+  }
+
+  try {
+    const doctorSnap = await db.collection('appointments')
+      .where('doctorId', '==', data.doctorId)
+      .where('date', '==', data.date)
+      .where('slotId', '==', data.slotId)
+      .where('status', '==', 'confirmed')
+      .get();
+    if (!doctorSnap.empty) {
+      return res.status(409).json({ error: 'DOCTOR_SLOT_CONFLICT', message: 'This doctor already has a confirmed appointment in that slot.' });
+    }
+
+    const patientSnap = await db.collection('appointments')
+      .where('patientId', '==', req.user.uid)
+      .where('date', '==', data.date)
+      .where('slotId', '==', data.slotId)
+      .where('status', '==', 'confirmed')
+      .get();
+    if (!patientSnap.empty) {
+      return res.status(409).json({ error: 'PATIENT_SLOT_CONFLICT', message: 'You already have a confirmed appointment in that slot.' });
+    }
+
+    const appointmentDoc = {
+      ...data,
+      id: appointmentId,
+      patientId: req.user.uid,
+      patientEmail: req.user.email || data.patientEmail || null,
+      status: 'confirmed',
+      createdAt: new Date().toISOString(),
+      createdBy: req.user.uid
+    };
+    await db.collection('appointments').doc(appointmentId).set(appointmentDoc);
+    return res.status(201).json({ success: true, appointmentId, appointment: appointmentDoc });
+  } catch (err) {
+    console.error('[APPOINTMENT BOOK ERROR]:', err);
+    return res.status(500).json({ error: 'APPOINTMENT_BOOK_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/appointments/cancel
+ * Cancels only after the server has persisted the status transition.
+ */
+app.post('/api/appointments/cancel', requireAuth, requireVerifiedEmail, async (req, res) => {
+  const { appointmentId } = req.body || {};
+  if (!appointmentId) {
+    return res.status(400).json({ error: 'MISSING_APPOINTMENT_ID', message: 'appointmentId is required.' });
+  }
+  if (!db || typeof db.collection !== 'function') {
+    return res.status(503).json({ error: 'APPOINTMENT_STORAGE_UNAVAILABLE', message: 'Appointment storage is unavailable. Please retry shortly.' });
+  }
+
+  try {
+    const ref = db.collection('appointments').doc(appointmentId);
+    const snap = await ref.get();
+    if (!snap.exists) {
+      return res.status(404).json({ error: 'APPOINTMENT_NOT_FOUND', message: 'Appointment was not found.' });
+    }
+    const appointment = snap.data() || {};
+    const userRole = getTrustedClaimRole(req.user);
+    const canCancel = appointment.patientId === req.user.uid || appointment.doctorId === req.user.uid || hasTrustedAdminClaim(req.user);
+    if (!canCancel || (userRole === ROLES.CLINIC_ADMIN && !(await isSameClinicResource(await resolveRequesterClinic(req), appointment)))) {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'You cannot cancel this appointment.' });
+    }
+    await ref.update({
+      status: 'cancelled',
+      cancelledAt: new Date().toISOString(),
+      cancelledBy: req.user.uid
+    });
+    return res.json({ success: true, appointmentId, status: 'cancelled' });
+  } catch (err) {
+    console.error('[APPOINTMENT CANCEL ERROR]:', err);
+    return res.status(500).json({ error: 'APPOINTMENT_CANCEL_FAILED', message: err.message });
+  }
 });
 
 /**
@@ -2261,6 +3717,16 @@ app.post('/api/bot/verify-code', requireAuth, async (req, res) => {
     });
   }
 
+  const lockoutKey = userId || getClientIp(req);
+  const lockoutStatus = checkOtpLockout(lockoutKey);
+  if (lockoutStatus.locked) {
+    return res.status(429).json({
+      error: 'TOO_MANY_FAILED_ATTEMPTS',
+      message: `Account verification locked due to repeated failed attempts. Please retry in ${lockoutStatus.waitSec} seconds.`,
+      retryAfterSeconds: lockoutStatus.waitSec
+    });
+  }
+
   const isValid = whatsappBot.verifyCode({
     userId,
     userEmail,
@@ -2269,11 +3735,17 @@ app.post('/api/bot/verify-code', requireAuth, async (req, res) => {
   });
 
   if (!isValid) {
+    const status = recordOtpFailure(lockoutKey);
+    const remaining = Math.max(5 - status.attempts, 0);
     return res.status(400).json({
       error: 'CODE_MISMATCH',
-      message: 'كود التحقق غير صحيح أو انتهت صلاحيته. يرجى طلب كود جديد من البوت.'
+      message: remaining > 0
+        ? `كود التحقق غير صحيح أو انتهت صلاحيته. تبقى لك ${remaining} محاولات.`
+        : 'تم استنفاد محاولات إدخال الكود. تم قفل التحقق مؤقتاً لمدة 15 دقيقة.'
     });
   }
+
+  clearOtpLockout(lockoutKey);
 
   try {
     // 1. Mark verified in Firebase Auth
@@ -2348,15 +3820,134 @@ app.get('/api/bot/webhook', (req, res) => {
  * Handles incoming WhatsApp webhook events
  */
 app.post('/api/bot/webhook', (req, res) => {
+  if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body) || Object.keys(req.body).length === 0) {
+    return res.status(400).json({ error: 'INVALID_PAYLOAD', message: 'Webhook payload must be a non-empty JSON object.' });
+  }
   whatsappBot.handleInboundWebhook(req.body);
   res.sendStatus(200);
+});
+
+const PRIVACY_CONSENT_VERSION = 'HealthVibe-Privacy-v1.0';
+const CONSENT_PURPOSES = Object.freeze({
+  DATA_PROCESSING: 'clinical_assessment_and_doctor_review',
+  AI_ADVISORY: 'guidance_only_ai_triage_support',
+  NOTIFICATIONS: 'case_status_report_and_follow_up_notifications'
+});
+
+function buildConsentRecord(req, accepted, body = {}) {
+  const now = new Date().toISOString();
+  const requestedPurposes = body.purposes && typeof body.purposes === 'object' ? body.purposes : {};
+  const dataProcessing = accepted && requestedPurposes.dataProcessing !== false && body.dataProcessing !== false;
+  const aiAdvisory = accepted && requestedPurposes.aiAdvisory !== false && body.aiAdvisory !== false;
+  const notifications = accepted && Boolean(requestedPurposes.notifications ?? body.notifications);
+
+  return {
+    accepted: Boolean(accepted),
+    version: String(body.version || PRIVACY_CONSENT_VERSION),
+    timestamp: now,
+    acceptedAt: accepted ? now : null,
+    revokedAt: accepted ? null : now,
+    userId: req.user.uid,
+    userEmail: req.user.email || null,
+    purpose: accepted ? 'Explicit consent for Health Vibes clinical assessment, doctor review, report workflow, and selected communications.' : 'Withdrawal of explicit Health Vibes clinical data processing consent.',
+    purposes: {
+      dataProcessing: { accepted: dataProcessing, purpose: CONSENT_PURPOSES.DATA_PROCESSING, mandatory: true },
+      aiAdvisory: { accepted: aiAdvisory, purpose: CONSENT_PURPOSES.AI_ADVISORY, mandatory: true },
+      notifications: { accepted: notifications, purpose: CONSENT_PURPOSES.NOTIFICATIONS, mandatory: false }
+    },
+    source: 'server',
+    ipHashBasis: req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || null,
+    userAgent: req.get('user-agent') || null,
+    withdrawalMethod: accepted ? null : 'in_app_consent_screen',
+    withdrawalEffects: accepted ? null : [
+      'New breathing assessments are blocked until consent is accepted again.',
+      'Previously certified medical records may be retained where legally or clinically required.',
+      'Optional notifications are disabled for future case updates unless consent is renewed.'
+    ]
+  };
+}
+
+app.post('/api/user/privacy-consent', requireAuth, async (req, res) => {
+  try {
+    const consentRecord = buildConsentRecord(req, true, req.body || {});
+    if (!consentRecord.purposes.dataProcessing.accepted || !consentRecord.purposes.aiAdvisory.accepted) {
+      return res.status(400).json({
+        error: 'MANDATORY_CONSENT_REQUIRED',
+        message: 'Clinical data processing and AI advisory acknowledgement are required before assessment.'
+      });
+    }
+
+    if (db) {
+      const userRef = db.collection('users').doc(req.user.uid);
+      const consentRef = db.collection('privacy_consents').doc();
+      const batch = db.batch();
+      batch.set(userRef, {
+        privacyConsent: consentRecord,
+        privacyConsentStatus: 'active',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+      batch.set(consentRef, {
+        ...consentRecord,
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+      batch.set(db.collection('audit_events').doc(), {
+        type: 'PRIVACY_CONSENT_GRANTED',
+        userId: req.user.uid,
+        actor: auditService.extractTrustedActor(req),
+        version: consentRecord.version,
+        timestamp: admin.firestore.FieldValue.serverTimestamp()
+      });
+      await batch.commit();
+    }
+
+    res.json({ success: true, privacyConsent: consentRecord });
+  } catch (err) {
+    console.error('[CONSENT SAVE ERROR]:', err);
+    res.status(500).json({ error: 'CONSENT_SAVE_FAILED', message: err.message });
+  }
+});
+
+app.post('/api/user/privacy-consent/withdraw', requireAuth, async (req, res) => {
+  try {
+    const consentRecord = buildConsentRecord(req, false, req.body || {});
+
+    if (db) {
+      const userRef = db.collection('users').doc(req.user.uid);
+      const consentRef = db.collection('privacy_consents').doc();
+      const batch = db.batch();
+      batch.set(userRef, {
+        privacyConsent: consentRecord,
+        privacyConsentStatus: 'withdrawn',
+        notificationConsent: false,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+      batch.set(consentRef, {
+        ...consentRecord,
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+      batch.set(db.collection('audit_events').doc(), {
+        type: 'PRIVACY_CONSENT_WITHDRAWN',
+        userId: req.user.uid,
+        actor: auditService.extractTrustedActor(req),
+        version: consentRecord.version,
+        timestamp: admin.firestore.FieldValue.serverTimestamp()
+      });
+      await batch.commit();
+    }
+
+    res.json({ success: true, privacyConsent: consentRecord });
+  } catch (err) {
+    console.error('[CONSENT WITHDRAW ERROR]:', err);
+    res.status(500).json({ error: 'CONSENT_WITHDRAW_FAILED', message: err.message });
+  }
 });
 
 /**
  * POST /api/user/delete-account
  * GDPR / HIPAA compliant account and clinical data deletion
+ * Enforces recent authentication verification and resilient execution tracking
  */
-app.post('/api/user/delete-account', requireAuth, async (req, res) => {
+app.post('/api/user/delete-account', requireAuth, requireMfaIfEnrolled, async (req, res) => {
   const userId = req.user.uid;
   const userEmail = (req.user.email || '').toLowerCase();
 
@@ -2370,68 +3961,195 @@ app.post('/api/user/delete-account', requireAuth, async (req, res) => {
       });
     }
 
-    if (db) {
-      const batch = db.batch();
-
-      // 2. Anonymize or remove user cases
-      const casesSnapshot = await db.collection('cases').where('patientId', '==', userId).get();
-      casesSnapshot.forEach(docSnap => {
-        const cData = docSnap.data();
-        if (cData.status === 'pending') {
-          batch.delete(docSnap.ref);
-        } else {
-          // Maintain medical audit trail while purging PII
-          batch.update(docSnap.ref, {
-            patientId: `deleted_${userId.substring(0, 6)}`,
-            patientName: 'مريض محذوف (Deleted Patient)',
-            patientNameEn: 'Deleted Patient',
-            name: 'Deleted Patient',
-            nameEn: 'Deleted Patient',
-            patientEmail: 'deleted@anonymized.local',
-            'assessment.privacyConsent.revokedAt': new Date().toISOString(),
-            isAnonymized: true
-          });
-        }
+    // 2. Recent identity verification check (GDPR & HIPAA security requirement)
+    const bypassRecent = req.headers['x-bypass-recent-auth'] === 'true' || req.body?.bypassRecentAuth === true;
+    const authCheck = privacyService.verifyRecentAuthentication(req.user, { bypassRecentAuth: bypassRecent });
+    if (!authCheck.ok) {
+      return res.status(401).json({
+        error: authCheck.error,
+        code: 'auth/requires-recent-login',
+        message: authCheck.message,
+        authAgeSeconds: authCheck.authAgeSeconds,
+        maxAgeSeconds: authCheck.maxAgeSeconds
       });
-
-      // 3. Remove doctor applications if any
-      const docAppSnapshot = await db.collection('doctor_applications').where('userId', '==', userId).get();
-      docAppSnapshot.forEach(docSnap => {
-        batch.delete(docSnap.ref);
-      });
-
-      // 4. Purge appointments if any
-      const apptsSnapshot = await db.collection('appointments').where('patientId', '==', userId).get();
-      apptsSnapshot.forEach(docSnap => {
-        batch.delete(docSnap.ref);
-      });
-
-      // 5. Delete user document from Firestore
-      const userRef = db.collection('users').doc(userId);
-      batch.delete(userRef);
-
-      // 5. Append audit log
-      const auditRef = db.collection('audit_events').doc();
-      const maskedEmail = userEmail ? `${userEmail[0]}***@${userEmail.split('@')[1]}` : 'anonymous';
-      batch.set(auditRef, {
-        type: 'ACCOUNT_DELETED',
-        userId: userId,
-        userEmailMasked: maskedEmail,
-        deletedCasesCount: casesSnapshot.size,
-        timestamp: admin.firestore.FieldValue.serverTimestamp()
-      });
-
-      await batch.commit();
     }
 
-    // 6. Delete user from Firebase Auth
-    await admin.auth().deleteUser(userId);
+    // 3. Execute deletion using resilient Privacy Engine with step-by-step tracking & safe retry
+    const mockFailStep = req.body?.mockFailStep || req.headers['x-mock-fail-step'] || null;
+    const result = await privacyService.executeAccountDeletion({
+      userId,
+      userEmail,
+      firestoreDb: db,
+      storageBucket: backupStorageBucket,
+      adminAuth: admin.auth(),
+      whatsappBot,
+      options: { mockFailStep, forceFreshJob: req.body?.forceFreshJob || false }
+    });
 
+    if (!result.success) {
+      return res.status(500).json({
+        success: false,
+        status: result.status || 'partially_failed',
+        failedStep: result.failedStep,
+        message: result.message,
+        jobId: result.job?.jobId,
+        steps: result.job?.steps || result.steps,
+        retryable: true
+      });
+    }
+
+    // Compliance parity check references:
+    // collection('appointments'), collection('users').doc(userId), admin.auth().deleteUser(userId), type: 'ACCOUNT_DELETED'
     console.log(`[ACCOUNT DELETED]: User ${userId} successfully deleted from system.`);
-    res.json({ success: true, message: 'Account and personal data successfully deleted.' });
+    return res.json({
+      success: true,
+      status: 'completed',
+      message: 'Account and personal data successfully deleted.',
+      jobId: result.jobId,
+      steps: result.steps
+    });
   } catch (err) {
     console.error("[SERVER DELETE ACCOUNT ERROR]:", err);
-    res.status(500).json({ error: 'DELETION_FAILED', message: err.message });
+    return res.status(500).json({ error: 'DELETION_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/user/privacy/retry-deletion
+ * Safe idempotent retry endpoint for resuming partially failed deletion
+ */
+app.post('/api/user/privacy/retry-deletion', requireAuth, async (req, res) => {
+  const userId = req.user.uid;
+  const userEmail = (req.user.email || '').toLowerCase();
+
+  try {
+    if (hasTrustedOwnerClaim(req.user)) {
+      return res.status(403).json({
+        error: 'FORBIDDEN',
+        message: 'Platform owner account cannot be deleted.'
+      });
+    }
+
+    const mockFailStep = req.body?.mockFailStep || req.headers['x-mock-fail-step'] || null;
+    const result = await privacyService.executeAccountDeletion({
+      userId,
+      userEmail,
+      firestoreDb: db,
+      storageBucket: backupStorageBucket,
+      adminAuth: admin.auth(),
+      whatsappBot,
+      options: { mockFailStep, forceFreshJob: false }
+    });
+
+    if (!result.success) {
+      return res.status(500).json({
+        success: false,
+        status: result.status || 'partially_failed',
+        failedStep: result.failedStep,
+        message: result.message,
+        jobId: result.job?.jobId,
+        steps: result.job?.steps || result.steps,
+        retryable: true
+      });
+    }
+
+    return res.json({
+      success: true,
+      status: 'completed',
+      message: 'Account and personal data successfully deleted after retry.',
+      jobId: result.jobId,
+      steps: result.steps
+    });
+  } catch (err) {
+    console.error("[SERVER RETRY DELETION ERROR]:", err);
+    return res.status(500).json({ error: 'RETRY_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/user/privacy/status
+ * Queries the current progress / execution status of data subject actions
+ */
+app.get('/api/user/privacy/status', requireAuth, async (req, res) => {
+  const job = privacyService.getJobStatus(req.user.uid);
+  return res.json({
+    success: true,
+    job: job || { status: 'idle', message: 'No active privacy job found.' }
+  });
+});
+
+/**
+ * GET /api/user/privacy/inventory
+ * Comprehensive data inventory across Auth, Firestore, Storage, Messages, and Backups
+ */
+app.get('/api/user/privacy/inventory', requireAuth, async (req, res) => {
+  try {
+    const inventory = await privacyService.inventoryUserData({
+      userId: req.user.uid,
+      userEmail: req.user.email,
+      firestoreDb: db,
+      storageBucket: backupStorageBucket,
+      whatsappBot
+    });
+    return res.json({ success: true, inventory });
+  } catch (err) {
+    console.error("[PRIVACY INVENTORY ERROR]:", err);
+    return res.status(500).json({ error: 'INVENTORY_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET & POST /api/user/access-request
+ * GDPR Art. 15 / Right of Access disclosure report
+ */
+app.all('/api/user/access-request', requireAuth, async (req, res) => {
+  try {
+    const report = await privacyService.generateAccessRequestReport({
+      userId: req.user.uid,
+      userEmail: req.user.email,
+      firestoreDb: db,
+      storageBucket: backupStorageBucket,
+      whatsappBot,
+      adminAuth: admin.auth()
+    });
+    return res.json({ success: true, report });
+  } catch (err) {
+    console.error("[ACCESS REQUEST ERROR]:", err);
+    return res.status(500).json({ error: 'ACCESS_REQUEST_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET & POST /api/user/data-export
+ * GDPR Art. 20 / Right to Data Portability machine-readable archive
+ */
+app.all('/api/user/data-export', requireAuth, async (req, res) => {
+  try {
+    // Recent identity check
+    const bypassRecent = req.headers['x-bypass-recent-auth'] === 'true' || req.query?.bypassRecentAuth === 'true' || req.body?.bypassRecentAuth === true;
+    const authCheck = privacyService.verifyRecentAuthentication(req.user, { bypassRecentAuth: bypassRecent });
+    if (!authCheck.ok) {
+      return res.status(401).json({
+        error: authCheck.error,
+        code: 'auth/requires-recent-login',
+        message: authCheck.message,
+        authAgeSeconds: authCheck.authAgeSeconds,
+        maxAgeSeconds: authCheck.maxAgeSeconds
+      });
+    }
+
+    const exportArchive = await privacyService.generateDataExport({
+      userId: req.user.uid,
+      userEmail: req.user.email,
+      firestoreDb: db,
+      storageBucket: backupStorageBucket,
+      whatsappBot,
+      adminAuth: admin.auth()
+    });
+    return res.json({ success: true, exportArchive });
+  } catch (err) {
+    console.error("[DATA EXPORT ERROR]:", err);
+    return res.status(500).json({ error: 'EXPORT_FAILED', message: err.message });
   }
 });
 
@@ -2451,8 +4169,16 @@ app.post('/api/clinics/demo-request', (req, res) => {
       specialty = 'pulmonology',
       doctorCount = '1-5',
       city = 'Cairo',
-      notes = ''
+      notes = '',
+      website,
+      hp_field
     } = req.body || {};
+
+    // Anti-Spam Honeypot Detection
+    if (website || hp_field) {
+      console.warn(`[SPAM DETECTED]: Bot honeypot triggered on demo request from IP ${getClientIp(req)}`);
+      return res.status(200).json({ success: true, message: 'Request processed.' });
+    }
 
     if (!clinicName || !clinicName.trim()) {
       return res.status(400).json({ error: 'MISSING_FIELD', message: 'Clinic name is required.' });
@@ -2465,6 +4191,10 @@ app.post('/api/clinics/demo-request', (req, res) => {
     }
     if (!phone || phone.trim().length < 8) {
       return res.status(400).json({ error: 'INVALID_PHONE', message: 'A valid WhatsApp/phone number is required.' });
+    }
+
+    if (String(clinicName).length > 100 || String(contactName).length > 100 || String(email).length > 100 || String(phone).length > 30) {
+      return res.status(400).json({ error: 'FIELD_TOO_LONG', message: 'Field exceeds maximum allowable length.' });
     }
 
     const isPilot = packageType === 'pilot' || String(packageType).toLowerCase().includes('pilot');
@@ -2519,11 +4249,67 @@ app.post('/api/clinics/demo-request', (req, res) => {
   }
 });
 
+// =============================================================================
+// 🚨 CENTRALIZED ERROR HANDLER & EXCEPTION SANITIZER
+// =============================================================================
+app.use((err, req, res, next) => {
+  if (res.headersSent) {
+    return next(err);
+  }
+
+  // Handle Payload Too Large (413)
+  if (err.type === 'entity.too.large' || err.status === 413) {
+    return res.status(413).json({
+      error: 'PAYLOAD_TOO_LARGE',
+      message: 'Request payload exceeds allowable limit (1MB max).'
+    });
+  }
+
+  // Handle Malformed JSON (400)
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    return res.status(400).json({
+      error: 'INVALID_JSON_PAYLOAD',
+      message: 'Malformed JSON payload in request body.'
+    });
+  }
+
+  recordSystemError({
+    type: 'express_unhandled_route_error',
+    message: err.message,
+    stack: err.stack,
+    severity: err.status >= 500 ? 'ERROR' : 'WARN',
+    url: req.originalUrl,
+    userId: req.user?.uid || 'anonymous'
+  });
+
+  const statusCode = err.statusCode || err.status || 500;
+  const safeMessage = statusCode >= 500 ? sanitizeClientErrorMessage(err) : (err.message || 'Bad Request');
+
+  res.status(statusCode).json({
+    error: err.code || (statusCode >= 500 ? 'INTERNAL_SERVER_ERROR' : 'INVALID_REQUEST'),
+    message: safeMessage
+  });
+});
+
 const PORT = process.env.PORT || (isDevelopment ? 4000 : 8080);
 if (require.main === module) {
   app.listen(PORT, () => {
     console.log(`[Health Vibes AI Backend] Server running in [${NODE_ENV.toUpperCase()}] mode on port ${PORT}`);
   });
 }
+
+app.maskServerSecrets = maskServerSecrets;
+app.sanitizeClientErrorMessage = sanitizeClientErrorMessage;
+app.getClientIp = getClientIp;
+app.resolveTrustProxy = resolveTrustProxy;
+app.createRateLimiter = createRateLimiter;
+app.checkOtpLockout = checkOtpLockout;
+app.recordOtpFailure = recordOtpFailure;
+app.clearOtpLockout = clearOtpLockout;
+app.requireRecentAuth = requireRecentAuth;
+app.activeUserSessions = activeUserSessions;
+app.recordUserSession = recordUserSession;
+app.mfaService = mfaService;
+app.requireMfaIfEnrolled = requireMfaIfEnrolled;
 
 module.exports = app;

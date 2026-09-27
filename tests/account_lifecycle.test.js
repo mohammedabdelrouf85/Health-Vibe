@@ -18,10 +18,14 @@ const indexHtmlPath = path.resolve(__dirname, '../app/index.html');
 const appJsPath = path.resolve(__dirname, '../app/app.js');
 const serverJsPath = path.resolve(__dirname, '../backend/server.js');
 const i18nJsPath = path.resolve(__dirname, '../app/i18n.js');
+const firestoreRulesPath = path.resolve(__dirname, '../firestore.rules');
+const storageRulesPath = path.resolve(__dirname, '../storage.rules');
 
 const indexHtml = fs.readFileSync(indexHtmlPath, 'utf8');
 const appJs = fs.readFileSync(appJsPath, 'utf8');
 const serverJs = fs.readFileSync(serverJsPath, 'utf8');
+const firestoreRules = fs.readFileSync(firestoreRulesPath, 'utf8');
+const storageRules = fs.readFileSync(storageRulesPath, 'utf8');
 const { translations } = require(i18nJsPath);
 
 // -----------------------------------------------------------------------------
@@ -75,7 +79,8 @@ console.log('\n▶ TEST 5: Client-Side Deletion & Local Registry Purging in app.
 assert(appJs.includes('window.openDeleteAccountModal = function'), 'openDeleteAccountModal must be on window');
 assert(appJs.includes('window.closeDeleteAccountModal = function'), 'closeDeleteAccountModal must be on window');
 assert(appJs.includes('isOwnerUser(user)'), 'Client modal must warn and block deleting trusted owner account');
-assert(appJs.includes('localStorage.setItem(ACCOUNTS_REGISTRY_KEY'), 'Account deletion must purge user from local registry');
+assert(appJs.includes('purgeSensitiveLegacyStorage()'), 'Account deletion must purge legacy sensitive browser storage');
+assert(!appJs.includes('localStorage.setItem(ACCOUNTS_REGISTRY_KEY'), 'Client must not recreate the local accounts registry');
 console.log('  ✓ Client deletion ensures local accounts registry and session keys are sanitized.');
 
 // -----------------------------------------------------------------------------
@@ -240,6 +245,40 @@ assert(
 );
 console.log('  ✓ DOCTOR_PENDING mobile nav shows verification/appointments/history/profile — not patient assessment flow.');
 
+// -----------------------------------------------------------------------------
+// TEST 14: Email Verification Is Strict Across Client, API, Firestore, Storage
+// -----------------------------------------------------------------------------
+console.log('\n▶ TEST 14: Email verification and suspension semantics stay strict');
+const isUserVerifiedSource = appJs.slice(
+  appJs.indexOf('function isUserVerified('),
+  appJs.indexOf('function updateEmailVerificationUI(')
+);
+assert(
+  !isUserVerifiedSource.includes('phoneVerified'),
+  'isUserVerified must not treat phoneVerified as a substitute for email verification'
+);
+const firestoreEmailVerifiedSource = firestoreRules.slice(
+  firestoreRules.indexOf('function isEmailVerified()'),
+  firestoreRules.indexOf('// Role extraction')
+);
+assert(
+  firestoreEmailVerifiedSource.includes('request.auth.token.email_verified == true'),
+  'Firestore rules must require Firebase Auth email_verified'
+);
+assert(
+  !firestoreEmailVerifiedSource.includes('phoneVerified') && !firestoreEmailVerifiedSource.includes('getUserData().emailVerified'),
+  'Firestore isEmailVerified must not trust Firestore emailVerified or phoneVerified as sensitive-action substitutes'
+);
+assert(
+  storageRules.includes('authzVersion') && storageRules.includes('isSuspended()'),
+  'Storage rules must enforce stale-token and suspended-account checks'
+);
+assert(
+  serverJs.includes('verifyIdToken(idToken, true)') && serverJs.includes('revokeRefreshTokens(targetUserId)'),
+  'API must verify revoked tokens and revoke refresh tokens after authorization changes'
+);
+console.log('  ✓ Email verification, stale-token, and suspended-account checks are aligned across layers.');
+
 console.log('\n==================================================================');
-console.log('🎉 ALL 13 ACCOUNT & ROLE LIFECYCLE TESTS PASSED WITH 100% SUCCESS!');
+console.log('🎉 ALL 14 ACCOUNT & ROLE LIFECYCLE TESTS PASSED WITH 100% SUCCESS!');
 console.log('==================================================================');

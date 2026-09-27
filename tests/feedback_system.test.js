@@ -116,6 +116,24 @@ runTest("Backend API Routes Definition in server.js", () => {
 });
 
 // -------------------------------------------------------------
+// TEST 4B: Server-Confirmed Save, Retry, and No Local-Only Success
+// -------------------------------------------------------------
+runTest("Server-Confirmed Feedback Save & Retry Failure Guards", () => {
+  const appJs = fs.readFileSync(path.join(__dirname, "../app/app.js"), "utf8");
+
+  assert.ok(appJs.includes('requireSuccessfulMutation("/api/feedback/submit"'), "Feedback submit must require successful backend mutation");
+  assert.ok(appJs.includes("showRetryFailure"), "Feedback failure must expose retry without clearing inputs");
+  assert.ok(appJs.includes("handleFeedbackSubmit._pending"), "Feedback submit must prevent duplicate in-flight submissions");
+  assert.ok(appJs.includes("purgeSensitiveLegacyStorage()"), "Client must purge legacy sensitive local feedback storage");
+  assert.ok(!appJs.includes("localStorage.setItem(\"hv_local_feedbacks\""), "Client must not persist feedback comments in localStorage");
+  assert.ok(!appJs.includes("Backend feedback API unreachable, saving to Firestore directly"), "Client must not turn backend failure into direct-write success");
+  assert.ok(!appJs.includes("Firestore feedback write failed, saving to local cache"), "Client must not treat localStorage as a durable feedback record");
+
+  console.log("  ✓ Feedback success now requires real backend acknowledgement.");
+  console.log("  ✓ Offline/service failure preserves inputs and exposes retry without duplicate submits.");
+});
+
+// -------------------------------------------------------------
 // TEST 5: Frontend UI Elements & Interactive Modal in index.html
 // -------------------------------------------------------------
 runTest("Feedback UI Screen & Modal Containers in app/index.html", () => {

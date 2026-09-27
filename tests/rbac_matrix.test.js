@@ -23,6 +23,12 @@ data.set('doctor_applications/doctor-app', { userId: 'doctor', status: 'approved
 data.set('cases/private', { patientId: 'patient', clinicId: 'a', status: 'approved', doctorApproved: true, clinicalDiagnosis: 'SECRET', assignedDoctorId: 'doctor' });
 data.set('cases/legacy-support', { patientId: 'support', clinicId: 'a', status: 'approved', doctorApproved: true });
 accounts.set('foreign', { email: 'foreign@test.invalid', customClaims: { role: 'doctor_pending' } });
+tokens.unverified = { uid: 'unverified', role: 'patient', email: 'unverified@test.invalid', email_verified: false };
+accounts.set('unverified', { uid: 'unverified', email: 'unverified@test.invalid', customClaims: { role: 'patient' } });
+data.set('users/unverified', { role: 'patient', clinicId: 'a' });
+tokens.logged_in_then_suspended = { uid: 'logged_in_then_suspended', role: 'patient', email: 'suspended@test.invalid', email_verified: true };
+accounts.set('logged_in_then_suspended', { uid: 'logged_in_then_suspended', email: 'suspended@test.invalid', customClaims: { role: 'patient' } });
+data.set('users/logged_in_then_suspended', { role: 'patient', clinicId: 'a' });
 function snapshot(key) { return { id: key.split('/')[1], exists: data.has(key), data: () => data.get(key) }; }
 function collection(name, filters = []) {
   return {
@@ -83,10 +89,14 @@ vm.runInNewContext(fs.readFileSync(serverPath,'utf8'),context,{filename:serverPa
   assert.equal((await request('support','/api/reports/legacy-support/doctor-identity',null,'GET')).status,403);
   assert.equal((await request('super_admin','/api/admin/set-user-role',{targetUserId:'super_admin',newRole:'patient'})).status,403);
   assert.equal((await request('super_admin','/api/admin/set-user-role',{targetUserId:'patient',newRole:'doctor'})).status,403);
+  assert.equal((await request('unverified','/api/appointments/book',{doctorId:'doctor', appointmentDate:'2026-10-01'})).status,403,'unverified account must fail sensitive API');
+  data.set('users/logged_in_then_suspended', { role: 'patient', clinicId: 'a', suspended: true, status: 'suspended' });
+  assert.equal((await request('logged_in_then_suspended','/api/auth/profile',null,'GET')).status,403,'already-signed-in account must fail after suspension');
   const old = {...tokens.clinic_admin};
   accounts.get('clinic_admin').customClaims.retainedFlag = true;
   assert.equal((await request('super_admin','/api/admin/set-user-role',{targetUserId:'clinic_admin',newRole:'support',clinicId:'b'})).status,200);
   assert.equal(accounts.get('clinic_admin').customClaims.retainedFlag,true);
+  assert.ok(effects.some(e => e[0] === 'revoke' && e[1] === 'clinic_admin'),'role changes must revoke refresh tokens');
   assert.equal((await request('clinic_admin','/api/kpi/metrics',null,'GET')).status,403,'old token must immediately fail');
   tokens.clinic_admin = {...old,...accounts.get('clinic_admin').customClaims};
   assert.equal((await request('clinic_admin','/api/kpi/metrics',null,'GET')).status,200);

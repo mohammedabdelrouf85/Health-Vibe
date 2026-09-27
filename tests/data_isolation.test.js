@@ -13,6 +13,7 @@ console.log("===================================================================
 
 // Load functions from app.js
 const appCode = fs.readFileSync(path.join(__dirname, "../app/app.js"), "utf-8");
+const indexHtml = fs.readFileSync(path.join(__dirname, "../app/index.html"), "utf-8");
 
 function extractFunction(fnName, code) {
   const match = code.match(new RegExp(`function ${fnName}\\s*\\([\\s\\S]*?\\n\\}`));
@@ -147,6 +148,13 @@ runTest("Patient Medical History: Test data is permanently blocked from leaking 
   assert.strictEqual(isolatedHistory.length, 2);
   assert.strictEqual(isolatedHistory.some(r => r.id === "demo_case_77"), false);
   assert.deepStrictEqual(isolatedHistory.map(r => r.id), ["hist_rec_01", "hist_rec_02"]);
+});
+
+runTest("New account UI does not ship preassigned doctors or static appointment doctors", () => {
+  assert(!indexHtml.includes('value="د. منى سامي - عيادة مدينة نصر"'), "Profile linked doctor must start empty");
+  assert(!indexHtml.includes('value="dr_mona"'), "Appointment booking must not include hard-coded doctor options");
+  assert(!appCode.includes('Dr. Mona Samy - Nasr City Clinic" : "د. منى سامي - عيادة مدينة نصر"'), "App code must not fallback to a static linked doctor");
+  assert(appCode.includes('loadAvailableAppointmentDoctors'), "Appointment doctors should be loaded from approved doctor records");
 });
 
 console.log("\n================================================================================");

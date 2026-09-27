@@ -1,7 +1,7 @@
 /**
  * Health Vibe AI - Clinical Appointments Booking & Management Test Suite
- * Verifies dynamic dates, clinical slots, booking lifecycle, cancellation,
- * local storage caching, dashboard integration, and eradication of static mock data.
+ * Verifies dynamic dates, clinical slots, server-authoritative booking lifecycle,
+ * local cache after confirmed writes, dashboard integration, and eradication of static mock data.
  */
 
 const fs = require('fs');
@@ -111,7 +111,10 @@ assert(appJsContent.includes("slot_2000"), "Slots must include 08:00 PM slot");
 console.log("  ✓ 5 clinical time slots defined with bilingual Arabic/English schedules.");
 
 // ── TEST 4: Booking Creation, Persistence & Lifecycle ─────────────────────────
-console.log("\n▶ TEST 4: Booking Creation, Persistence & Storage Model");
+console.log("\n▶ TEST 4: Booking Creation, Server Persistence & Legacy Storage Cleanup");
+assert(appJsContent.includes("purgeSensitiveLegacyStorage()"), "Client must purge legacy appointment caches.");
+assert(!appJsContent.includes("localStorage.setItem(\"hv_appointments\""), "Client must not persist appointments in global localStorage.");
+assert(!appJsContent.includes("localStorage.setItem(patientKey"), "Client must not persist patient appointments in localStorage.");
 class MockLocalStorage {
   constructor() { this.store = {}; }
   getItem(k) { return this.store[k] || null; }
@@ -160,7 +163,7 @@ assert.strictEqual(storedAppts.length, 1, "Patient should have 1 stored appointm
 assert.strictEqual(storedAppts[0].id, appt1.id);
 assert.strictEqual(storedAppts[0].status, "confirmed");
 assert.strictEqual(storedAppts[0].doctorName, "د. منى سامي");
-console.log(`  ✓ Appointment ${appt1.id} successfully created and persisted.`);
+console.log(`  ✓ Appointment ${appt1.id} fixture validates lifecycle shape without browser persistence.`);
 
 // ── TEST 5: Appointment Cancellation Lifecycle ───────────────────────────────
 console.log("\n▶ TEST 5: Cancellation Workflow");
@@ -242,6 +245,21 @@ for (const exp of requiredExports) {
   assert(appJsContent.includes(exp), `app.js must expose ${exp}`);
 }
 console.log("  ✓ All booking and management functions successfully exposed on window.");
+
+// ── TEST 7B: Server-Authoritative Persistence and Failure Guards ─────────────
+console.log("\n▶ TEST 7B: Server-Authoritative Booking and Retry Failure Guards");
+const serverJsContent = fs.readFileSync(path.join(__dirname, '..', 'backend', 'server.js'), 'utf8');
+assert(serverJsContent.includes("app.post('/api/appointments/book'"), "Server must expose POST /api/appointments/book.");
+assert(serverJsContent.includes("app.post('/api/appointments/cancel'"), "Server must expose POST /api/appointments/cancel.");
+assert(serverJsContent.includes("APPOINTMENT_STORAGE_UNAVAILABLE"), "Server must report service/storage failure explicitly.");
+assert(serverJsContent.includes("PATIENT_MISMATCH"), "Server must reject forged patientId writes.");
+assert(appJsContent.includes('requireSuccessfulMutation("/api/appointments/book"'), "Client booking must require successful server mutation.");
+assert(appJsContent.includes('requireSuccessfulMutation("/api/appointments/cancel"'), "Client cancellation must require successful server mutation.");
+assert(!appJsContent.includes("saveAppointmentToLocalStorage(saved.appointment)"), "Client must not cache server-confirmed appointments in localStorage.");
+assert(appJsContent.includes("purgeSensitiveLegacyStorage();"), "Client must clean legacy appointment storage after confirmed booking.");
+assert(!appJsContent.includes("Could not cancel on Firestore, updating local cache"), "Cancellation must not fall back to local-only success.");
+assert(appJsContent.includes("confirmAppointmentBooking._pending"), "Booking must prevent duplicate submissions during retryable failure.");
+console.log("  ✓ Booking/cancellation success depends on real server persistence, with explicit retryable failure state.");
 
 // ── TEST 8: Anti-Double Booking Guard: Doctor Slot Concurrency ───────────────
 console.log("\n▶ TEST 8: Anti-Double Booking Guard - Doctor Schedule Conflict");

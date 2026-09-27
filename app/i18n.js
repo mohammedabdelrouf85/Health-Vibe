@@ -114,7 +114,14 @@
         deleteAccountTitle: "حذف الحساب والبيانات السريرية",
         deleteAccountPermanent: "تنبيه هام: هذا الإجراء نهائي ولا يمكن التراجع عنه!",
         switchAccount: "تبديل الحساب",
-        switchAccountDesc: "يرجى تسجيل الدخول بالحساب الآخر"
+        switchAccountDesc: "يرجى تسجيل الدخول بالحساب الآخر",
+        exportData: "تصدير بياناتي (Data Portability)",
+        exportDataDesc: "تنزيل نسخة إلكترونية آمنة من كافة سجلاتك وبياناتك الطبية بصيغة JSON قابلة للنقل.",
+        accessRequest: "طلب تقرير وصول للبيانات (GDPR Art. 15)",
+        accessRequestDesc: "عرض تفصيلي لجميع البيانات الشخصية والسريرية المحفوظة وأغراض معالجتها وفترات الاحتفاظ بها.",
+        recentAuthRequired: "فحص أمني: يتطلب هذا الإجراء الحساس إعادة التحقق الحديث من هويتك.",
+        partialFailureRetry: "حدث فشل جزئي في بعض الخطوات، يمكنك إعادة المحاولة بأمان لاستكمال الحذف.",
+        dataRetentionPolicy: "سياسة الاحتفاظ بالبيانات والنسخ الاحتياطية"
       },
       patient: {
         welcome: "أهلاً بك",
@@ -291,7 +298,14 @@
         deleteAccountTitle: "Delete Account & Clinical Data",
         deleteAccountPermanent: "Important Notice: This action is permanent and irreversible!",
         switchAccount: "Switch Account",
-        switchAccountDesc: "Please sign in with another account"
+        switchAccountDesc: "Please sign in with another account",
+        exportData: "Export My Data (Data Portability)",
+        exportDataDesc: "Download a secure electronic archive of all your medical records and profile in portable JSON format.",
+        accessRequest: "Data Access Request (GDPR Art. 15)",
+        accessRequestDesc: "Detailed overview of all personal and clinical data processed, retention periods, and purposes.",
+        recentAuthRequired: "Security check: This sensitive action requires recent identity re-authentication.",
+        partialFailureRetry: "Partial failure occurred on some steps. You can retry safely to finish deletion.",
+        dataRetentionPolicy: "Data & Backup Retention Policy"
       },
       patient: {
         welcome: "Welcome",

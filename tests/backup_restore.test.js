@@ -139,7 +139,66 @@ const indexHtml = fs.readFileSync(INDEX_HTML_PATH, 'utf-8');
   assert.strictEqual(dryRunResult.success, true, "Dry-run restore with valid token must succeed.");
   assert.strictEqual(dryRunResult.dryRun, true);
   assert.ok(dryRunResult.message.includes("without modifying datastore"));
+  assert.ok(dryRunResult.metrics.measuredRtoMs >= 0, "Dry-run restore must report measured RTO.");
   console.log("  ✓ Dry-run restore drill successfully validated archive without modifying database.");
+
+  // -----------------------------------------------------------------------------
+  // TEST 6B: Fail-Closed Collection Reads & Isolated Live Restore
+  // -----------------------------------------------------------------------------
+  console.log("\n▶ TEST 6B: Fail-Closed Reads & Isolated Restore Match");
+  const failingDb = {
+    collection(name) {
+      return {
+        async get() {
+          if (name === 'cases') throw new Error('simulated cases read failure');
+          return { size: 0, docs: [] };
+        }
+      };
+    }
+  };
+  await assert.rejects(
+    backupService.createBackupSnapshot({ firestoreDb: failingDb, environment: 'test' }),
+    /failed to read 1 required data scope/,
+    "Backup must abort instead of succeeding when any required collection read fails."
+  );
+
+  function isolatedFirestore() {
+    const writes = new Map();
+    return {
+      writes,
+      collection(name) {
+        return {
+          doc(id) {
+            return { collectionName: name, id };
+          }
+        };
+      },
+      batch() {
+        const ops = [];
+        return {
+          set(ref, data) {
+            ops.push([`${ref.collectionName}/${ref.id}`, data]);
+          },
+          async commit() {
+            for (const [key, value] of ops) writes.set(key, value);
+          }
+        };
+      }
+    };
+  }
+
+  const restoreTarget = isolatedFirestore();
+  const liveRestore = await backupService.restoreBackupSnapshot(manifest.backupId, {
+    confirmToken: validToken,
+    dryRun: false,
+    firestoreDb: restoreTarget
+  });
+  assert.strictEqual(liveRestore.success, true, "Live restore into isolated target must succeed.");
+  assert.strictEqual(liveRestore.restoredRecords, 7, "Live restore must write every backed up Firestore record.");
+  assert.ok(liveRestore.metrics.measuredRtoMs >= 0, "Live restore must report measured RTO.");
+  assert.deepStrictEqual(restoreTarget.writes.get('users/usr_doc_1'), { role: 'doctor', email: 'dr.samir@healthvibe.ai' });
+  assert.deepStrictEqual(restoreTarget.writes.get('cases/case_101'), { status: 'approved', triagePriority: 'urgent', score: 82 });
+  console.log("  ✓ Backup read failures fail closed, and isolated restore writes records matching the snapshot.");
 
   // -----------------------------------------------------------------------------
   // TEST 7: Backend Endpoints in server.js
@@ -172,7 +231,18 @@ const indexHtml = fs.readFileSync(INDEX_HTML_PATH, 'utf-8');
   assert.ok(appJs.includes("window.renderAdminBackupUI = renderAdminBackupUI;"), "renderAdminBackupUI must be exposed on window.");
   console.log("  ✓ All 5 backup and disaster recovery functions exposed on window.");
 
+  // -----------------------------------------------------------------------------
+  // TEST 10: No Mock Success on Service Failure
+  // -----------------------------------------------------------------------------
+  console.log("\n▶ TEST 10: Backup UI Failure Semantics");
+  assert.ok(appJs.includes('requireSuccessfulMutation("/api/admin/backup/create"'), "Backup create must require successful server response.");
+  assert.ok(appJs.includes('requireSuccessfulMutation("/api/admin/backup/verify"'), "Backup verify must require successful server response.");
+  assert.ok(appJs.includes('requireSuccessfulMutation("/api/admin/backup/restore"'), "Backup restore must require successful server response.");
+  assert.ok(appJs.includes('return { status: "error", count: 0, snapshots: [], error: e.message };'), "Backup list failure must be shown as failure, not mock success.");
+  assert.ok(!appJs.includes('backup_${new Date().toISOString().slice(0, 10)}_auto'), "Backup UI must not fabricate local backup snapshots.");
+  console.log("  ✓ Backup UI no longer fabricates successful snapshots during service failure.");
+
   console.log("\n==================================================================");
-  console.log("🎉 ALL 9 BACKUP & DISASTER RECOVERY TESTS PASSED WITH 100% SUCCESS!");
+  console.log("🎉 ALL 10 BACKUP & DISASTER RECOVERY TESTS PASSED WITH 100% SUCCESS!");
   console.log("==================================================================");
 })();

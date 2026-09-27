@@ -80,7 +80,7 @@
       "ruleSetId": "breathing-triage",
       "ruleEngineVersion": "HealthVibe-Rules-v1.0",
       "ruleEngineEffectiveFrom": "2026-09-21",
-      "ruleEngineReviewStatus": "clinician-reviewed-rules",
+      "ruleEngineReviewStatus": "pending-qualified-clinical-and-regulatory-review",
       "ruleScoreValidated": false,
       "confidence": "not-validated-rule-score",
       "modelVersion": "HealthVibe-AI-v1.0"
@@ -118,7 +118,7 @@
   "ruleSetId": "breathing-triage",
   "ruleEngineVersion": "HealthVibe-Rules-v1.0",
   "ruleEngineEffectiveFrom": "2026-09-21",
-  "ruleEngineReviewStatus": "clinician-reviewed-rules",
+  "ruleEngineReviewStatus": "pending-qualified-clinical-and-regulatory-review",
   "ruleScoreValidated": false,
   "confidence": "not-validated-rule-score",
   "reportVersion": "1.0.0",
@@ -206,7 +206,7 @@
 * `ruleSetId`: معرف مجموعة القواعد المستخدمة، مثل `"breathing-triage"`، لتمييز مسارات فرز مختلفة مستقبلاً.
 * `ruleEngineVersion`: إصدار محرك القواعد المستخدم.
 * `ruleEngineEffectiveFrom`: تاريخ بدء العمل بهذه النسخة من القواعد.
-* `ruleEngineReviewStatus`: يوضح أن القواعد مصممة لتكون قابلة لمراجعة الطبيب (`"clinician-reviewed-rules"`)، وليست نموذجاً إحصائياً مُتحققاً.
+* `ruleEngineReviewStatus`: يوضح أن القواعد ما زالت معلقة لحين مراجعة مختص طبي مؤهل ومختص تنظيمي في مصر (`"pending-qualified-clinical-and-regulatory-review"`)، وليست نموذجاً إحصائياً مُتحققاً أو اعتماداً طبياً.
 * `ruleScoreValidated`: قيمة ثابتة `false` حتى يتم اعتماد تحقق سريري رسمي لهذا المؤشر.
 * `confidence`: حقل توافق قديم، ويجب ألا يحتوي نسبة مئوية أو يُعرض كثقة طبية؛ قيمته الحالية `"not-validated-rule-score"`.
 * `modelVersion`: إصدار خوارزمية التقييم.
@@ -222,9 +222,9 @@
 
 #### مواصفات الإصدارات المسجلة:
 
-##### 1. `HealthVibe-Rules-v1.0` (الإصدار النشط المعتمد - Baseline Active)
+##### 1. `HealthVibe-Rules-v1.0` (الإصدار التشغيلي النشط - غير معتمد سريرياً بعد)
 * **تاريخ السريان**: 2026-09-21
-* **الحالة**: `active` (Clinician-Reviewed)
+* **الحالة**: `active` تشغيلياً مع مراجعة طبية وتنظيمية معلقة. لا يوجد اعتماد سريري مسجل لهذا الإصدار.
 * **القواعد ونقاط الفرز**:
   * `spo2_lt_90` (SpO2 < 90%): +6 نقاط (تصعيد عاجل للطوارئ).
   * `spo2_90_92` (SpO2 90-92%): +4 نقاط (أولوية مراجعة عالية).
@@ -241,8 +241,8 @@
 
 ##### 2. `HealthVibe-Rules-v1.1` (الإصدار المرتقب - Candidate Release)
 * **تاريخ السريان**: 2026-10-01
-* **الحالة**: `candidate` (Under Pulmonology Review)
-* **سجل التغييرات**: تعزيز حساسية عوامل الخطورة التنفسية المزمنة ومضاعفة وزنها السريري إلى (+2 نقاط) مع تفصيل تمييز ضيق التنفس الحاد.
+* **الحالة**: `candidate` مع مراجعة طبية وتنظيمية معلقة.
+* **سجل التغييرات**: تعزيز حساسية عوامل الخطورة التنفسية المزمنة ومضاعفة وزنها إلى (+2 نقاط) مع تفصيل تمييز ضيق التنفس الحاد. لا يُفعّل كاعتماد طبي قبل قرار مختصين مؤهلين.
 
 ### 5. بيانات إصدار التقرير (`Report Metadata`):
 * `reportVersion`: إصدار قالب التقرير الطبي المعتمد.
