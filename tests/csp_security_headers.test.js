@@ -56,6 +56,8 @@ assert.ok(csp, "firebase.json headers must include 'Content-Security-Policy'.");
 // Directives verification
 assert.ok(csp.includes("default-src 'self'"), "CSP must define default-src 'self'.");
 assert.ok(csp.includes("script-src"), "CSP must define script-src.");
+assert.ok(!/script-src\s+[^;]*'unsafe-inline'/.test(csp), "CSP script-src must not allow inline script blocks.");
+assert.ok(csp.includes("script-src-attr 'unsafe-inline'"), "Temporary inline handler allowance must be isolated to script-src-attr during migration.");
 assert.ok(csp.includes("https://www.gstatic.com"), "CSP script-src must whitelist https://www.gstatic.com (Firebase SDK).");
 assert.ok(csp.includes("https://www.google.com") || csp.includes("https://www.recaptcha.net"), "CSP script-src must whitelist reCAPTCHA/AppCheck.");
 assert.ok(csp.includes("connect-src"), "CSP must define connect-src.");

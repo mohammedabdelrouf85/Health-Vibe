@@ -434,6 +434,63 @@ function canAccessScreen(screenName) {
   return allowed.includes(screenName);
 }
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function textToHtml(value) {
+  return escapeHtml(value).replace(/\n/g, "<br>");
+}
+
+function createTextElement(tagName, text, className = "") {
+  const element = document.createElement(tagName);
+  if (className) element.className = className;
+  element.textContent = String(text ?? "");
+  return element;
+}
+
+function sanitizeTrustedHtml(html) {
+  const template = document.createElement("template");
+  template.innerHTML = String(html || "");
+  const allowedTags = new Set(["DIV", "SPAN", "STRONG", "EM", "BR", "P", "UL", "OL", "LI", "CODE", "SMALL"]);
+  const allowedAttrs = new Set(["class", "style", "dir", "lang", "aria-hidden"]);
+  template.content.querySelectorAll("*").forEach((node) => {
+    if (!allowedTags.has(node.tagName)) {
+      node.replaceWith(document.createTextNode(node.textContent || ""));
+      return;
+    }
+    [...node.attributes].forEach((attr) => {
+      const name = attr.name.toLowerCase();
+      if (name.startsWith("on") || !allowedAttrs.has(name)) node.removeAttribute(attr.name);
+    });
+  });
+  return template.innerHTML;
+}
+
+function setTrustedHtml(element, html) {
+  if (element) element.innerHTML = sanitizeTrustedHtml(html);
+}
+
+function getSafeExternalUrl(value, fallback = "") {
+  const raw = String(value || "").trim();
+  if (!raw) return fallback;
+  try {
+    const url = new URL(raw, window.location.origin);
+    if (["https:", "http:"].includes(url.protocol)) return url.href;
+  } catch (error) {
+    return fallback;
+  }
+  return fallback;
+}
+
+window.escapeHtml = escapeHtml;
+window.textToHtml = textToHtml;
+
 // Client-side quick check for UI feedback only
 function enforcePermission(permission, actionDescription = "") {
   const user = (typeof auth !== "undefined" && auth) ? auth.currentUser : null;
@@ -6632,17 +6689,17 @@ async function renderReportScreen(targetCaseId = null) {
     const doctorSpecialty = escapeHtml(identity.specialty);
     const doctorLicense = escapeHtml(identity.licenseNumber);
     const clinicName = escapeHtml(identity.clinic);
-    const reportRef = caseData.reportRef || `HV-REP-${caseData.id.slice(-8).toUpperCase()}`;
-    const reportVersion = caseData.reportVersion || missing;
-    const modelVersion = caseData.modelVersion || caseData.assessment?.aiTriage?.modelVersion || missing;
-    const ruleEngineVersion = caseData.assessment?.aiTriage?.ruleEngineVersion || caseData.ruleEngineVersion || missing;
+    const reportRef = escapeHtml(caseData.reportRef || `HV-REP-${caseData.id.slice(-8).toUpperCase()}`);
+    const reportVersion = escapeHtml(caseData.reportVersion || missing);
+    const modelVersion = escapeHtml(caseData.modelVersion || caseData.assessment?.aiTriage?.modelVersion || missing);
+    const ruleEngineVersion = escapeHtml(caseData.assessment?.aiTriage?.ruleEngineVersion || caseData.ruleEngineVersion || missing);
     const ruleScorePoints = typeof caseData.assessment?.aiTriage?.ruleScorePoints === 'number'
       ? caseData.assessment.aiTriage.ruleScorePoints
       : (typeof caseData.ruleScorePoints === 'number' ? caseData.ruleScorePoints : missing);
     const rawPatientName = recordedClinicalText(caseData.name || caseData.patientName, isEn);
-    const patientName = isSupport
+    const patientName = escapeHtml(isSupport
       ? (isEn ? `Patient #${caseData.id.slice(-6).toUpperCase()} (Identity Masked)` : `مريض #${caseData.id.slice(-6).toUpperCase()} (الاسم محجوب لدواعي الخصوصية)`)
-      : rawPatientName;
+      : rawPatientName);
 
     const recorded = getRecordedClinicalContent(caseData, isEn);
     const clinicalDiagnosis = escapeHtml(recorded.diag);
@@ -6656,15 +6713,15 @@ async function renderReportScreen(targetCaseId = null) {
 
     const doctorRecommendations = recorded.recs.map(escapeHtml);
 
-    const breathingDifficultyDisplay = isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوب") : (recordedClinicalText(caseData.breathingDifficulty || caseData.difficulty, isEn));
-    const coughLevelDisplay = isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوبة") : (recordedClinicalText(caseData.coughLevel, isEn));
-    const durationDisplay = isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوب") : (recordedClinicalText(caseData.symptomDuration || caseData.duration, isEn));
+    const breathingDifficultyDisplay = escapeHtml(isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوب") : (recordedClinicalText(caseData.breathingDifficulty || caseData.difficulty, isEn)));
+    const coughLevelDisplay = escapeHtml(isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوبة") : (recordedClinicalText(caseData.coughLevel, isEn)));
+    const durationDisplay = escapeHtml(isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوب") : (recordedClinicalText(caseData.symptomDuration || caseData.duration, isEn)));
     const riskFactorsDisplay = isSupport
-      ? (isEn ? "🔒 Medical data redacted" : "🔒 بيانات سريرية محجوبة")
-      : (Array.isArray(caseData.riskFactors) && caseData.riskFactors.length > 0 ? caseData.riskFactors.join('، ') : recordedClinicalText(null, isEn));
+      ? escapeHtml(isEn ? "🔒 Medical data redacted" : "🔒 بيانات سريرية محجوبة")
+      : escapeHtml(Array.isArray(caseData.riskFactors) && caseData.riskFactors.length > 0 ? caseData.riskFactors.join('، ') : recordedClinicalText(null, isEn));
     const aiScoreDisplay = isSupport
-      ? (isEn ? "🔒 Triage score redacted" : "🔒 تصنيف الفرز محجوب للدعم")
-      : (isEn ? (caseData.aiScoreEn || caseData.aiScore || missing) : (caseData.aiScore || missing));
+      ? escapeHtml(isEn ? "🔒 Triage score redacted" : "🔒 تصنيف الفرز محجوب للدعم")
+      : escapeHtml(isEn ? (caseData.aiScoreEn || caseData.aiScore || missing) : (caseData.aiScore || missing));
     const ruleScorePointsDisplay = isSupport
       ? (isEn ? "🔒 Masked" : "🔒 محجوب")
       : `${ruleScorePoints} ${isEn ? "pts" : "نقطة"}`;
@@ -8470,6 +8527,11 @@ function encodeAuditArg(value) {
 window.openDoctorCredentialDocument = async function(encodedUrl, encodedAppId = "", encodedApplicantUserId = "", encodedDocName = "") {
   const url = decodeURIComponent(encodedUrl || "");
   if (!url) return false;
+  const safeUrl = getSafeExternalUrl(url);
+  if (!safeUrl) {
+    showToast(currentLanguage === "en" ? "Blocked unsafe document link." : "تم منع رابط مستند غير آمن.");
+    return false;
+  }
   const appId = decodeURIComponent(encodedAppId || "");
   const applicantUserId = decodeURIComponent(encodedApplicantUserId || "");
   const docName = decodeURIComponent(encodedDocName || "");
@@ -8479,7 +8541,7 @@ window.openDoctorCredentialDocument = async function(encodedUrl, encodedAppId = 
     docName: docName || "",
     auditCategory: "open"
   });
-  window.open(url, "_blank", "noopener");
+  window.open(safeUrl, "_blank", "noopener");
   return false;
 };
 
@@ -11286,7 +11348,8 @@ if (fileUploadInput) {
     const fileList = document.getElementById("fileList");
     [...event.target.files].forEach((file) => {
       const item = document.createElement("div");
-      item.innerHTML = `<strong>${file.name}</strong><span>${localized("جاهز لمراجعة الطبيب - بدون تحليل ذكاء اصطناعي")}</span>`;
+      item.appendChild(createTextElement("strong", file.name));
+      item.appendChild(createTextElement("span", localized("جاهز لمراجعة الطبيب - بدون تحليل ذكاء اصطناعي")));
       if (fileList) fileList.prepend(item);
     });
     if (event.target.files.length) showToast("تمت إضافة الملف كمرجع للطبيب");
@@ -11555,7 +11618,7 @@ async function handleSendChatMessage() {
   // Add temporary bot thinking indicator
   const thinkingBubble = document.createElement("div");
   thinkingBubble.className = "bot";
-  thinkingBubble.innerHTML = `<span style="opacity: 0.7;">${isEn ? "Evaluating clinical guardrails & report..." : "جاري فحص حواجز الأمان والملف الطبي المعتمد..."}</span>`;
+  setTrustedHtml(thinkingBubble, `<span style="opacity: 0.7;">${isEn ? "Evaluating clinical guardrails & report..." : "جاري فحص حواجز الأمان والملف الطبي المعتمد..."}</span>`);
   messages.appendChild(thinkingBubble);
   messages.scrollTop = messages.scrollHeight;
 
@@ -11572,7 +11635,7 @@ async function handleSendChatMessage() {
   if (guardrail.triggered) {
     if (guardrail.type === "emergency") {
       botResponse = guardrail.message + disclaimerHtml;
-      thinkingBubble.innerHTML = botResponse;
+      setTrustedHtml(thinkingBubble, botResponse);
       messages.scrollTop = messages.scrollHeight;
       return;
     }
@@ -11593,7 +11656,7 @@ async function handleSendChatMessage() {
           : `<br><br>🔒 <em>لا توجد روشتة معتمدة من الطبيب لحسابك حالياً. يُرجى انتظار اعتماد الطبيب.</em>`;
       }
       botResponse += disclaimerHtml;
-      thinkingBubble.innerHTML = botResponse;
+      setTrustedHtml(thinkingBubble, botResponse);
       messages.scrollTop = messages.scrollHeight;
       return;
     }
@@ -11614,7 +11677,7 @@ async function handleSendChatMessage() {
           : `<br><br>🔒 <em>فحصك الطبي قيد مراجعة الطبيب حالياً. يمنع النظام أي تشخيص آلي قبل اعتماد الطبيب.</em>`;
       }
       botResponse += disclaimerHtml;
-      thinkingBubble.innerHTML = botResponse;
+      setTrustedHtml(thinkingBubble, botResponse);
       messages.scrollTop = messages.scrollHeight;
       return;
     }
@@ -11640,7 +11703,7 @@ async function handleSendChatMessage() {
         : "🔒 تنبيه طبي: فحصك الطبي ما زال قيد المراجعة والتدقيق بواسطة الطبيب المختص. وفقاً لحواجز الأمان السريرية، يمتنع المساعد تماماً عن تقديم تشخيصات أو وصف علاجات قبل صدور الاعتماد الرسمي من الطبيب. يرجى الانتظار حتى اعتماد التقرير.";
     }
     botResponse += disclaimerHtml;
-    thinkingBubble.innerHTML = botResponse;
+    setTrustedHtml(thinkingBubble, botResponse);
     messages.scrollTop = messages.scrollHeight;
     return;
   }
@@ -11694,7 +11757,7 @@ async function handleSendChatMessage() {
   }
 
   botResponse += disclaimerHtml;
-  thinkingBubble.innerHTML = botResponse;
+  setTrustedHtml(thinkingBubble, botResponse);
   messages.scrollTop = messages.scrollHeight;
 }
 

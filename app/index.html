@@ -3,59 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://apis.google.com https://www.google.com https://www.recaptcha.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://www.gstatic.com https://*.googleusercontent.com https://firebasestorage.googleapis.com; media-src 'self' data: blob:; connect-src 'self' http://localhost:4000 http://127.0.0.1:4000 https://healthvibe.ai https://*.firebaseio.com https://*.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://firebasestorage.googleapis.com https://firebaseinstallations.googleapis.com https://firebaseappcheck.googleapis.com https://www.google.com https://www.recaptcha.net; frame-src 'self' https://health-vibes-a4b3b.firebaseapp.com https://*.firebaseapp.com https://www.google.com https://recaptcha.google.com https://www.recaptcha.net; object-src 'none'; base-uri 'self'; form-action 'self';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com https://www.google.com https://www.recaptcha.net; script-src-attr 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://www.gstatic.com https://*.googleusercontent.com https://firebasestorage.googleapis.com; media-src 'self' data: blob:; connect-src 'self' http://localhost:4000 http://127.0.0.1:4000 https://healthvibe.ai https://*.firebaseio.com https://*.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://firebasestorage.googleapis.com https://firebaseinstallations.googleapis.com https://firebaseappcheck.googleapis.com https://www.google.com https://www.recaptcha.net; frame-src 'self' https://health-vibes-a4b3b.firebaseapp.com https://*.firebaseapp.com https://www.google.com https://recaptcha.google.com https://www.recaptcha.net; object-src 'none'; base-uri 'self'; form-action 'self';">
   <title>Health Vibes</title>
   <link rel="icon" type="image/png" href="./logo-light.png">
   <link rel="stylesheet" href="./styles.css?v=5.0">
-  <script>
-    (function() {
-      try {
-        var themeDefaultVersion = "2026-09-25-dark-v5";
-        if (localStorage.getItem("hv_theme_default_version") !== themeDefaultVersion) {
-          localStorage.setItem("hv_theme_default_version", themeDefaultVersion);
-          localStorage.setItem("hv_theme", "dark");
-        }
-        var savedTheme = localStorage.getItem("hv_theme") || "dark";
-        if (savedTheme === "light") {
-          document.documentElement.classList.add("hv-theme-light");
-          document.documentElement.classList.remove("hv-theme-dark");
-        } else {
-          document.documentElement.classList.remove("hv-theme-light");
-          document.documentElement.classList.add("hv-theme-dark");
-        }
-        var hasSession = localStorage.getItem("hv_user_logged_in") === "true" || !!localStorage.getItem("hv_active_session");
-        if (!hasSession) {
-          for (var i = 0; i < localStorage.length; i++) {
-            var k = localStorage.key(i);
-            if (k && (k.indexOf("firebase:authUser:") === 0 || k.indexOf("firebase:persistence:") === 0)) {
-              hasSession = true;
-              break;
-            }
-          }
-        }
-        if (hasSession) {
-          document.documentElement.classList.add("hv-has-session");
-        }
-      } catch(e) {}
-    })();
-    function showAuth() {
-      var el = document.getElementById("authScreen");
-      if (el) {
-        el.classList.add("open");
-        el.style.display = "grid";
-      }
-      if (typeof window.showSignInView === "function") window.showSignInView();
-    }
-    function hideAuth() {
-      var el = document.getElementById("authScreen");
-      if (el) {
-        el.classList.remove("open");
-        el.style.display = "none";
-      }
-    }
-    window.showAuth = showAuth;
-    window.hideAuth = hideAuth;
-  </script>
+  <script src="./bootstrap.js?v=5.0"></script>
   <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-auth-compat.js"></script>
@@ -63,18 +15,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-app-check-compat.js"></script>
 </head>
 <body class="dark">
-  <script>
-    (function() {
-      try {
-        var saved = localStorage.getItem("hv_theme") || "dark";
-        if (saved === "dark") {
-          document.body.classList.add("dark");
-        } else {
-          document.body.classList.remove("dark");
-        }
-      } catch(e) {}
-    })();
-  </script>
+  <script src="./theme-boot.js?v=5.0"></script>
   <div id="loader" class="loader" aria-live="polite">
     <div class="loader-card">
       <div class="loader-media" aria-hidden="true">

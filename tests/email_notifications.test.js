@@ -49,7 +49,7 @@ assert(resultEmail.html.includes("د. منى سامي"), "HTML must contain doct
 assert(resultEmail.html.includes("التهاب شعبي حاد متكرر"), "HTML must display clinical diagnosis");
 assert(resultEmail.html.includes("بخاخ موسع للشعب"), "HTML must display prescribed medication preview");
 assert(resultEmail.html.includes("قياس تشبع الأكسجين"), "HTML must display clinical recommendations");
-assert(resultEmail.html.includes("screen=report&caseId=case_test_9981"), "HTML must contain direct link to certified report");
+assert(resultEmail.html.includes("screen=report&amp;caseId=case_test_9981"), "HTML must contain escaped direct link to certified report");
 assert(resultEmail.html.includes("تنبيه طبي"), "HTML must contain medical safety disclaimer");
 assert(resultEmail.text.includes("HV-REP-TEST9981"), "Plain text must contain report reference");
 
@@ -73,7 +73,7 @@ assert(moreInfoEmail.html.includes("Health Vibes AI"), "HTML must contain brandi
 assert(moreInfoEmail.html.includes("فاطمة الزهراء"), "HTML must address patient by name");
 assert(moreInfoEmail.html.includes("د. أحمد السيد"), "HTML must include requesting doctor's name");
 assert(moreInfoEmail.html.includes("يرجى إعادة قياس نسبة الأكسجين"), "HTML must display doctor's specific required info");
-assert(moreInfoEmail.html.includes("screen=pending&caseId=case_test_7742"), "HTML must contain direct action link to submit data");
+assert(moreInfoEmail.html.includes("screen=pending&amp;caseId=case_test_7742"), "HTML must contain escaped direct action link to submit data");
 assert(moreInfoEmail.text.includes("case_test_7742".slice(-6).toUpperCase()), "Plain text must contain case reference");
 
 console.log("  ✓ More Info Requested HTML & plain-text templates generated with doctor instructions.");
