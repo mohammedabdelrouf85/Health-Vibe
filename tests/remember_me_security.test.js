@@ -48,7 +48,7 @@ console.log("\n▶ TEST 2: Unrestricted Remember Me Toggle");
 // Verify that the old anti-pattern 'checkbox.checked = true; // Always stay checked' is absent
 assert.ok(!appJs.includes("checkbox.checked = true; // Always stay checked"), "Must NOT force checkbox to true on change event.");
 
-// Verify that user preference is stored and read from localStorage
+// Verify that only the non-sensitive user preference is stored and read from localStorage
 assert.ok(appJs.includes("localStorage.setItem(REMEMBER_ME_KEY, isChecked ? \"true\" : \"false\")"), "Checkbox change must record user selection to localStorage.");
 assert.ok(appJs.includes("localStorage.getItem(REMEMBER_ME_KEY)"), "Init must restore saved preference from localStorage.");
 console.log("  ✓ User preference freely toggled and accurately mirrored in storage.");
@@ -57,11 +57,13 @@ console.log("  ✓ User preference freely toggled and accurately mirrored in sto
 // TEST 3: Workstation Storage Segregation (HIPAA PHI Defense)
 // -----------------------------------------------------------------------------
 console.log("\n▶ TEST 3: Workstation Storage Segregation");
-// In saveActiveSession, if remember is false, persistent credentials must be cleared
-assert.ok(appJs.includes("sessionStorage.setItem(\"hv_active_session\", JSON.stringify(session))"), "Active session must always exist in ephemeral sessionStorage.");
-assert.ok(appJs.includes("localStorage.removeItem(\"hv_active_session\")"), "Shared mode must sanitize persistent localStorage to prevent PHI exposure.");
-assert.ok(appJs.includes("localStorage.removeItem(\"hv_user_logged_in\")"), "Shared mode must remove logged-in flag from persistent localStorage.");
-console.log("  ✓ Ephemeral session isolation protects patient data on shared clinical workstations.");
+assert.ok(appJs.includes("function purgeSensitiveLegacyStorage()"), "Client must define targeted legacy sensitive-storage cleanup.");
+assert.ok(appJs.includes("\"hv_active_session\""), "Legacy active session key must be included in targeted cleanup.");
+assert.ok(appJs.includes("\"hv_local_feedbacks\""), "Legacy feedback cache key must be included in targeted cleanup.");
+assert.ok(appJs.includes("\"hv_appointments\""), "Legacy appointment cache prefix must be included in targeted cleanup.");
+assert.ok(!appJs.includes("sessionStorage.setItem(\"hv_active_session\""), "App must not create custom sessionStorage auth sessions.");
+assert.ok(!appJs.includes("localStorage.setItem(\"hv_active_session\""), "App must not create custom localStorage auth sessions.");
+console.log("  ✓ Firebase Auth persistence is authoritative; legacy sensitive caches are purged.");
 
 // -----------------------------------------------------------------------------
 // TEST 4: Clinical Inactivity & HIPAA Auto-Lock Implementation

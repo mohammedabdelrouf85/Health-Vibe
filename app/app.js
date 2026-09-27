@@ -1471,12 +1471,50 @@ function validateClientRuntimeConfig(config, firebaseClientConfig) {
 
 validateClientRuntimeConfig(runtimeConfig, firebaseConfig);
 
+// ── Client Storage Privacy Guard ─────────────────────────────
+const SENSITIVE_LEGACY_STORAGE_KEYS = [
+  "hv_active_session",
+  "hv_user_logged_in",
+  "hv_last_user_uid",
+  "hv_last_user_role",
+  "hv_session_security",
+  "hv_local_feedbacks",
+  "health_vibe_phone_verified",
+  "hv_known_accounts_registry",
+  "HV_LAST_ERRORS"
+];
+const SENSITIVE_LEGACY_STORAGE_PREFIXES = [
+  "hv_appointments",
+  "hv_medical_notes",
+  "hv_medical_files",
+  "hv_uploaded_files",
+  "hv_patient_files",
+  "hv_feedback",
+  "hv_privacy_consent"
+];
+
+function isSensitiveLegacyStorageKey(key) {
+  return SENSITIVE_LEGACY_STORAGE_KEYS.includes(key) ||
+    SENSITIVE_LEGACY_STORAGE_PREFIXES.some(prefix => key === prefix || key.startsWith(`${prefix}_`));
+}
+
+function purgeSensitiveLegacyStorage() {
+  try {
+    Object.keys(localStorage).forEach((key) => {
+      if (isSensitiveLegacyStorageKey(key)) localStorage.removeItem(key);
+    });
+  } catch(e) {}
+  try {
+    Object.keys(sessionStorage).forEach((key) => {
+      if (isSensitiveLegacyStorageKey(key)) sessionStorage.removeItem(key);
+    });
+  } catch(e) {}
+}
+
+purgeSensitiveLegacyStorage();
+
 // ── Session Persistence Manager ─────────────────────────────
 function getActiveSession() {
-  try {
-    const raw = sessionStorage.getItem("hv_active_session") || localStorage.getItem("hv_active_session");
-    if (raw) return JSON.parse(raw);
-  } catch(e) {}
   return null;
 }
 
@@ -1487,18 +1525,6 @@ function getActiveUser() {
   if (window._restoredSessionUser) {
     return window._restoredSessionUser;
   }
-  const session = getActiveSession();
-  if (session && session.uid) {
-    return {
-      uid: session.uid,
-      email: session.email || "",
-      displayName: session.displayName || session.name || (session.email ? session.email.split('@')[0] : ""),
-      name: session.name || session.displayName || "",
-      phoneNumber: session.phoneNumber || window._verifiedPhone || "",
-      role: session.role || ROLES.PATIENT,
-      emailVerified: session.emailVerified !== false
-    };
-  }
   return null;
 }
 window.getActiveUser = getActiveUser;
@@ -1506,80 +1532,21 @@ window.getActiveUser = getActiveUser;
 function saveActiveSession(user, role) {
   if (!user) return;
   try {
-    const r = role || selectedRole || ROLES.PATIENT;
-    const remember = (typeof shouldRememberSession === "function") ? shouldRememberSession() : true;
-    const session = {
-      uid: user.uid || "persisted_user",
-      email: user.email || "",
-      displayName: user.displayName || (user.email ? user.email.split("@")[0] : "User"),
-      photoURL: user.photoURL || null,
-      role: r,
-      emailVerified: Boolean(user.emailVerified),
-      remember: Boolean(remember),
-      timestamp: Date.now()
-    };
-
-    // Always maintain in active tab session
-    sessionStorage.setItem("hv_active_session", JSON.stringify(session));
-    sessionStorage.setItem("hv_user_logged_in", "true");
-
-    if (remember) {
-      // Personal / Authorized Workstation: persist across browser restarts
-      localStorage.setItem("hv_active_session", JSON.stringify(session));
-      localStorage.setItem("hv_user_logged_in", "true");
-      localStorage.setItem("hv_last_user_uid", session.uid);
-      localStorage.setItem("hv_last_user_role", session.role);
-    } else {
-      // Shared / Clinical Desk: sanitize persistent storage to protect patient PHI
-      localStorage.removeItem("hv_active_session");
-      localStorage.removeItem("hv_user_logged_in");
-      localStorage.removeItem("hv_last_user_uid");
-      localStorage.removeItem("hv_last_user_role");
-    }
+    purgeSensitiveLegacyStorage();
     document.documentElement.classList.add("hv-has-session");
   } catch(e) {}
 }
 
 function clearActiveSession() {
   try {
-    sessionStorage.removeItem("hv_active_session");
-    sessionStorage.removeItem("hv_user_logged_in");
-    sessionStorage.removeItem("hv_session_security");
-    localStorage.removeItem("hv_active_session");
-    localStorage.removeItem("hv_user_logged_in");
-    localStorage.removeItem("hv_last_user_role");
-    localStorage.removeItem("hv_last_user_uid");
+    purgeSensitiveLegacyStorage();
     localStorage.removeItem("hv_active_screen");
-    localStorage.removeItem("hv_session_security");
     document.documentElement.classList.remove("hv-has-session");
   } catch(e) {}
 }
 
 function restorePersistedSession() {
-  const session = getActiveSession();
-  if (session && session.email) {
-    console.log("[Health Vibes] Restoring persisted session for:", session.email);
-    document.documentElement.classList.add("hv-has-session");
-    selectedRole = normalizeRole(session.role || ROLES.PATIENT);
-    const pseudoUser = {
-      uid: session.uid || "persisted_user",
-      email: session.email,
-      displayName: session.displayName || session.email.split("@")[0],
-      photoURL: session.photoURL || null,
-      emailVerified: session.emailVerified !== false,
-      role: session.role || ROLES.PATIENT,
-      getIdToken: async () => {
-        if (auth && auth.currentUser) {
-          try { return await auth.currentUser.getIdToken(); } catch(e) {}
-        }
-        return "";
-      },
-      reload: async () => {}
-    };
-    window._restoredSessionUser = pseudoUser;
-    transitionToApp(pseudoUser, { navigate: true });
-    return pseudoUser;
-  }
+  purgeSensitiveLegacyStorage();
   return null;
 }
 
@@ -1605,8 +1572,6 @@ try {
 
 function hasSavedAuthSession() {
   try {
-    if (localStorage.getItem("hv_active_session")) return true;
-    if (localStorage.getItem("hv_user_logged_in") === "true") return true;
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
       if (k && (k.startsWith("firebase:authUser:") || k.startsWith("firebase:persistence:"))) {
@@ -1830,9 +1795,7 @@ function captureError(details = {}) {
     }
 
     try {
-      if (typeof localStorage !== "undefined") {
-        localStorage.setItem("HV_LAST_ERRORS", JSON.stringify(HV_ERROR_BUFFER.slice(0, 10)));
-      }
+      purgeSensitiveLegacyStorage();
     } catch (e) {}
 
     // Dispatch to backend if within rate limit
@@ -1879,9 +1842,7 @@ function getErrorLogs() {
 function clearErrorLogs() {
   HV_ERROR_BUFFER.length = 0;
   try {
-    if (typeof localStorage !== "undefined") {
-      localStorage.removeItem("HV_LAST_ERRORS");
-    }
+    purgeSensitiveLegacyStorage();
   } catch (e) {}
 }
 
@@ -2076,12 +2037,6 @@ if (runtimeConfig.environment === "development" && runtimeConfig.emulators && ru
   }
 }
 
-// Immediately enforce permanent LOCAL persistence so user stays logged in across sessions
-if (auth && firebase.auth && firebase.auth.Auth && firebase.auth.Auth.Persistence) {
-  auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(err => {
-    console.warn("Could not set initial auth persistence:", err);
-  });
-}
 const API_BASE_URL = (runtimeConfig.apiBaseUrl || "").replace(/\/$/, "");
 
 const APP_ENV = {
@@ -2245,14 +2200,7 @@ async function applyAuthPersistence(remember) {
 
   try {
     localStorage.setItem(REMEMBER_ME_KEY, remember ? "true" : "false");
-    const securityMeta = {
-      remember: Boolean(remember),
-      mode: remember ? "LOCAL" : "SESSION",
-      updatedAt: Date.now(),
-      origin: window.location.origin
-    };
-    localStorage.setItem(SESSION_SECURITY_KEY, JSON.stringify(securityMeta));
-    sessionStorage.setItem(SESSION_SECURITY_KEY, JSON.stringify(securityMeta));
+    purgeSensitiveLegacyStorage();
   } catch(e) {}
 }
 
@@ -2418,67 +2366,12 @@ function initIdleSessionLockMonitor() {
 }
 
 function getLocalAccountsRegistry() {
-  try {
-    const raw = localStorage.getItem(ACCOUNTS_REGISTRY_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        // Filter out any mock/dummy/placeholder accounts
-        const cleaned = parsed.filter(u => {
-          if (!u || !u.email) return false;
-          const id = String(u.id || "");
-          const email = String(u.email || "").toLowerCase();
-          if (id.startsWith("usr_doc_") || id.startsWith("usr_reg_") || id.startsWith("demo_") || id.startsWith("mock_") || id.startsWith("test_")) return false;
-          if (email.includes("@healthvibe.ai") && !isOwnerUser(email)) return false;
-          return true;
-        });
-        if (cleaned.length !== parsed.length) {
-          localStorage.setItem(ACCOUNTS_REGISTRY_KEY, JSON.stringify(cleaned));
-        }
-        return cleaned;
-      }
-    }
-  } catch(e) {}
+  purgeSensitiveLegacyStorage();
   return [];
 }
 
 function saveToAccountsRegistry(userObj) {
-  if (!userObj || !userObj.email) return;
-  const emailNorm = userObj.email.trim().toLowerCase();
-  const idStr = String(userObj.id || userObj.uid || "");
-
-  // Exclude fake/mock identifiers
-  if (idStr.startsWith("usr_doc_") || idStr.startsWith("usr_reg_") || idStr.startsWith("demo_") || idStr.startsWith("mock_")) return;
-  if (emailNorm.includes("@healthvibe.ai") && !isOwnerUser(emailNorm)) return;
-
-  const list = getLocalAccountsRegistry();
-  const idx = list.findIndex(u => (u.email && u.email.trim().toLowerCase() === emailNorm) || (u.id && u.id === (userObj.id || userObj.uid)));
-
-  const isOwner = isOwnerUser(userObj.email);
-  const verificationRevoked = isVerificationRevoked(userObj.email);
-  const role = userObj.role || (isOwner ? ROLES.SUPER_ADMIN : ROLES.PATIENT);
-  const record = {
-    id: userObj.id || userObj.uid || `user_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
-    name: userObj.name || userObj.displayName || userObj.email.split('@')[0],
-    displayName: userObj.name || userObj.displayName || userObj.email.split('@')[0],
-    email: userObj.email,
-    role: role,
-    emailVerified: verificationRevoked ? false : Boolean(userObj.emailVerified || isOwner),
-    isOwner: isOwner,
-    clinic: userObj.clinic || "",
-    createdAt: userObj.createdAt || Date.now(),
-    lastSeen: Date.now()
-  };
-
-  if (idx >= 0) {
-    list[idx] = { ...list[idx], ...record };
-  } else {
-    list.unshift(record);
-  }
-
-  try {
-    localStorage.setItem(ACCOUNTS_REGISTRY_KEY, JSON.stringify(list));
-  } catch(e) {}
+  purgeSensitiveLegacyStorage();
 }
 
 function renderSavedAccountsSwitcher() {
@@ -4772,7 +4665,7 @@ function transitionToApp(user, options = {}) {
   }
   if (navigate && typeof showScreen === "function") {
     let savedScreen = "";
-    try { savedScreen = localStorage.getItem("hv_active_screen"); } catch(e) {}
+    try { savedScreen = ""; } catch(e) {}
     const defaultScreen = getRoleDefaultScreen(selectedRole);
     const targetScreen = (savedScreen && canAccessScreen(savedScreen)) ? savedScreen : defaultScreen;
     showScreen(targetScreen);
@@ -4856,9 +4749,7 @@ window.enterApp = enterApp;
 
 function showSignedOutUI() {
   try {
-    localStorage.removeItem("hv_user_logged_in");
-    localStorage.removeItem("hv_last_user_role");
-    localStorage.removeItem("hv_last_user_uid");
+    purgeSensitiveLegacyStorage();
     document.documentElement.classList.remove("hv-has-session");
   } catch(e) {}
   if (app) {
@@ -4918,9 +4809,7 @@ async function leaveApp(event) {
   window._isUserVerified = false;
   window._verifiedPhone = "";
   window._cachedUserDoc = null;
-  try {
-    sessionStorage.removeItem("health_vibe_phone_verified");
-  } catch(e) {}
+  purgeSensitiveLegacyStorage();
 
   showSignedOutUI();
 
@@ -4963,10 +4852,7 @@ async function switchAccount(event) {
   window._verifiedPhone = "";
   window._cachedUserDoc = null;
   try {
-    sessionStorage.removeItem("health_vibe_phone_verified");
-    sessionStorage.removeItem("hv_active_session");
-    localStorage.removeItem("hv_active_session");
-    localStorage.removeItem("hv_user_logged_in");
+    purgeSensitiveLegacyStorage();
   } catch(e) {}
 
   showSignedOutUI();
@@ -5030,9 +4916,6 @@ function isUserVerified(user) {
   if (isOwnerUser(user.email)) return true;
   if (user.emailVerified) return true;
   if (window._isUserVerified) return true;
-  try {
-    if (sessionStorage.getItem("health_vibe_phone_verified") === "true") return true;
-  } catch(e) {}
   if (window._cachedUserDoc && (window._cachedUserDoc.emailVerified || window._cachedUserDoc.phoneVerified)) {
     return true;
   }
@@ -5357,7 +5240,7 @@ async function verifyPhoneOtp() {
     // 1. Update client verified state
     window._isUserVerified = true;
     try {
-      sessionStorage.setItem("health_vibe_phone_verified", "true");
+      window._isUserVerified = true;
     } catch(e) {}
 
     // 2. Update Firestore user document
@@ -5371,14 +5254,7 @@ async function verifyPhoneOtp() {
       }, { merge: true }).catch(err => console.warn("Firestore user verification update warning:", err));
     }
 
-    // 3. Update local accounts registry (offline & admin reports)
-    const list = getLocalAccountsRegistry();
-    const target = list.find(x => (user && x.id === user.uid) || (user && x.email && x.email.toLowerCase() === (user.email || '').toLowerCase()));
-    if (target) {
-      target.emailVerified = true;
-      target.phoneVerified = true;
-      try { localStorage.setItem(ACCOUNTS_REGISTRY_KEY, JSON.stringify(list)); } catch (e) {}
-    }
+    purgeSensitiveLegacyStorage();
 
     // 4. Update UI
     if (user) {
@@ -5665,23 +5541,17 @@ function getConsentStorageKey() {
 }
 
 function hasAcceptedPrivacyConsent() {
-  try {
-    const raw = localStorage.getItem(getConsentStorageKey());
-    if (!raw) return false;
-    const parsed = JSON.parse(raw);
-    return Boolean(parsed && parsed.accepted === true);
-  } catch {
-    return false;
-  }
+  const user = auth ? auth.currentUser : null;
+  const profileConsent = window._cachedUserDoc && window._cachedUserDoc.privacyConsent;
+  return Boolean(
+    window._privacyConsentRecord?.accepted === true ||
+    (profileConsent && profileConsent.accepted === true && (!user || profileConsent.userId === user.uid))
+  );
 }
 
 function getStoredPrivacyConsent() {
-  try {
-    const raw = localStorage.getItem(getConsentStorageKey());
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
+  const profileConsent = window._cachedUserDoc && window._cachedUserDoc.privacyConsent;
+  return window._privacyConsentRecord || profileConsent || null;
 }
 
 function savePrivacyConsent(accepted = true, options = {}) {
@@ -5697,7 +5567,8 @@ function savePrivacyConsent(accepted = true, options = {}) {
     notifications: options.notifications !== undefined ? options.notifications : false
   };
 
-  localStorage.setItem(getConsentStorageKey(), JSON.stringify(consentRecord));
+  window._privacyConsentRecord = consentRecord;
+  purgeSensitiveLegacyStorage();
 
   // Sync to Firestore user profile if authenticated
   if (user && db) {
@@ -5790,17 +5661,15 @@ async function loadUserProfileData() {
   if (!user) return;
 
   const cachedDoc = window._cachedUserDoc || {};
-  const activeSession = (typeof getActiveSession === "function" ? getActiveSession() : null) || {};
-
   const nameEl = document.getElementById("profileName");
   const ageEl = document.getElementById("profileAge");
   const phoneEl = document.getElementById("profilePhone");
   const historyEl = document.getElementById("profileMedicalHistory");
   const doctorEl = document.getElementById("profileLinkedDoctor");
 
-  const nameVal = cachedDoc.name || cachedDoc.displayName || user.displayName || user.name || activeSession.displayName || activeSession.name || (user.email ? user.email.split('@')[0] : "");
+  const nameVal = cachedDoc.name || cachedDoc.displayName || user.displayName || user.name || (user.email ? user.email.split('@')[0] : "");
   const ageVal = cachedDoc.age || "";
-  const phoneVal = cachedDoc.phoneNumber || window._verifiedPhone || user.phoneNumber || activeSession.phoneNumber || "";
+  const phoneVal = cachedDoc.phoneNumber || window._verifiedPhone || user.phoneNumber || "";
   const historyVal = cachedDoc.medicalHistory || "";
   const docVal = cachedDoc.linkedDoctor || (currentLanguage === "en" ? "Dr. Mona Samy - Nasr City Clinic" : "د. منى سامي - عيادة مدينة نصر");
 
@@ -5848,15 +5717,7 @@ async function saveUserProfileData() {
     }
   }
 
-  try {
-    const rawSession = localStorage.getItem("hv_active_session");
-    if (rawSession) {
-      const s = JSON.parse(rawSession);
-      if (name) s.displayName = name;
-      if (phone) s.phoneNumber = phone;
-      localStorage.setItem("hv_active_session", JSON.stringify(s));
-    }
-  } catch(e) {}
+  purgeSensitiveLegacyStorage();
 
   showToast(currentLanguage === "en" ? "Medical profile updated successfully!" : "تم حفظ وتحديث الملف الطبي بنجاح!");
 }
@@ -5877,7 +5738,7 @@ function showScreen(name) {
   }
 
   try {
-    localStorage.setItem("hv_active_screen", name);
+  purgeSensitiveLegacyStorage();
   } catch(e) {}
 
   updateNavVisibility();
@@ -5957,8 +5818,7 @@ async function renderPatientDashboard() {
 
   // ── تحية المريض بالاسم الفعلي ────────────────────────────────────
   const cachedDoc = window._cachedUserDoc || {};
-  const activeSession = (typeof getActiveSession === "function" ? getActiveSession() : null) || {};
-  const fullPatientName = cachedDoc.name || cachedDoc.displayName || user?.displayName || user?.name || activeSession.displayName || activeSession.name || (user?.email ? user.email.split("@")[0] : (isEn ? "Patient" : "مريض"));
+  const fullPatientName = cachedDoc.name || cachedDoc.displayName || user?.displayName || user?.name || (user?.email ? user.email.split("@")[0] : (isEn ? "Patient" : "مريض"));
   const firstName = fullPatientName.split(" ")[0];
   const titleEl = document.getElementById("patientHeroTitle");
   if (titleEl) titleEl.textContent = isEn ? `Welcome, ${firstName}` : `مرحبًا ${firstName}`;
@@ -7438,18 +7298,6 @@ function updateAppointmentSummary() {
 
 async function getConfirmedAppointmentsForDoctorAndDate(doctorId, dateStr) {
   const confirmed = [];
-  try {
-    const globalRaw = localStorage.getItem("hv_appointments");
-    if (globalRaw) {
-      const list = JSON.parse(globalRaw);
-      list.forEach(a => {
-        if (a.status === "confirmed" && a.date === dateStr && a.doctorId === doctorId) {
-          confirmed.push(a);
-        }
-      });
-    }
-  } catch (e) {}
-
   if (db) {
     try {
       const snap = await db.collection("appointments")
@@ -7472,28 +7320,6 @@ async function getConfirmedAppointmentsForDoctorAndDate(doctorId, dateStr) {
 
 async function getConfirmedAppointmentsForPatientAndDate(patientId, dateStr) {
   const confirmed = [];
-  try {
-    const key = `hv_appointments_${patientId}`;
-    const raw = localStorage.getItem(key);
-    if (raw) {
-      const list = JSON.parse(raw);
-      list.forEach(a => {
-        if (a.status === "confirmed" && a.date === dateStr) {
-          confirmed.push(a);
-        }
-      });
-    }
-    const globalRaw = localStorage.getItem("hv_appointments");
-    if (globalRaw) {
-      const list = JSON.parse(globalRaw);
-      list.forEach(a => {
-        if (a.status === "confirmed" && a.date === dateStr && a.patientId === patientId && !confirmed.some(c => c.id === a.id)) {
-          confirmed.push(a);
-        }
-      });
-    }
-  } catch (e) {}
-
   if (db && patientId && patientId !== "anon_patient") {
     try {
       const snap = await db.collection("appointments")
@@ -7530,8 +7356,7 @@ async function renderAppointmentsScreen() {
   const doctorId = doctorSelect ? doctorSelect.value : "dr_mona";
 
   const user = auth ? auth.currentUser : null;
-  const activeSession = (typeof getActiveSession === "function" ? getActiveSession() : null) || {};
-  const patientId = user ? user.uid : (activeSession.uid || "anon_patient");
+  const patientId = user ? user.uid : "anon_patient";
 
   // Query confirmed bookings to prevent double-booking
   const [doctorBookings, patientBookings] = await Promise.all([
@@ -7654,58 +7479,15 @@ function selectAppointmentSlot(slotId) {
 }
 
 function getLocalAppointments(patientId) {
-  try {
-    const key = patientId ? `hv_appointments_${patientId}` : "hv_appointments";
-    const raw = localStorage.getItem(key);
-    if (raw) return JSON.parse(raw);
-    const globalRaw = localStorage.getItem("hv_appointments");
-    if (globalRaw) {
-      const list = JSON.parse(globalRaw);
-      return patientId ? list.filter(a => a.patientId === patientId) : list;
-    }
-  } catch (e) {}
   return [];
 }
 
 function saveAppointmentToLocalStorage(appt) {
-  try {
-    const patientKey = `hv_appointments_${appt.patientId}`;
-    let list = [];
-    const raw = localStorage.getItem(patientKey);
-    if (raw) list = JSON.parse(raw);
-    list = list.filter(a => a.id !== appt.id);
-    list.unshift(appt);
-    localStorage.setItem(patientKey, JSON.stringify(list));
-
-    let globalList = [];
-    const globalRaw = localStorage.getItem("hv_appointments");
-    if (globalRaw) globalList = JSON.parse(globalRaw);
-    globalList = globalList.filter(a => a.id !== appt.id);
-    globalList.unshift(appt);
-    localStorage.setItem("hv_appointments", JSON.stringify(globalList));
-  } catch (e) {}
+  purgeSensitiveLegacyStorage();
 }
 
 function updateLocalAppointmentStatus(apptId, newStatus) {
-  try {
-    const keys = Object.keys(localStorage).filter(k => k.startsWith("hv_appointments"));
-    keys.forEach(k => {
-      try {
-        const raw = localStorage.getItem(k);
-        if (raw) {
-          const list = JSON.parse(raw);
-          let changed = false;
-          list.forEach(a => {
-            if (a.id === apptId) {
-              a.status = newStatus;
-              changed = true;
-            }
-          });
-          if (changed) localStorage.setItem(k, JSON.stringify(list));
-        }
-      } catch (e) {}
-    });
-  } catch (e) {}
+  purgeSensitiveLegacyStorage();
 }
 
 async function confirmAppointmentBooking() {
@@ -7731,11 +7513,10 @@ async function confirmAppointmentBooking() {
 
   const user = auth ? auth.currentUser : null;
   const cachedDoc = window._cachedUserDoc || {};
-  const activeSession = (typeof getActiveSession === "function" ? getActiveSession() : null) || {};
-  const patientId = user ? user.uid : (activeSession.uid || "anon_patient");
-  const patientName = cachedDoc.name || cachedDoc.displayName || user?.displayName || activeSession.displayName || activeSession.name || (user?.email ? user.email.split("@")[0] : (isEn ? "Patient" : "مريض"));
-  const patientEmail = user?.email || cachedDoc.email || activeSession.email || "";
-  const patientPhone = cachedDoc.phoneNumber || user?.phoneNumber || activeSession.phoneNumber || "";
+  const patientId = user ? user.uid : "anon_patient";
+  const patientName = cachedDoc.name || cachedDoc.displayName || user?.displayName || (user?.email ? user.email.split("@")[0] : (isEn ? "Patient" : "مريض"));
+  const patientEmail = user?.email || cachedDoc.email || "";
+  const patientPhone = cachedDoc.phoneNumber || user?.phoneNumber || "";
 
   // 🛡️ ANTI-DOUBLE BOOKING GUARD #1: Check if Doctor is already booked for this slot
   const doctorExisting = await getConfirmedAppointmentsForDoctorAndDate(doctorId, apptSelectedDate.dateStr);
@@ -7803,7 +7584,7 @@ async function confirmAppointmentBooking() {
       body: JSON.stringify(apptData)
     }, data => data.success === true && data.appointment && data.appointment.id);
 
-    saveAppointmentToLocalStorage(saved.appointment);
+    purgeSensitiveLegacyStorage();
     showToast(isEn ? "Appointment confirmed successfully! Reminder notification scheduled." : "تم تأكيد حجز الموعد بنجاح! سيصلك تذكير قبل موعد الاستشارة.");
     if (notesInput) notesInput.value = "";
 
@@ -7828,11 +7609,10 @@ async function renderPatientAppointmentsList() {
 
   const isEn = currentLanguage === "en";
   const user = auth ? auth.currentUser : null;
-  const activeSession = (typeof getActiveSession === "function" ? getActiveSession() : null) || {};
-  const patientId = user ? user.uid : (activeSession.uid || "anon_patient");
+  const patientId = user ? user.uid : "anon_patient";
 
   let appts = [];
-  const localList = getLocalAppointments(patientId);
+  const localList = [];
 
   if (db && user && !user.isAnonymous) {
     try {
@@ -7977,10 +7757,9 @@ async function updatePatientDashboardNextAppt() {
 
   const isEn = currentLanguage === "en";
   const user = auth ? auth.currentUser : null;
-  const activeSession = (typeof getActiveSession === "function" ? getActiveSession() : null) || {};
-  const patientId = user ? user.uid : (activeSession.uid || "anon_patient");
+  const patientId = user ? user.uid : "anon_patient";
 
-  const localList = getLocalAppointments(patientId);
+  const localList = [];
   const now = new Date();
   const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
 
@@ -8209,7 +7988,7 @@ async function handleFeedbackSubmit() {
       })
     }, data => data.success === true && data.feedbackId && data.feedback);
 
-    saveLocalFeedback(saved.feedback);
+    purgeSensitiveLegacyStorage();
 
     if (typeof showToast === "function") {
       showToast(isEn ? "Thank you! Your feedback has been received." : "شكراً لك! تم استلام تقييمك وملاحظاتك بنجاح.");
@@ -8286,7 +8065,7 @@ async function submitModalFeedback() {
         isPublic: true
       })
     }, data => data.success === true && data.feedbackId && data.feedback);
-    saveLocalFeedback(saved.feedback);
+    purgeSensitiveLegacyStorage();
     closeFeedbackModal();
     if (typeof showToast === "function") {
       showToast(isEn ? "Thank you! Your rating has been submitted." : "شكراً لتقييمك! تم حفظ ملاحظاتك بنجاح.");
@@ -8302,22 +8081,12 @@ async function submitModalFeedback() {
 }
 
 function getStoredLocalFeedbacks() {
-  try {
-    const raw = localStorage.getItem("hv_local_feedbacks");
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+  purgeSensitiveLegacyStorage();
+  return [];
 }
 
 function saveLocalFeedback(doc) {
-  try {
-    const existing = getStoredLocalFeedbacks();
-    existing.unshift(doc);
-    localStorage.setItem("hv_local_feedbacks", JSON.stringify(existing.slice(0, 50)));
-  } catch (e) {
-    console.warn("Could not save to localStorage:", e);
-  }
+  purgeSensitiveLegacyStorage();
 }
 
 async function renderFeedbackScreen() {
@@ -8358,7 +8127,7 @@ async function renderFeedbackHistory() {
     }
   }
 
-  const localList = getStoredLocalFeedbacks();
+  const localList = [];
   const map = new Map();
   [...feedbacks, ...localList].forEach(item => {
     if (item && item.feedbackId && !map.has(item.feedbackId)) {
@@ -9671,14 +9440,7 @@ async function changeUserRole(userId, newRole, userName, userEmail) {
     });
     if (!resp?.success) throw new Error("Role update was not confirmed by the server");
 
-    // 3. Update in local registry
-    const list = getLocalAccountsRegistry();
-    const u = list.find(x => x.id === userId || (userEmail && x.email && x.email.toLowerCase() === userEmail.toLowerCase()));
-    if (u) {
-      u.role = newRole;
-      if (newRole === ROLES.DOCTOR) u.verifiedDoctor = true;
-      try { localStorage.setItem(ACCOUNTS_REGISTRY_KEY, JSON.stringify(list)); } catch(e) {}
-    }
+    purgeSensitiveLegacyStorage();
 
     // 4. If current logged-in user changed their own role, update session and UI!
     if (auth && auth.currentUser && (auth.currentUser.uid === userId || (userEmail && auth.currentUser.email.toLowerCase() === userEmail.toLowerCase()))) {
@@ -9715,13 +9477,7 @@ async function toggleUserVerification(userId, currentStatus, userName, userEmail
     });
     if (!result?.success) throw new Error("Verification update was not confirmed by the server");
 
-    // 2. Update local registry
-    const list = getLocalAccountsRegistry();
-    const u = list.find(x => x.id === userId || (x.email && x.email.toLowerCase() === (userEmail || '').toLowerCase()));
-    if (u) {
-      u.emailVerified = newStatus;
-      try { localStorage.setItem(ACCOUNTS_REGISTRY_KEY, JSON.stringify(list)); } catch(e) {}
-    }
+    purgeSensitiveLegacyStorage();
 
     // 3. Write audit log
     if (typeof writeClientAuditLog === "function") {
@@ -9763,15 +9519,7 @@ async function toggleUserSuspension(userId, currentSuspended, userName, userEmai
     });
     if (!result?.success) throw new Error("Suspension update was not confirmed by the server");
 
-    // 3. Local registry update
-    const list = getLocalAccountsRegistry();
-    const u = list.find(x => x.id === userId || (x.email && x.email.toLowerCase() === (userEmail || '').toLowerCase()));
-    if (u) {
-      u.suspended = targetSuspend;
-      u.isSuspended = targetSuspend;
-      u.status = targetSuspend ? "suspended" : "active";
-      try { localStorage.setItem(ACCOUNTS_REGISTRY_KEY, JSON.stringify(list)); } catch(e) {}
-    }
+    purgeSensitiveLegacyStorage();
 
     showToast(isEn ? `Account ${userName} is now ${targetSuspend ? 'SUSPENDED 🛑' : 'ACTIVE ✅'}!` : `تم ${targetSuspend ? 'إيقاف وحظر 🛑' : 'إعادة تفعيل ✅'} حساب ${userName} بنجاح!`);
     await renderAdminUsers();
@@ -9845,10 +9593,7 @@ async function verifyAllUnverifiedAccounts() {
         count++;
       }
     }
-    // Update local registry
-    try {
-      localStorage.setItem(ACCOUNTS_REGISTRY_KEY, JSON.stringify(users));
-    } catch(e) {}
+    purgeSensitiveLegacyStorage();
     showToast(isEn ? `Successfully verified ${count} accounts on system!` : `تم توثيق وتأكيد ${count} حساب بنجاح على السيستم!`);
     await renderAdminUsers();
     await renderAdminMetrics();
@@ -10744,7 +10489,6 @@ function buildAssessmentModel({
 
   // Resolve authentic patient identity
   const cachedDoc = window._cachedUserDoc || {};
-  const activeSession = (typeof getActiveSession === "function" ? getActiveSession() : null) || {};
   const profileNameInput = document.getElementById("profileName");
   const profileAgeInput = document.getElementById("profileAge");
   const profilePhoneInput = document.getElementById("profilePhone");
@@ -10752,11 +10496,11 @@ function buildAssessmentModel({
 
   const patientName = (profileNameInput && profileNameInput.value.trim() && profileNameInput.value.trim() !== "أحمد محمد")
     ? profileNameInput.value.trim()
-    : (cachedDoc.name || cachedDoc.displayName || user?.displayName || user?.name || activeSession.displayName || activeSession.name || (user?.email ? user.email.split('@')[0] : "مريض"));
+    : (cachedDoc.name || cachedDoc.displayName || user?.displayName || user?.name || (user?.email ? user.email.split('@')[0] : "مريض"));
 
-  const patientEmail = (user && user.email) || cachedDoc.email || activeSession.email || "";
-  const patientUid = (user && user.uid) || activeSession.uid || "";
-  const patientPhone = (profilePhoneInput && profilePhoneInput.value.trim()) || window._verifiedPhone || cachedDoc.phoneNumber || user?.phoneNumber || activeSession.phoneNumber || "";
+  const patientEmail = (user && user.email) || cachedDoc.email || "";
+  const patientUid = (user && user.uid) || "";
+  const patientPhone = (profilePhoneInput && profilePhoneInput.value.trim()) || window._verifiedPhone || cachedDoc.phoneNumber || user?.phoneNumber || "";
   const patientAge = (profileAgeInput && profileAgeInput.value.trim()) || cachedDoc.age || "";
   const patientHistory = (profileHistoryInput && profileHistoryInput.value.trim()) || cachedDoc.medicalHistory || "";
 
@@ -11910,17 +11654,6 @@ function initHVAuthListener() {
       // Update with enriched details
       transitionToApp(user);
     } else {
-      // Firebase returned null: Check if we have an active saved session!
-      const activeSession = getActiveSession();
-      if (activeSession && !window._isSigningOut) {
-        console.log("[Health Vibes] Retaining persisted user session across refresh.");
-        const restoredUser = window._restoredSessionUser || restorePersistedSession();
-        if (restoredUser) {
-          transitionToApp(restoredUser, { navigate: false });
-        }
-        return;
-      }
-
       // Truly signed out
       clearActiveSession();
       window._isUserVerified = false;
@@ -12264,17 +11997,9 @@ document.addEventListener("DOMContentLoaded", () => {
             localStorage.removeItem(getConsentStorageKey());
           }
           localStorage.removeItem(`hv_privacy_consent_${user.uid}`);
-          if (typeof getLocalAccountsRegistry === "function") {
-            const list = getLocalAccountsRegistry();
-            const filtered = list.filter(u => u.id !== user.uid && u.email?.toLowerCase() !== user.email?.toLowerCase());
-            localStorage.setItem(ACCOUNTS_REGISTRY_KEY, JSON.stringify(filtered));
-          }
           if (typeof clearActiveSession === "function") clearActiveSession();
-          localStorage.removeItem("hv_active_session");
-          sessionStorage.removeItem("hv_active_session");
-          localStorage.removeItem("hv_user_logged_in");
           localStorage.removeItem(REMEMBER_ME_KEY);
-          sessionStorage.removeItem("health_vibe_phone_verified");
+          purgeSensitiveLegacyStorage();
         } catch {}
 
         closeDeleteAccountModal();
@@ -13002,7 +12727,7 @@ function updateMobileBottomNav() {
 
   const activeScreenName = (typeof activeScreen !== "undefined" && activeScreen)
     ? activeScreen
-    : (localStorage.getItem("hv_active_screen") || getRoleDefaultScreen(currentRole));
+    : getRoleDefaultScreen(currentRole);
 
   navContainer.innerHTML = items.map(item => {
     if (item.isMenu) {

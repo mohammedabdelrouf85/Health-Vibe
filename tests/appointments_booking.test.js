@@ -111,7 +111,10 @@ assert(appJsContent.includes("slot_2000"), "Slots must include 08:00 PM slot");
 console.log("  ✓ 5 clinical time slots defined with bilingual Arabic/English schedules.");
 
 // ── TEST 4: Booking Creation, Persistence & Lifecycle ─────────────────────────
-console.log("\n▶ TEST 4: Booking Creation, Persistence & Storage Model");
+console.log("\n▶ TEST 4: Booking Creation, Server Persistence & Legacy Storage Cleanup");
+assert(appJsContent.includes("purgeSensitiveLegacyStorage()"), "Client must purge legacy appointment caches.");
+assert(!appJsContent.includes("localStorage.setItem(\"hv_appointments\""), "Client must not persist appointments in global localStorage.");
+assert(!appJsContent.includes("localStorage.setItem(patientKey"), "Client must not persist patient appointments in localStorage.");
 class MockLocalStorage {
   constructor() { this.store = {}; }
   getItem(k) { return this.store[k] || null; }
@@ -160,7 +163,7 @@ assert.strictEqual(storedAppts.length, 1, "Patient should have 1 stored appointm
 assert.strictEqual(storedAppts[0].id, appt1.id);
 assert.strictEqual(storedAppts[0].status, "confirmed");
 assert.strictEqual(storedAppts[0].doctorName, "د. منى سامي");
-console.log(`  ✓ Appointment ${appt1.id} successfully cached only after confirmed server persistence.`);
+console.log(`  ✓ Appointment ${appt1.id} fixture validates lifecycle shape without browser persistence.`);
 
 // ── TEST 5: Appointment Cancellation Lifecycle ───────────────────────────────
 console.log("\n▶ TEST 5: Cancellation Workflow");
@@ -252,7 +255,8 @@ assert(serverJsContent.includes("APPOINTMENT_STORAGE_UNAVAILABLE"), "Server must
 assert(serverJsContent.includes("PATIENT_MISMATCH"), "Server must reject forged patientId writes.");
 assert(appJsContent.includes('requireSuccessfulMutation("/api/appointments/book"'), "Client booking must require successful server mutation.");
 assert(appJsContent.includes('requireSuccessfulMutation("/api/appointments/cancel"'), "Client cancellation must require successful server mutation.");
-assert(appJsContent.includes("saveAppointmentToLocalStorage(saved.appointment)"), "Client may cache only the server-confirmed appointment.");
+assert(!appJsContent.includes("saveAppointmentToLocalStorage(saved.appointment)"), "Client must not cache server-confirmed appointments in localStorage.");
+assert(appJsContent.includes("purgeSensitiveLegacyStorage();"), "Client must clean legacy appointment storage after confirmed booking.");
 assert(!appJsContent.includes("Could not cancel on Firestore, updating local cache"), "Cancellation must not fall back to local-only success.");
 assert(appJsContent.includes("confirmAppointmentBooking._pending"), "Booking must prevent duplicate submissions during retryable failure.");
 console.log("  ✓ Booking/cancellation success depends on real server persistence, with explicit retryable failure state.");

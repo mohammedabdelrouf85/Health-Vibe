@@ -75,7 +75,8 @@ console.log('\n▶ TEST 5: Client-Side Deletion & Local Registry Purging in app.
 assert(appJs.includes('window.openDeleteAccountModal = function'), 'openDeleteAccountModal must be on window');
 assert(appJs.includes('window.closeDeleteAccountModal = function'), 'closeDeleteAccountModal must be on window');
 assert(appJs.includes('isOwnerUser(user)'), 'Client modal must warn and block deleting trusted owner account');
-assert(appJs.includes('localStorage.setItem(ACCOUNTS_REGISTRY_KEY'), 'Account deletion must purge user from local registry');
+assert(appJs.includes('purgeSensitiveLegacyStorage()'), 'Account deletion must purge legacy sensitive browser storage');
+assert(!appJs.includes('localStorage.setItem(ACCOUNTS_REGISTRY_KEY'), 'Client must not recreate the local accounts registry');
 console.log('  ✓ Client deletion ensures local accounts registry and session keys are sanitized.');
 
 // -----------------------------------------------------------------------------

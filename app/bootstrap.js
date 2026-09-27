@@ -13,7 +13,7 @@
       document.documentElement.classList.remove("hv-theme-light");
       document.documentElement.classList.add("hv-theme-dark");
     }
-    var hasSession = localStorage.getItem("hv_user_logged_in") === "true" || !!localStorage.getItem("hv_active_session");
+    var hasSession = false;
     if (!hasSession) {
       for (var i = 0; i < localStorage.length; i++) {
         var k = localStorage.key(i);

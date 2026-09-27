@@ -124,7 +124,8 @@ runTest("Server-Confirmed Feedback Save & Retry Failure Guards", () => {
   assert.ok(appJs.includes('requireSuccessfulMutation("/api/feedback/submit"'), "Feedback submit must require successful backend mutation");
   assert.ok(appJs.includes("showRetryFailure"), "Feedback failure must expose retry without clearing inputs");
   assert.ok(appJs.includes("handleFeedbackSubmit._pending"), "Feedback submit must prevent duplicate in-flight submissions");
-  assert.ok(appJs.includes("saveLocalFeedback(saved.feedback)"), "Local feedback cache must only store server-confirmed feedback");
+  assert.ok(appJs.includes("purgeSensitiveLegacyStorage()"), "Client must purge legacy sensitive local feedback storage");
+  assert.ok(!appJs.includes("localStorage.setItem(\"hv_local_feedbacks\""), "Client must not persist feedback comments in localStorage");
   assert.ok(!appJs.includes("Backend feedback API unreachable, saving to Firestore directly"), "Client must not turn backend failure into direct-write success");
   assert.ok(!appJs.includes("Firestore feedback write failed, saving to local cache"), "Client must not treat localStorage as a durable feedback record");
 
