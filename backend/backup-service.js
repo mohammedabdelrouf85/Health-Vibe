@@ -24,7 +24,8 @@ const FIRESTORE_COLLECTIONS = Object.freeze([
   'doctor_applications',
   'reports',
   'medical_reports',
-  'clinical_reports'
+  'clinical_reports',
+  'privacy_tombstones'
 ]);
 
 const STORAGE_PREFIXES = Object.freeze([
@@ -441,11 +442,44 @@ async function restoreBackupSnapshot(backupId, {
 
   let restoredRecords = 0;
   let pending = [];
+
+  // 1. Fetch active privacy tombstones to ensure deleted users are never restored
+  const tombstonedUserIds = new Set();
+  try {
+    if (firestoreDb && typeof firestoreDb.collection === 'function') {
+      const tombstonesSnap = await firestoreDb.collection('privacy_tombstones').get().catch(() => null);
+      if (tombstonesSnap && !tombstonesSnap.empty) {
+        tombstonesSnap.forEach(d => {
+          const tData = d.data() || {};
+          if (tData.userId) tombstonedUserIds.add(tData.userId);
+          else if (d.id) tombstonedUserIds.add(d.id);
+        });
+      }
+    }
+  } catch (e) {}
+
   for (const [collectionName, rows] of Object.entries(payload.firestore || {})) {
     for (const row of rows) {
       if (!row.id) {
         throw new Error(`Restore payload contains a ${collectionName} record without an id.`);
       }
+
+      // Privacy suppression check: do not resurrect deleted user profiles
+      if (collectionName === 'users' && tombstonedUserIds.has(row.id)) {
+        continue;
+      }
+
+      // If clinical case belongs to a tombstoned user, keep record but ensure PII remains scrubbed
+      if (row.data && (tombstonedUserIds.has(row.data.patientId) || tombstonedUserIds.has(row.data.userId))) {
+        if (collectionName === 'cases') {
+          row.data.patientName = 'مريض محذوف (Deleted Patient)';
+          row.data.patientEmail = 'deleted@anonymized.local';
+          row.data.isAnonymized = true;
+        } else if (['doctor_applications', 'email_notifications', 'feedbacks', 'appointments'].includes(collectionName)) {
+          continue;
+        }
+      }
+
       pending.push({
         ref: firestoreDb.collection(collectionName).doc(row.id),
         data: row.data || {}
@@ -463,6 +497,12 @@ async function restoreBackupSnapshot(backupId, {
   if (storageBucket && typeof storageBucket.file === 'function') {
     for (const object of payload.storage?.objects || []) {
       if (!object.contentBase64) continue;
+
+      // Privacy suppression check: do not restore storage files for deleted users
+      if (object.name && Array.from(tombstonedUserIds).some(uid => object.name.includes(uid))) {
+        continue;
+      }
+
       const buffer = Buffer.from(object.contentBase64, 'base64');
       const computed = computeChecksum(object.contentBase64);
       if (object.contentSha256 && computed !== object.contentSha256) {

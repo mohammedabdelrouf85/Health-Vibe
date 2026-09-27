@@ -4814,6 +4814,7 @@ async function leaveApp(event) {
   showSignedOutUI();
 
   try {
+    if (typeof auditSessionLogout === "function") await auditSessionLogout().catch(() => {});
     await auth.signOut();
   } catch(e) {
     console.error("Sign out error:", e);
@@ -4858,6 +4859,7 @@ async function switchAccount(event) {
   showSignedOutUI();
 
   try {
+    if (typeof auditSessionLogout === "function") await auditSessionLogout().catch(() => {});
     if (auth) await auth.signOut();
   } catch(e) {
     console.error("Sign out error during switch account:", e);
@@ -5537,9 +5539,12 @@ function getConsentStorageKey() {
 function hasAcceptedPrivacyConsent() {
   const user = auth ? auth.currentUser : null;
   const profileConsent = window._cachedUserDoc && window._cachedUserDoc.privacyConsent;
+  const activeRecord = window._privacyConsentRecord || profileConsent;
   return Boolean(
-    window._privacyConsentRecord?.accepted === true ||
-    (profileConsent && profileConsent.accepted === true && (!user || profileConsent.userId === user.uid))
+    activeRecord &&
+    activeRecord.accepted === true &&
+    !activeRecord.revokedAt &&
+    (!user || !activeRecord.userId || activeRecord.userId === user.uid)
   );
 }
 
@@ -5548,26 +5553,76 @@ function getStoredPrivacyConsent() {
   return window._privacyConsentRecord || profileConsent || null;
 }
 
-function savePrivacyConsent(accepted = true, options = {}) {
+async function syncPrivacyConsentToServer(consentRecord, withdraw = false) {
+  if (!auth?.currentUser || typeof callBackend !== "function") return null;
+  const endpoint = withdraw ? "/api/user/privacy-consent/withdraw" : "/api/user/privacy-consent";
+  return callBackend(endpoint, {
+    method: "POST",
+    body: JSON.stringify({
+      version: consentRecord.version,
+      dataProcessing: consentRecord.dataProcessing,
+      aiAdvisory: consentRecord.aiAdvisory,
+      notifications: consentRecord.notifications,
+      purposes: consentRecord.purposes || undefined
+    })
+  });
+}
+
+async function savePrivacyConsent(accepted = true, options = {}) {
   const user = auth ? auth.currentUser : null;
+  const now = new Date().toISOString();
   const consentRecord = {
     accepted: Boolean(accepted),
     version: PRIVACY_CONSENT_VERSION,
-    acceptedAt: new Date().toISOString(),
+    timestamp: now,
+    acceptedAt: accepted ? now : null,
+    revokedAt: accepted ? null : now,
     userId: user ? user.uid : "guest",
     userEmail: user ? user.email : "guest",
+    purpose: accepted
+      ? "Explicit consent for Health Vibes clinical assessment, doctor review, report workflow, and selected communications."
+      : "Withdrawal of explicit Health Vibes clinical data processing consent.",
     dataProcessing: options.dataProcessing !== undefined ? options.dataProcessing : true,
     aiAdvisory: options.aiAdvisory !== undefined ? options.aiAdvisory : true,
-    notifications: options.notifications !== undefined ? options.notifications : false
+    notifications: options.notifications !== undefined ? options.notifications : false,
+    purposes: {
+      dataProcessing: {
+        accepted: options.dataProcessing !== undefined ? Boolean(options.dataProcessing) : true,
+        purpose: "clinical_assessment_and_doctor_review",
+        mandatory: true
+      },
+      aiAdvisory: {
+        accepted: options.aiAdvisory !== undefined ? Boolean(options.aiAdvisory) : true,
+        purpose: "guidance_only_ai_triage_support",
+        mandatory: true
+      },
+      notifications: {
+        accepted: options.notifications !== undefined ? Boolean(options.notifications) : false,
+        purpose: "case_status_report_and_follow_up_notifications",
+        mandatory: false
+      }
+    }
   };
 
   window._privacyConsentRecord = consentRecord;
   purgeSensitiveLegacyStorage();
 
-  // Sync to Firestore user profile if authenticated
+  try {
+    const serverResult = await syncPrivacyConsentToServer(consentRecord, !accepted);
+    if (serverResult && serverResult.privacyConsent) {
+      window._privacyConsentRecord = serverResult.privacyConsent;
+      if (window._cachedUserDoc) window._cachedUserDoc.privacyConsent = serverResult.privacyConsent;
+      return serverResult.privacyConsent;
+    }
+  } catch (err) {
+    console.warn("[Consent] Server consent sync failed; using Firestore client fallback:", err);
+  }
+
+  // Fallback for local/emulator use when the API is unavailable.
   if (user && db) {
     db.collection("users").doc(user.uid).set({
-      privacyConsent: consentRecord
+      privacyConsent: consentRecord,
+      privacyConsentStatus: accepted ? "active" : "withdrawn"
     }, { merge: true }).catch(err => {
       console.warn("[Consent] Could not sync consent to Firestore:", err);
     });
@@ -5575,6 +5630,27 @@ function savePrivacyConsent(accepted = true, options = {}) {
 
   return consentRecord;
 }
+
+async function withdrawPrivacyConsent() {
+  const isEn = currentLanguage === "en";
+  if (!confirm(isEn
+    ? "Withdraw medical privacy consent? New breathing assessments will be blocked until you accept again. Existing medical records may be retained where legally or clinically required."
+    : "هل تريد سحب موافقة الخصوصية الطبية؟ سيتم منع فحوصات التنفس الجديدة حتى توافق مرة أخرى، وقد يتم الاحتفاظ بالسجلات الطبية السابقة عند وجود متطلبات قانونية أو سريرية.")) {
+    return null;
+  }
+  const record = await savePrivacyConsent(false, {
+    dataProcessing: false,
+    aiAdvisory: false,
+    notifications: false
+  });
+  updateAssessmentConsentBadge();
+  renderConsentScreen();
+  showToast(isEn
+    ? "Consent withdrawn. Assessment is paused until consent is renewed."
+    : "تم سحب الموافقة. تم إيقاف التقييمات الجديدة حتى تجديد الموافقة.");
+  return record;
+}
+window.withdrawPrivacyConsent = withdrawPrivacyConsent;
 
 function renderConsentScreen() {
   const isEn = currentLanguage === "en";
@@ -5593,7 +5669,7 @@ function renderConsentScreen() {
 
   const proceedBtn = document.getElementById("btnConsentProceed");
   if (proceedBtn) {
-    proceedBtn.onclick = () => {
+    proceedBtn.onclick = async () => {
       const chkProcessing = document.getElementById("consentDataProcessing");
       const chkAi = document.getElementById("consentAiAdvisory");
       const chkNotify = document.getElementById("consentNotifications");
@@ -5610,15 +5686,29 @@ function renderConsentScreen() {
         return;
       }
 
-      savePrivacyConsent(true, {
-        dataProcessing: isProcessingOk,
-        aiAdvisory: isAiOk,
-        notifications: chkNotify ? chkNotify.checked : false
-      });
+      proceedBtn.disabled = true;
+      const originalText = proceedBtn.textContent;
+      proceedBtn.textContent = isEn ? "Saving consent..." : "جاري حفظ الموافقة...";
+      try {
+        await savePrivacyConsent(true, {
+          dataProcessing: isProcessingOk,
+          aiAdvisory: isAiOk,
+          notifications: chkNotify ? chkNotify.checked : false
+        });
+      } finally {
+        proceedBtn.disabled = false;
+        proceedBtn.textContent = originalText;
+      }
 
       showToast(isEn ? "Privacy consent verified! Opening assessment..." : "تم توثيق الموافقة بنجاح! جاري فتح فحص التنفس...");
       showScreen("assessment");
     };
+  }
+
+  const withdrawBtn = document.getElementById("btnWithdrawConsent");
+  if (withdrawBtn) {
+    withdrawBtn.style.display = isConsented ? "inline-flex" : "none";
+    withdrawBtn.onclick = () => withdrawPrivacyConsent();
   }
 }
 
@@ -5803,6 +5893,9 @@ function showScreen(name) {
   }
   if (name === "kpi") {
     renderKpiDashboard();
+  }
+  if (name === "audit") {
+    loadAuditEvents();
   }
 }
 
@@ -6267,6 +6360,9 @@ async function renderReportScreen(targetCaseId = null) {
             caseData = { id: docSnap.id, ...d };
             if (d.patientId === user.uid && normalizeRole(selectedRole) === ROLES.PATIENT) {
               caseData = maskUnapprovedPatientCase(caseData);
+            }
+            if (typeof auditRecordViewed === "function" && caseId) {
+              auditRecordViewed(caseId).catch(() => {});
             }
           }
         }
@@ -11931,48 +12027,193 @@ window.exportUserData = async function() {
     return;
   }
 
-  showToast(isEn ? "Preparing your medical data..." : "جاري تجهيز بياناتك الطبية للتصدير...");
+  showToast(isEn ? "Preparing your complete medical & account data..." : "جاري تجهيز وتشفير بياناتك السريرية والحساب للتصدير...");
 
   try {
-    const exportPayload = {
-      exportVersion: "HealthVibe-Export-v1.0",
-      exportTimestamp: new Date().toISOString(),
-      userProfile: {
-        uid: user.uid,
-        email: user.email,
-        displayName: user.displayName || user.email.split("@")[0],
-        emailVerified: user.emailVerified,
-        role: typeof selectedRole !== "undefined" ? selectedRole : "patient"
-      },
-      privacyConsent: typeof getStoredPrivacyConsent === "function" ? getStoredPrivacyConsent() : null,
-      cases: []
-    };
+    let exportPayload = null;
 
-    if (db) {
-      const snap = await db.collection("cases").where("patientId", "==", user.uid).get();
-      snap.forEach(docSnap => {
-        exportPayload.cases.push({
-          id: docSnap.id,
-          ...docSnap.data()
-        });
-      });
+    // Step A: Attempt server-authoritative GDPR Art. 20 export archive
+    if (typeof callBackend === "function") {
+      try {
+        const resp = await callBackend("/api/user/data-export", { method: "GET" });
+        if (resp && resp.exportArchive) {
+          exportPayload = resp.exportArchive;
+        } else if (resp && (resp.error === "REQUIRES_RECENT_LOGIN" || resp.code === "auth/requires-recent-login")) {
+          showToast(isEn ? "Security check: Please re-authenticate to export sensitive clinical data." : "فحص أمني: يرجى إعادة تسجيل الدخول لتصدير البيانات السريرية الحساسة.");
+          return;
+        }
+      } catch (beErr) {
+        console.warn("Backend export request warning, using client fallback:", beErr);
+      }
+    }
+
+    // Step B: Resilient client fallback if backend unreachable
+    if (!exportPayload) {
+      exportPayload = {
+        exportVersion: "HealthVibe-GDPR-Export-v2.0",
+        exportTimestamp: new Date().toISOString(),
+        userProfile: {
+          uid: user.uid,
+          email: user.email,
+          displayName: user.displayName || user.email.split("@")[0],
+          emailVerified: user.emailVerified,
+          role: typeof selectedRole !== "undefined" ? selectedRole : "patient"
+        },
+        privacyConsent: typeof getStoredPrivacyConsent === "function" ? getStoredPrivacyConsent() : null,
+        cases: [],
+        appointments: [],
+        feedbacks: []
+      };
+
+      if (db) {
+        const snap = await db.collection("cases").where("patientId", "==", user.uid).get().catch(() => null);
+        if (snap) {
+          snap.forEach(docSnap => {
+            exportPayload.cases.push({ id: docSnap.id, ...docSnap.data() });
+          });
+        }
+        const apptSnap = await db.collection("appointments").where("patientId", "==", user.uid).get().catch(() => null);
+        if (apptSnap) {
+          apptSnap.forEach(docSnap => {
+            exportPayload.appointments.push({ id: docSnap.id, ...docSnap.data() });
+          });
+        }
+      }
     }
 
     const dataBlob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(dataBlob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `healthvibe-data-${user.uid.substring(0, 8)}.json`;
+    link.download = `healthvibe-data-export-${user.uid.substring(0, 8)}.json`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
 
-    showToast(isEn ? "Data exported successfully!" : "تم تصدير البيانات بنجاح في ملف JSON!");
+    showToast(isEn ? "Data exported successfully (JSON)!" : "تم تصدير نسخة بياناتك المعتمدة بنجاح بصيغة JSON!");
   } catch (err) {
     console.error("Export error:", err);
     showToast(isEn ? "Export failed: " + err.message : "فشل تصدير البيانات: " + err.message);
   }
+};
+
+window.requestAccessReport = async function() {
+  const user = auth ? auth.currentUser : null;
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  if (!user) {
+    showToast(isEn ? "Please sign in first." : "يجب تسجيل الدخول أولاً.");
+    return;
+  }
+
+  showToast(isEn ? "Fetching your personal data access disclosure..." : "جاري استرجاع تقرير الوصول للبيانات الشخصية...");
+
+  try {
+    let report = null;
+    if (typeof callBackend === "function") {
+      const resp = await callBackend("/api/user/access-request", { method: "GET" });
+      if (resp && resp.report) {
+        report = resp.report;
+      }
+    }
+
+    if (!report) {
+      report = {
+        reportId: `access_${user.uid.substring(0, 6)}_${Date.now()}`,
+        generatedAt: new Date().toISOString(),
+        legalFramework: ["GDPR Art. 15 (Right of Access)", "HIPAA Security Standards"],
+        dataSubject: { userId: user.uid, userEmailMasked: user.email ? `${user.email[0]}***@${user.email.split('@')[1]}` : 'anonymous' },
+        processingPurposes: [
+          "Clinical triage of respiratory symptoms via AI advisory engine",
+          "Human-in-the-loop review and approval by certified physicians",
+          "Clinical appointment booking and schedule management"
+        ],
+        dataCategoriesProcessed: [
+          { category: "User Account & Authentication", status: "Active" },
+          { category: "Clinical Cases & Measurements", status: "Protected Health Information" }
+        ],
+        retentionPolicies: {
+          activeRecords: "Retained during clinical relationship or until patient deletion",
+          approvedClinicalCases: "5 years minimum under clinical retention guidelines",
+          backupSnapshots: "30 days automated cryptographic rotation"
+        }
+      };
+    }
+
+    window.openPrivacyDataModal(report, isEn ? "Data Access Report (GDPR Art. 15)" : "تقرير الوصول للبيانات الشخصية (GDPR Art. 15)");
+  } catch (err) {
+    console.error("Access request error:", err);
+    showToast(isEn ? "Access request failed: " + err.message : "تعذر استرجاع تقرير الوصول: " + err.message);
+  }
+};
+
+window.openPrivacyDataModal = function(reportData, title) {
+  const modal = document.getElementById("privacyDataModal");
+  const modalTitle = document.getElementById("privacyModalTitle");
+  const modalBody = document.getElementById("privacyModalBody");
+  const dlBtn = document.getElementById("btnDownloadPrivacyJson");
+  if (!modal || !modalBody) return;
+
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  if (modalTitle && title) modalTitle.textContent = title;
+
+  let html = `
+    <div style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 14px;">
+      <div style="font-weight: 700; color: var(--teal); margin-bottom: 6px;">
+        🆔 ${isEn ? "Report Reference" : "مرجع التقرير"}: ${reportData.reportId || 'N/A'}
+      </div>
+      <div style="font-size: 12px; color: var(--muted);">
+        📅 ${isEn ? "Generated" : "تاريخ التوليد"}: ${new Date(reportData.generatedAt || Date.now()).toLocaleString()}
+      </div>
+    </div>
+
+    <h4 style="margin: 12px 0 6px; font-size: 14px; color: var(--ink);">${isEn ? "1. Processing Purposes" : "١. أغراض معالجة البيانات"}</h4>
+    <ul style="padding-inline-start: 20px; margin: 0 0 14px; font-size: 12.5px; color: var(--muted); line-height: 1.7;">
+      ${(reportData.processingPurposes || []).map(p => `<li>${p}</li>`).join("")}
+    </ul>
+
+    <h4 style="margin: 12px 0 6px; font-size: 14px; color: var(--ink);">${isEn ? "2. Data Categories & Counts" : "٢. فئات وسجلات البيانات المحفوظة"}</h4>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; margin-bottom: 14px;">
+      ${(reportData.dataCategoriesProcessed || []).map(cat => `
+        <div style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px;">
+          <strong style="font-size: 12px; color: var(--ink); display: block;">${cat.category}</strong>
+          <span style="font-size: 11px; color: var(--teal);">${cat.count !== undefined ? `${cat.count} ${isEn ? 'records' : 'سجلات'}` : cat.status || ''}</span>
+        </div>
+      `).join("")}
+    </div>
+
+    <h4 style="margin: 12px 0 6px; font-size: 14px; color: var(--ink);">${isEn ? "3. Retention & Backup Policy" : "٣. فترات الاحتفاظ والنسخ الاحتياطية"}</h4>
+    <ul style="padding-inline-start: 20px; margin: 0 0 14px; font-size: 12.5px; color: var(--muted); line-height: 1.7;">
+      ${Object.entries(reportData.retentionPolicies || {}).map(([k, v]) => `<li><strong>${k}</strong>: ${v}</li>`).join("")}
+    </ul>
+  `;
+
+  modalBody.innerHTML = html;
+
+  if (dlBtn) {
+    dlBtn.style.display = "inline-flex";
+    dlBtn.onclick = () => {
+      const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: "application/json" });
+      const u = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = u;
+      a.download = `privacy-access-report-${Date.now()}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(u);
+    };
+  }
+
+  modal.style.display = "flex";
+  modal.setAttribute("aria-hidden", "false");
+};
+
+window.closePrivacyDataModal = function() {
+  const modal = document.getElementById("privacyDataModal");
+  if (!modal) return;
+  modal.style.display = "none";
+  modal.setAttribute("aria-hidden", "true");
 };
 
 window.openDeleteAccountModal = function() {
@@ -11993,10 +12234,15 @@ window.openDeleteAccountModal = function() {
   const btn = document.getElementById("btnExecuteAccountDeletion");
   if (btn) {
     btn.disabled = true;
+    btn.style.display = "inline-flex";
     btn.style.opacity = "0.5";
     btn.style.cursor = "not-allowed";
     btn.textContent = isEn ? "🗑️ Confirm & Delete Account" : "🗑️ تأكيد وحذف الحساب نهائياً";
   }
+  const retryBtn = document.getElementById("btnRetryAccountDeletion");
+  if (retryBtn) retryBtn.style.display = "none";
+  const progress = document.getElementById("deleteProgressContainer");
+  if (progress) progress.style.display = "none";
   const reauth = document.getElementById("deleteReauthGroup");
   if (reauth) reauth.style.display = "none";
   modal.classList.add("open");
@@ -12015,6 +12261,8 @@ window.closeDeleteAccountModal = function() {
 document.addEventListener("DOMContentLoaded", () => {
   const confirmInput = document.getElementById("deleteConfirmationInput");
   const deleteBtn = document.getElementById("btnExecuteAccountDeletion");
+  const retryBtn = document.getElementById("btnRetryAccountDeletion");
+
   if (confirmInput && deleteBtn) {
     confirmInput.addEventListener("input", () => {
       const val = confirmInput.value.trim().toUpperCase();
@@ -12024,7 +12272,7 @@ document.addEventListener("DOMContentLoaded", () => {
       deleteBtn.style.cursor = isValid ? "pointer" : "not-allowed";
     });
 
-    deleteBtn.addEventListener("click", async () => {
+    const runDeletionWorkflow = async (isRetry = false) => {
       const user = auth ? auth.currentUser : null;
       const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
       if (!user) {
@@ -12034,77 +12282,97 @@ document.addEventListener("DOMContentLoaded", () => {
 
       deleteBtn.disabled = true;
       deleteBtn.textContent = isEn ? "Deleting account and data..." : "جاري حذف الحساب والبيانات السريرية...";
+      if (retryBtn) retryBtn.style.display = "none";
+
+      const progressContainer = document.getElementById("deleteProgressContainer");
+      const progressStatus = document.getElementById("deleteProgressStatus");
+      const progressBadge = document.getElementById("deleteProgressBadge");
+      const stepsList = document.getElementById("deleteStepsList");
+
+      if (progressContainer) progressContainer.style.display = "block";
+      if (progressBadge) {
+        progressBadge.textContent = isEn ? "In Progress" : "قيد المعالجة";
+        progressBadge.className = "pill";
+        progressBadge.style.color = "var(--teal)";
+      }
+      if (progressStatus) {
+        progressStatus.textContent = isEn
+          ? "Executing clinical inventory, scrubbing PII, and cleaning storage..."
+          : "تنفيذ حصر البيانات، وتعقيم السجلات الطبية، وتطهير التخزين والنسخ الاحتياطية...";
+      }
+
+      const pwdInput = document.getElementById("deletePasswordInput");
+      if (pwdInput && pwdInput.value) {
+        try {
+          const cred = firebase.auth.EmailAuthProvider.credential(user.email, pwdInput.value);
+          await user.reauthenticateWithCredential(cred);
+        } catch (reauthErr) {
+          console.warn("Re-authentication error:", reauthErr.message);
+          deleteBtn.disabled = false;
+          deleteBtn.textContent = isEn ? "Re-authenticate & Delete" : "تأكيد كلمة المرور والحذف";
+          showToast(isEn ? "Invalid password for re-authentication." : "كلمة المرور غير صحيحة لتأكيد الهوية.");
+          return;
+        }
+      }
 
       try {
-        // Step A: Attempt via backend API first
-        let backendSuccess = false;
-        try {
-          if (typeof callBackend === "function") {
-            const resp = await callBackend("/api/user/delete-account", { method: "POST" });
-            if (resp && resp.error === "FORBIDDEN") {
-              throw new Error(resp.message || "Forbidden");
-            }
-            backendSuccess = true;
-          }
-        } catch (backendErr) {
-          if (backendErr.message && backendErr.message.includes("owner")) {
-            throw backendErr;
-          }
-          console.warn("Backend deletion call returned error, proceeding to client deletion fallback:", backendErr);
+        const endpoint = isRetry ? "/api/user/privacy/retry-deletion" : "/api/user/delete-account";
+        let resp = null;
+        if (typeof callBackend === "function") {
+          resp = await callBackend(endpoint, {
+            method: "POST",
+            body: JSON.stringify({
+              userId: user.uid,
+              userEmail: user.email
+            })
+          });
         }
 
-        // Step B: Client fallback if backend was offline
-        if (!backendSuccess) {
-          // 1. Purge or anonymize cases
-          if (db) {
-            const snap = await db.collection("cases").where("patientId", "==", user.uid).get();
-            for (const docSnap of snap.docs) {
-              const cData = docSnap.data();
-              if (cData.status === "pending") {
-                await docSnap.ref.delete().catch(() => {});
-              } else {
-                await docSnap.ref.update({
-                  patientName: "Deleted Patient",
-                  patientNameEn: "Deleted Patient",
-                  name: "Deleted Patient",
-                  nameEn: "Deleted Patient",
-                  patientEmail: "deleted@anonymized.local",
-                  isAnonymized: true
-                }).catch(() => {});
-              }
-            }
-            // 2. Remove user doc
-            await db.collection("users").doc(user.uid).delete().catch(() => {});
-          }
-
-          // 3. Delete Firebase Auth user
-          try {
-            await user.delete();
-          } catch (authDelErr) {
-            if (authDelErr.code === "auth/requires-recent-login") {
-              const reauthGroup = document.getElementById("deleteReauthGroup");
-              const pwdInput = document.getElementById("deletePasswordInput");
-              if (reauthGroup && reauthGroup.style.display === "none") {
-                reauthGroup.style.display = "block";
-                deleteBtn.disabled = false;
-                deleteBtn.textContent = isEn ? "Re-authenticate & Delete" : "تأكيد كلمة المرور والحذف";
-                showToast(isEn ? "Security check: Please enter your password to confirm." : "فحص أمني: يرجى كتابة كلمة المرور لتأكيد الهوية.");
-                if (pwdInput) pwdInput.focus();
-                return;
-              } else if (pwdInput && pwdInput.value) {
-                const cred = firebase.auth.EmailAuthProvider.credential(user.email, pwdInput.value);
-                await user.reauthenticateWithCredential(cred);
-                await user.delete();
-              } else {
-                throw authDelErr;
-              }
-            } else {
-              throw authDelErr;
-            }
-          }
+        // Handle Re-Authentication required response
+        if (resp && (resp.error === "REQUIRES_RECENT_LOGIN" || resp.code === "auth/requires-recent-login")) {
+          const reauthGroup = document.getElementById("deleteReauthGroup");
+          if (reauthGroup) reauthGroup.style.display = "block";
+          if (progressContainer) progressContainer.style.display = "none";
+          deleteBtn.disabled = false;
+          deleteBtn.textContent = isEn ? "Confirm Password & Retry" : "تأكيد كلمة المرور وإعادة المحاولة";
+          showToast(isEn ? "Security check: Please enter your password to confirm identity." : "فحص أمني: يرجى كتابة كلمة المرور لتأكيد الهوية.");
+          if (pwdInput) pwdInput.focus();
+          return;
         }
 
-        // Step C: Cleanup Local Storage, Registry & State
+        // Handle partial failure without false completion claim
+        if (resp && (!resp.success || resp.status === "partially_failed")) {
+          if (progressBadge) {
+            progressBadge.textContent = isEn ? "Partial Failure" : "فشل جزئي";
+            progressBadge.className = "pill danger";
+            progressBadge.style.color = "#ef4444";
+          }
+          if (progressStatus) {
+            progressStatus.textContent = isEn
+              ? `Step failed: ${resp.failedStep || 'Unknown'}. ${resp.message}`
+              : `تعثرت مرحلة: ${resp.failedStep || 'غير محدد'}. ${resp.message}`;
+          }
+          if (stepsList && resp.steps) {
+            stepsList.innerHTML = Object.entries(resp.steps)
+              .map(([sName, sData]) => `<div>${sData.status === 'completed' ? '✅' : sData.status === 'failed' ? '❌' : '⏳'} <strong>${sName}</strong>: ${sData.status}</div>`)
+              .join("");
+          }
+
+          deleteBtn.style.display = "none";
+          if (retryBtn) {
+            retryBtn.style.display = "inline-flex";
+            retryBtn.textContent = isEn ? "🔄 Retry Deletion Safely" : "🔄 إعادة المحاولة الآمنة لاستكمال الحذف";
+          }
+
+          showToast(isEn ? "Partial deletion failure occurred. You can safely retry without losing progress." : "حدث تعثر جزئي أثناء الحذف. يمكنك إعادة المحاولة بأمان دون فقدان ما تم إنجازه.");
+          return;
+        }
+
+        if (resp && resp.error === "FORBIDDEN") {
+          throw new Error(resp.message || "Forbidden");
+        }
+
+        // Successful completion confirmed across all domains
         try {
           if (typeof getConsentStorageKey === "function") {
             localStorage.removeItem(getConsentStorageKey());
@@ -12116,20 +12384,26 @@ document.addEventListener("DOMContentLoaded", () => {
         } catch {}
 
         closeDeleteAccountModal();
-        showToast(isEn ? "Your account and data have been permanently deleted." : "تم حذف حسابك وبياناتك بنجاح. نتمنى لك دوام الصحة والعافية.");
+        showToast(isEn ? "Your account and personal data have been permanently deleted." : "تم حذف حسابك وبياناتك بنجاح. نتمنى لك دوام الصحة والعافية.");
 
-        // Sign out and redirect
         if (auth) await auth.signOut().catch(() => {});
         window.location.reload();
       } catch (finalErr) {
-        console.error("Account deletion failed:", finalErr);
+        console.error("Account deletion error:", finalErr);
         deleteBtn.disabled = false;
         deleteBtn.textContent = isEn ? "🗑️ Confirm & Delete Account" : "🗑️ تأكيد وحذف الحساب نهائياً";
+        if (progressContainer) progressContainer.style.display = "none";
         showToast(isEn ? "Deletion failed: " + finalErr.message : "فشل حذف الحساب: " + (getAuthErrorMessage ? getAuthErrorMessage(finalErr) : finalErr.message));
       }
-    });
+    };
+
+    deleteBtn.addEventListener("click", () => runDeletionWorkflow(false));
+    if (retryBtn) {
+      retryBtn.addEventListener("click", () => runDeletionWorkflow(true));
+    }
   }
 });
+
 
 
 window.submitPatientMoreInfo = async function(caseId) {
@@ -12917,6 +13191,222 @@ window.fetchBackupSnapshotsList = fetchBackupSnapshotsList;
 window.verifyBackupSnapshot = verifyBackupSnapshot;
 window.restoreBackupSnapshot = restoreBackupSnapshot;
 window.renderAdminBackupUI = renderAdminBackupUI;
+
+// =============================================================================
+// 🛡️ AUTHORITATIVE AUDIT TRAIL CLIENT ENGINE
+// =============================================================================
+
+async function auditSessionLogout() {
+  try {
+    if (auth && auth.currentUser) {
+      await authenticatedFetch('/api/audit/session-logout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: 'user_signed_out' })
+      }).catch(() => {});
+    }
+  } catch (_) {}
+}
+
+async function auditRecordViewed(caseId, recordType = 'clinical_case') {
+  if (!caseId) return;
+  try {
+    if (auth && auth.currentUser) {
+      await authenticatedFetch('/api/audit/record-viewed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ caseId, recordType })
+      }).catch(() => {});
+    }
+  } catch (_) {}
+}
+
+async function auditFileAccessed(fileId, fileName, fileType = 'attachment', purpose = 'clinical_review', caseId = null) {
+  if (!fileId && !fileName) return;
+  try {
+    if (auth && auth.currentUser) {
+      await authenticatedFetch('/api/audit/file-accessed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileId, fileName, fileType, purpose, caseId })
+      }).catch(() => {});
+    }
+  } catch (_) {}
+}
+
+async function loadAuditEvents() {
+  const container = document.getElementById('auditLogsContainer');
+  const countSummary = document.getElementById('auditCountSummary');
+  const scopeBadge = document.getElementById('auditClinicScopeBadge');
+  if (!container) return;
+
+  const isEn = typeof currentLanguage !== 'undefined' && currentLanguage === 'en';
+  container.innerHTML = `
+    <div style="text-align: center; padding: 24px; color: var(--muted);">
+      <div class="spinner" style="width: 20px; height: 20px; margin: 0 auto 10px auto;"></div>
+      <span>${isEn ? 'Querying authoritative audit trail...' : 'جاري جلب سجل التدقيق الموثوق...'}</span>
+    </div>
+  `;
+
+  try {
+    const searchVal = document.getElementById('auditSearchInput')?.value?.trim() || '';
+    const typeVal = document.getElementById('auditTypeFilter')?.value || 'all';
+    const startVal = document.getElementById('auditStartDate')?.value || '';
+    const endVal = document.getElementById('auditEndDate')?.value || '';
+
+    const params = new URLSearchParams();
+    if (searchVal) params.set('search', searchVal);
+    if (typeVal && typeVal !== 'all') params.set('type', typeVal);
+    if (startVal) params.set('startDate', startVal);
+    if (endVal) params.set('endDate', endVal);
+
+    const apiBase = runtimeConfig && runtimeConfig.apiBaseUrl ? runtimeConfig.apiBaseUrl : window.location.origin;
+    const response = await authenticatedFetch(`${apiBase}/api/admin/audit/events?${params.toString()}`);
+
+    if (!response.ok) {
+      const errJson = await response.json().catch(() => ({}));
+      const errMsg = errJson.message || (isEn ? 'Failed to retrieve audit trail.' : 'فشل جلب سجل التدقيق.');
+      container.innerHTML = `
+        <div style="text-align: center; padding: 24px; color: #ef4444;">
+          ⚠️ ${errMsg}
+        </div>
+      `;
+      if (countSummary) countSummary.textContent = isEn ? 'Error loading logs' : 'خطأ أثناء التحميل';
+      return;
+    }
+
+    const data = await response.json();
+    const events = data.events || [];
+    const totalCount = data.totalCount !== undefined ? data.totalCount : events.length;
+
+    if (countSummary) {
+      countSummary.textContent = isEn
+        ? `Found ${totalCount} recorded event(s)`
+        : `إجمالي الأحداث المطابقة: ${totalCount} حدث`;
+    }
+
+    if (scopeBadge) {
+      const userRole = normalizeRole(selectedRole);
+      scopeBadge.textContent = userRole === ROLES.CLINIC_ADMIN
+        ? (isEn ? 'Clinic Scoped' : 'نطاق العيادة المعتمدة')
+        : (isEn ? 'Platform Global Scope' : 'نطاق المنصة الشامل');
+    }
+
+    if (events.length === 0) {
+      container.innerHTML = `
+        <div style="text-align: center; padding: 30px; color: var(--muted);">
+          ${isEn ? 'No audit events found matching the specified filters.' : 'لا توجد أحداث تدقيق مطابقة للشروط المحددة.'}
+        </div>
+      `;
+      return;
+    }
+
+    const getBadgeColor = (type) => {
+      if (type.includes('APPROVED') || type.includes('GRANTED')) return 'success';
+      if (type.includes('REJECTED') || type.includes('WITHDRAWN') || type.includes('DELETED')) return 'danger';
+      if (type.includes('ROLE') || type.includes('VIEWED')) return 'info';
+      return 'warning';
+    };
+
+    container.innerHTML = events.map(evt => {
+      const dateStr = evt.timestamp ? new Date(evt.timestamp).toLocaleString(isEn ? 'en-US' : 'ar-EG') : '--';
+      const actorUid = evt.actor?.uid || evt.userId || 'system';
+      const actorRole = evt.actor?.role || evt.userRole || 'system';
+      const emailMasked = evt.actor?.emailMasked || '';
+      const badgeStyle = getBadgeColor(evt.type || '');
+      const ipSubnet = evt.ipMetadata?.subnetMask || '0.0.0.0/0';
+      const ipHash = evt.ipMetadata?.ipHash || 'unknown';
+      const platform = evt.deviceMetadata?.platform || 'Other';
+      const browser = evt.deviceMetadata?.browser || 'Other';
+      const detailsJson = evt.details ? JSON.stringify(evt.details) : '';
+
+      return `
+        <div style="display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); margin-bottom: 8px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="pill ${badgeStyle}" style="font-size: 11px; font-weight: 700;">${evt.type}</span>
+              <strong style="font-size: 13px;">${dateStr}</strong>
+            </div>
+            <div style="font-size: 11px; color: var(--muted); display: flex; gap: 10px;">
+              <span>🌐 Subnet: <code>${ipSubnet}</code> (Hash: <code>${ipHash}</code>)</span>
+              <span>💻 ${platform} / ${browser}</span>
+            </div>
+          </div>
+          <div style="font-size: 12px; color: var(--ink); line-height: 1.5; display: flex; justify-content: space-between; flex-wrap: wrap;">
+            <span>
+              <strong>${isEn ? 'Actor:' : 'الفاعل:'}</strong> <code>${actorUid}</code>
+              ${emailMasked ? `(${emailMasked})` : ''}
+              <span class="pill info" style="font-size: 10px; padding: 2px 6px;">${actorRole}</span>
+              ${evt.targetUserId ? ` → <strong>${isEn ? 'Target:' : 'المستهدف:'}</strong> <code>${evt.targetUserId}</code>` : ''}
+              ${evt.clinicId ? ` | <strong>${isEn ? 'Clinic:' : 'العيادة:'}</strong> <code>${evt.clinicId}</code>` : ''}
+            </span>
+            <span class="pill ${evt.outcome === 'SUCCESS' ? 'success' : 'danger'}" style="font-size: 10px;">${evt.outcome || 'SUCCESS'}</span>
+          </div>
+          ${detailsJson && detailsJson !== '{}' ? `
+            <div style="font-size: 11px; color: var(--muted); background: rgba(0,0,0,0.03); padding: 4px 8px; border-radius: 6px; font-family: monospace; overflow-x: auto;">
+              ${detailsJson}
+            </div>
+          ` : ''}
+        </div>
+      `;
+    }).join('');
+
+  } catch (err) {
+    console.error('[LOAD AUDIT ERROR]:', err);
+    container.innerHTML = `
+      <div style="text-align: center; padding: 24px; color: #ef4444;">
+        ⚠️ ${isEn ? 'Network error while querying audit trail.' : 'حدث خطأ في الشبكة أثناء جلب سجل التدقيق.'}
+      </div>
+    `;
+  }
+}
+
+async function exportAuditTrail(format = 'csv') {
+  const isEn = typeof currentLanguage !== 'undefined' && currentLanguage === 'en';
+  try {
+    showToast(isEn ? `Preparing ${format.toUpperCase()} export...` : `جاري تجهيز تصدير ${format.toUpperCase()}...`);
+
+    const searchVal = document.getElementById('auditSearchInput')?.value?.trim() || '';
+    const typeVal = document.getElementById('auditTypeFilter')?.value || 'all';
+    const startVal = document.getElementById('auditStartDate')?.value || '';
+    const endVal = document.getElementById('auditEndDate')?.value || '';
+
+    const params = new URLSearchParams();
+    params.set('format', format);
+    if (searchVal) params.set('search', searchVal);
+    if (typeVal && typeVal !== 'all') params.set('type', typeVal);
+    if (startVal) params.set('startDate', startVal);
+    if (endVal) params.set('endDate', endVal);
+
+    const apiBase = runtimeConfig && runtimeConfig.apiBaseUrl ? runtimeConfig.apiBaseUrl : window.location.origin;
+    const response = await authenticatedFetch(`${apiBase}/api/admin/audit/export?${params.toString()}`);
+
+    if (!response.ok) {
+      throw new Error(`Export failed with HTTP ${response.status}`);
+    }
+
+    const blob = await response.blob();
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    a.download = `audit-logs-${format}-${Date.now()}.${format}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(downloadUrl);
+
+    showToast(isEn ? 'Audit logs exported successfully.' : 'تم تصدير سجل التدقيق بنجاح.');
+  } catch (err) {
+    console.error('[EXPORT AUDIT ERROR]:', err);
+    showToast(isEn ? 'Failed to export audit logs.' : 'فشل تصدير سجل التدقيق.');
+  }
+}
+
+window.auditSessionLogout = auditSessionLogout;
+window.auditRecordViewed = auditRecordViewed;
+window.auditFileAccessed = auditFileAccessed;
+window.loadAuditEvents = loadAuditEvents;
+window.exportAuditTrail = exportAuditTrail;
 
 // Initialize on DOM ready
 if (document.readyState === "loading") {

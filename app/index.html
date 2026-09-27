@@ -484,6 +484,9 @@
               <button id="btnConsentProceed" type="button" class="solid-button" style="flex: 1; font-size: 14.5px; padding: 12px;">
                 ✓ أوافق والمتابعة لبدء فحص التنفس
               </button>
+              <button id="btnWithdrawConsent" type="button" class="outline-button" style="display: none; padding: 12px 16px; color: #dc2626; border-color: rgba(220, 38, 38, 0.35);">
+                سحب الموافقة
+              </button>
               <button type="button" class="outline-button" style="padding: 12px 16px;" onclick="showScreen('profile')">
                 الملف الطبي
               </button>
@@ -570,6 +573,9 @@
                 </button>
                 <button type="button" class="soft-button" onclick="exportUserData()" style="font-size: 13px; padding: 8px 14px;">
                   📥 تصدير بياناتي (JSON)
+                </button>
+                <button type="button" class="soft-button" onclick="requestAccessReport()" style="font-size: 13px; padding: 8px 14px;">
+                  📋 تقرير الوصول (Art. 15)
                 </button>
                 <button type="button" class="outline-button" onclick="openDeleteAccountModal()" style="border-color: rgba(239, 68, 68, 0.5); color: #ef4444; font-size: 13px; padding: 8px 14px;">
                   ⚠️ حذف الحساب والبيانات
@@ -1638,12 +1644,78 @@
 
       <section id="screen-audit" class="screen">
         <article class="panel">
-          <div class="panel-head"><h3>سجل التدقيق</h3><span class="pill info">أحداث تجريبية</span></div>
-          <div class="audit-table">
-            <div><strong>20 سبتمبر 2026 - 03:18</strong><span>المريض أرسل تقييم التنفس</span><em>المريض: 2048</em></div>
-            <div><strong>20 سبتمبر 2026 - 03:21</strong><span>نموذج التنفس أصدر تقدير خطورة متوسط</span><em>إصدار النموذج: الأول</em></div>
-            <div><strong>--</strong><span>لا توجد أحداث تدقيق مسجلة بعد</span><em>--</em></div>
-            <div><strong>20 سبتمبر 2026 - 03:35</strong><span>الإدارة راجعت لوحة جودة النموذج</span><em>الدور: مراجعة الجودة الطبية</em></div>
+          <div class="panel-head">
+            <div>
+              <h3 id="auditTitle">سجل التدقيق الأمني والامتثال</h3>
+              <p class="muted-copy" style="font-size: 13px; margin: 4px 0 0 0;">
+                سجل رقابي غير قابل للتعديل (Append-Only) خاضع لسياسات الخصوصية وتقليل البيانات وحماية الملكية الفكرية
+              </p>
+            </div>
+            <span class="pill success" style="font-weight: 700;">🔒 غير قابل للتعديل</span>
+          </div>
+
+          <!-- IP & Device Metadata Policy Notice -->
+          <div class="info-box" style="margin: 14px 0; padding: 12px 16px; border-radius: 12px; background: rgba(13, 148, 136, 0.08); border: 1px solid rgba(13, 148, 136, 0.2); font-size: 13px; line-height: 1.6;">
+            <strong>🛡️ سياسة الخصوصية لبيانات الشبكة والأجهزة:</strong>
+            <span style="display: block; color: var(--muted); margin-top: 4px;">
+              يتم إخفاء عناوين IP تلقائيًا عبر قناع الشبكة الفرعية (/24 لـ IPv4 و /48 لـ IPv6) وتجزئة HMAC مشفرة بملح سري لمنع تتبع الأفراد، مع تقليل بيانات الأجهزة وحذف أي بيانات سريرية أو هويات حساسة من السجل.
+            </span>
+          </div>
+
+          <!-- Search & Filter Controls -->
+          <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; align-items: flex-end;">
+            <div style="flex: 2; min-width: 200px;">
+              <label for="auditSearchInput" style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px; color: var(--muted);">بحث سريع:</label>
+              <input type="text" id="auditSearchInput" class="form-control" placeholder="ابحث بالمعرف، البريد المقنع، الإجراء..." style="width: 100%; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);">
+            </div>
+
+            <div style="flex: 1.5; min-width: 180px;">
+              <label for="auditTypeFilter" style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px; color: var(--muted);">نوع الحدث:</label>
+              <select id="auditTypeFilter" class="form-control" style="width: 100%; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);">
+                <option value="all">كافة الأحداث (All Events)</option>
+                <option value="USER_SIGNED_IN">تسجيل الدخول (USER_SIGNED_IN)</option>
+                <option value="USER_SIGNED_OUT">تسجيل الخروج (USER_SIGNED_OUT)</option>
+                <option value="RECORD_VIEWED">فتح / عرض السجل (RECORD_VIEWED)</option>
+                <option value="RECORD_UPDATED">تعديل السجل (RECORD_UPDATED)</option>
+                <option value="CASE_APPROVED">اعتماد الحالة (CASE_APPROVED)</option>
+                <option value="CASE_REJECTED">رفض الحالة (CASE_REJECTED)</option>
+                <option value="ROLE_CHANGED">تغيير الدور (ROLE_CHANGED)</option>
+                <option value="PRIVACY_CONSENT_GRANTED">منح الموافقة (CONSENT_GRANTED)</option>
+                <option value="PRIVACY_CONSENT_WITHDRAWN">سحب الموافقة (CONSENT_WITHDRAWN)</option>
+                <option value="ACCOUNT_DELETED">حذف الحساب (ACCOUNT_DELETED)</option>
+                <option value="FILE_ACCESSED">الوصول للملفات (FILE_ACCESSED)</option>
+                <option value="AUDIT_LOGS_EXPORTED">تصدير السجلات (AUDIT_EXPORTED)</option>
+              </select>
+            </div>
+
+            <div style="flex: 1; min-width: 130px;">
+              <label for="auditStartDate" style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px; color: var(--muted);">من تاريخ:</label>
+              <input type="date" id="auditStartDate" class="form-control" style="width: 100%; padding: 7px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);">
+            </div>
+
+            <div style="flex: 1; min-width: 130px;">
+              <label for="auditEndDate" style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px; color: var(--muted);">إلى تاريخ:</label>
+              <input type="date" id="auditEndDate" class="form-control" style="width: 100%; padding: 7px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);">
+            </div>
+
+            <div style="display: flex; gap: 6px;">
+              <button id="btnFilterAudit" type="button" class="solid-button" onclick="loadAuditEvents()" style="padding: 8px 14px; font-size: 13px;">تصفية</button>
+              <button id="btnExportAuditCsv" type="button" class="outline-button" onclick="exportAuditTrail('csv')" style="padding: 8px 12px; font-size: 13px;" title="تصدير بصيغة CSV">تصدير CSV</button>
+              <button id="btnExportAuditJson" type="button" class="outline-button" onclick="exportAuditTrail('json')" style="padding: 8px 12px; font-size: 13px;" title="تصدير بصيغة JSON">تصدير JSON</button>
+            </div>
+          </div>
+
+          <!-- Total count & status -->
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 13px; color: var(--muted);">
+            <span id="auditCountSummary">جاري تحميل سجل التدقيق...</span>
+            <span id="auditClinicScopeBadge" class="pill info" style="font-size: 11px;">نطاق المنصة</span>
+          </div>
+
+          <!-- Dynamic Events Container -->
+          <div id="auditLogsContainer" class="audit-table">
+            <div style="text-align: center; padding: 24px; color: var(--muted);">
+              جاري فحص وتأكيد الصلاحيات والاتصال بسجل التدقيق الموثوق...
+            </div>
           </div>
         </article>
       </section>
@@ -2016,13 +2088,20 @@
           <ul>
             <li><strong>البيانات الشخصية والحساب:</strong> الاسم، البريد الإلكتروني، معرف الحساب الرقمي، والدور المصرح.</li>
             <li><strong>المؤشرات الحيوية والأعراض:</strong> نسبة تشبع الأكسجين في الدم (SpO2)، صعوبة التنفس، شدة الكحة، مدة الأعراض، وعوامل الخطورة كالحمل والتدخين وأمراض الصدر المزمنة.</li>
-            <li><strong>سجلات التدقيق:</strong> تاريخ وتوقيت تقديم التقييمات، سجلات دورة حياة الحالة، وسجل قرارات واعتماد الطبيب المعتمد.</li>
+            <li><strong>بيانات التشغيل:</strong> المواعيد، طلبات توثيق الطبيب، المرفقات المهنية، تنبيهات البريد، ومحادثات المساعد الإرشادي المرتبطة بالتقرير المعتمد.</li>
+            <li><strong>سجلات الموافقة والتدقيق:</strong> إصدار الموافقة، وقتها، الغرض منها، تاريخ السحب عند حدوثه، دورة حياة الحالة، وسجل قرارات واعتماد الطبيب المعتمد.</li>
           </ul>
 
           <h4>3. التشفير وحماية البيانات</h4>
           <p>تُنقل جميع البيانات مشفرة بالكامل عبر بروتوكول <code>HTTPS / TLS 1.3</code> وتُخزن في خوادم Google Cloud بمعيار تشفير <code>AES-256</code> المعتمد، مع تطبيق مبدأ انعدام الثقة (Zero-Trust) لعزل بيانات كل مريض عن الآخرين.</p>
 
-          <h4>4. عدم المشاركة الإعلانية أو التجارية</h4>
+          <h4>4. الوصول والاحتفاظ وسحب الموافقة</h4>
+          <p>يقتصر الوصول على المريض، الطبيب أو العيادة المرتبطة بالحالة، وأدوار الإدارة والدعم وفق صلاحيات مقيدة وسجلات تدقيق. يمكن سحب الموافقة من شاشة الموافقة، وبعد السحب تتوقف التقييمات الجديدة إلى أن يتم قبول نسخة الموافقة الحالية مرة أخرى، مع استمرار الاحتفاظ بالسجلات المعتمدة عند وجود متطلبات قانونية أو سريرية.</p>
+
+          <h4>5. ملفات الارتباط والتخزين المحلي</h4>
+          <p>قد يستخدم التطبيق ملفات تعريف ارتباط تقنية أو تخزيناً محلياً لحفظ الجلسة، تفضيل اللغة، تذكر الحساب على الجهاز، وحالة الواجهة. لا تستخدم Health Vibes هذه البيانات للإعلانات أو البيع التجاري.</p>
+
+          <h4>6. عدم المشاركة الإعلانية أو التجارية</h4>
           <p><strong>لا يتم بيع أو مشاركة بياناتك مع أي طرف ثالث لأغراض تجارية أو إعلانية نهائياً.</strong> يتم مشاركة بيانات الحالة حصراً مع الطبيب المعالج المعتمد لإتمام المراجعة السريرية وإصدار التقرير الطبي.</p>
         </div>
 
@@ -2115,12 +2194,52 @@
         <input type="password" id="deletePasswordInput" placeholder="كلمة المرور الحالية" autocomplete="current-password" style="width: 100%; padding: 10px 14px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; background: var(--surface-2); color: var(--ink);">
       </div>
 
+      <div id="deleteProgressContainer" style="display: none; margin-bottom: 16px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+          <span style="font-size: 13px; font-weight: 700; color: var(--ink);" id="deleteProgressTitle">جاري تنفيذ مراحل الحذف والتعقيم...</span>
+          <span class="pill" id="deleteProgressBadge" style="font-size: 10.5px; padding: 2px 8px; background: rgba(14, 165, 164, 0.15); color: var(--teal);">قيد المعالجة</span>
+        </div>
+        <div style="font-size: 12px; color: var(--muted); line-height: 1.6;" id="deleteProgressStatus">
+          فحص الملفات والسجلات والنسخ الاحتياطية...
+        </div>
+        <div id="deleteStepsList" style="margin-top: 8px; font-size: 11.5px; color: var(--muted); display: flex; flex-direction: column; gap: 4px;"></div>
+      </div>
+
       <div style="display: flex; gap: 10px; flex-direction: column;">
         <button type="button" id="btnExecuteAccountDeletion" class="solid-button" disabled style="width: 100%; justify-content: center; padding: 12px; font-size: 14px; background: #dc2626; border-color: #dc2626; opacity: 0.5; cursor: not-allowed;">
           🗑️ تأكيد وحذف الحساب نهائياً
         </button>
+        <button type="button" id="btnRetryAccountDeletion" class="solid-button" style="display: none; width: 100%; justify-content: center; padding: 12px; font-size: 14px; background: #ea580c; border-color: #ea580c;">
+          🔄 إعادة المحاولة الآمنة لاستكمال الحذف
+        </button>
         <button type="button" class="outline-button" onclick="closeDeleteAccountModal()" style="width: 100%; justify-content: center; padding: 10px; font-size: 13.5px;">
           إلغاء والاحتفاظ بحسابي
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Privacy & Data Subject Rights Modal (GDPR Art. 15 / 20) -->
+  <div id="privacyDataModal" class="confirm-modal" aria-hidden="true" style="display: none;">
+    <div class="confirm-card" style="width: min(640px, 100%); text-align: start; max-height: 90vh; overflow-y: auto;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 22px;" id="privacyModalIcon">📋</span>
+          <h3 style="margin: 0; font-size: 18px; color: var(--ink);" id="privacyModalTitle">طلب الوصول للبيانات الشخصية</h3>
+        </div>
+        <button type="button" class="close-button" onclick="closePrivacyDataModal()" aria-label="Close">×</button>
+      </div>
+
+      <div id="privacyModalBody" style="font-size: 13px; color: var(--ink); line-height: 1.65; margin-bottom: 18px;">
+        <!-- Dynamically injected report / export summary -->
+      </div>
+
+      <div style="display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap;">
+        <button type="button" id="btnDownloadPrivacyJson" class="solid-button" style="display: none; padding: 8px 18px; font-size: 13px;">
+          📥 تنزيل الملف (JSON)
+        </button>
+        <button type="button" class="outline-button" onclick="closePrivacyDataModal()" style="padding: 8px 18px; font-size: 13px;">
+          إغلاق
         </button>
       </div>
     </div>

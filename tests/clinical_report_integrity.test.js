@@ -66,6 +66,7 @@ const client = {
   LOGO_MARK_ASSETS: { light: 'logo', dark: 'logo' },
   document: { body: { classList: { contains: () => false } }, getElementById: id => elements[id] || null, createElement: () => ({ innerHTML: '' }) },
   db: database, escapeHtml, normalizeRole: value => value,
+  setTrustedHtml: (el, html) => { if (el) el.innerHTML = html; },
   ROLES: { DOCTOR: 'doctor', PATIENT: 'patient', SUPER_ADMIN: 'super_admin' },
   CASE_STATUS: { APPROVED: 'approved', SUBMITTED: 'submitted', REJECTED: 'rejected', MORE_INFO_REQUESTED: 'more_info_requested' },
   isRealProductionRecord: () => true, toMillis: () => 0, getCaseStatusMeta: () => ({ icon: '', en: 'Pending', ar: 'قيد المراجعة' }), isTestOrDemoRecord: () => false, isOwnerUser: () => false, isAdminRole: () => false, isSupportRole: () => false, isSupportUser: () => false,

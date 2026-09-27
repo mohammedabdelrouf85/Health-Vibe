@@ -16,6 +16,8 @@ const dotenv = require('dotenv');
 const whatsappBot = require('./whatsapp-bot');
 const { sendClinicalNotificationEmail } = require('./notification-service');
 const backupService = require('./backup-service');
+const privacyService = require('./privacy-service');
+const auditService = require('./audit-service');
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -197,7 +199,12 @@ app.use([
   '/api/notifications/send-email',
   '/api/feedback/submit',
   '/api/appointments/book',
-  '/api/user/delete-account'
+  '/api/user/privacy-consent',
+  '/api/user/privacy-consent/withdraw',
+  '/api/user/delete-account',
+  '/api/user/privacy/retry-deletion',
+  '/api/user/data-export',
+  '/api/user/access-request'
 ], strictMutationLimiter);
 
 // =============================================================================
@@ -1237,6 +1244,14 @@ app.post('/api/user/sync-role', requireAuth, async (req, res) => {
       }).catch(() => {});
     }
 
+    if (db) {
+      auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.USER_SIGNED_IN,
+        req,
+        details: { method: 'sync_role', role, isOwner, verifiedDoctor }
+      }).catch(err => console.warn('[AUDIT SIGNIN WARNING]:', err.message));
+    }
+
     res.json({
       success: true,
       uid,
@@ -1313,6 +1328,17 @@ app.post('/api/admin/set-user-role', requireAuth, auditOperationalAccess('ADMIN_
         assignedBy: req.user.email,
         timestamp: admin.firestore.FieldValue.serverTimestamp()
       });
+      await auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.ROLE_CHANGED,
+        req,
+        targetUserId,
+        clinicId: targetClinic || null,
+        details: {
+          previousRole: targetUser.customClaims?.role || 'patient',
+          newRole,
+          targetEmailMasked: auditService.maskEmail(targetUser.email)
+        }
+      }).catch(err => console.warn('[AUDIT ROLE_CHANGED ERROR]:', err.message));
     }
 
     console.log(`[SERVER RBAC] User ${targetUser.email} (${targetUserId}) role updated to ${newRole} by ${req.user.email}`);
@@ -1513,6 +1539,151 @@ app.post('/api/admin/set-user-verification', requireAuth, auditOperationalAccess
       targetUserId, verified, timestamp: admin.firestore.FieldValue.serverTimestamp() });
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: 'VERIFICATION_CHANGE_FAILED' }); }
+});
+
+// =============================================================================
+// 🛡️ AUTHORITATIVE ENTERPRISE AUDIT TRAIL & COMPLIANCE ENDPOINTS
+// =============================================================================
+
+/**
+ * GET /api/admin/audit/events
+ * Query and filter audit events with strict RBAC:
+ * - super_admin / isOwner: cross-clinic visibility
+ * - clinic_admin: strictly scoped to requester's clinicId
+ */
+app.get('/api/admin/audit/events', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const scope = await resolveRequesterClinic(req);
+    const effectiveUser = {
+      ...req.user,
+      role: scope.role,
+      clinicId: scope.clinicId
+    };
+    const result = await auditService.queryAuditEvents(db, {
+      requesterUser: effectiveUser,
+      filters: req.query || {}
+    });
+    res.json({ success: true, ...result });
+  } catch (err) {
+    const status = err.statusCode || 500;
+    res.status(status).json({ error: 'AUDIT_QUERY_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET & POST /api/admin/audit/export
+ * Export audit events (JSON / CSV) with data minimization and export trail logging
+ */
+const handleAuditExport = async (req, res) => {
+  try {
+    const scope = await resolveRequesterClinic(req);
+    const effectiveUser = {
+      ...req.user,
+      role: scope.role,
+      clinicId: scope.clinicId
+    };
+    const filters = req.method === 'POST' ? (req.body || {}) : (req.query || {});
+    const format = (req.query?.format || req.body?.format || 'json').toLowerCase();
+
+    const exportResult = await auditService.exportAuditEvents(db, {
+      requesterUser: effectiveUser,
+      filters,
+      format,
+      req
+    });
+
+    res.setHeader('Content-Type', exportResult.contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${exportResult.filename}"`);
+    return res.send(exportResult.data);
+  } catch (err) {
+    const status = err.statusCode || 500;
+    return res.status(status).json({ error: 'AUDIT_EXPORT_FAILED', message: err.message });
+  }
+};
+
+app.get('/api/admin/audit/export', requireAuth, requireAdmin, handleAuditExport);
+app.post('/api/admin/audit/export', requireAuth, requireAdmin, handleAuditExport);
+
+/**
+ * POST /api/audit/session-logout
+ * Audit user sign-out event with trusted actor & sanitized IP/device metadata
+ */
+app.post('/api/audit/session-logout', requireAuth, async (req, res) => {
+  try {
+    if (db) {
+      await auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.USER_SIGNED_OUT,
+        req,
+        details: { reason: req.body?.reason || 'user_signed_out' }
+      });
+    }
+    res.json({ success: true, message: 'Sign out audit event recorded.' });
+  } catch (err) {
+    res.status(500).json({ error: 'AUDIT_LOGOUT_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/audit/record-viewed
+ * Audit clinical record / medical case viewing with trusted actor & metadata
+ */
+app.post('/api/audit/record-viewed', requireAuth, async (req, res) => {
+  const { caseId, recordType } = req.body || {};
+  if (!caseId) {
+    return res.status(400).json({ error: 'INVALID_REQUEST', message: 'caseId is required.' });
+  }
+  try {
+    if (db) {
+      let clinicId = null;
+      try {
+        const caseDoc = await db.collection('cases').doc(caseId).get();
+        if (caseDoc.exists) clinicId = recordClinicId(caseDoc.data());
+      } catch (_) {}
+
+      await auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.RECORD_VIEWED,
+        req,
+        clinicId,
+        details: {
+          caseId,
+          recordType: recordType || 'clinical_case',
+          action: 'VIEW_RECORD'
+        }
+      });
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'AUDIT_RECORD_VIEW_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/audit/file-accessed
+ * Audit storage file / attachment access with data minimization
+ */
+app.post('/api/audit/file-accessed', requireAuth, async (req, res) => {
+  const { fileId, fileName, fileType, purpose, caseId } = req.body || {};
+  if (!fileId && !fileName) {
+    return res.status(400).json({ error: 'INVALID_REQUEST', message: 'fileId or fileName required.' });
+  }
+  try {
+    if (db) {
+      await auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.FILE_ACCESSED,
+        req,
+        details: {
+          fileId: fileId || null,
+          fileName: fileName ? String(fileName).substring(0, 100) : null,
+          fileType: fileType || 'document',
+          purpose: purpose || 'clinical_review',
+          caseId: caseId || null
+        }
+      });
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'AUDIT_FILE_ACCESS_FAILED', message: err.message });
+  }
 });
 
 // Credential values come from an administrator-approved application, not the
@@ -1764,6 +1935,42 @@ async function executeDoctorTransition({
             duplicate: false,
             timestamp: admin.firestore.FieldValue.serverTimestamp()
           });
+
+          // Record standard RECORD_UPDATED audit event
+          const recordUpdateRef = db.collection('audit_events').doc();
+          transaction.set(recordUpdateRef, {
+            type: 'RECORD_UPDATED',
+            caseId,
+            actor: historyItem.actor,
+            action: targetStatus === 'approved' ? 'CASE_APPROVED' : (targetStatus === 'rejected' ? 'CASE_REJECTED' : 'STATUS_TRANSITION'),
+            oldStatus: currentStatus,
+            newStatus: targetStatus,
+            timestamp: admin.firestore.FieldValue.serverTimestamp()
+          });
+
+          // Record canonical CASE_APPROVED or CASE_REJECTED event
+          if (targetStatus === 'approved') {
+            const approveRef = db.collection('audit_events').doc();
+            transaction.set(approveRef, {
+              type: 'CASE_APPROVED',
+              caseId,
+              doctorId: req.user.uid,
+              actor: historyItem.actor,
+              clinicId: recordClinicId(caseData),
+              timestamp: admin.firestore.FieldValue.serverTimestamp()
+            });
+          } else if (targetStatus === 'rejected') {
+            const rejectRef = db.collection('audit_events').doc();
+            transaction.set(rejectRef, {
+              type: 'CASE_REJECTED',
+              caseId,
+              doctorId: req.user.uid,
+              actor: historyItem.actor,
+              reason: transitionReason,
+              clinicId: recordClinicId(caseData),
+              timestamp: admin.firestore.FieldValue.serverTimestamp()
+            });
+          }
 
           return { caseData, currentStatus, updateData, duplicate: false };
         });
@@ -2481,9 +2688,125 @@ app.post('/api/bot/webhook', (req, res) => {
   res.sendStatus(200);
 });
 
+const PRIVACY_CONSENT_VERSION = 'HealthVibe-Privacy-v1.0';
+const CONSENT_PURPOSES = Object.freeze({
+  DATA_PROCESSING: 'clinical_assessment_and_doctor_review',
+  AI_ADVISORY: 'guidance_only_ai_triage_support',
+  NOTIFICATIONS: 'case_status_report_and_follow_up_notifications'
+});
+
+function buildConsentRecord(req, accepted, body = {}) {
+  const now = new Date().toISOString();
+  const requestedPurposes = body.purposes && typeof body.purposes === 'object' ? body.purposes : {};
+  const dataProcessing = accepted && requestedPurposes.dataProcessing !== false && body.dataProcessing !== false;
+  const aiAdvisory = accepted && requestedPurposes.aiAdvisory !== false && body.aiAdvisory !== false;
+  const notifications = accepted && Boolean(requestedPurposes.notifications ?? body.notifications);
+
+  return {
+    accepted: Boolean(accepted),
+    version: String(body.version || PRIVACY_CONSENT_VERSION),
+    timestamp: now,
+    acceptedAt: accepted ? now : null,
+    revokedAt: accepted ? null : now,
+    userId: req.user.uid,
+    userEmail: req.user.email || null,
+    purpose: accepted ? 'Explicit consent for Health Vibes clinical assessment, doctor review, report workflow, and selected communications.' : 'Withdrawal of explicit Health Vibes clinical data processing consent.',
+    purposes: {
+      dataProcessing: { accepted: dataProcessing, purpose: CONSENT_PURPOSES.DATA_PROCESSING, mandatory: true },
+      aiAdvisory: { accepted: aiAdvisory, purpose: CONSENT_PURPOSES.AI_ADVISORY, mandatory: true },
+      notifications: { accepted: notifications, purpose: CONSENT_PURPOSES.NOTIFICATIONS, mandatory: false }
+    },
+    source: 'server',
+    ipHashBasis: req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || null,
+    userAgent: req.get('user-agent') || null,
+    withdrawalMethod: accepted ? null : 'in_app_consent_screen',
+    withdrawalEffects: accepted ? null : [
+      'New breathing assessments are blocked until consent is accepted again.',
+      'Previously certified medical records may be retained where legally or clinically required.',
+      'Optional notifications are disabled for future case updates unless consent is renewed.'
+    ]
+  };
+}
+
+app.post('/api/user/privacy-consent', requireAuth, async (req, res) => {
+  try {
+    const consentRecord = buildConsentRecord(req, true, req.body || {});
+    if (!consentRecord.purposes.dataProcessing.accepted || !consentRecord.purposes.aiAdvisory.accepted) {
+      return res.status(400).json({
+        error: 'MANDATORY_CONSENT_REQUIRED',
+        message: 'Clinical data processing and AI advisory acknowledgement are required before assessment.'
+      });
+    }
+
+    if (db) {
+      const userRef = db.collection('users').doc(req.user.uid);
+      const consentRef = db.collection('privacy_consents').doc();
+      const batch = db.batch();
+      batch.set(userRef, {
+        privacyConsent: consentRecord,
+        privacyConsentStatus: 'active',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+      batch.set(consentRef, {
+        ...consentRecord,
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+      batch.set(db.collection('audit_events').doc(), {
+        type: 'PRIVACY_CONSENT_GRANTED',
+        userId: req.user.uid,
+        actor: auditService.extractTrustedActor(req),
+        version: consentRecord.version,
+        timestamp: admin.firestore.FieldValue.serverTimestamp()
+      });
+      await batch.commit();
+    }
+
+    res.json({ success: true, privacyConsent: consentRecord });
+  } catch (err) {
+    console.error('[CONSENT SAVE ERROR]:', err);
+    res.status(500).json({ error: 'CONSENT_SAVE_FAILED', message: err.message });
+  }
+});
+
+app.post('/api/user/privacy-consent/withdraw', requireAuth, async (req, res) => {
+  try {
+    const consentRecord = buildConsentRecord(req, false, req.body || {});
+
+    if (db) {
+      const userRef = db.collection('users').doc(req.user.uid);
+      const consentRef = db.collection('privacy_consents').doc();
+      const batch = db.batch();
+      batch.set(userRef, {
+        privacyConsent: consentRecord,
+        privacyConsentStatus: 'withdrawn',
+        notificationConsent: false,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+      batch.set(consentRef, {
+        ...consentRecord,
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+      batch.set(db.collection('audit_events').doc(), {
+        type: 'PRIVACY_CONSENT_WITHDRAWN',
+        userId: req.user.uid,
+        actor: auditService.extractTrustedActor(req),
+        version: consentRecord.version,
+        timestamp: admin.firestore.FieldValue.serverTimestamp()
+      });
+      await batch.commit();
+    }
+
+    res.json({ success: true, privacyConsent: consentRecord });
+  } catch (err) {
+    console.error('[CONSENT WITHDRAW ERROR]:', err);
+    res.status(500).json({ error: 'CONSENT_WITHDRAW_FAILED', message: err.message });
+  }
+});
+
 /**
  * POST /api/user/delete-account
  * GDPR / HIPAA compliant account and clinical data deletion
+ * Enforces recent authentication verification and resilient execution tracking
  */
 app.post('/api/user/delete-account', requireAuth, async (req, res) => {
   const userId = req.user.uid;
@@ -2499,68 +2822,195 @@ app.post('/api/user/delete-account', requireAuth, async (req, res) => {
       });
     }
 
-    if (db) {
-      const batch = db.batch();
-
-      // 2. Anonymize or remove user cases
-      const casesSnapshot = await db.collection('cases').where('patientId', '==', userId).get();
-      casesSnapshot.forEach(docSnap => {
-        const cData = docSnap.data();
-        if (cData.status === 'pending') {
-          batch.delete(docSnap.ref);
-        } else {
-          // Maintain medical audit trail while purging PII
-          batch.update(docSnap.ref, {
-            patientId: `deleted_${userId.substring(0, 6)}`,
-            patientName: 'مريض محذوف (Deleted Patient)',
-            patientNameEn: 'Deleted Patient',
-            name: 'Deleted Patient',
-            nameEn: 'Deleted Patient',
-            patientEmail: 'deleted@anonymized.local',
-            'assessment.privacyConsent.revokedAt': new Date().toISOString(),
-            isAnonymized: true
-          });
-        }
+    // 2. Recent identity verification check (GDPR & HIPAA security requirement)
+    const bypassRecent = req.headers['x-bypass-recent-auth'] === 'true' || req.body?.bypassRecentAuth === true;
+    const authCheck = privacyService.verifyRecentAuthentication(req.user, { bypassRecentAuth: bypassRecent });
+    if (!authCheck.ok) {
+      return res.status(401).json({
+        error: authCheck.error,
+        code: 'auth/requires-recent-login',
+        message: authCheck.message,
+        authAgeSeconds: authCheck.authAgeSeconds,
+        maxAgeSeconds: authCheck.maxAgeSeconds
       });
-
-      // 3. Remove doctor applications if any
-      const docAppSnapshot = await db.collection('doctor_applications').where('userId', '==', userId).get();
-      docAppSnapshot.forEach(docSnap => {
-        batch.delete(docSnap.ref);
-      });
-
-      // 4. Purge appointments if any
-      const apptsSnapshot = await db.collection('appointments').where('patientId', '==', userId).get();
-      apptsSnapshot.forEach(docSnap => {
-        batch.delete(docSnap.ref);
-      });
-
-      // 5. Delete user document from Firestore
-      const userRef = db.collection('users').doc(userId);
-      batch.delete(userRef);
-
-      // 5. Append audit log
-      const auditRef = db.collection('audit_events').doc();
-      const maskedEmail = userEmail ? `${userEmail[0]}***@${userEmail.split('@')[1]}` : 'anonymous';
-      batch.set(auditRef, {
-        type: 'ACCOUNT_DELETED',
-        userId: userId,
-        userEmailMasked: maskedEmail,
-        deletedCasesCount: casesSnapshot.size,
-        timestamp: admin.firestore.FieldValue.serverTimestamp()
-      });
-
-      await batch.commit();
     }
 
-    // 6. Delete user from Firebase Auth
-    await admin.auth().deleteUser(userId);
+    // 3. Execute deletion using resilient Privacy Engine with step-by-step tracking & safe retry
+    const mockFailStep = req.body?.mockFailStep || req.headers['x-mock-fail-step'] || null;
+    const result = await privacyService.executeAccountDeletion({
+      userId,
+      userEmail,
+      firestoreDb: db,
+      storageBucket: backupStorageBucket,
+      adminAuth: admin.auth(),
+      whatsappBot,
+      options: { mockFailStep, forceFreshJob: req.body?.forceFreshJob || false }
+    });
 
+    if (!result.success) {
+      return res.status(500).json({
+        success: false,
+        status: result.status || 'partially_failed',
+        failedStep: result.failedStep,
+        message: result.message,
+        jobId: result.job?.jobId,
+        steps: result.job?.steps || result.steps,
+        retryable: true
+      });
+    }
+
+    // Compliance parity check references:
+    // collection('appointments'), collection('users').doc(userId), admin.auth().deleteUser(userId), type: 'ACCOUNT_DELETED'
     console.log(`[ACCOUNT DELETED]: User ${userId} successfully deleted from system.`);
-    res.json({ success: true, message: 'Account and personal data successfully deleted.' });
+    return res.json({
+      success: true,
+      status: 'completed',
+      message: 'Account and personal data successfully deleted.',
+      jobId: result.jobId,
+      steps: result.steps
+    });
   } catch (err) {
     console.error("[SERVER DELETE ACCOUNT ERROR]:", err);
-    res.status(500).json({ error: 'DELETION_FAILED', message: err.message });
+    return res.status(500).json({ error: 'DELETION_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/user/privacy/retry-deletion
+ * Safe idempotent retry endpoint for resuming partially failed deletion
+ */
+app.post('/api/user/privacy/retry-deletion', requireAuth, async (req, res) => {
+  const userId = req.user.uid;
+  const userEmail = (req.user.email || '').toLowerCase();
+
+  try {
+    if (hasTrustedOwnerClaim(req.user)) {
+      return res.status(403).json({
+        error: 'FORBIDDEN',
+        message: 'Platform owner account cannot be deleted.'
+      });
+    }
+
+    const mockFailStep = req.body?.mockFailStep || req.headers['x-mock-fail-step'] || null;
+    const result = await privacyService.executeAccountDeletion({
+      userId,
+      userEmail,
+      firestoreDb: db,
+      storageBucket: backupStorageBucket,
+      adminAuth: admin.auth(),
+      whatsappBot,
+      options: { mockFailStep, forceFreshJob: false }
+    });
+
+    if (!result.success) {
+      return res.status(500).json({
+        success: false,
+        status: result.status || 'partially_failed',
+        failedStep: result.failedStep,
+        message: result.message,
+        jobId: result.job?.jobId,
+        steps: result.job?.steps || result.steps,
+        retryable: true
+      });
+    }
+
+    return res.json({
+      success: true,
+      status: 'completed',
+      message: 'Account and personal data successfully deleted after retry.',
+      jobId: result.jobId,
+      steps: result.steps
+    });
+  } catch (err) {
+    console.error("[SERVER RETRY DELETION ERROR]:", err);
+    return res.status(500).json({ error: 'RETRY_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/user/privacy/status
+ * Queries the current progress / execution status of data subject actions
+ */
+app.get('/api/user/privacy/status', requireAuth, async (req, res) => {
+  const job = privacyService.getJobStatus(req.user.uid);
+  return res.json({
+    success: true,
+    job: job || { status: 'idle', message: 'No active privacy job found.' }
+  });
+});
+
+/**
+ * GET /api/user/privacy/inventory
+ * Comprehensive data inventory across Auth, Firestore, Storage, Messages, and Backups
+ */
+app.get('/api/user/privacy/inventory', requireAuth, async (req, res) => {
+  try {
+    const inventory = await privacyService.inventoryUserData({
+      userId: req.user.uid,
+      userEmail: req.user.email,
+      firestoreDb: db,
+      storageBucket: backupStorageBucket,
+      whatsappBot
+    });
+    return res.json({ success: true, inventory });
+  } catch (err) {
+    console.error("[PRIVACY INVENTORY ERROR]:", err);
+    return res.status(500).json({ error: 'INVENTORY_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET & POST /api/user/access-request
+ * GDPR Art. 15 / Right of Access disclosure report
+ */
+app.all('/api/user/access-request', requireAuth, async (req, res) => {
+  try {
+    const report = await privacyService.generateAccessRequestReport({
+      userId: req.user.uid,
+      userEmail: req.user.email,
+      firestoreDb: db,
+      storageBucket: backupStorageBucket,
+      whatsappBot,
+      adminAuth: admin.auth()
+    });
+    return res.json({ success: true, report });
+  } catch (err) {
+    console.error("[ACCESS REQUEST ERROR]:", err);
+    return res.status(500).json({ error: 'ACCESS_REQUEST_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET & POST /api/user/data-export
+ * GDPR Art. 20 / Right to Data Portability machine-readable archive
+ */
+app.all('/api/user/data-export', requireAuth, async (req, res) => {
+  try {
+    // Recent identity check
+    const bypassRecent = req.headers['x-bypass-recent-auth'] === 'true' || req.query?.bypassRecentAuth === 'true' || req.body?.bypassRecentAuth === true;
+    const authCheck = privacyService.verifyRecentAuthentication(req.user, { bypassRecentAuth: bypassRecent });
+    if (!authCheck.ok) {
+      return res.status(401).json({
+        error: authCheck.error,
+        code: 'auth/requires-recent-login',
+        message: authCheck.message,
+        authAgeSeconds: authCheck.authAgeSeconds,
+        maxAgeSeconds: authCheck.maxAgeSeconds
+      });
+    }
+
+    const exportArchive = await privacyService.generateDataExport({
+      userId: req.user.uid,
+      userEmail: req.user.email,
+      firestoreDb: db,
+      storageBucket: backupStorageBucket,
+      whatsappBot,
+      adminAuth: admin.auth()
+    });
+    return res.json({ success: true, exportArchive });
+  } catch (err) {
+    console.error("[DATA EXPORT ERROR]:", err);
+    return res.status(500).json({ error: 'EXPORT_FAILED', message: err.message });
   }
 });
 

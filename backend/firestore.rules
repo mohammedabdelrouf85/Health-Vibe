@@ -427,21 +427,21 @@ service cloud.firestore {
     // 4. 🛡️ SERVER AUDIT EVENTS (/audit_events/{eventId})
     // =========================================================================
     match /audit_events/{eventId} {
-      allow read: if isOwner();
+      allow read: if isOwner() || isPlatformAdmin() || isClinicAdminFor(resource.data);
+      allow create, update, delete: if false;
       allow write: if false;
-      allow read: if isPlatformAdmin() || isClinicAdminFor(resource.data);
     }
 
     // =========================================================================
     // 5. 📝 CLIENT AUDIT LOG (/auditLog/{logId})
     // =========================================================================
     match /auditLog/{logId} {
-      allow read: if isOwner();
-      allow read: if isPlatformAdmin() || isClinicAdminFor(resource.data);
+      allow read: if isOwner() || isPlatformAdmin() || isClinicAdminFor(resource.data);
       allow create: if isAuthenticated() && (
         ('patientId' in request.resource.data && request.resource.data.patientId == request.auth.uid) ||
         ('userId' in request.resource.data && request.resource.data.userId == request.auth.uid)
       );
+      allow update, delete: if false;
     }
 
     // =========================================================================
@@ -546,6 +546,15 @@ service cloud.firestore {
 
     match /system_config/admin_access {
       allow read, write: if isOwner();
+    }
+
+    // =========================================================================
+    // 🛡️ PRIVACY TOMBSTONES (/privacy_tombstones/{tombstoneId})
+    // Server Admin SDK authoritative suppression for GDPR / HIPAA compliance
+    // =========================================================================
+    match /privacy_tombstones/{tombstoneId} {
+      allow read: if isOwner() || isPlatformAdmin();
+      allow write: if false;
     }
 
     // =========================================================================
