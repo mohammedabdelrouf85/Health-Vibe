@@ -2169,6 +2169,58 @@ body.dark .audit-table strong {
   cursor: pointer;
 }
 
+.file-list {
+  display: grid;
+  gap: 10px;
+}
+
+.file-list .medical-file-item {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.medical-file-meta {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.medical-file-progress {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-3);
+}
+
+.medical-file-progress span {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: var(--teal);
+  transition: width 180ms ease;
+}
+
+.medical-file-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.medical-file-actions button {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 10px;
+  background: var(--surface-2);
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .field-warning {
   margin-top: 8px;
   padding: 12px;

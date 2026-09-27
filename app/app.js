@@ -9141,6 +9141,266 @@ async function uploadDoctorApplicationDocument({ user, appId, file }) {
   };
 }
 
+const MEDICAL_FILE_ALLOWED_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
+const MEDICAL_FILE_ALLOWED_EXTENSIONS = [".pdf", ".jpg", ".jpeg", ".png", ".webp"];
+const MEDICAL_FILE_BLOCKED_EXECUTABLE_EXTENSIONS = DOCTOR_APP_BLOCKED_EXECUTABLE_EXTENSIONS;
+const MEDICAL_FILE_MAX_SIZE = 10 * 1024 * 1024;
+const pendingMedicalFileUploads = [];
+const activeMedicalUploadTasks = new Map();
+
+function getSafeMedicalFileName(fileName) {
+  const cleaned = getSafeStorageFileName(fileName || "medical-file")
+    .replace(/^\.+/, "")
+    .slice(0, 120);
+  return cleaned || `medical-file-${Date.now()}.pdf`;
+}
+
+function validateMedicalCaseFile(file) {
+  const isEn = currentLanguage === "en";
+  if (!file) {
+    throw new Error(isEn ? "Please choose a medical file first." : "يرجى اختيار ملف طبي أولاً.");
+  }
+  const lowerName = String(file.name || "").toLowerCase();
+  const hasAllowedExtension = MEDICAL_FILE_ALLOWED_EXTENSIONS.some((ext) => lowerName.endsWith(ext));
+  const hasBlockedExecutableExtension = MEDICAL_FILE_BLOCKED_EXECUTABLE_EXTENSIONS.some((ext) => lowerName.endsWith(ext));
+  if (hasBlockedExecutableExtension || !hasAllowedExtension) {
+    throw new Error(isEn ? "Unsupported or unsafe file extension. Upload PDF, JPG, PNG, or WEBP only." : "امتداد الملف غير مدعوم أو غير آمن. ارفع PDF أو JPG أو PNG أو WEBP فقط.");
+  }
+  if (!MEDICAL_FILE_ALLOWED_TYPES.includes(file.type)) {
+    throw new Error(isEn ? "Unsupported file type. Upload PDF, JPG, PNG, or WEBP only." : "نوع الملف غير مدعوم. ارفع PDF أو JPG أو PNG أو WEBP فقط.");
+  }
+  if (file.size <= 0 || file.size > MEDICAL_FILE_MAX_SIZE) {
+    throw new Error(isEn ? "File size must be greater than 0 and no more than 10MB." : "يجب أن يكون حجم الملف أكبر من صفر ولا يتجاوز 10 ميجابايت.");
+  }
+}
+
+function formatMedicalFileSize(size) {
+  const value = Number(size) || 0;
+  if (value >= 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+  if (value >= 1024) return `${Math.round(value / 1024)} KB`;
+  return `${value} B`;
+}
+
+function renderMedicalFileItem(fileState) {
+  const fileList = document.getElementById("fileList");
+  if (!fileList || !fileState) return null;
+  let item = document.getElementById(`medical-file-${fileState.localId || fileState.id}`);
+  if (!item) {
+    item = document.createElement("div");
+    item.className = "medical-file-item";
+    item.id = `medical-file-${fileState.localId || fileState.id}`;
+    fileList.prepend(item);
+  }
+  const pct = Math.max(0, Math.min(100, Number(fileState.progress) || 0));
+  const status = fileState.status || "staged";
+  const scan = fileState.scanStatus || "quarantined";
+  const isAvailable = scan === "clean" && fileState.availability === "available";
+  const safeName = escapeHtml(fileState.fileName || fileState.safeFileName || "Medical file");
+  const meta = `${escapeHtml(fileState.contentType || "")} • ${formatMedicalFileSize(fileState.size)} • ${escapeHtml(status)} • ${escapeHtml(scan)}`;
+  item.innerHTML = `
+    <strong>${safeName}</strong>
+    <span class="medical-file-meta">${meta}</span>
+    <div class="medical-file-progress" aria-label="Upload progress"><span style="width:${pct}%"></span></div>
+    <div class="medical-file-actions">
+      ${isAvailable ? `<button type="button" onclick="previewMedicalCaseFile('${escapeHtmlAttr(fileState.id)}')">${currentLanguage === "en" ? "Preview" : "معاينة"}</button>` : ""}
+      ${fileState.id ? `<button type="button" onclick="deleteMedicalCaseFile('${escapeHtmlAttr(fileState.id)}')">${currentLanguage === "en" ? "Delete" : "حذف"}</button>` : ""}
+      ${status === "uploading" ? `<button type="button" onclick="cancelMedicalCaseUpload('${escapeHtmlAttr(fileState.id || fileState.localId)}')">${currentLanguage === "en" ? "Cancel" : "إلغاء"}</button>` : ""}
+    </div>
+  `;
+  return item;
+}
+
+function stageMedicalCaseFiles(fileList) {
+  const files = Array.from(fileList || []);
+  let stagedCount = 0;
+  files.forEach((file) => {
+    validateMedicalCaseFile(file);
+    const state = {
+      localId: `local_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+      file,
+      fileName: file.name,
+      safeFileName: getSafeMedicalFileName(file.name),
+      contentType: file.type,
+      size: file.size,
+      progress: 0,
+      status: "staged",
+      scanStatus: "quarantined",
+      availability: "quarantined"
+    };
+    pendingMedicalFileUploads.push(state);
+    renderMedicalFileItem(state);
+    stagedCount += 1;
+  });
+  if (stagedCount) {
+    showToast(currentLanguage === "en" ? "File staged. It will upload after the case is saved." : "تم تجهيز الملف وسيتم رفعه بعد حفظ الحالة.");
+  }
+}
+
+async function getLatestPatientCaseId(user) {
+  if (!user) return null;
+  try {
+    const userDoc = await db.collection("users").doc(user.uid).get();
+    const latestCaseId = userDoc.exists ? userDoc.data().latestCaseId : null;
+    if (latestCaseId) return latestCaseId;
+  } catch (_) {}
+  try {
+    const snap = await db.collection("cases").where("patientId", "==", user.uid).get();
+    const cases = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
+      .sort((a, b) => (toMillis(b.submittedAt || b.createdAt || b.updatedAt) || 0) - (toMillis(a.submittedAt || a.createdAt || a.updatedAt) || 0));
+    return cases[0]?.id || null;
+  } catch (_) {
+    return null;
+  }
+}
+
+async function uploadMedicalCaseFile({ user, caseId, state }) {
+  validateMedicalCaseFile(state.file);
+  const fileDocRef = db.collection("case_files").doc();
+  const fileId = fileDocRef.id;
+  const storagePath = `case_files/${user.uid}/${caseId}/${fileId}/${state.safeFileName}`;
+  const metadata = {
+    patientId: user.uid,
+    caseId,
+    fileName: state.fileName,
+    safeFileName: state.safeFileName,
+    contentType: state.contentType,
+    size: state.size,
+    storagePath,
+    scanStatus: "upload_pending",
+    availability: "quarantined",
+    uploadStatus: "metadata_created",
+    createdBy: user.uid,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  };
+  await fileDocRef.set(metadata);
+  state.id = fileId;
+  state.storagePath = storagePath;
+  state.status = "uploading";
+  renderMedicalFileItem(state);
+
+  const uploadTask = storage.ref().child(storagePath).put(state.file, {
+    contentType: state.contentType,
+    customMetadata: {
+      patientId: user.uid,
+      caseId,
+      fileId,
+      scanStatus: "upload_pending",
+      availability: "quarantined"
+    }
+  });
+  activeMedicalUploadTasks.set(fileId, uploadTask);
+  await fileDocRef.update({ uploadStatus: "uploading", updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+
+  await new Promise((resolve, reject) => {
+    uploadTask.on("state_changed", (snapshot) => {
+      state.progress = snapshot.totalBytes ? Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100) : 0;
+      renderMedicalFileItem(state);
+    }, reject, resolve);
+  });
+
+  activeMedicalUploadTasks.delete(fileId);
+  state.progress = 100;
+  state.status = "uploaded_quarantined";
+  state.scanStatus = "pending";
+  await fileDocRef.update({
+    uploadStatus: "uploaded",
+    progress: 100,
+    scanStatus: "pending",
+    availability: "quarantined",
+    uploadedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+  await writeClientAuditLog("MEDICAL_CASE_FILE_UPLOADED", {
+    patientId: user.uid,
+    caseId,
+    fileId,
+    fileName: state.fileName,
+    contentType: state.contentType,
+    size: state.size,
+    auditCategory: "upload"
+  });
+  renderMedicalFileItem(state);
+}
+
+async function uploadPendingMedicalFilesForCase(caseId) {
+  const user = auth.currentUser;
+  if (!user || !caseId || pendingMedicalFileUploads.length === 0) return;
+  const staged = pendingMedicalFileUploads.splice(0, pendingMedicalFileUploads.length);
+  for (const state of staged) {
+    try {
+      await uploadMedicalCaseFile({ user, caseId, state });
+    } catch (error) {
+      state.status = error && error.code === "storage/canceled" ? "cancelled" : "failed";
+      state.scanStatus = "quarantined";
+      renderMedicalFileItem(state);
+      if (state.id) {
+        await db.collection("case_files").doc(state.id).update({
+          uploadStatus: state.status,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }).catch(() => {});
+      }
+      console.warn("Medical file upload failed:", error);
+      showToast(error.message || (currentLanguage === "en" ? "File upload failed." : "تعذر رفع الملف."));
+    }
+  }
+}
+
+window.cancelMedicalCaseUpload = async function(fileId) {
+  const task = activeMedicalUploadTasks.get(fileId);
+  if (task && typeof task.cancel === "function") task.cancel();
+  await writeClientAuditLog("MEDICAL_CASE_FILE_UPLOAD_CANCELLED", { fileId, auditCategory: "delete" });
+};
+
+window.previewMedicalCaseFile = async function(fileId) {
+  const user = auth.currentUser;
+  if (!user || !fileId) return false;
+  const doc = await db.collection("case_files").doc(fileId).get();
+  if (!doc.exists) return false;
+  const data = doc.data();
+  if (data.scanStatus !== "clean" || data.availability !== "available") {
+    showToast(currentLanguage === "en" ? "Preview is unavailable until the file scan is clean." : "المعاينة غير متاحة حتى يكتمل الفحص الأمني بنجاح.");
+    return false;
+  }
+  if (!MEDICAL_FILE_ALLOWED_TYPES.includes(data.contentType)) return false;
+  await auditFileAccessed(fileId, data.fileName, data.contentType, "preview", data.caseId);
+  const url = await storage.ref().child(data.storagePath).getDownloadURL();
+  window.open(url, "_blank", "noopener");
+  return false;
+};
+
+window.deleteMedicalCaseFile = async function(fileId) {
+  const user = auth.currentUser;
+  if (!user || !fileId) return false;
+  const docRef = db.collection("case_files").doc(fileId);
+  const doc = await docRef.get();
+  if (!doc.exists) return false;
+  const data = doc.data();
+  try {
+    await storage.ref().child(data.storagePath).delete().catch(() => {});
+    await docRef.update({
+      uploadStatus: "deleted",
+      availability: "quarantined",
+      deletedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      deletedBy: user.uid,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    await writeClientAuditLog("MEDICAL_CASE_FILE_DELETED", {
+      patientId: data.patientId,
+      caseId: data.caseId,
+      fileId,
+      fileName: data.fileName,
+      auditCategory: "delete"
+    });
+    const item = document.getElementById(`medical-file-${fileId}`);
+    if (item) item.remove();
+    showToast(currentLanguage === "en" ? "File deleted." : "تم حذف الملف.");
+  } catch (error) {
+    showToast(error.message || (currentLanguage === "en" ? "Could not delete file." : "تعذر حذف الملف."));
+  }
+  return false;
+};
+
 function onDoctorFilePicked(input) {
   const label = document.getElementById("doctorAppFileName");
   if (input.files && input.files[0]) {
@@ -12258,6 +12518,7 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
         const docRef = await db.collection("cases").add(caseData);
         console.log("✅ Standardized Case saved to Firestore:", docRef.id);
         await clearAssessmentDraft();
+        await uploadPendingMedicalFilesForCase(docRef.id);
 
         // ── ربط الحالة مباشرة بسجل المستخدم في Firestore ──────────────
         if (db && user.uid) {
@@ -12420,14 +12681,18 @@ if (fileUploadInput) {
       event.target.value = "";
       return;
     }
-    const fileList = document.getElementById("fileList");
-    [...event.target.files].forEach((file) => {
-      const item = document.createElement("div");
-      item.appendChild(createTextElement("strong", file.name));
-      item.appendChild(createTextElement("span", localized("جاهز لمراجعة الطبيب - بدون تحليل ذكاء اصطناعي")));
-      if (fileList) fileList.prepend(item);
-    });
-    if (event.target.files.length) showToast("تمت إضافة الملف كمرجع للطبيب");
+    try {
+      stageMedicalCaseFiles(event.target.files);
+      const user = auth.currentUser;
+      const latestCaseId = await getLatestPatientCaseId(user);
+      if (latestCaseId) {
+        await uploadPendingMedicalFilesForCase(latestCaseId);
+      }
+    } catch (error) {
+      showToast(error.message || (currentLanguage === "en" ? "Could not stage this file." : "تعذر تجهيز الملف."));
+    } finally {
+      event.target.value = "";
+    }
   });
 }
 

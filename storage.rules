@@ -25,6 +25,22 @@ service firebase.storage {
       return firestore.exists(/databases/(default)/documents/doctor_applications/$(appId));
     }
 
+    function caseDoc(caseId) {
+      return firestore.get(/databases/(default)/documents/cases/$(caseId));
+    }
+
+    function caseExists(caseId) {
+      return firestore.exists(/databases/(default)/documents/cases/$(caseId));
+    }
+
+    function fileDoc(fileId) {
+      return firestore.get(/databases/(default)/documents/case_files/$(fileId));
+    }
+
+    function fileExists(fileId) {
+      return firestore.exists(/databases/(default)/documents/case_files/$(fileId));
+    }
+
     function isAdmin() {
       return isAuthenticated() &&
              request.auth.token.role in ['clinic_admin', 'super_admin'];
@@ -109,11 +125,74 @@ service firebase.storage {
              !hasBlockedExecutableExtension(fileName);
     }
 
+    function isAssignedDoctorForCase(caseId) {
+      return isAuthenticated() &&
+             request.auth.token.role == 'doctor' &&
+             request.auth.token.verifiedDoctor == true &&
+             caseExists(caseId) &&
+             (
+               caseDoc(caseId).data.assignedDoctorId == request.auth.uid ||
+               caseDoc(caseId).data.doctorId == request.auth.uid ||
+               caseDoc(caseId).data.doctorUid == request.auth.uid ||
+               caseDoc(caseId).data.approvingDoctorId == request.auth.uid
+             );
+    }
+
+    function hasAllowedCaseFileExtension(fileName) {
+      return fileName.matches('.*\\.([pP][dD][fF]|[jJ][pP][gG]|[jJ][pP][eE][gG]|[pP][nN][gG]|[wW][eE][bB][pP])$');
+    }
+
+    function isAllowedCaseFile(fileName) {
+      return request.resource != null &&
+             request.resource.size <= 10 * 1024 * 1024 &&
+             request.resource.contentType in [
+               'application/pdf',
+               'image/jpeg',
+               'image/png',
+               'image/webp'
+             ] &&
+             hasAllowedCaseFileExtension(fileName) &&
+             !hasBlockedExecutableExtension(fileName);
+    }
+
+    function canReadCleanCaseFile(patientId, caseId, fileId) {
+      return fileExists(fileId) &&
+             fileDoc(fileId).data.patientId == patientId &&
+             fileDoc(fileId).data.caseId == caseId &&
+             fileDoc(fileId).data.scanStatus == 'clean' &&
+             fileDoc(fileId).data.availability == 'available' &&
+             (isOwner(patientId) || isAssignedDoctorForCase(caseId) || isPlatformAdmin());
+    }
+
+    function canCreateCaseFile(patientId, caseId, fileId, fileName) {
+      return isOwner(patientId) &&
+             !isSuspended() &&
+             caseExists(caseId) &&
+             caseDoc(caseId).data.patientId == patientId &&
+             fileExists(fileId) &&
+             fileDoc(fileId).data.patientId == patientId &&
+             fileDoc(fileId).data.caseId == caseId &&
+             fileDoc(fileId).data.storagePath == 'case_files/' + patientId + '/' + caseId + '/' + fileId + '/' + fileName &&
+             fileDoc(fileId).data.scanStatus in ['upload_pending', 'pending', 'quarantined'] &&
+             fileDoc(fileId).data.availability == 'quarantined' &&
+             isAllowedCaseFile(fileName);
+    }
+
     match /doctor_applications/{userId}/{appId}/{fileName} {
       allow read: if !isSuspended() && (isOwner(userId) || adminCanReadDoctorApplicationFile(userId, appId));
       allow create, update: if ownerCanWriteDoctorApplicationFile(userId, appId) &&
                             isAllowedDoctorApplicationFile(fileName);
       allow delete: if ownerCanWriteDoctorApplicationFile(userId, appId);
+    }
+
+    match /case_files/{patientId}/{caseId}/{fileId}/{fileName} {
+      allow read: if !isSuspended() && canReadCleanCaseFile(patientId, caseId, fileId);
+      allow create, update: if canCreateCaseFile(patientId, caseId, fileId, fileName);
+      allow delete: if !isSuspended() &&
+                    fileExists(fileId) &&
+                    fileDoc(fileId).data.patientId == patientId &&
+                    fileDoc(fileId).data.caseId == caseId &&
+                    (isOwner(patientId) || isPlatformAdmin());
     }
 
     match /{allPaths=**} {

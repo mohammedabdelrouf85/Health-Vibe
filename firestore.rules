@@ -365,6 +365,66 @@ service cloud.firestore {
       ));
     }
 
+    function caseDoc(caseId) {
+      return get(/databases/$(database)/documents/cases/$(caseId));
+    }
+
+    function caseExists(caseId) {
+      return exists(/databases/$(database)/documents/cases/$(caseId));
+    }
+
+    function isAssignedDoctorForCaseId(caseId) {
+      return isAuthenticated() &&
+             isVerifiedDoctor() &&
+             caseExists(caseId) &&
+             isDoctorLinkedRecord(caseDoc(caseId).data);
+    }
+
+    function hasAllowedCaseFileExtension(fileName) {
+      return fileName.matches('.*\\.([pP][dD][fF]|[jJ][pP][gG]|[jJ][pP][eE][gG]|[pP][nN][gG]|[wW][eE][bB][pP])$');
+    }
+
+    function hasBlockedExecutableExtension(fileName) {
+      return fileName.matches('.*\\.([eE][xX][eE]|[dD][lL][lL]|[bB][aA][tT]|[cC][mM][dD]|[cC][oO][mM]|[mM][sS][iI]|[pP][sS]1|[sS][hH]|[jJ][sS]|[vV][bB][sS]|[sS][cC][rR]|[jJ][aA][rR]|[aA][pP][kK]|[dD][mM][gG])$');
+    }
+
+    function isValidCaseFileCreate(data, fileId) {
+      return data.keys().hasAll([
+               'patientId', 'caseId', 'fileName', 'safeFileName', 'contentType',
+               'size', 'storagePath', 'scanStatus', 'availability', 'uploadStatus',
+               'createdBy', 'createdAt'
+             ]) &&
+             data.patientId == request.auth.uid &&
+             data.createdBy == request.auth.uid &&
+             data.caseId is string &&
+             caseExists(data.caseId) &&
+             caseDoc(data.caseId).data.patientId == request.auth.uid &&
+             data.safeFileName is string &&
+             hasAllowedCaseFileExtension(data.safeFileName) &&
+             !hasBlockedExecutableExtension(data.safeFileName) &&
+             data.contentType in ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'] &&
+             data.size is number &&
+             data.size > 0 &&
+             data.size <= 10 * 1024 * 1024 &&
+             data.storagePath == 'case_files/' + request.auth.uid + '/' + data.caseId + '/' + fileId + '/' + data.safeFileName &&
+             data.scanStatus in ['upload_pending', 'pending', 'quarantined'] &&
+             data.availability == 'quarantined' &&
+             data.uploadStatus in ['metadata_created', 'uploading'];
+    }
+
+    function isPatientCaseFileMaintenance() {
+      return resource.data.patientId == request.auth.uid &&
+             request.resource.data.patientId == resource.data.patientId &&
+             request.resource.data.caseId == resource.data.caseId &&
+             request.resource.data.storagePath == resource.data.storagePath &&
+             request.resource.data.scanStatus in [resource.data.scanStatus, 'pending'] &&
+             request.resource.data.availability in [resource.data.availability, 'quarantined'] &&
+             request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+               'uploadStatus', 'progress', 'scanStatus', 'availability', 'uploadedAt', 'updatedAt', 'deletedAt', 'deletedBy'
+             ]) &&
+             request.resource.data.uploadStatus in ['uploading', 'uploaded', 'cancelled', 'deleted', 'failed'];
+    }
+
     // =========================================================================
     // 3. 📋 CLINICAL CASES (/cases/{caseId})
     // =========================================================================
@@ -444,6 +504,25 @@ service cloud.firestore {
                               !('approvingDoctorId' in request.resource.data);
 
       allow delete: if isAuthenticated() && draftId == request.auth.uid;
+    }
+
+    match /case_files/{fileId} {
+      allow read: if isAuthenticated() &&
+                    !('role' in request.auth.token && request.auth.token.role == 'support') &&
+                    (resource.data.patientId == request.auth.uid ||
+                     isAssignedDoctorForCaseId(resource.data.caseId) ||
+                     isOwner() ||
+                     tokenClinicAdminFor(resource.data));
+
+      allow create: if isAuthenticated() &&
+                      request.auth.token.role == 'patient' &&
+                      isEmailVerified() &&
+                      isValidCaseFileCreate(request.resource.data, fileId);
+
+      allow update: if isAuthenticated() && isPatientCaseFileMaintenance();
+
+      allow delete: if isAuthenticated() &&
+                      (resource.data.patientId == request.auth.uid || isOwner() || tokenClinicAdminFor(resource.data));
     }
 
     match /assessments/{assessmentId} {
