@@ -18,6 +18,7 @@ const { sendClinicalNotificationEmail } = require('./notification-service');
 const backupService = require('./backup-service');
 const privacyService = require('./privacy-service');
 const auditService = require('./audit-service');
+const mfaService = require('./mfa-service');
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -410,7 +411,12 @@ app.use([
   '/api/user/change-password',
   '/api/user/change-email',
   '/api/user/revoke-all-sessions',
-  '/api/user/sessions/terminate'
+  '/api/user/sessions/terminate',
+  '/api/user/mfa/enroll',
+  '/api/user/mfa/verify-enrollment',
+  '/api/user/mfa/verify-challenge',
+  '/api/user/mfa/recovery',
+  '/api/user/mfa/disenroll'
 ], strictMutationLimiter);
 
 // Auth login / token synchronization rate limiter (25 req / minute)
@@ -1182,6 +1188,87 @@ function requireRecentAuth(maxAgeSeconds = 900) {
 }
 
 /**
+ * Middleware: Enforce Multi-Factor Authentication (MFA) on Sensitive Operations
+ * Evaluates whether the authenticated user has MFA enabled.
+ * If enabled, requires either a valid cryptographic MFA ticket ('x-mfa-ticket'),
+ * a direct TOTP code ('x-mfa-code'), or an emergency recovery backup code ('x-mfa-recovery-code').
+ * Blocks direct API step-bypass attempts before any sensitive modification occurs.
+ */
+async function requireMfaIfEnrolled(req, res, next) {
+  if (!req.user || !req.user.uid) {
+    return res.status(401).json({ error: 'UNAUTHORIZED', message: 'Authentication required.' });
+  }
+
+  const userId = req.user.uid;
+
+  let isEnrolled = mfaService.isMfaEnabled(userId);
+  if (!isEnrolled && db) {
+    try {
+      const snap = await Promise.race([
+        db.collection('users').doc(userId).get(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 800))
+      ]);
+      if (snap && snap.exists && snap.data() && snap.data().mfaEnabled) {
+        isEnrolled = true;
+      }
+    } catch (_) {}
+  }
+
+  if (!isEnrolled) {
+    return next();
+  }
+
+  const ticket = req.headers['x-mfa-ticket'];
+  const code = req.headers['x-mfa-code'];
+  const recoveryCode = req.headers['x-mfa-recovery-code'];
+
+  if (ticket && mfaService.verifyMfaTicket(ticket, userId)) {
+    req.mfaVerified = true;
+    return next();
+  }
+
+  if (code) {
+    const rec = mfaService.getUserMfaRecord(userId);
+    if (rec && rec.secret && mfaService.verifyTotp(code, rec.secret)) {
+      req.mfaVerified = true;
+      return next();
+    }
+  }
+
+  if (recoveryCode) {
+    const consumed = mfaService.consumeBackupCode(userId, recoveryCode);
+    if (consumed) {
+      if (db) {
+        auditService.recordAuditEvent(db, {
+          type: auditService.AUDIT_EVENT_TYPES.MFA_RECOVERY_CODE_USED,
+          req,
+          details: { sensitiveAction: req.originalUrl || req.path }
+        }).catch(() => {});
+      }
+      req.mfaVerified = true;
+      return next();
+    }
+  }
+
+  if (db) {
+    auditService.recordAuditEvent(db, {
+      type: auditService.AUDIT_EVENT_TYPES.MFA_CHALLENGE_FAILED,
+      req,
+      details: {
+        reason: ticket || code || recoveryCode ? 'INVALID_MFA_CREDENTIAL' : 'MISSING_MFA_HEADER',
+        path: req.originalUrl || req.path
+      }
+    }).catch(() => {});
+  }
+
+  return res.status(403).json({
+    error: 'MFA_REQUIRED',
+    message: 'Multi-factor authentication is required to execute this sensitive operation. Provide a valid x-mfa-ticket, x-mfa-code, or x-mfa-recovery-code.',
+    mfaRequired: true
+  });
+}
+
+/**
  * Middleware: Enforce Verified Email for Sensitive Actions
  * Verifies that the user's email is verified. Privileged email lists are not
  * authorization sources; only trusted custom claims can bypass verification.
@@ -1800,7 +1887,7 @@ app.post('/api/user/sessions/terminate', requireAuth, async (req, res) => {
  * POST /api/user/revoke-all-sessions
  * Server-authoritative global session revocation across all devices (Sign out from all devices)
  */
-app.post('/api/user/revoke-all-sessions', requireAuth, requireRecentAuth(900), async (req, res) => {
+app.post('/api/user/revoke-all-sessions', requireAuth, requireRecentAuth(900), requireMfaIfEnrolled, async (req, res) => {
   const userId = req.user.uid;
   const nowIso = new Date().toISOString();
 
@@ -1842,7 +1929,7 @@ app.post('/api/user/revoke-all-sessions', requireAuth, requireRecentAuth(900), a
  * POST /api/user/change-password
  * Secure password change requiring recent re-authentication and revoking other active sessions
  */
-app.post('/api/user/change-password', requireAuth, requireRecentAuth(900), async (req, res) => {
+app.post('/api/user/change-password', requireAuth, requireRecentAuth(900), requireMfaIfEnrolled, async (req, res) => {
   const userId = req.user.uid;
   const { newPassword, confirmPassword } = req.body || {};
 
@@ -1914,7 +2001,7 @@ app.post('/api/user/change-password', requireAuth, requireRecentAuth(900), async
  * POST /api/user/change-email
  * Secure email change requiring recent re-authentication
  */
-app.post('/api/user/change-email', requireAuth, requireRecentAuth(900), async (req, res) => {
+app.post('/api/user/change-email', requireAuth, requireRecentAuth(900), requireMfaIfEnrolled, async (req, res) => {
   const userId = req.user.uid;
   const currentEmail = (req.user.email || '').toLowerCase();
   const { newEmail } = req.body || {};
@@ -2045,10 +2132,265 @@ app.post('/api/auth/recover-account', async (req, res) => {
 });
 
 /**
+ * GET /api/user/mfa/status
+ * Retrieve MFA enrollment status, registration timestamp, and remaining backup recovery codes
+ */
+app.get('/api/user/mfa/status', requireAuth, async (req, res) => {
+  const userId = req.user.uid;
+  const isEnabled = mfaService.isMfaEnabled(userId);
+  const rec = mfaService.getUserMfaRecord(userId);
+
+  let backupCodesRemaining = 0;
+  if (rec && Array.isArray(rec.backupCodes)) {
+    backupCodesRemaining = rec.backupCodes.filter(b => !b.used).length;
+  }
+
+  res.json({
+    success: true,
+    mfaEnabled: isEnabled,
+    enrolledAt: rec?.enrolledAt || null,
+    backupCodesRemaining
+  });
+});
+
+/**
+ * POST /api/user/mfa/enroll
+ * Initiate MFA enrollment: generate TOTP secret, backup recovery codes, and otpauth URI
+ * Requires fresh re-authentication
+ */
+app.post('/api/user/mfa/enroll', requireAuth, requireRecentAuth(900), async (req, res) => {
+  const userId = req.user.uid;
+  const userEmail = req.user.email || 'user@healthvibes.ai';
+
+  if (mfaService.isMfaEnabled(userId)) {
+    return res.status(400).json({
+      error: 'ALREADY_ENROLLED',
+      message: 'MFA is already enabled on this account. Disenroll first to rotate credentials.'
+    });
+  }
+
+  const secret = mfaService.generateTotpSecret();
+  const { plainCodes, hashedRecords } = mfaService.generateBackupCodes(8);
+  const otpauthUri = mfaService.generateOtpAuthUri({
+    email: userEmail,
+    secret,
+    issuer: 'Health Vibes AI'
+  });
+
+  mfaService.setUserMfaRecord(userId, {
+    enabled: false,
+    secret,
+    backupCodes: hashedRecords,
+    pendingAt: new Date().toISOString()
+  });
+
+  res.json({
+    success: true,
+    secret,
+    otpauthUri,
+    backupCodes: plainCodes,
+    message: 'Scan the QR code or enter the secret in your authenticator app, then verify with a 6-digit code to activate.'
+  });
+});
+
+/**
+ * POST /api/user/mfa/verify-enrollment
+ * Finalize MFA enrollment by verifying the first 6-digit TOTP code
+ */
+app.post('/api/user/mfa/verify-enrollment', requireAuth, requireRecentAuth(900), async (req, res) => {
+  const userId = req.user.uid;
+  const { code } = req.body || {};
+
+  const rec = mfaService.getUserMfaRecord(userId);
+  if (!rec || !rec.secret) {
+    return res.status(400).json({
+      error: 'NO_PENDING_ENROLLMENT',
+      message: 'No pending MFA enrollment found. Call /api/user/mfa/enroll first.'
+    });
+  }
+
+  const isValid = mfaService.verifyTotp(code, rec.secret);
+  if (!isValid) {
+    return res.status(400).json({
+      error: 'INVALID_MFA_CODE',
+      message: 'The 6-digit verification code is invalid or has expired.'
+    });
+  }
+
+  const nowIso = new Date().toISOString();
+  rec.enabled = true;
+  rec.enrolledAt = nowIso;
+  mfaService.setUserMfaRecord(userId, rec);
+
+  if (db) {
+    db.collection('users').doc(userId).set({
+      mfaEnabled: true,
+      mfaEnrolledAt: nowIso
+    }, { merge: true }).catch(() => {});
+
+    auditService.recordAuditEvent(db, {
+      type: auditService.AUDIT_EVENT_TYPES.MFA_ENROLLED,
+      req,
+      details: { enrolledAt: nowIso, method: 'TOTP_RFC6238' }
+    }).catch(() => {});
+  }
+
+  const mfaTicket = mfaService.issueMfaTicket(userId);
+
+  res.json({
+    success: true,
+    mfaTicket,
+    message: 'Multi-factor authentication successfully activated.'
+  });
+});
+
+/**
+ * POST /api/user/mfa/verify-challenge
+ * Verify MFA challenge via 6-digit TOTP code, issuing a short-lived cryptographic step-up ticket
+ */
+app.post('/api/user/mfa/verify-challenge', requireAuth, async (req, res) => {
+  const userId = req.user.uid;
+  const { code } = req.body || {};
+
+  if (!mfaService.isMfaEnabled(userId)) {
+    return res.status(400).json({
+      error: 'MFA_NOT_ENROLLED',
+      message: 'MFA is not enabled on this account.'
+    });
+  }
+
+  const rec = mfaService.getUserMfaRecord(userId);
+  const isValid = mfaService.verifyTotp(code, rec.secret);
+
+  if (!isValid) {
+    if (db) {
+      auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.MFA_CHALLENGE_FAILED,
+        req,
+        details: { reason: 'INVALID_TOTP_CODE' }
+      }).catch(() => {});
+    }
+
+    return res.status(400).json({
+      error: 'INVALID_MFA_CODE',
+      message: 'Invalid two-factor authentication code.'
+    });
+  }
+
+  const mfaTicket = mfaService.issueMfaTicket(userId);
+
+  if (db) {
+    auditService.recordAuditEvent(db, {
+      type: auditService.AUDIT_EVENT_TYPES.MFA_CHALLENGE_VERIFIED,
+      req,
+      details: { verifiedAt: new Date().toISOString() }
+    }).catch(() => {});
+  }
+
+  res.json({
+    success: true,
+    mfaTicket,
+    expiresInSeconds: mfaService.MFA_TICKET_TTL_SECONDS
+  });
+});
+
+/**
+ * POST /api/user/mfa/recovery
+ * Authenticate via single-use backup recovery code (factor loss recovery)
+ */
+app.post('/api/user/mfa/recovery', requireAuth, async (req, res) => {
+  const userId = req.user.uid;
+  const { recoveryCode } = req.body || {};
+
+  if (!mfaService.isMfaEnabled(userId)) {
+    return res.status(400).json({
+      error: 'MFA_NOT_ENROLLED',
+      message: 'MFA is not enabled on this account.'
+    });
+  }
+
+  if (!recoveryCode) {
+    return res.status(400).json({
+      error: 'INVALID_RECOVERY_CODE',
+      message: 'Recovery code is required.'
+    });
+  }
+
+  const consumed = mfaService.consumeBackupCode(userId, recoveryCode);
+  if (!consumed) {
+    if (db) {
+      auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.MFA_CHALLENGE_FAILED,
+        req,
+        details: { reason: 'INVALID_OR_CONSUMED_RECOVERY_CODE' }
+      }).catch(() => {});
+    }
+
+    return res.status(400).json({
+      error: 'INVALID_RECOVERY_CODE',
+      message: 'Invalid or already used backup recovery code.'
+    });
+  }
+
+  const mfaTicket = mfaService.issueMfaTicket(userId);
+
+  if (db) {
+    auditService.recordAuditEvent(db, {
+      type: auditService.AUDIT_EVENT_TYPES.MFA_RECOVERY_CODE_USED,
+      req,
+      details: { recoveredAt: new Date().toISOString() }
+    }).catch(() => {});
+  }
+
+  const rec = mfaService.getUserMfaRecord(userId);
+  const remaining = rec?.backupCodes?.filter(b => !b.used).length || 0;
+
+  res.json({
+    success: true,
+    mfaTicket,
+    expiresInSeconds: mfaService.MFA_TICKET_TTL_SECONDS,
+    backupCodesRemaining: remaining,
+    message: 'Backup code accepted. Emergency step-up access granted.'
+  });
+});
+
+/**
+ * POST /api/user/mfa/disenroll
+ * Disenroll from MFA: requires fresh re-authentication and MFA verification
+ */
+app.post('/api/user/mfa/disenroll', requireAuth, requireRecentAuth(900), requireMfaIfEnrolled, async (req, res) => {
+  const userId = req.user.uid;
+  const nowIso = new Date().toISOString();
+
+  mfaService.setUserMfaRecord(userId, {
+    enabled: false,
+    disenrolledAt: nowIso
+  });
+
+  if (db) {
+    db.collection('users').doc(userId).set({
+      mfaEnabled: false,
+      mfaDisenrolledAt: nowIso
+    }, { merge: true }).catch(() => {});
+
+    auditService.recordAuditEvent(db, {
+      type: auditService.AUDIT_EVENT_TYPES.MFA_DISENROLLED,
+      req,
+      details: { disenrolledAt: nowIso }
+    }).catch(() => {});
+  }
+
+  res.json({
+    success: true,
+    message: 'Multi-factor authentication has been disabled.'
+  });
+});
+
+/**
  * POST /api/admin/set-user-role
  * Server-authoritative endpoint to change a user's role and set Firebase Custom Claims
  */
-app.post('/api/admin/set-user-role', requireAuth, auditOperationalAccess('ADMIN_ROLE_CHANGE'), requireVerifiedEmail, requireSuperAdmin, async (req, res) => {
+app.post('/api/admin/set-user-role', requireAuth, auditOperationalAccess('ADMIN_ROLE_CHANGE'), requireVerifiedEmail, requireSuperAdmin, requireMfaIfEnrolled, async (req, res) => {
   const { targetUserId, newRole, clinicId } = req.body;
 
   if (!targetUserId || !VALID_ROLES.includes(newRole)) {
@@ -2861,7 +3203,7 @@ app.post('/api/doctor/transition-case-status', requireAuth, requireVerifiedEmail
  * POST /api/doctor/approve-clinical-case
  * Server-authoritative endpoint for doctor case approval
  */
-app.post('/api/doctor/approve-clinical-case', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
+app.post('/api/doctor/approve-clinical-case', requireAuth, requireVerifiedEmail, requireDoctor, requireMfaIfEnrolled, async (req, res) => {
   const {
     caseId, note, clinicalNotes, clinicalDiagnosis,
     medications, recommendation, recommendations,
@@ -3605,7 +3947,7 @@ app.post('/api/user/privacy-consent/withdraw', requireAuth, async (req, res) => 
  * GDPR / HIPAA compliant account and clinical data deletion
  * Enforces recent authentication verification and resilient execution tracking
  */
-app.post('/api/user/delete-account', requireAuth, async (req, res) => {
+app.post('/api/user/delete-account', requireAuth, requireMfaIfEnrolled, async (req, res) => {
   const userId = req.user.uid;
   const userEmail = (req.user.email || '').toLowerCase();
 
@@ -3967,5 +4309,7 @@ app.clearOtpLockout = clearOtpLockout;
 app.requireRecentAuth = requireRecentAuth;
 app.activeUserSessions = activeUserSessions;
 app.recordUserSession = recordUserSession;
+app.mfaService = mfaService;
+app.requireMfaIfEnrolled = requireMfaIfEnrolled;
 
 module.exports = app;
