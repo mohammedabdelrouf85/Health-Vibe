@@ -162,6 +162,7 @@ function getRoleDefaultScreen(role) {
   if (isAdminRole(r)) return "admin";
   if (r === ROLES.DOCTOR) return "doctor";
   if (r === ROLES.DOCTOR_PENDING) return "verification";
+  if (r === ROLES.SUPPORT) return "kpi";
   return "patient";
 }
 
@@ -223,9 +224,6 @@ const ROLE_PERMISSIONS_MAP = {
   [ROLES.CLINIC_ADMIN]: [
     PERMISSIONS.VIEW_ADMIN_DASHBOARD,
     PERMISSIONS.VIEW_DOCTOR_QUEUE,
-    PERMISSIONS.REVIEW_CASE,
-    PERMISSIONS.APPROVE_CASE,
-    PERMISSIONS.REJECT_CASE,
     PERMISSIONS.VIEW_OWN_CASES,
     PERMISSIONS.VIEW_AUDIT_LOG,
     PERMISSIONS.APPROVE_DOCTOR_APPLICATION,
@@ -234,12 +232,10 @@ const ROLE_PERMISSIONS_MAP = {
     PERMISSIONS.MANAGE_USERS,
     PERMISSIONS.VIEW_SYSTEM_METRICS
   ],
-  [ROLES.SUPPORT]: [
-    PERMISSIONS.VIEW_PATIENT_DASHBOARD,
-    PERMISSIONS.VIEW_OWN_CASES,
-    PERMISSIONS.VIEW_SYSTEM_METRICS
-  ],
-  [ROLES.SUPER_ADMIN]: Object.values(PERMISSIONS)
+  [ROLES.SUPPORT]: [PERMISSIONS.VIEW_SYSTEM_METRICS],
+  [ROLES.SUPER_ADMIN]: Object.values(PERMISSIONS).filter(p => ![
+    PERMISSIONS.SUBMIT_ASSESSMENT, PERMISSIONS.REVIEW_CASE, PERMISSIONS.APPROVE_CASE, PERMISSIONS.REJECT_CASE
+  ].includes(p))
 };
 
 const ROLE_ALLOWED_SCREENS = {
@@ -254,17 +250,13 @@ const ROLE_ALLOWED_SCREENS = {
     "doctor", "verification", "history", "appointments", "feedback", "report", "profile", "kpi", "patient"
   ],
   [ROLES.CLINIC_ADMIN]: [
-    "patient", "consent", "profile", "assessment", "pending", "result",
-    "history", "appointments", "feedback", "assistant", "verification", "doctor",
-    "report", "admin", "audit", "kpi"
+    "profile", "history", "appointments", "feedback", "doctor", "report", "admin", "audit", "kpi"
   ],
   [ROLES.SUPPORT]: [
-    "patient", "history", "appointments", "feedback", "assistant", "report", "kpi"
+    "profile", "kpi"
   ],
   [ROLES.SUPER_ADMIN]: [
-    "patient", "consent", "profile", "assessment", "pending", "result",
-    "history", "appointments", "feedback", "assistant", "verification", "doctor",
-    "report", "admin", "audit", "kpi"
+    "profile", "history", "appointments", "feedback", "doctor", "report", "admin", "audit", "kpi"
   ]
 };
 
@@ -424,9 +416,7 @@ async function getVerifiedServerRole(forceRefresh = false) {
 function hasPermission(permission) {
   const user = (typeof auth !== "undefined" && auth) ? auth.currentUser : null;
   const isOwner = Boolean(user && isOwnerUser(user));
-  if (isOwner) return true;
   const role = normalizeRole((typeof selectedRole !== "undefined" && selectedRole) ? selectedRole : ROLES.PATIENT, isOwner);
-  if (role === ROLES.SUPER_ADMIN) return true;
   const perms = ROLE_PERMISSIONS_MAP[role] || [];
   return perms.includes(permission);
 }
@@ -437,8 +427,7 @@ function canAccessScreen(screenName) {
   // Resolve the active role: respect selectedRole (owner may be testing as patient/doctor).
   const role = normalizeRole((typeof selectedRole !== "undefined" && selectedRole) ? selectedRole : ROLES.PATIENT, isOwner);
   // Full access only when the active role is SUPER_ADMIN (not merely isOwner).
-  if (role === ROLES.SUPER_ADMIN) return true;
-  if (screenName === "verification" && tempAllowDoctorApplication) {
+  if (screenName === "verification" && tempAllowDoctorApplication && role === ROLES.PATIENT) {
     return true;
   }
   const allowed = ROLE_ALLOWED_SCREENS[role] || ROLE_ALLOWED_SCREENS[ROLES.PATIENT];
@@ -2713,51 +2702,22 @@ async function getCases(options = {}) {
     const isOwner = isOwnerUser(user.email);
     const role = normalizeRole(selectedRole, isOwner);
 
+    if (role === ROLES.SUPPORT) return [];
     let cases = [];
-    if (role === ROLES.DOCTOR || isAdminRole(role) || isOwner) {
-      // 🩺 DOCTOR & ADMIN: Fetch all cases for clinical review queue
-      try {
-        const snap = await db.collection("cases").get();
-        cases = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      } catch (e) {
-        console.warn("Direct cases collection get failed, trying fallback:", e.message);
-        try {
-          const snapAssigned = await db.collection("cases").where("assignedDoctorId", "==", user.uid).get();
-          cases = snapAssigned.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        } catch (e2) {}
-        try {
-          const snapUnassigned = await db.collection("cases").where("assignedDoctorId", "==", null).get();
-          const byId = new Map(cases.map(c => [c.id, c]));
-          snapUnassigned.docs.forEach(doc => {
-            if (!byId.has(doc.id)) byId.set(doc.id, { id: doc.id, ...doc.data() });
-          });
-          cases = Array.from(byId.values());
-        } catch (e3) {}
-      }
-    } else if (role === ROLES.PATIENT) {
-      // 👤 PATIENT PRIVACY: Fetch only own cases
-      try {
-        const snap = await db.collection("cases").where("patientId", "==", user.uid).get();
-        cases = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      } catch(e) {}
-      if (user.email) {
-        try {
-          const emailSnap = await db.collection("cases").where("patientEmail", "==", user.email).get();
-          const byId = new Map(cases.map(c => [c.id, c]));
-          emailSnap.docs.forEach(doc => {
-            if (!byId.has(doc.id)) byId.set(doc.id, { id: doc.id, ...doc.data() });
-          });
-          cases = Array.from(byId.values());
-        } catch (e) {
-          console.warn("Patient cases email fallback failed:", e.message);
-        }
-      }
-    } else {
-      try {
-        const snapshot = await db.collection("cases").get();
-        cases = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      } catch(e) {}
-    }
+    let query = db.collection("cases");
+    if (role === ROLES.DOCTOR) query = query.where("assignedDoctorId", "==", user.uid);
+    else if (role === ROLES.CLINIC_ADMIN) {
+      const profile = await db.collection("users").doc(user.uid).get();
+      const clinicId = profile.exists && (profile.data().clinicId || profile.data().clinic);
+      if (!clinicId) return [];
+      query = query.where("clinicId", "==", clinicId);
+    } else if ([ROLES.PATIENT, ROLES.DOCTOR_PENDING].includes(role)) {
+      query = query.where("patientId", "==", user.uid);
+      // Rules cannot filter hidden drafts out of a query. Query published records explicitly.
+      query = query.where("doctorApproved", "==", true);
+    } else if (role !== ROLES.SUPER_ADMIN) return [];
+    const snap = await query.get();
+    cases = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
     // Client-side sort by submittedAt or createdAt descending
     cases.sort((a, b) => {
@@ -2775,7 +2735,7 @@ async function getCases(options = {}) {
       return hasPatient && hasVitals;
     });
 
-    return role === ROLES.PATIENT ? cases.map(maskUnapprovedPatientCase) : cases;
+    return [ROLES.PATIENT, ROLES.DOCTOR_PENDING].includes(role) ? cases.map(maskUnapprovedPatientCase) : cases;
   } catch (err) {
     console.error("getCases error:", err);
     return [];
@@ -4561,7 +4521,6 @@ async function handleEmailAuth(e) {
       await db.collection("users").doc(user.uid).set({
         name: displayName,
         email: user.email,
-        emailVerified: false,
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
 
@@ -4757,7 +4716,6 @@ async function enterApp(source = "google") {
           await db.collection("users").doc(user.uid).set({
             name: user.displayName || user.email.split('@')[0],
             email: user.email,
-            emailVerified: verificationRevoked ? false : true,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
           });
         } else {
@@ -6313,6 +6271,7 @@ async function renderAdminAccountsReportView(container, isEn, hasCaseData) {
 window.renderAdminAccountsReportView = renderAdminAccountsReportView;
 
 async function renderReportScreen(targetCaseId = null) {
+  if (isSupportUser()) return;
   const container = document.getElementById("reportContainer");
   if (!container) return;
 
@@ -7163,6 +7122,7 @@ async function renderResultScreen() {
 }
 
 async function renderPatientHistory() {
+  if (isSupportUser()) return;
   const container = document.getElementById("patientHistoryContainer");
   const countBadge = document.getElementById("patientHistoryCount");
   if (!container) return;
@@ -8588,9 +8548,6 @@ async function cancelOrReapplyDoctorApp() {
       status: "cancelled",
       cancelledAt: firebase.firestore.FieldValue.serverTimestamp()
     });
-    await db.collection("users").doc(user.uid).set({
-      doctorApplicationStatus: "cancelled"
-    }, { merge: true });
     await writeClientAuditLog("DOCTOR_APPLICATION_CANCELLED", {
       applicationId: appId,
       applicantUserId: user.uid,
@@ -8662,15 +8619,16 @@ async function handleDoctorAppSubmit(e) {
       appliedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
 
+    const membership = await db.collection("users").doc(user.uid).get();
+    if (membership.exists && membership.data().clinicId) appData.clinicId = membership.data().clinicId;
     await db.collection("doctor_applications").doc(appId).set(appData);
 
     await db.collection("users").doc(user.uid).set({
-      doctorApplicationStatus: "pending",
       doctorApplicationId: appId,
       doctorAppName: name,
       licenseNumber: license,
       specialty: specialty,
-      clinic: clinic,
+      doctorAppClinicName: clinic,
       doctorAppDocName: uploadedDocument.docName,
       doctorAppDocSize: uploadedDocument.docSize,
       doctorAppDocContentType: uploadedDocument.docContentType,
@@ -9429,39 +9387,11 @@ async function approveDoctorApplication(appId, userId, doctorName) {
   try {
     showToast(isEn ? `Approving ${doctorName}...` : `جاري اعتماد الطبيب ${doctorName}...`);
 
-    if (typeof callBackend === "function") {
-      try {
-        await callBackend("/api/admin/approve-doctor-application", {
-          method: "POST",
-          body: JSON.stringify({
-            applicationId: appId,
-            applicantUserId: userId
-          })
-        });
-      } catch (beErr) {
-        console.warn("Backend API unavailable for approval, fallback to Firestore update:", beErr.message);
-      }
-    }
-
-    await db.collection("doctor_applications").doc(appId).set({
-      status: "approved",
-      approvedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      approvedBy: auth.currentUser ? auth.currentUser.email : "Admin"
-    }, { merge: true }).catch(() => {});
-
-    if (userId) {
-      await db.collection("users").doc(userId).set({
-        role: ROLES.DOCTOR,
-        verifiedDoctor: true,
-        doctorApplicationStatus: "approved"
-      }, { merge: true }).catch(() => {});
-    }
-
-    if (auth.currentUser && auth.currentUser.uid === userId) {
-      selectedRole = ROLES.DOCTOR;
-      updateNavVisibility();
-      accountLabel.textContent = isEn ? englishRoleLabels.doctor : roleLabels.doctor;
-    }
+    if (!enforcePermission(PERMISSIONS.APPROVE_DOCTOR_APPLICATION, "Approve Doctor")) return;
+    const result = await callBackend("/api/admin/approve-doctor-application", {
+      method: "POST", body: JSON.stringify({ applicationId: appId, applicantUserId: userId })
+    });
+    if (!result?.success) throw new Error("Approval was not confirmed by the server");
 
     showToast(isEn ? `🎉 Successfully approved Dr. ${doctorName}!` : `🎉 تم اعتماد الطبيب ${doctorName} وترقيته رسمياً لطبيب موثق!`);
     await renderAdminMetrics();
@@ -9476,17 +9406,11 @@ async function approveDoctorApplication(appId, userId, doctorName) {
 async function rejectDoctorApplication(appId, userId) {
   const isEn = currentLanguage === "en";
   try {
-    await db.collection("doctor_applications").doc(appId).set({
-      status: "rejected",
-      rejectedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      rejectedBy: auth.currentUser ? auth.currentUser.email : "Admin"
-    }, { merge: true }).catch(() => {});
-
-    if (userId) {
-      await db.collection("users").doc(userId).set({
-        doctorApplicationStatus: "rejected"
-      }, { merge: true }).catch(() => {});
-    }
+    if (!enforcePermission(PERMISSIONS.REJECT_DOCTOR_APPLICATION, "Reject Doctor")) return;
+    const result = await callBackend("/api/admin/reject-doctor-application", {
+      method: "POST", body: JSON.stringify({ applicationId: appId, applicantUserId: userId })
+    });
+    if (!result?.success) throw new Error("Rejection was not confirmed by the server");
 
     showToast(isEn ? "Application rejected." : "تم رفض الطلب.");
     await renderAdminMetrics();
@@ -9634,7 +9558,7 @@ async function renderAdminUsers() {
               </div>
             </td>
             <td style="padding: 12px; text-align: end;">
-              <select onchange="changeUserRole('${u.id}', this.value, '${userNameStr}', '${u.email}')" class="admin-role-select" style="padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 12px; font-weight: 600; cursor: pointer;">
+              <select ${hasPermission(PERMISSIONS.MANAGE_USER_ROLES) ? "" : "disabled"} onchange="changeUserRole('${u.id}', this.value, '${userNameStr}', '${u.email}')" class="admin-role-select" style="padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 12px; font-weight: 600; cursor: pointer;">
                 <option value="patient" ${role === 'patient' ? 'selected' : ''}>👤 ${isEn ? 'Patient (مريض)' : 'حساب مريض'}</option>
                 <option value="doctor" ${role === 'doctor' ? 'selected' : ''}>🩺 ${isEn ? 'Doctor (طبيب موثق)' : 'طبيب موثق'}</option>
                 <option value="clinic_admin" ${role === 'clinic_admin' ? 'selected' : ''}>🏥 ${isEn ? 'Clinic admin (مدير عيادة)' : 'مدير عيادة'}</option>
@@ -9664,30 +9588,17 @@ async function changeUserRole(userId, newRole, userName, userEmail) {
   try {
     showToast(isEn ? `Updating role to ${englishRoleLabels[newRole] || newRole} for ${userName}...` : `جاري تحديث دور ${userName} إلى ${roleLabels[newRole] || newRole}...`);
 
-    // 1. Server-authoritative role update via Backend Admin SDK
-    let backendSuccess = false;
-    if (typeof callBackend === "function") {
-      try {
-        const resp = await callBackend("/api/admin/set-user-role", {
-          method: "POST",
-          body: JSON.stringify({
-            targetUserId: userId,
-            newRole: newRole
-          })
-        });
-        if (resp && resp.success) backendSuccess = true;
-      } catch (beErr) {
-        console.warn("Backend API role update returned error, attempting direct sync:", beErr.message);
-      }
+    if (!enforcePermission(PERMISSIONS.MANAGE_USER_ROLES, "Change User Role")) return;
+    let clinicId;
+    if (newRole === ROLES.CLINIC_ADMIN) {
+      clinicId = prompt(isEn ? "Clinic ID for this administrator:" : "معرّف العيادة لهذا المدير:");
+      if (!clinicId || !clinicId.trim()) return;
+      clinicId = clinicId.trim();
     }
-
-    // 2. Direct Firestore update as fallback/sync
-    if (db) {
-      await db.collection("users").doc(userId).set({
-        role: newRole,
-        verifiedDoctor: newRole === ROLES.DOCTOR
-      }, { merge: true }).catch(() => {});
-    }
+    const resp = await callBackend("/api/admin/set-user-role", {
+      method: "POST", body: JSON.stringify({ targetUserId: userId, newRole, clinicId })
+    });
+    if (!resp?.success) throw new Error("Role update was not confirmed by the server");
 
     // 3. Update in local registry
     const list = getLocalAccountsRegistry();
@@ -9728,14 +9639,10 @@ async function toggleUserVerification(userId, currentStatus, userName, userEmail
   showToast(isEn ? `Updating verification status...` : `جاري تسجيل حالة التوثيق في النظام...`);
 
   try {
-    // 1. Update Firestore users collection
-    if (typeof db !== "undefined" && db) {
-      await db.collection("users").doc(userId).set({
-        emailVerified: newStatus,
-        verifiedAt: newStatus ? firebase.firestore.FieldValue.serverTimestamp() : null,
-        verifiedByAdmin: newStatus ? (auth?.currentUser?.email || "super_admin") : null
-      }, { merge: true });
-    }
+    const result = await callBackend("/api/admin/set-user-verification", {
+      method: "POST", body: JSON.stringify({ targetUserId: userId, verified: newStatus })
+    });
+    if (!result?.success) throw new Error("Verification update was not confirmed by the server");
 
     // 2. Update local registry
     const list = getLocalAccountsRegistry();
@@ -9779,29 +9686,11 @@ async function toggleUserSuspension(userId, currentSuspended, userName, userEmai
   try {
     showToast(isEn ? "Updating account suspension status..." : "جاري تحديث حالة إيقاف الحساب...");
 
-    // 1. Authoritative Backend Call
-    await callBackend("/api/admin/toggle-user-suspension", {
-      method: "POST",
-      body: JSON.stringify({
-        targetUserId: userId,
-        suspend: targetSuspend,
-        reason: targetSuspend ? "Suspended via Admin Dashboard" : "Re-activated via Admin Dashboard"
-      })
-    }).catch(err => {
-      console.warn("Backend toggle-user-suspension error:", err);
+    const result = await callBackend("/api/admin/toggle-user-suspension", {
+      method: "POST", body: JSON.stringify({ targetUserId: userId, suspend: targetSuspend,
+        reason: "Admin Dashboard" })
     });
-
-    // 2. Direct Firestore fallback/sync
-    if (typeof db !== "undefined" && db) {
-      await db.collection("users").doc(userId).set({
-        suspended: targetSuspend,
-        isSuspended: targetSuspend,
-        status: targetSuspend ? "suspended" : "active",
-        accountStatus: targetSuspend ? "suspended" : "active",
-        suspendedAt: targetSuspend ? firebase.firestore.FieldValue.serverTimestamp() : null,
-        suspendedBy: targetSuspend ? (auth?.currentUser?.email || "admin") : null
-      }, { merge: true });
-    }
+    if (!result?.success) throw new Error("Suspension update was not confirmed by the server");
 
     // 3. Local registry update
     const list = getLocalAccountsRegistry();
@@ -11924,9 +11813,6 @@ function initHVAuthListener() {
           await db.collection("users").doc(user.uid).set({
             name: displayName || user.email.split('@')[0],
             email: user.email,
-            role: safeRole,
-            isOwner: isOwner,
-            emailVerified: verificationRevoked ? false : (user.emailVerified || false),
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
           }, { merge: true });
         }
@@ -12669,14 +12555,40 @@ function calculateKpiMetrics(cases, options = {}) {
 }
 
 async function renderKpiDashboard(options = {}) {
+  if (!canAccessScreen("kpi")) return;
+  const screen = document.getElementById("screen-kpi");
+  let supportPanel = document.getElementById("supportMetrics");
+  if (screen) {
+    for (const child of screen.children) if (child.id !== "supportMetrics") child.hidden = isSupportUser();
+    if (supportPanel) supportPanel.hidden = !isSupportUser();
+  }
+  if (isSupportUser()) {
+    // Fetch only aggregate numbers. Never hydrate clinical records or cached cases.
+    if (!supportPanel && screen) {
+      supportPanel = document.createElement("article");
+      supportPanel.id = "supportMetrics";
+      supportPanel.className = "panel";
+      screen.appendChild(supportPanel);
+    }
+    if (!supportPanel) return;
+    supportPanel.textContent = currentLanguage === "en" ? "Loading operational metrics…" : "جاري تحميل المؤشرات التشغيلية…";
+    try {
+      const metrics = await callBackend("/api/kpi/metrics", { method: "GET" });
+      const en = currentLanguage === "en";
+      supportPanel.textContent = (en ? "Operational metrics: " : "المؤشرات التشغيلية: ") +
+        (en ? "Total: " : "الإجمالي: ") + Number(metrics.totalCases || 0) + " | " +
+        (en ? "Completed: " : "المكتمل: ") + Number(metrics.completedCasesCount || 0) + " | " +
+        (en ? "Pending: " : "قيد الانتظار: ") + Number(metrics.pendingCasesCount || 0);
+    } catch (err) { supportPanel.textContent = currentLanguage === "en" ? "Metrics unavailable." : "المؤشرات غير متاحة حالياً."; }
+    return;
+  }
   const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
 
   try {
     let cases = cachedKpiCases;
     if (!cases) {
       if (typeof db !== "undefined" && db) {
-        const snap = await db.collection("cases").get().catch(() => ({ docs: [] }));
-        cases = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        cases = await getCases({ includeTest: false });
         cachedKpiCases = cases;
       } else if (typeof getCases === "function") {
         cases = await getCases({ includeTest: false });

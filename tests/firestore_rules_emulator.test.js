@@ -281,9 +281,9 @@ async function run(name, fn) {
       await assertFails(adminDb.collection("users").doc("patient-a").update({ role: "doctor" }));
     });
 
-    await run("super admins can modify role fields through trusted custom claims", async () => {
+    await run("super admins must use the audited API to modify role fields", async () => {
       const ownerDb = db(env, "owner", { email_verified: true, role: "super_admin", isOwner: true });
-      await assertSucceeds(ownerDb.collection("users").doc("patient-a").update({ role: "doctor" }));
+      await assertFails(ownerDb.collection("users").doc("patient-a").update({ role: "doctor" }));
     });
 
     await run("patients can create their own clean case and cannot create for another account", async () => {

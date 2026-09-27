@@ -160,8 +160,8 @@ assert(
   'canAccessScreen must NOT contain bare isOwner bypass — it must check role === SUPER_ADMIN instead'
 );
 assert(
-  canAccessSource.includes("role === ROLES.SUPER_ADMIN) return true"),
-  'canAccessScreen must allow access when active role resolves to SUPER_ADMIN (not merely isOwner)'
+  canAccessSource.includes("ROLE_ALLOWED_SCREENS[role]"),
+  'canAccessScreen must enforce the explicit screen matrix for every role'
 );
 console.log('  ✓ canAccessScreen grants full access only when selectedRole resolves to SUPER_ADMIN.');
 

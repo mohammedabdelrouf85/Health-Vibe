@@ -3,7 +3,10 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
     function isAuthenticated() {
-      return request.auth != null;
+      return request.auth != null &&
+        (!firestore.exists(/databases/(default)/documents/users/$(request.auth.uid)) ||
+         !('authzVersion' in userDoc(request.auth.uid).data) ||
+         ('authzVersion' in request.auth.token && request.auth.token.authzVersion == userDoc(request.auth.uid).data.authzVersion));
     }
 
     function isOwner(userId) {
@@ -33,11 +36,11 @@ service firebase.storage {
         ('isSuspended' in request.auth.token && request.auth.token.isSuspended == true) ||
         ('status' in request.auth.token && request.auth.token.status == 'suspended') ||
         ('disabled' in request.auth.token && request.auth.token.disabled == true) ||
-        userDoc(request.auth.uid).data.suspended == true ||
-        userDoc(request.auth.uid).data.isSuspended == true ||
-        userDoc(request.auth.uid).data.status == 'suspended' ||
-        userDoc(request.auth.uid).data.accountStatus == 'suspended' ||
-        userDoc(request.auth.uid).data.disabled == true
+        ('suspended' in userDoc(request.auth.uid).data && userDoc(request.auth.uid).data.suspended == true) ||
+        ('isSuspended' in userDoc(request.auth.uid).data && userDoc(request.auth.uid).data.isSuspended == true) ||
+        ('status' in userDoc(request.auth.uid).data && userDoc(request.auth.uid).data.status == 'suspended') ||
+        ('accountStatus' in userDoc(request.auth.uid).data && userDoc(request.auth.uid).data.accountStatus == 'suspended') ||
+        ('disabled' in userDoc(request.auth.uid).data && userDoc(request.auth.uid).data.disabled == true)
       );
     }
 
@@ -107,7 +110,7 @@ service firebase.storage {
     }
 
     match /doctor_applications/{userId}/{appId}/{fileName} {
-      allow read: if isOwner(userId) || adminCanReadDoctorApplicationFile(userId, appId);
+      allow read: if !isSuspended() && (isOwner(userId) || adminCanReadDoctorApplicationFile(userId, appId));
       allow create, update: if ownerCanWriteDoctorApplicationFile(userId, appId) &&
                             isAllowedDoctorApplicationFile(fileName);
       allow delete: if ownerCanWriteDoctorApplicationFile(userId, appId);

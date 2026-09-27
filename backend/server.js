@@ -696,7 +696,7 @@ async function requireAuth(req, res, next) {
 
   const idToken = authHeader.split('Bearer ')[1];
   try {
-    const decodedToken = await admin.auth().verifyIdToken(idToken);
+    const decodedToken = await admin.auth().verifyIdToken(idToken, true);
     req.user = decodedToken;
 
     // 🛑 Block suspended accounts via Custom Claims
@@ -712,6 +712,9 @@ async function requireAuth(req, res, next) {
       const userDoc = await db.collection('users').doc(decodedToken.uid).get();
       if (userDoc.exists) {
         const udata = userDoc.data();
+        if (udata.authzVersion && udata.authzVersion !== decodedToken.authzVersion) {
+          return res.status(403).json({ error: 'STALE_PERMISSIONS', message: 'Refresh your sign-in token.' });
+        }
         if (udata.suspended === true || udata.status === 'suspended' || udata.accountStatus === 'suspended' || udata.disabled === true || udata.isSuspended === true) {
           return res.status(403).json({
             error: 'ACCOUNT_SUSPENDED',
@@ -788,7 +791,7 @@ async function requireDoctor(req, res, next) {
   try {
     const profile = await getServerUserProfile(uid);
     const doctorIdentity = await getVerifiedDoctorIdentity(uid);
-    if (profile &&
+    if (getTrustedClaimRole(req.user) === ROLES.DOCTOR && profile &&
         !isSuspendedProfile(profile) &&
         profile.role === 'doctor' &&
         profile.doctorApplicationStatus === 'approved' &&
@@ -1193,11 +1196,13 @@ app.post('/api/user/sync-role', requireAuth, async (req, res) => {
     }
 
     // Set cryptographic custom claims on Firebase Auth
+    const currentAuth = await admin.auth().getUser(uid);
     await admin.auth().setCustomUserClaims(uid, {
+      ...currentAuth.customClaims,
       role: role,
       isOwner: isOwner,
       verifiedDoctor: verifiedDoctor
-    }).catch(() => {});
+    });
 
     if (privilegedAccountReviewRequired && db) {
       await db.collection('audit_events').add({
@@ -1227,20 +1232,38 @@ app.post('/api/user/sync-role', requireAuth, async (req, res) => {
  * POST /api/admin/set-user-role
  * Server-authoritative endpoint to change a user's role and set Firebase Custom Claims
  */
-app.post('/api/admin/set-user-role', requireAuth, requireVerifiedEmail, requireSuperAdmin, async (req, res) => {
-  const { targetUserId, newRole } = req.body;
+app.post('/api/admin/set-user-role', requireAuth, auditOperationalAccess('ADMIN_ROLE_CHANGE'), requireVerifiedEmail, requireSuperAdmin, async (req, res) => {
+  const { targetUserId, newRole, clinicId } = req.body;
 
   if (!targetUserId || !VALID_ROLES.includes(newRole)) {
     return res.status(400).json({ error: 'INVALID_REQUEST', message: 'Valid targetUserId and newRole required.' });
   }
 
   try {
+    if (!db) return res.status(503).json({ error: 'AUTHORIZATION_STORE_UNAVAILABLE' });
+    if (targetUserId === req.user.uid) return res.status(403).json({ error: 'SELF_ROLE_CHANGE_DENIED' });
     const targetUser = await admin.auth().getUser(targetUserId);
+    const targetProfile = await getServerUserProfile(targetUserId) || {};
+    const targetClinic = clinicId === undefined ? recordClinicId(targetProfile) : clinicId;
+    if ((clinicId !== undefined && (typeof clinicId !== 'string' || !clinicId.trim() || clinicId.length > 128)) ||
+        (newRole === ROLES.CLINIC_ADMIN && !targetClinic)) return res.status(400).json({ error: 'CLINIC_REQUIRED' });
+    if (newRole === ROLES.DOCTOR && !await getVerifiedDoctorIdentity(targetUserId)) {
+      return res.status(403).json({ error: 'APPROVED_DOCTOR_APPLICATION_REQUIRED' });
+    }
+    // Fail closed across Auth/Firestore: old tokens stop working before claims change.
+    // A failed Auth write is recoverable by retrying this administrator operation.
+    const authzVersion = require('crypto').randomUUID();
+    await db.collection('audit_events').add({ type: 'ROLE_CHANGE_REQUESTED', targetUserId,
+      actorId: req.user.uid, oldRole: targetUser.customClaims?.role || 'patient', newRole,
+      oldClinicId: recordClinicId(targetProfile), clinicId: targetClinic || null, authzVersion,
+      timestamp: admin.firestore.FieldValue.serverTimestamp() });
+    await db.collection('users').doc(targetUserId).set({ authzVersion }, { merge: true });
     const targetIsOwner = newRole === ROLES.SUPER_ADMIN;
     const isDoctor = newRole === ROLES.DOCTOR;
 
     // 1. Set cryptographic custom claims on Firebase Auth
     await admin.auth().setCustomUserClaims(targetUserId, {
+      ...targetUser.customClaims, authzVersion, clinicId: targetClinic || null,
       role: newRole,
       isOwner: targetIsOwner,
       verifiedDoctor: isDoctor
@@ -1252,6 +1275,7 @@ app.post('/api/admin/set-user-role', requireAuth, requireVerifiedEmail, requireS
         role: newRole,
         verifiedDoctor: isDoctor,
         isOwner: targetIsOwner,
+        clinicId: targetClinic || null,
         roleUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
         roleUpdatedBy: req.user.email
       }, { merge: true });
@@ -1279,13 +1303,19 @@ app.post('/api/admin/set-user-role', requireAuth, requireVerifiedEmail, requireS
  * POST /api/admin/toggle-user-suspension
  * Server-authoritative endpoint to suspend or unsuspend a user account and revoke tokens
  */
-app.post('/api/admin/toggle-user-suspension', requireAuth, requireVerifiedEmail, requireAdmin, async (req, res) => {
+app.post('/api/admin/toggle-user-suspension', requireAuth, auditOperationalAccess('ADMIN_SUSPENSION_CHANGE'), requireVerifiedEmail, requireAdmin, async (req, res) => {
   const { targetUserId, suspend, reason } = req.body;
   if (!targetUserId || typeof suspend !== 'boolean') {
     return res.status(400).json({ error: 'INVALID_REQUEST', message: 'targetUserId and boolean suspend status required.' });
   }
 
   try {
+    const scope = await resolveRequesterClinic(req);
+    const targetProfile = await getServerUserProfile(targetUserId);
+    if (!targetProfile || !isSameClinicResource(scope, targetProfile) ||
+        (scope.role === ROLES.CLINIC_ADMIN && ADMIN_ROLES.includes(targetProfile.role))) {
+      return res.status(403).json({ error: 'ACCESS_DENIED' });
+    }
     const targetUser = await admin.auth().getUser(targetUserId);
     if (hasTrustedOwnerClaim(targetUser.customClaims || {})) {
       return res.status(403).json({ error: 'CANNOT_SUSPEND_OWNER', message: 'System owner accounts cannot be suspended.' });
@@ -1345,7 +1375,7 @@ app.post('/api/admin/toggle-user-suspension', requireAuth, requireVerifiedEmail,
  * POST /api/admin/approve-doctor-application
  * Server-authoritative endpoint to approve a doctor application and elevate their role
  */
-app.post('/api/admin/approve-doctor-application', requireAuth, requireVerifiedEmail, requireAdmin, async (req, res) => {
+app.post('/api/admin/approve-doctor-application', requireAuth, auditOperationalAccess('ADMIN_DOCTOR_APPROVAL'), requireVerifiedEmail, requireAdmin, async (req, res) => {
   const { applicationId, applicantUserId } = req.body;
 
   if (!applicationId || !applicantUserId) {
@@ -1365,6 +1395,10 @@ app.post('/api/admin/approve-doctor-application', requireAuth, requireVerifiedEm
       });
     }
 
+    const scope = await resolveRequesterClinic(req);
+    if (!applicantDoc.exists || !isSameClinicResource(scope, applicationDoc.data()) ||
+        !isSameClinicResource(scope, applicantDoc.data())) return res.status(403).json({ error: 'ACCESS_DENIED' });
+
     if (applicationDoc.data().status !== 'pending') {
       return res.status(400).json({
         error: 'INVALID_DOCTOR_APPLICATION_STATUS',
@@ -1380,7 +1414,8 @@ app.post('/api/admin/approve-doctor-application', requireAuth, requireVerifiedEm
     }
 
     // 1. Elevate user role to 'doctor' in Firebase Auth Custom Claims
-    await admin.auth().setCustomUserClaims(applicantUserId, { role: 'doctor' });
+    const applicantAuth = await admin.auth().getUser(applicantUserId);
+    await admin.auth().setCustomUserClaims(applicantUserId, { ...applicantAuth.customClaims, role: 'doctor', verifiedDoctor: true });
 
     // 2. Update application status in Firestore
     if (db) {
@@ -1411,6 +1446,47 @@ app.post('/api/admin/approve-doctor-application', requireAuth, requireVerifiedEm
     console.error("[SERVER DOCTOR APPROVAL ERROR]:", err);
     res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
   }
+});
+
+app.post('/api/admin/reject-doctor-application', requireAuth, auditOperationalAccess('ADMIN_DOCTOR_REJECTION'), requireVerifiedEmail, requireAdmin, async (req, res) => {
+  try {
+    const { applicationId, applicantUserId } = req.body;
+    if (typeof applicationId !== 'string' || typeof applicantUserId !== 'string') return res.status(400).json({ error: 'INVALID_REQUEST' });
+    const application = await db.collection('doctor_applications').doc(applicationId).get();
+    const profile = await getServerUserProfile(applicantUserId);
+    const scope = await resolveRequesterClinic(req);
+    if (!application.exists || !profile || application.data().userId !== applicantUserId ||
+        !isSameClinicResource(scope, application.data()) || !isSameClinicResource(scope, profile)) {
+      return res.status(403).json({ error: 'ACCESS_DENIED' });
+    }
+    if (application.data().status !== 'pending' || profile.role !== ROLES.DOCTOR_PENDING) {
+      return res.status(409).json({ error: 'INVALID_ROLE_TRANSITION' });
+    }
+    await db.collection('doctor_applications').doc(applicationId).update({ status: 'rejected',
+      rejectedBy: req.user.uid, rejectedAt: admin.firestore.FieldValue.serverTimestamp() });
+    const account = await admin.auth().getUser(applicantUserId);
+    await admin.auth().setCustomUserClaims(applicantUserId, { ...account.customClaims, role: ROLES.PATIENT, verifiedDoctor: false, doctorVerified: false });
+    await db.collection('users').doc(applicantUserId).set({ role: ROLES.PATIENT, verifiedDoctor: false,
+      doctorVerified: false, doctorApplicationStatus: 'rejected' }, { merge: true });
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: 'APPLICATION_REJECTION_FAILED' }); }
+});
+
+app.post('/api/admin/set-user-verification', requireAuth, auditOperationalAccess('ADMIN_VERIFICATION_CHANGE'), requireVerifiedEmail, requireAdmin, async (req, res) => {
+  try {
+    const { targetUserId, verified } = req.body;
+    if (typeof targetUserId !== 'string' || typeof verified !== 'boolean') return res.status(400).json({ error: 'INVALID_REQUEST' });
+    const profile = await getServerUserProfile(targetUserId);
+    const scope = await resolveRequesterClinic(req);
+    if (!profile || !isSameClinicResource(scope, profile) || targetUserId === req.user.uid ||
+        (scope.role === ROLES.CLINIC_ADMIN && ADMIN_ROLES.includes(profile.role))) return res.status(403).json({ error: 'ACCESS_DENIED' });
+    await admin.auth().updateUser(targetUserId, { emailVerified: verified });
+    await db.collection('users').doc(targetUserId).set({ emailVerified: verified,
+      verifiedByAdmin: req.user.uid, verifiedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+    await db.collection('audit_events').add({ type: 'USER_VERIFICATION_CHANGED', actorId: req.user.uid,
+      targetUserId, verified, timestamp: admin.firestore.FieldValue.serverTimestamp() });
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: 'VERIFICATION_CHANGE_FAILED' }); }
 });
 
 // Credential values come from an administrator-approved application, not the
@@ -1444,6 +1520,9 @@ app.get('/api/doctor/verified-profile', requireAuth, requireDoctor, async (req, 
 
 app.get('/api/reports/:caseId/doctor-identity', requireAuth, async (req, res) => {
   try {
+    if (getTrustedClaimRole(req.user) === 'support') {
+      return res.status(403).json({ error: 'ACCESS_DENIED' });
+    }
     const snapshot = await db.collection('cases').doc(req.params.caseId).get();
     if (!snapshot.exists) return res.status(404).json({ error: 'NOT_FOUND' });
     const record = snapshot.data();
@@ -1866,7 +1945,7 @@ app.post('/api/feedback/submit', requireAuth, async (req, res) => {
     });
   }
 
-  const userRole = req.user.role || role || 'patient';
+  const userRole = getTrustedClaimRole(req.user);
   const validRoles = ['patient', 'doctor', 'doctor_pending', 'clinic_admin', 'super_admin'];
   const sanitizedRole = validRoles.includes(userRole) ? userRole : 'patient';
 
@@ -1934,7 +2013,9 @@ app.get('/api/feedback/list', requireAuth, async (req, res) => {
     const feedbacks = [];
     snapshot.forEach(doc => {
       const item = doc.data();
-      if (!hasTrustedAdminClaim(req.user) || isSameClinicResource(scope, item)) {
+      const doctorCanRead = userRole !== ROLES.DOCTOR || item.userId === req.user.uid ||
+        [item.assignedDoctorId, item.doctorId, item.doctorUid, item.approvingDoctorId].includes(req.user.uid);
+      if (doctorCanRead && (!hasTrustedAdminClaim(req.user) || isSameClinicResource(scope, item))) {
         feedbacks.push(item);
       }
     });
