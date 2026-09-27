@@ -4913,10 +4913,9 @@ function normalizePhoneNumberInput(value) {
 function isUserVerified(user) {
   if (!user) return false;
   if (isVerificationRevoked(user)) return false;
-  if (isOwnerUser(user.email)) return true;
   if (user.emailVerified) return true;
   if (window._isUserVerified) return true;
-  if (window._cachedUserDoc && (window._cachedUserDoc.emailVerified || window._cachedUserDoc.phoneVerified)) {
+  if (window._cachedUserDoc && window._cachedUserDoc.emailVerified === true) {
     return true;
   }
   return false;
@@ -5454,12 +5453,7 @@ async function enforceEmailVerification(actionNameAr = "هذا الإجراء", 
     return false;
   }
 
-  // System owner bypasses for disaster recovery
-  if (isOwnerUser(user.email)) {
-    return true;
-  }
-
-  // If already verified via OTP or cached document
+  // If already verified by Firebase Auth or the backend-owned user document
   if (isUserVerified(user)) {
     return true;
   }
@@ -11610,7 +11604,7 @@ function initHVAuthListener() {
                 verifiedByAdmin: null
               }, { merge: true }).catch(() => {});
             }
-          } else if (udata.phoneVerified || udata.emailVerified) {
+          } else if (udata.emailVerified === true) {
             window._isUserVerified = true;
             window._verifiedPhone = udata.phoneNumber || "";
           }

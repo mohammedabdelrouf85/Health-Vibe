@@ -1273,6 +1273,7 @@ app.post('/api/admin/set-user-role', requireAuth, auditOperationalAccess('ADMIN_
       isOwner: targetIsOwner,
       verifiedDoctor: isDoctor
     });
+    await admin.auth().revokeRefreshTokens(targetUserId);
 
     // 2. Update Firestore user document
     if (db) {
@@ -1421,6 +1422,7 @@ app.post('/api/admin/approve-doctor-application', requireAuth, auditOperationalA
     // 1. Elevate user role to 'doctor' in Firebase Auth Custom Claims
     const applicantAuth = await admin.auth().getUser(applicantUserId);
     await admin.auth().setCustomUserClaims(applicantUserId, { ...applicantAuth.customClaims, role: 'doctor', verifiedDoctor: true });
+    await admin.auth().revokeRefreshTokens(applicantUserId);
 
     // 2. Update application status in Firestore
     if (db) {
@@ -1471,6 +1473,7 @@ app.post('/api/admin/reject-doctor-application', requireAuth, auditOperationalAc
       rejectedBy: req.user.uid, rejectedAt: admin.firestore.FieldValue.serverTimestamp() });
     const account = await admin.auth().getUser(applicantUserId);
     await admin.auth().setCustomUserClaims(applicantUserId, { ...account.customClaims, role: ROLES.PATIENT, verifiedDoctor: false, doctorVerified: false });
+    await admin.auth().revokeRefreshTokens(applicantUserId);
     await db.collection('users').doc(applicantUserId).set({ role: ROLES.PATIENT, verifiedDoctor: false,
       doctorVerified: false, doctorApplicationStatus: 'rejected' }, { merge: true });
     res.json({ success: true });
