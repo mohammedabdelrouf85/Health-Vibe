@@ -3084,6 +3084,9 @@ async function updateCaseStatus(id, newStatus, note, extraFields = {}) {
 
 let activeCaseId = null;
 let currentDoctorQueueFilter = 'all';
+let currentDoctorPriorityFilter = 'all';
+let currentDoctorQueueSort = 'waiting_desc';
+let currentDoctorQueueSearch = '';
 
 // Missing approved fields remain missing; never synthesize clinical content.
 function recordedClinicalText(value, isEn) {
@@ -3140,9 +3143,131 @@ function parseDoctorRecommendations(rawText) {
     .filter(Boolean);
 }
 
+function getCaseOxygenValue(c) {
+  const value = Number(c && (c.o2 ?? c.oxygenLevel ?? c.assessment?.oxygenLevel ?? c.assessment?.o2));
+  return Number.isFinite(value) ? value : 0;
+}
+
+function getCaseSubmittedMillis(c) {
+  return toMillis(c && (c.submittedAt || c.createdAt || c.created_at || c.date || c.assessment?.submittedAt));
+}
+
+function getCaseWaitingMinutes(c, nowMs = Date.now()) {
+  const start = getCaseSubmittedMillis(c);
+  return start > 0 ? Math.max(0, Math.floor((nowMs - start) / 60000)) : 0;
+}
+
+function formatElapsedMinutes(minutes, isEn) {
+  const total = Number(minutes) || 0;
+  if (total < 60) return isEn ? `${total} min` : `${total} دقيقة`;
+  const hours = Math.floor(total / 60);
+  const mins = total % 60;
+  if (hours < 24) return isEn ? `${hours}h ${mins}m` : `${hours}س ${mins}د`;
+  const days = Math.floor(hours / 24);
+  const rest = hours % 24;
+  return isEn ? `${days}d ${rest}h` : `${days}ي ${rest}س`;
+}
+
+function getCasePriorityKey(c) {
+  const priority = String(c?.priority || c?.risk || c?.assessment?.aiTriage?.priority || "").toLowerCase();
+  const o2 = getCaseOxygenValue(c);
+  if (priority.includes("urgent") || priority.includes("emergency") || priority.includes("عاجل") || o2 > 0 && o2 < 90) return "urgent";
+  if (priority.includes("high") || priority.includes("medium") || priority.includes("عالية") || o2 >= 90 && o2 < 93) return "high";
+  return "normal";
+}
+
+function getPriorityMeta(priority, isEn) {
+  const key = priority || "normal";
+  const meta = {
+    urgent: { weight: 3, pill: "danger", en: "Urgent", ar: "عاجل" },
+    high: { weight: 2, pill: "pending", en: "High", ar: "أولوية عالية" },
+    normal: { weight: 1, pill: "ok", en: "Routine", ar: "عادية" }
+  };
+  const item = meta[key] || meta.normal;
+  return { ...item, label: isEn ? item.en : item.ar };
+}
+
+function getCaseSlaInfo(c, isEn) {
+  const priority = getCasePriorityKey(c);
+  const target = priority === "urgent" ? 15 : (priority === "high" ? 30 : 120);
+  const elapsed = getCaseWaitingMinutes(c);
+  const respondedAt = toMillis(c?.reviewStartedAt || c?.firstReviewedAt || c?.underReviewAt || c?.approvedAt || c?.updatedAt);
+  const responseMinutes = respondedAt && getCaseSubmittedMillis(c)
+    ? Math.max(0, Math.floor((respondedAt - getCaseSubmittedMillis(c)) / 60000))
+    : null;
+  const compare = responseMinutes ?? elapsed;
+  const met = compare <= target;
+  return {
+    priority,
+    target,
+    elapsed,
+    responseMinutes,
+    met,
+    label: isEn
+      ? `SLA ${target} min - ${met ? "on track" : "overdue"}`
+      : `SLA ${target} دقيقة - ${met ? "ضمن الوقت" : "متأخر"}`
+  };
+}
+
+function isCaseAssignedToCurrentDoctor(c) {
+  const user = typeof auth !== "undefined" && auth ? auth.currentUser : null;
+  if (!user || !c) return false;
+  const uid = user.uid;
+  const email = String(user.email || "").toLowerCase();
+  return Boolean(
+    (c.assignedDoctorId && c.assignedDoctorId === uid) ||
+    (c.doctorId && c.doctorId === uid) ||
+    (c.doctorUid && c.doctorUid === uid) ||
+    (c.assignedDoctorEmail && String(c.assignedDoctorEmail).toLowerCase() === email) ||
+    (c.doctorEmail && String(c.doctorEmail).toLowerCase() === email)
+  );
+}
+
+function formatCaseAnswers(c, isEn) {
+  const assessment = c?.assessment || {};
+  const fields = [
+    [isEn ? "Symptoms" : "الأعراض", c?.symptomsEn || c?.symptoms || assessment.symptomsText],
+    [isEn ? "Patient notes" : "ملاحظات المريض", c?.notes || c?.patientNotes || assessment.notes],
+    [isEn ? "Duration" : "مدة الأعراض", c?.durationEn || c?.duration || assessment.duration],
+    [isEn ? "Medications reported by patient" : "الأدوية التي ذكرها المريض", assessment.medications || c?.patientMedications],
+    [isEn ? "Follow-up request/response" : "المتابعة والردود", c?.patientResponse || c?.followUpResponse || c?.moreInfoResponse]
+  ];
+  if (assessment.answers && typeof assessment.answers === "object") {
+    Object.entries(assessment.answers).forEach(([key, value]) => fields.push([key, value]));
+  }
+  return fields
+    .filter(([, value]) => value !== undefined && value !== null && String(value).trim())
+    .map(([label, value]) => `
+      <div><span>${escapeHtml(label)}</span><strong>${escapeHtml(Array.isArray(value) ? value.join(", ") : value)}</strong></div>
+    `).join("") || `<div><span>${isEn ? "Answers" : "الإجابات"}</span><strong>${isEn ? "Not recorded" : "غير مسجل"}</strong></div>`;
+}
+
 window.setDoctorQueueFilter = function(filterKey) {
   currentDoctorQueueFilter = filterKey;
-  renderDoctorQueue();
+  const filterTabsContainer = document.getElementById("doctorQueueFilterTabs");
+  if (filterTabsContainer) {
+    filterTabsContainer.querySelectorAll(".status-filter-tab").forEach(btn => {
+      btn.classList.toggle("active", btn.dataset.filter === filterKey);
+    });
+  }
+  const queue = state.doctorQueue || [];
+  if (queue.length) renderDoctorQueueItems(queue);
+  else renderDoctorQueue();
+};
+
+window.setDoctorPriorityFilter = function(priority) {
+  currentDoctorPriorityFilter = priority || "all";
+  renderDoctorQueueItems(state.doctorQueue || []);
+};
+
+window.setDoctorQueueSort = function(sortKey) {
+  currentDoctorQueueSort = sortKey || "waiting_desc";
+  renderDoctorQueueItems(state.doctorQueue || []);
+};
+
+window.setDoctorQueueSearch = function(value) {
+  currentDoctorQueueSearch = String(value || "").trim().toLowerCase();
+  renderDoctorQueueItems(state.doctorQueue || []);
 };
 
 window.applyDiagPreset = function(presetKey) {
@@ -3394,6 +3519,7 @@ function renderDoctorQueueItems(allCases) {
   const realCases = (allCases || []).filter(c => {
     if (!c || !isRealProductionRecord(c)) return false;
     if (c.status === CASE_STATUS.DRAFT || c.status === "draft") return false;
+    if (selectedRole === ROLES.DOCTOR && !isCaseAssignedToCurrentDoctor(c)) return false;
     const hasPatient = Boolean(c.patientId || c.patientUid || c.patientEmail);
     const hasVitals = typeof c.o2 === "number" || typeof c.oxygenLevel === "number";
     return hasPatient && hasVitals;
@@ -3448,6 +3574,22 @@ function renderDoctorQueueItems(allCases) {
     }
   }
 
+  if (!isSandbox && currentDoctorPriorityFilter !== "all") {
+    cases = cases.filter(c => getCasePriorityKey(c) === currentDoctorPriorityFilter);
+  }
+
+  if (!isSandbox && currentDoctorQueueSearch) {
+    cases = cases.filter(c => {
+      const haystack = [
+        c.id, c.patientId, c.patientName, c.patientNameEn, c.name, c.nameEn,
+        c.patientEmail, c.userEmail, c.patientPhone, c.phone,
+        c.symptoms, c.symptomsEn, c.notes, c.patientNotes, c.clinicalDiagnosis,
+        c.doctorNote, c.moreInfoNote
+      ].map(value => String(value || "").toLowerCase()).join(" ");
+      return haystack.includes(currentDoctorQueueSearch);
+    });
+  }
+
   if (cases.length === 0) {
     if (isSandbox) {
       queueList.innerHTML += `
@@ -3497,7 +3639,7 @@ function renderDoctorQueueItems(allCases) {
     return;
   }
 
-  // Sort: under_review and emergency first, then assigned/pending, then approved/closed
+  // Sort by selected queue mode, defaulting to longest waiting urgent cases first.
   const statusWeight = {
     [CASE_STATUS.UNDER_REVIEW]: 1,
     [CASE_STATUS.ASSIGNED]: 2,
@@ -3512,26 +3654,34 @@ function renderDoctorQueueItems(allCases) {
   };
 
   cases.sort((a, b) => {
-    const isCritA = a.o2 > 0 && a.o2 < 90;
-    const isCritB = b.o2 > 0 && b.o2 < 90;
-    if (isCritA && !isCritB) return -1;
-    if (!isCritA && isCritB) return 1;
+    const priorityA = getPriorityMeta(getCasePriorityKey(a), isEn).weight;
+    const priorityB = getPriorityMeta(getCasePriorityKey(b), isEn).weight;
+    const waitA = getCaseWaitingMinutes(a);
+    const waitB = getCaseWaitingMinutes(b);
+    if (currentDoctorQueueSort === "priority_desc" && priorityA !== priorityB) return priorityB - priorityA;
+    if (currentDoctorQueueSort === "waiting_desc" && waitA !== waitB) return waitB - waitA;
+    if (currentDoctorQueueSort === "newest") return getCaseSubmittedMillis(b) - getCaseSubmittedMillis(a);
     const wA = statusWeight[a.status] || 99;
     const wB = statusWeight[b.status] || 99;
-    return wA - wB;
+    if (wA !== wB) return wA - wB;
+    if (priorityA !== priorityB) return priorityB - priorityA;
+    return waitB - waitA;
   });
 
   cases.forEach(c => {
     const btn = document.createElement("button");
     btn.dataset.caseId = c.id;
-    const isCritO2 = c.o2 > 0 && c.o2 < 90;
+    const o2Value = getCaseOxygenValue(c);
+    const isCritO2 = o2Value > 0 && o2Value < 90;
     const meta = getCaseStatusMeta(c.status);
+    const priorityMeta = getPriorityMeta(getCasePriorityKey(c), isEn);
+    const sla = getCaseSlaInfo(c, isEn);
 
     btn.className = c.status === CASE_STATUS.APPROVED ? "ok" : (isCritO2 || c.risk === "عاجل" || c.status === CASE_STATUS.ESCALATED ? "danger" : "pending");
     if (c.id === activeCaseId) btn.style.border = "2px solid var(--teal)";
 
     const riskBadge = isCritO2
-      ? `<em class="doctor-emergency-pill">${isEn ? '🚨 CRITICAL O2 ' + c.o2 + '%' : '🚨 أكسجين حرج ' + c.o2 + '%'}</em>`
+      ? `<em class="doctor-emergency-pill">${isEn ? 'Critical O2 ' + o2Value + '%' : 'أكسجين حرج ' + o2Value + '%'}</em>`
       : `<em>${isEn ? c.riskEn : c.risk}</em>`;
 
     const statusPillHtml = `<span class="pill ${meta.pillClass} case-status-badge" style="font-size: 11px; margin-inline-end: 6px;">${meta.icon} ${isEn ? meta.en : meta.ar}</span>`;
@@ -3539,8 +3689,8 @@ function renderDoctorQueueItems(allCases) {
     const isDemoCase = isTestOrDemoRecord(c);
     const demoTag = isDemoCase ? `<span class="pill demo-pill" style="font-size: 10px; background: rgba(245, 158, 11, 0.18); color: #b45309; border: 1px solid rgba(245, 158, 11, 0.4); padding: 1px 6px; margin-inline-end: 4px; font-weight: bold;">🧪 ${isEn ? 'Demo Data' : 'بيانات تجريبية'}</span>` : '';
     const o2Text = isEn
-      ? `O2 ${c.o2}%${isDemoCase ? ' (Demo Data)' : ''} - ${(c.symptomsEn || c.symptoms || '')}`
-      : `نسبة الأكسجين ${c.o2}%${isDemoCase ? ' (بيانات تجريبية)' : ''} - ${(c.symptoms || c.symptomsEn || '')}`;
+      ? `O2 ${o2Value || '--'}%${isDemoCase ? ' (Demo Data)' : ''} - ${(c.symptomsEn || c.symptoms || '')}`
+      : `نسبة الأكسجين ${o2Value || '--'}%${isDemoCase ? ' (بيانات تجريبية)' : ''} - ${(c.symptoms || c.symptomsEn || '')}`;
 
     btn.innerHTML = `
       <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 4px;">
@@ -3551,7 +3701,11 @@ function renderDoctorQueueItems(allCases) {
         ${statusPillHtml}
       </div>
       <span>${o2Text}</span>
-      ${riskBadge}
+      <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;">
+        <em class="pill ${priorityMeta.pill}" style="font-style:normal; font-size:10.5px;">${priorityMeta.label}</em>
+        <em class="pill ${sla.met ? 'ok' : 'danger'}" style="font-style:normal; font-size:10.5px;">${isEn ? 'Waiting ' : 'انتظار '}${formatElapsedMinutes(sla.elapsed, isEn)}</em>
+      </div>
+      ${riskBadge || ''}
     `;
     btn.onclick = () => selectDoctorCase(c.id);
     queueList.appendChild(btn);
@@ -3582,10 +3736,26 @@ async function renderDoctorQueue() {
     ];
 
     filterTabsContainer.innerHTML = filters.map(f => `
-      <button type="button" class="status-filter-tab ${currentDoctorQueueFilter === f.key ? 'active' : ''}" onclick="setDoctorQueueFilter('${f.key}')">
+      <button type="button" class="status-filter-tab ${currentDoctorQueueFilter === f.key ? 'active' : ''}" data-filter="${f.key}" onclick="setDoctorQueueFilter('${f.key}')">
         ${isEn ? f.en : f.ar}
       </button>
-    `).join('');
+    `).join('') + `
+      <div style="display:grid; grid-template-columns: minmax(160px, 1fr) minmax(130px, auto) minmax(150px, auto); gap:8px; width:100%; margin-top:10px;">
+        <input type="search" value="${escapeHtml(currentDoctorQueueSearch)}" oninput="setDoctorQueueSearch(this.value)" placeholder="${isEn ? 'Search patient, case, symptoms...' : 'بحث بالاسم أو الحالة أو الأعراض...'}" style="min-width:0; border:1px solid var(--line); border-radius:10px; padding:8px 10px; background:var(--surface); color:var(--ink); font-family:inherit; font-size:12.5px;" />
+        <select onchange="setDoctorPriorityFilter(this.value)" style="border:1px solid var(--line); border-radius:10px; padding:8px 10px; background:var(--surface); color:var(--ink); font-family:inherit; font-size:12.5px;">
+          <option value="all" ${currentDoctorPriorityFilter === "all" ? "selected" : ""}>${isEn ? "All priorities" : "كل الأولويات"}</option>
+          <option value="urgent" ${currentDoctorPriorityFilter === "urgent" ? "selected" : ""}>${isEn ? "Urgent" : "عاجل"}</option>
+          <option value="high" ${currentDoctorPriorityFilter === "high" ? "selected" : ""}>${isEn ? "High" : "عالية"}</option>
+          <option value="normal" ${currentDoctorPriorityFilter === "normal" ? "selected" : ""}>${isEn ? "Routine" : "عادية"}</option>
+        </select>
+        <select onchange="setDoctorQueueSort(this.value)" style="border:1px solid var(--line); border-radius:10px; padding:8px 10px; background:var(--surface); color:var(--ink); font-family:inherit; font-size:12.5px;">
+          <option value="waiting_desc" ${currentDoctorQueueSort === "waiting_desc" ? "selected" : ""}>${isEn ? "Longest waiting" : "الأطول انتظاراً"}</option>
+          <option value="priority_desc" ${currentDoctorQueueSort === "priority_desc" ? "selected" : ""}>${isEn ? "Highest priority" : "الأعلى أولوية"}</option>
+          <option value="status" ${currentDoctorQueueSort === "status" ? "selected" : ""}>${isEn ? "Workflow status" : "حالة سير العمل"}</option>
+          <option value="newest" ${currentDoctorQueueSort === "newest" ? "selected" : ""}>${isEn ? "Newest first" : "الأحدث أولاً"}</option>
+        </select>
+      </div>
+    `;
   }
 
   // ── إلغاء المستمع السابق لتجنب التسريب ────────────────────────
@@ -3619,8 +3789,10 @@ async function renderDoctorQueue() {
               const tB = toMillis(b.submittedAt || b.createdAt || b.updatedAt) || 0;
               return tB - tA;
             });
+            state.doctorQueue = docs;
             renderDoctorQueueItems(docs);
           } else {
+            state.doctorQueue = [];
             renderDoctorQueueItems([]);
           }
         },
@@ -3628,6 +3800,7 @@ async function renderDoctorQueue() {
           console.warn("Doctor queue real-time listener error, fallback to getCases():", err.message);
           try {
             const cases = await getCases({ includeTest: true });
+            state.doctorQueue = cases;
             renderDoctorQueueItems(cases);
           } catch(e) {
             renderDoctorQueueError(e);
@@ -3638,6 +3811,7 @@ async function renderDoctorQueue() {
       console.warn("Could not bind real-time doctor queue:", e.message);
       try {
         const cases = await getCases({ includeTest: true });
+        state.doctorQueue = cases;
         renderDoctorQueueItems(cases);
       } catch(errFallback) {
         renderDoctorQueueError(errFallback);
@@ -3646,6 +3820,7 @@ async function renderDoctorQueue() {
   } else {
     try {
       const cases = await getCases({ includeTest: true });
+      state.doctorQueue = cases;
       renderDoctorQueueItems(cases);
     } catch(e) {
       renderDoctorQueueError(e);
@@ -3673,7 +3848,7 @@ async function selectDoctorCase(id) {
   const cases = await getCases({ includeTest: true });
   const c = cases.find(c => c.id === id);
   const reviewPanel = document.getElementById("doctorReviewPanel");
-  if (!c || !reviewPanel) {
+  if (!c || !reviewPanel || (selectedRole === ROLES.DOCTOR && !isTestOrDemoRecord(c) && !isCaseAssignedToCurrentDoctor(c))) {
     if (reviewPanel) {
       reviewPanel.style.display = "none";
       reviewPanel.innerHTML = "";
@@ -3713,12 +3888,17 @@ async function selectDoctorCase(id) {
 
   const statusMeta = getCaseStatusMeta(c.status);
   const statusPill = `<span class="pill ${statusMeta.pillClass}" style="font-size: 12.5px; padding: 5px 12px;">${statusMeta.icon} ${isEn ? statusMeta.en : statusMeta.ar}</span>`;
+  const o2Value = getCaseOxygenValue(c);
+  const priorityMeta = getPriorityMeta(getCasePriorityKey(c), isEn);
+  const slaInfo = getCaseSlaInfo(c, isEn);
+  const submittedMs = getCaseSubmittedMillis(c);
+  const submittedLabel = submittedMs ? new Date(submittedMs).toLocaleString(isEn ? "en-US" : "ar-EG", { dateStyle: "medium", timeStyle: "short" }) : (isEn ? "Not recorded" : "غير مسجل");
 
-  const emergencyDoctorBanner = (c.o2 > 0 && c.o2 < 90) ? `
+  const emergencyDoctorBanner = (o2Value > 0 && o2Value < 90) ? `
     <div class="doctor-emergency-alert-banner">
       <span class="icon">🚨</span>
       <div>
-        <strong>${isEn ? 'Clinical Emergency: Critical Hypoxemia (SpO2 ' + c.o2 + '%)' : 'تنبيه سريري عاجل: نقص أكسجين حاد (SpO2 ' + c.o2 + '%)'}</strong>
+        <strong>${isEn ? 'Clinical Emergency: Critical Hypoxemia (SpO2 ' + o2Value + '%)' : 'تنبيه سريري عاجل: نقص أكسجين حاد (SpO2 ' + o2Value + '%)'}</strong>
         <p>${isEn ? 'Patient oxygen saturation is critically low. Urgent contact and immediate referral to Emergency Room / Ambulance (123) is advised.' : 'نسبة تشبع الأكسجين لدى المريض حرجة للغاية. يوصى بالتواصل المباشر العاجل وتوجيه الحالة فوراً لأقرب قسم طوارئ أو استدعاء الإسعاف (123).'}</p>
       </div>
     </div>
@@ -3890,7 +4070,7 @@ if (isUnderReview) {
     `;
   }
 
-  const existingDoctorNote = c.clinicalDiagnosis || "";
+  const existingDoctorNote = c.clinicalDiagnosis || c.clinicalNotes || c.doctorNotes || c.doctorNote || "";
   const existingRecommendations = Array.isArray(c.recommendations) && c.recommendations.length > 0
     ? c.recommendations.join("\n")
     : (c.recommendation || "");
@@ -3972,6 +4152,24 @@ if (isUnderReview) {
     </div>
   ` : '';
 
+  const patientDataHtml = `
+    <div class="summary-list" style="margin-top: 12px;">
+      <div><span>${isEn ? 'Submitted' : 'تاريخ الإرسال'}</span><strong>${submittedLabel}</strong></div>
+      <div><span>${isEn ? 'Elapsed waiting time' : 'زمن الانتظار'}</span><strong>${formatElapsedMinutes(slaInfo.elapsed, isEn)}</strong></div>
+      <div><span>${isEn ? 'SLA target' : 'هدف SLA'}</span><strong class="pill ${slaInfo.met ? 'ok' : 'danger'}" style="display:inline-flex;">${slaInfo.label}</strong></div>
+      <div><span>${isEn ? 'Priority' : 'الأولوية'}</span><strong class="pill ${priorityMeta.pill}" style="display:inline-flex;">${priorityMeta.label}</strong></div>
+      ${formatCaseAnswers(c, isEn)}
+    </div>
+  `;
+
+  const doctorNotesHtml = `
+    <div class="summary-list" style="margin-top: 12px;">
+      <div><span>${isEn ? 'Doctor notes' : 'ملاحظات الطبيب'}</span><strong>${escapeHtml(c.clinicalNotes || c.doctorNotes || c.doctorNote || (isEn ? 'Not recorded' : 'غير مسجل'))}</strong></div>
+      <div><span>${isEn ? 'Manual diagnosis' : 'التشخيص اليدوي'}</span><strong>${escapeHtml(c.clinicalDiagnosis || (isEn ? 'Not recorded' : 'غير مسجل'))}</strong></div>
+      <div><span>${isEn ? 'Follow-up' : 'المتابعة'}</span><strong>${escapeHtml(c.moreInfoNote || c.followUpPlan || c.patientResponse || (isEn ? 'Not recorded' : 'غير مسجل'))}</strong></div>
+    </div>
+  `;
+
   reviewPanel.innerHTML = `
     <div class="panel-head">
       <div>
@@ -3990,11 +4188,15 @@ if (isUnderReview) {
     </div>
     ${emergencyDoctorBanner}
     <div class="summary-list">
-      <div><span>${isEn ? 'AI Risk Score' : 'تصنيف الذكاء الاصطناعي'}</span><strong>${isEn ? c.aiScoreEn : c.aiScore}${isDemoCase ? ' (Demo Data)' : ''}</strong></div>
-      <div><span>${isEn ? 'Rule score' : 'مؤشر القواعد'}</span><strong>${(isEn ? c.ruleScoreLabelEn : c.ruleScoreLabelAr) || c.ruleScore || (isEn ? 'Not clinically validated' : 'غير مدقق سريرياً')}</strong></div>
-      <div><span>${isEn ? 'Oxygen Level' : 'نسبة الأكسجين'}</span><strong style="${c.o2 < 90 ? 'color: #ef4444;' : ''}">${c.o2}%${isDemoCase ? ' (Demo Data)' : ''}</strong></div>
+      <div><span>${isEn ? 'Rules-based suggestion' : 'اقتراح مبني على قواعد'}</span><strong>${(isEn ? c.aiScoreEn : c.aiScore) || (isEn ? 'Not clinically validated' : 'غير مدقق سريرياً')}${isDemoCase ? ' (Demo Data)' : ''}</strong></div>
+      <div><span>${isEn ? 'Rule score' : 'مؤشر القواعد'}</span><strong>${(isEn ? c.ruleScoreLabelEn : c.ruleScoreLabelAr) || c.ruleScore || (isEn ? 'No validated confidence value' : 'لا توجد قيمة ثقة معتمدة')}</strong></div>
+      <div><span>${isEn ? 'Oxygen Level' : 'نسبة الأكسجين'}</span><strong style="${o2Value < 90 ? 'color: #ef4444;' : ''}">${o2Value || '--'}%${isDemoCase ? ' (Demo Data)' : ''}</strong></div>
       <div><span>${isEn ? 'Duration' : 'مدة الأعراض'}</span><strong>${isEn ? c.durationEn : c.duration}${isDemoCase ? ' (Demo Data)' : ''}</strong></div>
     </div>
+    <h4 style="margin: 16px 0 6px; font-size: 14px;">${isEn ? 'Patient History & Answers' : 'تاريخ المريض وإجاباته'}</h4>
+    ${patientDataHtml}
+    <h4 style="margin: 16px 0 6px; font-size: 14px;">${isEn ? 'Doctor Notes & Follow-up' : 'ملاحظات الطبيب والمتابعة'}</h4>
+    ${doctorNotesHtml}
     ${triggeredRulesHtml}
 
     <!-- DYNAMIC CLINICAL REPORT BUILDER STATION -->
@@ -4009,7 +4211,7 @@ if (isUnderReview) {
       <!-- Quick Diagnostic Presets -->
       <div style="margin-bottom: 12px;">
         <label style="font-size: 12px; font-weight: 700; color: var(--muted); display: block; margin-bottom: 6px;">
-          ${isEn ? '⚡ Quick Diagnostic Presets:' : '⚡ قوالب تشخيصية وخطة علاج سريعة:'}
+          ${isEn ? 'Manual diagnosis shortcuts:' : 'اختصارات إدخال التشخيص اليدوي:'}
         </label>
         <div style="display: flex; gap: 6px; flex-wrap: wrap;">
           <button type="button" class="soft-button" style="font-size: 11.5px; padding: 4px 10px;" onclick="applyDiagPreset('asthma')">🫁 ${isEn ? 'Asthma Flare' : 'حساسية صدرية وربو'}</button>
@@ -4024,7 +4226,7 @@ if (isUnderReview) {
         <label for="doctorDiagnosisInput" style="font-weight: 800; font-size: 13px; display: block; margin-bottom: 4px;">
           ${isEn ? '1. Physician Clinical Diagnosis & Assessment *' : '1. التشخيص الطبي السريري المعتمد *'}
         </label>
-        <textarea id="doctorDiagnosisInput" ${isClosed ? 'disabled' : ''} placeholder="${isEn ? 'Enter verified clinical diagnosis...' : 'اكتب التشخيص الطبي والملاحظات السريرية المعتمدة...'}" style="width: 100%; min-height: 75px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 10px; font-family: inherit; font-size: 13px;">${existingDoctorNote || (isEn ? 'Patient assessment verified. Normal breathing sounds with mild bronchial irritation.' : 'تمت المراجعة والتدقيق السريري. أعراض حساسية صدرية موسمية مع كحة خفيفة واستقرار تشبع الأكسجين.')}</textarea>
+        <textarea id="doctorDiagnosisInput" ${isClosed ? 'disabled' : ''} placeholder="${isEn ? 'Manually enter the physician diagnosis and clinical notes. Do not rely on rule suggestions as a diagnosis.' : 'أدخل التشخيص والملاحظات السريرية يدوياً. لا تعتمد اقتراحات القواعد كتشخيص.'}" style="width: 100%; min-height: 75px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 10px; font-family: inherit; font-size: 13px;">${escapeHtml(existingDoctorNote)}</textarea>
         <input type="hidden" id="doctorNoteInput" value="${escapeHtml(existingDoctorNote)}" />
       </div>
 
@@ -4041,7 +4243,7 @@ if (isUnderReview) {
         <label for="doctorRecommendationsInput" style="font-weight: 800; font-size: 13px; display: block; margin-bottom: 4px;">
           ${isEn ? '3. Clinical Recommendations & Care Plan' : '3. التوصيات الطبية وخطة المتابعة'}
         </label>
-        <textarea id="doctorRecommendationsInput" ${isClosed ? 'disabled' : ''} placeholder="${isEn ? 'Add one recommendation per line.' : 'أضف كل توصية في سطر منفصل.'}" style="width: 100%; min-height: 85px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 10px; font-family: inherit; font-size: 13px;">${existingRecommendations || (isEn ? '• Monitor oxygen saturation SpO2 twice daily.\n• Increase warm fluid intake and practice deep breathing.\n• Return for clinical evaluation within 48 hours.\n• Seek immediate emergency care (123) if breathing worsens.' : '• قياس نسبة تشبع الأكسجين مرتين يومياً بجهاز نبض موثوق.\n• الحرص على شرب السوائل الدافئة وتمارين التنفس العميق.\n• متابعة الاستشارة في العيادة أو عن بُعد خلال 48 ساعة.\n• التوجه الفوري للطوارئ أو الاتصال بالإسعاف (123) في حال زيادة ضيق التنفس.')}</textarea>
+        <textarea id="doctorRecommendationsInput" ${isClosed ? 'disabled' : ''} placeholder="${isEn ? 'Add one recommendation per line.' : 'أضف كل توصية في سطر منفصل.'}" style="width: 100%; min-height: 85px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 10px; font-family: inherit; font-size: 13px;">${escapeHtml(existingRecommendations)}</textarea>
       </div>
 
       <!-- Doctor Identity & Credentials Box -->
