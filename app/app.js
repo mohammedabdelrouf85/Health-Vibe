@@ -633,8 +633,8 @@ const englishRoleLabels = {
 };
 
 const englishNames = {
-  patient: "Ahmed Mohamed",
-  doctor: "Dr. Mona Samy",
+  patient: "Patient",
+  doctor: "Verified physician",
   admin: "Operations Admin"
 };
 
@@ -657,7 +657,7 @@ const uiText = {
   "الذكاء الاصطناعي لا يصدر تشخيصًا مستقلًا": "AI does not issue an independent diagnosis",
   "مراجعة طبيب إلزامية": "Doctor review is required",
   "واجهة عربية كاملة": "Full Arabic interface",
-  "أحمد": "Ahmed",
+  "المستخدم": "User",
   "قيد المراجعة": "Under review",
   "تقييم التنفس": "Breathing assessment",
   "نسبة الأكسجين 95% - كحة متوسطة - 3 أيام": "Oxygen level 95% - moderate cough - 3 days",
@@ -725,7 +725,7 @@ const uiText = {
   "سجل التدقيق": "Audit Log",
   "تسجيل الخروج": "Sign out",
   "عربي": "English",
-  "مرحبًا أحمد": "Welcome, Ahmed",
+  "مرحبًا": "Welcome",
   "متابعة التنفس مع طبيبك في مسار واحد واضح": "Track breathing with your doctor in one clear path",
   "أدخل الأعراض والقياسات. يحصل الطبيب على تقدير خطورة مبني على قواعد قبل اعتماد أي تقرير يظهر لك.": "Enter symptoms and measurements. The doctor receives a rule-based risk preview before approving any report shown to you.",
   "بدء تقييم التنفس": "Start breathing assessment",
@@ -733,7 +733,7 @@ const uiText = {
   "آخر حالة": "Latest status",
   "نسبة الأكسجين": "Oxygen level",
   "مؤشر قواعد": "Rule score",
-  "د. منى سامي": "Dr. Mona Samy",
+  "طبيب معتمد": "Verified physician",
   "الموعد القادم": "Next appointment",
   "غدًا 7:30م": "Tomorrow 7:30 PM",
   "استشارة متابعة": "Follow-up consultation",
@@ -766,11 +766,11 @@ const uiText = {
   "صلاحيات تشغيلية مقيدة حسب الدور مع سجل تدقيق.": "Operational permissions limited by role with an audit log.",
   "92% مكتمل": "92% complete",
   "الاسم": "Name",
-  "أحمد محمد": "Ahmed Mohamed",
+  "اسم المريض": "Patient name",
   "العمر": "Age",
   "34 سنة": "34 years",
   "الطبيب المرتبط": "Linked doctor",
-  "د. منى سامي - عيادة مدينة نصر": "Dr. Mona Samy - Nasr City Clinic",
+  "لا يوجد طبيب مرتبط حتى الآن": "No linked doctor yet",
   "أمراض مزمنة أو حساسية": "Chronic conditions or allergies",
   "لا يوجد حساسية معروفة. تاريخ سابق لكحة موسمية.": "No known allergies. Previous history of seasonal cough.",
   "حفظ وبدء تقييم التنفس": "Save and start breathing assessment",
@@ -832,7 +832,7 @@ const uiText = {
   "السجل والتقارير": "History & Reports",
   "3 عناصر": "3 items",
   "20 سبتمبر 2026 - خطر متوسط - الإصدار الأول": "September 20, 2026 - medium risk - version 1",
-  "12 سبتمبر 2026 - خطر منخفض - د. منى": "September 12, 2026 - low risk - Dr. Mona",
+  "12 سبتمبر 2026 - خطر منخفض": "September 12, 2026 - low risk",
   "مطمئن": "Reassuring",
   "استكمال الملف": "Complete profile",
   "10 سبتمبر 2026 - الموافقة مفعلة": "September 10, 2026 - consent active",
@@ -878,12 +878,12 @@ const uiText = {
   "طبيب موثق": "Verified doctor",
   "نسبة الأكسجين 91% - كحة شديدة": "Oxygen level 91% - severe cough",
   "عاجل": "Urgent",
-  "سارة علي": "Sara Ali",
+  "حالة مريض": "Patient case",
   "خطر متوسط - منذ 14 دقيقة": "Medium risk - 14 minutes ago",
-  "محمد حسن": "Mohamed Hassan",
+  "حالة متابعة": "Follow-up case",
   "خطر منخفض - تقرير جاهز": "Low risk - report ready",
   "منخفض": "Low",
-  "مراجعة حالة أحمد": "Ahmed case review",
+  "مراجعة حالة المريض": "Patient case review",
   "خطورة الذكاء الاصطناعي": "AI risk",
   "ملاحظة الطبيب": "Doctor note",
   "اعتماد النتيجة": "Approve result",
@@ -937,12 +937,12 @@ const uiText = {
   "الإدارة راجعت لوحة جودة النموذج": "Admin viewed model quality dashboard",
   "المريض: 2048": "patient: 2048",
   "إصدار النموذج: الأول": "model version: 1",
-  "الطبيب: منى 17": "doctor: Mona 17",
+  "الطبيب: --": "doctor: --",
   "الدور: مراجعة الجودة الطبية": "role: Clinical QA",
   "تقرير تقييم التنفس": "Breathing Assessment Report",
   "تنبيه": "Caution",
-  "أحمد محمد - رقم 2048": "Ahmed Mohamed - No. 2048",
-  "د. منى سامي - موثقة": "Dr. Mona Samy - verified",
+  "المريض - رقم الحالة": "Patient - Case No.",
+  "طبيب معتمد - موثق": "Verified physician - approved",
   "التاريخ": "Date",
   "20 سبتمبر 2026": "September 20, 2026",
   "النتيجة": "Result",
@@ -5665,9 +5665,9 @@ async function loadUserProfileData() {
   const ageVal = cachedDoc.age || "";
   const phoneVal = cachedDoc.phoneNumber || window._verifiedPhone || user.phoneNumber || "";
   const historyVal = cachedDoc.medicalHistory || "";
-  const docVal = cachedDoc.linkedDoctor || (currentLanguage === "en" ? "Dr. Mona Samy - Nasr City Clinic" : "د. منى سامي - عيادة مدينة نصر");
+  const docVal = cachedDoc.linkedDoctor || "";
 
-  if (nameEl && (!nameEl.value || nameEl.value === "أحمد محمد")) nameEl.value = nameVal;
+  if (nameEl && (!nameEl.value || nameEl.value === "اسم المريض")) nameEl.value = nameVal;
   if (ageEl && (!ageEl.value || ageEl.value === "34 سنة")) ageEl.value = ageVal;
   if (phoneEl && !phoneEl.value) phoneEl.value = phoneVal;
   if (historyEl && (!historyEl.value || historyEl.value.includes("لا يوجد حساسية معروفة"))) historyEl.value = historyVal;
@@ -7199,6 +7199,64 @@ let apptDaysList = [];
 let apptSelectedDate = null;
 let apptSelectedSlot = null;
 let apptSelectedType = "video";
+let cachedAppointmentDoctors = null;
+
+async function loadAvailableAppointmentDoctors() {
+  if (!db) return [];
+  if (Array.isArray(cachedAppointmentDoctors)) return cachedAppointmentDoctors;
+
+  const doctors = [];
+  try {
+    const snap = await db.collection("doctor_applications").where("status", "==", "approved").get();
+    snap.forEach((doc) => {
+      const d = doc.data() || {};
+      const userId = d.userId || d.doctorId || d.uid || "";
+      const name = String(d.name || d.displayName || "").trim();
+      const licenseNumber = String(d.licenseNumber || d.medicalLicense || d.license || "").trim();
+      if (!userId || !name || !licenseNumber || isTestOrDemoRecord({ id: doc.id, ...d })) return;
+      doctors.push({
+        id: userId,
+        name,
+        nameEn: String(d.nameEn || d.name || d.displayName || "").trim(),
+        specialty: String(d.specialty || "").trim(),
+        specialtyEn: String(d.specialtyEn || d.specialty || "").trim(),
+        clinic: String(d.clinicName || d.clinic || "").trim(),
+        licenseNumber
+      });
+    });
+  } catch (err) {
+    console.warn("Could not load approved appointment doctors:", err.message);
+  }
+
+  cachedAppointmentDoctors = doctors;
+  return doctors;
+}
+
+function renderAppointmentDoctorOptions(doctors) {
+  const isEn = currentLanguage === "en";
+  const doctorSelect = document.getElementById("apptDoctorSelect");
+  if (!doctorSelect) return "";
+
+  const previousValue = doctorSelect.value;
+  if (!doctors || doctors.length === 0) {
+    doctorSelect.innerHTML = `<option value="">${isEn ? "No approved doctors available for booking" : "لا يوجد طبيب معتمد متاح للحجز حالياً"}</option>`;
+    doctorSelect.disabled = true;
+    return "";
+  }
+
+  doctorSelect.disabled = false;
+  doctorSelect.innerHTML = doctors.map((doctor) => {
+    const displayName = isEn ? (doctor.nameEn || doctor.name) : doctor.name;
+    const displaySpec = isEn ? (doctor.specialtyEn || doctor.specialty) : doctor.specialty;
+    const label = [displayName, displaySpec].filter(Boolean).join(" - ");
+    return `<option value="${escapeHtml(doctor.id)}" data-name="${escapeHtml(doctor.name)}" data-name-en="${escapeHtml(doctor.nameEn || doctor.name)}" data-spec="${escapeHtml(doctor.specialty)}" data-spec-en="${escapeHtml(doctor.specialtyEn || doctor.specialty)}" data-clinic="${escapeHtml(doctor.clinic)}" data-license="${escapeHtml(doctor.licenseNumber)}">${escapeHtml(label)}</option>`;
+  }).join("");
+
+  if (previousValue && doctors.some((doctor) => doctor.id === previousValue)) {
+    doctorSelect.value = previousValue;
+  }
+  return doctorSelect.value || "";
+}
 
 function generateAppointmentDays() {
   const days = [];
@@ -7254,7 +7312,9 @@ function updateAppointmentSummary() {
   const isEn = currentLanguage === "en";
   const doctorSelect = document.getElementById("apptDoctorSelect");
   const selectedOption = doctorSelect ? doctorSelect.selectedOptions[0] : null;
-  const docName = selectedOption ? (isEn ? (selectedOption.dataset.nameEn || selectedOption.dataset.name) : selectedOption.dataset.name) : (isEn ? "Dr. Mona Sami" : "د. منى سامي");
+  const docName = selectedOption && selectedOption.value
+    ? (isEn ? (selectedOption.dataset.nameEn || selectedOption.dataset.name) : selectedOption.dataset.name)
+    : "--";
 
   const docEl = document.getElementById("summaryDoctorName");
   if (docEl) docEl.textContent = docName;
@@ -7292,7 +7352,7 @@ function updateAppointmentSummary() {
 
 async function getConfirmedAppointmentsForDoctorAndDate(doctorId, dateStr) {
   const confirmed = [];
-  if (db) {
+  if (db && doctorId) {
     try {
       const snap = await db.collection("appointments")
         .where("doctorId", "==", doctorId)
@@ -7336,6 +7396,8 @@ async function getConfirmedAppointmentsForPatientAndDate(patientId, dateStr) {
 
 async function renderAppointmentsScreen() {
   const isEn = currentLanguage === "en";
+  const approvedDoctors = await loadAvailableAppointmentDoctors();
+  const selectedDoctorId = renderAppointmentDoctorOptions(approvedDoctors);
   apptDaysList = generateAppointmentDays();
 
   if (!apptSelectedDate) {
@@ -7347,7 +7409,7 @@ async function renderAppointmentsScreen() {
 
   // Identify current doctor and patient
   const doctorSelect = document.getElementById("apptDoctorSelect");
-  const doctorId = doctorSelect ? doctorSelect.value : "dr_mona";
+  const doctorId = doctorSelect ? doctorSelect.value : selectedDoctorId;
 
   const user = auth ? auth.currentUser : null;
   const patientId = user ? user.uid : "anon_patient";
@@ -7363,9 +7425,12 @@ async function renderAppointmentsScreen() {
 
   // Determine available non-booked slots
   const availableSlots = AVAILABLE_APPOINTMENT_SLOTS.filter(s => !doctorBookedSlotIds.has(s.id) && !patientBookedSlotIds.has(s.id));
+  const canBookDoctor = Boolean(doctorId);
 
   // If currently selected slot is booked, auto-select first available non-booked slot
-  if (!apptSelectedSlot || doctorBookedSlotIds.has(apptSelectedSlot.id) || patientBookedSlotIds.has(apptSelectedSlot.id)) {
+  if (!canBookDoctor) {
+    apptSelectedSlot = null;
+  } else if (!apptSelectedSlot || doctorBookedSlotIds.has(apptSelectedSlot.id) || patientBookedSlotIds.has(apptSelectedSlot.id)) {
     apptSelectedSlot = availableSlots.length > 0 ? availableSlots[0] : null;
   }
 
@@ -7390,13 +7455,15 @@ async function renderAppointmentsScreen() {
     slotsContainer.innerHTML = AVAILABLE_APPOINTMENT_SLOTS.map((slot) => {
       const isDocBooked = doctorBookedSlotIds.has(slot.id);
       const isPatBooked = patientBookedSlotIds.has(slot.id);
-      const isUnavailable = isDocBooked || isPatBooked;
+      const isUnavailable = !canBookDoctor || isDocBooked || isPatBooked;
       const isActive = !isUnavailable && apptSelectedSlot && slot.id === apptSelectedSlot.id;
 
       const timeText = isEn ? slot.timeEn : slot.timeAr;
       let descText = isEn ? slot.periodEn : slot.periodAr;
 
-      if (isDocBooked) {
+      if (!canBookDoctor) {
+        descText = isEn ? "No approved doctor selected" : "لا يوجد طبيب معتمد محدد";
+      } else if (isDocBooked) {
         descText = isEn ? "⛔ Booked for this doctor" : "⛔ محجوز مسبقاً لدى الطبيب";
       } else if (isPatBooked) {
         descText = isEn ? "⚠️ You have another booking" : "⚠️ لديك موعد آخر بنفس الوقت";
@@ -7414,7 +7481,10 @@ async function renderAppointmentsScreen() {
   // Update Available Slots Badge
   const countBadge = document.getElementById("availableSlotsCount");
   if (countBadge) {
-    if (availableSlots.length > 0) {
+    if (!canBookDoctor) {
+      countBadge.textContent = isEn ? "No approved doctor available" : "لا يوجد طبيب معتمد متاح";
+      countBadge.className = "pill pending";
+    } else if (availableSlots.length > 0) {
       countBadge.textContent = isEn ? `${availableSlots.length} slots available` : `${availableSlots.length} فترات متاحة`;
       countBadge.className = "pill ok";
     } else {
@@ -7426,7 +7496,7 @@ async function renderAppointmentsScreen() {
   // Enable/Disable Confirm Booking Button
   const confirmBtn = document.getElementById("btnConfirmBooking");
   if (confirmBtn) {
-    confirmBtn.disabled = !apptSelectedSlot;
+    confirmBtn.disabled = !canBookDoctor || !apptSelectedSlot;
   }
 
   // Bind Type Buttons
@@ -7497,10 +7567,18 @@ async function confirmAppointmentBooking() {
 
   const doctorSelect = document.getElementById("apptDoctorSelect");
   const selectedOption = doctorSelect ? doctorSelect.selectedOptions[0] : null;
-  const doctorId = doctorSelect ? doctorSelect.value : "dr_mona";
-  const doctorName = selectedOption ? (selectedOption.dataset.name || "د. منى سامي") : "د. منى سامي";
-  const doctorSpecialty = selectedOption ? (selectedOption.dataset.spec || "استشاري أمراض صدرية") : "استشاري أمراض صدرية";
-  const clinicName = selectedOption ? (selectedOption.dataset.clinic || "عيادة الصدر والرعاية التنفسية") : "عيادة الصدر والرعاية التنفسية";
+  const doctorId = doctorSelect ? doctorSelect.value : "";
+  const doctorName = selectedOption && selectedOption.value ? (selectedOption.dataset.name || "") : "";
+  const doctorSpecialty = selectedOption && selectedOption.value ? (selectedOption.dataset.spec || "") : "";
+  const clinicName = selectedOption && selectedOption.value ? (selectedOption.dataset.clinic || "") : "";
+  const doctorLicense = selectedOption && selectedOption.value ? (selectedOption.dataset.license || "") : "";
+
+  if (!doctorId || !doctorName || !doctorLicense) {
+    showToast(isEn
+      ? "No approved doctor is available for booking yet."
+      : "لا يوجد طبيب معتمد متاح للحجز حالياً.");
+    return;
+  }
 
   const notesInput = document.getElementById("apptNotesInput");
   const notes = notesInput ? notesInput.value.trim() : "";
@@ -7547,6 +7625,7 @@ async function confirmAppointmentBooking() {
     doctorId: doctorId,
     doctorName: doctorName,
     doctorSpecialty: doctorSpecialty,
+    doctorLicense: doctorLicense,
     clinicName: clinicName,
     type: apptSelectedType,
     typeLabel: apptSelectedType === "video" ? (isEn ? "Telehealth Video" : "فيديو عن بُعد") : (apptSelectedType === "clinic" ? (isEn ? "In-Clinic Visit" : "حضور العيادة") : (isEn ? "Results Follow-up" : "متابعة نتائج")),
@@ -8129,48 +8208,12 @@ async function renderFeedbackHistory() {
     }
   });
 
-  if (map.size === 0) {
-    const initialSamples = [
-      {
-        feedbackId: "fb_sample_1",
-        userId: "demo_patient_1",
-        userName: "أحمد كمال (مريض)",
-        role: "patient",
-        rating: 5,
-        category: "clinical_assessment",
-        comment: "الفحص الصدري بالذكاء الاصطناعي سريع جداً وملاحظات الطبيب كانت مطمئنة للغاية.",
-        createdAt: new Date(Date.now() - 3600000 * 24).toISOString()
-      },
-      {
-        feedbackId: "fb_sample_2",
-        userId: "demo_doc_1",
-        userName: "د. منى سامي",
-        role: "doctor",
-        rating: 5,
-        category: "ai_triage_accuracy",
-        comment: "نظام تصنيف وتحديد درجة خطورة نقص الأكسجين ممتاز ويختصر وقتاً ثميناً في الطوارئ.",
-        createdAt: new Date(Date.now() - 3600000 * 12).toISOString()
-      },
-      {
-        feedbackId: "fb_sample_3",
-        userId: "demo_patient_2",
-        userName: "سارة عبد الله (مريضة)",
-        role: "patient",
-        rating: 4,
-        category: "doctor_report",
-        comment: "التقرير المعتمد شافي ومفصل، والوصفة الطبية واضحة جداً بالجرعات.",
-        createdAt: new Date(Date.now() - 3600000 * 4).toISOString()
-      }
-    ];
-    initialSamples.forEach(s => map.set(s.feedbackId, s));
-  }
-
   cachedFeedbacks = Array.from(map.values()).sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
 
   const total = cachedFeedbacks.length;
-  const avg = total > 0 ? (cachedFeedbacks.reduce((acc, c) => acc + (Number(c.rating) || 5), 0) / total).toFixed(1) : "5.0";
+  const avg = total > 0 ? (cachedFeedbacks.reduce((acc, c) => acc + (Number(c.rating) || 0), 0) / total).toFixed(1) : "--";
   const positiveCount = cachedFeedbacks.filter(c => Number(c.rating) >= 4).length;
-  const satisfactionRate = total > 0 ? Math.round((positiveCount / total) * 100) : 100;
+  const satisfactionRate = total > 0 ? Math.round((positiveCount / total) * 100) : 0;
 
   const kpiAvg = document.getElementById("kpiAvgRating");
   if (kpiAvg) kpiAvg.textContent = `${avg} ★`;
@@ -8197,8 +8240,8 @@ async function renderFeedbackHistory() {
     container.innerHTML = `
       <div class="hv-state-card" style="margin: 16px 0; padding: 24px 16px;">
         <span class="state-icon">⭐</span>
-        <h4>${isEn ? "No Reviews in this category" : "لا توجد تقييمات في هذا التصنيف حالياً"}</h4>
-        <p>${isEn ? "Be the first to leave your feedback using the form." : "كن أول من يشاركنا تجربته وملاحظاته عبر النموذج أعلاه."}</p>
+        <h4>${isEn ? "No feedback has been submitted yet" : "لا توجد تقييمات مسجلة حتى الآن"}</h4>
+        <p>${isEn ? "Submitted feedback will appear here after it is saved to your account or authorized workspace." : "ستظهر التقييمات هنا بعد حفظها فعلياً وربطها بحساب أو مساحة عمل مصرح بها."}</p>
       </div>
     `;
     return;
@@ -8661,7 +8704,7 @@ async function renderVerificationScreen() {
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-bottom: 16px;">
               <div class="form-group">
                 <label for="doctorAppName">${isEn ? "Full Name (as in Medical Syndicate) *" : "الاسم بالكامل (كما هو في ترخيص النقابة) *"}</label>
-                <input type="text" id="doctorAppName" value="${user.displayName || ''}" placeholder="${isEn ? 'Dr. Ahmed Mohamed' : 'د. أحمد محمد علي'}" required />
+                <input type="text" id="doctorAppName" value="${user.displayName || ''}" placeholder="${isEn ? 'Full licensed name' : 'الاسم المهني الكامل'}" required />
               </div>
               <div class="form-group">
                 <label for="doctorAppLicense">${isEn ? "Syndicate License Number *" : "رقم ترخيص مزاولة المهنة / رقم القيد بالنقابة *"}</label>
@@ -9995,8 +10038,8 @@ window.openConfirmAssessmentModal = function(data, onConfirm) {
   safeSet("confirmCough", data.coughLevel);
   safeSet("confirmDuration", data.symptomDuration);
   safeSet("confirmRisks", data.riskFactors && data.riskFactors.length ? data.riskFactors.join("، ") : (isEn ? "None" : "لا يوجد"));
-  safeSet("confirmDoctor", data.assignedDoctorName || (isEn ? "Dr. Mona Samy" : "د. منى سامي"));
-  safeSet("confirmClinic", data.clinicName || (isEn ? "Nasr City Clinic" : "عيادة مدينة نصر"));
+  safeSet("confirmDoctor", data.assignedDoctorName || "--");
+  safeSet("confirmClinic", data.clinicName || "--");
   safeSet("confirmConsentStatus", isEn ? "🔒 Verified & Accepted" : "🔒 موثقة ومقبولة");
 
   const prioPill = document.getElementById("confirmModalPriorityPill");
@@ -10484,8 +10527,8 @@ function buildAssessmentModel({
   riskFactorsRaw = [],
   assignedDoctorId = null,
   assignedDoctorName = null,
-  clinicId = "clinic_cairo_nasr_city",
-  clinicName = "عيادة مدينة نصر"
+  clinicId = null,
+  clinicName = null
 }) {
   // 1. Oxygen Vitals (Strict Physiological Validation)
   const parsedOxygen = parseStrictOxygenInput(oxygenLevel);
@@ -10563,9 +10606,9 @@ function buildAssessmentModel({
   const profilePhoneInput = document.getElementById("profilePhone");
   const profileHistoryInput = document.getElementById("profileMedicalHistory");
 
-  const patientName = (profileNameInput && profileNameInput.value.trim() && profileNameInput.value.trim() !== "أحمد محمد")
+  const patientName = (profileNameInput && profileNameInput.value.trim() && profileNameInput.value.trim() !== "اسم المريض")
     ? profileNameInput.value.trim()
-    : (cachedDoc.name || cachedDoc.displayName || user?.displayName || user?.name || (user?.email ? user.email.split('@')[0] : "مريض"));
+    : (cachedDoc.name || cachedDoc.displayName || user?.displayName || user?.name || (user?.email ? user.email.split('@')[0] : ""));
 
   const patientEmail = (user && user.email) || cachedDoc.email || "";
   const patientUid = (user && user.uid) || "";
@@ -10600,8 +10643,8 @@ function buildAssessmentModel({
     // ── Clinical Tenant & Doctor Assignment ──
     assignedDoctorId: assignedDoctorId || null,
     assignedDoctorName: assignedDoctorName || null,
-    clinicId: clinicId || "clinic_cairo_nasr_city",
-    clinicName: clinicName || "عيادة مدينة نصر",
+    clinicId: clinicId || null,
+    clinicName: clinicName || null,
 
     // ── Privacy Consent Gate (Document Root - Before Assessment) ──
     privacyConsent: getStoredPrivacyConsent() || {
@@ -10958,8 +11001,8 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
 
     // ── قراءة الطبيب المرتبط وبيانات العيادة ───────────────────────
     const linkedDoctorEl = document.getElementById("profileLinkedDoctor");
-    const linkedDoctorName = linkedDoctorEl ? linkedDoctorEl.value.trim() : (isEn ? "Dr. Mona Samy - Nasr City Clinic" : "د. منى سامي - عيادة مدينة نصر");
-    const clinicName = isEn ? "Nasr City Clinic" : "عيادة مدينة نصر";
+    const linkedDoctorName = linkedDoctorEl ? linkedDoctorEl.value.trim() : "";
+    const clinicName = window._patientClinicName || "";
 
     // حساب الأولوية المتوقعة
     const priority = oxygenLevel > 0 && oxygenLevel < 90 ? "urgent" : (oxygenLevel > 0 && oxygenLevel < 93 ? "high" : "normal");
@@ -10991,8 +11034,8 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
           riskFactorsRaw: riskFactors,
           assignedDoctorId: window._patientAssignedDoctorId || null,
           assignedDoctorName: linkedDoctorName || null,
-          clinicId: window._patientClinicId || "clinic_cairo_nasr_city",
-          clinicName
+          clinicId: window._patientClinicId || null,
+          clinicName: clinicName || null
         });
 
         // ── حفظ في Firestore ──────────────────────────────────────────
@@ -12239,11 +12282,11 @@ function calculateKpiMetrics(cases, options = {}) {
 
   const completionRate = totalCases > 0
     ? Math.round((completedCases.length / totalCases) * 100)
-    : 94; // clinical benchmark default
+    : 0;
 
   const urgentCompletionRate = urgentCases.length > 0
     ? Math.round((urgentCompletedCases.length / urgentCases.length) * 100)
-    : 98;
+    : 0;
 
   // 2. RESPONSE TIME METRICS
   const responseTimes = [];
@@ -12271,23 +12314,23 @@ function calculateKpiMetrics(cases, options = {}) {
 
   const avgResponseTimeMinutes = responseTimes.length > 0
     ? Number((responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length).toFixed(1))
-    : 18.5; // clinical benchmark default
+    : 0;
 
   const medianResponseTimeMinutes = responseTimes.length > 0
     ? Number(responseTimes[Math.floor(responseTimes.length / 2)].toFixed(1))
-    : 14.0;
+    : 0;
 
   const fastestResponseMinutes = responseTimes.length > 0
     ? Number(responseTimes[0].toFixed(1))
-    : 4.2;
+    : 0;
 
   const urgentAvgResponseMinutes = urgentResponseTimes.length > 0
     ? Number((urgentResponseTimes.reduce((a, b) => a + b, 0) / urgentResponseTimes.length).toFixed(1))
-    : 8.5;
+    : 0;
 
   const responseSlaComplianceRate = responseTimes.length > 0
     ? Math.round((responseTimes.filter(t => t <= 30).length / responseTimes.length) * 100)
-    : 96;
+    : 0;
 
   // 3. REPORT TURNAROUND TIME (TAT) METRICS
   const turnaroundTimes = [];
@@ -12306,24 +12349,24 @@ function calculateKpiMetrics(cases, options = {}) {
 
   const avgTurnaroundMinutes = turnaroundTimes.length > 0
     ? Number((turnaroundTimes.reduce((a, b) => a + b, 0) / turnaroundTimes.length).toFixed(1))
-    : 48.0; // clinical benchmark default
+    : 0;
 
   const medianTurnaroundMinutes = turnaroundTimes.length > 0
     ? Number(turnaroundTimes[Math.floor(turnaroundTimes.length / 2)].toFixed(1))
-    : 42.0;
+    : 0;
 
   const fastestTurnaroundMinutes = turnaroundTimes.length > 0
     ? Number(turnaroundTimes[0].toFixed(1))
-    : 12.0;
+    : 0;
 
   const p95Index = Math.min(turnaroundTimes.length - 1, Math.floor(turnaroundTimes.length * 0.95));
   const p95TurnaroundMinutes = turnaroundTimes.length > 0
     ? Number(turnaroundTimes[p95Index].toFixed(1))
-    : 92.0;
+    : 0;
 
   const turnaroundSlaComplianceRate = turnaroundTimes.length > 0
     ? Math.round((turnaroundTimes.filter(t => t <= 120).length / turnaroundTimes.length) * 100)
-    : 98;
+    : 0;
 
   // 4. WATERFALL STAGES (Intake -> Queue -> Clinical Review -> Report Delivery)
   const stageIntakeMinutes = 1.2;
@@ -12334,8 +12377,9 @@ function calculateKpiMetrics(cases, options = {}) {
   // 5. DOCTOR BREAKDOWN
   const doctorsMap = new Map();
   filtered.forEach(c => {
-    const docName = c.approvingDoctorName || c.assignedDoctorName || c.requestingDoctorName || "Dr. Mona Samy";
-    const docClinic = c.clinicName || "Health Vibes Specialized Clinics";
+    const docName = c.approvingDoctorName || c.assignedDoctorName || c.requestingDoctorName || "";
+    const docClinic = c.clinicName || c.clinic || "";
+    if (!docName) return;
     const key = `${docName}__${docClinic}`;
 
     if (!doctorsMap.has(key)) {
@@ -12387,18 +12431,6 @@ function calculateKpiMetrics(cases, options = {}) {
       rating: "4.9 ★"
     });
   });
-
-  if (doctorsPerformance.length === 0) {
-    doctorsPerformance.push({
-      name: "Dr. Mona Samy",
-      clinic: "Pulmonology & Respiratory Medicine",
-      total: totalCases > 0 ? totalCases : 14,
-      completionRate: completionRate,
-      avgResponseMinutes: avgResponseTimeMinutes,
-      avgTurnaroundMinutes: avgTurnaroundMinutes,
-      rating: "4.9 ★"
-    });
-  }
 
   return {
     timeRange,
@@ -12480,8 +12512,8 @@ async function renderKpiDashboard(options = {}) {
     const liveBadge = document.getElementById("kpiLiveStreamBadge");
     if (liveBadge) {
       if (metrics.isBenchmark) {
-        liveBadge.className = "pill warning";
-        liveBadge.textContent = isEn ? "🧪 Clinical Benchmarks (Simulated Baseline)" : "🧪 معايير سريرية مرجعية (محاكاة)";
+        liveBadge.className = "pill pending";
+        liveBadge.textContent = isEn ? "No live clinical records yet" : "لا توجد سجلات سريرية حية بعد";
       } else {
         liveBadge.className = "pill ok";
         liveBadge.textContent = isEn ? "🟢 Live Firestore Stream" : "🟢 مباشر من Firestore الحقيقي";
@@ -12626,7 +12658,16 @@ async function renderKpiDashboard(options = {}) {
         ? `${metrics.doctorsPerformance.length} Active Physicians`
         : `${metrics.doctorsPerformance.length} أطباء نشطين`);
 
-      docTbody.innerHTML = metrics.doctorsPerformance.map(doc => `
+      if (metrics.doctorsPerformance.length === 0) {
+        docTbody.innerHTML = `
+          <tr>
+            <td colspan="6" style="text-align:center; color: var(--muted); padding: 18px;">
+              ${isEn ? "No approved physician activity has been recorded yet." : "لا يوجد نشاط موثق لطبيب معتمد حتى الآن."}
+            </td>
+          </tr>
+        `;
+      } else {
+        docTbody.innerHTML = metrics.doctorsPerformance.map(doc => `
         <tr>
           <td>
             <strong>${doc.name}</strong>
@@ -12638,7 +12679,8 @@ async function renderKpiDashboard(options = {}) {
           <td style="color: var(--teal); font-weight: 600;">${doc.avgTurnaroundMinutes} ${isEn ? 'min' : 'دقيقة'}</td>
           <td><span style="color: #f59e0b; font-weight: 800;">${doc.rating}</span></td>
         </tr>
-      `).join('');
+        `).join('');
+      }
     }
 
     // Last Refreshed
