@@ -12,6 +12,15 @@ const sentEmailsLog = [];
  * Configure email transporter
  */
 function createTransporter() {
+  if (process.env.SIMULATE_EMAIL_FAILURE === 'true') {
+    return {
+      isMock: true,
+      sendMail: async () => {
+        throw new Error('Simulated email transport failure.');
+      }
+    };
+  }
+
   const host = process.env.SMTP_HOST;
   const port = Number(process.env.SMTP_PORT) || 587;
   const user = process.env.SMTP_USER;

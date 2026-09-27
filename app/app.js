@@ -1315,6 +1315,63 @@ function showToast(message) {
   showToast.timer = window.setTimeout(() => toast.classList.remove("show"), 2600);
 }
 
+function getApiBaseUrl() {
+  return (typeof runtimeConfig !== "undefined" && runtimeConfig && runtimeConfig.apiBaseUrl) ? runtimeConfig.apiBaseUrl : "";
+}
+
+async function parseJsonResponse(res) {
+  try {
+    return await res.json();
+  } catch (e) {
+    return {};
+  }
+}
+
+async function requireSuccessfulMutation(url, options = {}, successPredicate) {
+  if (typeof navigator !== "undefined" && navigator && navigator.onLine === false) {
+    const err = new Error(currentLanguage === "en" ? "You appear to be offline. Please check your connection and retry." : "يبدو أن الاتصال منقطع. تحقق من الشبكة ثم أعد المحاولة.");
+    err.code = "OFFLINE";
+    throw err;
+  }
+  const fetchFn = typeof authenticatedFetch === "function" ? authenticatedFetch : fetch;
+  const authHeaders = {};
+  if (typeof authenticatedFetch !== "function" && typeof auth !== "undefined" && auth && auth.currentUser && typeof auth.currentUser.getIdToken === "function") {
+    const token = await auth.currentUser.getIdToken();
+    if (token) authHeaders.Authorization = `Bearer ${token}`;
+  }
+  const res = await fetchFn(`${getApiBaseUrl()}${url}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders,
+      ...(options.headers || {})
+    }
+  });
+  const data = await parseJsonResponse(res);
+  const ok = res.ok && (typeof successPredicate === "function" ? successPredicate(data) : data.success !== false);
+  if (!ok) {
+    const err = new Error(data.message || data.error || `Request failed with status ${res.status}`);
+    err.status = res.status;
+    err.code = data.error || "REQUEST_FAILED";
+    err.response = data;
+    throw err;
+  }
+  return data;
+}
+
+function showRetryFailure(message, retryFn) {
+  const retryText = currentLanguage === "en" ? "Retry" : "إعادة المحاولة";
+  if (typeof showToast === "function") showToast(message);
+  if (typeof window !== "undefined" && typeof retryFn === "function") {
+    window._lastSensitiveRetry = retryFn;
+  }
+  const activeButton = document.activeElement;
+  if (activeButton && activeButton.tagName === "BUTTON") {
+    activeButton.disabled = false;
+    activeButton.title = retryText;
+  }
+}
+
 // --- Environment Config + Real Database (Firebase Firestore) ---
 const DEFAULT_FIREBASE_CONFIG = {
   apiKey: "AIzaSyANyIglmiKcdM0I2EKkjPhzMjKR58o8BRM",
@@ -1827,30 +1884,18 @@ async function triggerBackupSnapshot() {
   if (btn) btn.disabled = true;
 
   try {
-    const apiUrl = (typeof runtimeConfig !== "undefined" && runtimeConfig && runtimeConfig.apiBaseUrl) ? runtimeConfig.apiBaseUrl : "";
-    const fetchFn = typeof authenticatedFetch === "function" ? authenticatedFetch : fetch;
     const initiator = (auth && auth.currentUser) ? auth.currentUser.uid : "admin_manual";
-
-    const res = await fetchFn(`${apiUrl}/api/admin/backup/create`, {
+    const data = await requireSuccessfulMutation("/api/admin/backup/create", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ initiator })
-    });
-
-    const data = await res.json();
-    if (res.ok) {
-      if (typeof showToast === "function") {
-        showToast(`✅ تم إنشاء نسخة احتياطية مشفرة بنجاح: ${data.manifest.backupId}`, "success");
-      }
-      await renderAdminBackupUI();
-      return data;
-    } else {
-      throw new Error(data.message || "Failed to create backup snapshot.");
-    }
-  } catch (err) {
+    }, data => data.success === true && data.manifest && data.manifest.backupId);
     if (typeof showToast === "function") {
-      showToast(`❌ فشل إنشاء النسخة الاحتياطية: ${err.message}`, "error");
+      showToast(`تم إنشاء نسخة احتياطية مشفرة بنجاح: ${data.manifest.backupId}`, "success");
     }
+    await renderAdminBackupUI();
+    return data;
+  } catch (err) {
+    showRetryFailure(`فشل إنشاء النسخة الاحتياطية: ${err.message}`, () => triggerBackupSnapshot());
     console.error("[BACKUP ERROR]:", err);
     return null;
   } finally {
@@ -1860,81 +1905,53 @@ async function triggerBackupSnapshot() {
 
 async function fetchBackupSnapshotsList() {
   try {
-    const apiUrl = (typeof runtimeConfig !== "undefined" && runtimeConfig && runtimeConfig.apiBaseUrl) ? runtimeConfig.apiBaseUrl : "";
     const fetchFn = typeof authenticatedFetch === "function" ? authenticatedFetch : fetch;
-    const res = await fetchFn(`${apiUrl}/api/admin/backup/list`);
+    const res = await fetchFn(`${getApiBaseUrl()}/api/admin/backup/list`);
     if (res.ok) {
       return await res.json();
     }
-  } catch (e) {}
-
-  return {
-    status: "ok",
-    count: 1,
-    rpoCompliance: "< 15 minutes (PITR active)",
-    rtoTarget: "< 30 minutes",
-    snapshots: [
-      {
-        backupId: `backup_${new Date().toISOString().slice(0, 10)}_auto`,
-        timestamp: new Date().toISOString(),
-        totalRecords: 120,
-        status: "COMPLETED",
-        checksum: { algorithm: "SHA-256", hash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" }
-      }
-    ]
-  };
+    const data = await parseJsonResponse(res);
+    throw new Error(data.message || data.error || "Failed to fetch backup snapshots.");
+  } catch (e) {
+    showRetryFailure(`فشل تحميل النسخ الاحتياطية: ${e.message}`, () => renderAdminBackupUI());
+    return { status: "error", count: 0, snapshots: [], error: e.message };
+  }
 }
 
 async function verifyBackupSnapshot(backupId) {
   try {
-    const apiUrl = (typeof runtimeConfig !== "undefined" && runtimeConfig && runtimeConfig.apiBaseUrl) ? runtimeConfig.apiBaseUrl : "";
-    const fetchFn = typeof authenticatedFetch === "function" ? authenticatedFetch : fetch;
-    const res = await fetchFn(`${apiUrl}/api/admin/backup/verify`, {
+    const result = await requireSuccessfulMutation("/api/admin/backup/verify", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ backupId })
-    });
-    const result = await res.json();
+    }, data => typeof data.valid === "boolean");
     if (result.valid) {
       if (typeof showToast === "function") {
-        showToast(`🔒 سلامة النسخة الاحتياطية مؤكدة: SHA-256 سليم`, "success");
+        showToast(`سلامة النسخة الاحتياطية مؤكدة: SHA-256 سليم`, "success");
       }
     } else {
       if (typeof showToast === "function") {
-        showToast(`⚠️ تحذير: فشل فحص سلامة النسخة الاحتياطية!`, "error");
+        showToast(`تحذير: فشل فحص سلامة النسخة الاحتياطية!`, "error");
       }
     }
     return result;
   } catch (err) {
-    if (typeof showToast === "function") {
-      showToast(`فشل التحقق: ${err.message}`, "error");
-    }
+    showRetryFailure(`فشل التحقق: ${err.message}`, () => verifyBackupSnapshot(backupId));
     return { valid: false, error: err.message };
   }
 }
 
 async function restoreBackupSnapshot(backupId, confirmToken, dryRun = true) {
   try {
-    const apiUrl = (typeof runtimeConfig !== "undefined" && runtimeConfig && runtimeConfig.apiBaseUrl) ? runtimeConfig.apiBaseUrl : "";
-    const fetchFn = typeof authenticatedFetch === "function" ? authenticatedFetch : fetch;
-    const res = await fetchFn(`${apiUrl}/api/admin/backup/restore`, {
+    const data = await requireSuccessfulMutation("/api/admin/backup/restore", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ backupId, confirmToken, dryRun })
-    });
-    const data = await res.json();
-    if (res.ok) {
-      if (typeof showToast === "function") {
-        showToast(dryRun ? `🧪 اكتملت المحاكاة الاختبارية للاستعادة بنجاح` : `✅ تم استعادة قاعدة البيانات بنجاح`, "success");
-      }
-      return data;
-    } else {
-      throw new Error(data.message || "Restoration rejected.");
-    }
-  } catch (err) {
+    }, data => data.success === true);
     if (typeof showToast === "function") {
-      showToast(`فشل الاستعادة: ${err.message}`, "error");
+      showToast(dryRun ? `اكتملت المحاكاة الاختبارية للاستعادة بنجاح` : `تم استعادة قاعدة البيانات بنجاح`, "success");
     }
+    return data;
+  } catch (err) {
+    showRetryFailure(`فشل الاستعادة: ${err.message}`, () => restoreBackupSnapshot(backupId, confirmToken, dryRun));
     return { success: false, error: err.message };
   }
 }
@@ -7633,6 +7650,10 @@ function updateLocalAppointmentStatus(apptId, newStatus) {
 
 async function confirmAppointmentBooking() {
   const isEn = currentLanguage === "en";
+  if (confirmAppointmentBooking._pending) {
+    showToast(isEn ? "This booking is already being submitted." : "جاري إرسال هذا الحجز بالفعل.");
+    return;
+  }
   if (!apptSelectedDate || !apptSelectedSlot) {
     showToast(isEn ? "Please select an available date and time slot." : "يرجى تحديد اليوم والفترة الزمنية المتاحة.");
     return;
@@ -7712,16 +7733,17 @@ async function confirmAppointmentBooking() {
   }
 
   try {
-    if (db && user && !user.isAnonymous) {
-      try {
-        await db.collection("appointments").doc(apptId).set(apptData);
-      } catch (fErr) {
-        console.warn("Firestore appointments write warning:", fErr);
-      }
+    if (!user || user.isAnonymous) {
+      throw new Error(isEn ? "Please sign in with a verified account before booking." : "يرجى تسجيل الدخول بحساب موثق قبل الحجز.");
     }
 
-    saveAppointmentToLocalStorage(apptData);
+    confirmAppointmentBooking._pending = true;
+    const saved = await requireSuccessfulMutation("/api/appointments/book", {
+      method: "POST",
+      body: JSON.stringify(apptData)
+    }, data => data.success === true && data.appointment && data.appointment.id);
 
+    saveAppointmentToLocalStorage(saved.appointment);
     showToast(isEn ? "Appointment confirmed successfully! Reminder notification scheduled." : "تم تأكيد حجز الموعد بنجاح! سيصلك تذكير قبل موعد الاستشارة.");
     if (notesInput) notesInput.value = "";
 
@@ -7730,8 +7752,9 @@ async function confirmAppointmentBooking() {
     updatePatientDashboardNextAppt();
   } catch (err) {
     console.error("Booking appointment error:", err);
-    showToast(isEn ? "Error booking appointment: " + err.message : "حدث خطأ أثناء حجز الموعد: " + err.message);
+    showRetryFailure(isEn ? "Booking failed: " + err.message : "فشل حجز الموعد: " + err.message, () => confirmAppointmentBooking());
   } finally {
+    confirmAppointmentBooking._pending = false;
     if (confirmBtn) {
       confirmBtn.disabled = false;
       confirmBtn.innerHTML = `<span class="lang-ar">✓ تأكيد حجز الموعد</span><span class="lang-en">✓ Confirm Appointment Booking</span>`;
@@ -7842,21 +7865,24 @@ async function renderPatientAppointmentsList() {
 
 async function cancelAppointment(apptId) {
   const isEn = currentLanguage === "en";
+  if (cancelAppointment._pending && cancelAppointment._pending[apptId]) {
+    showToast(isEn ? "This cancellation is already being saved." : "جاري حفظ إلغاء هذا الموعد بالفعل.");
+    return;
+  }
   const confirmed = window.confirm(isEn ? "Are you sure you want to cancel this appointment?" : "هل أنت متأكد من رغبتك في إلغاء هذا الموعد الطبي؟");
   if (!confirmed) return;
 
   try {
     const user = auth ? auth.currentUser : null;
-    if (db && user && !user.isAnonymous) {
-      try {
-        await db.collection("appointments").doc(apptId).update({
-          status: "cancelled",
-          cancelledAt: new Date().toISOString()
-        });
-      } catch (e) {
-        console.warn("Could not cancel on Firestore, updating local cache:", e);
-      }
+    if (!user || user.isAnonymous) {
+      throw new Error(isEn ? "Please sign in before cancelling an appointment." : "يرجى تسجيل الدخول قبل إلغاء الموعد.");
     }
+    cancelAppointment._pending = cancelAppointment._pending || {};
+    cancelAppointment._pending[apptId] = true;
+    await requireSuccessfulMutation("/api/appointments/cancel", {
+      method: "POST",
+      body: JSON.stringify({ appointmentId: apptId })
+    }, data => data.success === true && data.status === "cancelled");
 
     updateLocalAppointmentStatus(apptId, "cancelled");
     showToast(isEn ? "Appointment has been cancelled." : "تم إلغاء الموعد الطبي بنجاح.");
@@ -7865,7 +7891,9 @@ async function cancelAppointment(apptId) {
     updatePatientDashboardNextAppt();
   } catch (err) {
     console.error("Cancel appointment error:", err);
-    showToast(isEn ? "Failed to cancel appointment: " + err.message : "تعذر إلغاء الموعد: " + err.message);
+    showRetryFailure(isEn ? "Failed to cancel appointment: " + err.message : "تعذر إلغاء الموعد: " + err.message, () => cancelAppointment(apptId));
+  } finally {
+    if (cancelAppointment._pending) cancelAppointment._pending[apptId] = false;
   }
 }
 
@@ -8071,6 +8099,10 @@ function closeFeedbackModal() {
 
 async function handleFeedbackSubmit() {
   const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  if (handleFeedbackSubmit._pending) {
+    showToast(isEn ? "This feedback is already being submitted." : "جاري إرسال هذا التقييم بالفعل.");
+    return;
+  }
   const user = (typeof auth !== "undefined" && auth) ? auth.currentUser : null;
   if (!user) {
     if (typeof showToast === "function") {
@@ -8101,62 +8133,23 @@ async function handleFeedbackSubmit() {
   }
 
   try {
-    const feedbackId = `fb_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     const isDoc = (typeof isDoctorRole === "function" && isDoctorRole(selectedRole)) || (typeof selectedRole !== "undefined" && selectedRole === "doctor");
     const userRole = currentFeedbackPerspective || (isDoc ? "doctor" : "patient");
-    const feedbackDoc = {
-      feedbackId,
-      userId: user.uid,
-      userName: user.displayName || (userRole === "doctor" ? "طبيب معالج" : "مريض"),
-      userEmail: user.email || null,
-      role: userRole,
-      rating: ratingVal,
-      category,
-      comment: commentInput,
-      refId: refInput || null,
-      isPublic,
-      status: "received",
-      createdAt: new Date().toISOString()
-    };
+    handleFeedbackSubmit._pending = true;
+    const saved = await requireSuccessfulMutation("/api/feedback/submit", {
+      method: "POST",
+      body: JSON.stringify({
+        rating: ratingVal,
+        category,
+        comment: commentInput,
+        role: userRole,
+        caseId: refInput.startsWith("case_") ? refInput : null,
+        appointmentId: refInput.startsWith("appt_") ? refInput : null,
+        isPublic
+      })
+    }, data => data.success === true && data.feedbackId && data.feedback);
 
-    // 1. Try sending to backend endpoint
-    let submittedToBackend = false;
-    try {
-      const token = user.getIdToken ? await user.getIdToken() : null;
-      const res = await fetch("/api/feedback/submit", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { "Authorization": `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({
-          rating: ratingVal,
-          category,
-          comment: commentInput,
-          role: userRole,
-          caseId: refInput.startsWith("case_") ? refInput : null,
-          appointmentId: refInput.startsWith("appt_") ? refInput : null,
-          isPublic
-        })
-      });
-      if (res.ok) {
-        submittedToBackend = true;
-      }
-    } catch (netErr) {
-      console.warn("Backend feedback API unreachable, saving to Firestore directly:", netErr);
-    }
-
-    // 2. Persist to Firestore if client Firestore is active
-    if (!submittedToBackend && typeof db !== "undefined" && db && !user.isAnonymous) {
-      try {
-        await db.collection("feedbacks").doc(feedbackId).set(feedbackDoc);
-      } catch (dbErr) {
-        console.warn("Firestore feedback write failed, saving to local cache:", dbErr);
-      }
-    }
-
-    // 3. Update local cache
-    saveLocalFeedback(feedbackDoc);
+    saveLocalFeedback(saved.feedback);
 
     if (typeof showToast === "function") {
       showToast(isEn ? "Thank you! Your feedback has been received." : "شكراً لك! تم استلام تقييمك وملاحظاتك بنجاح.");
@@ -8176,10 +8169,9 @@ async function handleFeedbackSubmit() {
     await renderFeedbackHistory();
   } catch (err) {
     console.error("Feedback submit error:", err);
-    if (typeof showToast === "function") {
-      showToast(isEn ? "Failed to submit feedback: " + err.message : "تعذر إرسال التقييم: " + err.message);
-    }
+    showRetryFailure(isEn ? "Failed to submit feedback: " + err.message : "تعذر إرسال التقييم: " + err.message, () => handleFeedbackSubmit());
   } finally {
+    handleFeedbackSubmit._pending = false;
     if (submitBtn) {
       submitBtn.disabled = false;
       submitBtn.innerHTML = `<span>⭐</span> <span class="lang-ar">إرسال التقييم والملاحظات</span><span class="lang-en">Submit Feedback</span>`;
@@ -8189,6 +8181,10 @@ async function handleFeedbackSubmit() {
 
 async function submitModalFeedback() {
   const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  if (submitModalFeedback._pending) {
+    showToast(isEn ? "This feedback is already being submitted." : "جاري إرسال هذا التقييم بالفعل.");
+    return;
+  }
   const user = (typeof auth !== "undefined" && auth) ? auth.currentUser : null;
   if (!user) {
     if (typeof showToast === "function") {
@@ -8213,30 +8209,24 @@ async function submitModalFeedback() {
     return;
   }
 
-  const feedbackId = `fb_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
   const isDoc = (typeof isDoctorRole === "function" && isDoctorRole(selectedRole)) || (typeof selectedRole !== "undefined" && selectedRole === "doctor");
   const userRole = ctx.role || (isDoc ? "doctor" : "patient");
-  const feedbackDoc = {
-    feedbackId,
-    userId: user.uid,
-    userName: user.displayName || (userRole === "doctor" ? "طبيب معالج" : "مريض"),
-    userEmail: user.email || null,
-    role: userRole,
-    rating: ratingVal,
-    category,
-    comment: commentInput,
-    caseId: ctx.caseId || null,
-    appointmentId: ctx.appointmentId || null,
-    isPublic: true,
-    status: "received",
-    createdAt: new Date().toISOString()
-  };
 
   try {
-    if (typeof db !== "undefined" && db && !user.isAnonymous) {
-      db.collection("feedbacks").doc(feedbackId).set(feedbackDoc).catch(e => console.warn(e));
-    }
-    saveLocalFeedback(feedbackDoc);
+    submitModalFeedback._pending = true;
+    const saved = await requireSuccessfulMutation("/api/feedback/submit", {
+      method: "POST",
+      body: JSON.stringify({
+        rating: ratingVal,
+        category,
+        comment: commentInput,
+        role: userRole,
+        caseId: ctx.caseId || null,
+        appointmentId: ctx.appointmentId || null,
+        isPublic: true
+      })
+    }, data => data.success === true && data.feedbackId && data.feedback);
+    saveLocalFeedback(saved.feedback);
     closeFeedbackModal();
     if (typeof showToast === "function") {
       showToast(isEn ? "Thank you! Your rating has been submitted." : "شكراً لتقييمك! تم حفظ ملاحظاتك بنجاح.");
@@ -8245,7 +8235,9 @@ async function submitModalFeedback() {
       await renderFeedbackHistory();
     }
   } catch (err) {
-    if (typeof showToast === "function") showToast(err.message);
+    showRetryFailure(isEn ? "Failed to submit feedback: " + err.message : "تعذر إرسال التقييم: " + err.message, () => submitModalFeedback());
+  } finally {
+    submitModalFeedback._pending = false;
   }
 }
 

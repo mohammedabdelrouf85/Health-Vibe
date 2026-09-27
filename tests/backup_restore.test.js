@@ -172,7 +172,18 @@ const indexHtml = fs.readFileSync(INDEX_HTML_PATH, 'utf-8');
   assert.ok(appJs.includes("window.renderAdminBackupUI = renderAdminBackupUI;"), "renderAdminBackupUI must be exposed on window.");
   console.log("  ✓ All 5 backup and disaster recovery functions exposed on window.");
 
+  // -----------------------------------------------------------------------------
+  // TEST 10: No Mock Success on Service Failure
+  // -----------------------------------------------------------------------------
+  console.log("\n▶ TEST 10: Backup UI Failure Semantics");
+  assert.ok(appJs.includes('requireSuccessfulMutation("/api/admin/backup/create"'), "Backup create must require successful server response.");
+  assert.ok(appJs.includes('requireSuccessfulMutation("/api/admin/backup/verify"'), "Backup verify must require successful server response.");
+  assert.ok(appJs.includes('requireSuccessfulMutation("/api/admin/backup/restore"'), "Backup restore must require successful server response.");
+  assert.ok(appJs.includes('return { status: "error", count: 0, snapshots: [], error: e.message };'), "Backup list failure must be shown as failure, not mock success.");
+  assert.ok(!appJs.includes('backup_${new Date().toISOString().slice(0, 10)}_auto'), "Backup UI must not fabricate local backup snapshots.");
+  console.log("  ✓ Backup UI no longer fabricates successful snapshots during service failure.");
+
   console.log("\n==================================================================");
-  console.log("🎉 ALL 9 BACKUP & DISASTER RECOVERY TESTS PASSED WITH 100% SUCCESS!");
+  console.log("🎉 ALL 10 BACKUP & DISASTER RECOVERY TESTS PASSED WITH 100% SUCCESS!");
   console.log("==================================================================");
 })();

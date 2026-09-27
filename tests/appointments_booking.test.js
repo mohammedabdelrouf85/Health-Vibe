@@ -1,7 +1,7 @@
 /**
  * Health Vibe AI - Clinical Appointments Booking & Management Test Suite
- * Verifies dynamic dates, clinical slots, booking lifecycle, cancellation,
- * local storage caching, dashboard integration, and eradication of static mock data.
+ * Verifies dynamic dates, clinical slots, server-authoritative booking lifecycle,
+ * local cache after confirmed writes, dashboard integration, and eradication of static mock data.
  */
 
 const fs = require('fs');
@@ -160,7 +160,7 @@ assert.strictEqual(storedAppts.length, 1, "Patient should have 1 stored appointm
 assert.strictEqual(storedAppts[0].id, appt1.id);
 assert.strictEqual(storedAppts[0].status, "confirmed");
 assert.strictEqual(storedAppts[0].doctorName, "د. منى سامي");
-console.log(`  ✓ Appointment ${appt1.id} successfully created and persisted.`);
+console.log(`  ✓ Appointment ${appt1.id} successfully cached only after confirmed server persistence.`);
 
 // ── TEST 5: Appointment Cancellation Lifecycle ───────────────────────────────
 console.log("\n▶ TEST 5: Cancellation Workflow");
@@ -242,6 +242,20 @@ for (const exp of requiredExports) {
   assert(appJsContent.includes(exp), `app.js must expose ${exp}`);
 }
 console.log("  ✓ All booking and management functions successfully exposed on window.");
+
+// ── TEST 7B: Server-Authoritative Persistence and Failure Guards ─────────────
+console.log("\n▶ TEST 7B: Server-Authoritative Booking and Retry Failure Guards");
+const serverJsContent = fs.readFileSync(path.join(__dirname, '..', 'backend', 'server.js'), 'utf8');
+assert(serverJsContent.includes("app.post('/api/appointments/book'"), "Server must expose POST /api/appointments/book.");
+assert(serverJsContent.includes("app.post('/api/appointments/cancel'"), "Server must expose POST /api/appointments/cancel.");
+assert(serverJsContent.includes("APPOINTMENT_STORAGE_UNAVAILABLE"), "Server must report service/storage failure explicitly.");
+assert(serverJsContent.includes("PATIENT_MISMATCH"), "Server must reject forged patientId writes.");
+assert(appJsContent.includes('requireSuccessfulMutation("/api/appointments/book"'), "Client booking must require successful server mutation.");
+assert(appJsContent.includes('requireSuccessfulMutation("/api/appointments/cancel"'), "Client cancellation must require successful server mutation.");
+assert(appJsContent.includes("saveAppointmentToLocalStorage(saved.appointment)"), "Client may cache only the server-confirmed appointment.");
+assert(!appJsContent.includes("Could not cancel on Firestore, updating local cache"), "Cancellation must not fall back to local-only success.");
+assert(appJsContent.includes("confirmAppointmentBooking._pending"), "Booking must prevent duplicate submissions during retryable failure.");
+console.log("  ✓ Booking/cancellation success depends on real server persistence, with explicit retryable failure state.");
 
 // ── TEST 8: Anti-Double Booking Guard: Doctor Slot Concurrency ───────────────
 console.log("\n▶ TEST 8: Anti-Double Booking Guard - Doctor Schedule Conflict");

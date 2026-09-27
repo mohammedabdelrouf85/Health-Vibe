@@ -1900,6 +1900,101 @@ app.post('/api/doctor/close-clinical-case', requireAuth, requireVerifiedEmail, r
 });
 
 /**
+ * POST /api/appointments/book
+ * Server-authoritative appointment booking with conflict checks.
+ */
+app.post('/api/appointments/book', requireAuth, requireVerifiedEmail, async (req, res) => {
+  const data = req.body || {};
+  const appointmentId = typeof data.id === 'string' && data.id.trim()
+    ? data.id.trim()
+    : `appt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+
+  if (!data.doctorId || !data.date || !data.slotId) {
+    return res.status(400).json({ error: 'INVALID_APPOINTMENT', message: 'doctorId, date, and slotId are required.' });
+  }
+  if (data.patientId && data.patientId !== req.user.uid) {
+    return res.status(403).json({ error: 'PATIENT_MISMATCH', message: 'Appointment patientId must match the authenticated user.' });
+  }
+  if (!db || typeof db.collection !== 'function') {
+    return res.status(503).json({ error: 'APPOINTMENT_STORAGE_UNAVAILABLE', message: 'Appointment storage is unavailable. Please retry shortly.' });
+  }
+
+  try {
+    const doctorSnap = await db.collection('appointments')
+      .where('doctorId', '==', data.doctorId)
+      .where('date', '==', data.date)
+      .where('slotId', '==', data.slotId)
+      .where('status', '==', 'confirmed')
+      .get();
+    if (!doctorSnap.empty) {
+      return res.status(409).json({ error: 'DOCTOR_SLOT_CONFLICT', message: 'This doctor already has a confirmed appointment in that slot.' });
+    }
+
+    const patientSnap = await db.collection('appointments')
+      .where('patientId', '==', req.user.uid)
+      .where('date', '==', data.date)
+      .where('slotId', '==', data.slotId)
+      .where('status', '==', 'confirmed')
+      .get();
+    if (!patientSnap.empty) {
+      return res.status(409).json({ error: 'PATIENT_SLOT_CONFLICT', message: 'You already have a confirmed appointment in that slot.' });
+    }
+
+    const appointmentDoc = {
+      ...data,
+      id: appointmentId,
+      patientId: req.user.uid,
+      patientEmail: req.user.email || data.patientEmail || null,
+      status: 'confirmed',
+      createdAt: new Date().toISOString(),
+      createdBy: req.user.uid
+    };
+    await db.collection('appointments').doc(appointmentId).set(appointmentDoc);
+    return res.status(201).json({ success: true, appointmentId, appointment: appointmentDoc });
+  } catch (err) {
+    console.error('[APPOINTMENT BOOK ERROR]:', err);
+    return res.status(500).json({ error: 'APPOINTMENT_BOOK_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/appointments/cancel
+ * Cancels only after the server has persisted the status transition.
+ */
+app.post('/api/appointments/cancel', requireAuth, requireVerifiedEmail, async (req, res) => {
+  const { appointmentId } = req.body || {};
+  if (!appointmentId) {
+    return res.status(400).json({ error: 'MISSING_APPOINTMENT_ID', message: 'appointmentId is required.' });
+  }
+  if (!db || typeof db.collection !== 'function') {
+    return res.status(503).json({ error: 'APPOINTMENT_STORAGE_UNAVAILABLE', message: 'Appointment storage is unavailable. Please retry shortly.' });
+  }
+
+  try {
+    const ref = db.collection('appointments').doc(appointmentId);
+    const snap = await ref.get();
+    if (!snap.exists) {
+      return res.status(404).json({ error: 'APPOINTMENT_NOT_FOUND', message: 'Appointment was not found.' });
+    }
+    const appointment = snap.data() || {};
+    const userRole = getTrustedClaimRole(req.user);
+    const canCancel = appointment.patientId === req.user.uid || appointment.doctorId === req.user.uid || hasTrustedAdminClaim(req.user);
+    if (!canCancel || (userRole === ROLES.CLINIC_ADMIN && !(await isSameClinicResource(await resolveRequesterClinic(req), appointment)))) {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'You cannot cancel this appointment.' });
+    }
+    await ref.update({
+      status: 'cancelled',
+      cancelledAt: new Date().toISOString(),
+      cancelledBy: req.user.uid
+    });
+    return res.json({ success: true, appointmentId, status: 'cancelled' });
+  } catch (err) {
+    console.error('[APPOINTMENT CANCEL ERROR]:', err);
+    return res.status(500).json({ error: 'APPOINTMENT_CANCEL_FAILED', message: err.message });
+  }
+});
+
+/**
  * POST /api/notifications/send-email
  * Dedicated endpoint for dispatching clinical email notifications
  */

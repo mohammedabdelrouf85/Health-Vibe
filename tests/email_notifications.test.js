@@ -131,8 +131,22 @@ clearSentEmailsLog();
   assert.strictEqual(invalidRes.reason, "INVALID_RECIPIENT");
   console.log("  ✓ System rejects malformed/missing recipient email safely without crashing.");
 
-  // ── TEST 6: Backend Server Integration & Routes Check ──────────────────────
-  console.log("\n▶ TEST 6: Backend Route and Endpoint Definition");
+  // ── TEST 6: Transport Failure Guard ────────────────────────────────────────
+  console.log("\n▶ TEST 6: Transport Failure Guard");
+  clearSentEmailsLog();
+  process.env.SIMULATE_EMAIL_FAILURE = 'true';
+  const failureRes = await sendClinicalNotificationEmail({
+    type: 'result_ready',
+    patientEmail: "tarek.patient@example.com",
+    ...sampleResultData
+  });
+  delete process.env.SIMULATE_EMAIL_FAILURE;
+  assert.strictEqual(failureRes.success, false, "Transport failure must not be reported as success");
+  assert.strictEqual(getSentEmailsLog().length, 0, "Failed transport must not append sent-email log entries");
+  console.log("  ✓ Simulated SMTP/service failure returns explicit failure and records no sent email.");
+
+  // ── TEST 7: Backend Server Integration & Routes Check ──────────────────────
+  console.log("\n▶ TEST 7: Backend Route and Endpoint Definition");
   const serverPath = path.join(__dirname, '..', 'backend', 'server.js');
   const serverContent = fs.readFileSync(serverPath, 'utf8');
 
@@ -143,8 +157,8 @@ clearSentEmailsLog();
   console.log("  ✓ backend/server.js has dedicated /api/notifications/send-email endpoint.");
   console.log("  ✓ Automatic email notification hooks verified in doctor status transition.");
 
-  // ── TEST 7: Security Rules Audit for Email Notifications ───────────────────
-  console.log("\n▶ TEST 7: Firestore Security Rules Check for /email_notifications");
+  // ── TEST 8: Security Rules Audit for Email Notifications ───────────────────
+  console.log("\n▶ TEST 8: Firestore Security Rules Check for /email_notifications");
   const rulesPath = path.join(__dirname, '..', 'firestore.rules');
   const rulesContent = fs.readFileSync(rulesPath, 'utf8');
 
@@ -154,6 +168,6 @@ clearSentEmailsLog();
   console.log("  ✓ Read allowed only for recipient/patient/doctor/admin; direct client writes forbidden.");
 
   console.log("\n==================================================================");
-  console.log("🎉 ALL 7 EMAIL NOTIFICATION TESTS PASSED WITH 100% SUCCESS!");
+  console.log("🎉 ALL 8 EMAIL NOTIFICATION TESTS PASSED WITH 100% SUCCESS!");
   console.log("==================================================================\n");
 })();
