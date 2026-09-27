@@ -4101,12 +4101,101 @@ app.get('/api/reports/:caseId/doctor-identity', requireAuth, async (req, res) =>
     if (record.status !== 'approved' || record.doctorApproved !== true) {
       return res.status(403).json({ error: 'REPORT_NOT_APPROVED' });
     }
-    const doctorIdentity = record.approvingDoctorId ? await getVerifiedDoctorIdentity(record.approvingDoctorId) : null;
+    const doctorIdentity = record.reportSnapshot?.doctorIdentity ||
+      (record.approvingDoctorId ? await getVerifiedDoctorIdentity(record.approvingDoctorId) : null);
     return res.json({ doctorIdentity });
   } catch (err) {
     return res.status(503).json({ error: 'DOCTOR_CREDENTIALS_UNAVAILABLE' });
   }
 });
+
+function buildApprovedReportSnapshot({ caseId, caseData, updateData, doctorIdentity, actor, approvedAtIso, previousRevisionId }) {
+  const reportRevisionNumber = Number(caseData.reportRevisionNumber || 0) + 1;
+  const revisionId = `${caseId}_v${reportRevisionNumber}`;
+  const originalCaseId = caseData.originalCaseId || caseData.caseId || caseId;
+  const patientSnapshot = {
+    patientId: caseData.patientId || caseData.userId || null,
+    patientName: caseData.patientName || caseData.name || '',
+    patientEmail: caseData.patientEmail || caseData.userEmail || caseData.email || '',
+    patientPhone: caseData.patientPhone || caseData.phone || '',
+    patientDob: caseData.patientDob || caseData.dateOfBirth || caseData.dob || null,
+    patientAge: caseData.patientAge || caseData.age || '',
+    patientMedicalHistory: caseData.patientMedicalHistory || caseData.medicalHistory || ''
+  };
+  const caseSnapshot = {
+    id: caseId,
+    originalCaseId,
+    clinicId: recordClinicId(caseData) || null,
+    submittedAt: caseData.submittedAt || caseData.createdAt || null,
+    oxygenLevel: caseData.oxygenLevel ?? caseData.o2 ?? null,
+    o2: caseData.o2 ?? caseData.oxygenLevel ?? null,
+    breathingDifficulty: caseData.breathingDifficulty || caseData.difficulty || '',
+    coughLevel: caseData.coughLevel || '',
+    symptomDuration: caseData.symptomDuration || caseData.duration || '',
+    temperature: caseData.assessment?.vitals?.temperature ?? caseData.temperature ?? null,
+    temperatureUnit: caseData.assessment?.vitals?.temperatureUnit || caseData.temperatureUnit || '°C',
+    respiratoryRate: caseData.assessment?.vitals?.respiratoryRate ?? caseData.respiratoryRate ?? null,
+    respiratoryRateUnit: caseData.assessment?.vitals?.respiratoryRateUnit || caseData.respiratoryRateUnit || null,
+    chestPain: caseData.chestPain || caseData.assessment?.symptoms?.chestPain || '',
+    progression: caseData.progression || caseData.assessment?.symptoms?.progression || '',
+    riskFactors: caseData.riskFactors || caseData.assessment?.riskFactors || [],
+    patientNotes: caseData.patientNotes || caseData.notes || ''
+  };
+  const clinicalContent = {
+    clinicalDiagnosis: updateData.clinicalDiagnosis,
+    clinicalNotes: updateData.clinicalNotes,
+    doctorNote: updateData.doctorNote,
+    medications: updateData.medications,
+    recommendation: updateData.recommendation,
+    recommendations: updateData.recommendations
+  };
+  const signature = {
+    workflow: 'doctor_electronic_approval_v1',
+    status: 'signed',
+    signedAt: approvedAtIso,
+    signedBy: actor,
+    meaning: 'The verified doctor approved this report version for patient viewing.'
+  };
+  return {
+    revisionId,
+    revisionNumber: reportRevisionNumber,
+    originalCaseId,
+    previousRevisionId: previousRevisionId || caseData.currentReportRevisionId || null,
+    caseId,
+    status: 'approved',
+    patient: patientSnapshot,
+    caseDetails: caseSnapshot,
+    clinicalContent,
+    doctorIdentity,
+    approval: {
+      approvedAt: approvedAtIso,
+      approvedBy: actor,
+      signature
+    },
+    signature,
+    disclaimer: {
+      en: 'This report records physician-reviewed clinical information from Health Vibes. It supports care coordination and does not replace emergency medical care.',
+      ar: 'يوثق هذا التقرير معلومات سريرية راجعها الطبيب عبر Health Vibes. يدعم تنسيق الرعاية ولا يستبدل رعاية الطوارئ الطبية.'
+    },
+    versions: {
+      reportVersion: REPORT_VERSION,
+      modelVersion: MODEL_VERSION,
+      ruleEngineVersion: caseData.assessment?.aiTriage?.ruleEngineVersion || caseData.ruleEngineVersion || null
+    },
+    dates: {
+      submittedAt: caseSnapshot.submittedAt,
+      approvedAt: approvedAtIso,
+      generatedAt: approvedAtIso,
+      snapshotCreatedAt: approvedAtIso
+    },
+    withdrawal: {
+      status: 'active',
+      withdrawnAt: null,
+      withdrawnBy: null,
+      reason: null
+    }
+  };
+}
 
 /**
  * Helper: Authoritative Doctor Case Transition Executor
@@ -4287,6 +4376,13 @@ async function executeDoctorTransition({
 
           if (targetStatus === 'approved') {
             const doctorIdentity = req.doctorIdentity;
+            const previousRevisionId = caseData.currentReportRevisionId || null;
+            const actor = {
+              uid: req.user.uid,
+              email: req.user.email || '',
+              name: doctorIdentity.name || req.user.name || req.user.displayName || 'Doctor',
+              role: 'doctor'
+            };
             updateData.doctorApproved = true;
             updateData.approvingDoctorId = req.user.uid;
             updateData.approvingDoctorEmail = req.user.email || '';
@@ -4307,6 +4403,26 @@ async function executeDoctorTransition({
             updateData.medications = typeof medications === 'string' ? medications.trim() : '';
             updateData.recommendation = normalizedRecommendations.join('\n');
             updateData.recommendations = normalizedRecommendations;
+            updateData.reportSnapshot = buildApprovedReportSnapshot({
+              caseId,
+              caseData,
+              updateData,
+              doctorIdentity,
+              actor,
+              approvedAtIso: nowIso,
+              previousRevisionId
+            });
+            updateData.reportRevisionNumber = updateData.reportSnapshot.revisionNumber;
+            updateData.currentReportRevisionId = updateData.reportSnapshot.revisionId;
+            updateData.originalCaseId = updateData.reportSnapshot.originalCaseId;
+            updateData.previousReportRevisionId = previousRevisionId;
+            updateData.approvalHistory = admin.firestore.FieldValue.arrayUnion({
+              revisionId: updateData.reportSnapshot.revisionId,
+              revisionNumber: updateData.reportSnapshot.revisionNumber,
+              approvedAt: nowIso,
+              approvedBy: actor,
+              signatureWorkflow: updateData.reportSnapshot.signature.workflow
+            });
           } else if (targetStatus === 'more_info_requested') {
             updateData.moreInfoRequestedAt = admin.firestore.FieldValue.serverTimestamp();
             updateData.moreInfoNote = transitionReason;
@@ -4319,6 +4435,21 @@ async function executeDoctorTransition({
           }
 
           transaction.update(caseRef, updateData);
+          if (targetStatus === 'approved') {
+            const reportRevisionRef = db.collection('clinical_reports').doc(updateData.reportSnapshot.revisionId);
+            transaction.set(reportRevisionRef, {
+              ...updateData.reportSnapshot,
+              patientId: updateData.reportSnapshot.patient.patientId,
+              approvingDoctorId: req.user.uid,
+              clinicId: updateData.reportSnapshot.caseDetails.clinicId,
+              reportRef: updateData.reportRef,
+              reportVersion: updateData.reportVersion,
+              modelVersion: updateData.modelVersion,
+              doctorApproved: true,
+              published: true,
+              createdAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+          }
           const auditRef = db.collection('audit_events').doc();
           transaction.set(auditRef, {
             type: `CLINICAL_CASE_${targetStatus.toUpperCase()}`,
@@ -4350,6 +4481,8 @@ async function executeDoctorTransition({
             transaction.set(approveRef, {
               type: 'CASE_APPROVED',
               caseId,
+              revisionId: updateData.reportSnapshot.revisionId,
+              revisionNumber: updateData.reportSnapshot.revisionNumber,
               doctorId: req.user.uid,
               actor: historyItem.actor,
               clinicId: recordClinicId(caseData),
@@ -4490,6 +4623,82 @@ app.post('/api/doctor/approve-clinical-case', requireAuth, requireVerifiedEmail,
     medications, recommendation, recommendations,
     approvingDoctorName, doctorSpecialty, doctorLicense, clinicName, reportRef, reportGeneratedAt
   });
+});
+
+app.post('/api/doctor/withdraw-clinical-report', requireAuth, requireVerifiedEmail, requireDoctor, requireMfaIfEnrolled, async (req, res) => {
+  const { caseId, reason } = req.body || {};
+  const withdrawalReason = String(reason || '').trim();
+  if (!caseId || !withdrawalReason) {
+    return res.status(400).json({ error: 'MISSING_WITHDRAWAL_REASON', message: 'caseId and withdrawal reason are required.' });
+  }
+  try {
+    const caseRef = db.collection('cases').doc(caseId);
+    const result = await db.runTransaction(async transaction => {
+      const caseDoc = await transaction.get(caseRef);
+      if (!caseDoc.exists) return { statusCode: 404, body: { error: 'NOT_FOUND' } };
+      const caseData = caseDoc.data() || {};
+      const assignedDoctor = caseData.assignedDoctorId || caseData.doctorId || caseData.doctorUid;
+      if (assignedDoctor !== req.user.uid && caseData.approvingDoctorId !== req.user.uid) {
+        return { statusCode: 403, body: { error: 'ACCESS_DENIED' } };
+      }
+      if (caseData.status !== 'approved' || caseData.doctorApproved !== true || !caseData.currentReportRevisionId) {
+        return { statusCode: 400, body: { error: 'NO_ACTIVE_APPROVED_REPORT' } };
+      }
+      const nowIso = new Date().toISOString();
+      const actor = {
+        uid: req.user.uid,
+        email: req.user.email || '',
+        name: req.user.name || req.user.displayName || 'Doctor',
+        role: 'doctor'
+      };
+      const withdrawal = {
+        status: 'withdrawn',
+        withdrawnAt: nowIso,
+        withdrawnBy: actor,
+        reason: withdrawalReason
+      };
+      transaction.update(caseRef, {
+        reportWithdrawal: withdrawal,
+        'reportSnapshot.withdrawal': withdrawal,
+        reportWithdrawnAt: nowIso,
+        reportWithdrawnBy: req.user.uid,
+        reportWithdrawalReason: withdrawalReason,
+        statusHistory: admin.firestore.FieldValue.arrayUnion({
+          oldStatus: 'approved',
+          newStatus: 'report_withdrawn',
+          actor,
+          reason: withdrawalReason,
+          timestamp: nowIso,
+          changedAt: nowIso,
+          changedBy: req.user.uid,
+          changedByEmail: req.user.email || '',
+          changedByRole: 'doctor'
+        })
+      });
+      transaction.update(db.collection('clinical_reports').doc(caseData.currentReportRevisionId), {
+        withdrawal,
+        published: false,
+        withdrawnAt: nowIso,
+        withdrawnBy: req.user.uid,
+        withdrawalReason
+      });
+      transaction.set(db.collection('audit_events').doc(), {
+        type: 'CLINICAL_REPORT_WITHDRAWN',
+        caseId,
+        revisionId: caseData.currentReportRevisionId,
+        doctorId: req.user.uid,
+        actor,
+        reason: withdrawalReason,
+        timestamp: admin.firestore.FieldValue.serverTimestamp()
+      });
+      return { revisionId: caseData.currentReportRevisionId, withdrawal };
+    });
+    if (result.statusCode) return res.status(result.statusCode).json(result.body);
+    return res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('[REPORT WITHDRAW ERROR]:', err);
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
+  }
 });
 
 /**

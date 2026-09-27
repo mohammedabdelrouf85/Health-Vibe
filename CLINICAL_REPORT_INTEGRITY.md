@@ -16,6 +16,25 @@ views refresh identity through an authenticated, case-authorized API lookup;
 missing or unavailable verified records display the missing-value label,
 including for legacy reports. No historical record is automatically rewritten.
 
+Approved reports now create an immutable `reportSnapshot` on the case and a
+linked `clinical_reports/{caseId}_vN` revision document. The snapshot freezes
+patient and case details, recorded results, doctor notes, recommendations,
+verified doctor identity, disclaimer text, report/model/rule versions, approval
+dates, and generated dates at the moment of approval. Report rendering prefers
+that snapshot, so later edits to a doctor application, doctor profile, patient
+profile, or operational case fields do not alter older approved reports.
+
+Each approval records `approvalHistory[]` with the revision ID, version number,
+approving doctor, approval time, and signature workflow
+`doctor_electronic_approval_v1`. New approved versions increment
+`reportRevisionNumber`, link to `previousReportRevisionId`, and keep the
+original case ID for revision history access.
+
+Reports can be withdrawn only through the backend doctor endpoint with a
+required reason. Withdrawal records who withdrew the active revision, when, and
+why, marks the linked revision unpublished, and preserves the prior approved
+snapshot for audit/history instead of deleting or rewriting it.
+
 `firestore.rules` prevents direct client approval or replacement of protected
 identity and approved clinical fields. Deploy the backend and these rules with
 the frontend. Backend configuration is required for approval; a backend failure

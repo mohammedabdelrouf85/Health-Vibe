@@ -3094,7 +3094,7 @@ function recordedClinicalText(value, isEn) {
 }
 
 function getRecordedClinicalContent(record, isEn) {
-  const c = record || {};
+  const c = (record && record.reportSnapshot && record.reportSnapshot.clinicalContent) || record || {};
   const saved = Array.isArray(c.recommendations)
     ? c.recommendations.filter(value => typeof value === "string" && value.trim()).map(value => value.trim())
     : parseDoctorRecommendations(c.recommendation);
@@ -3106,8 +3106,10 @@ function getRecordedClinicalContent(record, isEn) {
 }
 
 function getRecordedDoctorIdentity(record, isEn) {
-  const identity = record && record.doctorIdentity;
-  const verified = identity && identity.uid === record.approvingDoctorId && identity.applicationId ? identity : {};
+  const snapshotIdentity = record && record.reportSnapshot && record.reportSnapshot.doctorIdentity;
+  const identity = snapshotIdentity || (record && record.doctorIdentity);
+  const approvedDoctorId = record && (record.approvingDoctorId || record.reportSnapshot?.approval?.approvedBy?.uid);
+  const verified = identity && identity.uid === approvedDoctorId && identity.applicationId ? identity : {};
   return {
     name: recordedClinicalText(verified.name, isEn),
     licenseNumber: recordedClinicalText(verified.licenseNumber, isEn),
@@ -3116,7 +3118,31 @@ function getRecordedDoctorIdentity(record, isEn) {
   };
 }
 
+function applyApprovedReportSnapshot(record) {
+  const snapshot = record && record.reportSnapshot;
+  if (!snapshot) return record;
+  return {
+    ...record,
+    ...(snapshot.patient || {}),
+    ...(snapshot.caseDetails || {}),
+    ...(snapshot.clinicalContent || {}),
+    doctorIdentity: snapshot.doctorIdentity || record.doctorIdentity,
+    reportVersion: snapshot.versions?.reportVersion || record.reportVersion,
+    modelVersion: snapshot.versions?.modelVersion || record.modelVersion,
+    ruleEngineVersion: snapshot.versions?.ruleEngineVersion || record.ruleEngineVersion,
+    approvedAt: snapshot.dates?.approvedAt || record.approvedAt,
+    generatedAt: snapshot.dates?.generatedAt || record.generatedAt,
+    reportGeneratedAt: snapshot.dates?.generatedAt || record.reportGeneratedAt,
+    submittedAt: snapshot.dates?.submittedAt || record.submittedAt,
+    reportRevisionNumber: snapshot.revisionNumber || record.reportRevisionNumber,
+    currentReportRevisionId: snapshot.revisionId || record.currentReportRevisionId,
+    previousReportRevisionId: snapshot.previousRevisionId || record.previousReportRevisionId,
+    reportWithdrawal: record.reportWithdrawal || snapshot.withdrawal
+  };
+}
+
 async function loadReportDoctorIdentity(record) {
+  if (record && record.reportSnapshot && record.reportSnapshot.doctorIdentity) return record;
   // Refresh legacy reports from the verified record too; never trust old
   // free-text names or licenses. A failed lookup renders "Not recorded".
   try {
@@ -7181,7 +7207,7 @@ async function renderReportScreen(targetCaseId = null) {
     const o2StatusText = isSupport ? (isEn ? "Concealed" : "محجوب") : (isEn ? "Recorded measurement" : "القياس المسجل");
     const o2Display = isSupport ? "**%" : (o2Val === null || o2Val === "" ? missing : `${escapeHtml(String(o2Val))}%`);
 
-    if (!isPreview) caseData = await loadReportDoctorIdentity(caseData);
+    if (!isPreview) caseData = applyApprovedReportSnapshot(await loadReportDoctorIdentity(caseData));
     const identity = getRecordedDoctorIdentity(caseData, isEn);
     const doctorName = escapeHtml(identity.name);
     const doctorSpecialty = escapeHtml(identity.specialty);
@@ -7189,6 +7215,9 @@ async function renderReportScreen(targetCaseId = null) {
     const clinicName = escapeHtml(identity.clinic);
     const reportRef = escapeHtml(caseData.reportRef || `HV-REP-${caseData.id.slice(-8).toUpperCase()}`);
     const reportVersion = escapeHtml(caseData.reportVersion || missing);
+    const reportRevisionLabel = escapeHtml(caseData.reportRevisionNumber ? `v${caseData.reportRevisionNumber}` : missing);
+    const reportWithdrawal = caseData.reportWithdrawal || {};
+    const isWithdrawnReport = reportWithdrawal.status === "withdrawn";
     const modelVersion = escapeHtml(caseData.modelVersion || caseData.assessment?.aiTriage?.modelVersion || missing);
     const ruleEngineVersion = escapeHtml(caseData.assessment?.aiTriage?.ruleEngineVersion || caseData.ruleEngineVersion || missing);
     const ruleScorePoints = typeof caseData.assessment?.aiTriage?.ruleScorePoints === 'number'
@@ -7593,7 +7622,7 @@ async function renderReportScreen(targetCaseId = null) {
                 Digital Hash: SHA256-${caseData.id.slice(0, 14).toUpperCase()}
               </div>
               <div style="font-size: 11px; color: var(--muted); font-family: monospace;">
-                Audit Ref: ${reportRef} | Ver: ${reportVersion} | Rules: ${ruleEngineVersion}
+                Audit Ref: ${reportRef} | Ver: ${reportVersion} | Revision: ${reportRevisionLabel} | Rules: ${ruleEngineVersion}
               </div>
             </div>
           </div>
@@ -7606,6 +7635,14 @@ async function renderReportScreen(targetCaseId = null) {
             <span style="font-size: 7px; color: var(--muted);">${new Date().getFullYear()} OFFICIAL</span>
           </div>
         </div>
+
+        ${isWithdrawnReport ? `
+          <div class="safety-note" style="font-size: 12px; line-height: 1.5; margin-bottom: 20px; padding: 12px 16px; background: rgba(239, 68, 68, 0.08); border-left: 4px solid #ef4444; border-radius: 8px;">
+            <strong>${isEn ? "Report withdrawn" : "تم سحب التقرير"}</strong>
+            <div>${escapeHtml(reportWithdrawal.reason || missing)}</div>
+            <small>${escapeHtml(formatRecordedDate(reportWithdrawal.withdrawnAt))}</small>
+          </div>
+        ` : ''}
 
         <!-- MANDATORY MEDICAL NOTICE -->
         <div class="safety-note" style="font-size: 12px; line-height: 1.5; margin-bottom: 24px; padding: 12px 16px; background: var(--surface-2); border-left: 4px solid ${isSupport ? '#f59e0b' : 'var(--teal)'}; border-radius: 8px;">

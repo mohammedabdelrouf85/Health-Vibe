@@ -419,8 +419,12 @@ service cloud.firestore {
       allow read: if isAuthenticated() &&
                     !('role' in request.auth.token && request.auth.token.role == 'support') &&
                     ((isPatientOwnedRecord(resource.data) && isPublishedReport(resource.data)) ||
+                     (isPatientOwnedRecord(resource.data) && ('withdrawal' in resource.data) && resource.data.withdrawal.status == 'withdrawn') ||
+                     (('role' in request.auth.token && request.auth.token.role == 'doctor') &&
+                      ('approvingDoctorId' in resource.data) && resource.data.approvingDoctorId == request.auth.uid) ||
                      ('role' in request.auth.token && request.auth.token.role == 'super_admin') ||
                      tokenClinicAdminFor(resource.data));
+      allow create, update, delete: if false;
     }
 
     // =========================================================================
