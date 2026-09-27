@@ -885,8 +885,16 @@
       <section id="screen-assessment" class="screen">
         <div class="form-layout">
           <article class="panel form-panel">
-            <div class="panel-head"><h3>تقييم التنفس</h3><span class="pill info">الخطوة 2 من 4</span></div>
-            <div class="progress"><span style="width:54%"></span></div>
+            <div class="panel-head"><h3>تقييم التنفس</h3><span id="assessmentProgressLabel" class="pill info">الخطوة 2 من 4</span></div>
+            <div class="progress" aria-label="Assessment completion progress"><span id="assessmentProgressBar" style="width:0%"></span></div>
+            <div id="assessmentDraftStatus" class="field-hint" style="margin: 8px 0 12px;">لم يتم حفظ مسودة بعد</div>
+            <div id="assessmentRecoveryBanner" class="clinical-note" hidden style="margin-bottom: 14px;">
+              توجد مسودة محفوظة لهذا الحساب. يمكنك المتابعة أو البدء من جديد.
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+                <button type="button" id="btnResumeAssessmentDraft" class="solid-button" style="padding:7px 12px;font-size:12px;">متابعة المسودة</button>
+                <button type="button" id="btnDiscardAssessmentDraft" class="outline-button" style="padding:7px 12px;font-size:12px;">بدء جديد</button>
+              </div>
+            </div>
             <label>هل يوجد ضيق تنفس؟</label>
             <div id="breathingChoices" class="choice-row">
               <button class="choice active">نعم</button>
@@ -960,6 +968,10 @@
               </label>
             </div>
 
+            <div class="doctor-actions" style="display:flex;gap:10px;flex-wrap:wrap;">
+              <button type="button" id="btnAssessmentPrev" class="outline-button" style="flex:1;">السابق</button>
+              <button type="button" id="btnAssessmentNext" class="outline-button" style="flex:1;">التالي</button>
+            </div>
             <button id="submitAssessment" class="solid-button full">إرسال للطبيب</button>
           </article>
           <article class="panel insight-panel">
@@ -2238,7 +2250,15 @@
         <div><span>ضيق التنفس</span><strong id="confirmDyspnea">--</strong></div>
         <div><span>درجة الكحة</span><strong id="confirmCough">--</strong></div>
         <div><span>مدة الأعراض</span><strong id="confirmDuration">--</strong></div>
+        <div><span>درجة الحرارة</span><strong id="confirmTemperature">--</strong></div>
+        <div><span>معدل التنفس</span><strong id="confirmRespiratoryRate">--</strong></div>
+        <div><span>ألم بالصدر</span><strong id="confirmChestPain">--</strong></div>
+        <div><span>تطور الأعراض</span><strong id="confirmProgression">--</strong></div>
+        <div><span>عدوى حديثة</span><strong id="confirmRecentInfection">--</strong></div>
+        <div><span>ربو أو COPD</span><strong id="confirmAsthmaCopd">--</strong></div>
         <div><span>عوامل الخطورة</span><strong id="confirmRisks">--</strong></div>
+        <div><span>الأدوية الحالية</span><strong id="confirmMedications">--</strong></div>
+        <div><span>ملاحظات</span><strong id="confirmNotes">--</strong></div>
         <div><span>الطبيب المرتبط</span><strong id="confirmDoctor">--</strong></div>
         <div><span>العيادة</span><strong id="confirmClinic">--</strong></div>
         <div><span>الموافقة الطبية</span><strong id="confirmConsentStatus" style="color: #10b981;">🔒 موثقة ومقبولة</strong></div>

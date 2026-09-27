@@ -427,6 +427,25 @@ service cloud.firestore {
       allow delete: if isOwner() || isPlatformAdmin() || isClinicAdminFor(resource.data);
     }
 
+    match /assessmentDrafts/{draftId} {
+      allow read: if isAuthenticated() &&
+                    draftId == request.auth.uid &&
+                    resource.data.patientId == request.auth.uid;
+
+      allow create, update: if isAuthenticated() &&
+                              draftId == request.auth.uid &&
+                              request.resource.data.patientId == request.auth.uid &&
+                              request.resource.data.createdBy == request.auth.uid &&
+                              request.resource.data.status in ['draft', 'submitted'] &&
+                              !('doctorApproved' in request.resource.data) &&
+                              !('assignedDoctorId' in request.resource.data) &&
+                              !('doctorId' in request.resource.data) &&
+                              !('doctorUid' in request.resource.data) &&
+                              !('approvingDoctorId' in request.resource.data);
+
+      allow delete: if isAuthenticated() && draftId == request.auth.uid;
+    }
+
     match /assessments/{assessmentId} {
       allow read: if isAuthenticated() &&
                     !('role' in request.auth.token && request.auth.token.role == 'support') &&

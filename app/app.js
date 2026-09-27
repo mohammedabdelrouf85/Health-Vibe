@@ -3393,6 +3393,7 @@ function renderDoctorQueueItems(allCases) {
   // 🛡️ STRICT ISOLATION: Partition cases into authentic patients vs test/demo data
   const realCases = (allCases || []).filter(c => {
     if (!c || !isRealProductionRecord(c)) return false;
+    if (c.status === CASE_STATUS.DRAFT || c.status === "draft") return false;
     const hasPatient = Boolean(c.patientId || c.patientUid || c.patientEmail);
     const hasVitals = typeof c.o2 === "number" || typeof c.oxygenLevel === "number";
     return hasPatient && hasVitals;
@@ -6221,6 +6222,8 @@ function showScreen(name) {
   }
   if (name === "assessment") {
     updateAssessmentConsentBadge();
+    initAssessmentDraftAutosave();
+    loadAssessmentDraft();
   }
   if (name === "profile") {
     loadUserProfileData();
@@ -10618,7 +10621,15 @@ window.openConfirmAssessmentModal = function(data, onConfirm) {
   safeSet("confirmDyspnea", data.breathingDifficulty);
   safeSet("confirmCough", data.coughLevel);
   safeSet("confirmDuration", data.symptomDuration);
+  safeSet("confirmTemperature", data.temperature);
+  safeSet("confirmRespiratoryRate", data.respiratoryRate);
+  safeSet("confirmChestPain", data.chestPain);
+  safeSet("confirmProgression", data.symptomProgression);
+  safeSet("confirmRecentInfection", data.recentInfection);
+  safeSet("confirmAsthmaCopd", data.asthmaCopd);
   safeSet("confirmRisks", data.riskFactors && data.riskFactors.length ? data.riskFactors.join("، ") : (isEn ? "None" : "لا يوجد"));
+  safeSet("confirmMedications", data.currentMedications || (isEn ? "Not provided" : "غير مسجل"));
+  safeSet("confirmNotes", data.notes || (isEn ? "Not provided" : "غير مسجل"));
   safeSet("confirmDoctor", data.assignedDoctorName || "--");
   safeSet("confirmClinic", data.clinicName || "--");
   safeSet("confirmConsentStatus", isEn ? "🔒 Verified & Accepted" : "🔒 موثقة ومقبولة");
@@ -11446,6 +11457,226 @@ function buildAssessmentModel({
 }
 window.buildAssessmentModel = buildAssessmentModel;
 
+const ASSESSMENT_DRAFT_COLLECTION = "assessmentDrafts";
+const ASSESSMENT_DRAFT_VERSION = "2026-09-draft-v1";
+let _assessmentDraftSaveTimer = null;
+let _assessmentSubmitting = false;
+let _assessmentLoadedDraft = null;
+
+function getAssessmentDraftKey(user = getActiveUser()) {
+  const uid = user && user.uid ? user.uid : "guest";
+  return `hv_assessment_draft_${uid}`;
+}
+
+function getAssessmentDraftDocId(user = getActiveUser()) {
+  return user && user.uid ? user.uid : null;
+}
+
+function setChoiceGroupValue(groupId, value) {
+  const group = document.getElementById(groupId);
+  if (!group) return;
+  group.querySelectorAll(".choice").forEach((btn) => {
+    btn.classList.toggle("active", btn.textContent.trim() === value);
+  });
+}
+
+function gatherAssessmentDraftFields() {
+  const readChoices = (groupId) => Array.from(document.querySelectorAll(`#${groupId} .choice.active`)).map(btn => btn.textContent.trim());
+  const firstChoice = (groupId) => readChoices(groupId)[0] || "";
+  return {
+    oxygenRaw: readOxygenRawValue(),
+    breathingDifficulty: firstChoice("breathingChoices"),
+    coughLevel: firstChoice("coughChoices"),
+    symptomDuration: document.getElementById("symptomDuration")?.value.trim() || "",
+    temperatureRaw: document.getElementById("temperatureInput")?.value.trim() || "",
+    respiratoryRateRaw: document.getElementById("respiratoryRateInput")?.value.trim() || "",
+    chestPain: firstChoice("chestPainChoices"),
+    symptomProgression: firstChoice("symptomProgressionChoices"),
+    recentInfection: firstChoice("recentInfectionChoices"),
+    asthmaCopd: firstChoice("asthmaCopdChoices"),
+    riskFactors: readChoices("riskChoices"),
+    currentMedications: document.getElementById("currentMedicationsInput")?.value.trim() || "",
+    notes: document.getElementById("assessmentNotesInput")?.value.trim() || "",
+    inlineConsent: Boolean(document.getElementById("assessmentInlineConsent")?.checked)
+  };
+}
+
+function applyAssessmentDraftFields(fields = {}) {
+  const setValue = (id, value) => {
+    const el = document.getElementById(id);
+    if (el && value !== undefined && value !== null) el.value = value;
+  };
+  setValue("oxygenInput", fields.oxygenRaw);
+  setValue("symptomDuration", fields.symptomDuration);
+  setValue("temperatureInput", fields.temperatureRaw);
+  setValue("respiratoryRateInput", fields.respiratoryRateRaw);
+  setValue("currentMedicationsInput", fields.currentMedications);
+  setValue("assessmentNotesInput", fields.notes);
+  setChoiceGroupValue("breathingChoices", fields.breathingDifficulty);
+  setChoiceGroupValue("coughChoices", fields.coughLevel);
+  setChoiceGroupValue("chestPainChoices", fields.chestPain);
+  setChoiceGroupValue("symptomProgressionChoices", fields.symptomProgression);
+  setChoiceGroupValue("recentInfectionChoices", fields.recentInfection);
+  setChoiceGroupValue("asthmaCopdChoices", fields.asthmaCopd);
+  const riskGroup = document.getElementById("riskChoices");
+  if (riskGroup && Array.isArray(fields.riskFactors) && fields.riskFactors.length) {
+    riskGroup.querySelectorAll(".choice").forEach(btn => {
+      btn.classList.toggle("active", fields.riskFactors.includes(btn.textContent.trim()));
+    });
+  }
+  const inlineConsent = document.getElementById("assessmentInlineConsent");
+  if (inlineConsent && typeof fields.inlineConsent === "boolean") inlineConsent.checked = fields.inlineConsent;
+  updateAssessmentProgress();
+  updateOxygenWarning();
+}
+
+function buildAssessmentDraftPayload(user = getActiveUser()) {
+  const fields = gatherAssessmentDraftFields();
+  return {
+    schemaVersion: ASSESSMENT_DRAFT_VERSION,
+    status: "draft",
+    patientId: user?.uid || null,
+    createdBy: user?.uid || null,
+    patientEmail: user?.email || null,
+    fields,
+    updatedAtClient: new Date().toISOString(),
+    isSubmittedToDoctor: false
+  };
+}
+
+function updateAssessmentProgress() {
+  const fields = gatherAssessmentDraftFields();
+  const checks = [
+    fields.breathingDifficulty,
+    fields.coughLevel,
+    fields.oxygenRaw,
+    fields.symptomDuration,
+    fields.chestPain,
+    fields.symptomProgression,
+    fields.recentInfection,
+    fields.asthmaCopd,
+    Array.isArray(fields.riskFactors) && fields.riskFactors.length > 0,
+    fields.inlineConsent
+  ];
+  const completed = checks.filter(Boolean).length;
+  const pct = Math.round((completed / checks.length) * 100);
+  const bar = document.getElementById("assessmentProgressBar");
+  const label = document.getElementById("assessmentProgressLabel");
+  if (bar) bar.style.width = `${pct}%`;
+  if (label) label.textContent = currentLanguage === "en" ? `${pct}% complete` : `مكتمل ${pct}%`;
+  return pct;
+}
+
+async function saveAssessmentDraftNow() {
+  const user = getActiveUser();
+  const payload = buildAssessmentDraftPayload(user);
+  updateAssessmentProgress();
+  try {
+    localStorage.setItem(getAssessmentDraftKey(user), JSON.stringify(payload));
+  } catch(e) {}
+  if (user?.uid && typeof db !== "undefined" && db) {
+    try {
+      await db.collection(ASSESSMENT_DRAFT_COLLECTION).doc(getAssessmentDraftDocId(user)).set({
+        ...payload,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+      const status = document.getElementById("assessmentDraftStatus");
+      if (status) status.textContent = currentLanguage === "en" ? "Draft saved securely to your account" : "تم حفظ المسودة بأمان على حسابك";
+    } catch (err) {
+      console.warn("Assessment draft cloud save failed:", err);
+      const status = document.getElementById("assessmentDraftStatus");
+      if (status) status.textContent = currentLanguage === "en" ? "Draft saved on this device; cloud sync pending" : "تم حفظ المسودة على هذا الجهاز؛ مزامنة السحابة معلقة";
+    }
+  }
+}
+
+function scheduleAssessmentDraftSave() {
+  updateAssessmentProgress();
+  window.clearTimeout(_assessmentDraftSaveTimer);
+  _assessmentDraftSaveTimer = window.setTimeout(saveAssessmentDraftNow, 450);
+}
+
+async function loadAssessmentDraft() {
+  const user = getActiveUser();
+  let draft = null;
+  if (user?.uid && typeof db !== "undefined" && db) {
+    try {
+      const snap = await db.collection(ASSESSMENT_DRAFT_COLLECTION).doc(getAssessmentDraftDocId(user)).get();
+      if (snap.exists) draft = { id: snap.id, ...snap.data() };
+    } catch (err) {
+      console.warn("Assessment draft cloud load failed:", err);
+    }
+  }
+  if (!draft) {
+    try {
+      draft = JSON.parse(localStorage.getItem(getAssessmentDraftKey(user)) || "null");
+    } catch(e) {
+      draft = null;
+    }
+  }
+  _assessmentLoadedDraft = draft && draft.status === "draft" && !draft.isSubmittedToDoctor ? draft : null;
+  const banner = document.getElementById("assessmentRecoveryBanner");
+  if (banner) banner.hidden = !_assessmentLoadedDraft;
+  updateAssessmentProgress();
+  return _assessmentLoadedDraft;
+}
+
+async function clearAssessmentDraft() {
+  const user = getActiveUser();
+  try {
+    localStorage.removeItem(getAssessmentDraftKey(user));
+  } catch(e) {}
+  if (user?.uid && typeof db !== "undefined" && db) {
+    try {
+      await db.collection(ASSESSMENT_DRAFT_COLLECTION).doc(getAssessmentDraftDocId(user)).set({
+        status: "submitted",
+        isSubmittedToDoctor: true,
+        clearedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+    } catch(e) {
+      console.warn("Could not mark assessment draft cleared:", e);
+    }
+  }
+  _assessmentLoadedDraft = null;
+  const banner = document.getElementById("assessmentRecoveryBanner");
+  if (banner) banner.hidden = true;
+}
+
+function initAssessmentDraftAutosave() {
+  const root = document.getElementById("screen-assessment");
+  if (!root || root.dataset.draftAutosaveBound === "true") return;
+  root.dataset.draftAutosaveBound = "true";
+  root.addEventListener("input", scheduleAssessmentDraftSave);
+  root.addEventListener("change", scheduleAssessmentDraftSave);
+  root.addEventListener("click", (event) => {
+    if (event.target.closest(".choice")) window.setTimeout(scheduleAssessmentDraftSave, 0);
+  });
+  document.getElementById("btnResumeAssessmentDraft")?.addEventListener("click", () => {
+    if (_assessmentLoadedDraft?.fields) {
+      applyAssessmentDraftFields(_assessmentLoadedDraft.fields);
+      document.getElementById("assessmentRecoveryBanner").hidden = true;
+      showToast(currentLanguage === "en" ? "Draft restored." : "تم استرجاع المسودة.");
+    }
+  });
+  document.getElementById("btnDiscardAssessmentDraft")?.addEventListener("click", async () => {
+    await clearAssessmentDraft();
+    showToast(currentLanguage === "en" ? "Draft discarded." : "تم حذف المسودة.");
+  });
+  document.getElementById("btnAssessmentPrev")?.addEventListener("click", () => {
+    saveAssessmentDraftNow();
+    showScreen("profile");
+  });
+  document.getElementById("btnAssessmentNext")?.addEventListener("click", () => {
+    saveAssessmentDraftNow();
+    document.getElementById("submitAssessment")?.focus();
+  });
+}
+
+window.gatherAssessmentDraftFields = gatherAssessmentDraftFields;
+window.applyAssessmentDraftFields = applyAssessmentDraftFields;
+window.saveAssessmentDraftNow = saveAssessmentDraftNow;
+window.loadAssessmentDraft = loadAssessmentDraft;
+
 /**
  * Comprehensive Validation Engine for Clinical Assessment Fields
  * Validates oxygenLevel, breathingDifficulty, coughLevel, symptomDuration, riskFactors
@@ -11591,6 +11822,10 @@ function validateAssessmentFields({
 }
 
 document.getElementById("submitAssessment").addEventListener("click", async () => {
+  if (_assessmentSubmitting) {
+    showToast(currentLanguage === "en" ? "Submission already in progress. Please wait." : "الإرسال جارٍ بالفعل. يرجى الانتظار.");
+    return;
+  }
   updateOxygenWarning();
 
   const inlineConsentChk = document.getElementById("assessmentInlineConsent");
@@ -11623,6 +11858,7 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
   const isEn = currentLanguage === "en";
 
   try {
+    await saveAssessmentDraftNow();
     // ── جمع بيانات النموذج ──────────────────────────────────────────
     const oxygenRaw = readOxygenRawValue();
 
@@ -11751,6 +11987,8 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
       priority,
       priorityAr: priorityAr[priority]
     }, async () => {
+      if (_assessmentSubmitting) return;
+      _assessmentSubmitting = true;
       submitBtn.disabled = true;
       submitBtn.textContent = isEn ? "Submitting..." : "جاري الإرسال...";
 
@@ -11780,6 +12018,7 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
         // ── حفظ في Firestore ──────────────────────────────────────────
         const docRef = await db.collection("cases").add(caseData);
         console.log("✅ Standardized Case saved to Firestore:", docRef.id);
+        await clearAssessmentDraft();
 
         // ── ربط الحالة مباشرة بسجل المستخدم في Firestore ──────────────
         if (db && user.uid) {
@@ -11900,6 +12139,7 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
           showToast(isEn ? "Error sending assessment. Please try again." : "حدث خطأ أثناء الإرسال. حاول مرة أخرى.");
         }
       } finally {
+        _assessmentSubmitting = false;
         submitBtn.disabled = false;
         submitBtn.textContent = isEn ? "Send to Doctor" : "إرسال للطبيب";
       }
