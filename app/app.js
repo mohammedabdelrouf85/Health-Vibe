@@ -567,6 +567,13 @@ const DEFAULT_REVOKED_VERIFICATION_EMAILS = [
   "devilunderurwater@gmail.com"
 ];
 
+const DEFAULT_OWNER_EMAILS = [
+  "mennamahmoudtawfik281@gmail.com",
+  "mohammedabdelrouf85@gmail.com",
+  "sondoselbehery287@gmail.com",
+  "badr.ahmed.biotech@gmail.com"
+];
+
 function getConfiguredEmailList(configKey, fallback) {
   const config = typeof window !== "undefined" ? window.HEALTH_VIBE_CONFIG : null;
   const values = config && config.adminAccess && Array.isArray(config.adminAccess[configKey])
@@ -581,12 +588,25 @@ function getRevokedVerificationEmails() {
   return getConfiguredEmailList("revokedVerificationEmails", DEFAULT_REVOKED_VERIFICATION_EMAILS);
 }
 
+function getTrustedOwnerEmails() {
+  return getConfiguredEmailList("ownerEmails", DEFAULT_OWNER_EMAILS);
+}
+
 function isOwnerUser(userOrEmail) {
-  return Boolean(
-    typeof userOrEmail === "object" &&
-    userOrEmail &&
-    (userOrEmail.isOwner === true || userOrEmail.role === "super_admin")
-  );
+  if (!userOrEmail) return false;
+  const trustedList = getTrustedOwnerEmails();
+  if (typeof userOrEmail === "string") {
+    return trustedList.includes(userOrEmail.trim().toLowerCase());
+  }
+  if (typeof userOrEmail === "object") {
+    const email = (userOrEmail.email || "").trim().toLowerCase();
+    return Boolean(
+      userOrEmail.isOwner === true ||
+      userOrEmail.role === "super_admin" ||
+      (email && trustedList.includes(email))
+    );
+  }
+  return false;
 }
 
 function isVerificationRevoked(userOrEmail) {
@@ -5155,9 +5175,10 @@ function normalizePhoneNumberInput(value) {
 function isUserVerified(user) {
   if (!user) return false;
   if (isVerificationRevoked(user)) return false;
+  if (isOwnerUser(user)) return true;
   if (user.emailVerified) return true;
   if (window._isUserVerified) return true;
-  if (window._cachedUserDoc && window._cachedUserDoc.emailVerified === true) {
+  if (window._cachedUserDoc && (window._cachedUserDoc.emailVerified === true || window._cachedUserDoc.isVerified === true)) {
     return true;
   }
   return false;

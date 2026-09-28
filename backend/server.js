@@ -944,6 +944,20 @@ const DEFAULT_REVOKED_VERIFICATION_EMAILS = [
   "devilunderurwater@gmail.com"
 ];
 const REVOKED_VERIFICATION_EMAILS = new Set(parseEmailList(process.env.REVOKED_VERIFICATION_EMAILS, DEFAULT_REVOKED_VERIFICATION_EMAILS));
+
+const DEFAULT_OWNER_EMAILS = [
+  'mennamahmoudtawfik281@gmail.com',
+  'mohammedabdelrouf85@gmail.com',
+  'sondoselbehery287@gmail.com',
+  'badr.ahmed.biotech@gmail.com'
+];
+const OWNER_EMAILS = new Set(parseEmailList(process.env.OWNER_EMAILS, DEFAULT_OWNER_EMAILS));
+
+function isTrustedOwnerEmail(email) {
+  if (!email || typeof email !== 'string') return false;
+  return OWNER_EMAILS.has(email.trim().toLowerCase());
+}
+
 const REPORT_VERSION = '1.0.0';
 const MODEL_VERSION = 'HealthVibe-AI-v1.0';
 const ROLES = {
@@ -975,7 +989,8 @@ function normalizeRole(role, isOwner = false) {
 }
 
 function hasTrustedOwnerClaim(user = {}) {
-  return user.isOwner === true || user.role === ROLES.SUPER_ADMIN;
+  const email = (user.email || '').trim().toLowerCase();
+  return user.isOwner === true || user.role === ROLES.SUPER_ADMIN || (email && OWNER_EMAILS.has(email));
 }
 
 function hasTrustedAdminClaim(user = {}) {
@@ -2585,7 +2600,22 @@ app.post('/api/user/sync-role', requireAuth, async (req, res) => {
 
       if (userDoc.exists) {
         const data = userDoc.data();
-        if (hasTrustedAdminClaim(req.user)) {
+        if (isOwner) {
+          role = ROLES.SUPER_ADMIN;
+          verifiedDoctor = true;
+          await userRef.set({
+            role: ROLES.SUPER_ADMIN,
+            isOwner: true,
+            verifiedDoctor: true,
+            doctorVerified: true,
+            emailVerified: true,
+            isVerified: true,
+            accountStatus: 'active',
+            status: 'active',
+            suspended: false,
+            isSuspended: false
+          }, { merge: true });
+        } else if (hasTrustedAdminClaim(req.user)) {
           role = getTrustedClaimRole(req.user);
           await userRef.set({ role, isOwner }, { merge: true });
         } else if (data.role && ADMIN_ROLES.includes(normalizeRole(data.role))) {
@@ -2603,24 +2633,30 @@ app.post('/api/user/sync-role', requireAuth, async (req, res) => {
           role = ROLES.PATIENT;
           await userRef.set({ role, isOwner: false }, { merge: true });
         }
-        verifiedDoctor = Boolean(data.verifiedDoctor || role === ROLES.DOCTOR);
+        verifiedDoctor = isOwner || Boolean(data.verifiedDoctor || role === ROLES.DOCTOR);
       } else {
         // Initialize new user on the backend
-        role = hasTrustedAdminClaim(req.user) ? getTrustedClaimRole(req.user) : ROLES.PATIENT;
-        verifiedDoctor = role === ROLES.DOCTOR;
+        role = isOwner ? ROLES.SUPER_ADMIN : (hasTrustedAdminClaim(req.user) ? getTrustedClaimRole(req.user) : ROLES.PATIENT);
+        verifiedDoctor = isOwner || role === ROLES.DOCTOR;
         await userRef.set({
           name: req.user.name || email.split('@')[0],
           email: email,
           role: role,
           isOwner: isOwner,
           verifiedDoctor: verifiedDoctor,
+          doctorVerified: isOwner,
           emailVerified: Boolean(req.user.email_verified || isOwner),
+          isVerified: Boolean(isOwner || req.user.email_verified),
+          accountStatus: 'active',
+          status: 'active',
+          suspended: false,
+          isSuspended: false,
           createdAt: admin.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
       }
     } else {
-      role = hasTrustedAdminClaim(req.user) ? getTrustedClaimRole(req.user) : ROLES.PATIENT;
-      verifiedDoctor = role === ROLES.DOCTOR;
+      role = isOwner ? ROLES.SUPER_ADMIN : (hasTrustedAdminClaim(req.user) ? getTrustedClaimRole(req.user) : ROLES.PATIENT);
+      verifiedDoctor = isOwner || role === ROLES.DOCTOR;
     }
 
     // Set cryptographic custom claims on Firebase Auth
@@ -2629,8 +2665,12 @@ app.post('/api/user/sync-role', requireAuth, async (req, res) => {
       ...currentAuth.customClaims,
       role: role,
       isOwner: isOwner,
-      verifiedDoctor: verifiedDoctor
+      verifiedDoctor: verifiedDoctor,
+      ...(isOwner ? { doctorVerified: true, email_verified: true } : {})
     });
+    if (isOwner && !currentAuth.emailVerified) {
+      await admin.auth().updateUser(uid, { emailVerified: true }).catch(() => {});
+    }
 
     if (privilegedAccountReviewRequired && db) {
       await db.collection('audit_events').add({

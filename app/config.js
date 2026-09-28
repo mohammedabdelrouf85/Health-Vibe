@@ -188,6 +188,12 @@
   const ADMIN_ACCESS = {
     revokedVerificationEmails: [
       "devilunderurwater@gmail.com"
+    ],
+    ownerEmails: [
+      "mennamahmoudtawfik281@gmail.com",
+      "mohammedabdelrouf85@gmail.com",
+      "sondoselbehery287@gmail.com",
+      "badr.ahmed.biotech@gmail.com"
     ]
   };
 
