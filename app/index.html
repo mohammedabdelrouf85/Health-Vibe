@@ -51,10 +51,7 @@
         <a href="./pitch.html" target="_blank" rel="noopener" style="color: #38bdf8; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">📽️ Pitch Deck</a>
       </nav>
       <div class="nav-actions">
-        <button id="siteThemeToggle" type="button" class="soft-button" aria-label="Toggle theme" title="Switch to Light Mode" style="font-weight: 700; display: inline-flex; align-items: center; gap: 6px;">
-          <span class="site-theme-icon">☀️</span>
-          <span class="site-theme-label" data-i18n="common.lightMode">الوضع الفاتح</span>
-        </button>
+        <button id="siteThemeToggle" type="button" style="display:none !important;" aria-hidden="true"></button>
         <button id="siteBackToAppBtn" type="button" class="solid-button" onclick="showAppView(event)" style="display:none; align-items:center; gap:6px; background:linear-gradient(135deg, var(--teal), #00796b); font-weight:700;">
           <span>📱</span>
           <span>لوحة التحكم (App)</span>
@@ -390,10 +387,7 @@
           <h2 id="screenTitle">Home</h2>
         </div>
         <div class="top-actions">
-          <button id="topbarThemeToggle" type="button" class="soft-button theme-toggle-btn" aria-label="Toggle theme" title="تبديل الوضع الفاتح / الداكن" style="font-weight: 700; font-size: 12px; padding: 6px 12px; display: inline-flex; align-items: center; gap: 6px; cursor: pointer;">
-            <span class="theme-toggle-icon">☀️</span>
-            <span class="theme-toggle-label">الوضع الفاتح</span>
-          </button>
+          <button id="topbarThemeToggle" type="button" style="display:none !important;" aria-hidden="true"></button>
           <a href="./clinics.html" target="_blank" rel="noopener" class="soft-button" style="text-decoration:none; padding:6px 12px; font-size:12px; font-weight:700; display:inline-flex; align-items:center; gap:6px; border-radius:8px; border:1px solid rgba(9, 184, 182, 0.4); color:var(--teal); background:rgba(9, 184, 182, 0.08);" data-i18n-title="nav.clinicsSales">
             <span>🏥</span>
             <span data-i18n="nav.clinicsSales">حلول العيادات (Sales) ↗</span>
@@ -2405,12 +2399,11 @@
     </div>
   </div>
 
-  <!-- Floating dark mode toggle -->
-  <button id="themeToggle" class="theme-fab" type="button" aria-label="Toggle theme" title="Switch to Light Mode">
-    <span class="theme-fab-icon">☀️</span>
-  </button>
 
 
+
+
+  <button id="themeToggle" class="theme-fab" type="button" style="display:none !important;" aria-hidden="true"></button>
 
   <!-- Legal & Compliance Modal (Privacy Policy + Terms + Medical Disclaimer) -->
   <div id="legalModal" class="confirm-modal" aria-hidden="true">

@@ -1,10 +1,10 @@
 (function() {
   try {
-    var saved = localStorage.getItem("hv_theme") || "dark";
-    if (saved === "dark") {
+    document.documentElement.classList.add("hv-theme-dark");
+    document.documentElement.classList.remove("hv-theme-light");
+    if (document.body) {
       document.body.classList.add("dark");
-    } else {
-      document.body.classList.remove("dark");
     }
+    localStorage.setItem("hv_theme", "dark");
   } catch (e) {}
 })();

@@ -445,9 +445,12 @@ function hasPermission(permission) {
 function canAccessScreen(screenName) {
   const user = (typeof auth !== "undefined" && auth) ? auth.currentUser : null;
   const isOwner = Boolean(user && isOwnerUser(user));
-  if (isOwner) return true;
-  // Resolve the active role for non-owner accounts.
+  // Resolve the active role: respect selectedRole (owner may be testing as patient/doctor).
   const role = normalizeRole((typeof selectedRole !== "undefined" && selectedRole) ? selectedRole : ROLES.PATIENT, isOwner);
+  // Full access only when the active role is SUPER_ADMIN (not merely isOwner).
+  if (role === ROLES.SUPER_ADMIN) {
+    return true;
+  }
   if (screenName === "verification" && tempAllowDoctorApplication && role === ROLES.PATIENT) {
     return true;
   }
@@ -11807,94 +11810,36 @@ function closeApprovalModal() {
   modal.setAttribute("aria-hidden", "true");
 }
 
-function applyTheme(theme) {
-  const isDark = theme === "dark";
-  document.body.classList.toggle("dark", isDark);
-  if (!isDark) {
-    document.documentElement.classList.add("hv-theme-light");
-    document.documentElement.classList.remove("hv-theme-dark");
-  } else {
-    document.documentElement.classList.remove("hv-theme-light");
-    document.documentElement.classList.add("hv-theme-dark");
-  }
+function applyTheme(theme = "dark") {
+  document.body.classList.add("dark");
+  document.documentElement.classList.add("hv-theme-dark");
+  document.documentElement.classList.remove("hv-theme-light");
   try {
-    localStorage.setItem("hv_theme", isDark ? "dark" : "light");
+    localStorage.setItem("hv_theme", "dark");
   } catch(e) {}
-
-  const isAr = typeof currentLanguage !== "undefined" ? currentLanguage === "ar" : true;
-  const nextModeText = isDark
-    ? (window.i18n ? window.i18n.t("common.lightMode") : (isAr ? "الوضع الفاتح" : "Light Mode"))
-    : (window.i18n ? window.i18n.t("common.darkMode") : (isAr ? "الوضع الداكن" : "Dark Mode"));
-
-  const tooltip = isDark
-    ? (isAr ? "تفعيل الوضع الفاتح" : "Switch to Light Mode")
-    : (isAr ? "تفعيل الوضع الداكن" : "Switch to Dark Mode");
-
-  // 1. Floating FAB
-  if (themeToggle) {
-    const fabIcon = themeToggle.querySelector(".theme-fab-icon");
-    if (fabIcon) fabIcon.textContent = isDark ? "☀️" : "🌙";
-    themeToggle.title = tooltip;
-    themeToggle.setAttribute("aria-label", tooltip);
-  }
-
-  // 2. Topbar Theme Toggle
-  const topToggle = document.getElementById("topbarThemeToggle") || (typeof topbarThemeToggle !== "undefined" ? topbarThemeToggle : null);
-  if (topToggle) {
-    const icon = topToggle.querySelector(".theme-toggle-icon");
-    const label = topToggle.querySelector(".theme-toggle-label");
-    if (icon) icon.textContent = isDark ? "☀️" : "🌙";
-    if (label) label.textContent = nextModeText;
-    topToggle.title = tooltip;
-    topToggle.setAttribute("aria-label", tooltip);
-  }
-
-  // 3. Site Nav Theme Toggle
-  const siteToggle = document.getElementById("siteThemeToggle") || (typeof siteThemeToggle !== "undefined" ? siteThemeToggle : null);
-  if (siteToggle) {
-    const siteIcon = siteToggle.querySelector(".site-theme-icon");
-    const siteLabel = siteToggle.querySelector(".site-theme-label");
-    if (siteIcon) siteIcon.textContent = isDark ? "☀️" : "🌙";
-    if (siteLabel) {
-      siteLabel.textContent = nextModeText;
-    } else {
-      siteToggle.textContent = nextModeText;
-    }
-    siteToggle.title = tooltip;
-    siteToggle.setAttribute("aria-label", tooltip);
-  }
-
   updateThemeLogos();
 }
 
 let _themeToggling = false;
 function toggleTheme() {
-  if (_themeToggling) return;
-  _themeToggling = true;
-  window.setTimeout(() => { _themeToggling = false; }, 250);
-
-  const willBeDark = !document.body.classList.contains("dark");
-  applyTheme(willBeDark ? "dark" : "light");
+  applyTheme("dark");
 }
 
 function initTheme() {
-  let theme = "dark";
+  const themeDefaultVersion = "2026-09-25-dark-v5";
   try {
-    const themeDefaultVersion = "2026-09-25-dark-v5";
     if (localStorage.getItem("hv_theme_default_version") !== themeDefaultVersion) {
       localStorage.setItem("hv_theme_default_version", themeDefaultVersion);
       localStorage.setItem("hv_theme", "dark");
     }
-    const saved = localStorage.getItem("hv_theme");
-    if (saved) theme = saved;
   } catch(e) {}
-  applyTheme(theme);
+  applyTheme("dark");
 }
 window.toggleTheme = toggleTheme;
 window.applyTheme = applyTheme;
 window.initTheme = initTheme;
 
-// Global theme toggle delegation to guarantee clicks always register
+// Global theme toggle delegation handler
 document.addEventListener("click", (event) => {
   const toggleBtn = event.target.closest("#themeToggle, #topbarThemeToggle, #siteThemeToggle, .theme-fab");
   if (toggleBtn) {
