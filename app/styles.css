@@ -10,7 +10,7 @@
   --amber: #f0b429;
   --red: #f06060;
   --ink: #e2f0ee;
-  --muted: #7fa8a6;
+  --muted: #9ac1bf;
   --bg: #07191b;
   --surface: #0d2427;
   --surface-2: #112d30;
@@ -29,7 +29,7 @@ body.dark {
   --surface-2: #112d30;
   --line: #1e3f42;
   --ink: #e2f0ee;
-  --muted: #7fa8a6;
+  --muted: #9ac1bf;
   --cyan: #0e2e31;
   --shadow: 0 24px 70px rgba(0, 0, 0, .45);
   --teal: #09b8b6;
@@ -86,6 +86,60 @@ body.dark {
 button, input, textarea { font: inherit; }
 button { cursor: pointer; }
 a { color: inherit; text-decoration: none; }
+
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+.skip-link {
+  position: fixed;
+  top: 12px;
+  inset-inline-start: 12px;
+  z-index: 1000000;
+  transform: translateY(-160%);
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #073537;
+  border: 2px solid var(--teal-2);
+  font-weight: 800;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, .32);
+}
+
+.skip-link:focus,
+.skip-link:focus-visible {
+  transform: translateY(0);
+  outline: 3px solid #ffffff;
+  outline-offset: 3px;
+}
+
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 3px solid #ffffff;
+  outline-offset: 3px;
+  box-shadow: 0 0 0 6px rgba(9, 184, 182, .46);
+}
+
+:where(button, .solid-button, .outline-button, .soft-button, .google-button, .nav-item, .icon-button, .lang-toggle, .theme-fab, .banner-btn, .filter-tab, .kpi-pill-btn, .legal-tab-btn, .verify-tab, .emergency-call-btn, a.nav-item) {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+:where(input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]), select, textarea) {
+  min-height: 44px;
+}
+
+:where(input[type="checkbox"], input[type="radio"]) {
+  min-width: 22px;
+  min-height: 22px;
+}
 
 .is-hidden {
   opacity: 0;
@@ -302,10 +356,11 @@ body:not(.dark) .loading-bar {
   transform: translateX(-50%) translateY(-20px);
   opacity: 0;
   z-index: 120;
+  max-width: min(92vw, 640px);
   padding: 12px 16px;
   border-radius: 999px;
   color: white;
-  background: var(--teal-2);
+  background: #0f766e;
   box-shadow: var(--shadow);
   pointer-events: none;
   transition: opacity .25s ease, transform .25s ease;
@@ -429,9 +484,12 @@ body[dir="rtl"] .hero-brand-logo {
   color: var(--muted);
   font-weight: 700;
   font-size: 13.5px;
-  padding: 7px 11px;
+  min-height: 44px;
+  padding: 0 11px;
   border-radius: 12px;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
   transition: background .2s ease, color .2s ease;
 }
 
@@ -456,7 +514,7 @@ body[dir="rtl"] .hero-brand-logo {
 .nav-actions .solid-button,
 .nav-actions .outline-button,
 .nav-actions .soft-button {
-  min-height: 40px;
+  min-height: 44px;
   padding: 0 14px;
   font-size: 13.5px;
   border-radius: 12px;
@@ -533,6 +591,11 @@ body[dir="rtl"] .hero-brand-logo {
   color: var(--teal);
   font-weight: 900;
   font-size: 13px;
+}
+
+#patientHeroTitle,
+.hv-onboarding-strip .eyebrow {
+  color: #ffffff;
 }
 
 .hero-copy h1,
@@ -1353,7 +1416,7 @@ textarea {
 
 .nav-item {
   width: 100%;
-  min-height: 40px;
+  min-height: 44px;
   border: 0;
   background: transparent;
   color: var(--muted);
@@ -1438,7 +1501,7 @@ html[dir="ltr"] .nav-item {
 
 .sidebar-account-actions button {
   flex: 1;
-  min-height: 38px;
+  min-height: 44px;
   padding: 0 8px;
   font-size: 12px;
   border-radius: 12px;
@@ -2458,6 +2521,7 @@ html[dir="ltr"] .queue .ok { border-left-color: var(--green); }
   padding: 18px;
   background: rgba(7, 23, 25, .42);
   backdrop-filter: blur(12px);
+  overflow-y: auto;
 }
 
 .confirm-modal.open {
@@ -2471,6 +2535,8 @@ html[dir="ltr"] .queue .ok { border-left-color: var(--green); }
   background: var(--surface);
   border: 1px solid var(--line);
   box-shadow: var(--shadow);
+  max-height: min(92vh, 900px);
+  overflow-y: auto;
 }
 
 .confirm-card h3 {
@@ -2635,7 +2701,7 @@ body.sidebar-open .sidebar { transform: translateX(0); }
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 36px;
+  min-height: 44px;
   padding: 0 12px;
   border-radius: 999px;
   border: 1.5px solid var(--line);
@@ -3848,6 +3914,28 @@ body.dark .report-page.official-certified-report {
   padding: 8px 10px;
   border: 1px solid var(--line);
   text-align: start;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto !important;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
+  }
+
+  .loader-logo,
+  .loader-fallback-animation span,
+  .breath-orb,
+  .emergency-pulsing-badge {
+    animation: none !important;
+  }
 }
 
 .rules-spec-table th {

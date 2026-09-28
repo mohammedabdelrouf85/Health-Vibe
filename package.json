@@ -31,6 +31,7 @@
     "test:remember": "node tests/remember_me_security.test.js",
     "test:lifecycle": "node tests/account_lifecycle.test.js",
     "test:guards": "node tests/route_guards.test.js",
+    "audit:a11y": "node scripts/a11y-audit.js",
     "dev:backend": "cd backend && node server.js",
     "prod:backend": "cd backend && node server.js",
     "test:operations": "node tests/operational_access.test.js",
@@ -64,8 +65,10 @@
   "license": "ISC",
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5.0.2",
+    "axe-core": "^4.13.0",
     "firebase": "^12.19.0",
     "firebase-functions": "^7.4.0",
-    "firebase-tools": "^15.31.0"
+    "firebase-tools": "^15.31.0",
+    "puppeteer-core": "^25.12.0"
   }
 }

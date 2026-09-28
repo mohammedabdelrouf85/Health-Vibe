@@ -23,6 +23,7 @@ const publicSite = document.getElementById("publicSite");
 const authScreen = document.getElementById("authScreen");
 const app = document.getElementById("app");
 const toast = document.getElementById("toast");
+const srStatus = document.getElementById("srStatus");
 const screenTitle = document.getElementById("screenTitle");
 const themeToggle = document.getElementById("themeToggle");
 const siteThemeToggle = document.getElementById("siteThemeToggle") || null;
@@ -1493,10 +1494,97 @@ function showToast(message) {
   if (!message || String(message).trim() === "" || String(message).includes("undefined")) {
     return;
   }
-  toast.textContent = localized(message);
+  const text = localized(message);
+  toast.textContent = text;
+  if (srStatus) srStatus.textContent = text;
   toast.classList.add("show");
   window.clearTimeout(showToast.timer);
   showToast.timer = window.setTimeout(() => toast.classList.remove("show"), 2600);
+}
+
+const focusableSelector = [
+  "a[href]",
+  "button:not([disabled])",
+  "input:not([disabled]):not([type='hidden'])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  "summary",
+  "[tabindex]:not([tabindex='-1'])"
+].join(",");
+let lastFocusedBeforeDialog = null;
+
+function getFocusableElements(container) {
+  if (!container) return [];
+  return Array.from(container.querySelectorAll(focusableSelector)).filter((el) => {
+    const style = window.getComputedStyle(el);
+    return style.display !== "none" && style.visibility !== "hidden" && el.offsetParent !== null;
+  });
+}
+
+function focusFirstInteractiveElement(container) {
+  const focusables = getFocusableElements(container);
+  const target = focusables[0] || container;
+  if (target && typeof target.focus === "function") {
+    window.setTimeout(() => target.focus({ preventScroll: true }), 0);
+  }
+}
+
+function trapDialogFocus(event) {
+  const dialog = event.currentTarget;
+  if (event.key === "Escape") {
+    const closeControl = dialog.querySelector("[data-dialog-close], .close-button, [id*='CloseBtn'], [onclick*='close'], [onclick*='Close']");
+    if (closeControl && typeof closeControl.click === "function") {
+      event.preventDefault();
+      closeControl.click();
+    }
+    return;
+  }
+  if (event.key !== "Tab") return;
+  const focusables = getFocusableElements(dialog);
+  if (!focusables.length) {
+    event.preventDefault();
+    dialog.focus();
+    return;
+  }
+  const first = focusables[0];
+  const last = focusables[focusables.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
+function setDialogAccessibility(dialog, isOpen) {
+  if (!dialog) return;
+  if (!dialog.hasAttribute("role")) dialog.setAttribute("role", "dialog");
+  if (!dialog.hasAttribute("aria-modal")) dialog.setAttribute("aria-modal", "true");
+  dialog.setAttribute("aria-hidden", isOpen ? "false" : "true");
+  if (isOpen) {
+    lastFocusedBeforeDialog = document.activeElement;
+    dialog.setAttribute("tabindex", "-1");
+    dialog.addEventListener("keydown", trapDialogFocus);
+    focusFirstInteractiveElement(dialog);
+  } else {
+    dialog.removeEventListener("keydown", trapDialogFocus);
+    if (lastFocusedBeforeDialog && typeof lastFocusedBeforeDialog.focus === "function" && document.contains(lastFocusedBeforeDialog)) {
+      window.setTimeout(() => lastFocusedBeforeDialog.focus({ preventScroll: true }), 0);
+    }
+  }
+}
+
+function initializeDialogAccessibility() {
+  const dialogs = document.querySelectorAll(".confirm-modal, .modal-overlay, .auth-screen");
+  dialogs.forEach((dialog) => {
+    setDialogAccessibility(dialog, dialog.classList.contains("open") || dialog.style.display === "grid" || dialog.style.display === "flex");
+    const observer = new MutationObserver(() => {
+      const isOpen = dialog.classList.contains("open") || dialog.style.display === "grid" || dialog.style.display === "flex";
+      setDialogAccessibility(dialog, isOpen);
+    });
+    observer.observe(dialog, { attributes: true, attributeFilter: ["class", "style"] });
+  });
 }
 
 function getApiBaseUrl() {
@@ -2310,8 +2398,8 @@ if (typeof window !== "undefined" && window.location.protocol === "file:") {
           banner.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:99999;background:linear-gradient(90deg, #b91c1c, #991b1b);color:#ffffff;padding:12px 24px;text-align:center;font-size:14px;font-family:inherit;font-weight:600;box-shadow:0 4px 14px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;";
           const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
           banner.innerHTML = isEn
-            ? "<span>⚠️ <strong>Notice:</strong> You are viewing this page via <code>file://</code>. Firebase Authentication requires HTTP. Please open <a href=\"http://localhost:3000\" style=\"color:#fef08a;text-decoration:underline;font-weight:bold;\">http://localhost:3000</a> (run <code>start-server.bat</code>).</span>"
-            : "<span>⚠️ <strong>تنبيه:</strong> أنت تتصفح التطبيق كملف محلي (<code>file://</code>). لتفعيل تسجيل الدخول، يرجى تشغيل <code>start-server.bat</code> وفتح <a href=\"http://localhost:3000\" style=\"color:#fef08a;text-decoration:underline;font-weight:bold;\">http://localhost:3000</a></span>";
+            ? "<span>⚠️ <strong>Notice:</strong> You are viewing this page via <code>file://</code>. Firebase Authentication requires HTTP. Please open <a href=\"http://localhost:3000\" style=\"color:#fef08a;text-decoration:underline;font-weight:bold;display:inline-flex;align-items:center;min-height:44px;padding:0 6px;\">http://localhost:3000</a> (run <code>start-server.bat</code>).</span>"
+            : "<span>⚠️ <strong>تنبيه:</strong> أنت تتصفح التطبيق كملف محلي (<code>file://</code>). لتفعيل تسجيل الدخول، يرجى تشغيل <code>start-server.bat</code> وفتح <a href=\"http://localhost:3000\" style=\"color:#fef08a;text-decoration:underline;font-weight:bold;display:inline-flex;align-items:center;min-height:44px;padding:0 6px;\">http://localhost:3000</a></span>";
           document.body.prepend(banner);
         }
       };
@@ -4568,6 +4656,7 @@ function showAuth() {
   if (authScreen) {
     authScreen.classList.add("open");
     authScreen.style.display = "grid";
+    setDialogAccessibility(authScreen, true);
   }
   clearAuthError();
   if (window.location.protocol === "file:") {
@@ -4591,6 +4680,7 @@ function hideAuth() {
   if (authScreen) {
     authScreen.classList.remove("open");
     authScreen.style.display = "none";
+    setDialogAccessibility(authScreen, false);
   }
   clearAuthError();
 }
@@ -12117,6 +12207,8 @@ window.closeRulesGovernanceModal = function() {
 
 // Bind interactive modals (Emergency & Confirmation)
 document.addEventListener("DOMContentLoaded", () => {
+  initializeDialogAccessibility();
+
   const closeGuideBtn = document.getElementById("closeEmergencyGuideBtn");
   if (closeGuideBtn) closeGuideBtn.addEventListener("click", closeEmergencyGuideModal);
   const closeRulesGovBtn = document.getElementById("closeRulesGovModalBtn");
@@ -14155,6 +14247,7 @@ window.openLegalModal = function(tab = "privacy") {
   modal.classList.add("open");
   modal.setAttribute("aria-hidden", "false");
   window.switchLegalTab(tab);
+  setDialogAccessibility(modal, true);
 };
 
 window.closeLegalModal = function() {
@@ -14162,6 +14255,7 @@ window.closeLegalModal = function() {
   if (!modal) return;
   modal.classList.remove("open");
   modal.setAttribute("aria-hidden", "true");
+  setDialogAccessibility(modal, false);
 };
 
 window.switchLegalTab = function(tab = "privacy") {

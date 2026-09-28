@@ -16,6 +16,7 @@
 </head>
 <body class="dark">
   <script src="./theme-boot.js?v=5.0"></script>
+  <a class="skip-link" href="#screenTitle">Skip to main content</a>
   <div id="loader" class="loader" aria-live="polite">
     <div class="loader-card">
       <div class="loader-media" aria-hidden="true">
@@ -32,7 +33,8 @@
     </div>
   </div>
 
-  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+  <div id="srStatus" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
 
   <main id="publicSite" class="site-shell is-hidden">
     <header class="site-nav">
@@ -170,7 +172,7 @@
     </footer>
   </main>
 
-  <section id="authScreen" class="auth-screen" aria-label="Sign in">
+  <section id="authScreen" class="auth-screen" role="dialog" aria-modal="true" aria-labelledby="authDialogTitle" aria-describedby="authDialogDescription" aria-hidden="true" aria-label="Sign in">
     <div class="auth-card">
       <button id="authClose" class="close-button" aria-label="Close" onclick="hideAuth()">×</button>
       <div class="brand auth-brand">
@@ -184,8 +186,8 @@
 
       <!-- MAIN SIGN IN / SIGN UP VIEW -->
       <div id="authMainView">
-        <h2 data-i18n="auth.signIn">Access your account</h2>
-        <p data-i18n="auth.accountRole">Sign in with email or Google to proceed securely.</p>
+        <h2 id="authDialogTitle" data-i18n="auth.signIn">Access your account</h2>
+        <p id="authDialogDescription" data-i18n="auth.accountRole">Sign in with email or Google to proceed securely.</p>
 
         <div class="doctor-auth-note">
           <span style="font-size:16px;">🩺</span>
@@ -313,7 +315,7 @@
     </div>
   </section>
 
-  <main id="app" class="app-shell" hidden>
+  <main id="app" class="app-shell" hidden aria-labelledby="screenTitle">
     <!-- Mobile Drawer Backdrop Overlay -->
     <div id="sidebarBackdrop" class="sidebar-backdrop" onclick="closeSidebarDrawer()" aria-hidden="true"></div>
 
@@ -379,7 +381,7 @@
       </button>
     </aside>
 
-    <section class="workspace">
+    <section class="workspace" aria-labelledby="screenTitle">
       <header class="topbar">
         <button id="menuToggle" class="icon-button" aria-label="Toggle menu">☰</button>
         <div>
@@ -2149,14 +2151,14 @@
   </main>
 
   <!-- Quick Clinical & Patient Feedback Modal -->
-  <div id="feedbackModal" class="confirm-modal" aria-hidden="true">
+  <div id="feedbackModal" class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="modalFeedbackTitle" aria-describedby="modalFeedbackSub" aria-hidden="true">
     <div class="confirm-card" style="text-align: right; max-width: 500px; width: 95%;">
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
         <div style="display: flex; align-items: center; gap: 8px;">
           <span style="font-size: 22px;">⭐</span>
           <h3 id="modalFeedbackTitle" style="margin: 0; font-size: 17px; color: var(--ink);">تقييم الخدمة والملاحظات</h3>
         </div>
-        <button type="button" onclick="closeFeedbackModal()" style="background: none; border: none; font-size: 20px; color: var(--muted); cursor: pointer; line-height: 1;">&times;</button>
+        <button type="button" onclick="closeFeedbackModal()" aria-label="إغلاق نافذة التقييم" style="background: none; border: none; font-size: 20px; color: var(--muted); cursor: pointer; line-height: 1;">&times;</button>
       </div>
       <p id="modalFeedbackSub" style="font-size: 13px; color: var(--muted); margin-bottom: 14px; line-height: 1.5;">
         شاركنا تقييمك ورأيك السريري لمساعدتنا على تحسين جودة التشخيص والرعاية.
@@ -2195,10 +2197,10 @@
     </div>
   </div>
 
-  <div id="confirmModal" class="confirm-modal" aria-hidden="true">
+  <div id="confirmModal" class="confirm-modal" role="alertdialog" aria-modal="true" aria-labelledby="approveConfirmTitle" aria-describedby="approveConfirmDesc" aria-hidden="true">
     <div class="confirm-card">
-      <h3>تأكيد اعتماد التقرير</h3>
-      <p>بعد الاعتماد ستظهر النتيجة والتوصيات للمريض وسيتم حفظ الحدث في سجل التدقيق.</p>
+      <h3 id="approveConfirmTitle">تأكيد اعتماد التقرير</h3>
+      <p id="approveConfirmDesc">بعد الاعتماد ستظهر النتيجة والتوصيات للمريض وسيتم حفظ الحدث في سجل التدقيق.</p>
       <div class="doctor-actions">
         <button id="confirmApprove" class="solid-button">تأكيد الاعتماد</button>
         <button id="cancelApprove" class="outline-button">إلغاء</button>
@@ -2206,14 +2208,14 @@
     </div>
   </div>
 
-  <div id="verifyRequiredModal" class="confirm-modal" aria-hidden="true">
+  <div id="verifyRequiredModal" class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="verifyModalTitle" aria-describedby="verifyModalDesc" aria-hidden="true">
     <div class="confirm-card" style="text-align: right; max-width: 480px; width: 95%; max-height: 90vh; overflow-y: auto;">
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
         <div style="display: flex; align-items: center; gap: 8px;">
           <span style="font-size: 26px;">🛡️</span>
           <h3 id="verifyModalTitle" style="margin: 0; font-size: 18px; color: var(--ink);">توثيق وتفعيل الحساب</h3>
         </div>
-        <button id="verifyModalCloseBtnTop" type="button" onclick="closeVerifyRequiredModal()" style="font-size: 20px; border: 0; background: transparent; cursor: pointer; color: var(--muted); line-height: 1;">&times;</button>
+        <button id="verifyModalCloseBtnTop" type="button" onclick="closeVerifyRequiredModal()" aria-label="إغلاق نافذة توثيق الحساب" style="font-size: 20px; border: 0; background: transparent; cursor: pointer; color: var(--muted); line-height: 1;">&times;</button>
       </div>
 
       <p id="verifyModalDesc" style="margin: 0 0 14px; font-size: 13px; color: var(--muted); line-height: 1.5;">
@@ -2294,7 +2296,7 @@
   </div>
 
   <!-- Assessment Submission Confirmation Modal -->
-  <div id="confirmAssessmentModal" class="confirm-modal" aria-hidden="true">
+  <div id="confirmAssessmentModal" class="confirm-modal" role="alertdialog" aria-modal="true" aria-labelledby="confirmModalTitle" aria-describedby="confirmModalDesc confirmAssessmentSummary" aria-hidden="true">
     <div class="confirm-card" style="width: min(500px, 100%); text-align: right; max-height: 90vh; overflow-y: auto;">
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
         <h3 id="confirmModalTitle" style="margin: 0; font-size: 19px; color: var(--teal-2);">تأكيد إرسال التقييم للطبيب</h3>
@@ -2354,16 +2356,16 @@
   </div>
 
   <!-- Emergency Submission Safety Interception Modal -->
-  <div id="emergencySubmitModal" class="confirm-modal" aria-hidden="true">
+  <div id="emergencySubmitModal" class="confirm-modal" role="alertdialog" aria-modal="true" aria-labelledby="emergencySubmitTitle" aria-describedby="emergencySubmitText emergencySubmitGuidance" aria-hidden="true">
     <div class="confirm-card emergency-alert-card critical-oxygen" style="width: min(480px, 100%); text-align: right; padding: 24px;">
       <div class="emergency-header" style="justify-content: flex-start;">
         <span class="emergency-pulsing-badge">🚨 تنبيه طوارئ فوري</span>
-        <h3 style="margin: 0; color: #dc2626; font-size: 19px;">نقص أكسجين حاد — لا تنتظر مراجعة التطبيق</h3>
+        <h3 id="emergencySubmitTitle" style="margin: 0; color: #dc2626; font-size: 19px;">نقص أكسجين حاد — لا تنتظر مراجعة التطبيق</h3>
       </div>
-      <p style="color: var(--ink); font-size: 14px; line-height: 1.6; margin: 12px 0 16px;">
+      <p id="emergencySubmitText" style="color: var(--ink); font-size: 14px; line-height: 1.6; margin: 12px 0 16px;">
         نسبة الأكسجين المدخلة (<strong id="emergencyModalO2Val" style="color:#dc2626;">--%</strong>) حرجة للغاية وتشير إلى نقص أكسجين يستدعي رعاية طبية طارئة ومباشرة فوراً.
       </p>
-      <div style="background: rgba(220, 38, 38, 0.08); border-radius: 12px; padding: 12px 14px; margin-bottom: 16px; border: 1px dashed #ef4444;">
+      <div id="emergencySubmitGuidance" style="background: rgba(220, 38, 38, 0.08); border-radius: 12px; padding: 12px 14px; margin-bottom: 16px; border: 1px dashed #ef4444;">
         <strong style="color: #b91c1c; display: block; margin-bottom: 4px; font-size: 13.5px;">⚠️ إرشادات السلامة الفورية:</strong>
         <ul style="margin: 0; padding-inline-start: 18px; font-size: 12.8px; line-height: 1.55; color: var(--ink);">
           <li>التوجه فوراً لأقرب قسم طوارئ أو استدعاء الإسعاف (123).</li>
@@ -2386,10 +2388,10 @@
   </div>
 
   <!-- Emergency First Aid & Respiration Guide Modal -->
-  <div id="emergencyGuideModal" class="confirm-modal" aria-hidden="true">
+  <div id="emergencyGuideModal" class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="emergencyGuideTitle" aria-hidden="true">
     <div class="confirm-card emergency-guide-card">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
-        <h3 style="margin: 0;">🫁 إرشادات الإسعافات الأولية لتسهيل التنفس</h3>
+        <h3 id="emergencyGuideTitle" style="margin: 0;">🫁 إرشادات الإسعافات الأولية لتسهيل التنفس</h3>
         <button id="closeEmergencyGuideBtn" type="button" class="outline-button" style="padding: 4px 10px; font-size: 12px; border-radius: 8px;">✕ إغلاق</button>
       </div>
 
@@ -2442,7 +2444,7 @@
   </div>
 
   <!-- Clinical Risk Rules Governance & Versioning Modal -->
-  <div id="rulesGovernanceModal" class="confirm-modal" aria-hidden="true">
+  <div id="rulesGovernanceModal" class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="rulesGovModalTitle" aria-hidden="true">
     <div class="confirm-card rules-governance-card">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; border-bottom: 1px solid var(--line); padding-bottom: 10px;">
         <div style="display: flex; align-items: center; gap: 8px;">
@@ -2476,7 +2478,7 @@
   <button id="themeToggle" class="theme-fab" type="button" style="display:none !important;" aria-hidden="true"></button>
 
   <!-- Legal & Compliance Modal (Privacy Policy + Terms + Medical Disclaimer) -->
-  <div id="legalModal" class="confirm-modal" aria-hidden="true">
+  <div id="legalModal" class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="legalModalTitle" aria-describedby="legalModalBody" aria-hidden="true">
     <div class="confirm-card legal-modal-card">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
         <div style="display: flex; align-items: center; gap: 8px;">
@@ -2577,17 +2579,17 @@
   </div>
 
   <!-- Delete Account Confirmation Modal -->
-  <div id="deleteAccountModal" class="confirm-modal" aria-hidden="true">
+  <div id="deleteAccountModal" class="confirm-modal" role="alertdialog" aria-modal="true" aria-labelledby="deleteAccountTitle" aria-describedby="deleteAccountWarning" aria-hidden="true">
     <div class="confirm-card" style="width: min(520px, 100%); text-align: right; max-height: 90vh; overflow-y: auto;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
         <div style="display: flex; align-items: center; gap: 8px;">
           <span style="font-size: 22px;">⚠️</span>
-          <h3 style="margin: 0; font-size: 18px; color: #ef4444;" data-i18n="auth.deleteAccountTitle">حذف الحساب والبيانات السريرية</h3>
+          <h3 id="deleteAccountTitle" style="margin: 0; font-size: 18px; color: #ef4444;" data-i18n="auth.deleteAccountTitle">حذف الحساب والبيانات السريرية</h3>
         </div>
         <button type="button" class="close-button" onclick="closeDeleteAccountModal()" aria-label="Close">×</button>
       </div>
 
-      <div class="emergency-alert-card critical-oxygen" style="margin-bottom: 16px; padding: 12px 14px;">
+      <div id="deleteAccountWarning" class="emergency-alert-card critical-oxygen" style="margin-bottom: 16px; padding: 12px 14px;">
         <strong style="color: #dc2626; font-size: 13px;">تنبيه هام: هذا الإجراء نهائي ولا يمكن التراجع عنه!</strong>
         <p style="font-size: 12.5px; margin: 4px 0 0; color: var(--ink); line-height: 1.5;">
           عند إتمام الحذف، ستفقد إمكانية الوصول إلى المنصة وسيتم حذف أو إخفاء هوية كافة بياناتك المسجلة.
@@ -2642,7 +2644,7 @@
   </div>
 
   <!-- Privacy & Data Subject Rights Modal (GDPR Art. 15 / 20) -->
-  <div id="privacyDataModal" class="confirm-modal" aria-hidden="true" style="display: none;">
+  <div id="privacyDataModal" class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="privacyModalTitle" aria-describedby="privacyModalBody" aria-hidden="true" style="display: none;">
     <div class="confirm-card" style="width: min(640px, 100%); text-align: start; max-height: 90vh; overflow-y: auto;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
         <div style="display: flex; align-items: center; gap: 8px;">
@@ -2670,7 +2672,7 @@
   <!-- ========================================================================= -->
   <!-- 🔒 CLINICAL INACTIVITY & HIPAA WORKSTATION AUTO-LOCK OVERLAY -->
   <!-- ========================================================================= -->
-  <div id="idleLockScreen" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(11, 19, 43, 0.88); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); z-index: 999998; align-items: center; justify-content: center; padding: 20px;">
+  <div id="idleLockScreen" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="idleLockTitle" aria-describedby="idleLockDesc" aria-hidden="true" style="display: none; position: fixed; inset: 0; background: rgba(11, 19, 43, 0.88); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); z-index: 999998; align-items: center; justify-content: center; padding: 20px;">
     <div class="modal-content" style="background: var(--surface); border: 1px solid var(--line); border-radius: 24px; max-width: 460px; width: 100%; padding: 32px 28px; box-shadow: 0 30px 60px -15px rgba(0, 0, 0, 0.6); text-align: center; position: relative;">
       
       <div style="width: 64px; height: 64px; border-radius: 20px; background: rgba(13, 148, 136, 0.14); border: 2px solid rgba(13, 148, 136, 0.3); display: flex; align-items: center; justify-content: center; font-size: 30px; margin: 0 auto 16px; color: var(--teal); box-shadow: 0 8px 20px -4px rgba(13, 148, 136, 0.3);">
@@ -2729,7 +2731,7 @@
   <!-- ========================================================================= -->
   <!-- 🛑 CENTRALIZED APPLICATION ERROR MODAL (Human-Friendly, No Raw Technical Jargon) -->
   <!-- ========================================================================= -->
-  <div id="centralErrorModal" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 999999; align-items: center; justify-content: center; padding: 20px;">
+  <div id="centralErrorModal" class="modal-overlay" role="alertdialog" aria-modal="true" aria-labelledby="centralErrorTitle" aria-describedby="centralErrorMessage centralErrorAction" aria-hidden="true" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 999999; align-items: center; justify-content: center; padding: 20px;">
     <div class="modal-content" style="background: var(--surface); border: 1px solid var(--line); border-radius: 20px; max-width: 480px; width: 100%; padding: 24px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4); text-align: start; position: relative;">
       <div style="display: flex; align-items: flex-start; gap: 14px; margin-bottom: 16px;">
         <div id="centralErrorIcon" style="width: 46px; height: 46px; border-radius: 12px; background: rgba(239, 68, 68, 0.12); display: flex; align-items: center; justify-content: center; font-size: 24px; flex-shrink: 0; color: #ef4444;">
