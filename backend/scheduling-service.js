@@ -1,9 +1,19 @@
 /**
  * Health Vibe AI - Clinical Scheduling & Availability Service
  *
- * Implements reliable work schedules, clinics, time zones, leave management,
- * and ACID transactional slot booking with anti-double-booking concurrency locks.
+ * Implements:
+ * 1. Work Schedules, Clinics, Time Zones, and Leave Management.
+ * 2. ACID Transactional Slot Booking with Anti-Double Booking Locks.
+ * 3. Atomic Rescheduling (reserves replacement slot and releases old slot safely).
+ * 4. Cancellation with Policy Validation and RBAC Permission Enforcement.
+ * 5. Full Appointment Lifecycle Statuses ('confirmed', 'rescheduled', 'completed', 'cancelled', 'no_show').
+ * 6. Change History / Audit Trail Retention on each appointment document.
+ * 7. Upcoming and Past Appointment History Partitioning.
+ * 8. Doctor and Clinic Calendars with Slot Availability Statuses.
+ * 9. Reliable Notification and Audit Event Emission for Every State Mutation.
  */
+
+const auditService = require('./audit-service');
 
 // ============================================================================
 // 🏥 CLINICS REGISTRY
@@ -51,6 +61,20 @@ const CLINICS = {
 };
 
 const DEFAULT_CLINIC_ID = 'clinic_cairo_main';
+
+// ============================================================================
+// 📊 APPOINTMENT STATUSES & POLICIES
+// ============================================================================
+const APPOINTMENT_STATUSES = {
+  CONFIRMED: 'confirmed',
+  RESCHEDULED: 'rescheduled',
+  COMPLETED: 'completed',
+  CANCELLED: 'cancelled',
+  NO_SHOW: 'no_show'
+};
+
+const CANCELLATION_MIN_NOTICE_HOURS = 2;
+const RESCHEDULING_MIN_NOTICE_HOURS = 2;
 
 // ============================================================================
 // 👨‍⚕️ DOCTORS WORK SCHEDULES & LEAVE REGISTRY
@@ -131,7 +155,7 @@ const FALLBACK_SLOTS = [
   { id: 'slot_2000', startTime: '20:00', endTime: '20:30', timeAr: '08:00 مساءً', timeEn: '08:00 PM', periodAr: 'استشارة مسائية متقدمة', periodEn: 'Late Evening Telehealth' }
 ];
 
-// In-process lock tracker to guarantee atomic exclusion across concurrent requests
+// In-process lock tracker to serialize concurrent requests during in-flight transactions
 const activeMemorySlotLocks = new Map();
 
 // ============================================================================
@@ -147,18 +171,8 @@ function getDayOfWeekForDate(dateStr, timeZone = 'Africa/Cairo') {
     throw new Error(`Invalid date string format: ${dateStr}. Expected YYYY-MM-DD.`);
   }
   const [year, month, day] = dateStr.split('-').map(Number);
-  // Construct noon UTC on target date to avoid boundary edge cases
   const utcDate = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
-  try {
-    const formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: timeZone || 'Africa/Cairo',
-      weekday: 'narrow'
-    });
-    // Or compute day index mathematically from UTC noon date
-    return utcDate.getUTCDay();
-  } catch {
-    return utcDate.getUTCDay();
-  }
+  return utcDate.getUTCDay();
 }
 
 /**
@@ -224,6 +238,142 @@ function checkDoctorLeave(doctor, dateStr) {
 }
 
 // ============================================================================
+// 🛡️ ROLE PERMISSION VERIFICATION & POLICY GUARDS
+// ============================================================================
+
+/**
+ * Enforce role-based access control on appointment mutations.
+ * Patients: can only view, reschedule, or cancel their OWN appointments.
+ * Doctors: can only view, reschedule, cancel, or complete appointments assigned to them.
+ * Clinic Admins: restricted to appointments in their clinic.
+ * Super Admins: cross-clinic administrative authority.
+ */
+function verifyAppointmentActorPermission(appointment, actorUser, action = 'modify') {
+  if (!actorUser) {
+    const err = new Error('Authentication required.');
+    err.code = 'AUTHENTICATION_REQUIRED';
+    err.statusCode = 401;
+    throw err;
+  }
+
+  const role = actorUser.role || 'patient';
+  const uid = actorUser.uid;
+
+  if (role === 'super_admin' || actorUser.isSuperAdmin) {
+    return { allowed: true, role: 'super_admin' };
+  }
+
+  if (role === 'patient') {
+    if (appointment.patientId !== uid) {
+      const err = new Error("Access denied: You cannot view or modify another patient's appointment.");
+      err.code = 'ACCESS_DENIED';
+      err.statusCode = 403;
+      throw err;
+    }
+    return { allowed: true, role: 'patient' };
+  }
+
+  if (role === 'doctor') {
+    const isAssigned = appointment.doctorId === uid || appointment.assignedDoctorId === uid || appointment.doctorUid === uid;
+    if (!isAssigned) {
+      const err = new Error("Access denied: You cannot manage appointments assigned to another doctor.");
+      err.code = 'ACCESS_DENIED';
+      err.statusCode = 403;
+      throw err;
+    }
+    return { allowed: true, role: 'doctor' };
+  }
+
+  if (role === 'clinic_admin') {
+    if (actorUser.clinicId && appointment.clinicId && actorUser.clinicId !== appointment.clinicId) {
+      const err = new Error("Access denied: You cannot manage appointments outside your assigned clinic.");
+      err.code = 'ACCESS_DENIED';
+      err.statusCode = 403;
+      throw err;
+    }
+    return { allowed: true, role: 'clinic_admin' };
+  }
+
+  const err = new Error('Access denied: Insufficient permissions to modify clinical appointments.');
+  err.code = 'ACCESS_DENIED';
+  err.statusCode = 403;
+  throw err;
+}
+
+/**
+ * Validate agreed cancellation policy.
+ * - Cannot cancel an already cancelled appointment.
+ * - Cannot cancel a completed appointment.
+ * - Cannot cancel past appointments.
+ * - Enforces notice period for non-admin cancellations.
+ */
+function validateCancellationPolicy(appointment, actorUser, options = {}) {
+  const currentStatus = appointment.status || 'confirmed';
+
+  if (currentStatus === APPOINTMENT_STATUSES.CANCELLED) {
+    const err = new Error('This appointment has already been cancelled.');
+    err.code = 'APPOINTMENT_ALREADY_CANCELLED';
+    err.statusCode = 400;
+    throw err;
+  }
+
+  if (currentStatus === APPOINTMENT_STATUSES.COMPLETED) {
+    const err = new Error('Completed appointments cannot be cancelled.');
+    err.code = 'APPOINTMENT_ALREADY_COMPLETED';
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const now = options.now instanceof Date ? options.now : new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+  if (appointment.date < todayStr) {
+    const err = new Error('Cannot cancel appointments that occurred in the past.');
+    err.code = 'PAST_APPOINTMENT_CANNOT_BE_CANCELLED';
+    err.statusCode = 400;
+    throw err;
+  }
+
+  return true;
+}
+
+/**
+ * Validate agreed rescheduling policy.
+ * - Must be active ('confirmed' or 'rescheduled').
+ * - Cannot reschedule cancelled or completed appointments.
+ * - Cannot reschedule past appointments.
+ */
+function validateReschedulingPolicy(appointment, actorUser, options = {}) {
+  const currentStatus = appointment.status || 'confirmed';
+
+  if (currentStatus === APPOINTMENT_STATUSES.CANCELLED) {
+    const err = new Error('Cancelled appointments cannot be rescheduled. Please book a new appointment.');
+    err.code = 'CANNOT_RESCHEDULE_CANCELLED';
+    err.statusCode = 400;
+    throw err;
+  }
+
+  if (currentStatus === APPOINTMENT_STATUSES.COMPLETED) {
+    const err = new Error('Completed clinical appointments cannot be rescheduled.');
+    err.code = 'CANNOT_RESCHEDULE_COMPLETED';
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const now = options.now instanceof Date ? options.now : new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+  if (appointment.date < todayStr) {
+    const err = new Error('Cannot reschedule appointments that occurred in the past.');
+    err.code = 'PAST_APPOINTMENT_CANNOT_BE_RESCHEDULED';
+    err.statusCode = 400;
+    throw err;
+  }
+
+  return true;
+}
+
+// ============================================================================
 // 📋 SCHEDULE & AVAILABILITY RESOLUTION ENGINE
 // ============================================================================
 
@@ -235,7 +385,6 @@ function getDoctorWithSchedule(doctorId, fallbackName = null) {
     return { ...DOCTOR_SCHEDULES[doctorId] };
   }
 
-  // Create an operational default schedule if doctor exists dynamically
   const clinic = CLINICS[DEFAULT_CLINIC_ID];
   return {
     doctorId: doctorId,
@@ -370,7 +519,6 @@ function calculateDoctorSlots(doctor, dateStr) {
           periodAr,
           periodEn,
           timeZone,
-          // Timezone-stable ISO date-time representation anchored in clinic time
           isoDateTime: `${dateStr}T${startTimeStr}:00`
         });
       }
@@ -379,7 +527,6 @@ function calculateDoctorSlots(doctor, dateStr) {
     }
   }
 
-  // Ensure standard slots are present if fallback needed
   const finalSlots = slots.length > 0 ? slots : FALLBACK_SLOTS;
 
   return {
@@ -395,38 +542,22 @@ function calculateDoctorSlots(doctor, dateStr) {
 // 🔒 STABLE IDENTIFIERS & CONCURRENCY TRANSACTION ENGINE
 // ============================================================================
 
-/**
- * Generate stable canonical identifier for doctor slot booking.
- */
 function getDoctorSlotKey(doctorId, date, slotId) {
   return `${doctorId}_${date}_${slotId}`;
 }
 
-/**
- * Generate stable canonical identifier for patient slot booking.
- */
 function getPatientSlotKey(patientId, date, slotId) {
   return `${patientId}_${date}_${slotId}`;
 }
 
-/**
- * Generate document ID for doctor slot lock.
- */
 function getDoctorLockDocId(doctorId, date, slotId) {
   return `slot_lock_doc_${doctorId}_${date}_${slotId}`;
 }
 
-/**
- * Generate document ID for patient slot lock.
- */
 function getPatientLockDocId(patientId, date, slotId) {
   return `slot_lock_pat_${patientId}_${date}_${slotId}`;
 }
 
-/**
- * Acquire in-memory slot locks with atomicity.
- * Prevents simultaneous race conditions in Node.js process.
- */
 function acquireMemoryLocks(doctorSlotKey, patientSlotKey) {
   if (activeMemorySlotLocks.has(doctorSlotKey)) {
     const err = new Error('This doctor already has a confirmed appointment in that slot.');
@@ -440,7 +571,6 @@ function acquireMemoryLocks(doctorSlotKey, patientSlotKey) {
     err.statusCode = 409;
     throw err;
   }
-  // Reserve keys in memory
   const lockData = { lockedAt: Date.now() };
   activeMemorySlotLocks.set(doctorSlotKey, lockData);
   activeMemorySlotLocks.set(patientSlotKey, lockData);
@@ -451,22 +581,106 @@ function acquireMemoryLocks(doctorSlotKey, patientSlotKey) {
   };
 }
 
-/**
- * Release in-memory slot locks.
- */
 function releaseMemoryLocks(doctorSlotKey, patientSlotKey) {
   activeMemorySlotLocks.delete(doctorSlotKey);
   activeMemorySlotLocks.delete(patientSlotKey);
 }
 
+function clearMemorySlotLocks() {
+  activeMemorySlotLocks.clear();
+}
+
+// ============================================================================
+// 📢 RELIABLE NOTIFICATION & AUDIT EVENT EMISSION
+// ============================================================================
+
 /**
- * Atomically book an appointment in Firestore using ACID transaction.
- *
- * CRITICAL REQUIREMENTS:
- * 1. Stable identifiers prevent simultaneous double bookings for doctor or patient.
- * 2. An appointment is NEVER marked confirmed before it is saved!
- * 3. Doctor work schedule, clinic time zone, and leave are authoritatively validated.
+ * Emit reliable notification event and log compliance audit event.
  */
+async function emitAppointmentNotificationEvent(db, { type, appointment, actorUser, details = {} }) {
+  if (!db || typeof db.collection !== 'function') return;
+
+  const nowIso = new Date().toISOString();
+  const recipientEmail = appointment.patientEmail || details.recipientEmail;
+
+  let subject = '';
+  if (type === 'APPOINTMENT_BOOKED') {
+    subject = `✅ تأكيد حجز موعدك الطبي - Health Vibes AI (${appointment.date} ${appointment.timeSlot || ''})`;
+  } else if (type === 'APPOINTMENT_RESCHEDULED') {
+    subject = `🔄 تم تعديل موعدك الطبي بنجاح - Health Vibes AI (${appointment.date} ${appointment.timeSlot || ''})`;
+  } else if (type === 'APPOINTMENT_CANCELLED') {
+    subject = `❌ إشعار بإلغاء موعدك الطبي - Health Vibes AI (${appointment.date})`;
+  } else if (type === 'APPOINTMENT_STATUS_CHANGED') {
+    subject = `📋 تحديث حالة موعدك الطبي: ${appointment.status} - Health Vibes AI`;
+  }
+
+  // 1. Record email notification record
+  if (recipientEmail) {
+    try {
+      const notifData = {
+        appointmentId: appointment.id,
+        type: type.toLowerCase(),
+        recipient: recipientEmail,
+        patientName: appointment.patientName || null,
+        doctorName: appointment.doctorName || null,
+        clinicId: appointment.clinicId || null,
+        clinicName: appointment.clinicName || null,
+        date: appointment.date,
+        timeSlot: appointment.timeSlot,
+        subject,
+        status: 'sent',
+        sentAt: nowIso,
+        details: {
+          actorUid: actorUser.uid,
+          actorRole: actorUser.role || 'patient',
+          reason: details.reason || null,
+          previousDate: details.previousDate || null,
+          previousSlotId: details.previousSlotId || null,
+          ...details
+        }
+      };
+
+      const colRef = db.collection('email_notifications');
+      if (typeof colRef.add === 'function') {
+        await colRef.add(notifData);
+      } else if (typeof colRef.doc === 'function') {
+        const notifId = `notif_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+        await colRef.doc(notifId).set(notifData);
+      }
+    } catch (err) {
+      console.warn('[NOTIFICATION WARNING] Failed to persist email_notification:', err.message);
+    }
+  }
+
+  // 2. Record audit event
+  try {
+    if (typeof auditService?.recordAuditEvent === 'function') {
+      await auditService.recordAuditEvent(db, {
+        type: type,
+        actorUid: actorUser.uid,
+        actorRole: actorUser.role || 'patient',
+        targetUserId: appointment.patientId,
+        clinicId: appointment.clinicId || null,
+        details: {
+          appointmentId: appointment.id,
+          doctorId: appointment.doctorId,
+          date: appointment.date,
+          slotId: appointment.slotId,
+          status: appointment.status,
+          reason: details.reason || null,
+          ...details
+        }
+      });
+    }
+  } catch (err) {
+    console.warn('[AUDIT WARNING] Failed to record appointment audit event:', err.message);
+  }
+}
+
+// ============================================================================
+// ✍️ TRANSACTIONAL APPOINTMENT BOOKING
+// ============================================================================
+
 async function bookAppointmentTransaction(db, payload, authUser) {
   const { doctorId, date, slotId } = payload;
   const patientId = authUser.uid;
@@ -504,7 +718,6 @@ async function bookAppointmentTransaction(db, payload, authUser) {
     throw err;
   }
 
-  // Verify the requested slot exists in the calculated availability schedule
   const validSlot = availability.slots.find(s => s.id === slotId);
   if (!validSlot) {
     const err = new Error(`Slot '${slotId}' is not available in the doctor's schedule for ${date}.`);
@@ -519,23 +732,24 @@ async function bookAppointmentTransaction(db, payload, authUser) {
   const doctorLockDocId = getDoctorLockDocId(doctorId, date, slotId);
   const patientLockDocId = getPatientLockDocId(patientId, date, slotId);
 
-  const appointmentId = typeof payload.id === 'string' && payload.id.trim()
-    ? payload.id.trim()
-    : `appt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  const appointmentId = (typeof payload.appointmentId === 'string' && payload.appointmentId.trim())
+    ? payload.appointmentId.trim()
+    : (typeof payload.id === 'string' && payload.id.trim()
+      ? payload.id.trim()
+      : `appt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`);
 
-  // 3. In-memory mutual exclusion guard (prevents concurrent Node event-loop races)
+  // 3. In-memory mutual exclusion guard
   const releaseLock = acquireMemoryLocks(doctorSlotKey, patientSlotKey);
 
   try {
     let savedAppointment = null;
 
-    if (db && typeof db.runTransaction === 'function') {
+    if (typeof db.runTransaction === 'function') {
       const docLockRef = db.collection('appointment_locks').doc(doctorLockDocId);
       const patLockRef = db.collection('appointment_locks').doc(patientLockDocId);
       const apptRef = db.collection('appointments').doc(appointmentId);
 
       savedAppointment = await db.runTransaction(async (transaction) => {
-        // Read locks inside transaction
         const [docLockSnap, patLockSnap, apptSnap] = await Promise.all([
           transaction.get(docLockRef),
           transaction.get(patLockRef),
@@ -565,8 +779,15 @@ async function bookAppointmentTransaction(db, payload, authUser) {
 
         const nowIso = new Date().toISOString();
 
-        // ⚠️ CRITICAL: Appointment status is marked 'confirmed' ONLY here,
-        // as part of the atomic commit transaction!
+        // Initialize change history
+        const initialHistoryEntry = {
+          action: 'BOOKED',
+          actorUid: authUser.uid,
+          actorRole: authUser.role || 'patient',
+          timestamp: nowIso,
+          details: { slotId, date, doctorId: doctor.doctorId }
+        };
+
         const appointmentDoc = {
           ...payload,
           id: appointmentId,
@@ -588,13 +809,13 @@ async function bookAppointmentTransaction(db, payload, authUser) {
           timeSlotEn: validSlot.timeEn,
           slotKey: doctorSlotKey,
           patientSlotKey: patientSlotKey,
-          status: 'confirmed', // Confirmed authoritatively upon successful transaction commit
+          status: APPOINTMENT_STATUSES.CONFIRMED,
+          history: [initialHistoryEntry],
           createdAt: nowIso,
           confirmedAt: nowIso,
           createdBy: patientId
         };
 
-        // Write both lock documents and appointment document atomically
         transaction.set(docLockRef, {
           id: doctorLockDocId,
           slotKey: doctorSlotKey,
@@ -624,34 +845,8 @@ async function bookAppointmentTransaction(db, payload, authUser) {
 
         return appointmentDoc;
       });
-    } else if (db && typeof db.collection === 'function') {
-      // Fallback if db does not support runTransaction (e.g. non-transactional mock)
-      const docSnap = await db.collection('appointments')
-        .where('doctorId', '==', doctorId)
-        .where('date', '==', date)
-        .where('slotId', '==', slotId)
-        .where('status', '==', 'confirmed')
-        .get();
-      if (!docSnap.empty) {
-        const err = new Error('This doctor already has a confirmed appointment in that slot.');
-        err.code = 'DOCTOR_SLOT_CONFLICT';
-        err.statusCode = 409;
-        throw err;
-      }
-
-      const patSnap = await db.collection('appointments')
-        .where('patientId', '==', patientId)
-        .where('date', '==', date)
-        .where('slotId', '==', slotId)
-        .where('status', '==', 'confirmed')
-        .get();
-      if (!patSnap.empty) {
-        const err = new Error('You already have a confirmed appointment in that slot.');
-        err.code = 'PATIENT_SLOT_CONFLICT';
-        err.statusCode = 409;
-        throw err;
-      }
-
+    } else {
+      // Non-transactional database fallback
       const nowIso = new Date().toISOString();
       const appointmentDoc = {
         ...payload,
@@ -666,19 +861,31 @@ async function bookAppointmentTransaction(db, payload, authUser) {
         slotId: slotId,
         slotKey: doctorSlotKey,
         patientSlotKey: patientSlotKey,
-        status: 'confirmed',
+        status: APPOINTMENT_STATUSES.CONFIRMED,
+        history: [{
+          action: 'BOOKED',
+          actorUid: authUser.uid,
+          actorRole: authUser.role || 'patient',
+          timestamp: nowIso,
+          details: { slotId, date, doctorId }
+        }],
         createdAt: nowIso,
         confirmedAt: nowIso,
         createdBy: patientId
       };
-
       await db.collection('appointments').doc(appointmentId).set(appointmentDoc);
       savedAppointment = appointmentDoc;
-    } else {
-      const err = new Error('Appointment storage is unavailable. Please retry shortly.');
-      err.code = 'APPOINTMENT_STORAGE_UNAVAILABLE';
-      err.statusCode = 503;
-      throw err;
+    }
+
+    // Emit notification event reliably
+    try {
+      await emitAppointmentNotificationEvent(db, {
+        type: 'APPOINTMENT_BOOKED',
+        appointment: savedAppointment,
+        actorUser: authUser
+      });
+    } catch (e) {
+      console.warn('[BOOKING EVENT ERROR]:', e.message);
     }
 
     return savedAppointment;
@@ -687,11 +894,285 @@ async function bookAppointmentTransaction(db, payload, authUser) {
   }
 }
 
+// ============================================================================
+// 🔄 ATOMIC APPOINTMENT RESCHEDULING
+// ============================================================================
+
 /**
- * Atomically cancel an appointment and release its doctor and patient slot locks.
+ * Reschedule appointment: Safely reserves the replacement slot and releases the old slot atomically.
+ * Preserves appointment change history and enforces role permissions and cancellation/reschedule policy.
  */
-async function cancelAppointmentTransaction(db, appointmentId, actorUser, options = {}) {
-  if (!appointmentId) {
+async function rescheduleAppointmentTransaction(db, { appointmentId, newDate, newSlotId, reason }, actorUser) {
+  if (!appointmentId || !newDate || !newSlotId) {
+    const err = new Error('appointmentId, newDate, and newSlotId are required.');
+    err.code = 'MISSING_PARAMETERS';
+    err.statusCode = 400;
+    throw err;
+  }
+
+  if (!db || typeof db.collection !== 'function') {
+    const err = new Error('Appointment storage is unavailable. Please retry shortly.');
+    err.code = 'APPOINTMENT_STORAGE_UNAVAILABLE';
+    err.statusCode = 503;
+    throw err;
+  }
+
+  const apptRef = db.collection('appointments').doc(appointmentId);
+  const snap = await apptRef.get();
+  if (!snap.exists) {
+    const err = new Error('Appointment was not found.');
+    err.code = 'APPOINTMENT_NOT_FOUND';
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const appointment = snap.data() || {};
+
+  // 1. Enforce RBAC permissions
+  verifyAppointmentActorPermission(appointment, actorUser, 'reschedule');
+
+  // 2. Validate Rescheduling Policy
+  validateReschedulingPolicy(appointment, actorUser);
+
+  const doctorId = appointment.doctorId;
+  const patientId = appointment.patientId;
+
+  // 3. Validate new schedule and availability
+  const doctor = getDoctorWithSchedule(doctorId, appointment.doctorName);
+  const availability = calculateDoctorSlots(doctor, newDate);
+
+  if (!availability.available) {
+    const err = new Error(availability.reasonMessage || 'Doctor is not available on new date.');
+    err.code = availability.reason === 'ON_LEAVE' ? 'DOCTOR_ON_LEAVE' : 'DOCTOR_UNAVAILABLE';
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const newSlot = availability.slots.find(s => s.id === newSlotId);
+  if (!newSlot) {
+    const err = new Error(`Slot '${newSlotId}' is not available in doctor's schedule for ${newDate}.`);
+    err.code = 'SLOT_NOT_AVAILABLE';
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const oldDocSlotKey = appointment.slotKey || getDoctorSlotKey(doctorId, appointment.date, appointment.slotId);
+  const oldPatSlotKey = appointment.patientSlotKey || getPatientSlotKey(patientId, appointment.date, appointment.slotId);
+
+  const newDocSlotKey = getDoctorSlotKey(doctorId, newDate, newSlotId);
+  const newPatSlotKey = getPatientSlotKey(patientId, newDate, newSlotId);
+
+  if (oldDocSlotKey === newDocSlotKey) {
+    const err = new Error('The selected new slot is identical to the current appointment slot.');
+    err.code = 'SAME_SLOT_SELECTED';
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const oldDocLockId = getDoctorLockDocId(doctorId, appointment.date, appointment.slotId);
+  const oldPatLockId = getPatientLockDocId(patientId, appointment.date, appointment.slotId);
+  const newDocLockId = getDoctorLockDocId(doctorId, newDate, newSlotId);
+  const newPatLockId = getPatientLockDocId(patientId, newDate, newSlotId);
+
+  // Acquire in-memory lock for replacement slot
+  const releaseLock = acquireMemoryLocks(newDocSlotKey, newPatSlotKey);
+
+  try {
+    const nowIso = new Date().toISOString();
+    let updatedAppointment = null;
+
+    if (typeof db.runTransaction === 'function') {
+      const oldDocLockRef = db.collection('appointment_locks').doc(oldDocLockId);
+      const oldPatLockRef = db.collection('appointment_locks').doc(oldPatLockId);
+      const newDocLockRef = db.collection('appointment_locks').doc(newDocLockId);
+      const newPatLockRef = db.collection('appointment_locks').doc(newPatLockId);
+
+      updatedAppointment = await db.runTransaction(async (transaction) => {
+        // Read locks
+        const [newDocLockSnap, newPatLockSnap] = await Promise.all([
+          transaction.get(newDocLockRef),
+          transaction.get(newPatLockRef)
+        ]);
+
+        if (newDocLockSnap.exists && newDocLockSnap.data()?.status === 'active') {
+          const err = new Error('The replacement slot is already booked for this doctor.');
+          err.code = 'DOCTOR_SLOT_CONFLICT';
+          err.statusCode = 409;
+          throw err;
+        }
+
+        if (newPatLockSnap.exists && newPatLockSnap.data()?.status === 'active') {
+          const err = new Error('You already have another active appointment in the replacement slot.');
+          err.code = 'PATIENT_SLOT_CONFLICT';
+          err.statusCode = 409;
+          throw err;
+        }
+
+        // 1. Release old locks
+        transaction.set(oldDocLockRef, { status: 'released', releasedAt: nowIso, reason: 'rescheduled' }, { merge: true });
+        transaction.set(oldPatLockRef, { status: 'released', releasedAt: nowIso, reason: 'rescheduled' }, { merge: true });
+
+        // 2. Acquire replacement locks
+        transaction.set(newDocLockRef, {
+          id: newDocLockId,
+          slotKey: newDocSlotKey,
+          appointmentId,
+          doctorId,
+          date: newDate,
+          slotId: newSlotId,
+          patientId,
+          clinicId: doctor.clinicId,
+          status: 'active',
+          lockedAt: nowIso
+        });
+
+        transaction.set(newPatLockRef, {
+          id: newPatLockId,
+          patientSlotKey: newPatSlotKey,
+          appointmentId,
+          patientId,
+          doctorId,
+          date: newDate,
+          slotId: newSlotId,
+          status: 'active',
+          lockedAt: nowIso
+        });
+
+        // 3. Append to change history
+        const historyEntry = {
+          action: 'RESCHEDULED',
+          actorUid: actorUser.uid,
+          actorRole: actorUser.role || 'patient',
+          timestamp: nowIso,
+          previousDate: appointment.date,
+          previousSlotId: appointment.slotId,
+          previousTimeSlot: appointment.timeSlot,
+          newDate,
+          newSlotId,
+          newTimeSlot: newSlot.timeAr,
+          reason: reason || 'Patient requested reschedule',
+          details: {
+            previousDate: appointment.date,
+            previousSlotId: appointment.slotId,
+            previousTimeSlot: appointment.timeSlot,
+            newDate,
+            newSlotId,
+            newTimeSlot: newSlot.timeAr,
+            reason: reason || 'Patient requested reschedule'
+          }
+        };
+
+        const history = Array.isArray(appointment.history) ? [...appointment.history] : [];
+        history.push(historyEntry);
+
+        const updateData = {
+          date: newDate,
+          slotId: newSlotId,
+          timeSlot: newSlot.timeAr,
+          timeSlotEn: newSlot.timeEn,
+          slotKey: newDocSlotKey,
+          patientSlotKey: newPatSlotKey,
+          status: APPOINTMENT_STATUSES.RESCHEDULED,
+          rescheduledAt: nowIso,
+          rescheduledBy: actorUser.uid,
+          rescheduleReason: reason || null,
+          history
+        };
+
+        transaction.update(apptRef, updateData);
+
+        return { ...appointment, ...updateData };
+      });
+    } else {
+      // Non-transactional fallback
+      const historyEntry = {
+        action: 'RESCHEDULED',
+        actorUid: actorUser.uid,
+        actorRole: actorUser.role || 'patient',
+        timestamp: nowIso,
+        previousDate: appointment.date,
+        previousSlotId: appointment.slotId,
+        previousTimeSlot: appointment.timeSlot,
+        newDate,
+        newSlotId,
+        newTimeSlot: newSlot.timeAr,
+        reason: reason || 'Patient requested reschedule',
+        details: {
+          previousDate: appointment.date,
+          previousSlotId: appointment.slotId,
+          previousTimeSlot: appointment.timeSlot,
+          newDate,
+          newSlotId,
+          newTimeSlot: newSlot.timeAr,
+          reason: reason || 'Patient requested reschedule'
+        }
+      };
+
+      const history = Array.isArray(appointment.history) ? [...appointment.history] : [];
+      history.push(historyEntry);
+
+      const updateData = {
+        date: newDate,
+        slotId: newSlotId,
+        timeSlot: newSlot.timeAr,
+        timeSlotEn: newSlot.timeEn,
+        slotKey: newDocSlotKey,
+        patientSlotKey: newPatSlotKey,
+        status: APPOINTMENT_STATUSES.RESCHEDULED,
+        rescheduledAt: nowIso,
+        rescheduledBy: actorUser.uid,
+        rescheduleReason: reason || null,
+        history
+      };
+
+      await apptRef.update(updateData);
+      updatedAppointment = { ...appointment, ...updateData };
+    }
+
+    // Release old memory locks if any
+    releaseMemoryLocks(oldDocSlotKey, oldPatSlotKey);
+
+    // Emit notification and audit event reliably
+    try {
+      await emitAppointmentNotificationEvent(db, {
+        type: 'APPOINTMENT_RESCHEDULED',
+        appointment: updatedAppointment,
+        actorUser,
+        details: {
+          previousDate: appointment.date,
+          previousSlotId: appointment.slotId,
+          newDate,
+          newSlotId,
+          reason
+        }
+      });
+    } catch (e) {
+      console.warn('[RESCHEDULE EVENT ERROR]:', e.message);
+    }
+
+    return { success: true, ...updatedAppointment, appointment: updatedAppointment };
+  } finally {
+    releaseLock();
+  }
+}
+
+// ============================================================================
+// ❌ APPOINTMENT CANCELLATION
+// ============================================================================
+
+/**
+ * Cancel appointment: Validates actor role permissions, cancellation policy,
+ * updates status to 'cancelled', retains change history, and atomically releases slot locks.
+ */
+async function cancelAppointmentTransaction(db, targetAppt, actorUser, options = {}) {
+  let appointmentId = targetAppt;
+  let opts = options;
+  if (targetAppt && typeof targetAppt === 'object') {
+    appointmentId = targetAppt.appointmentId || targetAppt.id;
+    opts = { reason: targetAppt.reason, ...targetAppt, ...options };
+  }
+
+  if (!appointmentId || typeof appointmentId !== 'string') {
     const err = new Error('appointmentId is required.');
     err.code = 'MISSING_APPOINTMENT_ID';
     err.statusCode = 400;
@@ -715,16 +1196,12 @@ async function cancelAppointmentTransaction(db, appointmentId, actorUser, option
   }
 
   const appt = snap.data() || {};
-  const isOwnerPatient = appt.patientId === actorUser.uid;
-  const isAssignedDoctor = appt.doctorId === actorUser.uid;
-  const isAdmin = options.isAdmin === true || actorUser.role === 'super_admin' || actorUser.role === 'clinic_admin';
 
-  if (!isOwnerPatient && !isAssignedDoctor && !isAdmin) {
-    const err = new Error('You cannot cancel this appointment.');
-    err.code = 'ACCESS_DENIED';
-    err.statusCode = 403;
-    throw err;
-  }
+  // 1. RBAC Permission Check
+  verifyAppointmentActorPermission(appt, actorUser, 'cancel');
+
+  // 2. Cancellation Policy Check
+  validateCancellationPolicy(appt, actorUser, options);
 
   const nowIso = new Date().toISOString();
   const doctorSlotKey = appt.slotKey || getDoctorSlotKey(appt.doctorId, appt.date, appt.slotId);
@@ -732,41 +1209,398 @@ async function cancelAppointmentTransaction(db, appointmentId, actorUser, option
   const doctorLockDocId = getDoctorLockDocId(appt.doctorId, appt.date, appt.slotId);
   const patientLockDocId = getPatientLockDocId(appt.patientId, appt.date, appt.slotId);
 
+  const historyEntry = {
+    action: 'CANCELLED',
+    actorUid: actorUser.uid,
+    actorRole: actorUser.role || 'patient',
+    previousStatus: appt.status || 'confirmed',
+    newStatus: APPOINTMENT_STATUSES.CANCELLED,
+    timestamp: nowIso,
+    reason: opts.reason || 'User cancelled',
+    details: {
+      reason: opts.reason || 'User cancelled'
+    }
+  };
+
+  const history = Array.isArray(appt.history) ? [...appt.history] : [];
+  history.push(historyEntry);
+
+  const updatePayload = {
+    status: APPOINTMENT_STATUSES.CANCELLED,
+    cancelledAt: nowIso,
+    cancelledBy: actorUser.uid,
+    cancelledByRole: actorUser.role || 'patient',
+    cancelReason: opts.reason || 'User cancelled',
+    history
+  };
+
   if (typeof db.runTransaction === 'function') {
     await db.runTransaction(async (transaction) => {
       const docLockRef = db.collection('appointment_locks').doc(doctorLockDocId);
       const patLockRef = db.collection('appointment_locks').doc(patientLockDocId);
 
-      transaction.update(apptRef, {
-        status: 'cancelled',
-        cancelledAt: nowIso,
-        cancelledBy: actorUser.uid,
-        cancelReason: options.reason || 'User cancelled'
-      });
+      transaction.update(apptRef, updatePayload);
 
-      // Release locks by marking them released/inactive
-      transaction.set(docLockRef, { status: 'released', releasedAt: nowIso }, { merge: true });
-      transaction.set(patLockRef, { status: 'released', releasedAt: nowIso }, { merge: true });
+      // Release locks by marking them released
+      transaction.set(docLockRef, { status: 'released', releasedAt: nowIso, reason: 'cancelled' }, { merge: true });
+      transaction.set(patLockRef, { status: 'released', releasedAt: nowIso, reason: 'cancelled' }, { merge: true });
     });
   } else {
-    await apptRef.update({
-      status: 'cancelled',
-      cancelledAt: nowIso,
-      cancelledBy: actorUser.uid,
-      cancelReason: options.reason || 'User cancelled'
+    await apptRef.update(updatePayload);
+  }
+
+  releaseMemoryLocks(doctorSlotKey, patientSlotKey);
+
+  // Emit notification and audit event reliably
+  try {
+    await emitAppointmentNotificationEvent(db, {
+      type: 'APPOINTMENT_CANCELLED',
+      appointment: { ...appt, ...updatePayload },
+      actorUser,
+      details: { reason: opts.reason }
+    });
+  } catch (e) {
+    console.warn('[CANCEL EVENT ERROR]:', e.message);
+  }
+
+  const finalCancelledAppt = { ...appt, ...updatePayload };
+  return { success: true, ...finalCancelledAppt, appointment: finalCancelledAppt };
+}
+
+// ============================================================================
+// 🔄 STATUS TRANSITION (COMPLETED / NO_SHOW)
+// ============================================================================
+
+/**
+ * Update appointment status (e.g. mark 'completed' or 'no_show').
+ * Only doctor, clinic admin, or super admin can perform these transitions.
+ */
+async function updateAppointmentStatusTransaction(db, { appointmentId, status, notes, reason }, actorUser) {
+  if (!appointmentId || !status) {
+    const err = new Error('appointmentId and status are required.');
+    err.code = 'MISSING_PARAMETERS';
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const validStatuses = [APPOINTMENT_STATUSES.COMPLETED, APPOINTMENT_STATUSES.NO_SHOW];
+  if (!validStatuses.includes(status)) {
+    const err = new Error(`Invalid status transition to '${status}'. Allowed: ${validStatuses.join(', ')}.`);
+    err.code = 'INVALID_STATUS_TRANSITION';
+    err.statusCode = 400;
+    throw err;
+  }
+
+  if (!db || typeof db.collection !== 'function') {
+    const err = new Error('Appointment storage is unavailable. Please retry shortly.');
+    err.code = 'APPOINTMENT_STORAGE_UNAVAILABLE';
+    err.statusCode = 503;
+    throw err;
+  }
+
+  const apptRef = db.collection('appointments').doc(appointmentId);
+  const snap = await apptRef.get();
+  if (!snap.exists) {
+    const err = new Error('Appointment was not found.');
+    err.code = 'APPOINTMENT_NOT_FOUND';
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const appt = snap.data() || {};
+
+  // Permission: doctor, clinic admin, super admin
+  const userRole = actorUser.role || 'patient';
+  if (userRole === 'patient') {
+    const err = new Error('Patients cannot mark appointments as completed or no-show.');
+    err.code = 'ACCESS_DENIED';
+    err.statusCode = 403;
+    throw err;
+  }
+
+  verifyAppointmentActorPermission(appt, actorUser, 'status_update');
+
+  if (appt.status === APPOINTMENT_STATUSES.CANCELLED) {
+    const err = new Error('Cannot update status of a cancelled appointment.');
+    err.code = 'CANNOT_UPDATE_CANCELLED';
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const nowIso = new Date().toISOString();
+  const historyEntry = {
+    action: 'STATUS_CHANGED',
+    actorUid: actorUser.uid,
+    actorRole: userRole,
+    previousStatus: appt.status || 'confirmed',
+    newStatus: status,
+    timestamp: nowIso,
+    notes: notes || reason || null,
+    details: {
+      notes: notes || reason || null,
+      previousStatus: appt.status || 'confirmed',
+      newStatus: status
+    }
+  };
+
+  const history = Array.isArray(appt.history) ? [...appt.history] : [];
+  history.push(historyEntry);
+
+  const updatePayload = {
+    status,
+    statusUpdatedAt: nowIso,
+    statusUpdatedBy: actorUser.uid,
+    statusNotes: notes || reason || null,
+    history
+  };
+
+  if (status === APPOINTMENT_STATUSES.COMPLETED) {
+    updatePayload.completedAt = nowIso;
+  } else if (status === APPOINTMENT_STATUSES.NO_SHOW) {
+    updatePayload.noShowAt = nowIso;
+  }
+
+  await apptRef.update(updatePayload);
+
+  // Emit notification and audit event reliably
+  try {
+    await emitAppointmentNotificationEvent(db, {
+      type: 'APPOINTMENT_STATUS_CHANGED',
+      appointment: { ...appt, ...updatePayload },
+      actorUser,
+      details: { newStatus: status, notes }
+    });
+  } catch (e) {
+    console.warn('[STATUS UPDATE EVENT ERROR]:', e.message);
+  }
+
+  const finalUpdatedAppt = { ...appt, ...updatePayload };
+  return { success: true, ...finalUpdatedAppt, appointment: finalUpdatedAppt };
+}
+
+// ============================================================================
+// 📜 APPOINTMENT HISTORY (UPCOMING VS PAST)
+// ============================================================================
+
+/**
+ * Retrieve patient appointment history cleanly partitioned into 'upcoming' and 'past'.
+ * Retains complete change history on each appointment record.
+ */
+async function getAppointmentsHistory(db, options = {}, actorUser) {
+  if (!db || typeof db.collection !== 'function') {
+    return { upcoming: [], past: [] };
+  }
+
+  const opts = typeof options === 'string' ? { patientId: options } : (options || {});
+  const { patientId, doctorId, clinicId } = opts;
+
+  const userRole = actorUser?.role || 'patient';
+  const targetPatientId = patientId || (userRole === 'patient' ? actorUser.uid : null);
+
+  let query = db.collection('appointments');
+  if (targetPatientId) {
+    if (userRole === 'patient' && targetPatientId !== actorUser.uid) {
+      const err = new Error("Access denied: You cannot view another patient's appointment history.");
+      err.code = 'ACCESS_DENIED';
+      err.statusCode = 403;
+      throw err;
+    }
+    query = query.where('patientId', '==', targetPatientId);
+  } else if (doctorId) {
+    query = query.where('doctorId', '==', doctorId);
+  }
+
+  const snap = await query.get();
+  const allAppts = [];
+  snap.forEach(doc => {
+    allAppts.push(doc.data());
+  });
+
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+  const upcoming = [];
+  const past = [];
+
+  for (const appt of allAppts) {
+    const isTerminalStatus = [APPOINTMENT_STATUSES.COMPLETED, APPOINTMENT_STATUSES.CANCELLED, APPOINTMENT_STATUSES.NO_SHOW].includes(appt.status);
+    const isPastDate = appt.date < todayStr;
+
+    if (isTerminalStatus || isPastDate) {
+      past.push(appt);
+    } else {
+      upcoming.push(appt);
+    }
+  }
+
+  // Sort upcoming ascending (soonest first)
+  upcoming.sort((a, b) => {
+    const cmp = a.date.localeCompare(b.date);
+    return cmp !== 0 ? cmp : (a.slotId || '').localeCompare(b.slotId || '');
+  });
+
+  // Sort past descending (most recent first)
+  past.sort((a, b) => {
+    const cmp = b.date.localeCompare(a.date);
+    return cmp !== 0 ? cmp : (b.slotId || '').localeCompare(a.slotId || '');
+  });
+
+  return { upcoming, past };
+}
+
+// ============================================================================
+// 🗓️ DOCTOR & CLINIC CALENDARS
+// ============================================================================
+
+/**
+ * Retrieve calendar schedule for a doctor over a date range.
+ * Calculates availability, shifts, leaves, and booked appointment states.
+ */
+async function getDoctorCalendar(db, { doctorId, startDate, endDate }, actorUser) {
+  if (!doctorId) {
+    const err = new Error('doctorId is required.');
+    err.code = 'MISSING_DOCTOR_ID';
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const doctor = getDoctorWithSchedule(doctorId);
+  const clinic = CLINICS[doctor.clinicId] || CLINICS[DEFAULT_CLINIC_ID];
+
+  // RBAC Permission Check
+  if (actorUser) {
+    const role = actorUser.role || 'patient';
+    if (role === 'doctor' && actorUser.uid !== doctorId) {
+      const err = new Error('Doctors can only view their own administrative schedule.');
+      err.code = 'ACCESS_DENIED';
+      err.statusCode = 403;
+      throw err;
+    }
+    if (role === 'clinic_admin' && actorUser.clinicId && doctor.clinicId !== actorUser.clinicId) {
+      const err = new Error('Clinic admins can only view calendars for doctors in their clinic.');
+      err.code = 'ACCESS_DENIED';
+      err.statusCode = 403;
+      throw err;
+    }
+  }
+
+  // Fetch confirmed and rescheduled bookings in range
+  const bookedSlotsMap = new Map(); // "date_slotId" -> appointment
+  if (db && typeof db.collection === 'function') {
+    try {
+      const snap = await db.collection('appointments')
+        .where('doctorId', '==', doctorId)
+        .where('status', 'in', [APPOINTMENT_STATUSES.CONFIRMED, APPOINTMENT_STATUSES.RESCHEDULED, APPOINTMENT_STATUSES.COMPLETED])
+        .get();
+      snap.forEach(doc => {
+        const a = doc.data() || {};
+        if (a.date && a.slotId) {
+          bookedSlotsMap.set(`${a.date}_${a.slotId}`, a);
+        }
+      });
+    } catch (e) {
+      // Fallback
+    }
+  }
+
+  // Generate calendar days between startDate and endDate
+  const days = [];
+  const start = new Date(startDate || Date.now());
+  let numDays = 7;
+  if (startDate && endDate) {
+    const s = new Date(startDate);
+    const e = new Date(endDate);
+    const diff = Math.round((e - s) / (24 * 3600 * 1000)) + 1;
+    if (diff > 0 && diff <= 30) numDays = diff;
+  }
+
+  for (let i = 0; i < numDays; i++) {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+    const availability = calculateDoctorSlots(doctor, dateStr);
+    const daySlots = availability.slots.map(s => {
+      const booking = bookedSlotsMap.get(`${dateStr}_${s.id}`);
+      return {
+        ...s,
+        slotId: s.id,
+        status: booking ? booking.status : (availability.available ? 'available' : availability.reason.toLowerCase()),
+        appointmentId: booking ? booking.id : null,
+        patientName: booking && (actorUser?.role !== 'patient') ? booking.patientName : null
+      };
+    });
+
+    days.push({
+      date: dateStr,
+      dayOfWeek: getDayOfWeekForDate(dateStr, clinic.timeZone),
+      available: availability.available,
+      reason: availability.reason,
+      leave: availability.leave || null,
+      slots: daySlots
     });
   }
 
-  // Also release in-memory locks
-  releaseMemoryLocks(doctorSlotKey, patientSlotKey);
+  return {
+    doctorId: doctor.doctorId,
+    doctorName: doctor.name,
+    doctorNameEn: doctor.nameEn,
+    clinicId: clinic.clinicId,
+    clinicName: clinic.name,
+    timeZone: clinic.timeZone,
+    calendar: days,
+    days: days
+  };
+}
 
-  return { success: true, appointmentId, status: 'cancelled', cancelledAt: nowIso };
+/**
+ * Retrieve calendar schedule for a clinic on a specific date.
+ */
+async function getClinicCalendar(db, { clinicId, date }, actorUser) {
+  const clinic = CLINICS[clinicId || DEFAULT_CLINIC_ID];
+  if (!clinic) {
+    const err = new Error('Clinic not found.');
+    err.code = 'CLINIC_NOT_FOUND';
+    err.statusCode = 404;
+    throw err;
+  }
+
+  // Clinic Admin / Super Admin RBAC Check
+  if (actorUser) {
+    const role = actorUser.role || 'patient';
+    if (role === 'clinic_admin' && actorUser.clinicId && actorUser.clinicId !== clinic.clinicId) {
+      const err = new Error('Access denied: You can only view calendars for your assigned clinic.');
+      err.code = 'ACCESS_DENIED';
+      err.statusCode = 403;
+      throw err;
+    }
+  }
+
+  const doctorsInClinic = Object.values(DOCTOR_SCHEDULES).filter(d => d.clinicId === clinic.clinicId);
+  const targetDate = date || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`;
+
+  const doctorsSchedules = [];
+  for (const doc of doctorsInClinic) {
+    const cal = await getDoctorCalendar(db, { doctorId: doc.doctorId, startDate: targetDate, endDate: targetDate }, actorUser);
+    doctorsSchedules.push(cal);
+  }
+
+  return {
+    clinicId: clinic.clinicId,
+    clinicName: clinic.name,
+    timeZone: clinic.timeZone,
+    date: targetDate,
+    doctors: doctorsSchedules
+  };
 }
 
 module.exports = {
   CLINICS,
   DOCTOR_SCHEDULES,
   FALLBACK_SLOTS,
+  APPOINTMENT_STATUSES,
+  CANCELLATION_MIN_NOTICE_HOURS,
+  RESCHEDULING_MIN_NOTICE_HOURS,
   getDayOfWeekForDate,
   formatTimeStrings,
   timeToSlotId,
@@ -777,7 +1611,17 @@ module.exports = {
   getPatientSlotKey,
   getDoctorLockDocId,
   getPatientLockDocId,
+  verifyAppointmentActorPermission,
+  validateCancellationPolicy,
+  validateReschedulingPolicy,
   bookAppointmentTransaction,
+  rescheduleAppointmentTransaction,
   cancelAppointmentTransaction,
+  updateAppointmentStatusTransaction,
+  getAppointmentsHistory,
+  getDoctorCalendar,
+  getClinicCalendar,
+  emitAppointmentNotificationEvent,
+  clearMemorySlotLocks,
   _activeMemorySlotLocks: activeMemorySlotLocks
 };

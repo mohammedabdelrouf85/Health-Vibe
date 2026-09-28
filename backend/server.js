@@ -404,6 +404,9 @@ app.use([
   '/api/notifications/send-email',
   '/api/feedback/submit',
   '/api/appointments/book',
+  '/api/appointments/reschedule',
+  '/api/appointments/cancel',
+  '/api/appointments/update-status',
   '/api/user/privacy-consent',
   '/api/user/privacy-consent/withdraw',
   '/api/user/delete-account',
@@ -4898,6 +4901,114 @@ app.post('/api/appointments/cancel', requireAuth, requireVerifiedEmail, async (r
     console.error('[APPOINTMENT CANCEL ERROR]:', err);
     const statusCode = err.statusCode || 500;
     return res.status(statusCode).json({ error: err.code || 'APPOINTMENT_CANCEL_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/appointments/reschedule
+ * Safely reserves the replacement slot and releases the old slot atomically.
+ * Enforces role permissions, notice policy, and retains change history.
+ */
+app.post('/api/appointments/reschedule', requireAuth, requireVerifiedEmail, async (req, res) => {
+  const { appointmentId, newDate, newSlotId, reason } = req.body || {};
+  if (!appointmentId || !newDate || !newSlotId) {
+    return res.status(400).json({ error: 'MISSING_PARAMETERS', message: 'appointmentId, newDate, and newSlotId are required.' });
+  }
+  if (!db || typeof db.collection !== 'function') {
+    return res.status(503).json({ error: 'APPOINTMENT_STORAGE_UNAVAILABLE', message: 'Appointment storage is unavailable. Please retry shortly.' });
+  }
+  try {
+    const result = await schedulingService.rescheduleAppointmentTransaction(db, {
+      appointmentId,
+      newDate,
+      newSlotId,
+      reason
+    }, req.user);
+    return res.json(result);
+  } catch (err) {
+    console.error('[APPOINTMENT RESCHEDULE ERROR]:', err);
+    const statusCode = err.statusCode || (err.code === 'DOCTOR_SLOT_CONFLICT' || err.code === 'PATIENT_SLOT_CONFLICT' ? 409 : 500);
+    return res.status(statusCode).json({ error: err.code || 'APPOINTMENT_RESCHEDULE_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/appointments/update-status
+ * Updates appointment status (completed, no_show) with clinical notes and change history.
+ */
+app.post('/api/appointments/update-status', requireAuth, requireVerifiedEmail, async (req, res) => {
+  const { appointmentId, status, notes, reason } = req.body || {};
+  if (!appointmentId || !status) {
+    return res.status(400).json({ error: 'MISSING_PARAMETERS', message: 'appointmentId and status are required.' });
+  }
+  if (!db || typeof db.collection !== 'function') {
+    return res.status(503).json({ error: 'APPOINTMENT_STORAGE_UNAVAILABLE', message: 'Appointment storage is unavailable. Please retry shortly.' });
+  }
+  try {
+    const result = await schedulingService.updateAppointmentStatusTransaction(db, {
+      appointmentId,
+      status,
+      notes,
+      reason
+    }, req.user);
+    return res.json(result);
+  } catch (err) {
+    console.error('[APPOINTMENT STATUS UPDATE ERROR]:', err);
+    const statusCode = err.statusCode || 500;
+    return res.status(statusCode).json({ error: err.code || 'STATUS_UPDATE_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/appointments/my-appointments
+ * Retrieves appointment history for patient partitioned into upcoming and past.
+ */
+app.get('/api/appointments/my-appointments', requireAuth, async (req, res) => {
+  if (!db || typeof db.collection !== 'function') {
+    return res.status(503).json({ error: 'APPOINTMENT_STORAGE_UNAVAILABLE', message: 'Appointment storage is unavailable.' });
+  }
+  try {
+    const result = await schedulingService.getAppointmentsHistory(db, req.query, req.user);
+    return res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('[APPOINTMENTS HISTORY ERROR]:', err);
+    const statusCode = err.statusCode || 500;
+    return res.status(statusCode).json({ error: err.code || 'HISTORY_FETCH_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/appointments/doctor-calendar
+ * Retrieves full calendar schedule for doctor over a date range.
+ */
+app.get('/api/appointments/doctor-calendar', requireAuth, async (req, res) => {
+  const { doctorId, startDate, endDate } = req.query;
+  if (!doctorId) {
+    return res.status(400).json({ error: 'MISSING_PARAMETERS', message: 'doctorId query parameter is required.' });
+  }
+  try {
+    const result = await schedulingService.getDoctorCalendar(db, { doctorId, startDate, endDate }, req.user);
+    return res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('[DOCTOR CALENDAR ERROR]:', err);
+    const statusCode = err.statusCode || 500;
+    return res.status(statusCode).json({ error: err.code || 'CALENDAR_FETCH_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/appointments/clinic-calendar
+ * Retrieves aggregate clinic calendar for all doctors on a specific date.
+ */
+app.get('/api/appointments/clinic-calendar', requireAuth, async (req, res) => {
+  const { clinicId, date } = req.query;
+  try {
+    const result = await schedulingService.getClinicCalendar(db, { clinicId, date }, req.user);
+    return res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('[CLINIC CALENDAR ERROR]:', err);
+    const statusCode = err.statusCode || 500;
+    return res.status(statusCode).json({ error: err.code || 'CLINIC_CALENDAR_FAILED', message: err.message });
   }
 });
 

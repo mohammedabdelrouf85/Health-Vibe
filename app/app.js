@@ -8679,7 +8679,7 @@ async function renderPatientAppointmentsList() {
     }
   }
 
-  // Merge with localList and deduplicate by id
+  // Deduplicate by id
   const map = new Map();
   localList.forEach(a => map.set(a.id, a));
   appts.forEach(a => map.set(a.id, a));
@@ -8701,12 +8701,32 @@ async function renderPatientAppointmentsList() {
     return;
   }
 
-  container.innerHTML = merged.map((appt) => {
+  const todayStr = new Date().toISOString().split("T")[0];
+  const upcoming = merged.filter(a => (a.status === "confirmed" || a.status === "rescheduled") && (a.date >= todayStr));
+  const past = merged.filter(a => a.status === "completed" || a.status === "cancelled" || a.status === "no_show" || (a.date < todayStr));
+
+  const renderCard = (appt) => {
     const isCancelled = appt.status === "cancelled";
-    const statusPillClass = isCancelled ? "pill danger" : "pill ok";
-    const statusLabel = isCancelled
-      ? (isEn ? "Cancelled" : "ملغي")
-      : (isEn ? "Confirmed" : "مؤكد");
+    const isCompleted = appt.status === "completed";
+    const isNoShow = appt.status === "no_show";
+    const isRescheduled = appt.status === "rescheduled";
+    const isConfirmed = appt.status === "confirmed";
+
+    let statusPillClass = "pill ok";
+    let statusLabel = isEn ? "Confirmed" : "مؤكد";
+    if (isCancelled) {
+      statusPillClass = "pill danger";
+      statusLabel = isEn ? "Cancelled" : "ملغي";
+    } else if (isRescheduled) {
+      statusPillClass = "pill info";
+      statusLabel = isEn ? "Rescheduled" : "تمت إعادة الجدولة";
+    } else if (isCompleted) {
+      statusPillClass = "pill ok";
+      statusLabel = isEn ? "Completed" : "مكتمل";
+    } else if (isNoShow) {
+      statusPillClass = "pill warn";
+      statusLabel = isEn ? "No Show" : "لم يحضر";
+    }
 
     let typePillClass = "pill info";
     let typeIcon = "📹";
@@ -8718,13 +8738,15 @@ async function renderPatientAppointmentsList() {
       typeIcon = "📋";
     }
 
+    const canModify = (isConfirmed || isRescheduled) && (appt.date >= todayStr);
+
     return `
-      <div class="appointment-card" id="appt-card-${appt.id}">
+      <div class="appointment-card" id="appt-card-${appt.id}" style="margin-bottom: 12px; border: 1px solid var(--surface-3); border-radius: 8px; padding: 14px; background: var(--surface-2);">
         <div style="flex: 1;">
           <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap;">
             <span class="${statusPillClass}">${statusLabel}</span>
             <span class="${typePillClass}">${typeIcon} ${appt.typeLabel || appt.type}</span>
-            <span class="pill" style="background:var(--surface-3); color:var(--ink); font-size:11px;">⏰ ${appt.dateLabel} - ${appt.timeSlot}</span>
+            <span class="pill" style="background:var(--surface-3); color:var(--ink); font-size:11px;">⏰ ${appt.dateLabel || appt.date} - ${appt.timeSlot}</span>
           </div>
           <strong style="display: block; font-size: 15px; color: var(--ink); margin-bottom: 2px;">
             ${appt.doctorName}
@@ -8733,28 +8755,119 @@ async function renderPatientAppointmentsList() {
             ${appt.clinicName || appt.doctorSpecialty}
           </span>
           ${appt.notes ? `<p style="margin: 6px 0 0; font-size: 12px; color: var(--ink); opacity: 0.85;">💬 ${appt.notes}</p>` : ""}
+          ${appt.history && appt.history.length > 1 ? `
+            <div style="margin-top: 6px; font-size: 11px; color: var(--muted);">
+              📜 ${isEn ? "Audit changes:" : "سجل التعديلات:"} ${appt.history.length - 1} ${isEn ? "events" : "أحداث"}
+            </div>
+          ` : ""}
         </div>
-        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-          ${!isCancelled ? `
+        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px;">
+          ${canModify ? `
             ${appt.type === "video" ? `
-              <button type="button" class="solid-button" style="padding: 8px 14px; font-size: 12px;" onclick="joinAppointmentVideo('${appt.id}')">
+              <button type="button" class="solid-button" style="padding: 6px 12px; font-size: 12px;" onclick="joinAppointmentVideo('${appt.id}')">
                 📹 ${isEn ? "Join Video Call" : "انضمام للاستشارة"}
               </button>
             ` : `
-              <button type="button" class="outline-button" style="padding: 8px 14px; font-size: 12px;" onclick="showClinicDirections('${appt.id}')">
+              <button type="button" class="outline-button" style="padding: 6px 12px; font-size: 12px;" onclick="showClinicDirections('${appt.id}')">
                 📍 ${isEn ? "Clinic Details" : "موقع العيادة"}
               </button>
             `}
-            <button type="button" class="soft-button" style="padding: 8px 14px; font-size: 12px; color: #ef4444;" onclick="cancelAppointment('${appt.id}')">
+            <button type="button" class="outline-button" style="padding: 6px 12px; font-size: 12px;" onclick="promptRescheduleAppointment('${appt.id}', '${appt.doctorId}')">
+              🔄 ${isEn ? "Reschedule" : "إعادة جدولة"}
+            </button>
+            <button type="button" class="soft-button" style="padding: 6px 12px; font-size: 12px; color: #ef4444;" onclick="cancelAppointment('${appt.id}')">
               ✕ ${isEn ? "Cancel" : "إلغاء الموعد"}
             </button>
           ` : `
-            <span style="font-size: 12px; color: var(--muted);">${isEn ? "Booking Cancelled" : "تم إلغاء الحجز"}</span>
+            <span style="font-size: 12px; color: var(--muted);">${isCancelled ? (isEn ? "Booking Cancelled" : "تم إلغاء الحجز") : (isCompleted ? (isEn ? "Consultation Completed" : "اكتملت الاستشارة") : (isEn ? "Past Consultation" : "استشارة سابقة"))}</span>
           `}
         </div>
       </div>
     `;
-  }).join("");
+  };
+
+  let html = "";
+  if (upcoming.length > 0) {
+    html += `
+      <div style="margin-bottom: 16px;">
+        <h4 style="font-size: 14px; margin-bottom: 10px; color: var(--brand-accent, #3b82f6); display: flex; align-items: center; gap: 6px;">
+          <span>🗓️</span> ${isEn ? `Upcoming Appointments (${upcoming.length})` : `المواعيد القادمة (${upcoming.length})`}
+        </h4>
+        ${upcoming.map(renderCard).join("")}
+      </div>
+    `;
+  }
+
+  if (past.length > 0) {
+    html += `
+      <div style="margin-top: ${upcoming.length > 0 ? "20px" : "0"};">
+        <h4 style="font-size: 14px; margin-bottom: 10px; color: var(--muted); display: flex; align-items: center; gap: 6px;">
+          <span>📂</span> ${isEn ? `Past & Cancelled Appointments (${past.length})` : `المواعيد السابقة والملغاة (${past.length})`}
+        </h4>
+        ${past.map(renderCard).join("")}
+      </div>
+    `;
+  }
+
+  container.innerHTML = html;
+}
+
+async function rescheduleAppointment(apptId, newDate, newSlotId, reason = "") {
+  const isEn = currentLanguage === "en";
+  if (rescheduleAppointment._pending && rescheduleAppointment._pending[apptId]) {
+    showToast(isEn ? "This reschedule request is already being processed." : "طلب إعادة الجدولة قيد المعالجة بالفعل.");
+    return;
+  }
+
+  try {
+    const user = auth ? auth.currentUser : null;
+    if (!user || user.isAnonymous) {
+      throw new Error(isEn ? "Please sign in before rescheduling an appointment." : "يرجى تسجيل الدخول قبل إعادة جدولة الموعد.");
+    }
+    rescheduleAppointment._pending = rescheduleAppointment._pending || {};
+    rescheduleAppointment._pending[apptId] = true;
+
+    await requireSuccessfulMutation("/api/appointments/reschedule", {
+      method: "POST",
+      body: JSON.stringify({
+        appointmentId: apptId,
+        newDate: newDate,
+        newSlotId: newSlotId,
+        reason: reason || "Patient requested reschedule via portal"
+      })
+    }, data => data.success === true && data.status === "rescheduled");
+
+    showToast(isEn ? "Appointment rescheduled successfully! Replacement slot reserved." : "تمت إعادة جدولة الموعد بنجاح وحجز الموعد البديل.");
+    await renderPatientAppointmentsList();
+    await renderAppointmentsScreen();
+    updatePatientDashboardNextAppt();
+  } catch (err) {
+    console.error("Reschedule appointment error:", err);
+    showRetryFailure(isEn ? "Failed to reschedule appointment: " + err.message : "تعذر إعادة جدولة الموعد: " + err.message, () => rescheduleAppointment(apptId, newDate, newSlotId, reason));
+  } finally {
+    if (rescheduleAppointment._pending) rescheduleAppointment._pending[apptId] = false;
+  }
+}
+
+async function promptRescheduleAppointment(apptId, doctorId) {
+  const isEn = currentLanguage === "en";
+  if (apptSelectedDate && apptSelectedSlot) {
+    const confirmMsg = isEn
+      ? `Reschedule this appointment to ${apptSelectedDate.dateStr} at ${apptSelectedSlot.timeEn}?`
+      : `هل ترغب في إعادة جدولة هذا الموعد إلى ${apptSelectedDate.dateStr} في تمام ${apptSelectedSlot.timeAr}؟`;
+    if (window.confirm(confirmMsg)) {
+      return rescheduleAppointment(apptId, apptSelectedDate.dateStr, apptSelectedSlot.id, "Rescheduled via UI selection");
+    }
+  }
+
+  const defaultDate = apptDaysList && apptDaysList.length > 0 ? apptDaysList[0].dateStr : "";
+  const targetDate = window.prompt(isEn ? "Enter new appointment date (YYYY-MM-DD):" : "أدخل تاريخ الموعد الجديد (YYYY-MM-DD):", defaultDate);
+  if (!targetDate) return;
+
+  const targetSlot = window.prompt(isEn ? "Enter new time slot ID (e.g., slot_0900, slot_1000, slot_1100, slot_1400, slot_1500, slot_1600):" : "أدخل معرف الفترة الزمنية الجديدة (مثال: slot_0900, slot_1000):", "slot_1000");
+  if (!targetSlot) return;
+
+  return rescheduleAppointment(apptId, targetDate.trim(), targetSlot.trim(), "Rescheduled via patient request");
 }
 
 async function cancelAppointment(apptId) {
@@ -8834,6 +8947,8 @@ window.selectAppointmentDate = selectAppointmentDate;
 window.selectAppointmentSlot = selectAppointmentSlot;
 window.confirmAppointmentBooking = confirmAppointmentBooking;
 window.cancelAppointment = cancelAppointment;
+window.rescheduleAppointment = rescheduleAppointment;
+window.promptRescheduleAppointment = promptRescheduleAppointment;
 window.joinAppointmentVideo = joinAppointmentVideo;
 window.showClinicDirections = showClinicDirections;
 window.updatePatientDashboardNextAppt = updatePatientDashboardNextAppt;
