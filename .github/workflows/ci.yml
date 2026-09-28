@@ -1,0 +1,50 @@
+name: CI - Test & Validation Suite
+
+on:
+  push:
+    branches: [ main, staging, 'release/**', 'feature/**' ]
+  pull_request:
+    branches: [ main, staging ]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Run Test Suite (Node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [ 20.x, 22.x ]
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install Root Dependencies
+        run: npm ci
+
+      - name: Install Backend Dependencies
+        run: |
+          cd backend
+          npm ci
+          cd ..
+
+      - name: Validate Staging & Prod Build Readiness
+        run: |
+          npm run build:staging
+          npm run build:prod
+
+      - name: Execute Full Test Suite
+        run: npm test
+
+      - name: Verify Staging Deployment & Rollback Pipeline
+        run: npm run test:staging

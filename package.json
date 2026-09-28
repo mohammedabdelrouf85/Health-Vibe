@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Health Vibes AI - Smart Respiratory Clinical Assessment",
   "scripts": {
-    "test": "npm run test:rules && node tests/clinical_input_parsing.test.js && node tests/api_clinic_isolation.test.js && node tests/e2e_happy_path.test.js && node tests/data_isolation.test.js && node tests/doctor_queue_filters.test.js && node tests/environment_config.test.js && node tests/appointments_booking.test.js && node tests/appointments_concurrency_and_schedules.test.js && node tests/appointments_lifecycle_and_rbac.test.js && node tests/email_notifications.test.js && node tests/notification_engine_and_scheduler.test.js && node tests/owner_accounts_and_privileges.test.js && node tests/feedback_system.test.js && node tests/kpi_dashboard.test.js && node tests/mobile_ux.test.js && node tests/security_scan.test.js && node tests/app_check.test.js && node tests/csp_security_headers.test.js && node tests/error_monitoring.test.js && node tests/backup_restore.test.js && node tests/i18n_system.test.js && node tests/clinic_sales_landing.test.js && node tests/remember_me_security.test.js && node tests/theme_system.test.js && node tests/account_lifecycle.test.js && node tests/route_guards.test.js && node tests/operational_access.test.js && node tests/clinical_report_integrity.test.js && node tests/rbac_matrix.test.js && node tests/audit_trail_system.test.js && node tests/medical_file_uploads.test.js",
+    "test": "npm run test:rules && node tests/clinical_input_parsing.test.js && node tests/api_clinic_isolation.test.js && node tests/e2e_happy_path.test.js && node tests/data_isolation.test.js && node tests/doctor_queue_filters.test.js && node tests/environment_config.test.js && node tests/appointments_booking.test.js && node tests/appointments_concurrency_and_schedules.test.js && node tests/appointments_lifecycle_and_rbac.test.js && node tests/email_notifications.test.js && node tests/notification_engine_and_scheduler.test.js && node tests/owner_accounts_and_privileges.test.js && node tests/feedback_system.test.js && node tests/kpi_dashboard.test.js && node tests/mobile_ux.test.js && node tests/security_scan.test.js && node tests/app_check.test.js && node tests/csp_security_headers.test.js && node tests/error_monitoring.test.js && node tests/backup_restore.test.js && node tests/i18n_system.test.js && node tests/clinic_sales_landing.test.js && node tests/remember_me_security.test.js && node tests/theme_system.test.js && node tests/account_lifecycle.test.js && node tests/route_guards.test.js && node tests/operational_access.test.js && node tests/clinical_report_integrity.test.js && node tests/rbac_matrix.test.js && node tests/audit_trail_system.test.js && node tests/medical_file_uploads.test.js && node tests/patient_timeline.test.js && node tests/staging_deployment_and_rollback.test.js",
     "test:rules": "node tests/run_rules_emulator.js",
     "test:api-isolation": "node tests/api_clinic_isolation.test.js",
     "test:e2e": "node tests/e2e_happy_path.test.js",
@@ -42,6 +42,13 @@
     "test:licensing": "node tests/doctor_licensing_membership.test.js",
     "test:patient-profile": "node tests/patient_profile_provenance.test.js",
     "test:timeline": "node tests/patient_timeline.test.js",
+    "test:staging": "node tests/staging_deployment_and_rollback.test.js",
+    "build:staging": "node scripts/build.js --env=staging",
+    "build:prod": "node scripts/build.js --env=production",
+    "deploy:staging": "node scripts/deploy.js --env=staging",
+    "deploy:prod": "node scripts/deploy.js --env=production",
+    "rollback:staging": "node scripts/rollback.js --env=staging",
+    "rollback:prod": "node scripts/rollback.js --env=production",
     "grant:owners": "node backend/scripts/grant-owners.js"
   },
   "keywords": [
@@ -55,6 +62,7 @@
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5.0.2",
     "firebase": "^12.19.0",
+    "firebase-functions": "^7.4.0",
     "firebase-tools": "^15.31.0"
   }
 }

@@ -2,7 +2,7 @@
   "name": "health-vibe-backend",
   "version": "1.0.0",
   "description": "Health Vibes AI - Server-authoritative Zero-Trust RBAC Backend",
-  "main": "server.js",
+  "main": "index.js",
   "scripts": {
     "start": "node server.js",
     "start:dev": "node server.js",
@@ -16,6 +16,7 @@
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "firebase-admin": "^12.2.0",
+    "firebase-functions": "^7.4.0",
     "nodemailer": "^10.0.10"
   },
   "overrides": {

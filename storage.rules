@@ -43,7 +43,8 @@ service firebase.storage {
 
     function isAdmin() {
       return isAuthenticated() &&
-             request.auth.token.role in ['clinic_admin', 'super_admin'];
+             (request.auth.token.role in ['clinic_admin', 'super_admin'] ||
+              ('isOwner' in request.auth.token && request.auth.token.isOwner == true));
     }
 
     function isSuspended() {
@@ -68,7 +69,10 @@ service firebase.storage {
     }
 
     function isPlatformAdmin() {
-      return isAuthenticated() && request.auth.token.role == 'super_admin';
+      return isAuthenticated() && (
+        request.auth.token.role in ['super_admin', 'owner'] ||
+        ('isOwner' in request.auth.token && request.auth.token.isOwner == true)
+      );
     }
 
     function isClinicAdminForApplication(appId) {
