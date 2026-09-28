@@ -33,6 +33,7 @@ const auditService = require('./audit-service');
 const mfaService = require('./mfa-service');
 const schedulingService = require('./scheduling-service');
 const timelineService = require('./timeline-service');
+const monitoringService = require('./monitoring-service');
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -292,6 +293,9 @@ function sanitizeClientErrorMessage(err) {
 
   return msg;
 }
+
+// 🔗 Distributed Tracing & Request Performance Telemetry
+app.use(monitoringService.traceMiddleware);
 
 // 🛡️ Global JSON response sanitizer: never expose stack traces or internal Firebase errors to client
 app.use((req, res, next) => {
@@ -623,6 +627,7 @@ const MAX_ERROR_LOGS = 200;
 
 function recordSystemError({
   type = 'uncaught_exception',
+  category = null,
   message = 'Unknown error',
   stack = null,
   source = 'unknown',
@@ -634,14 +639,15 @@ function recordSystemError({
   screen = 'unknown',
   environment = NODE_ENV,
   severity = 'ERROR',
+  traceId = null,
+  sessionId = null,
   metadata = {}
 } = {}) {
-  const errorId = `err_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-  const record = {
-    errorId,
+  const monitoringRecord = monitoringService.recordMonitoringError({
     type,
-    message: maskServerSecrets(String(message || '').substring(0, 1000)),
-    stack: stack ? maskServerSecrets(String(stack).substring(0, 4000)) : null,
+    category,
+    message,
+    stack,
     source,
     lineno,
     colno,
@@ -651,11 +657,12 @@ function recordSystemError({
     screen,
     environment,
     severity,
-    metadata,
-    timestamp: new Date().toISOString()
-  };
+    traceId,
+    sessionId,
+    metadata
+  });
 
-  errorLogsRingBuffer.unshift(record);
+  errorLogsRingBuffer.unshift(monitoringRecord);
   if (errorLogsRingBuffer.length > MAX_ERROR_LOGS) {
     errorLogsRingBuffer.pop();
   }
@@ -665,11 +672,13 @@ function recordSystemError({
     try {
       db.collection('audit_events').add({
         type: 'SYSTEM_ERROR_LOGGED',
-        errorId,
+        errorId: monitoringRecord.errorId,
+        traceId: monitoringRecord.traceId,
         errorType: type,
-        message: record.message,
-        severity,
-        userId,
+        category: monitoringRecord.category,
+        message: monitoringRecord.message,
+        severity: monitoringRecord.severity,
+        userId: monitoringRecord.userId,
         userRole,
         environment,
         timestamp: admin.firestore.FieldValue.serverTimestamp()
@@ -679,14 +688,15 @@ function recordSystemError({
     } catch (e) {}
   }
 
-  console.error(`[ERROR MONITOR] [${severity}] [${type}] ${record.message} (ID: ${errorId})`);
-  return record;
+  console.error(`[ERROR MONITOR] [${monitoringRecord.severity}] [${monitoringRecord.category}:${type}] ${monitoringRecord.message} (Trace: ${monitoringRecord.traceId}, ID: ${monitoringRecord.errorId})`);
+  return monitoringRecord;
 }
 
 // Global Process-Level Crash Protection
 process.on('uncaughtException', (err) => {
   recordSystemError({
     type: 'server_uncaught_exception',
+    category: monitoringService.ERROR_CATEGORIES.API,
     message: err.message,
     stack: err.stack,
     severity: 'CRITICAL',
@@ -699,6 +709,7 @@ process.on('unhandledRejection', (reason) => {
   const stack = reason && reason.stack ? reason.stack : null;
   recordSystemError({
     type: 'server_unhandled_rejection',
+    category: monitoringService.ERROR_CATEGORIES.API,
     message: msg,
     stack: stack,
     severity: 'ERROR',
@@ -738,16 +749,19 @@ function auditOperationalAccess(action) {
   };
 }
 
-// Endpoint: Ingest client/frontend error events
+// Endpoint: Ingest client/frontend error events with PII redaction and traceId
 app.post('/api/monitoring/errors', requireAuth, (req, res) => {
-  const { type, message, stack, source, lineno, colno, url, screen, severity, metadata } = req.body || {};
+  const { type, category, message, stack, source, lineno, colno, url, screen, severity, traceId, sessionId, metadata } = req.body || {};
 
   if (!message && !type) {
     return res.status(400).json({ error: 'INVALID_PAYLOAD', message: 'Error type or message is required.' });
   }
 
+  const effectiveTraceId = traceId || req.traceId || req.headers['x-trace-id'] || null;
+
   const record = recordSystemError({
     type: type || 'client_reported_error',
+    category: category || null,
     message: message || 'Unspecified client failure',
     stack,
     source: source || 'client',
@@ -758,49 +772,162 @@ app.post('/api/monitoring/errors', requireAuth, (req, res) => {
     userRole: getTrustedClaimRole(req.user),
     screen: screen || 'unknown',
     severity: severity || 'ERROR',
+    traceId: effectiveTraceId,
+    sessionId: sessionId || req.headers['x-session-id'] || null,
     metadata: metadata || {}
   });
 
   res.status(201).json({
     success: true,
     errorId: record.errorId,
+    traceId: record.traceId,
+    category: record.category,
     loggedAt: record.timestamp
   });
 });
 
-// Endpoint: Error telemetry summary & metrics
+// Endpoint: Error telemetry summary & metrics with measured session crash-free rate
 app.get('/api/monitoring/errors/summary', requireAuth, auditOperationalAccess('MONITORING_SUMMARY_READ'), requireSuperAdmin, (req, res) => {
   const byType = {};
   const bySeverity = {};
+  const byCategory = {};
   let criticalCount = 0;
 
   for (const err of errorLogsRingBuffer) {
     byType[err.type] = (byType[err.type] || 0) + 1;
     bySeverity[err.severity] = (bySeverity[err.severity] || 0) + 1;
+    const cat = err.category || monitoringService.categorizeError(err.type, err.message, err.source);
+    byCategory[cat] = (byCategory[cat] || 0) + 1;
     if (err.severity === 'CRITICAL') criticalCount++;
   }
 
-  // Calculate estimated crash-free sessions percentage
   const totalLogged = errorLogsRingBuffer.length;
-  const crashFreePct = totalLogged === 0 ? 100 : Math.max(90, 100 - (criticalCount * 0.5) - (totalLogged * 0.05)).toFixed(2);
+  // Calculate crashFreeRate strictly based on measured sessions, or return "Unavailable"
+  const crashFreeRate = monitoringService.calculateCrashFreeRate();
 
   res.json({
     status: 'ok',
     environment: NODE_ENV,
     totalErrors: totalLogged,
-    crashFreeRate: `${crashFreePct}%`,
+    crashFreeRate,
     byType,
     bySeverity,
+    byCategory,
+    uptime: monitoringService.getUptimeMetrics(),
+    activeAlerts: monitoringService.getActiveAlerts(),
     serverUptimeSeconds: Math.floor(process.uptime()),
     recentErrors: errorLogsRingBuffer.slice(0, 50),
     timestamp: new Date().toISOString()
   });
 });
 
+// Endpoint: Event Dashboard linked through trace identifiers
+app.get('/api/monitoring/events', requireAuth, auditOperationalAccess('MONITORING_EVENTS_READ'), requireSuperAdmin, (req, res) => {
+  const { category, traceId, severity, limit } = req.query || {};
+  const events = monitoringService.queryEvents({
+    category: category || null,
+    traceId: traceId || null,
+    severity: severity || null,
+    limit: limit ? parseInt(limit, 10) : 50
+  });
+
+  res.json({
+    status: 'ok',
+    count: events.length,
+    events,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Endpoint: Uptime and performance latency metrics
+app.get('/api/monitoring/uptime', (req, res) => {
+  const metrics = monitoringService.getUptimeMetrics();
+  res.json({
+    status: 'ok',
+    ...metrics,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Endpoint: Alerts dashboard (active alerts, threshold config, history)
+app.get('/api/monitoring/alerts', requireAuth, auditOperationalAccess('MONITORING_ALERTS_READ'), requireSuperAdmin, (req, res) => {
+  res.json({
+    status: 'ok',
+    activeAlerts: monitoringService.getActiveAlerts(),
+    alertHistory: monitoringService.alertHistory.slice(0, 50),
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Endpoint: Session ping / registration for measured session tracking
+app.post('/api/monitoring/sessions', (req, res) => {
+  const { sessionId, metadata } = req.body || {};
+  if (!sessionId) {
+    return res.status(400).json({ error: 'SESSION_ID_REQUIRED', message: 'sessionId is required.' });
+  }
+
+  const session = monitoringService.recordSession(
+    sessionId,
+    req.user ? req.user.uid : 'anonymous',
+    metadata
+  );
+
+  res.json({
+    success: true,
+    sessionId: session.sessionId,
+    startedAt: session.startedAt,
+    hasCrashed: session.hasCrashed
+  });
+});
+
+// Endpoint: Injected failure simulation for alert & recovery verification
+app.post('/api/monitoring/test/inject-failure', requireAuth, requireSuperAdmin, (req, res) => {
+  const { failureCount = 5, latencyMs = 2500, action = 'inject' } = req.body || {};
+
+  if (action === 'inject') {
+    // Inject failures to trigger alert
+    for (let i = 0; i < failureCount; i++) {
+      monitoringService.recordRequestMetric({
+        timestamp: Date.now(),
+        durationMs: latencyMs,
+        statusCode: 500,
+        path: '/api/test/injected-fault',
+        isError: true
+      });
+    }
+    return res.json({
+      success: true,
+      action: 'injected',
+      activeAlerts: monitoringService.getActiveAlerts()
+    });
+  }
+
+  if (action === 'recover') {
+    // Inject healthy requests to clear error rate and trigger recovery
+    for (let i = 0; i < 20; i++) {
+      monitoringService.recordRequestMetric({
+        timestamp: Date.now(),
+        durationMs: 45,
+        statusCode: 200,
+        path: '/api/test/healthy-probe',
+        isError: false
+      });
+    }
+    return res.json({
+      success: true,
+      action: 'recovered',
+      activeAlerts: monitoringService.getActiveAlerts()
+    });
+  }
+
+  res.status(400).json({ error: 'INVALID_ACTION', message: 'Supported actions: inject, recover' });
+});
+
 // Endpoint: Clear in-memory error buffer (platform administrators only)
 app.post('/api/monitoring/errors/clear', requireAuth, auditOperationalAccess('MONITORING_ERRORS_CLEARED'), requireSuperAdmin, (req, res) => {
   errorLogsRingBuffer.length = 0;
-  res.json({ success: true, message: 'In-memory error logs successfully cleared.' });
+  monitoringService.resetMonitoringState();
+  res.json({ success: true, message: 'In-memory error logs and telemetry state successfully cleared.' });
 });
 
 // =============================================================================
@@ -6497,5 +6624,6 @@ app.notificationService = {
   NOTIFICATION_TYPES
 };
 app.timelineService = timelineService;
+app.monitoringService = monitoringService;
 
 module.exports = app;

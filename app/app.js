@@ -1785,12 +1785,71 @@ function initErrorMonitoring() {
   console.log("[ERROR MONITORING] Global telemetry active (listeners installed).");
 }
 
+function redactClientPii(input) {
+  if (input === null || input === undefined) return input;
+  if (typeof input === "string") {
+    return input
+      .replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/gi, "[REDACTED_EMAIL]")
+      .replace(/\b[23]\d{13}\b/g, "[REDACTED_NATIONAL_ID]")
+      .replace(/\b\d{3}-\d{2}-\d{4}\b/g, "[REDACTED_NATIONAL_ID]")
+      .replace(/(?:\+?20|0)?1[0125]\d{8}\b/g, "[REDACTED_PHONE]")
+      .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, "[REDACTED_JWT]")
+      .replace(/\b(?:\d{4}[-\s]?){3}\d{4}\b/g, "[REDACTED_CARD]")
+      .replace(/(["']?(?:password|passwd|secret|api[_-]?key|token|auth[a-z]*|bearer)["']?\s*[:=]\s*["']?)([^"',;&\s]{3,})/gi, "$1[REDACTED_SECRET]")
+      .replace(/(["']?(?:dob|birthdate)["']?\s*[:=]\s*["']?)(\d{4}[-/]\d{2}[-/]\d{2}|\d{2}[-/]\d{2}[-/]\d{4})/gi, "$1[REDACTED_DOB]");
+  }
+  return input;
+}
+
+function categorizeClientError(type = "", message = "", source = "") {
+  const t = String(type).toLowerCase();
+  const m = String(message).toLowerCase();
+  const s = String(source).toLowerCase();
+
+  if (t.includes("ai") || t.includes("gemini") || m.includes("gemini") || m.includes("triage") || s.includes("ai")) {
+    return "ai_service";
+  }
+  if (t.includes("notification") || t.includes("smtp") || t.includes("email") || m.includes("smtp") || m.includes("mail")) {
+    return "notification";
+  }
+  if (t.includes("auth") || t.includes("token") || m.includes("unauthorized") || m.includes("auth/")) {
+    return "auth";
+  }
+  if (t.includes("firestore") || t.includes("firebase") || t.includes("storage") || m.includes("permission_denied") || m.includes("firestore")) {
+    return "firebase";
+  }
+  if (t.includes("api") || t.includes("fetch") || t.includes("http") || s.includes("server")) {
+    return "api";
+  }
+  return "javascript";
+}
+
+function getClientSessionId() {
+  if (typeof window !== "undefined") {
+    if (!window.__HV_SESSION_ID) {
+      window.__HV_SESSION_ID = `sess_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+      // Send session ping to backend
+      try {
+        const apiUrl = (typeof runtimeConfig !== "undefined" && runtimeConfig && runtimeConfig.apiBaseUrl) ? runtimeConfig.apiBaseUrl : "";
+        fetch(`${apiUrl}/api/monitoring/sessions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionId: window.__HV_SESSION_ID })
+        }).catch(() => {});
+      } catch (e) {}
+    }
+    return window.__HV_SESSION_ID;
+  }
+  return null;
+}
+
 function captureError(details = {}) {
   try {
     const now = Date.now();
     const type = details.type || "generic_error";
-    const message = details.message || "Unknown error occurred";
-    const signature = `${type}:${message}:${details.lineno || 0}`;
+    const rawMessage = details.message || "Unknown error occurred";
+    const cleanMessage = redactClientPii(rawMessage);
+    const signature = `${type}:${cleanMessage}:${details.lineno || 0}`;
 
     // De-duplication: skip if identical error occurred within last 5 seconds
     if (signature === lastErrorSignature && (now - lastErrorTimestamp) < 5000) {
@@ -1814,16 +1873,23 @@ function captureError(details = {}) {
       : null;
     const currentScreen = activeScreenEl ? (activeScreenEl.id || "unknown") : "unknown";
 
+    const traceId = details.traceId || (typeof window !== "undefined" ? (window.__HV_TRACE_ID || `trc_${now}_${Math.random().toString(36).substring(2, 7)}`) : null);
+    const sessionId = getClientSessionId();
+    const category = details.category || categorizeClientError(type, cleanMessage, details.source);
+
     const payload = {
       errorId: `err_${now}_${Math.random().toString(36).substring(2, 7)}`,
+      traceId: traceId,
+      sessionId: sessionId,
+      category: category,
       type: type,
-      message: message,
-      stack: details.stack ? String(details.stack).substring(0, 3000) : null,
+      message: cleanMessage,
+      stack: details.stack ? redactClientPii(String(details.stack).substring(0, 3000)) : null,
       source: details.source || (typeof window !== "undefined" ? window.location.href : "unknown"),
       lineno: details.lineno || null,
       colno: details.colno || null,
       screen: currentScreen,
-      url: typeof window !== "undefined" ? window.location.href : "",
+      url: typeof window !== "undefined" ? redactClientPii(window.location.href) : "",
       userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "node",
       userId: (typeof auth !== "undefined" && auth && auth.currentUser) ? auth.currentUser.uid : "anonymous",
       environment: (typeof runtimeConfig !== "undefined" && runtimeConfig && runtimeConfig.environment) ? runtimeConfig.environment : "development",
@@ -1845,16 +1911,20 @@ function captureError(details = {}) {
     // Dispatch to backend if within rate limit
     if (errorDispatchCount <= 15) {
       const apiUrl = (typeof runtimeConfig !== "undefined" && runtimeConfig && runtimeConfig.apiBaseUrl) ? runtimeConfig.apiBaseUrl : "";
+      const headers = {
+        "Content-Type": "application/json",
+        "X-Trace-Id": traceId || ""
+      };
       if (typeof authenticatedFetch === "function") {
         authenticatedFetch(`${apiUrl}/api/monitoring/errors`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers,
           body: JSON.stringify(payload)
         }).catch(() => {});
       } else if (typeof fetch === "function") {
         fetch(`${apiUrl}/api/monitoring/errors`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers,
           body: JSON.stringify(payload)
         }).catch(() => {});
       }
@@ -1872,6 +1942,7 @@ function captureError(details = {}) {
 function reportManualError(message, context = {}) {
   captureError({
     type: context.type || "manual_reported_error",
+    category: context.category || null,
     message: message,
     stack: context.stack || (new Error().stack),
     severity: context.severity || "WARN",
@@ -1905,7 +1976,7 @@ async function fetchErrorMonitoringSummary() {
     status: "ok",
     environment: (typeof runtimeConfig !== "undefined" && runtimeConfig) ? runtimeConfig.environment : "development",
     totalErrors: HV_ERROR_BUFFER.length,
-    crashFreeRate: HV_ERROR_BUFFER.length === 0 ? "100%" : "99.4%",
+    crashFreeRate: "Unavailable",
     recentErrors: HV_ERROR_BUFFER
   };
 }
@@ -1921,20 +1992,33 @@ async function updateAdminErrorMonitoringUI() {
   const tableBody = document.getElementById("monitoringErrorsTableBody");
 
   if (totalCountEl) totalCountEl.textContent = summary.totalErrors || 0;
-  if (crashFreeEl) crashFreeEl.textContent = summary.crashFreeRate || "100%";
+  if (crashFreeEl) crashFreeEl.textContent = summary.crashFreeRate || "Unavailable";
+
+  // Display alert banner if active
+  const alertsBanner = document.getElementById("monitoringActiveAlertsBanner");
+  if (alertsBanner) {
+    const active = summary.activeAlerts || [];
+    if (active.length > 0) {
+      alertsBanner.style.display = "block";
+      alertsBanner.innerHTML = `⚠️ تنبيه نشط: ${active.map(a => a.message).join(" | ")}`;
+    } else {
+      alertsBanner.style.display = "none";
+    }
+  }
 
   if (tableBody) {
     const errors = summary.recentErrors || [];
     if (errors.length === 0) {
-      tableBody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--muted); padding: 18px;">✅ لا توجد أخطاء مسجلة حالياً - النظام يعمل بكفاءة تامة</td></tr>`;
+      tableBody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--muted); padding: 18px;">✅ لا توجد أخطاء مسجلة حالياً - النظام يعمل بكفاءة تامة</td></tr>`;
       return;
     }
     tableBody.innerHTML = errors.slice(0, 15).map(err => `
       <tr style="border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.06));">
         <td style="padding: 10px; font-size: 12px; font-family: monospace;">${new Date(err.timestamp).toLocaleTimeString()}</td>
         <td style="padding: 10px;"><span class="pill ${err.severity === 'CRITICAL' ? 'danger' : err.severity === 'WARN' ? 'warning' : 'danger'}" style="font-size: 11px;">${err.severity || 'ERROR'}</span></td>
-        <td style="padding: 10px; font-size: 12.5px; font-weight: 600;">${typeof escapeHtml === 'function' ? escapeHtml(err.message || '') : (err.message || '')}</td>
-        <td style="padding: 10px; font-size: 11.5px; color: var(--muted);">${err.type || ''} (${err.screen || ''})</td>
+        <td style="padding: 10px; font-size: 11px; font-family: monospace; color: var(--accent-light, #38bdf8);">${err.traceId ? err.traceId.slice(0, 14) + '...' : '-'}</td>
+        <td style="padding: 10px; font-size: 12px; font-weight: 600;">${typeof escapeHtml === 'function' ? escapeHtml(err.message || '') : (err.message || '')}</td>
+        <td style="padding: 10px; font-size: 11px; color: var(--muted);"><span class="badge" style="font-size: 10px; background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px;">${err.category || 'javascript'}</span> ${err.type || ''}</td>
         <td style="padding: 10px; font-size: 11px; color: var(--muted);">${err.userRole || 'anon'}</td>
       </tr>
     `).join("");
