@@ -4824,5 +4824,78 @@ body.dark .mobile-bottom-nav {
   to { transform: translateY(0); }
 }
 
+/* ==========================================================================
+   Unified Clinical Patient Timeline & History Styles
+   ========================================================================== */
+.timeline-filters-toolbar {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.timeline-filter-btn {
+  background: var(--surface-3, rgba(255, 255, 255, 0.05));
+  border: 1px solid var(--line);
+  color: var(--muted);
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.timeline-filter-btn:hover {
+  background: var(--surface-hover, rgba(9, 184, 182, 0.12));
+  color: var(--ink);
+  border-color: var(--teal);
+}
+
+.timeline-filter-btn.active {
+  background: var(--teal, #09b8b6);
+  color: #ffffff;
+  border-color: var(--teal, #09b8b6);
+  box-shadow: 0 2px 8px rgba(9, 184, 182, 0.3);
+}
+
+.unified-timeline-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 18px;
+  border-radius: 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  margin-bottom: 12px;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.unified-timeline-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06);
+  border-color: rgba(9, 184, 182, 0.35);
+}
+
+.unified-timeline-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+}
+
+[dir="rtl"] .unified-timeline-card::before { right: 0; }
+[dir="ltr"] .unified-timeline-card::before { left: 0; }
+
+.timeline-cat-assessment::before { background: #09b8b6; }
+.timeline-cat-report::before { background: #3b82f6; }
+.timeline-cat-appointment::before { background: #8b5cf6; }
+.timeline-cat-attachment::before { background: #10b981; }
+.timeline-cat-medication::before { background: #f97316; }
+.timeline-cat-condition::before { background: #ec4899; }
+.timeline-cat-doctor_note::before { background: #eab308; }
+.timeline-cat-internal_note::before { background: #ef4444; }
+
 
 

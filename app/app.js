@@ -7930,8 +7930,53 @@ async function renderResultScreen() {
   }
 }
 
+let timelineActiveFilter = {
+  type: 'all',
+  search: '',
+  startDate: '',
+  endDate: ''
+};
+
+function setTimelineTypeFilter(type) {
+  timelineActiveFilter.type = type || 'all';
+  document.querySelectorAll('.timeline-filter-btn').forEach(btn => {
+    if (btn.getAttribute('data-timeline-type') === timelineActiveFilter.type) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
+  renderPatientHistory();
+}
+
+function onTimelineFilterChange() {
+  const searchInput = document.getElementById('timelineSearchInput');
+  const startDateInput = document.getElementById('timelineStartDate');
+  const endDateInput = document.getElementById('timelineEndDate');
+
+  timelineActiveFilter.search = searchInput ? searchInput.value.trim() : '';
+  timelineActiveFilter.startDate = startDateInput ? startDateInput.value : '';
+  timelineActiveFilter.endDate = endDateInput ? endDateInput.value : '';
+
+  renderPatientHistory();
+}
+
+function clearTimelineFilters() {
+  timelineActiveFilter = { type: 'all', search: '', startDate: '', endDate: '' };
+  const searchInput = document.getElementById('timelineSearchInput');
+  const startDateInput = document.getElementById('timelineStartDate');
+  const endDateInput = document.getElementById('timelineEndDate');
+  if (searchInput) searchInput.value = '';
+  if (startDateInput) startDateInput.value = '';
+  if (endDateInput) endDateInput.value = '';
+  document.querySelectorAll('.timeline-filter-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.getAttribute('data-timeline-type') === 'all');
+  });
+  renderPatientHistory();
+}
+
 async function renderPatientHistory() {
-  if (isSupportUser()) return;
+  if (isSupportUser && isSupportUser()) return;
   const container = document.getElementById("patientHistoryContainer");
   const countBadge = document.getElementById("patientHistoryCount");
   if (!container) return;
@@ -7940,92 +7985,222 @@ async function renderPatientHistory() {
   const user = auth ? auth.currentUser : null;
 
   if (!user) {
-    container.innerHTML = `<div style="padding: 20px; text-align: center;">${isEn ? "Please sign in" : "يرجى تسجيل الدخول"}</div>`;
+    container.innerHTML = `<div style="padding: 24px; text-align: center; color: var(--muted);">${isEn ? "Please sign in to view your clinical timeline." : "يرجى تسجيل الدخول لاستعراض الجدول الزمني وسجلك الطبي الموحد."}</div>`;
     return;
   }
 
+  // Clear Loading State: Skeleton pulse cards & animated spinner
   container.innerHTML = `
     <div style="padding: 16px 0; display: flex; flex-direction: column; gap: 12px;">
-      <div style="display: flex; align-items: center; gap: 8px; color: var(--teal); font-size: 13px; font-weight: 600;">
-        <div class="spinner" style="width: 15px; height: 15px;"></div>
-        <span>${isEn ? "Retrieving complete medical history..." : "جاري استرجاع السجل الطبي الشامل..."}</span>
+      <div style="display: flex; align-items: center; gap: 8px; color: var(--teal); font-size: 13.5px; font-weight: 600;">
+        <div class="spinner" style="width: 16px; height: 16px;"></div>
+        <span>${isEn ? "Aggregating unified clinical timeline & history..." : "جاري استرجاع وتجميع الجدول الزمني الطبي الشامل..."}</span>
       </div>
-      <div class="hv-skeleton" style="height: 68px; width: 100%;"></div>
-      <div class="hv-skeleton" style="height: 68px; width: 100%;"></div>
-      <div class="hv-skeleton" style="height: 68px; width: 100%;"></div>
+      <div class="hv-skeleton" style="height: 78px; width: 100%; border-radius: 12px;"></div>
+      <div class="hv-skeleton" style="height: 78px; width: 100%; border-radius: 12px;"></div>
+      <div class="hv-skeleton" style="height: 78px; width: 100%; border-radius: 12px;"></div>
     </div>
   `;
 
   try {
-    let records = await getPatientDatabaseHistoryRecords(user);
-    if (records.length === 0) records = await getCases();
+    let timelineItems = [];
+    let isApiSuccess = false;
 
-    if (countBadge) {
-      const reportCount = records.filter((item) => item.historyType === "report").length;
-      const assessmentCount = records.length - reportCount;
-      countBadge.textContent = isEn
-        ? `${assessmentCount} assessments / ${reportCount} reports`
-        : `${assessmentCount} تقييم / ${reportCount} تقرير`;
+    // 1. Attempt Server-Authoritative API Fetch
+    try {
+      const params = new URLSearchParams();
+      if (timelineActiveFilter.type && timelineActiveFilter.type !== 'all') params.append('type', timelineActiveFilter.type);
+      if (timelineActiveFilter.search) params.append('search', timelineActiveFilter.search);
+      if (timelineActiveFilter.startDate) params.append('startDate', timelineActiveFilter.startDate);
+      if (timelineActiveFilter.endDate) params.append('endDate', timelineActiveFilter.endDate);
+
+      const res = await authenticatedFetch(`/api/patient/timeline?${params.toString()}`);
+      if (res && res.ok) {
+        const data = await res.json();
+        if (data && data.success && Array.isArray(data.timeline)) {
+          timelineItems = data.timeline;
+          isApiSuccess = true;
+        }
+      }
+    } catch (apiErr) {
+      console.warn('[TIMELINE] API fetch fallback to local consolidation:', apiErr.message);
     }
 
-    if (records.length === 0) {
+    // 2. Fallback to client-side multi-source consolidation if API was unavailable
+    if (!isApiSuccess) {
+      const rawRecords = await getPatientDatabaseHistoryRecords(user);
+      timelineItems = rawRecords.map(c => {
+        const isReport = c.historyType === 'report' || c.status === 'approved';
+        const ts = toMillis(c.approvedAt || c.reportGeneratedAt || c.submittedAt || c.createdAt || c.updatedAt) || Date.now();
+        const dateStr = new Date(ts).toISOString().slice(0, 10);
+        return {
+          id: c.id,
+          type: isReport ? 'report' : 'assessment',
+          title: isReport ? (isEn ? 'Certified Diagnostic Report' : 'تقرير طبي معتمد') : (isEn ? 'Breathing Assessment' : 'تقييم سريري للجهاز التنفسي'),
+          titleEn: isReport ? 'Certified Diagnostic Report' : 'Breathing Assessment',
+          timestamp: new Date(ts).toISOString(),
+          date: dateStr,
+          status: c.status || 'pending',
+          category: isReport ? 'diagnostic' : 'clinical',
+          summary: isReport
+            ? `${c.clinicalDiagnosis || (isEn ? 'Verified Diagnosis' : 'تشخيص معتمد')} • ${c.reportRef || c.id}`
+            : `${isEn ? 'Respiratory triage' : 'فرز سريري'}: ${c.triageLevel || 'عادي'} • SpO2: ${c.oxygenLevel || c.o2 || '--'}%`,
+          details: { ...c, caseId: c.id },
+          link: isReport ? `/app/index.html?screen=report&caseId=${encodeURIComponent(c.id)}` : `/app/index.html?screen=pending&caseId=${encodeURIComponent(c.id)}`,
+          recordId: c.id,
+          source: c.sourceCollection || 'cases',
+          author: c.approvingDoctorName || c.patientName || 'الطبيب المعالج',
+          isInternal: false
+        };
+      });
+
+      // Apply client-side filters on fallback
+      if (timelineActiveFilter.type && timelineActiveFilter.type !== 'all') {
+        timelineItems = timelineItems.filter(i => i.type === timelineActiveFilter.type);
+      }
+      if (timelineActiveFilter.startDate) {
+        timelineItems = timelineItems.filter(i => i.date >= timelineActiveFilter.startDate);
+      }
+      if (timelineActiveFilter.endDate) {
+        timelineItems = timelineItems.filter(i => i.date <= timelineActiveFilter.endDate);
+      }
+      if (timelineActiveFilter.search) {
+        const q = timelineActiveFilter.search.toLowerCase();
+        timelineItems = timelineItems.filter(i => (i.title + ' ' + i.summary).toLowerCase().includes(q));
+      }
+    }
+
+    // Update Counter Badge
+    if (countBadge) {
+      countBadge.textContent = isEn
+        ? `${timelineItems.length} records found`
+        : `${timelineItems.length} سجل سريري`;
+    }
+
+    // 3. Clear Empty State Handling
+    if (timelineItems.length === 0) {
+      const hasActiveFilters = Boolean(
+        (timelineActiveFilter.type && timelineActiveFilter.type !== 'all') ||
+        timelineActiveFilter.search ||
+        timelineActiveFilter.startDate ||
+        timelineActiveFilter.endDate
+      );
+
       container.innerHTML = `
-        <div class="hv-state-card" style="margin: 24px 0; padding: 40px 20px;">
-          <span class="state-icon">📂</span>
-          <h4>${isEn ? "Your Medical History is Empty" : "سجلك الطبي خالٍ حتى الآن"}</h4>
-          <p>${isEn ? "No previous respiratory assessments or certified reports were found. Submit your first breathing assessment to start tracking your respiratory health." : "لم تسجل أي فحوصات تنفسية أو تقارير معتمدة سابقة في هذا الحساب. ابدأ تقييمك الأول لتوثيق ومتابعة صحتك بانتظام."}</p>
-          <button type="button" class="solid-button" onclick="showScreen('assessment')" style="margin-top: 8px;">
-            <span>🫁</span> ${isEn ? "Start First Assessment" : "إجراء أول فحص طبي"}
-          </button>
+        <div class="hv-state-card" style="margin: 24px 0; padding: 40px 20px; text-align: center;">
+          <span class="state-icon" style="font-size: 40px;">📂</span>
+          <h4 style="margin: 12px 0 6px; font-size: 17px; font-weight: 700; color: var(--ink);">
+            ${hasActiveFilters ? (isEn ? "No Matching Timeline Records" : "لا توجد سجلات مطابقة للبحث والفلترة") : (isEn ? "Your Medical Timeline is Empty" : "سجلك الطبي خالٍ حتى الآن")}
+          </h4>
+          <p style="font-size: 13.5px; color: var(--muted); max-width: 520px; margin: 0 auto 18px; line-height: 1.6;">
+            ${hasActiveFilters
+              ? (isEn ? "No clinical assessments, certified reports, appointments, files, or medications match your active filter." : "لم يتم العثور على أي فحوصات، تقارير، مواعيد، مرفقات أو أدوية تطابق معايير الفلترة المحددة. جرب تغيير كلمات البحث أو إعادة ضبط الفلاتر.")
+              : (isEn ? "Submit your first respiratory assessment or book a medical consultation to establish your clinical timeline." : "ابدأ أول تقييم سريري للجهاز التنفسي أو احجز موعد استشارة لإنشاء سجلك الطبي المعتمد ومتابعة حالتك بانتظام.")
+            }
+          </p>
+          <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+            ${hasActiveFilters ? `
+              <button type="button" class="soft-button" onclick="clearTimelineFilters()" style="padding: 10px 18px;">
+                <span>🔄</span> ${isEn ? "Reset Filters" : "إلغاء الفلاتر وعرض الكل"}
+              </button>
+            ` : ''}
+            <button type="button" class="solid-button" onclick="showScreen('assessment')" style="padding: 10px 18px;">
+              <span>🫁</span> ${isEn ? "Start Assessment" : "إجراء أول فحص طبي"}
+            </button>
+            <button type="button" class="outline-button" onclick="showScreen('appointments')" style="padding: 10px 18px;">
+              <span>📅</span> ${isEn ? "Book Appointment" : "حجز موعد سريري"}
+            </button>
+          </div>
         </div>
       `;
       return;
     }
 
-    let html = "";
-    const isSupport = isSupportUser();
-    if (isSupport) {
-      html += `
-        <div class="support-history-banner" style="background: rgba(245, 158, 11, 0.1); border: 1px solid #f59e0b; border-radius: 10px; padding: 12px 16px; margin-bottom: 14px; font-size: 13px; color: #92400e; display: flex; align-items: center; gap: 10px;">
-          <span style="font-size: 20px;">🛡️</span>
-          <span>${isEn ? "Support Role Mode: Physiological metrics (SpO2) and clinical diagnoses are hidden to protect patient health privacy." : "وضع الدعم الفني المحدود: يتم إخفاء قياسات الأكسجين (SpO2) والبيانات السريرية التزاماً بمعايير حماية سرية المريض."}</span>
-        </div>
-      `;
-    }
+    // 4. Render Aggregated Timeline Cards with Links
+    const typeIcons = {
+      assessment: '🫁',
+      report: '📄',
+      appointment: '📅',
+      attachment: '📎',
+      medication: '💊',
+      condition: '🩺',
+      doctor_note: '📝'
+    };
 
-    records.forEach(c => {
-      const isApproved = isCaseApprovedForPatient(c);
-      const statusMeta = getCaseStatusMeta(c.status);
-      const ts = toMillis(c.approvedAt || c.reportGeneratedAt || c.submittedAt || c.createdAt || c.updatedAt) || 0;
-      const dt = ts ? new Date(ts).toLocaleDateString(isEn ? "en-US" : "ar-EG", { year: "numeric", month: "short", day: "numeric" }) : "--";
-      const o2Display = isSupport ? `**% (${isEn ? "Masked" : "محجوب للدعم 🔒"})` : `${c.oxygenLevel || c.o2 || "--"}%`;
-      const recordTypeLabel = c.historyType === "report"
-        ? (isEn ? "Certified Report" : "تقرير طبي معتمد")
-        : (isEn ? "Breathing Assessment" : "تقييم التنفس");
-      const sourceLabel = c.sourceCollection ? c.sourceCollection.replace(/_/g, " ") : "cases";
+    let html = '';
+    timelineItems.forEach(item => {
+      const icon = typeIcons[item.type] || '📋';
+      const catClass = item.isInternal ? 'timeline-cat-internal_note' : `timeline-cat-${item.type}`;
+      const dt = item.date || (item.timestamp ? item.timestamp.slice(0, 10) : '--');
+      const timeStr = item.details?.timeSlot || (item.timestamp && item.timestamp.includes('T') ? item.timestamp.slice(11, 16) : '');
+
+      let linkActionHtml = '';
+      if (item.type === 'report' || (item.type === 'doctor_note' && !item.isInternal)) {
+        linkActionHtml = `
+          <button type="button" class="solid-button" onclick="openPatientHistoryRecord('clinical_reports', '${item.recordId || item.details?.caseId}')" style="font-size: 12.5px; padding: 6px 14px; white-space: nowrap;">
+            <span>📄</span> ${isEn ? "View Certified Report" : "عرض التقرير المعتمد"}
+          </button>
+        `;
+      } else if (item.type === 'assessment') {
+        linkActionHtml = `
+          <button type="button" class="outline-button" onclick="openPatientHistoryRecord('cases', '${item.recordId}')" style="font-size: 12.5px; padding: 6px 14px; white-space: nowrap;">
+            <span>🔍</span> ${isEn ? "View Assessment" : "تفاصيل الفحص"}
+          </button>
+        `;
+      } else if (item.type === 'appointment') {
+        linkActionHtml = `
+          <button type="button" class="solid-button" onclick="showScreen('appointments')" style="font-size: 12.5px; padding: 6px 14px; white-space: nowrap; background: #8b5cf6;">
+            <span>📅</span> ${isEn ? "Manage Appointment" : "تفاصيل الحجز"}
+          </button>
+        `;
+      } else if (item.type === 'attachment') {
+        const downloadUrl = item.details?.downloadUrl || item.link;
+        linkActionHtml = downloadUrl ? `
+          <a href="${downloadUrl}" target="_blank" rel="noopener noreferrer" class="soft-button" style="font-size: 12.5px; padding: 6px 14px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;">
+            <span>📥</span> ${isEn ? "Open File" : "معاينة الملف"}
+          </a>
+        ` : '';
+      } else if (item.type === 'medication' || item.type === 'condition') {
+        linkActionHtml = `
+          <button type="button" class="soft-button" onclick="showScreen('profile')" style="font-size: 12.5px; padding: 6px 14px; white-space: nowrap;">
+            <span>👤</span> ${isEn ? "Medical Profile" : "الملف الطبي"}
+          </button>
+        `;
+      } else if (item.isInternal) {
+        linkActionHtml = `
+          <span class="pill danger" style="font-size: 11px; padding: 4px 8px;">
+            🔒 ${isEn ? "Confidential Staff Note" : "ملاحظة سريرية سرية"}
+          </span>
+        `;
+      }
 
       html += `
-        <div class="patient-history-record-card" style="display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line); margin-bottom: 10px; flex-wrap: wrap; gap: 10px;">
-          <div>
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <strong style="font-size: 15px; color: var(--ink);">${recordTypeLabel}</strong>
-              <span class="pill ${statusMeta.pillClass}" style="font-size: 11px; padding: 2px 8px;">
-                ${statusMeta.icon} ${isEn ? statusMeta.en : statusMeta.ar}
-              </span>
+        <div class="unified-timeline-card ${catClass}">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap;">
+            <div style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 220px;">
+              <span style="font-size: 24px; line-height: 1;">${icon}</span>
+              <div>
+                <strong style="font-size: 15px; color: var(--ink); display: block;">
+                  ${isEn && item.titleEn ? item.titleEn : item.title}
+                </strong>
+                <div style="font-size: 12px; color: var(--muted); margin-top: 3px; display: flex; gap: 8px; flex-wrap: wrap;">
+                  <span>📅 ${dt}${timeStr ? ` • ${timeStr}` : ''}</span>
+                  ${item.author ? `<span>👤 ${item.author}</span>` : ''}
+                  ${item.details?.reportRef ? `<span>🔖 #${item.details.reportRef}</span>` : ''}
+                </div>
+              </div>
             </div>
-            <div style="font-size: 12.5px; color: var(--muted); margin-top: 4px;">
-              <span>📅 ${dt}</span> • <span>${isEn ? "DB" : "قاعدة البيانات"}: ${sourceLabel}</span> • <span>🫁 SpO2: ${o2Display}</span> • <span>#${c.id.slice(-6).toUpperCase()}</span>
+
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="pill info" style="font-size: 11px; padding: 3px 8px; text-transform: capitalize;">
+                ${item.status || item.type}
+              </span>
+              ${linkActionHtml}
             </div>
           </div>
-          <div>
-            ${isApproved
-              ? `<button type="button" class="solid-button" onclick="openPatientHistoryRecord('${c.sourceCollection || 'cases'}', '${c.id}')" style="font-size: 13px; padding: 8px 16px;">
-                  <span>${isSupport ? "🛡️" : "✅"}</span> ${isSupport ? (isEn ? "View Support Dossier (Redacted)" : "عرض السجل (محجوب سريرياً)") : (isEn ? "View Certified Report" : "عرض التقرير المعتمد")}
-                 </button>`
-              : `<button type="button" class="outline-button" onclick="openPatientHistoryRecord('${c.sourceCollection || 'cases'}', '${c.id}')" style="font-size: 13px; padding: 8px 16px;">
-                  <span>🔒</span> ${isEn ? "Awaiting Approval (Locked)" : "قيد المراجعة (مغلق)"}
-                 </button>`
-            }
+
+          <div style="font-size: 13px; color: var(--ink); line-height: 1.5; background: var(--surface-1); padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.04);">
+            ${isEn && item.summaryEn ? item.summaryEn : item.summary}
           </div>
         </div>
       `;
@@ -8034,13 +8209,18 @@ async function renderPatientHistory() {
     container.innerHTML = html;
   } catch (err) {
     console.error("renderPatientHistory error:", err);
+    // Clear Error State with Retry CTA
     container.innerHTML = `
-      <div class="hv-state-card error-card" style="margin: 24px 0; padding: 36px 20px;">
-        <span class="state-icon">⚠️</span>
-        <h4>${isEn ? "Failed to Load Medical History" : "تعذر استرجاع السجل الطبي"}</h4>
-        <p>${isEn ? "An unexpected connection issue occurred while fetching your medical records. Please verify your connection." : "حدث خطأ أثناء استرجاع السجلات الطبية من الخادم. يرجى فحص الاتصال وإعادة المحاولة."}</p>
-        <button type="button" class="solid-button" onclick="renderPatientHistory()" style="margin-top: 8px;">
-          <span>🔄</span> ${isEn ? "Retry" : "إعادة المحاولة"}
+      <div class="hv-state-card error-card" style="margin: 24px 0; padding: 36px 20px; text-align: center;">
+        <span class="state-icon" style="font-size: 40px;">⚠️</span>
+        <h4 style="margin: 12px 0 6px; font-size: 17px; font-weight: 700; color: #dc2626;">
+          ${isEn ? "Failed to Load Medical Timeline" : "تعذر استرجاع الجدول الزمني السريري"}
+        </h4>
+        <p style="font-size: 13.5px; color: var(--muted); max-width: 480px; margin: 0 auto 16px; line-height: 1.5;">
+          ${isEn ? "An unexpected communication issue occurred while fetching your medical records. Please verify your connection and try again." : "حدث خطأ غير متوقع أثناء استرجاع بيانات السجل الطبي والجدول الزمني. يرجى فحص الاتصال والمحاولة مرة أخرى."}
+        </p>
+        <button type="button" class="solid-button" onclick="renderPatientHistory()" style="padding: 10px 20px;">
+          <span>🔄</span> ${isEn ? "Retry Connection" : "إعادة المحاولة"}
         </button>
       </div>
     `;

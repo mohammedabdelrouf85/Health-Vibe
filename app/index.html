@@ -1033,9 +1033,61 @@
       <section id="screen-history" class="screen">
         <article class="panel">
           <div class="panel-head">
-            <h3>السجل والتقارير الطبية</h3>
+            <div>
+              <h3 style="margin: 0; font-size: 18px; font-weight: 700;">
+                <span class="lang-ar">الجدول الزمني الطبي الموحد والسجل السريري</span>
+                <span class="lang-en">Unified Clinical Timeline &amp; Medical History</span>
+              </h3>
+              <p style="margin: 4px 0 0; font-size: 12.5px; color: var(--muted);">
+                <span class="lang-ar">سجل شامل يجمع التقييمات، التقارير المعتمدة، المواعيد، الفحوصات المرفقة، الأدوية، والحالات المزمنة</span>
+                <span class="lang-en">Comprehensive record combining assessments, reports, appointments, files, medications, and conditions</span>
+              </p>
+            </div>
             <span class="pill info" id="patientHistoryCount">--</span>
           </div>
+
+          <!-- Timeline Search & Filter Bar -->
+          <div class="timeline-filters-toolbar" style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; margin: 16px 0 20px;">
+            <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+              <!-- Search Input -->
+              <div style="flex: 1; min-width: 240px; position: relative;">
+                <span style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: 14px; color: var(--muted); pointer-events: none;">🔍</span>
+                <input type="text" id="timelineSearchInput" class="form-control" placeholder="بحث في السجل (أعراض، أدوية، تشخيص، طبيب)..." style="width: 100%; padding: 9px 36px 9px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-1); color: var(--ink); font-size: 13px;" oninput="onTimelineFilterChange()">
+              </div>
+
+              <!-- Date Range Controls -->
+              <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                <label style="font-size: 12px; font-weight: 600; color: var(--muted); display: flex; align-items: center;">
+                  <span class="lang-ar">من:</span>
+                  <span class="lang-en">From:</span>
+                  <input type="date" id="timelineStartDate" class="form-control" style="padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-1); color: var(--ink); font-size: 12px; margin: 0 4px;" onchange="onTimelineFilterChange()">
+                </label>
+                <label style="font-size: 12px; font-weight: 600; color: var(--muted); display: flex; align-items: center;">
+                  <span class="lang-ar">إلى:</span>
+                  <span class="lang-en">To:</span>
+                  <input type="date" id="timelineEndDate" class="form-control" style="padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-1); color: var(--ink); font-size: 12px; margin: 0 4px;" onchange="onTimelineFilterChange()">
+                </label>
+                <button type="button" class="soft-button" onclick="clearTimelineFilters()" style="padding: 7px 12px; font-size: 12px; border-radius: 8px;">
+                  <span>✕</span>
+                  <span class="lang-ar">إعادة ضبط</span>
+                  <span class="lang-en">Reset</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Category / Type Filter Pills -->
+            <div class="timeline-type-pills" style="display: flex; gap: 6px; flex-wrap: wrap;">
+              <button type="button" class="timeline-filter-btn active" data-timeline-type="all" onclick="setTimelineTypeFilter('all')">🌐 الكل / All</button>
+              <button type="button" class="timeline-filter-btn" data-timeline-type="assessment" onclick="setTimelineTypeFilter('assessment')">🫁 التقييمات / Assessments</button>
+              <button type="button" class="timeline-filter-btn" data-timeline-type="report" onclick="setTimelineTypeFilter('report')">📄 التقارير / Reports</button>
+              <button type="button" class="timeline-filter-btn" data-timeline-type="appointment" onclick="setTimelineTypeFilter('appointment')">📅 المواعيد / Appointments</button>
+              <button type="button" class="timeline-filter-btn" data-timeline-type="attachment" onclick="setTimelineTypeFilter('attachment')">📎 المرفقات / Files</button>
+              <button type="button" class="timeline-filter-btn" data-timeline-type="medication" onclick="setTimelineTypeFilter('medication')">💊 الأدوية / Medications</button>
+              <button type="button" class="timeline-filter-btn" data-timeline-type="condition" onclick="setTimelineTypeFilter('condition')">🩺 الحالات / Conditions</button>
+              <button type="button" class="timeline-filter-btn" data-timeline-type="doctor_note" onclick="setTimelineTypeFilter('doctor_note')">📝 ملاحظات الطبيب / Notes</button>
+            </div>
+          </div>
+
           <div id="patientHistoryContainer" class="records">
             <!-- Dynamically rendered via renderPatientHistory() -->
           </div>

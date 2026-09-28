@@ -32,6 +32,7 @@ const privacyService = require('./privacy-service');
 const auditService = require('./audit-service');
 const mfaService = require('./mfa-service');
 const schedulingService = require('./scheduling-service');
+const timelineService = require('./timeline-service');
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -502,6 +503,15 @@ const clientErrorLimiter = createRateLimiter({
   keyGenerator: req => `err_ip:${getClientIp(req)}`
 });
 app.use('/api/monitoring/errors', clientErrorLimiter);
+
+// Patient Timeline query rate limiter (60 req / minute per user/IP)
+const timelineLimiter = createRateLimiter({
+  windowMs: 60000,
+  maxRequests: 60,
+  message: 'Too many timeline requests. Please wait a moment.',
+  keyGenerator: req => req.user?.uid ? `timeline_user:${req.user.uid}` : `timeline_ip:${getClientIp(req)}`
+});
+app.use('/api/patient/timeline', timelineLimiter);
 
 // OTP Lockout Tracking Registry (Anti-Brute Force)
 const otpLockouts = new Map();
@@ -2034,6 +2044,38 @@ app.get('/api/patient/medical-profile', requireAuth, patientProfileLimiter, asyn
   } catch (err) {
     console.error('[PATIENT PROFILE GET ERROR]:', err);
     res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to retrieve patient medical profile.' });
+  }
+});
+
+/**
+ * GET /api/patient/timeline
+ * Unified clinical timeline aggregating:
+ * Assessments, Reports, Appointments, Attachments, Medications, Chronic Conditions, and Doctor Notes.
+ * Enforces Zero-Trust RBAC and strict redaction of internal doctor notes for patients.
+ */
+app.get('/api/patient/timeline', requireAuth, timelineLimiter, async (req, res) => {
+  try {
+    const patientId = req.query.patientId || req.query.uid || req.user.uid;
+    const { search, type, startDate, endDate } = req.query;
+
+    const timeline = await timelineService.buildPatientTimeline({
+      db,
+      patientId,
+      requestingUser: req.user,
+      search,
+      type,
+      startDate,
+      endDate
+    });
+
+    return res.json(timeline);
+  } catch (err) {
+    console.error('[PATIENT TIMELINE ERROR]:', err);
+    const statusCode = err.statusCode || 500;
+    return res.status(statusCode).json({
+      error: err.code || 'TIMELINE_FAILED',
+      message: err.message
+    });
   }
 });
 
@@ -6454,5 +6496,6 @@ app.notificationService = {
   NOTIFICATION_STATUS,
   NOTIFICATION_TYPES
 };
+app.timelineService = timelineService;
 
 module.exports = app;
