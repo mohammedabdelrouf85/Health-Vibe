@@ -253,9 +253,7 @@ const ROLE_PERMISSIONS_MAP = {
     PERMISSIONS.VIEW_SYSTEM_METRICS
   ],
   [ROLES.SUPPORT]: [PERMISSIONS.VIEW_SYSTEM_METRICS],
-  [ROLES.SUPER_ADMIN]: Object.values(PERMISSIONS).filter(p => ![
-    PERMISSIONS.SUBMIT_ASSESSMENT, PERMISSIONS.REVIEW_CASE, PERMISSIONS.APPROVE_CASE, PERMISSIONS.REJECT_CASE
-  ].includes(p))
+  [ROLES.SUPER_ADMIN]: Object.values(PERMISSIONS)
 };
 
 const ROLE_ALLOWED_SCREENS = {
@@ -438,6 +436,7 @@ async function getVerifiedServerRole(forceRefresh = false) {
 function hasPermission(permission) {
   const user = (typeof auth !== "undefined" && auth) ? auth.currentUser : null;
   const isOwner = Boolean(user && isOwnerUser(user));
+  if (isOwner) return true;
   const role = normalizeRole((typeof selectedRole !== "undefined" && selectedRole) ? selectedRole : ROLES.PATIENT, isOwner);
   const perms = ROLE_PERMISSIONS_MAP[role] || [];
   return perms.includes(permission);
@@ -446,9 +445,9 @@ function hasPermission(permission) {
 function canAccessScreen(screenName) {
   const user = (typeof auth !== "undefined" && auth) ? auth.currentUser : null;
   const isOwner = Boolean(user && isOwnerUser(user));
-  // Resolve the active role: respect selectedRole (owner may be testing as patient/doctor).
+  if (isOwner) return true;
+  // Resolve the active role for non-owner accounts.
   const role = normalizeRole((typeof selectedRole !== "undefined" && selectedRole) ? selectedRole : ROLES.PATIENT, isOwner);
-  // Full access only when the active role is SUPER_ADMIN (not merely isOwner).
   if (screenName === "verification" && tempAllowDoctorApplication && role === ROLES.PATIENT) {
     return true;
   }
@@ -593,7 +592,7 @@ const DEFAULT_OWNER_EMAILS = [
   "mennamahmoudtawfik281@gmail.com",
   "mohammedabdelrouf85@gmail.com",
   "sondoselbehery287@gmail.com",
-  "badr.ahmed.biotech@gmail.com"
+  "badr46694@gmail.com"
 ];
 
 function getConfiguredEmailList(configKey, fallback) {
@@ -643,7 +642,7 @@ const roleLabels = {
   doctor: "حساب طبيب موثق",
   clinic_admin: "مدير عيادة",
   support: "دعم فني",
-  super_admin: "حساب المالك (Owner)"
+  super_admin: "Owner"
 };
 
 const englishTitles = {
@@ -671,7 +670,7 @@ const englishRoleLabels = {
   doctor: "Verified doctor account",
   clinic_admin: "Clinic admin account",
   support: "Support account",
-  super_admin: "Owner account"
+  super_admin: "Owner"
 };
 
 const englishNames = {
@@ -2504,7 +2503,7 @@ async function getAllKnownAccounts() {
     { email: "mohammedabdelrouf85@gmail.com", name: "Mohammed Abdelrouf" },
     { email: "mennamahmoudtawfik281@gmail.com", name: "Menna Mahmoud Tawfik" },
     { email: "sondoselbehery287@gmail.com", name: "Sondos Elbehery" },
-    { email: "badr.ahmed.biotech@gmail.com", name: "Badr Ahmed" }
+    { email: "badr46694@gmail.com", name: "Badr Ahmed" }
   ];
 
   KNOWN_OWNER_PROFILES.forEach(profile => {
@@ -5842,8 +5841,7 @@ async function enforceEmailVerification(actionNameAr = "هذا الإجراء", 
 }
 
 function updateNavVisibility() {
-  // Navigation visibility is strictly driven by the active selectedRole.
-  // isOwner does NOT auto-show all screens — it only matters when selectedRole is SUPER_ADMIN.
+  // Owners see every product surface; other accounts are driven by active selectedRole.
   document.querySelectorAll(".nav-item").forEach((btn) => {
     const screen = btn.dataset.screen;
     if (!screen) return;
@@ -7089,7 +7087,7 @@ async function renderReportScreen(targetCaseId = null) {
       }
     }
 
-    // ADMIN CHECK: If Admin or Super Admin and viewing accounts report (or no clinical case)
+    // ADMIN CHECK: If Admin or Owner and viewing accounts report (or no clinical case)
     const isUserAdmin = isOwnerUser(user.email) || isAdminRole(selectedRole) || selectedRole === ROLES.SUPER_ADMIN;
     if (isUserAdmin && (!caseData || window._adminReportView === "accounts")) {
       await renderAdminAccountsReportView(container, isEn, Boolean(caseData));
@@ -10864,7 +10862,7 @@ async function renderAdminUsers() {
         const role = u.role && VALID_ROLES.includes(u.role) ? u.role : (isOwner ? ROLES.SUPER_ADMIN : ROLES.PATIENT);
         const roleBadgeClass = isOwner ? "owner-badge" : (role === ROLES.SUPER_ADMIN ? "owner-badge" : (isAdminRole(role) ? "pill danger" : (role === ROLES.DOCTOR ? "pill ok" : "pill info")));
         const roleText = isOwner
-          ? (isEn ? "👑 Owner account" : "👑 حساب مالك (Owner)")
+          ? (isEn ? "👑 Owner" : "👑 Owner")
           : (isEn ? (englishRoleLabels[role] || role) : (roleLabels[role] || role));
 
         const isVerified = Boolean(u.emailVerified || isOwner);
@@ -10883,7 +10881,7 @@ async function renderAdminUsers() {
           <tr style="border-bottom: 1px solid var(--line); ${isUserSuspended ? 'background: rgba(239, 68, 68, 0.04);' : ''}">
             <td style="padding: 12px 14px; font-weight: 600; color: var(--ink);">
               ${userNameStr}
-              ${isOwner ? `<span class="owner-badge" style="margin-inline-start: 6px;">${isEn ? "👑 Owner" : "👑 مالك النظام"}</span>` : ''}
+              ${isOwner ? `<span class="owner-badge" style="margin-inline-start: 6px;">👑 Owner</span>` : ''}
               ${isUserSuspended ? `<span style="margin-inline-start: 6px; font-size: 11px; color: #ef4444; font-weight: bold;">[BLOCKED]</span>` : ''}
             </td>
             <td style="padding: 12px 14px; color: var(--muted); font-family: monospace;">${u.email}</td>
@@ -10924,7 +10922,7 @@ async function renderAdminUsers() {
                 <option value="doctor" ${role === 'doctor' ? 'selected' : ''}>🩺 ${isEn ? 'Doctor (طبيب موثق)' : 'طبيب موثق'}</option>
                 <option value="clinic_admin" ${role === 'clinic_admin' ? 'selected' : ''}>🏥 ${isEn ? 'Clinic admin (مدير عيادة)' : 'مدير عيادة'}</option>
                 <option value="support" ${role === 'support' ? 'selected' : ''}>🎧 ${isEn ? 'Support (دعم فني)' : 'دعم فني (محدود)'}</option>
-                <option value="super_admin" ${role === 'super_admin' ? 'selected' : ''}>👑 ${isEn ? 'Owner (مالك النظام)' : 'مالك النظام (Owner)'}</option>
+                <option value="super_admin" ${role === 'super_admin' ? 'selected' : ''}>👑 Owner</option>
               </select>
             </td>
           </tr>
@@ -11900,6 +11898,7 @@ window.initTheme = initTheme;
 document.addEventListener("click", (event) => {
   const toggleBtn = event.target.closest("#themeToggle, #topbarThemeToggle, #siteThemeToggle, .theme-fab");
   if (toggleBtn) {
+    event.preventDefault();
     toggleTheme();
   }
 });
@@ -13599,17 +13598,6 @@ if (chatInputField) {
   });
 }
 
-if (themeToggle) {
-  themeToggle.addEventListener("click", toggleTheme);
-}
-if (siteThemeToggle) {
-  siteThemeToggle.addEventListener("click", toggleTheme);
-}
-const topbarThemeToggleBtn = document.getElementById("topbarThemeToggle");
-if (topbarThemeToggleBtn) {
-  topbarThemeToggleBtn.addEventListener("click", toggleTheme);
-}
-
 languageToggle.addEventListener("click", () => {
   const nextLanguage = currentLanguage === "ar" ? "en" : "ar";
   applyLanguage(nextLanguage);
@@ -14088,7 +14076,7 @@ window.openDeleteAccountModal = function() {
   const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
 
   if (user && typeof isOwnerUser === "function" && isOwnerUser(user.email)) {
-    showToast(isEn ? "System owner account cannot be deleted." : "حساب مالك النظام محمي ولا يمكن حذفه.");
+    showToast(isEn ? "Owner account cannot be deleted." : "حساب Owner محمي ولا يمكن حذفه.");
     return;
   }
 
@@ -15148,7 +15136,7 @@ function updateMobileBottomNav() {
       { isMenu: true, icon: "☰", label: isEn ? "Menu" : "المزيد" }
     ];
   } else if (isAdminRole(currentRole)) {
-    // Admin / Super Admin
+    // Admin / Owner
     items = [
       { screen: "admin", icon: "⚙️", label: isEn ? "Admin" : "الإدارة" },
       { screen: "kpi", icon: "📊", label: isEn ? "KPIs" : "المؤشرات" },

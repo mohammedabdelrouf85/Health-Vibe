@@ -78,7 +78,7 @@
         doctor_pending: "طبيب بانتظار الاعتماد",
         clinic_admin: "مدير عيادة",
         support: "دعم فني",
-        super_admin: "حساب المالك (Owner)"
+        super_admin: "Owner"
       },
       auth: {
         signIn: "تسجيل الدخول",
@@ -263,7 +263,7 @@
         doctor_pending: "Pending doctor account",
         clinic_admin: "Clinic admin account",
         support: "Support account",
-        super_admin: "Owner account"
+        super_admin: "Owner"
       },
       auth: {
         signIn: "Sign In",

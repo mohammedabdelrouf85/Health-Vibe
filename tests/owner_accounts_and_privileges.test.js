@@ -6,7 +6,7 @@
  *    - mennamahmoudtawfik281@gmail.com
  *    - mohammedabdelrouf85@gmail.com
  *    - sondoselbehery287@gmail.com
- *    - badr.ahmed.biotech@gmail.com
+ *    - badr46694@gmail.com
  * 2. Backend hasTrustedOwnerClaim & hasTrustedAdminClaim recognize all 4 accounts.
  * 3. Middleware requireVerifiedEmail, requireAdmin, and requireSuperAdmin grant immediate access.
  * 4. sync-role assigns role: 'super_admin', isOwner: true, verifiedDoctor: true, emailVerified: true without quarantine.
@@ -27,7 +27,7 @@ const TARGET_EMAILS = [
   'mennamahmoudtawfik281@gmail.com',
   'mohammedabdelrouf85@gmail.com',
   'sondoselbehery287@gmail.com',
-  'badr.ahmed.biotech@gmail.com'
+  'badr46694@gmail.com'
 ];
 
 // -----------------------------------------------------------------------------

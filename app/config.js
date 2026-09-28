@@ -193,7 +193,7 @@
       "mennamahmoudtawfik281@gmail.com",
       "mohammedabdelrouf85@gmail.com",
       "sondoselbehery287@gmail.com",
-      "badr.ahmed.biotech@gmail.com"
+      "badr46694@gmail.com"
     ]
   };
 

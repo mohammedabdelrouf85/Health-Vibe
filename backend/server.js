@@ -949,7 +949,7 @@ const DEFAULT_OWNER_EMAILS = [
   'mennamahmoudtawfik281@gmail.com',
   'mohammedabdelrouf85@gmail.com',
   'sondoselbehery287@gmail.com',
-  'badr.ahmed.biotech@gmail.com'
+  'badr46694@gmail.com'
 ];
 const OWNER_EMAILS = new Set(parseEmailList(process.env.OWNER_EMAILS, DEFAULT_OWNER_EMAILS));
 
@@ -1843,7 +1843,7 @@ async function requireSuperAdmin(req, res, next) {
 
   return res.status(403).json({
     error: 'ACCESS_DENIED',
-    message: 'Server verification failed: Super Admin privileges are required to perform this action.'
+    message: 'Server verification failed: Owner privileges are required to perform this action.'
   });
 }
 

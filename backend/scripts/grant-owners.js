@@ -5,7 +5,7 @@
  * 1. mennamahmoudtawfik281@gmail.com
  * 2. mohammedabdelrouf85@gmail.com
  * 3. sondoselbehery287@gmail.com
- * 4. badr.ahmed.biotech@gmail.com
+ * 4. badr46694@gmail.com
  * 
  * Privileges granted:
  * - role: 'super_admin'
@@ -44,7 +44,7 @@ const TARGET_OWNERS = [
   'mennamahmoudtawfik281@gmail.com',
   'mohammedabdelrouf85@gmail.com',
   'sondoselbehery287@gmail.com',
-  'badr.ahmed.biotech@gmail.com'
+  'badr46694@gmail.com'
 ];
 
 async function initializeFirebaseAdmin() {
