@@ -455,6 +455,7 @@ const otpRequestLimiter = createRateLimiter({
   keyGenerator: req => req.user?.uid ? `otp_req_user:${req.user.uid}` : `otp_req_ip:${getClientIp(req)}`
 });
 app.use('/api/bot/request-code', otpRequestLimiter);
+app.use('/api/auth/send-verification-email', otpRequestLimiter);
 
 // OTP Verification attempt rate limiter (5 attempts / 15 minutes)
 const otpVerifyLimiter = createRateLimiter({
@@ -464,6 +465,7 @@ const otpVerifyLimiter = createRateLimiter({
   keyGenerator: req => req.user?.uid ? `otp_ver_user:${req.user.uid}` : `otp_ver_ip:${getClientIp(req)}`
 });
 app.use('/api/bot/verify-code', otpVerifyLimiter);
+app.use('/api/auth/verify-email-otp', otpVerifyLimiter);
 
 // Public form submissions limiter (5 req / 15 minutes per IP)
 const publicFormLimiter = createRateLimiter({
@@ -4630,6 +4632,17 @@ async function executeDoctorTransition({
             moreInfoNote: note || '',
             db
           });
+        } else if (targetStatus === 'escalated') {
+          notificationResult = await sendClinicalNotificationEmail({
+            type: 'escalation',
+            patientEmail: targetRecipient,
+            patientName: targetPatientName,
+            caseId: caseId,
+            severityLevel: caseData.triageLevel || 'عالي الخطورة (Red Flag)',
+            criticalFindings: note || updateData.escalationReason || 'تم رصد مؤشرات حرجة تستدعي التدخل الفوري',
+            instructions: 'يرجى التوجه فوراً لأقرب قسم طوارئ أو الاتصال بالإسعاف (123).',
+            db
+          });
         }
       }
 
@@ -5565,6 +5578,33 @@ app.post('/api/admin/assign-case', requireAuth, requireVerifiedEmail, requireAdm
         assignedBy: req.user.email,
         timestamp: admin.firestore.FieldValue.serverTimestamp()
       });
+
+      // Notify patient of doctor assignment
+      try {
+        let recipient = caseData.patientEmail || caseData.email;
+        let patientName = caseData.patientName || caseData.name;
+        if (!recipient && caseData.patientId && db) {
+          const uDoc = await db.collection('users').doc(caseData.patientId).get();
+          if (uDoc.exists) {
+            recipient = uDoc.data().email || uDoc.data().patientEmail;
+            if (!patientName) patientName = uDoc.data().name || uDoc.data().displayName;
+          }
+        }
+        if (recipient) {
+          await sendClinicalNotificationEmail({
+            type: 'doctor_assigned',
+            patientEmail: recipient,
+            patientName: patientName || 'المحترم',
+            caseId,
+            doctorName: doctorName || 'طبيب استشاري',
+            doctorSpecialty: 'استشاري أمراض الصدر والجهاز التنفسي',
+            clinicName: clinicName || caseData.clinicName || 'عيادة الصدر المتخصصة',
+            db
+          });
+        }
+      } catch (notifErr) {
+        console.warn('[SERVER] Could not send doctor_assigned notification:', notifErr.message);
+      }
     }
 
     res.json({ success: true, message: 'Case successfully assigned to doctor.' });
@@ -5585,6 +5625,152 @@ app.post('/api/auth/verify-phone-otp', requireAuth, async (req, res) => {
     error: 'ENDPOINT_DEPRECATED',
     message: 'Use /api/bot/request-code and /api/bot/verify-code for verified OTP activation.'
   });
+});
+
+// Active Email Verification Codes Registry (10 minutes validity)
+const activeEmailOtps = new Map();
+
+/**
+ * POST /api/auth/send-verification-email
+ * Sends 6-digit verification code to the authenticated user's email via sendClinicalNotificationEmail.
+ */
+app.post('/api/auth/send-verification-email', requireAuth, async (req, res) => {
+  const userId = req.user.uid;
+  const userEmail = req.user.email;
+  const userName = req.user.displayName || req.user.name || 'المستخدم';
+
+  if (!userEmail) {
+    return res.status(400).json({ error: 'NO_EMAIL', message: 'User account has no associated email address.' });
+  }
+
+  if (isVerificationRevoked(userEmail)) {
+    return res.status(403).json({
+      error: 'VERIFICATION_REVOKED',
+      message: 'Account verification has been revoked by the platform administrator.'
+    });
+  }
+
+  const existing = activeEmailOtps.get(userId);
+  if (existing && Date.now() - existing.createdAt < 60000) {
+    const waitSec = Math.ceil((60000 - (Date.now() - existing.createdAt)) / 1000);
+    return res.status(429).json({
+      error: 'RATE_LIMITED',
+      message: `يرجى الانتظار ${waitSec} ثانية قبل طلب رمز تحقق جديد.`,
+      retryAfterSeconds: waitSec
+    });
+  }
+
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  const expiresAt = Date.now() + 10 * 60 * 1000;
+
+  activeEmailOtps.set(userId, {
+    code,
+    expiresAt,
+    createdAt: Date.now(),
+    email: userEmail
+  });
+
+  try {
+    const result = await sendClinicalNotificationEmail({
+      type: 'verification',
+      recipient: userEmail,
+      recipientName: userName,
+      code,
+      purpose: 'تأكيد البريد الإلكتروني وتفعيل الحساب',
+      expiresMinutes: 10,
+      db
+    });
+
+    if (!result.success) {
+      return res.status(502).json({ error: 'DISPATCH_FAILED', message: result.error || 'Failed to dispatch verification email.' });
+    }
+
+    return res.json({
+      success: true,
+      message: 'تم إرسال رمز التحقق إلى بريدك الإلكتروني بنجاح.',
+      expiresInSeconds: 600
+    });
+  } catch (err) {
+    console.error('[EMAIL VERIFICATION ERROR]:', err);
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/auth/verify-email-otp
+ * Verifies email OTP code and marks account verified.
+ */
+app.post('/api/auth/verify-email-otp', requireAuth, async (req, res) => {
+  const userId = req.user.uid;
+  const userEmail = req.user.email;
+  const { code } = req.body || {};
+
+  if (!code || String(code).trim().length !== 6) {
+    return res.status(400).json({ error: 'INVALID_CODE', message: 'رمز التحقق يجب أن يتكون من 6 أرقام.' });
+  }
+
+  if (isVerificationRevoked(userEmail)) {
+    return res.status(403).json({
+      error: 'VERIFICATION_REVOKED',
+      message: 'Account verification has been revoked by the platform administrator.'
+    });
+  }
+
+  const lockoutKey = `email_otp_${userId}`;
+  const lockoutStatus = checkOtpLockout(lockoutKey);
+  if (lockoutStatus.locked) {
+    return res.status(429).json({
+      error: 'TOO_MANY_FAILED_ATTEMPTS',
+      message: `تم قفل التحقق مؤقتاً بسبب تكرار المحاولات الخاطئة. يرجى المحاولة بعد ${lockoutStatus.waitSec} ثانية.`,
+      retryAfterSeconds: lockoutStatus.waitSec
+    });
+  }
+
+  const record = activeEmailOtps.get(userId);
+  if (!record || record.expiresAt < Date.now() || record.code !== String(code).trim()) {
+    const status = recordOtpFailure(lockoutKey);
+    const remaining = Math.max(5 - status.attempts, 0);
+    return res.status(400).json({
+      error: 'CODE_MISMATCH',
+      message: remaining > 0
+        ? `رمز التحقق غير صحيح أو منتهي الصلاحية. المتبقي: ${remaining} محاولات.`
+        : 'تم استنفاد المحاولات. تم قفل التحقق مؤقتاً لمدة 15 دقيقة.'
+    });
+  }
+
+  clearOtpLockout(lockoutKey);
+  activeEmailOtps.delete(userId);
+
+  try {
+    if (userId) {
+      await admin.auth().updateUser(userId, {
+        emailVerified: true
+      }).catch(err => console.warn("[EMAIL VERIFY AUTH WARNING]:", err.message));
+    }
+
+    if (db && userId) {
+      await db.collection('users').doc(userId).set({
+        emailVerified: true,
+        verificationMethod: 'email_otp',
+        verifiedAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+
+      await db.collection('audit_events').add({
+        type: 'EMAIL_VERIFIED_VIA_OTP',
+        userId,
+        email: userEmail,
+        timestamp: admin.firestore.FieldValue.serverTimestamp()
+      }).catch(() => {});
+    }
+
+    return res.json({
+      success: true,
+      message: 'تم التحقق من البريد الإلكتروني وتفعيل الحساب بنجاح.'
+    });
+  } catch (err) {
+    console.error("[EMAIL VERIFY ERROR]:", err);
+    return res.status(500).json({ error: 'VERIFICATION_SAVE_FAILED', message: err.message });
+  }
 });
 
 /**
