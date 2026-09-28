@@ -1,0 +1,15 @@
+# Health Vibes AI - Security Disclosure & Vulnerability Reporting Policy
+# RFC 9116 compliant security.txt
+
+Contact: mailto:security@healthvibe.ai
+Contact: mailto:badr46694@gmail.com
+Canonical: https://healthvibe.ai/.well-known/security.txt
+Policy: https://healthvibe.ai/security-policy
+Acknowledgments: https://healthvibe.ai/security-acknowledgments
+Preferred-Languages: en, ar
+Expires: 2027-12-31T23:59:59.000Z
+
+# Safe Harbor:
+# Health Vibes AI supports responsible, authorized security research conducted in good faith.
+# Please do not access, modify, or delete patient data (PHI/PII), perform DoS attacks, or disrupt clinical operations.
+# Report all vulnerabilities directly to our security team through the contact addresses above or the in-app reporting portal.

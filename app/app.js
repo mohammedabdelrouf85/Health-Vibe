@@ -253,7 +253,18 @@ const ROLE_PERMISSIONS_MAP = {
     PERMISSIONS.VIEW_SYSTEM_METRICS
   ],
   [ROLES.SUPPORT]: [PERMISSIONS.VIEW_SYSTEM_METRICS],
-  [ROLES.SUPER_ADMIN]: Object.values(PERMISSIONS)
+  [ROLES.SUPER_ADMIN]: [
+    PERMISSIONS.VIEW_ADMIN_DASHBOARD,
+    PERMISSIONS.VIEW_AUDIT_LOG,
+    PERMISSIONS.APPROVE_DOCTOR_APPLICATION,
+    PERMISSIONS.REJECT_DOCTOR_APPLICATION,
+    PERMISSIONS.MANAGE_AI_MODELS,
+    PERMISSIONS.MANAGE_USER_ROLES,
+    PERMISSIONS.MANAGE_USERS,
+    PERMISSIONS.VIEW_SYSTEM_METRICS,
+    PERMISSIONS.VIEW_PATIENT_DASHBOARD,
+    PERMISSIONS.VIEW_OWN_CASES
+  ]
 };
 
 const ROLE_ALLOWED_SCREENS = {
@@ -447,14 +458,13 @@ function canAccessScreen(screenName) {
   const isOwner = Boolean(user && isOwnerUser(user));
   // Resolve the active role: respect selectedRole (owner may be testing as patient/doctor).
   const role = normalizeRole((typeof selectedRole !== "undefined" && selectedRole) ? selectedRole : ROLES.PATIENT, isOwner);
-  // Full access only when the active role is SUPER_ADMIN (not merely isOwner).
-  if (role === ROLES.SUPER_ADMIN) {
-    return true;
-  }
   if (screenName === "verification" && tempAllowDoctorApplication && role === ROLES.PATIENT) {
     return true;
   }
   const allowed = ROLE_ALLOWED_SCREENS[role] || ROLE_ALLOWED_SCREENS[ROLES.PATIENT];
+  if (role === ROLES.SUPER_ADMIN) {
+    return allowed.includes(screenName);
+  }
   return allowed.includes(screenName);
 }
 

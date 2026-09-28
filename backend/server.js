@@ -34,6 +34,7 @@ const mfaService = require('./mfa-service');
 const schedulingService = require('./scheduling-service');
 const timelineService = require('./timeline-service');
 const monitoringService = require('./monitoring-service');
+const incidentService = require('./incident-service');
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -928,6 +929,190 @@ app.post('/api/monitoring/errors/clear', requireAuth, auditOperationalAccess('MO
   errorLogsRingBuffer.length = 0;
   monitoringService.resetMonitoringState();
   res.json({ success: true, message: 'In-memory error logs and telemetry state successfully cleared.' });
+});
+
+// =============================================================================
+// 🛡️ VULNERABILITY REPORTING & INCIDENT / ADVERSE EVENT REGISTER
+// =============================================================================
+const vulnRateLimiter = createRateLimiter({
+  windowMs: 60000,
+  maxRequests: 5,
+  message: 'Too many vulnerability disclosure submissions. Please wait 1 minute before submitting again.',
+  keyGenerator: req => `vuln_ip:${getClientIp(req)}`
+});
+
+// Endpoint: Submit vulnerability report (Public / Authenticated responsible disclosure channel)
+app.post('/api/security/report-vulnerability', vulnRateLimiter, (req, res) => {
+  const { reporterName, reporterEmail, vulnerabilityType, severity, affectedComponent, reproductionSteps, pocDetails } = req.body || {};
+
+  if (!vulnerabilityType && !reproductionSteps) {
+    return res.status(400).json({ error: 'INVALID_PAYLOAD', message: 'vulnerabilityType and reproductionSteps are required.' });
+  }
+
+  const clientIp = getClientIp(req);
+  const report = incidentService.submitVulnerabilityReport({
+    reporterName,
+    reporterEmail,
+    vulnerabilityType,
+    severity,
+    affectedComponent,
+    reproductionSteps,
+    pocDetails,
+    clientIp,
+    firestoreDb: db
+  });
+
+  res.status(201).json({
+    success: true,
+    reportId: report.reportId,
+    status: report.status,
+    message: 'Thank you for responsibly disclosing this finding. Our security team will review it immediately.'
+  });
+});
+
+// Endpoint: List vulnerability reports (Super Admin & Owners)
+app.get('/api/security/vulnerabilities', requireAuth, auditOperationalAccess('VULNERABILITIES_LIST_READ'), requireSuperAdmin, (req, res) => {
+  const { status, severity, limit } = req.query || {};
+  const reports = incidentService.getVulnerabilityReports({
+    status: status || null,
+    severity: severity || null,
+    limit: limit ? parseInt(limit, 10) : 50
+  });
+
+  res.json({
+    status: 'ok',
+    count: reports.length,
+    reports,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Endpoint: Register security incident or clinical adverse event
+app.post('/api/incidents', requireAuth, auditOperationalAccess('INCIDENT_CREATED'), (req, res) => {
+  const { type, severity, title, description, affectedUsersCount, escalationLevel, metadata } = req.body || {};
+
+  if (!title || !description) {
+    return res.status(400).json({ error: 'INVALID_PAYLOAD', message: 'Title and description are required.' });
+  }
+
+  const role = getTrustedClaimRole(req.user);
+  const isPrivileged = [ROLES.DOCTOR, ROLES.CLINIC_ADMIN, ROLES.SUPER_ADMIN].includes(role) || hasTrustedOwnerClaim(req.user);
+  if (!isPrivileged) {
+    return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Only authorized clinical or administrative personnel may register incidents.' });
+  }
+
+  const incident = incidentService.createIncident({
+    type,
+    severity,
+    title,
+    description,
+    owner: {
+      name: req.user.displayName || req.user.name || role,
+      email: req.user.email || 'operator@healthvibe.ai',
+      role
+    },
+    affectedUsersCount,
+    escalationLevel,
+    metadata,
+    reportedBy: req.user.uid,
+    firestoreDb: db
+  });
+
+  res.status(201).json({
+    success: true,
+    incidentId: incident.incidentId,
+    isAdverseEvent: incident.isAdverseEvent,
+    status: incident.status,
+    incident
+  });
+});
+
+// Endpoint: List incidents and clinical adverse events
+app.get('/api/incidents', requireAuth, auditOperationalAccess('INCIDENTS_LIST_READ'), (req, res) => {
+  const role = getTrustedClaimRole(req.user);
+  const isPrivileged = [ROLES.DOCTOR, ROLES.CLINIC_ADMIN, ROLES.SUPER_ADMIN].includes(role) || hasTrustedOwnerClaim(req.user);
+  if (!isPrivileged) {
+    return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Access denied to incident register.' });
+  }
+
+  const { type, severity, status, isAdverseEvent, limit } = req.query || {};
+  const incidents = incidentService.queryIncidents({
+    type: type || null,
+    severity: severity || null,
+    status: status || null,
+    isAdverseEvent: isAdverseEvent !== undefined ? (isAdverseEvent === 'true') : null,
+    limit: limit ? parseInt(limit, 10) : 50
+  });
+
+  res.json({
+    status: 'ok',
+    count: incidents.length,
+    incidents,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Endpoint: Get specific incident details with forensic evidence and communications
+app.get('/api/incidents/:id', requireAuth, (req, res) => {
+  const incident = incidentService.getIncidentById(req.params.id);
+  if (!incident) {
+    return res.status(404).json({ error: 'NOT_FOUND', message: 'Incident record not found.' });
+  }
+  res.json({ status: 'ok', incident });
+});
+
+// Endpoint: Attach forensic evidence with cryptographic SHA-256 fingerprint
+app.post('/api/incidents/:id/evidence', requireAuth, auditOperationalAccess('INCIDENT_EVIDENCE_ATTACHED'), requireSuperAdmin, (req, res) => {
+  const { type, referenceId, traceId, data } = req.body || {};
+  try {
+    const evidence = incidentService.attachEvidence(req.params.id, {
+      type,
+      referenceId,
+      traceId: traceId || req.traceId,
+      data,
+      capturedBy: req.user.uid,
+      firestoreDb: db
+    });
+    res.status(201).json({ success: true, evidence });
+  } catch (err) {
+    res.status(400).json({ error: 'EVIDENCE_ATTACH_FAILED', message: err.message });
+  }
+});
+
+// Endpoint: Update incident status and recovery action
+app.patch('/api/incidents/:id/status', requireAuth, auditOperationalAccess('INCIDENT_STATUS_UPDATED'), requireSuperAdmin, (req, res) => {
+  const { status, rootCause, recoveryAction, escalationLevel } = req.body || {};
+  try {
+    const updated = incidentService.updateIncidentStatus(req.params.id, {
+      status,
+      rootCause,
+      recoveryAction,
+      escalationLevel,
+      resolvedBy: req.user.email || req.user.uid,
+      firestoreDb: db
+    });
+    res.json({ success: true, incident: updated });
+  } catch (err) {
+    res.status(400).json({ error: 'UPDATE_FAILED', message: err.message });
+  }
+});
+
+// Endpoint: Log outbound stakeholder communication on incident
+app.post('/api/incidents/:id/communicate', requireAuth, auditOperationalAccess('INCIDENT_COMMUNICATION_LOGGED'), requireSuperAdmin, (req, res) => {
+  const { recipientGroup, channel, summary, messageId } = req.body || {};
+  try {
+    const commEntry = incidentService.logIncidentCommunication(req.params.id, {
+      recipientGroup,
+      channel,
+      summary,
+      messageId,
+      sentBy: req.user.email || req.user.uid,
+      firestoreDb: db
+    });
+    res.status(201).json({ success: true, communication: commEntry });
+  } catch (err) {
+    res.status(400).json({ error: 'COMMUNICATION_LOG_FAILED', message: err.message });
+  }
 });
 
 // =============================================================================
@@ -5703,7 +5888,7 @@ app.post('/api/admin/assign-case', requireAuth, requireVerifiedEmail, requireAdm
         });
       }
 
-      const targetClinic = clinicId || recordClinicId(caseData) || (scope.role === ROLES.CLINIC_ADMIN ? scope.clinicId : null);
+      const targetClinic = (scope.role === ROLES.SUPER_ADMIN && clinicId) ? clinicId : (recordClinicId(caseData) || (scope.role === ROLES.CLINIC_ADMIN ? scope.clinicId : null));
       if (targetClinic && !isDoctorApprovedMemberOfClinic(doctorIdentity, doctorProfile, targetClinic)) {
         return res.status(403).json({
           error: 'DOCTOR_CLINIC_MEMBERSHIP_REQUIRED',
@@ -6625,5 +6810,6 @@ app.notificationService = {
 };
 app.timelineService = timelineService;
 app.monitoringService = monitoringService;
+app.incidentService = incidentService;
 
 module.exports = app;
