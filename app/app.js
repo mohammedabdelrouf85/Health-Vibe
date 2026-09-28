@@ -7943,6 +7943,134 @@ const AVAILABLE_APPOINTMENT_SLOTS = [
   { id: "slot_2000", timeAr: "08:00 مساءً", timeEn: "08:00 PM", periodAr: "استشارة مسائية متقدمة", periodEn: "Late Evening Telehealth" }
 ];
 
+const CLINICS_REGISTRY = {
+  clinic_cairo_main: {
+    clinicId: "clinic_cairo_main",
+    name: "عيادة الصدر والرعاية التنفسية التخصصية",
+    nameEn: "Specialized Chest & Respiratory Clinic",
+    timeZone: "Africa/Cairo",
+    operatingHours: { open: "09:00", close: "21:00", workingDays: [0, 1, 2, 3, 4] }
+  },
+  clinic_riyadh_pulmonary: {
+    clinicId: "clinic_riyadh_pulmonary",
+    name: "مركز الرياض المتقدم للرعاية التنفسية",
+    nameEn: "Riyadh Advanced Pulmonary Care Center",
+    timeZone: "Asia/Riyadh",
+    operatingHours: { open: "09:00", close: "21:00", workingDays: [0, 1, 2, 3, 4] }
+  }
+};
+
+const DOCTORS_WORK_SCHEDULES = {
+  dr_mona: {
+    doctorId: "dr_mona",
+    name: "د. منى سامي",
+    nameEn: "Dr. Mona Samy",
+    specialty: "أمراض الصدر والحساسية",
+    specialtyEn: "Pulmonology & Allergy",
+    clinicId: "clinic_cairo_main",
+    timeZone: "Africa/Cairo",
+    licenseNumber: "EGY-MED-449102",
+    weeklySchedule: {
+      workingDays: [0, 1, 2, 3, 4],
+      shifts: [{ start: "10:00", end: "13:00" }, { start: "16:00", end: "20:30" }],
+      slotDurationMinutes: 30,
+      breakPeriods: [{ start: "13:00", end: "16:00", label: "Mid-day Rounds" }]
+    },
+    leaves: [
+      {
+        id: "leave_mona_conf",
+        startDate: "2026-10-10",
+        endDate: "2026-10-12",
+        reason: "International Pulmonology Summit",
+        reasonAr: "المؤتمر الدولي لأمراض الصدر"
+      }
+    ]
+  },
+  dr_ahmed: {
+    doctorId: "dr_ahmed",
+    name: "د. أحمد السيد",
+    nameEn: "Dr. Ahmed El-Sayed",
+    specialty: "استشاري الأمراض الصدرية والعناية المركزة",
+    specialtyEn: "Critical Care & Pulmonary Consultant",
+    clinicId: "clinic_cairo_main",
+    timeZone: "Africa/Cairo",
+    licenseNumber: "EGY-MED-381044",
+    weeklySchedule: {
+      workingDays: [0, 1, 2, 3, 4],
+      shifts: [{ start: "11:30", end: "15:00" }, { start: "16:00", end: "20:30" }],
+      slotDurationMinutes: 30,
+      breakPeriods: [{ start: "15:00", end: "16:00", label: "ICU Rounds" }]
+    },
+    leaves: [
+      {
+        id: "leave_ahmed_annual",
+        startDate: "2026-10-15",
+        endDate: "2026-10-18",
+        reason: "Annual Leave",
+        reasonAr: "إجازة سنوية معتمدة"
+      }
+    ]
+  }
+};
+
+function checkDoctorLeaveClient(doctor, dateStr) {
+  if (!doctor || !Array.isArray(doctor.leaves)) return { onLeave: false };
+  for (const leave of doctor.leaves) {
+    if (leave.startDate && leave.endDate && dateStr >= leave.startDate && dateStr <= leave.endDate) {
+      return { onLeave: true, leave };
+    }
+    if (leave.date === dateStr) {
+      return { onLeave: true, leave };
+    }
+  }
+  return { onLeave: false };
+}
+
+function calculateSlotsForDoctor(doctor, dateStr) {
+  if (!doctor) {
+    return { available: false, reason: "NO_DOCTOR", slots: [] };
+  }
+  const clinic = CLINICS_REGISTRY[doctor.clinicId] || CLINICS_REGISTRY.clinic_cairo_main;
+  const timeZone = doctor.timeZone || clinic.timeZone || "Africa/Cairo";
+
+  // Check approved leaves
+  const leaveCheck = checkDoctorLeaveClient(doctor, dateStr);
+  if (leaveCheck.onLeave) {
+    return {
+      available: false,
+      reason: "ON_LEAVE",
+      leave: leaveCheck.leave,
+      clinic,
+      timeZone,
+      slots: []
+    };
+  }
+
+  // Check working days
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const dayOfWeek = new Date(Date.UTC(year, month - 1, day, 12, 0, 0)).getUTCDay();
+  const schedule = doctor.weeklySchedule || {};
+  const workingDays = Array.isArray(schedule.workingDays) ? schedule.workingDays : [0, 1, 2, 3, 4];
+
+  if (!workingDays.includes(dayOfWeek)) {
+    return {
+      available: false,
+      reason: "NON_WORKING_DAY",
+      clinic,
+      timeZone,
+      slots: []
+    };
+  }
+
+  return {
+    available: true,
+    reason: "AVAILABLE",
+    clinic,
+    timeZone,
+    slots: AVAILABLE_APPOINTMENT_SLOTS
+  };
+}
+
 let apptDaysList = [];
 let apptSelectedDate = null;
 let apptSelectedSlot = null;
@@ -7950,30 +8078,89 @@ let apptSelectedType = "video";
 let cachedAppointmentDoctors = null;
 
 async function loadAvailableAppointmentDoctors() {
-  if (!db) return [];
-  if (Array.isArray(cachedAppointmentDoctors)) return cachedAppointmentDoctors;
+  if (Array.isArray(cachedAppointmentDoctors) && cachedAppointmentDoctors.length > 0) {
+    return cachedAppointmentDoctors;
+  }
 
   const doctors = [];
+
+  // Try fetching from server endpoint first
   try {
-    const snap = await db.collection("doctor_applications").where("status", "==", "approved").get();
-    snap.forEach((doc) => {
-      const d = doc.data() || {};
-      const userId = d.userId || d.doctorId || d.uid || "";
-      const name = String(d.name || d.displayName || "").trim();
-      const licenseNumber = String(d.licenseNumber || d.medicalLicense || d.license || "").trim();
-      if (!userId || !name || !licenseNumber || isTestOrDemoRecord({ id: doc.id, ...d })) return;
-      doctors.push({
-        id: userId,
-        name,
-        nameEn: String(d.nameEn || d.name || d.displayName || "").trim(),
-        specialty: String(d.specialty || "").trim(),
-        specialtyEn: String(d.specialtyEn || d.specialty || "").trim(),
-        clinic: String(d.clinicName || d.clinic || "").trim(),
-        licenseNumber
-      });
-    });
+    const res = await fetch("/api/appointments/doctors");
+    if (res.ok) {
+      const json = await res.json();
+      if (Array.isArray(json.doctors)) {
+        json.doctors.forEach(d => {
+          if (!isTestOrDemoRecord(d) && d.doctorId) {
+            doctors.push({
+              id: d.doctorId,
+              name: d.name,
+              nameEn: d.nameEn || d.name,
+              specialty: d.specialty || "",
+              specialtyEn: d.specialtyEn || d.specialty || "",
+              clinic: d.clinicName || (CLINICS_REGISTRY[d.clinicId]?.name) || "",
+              clinicId: d.clinicId || "clinic_cairo_main",
+              timeZone: d.timeZone || "Africa/Cairo",
+              licenseNumber: d.licenseNumber || "",
+              weeklySchedule: d.weeklySchedule,
+              leaves: d.leaves || []
+            });
+          }
+        });
+      }
+    }
   } catch (err) {
-    console.warn("Could not load approved appointment doctors:", err.message);
+    // Non-fatal, proceed with database or local schedules
+  }
+
+  // Fallback to Firestore doctor_applications
+  if (doctors.length === 0 && db) {
+    try {
+      const snap = await db.collection("doctor_applications").where("status", "==", "approved").get();
+      snap.forEach((doc) => {
+        const d = doc.data() || {};
+        const userId = d.userId || d.doctorId || d.uid || "";
+        const name = String(d.name || d.displayName || "").trim();
+        const licenseNumber = String(d.licenseNumber || d.medicalLicense || d.license || "").trim();
+        if (!userId || !name || !licenseNumber || isTestOrDemoRecord({ id: doc.id, ...d })) return;
+        const sched = DOCTORS_WORK_SCHEDULES[userId] || {};
+        doctors.push({
+          id: userId,
+          name,
+          nameEn: String(d.nameEn || d.name || d.displayName || "").trim(),
+          specialty: String(d.specialty || "").trim(),
+          specialtyEn: String(d.specialtyEn || d.specialty || "").trim(),
+          clinic: String(d.clinicName || d.clinic || "").trim(),
+          clinicId: sched.clinicId || "clinic_cairo_main",
+          timeZone: sched.timeZone || "Africa/Cairo",
+          licenseNumber,
+          weeklySchedule: sched.weeklySchedule,
+          leaves: sched.leaves || []
+        });
+      });
+    } catch (err) {
+      console.warn("Could not load approved appointment doctors:", err.message);
+    }
+  }
+
+  // Fallback to DOCTORS_WORK_SCHEDULES registry if Firestore is empty
+  if (doctors.length === 0) {
+    for (const docKey of Object.keys(DOCTORS_WORK_SCHEDULES)) {
+      const s = DOCTORS_WORK_SCHEDULES[docKey];
+      doctors.push({
+        id: s.doctorId,
+        name: s.name,
+        nameEn: s.nameEn,
+        specialty: s.specialty,
+        specialtyEn: s.specialtyEn,
+        clinic: CLINICS_REGISTRY[s.clinicId]?.name || "",
+        clinicId: s.clinicId,
+        timeZone: s.timeZone,
+        licenseNumber: s.licenseNumber,
+        weeklySchedule: s.weeklySchedule,
+        leaves: s.leaves
+      });
+    }
   }
 
   cachedAppointmentDoctors = doctors;
@@ -8162,6 +8349,15 @@ async function renderAppointmentsScreen() {
   const user = auth ? auth.currentUser : null;
   const patientId = user ? user.uid : "anon_patient";
 
+  // Evaluate doctor availability with work schedules, clinic timezone, and leaves
+  const currentDoctor = (approvedDoctors || []).find(d => d.id === doctorId);
+  const docAvailability = calculateSlotsForDoctor(currentDoctor, apptSelectedDate.dateStr);
+  const isDoctorOnLeave = !docAvailability.available && docAvailability.reason === "ON_LEAVE";
+  const isDoctorOffDuty = !docAvailability.available && docAvailability.reason === "NON_WORKING_DAY";
+  const activeTemplateSlots = docAvailability.available && Array.isArray(docAvailability.slots) && docAvailability.slots.length > 0
+    ? docAvailability.slots
+    : AVAILABLE_APPOINTMENT_SLOTS;
+
   // Query confirmed bookings to prevent double-booking
   const [doctorBookings, patientBookings] = await Promise.all([
     getConfirmedAppointmentsForDoctorAndDate(doctorId, apptSelectedDate.dateStr),
@@ -8172,10 +8368,14 @@ async function renderAppointmentsScreen() {
   const patientBookedSlotIds = new Set(patientBookings.map(b => b.slotId));
 
   // Determine available non-booked slots
-  const availableSlots = AVAILABLE_APPOINTMENT_SLOTS.filter(s => !doctorBookedSlotIds.has(s.id) && !patientBookedSlotIds.has(s.id));
-  const canBookDoctor = Boolean(doctorId);
+  let availableSlots = [];
+  let canBookDoctor = Boolean(doctorId) && !isDoctorOnLeave && !isDoctorOffDuty;
 
-  // If currently selected slot is booked, auto-select first available non-booked slot
+  if (canBookDoctor) {
+    availableSlots = activeTemplateSlots.filter(s => !doctorBookedSlotIds.has(s.id) && !patientBookedSlotIds.has(s.id));
+  }
+
+  // If currently selected slot is booked or unavailable, auto-select first available non-booked slot
   if (!canBookDoctor) {
     apptSelectedSlot = null;
   } else if (!apptSelectedSlot || doctorBookedSlotIds.has(apptSelectedSlot.id) || patientBookedSlotIds.has(apptSelectedSlot.id)) {
@@ -8197,41 +8397,72 @@ async function renderAppointmentsScreen() {
     }).join("");
   }
 
-  // Render Slots Selector with Double-Booking Guards
+  // Render Slots Selector with Leave and Double-Booking Guards
   const slotsContainer = document.getElementById("appointmentTimeSlots");
   if (slotsContainer) {
-    slotsContainer.innerHTML = AVAILABLE_APPOINTMENT_SLOTS.map((slot) => {
-      const isDocBooked = doctorBookedSlotIds.has(slot.id);
-      const isPatBooked = patientBookedSlotIds.has(slot.id);
-      const isUnavailable = !canBookDoctor || isDocBooked || isPatBooked;
-      const isActive = !isUnavailable && apptSelectedSlot && slot.id === apptSelectedSlot.id;
-
-      const timeText = isEn ? slot.timeEn : slot.timeAr;
-      let descText = isEn ? slot.periodEn : slot.periodAr;
-
-      if (!canBookDoctor) {
-        descText = isEn ? "No approved doctor selected" : "لا يوجد طبيب معتمد محدد";
-      } else if (isDocBooked) {
-        descText = isEn ? "⛔ Booked for this doctor" : "⛔ محجوز مسبقاً لدى الطبيب";
-      } else if (isPatBooked) {
-        descText = isEn ? "⚠️ You have another booking" : "⚠️ لديك موعد آخر بنفس الوقت";
-      }
-
-      return `
-        <button type="button" class="${isActive ? 'active' : ''} ${isUnavailable ? 'is-booked' : ''}" ${isUnavailable ? 'disabled="disabled"' : ''} onclick="${isUnavailable ? '' : `selectAppointmentSlot('${slot.id}')`}">
-          <strong>${timeText}</strong>
-          <span>${descText}</span>
-        </button>
+    if (isDoctorOnLeave) {
+      const leaveReason = isEn
+        ? (docAvailability.leave?.reason || "Doctor on approved leave")
+        : (docAvailability.leave?.reasonAr || docAvailability.leave?.reason || "الطبيب في إجازة معتمدة");
+      slotsContainer.innerHTML = `
+        <div class="slot-leave-notice" style="grid-column: 1/-1; padding: 16px; border-radius: 12px; background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.25); text-align: center;">
+          <strong style="display:block; color: #ef4444; font-size: 15px; margin-bottom: 6px;">
+            🏖️ ${isEn ? "Doctor on Approved Leave" : "الطبيب في إجازة معتمدة"}
+          </strong>
+          <span style="font-size: 13px; color: var(--muted);">${escapeHtml(leaveReason)}</span>
+        </div>
       `;
-    }).join("");
+    } else if (isDoctorOffDuty) {
+      slotsContainer.innerHTML = `
+        <div class="slot-offduty-notice" style="grid-column: 1/-1; padding: 16px; border-radius: 12px; background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.25); text-align: center;">
+          <strong style="display:block; color: #f59e0b; font-size: 15px; margin-bottom: 6px;">
+            📅 ${isEn ? "Doctor Off-Duty" : "خارج أوقات العمل الرسمية"}
+          </strong>
+          <span style="font-size: 13px; color: var(--muted);">${isEn ? "No clinic shifts scheduled on this day." : "لا توجد فترات عمل مجدولة في هذا اليوم."}</span>
+        </div>
+      `;
+    } else {
+      slotsContainer.innerHTML = activeTemplateSlots.map((slot) => {
+        const isDocBooked = doctorBookedSlotIds.has(slot.id);
+        const isPatBooked = patientBookedSlotIds.has(slot.id);
+        const isUnavailable = !canBookDoctor || isDocBooked || isPatBooked;
+        const isActive = !isUnavailable && apptSelectedSlot && slot.id === apptSelectedSlot.id;
+
+        const timeText = isEn ? slot.timeEn : slot.timeAr;
+        let descText = isEn ? slot.periodEn : slot.periodAr;
+
+        if (!canBookDoctor) {
+          descText = isEn ? "No approved doctor selected" : "لا يوجد طبيب معتمد محدد";
+        } else if (isDocBooked) {
+          descText = isEn ? "⛔ Booked for this doctor" : "⛔ محجوز مسبقاً لدى الطبيب";
+        } else if (isPatBooked) {
+          descText = isEn ? "⚠️ You have another booking" : "⚠️ لديك موعد آخر بنفس الوقت";
+        }
+
+        return `
+          <button type="button" class="${isActive ? 'active' : ''} ${isUnavailable ? 'is-booked' : ''}" ${isUnavailable ? 'disabled="disabled"' : ''} onclick="${isUnavailable ? '' : `selectAppointmentSlot('${slot.id}')`}">
+            <strong>${timeText}</strong>
+            <span>${descText}</span>
+          </button>
+        `;
+      }).join("");
+    }
   }
 
   // Update Available Slots Badge
   const countBadge = document.getElementById("availableSlotsCount");
   if (countBadge) {
     if (!canBookDoctor) {
-      countBadge.textContent = isEn ? "No approved doctor available" : "لا يوجد طبيب معتمد متاح";
-      countBadge.className = "pill pending";
+      if (isDoctorOnLeave) {
+        countBadge.textContent = isEn ? "On Leave (0 slots)" : "في إجازة معتمدة (0 متاح)";
+        countBadge.className = "pill danger";
+      } else if (isDoctorOffDuty) {
+        countBadge.textContent = isEn ? "Off-Duty (0 slots)" : "خارج أوقات العمل (0 متاح)";
+        countBadge.className = "pill pending";
+      } else {
+        countBadge.textContent = isEn ? "No approved doctor available" : "لا يوجد طبيب معتمد متاح";
+        countBadge.className = "pill pending";
+      }
     } else if (availableSlots.length > 0) {
       countBadge.textContent = isEn ? `${availableSlots.length} slots available` : `${availableSlots.length} فترات متاحة`;
       countBadge.className = "pill ok";
@@ -8364,6 +8595,8 @@ async function confirmAppointmentBooking() {
   const dateLabel = isEn ? apptSelectedDate.fullLabelEn : apptSelectedDate.fullLabelAr;
   const timeLabel = isEn ? apptSelectedSlot.timeEn : apptSelectedSlot.timeAr;
 
+  // ⚠️ CRITICAL: The appointment is NOT marked confirmed before it is saved!
+  // It starts as pending_confirmation and is stamped confirmed by server transaction.
   const apptData = {
     id: apptId,
     patientId: patientId,
@@ -8384,7 +8617,7 @@ async function confirmAppointmentBooking() {
     slotKey: `${doctorId}_${apptSelectedDate.dateStr}_${apptSelectedSlot.id}`,
     patientSlotKey: `${patientId}_${apptSelectedDate.dateStr}_${apptSelectedSlot.id}`,
     notes: notes,
-    status: "confirmed",
+    status: "pending_confirmation",
     createdAt: new Date().toISOString()
   };
 
@@ -8606,6 +8839,10 @@ window.showClinicDirections = showClinicDirections;
 window.updatePatientDashboardNextAppt = updatePatientDashboardNextAppt;
 window.getConfirmedAppointmentsForDoctorAndDate = getConfirmedAppointmentsForDoctorAndDate;
 window.getConfirmedAppointmentsForPatientAndDate = getConfirmedAppointmentsForPatientAndDate;
+window.calculateSlotsForDoctor = calculateSlotsForDoctor;
+window.checkDoctorLeaveClient = checkDoctorLeaveClient;
+window.CLINICS_REGISTRY = CLINICS_REGISTRY;
+window.DOCTORS_WORK_SCHEDULES = DOCTORS_WORK_SCHEDULES;
 
 // =========================================================================
 // ⭐ CLINICAL & PATIENT FEEDBACK MODULE

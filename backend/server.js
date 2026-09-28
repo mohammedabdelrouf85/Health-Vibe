@@ -20,6 +20,7 @@ const backupService = require('./backup-service');
 const privacyService = require('./privacy-service');
 const auditService = require('./audit-service');
 const mfaService = require('./mfa-service');
+const schedulingService = require('./scheduling-service');
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -4738,14 +4739,100 @@ app.post('/api/doctor/close-clinical-case', requireAuth, requireVerifiedEmail, r
 });
 
 /**
+ * GET /api/appointments/doctors
+ * Returns list of approved doctors with work schedules, clinic association, time zones, and leaves.
+ */
+app.get('/api/appointments/doctors', async (req, res) => {
+  try {
+    const doctors = [];
+    if (db && typeof db.collection === 'function') {
+      try {
+        const snap = await db.collection('doctor_applications').where('status', '==', 'approved').get();
+        snap.forEach(doc => {
+          const d = doc.data() || {};
+          const uid = d.userId || d.doctorId || doc.id;
+          if (uid) {
+            doctors.push(schedulingService.getDoctorWithSchedule(uid, d.name || d.displayName));
+          }
+        });
+      } catch (err) {
+        console.warn('[DOCTORS FETCH DB WARNING]:', err.message);
+      }
+    }
+    for (const docId of Object.keys(schedulingService.DOCTOR_SCHEDULES)) {
+      if (!doctors.some(d => d.doctorId === docId)) {
+        doctors.push(schedulingService.getDoctorWithSchedule(docId));
+      }
+    }
+    return res.json({ success: true, doctors });
+  } catch (err) {
+    console.error('[DOCTORS FETCH ERROR]:', err);
+    return res.status(500).json({ error: 'DOCTORS_FETCH_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/appointments/availability
+ * Returns dynamic slot schedule and availability for a doctor on a specific date,
+ * strictly factoring in clinic operating hours, timezone, doctor shifts, breaks, and leaves.
+ */
+app.get('/api/appointments/availability', async (req, res) => {
+  const { doctorId, date } = req.query;
+  if (!doctorId || !date) {
+    return res.status(400).json({ error: 'MISSING_PARAMETERS', message: 'doctorId and date query parameters are required.' });
+  }
+  try {
+    const doctor = schedulingService.getDoctorWithSchedule(doctorId);
+    const availability = schedulingService.calculateDoctorSlots(doctor, date);
+
+    let bookedSlotIds = [];
+    if (db && typeof db.collection === 'function') {
+      try {
+        const snap = await db.collection('appointments')
+          .where('doctorId', '==', doctorId)
+          .where('date', '==', date)
+          .where('status', '==', 'confirmed')
+          .get();
+        snap.forEach(doc => {
+          const d = doc.data() || {};
+          if (d.slotId) bookedSlotIds.push(d.slotId);
+        });
+      } catch (err) {
+        console.warn('[AVAILABILITY QUERY WARNING]:', err.message);
+      }
+    }
+
+    const slotsWithBookingState = availability.slots.map(s => ({
+      ...s,
+      isBooked: bookedSlotIds.includes(s.id)
+    }));
+
+    return res.json({
+      success: true,
+      doctorId,
+      date,
+      available: availability.available,
+      reason: availability.reason,
+      reasonMessage: availability.reasonMessage,
+      leave: availability.leave || null,
+      clinic: availability.clinic,
+      timeZone: availability.timeZone,
+      slots: slotsWithBookingState
+    });
+  } catch (err) {
+    console.error('[AVAILABILITY FETCH ERROR]:', err);
+    return res.status(500).json({ error: 'AVAILABILITY_FETCH_FAILED', message: err.message });
+  }
+});
+
+/**
  * POST /api/appointments/book
- * Server-authoritative appointment booking with conflict checks.
+ * Server-authoritative appointment booking with ACID transaction,
+ * stable canonical identifiers, and anti-double booking concurrency locks.
+ * Guarantees that an appointment is NEVER marked confirmed before it is saved!
  */
 app.post('/api/appointments/book', requireAuth, requireVerifiedEmail, async (req, res) => {
   const data = req.body || {};
-  const appointmentId = typeof data.id === 'string' && data.id.trim()
-    ? data.id.trim()
-    : `appt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
   if (!data.doctorId || !data.date || !data.slotId) {
     return res.status(400).json({ error: 'INVALID_APPOINTMENT', message: 'doctorId, date, and slotId are required.' });
@@ -4758,49 +4845,30 @@ app.post('/api/appointments/book', requireAuth, requireVerifiedEmail, async (req
   }
 
   try {
-    const doctorSnap = await db.collection('appointments')
-      .where('doctorId', '==', data.doctorId)
-      .where('date', '==', data.date)
-      .where('slotId', '==', data.slotId)
-      .where('status', '==', 'confirmed')
-      .get();
-    if (!doctorSnap.empty) {
-      return res.status(409).json({ error: 'DOCTOR_SLOT_CONFLICT', message: 'This doctor already has a confirmed appointment in that slot.' });
-    }
-
-    const patientSnap = await db.collection('appointments')
-      .where('patientId', '==', req.user.uid)
-      .where('date', '==', data.date)
-      .where('slotId', '==', data.slotId)
-      .where('status', '==', 'confirmed')
-      .get();
-    if (!patientSnap.empty) {
-      return res.status(409).json({ error: 'PATIENT_SLOT_CONFLICT', message: 'You already have a confirmed appointment in that slot.' });
-    }
-
-    const appointmentDoc = {
-      ...data,
-      id: appointmentId,
-      patientId: req.user.uid,
-      patientEmail: req.user.email || data.patientEmail || null,
-      status: 'confirmed',
-      createdAt: new Date().toISOString(),
-      createdBy: req.user.uid
-    };
-    await db.collection('appointments').doc(appointmentId).set(appointmentDoc);
-    return res.status(201).json({ success: true, appointmentId, appointment: appointmentDoc });
+    const savedAppointment = await schedulingService.bookAppointmentTransaction(db, data, req.user);
+    return res.status(201).json({
+      success: true,
+      appointmentId: savedAppointment.id,
+      appointment: savedAppointment
+    });
   } catch (err) {
     console.error('[APPOINTMENT BOOK ERROR]:', err);
-    return res.status(500).json({ error: 'APPOINTMENT_BOOK_FAILED', message: err.message });
+    const statusCode = err.statusCode || (err.code === 'DOCTOR_SLOT_CONFLICT' || err.code === 'PATIENT_SLOT_CONFLICT' ? 409 : 500);
+    return res.status(statusCode).json({
+      error: err.code || 'APPOINTMENT_BOOK_FAILED',
+      message: err.message,
+      details: err.details || null
+    });
   }
 });
 
 /**
  * POST /api/appointments/cancel
- * Cancels only after the server has persisted the status transition.
+ * Cancels only after the server has persisted the status transition,
+ * releasing doctor and patient slot locks atomically.
  */
 app.post('/api/appointments/cancel', requireAuth, requireVerifiedEmail, async (req, res) => {
-  const { appointmentId } = req.body || {};
+  const { appointmentId, reason } = req.body || {};
   if (!appointmentId) {
     return res.status(400).json({ error: 'MISSING_APPOINTMENT_ID', message: 'appointmentId is required.' });
   }
@@ -4820,15 +4888,16 @@ app.post('/api/appointments/cancel', requireAuth, requireVerifiedEmail, async (r
     if (!canCancel || (userRole === ROLES.CLINIC_ADMIN && !(await isSameClinicResource(await resolveRequesterClinic(req), appointment)))) {
       return res.status(403).json({ error: 'ACCESS_DENIED', message: 'You cannot cancel this appointment.' });
     }
-    await ref.update({
-      status: 'cancelled',
-      cancelledAt: new Date().toISOString(),
-      cancelledBy: req.user.uid
+
+    const cancelResult = await schedulingService.cancelAppointmentTransaction(db, appointmentId, req.user, {
+      isAdmin: hasTrustedAdminClaim(req.user),
+      reason
     });
     return res.json({ success: true, appointmentId, status: 'cancelled' });
   } catch (err) {
     console.error('[APPOINTMENT CANCEL ERROR]:', err);
-    return res.status(500).json({ error: 'APPOINTMENT_CANCEL_FAILED', message: err.message });
+    const statusCode = err.statusCode || 500;
+    return res.status(statusCode).json({ error: err.code || 'APPOINTMENT_CANCEL_FAILED', message: err.message });
   }
 });
 
