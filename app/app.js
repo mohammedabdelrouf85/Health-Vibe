@@ -275,24 +275,24 @@ const ROLE_PERMISSIONS_MAP = {
 const ROLE_ALLOWED_SCREENS = {
   [ROLES.PATIENT]: [
     "patient", "consent", "profile", "assessment", "pending", "result",
-    "history", "appointments", "feedback", "assistant", "report"
+    "history", "appointments", "feedback", "assistant", "report", "verify-report", "verify"
   ],
   [ROLES.DOCTOR_PENDING]: [
-    "patient", "verification", "history", "appointments", "feedback", "report", "profile"
+    "patient", "verification", "history", "appointments", "feedback", "report", "profile", "verify-report", "verify"
   ],
   [ROLES.DOCTOR]: [
-    "doctor", "verification", "history", "appointments", "feedback", "report", "profile", "kpi", "patient"
+    "doctor", "verification", "history", "appointments", "feedback", "report", "profile", "kpi", "patient", "verify-report", "verify"
   ],
   [ROLES.CLINIC_ADMIN]: [
-    "profile", "history", "appointments", "feedback", "doctor", "report", "admin", "audit", "kpi"
+    "profile", "history", "appointments", "feedback", "doctor", "report", "admin", "audit", "kpi", "verify-report", "verify"
   ],
   [ROLES.SUPPORT]: [
-    "profile", "kpi"
+    "profile", "kpi", "verify-report", "verify"
   ],
   [ROLES.SUPER_ADMIN]: [
     "patient", "consent", "profile", "assessment", "pending", "result",
     "history", "appointments", "feedback", "assistant", "verification",
-    "doctor", "kpi", "report", "admin", "audit"
+    "doctor", "kpi", "report", "admin", "audit", "verify-report", "verify"
   ]
 };
 
@@ -6845,6 +6845,14 @@ function showScreen(name) {
   if (name === "verification") {
     renderVerificationScreen();
   }
+  if (name === "verify-report" || name === "verify") {
+    const urlParams = new URLSearchParams(window.location.search);
+    const ref = urlParams.get("ref") || (window._selectedReportCaseId ? `HV-REP-${window._selectedReportCaseId.slice(-8).toUpperCase()}` : "");
+    const verifyContainer = document.getElementById("verifyReportContainer") || document.getElementById("reportContainer");
+    if (window.HealthVibes?.ReportsUI?.renderVerificationView) {
+      window.HealthVibes.ReportsUI.renderVerificationView(verifyContainer, ref);
+    }
+  }
   if (name === "report") {
     renderReportScreen(window._selectedReportCaseId || null);
   }
@@ -7628,6 +7636,7 @@ async function renderReportScreen(targetCaseId = null) {
     if (isPreview && window.__doctorPreviewCase) {
       caseData = window.__doctorPreviewCase;
     }
+    window._currentViewingCase = caseData;
 
     const missing = recordedClinicalText(null, isEn);
     const formatRecordedDate = value => {
@@ -8049,8 +8058,10 @@ async function renderReportScreen(targetCaseId = null) {
           <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
             <!-- QR CODE BOX -->
             <div class="qr-verify-box" style="text-align: center;">
-              ${qrSvg}
-              <small style="display: block; font-size: 9.5px; color: var(--muted); margin-top: 4px; font-family: monospace;">SCAN TO VERIFY</small>
+              <a href="./index.html?screen=verify-report&ref=${encodeURIComponent(reportRef)}" target="_blank" rel="noopener" title="${isEn ? 'Verify Report Authenticity' : 'التحقق من صحة التقرير والاعتماد الرسمي'}" style="text-decoration: none; color: inherit; display: inline-block;">
+                ${qrSvg}
+                <small style="display: block; font-size: 9.5px; color: var(--teal); margin-top: 4px; font-family: monospace; font-weight: 700;">SCAN TO VERIFY</small>
+              </a>
             </div>
 
             <div>
@@ -8077,7 +8088,7 @@ async function renderReportScreen(targetCaseId = null) {
 
         ${isWithdrawnReport ? `
           <div class="safety-note" style="font-size: 12px; line-height: 1.5; margin-bottom: 20px; padding: 12px 16px; background: rgba(239, 68, 68, 0.08); border-left: 4px solid #ef4444; border-radius: 8px;">
-            <strong>${isEn ? "Report withdrawn" : "تم سحب التقرير"}</strong>
+            <strong style="color: #dc2626;">${isEn ? "Report withdrawn" : "تم سحب التقرير"}</strong>
             <div>${escapeHtml(reportWithdrawal.reason || missing)}</div>
             <small>${escapeHtml(formatRecordedDate(reportWithdrawal.withdrawnAt))}</small>
           </div>
@@ -8094,12 +8105,15 @@ async function renderReportScreen(targetCaseId = null) {
         </div>
 
         <!-- REPORT ACTION TOOLBAR (Hidden on Print) -->
-        <div class="report-actions-toolbar no-print" style="display: flex; gap: 12px; flex-wrap: wrap;">
-          <button type="button" class="solid-button large print-report-btn" onclick="window.print()">
-            <span>🖨️</span> ${isSupport ? (isEn ? "Print Support Summary" : "طباعة ملخص الدعم الفني") : (isEn ? "Print Official Report (PDF)" : "طباعة التقرير الطبي (PDF)")}
+        <div class="report-actions-toolbar no-print" style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px;">
+          <button type="button" class="solid-button large print-report-btn" onclick="exportReportToPdf('${caseData.id}', 'ar')">
+            <span>📄</span> ${isEn ? "Export PDF (Arabic)" : "تصدير PDF (عربي)"}
           </button>
-          <button type="button" class="outline-button large" onclick="navigator.clipboard.writeText(window.location.href); showToast(currentLanguage === 'en' ? 'Report link copied' : 'تم نسخ رابط التقرير')">
-            <span>🔗</span> ${isEn ? "Copy Report Link" : "نسخ رابط التقرير"}
+          <button type="button" class="solid-button large print-report-btn" style="background: #0284c7;" onclick="exportReportToPdf('${caseData.id}', 'en')">
+            <span>📄</span> ${isEn ? "Export PDF (English)" : "تصدير PDF (إنجليزي)"}
+          </button>
+          <button type="button" class="outline-button large" onclick="openShareReportModal('${caseData.id}')">
+            <span>🔗</span> ${isEn ? "Share Report (Consent Link)" : "مشاركة التقرير برابط آمن"}
           </button>
           ${!isSupport ? `
             <button type="button" class="outline-button large" onclick="showScreen('appointments')">
@@ -8126,6 +8140,22 @@ async function renderReportScreen(targetCaseId = null) {
     `;
   }
 }
+
+window.exportReportToPdf = function(caseId, language) {
+  const caseObj = (window._currentViewingCase && window._currentViewingCase.id === caseId) ? window._currentViewingCase : { id: caseId };
+  if (window.HealthVibes?.ReportsUI?.exportReportToPdf) {
+    window.HealthVibes.ReportsUI.exportReportToPdf(caseObj, language);
+  } else if (typeof window !== "undefined") {
+    window.print();
+  }
+};
+
+window.openShareReportModal = function(caseId) {
+  const caseObj = (window._currentViewingCase && window._currentViewingCase.id === caseId) ? window._currentViewingCase : { id: caseId };
+  if (window.HealthVibes?.ReportsUI?.openShareReportModal) {
+    window.HealthVibes.ReportsUI.openShareReportModal(caseObj);
+  }
+};
 
 async function renderResultScreen() {
   const container = document.getElementById("resultContainer");
@@ -14225,7 +14255,13 @@ function checkUrlAuthAction() {
   }
 }
 
-showScreen("patient");
+const initialParams = new URLSearchParams(window.location.search);
+const initialScreen = initialParams.get("screen");
+if (initialScreen === "verify-report" || initialScreen === "verify") {
+  showScreen("verify-report");
+} else {
+  showScreen("patient");
+}
 bindScreenNavigation();
 applyLanguage(currentLanguage);
 checkUrlAuthAction();
@@ -14248,7 +14284,7 @@ checkUrlAuthAction();
     const allScreenNames = [
       "patient","consent","profile","assessment","pending","result",
       "history","appointments","feedback","assistant","report",
-      "verification","doctor","kpi","admin","audit"
+      "verification","doctor","kpi","admin","audit","verify-report","verify"
     ];
     if (allScreenNames.includes(screenFromHash)) {
       console.info(`[HashRouter] Hash navigation to '${screenFromHash}'.`);

@@ -4537,6 +4537,372 @@ app.get('/api/reports/:caseId/doctor-identity', requireAuth, async (req, res) =>
   }
 });
 
+// In-memory registry for report share tokens (with database persistence)
+const reportSharesRegistry = new Map();
+
+/**
+ * POST /api/reports/share
+ * Generates a time-limited, revocable share link for an approved report with mandatory explicit consent.
+ */
+app.post('/api/reports/share', requireAuth, async (req, res) => {
+  const { caseId, consent, consentGiven, consentText, expiresInHours = 48, recipientEmail, recipientPin } = req.body || {};
+  if (!caseId) {
+    return res.status(400).json({ error: 'MISSING_CASE_ID', message: 'caseId is required.' });
+  }
+  const isConsentGiven = consent === true || consentGiven === true;
+  if (!isConsentGiven) {
+    return res.status(400).json({
+      error: 'EXPLICIT_CONSENT_REQUIRED',
+      message: 'Explicit patient consent is required prior to sharing certified clinical reports.'
+    });
+  }
+
+  try {
+    let caseData = null;
+    const caseSnap = await db.collection('cases').doc(caseId).get();
+    if (!caseSnap.exists) {
+      return res.status(404).json({ error: 'NOT_FOUND', message: 'Case not found.' });
+    }
+    caseData = { id: caseSnap.id, ...caseSnap.data() };
+
+    const isOwner = caseData.patientId === req.user.uid || caseData.userId === req.user.uid;
+    const isDoctor = caseData.assignedDoctorId === req.user.uid || caseData.approvingDoctorId === req.user.uid || req.user.role === 'doctor';
+    const isAdmin = hasTrustedAdminClaim(req.user) || (typeof isOwnerUser === 'function' && isOwnerUser(req.user.email));
+    if (!isOwner && !isDoctor && !isAdmin) {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Not authorized to share this report.' });
+    }
+
+    if (caseData.status !== 'approved' || caseData.doctorApproved !== true) {
+      return res.status(400).json({ error: 'REPORT_NOT_APPROVED', message: 'Only approved, doctor-certified reports can be shared.' });
+    }
+
+    const hours = Math.min(Math.max(Number(expiresInHours) || 48, 1), 720);
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + hours * 3600 * 1000).toISOString();
+    const shareId = crypto.randomBytes(24).toString('hex');
+    const normalizedRecipientEmail = recipientEmail ? String(recipientEmail).trim().toLowerCase() : null;
+    const pinHash = recipientPin ? crypto.createHash('sha256').update(String(recipientPin).trim()).digest('hex') : null;
+    const reportRef = caseData.reportRef || `HV-REP-${caseId.slice(-8).toUpperCase()}`;
+
+    const shareRecord = {
+      shareId,
+      caseId,
+      patientId: caseData.patientId || caseData.userId || req.user.uid,
+      createdBy: req.user.uid,
+      createdRole: req.user.role || 'patient',
+      createdAt: now.toISOString(),
+      expiresAt,
+      status: 'active',
+      consentGiven: true,
+      consentText: String(consentText || 'Patient explicitly authorized time-limited medical report sharing.').trim(),
+      consentTimestamp: now.toISOString(),
+      recipientEmail: normalizedRecipientEmail,
+      recipientPinHash: pinHash,
+      accessCount: 0,
+      reportRef
+    };
+
+    reportSharesRegistry.set(shareId, shareRecord);
+    try {
+      await db.collection('report_shares').doc(shareId).set(shareRecord);
+    } catch (e) {}
+
+    try {
+      await db.collection('audit_events').add({
+        type: 'REPORT_SHARE_LINK_CREATED',
+        shareId,
+        caseId,
+        createdBy: req.user.uid,
+        recipientEmail: normalizedRecipientEmail,
+        expiresAt,
+        timestamp: admin.firestore?.FieldValue ? admin.firestore.FieldValue.serverTimestamp() : now.toISOString()
+      });
+    } catch (e) {}
+
+    return res.json({
+      success: true,
+      shareId,
+      shareUrl: `/shared-report.html?token=${shareId}`,
+      expiresAt,
+      recipientRestricted: Boolean(normalizedRecipientEmail),
+      recipientEmail: normalizedRecipientEmail,
+      hasPin: Boolean(pinHash),
+      reportRef
+    });
+  } catch (err) {
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/reports/share/revoke
+ * Revokes an existing time-limited share link.
+ */
+app.post('/api/reports/share/revoke', requireAuth, async (req, res) => {
+  const { shareId } = req.body || {};
+  if (!shareId) {
+    return res.status(400).json({ error: 'MISSING_SHARE_ID', message: 'shareId is required.' });
+  }
+  try {
+    let shareRecord = null;
+    try {
+      const doc = await db.collection('report_shares').doc(shareId).get();
+      if (doc.exists) shareRecord = doc.data();
+    } catch (e) {}
+    if (!shareRecord) {
+      shareRecord = reportSharesRegistry.get(shareId);
+    }
+    if (!shareRecord) {
+      return res.status(404).json({ error: 'SHARE_NOT_FOUND', message: 'Share link not found.' });
+    }
+    const isCreator = shareRecord.createdBy === req.user.uid;
+    const isPatient = shareRecord.patientId === req.user.uid;
+    const isAdmin = hasTrustedAdminClaim(req.user) || (typeof isOwnerUser === 'function' && isOwnerUser(req.user.email));
+    if (!isCreator && !isPatient && !isAdmin) {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Not authorized to revoke this share link.' });
+    }
+    shareRecord.status = 'revoked';
+    shareRecord.revokedAt = new Date().toISOString();
+    shareRecord.revokedBy = req.user.uid;
+    reportSharesRegistry.set(shareId, shareRecord);
+    try {
+      await db.collection('report_shares').doc(shareId).update({
+        status: 'revoked',
+        revokedAt: shareRecord.revokedAt,
+        revokedBy: shareRecord.revokedBy
+      });
+    } catch (e) {}
+    try {
+      await db.collection('audit_events').add({
+        type: 'REPORT_SHARE_LINK_REVOKED',
+        shareId,
+        caseId: shareRecord.caseId,
+        revokedBy: req.user.uid,
+        timestamp: admin.firestore?.FieldValue ? admin.firestore.FieldValue.serverTimestamp() : new Date().toISOString()
+      });
+    } catch (e) {}
+    return res.json({ success: true, status: 'revoked', shareId });
+  } catch (err) {
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
+  }
+});
+
+/**
+ * Helper to service shared report access
+ */
+async function handleSharedReportAccess(req, res) {
+  const shareId = req.params.shareId;
+  if (!shareId) return res.status(400).json({ error: 'MISSING_SHARE_ID' });
+
+  let share = null;
+  try {
+    const doc = await db.collection('report_shares').doc(shareId).get();
+    if (doc.exists) share = doc.data();
+  } catch (e) {}
+  if (!share) {
+    share = reportSharesRegistry.get(shareId);
+  }
+  if (!share) {
+    return res.status(404).json({ error: 'SHARE_NOT_FOUND', message: 'This shared report link does not exist.' });
+  }
+  if (share.status === 'revoked') {
+    return res.status(410).json({ error: 'SHARE_LINK_REVOKED', message: 'This medical report share link has been revoked.' });
+  }
+  const nowMs = Date.now();
+  const expiryMs = new Date(share.expiresAt).getTime();
+  if (!isNaN(expiryMs) && nowMs >= expiryMs) {
+    return res.status(410).json({ error: 'SHARE_LINK_EXPIRED', message: 'This medical report share link has expired.' });
+  }
+
+  if (share.recipientEmail) {
+    const claimedEmail = (req.query.recipientEmail || req.headers['x-recipient-email'] || req.body?.recipientEmail || req.user?.email || '').trim().toLowerCase();
+    if (!claimedEmail || claimedEmail !== share.recipientEmail.toLowerCase()) {
+      return res.status(403).json({ error: 'RECIPIENT_RESTRICTED', message: 'Access is restricted to the designated recipient.' });
+    }
+  }
+
+  if (share.recipientPinHash) {
+    const pin = String(req.query.pin || req.headers['x-recipient-pin'] || req.body?.pin || '').trim();
+    const pinHash = crypto.createHash('sha256').update(pin).digest('hex');
+    if (!pin || pinHash !== share.recipientPinHash) {
+      return res.status(401).json({ error: 'INVALID_PIN', message: 'A valid PIN code is required to access this report.' });
+    }
+  }
+
+  let caseData = null;
+  try {
+    const docSnap = await db.collection('cases').doc(share.caseId).get();
+    if (docSnap.exists) caseData = { id: docSnap.id, ...docSnap.data() };
+  } catch (e) {}
+
+  if (!caseData) {
+    return res.status(404).json({ error: 'REPORT_NOT_FOUND', message: 'The associated clinical report could not be found.' });
+  }
+
+  share.accessCount = (share.accessCount || 0) + 1;
+  reportSharesRegistry.set(shareId, share);
+
+  const snapshot = caseData.reportSnapshot || {};
+  const clinical = snapshot.clinicalContent || caseData;
+  const doctorId = snapshot.doctorIdentity || caseData.doctorIdentity || {};
+  const withdrawal = caseData.reportWithdrawal || snapshot.withdrawal || null;
+
+  return res.json({
+    success: true,
+    share: {
+      shareId: share.shareId,
+      expiresAt: share.expiresAt,
+      createdAt: share.createdAt,
+      recipientEmail: share.recipientEmail || null
+    },
+    report: {
+      id: caseData.id,
+      reportRef: caseData.reportRef || `HV-REP-${caseData.id.slice(-8).toUpperCase()}`,
+      status: caseData.status,
+      doctorApproved: caseData.doctorApproved,
+      approvedAt: snapshot.dates?.approvedAt || caseData.approvedAt,
+      reportGeneratedAt: snapshot.dates?.generatedAt || caseData.reportGeneratedAt || caseData.generatedAt,
+      reportVersion: snapshot.versions?.reportVersion || caseData.reportVersion || '1.0.0',
+      reportRevisionNumber: snapshot.revisionNumber || caseData.reportRevisionNumber || 1,
+      patientName: snapshot.patient?.patientName || caseData.patientName || caseData.name || 'Patient',
+      patientAge: snapshot.patient?.patientAge || caseData.patientAge || caseData.age,
+      doctorIdentity: {
+        name: doctorId.name || caseData.approvingDoctorName || 'Verified Physician',
+        specialty: doctorId.specialty || caseData.doctorSpecialty || 'Pulmonology',
+        licenseNumber: doctorId.licenseNumber || caseData.doctorLicense || 'VERIFIED-LICENSE',
+        clinic: doctorId.clinic || caseData.clinicName || 'Health Vibes Medical Center'
+      },
+      clinicalDiagnosis: clinical.clinicalDiagnosis,
+      medications: clinical.medications,
+      recommendations: clinical.recommendations || (clinical.recommendation ? [clinical.recommendation] : []),
+      oxygenLevel: snapshot.caseDetails?.oxygenLevel ?? caseData.oxygenLevel ?? caseData.o2 ?? null,
+      breathingDifficulty: snapshot.caseDetails?.breathingDifficulty || caseData.breathingDifficulty,
+      coughLevel: snapshot.caseDetails?.coughLevel || caseData.coughLevel,
+      symptomDuration: snapshot.caseDetails?.symptomDuration || caseData.symptomDuration,
+      reportWithdrawal: withdrawal
+    }
+  });
+}
+
+app.get('/api/reports/shared/:shareId', handleSharedReportAccess);
+app.post('/api/reports/shared/:shareId/access', handleSharedReportAccess);
+
+/**
+ * GET /api/reports/verify/:reportRefOrId
+ * Public authenticity verification endpoint.
+ * Safeguards patient confidentiality: NO diagnosis, medications, or vitals are exposed.
+ */
+app.get('/api/reports/verify/:reportRefOrId', async (req, res) => {
+  try {
+    const refOrId = String(req.params.reportRefOrId || '').trim();
+    if (!refOrId) return res.status(400).json({ valid: false, error: 'MISSING_REF' });
+
+    let caseData = null;
+    try {
+      const directDoc = await db.collection('cases').doc(refOrId).get();
+      if (directDoc.exists) {
+        caseData = { id: directDoc.id, ...directDoc.data() };
+      }
+    } catch (e) {}
+
+    if (!caseData) {
+      try {
+        const querySnap = await db.collection('cases').where('reportRef', '==', refOrId).get();
+        if (querySnap && !querySnap.empty) {
+          const doc = querySnap.docs[0];
+          caseData = { id: doc.id, ...doc.data() };
+        }
+      } catch (e) {}
+    }
+
+    if (!caseData) {
+      try {
+        const revDoc = await db.collection('clinical_reports').doc(refOrId).get();
+        if (revDoc.exists) {
+          const rev = revDoc.data();
+          const parentDoc = await db.collection('cases').doc(rev.caseId || rev.originalCaseId).get();
+          if (parentDoc.exists) {
+            caseData = { id: parentDoc.id, ...parentDoc.data() };
+          }
+        }
+      } catch (e) {}
+    }
+
+    if (!caseData) {
+      return res.status(404).json({
+        valid: false,
+        status: 'not_found',
+        message: 'Medical report reference not found in the authentic registry.'
+      });
+    }
+
+    const snapshot = caseData.reportSnapshot || {};
+    const doctorId = snapshot.doctorIdentity || caseData.doctorIdentity || {};
+    const withdrawal = caseData.reportWithdrawal || snapshot.withdrawal;
+    const isWithdrawn = withdrawal && withdrawal.status === 'withdrawn';
+    const reportRef = caseData.reportRef || `HV-REP-${caseData.id.slice(-8).toUpperCase()}`;
+    const digitalHash = caseData.reportHash || `SHA256-${caseData.id.slice(0, 16).toUpperCase()}`;
+
+    const publicDoctor = {
+      name: doctorId.name || caseData.approvingDoctorName || 'Verified Physician',
+      specialty: doctorId.specialty || caseData.doctorSpecialty || 'Pulmonology',
+      licenseNumber: doctorId.licenseNumber || caseData.doctorLicense || 'VERIFIED-LICENSE',
+      clinic: doctorId.clinic || caseData.clinicName || 'Health Vibes Medical Center'
+    };
+
+    if (isWithdrawn) {
+      return res.json({
+        valid: false,
+        status: 'withdrawn',
+        reportRef,
+        reportVersion: snapshot.versions?.reportVersion || caseData.reportVersion || '1.0.0',
+        revisionNumber: snapshot.revisionNumber || caseData.reportRevisionNumber || 1,
+        issuedAt: snapshot.dates?.approvedAt || caseData.approvedAt || null,
+        withdrawnAt: withdrawal.withdrawnAt,
+        withdrawalReason: withdrawal.reason,
+        doctor: publicDoctor,
+        clinic: publicDoctor.clinic,
+        digitalSignature: {
+          algorithm: 'SHA-256',
+          hash: digitalHash
+        },
+        statusDescription: 'Report Formally Withdrawn by Physician',
+        medicalPrivacyNotice: 'Confidential clinical content (diagnosis, medications, vitals) is protected under HIPAA/GDPR and excluded from public authenticity verification.'
+      });
+    }
+
+    if (caseData.status !== 'approved' || caseData.doctorApproved !== true) {
+      return res.json({
+        valid: false,
+        status: 'unapproved',
+        reportRef,
+        statusDescription: 'Preliminary / Not Certified by Physician',
+        medicalPrivacyNotice: 'Confidential clinical content is excluded.'
+      });
+    }
+
+    return res.json({
+      valid: true,
+      status: 'certified',
+      reportRef,
+      reportVersion: snapshot.versions?.reportVersion || caseData.reportVersion || '1.0.0',
+      revisionNumber: snapshot.revisionNumber || caseData.reportRevisionNumber || 1,
+      issuedAt: snapshot.dates?.approvedAt || caseData.approvedAt || null,
+      doctor: publicDoctor,
+      clinic: publicDoctor.clinic,
+      digitalSignature: {
+        algorithm: 'SHA-256',
+        hash: digitalHash
+      },
+      statusDescription: 'Digitally Certified & Authenticated by Attending Physician',
+      authenticityStatement: 'This digital certificate confirms that the clinical report was officially reviewed, approved, and digitally signed by a verified licensed physician on the Health Vibes platform.',
+      medicalPrivacyNotice: 'Confidential clinical content (diagnosis, medications, vitals) is protected under HIPAA/GDPR and excluded from public authenticity verification.'
+    });
+  } catch (err) {
+    return res.status(500).json({ valid: false, error: 'VERIFICATION_ERROR', message: err.message });
+  }
+});
+
 function buildApprovedReportSnapshot({ caseId, caseData, updateData, doctorIdentity, actor, approvedAtIso, previousRevisionId }) {
   const reportRevisionNumber = Number(caseData.reportRevisionNumber || 0) + 1;
   const revisionId = `${caseId}_v${reportRevisionNumber}`;

@@ -91,24 +91,24 @@
   const ROLE_ALLOWED_SCREENS = {
     [ROLES.PATIENT]: [
       "patient", "consent", "profile", "assessment", "pending", "result",
-      "history", "appointments", "feedback", "assistant", "report"
+      "history", "appointments", "feedback", "assistant", "report", "verify-report"
     ],
     [ROLES.DOCTOR_PENDING]: [
-      "patient", "verification", "history", "appointments", "feedback", "report", "profile"
+      "patient", "verification", "history", "appointments", "feedback", "report", "profile", "verify-report"
     ],
     [ROLES.DOCTOR]: [
-      "doctor", "verification", "history", "appointments", "feedback", "report", "profile", "kpi", "patient"
+      "doctor", "verification", "history", "appointments", "feedback", "report", "profile", "kpi", "patient", "verify-report"
     ],
     [ROLES.CLINIC_ADMIN]: [
-      "profile", "history", "appointments", "feedback", "doctor", "report", "admin", "audit", "kpi"
+      "profile", "history", "appointments", "feedback", "doctor", "report", "admin", "audit", "kpi", "verify-report"
     ],
     [ROLES.SUPPORT]: [
-      "profile", "kpi"
+      "profile", "kpi", "verify-report"
     ],
     [ROLES.SUPER_ADMIN]: [
       "patient", "consent", "profile", "assessment", "pending", "result",
       "history", "appointments", "feedback", "assistant", "verification",
-      "doctor", "kpi", "report", "admin", "audit"
+      "doctor", "kpi", "report", "admin", "audit", "verify-report"
     ]
   };
 

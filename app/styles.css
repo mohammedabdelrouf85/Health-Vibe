@@ -3854,7 +3854,23 @@ body.dark .report-page.official-certified-report {
     background: #ffffff !important;
     color: #000000 !important;
     border-radius: 4px !important;
-    page-break-inside: avoid;
+    page-break-inside: auto !important;
+    break-inside: auto !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  .report-page.official-certified-report .report-header,
+  .report-page.official-certified-report .report-grid,
+  .report-page.official-certified-report .report-vitals-box,
+  .report-page.official-certified-report .report-diagnosis-section,
+  .report-page.official-certified-report .report-prescription-section,
+  .report-page.official-certified-report .report-signature-block,
+  .report-page.official-certified-report .safety-note,
+  .report-page.official-certified-report .report-badge {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    margin-bottom: 14px !important;
   }
 
   .report-page.official-certified-report .report-header {
@@ -3882,6 +3898,38 @@ body.dark .report-page.official-certified-report {
   .qr-verify-box svg {
     display: block !important;
   }
+
+  /* Bilingual typography for clinical PDF printing */
+  body.print-lang-ar,
+  body.print-lang-ar * {
+    font-family: 'Cairo', 'Segoe UI', Tahoma, Arial, sans-serif !important;
+  }
+  body.print-lang-en,
+  body.print-lang-en * {
+    font-family: 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
+  }
+
+  .print-pagination {
+    display: flex !important;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 8.5pt !important;
+    color: #555555 !important;
+    border-top: 1px solid #cccccc !important;
+    padding-top: 8px !important;
+    margin-top: 20px !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .print-page-break {
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+}
+
+.print-pagination {
+  display: none;
 }
 
 /* ==========================================================================
