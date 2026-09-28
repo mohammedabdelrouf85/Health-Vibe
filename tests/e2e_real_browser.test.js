@@ -219,8 +219,10 @@ class StagingTestServer {
         '.json': 'application/json; charset=utf-8',
         '.png': 'image/png',
         '.jpg': 'image/jpeg',
+        '.webp': 'image/webp',
         '.svg': 'image/svg+xml'
       };
+      res.setHeader('Cache-Control', ext === '.html' ? 'no-cache' : 'public, max-age=86400');
       res.writeHead(200, { 'Content-Type': mimeTypes[ext] || 'application/octet-stream' });
       res.end(fs.readFileSync(filePath));
     } else {

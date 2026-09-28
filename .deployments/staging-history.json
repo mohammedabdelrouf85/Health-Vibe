@@ -198,5 +198,25 @@
     "rolledBackToReleaseId": "rel_staging_1790634298301",
     "rolledBackToCommit": "16f0f5bdbecf790d0b9d0346a4be07e1095db2bd",
     "status": "rolled_back"
+  },
+  {
+    "releaseId": "rel_staging_1790635891613",
+    "timestamp": "2026-09-28T22:51:31.613Z",
+    "environment": "staging",
+    "projectId": "health-vibes-staging",
+    "gitCommit": "c713ae985bc8e228e70654e73dac691b02df8840",
+    "gitBranch": "main",
+    "version": "1.0.0",
+    "status": "deployed",
+    "deployedAt": "2026-09-28T22:51:31.614Z"
+  },
+  {
+    "releaseId": "rollback_staging_1790635891620",
+    "timestamp": "2026-09-28T22:51:31.620Z",
+    "environment": "staging",
+    "projectId": "health-vibes-staging",
+    "rolledBackToReleaseId": "rel_staging_1790634840177",
+    "rolledBackToCommit": "16f0f5bdbecf790d0b9d0346a4be07e1095db2bd",
+    "status": "rolled_back"
   }
 ]

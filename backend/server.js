@@ -159,6 +159,20 @@ app.use((req, res, next) => {
   if (isProduction) {
     res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
   }
+
+  // Strict clinical caching policy: NEVER cache PHI / patient health data insecurely
+  if (req.path.startsWith('/api/cases') || 
+      req.path.startsWith('/api/patient') || 
+      req.path.startsWith('/api/doctor') || 
+      req.path.startsWith('/api/reports') ||
+      req.path.startsWith('/api/appointments') ||
+      req.path.startsWith('/api/admin/audit')) {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  } else if (req.path.startsWith('/api/public') || req.path.startsWith('/api/clinics') || req.path.startsWith('/api/config')) {
+    res.setHeader('Cache-Control', 'public, max-age=300, stale-while-revalidate=600');
+  }
   next();
 });
 

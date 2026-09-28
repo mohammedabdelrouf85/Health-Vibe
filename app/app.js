@@ -63,12 +63,16 @@ const accountLabel = document.getElementById("accountLabel");
 const userName = document.getElementById("userName");
 const userEmail = document.getElementById("userEmail");
 const LOGO_ASSETS = {
-  light: "./logo-light.png",
-  dark: "./logo-dark.png"
+  light: "./logo-light.webp",
+  dark: "./logo-dark.webp",
+  lightPng: "./logo-light.png",
+  darkPng: "./logo-dark.png"
 };
 const LOGO_MARK_ASSETS = {
-  light: "./logo-light-mark.png",
-  dark: "./logo-dark-mark.png"
+  light: "./logo-light-mark.webp",
+  dark: "./logo-dark-mark.webp",
+  lightPng: "./logo-light-mark.png",
+  darkPng: "./logo-dark-mark.png"
 };
 
 function getThemeLogoSrc() {
@@ -3056,6 +3060,10 @@ async function getCases(options = {}) {
       // Rules cannot filter hidden drafts out of a query. Query published records explicitly.
       query = query.where("doctorApproved", "==", true);
     } else if (role !== ROLES.SUPER_ADMIN) return [];
+    const maxLimit = (options && options.limit) ? options.limit : 50;
+    if (typeof query.limit === "function") {
+      query = query.limit(maxLimit);
+    }
     const snap = await query.get();
     cases = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
@@ -4160,10 +4168,17 @@ async function renderDoctorQueue() {
     </div>
   `;
 
-  // ── مستمع حي Real-Time Listener لاستقبال التقييمات فورياً ──────
+  // ── مستمع حي Real-Time Listener لاستقبال التقييمات فورياً مع ترقيم وتقييد ──────
+  if (window._doctorQueueUnsub) {
+    try { window._doctorQueueUnsub(); } catch(e) {}
+    window._doctorQueueUnsub = null;
+  }
   if (typeof db !== "undefined" && db) {
     try {
-      window._doctorQueueUnsub = db.collection("cases").onSnapshot(
+      const queueQuery = typeof db.collection("cases").limit === "function"
+        ? db.collection("cases").limit(50)
+        : db.collection("cases");
+      window._doctorQueueUnsub = queueQuery.onSnapshot(
         (snapshot) => {
           if (!snapshot.empty) {
             const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -5429,8 +5444,12 @@ async function leaveApp(event) {
   clearActiveSession();
   // ── إيقاف الـ real-time listener عند تسجيل الخروج ────────────
   if (window._patientCasesUnsub) {
-    window._patientCasesUnsub();
+    try { window._patientCasesUnsub(); } catch(e) {}
     window._patientCasesUnsub = null;
+  }
+  if (window._doctorQueueUnsub) {
+    try { window._doctorQueueUnsub(); } catch(e) {}
+    window._doctorQueueUnsub = null;
   }
   window._currentCaseId = null;
   window._isUserVerified = false;
@@ -6819,6 +6838,9 @@ function showScreen(name) {
   }
   if (name === "patient") {
     renderPatientDashboard();
+  } else if (window._patientCasesUnsub) {
+    try { window._patientCasesUnsub(); } catch(e) {}
+    window._patientCasesUnsub = null;
   }
   if (name === "verification") {
     renderVerificationScreen();
@@ -6929,11 +6951,10 @@ async function renderPatientDashboard() {
     window._patientCasesUnsub = null;
   }
 
-  // ── Real-Time Listener — حالات المريض مربوطة بـ patientId ─────────
-  window._patientCasesUnsub = db
-    .collection("cases")
-    .where("patientId", "==", user.uid)
-    .onSnapshot(
+  const patientCasesQuery = typeof db.collection("cases").where("patientId", "==", user.uid).limit === "function"
+    ? db.collection("cases").where("patientId", "==", user.uid).limit(10)
+    : db.collection("cases").where("patientId", "==", user.uid);
+  window._patientCasesUnsub = patientCasesQuery.onSnapshot(
       async (snapshot) => {
         let c = null;
 
