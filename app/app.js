@@ -1,4 +1,24 @@
 const loader = document.getElementById("loader");
+const loaderStartTime = Date.now();
+const LOADER_MIN_DISPLAY_MS = 2700; // +35% longer display time to showcase the brand intro animation
+
+function dismissLoader(immediate = false) {
+  if (!loader || loader.classList.contains("is-done")) return;
+  if (immediate) {
+    loader.classList.add("is-done");
+    return;
+  }
+  const elapsed = Date.now() - loaderStartTime;
+  const remaining = Math.max(0, LOADER_MIN_DISPLAY_MS - elapsed);
+  if (remaining > 0) {
+    window.setTimeout(() => {
+      if (loader) loader.classList.add("is-done");
+    }, remaining);
+  } else {
+    loader.classList.add("is-done");
+  }
+}
+window.dismissLoader = dismissLoader;
 const publicSite = document.getElementById("publicSite");
 const authScreen = document.getElementById("authScreen");
 const app = document.getElementById("app");
@@ -98,7 +118,7 @@ async function setupLoaderVideo() {
   video.addEventListener("error", hideVideo);
   window.setTimeout(() => {
     if (!video.src || video.readyState === 0) hideVideo();
-  }, 900);
+  }, 1215);
 }
 
 const titles = {
@@ -1602,12 +1622,12 @@ function hasSavedAuthSession() {
   return false;
 }
 
-// Fallback loader dismiss timer: if a session is being restored, give ample time to verify
-const loaderSafetyTimeoutMs = hasSavedAuthSession() ? 10000 : 3000;
+// Fallback loader dismiss timer: if a session is being restored, give ample time to verify (+35% longer duration)
+const loaderSafetyTimeoutMs = hasSavedAuthSession() ? 13500 : 4050;
 const loaderSafetyTimer = window.setTimeout(() => {
   if (loader && !loader.classList.contains("is-done")) {
     console.warn("Loader safety timeout: dismissing loader.");
-    loader.classList.add("is-done");
+    dismissLoader(true);
     if (!auth.currentUser && !hasSavedAuthSession()) {
       if (publicSite && publicSite.classList.contains("is-hidden")) {
         publicSite.classList.remove("is-hidden");
@@ -4931,9 +4951,7 @@ function transitionToApp(user, options = {}) {
     showScreen(targetScreen);
   }
   applyLanguage(currentLanguage);
-  if (loader) {
-    loader.classList.add("is-done");
-  }
+  dismissLoader();
   try { updateAvatar(user); } catch(e) {}
   try { updateEmailVerificationUI(user); } catch(e) {}
   try { updateNavVisibility(); } catch(e) {}
@@ -13640,10 +13658,12 @@ function initHVAuthListener() {
         app.removeAttribute("hidden");
         app.style.display = "grid";
       }
+      const elapsed = Date.now() - loaderStartTime;
+      const delay = Math.max(340, LOADER_MIN_DISPLAY_MS - elapsed);
       window.setTimeout(() => {
-        if (loader) loader.classList.add("is-done");
+        dismissLoader(true);
         showScreen("patient");
-      }, 250);
+      }, delay);
     }
   });
 }

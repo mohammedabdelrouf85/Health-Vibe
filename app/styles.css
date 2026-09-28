@@ -142,7 +142,7 @@ body:not(.dark) .theme-fab {
   background:
     radial-gradient(circle at 50% 35%, rgba(9, 184, 182, .18), transparent 45%),
     linear-gradient(135deg, #061517, #0b2226);
-  transition: opacity .55s ease, visibility .55s ease;
+  transition: opacity .74s ease, visibility .74s ease;
 }
 
 body:not(.dark) .loader {
@@ -165,7 +165,7 @@ body:not(.dark) .loader {
   border: 1px solid rgba(30, 63, 66, .9);
   box-shadow: 0 24px 70px rgba(0, 0, 0, .55);
   backdrop-filter: blur(18px);
-  animation: floatIn .75s ease both;
+  animation: floatIn 1.01s ease both;
 }
 
 body:not(.dark) .loader-card {
@@ -187,18 +187,18 @@ body:not(.dark) .loader-card {
 }
 
 .loader-media {
-  width: 192px;
-  height: 192px;
+  width: 200px;
+  height: 200px;
   margin: 0 auto;
   position: relative;
   display: grid;
   place-items: center;
-  border-radius: 34px;
-  overflow: hidden;
-  background: linear-gradient(145deg, rgba(9, 184, 182, .14), rgba(24, 160, 88, .10));
-  border: 1px solid rgba(93, 214, 212, .28);
-  box-shadow: 0 18px 46px rgba(0, 0, 0, .35);
-  animation: floatIn .6s ease both;
+  border-radius: 50%;
+  overflow: visible;
+  background: radial-gradient(circle, rgba(9, 184, 182, .24) 0%, rgba(9, 184, 182, .06) 55%, transparent 75%);
+  border: 1px solid rgba(93, 214, 212, .22);
+  box-shadow: 0 0 40px rgba(9, 184, 182, .22);
+  animation: floatIn .81s ease both;
 }
 
 .loader-video {
@@ -206,23 +206,29 @@ body:not(.dark) .loader-card {
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   z-index: 2;
+  background: transparent;
+  mix-blend-mode: screen;
+  filter: drop-shadow(0 0 20px rgba(9, 184, 182, 0.45));
 }
 
 .loader-video:not([src]) + .loader-logo,
 .loader-logo {
-  width: 152px;
-  height: 152px;
+  width: 156px;
+  height: 156px;
   object-fit: contain;
   border-radius: 28px;
   position: relative;
   z-index: 1;
+  background: transparent;
+  mix-blend-mode: screen;
+  filter: drop-shadow(0 0 16px rgba(9, 184, 182, 0.4));
 }
 
 .loader-fallback-animation {
   position: absolute;
-  inset: 12px;
+  inset: -8px;
   display: grid;
   place-items: center;
   pointer-events: none;
@@ -230,25 +236,30 @@ body:not(.dark) .loader-card {
 
 .loader-fallback-animation span {
   position: absolute;
-  width: 76%;
-  height: 76%;
+  width: 84%;
+  height: 84%;
   border-radius: 50%;
-  border: 1px solid rgba(9, 184, 182, .26);
-  animation: loaderPulse 2.4s ease-in-out infinite;
+  border: 1px solid rgba(9, 184, 182, .28);
+  animation: loaderPulse 3.24s ease-in-out infinite;
 }
 
 .loader-fallback-animation span:nth-child(2) {
-  animation-delay: .45s;
+  animation-delay: .61s;
 }
 
 .loader-fallback-animation span:nth-child(3) {
-  animation-delay: .9s;
+  animation-delay: 1.22s;
 }
 
 body:not(.dark) .loader-media {
-  background: rgba(255, 255, 255, .72);
+  background: radial-gradient(circle, rgba(0, 109, 111, .14) 0%, rgba(0, 109, 111, .03) 60%, transparent 75%);
   border-color: rgba(0, 109, 111, .18);
-  box-shadow: 0 18px 42px rgba(3, 72, 74, .14);
+  box-shadow: 0 0 32px rgba(3, 72, 74, .14);
+}
+
+body:not(.dark) .loader-video,
+body:not(.dark) .loader-logo {
+  mix-blend-mode: normal;
 }
 
 .loading-bar {
@@ -269,7 +280,7 @@ body:not(.dark) .loading-bar {
   height: 100%;
   border-radius: inherit;
   background: linear-gradient(90deg, var(--teal), var(--green));
-  animation: load 1.25s ease-in-out infinite;
+  animation: load 1.69s ease-in-out infinite;
 }
 
 @keyframes load {
