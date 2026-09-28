@@ -445,6 +445,20 @@
           </div>
         </div>
 
+        <article class="hv-onboarding-strip" aria-label="Product onboarding">
+          <div>
+            <span class="eyebrow">How Health Vibes Works</span>
+            <h2>From breathing data to doctor-approved guidance</h2>
+            <p>Submit symptoms and vitals, let the system prioritize the case, then wait for a licensed physician to review and release the final report.</p>
+          </div>
+          <ol>
+            <li><strong>1. Share</strong><span>Enter oxygen, symptoms, history, and consent.</span></li>
+            <li><strong>2. Triage</strong><span>Rule-based risk helps prioritize review.</span></li>
+            <li><strong>3. Review</strong><span>A doctor approves, asks follow-up, or escalates.</span></li>
+            <li><strong>4. Receive</strong><span>Your certified report appears only after approval.</span></li>
+          </ol>
+        </article>
+
         <div class="metric-grid">
           <article><span data-i18n="patient.nextAppointment">Next appointment</span><strong id="patientNextAppt">--</strong><small data-i18n="patient.followUpConsultation">Follow-up consultation</small></article>
           <article><span data-i18n="patient.latestReport">Latest report</span><strong id="patientLatestReport">--</strong><small data-i18n="nav.assessment">Breathing Assessment</small></article>
@@ -464,54 +478,54 @@
         <div class="content-grid">
           <article class="panel">
             <div class="panel-head">
-              <h3>الموافقة الطبية وسياسة الخصوصية</h3>
-              <span id="consentStatusBadge" class="pill pending">مطلوبة قبل الفحص</span>
+              <h3 data-i18n="consent.title">الموافقة الطبية وسياسة الخصوصية</h3>
+              <span id="consentStatusBadge" class="pill pending" data-i18n="consent.badgeRequired">مطلوبة قبل الفحص</span>
             </div>
-            <p class="muted-copy">Health Vibes يجمع بياناتك الصحية لتقييم خطورة إرشادي ثم يرسلها لطبيب معتمد قبل ظهور أي نتيجة نهائية. لحماية بياناتك والامتثال للمعايير الطبية، نرجو مراجعة وتأكيد بنود الموافقة أدناه:</p>
+            <p class="muted-copy" data-i18n="consent.desc">Health Vibes يجمع بياناتك الصحية لتقييم خطورة إرشادي ثم يرسلها لطبيب معتمد قبل ظهور أي نتيجة نهائية. لحماية بياناتك والامتثال للمعايير الطبية، نرجو مراجعة وتأكيد بنود الموافقة أدناه:</p>
             <div class="check-list" style="margin: 16px 0; display: flex; flex-direction: column; gap: 12px;">
               <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer;">
                 <input type="checkbox" id="consentDataProcessing" checked style="margin-top: 3px;">
-                <span><strong>معالجة البيانات السريرية (إلزامي):</strong> أوافق على استخدام بيانات الأعراض والقياسات الحيوية داخل مسار التقييم ومشاركتها مع الطبيب المعالج المعتمد.</span>
+                <span data-i18n="consent.dataProcessing"><strong>معالجة البيانات السريرية (إلزامي):</strong> أوافق على استخدام بيانات الأعراض والقياسات الحيوية داخل مسار التقييم ومشاركتها مع الطبيب المعالج المعتمد.</span>
               </label>
               <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer;">
                 <input type="checkbox" id="consentAiAdvisory" checked style="margin-top: 3px;">
-                <span><strong>الطبيعة الإرشادية للذكاء الاصطناعي (إلزامي):</strong> أفهم أن مؤشر الذكاء الاصطناعي أداة فرز إرشادية غير مدققة سريرياً ولا تُعد تشخيصاً طبياً مستقلاً ولا تغني عن فحص الطبيب.</span>
+                <span data-i18n="consent.aiAdvisory"><strong>الطبيعة الإرشادية للذكاء الاصطناعي (إلزامي):</strong> أفهم أن مؤشر الذكاء الاصطناعي أداة فرز إرشادية غير مدققة سريرياً ولا تُعد تشخيصاً طبياً مستقلاً ولا تغني عن فحص الطبيب.</span>
               </label>
               <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer;">
                 <input type="checkbox" id="consentNotifications" checked style="margin-top: 3px;">
-                <span><strong>تنبيهات المتابعة والتقارير (اختياري):</strong> أوافق على استقبال إشعارات تحديث الحالة وتقارير الفحص الصادرة من الطبيب.</span>
+                <span data-i18n="consent.notifications"><strong>تنبيهات المتابعة والتقارير (اختياري):</strong> أوافق على استقبال إشعارات تحديث الحالة وتقارير الفحص الصادرة من الطبيب.</span>
               </label>
             </div>
-            <div class="safety-note" style="margin-bottom: 16px;">
+            <div class="safety-note" style="margin-bottom: 16px;" data-i18n="consent.privacyNote">
               🔒 خصوصيتك أولويتنا: يتم تشفير البيانات ولا يتم مشاركتها مع أي طرف ثالث لأغراض إعلانية. يمكنك مراجعة أو سحب الموافقة في أي وقت.
             </div>
             <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-              <button id="btnConsentProceed" type="button" class="solid-button" style="flex: 1; font-size: 14.5px; padding: 12px;">
+              <button id="btnConsentProceed" type="button" class="solid-button" style="flex: 1; font-size: 14.5px; padding: 12px;" data-i18n="consent.agreeBtn">
                 ✓ أوافق والمتابعة لبدء فحص التنفس
               </button>
-              <button id="btnWithdrawConsent" type="button" class="outline-button" style="display: none; padding: 12px 16px; color: #dc2626; border-color: rgba(220, 38, 38, 0.35);">
+              <button id="btnWithdrawConsent" type="button" class="outline-button" style="display: none; padding: 12px 16px; color: #dc2626; border-color: rgba(220, 38, 38, 0.35);" data-i18n="consent.withdrawBtn">
                 سحب الموافقة
               </button>
-              <button type="button" class="outline-button" style="padding: 12px 16px;" onclick="showScreen('profile')">
+              <button type="button" class="outline-button" style="padding: 12px 16px;" onclick="showScreen('profile')" data-i18n="consent.profileBtn">
                 الملف الطبي
               </button>
             </div>
           </article>
           <article class="panel">
-            <div class="panel-head"><h3>نطاق الوصول</h3><span class="pill info">صلاحيات الأدوار</span></div>
+            <div class="panel-head"><h3 data-i18n="consent.accessScope">نطاق الوصول</h3><span class="pill info" data-i18n="consent.rolePermissions">صلاحيات الأدوار</span></div>
             <div class="access-matrix">
-              <div><strong>المريض</strong><span>يرى بياناته ونتائجه المعتمدة فقط.</span></div>
-              <div><strong>الطبيب</strong><span>يرى الحالات المرتبطة به فقط مع سجل المراجعة.</span></div>
-              <div><strong>الإدارة</strong><span>صلاحيات تشغيلية مقيدة حسب الدور مع سجل تدقيق.</span></div>
+              <div><span data-i18n="consent.patientAccess"><strong>المريض</strong>: يرى بياناته ونتائجه المعتمدة فقط.</span></div>
+              <div><span data-i18n="consent.doctorAccess"><strong>الطبيب</strong>: يرى الحالات المرتبطة به فقط مع سجل المراجعة.</span></div>
+              <div><span data-i18n="consent.adminAccess"><strong>الإدارة</strong>: صلاحيات تشغيلية مقيدة حسب الدور مع سجل تدقيق.</span></div>
             </div>
 
             <div style="margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line);">
-              <h4 style="font-size: 13.5px; margin-bottom: 8px; color: var(--teal-2);">المعايير والوثائق القانونية والطبية:</h4>
-              <p class="muted-copy" style="font-size: 12px; margin-bottom: 10px;">يمكنك قراءة الوثائق المعتمدة كاملة في أي وقت:</p>
+              <h4 style="font-size: 13.5px; margin-bottom: 8px; color: var(--teal-2);" data-i18n="consent.legalStandards">المعايير والوثائق القانونية والطبية:</h4>
+              <p class="muted-copy" style="font-size: 12px; margin-bottom: 10px;" data-i18n="consent.legalDesc">يمكنك قراءة الوثائق المعتمدة كاملة في أي وقت:</p>
               <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                <button type="button" class="soft-button" style="font-size: 12px; padding: 6px 10px;" onclick="openLegalModal('privacy')">🔒 سياسة الخصوصية</button>
-                <button type="button" class="soft-button" style="font-size: 12px; padding: 6px 10px;" onclick="openLegalModal('terms')">📜 شروط الاستخدام</button>
-                <button type="button" class="soft-button" style="font-size: 12px; padding: 6px 10px; color: #f87171;" onclick="openLegalModal('disclaimer')">🚨 إخلاء المسؤولية</button>
+                <button type="button" class="soft-button" style="font-size: 12px; padding: 6px 10px;" onclick="openLegalModal('privacy')" data-i18n="consent.privacyPolicyBtn">🔒 سياسة الخصوصية</button>
+                <button type="button" class="soft-button" style="font-size: 12px; padding: 6px 10px;" onclick="openLegalModal('terms')" data-i18n="consent.termsBtn">📜 شروط الاستخدام</button>
+                <button type="button" class="soft-button" style="font-size: 12px; padding: 6px 10px; color: #f87171;" onclick="openLegalModal('disclaimer')" data-i18n="consent.disclaimerBtn">🚨 إخلاء المسؤولية</button>
               </div>
             </div>
           </article>
@@ -889,63 +903,63 @@
       <section id="screen-assessment" class="screen">
         <div class="form-layout">
           <article class="panel form-panel">
-            <div class="panel-head"><h3>تقييم التنفس</h3><span id="assessmentProgressLabel" class="pill info">الخطوة 2 من 4</span></div>
+            <div class="panel-head"><h3 data-i18n="assessment.title">تقييم التنفس</h3><span id="assessmentProgressLabel" class="pill info">الخطوة 2 من 4</span></div>
             <div class="progress" aria-label="Assessment completion progress"><span id="assessmentProgressBar" style="width:0%"></span></div>
-            <div id="assessmentDraftStatus" class="field-hint" style="margin: 8px 0 12px;">لم يتم حفظ مسودة بعد</div>
+            <div id="assessmentDraftStatus" class="field-hint" style="margin: 8px 0 12px;" data-i18n="assessment.draftStatusEmpty">لم يتم حفظ مسودة بعد</div>
             <div id="assessmentRecoveryBanner" class="clinical-note" hidden style="margin-bottom: 14px;">
-              توجد مسودة محفوظة لهذا الحساب. يمكنك المتابعة أو البدء من جديد.
+              <span data-i18n="assessment.draftBannerText">توجد مسودة محفوظة لهذا الحساب. يمكنك المتابعة أو البدء من جديد.</span>
               <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
-                <button type="button" id="btnResumeAssessmentDraft" class="solid-button" style="padding:7px 12px;font-size:12px;">متابعة المسودة</button>
-                <button type="button" id="btnDiscardAssessmentDraft" class="outline-button" style="padding:7px 12px;font-size:12px;">بدء جديد</button>
+                <button type="button" id="btnResumeAssessmentDraft" class="solid-button" style="padding:7px 12px;font-size:12px;" data-i18n="assessment.resumeDraft">متابعة المسودة</button>
+                <button type="button" id="btnDiscardAssessmentDraft" class="outline-button" style="padding:7px 12px;font-size:12px;" data-i18n="assessment.discardDraft">بدء جديد</button>
               </div>
             </div>
-            <label>هل يوجد ضيق تنفس؟</label>
+            <label data-i18n="assessment.shortnessOfBreath">هل يوجد ضيق تنفس؟</label>
             <div id="breathingChoices" class="choice-row">
               <button class="choice active">نعم</button>
               <button class="choice">لا</button>
             </div>
-            <label>درجة الكحة</label>
+            <label data-i18n="assessment.coughLabel">درجة الكحة</label>
             <div id="coughChoices" class="choice-row four">
               <button class="choice">خفيفة</button>
               <button class="choice active">متوسطة</button>
               <button class="choice">شديدة</button>
               <button class="choice">لا توجد</button>
             </div>
-            <label>نسبة الأكسجين (50% - 100%)</label>
+            <label data-i18n="assessment.o2Label">نسبة الأكسجين (50% - 100%)</label>
             <input id="oxygenInput" type="number" min="50" max="100" value="95" aria-label="نسبة الأكسجين" placeholder="95">
             <div id="oxygenWarning" class="field-warning" hidden></div>
-            <label>درجة الحرارة (اختياري)</label>
+            <label data-i18n="assessment.tempLabel">درجة الحرارة (اختياري)</label>
             <input id="temperatureInput" inputmode="decimal" aria-label="درجة الحرارة" placeholder="37.0 °C أو unknown">
-            <label>معدل التنفس (اختياري)</label>
+            <label data-i18n="assessment.respiratoryRateLabel">معدل التنفس (اختياري)</label>
             <input id="respiratoryRateInput" type="number" min="5" max="60" aria-label="معدل التنفس في الدقيقة" placeholder="مثال: 18">
-            <label>ألم بالصدر</label>
+            <label data-i18n="assessment.chestPainLabel">ألم بالصدر</label>
             <div id="chestPainChoices" class="choice-row three">
               <button class="choice">نعم</button>
               <button class="choice active">لا</button>
               <button class="choice">غير معروف</button>
             </div>
-            <label>مدة الأعراض</label>
+            <label data-i18n="assessment.symptomDurationLabel">مدة الأعراض</label>
             <input id="symptomDuration" value="3 أيام" aria-label="مدة الأعراض">
-            <label>تطور الأعراض</label>
+            <label data-i18n="assessment.symptomProgressionLabel">تطور الأعراض</label>
             <div id="symptomProgressionChoices" class="choice-row three">
               <button class="choice">تتحسن</button>
               <button class="choice active">ثابتة</button>
               <button class="choice">تسوء</button>
               <button class="choice">غير معروف</button>
             </div>
-            <label>عدوى حديثة</label>
+            <label data-i18n="assessment.recentInfectionLabel">عدوى حديثة</label>
             <div id="recentInfectionChoices" class="choice-row three">
               <button class="choice">نعم</button>
               <button class="choice active">لا</button>
               <button class="choice">غير معروف</button>
             </div>
-            <label>ربو أو COPD</label>
+            <label data-i18n="assessment.asthmaCopdLabel">ربو أو COPD</label>
             <div id="asthmaCopdChoices" class="choice-row three">
               <button class="choice">نعم</button>
               <button class="choice active">لا</button>
               <button class="choice">غير معروف</button>
             </div>
-            <label>عوامل خطورة</label>
+            <label data-i18n="assessment.riskFactorsLabel">عوامل خطورة</label>
             <div id="riskChoices" class="choice-row four">
               <button class="choice">ربو</button>
               <button class="choice">تدخين</button>
@@ -994,31 +1008,31 @@
       <section id="screen-pending" class="screen">
         <div class="center-state">
           <div class="review-orbit"><span></span></div>
-          <span class="pill pending">بانتظار مراجعة الطبيب</span>
-          <h1>تم إرسال التقييم بنجاح</h1>
-          <p>يراجع الطبيب الأعراض والقياسات ونتيجة الذكاء الاصطناعي قبل إصدار التقرير النهائي.</p>
+          <span class="pill pending" data-i18n="pending.statusBadge">بانتظار مراجعة الطبيب</span>
+          <h1 data-i18n="pending.successTitle">تم إرسال التقييم بنجاح</h1>
+          <p data-i18n="pending.reviewNote">يراجع الطبيب الأعراض والقياسات ونتيجة الذكاء الاصطناعي قبل إصدار التقرير النهائي.</p>
 
           <!-- بطاقة طوارئ فورية تظهر عند انخفاض نسبة الأكسجين -->
           <div id="pendingEmergencyAlert" class="emergency-pending-banner" hidden></div>
 
           <!-- بيانات الحالة الحقيقية -->
           <div class="summary-list" id="pendingCaseSummary" style="max-width:360px;margin:16px auto;text-align:right;">
-            <div><span>رقم الحالة</span><strong id="pendingCaseId">--</strong></div>
-            <div><span>المريض</span><strong id="pendingCaseName">--</strong></div>
-            <div><span>نسبة الأكسجين</span><strong id="pendingCaseO2">--%</strong></div>
-            <div><span>الأولوية</span><strong id="pendingCasePriority">--</strong></div>
-            <div><span>وقت الإرسال</span><strong id="pendingCaseTime">--</strong></div>
+            <div><span data-i18n="pending.caseId">رقم الحالة</span><strong id="pendingCaseId">--</strong></div>
+            <div><span data-i18n="pending.patientName">المريض</span><strong id="pendingCaseName">--</strong></div>
+            <div><span data-i18n="pending.oxygen">نسبة الأكسجين</span><strong id="pendingCaseO2">--%</strong></div>
+            <div><span data-i18n="pending.priority">الأولوية</span><strong id="pendingCasePriority">--</strong></div>
+            <div><span data-i18n="pending.submittedAt">وقت الإرسال</span><strong id="pendingCaseTime">--</strong></div>
           </div>
 
           <div class="timeline">
-            <div class="done"><b></b><span>استلام البيانات</span></div>
-            <div class="done"><b></b><span>تشغيل الذكاء الاصطناعي</span></div>
-            <div class="active"><b></b><span>مراجعة الطبيب</span></div>
-            <div><b></b><span>إصدار التقرير</span></div>
+            <div class="done"><b></b><span data-i18n="pending.timelineReceive">استلام البيانات</span></div>
+            <div class="done"><b></b><span data-i18n="pending.timelineAi">تشغيل الذكاء الاصطناعي</span></div>
+            <div class="active"><b></b><span data-i18n="pending.timelineReview">مراجعة الطبيب</span></div>
+            <div><b></b><span data-i18n="pending.timelineReport">إصدار التقرير</span></div>
           </div>
           <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 16px;">
-            <button class="solid-button large" data-screen="patient">العودة للرئيسية ومتابعة الحالة</button>
-            <button class="soft-button large" data-screen="history">عرض سجل الفحوصات</button>
+            <button class="solid-button large" data-screen="patient" data-i18n="pending.returnHome">العودة للرئيسية ومتابعة الحالة</button>
+            <button class="soft-button large" data-screen="history" data-i18n="pending.viewHistory">عرض سجل الفحوصات</button>
           </div>
         </div>
       </section>

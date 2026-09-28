@@ -510,6 +510,56 @@ function setTrustedHtml(element, html) {
   if (element) element.innerHTML = sanitizeTrustedHtml(html);
 }
 
+function hvStateCard({ type = "empty", title = "", message = "", actionText = "", action = "", icon = "" } = {}) {
+  const iconMap = {
+    loading: "⌛",
+    empty: "—",
+    error: "⚠",
+    success: "✓",
+    offline: "↻",
+  };
+  const safeType = ["loading", "empty", "error", "success", "offline"].includes(type) ? type : "empty";
+  const classes = ["hv-state-card"];
+  if (safeType === "error" || safeType === "offline") classes.push("error-card");
+  if (safeType === "success") classes.push("success-card");
+  return `
+    <div class="${classes.join(" ")}" data-state="${safeType}">
+      <span class="state-icon" aria-hidden="true">${escapeHtml(icon || iconMap[safeType] || iconMap.empty)}</span>
+      ${title ? `<h4>${escapeHtml(title)}</h4>` : ""}
+      ${message ? `<p>${escapeHtml(message)}</p>` : ""}
+      ${actionText && action ? `<button type="button" class="solid-button" onclick="${escapeHtml(action)}">${escapeHtml(actionText)}</button>` : ""}
+    </div>
+  `;
+}
+
+function hvSkeletonRows(count = 3, height = 72) {
+  return Array.from({ length: Math.max(1, count) }, () => `<div class="hv-skeleton" style="height: ${height}px; width: 100%;"></div>`).join("");
+}
+
+function setScreenBreadcrumb(name) {
+  const screen = document.getElementById(`screen-${name}`);
+  if (!screen || !["admin", "doctor", "kpi", "audit", "verification", "report"].includes(name)) return;
+  let crumb = screen.querySelector(":scope > .hv-breadcrumb");
+  if (!crumb) {
+    crumb = document.createElement("nav");
+    crumb.className = "hv-breadcrumb";
+    crumb.setAttribute("aria-label", "Breadcrumb");
+    screen.insertBefore(crumb, screen.firstChild);
+  }
+  const isEn = currentLanguage === "en";
+  const roleLabel = (isEn ? englishRoleLabels[selectedRole] : roleLabels[selectedRole]) || (isEn ? "Workspace" : "مساحة العمل");
+  const title = isEn ? (englishTitles[name] || "Dashboard") : (titles[name] || "لوحة التحكم");
+  crumb.innerHTML = `
+    <button type="button" onclick="showScreen('${getRoleDefaultScreen(selectedRole)}')">${escapeHtml(roleLabel)}</button>
+    <span aria-hidden="true">/</span>
+    <strong>${escapeHtml(title)}</strong>
+  `;
+}
+
+function isOfflineNow() {
+  return typeof navigator !== "undefined" && navigator.onLine === false;
+}
+
 function getSafeExternalUrl(value, fallback = "") {
   const raw = String(value || "").trim();
   if (!raw) return fallback;
@@ -1393,6 +1443,7 @@ function applyLanguage(language) {
     }
     screenTitle.textContent = title;
   }
+  if (typeof setScreenBreadcrumb === "function") setScreenBreadcrumb(activeScreenName);
   if (typeof updateVerificationSoonState === "function") {
     updateVerificationSoonState();
   }
@@ -1410,9 +1461,31 @@ function applyLanguage(language) {
   if (typeof updateEmailVerificationUI === "function" && typeof auth !== "undefined") updateEmailVerificationUI(auth.currentUser);
   if (typeof updateOxygenWarning === "function") updateOxygenWarning();
 
-  // 10. Re-render dynamic active screen
+  // 10. Re-render dynamic active screen without wiping user inputs
   if (activeScreenName === "patient" && typeof renderPatientDashboard === "function") {
     renderPatientDashboard();
+  } else if (activeScreenName === "report" && typeof renderReportScreen === "function") {
+    renderReportScreen(window._selectedReportCaseId || null);
+  } else if (activeScreenName === "pending" && typeof renderPendingScreen === "function") {
+    renderPendingScreen();
+  } else if (activeScreenName === "doctor" && typeof renderDoctorQueue === "function") {
+    renderDoctorQueue();
+  } else if (activeScreenName === "history" && typeof renderPatientHistory === "function") {
+    renderPatientHistory();
+  } else if (activeScreenName === "appointments" && typeof renderAppointmentsScreen === "function") {
+    renderAppointmentsScreen();
+  } else if (activeScreenName === "kpi" && typeof loadKpiMetrics === "function") {
+    loadKpiMetrics();
+  } else if (activeScreenName === "audit" && typeof renderAuditScreen === "function") {
+    renderAuditScreen();
+  } else if (activeScreenName === "consent" && typeof renderConsentScreen === "function") {
+    renderConsentScreen();
+  } else if (activeScreenName === "verification" && typeof renderVerificationScreen === "function") {
+    renderVerificationScreen();
+  } else if (activeScreenName === "result" && typeof renderResultScreen === "function") {
+    renderResultScreen();
+  } else if (activeScreenName === "assistant" && typeof renderAssistantScreen === "function") {
+    renderAssistantScreen();
   }
 }
 
@@ -3975,9 +4048,7 @@ async function renderDoctorQueue() {
         <div class="spinner" style="width: 15px; height: 15px;"></div>
         <span>${isEn ? 'Synchronizing clinical queue with cloud...' : 'جاري مزامنة قائمة الانتظار السريرية مع السحابة...'}</span>
       </div>
-      <div class="hv-skeleton" style="height: 72px; width: 100%;"></div>
-      <div class="hv-skeleton" style="height: 72px; width: 100%;"></div>
-      <div class="hv-skeleton" style="height: 72px; width: 100%;"></div>
+      ${hvSkeletonRows(3, 72)}
     </div>
   `;
 
@@ -6623,6 +6694,7 @@ function showScreen(name) {
   });
 
   screenTitle.textContent = currentLanguage === "en" ? englishTitles[name] || "Health Vibes" : titles[name] || "Health Vibes";
+  setScreenBreadcrumb(name);
   if (typeof closeSidebarDrawer === "function") {
     closeSidebarDrawer();
   } else {
@@ -6715,8 +6787,16 @@ async function renderPatientDashboard() {
   if (profileCompletionEl) {
     profileCompletionEl.textContent = `${completionPct}%`;
   }
-  document.getElementById("patientAlertsCount").textContent = isEn ? "0 new" : "0 جديد";
-  document.getElementById("patientAlertsList").innerHTML = `<div><strong>${isEn ? 'No new alerts' : 'لا توجد تنبيهات جديدة'}</strong><span>--</span></div>`;
+  document.getElementById("patientAlertsCount").textContent = isEn ? "No live alerts yet" : "لا توجد تنبيهات حية بعد";
+  document.getElementById("patientAlertsList").innerHTML = hvStateCard({
+    type: "empty",
+    title: isEn ? "No assessments submitted yet" : "لم يتم إرسال أي فحص بعد",
+    message: isEn
+      ? "Start the breathing assessment when you are ready. Results stay locked until a physician reviews them."
+      : "ابدأ تقييم التنفس عندما تكون جاهزاً. ستظل النتائج مغلقة حتى يراجعها الطبيب.",
+    actionText: isEn ? "Start assessment" : "بدء التقييم",
+    action: "showScreen('assessment')"
+  });
 
   const heroAssessmentBtn = document.querySelector("#screen-patient .hero-actions [data-screen='assessment']");
   if (heroAssessmentBtn) {
@@ -6765,7 +6845,12 @@ async function renderPatientDashboard() {
           c = fallbackCases[0] || null;
         }
 
-        if (!c) return;
+        if (!c) {
+          document.getElementById("patientClinicalStatus").textContent = isEn ? "Ready for your first assessment" : "جاهز لأول فحص";
+          document.getElementById("patientLatestReport").textContent = isEn ? "No report yet" : "لا يوجد تقرير بعد";
+          document.getElementById("patientResultStatus").textContent = isEn ? "Not submitted" : "لم يتم الإرسال";
+          return;
+        }
 
         // فورمات التاريخ
         const tsMillis = toMillis(c.submittedAt || c.createdAt || c.updatedAt) || 0;
@@ -6871,6 +6956,19 @@ async function renderPatientDashboard() {
       },
       (error) => {
         console.warn("❌ Patient cases listener error:", error);
+        const title = isOfflineNow()
+          ? (isEn ? "You are offline" : "أنت غير متصل بالإنترنت")
+          : (isEn ? "Could not load latest status" : "تعذر تحميل آخر حالة");
+        document.getElementById("patientAlertsCount").textContent = isEn ? "Needs retry" : "يحتاج إعادة محاولة";
+        document.getElementById("patientAlertsList").innerHTML = hvStateCard({
+          type: isOfflineNow() ? "offline" : "error",
+          title,
+          message: isEn
+            ? "Your saved account is safe. Reconnect or retry to refresh clinical updates."
+            : "حسابك محفوظ بأمان. أعد الاتصال أو حاول مرة أخرى لتحديث المتابعة الطبية.",
+          actionText: isEn ? "Retry loading status" : "إعادة تحميل الحالة",
+          action: "renderPatientDashboard()"
+        });
       }
     );
 }
@@ -13820,7 +13918,7 @@ if (chatInputField) {
 languageToggle.addEventListener("click", () => {
   const nextLanguage = currentLanguage === "ar" ? "en" : "ar";
   applyLanguage(nextLanguage);
-  showToast(nextLanguage === "ar" ? "الواجهة مضبوطة على العربية" : "الواجهة مضبوطة على الإنجليزية");
+  showToast(nextLanguage === "ar" ? "الواجهة مضبوطة على العربية" : "Interface set to English");
 });
 
 menuToggle.addEventListener("click", () => {
@@ -14799,7 +14897,8 @@ function calculateKpiMetrics(cases, options = {}) {
     });
   }
 
-  const isBenchmark = filtered.length === 0;
+  const isBenchmark = false;
+  const hasLiveData = filtered.length > 0;
 
   // 1. COMPLETION RATE METRICS
   const totalCases = filtered.length;
@@ -14897,10 +14996,10 @@ function calculateKpiMetrics(cases, options = {}) {
     : 0;
 
   // 4. WATERFALL STAGES (Intake -> Queue -> Clinical Review -> Report Delivery)
-  const stageIntakeMinutes = 1.2;
-  const stageQueueMinutes = Number(Math.max(1, avgResponseTimeMinutes * 0.65).toFixed(1));
-  const stageReviewMinutes = Number(Math.max(2, (avgTurnaroundMinutes - avgResponseTimeMinutes) * 0.85).toFixed(1));
-  const stageReportMinutes = 1.8;
+  const stageIntakeMinutes = hasLiveData ? 1.2 : 0;
+  const stageQueueMinutes = hasLiveData ? Number(Math.max(1, avgResponseTimeMinutes * 0.65).toFixed(1)) : 0;
+  const stageReviewMinutes = hasLiveData ? Number(Math.max(2, (avgTurnaroundMinutes - avgResponseTimeMinutes) * 0.85).toFixed(1)) : 0;
+  const stageReportMinutes = hasLiveData ? 1.8 : 0;
 
   // 5. DOCTOR BREAKDOWN
   const doctorsMap = new Map();
@@ -14964,6 +15063,7 @@ function calculateKpiMetrics(cases, options = {}) {
     timeRange,
     priorityFilter,
     isBenchmark,
+    hasLiveData,
     totalCases,
     completedCasesCount: completedCases.length,
     pendingCasesCount: pendingCases.length,
@@ -15039,7 +15139,7 @@ async function renderKpiDashboard(options = {}) {
     // 1. Data Source Pill
     const liveBadge = document.getElementById("kpiLiveStreamBadge");
     if (liveBadge) {
-      if (metrics.isBenchmark) {
+      if (!metrics.hasLiveData) {
         liveBadge.className = "pill pending";
         liveBadge.textContent = isEn ? "No live clinical records yet" : "لا توجد سجلات سريرية حية بعد";
       } else {
@@ -15063,10 +15163,12 @@ async function renderKpiDashboard(options = {}) {
 
     const compSlaBadge = document.getElementById("kpiCompletionSlaBadge");
     if (compSlaBadge) {
-      compSlaBadge.className = `kpi-badge-sla ${metrics.completionRate >= 90 ? 'optimal' : 'warning'}`;
-      compSlaBadge.textContent = isEn
-        ? `Target: ≥ 90% (${metrics.completionRate >= 90 ? 'Optimal' : 'Needs Focus'})`
-        : `الهدف: ≥ 90% (${metrics.completionRate >= 90 ? 'ممتاز' : 'يتطلب تركيز'})`;
+      compSlaBadge.className = `kpi-badge-sla ${metrics.hasLiveData && metrics.completionRate >= 90 ? 'optimal' : 'warning'}`;
+      compSlaBadge.textContent = !metrics.hasLiveData
+        ? (isEn ? "Waiting for first real case" : "بانتظار أول حالة حقيقية")
+        : (isEn
+          ? `Target: ≥ 90% (${metrics.completionRate >= 90 ? 'Optimal' : 'Needs Focus'})`
+          : `الهدف: ≥ 90% (${metrics.completionRate >= 90 ? 'ممتاز' : 'يتطلب تركيز'})`);
     }
 
     // 3. HERO CARD 2: PHYSICIAN RESPONSE TIME
@@ -15080,8 +15182,8 @@ async function renderKpiDashboard(options = {}) {
     }
 
     setText("kpiResponseContext", isEn
-      ? "Time from patient submission to first clinical physician action"
-      : "من وقت تقديم الفحص حتى أول إجراء طبي سريري");
+      ? (metrics.hasLiveData ? "Time from patient submission to first clinical physician action" : "No physician response timing is available until a real case is reviewed")
+      : (metrics.hasLiveData ? "من وقت تقديم الفحص حتى أول إجراء طبي سريري" : "لا يتوفر زمن استجابة الطبيب قبل مراجعة حالة حقيقية"));
 
     setText("kpiUrgentResponseTime", isEn ? `${metrics.urgentAvgResponseMinutes} min` : `${metrics.urgentAvgResponseMinutes} دقيقة`);
     setText("kpiMedianResponseTime", isEn ? `${metrics.medianResponseTimeMinutes} min` : `${metrics.medianResponseTimeMinutes} دقيقة`);
@@ -15089,10 +15191,12 @@ async function renderKpiDashboard(options = {}) {
 
     const respSlaBadge = document.getElementById("kpiResponseSlaBadge");
     if (respSlaBadge) {
-      respSlaBadge.className = `kpi-badge-sla ${metrics.avgResponseTimeMinutes <= 30 ? 'optimal' : 'warning'}`;
-      respSlaBadge.textContent = isEn
-        ? `SLA: < 30m (${metrics.responseSlaComplianceRate}% on-time)`
-        : `SLA: < 30 دقيقة (${metrics.responseSlaComplianceRate}% التزام)`;
+      respSlaBadge.className = `kpi-badge-sla ${metrics.hasLiveData && metrics.avgResponseTimeMinutes <= 30 ? 'optimal' : 'warning'}`;
+      respSlaBadge.textContent = !metrics.hasLiveData
+        ? (isEn ? "Insufficient live data" : "بيانات حية غير كافية")
+        : (isEn
+          ? `SLA: < 30m (${metrics.responseSlaComplianceRate}% on-time)`
+          : `SLA: < 30 دقيقة (${metrics.responseSlaComplianceRate}% التزام)`);
     }
 
     // 4. HERO CARD 3: REPORT TURNAROUND TIME (TAT)
@@ -15106,8 +15210,8 @@ async function renderKpiDashboard(options = {}) {
     }
 
     setText("kpiTurnaroundContext", isEn
-      ? "End-to-end duration from intake to final certified signed report"
-      : "من إرسال التقييم حتى توثيق واعتماد التقرير الطبي");
+      ? (metrics.hasLiveData ? "End-to-end duration from intake to final certified signed report" : "Report turnaround appears after a physician certifies a real report")
+      : (metrics.hasLiveData ? "من إرسال التقييم حتى توثيق واعتماد التقرير الطبي" : "يظهر زمن إصدار التقرير بعد اعتماد تقرير حقيقي من الطبيب"));
 
     setText("kpiOnTimeTurnaroundRate", `${metrics.turnaroundSlaComplianceRate}%`);
     setText("kpiP95TurnaroundTime", isEn ? `${metrics.p95TurnaroundMinutes} min` : `${metrics.p95TurnaroundMinutes} دقيقة`);
@@ -15115,24 +15219,44 @@ async function renderKpiDashboard(options = {}) {
 
     const tatSlaBadge = document.getElementById("kpiTurnaroundSlaBadge");
     if (tatSlaBadge) {
-      tatSlaBadge.className = `kpi-badge-sla ${metrics.avgTurnaroundMinutes <= 120 ? 'optimal' : 'warning'}`;
-      tatSlaBadge.textContent = isEn
-        ? `Target: < 2h (${metrics.turnaroundSlaComplianceRate}% on-time)`
-        : `الهدف: < 2 ساعة (${metrics.turnaroundSlaComplianceRate}% تسليم)`;
+      tatSlaBadge.className = `kpi-badge-sla ${metrics.hasLiveData && metrics.avgTurnaroundMinutes <= 120 ? 'optimal' : 'warning'}`;
+      tatSlaBadge.textContent = !metrics.hasLiveData
+        ? (isEn ? "Insufficient live data" : "بيانات حية غير كافية")
+        : (isEn
+          ? `Target: < 2h (${metrics.turnaroundSlaComplianceRate}% on-time)`
+          : `الهدف: < 2 ساعة (${metrics.turnaroundSlaComplianceRate}% تسليم)`);
     }
 
     // 5. WATERFALL PIPELINE
-    setText("kpiStageIntakeTime", isEn ? `${metrics.stages.intake} min` : `${metrics.stages.intake} دقيقة`);
-    setText("kpiStageQueueTime", isEn ? `${metrics.stages.queue} min` : `${metrics.stages.queue} دقيقة`);
-    setText("kpiStageReviewTime", isEn ? `${metrics.stages.review} min` : `${metrics.stages.review} دقيقة`);
-    setText("kpiStageReportTime", isEn ? `${metrics.stages.report} min` : `${metrics.stages.report} دقيقة`);
-    setText("kpiWaterfallTotalTimeBadge", isEn
-      ? `Full Cycle Average: ${metrics.stages.total} minutes`
-      : `متوسط الدورة الكاملة: ${metrics.stages.total} دقيقة`);
+    const noDataLabel = isEn ? "Not enough data" : "بيانات غير كافية";
+    setText("kpiStageIntakeTime", metrics.hasLiveData ? (isEn ? `${metrics.stages.intake} min` : `${metrics.stages.intake} دقيقة`) : noDataLabel);
+    setText("kpiStageQueueTime", metrics.hasLiveData ? (isEn ? `${metrics.stages.queue} min` : `${metrics.stages.queue} دقيقة`) : noDataLabel);
+    setText("kpiStageReviewTime", metrics.hasLiveData ? (isEn ? `${metrics.stages.review} min` : `${metrics.stages.review} دقيقة`) : noDataLabel);
+    setText("kpiStageReportTime", metrics.hasLiveData ? (isEn ? `${metrics.stages.report} min` : `${metrics.stages.report} دقيقة`) : noDataLabel);
+    setText("kpiWaterfallTotalTimeBadge", !metrics.hasLiveData
+      ? (isEn ? "Waiting for live clinical records" : "بانتظار سجلات سريرية حية")
+      : (isEn
+        ? `Full Cycle Average: ${metrics.stages.total} minutes`
+        : `متوسط الدورة الكاملة: ${metrics.stages.total} دقيقة`));
 
     // 6. SLA TABLE
     const slaTbody = document.getElementById("kpiSlaTableBody");
     if (slaTbody) {
+      if (!metrics.hasLiveData) {
+        slaTbody.innerHTML = `
+          <tr>
+            <td colspan="5" style="text-align:center; padding: 22px;">
+              ${hvStateCard({
+                type: "empty",
+                title: isEn ? "No SLA evidence yet" : "لا توجد أدلة SLA بعد",
+                message: isEn
+                  ? "Operational SLA rows will populate after real clinical submissions and physician actions are recorded."
+                  : "ستظهر صفوف الالتزام التشغيلي بعد تسجيل فحوصات وإجراءات أطباء حقيقية."
+              })}
+            </td>
+          </tr>
+        `;
+      } else {
       const slaRows = [
         {
           name: isEn ? "Physician Response Time" : "سرعة استجابة الأطباء",
@@ -15177,6 +15301,7 @@ async function renderKpiDashboard(options = {}) {
           <td><span class="pill ${row.status}">${row.statusText}</span></td>
         </tr>
       `).join('');
+      }
     }
 
     // 7. DOCTORS LEADERBOARD TABLE

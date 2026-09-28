@@ -4047,6 +4047,108 @@ body.dark .legal-content-body h4 {
   color: #16a34a;
 }
 
+.hv-state-card[data-state="offline"] {
+  border-style: solid;
+  background: rgba(245, 158, 11, 0.06);
+  border-color: rgba(245, 158, 11, 0.34);
+}
+
+.hv-state-card .solid-button {
+  margin-top: 2px;
+  padding: 8px 16px;
+  font-size: 13px;
+}
+
+.hv-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.hv-breadcrumb button {
+  border: 0;
+  background: transparent;
+  color: var(--teal);
+  font: inherit;
+  font-weight: 700;
+  padding: 0;
+  cursor: pointer;
+}
+
+.hv-breadcrumb strong {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.hv-onboarding-strip {
+  margin: 18px 0;
+  padding: 18px;
+  display: grid;
+  grid-template-columns: minmax(220px, 0.9fr) minmax(280px, 1.4fr);
+  gap: 18px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.hv-onboarding-strip h2 {
+  margin: 4px 0 6px;
+  font-size: 19px;
+  line-height: 1.25;
+  color: var(--ink);
+}
+
+.hv-onboarding-strip p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.hv-onboarding-strip ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.hv-onboarding-strip li {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+
+.hv-onboarding-strip strong,
+.hv-onboarding-strip span {
+  display: block;
+}
+
+.hv-onboarding-strip strong {
+  color: var(--ink);
+  font-size: 13px;
+  margin-bottom: 5px;
+}
+
+.hv-onboarding-strip span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+@media (max-width: 900px) {
+  .hv-onboarding-strip,
+  .hv-onboarding-strip ol {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ── Clinical Appointments Booking ── */
 .week {
   display: grid;
