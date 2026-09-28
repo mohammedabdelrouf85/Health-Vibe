@@ -455,10 +455,10 @@ function hasPermission(permission) {
 }
 
 function canAccessScreen(screenName) {
-  const user = (typeof auth !== "undefined" && auth) ? auth.currentUser : null;
+  const user = (typeof getActiveUser === "function") ? getActiveUser() : ((typeof auth !== "undefined" && auth) ? auth.currentUser : null);
   const isOwner = Boolean(user && isOwnerUser(user));
   // Resolve the active role: respect selectedRole (owner may be testing as patient/doctor).
-  const role = normalizeRole((typeof selectedRole !== "undefined" && selectedRole) ? selectedRole : ROLES.PATIENT, isOwner);
+  const role = normalizeRole((typeof selectedRole !== "undefined" && selectedRole) ? selectedRole : (user?.role || ROLES.PATIENT), isOwner);
   if (screenName === "verification" && tempAllowDoctorApplication && role === ROLES.PATIENT) {
     return true;
   }
@@ -468,6 +468,7 @@ function canAccessScreen(screenName) {
   }
   return allowed.includes(screenName);
 }
+window.setSelectedRole = function(r) { selectedRole = r; };
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -1740,6 +1741,9 @@ function getActiveUser() {
   if (window._restoredSessionUser) {
     return window._restoredSessionUser;
   }
+  if (window._activeUser) {
+    return window._activeUser;
+  }
   return null;
 }
 window.getActiveUser = getActiveUser;
@@ -1819,6 +1823,22 @@ const db = firebase.firestore();
 const auth = firebase.auth();
 const storage = firebase.storage();
 const googleProvider = new firebase.auth.GoogleAuthProvider();
+
+if (runtimeConfig.emulators && runtimeConfig.emulators.enabled) {
+  const emu = runtimeConfig.emulators;
+  if (emu.firestore && db && typeof db.useEmulator === "function") {
+    try {
+      db.useEmulator(emu.firestore.host || "localhost", emu.firestore.port || 8080);
+    } catch (e) {}
+  }
+  if (emu.auth && auth && typeof auth.useEmulator === "function") {
+    try {
+      const authHost = emu.auth.host || "localhost";
+      const authPort = emu.auth.port || 9099;
+      auth.useEmulator(`http://${authHost}:${authPort}`, { disableWarnings: true });
+    } catch (e) {}
+  }
+}
 
 // =============================================================================
 // 🛡️ FIREBASE APP CHECK INITIALIZATION (Zero-Trust App Attestation)
@@ -9117,87 +9137,7 @@ async function confirmAppointmentBooking() {
     showToast(isEn ? "This booking is already being submitted." : "جاري إرسال هذا الحجز بالفعل.");
     return;
   }
-  if (!apptSelectedDate || !apptSelectedSlot) {
-    showToast(isEn ? "Please select an available date and time slot." : "يرجى تحديد اليوم والفترة الزمنية المتاحة.");
-    return;
-  }
-
-  const doctorSelect = document.getElementById("apptDoctorSelect");
-  const selectedOption = doctorSelect ? doctorSelect.selectedOptions[0] : null;
-  const doctorId = doctorSelect ? doctorSelect.value : "";
-  const doctorName = selectedOption && selectedOption.value ? (selectedOption.dataset.name || "") : "";
-  const doctorSpecialty = selectedOption && selectedOption.value ? (selectedOption.dataset.spec || "") : "";
-  const clinicName = selectedOption && selectedOption.value ? (selectedOption.dataset.clinic || "") : "";
-  const doctorLicense = selectedOption && selectedOption.value ? (selectedOption.dataset.license || "") : "";
-
-  if (!doctorId || !doctorName || !doctorLicense) {
-    showToast(isEn
-      ? "No approved doctor is available for booking yet."
-      : "لا يوجد طبيب معتمد متاح للحجز حالياً.");
-    return;
-  }
-
-  const notesInput = document.getElementById("apptNotesInput");
-  const notes = notesInput ? notesInput.value.trim() : "";
-
-  const user = auth ? auth.currentUser : null;
-  const cachedDoc = window._cachedUserDoc || {};
-  const patientId = user ? user.uid : "anon_patient";
-  const patientName = cachedDoc.name || cachedDoc.displayName || user?.displayName || (user?.email ? user.email.split("@")[0] : (isEn ? "Patient" : "مريض"));
-  const patientEmail = user?.email || cachedDoc.email || "";
-  const patientPhone = cachedDoc.phoneNumber || user?.phoneNumber || "";
-
-  // 🛡️ ANTI-DOUBLE BOOKING GUARD #1: Check if Doctor is already booked for this slot
-  const doctorExisting = await getConfirmedAppointmentsForDoctorAndDate(doctorId, apptSelectedDate.dateStr);
-  const isDoctorDoubleBooked = doctorExisting.some(a => a.slotId === apptSelectedSlot.id && a.status === "confirmed");
-  if (isDoctorDoubleBooked) {
-    showToast(isEn
-      ? "Conflict: This time slot is already booked for this doctor. Please choose another slot."
-      : "تضارب: هذا الموعد محجوز بالفعل لدى الطبيب المختار. يرجى اختيار فترة زمنية أخرى.");
-    await renderAppointmentsScreen();
-    return;
-  }
-
-  // 🛡️ ANTI-DOUBLE BOOKING GUARD #2: Check if Patient already has another active appointment at this exact date and slot
-  const patientExisting = await getConfirmedAppointmentsForPatientAndDate(patientId, apptSelectedDate.dateStr);
-  const isPatientDoubleBooked = patientExisting.some(a => a.slotId === apptSelectedSlot.id && a.status === "confirmed");
-  if (isPatientDoubleBooked) {
-    showToast(isEn
-      ? "Conflict: You already have another active appointment scheduled at this exact time."
-      : "تضارب: لديك موعد طبي آخر محجوز بالفعل في نفس هذا التوقيت.");
-    await renderAppointmentsScreen();
-    return;
-  }
-
-  const apptId = "appt_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6);
-  const dateLabel = isEn ? apptSelectedDate.fullLabelEn : apptSelectedDate.fullLabelAr;
-  const timeLabel = isEn ? apptSelectedSlot.timeEn : apptSelectedSlot.timeAr;
-
-  // ⚠️ CRITICAL: The appointment is NOT marked confirmed before it is saved!
-  // It starts as pending_confirmation and is stamped confirmed by server transaction.
-  const apptData = {
-    id: apptId,
-    patientId: patientId,
-    patientName: patientName,
-    patientEmail: patientEmail,
-    patientPhone: patientPhone,
-    doctorId: doctorId,
-    doctorName: doctorName,
-    doctorSpecialty: doctorSpecialty,
-    doctorLicense: doctorLicense,
-    clinicName: clinicName,
-    type: apptSelectedType,
-    typeLabel: apptSelectedType === "video" ? (isEn ? "Telehealth Video" : "فيديو عن بُعد") : (apptSelectedType === "clinic" ? (isEn ? "In-Clinic Visit" : "حضور العيادة") : (isEn ? "Results Follow-up" : "متابعة نتائج")),
-    date: apptSelectedDate.dateStr,
-    dateLabel: dateLabel,
-    timeSlot: timeLabel,
-    slotId: apptSelectedSlot.id,
-    slotKey: `${doctorId}_${apptSelectedDate.dateStr}_${apptSelectedSlot.id}`,
-    patientSlotKey: `${patientId}_${apptSelectedDate.dateStr}_${apptSelectedSlot.id}`,
-    notes: notes,
-    status: "pending_confirmation",
-    createdAt: new Date().toISOString()
-  };
+  confirmAppointmentBooking._pending = true;
 
   const confirmBtn = document.getElementById("btnConfirmBooking");
   if (confirmBtn) {
@@ -9206,11 +9146,90 @@ async function confirmAppointmentBooking() {
   }
 
   try {
+    if (!apptSelectedDate || !apptSelectedSlot) {
+      showToast(isEn ? "Please select an available date and time slot." : "يرجى تحديد اليوم والفترة الزمنية المتاحة.");
+      return;
+    }
+
+    const doctorSelect = document.getElementById("apptDoctorSelect");
+    const selectedOption = doctorSelect ? doctorSelect.selectedOptions[0] : null;
+    const doctorId = doctorSelect ? doctorSelect.value : "";
+    const doctorName = selectedOption && selectedOption.value ? (selectedOption.dataset.name || "") : "";
+    const doctorSpecialty = selectedOption && selectedOption.value ? (selectedOption.dataset.spec || "") : "";
+    const clinicName = selectedOption && selectedOption.value ? (selectedOption.dataset.clinic || "") : "";
+    const doctorLicense = selectedOption && selectedOption.value ? (selectedOption.dataset.license || "") : "";
+
+    if (!doctorId || !doctorName || !doctorLicense) {
+      showToast(isEn
+        ? "No approved doctor is available for booking yet."
+        : "لا يوجد طبيب معتمد متاح للحجز حالياً.");
+      return;
+    }
+
+    const notesInput = document.getElementById("apptNotesInput");
+    const notes = notesInput ? notesInput.value.trim() : "";
+
+    const user = auth ? auth.currentUser : null;
+    const cachedDoc = window._cachedUserDoc || {};
+    const patientId = user ? user.uid : "anon_patient";
+    const patientName = cachedDoc.name || cachedDoc.displayName || user?.displayName || (user?.email ? user.email.split("@")[0] : (isEn ? "Patient" : "مريض"));
+    const patientEmail = user?.email || cachedDoc.email || "";
+    const patientPhone = cachedDoc.phoneNumber || user?.phoneNumber || "";
+
+    // 🛡️ ANTI-DOUBLE BOOKING GUARD #1: Check if Doctor is already booked for this slot
+    const doctorExisting = await getConfirmedAppointmentsForDoctorAndDate(doctorId, apptSelectedDate.dateStr);
+    const isDoctorDoubleBooked = doctorExisting.some(a => a.slotId === apptSelectedSlot.id && a.status === "confirmed");
+    if (isDoctorDoubleBooked) {
+      showToast(isEn
+        ? "Conflict: This time slot is already booked for this doctor. Please choose another slot."
+        : "تضارب: هذا الموعد محجوز بالفعل لدى الطبيب المختار. يرجى اختيار فترة زمنية أخرى.");
+      await renderAppointmentsScreen();
+      return;
+    }
+
+    // 🛡️ ANTI-DOUBLE BOOKING GUARD #2: Check if Patient already has another active appointment at this exact date and slot
+    const patientExisting = await getConfirmedAppointmentsForPatientAndDate(patientId, apptSelectedDate.dateStr);
+    const isPatientDoubleBooked = patientExisting.some(a => a.slotId === apptSelectedSlot.id && a.status === "confirmed");
+    if (isPatientDoubleBooked) {
+      showToast(isEn
+        ? "Conflict: You already have another active appointment scheduled at this exact time."
+        : "تضارب: لديك موعد طبي آخر محجوز بالفعل في نفس هذا التوقيت.");
+      await renderAppointmentsScreen();
+      return;
+    }
+
+    const apptId = "appt_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6);
+    const dateLabel = isEn ? apptSelectedDate.fullLabelEn : apptSelectedDate.fullLabelAr;
+    const timeLabel = isEn ? apptSelectedSlot.timeEn : apptSelectedSlot.timeAr;
+
+    const apptData = {
+      id: apptId,
+      patientId: patientId,
+      patientName: patientName,
+      patientEmail: patientEmail,
+      patientPhone: patientPhone,
+      doctorId: doctorId,
+      doctorName: doctorName,
+      doctorSpecialty: doctorSpecialty,
+      doctorLicense: doctorLicense,
+      clinicName: clinicName,
+      type: apptSelectedType,
+      typeLabel: apptSelectedType === "video" ? (isEn ? "Telehealth Video" : "فيديو عن بُعد") : (apptSelectedType === "clinic" ? (isEn ? "In-Clinic Visit" : "حضور العيادة") : (isEn ? "Results Follow-up" : "متابعة نتائج")),
+      date: apptSelectedDate.dateStr,
+      dateLabel: dateLabel,
+      timeSlot: timeLabel,
+      slotId: apptSelectedSlot.id,
+      slotKey: `${doctorId}_${apptSelectedDate.dateStr}_${apptSelectedSlot.id}`,
+      patientSlotKey: `${patientId}_${apptSelectedDate.dateStr}_${apptSelectedSlot.id}`,
+      notes: notes,
+      status: "pending_confirmation",
+      createdAt: new Date().toISOString()
+    };
+
     if (!user || user.isAnonymous) {
       throw new Error(isEn ? "Please sign in with a verified account before booking." : "يرجى تسجيل الدخول بحساب موثق قبل الحجز.");
     }
 
-    confirmAppointmentBooking._pending = true;
     const saved = await requireSuccessfulMutation("/api/appointments/book", {
       method: "POST",
       body: JSON.stringify(apptData)

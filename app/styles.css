@@ -5087,5 +5087,399 @@ body.dark .mobile-bottom-nav {
 .timeline-cat-doctor_note::before { background: #eab308; }
 .timeline-cat-internal_note::before { background: #ef4444; }
 
+/* ==========================================================================
+   25. UI SYSTEM COMPLETION: TOKENS, STATES, ROLES & RESPONSIVE QA
+   ========================================================================== */
+:root {
+  --font-sans: "Cairo", "IBM Plex Sans Arabic", "Segoe UI", Tahoma, sans-serif;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --surface-3: #17383c;
+  --surface-hover: rgba(9, 184, 182, 0.12);
+  --focus-ring: 0 0 0 4px rgba(93, 214, 212, 0.28);
+  --state-info: #38bdf8;
+  --state-success: var(--green);
+  --state-warning: var(--amber);
+  --state-danger: #f87171;
+  --role-patient: #10b981;
+  --role-doctor: #38bdf8;
+  --role-admin: #f59e0b;
+}
+
+body {
+  font-family: var(--font-sans);
+  line-height: 1.5;
+  text-rendering: optimizeLegibility;
+}
+
+:where(.solid-button, .outline-button, .soft-button, .danger-button, .google-button, .auth-submit-btn, .banner-btn, .filter-tab, .status-filter-tab, .kpi-pill-btn, .legal-tab-btn, .verify-tab, .emergency-call-btn, .emergency-big-call-btn, .emergency-banner-guide-btn, .emergency-guide-trigger-btn, .timeline-filter-btn, .btn-clinical, .slot-list button, .mobile-nav-btn, .icon-button) {
+  border-radius: var(--radius-sm);
+  font-weight: 800;
+  letter-spacing: 0;
+  transition: background-color .18s ease, border-color .18s ease, color .18s ease, box-shadow .18s ease, transform .18s ease, opacity .18s ease;
+}
+
+:where(.solid-button, .auth-submit-btn, .banner-btn.primary):hover:not(:disabled) {
+  filter: brightness(1.08);
+  box-shadow: 0 14px 32px rgba(9, 184, 182, 0.24);
+}
+
+:where(.outline-button, .soft-button, .google-button, .filter-tab, .status-filter-tab, .timeline-filter-btn, .verify-tab, .legal-tab-btn):hover:not(:disabled) {
+  background: var(--surface-hover);
+  border-color: color-mix(in srgb, var(--teal) 55%, var(--line));
+  color: var(--ink);
+}
+
+:where(button, .solid-button, .outline-button, .soft-button, .danger-button, .google-button, .auth-submit-btn, .banner-btn, .slot-list button):disabled,
+:where(button, .solid-button, .outline-button, .soft-button, .danger-button, .google-button, .auth-submit-btn, .banner-btn, .slot-list button)[aria-disabled="true"] {
+  cursor: not-allowed !important;
+  opacity: .58;
+  filter: grayscale(.25);
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+:where(button, .solid-button, .outline-button, .soft-button, .danger-button, .google-button, .auth-submit-btn, .banner-btn).is-loading,
+:where(button, .solid-button, .outline-button, .soft-button, .danger-button, .google-button, .auth-submit-btn, .banner-btn)[aria-busy="true"] {
+  position: relative;
+  color: transparent !important;
+  pointer-events: none;
+}
+
+:where(button, .solid-button, .outline-button, .soft-button, .danger-button, .google-button, .auth-submit-btn, .banner-btn).is-loading::after,
+:where(button, .solid-button, .outline-button, .soft-button, .danger-button, .google-button, .auth-submit-btn, .banner-btn)[aria-busy="true"]::after {
+  content: "";
+  position: absolute;
+  inset: 50% auto auto 50%;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  color: #fff;
+  animation: hvSpin .72s linear infinite;
+}
+
+@keyframes hvSpin {
+  to { transform: rotate(360deg); }
+}
+
+:where(input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]), select, textarea, .admin-role-select) {
+  width: 100%;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--ink);
+  padding: 11px 13px;
+  transition: border-color .18s ease, box-shadow .18s ease, background-color .18s ease;
+}
+
+:where(input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]), select, textarea, .admin-role-select):hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--teal) 35%, var(--line));
+}
+
+:where(input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]), select, textarea, .admin-role-select):focus,
+:where(input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]), select, textarea, .admin-role-select):focus-visible {
+  outline: 0;
+  border-color: var(--teal-2);
+  box-shadow: var(--focus-ring);
+}
+
+:where(input, select, textarea)::placeholder {
+  color: color-mix(in srgb, var(--muted) 72%, transparent);
+}
+
+:where(input, select, textarea):disabled {
+  cursor: not-allowed;
+  opacity: .62;
+  background: color-mix(in srgb, var(--surface-2) 72%, #000);
+}
+
+.role-stack div,
+.feedback-badge-role,
+.doctor-badge,
+.pill.patient,
+.pill.doctor,
+.pill.admin,
+[data-role="patient"],
+[data-role="doctor"],
+[data-role="admin"] {
+  border-radius: var(--radius-sm);
+}
+
+.role-stack div:nth-child(1),
+.feedback-badge-role.patient,
+.pill.patient,
+[data-role="patient"] {
+  border-color: color-mix(in srgb, var(--role-patient) 38%, var(--line));
+}
+
+.role-stack div:nth-child(2),
+.feedback-badge-role.doctor,
+.doctor-badge,
+.pill.doctor,
+[data-role="doctor"] {
+  border-color: color-mix(in srgb, var(--role-doctor) 42%, var(--line));
+}
+
+.role-stack div:nth-child(3),
+.pill.admin,
+[data-role="admin"] {
+  border-color: color-mix(in srgb, var(--role-admin) 42%, var(--line));
+}
+
+.role-stack div:nth-child(1)::before,
+.role-stack div:nth-child(2)::before,
+.role-stack div:nth-child(3)::before {
+  content: "";
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-inline-end: 8px;
+  border-radius: 999px;
+  vertical-align: middle;
+}
+
+.role-stack div:nth-child(1)::before { background: var(--role-patient); }
+.role-stack div:nth-child(2)::before { background: var(--role-doctor); }
+.role-stack div:nth-child(3)::before { background: var(--role-admin); }
+
+.pill,
+.status-filter-tab,
+.timeline-filter-btn {
+  white-space: nowrap;
+}
+
+.pill.danger,
+.pill.escalated,
+.pill.rejected,
+.field-warning.urgent,
+.doctor-emergency-pill {
+  font-weight: 900;
+}
+
+.emergency-alert-card,
+.emergency-pending-banner,
+.doctor-emergency-alert-banner {
+  border-radius: var(--radius-md);
+  text-wrap: pretty;
+}
+
+.emergency-alert-card strong,
+.emergency-pending-banner strong,
+.doctor-emergency-alert-banner strong {
+  display: inline;
+}
+
+.field-warning.urgent::before,
+.emergency-pending-banner.critical .emergency-banner-title::before,
+.doctor-emergency-alert-banner strong::before {
+  content: "Urgent: ";
+  font-weight: 900;
+}
+
+[dir="rtl"] .field-warning.urgent::before,
+[dir="rtl"] .emergency-pending-banner.critical .emergency-banner-title::before,
+[dir="rtl"] .doctor-emergency-alert-banner strong::before {
+  content: "عاجل: ";
+}
+
+.table-responsive-wrapper,
+#adminUsersTableContainer,
+.kpi-dashboard-wrapper,
+.audit-table,
+.rules-spec-table {
+  max-width: 100%;
+}
+
+#adminUsersTableContainer,
+.table-responsive-wrapper,
+.kpi-dashboard-wrapper div[style*="overflow-x: auto"] {
+  overflow-x: auto !important;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+.admin-users-table,
+.kpi-table,
+.rules-spec-table {
+  min-width: 680px;
+}
+
+.admin-users-table th,
+.admin-users-table td,
+.kpi-table th,
+.kpi-table td,
+.rules-spec-table th,
+.rules-spec-table td {
+  vertical-align: top;
+  line-height: 1.45;
+}
+
+.confirm-modal,
+.auth-screen,
+.modal-overlay {
+  padding: clamp(14px, 3vw, 28px);
+}
+
+.confirm-card,
+.auth-card,
+.legal-modal-card,
+.modal-content {
+  max-height: min(88dvh, 920px);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.site-hero,
+.split-section,
+.content-grid,
+.doctor-layout,
+.metric-grid,
+.workflow-grid,
+.kpi-hero-grid {
+  min-width: 0;
+}
+
+.panel,
+.hero-panel,
+.admin-app-card,
+.unified-timeline-card,
+.kpi-card,
+.doctor-rules-card,
+.doctor-report-builder-card {
+  border-radius: var(--radius-md);
+}
+
+img,
+video,
+canvas,
+svg {
+  max-width: 100%;
+}
+
+@media (max-width: 1060px) {
+  .site-nav,
+  .site-hero,
+  .split-section,
+  .doctor-layout,
+  .content-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .site-nav {
+    gap: var(--space-4);
+  }
+
+  .site-links,
+  .nav-actions {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 768px) {
+  :root {
+    --shadow: 0 18px 46px rgba(0, 0, 0, .38);
+  }
+
+  .site-shell,
+  .app-shell {
+    width: 100%;
+  }
+
+  .site-hero,
+  .site-section,
+  .safety-band,
+  #clinicsTeaser {
+    padding-inline: 16px !important;
+  }
+
+  .site-hero h1,
+  .hero-copy h1 {
+    font-size: clamp(28px, 9vw, 42px);
+    line-height: 1.08;
+  }
+
+  .trust-row,
+  .hero-actions,
+  .emergency-action-buttons,
+  .emergency-banner-footer,
+  .kpi-banner-cta,
+  .doctor-actions-toolbar {
+    align-items: stretch;
+  }
+
+  .trust-row span,
+  .hero-actions > *,
+  .emergency-action-buttons > *,
+  .emergency-banner-footer > *,
+  .kpi-banner-cta > *,
+  .doctor-actions-toolbar > * {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .admin-users-table,
+  .kpi-table,
+  .rules-spec-table {
+    min-width: 620px;
+    font-size: 12.5px;
+  }
+
+  .legal-modal-card,
+  .auth-card {
+    width: 100%;
+    border-radius: 18px;
+  }
+
+  .emergency-alert-card,
+  .emergency-pending-banner,
+  .doctor-emergency-alert-banner {
+    padding: 14px !important;
+  }
+
+  .role-stack div,
+  .panel,
+  .admin-app-card,
+  .unified-timeline-card {
+    padding: 14px;
+  }
+}
+
+@media (max-width: 420px) {
+  .choice-row.three,
+  .choice-row.four,
+  .metric-grid,
+  .workflow-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .brand,
+  .auth-brand {
+    min-width: 0;
+  }
+
+  .brand strong,
+  .brand span,
+  .topbar h2,
+  .mobile-nav-label {
+    overflow-wrap: anywhere;
+  }
+
+  .mobile-nav-btn {
+    min-width: 48px;
+    padding-inline: 5px;
+  }
+}
 
 
