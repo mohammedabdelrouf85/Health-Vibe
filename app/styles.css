@@ -187,43 +187,39 @@ body:not(.dark) .loader-card {
 }
 
 .loader-media {
-  width: 200px;
-  height: 200px;
+  width: 190px;
+  height: 190px;
   margin: 0 auto;
   position: relative;
   display: grid;
   place-items: center;
   border-radius: 50%;
   overflow: visible;
-  background: radial-gradient(circle, rgba(9, 184, 182, .24) 0%, rgba(9, 184, 182, .06) 55%, transparent 75%);
-  border: 1px solid rgba(93, 214, 212, .22);
-  box-shadow: 0 0 40px rgba(9, 184, 182, .22);
+  background: radial-gradient(circle, rgba(9, 184, 182, .26) 0%, rgba(9, 184, 182, .06) 60%, transparent 75%);
+  border: 1px solid rgba(93, 214, 212, .24);
+  box-shadow: 0 0 45px rgba(9, 184, 182, .25);
   animation: floatIn .81s ease both;
 }
 
-.loader-video {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+.loader-logo {
+  width: 142px;
+  height: 142px;
   object-fit: contain;
+  position: relative;
   z-index: 2;
-  background: transparent;
-  mix-blend-mode: screen;
-  filter: drop-shadow(0 0 20px rgba(9, 184, 182, 0.45));
+  filter: drop-shadow(0 0 24px rgba(9, 184, 182, 0.6));
+  animation: logoBreath 3.24s ease-in-out infinite;
 }
 
-.loader-video:not([src]) + .loader-logo,
-.loader-logo {
-  width: 156px;
-  height: 156px;
-  object-fit: contain;
-  border-radius: 28px;
-  position: relative;
-  z-index: 1;
-  background: transparent;
-  mix-blend-mode: screen;
-  filter: drop-shadow(0 0 16px rgba(9, 184, 182, 0.4));
+@keyframes logoBreath {
+  0%, 100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 20px rgba(9, 184, 182, 0.45));
+  }
+  50% {
+    transform: scale(1.05);
+    filter: drop-shadow(0 0 32px rgba(9, 184, 182, 0.8));
+  }
 }
 
 .loader-fallback-animation {
@@ -252,14 +248,13 @@ body:not(.dark) .loader-card {
 }
 
 body:not(.dark) .loader-media {
-  background: radial-gradient(circle, rgba(0, 109, 111, .14) 0%, rgba(0, 109, 111, .03) 60%, transparent 75%);
-  border-color: rgba(0, 109, 111, .18);
-  box-shadow: 0 0 32px rgba(3, 72, 74, .14);
+  background: radial-gradient(circle, rgba(0, 109, 111, .15) 0%, rgba(0, 109, 111, .03) 60%, transparent 75%);
+  border-color: rgba(0, 109, 111, .2);
+  box-shadow: 0 0 36px rgba(3, 72, 74, .16);
 }
 
-body:not(.dark) .loader-video,
 body:not(.dark) .loader-logo {
-  mix-blend-mode: normal;
+  filter: drop-shadow(0 4px 20px rgba(0, 109, 111, 0.3));
 }
 
 .loading-bar {
@@ -2739,16 +2734,89 @@ body.dark .theme-fab {
 .owner-badge {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   background: linear-gradient(135deg, #f59e0b, #d97706);
-  color: #ffffff;
-  font-size: 10px;
-  font-weight: 700;
-  padding: 1px 7px;
+  color: #ffffff !important;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 3px 9px;
   border-radius: 999px;
   letter-spacing: 0.3px;
-  box-shadow: 0 2px 6px rgba(245, 158, 11, 0.4);
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.45);
   vertical-align: middle;
+}
+
+body:not(.dark) .owner-badge {
+  background: linear-gradient(135deg, #d97706, #b45309);
+  box-shadow: 0 2px 6px rgba(217, 119, 6, 0.35);
+}
+
+.admin-users-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: start;
+  font-size: 13px;
+}
+
+.admin-users-table th {
+  padding: 12px 14px;
+  text-align: start;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid var(--line);
+  color: var(--muted);
+  background: rgba(9, 184, 182, 0.05);
+}
+
+body:not(.dark) .admin-users-table th {
+  background: #f0faf8;
+  color: #3b5f63;
+  border-bottom-color: #d1e7e5;
+}
+
+.admin-users-table td {
+  padding: 13px 14px;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--line);
+}
+
+body:not(.dark) .admin-users-table td {
+  border-bottom-color: #e5f2f0;
+}
+
+.admin-users-table tr:hover td {
+  background: rgba(9, 184, 182, 0.05);
+}
+
+body:not(.dark) .admin-users-table tr:hover td {
+  background: #f7fcfb;
+}
+
+.admin-role-select {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+body:not(.dark) .admin-role-select {
+  background: #ffffff;
+  border-color: #cde4e1;
+  color: #0b2226;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.admin-role-select:focus {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(9, 184, 182, 0.2);
 }
 
 .doctor-badge {

@@ -66,6 +66,7 @@
         audit: "سجل التدقيق",
         kpi: "لوحة المؤشرات",
         clinicsSales: "حلول العيادات (Sales)",
+        publicLanding: "الموقع التعريفي الرئيسي",
         signOut: "تسجيل الخروج",
         switchAccount: "تبديل الحساب",
         deleteAccount: "حذف الحساب",
@@ -77,7 +78,7 @@
         doctor_pending: "طبيب بانتظار الاعتماد",
         clinic_admin: "مدير عيادة",
         support: "دعم فني",
-        super_admin: "مدير عام للنظام"
+        super_admin: "حساب المالك (Owner)"
       },
       auth: {
         signIn: "تسجيل الدخول",
@@ -250,6 +251,7 @@
         audit: "Audit Log",
         kpi: "KPI Dashboard",
         clinicsSales: "Clinic Solutions (Sales)",
+        publicLanding: "Public Website / Landing",
         signOut: "Sign out",
         switchAccount: "Switch account",
         deleteAccount: "Delete account",
@@ -261,7 +263,7 @@
         doctor_pending: "Pending doctor account",
         clinic_admin: "Clinic admin account",
         support: "Support account",
-        super_admin: "Super admin account"
+        super_admin: "Owner account"
       },
       auth: {
         signIn: "Sign In",

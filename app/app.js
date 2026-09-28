@@ -276,7 +276,9 @@ const ROLE_ALLOWED_SCREENS = {
     "profile", "kpi"
   ],
   [ROLES.SUPER_ADMIN]: [
-    "profile", "history", "appointments", "feedback", "doctor", "report", "admin", "audit", "kpi"
+    "patient", "consent", "profile", "assessment", "pending", "result",
+    "history", "appointments", "feedback", "assistant", "verification",
+    "doctor", "kpi", "report", "admin", "audit"
   ]
 };
 
@@ -641,7 +643,7 @@ const roleLabels = {
   doctor: "حساب طبيب موثق",
   clinic_admin: "مدير عيادة",
   support: "دعم فني",
-  super_admin: "مدير عام للنظام"
+  super_admin: "حساب المالك (Owner)"
 };
 
 const englishTitles = {
@@ -669,7 +671,7 @@ const englishRoleLabels = {
   doctor: "Verified doctor account",
   clinic_admin: "Clinic admin account",
   support: "Support account",
-  super_admin: "Super admin account"
+  super_admin: "Owner account"
 };
 
 const englishNames = {
@@ -959,7 +961,7 @@ const uiText = {
   "بدون ملاحظات طبية": "No medical notes",
   "مراجعة الجودة الطبية": "Clinical QA",
   "وصول بدون هوية المريض": "De-identified access",
-  "الإدارة العليا": "Super admin",
+  "الإدارة العليا": "Owner",
   "للطوارئ فقط": "Emergency only",
   "أحداث التدقيق": "Audit events",
   "مفعلة": "Enabled",
@@ -2496,6 +2498,46 @@ async function getAllKnownAccounts() {
       saveToAccountsRegistry(curRec);
     }
   }
+
+  // 1.5. Ensure all designated system owner profiles are registered & visible
+  const KNOWN_OWNER_PROFILES = [
+    { email: "mohammedabdelrouf85@gmail.com", name: "Mohammed Abdelrouf" },
+    { email: "mennamahmoudtawfik281@gmail.com", name: "Menna Mahmoud Tawfik" },
+    { email: "sondoselbehery287@gmail.com", name: "Sondos Elbehery" },
+    { email: "badr.ahmed.biotech@gmail.com", name: "Badr Ahmed" }
+  ];
+
+  KNOWN_OWNER_PROFILES.forEach(profile => {
+    const e = profile.email.toLowerCase();
+    if (!accountMap.has(e)) {
+      const ownerRec = {
+        id: `owner_${e.replace(/[^a-zA-Z0-9]/g, '_')}`,
+        name: profile.name,
+        displayName: profile.name,
+        email: profile.email,
+        role: ROLES.SUPER_ADMIN,
+        emailVerified: true,
+        isOwner: true,
+        accountStatus: "active",
+        status: "active",
+        createdAt: 1710000000000,
+        lastSeen: Date.now()
+      };
+      accountMap.set(e, ownerRec);
+      saveToAccountsRegistry(ownerRec);
+    } else {
+      const existing = accountMap.get(e);
+      existing.isOwner = true;
+      existing.emailVerified = true;
+      if (!existing.role || existing.role === ROLES.PATIENT) {
+        existing.role = ROLES.SUPER_ADMIN;
+      }
+      if (!existing.name || existing.name === e.split('@')[0]) {
+        existing.name = profile.name;
+        existing.displayName = profile.name;
+      }
+    }
+  });
 
   // 2. Local accounts registry (all verified & regular accounts that ever entered)
   const localList = getLocalAccountsRegistry();
@@ -4959,6 +5001,36 @@ function transitionToApp(user, options = {}) {
 
 window.transitionToApp = transitionToApp;
 
+function showPublicLandingPage() {
+  if (publicSite) {
+    publicSite.hidden = false;
+    publicSite.removeAttribute("hidden");
+    publicSite.style.display = "block";
+    publicSite.classList.remove("is-hidden");
+    const siteBackBtn = document.getElementById("siteBackToAppBtn");
+    if (siteBackBtn) siteBackBtn.style.display = "inline-flex";
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+}
+window.showPublicLandingPage = showPublicLandingPage;
+
+function showAppView(event) {
+  if (event && event.preventDefault) event.preventDefault();
+  if (publicSite) {
+    publicSite.hidden = true;
+    publicSite.setAttribute("hidden", "true");
+    publicSite.style.display = "none";
+  }
+  if (app) {
+    app.hidden = false;
+    app.removeAttribute("hidden");
+    app.style.display = "grid";
+  }
+  const defaultScreen = typeof getRoleDefaultScreen === "function" ? getRoleDefaultScreen(selectedRole) : "patient";
+  if (typeof showScreen === "function") showScreen(defaultScreen || "patient");
+}
+window.showAppView = showAppView;
+
 async function enterApp(source = "google") {
   if (source === "google") {
     clearAuthError();
@@ -5783,6 +5855,10 @@ function updateNavVisibility() {
   const docApplyCard = document.getElementById("doctorApplyCard");
   if (docApplyCard) {
     docApplyCard.style.display = (selectedRole === ROLES.PATIENT) ? "block" : "none";
+  }
+  const siteBackBtn = document.getElementById("siteBackToAppBtn");
+  if (siteBackBtn) {
+    siteBackBtn.style.display = (auth && auth.currentUser) ? "inline-flex" : "none";
   }
   if (typeof updateMobileBottomNav === "function") {
     updateMobileBottomNav();
@@ -6899,7 +6975,7 @@ async function renderAdminAccountsReportView(container, isEn, hasCaseData) {
                 const uName = u.name || u.displayName || u.email.split('@')[0];
                 return `
                   <tr style="border-bottom: 1px solid var(--line);">
-                    <td style="padding: 10px 12px; font-weight: 600;">${uName} ${isOwner ? '<span class="owner-badge">Super Admin</span>' : ''}</td>
+                    <td style="padding: 10px 12px; font-weight: 600;">${uName} ${isOwner ? '<span class="owner-badge">👑 Owner</span>' : ''}</td>
                     <td style="padding: 10px 12px; font-family: monospace; color: var(--muted);">${u.email}</td>
                     <td style="padding: 10px 12px;"><span class="pill info">${englishRoleLabels[u.role] || u.role}</span></td>
                     <td style="padding: 10px 12px;">
@@ -10760,14 +10836,14 @@ async function renderAdminUsers() {
         </button>
       </div>
 
-      <table style="width: 100%; border-collapse: collapse; text-align: start; font-size: 13px;">
+      <table class="admin-users-table">
         <thead>
-          <tr style="border-bottom: 2px solid var(--line); color: var(--muted);">
-            <th style="padding: 10px 12px; text-align: start;">${isEn ? "User" : "المستخدم"}</th>
-            <th style="padding: 10px 12px; text-align: start;">${isEn ? "Email" : "البريد الإلكتروني"}</th>
-            <th style="padding: 10px 12px; text-align: start;">${isEn ? "Role" : "الدور الحالي"}</th>
-            <th style="padding: 10px 12px; text-align: start;">${isEn ? "Verification" : "حالة التوثيق"}</th>
-            <th style="padding: 10px 12px; text-align: end;">${isEn ? "Actions" : "إدارة الصلاحيات والتوثيق"}</th>
+          <tr>
+            <th style="padding: 12px 14px; text-align: start;">${isEn ? "User" : "المستخدم"}</th>
+            <th style="padding: 12px 14px; text-align: start;">${isEn ? "Email" : "البريد الإلكتروني"}</th>
+            <th style="padding: 12px 14px; text-align: start;">${isEn ? "Role" : "الدور الحالي"}</th>
+            <th style="padding: 12px 14px; text-align: start;">${isEn ? "Verification" : "حالة التوثيق"}</th>
+            <th style="padding: 12px 14px; text-align: end;">${isEn ? "Actions" : "إدارة الصلاحيات والتوثيق"}</th>
           </tr>
         </thead>
         <tbody>
@@ -10776,11 +10852,20 @@ async function renderAdminUsers() {
     if (filteredUsers.length === 0) {
       html += `<tr><td colspan="5" style="padding: 24px; text-align: center; color: var(--muted);">${isEn ? "No accounts match this filter" : "لا توجد حسابات تطابق هذا التصنيف"}</td></tr>`;
     } else {
+      // Prioritize owners at the top of the users list
+      filteredUsers.sort((a, b) => {
+        const aIsOwner = isOwnerUser(a.email) || a.isOwner === true;
+        const bIsOwner = isOwnerUser(b.email) || b.isOwner === true;
+        return (bIsOwner ? 1 : 0) - (aIsOwner ? 1 : 0);
+      });
+
       filteredUsers.forEach(u => {
         const isOwner = isOwnerUser(u.email) || u.isOwner === true;
         const role = u.role && VALID_ROLES.includes(u.role) ? u.role : (isOwner ? ROLES.SUPER_ADMIN : ROLES.PATIENT);
-        const roleBadgeClass = role === ROLES.SUPER_ADMIN ? "owner-badge" : (isAdminRole(role) ? "pill danger" : (role === ROLES.DOCTOR ? "pill ok" : "pill info"));
-        const roleText = isEn ? (englishRoleLabels[role] || role) : (roleLabels[role] || role);
+        const roleBadgeClass = isOwner ? "owner-badge" : (role === ROLES.SUPER_ADMIN ? "owner-badge" : (isAdminRole(role) ? "pill danger" : (role === ROLES.DOCTOR ? "pill ok" : "pill info")));
+        const roleText = isOwner
+          ? (isEn ? "👑 Owner account" : "👑 حساب مالك (Owner)")
+          : (isEn ? (englishRoleLabels[role] || role) : (roleLabels[role] || role));
 
         const isVerified = Boolean(u.emailVerified || isOwner);
         const isEmailVerifiedHtml = isVerified
@@ -10796,16 +10881,16 @@ async function renderAdminUsers() {
 
         html += `
           <tr style="border-bottom: 1px solid var(--line); ${isUserSuspended ? 'background: rgba(239, 68, 68, 0.04);' : ''}">
-            <td style="padding: 12px; font-weight: 600; color: var(--ink);">
+            <td style="padding: 12px 14px; font-weight: 600; color: var(--ink);">
               ${userNameStr}
-              ${isOwner ? `<span class="owner-badge" style="margin-inline-start: 6px;">${isEn ? "Super Admin" : "مدير عام"}</span>` : ''}
+              ${isOwner ? `<span class="owner-badge" style="margin-inline-start: 6px;">${isEn ? "👑 Owner" : "👑 مالك النظام"}</span>` : ''}
               ${isUserSuspended ? `<span style="margin-inline-start: 6px; font-size: 11px; color: #ef4444; font-weight: bold;">[BLOCKED]</span>` : ''}
             </td>
-            <td style="padding: 12px; color: var(--muted); font-family: monospace;">${u.email}</td>
-            <td style="padding: 12px;">
+            <td style="padding: 12px 14px; color: var(--muted); font-family: monospace;">${u.email}</td>
+            <td style="padding: 12px 14px;">
               <span class="${roleBadgeClass}" style="font-size: 11.5px; padding: 4px 10px;">${roleText}</span>
             </td>
-            <td style="padding: 12px;">
+            <td style="padding: 12px 14px;">
               <div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start;">
                 ${isEmailVerifiedHtml}
                 ${suspendedBadgeHtml}
@@ -10833,13 +10918,13 @@ async function renderAdminUsers() {
                 ` : ''}
               </div>
             </td>
-            <td style="padding: 12px; text-align: end;">
-              <select ${hasPermission(PERMISSIONS.MANAGE_USER_ROLES) ? "" : "disabled"} onchange="changeUserRole('${u.id}', this.value, '${userNameStr}', '${u.email}')" class="admin-role-select" style="padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 12px; font-weight: 600; cursor: pointer;">
+            <td style="padding: 12px 14px; text-align: end;">
+              <select ${hasPermission(PERMISSIONS.MANAGE_USER_ROLES) ? "" : "disabled"} onchange="changeUserRole('${u.id}', this.value, '${userNameStr}', '${u.email}')" class="admin-role-select">
                 <option value="patient" ${role === 'patient' ? 'selected' : ''}>👤 ${isEn ? 'Patient (مريض)' : 'حساب مريض'}</option>
                 <option value="doctor" ${role === 'doctor' ? 'selected' : ''}>🩺 ${isEn ? 'Doctor (طبيب موثق)' : 'طبيب موثق'}</option>
                 <option value="clinic_admin" ${role === 'clinic_admin' ? 'selected' : ''}>🏥 ${isEn ? 'Clinic admin (مدير عيادة)' : 'مدير عيادة'}</option>
                 <option value="support" ${role === 'support' ? 'selected' : ''}>🎧 ${isEn ? 'Support (دعم فني)' : 'دعم فني (محدود)'}</option>
-                <option value="super_admin" ${role === 'super_admin' ? 'selected' : ''}>👑 ${isEn ? 'Super admin (مدير عام)' : 'مدير عام للنظام'}</option>
+                <option value="super_admin" ${role === 'super_admin' ? 'selected' : ''}>👑 ${isEn ? 'Owner (مالك النظام)' : 'مالك النظام (Owner)'}</option>
               </select>
             </td>
           </tr>
