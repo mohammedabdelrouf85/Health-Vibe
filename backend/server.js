@@ -15,7 +15,18 @@ const cors = require('cors');
 const admin = require('firebase-admin');
 const dotenv = require('dotenv');
 const whatsappBot = require('./whatsapp-bot');
-const { sendClinicalNotificationEmail } = require('./notification-service');
+const {
+  sendClinicalNotificationEmail,
+  enqueueNotification,
+  processNotificationQueue,
+  recordDeliveryConfirmation,
+  scheduleAppointmentReminder,
+  cancelAppointmentReminders,
+  startReminderScheduler,
+  stopReminderScheduler,
+  NOTIFICATION_STATUS,
+  NOTIFICATION_TYPES
+} = require('./notification-service');
 const backupService = require('./backup-service');
 const privacyService = require('./privacy-service');
 const auditService = require('./audit-service');
@@ -402,6 +413,9 @@ const strictMutationLimiter = createRateLimiter({
 
 app.use([
   '/api/notifications/send-email',
+  '/api/notifications/enqueue',
+  '/api/notifications/process-queue',
+  '/api/notifications/delivery-webhook',
   '/api/feedback/submit',
   '/api/appointments/book',
   '/api/appointments/reschedule',
@@ -5014,73 +5028,275 @@ app.get('/api/appointments/clinic-calendar', requireAuth, async (req, res) => {
 
 /**
  * POST /api/notifications/send-email
- * Dedicated endpoint for dispatching clinical email notifications
+ * Dedicated endpoint for dispatching clinical email notifications across all 6 categories:
+ * result_ready, information_requested, doctor_assigned, escalation, appointment_changes, verification.
  */
-app.post('/api/notifications/send-email', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
-  const { type, caseId, note, overrideRecipient } = req.body;
-  if (!['result_ready', 'more_info_requested'].includes(type)) {
+app.post('/api/notifications/send-email', requireAuth, requireVerifiedEmail, async (req, res) => {
+  const {
+    type,
+    caseId,
+    appointmentId,
+    note,
+    overrideRecipient,
+    code,
+    purpose,
+    severityLevel,
+    criticalFindings,
+    action
+  } = req.body;
+
+  const validTypes = [
+    'result_ready',
+    'more_info_requested',
+    'information_requested',
+    'doctor_assigned',
+    'escalation',
+    'appointment_changes',
+    'appointment_booked',
+    'appointment_rescheduled',
+    'appointment_cancelled',
+    'appointment_reminder',
+    'verification'
+  ];
+
+  if (!validTypes.includes(type)) {
     return res.status(400).json({
       error: 'INVALID_TYPE',
-      message: "Notification type must be 'result_ready' or 'more_info_requested'."
+      message: `Notification type '${type}' is not supported. Allowed: ${validTypes.join(', ')}.`
     });
-  }
-  if (!caseId) {
-    return res.status(400).json({ error: 'MISSING_CASE_ID', message: 'caseId is required.' });
   }
 
   try {
-    const caseDoc = await db.collection('cases').doc(caseId).get();
-    if (!caseDoc.exists) {
-      return res.status(404).json({ error: 'CASE_NOT_FOUND', message: `Case ${caseId} does not exist.` });
-    }
-    const c = caseDoc.data();
-    const assignedDoctor = c.assignedDoctorId || c.doctorId || c.doctorUid;
-    if (!assignedDoctor) {
-      return res.status(403).json({
-        error: 'CASE_NOT_ASSIGNED',
-        message: 'This clinical case must be assigned before a doctor can send clinical notifications.'
-      });
-    }
-    if (assignedDoctor !== req.user.uid) {
-      return res.status(403).json({
-        error: 'ACCESS_DENIED',
-        message: 'Zero-Trust enforcement: This clinical case is assigned to another physician.'
-      });
-    }
-    let recipient = overrideRecipient || c.patientEmail || c.email;
-    let patientName = c.patientName || c.name;
+    let recipient = (overrideRecipient || '').trim();
+    let patientName = '';
+    let notificationPayload = { ...req.body };
 
-    if (!recipient && c.patientId) {
-      const uDoc = await db.collection('users').doc(c.patientId).get();
-      if (uDoc.exists) {
-        recipient = uDoc.data().email || uDoc.data().patientEmail;
-        if (!patientName) patientName = uDoc.data().name || uDoc.data().displayName;
+    // 1. Case-associated notification types
+    if (['result_ready', 'more_info_requested', 'information_requested', 'doctor_assigned', 'escalation'].includes(type)) {
+      if (!caseId) {
+        return res.status(400).json({ error: 'MISSING_CASE_ID', message: 'caseId is required for clinical notifications.' });
+      }
+
+      const caseDoc = await db.collection('cases').doc(caseId).get();
+      if (!caseDoc.exists) {
+        return res.status(404).json({ error: 'CASE_NOT_FOUND', message: `Case ${caseId} does not exist.` });
+      }
+
+      const c = caseDoc.data();
+      const assignedDoctor = c.assignedDoctorId || c.doctorId || c.doctorUid;
+      const userRole = req.user.role || 'patient';
+      const isPrivileged = ['super_admin', 'clinic_admin'].includes(userRole);
+
+      // Verify doctor assignment if doctor role
+      if (userRole === 'doctor') {
+        if (!assignedDoctor) {
+          return res.status(403).json({
+            error: 'CASE_NOT_ASSIGNED',
+            message: 'This clinical case must be assigned before a doctor can send clinical notifications.'
+          });
+        }
+        if (assignedDoctor !== req.user.uid) {
+          return res.status(403).json({
+            error: 'ACCESS_DENIED',
+            message: 'Zero-Trust enforcement: This clinical case is assigned to another physician.'
+          });
+        }
+      } else if (!isPrivileged && type !== 'escalation') {
+        return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Only authorized clinical staff can dispatch case notifications.' });
+      }
+
+      if (!recipient) {
+        recipient = c.patientEmail || c.email;
+        patientName = c.patientName || c.name;
+        if (!recipient && c.patientId) {
+          const uDoc = await db.collection('users').doc(c.patientId).get();
+          if (uDoc.exists) {
+            recipient = uDoc.data().email || uDoc.data().patientEmail;
+            if (!patientName) patientName = uDoc.data().name || uDoc.data().displayName;
+          }
+        }
+      }
+
+      notificationPayload = {
+        ...notificationPayload,
+        caseId,
+        reportRef: c.reportRef,
+        doctorName: c.approvingDoctorName || req.user.displayName || req.user.name || 'Doctor',
+        doctorSpecialty: c.doctorSpecialty,
+        clinicName: c.clinicName,
+        clinicalDiagnosis: c.clinicalDiagnosis || c.clinicalNotes,
+        medications: c.medications,
+        recommendations: c.recommendations,
+        moreInfoNote: note || c.moreInfoNote,
+        severityLevel: severityLevel || c.triageLevel,
+        criticalFindings: criticalFindings || c.criticalFindings
+      };
+    }
+
+    // 2. Appointment-associated notification types
+    if (type.startsWith('appointment_')) {
+      if (appointmentId && db) {
+        const apptDoc = await db.collection('appointments').doc(appointmentId).get();
+        if (apptDoc.exists) {
+          const a = apptDoc.data();
+          if (!recipient) recipient = a.patientEmail || a.recipient;
+          if (!patientName) patientName = a.patientName;
+          notificationPayload = {
+            ...a,
+            ...notificationPayload,
+            appointmentId
+          };
+        }
       }
     }
 
+    // 3. Verification notification type
+    if (type === 'verification') {
+      if (!recipient) recipient = req.user.email;
+      notificationPayload = {
+        ...notificationPayload,
+        recipientName: patientName || req.user.name || req.user.displayName || 'User',
+        code: code || Math.floor(100000 + Math.random() * 900000).toString(),
+        purpose: purpose || 'Account Verification'
+      };
+    }
+
     if (!recipient) {
-      return res.status(400).json({ error: 'NO_RECIPIENT_EMAIL', message: 'Could not find patient email for this case.' });
+      return res.status(400).json({ error: 'NO_RECIPIENT_EMAIL', message: 'Could not determine recipient email.' });
     }
 
     const result = await sendClinicalNotificationEmail({
       type,
       patientEmail: recipient,
+      recipient,
       patientName,
-      caseId,
-      reportRef: c.reportRef,
-      doctorName: c.approvingDoctorName || req.user.displayName || req.user.name || 'Doctor',
-      doctorSpecialty: c.doctorSpecialty,
-      clinicalDiagnosis: c.clinicalDiagnosis || c.clinicalNotes,
-      medications: c.medications,
-      recommendations: c.recommendations,
-      moreInfoNote: note || c.moreInfoNote,
+      ...notificationPayload,
       db
     });
+
+    if (!result.success) {
+      return res.status(502).json({ error: result.code || 'DISPATCH_FAILED', message: result.error || 'Failed to dispatch email notification.' });
+    }
 
     return res.json({ success: true, notification: result });
   } catch (err) {
     console.error('[SERVER NOTIFICATION ERROR]:', err);
     return res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/notifications/enqueue
+ * Durable queue submission with idempotency deduplication guard.
+ */
+app.post('/api/notifications/enqueue', requireAuth, requireVerifiedEmail, async (req, res) => {
+  const { type, recipient, payload, idempotencyKey, scheduledAt, priority } = req.body;
+  if (!type || !recipient) {
+    return res.status(400).json({ error: 'MISSING_PARAMETERS', message: 'type and recipient are required.' });
+  }
+
+  try {
+    const queueResult = await enqueueNotification(db, {
+      type,
+      recipient,
+      payload: payload || {},
+      idempotencyKey,
+      scheduledAt,
+      priority
+    });
+    return res.json({ success: true, ...queueResult });
+  } catch (err) {
+    console.error('[ENQUEUE NOTIFICATION ERROR]:', err);
+    return res.status(500).json({ error: 'ENQUEUE_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/notifications/process-queue
+ * Worker trigger to process pending notifications in the queue.
+ */
+app.post('/api/notifications/process-queue', requireAuth, async (req, res) => {
+  const userRole = req.user.role || 'patient';
+  if (!['super_admin', 'clinic_admin', 'doctor'].includes(userRole)) {
+    return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Queue processing requires administrative privileges.' });
+  }
+
+  try {
+    const { batchSize } = req.body || {};
+    const stats = await processNotificationQueue(db, { batchSize: Number(batchSize) || 10 });
+    return res.json({ success: true, stats });
+  } catch (err) {
+    console.error('[PROCESS QUEUE ERROR]:', err);
+    return res.status(500).json({ error: 'QUEUE_PROCESSING_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/notifications/queue-status
+ * Health and state inspection for the notification queue.
+ */
+app.get('/api/notifications/queue-status', requireAuth, async (req, res) => {
+  const userRole = req.user.role || 'patient';
+  if (!['super_admin', 'clinic_admin', 'doctor'].includes(userRole)) {
+    return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Queue inspection requires administrative privileges.' });
+  }
+
+  try {
+    const counts = {
+      pending: 0,
+      processing: 0,
+      sent: 0,
+      delivered: 0,
+      failed: 0,
+      cancelled: 0,
+      total: 0
+    };
+
+    if (db && typeof db.collection === 'function') {
+      const snap = await db.collection('notification_queue').get();
+      snap.forEach(doc => {
+        counts.total++;
+        const status = doc.data()?.status;
+        if (status && counts[status] !== undefined) {
+          counts[status]++;
+        }
+      });
+    }
+
+    return res.json({ success: true, queue: counts });
+  } catch (err) {
+    return res.status(500).json({ error: 'QUEUE_STATUS_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/notifications/delivery-webhook
+ * Record verified delivery confirmation from email provider without claiming delivery merely on send.
+ */
+app.post('/api/notifications/delivery-webhook', async (req, res) => {
+  const { messageId, notificationId, recipient, deliveredAt, providerMetadata, secret } = req.body || {};
+
+  // Optional webhook secret guard
+  if (process.env.WEBHOOK_SECRET && secret !== process.env.WEBHOOK_SECRET) {
+    return res.status(401).json({ error: 'UNAUTHORIZED_WEBHOOK', message: 'Invalid webhook credentials.' });
+  }
+
+  if (!messageId && !notificationId) {
+    return res.status(400).json({ error: 'MISSING_IDENTIFIER', message: 'messageId or notificationId is required.' });
+  }
+
+  try {
+    const result = await recordDeliveryConfirmation(db, {
+      messageId,
+      notificationId,
+      recipient,
+      deliveredAt,
+      providerMetadata
+    });
+    return res.json({ success: true, delivery: result });
+  } catch (err) {
+    console.error('[DELIVERY WEBHOOK ERROR]:', err);
+    return res.status(500).json({ error: 'DELIVERY_RECORDING_FAILED', message: err.message });
   }
 });
 
@@ -5971,6 +6187,9 @@ const PORT = process.env.PORT || (isDevelopment ? 4000 : 8080);
 if (require.main === module) {
   app.listen(PORT, () => {
     console.log(`[Health Vibes AI Backend] Server running in [${NODE_ENV.toUpperCase()}] mode on port ${PORT}`);
+    if (db) {
+      startReminderScheduler(db);
+    }
   });
 }
 
@@ -5997,5 +6216,17 @@ app.evaluatePregnancyClinicalRelevance = evaluatePregnancyClinicalRelevance;
 app.validatePatientMedicalProfile = validatePatientMedicalProfile;
 app.buildPatientProfileProvenance = buildPatientProfileProvenance;
 app.verifyPatientClinicAndDoctorLinkage = verifyPatientClinicAndDoctorLinkage;
+app.notificationService = {
+  sendClinicalNotificationEmail,
+  enqueueNotification,
+  processNotificationQueue,
+  recordDeliveryConfirmation,
+  scheduleAppointmentReminder,
+  cancelAppointmentReminders,
+  startReminderScheduler,
+  stopReminderScheduler,
+  NOTIFICATION_STATUS,
+  NOTIFICATION_TYPES
+};
 
 module.exports = app;

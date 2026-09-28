@@ -634,7 +634,7 @@ service cloud.firestore {
     }
 
     // =========================================================================
-    // 8. 📧 EMAIL NOTIFICATIONS (/email_notifications/{notificationId})
+    // 8. 📧 EMAIL NOTIFICATIONS & QUEUE (/email_notifications/{notificationId})
     // =========================================================================
     match /email_notifications/{notificationId} {
       allow read: if isOwner();
@@ -645,6 +645,16 @@ service cloud.firestore {
         resource.data.patientId == request.auth.uid ||
         (request.auth.token.email != null && resource.data.recipient == request.auth.token.email)
       );
+      allow write: if false;
+    }
+
+    match /notification_queue/{queueId} {
+      allow read: if isOwner() || isPlatformAdmin();
+      allow write: if false;
+    }
+
+    match /delivery_receipts/{receiptId} {
+      allow read: if isOwner() || isPlatformAdmin();
       allow write: if false;
     }
 

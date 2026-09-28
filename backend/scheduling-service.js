@@ -14,6 +14,10 @@
  */
 
 const auditService = require('./audit-service');
+const {
+  scheduleAppointmentReminder,
+  cancelAppointmentReminders
+} = require('./notification-service');
 
 // ============================================================================
 // 🏥 CLINICS REGISTRY
@@ -888,6 +892,13 @@ async function bookAppointmentTransaction(db, payload, authUser) {
       console.warn('[BOOKING EVENT ERROR]:', e.message);
     }
 
+    // Schedule automated pre-consultation reminder
+    try {
+      await scheduleAppointmentReminder(db, savedAppointment, { hoursBefore: 24 });
+    } catch (remErr) {
+      console.warn('[REMINDER SCHEDULE WARNING]:', remErr.message);
+    }
+
     return savedAppointment;
   } finally {
     releaseLock();
@@ -1150,6 +1161,14 @@ async function rescheduleAppointmentTransaction(db, { appointmentId, newDate, ne
       console.warn('[RESCHEDULE EVENT ERROR]:', e.message);
     }
 
+    // Reschedule automated reminder: cancel old reminder and schedule for replacement slot
+    try {
+      await cancelAppointmentReminders(db, appointment.id, 'appointment_rescheduled');
+      await scheduleAppointmentReminder(db, updatedAppointment, { hoursBefore: 24 });
+    } catch (remErr) {
+      console.warn('[REMINDER RESCHEDULE WARNING]:', remErr.message);
+    }
+
     return { success: true, ...updatedAppointment, appointment: updatedAppointment };
   } finally {
     releaseLock();
@@ -1261,6 +1280,13 @@ async function cancelAppointmentTransaction(db, targetAppt, actorUser, options =
     });
   } catch (e) {
     console.warn('[CANCEL EVENT ERROR]:', e.message);
+  }
+
+  // Cancel all pending reminders for this appointment
+  try {
+    await cancelAppointmentReminders(db, appt.id || appointmentId, 'appointment_cancelled');
+  } catch (remErr) {
+    console.warn('[REMINDER CANCEL WARNING]:', remErr.message);
   }
 
   const finalCancelledAppt = { ...appt, ...updatePayload };
@@ -1622,6 +1648,8 @@ module.exports = {
   getDoctorCalendar,
   getClinicCalendar,
   emitAppointmentNotificationEvent,
+  scheduleAppointmentReminder,
+  cancelAppointmentReminders,
   clearMemorySlotLocks,
   _activeMemorySlotLocks: activeMemorySlotLocks
 };
