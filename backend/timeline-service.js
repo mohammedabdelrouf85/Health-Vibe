@@ -36,7 +36,8 @@ const TIMELINE_TYPES = {
   ATTACHMENT: 'attachment',
   MEDICATION: 'medication',
   CONDITION: 'condition',
-  DOCTOR_NOTE: 'doctor_note'
+  DOCTOR_NOTE: 'doctor_note',
+  REASSESSMENT_PLAN: 'reassessment_plan'
 };
 
 const VALID_TIMELINE_TYPES = new Set(Object.values(TIMELINE_TYPES));
@@ -489,9 +490,47 @@ function normalizeChronicCondition(cond, idx, fallbackDate) {
 }
 
 /**
+ * Normalizes doctor-approved reassessment plans into timeline items.
+ */
+function normalizeReassessmentPlan(plan, planId) {
+  const ts = plan.approvedAt || plan.createdAt || new Date().toISOString();
+  const dateStr = String(ts).slice(0, 10);
+  const docName = plan.doctor?.name || plan.doctorName || 'الطبيب المعالج';
+
+  return {
+    id: `plan_${planId}`,
+    type: TIMELINE_TYPES.REASSESSMENT_PLAN,
+    title: 'خطة إعادة التقييم المعتمدة من الطبيب',
+    titleEn: 'Doctor-Approved Reassessment Plan',
+    timestamp: ts,
+    date: dateStr,
+    status: plan.status || 'active',
+    category: 'clinical_plan',
+    summary: `خطة إعادة تقييم خلال ${plan.intervalHours || 24} ساعة معتمدة بواسطة ${docName}`,
+    summaryEn: `Reassessment plan scheduled for ${plan.intervalHours || 24}h approved by ${docName}`,
+    details: {
+      planId,
+      intervalHours: plan.intervalHours,
+      frequency: plan.frequency,
+      instructions: plan.instructions,
+      scheduledAt: plan.scheduledAt,
+      doctorName: docName,
+      doctorSpecialty: plan.doctor?.specialty,
+      status: plan.status,
+      disclaimer: 'Observational reassessment plan approved by physician. Does not derive an automated diagnosis.'
+    },
+    link: `/app/index.html?screen=assessment&action=reassess&planId=${encodeURIComponent(planId)}`,
+    recordId: planId,
+    source: 'reassessment_plans',
+    author: docName,
+    isInternal: false
+  };
+}
+
+/**
  * Primary Unified Patient Timeline Builder & Query Engine.
- * Concurrently queries and consolidates all 7 clinical sources:
- * Assessments, Reports, Appointments, Attachments, Medications, Chronic Conditions, and Doctor Notes.
+ * Concurrently queries and consolidates all clinical sources:
+ * Assessments, Reports, Appointments, Attachments, Medications, Chronic Conditions, Doctor Notes, and Reassessment Plans.
  */
 async function buildPatientTimeline({
   db,
@@ -530,12 +569,14 @@ async function buildPatientTimeline({
       reportsSnap,
       appointmentsSnap,
       filesSnap,
+      plansSnap,
       userDocSnap
     ] = await Promise.all([
       db.collection('cases').where('patientId', '==', patientId).get().catch(() => ({ docs: [], empty: true })),
       db.collection('clinical_reports').where('patientId', '==', patientId).get().catch(() => ({ docs: [], empty: true })),
       db.collection('appointments').where('patientId', '==', patientId).get().catch(() => ({ docs: [], empty: true })),
       db.collection('case_files').where('patientId', '==', patientId).get().catch(() => ({ docs: [], empty: true })),
+      db.collection('reassessment_plans').where('patientId', '==', patientId).get().catch(() => ({ docs: [], empty: true })),
       db.collection('users').doc(patientId).get().catch(() => ({ exists: false, data: () => ({}) }))
     ]);
 
@@ -655,6 +696,14 @@ async function buildPatientTimeline({
         timelineItems.push(normalizeMedication(med, `profile_${idx}`, u.createdAt));
       });
     }
+
+    // F. Aggregate Doctor-Approved Reassessment Plans
+    if (plansSnap && plansSnap.docs) {
+      for (const doc of plansSnap.docs) {
+        const p = doc.data() || {};
+        timelineItems.push(normalizeReassessmentPlan(p, doc.id));
+      }
+    }
   }
 
   // 3. Strict Redaction Guard: Ensure zero internal notes leak to patient
@@ -762,5 +811,6 @@ module.exports = {
   normalizeAttachment,
   normalizeMedication,
   normalizeChronicCondition,
+  normalizeReassessmentPlan,
   buildPatientTimeline
 };

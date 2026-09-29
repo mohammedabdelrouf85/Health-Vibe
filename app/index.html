@@ -434,6 +434,7 @@
             <p data-i18n="patient.heroSubtitle">Enter symptoms and measurements. The doctor receives a rule-based risk preview before approving any report shown to you.</p>
             <div class="hero-actions">
               <button class="solid-button large" data-screen="assessment" data-i18n="patient.startBreathingAssessment">Start breathing assessment</button>
+              <button class="soft-button large" type="button" onclick="if(window.auth && auth.currentUser) openAssessmentComparisonModal(auth.currentUser.uid); else showAuth();">📊 <span data-i18n="patient.compareAssessments">Compare Assessments</span></button>
               <button class="soft-button large" data-screen="history" data-i18n="patient.viewHistory">View history</button>
             </div>
           </div>
@@ -2943,6 +2944,7 @@
   <script defer src="./modules/assessment/assessment-validation.js?v=1.0"></script>
   <script defer src="./modules/assessment/assessment-service.js?v=1.0"></script>
   <script defer src="./modules/assessment/assessment-ui.js?v=1.0"></script>
+  <script defer src="./modules/assessment/assessment-comparison-ui.js?v=1.0"></script>
   <script defer src="./modules/doctor/doctor-service.js?v=1.0"></script>
   <script defer src="./modules/doctor/doctor-ui.js?v=1.0"></script>
   <script defer src="./modules/reports/reports-service.js?v=1.0"></script>

@@ -54,6 +54,7 @@ const driftMonitoring = require('./drift-monitoring-service');
 const safetyRegister = require('./safety-register-service');
 const analyticsService = require('./analytics-service');
 const feedbackSupportService = require('./feedback-support-service');
+const assessmentComparisonService = require('./assessment-comparison-service');
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -8285,6 +8286,403 @@ app.post('/api/notifications/dispatch', requireAuth, async (req, res) => {
 });
 
 // =============================================================================
+// 📊 INDEPENDENT ASSESSMENTS, COMPARISONS, CHARTS & REASSESSMENT PLANS
+// =============================================================================
+
+/**
+ * Helper to fetch patient cases from Firestore or in-memory fallback.
+ */
+async function fetchPatientCases(patientId) {
+  if (!patientId) return [];
+  const cases = [];
+  if (db && typeof db.collection === 'function') {
+    try {
+      const snap = await db.collection('cases').where('patientId', '==', patientId).get();
+      if (snap && snap.docs) {
+        snap.docs.forEach(d => {
+          cases.push({ id: d.id, ...d.data() });
+        });
+      }
+    } catch (e) {
+      console.warn('[FETCH CASES WARNING]:', e.message);
+    }
+  }
+  cases.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  return cases;
+}
+
+/**
+ * Helper to fetch patient reports from Firestore or in-memory fallback.
+ */
+async function fetchPatientReports(patientId) {
+  if (!patientId) return [];
+  const reports = [];
+  if (db && typeof db.collection === 'function') {
+    try {
+      const snap = await db.collection('clinical_reports').where('patientId', '==', patientId).get();
+      if (snap && snap.docs) {
+        snap.docs.forEach(d => {
+          reports.push({ id: d.id, ...d.data() });
+        });
+      }
+    } catch (e) {}
+  }
+  reports.sort((a, b) => new Date(b.approvedAt || b.createdAt || 0) - new Date(a.approvedAt || a.createdAt || 0));
+  return reports;
+}
+
+/**
+ * POST /api/assessment/new
+ * Starts an independent new assessment for the patient without overwriting historical records.
+ */
+app.post('/api/assessment/new', requireAuth, async (req, res) => {
+  try {
+    const user = req.user;
+    const {
+      oxygenLevel,
+      o2,
+      heartRate,
+      pulse,
+      respiratoryRate,
+      temperature,
+      breathingDifficulty,
+      coughLevel,
+      symptoms,
+      notes,
+      clinicId,
+      assignedDoctorId,
+      assignedDoctorName,
+      dataSource,
+      previousCaseId
+    } = req.body || {};
+
+    const rawO2 = oxygenLevel ?? o2;
+    if (rawO2 === undefined || rawO2 === null || isNaN(Number(rawO2))) {
+      return res.status(400).json({
+        error: 'INVALID_OXYGEN_LEVEL',
+        message: 'A valid numeric oxygenLevel (SpO2 %) is required.'
+      });
+    }
+
+    const numO2 = Number(rawO2);
+    if (numO2 < 50 || numO2 > 100) {
+      return res.status(400).json({
+        error: 'OUT_OF_RANGE_OXYGEN',
+        message: 'Oxygen level must be between 50% and 100%.'
+      });
+    }
+
+    const newCase = await assessmentComparisonService.createIndependentNewAssessment(db, {
+      user: {
+        uid: user.uid,
+        name: user.name || user.displayName || 'Patient',
+        email: user.email,
+        latestCaseId: user.latestCaseId || null
+      },
+      assessmentData: {
+        oxygenLevel: numO2,
+        heartRate: heartRate ?? pulse,
+        respiratoryRate,
+        temperature,
+        breathingDifficulty,
+        coughLevel,
+        symptoms,
+        notes,
+        clinicId: clinicId || user.clinicId,
+        assignedDoctorId,
+        assignedDoctorName,
+        dataSource: dataSource || 'patient_reported'
+      },
+      previousCaseId
+    });
+
+    return res.status(201).json({
+      success: true,
+      caseId: newCase.caseId,
+      case: newCase,
+      message: 'Independent new assessment recorded successfully.'
+    });
+  } catch (err) {
+    console.error('[NEW ASSESSMENT ERROR]:', err);
+    return res.status(500).json({ error: 'ASSESSMENT_CREATION_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/patient/:patientId/assessments/latest
+ * Retrieves latest independent assessments for the patient with access control.
+ */
+app.get('/api/patient/:patientId/assessments/latest', requireAuth, async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const accessCheck = await timelineService.verifyTimelineAccess(req.user, patientId, db);
+    if (!accessCheck.authorized) {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: accessCheck.reason || 'Access denied.' });
+    }
+
+    const cases = await fetchPatientCases(patientId);
+    return res.json({
+      success: true,
+      patientId,
+      count: cases.length,
+      cases
+    });
+  } catch (err) {
+    console.error('[GET LATEST ASSESSMENTS ERROR]:', err);
+    return res.status(500).json({ error: 'FETCH_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/patient/:patientId/assessments/compare
+ * Compares latest assessment with previous baseline (or two specified case IDs),
+ * returning measurement deltas (with units, timing, data sources, missing measurements),
+ * approved report comparison, and longitudinal chart trend points.
+ */
+app.get('/api/patient/:patientId/assessments/compare', requireAuth, async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const accessCheck = await timelineService.verifyTimelineAccess(req.user, patientId, db);
+    if (!accessCheck.authorized) {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: accessCheck.reason || 'Access denied.' });
+    }
+
+    const { currentCaseId, previousCaseId } = req.query;
+    const allCases = await fetchPatientCases(patientId);
+
+    if (allCases.length < 2 && (!currentCaseId || !previousCaseId)) {
+      return res.json({
+        success: true,
+        comparable: false,
+        message: 'At least two assessments are required to perform comparative analysis.',
+        casesCount: allCases.length,
+        chart: assessmentComparisonService.buildPatientChartData(allCases)
+      });
+    }
+
+    let latestCase = null;
+    let previousCase = null;
+
+    if (currentCaseId) {
+      latestCase = allCases.find(c => c.id === currentCaseId || c.caseId === currentCaseId);
+    } else {
+      latestCase = allCases[0];
+    }
+
+    if (previousCaseId) {
+      previousCase = allCases.find(c => c.id === previousCaseId || c.caseId === previousCaseId);
+    } else {
+      previousCase = allCases[1];
+    }
+
+    if (!latestCase || !previousCase) {
+      return res.status(404).json({
+        error: 'CASES_NOT_FOUND',
+        message: 'One or both specified assessment cases were not found.'
+      });
+    }
+
+    const comparison = assessmentComparisonService.compareAssessments(latestCase, previousCase);
+
+    // Fetch reports for comparison
+    const allReports = await fetchPatientReports(patientId);
+    const latestReport = allReports.find(r => r.caseId === latestCase.id) || allReports[0] || null;
+    const previousReport = allReports.find(r => r.caseId === previousCase.id) || allReports[1] || null;
+
+    let reportComparison = null;
+    if (latestReport && previousReport) {
+      reportComparison = assessmentComparisonService.compareApprovedReports(latestReport, previousReport);
+    }
+
+    const chart = assessmentComparisonService.buildPatientChartData(allCases);
+
+    return res.json({
+      success: true,
+      comparable: true,
+      patientId,
+      comparison,
+      reportComparison,
+      chart
+    });
+  } catch (err) {
+    console.error('[COMPARE ASSESSMENTS ERROR]:', err);
+    return res.status(500).json({ error: 'COMPARISON_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/patient/:patientId/medical-summary
+ * Generates comprehensive Medical Summary Export (JSON and structured report).
+ */
+app.get('/api/patient/:patientId/medical-summary', requireAuth, async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const accessCheck = await timelineService.verifyTimelineAccess(req.user, patientId, db);
+    if (!accessCheck.authorized) {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: accessCheck.reason || 'Access denied.' });
+    }
+
+    let patientProfile = {};
+    if (db && typeof db.collection === 'function') {
+      const pDoc = await db.collection('users').doc(patientId).get().catch(() => null);
+      if (pDoc && pDoc.exists) patientProfile = pDoc.data();
+    }
+
+    const cases = await fetchPatientCases(patientId);
+    const reports = await fetchPatientReports(patientId);
+    const plans = await assessmentComparisonService.getPatientReassessmentPlans(db, patientId);
+    const activePlan = plans.find(p => p.status === 'active') || null;
+
+    const summary = assessmentComparisonService.generateMedicalSummaryExport({
+      patient: {
+        uid: patientId,
+        name: patientProfile.name || patientProfile.displayName || req.user.name,
+        email: patientProfile.email || req.user.email,
+        nationalId: patientProfile.nationalId,
+        age: patientProfile.age || patientProfile.medicalProfile?.age,
+        gender: patientProfile.gender || patientProfile.medicalProfile?.gender
+      },
+      cases,
+      reports,
+      reassessmentPlan: activePlan
+    });
+
+    return res.json({ success: true, medicalSummary: summary });
+  } catch (err) {
+    console.error('[MEDICAL SUMMARY ERROR]:', err);
+    return res.status(500).json({ error: 'EXPORT_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/patient/:patientId/reassessment-plan
+ * Doctor creates/approves a reassessment plan and schedules follow-up reminders.
+ * STRICT SAFETY RULE:
+ * Does NOT derive a new diagnosis from the chart.
+ */
+app.post('/api/patient/:patientId/reassessment-plan', requireAuth, async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const callerRole = (req.user.role || '').toLowerCase();
+    const isOwner = req.user.isOwner === true || callerRole === 'super_admin';
+
+    // Must be verified doctor or admin
+    if (!isOwner && !['doctor', 'doctor_verified', 'clinic_admin'].includes(callerRole)) {
+      return res.status(403).json({
+        error: 'CLINICIAN_REQUIRED',
+        message: 'Only a licensed physician or medical administrator can approve a reassessment plan.'
+      });
+    }
+
+    const {
+      intervalHours = 24,
+      frequency = 'once',
+      instructions = '',
+      caseId = null
+    } = req.body || {};
+
+    const plan = await assessmentComparisonService.scheduleDoctorReassessmentPlan(db, {
+      patientId,
+      doctorId: req.user.uid,
+      doctorName: req.user.name || req.user.displayName || 'د. طارق محمود',
+      doctorSpecialty: req.user.specialty || 'استشاري أمراض صدرية',
+      intervalHours,
+      frequency,
+      instructions,
+      caseId
+    });
+
+    // Schedule automated reminder in notification queue for the patient
+    try {
+      const patientUserDoc = db ? await db.collection('users').doc(patientId).get().catch(() => null) : null;
+      const patientEmail = patientUserDoc?.exists ? patientUserDoc.data()?.email : null;
+
+      await enqueueNotification(db, {
+        type: 'reassessment_reminder',
+        recipient: patientEmail || 'patient@healthvibe.ai',
+        scheduledAt: plan.scheduledAt,
+        priority: 'normal',
+        payload: {
+          patientId,
+          planId: plan.planId,
+          doctorName: plan.doctor.name,
+          intervalHours: plan.intervalHours,
+          instructions: plan.instructions,
+          scheduledAt: plan.scheduledAt,
+          disclaimer: 'Doctor-approved observational reassessment reminder.'
+        }
+      });
+
+      // Record in user notification history as well
+      await recordNotificationHistory(db, {
+        userId: patientId,
+        eventType: 'reassessment_reminder',
+        title: 'تذكير بموعد إعادة الفحص المعتمد من الطبيب',
+        message: `طلب د. ${plan.doctor.name} إجراء فحص تنفسي جديد للمتابعة. التعليمات: ${plan.instructions}`,
+        authorizedDestinationLink: `/app/index.html?screen=assessment&action=reassess&planId=${encodeURIComponent(plan.planId)}`,
+        urgent: false,
+        metadata: {
+          planId: plan.planId,
+          intervalHours: plan.intervalHours,
+          scheduledAt: plan.scheduledAt
+        }
+      });
+    } catch (notifErr) {
+      console.warn('[REASSESSMENT REMINDER WARNING]:', notifErr.message);
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: 'Doctor-approved reassessment plan created and reminders scheduled.',
+      plan
+    });
+  } catch (err) {
+    console.error('[CREATE REASSESSMENT PLAN ERROR]:', err);
+    return res.status(500).json({ error: 'PLAN_CREATION_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/patient/:patientId/reassessment-plan
+ * Retrieves reassessment plans for the patient.
+ */
+app.get('/api/patient/:patientId/reassessment-plan', requireAuth, async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const accessCheck = await timelineService.verifyTimelineAccess(req.user, patientId, db);
+    if (!accessCheck.authorized) {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: accessCheck.reason || 'Access denied.' });
+    }
+
+    const plans = await assessmentComparisonService.getPatientReassessmentPlans(db, patientId);
+    return res.json({ success: true, count: plans.length, plans });
+  } catch (err) {
+    console.error('[GET REASSESSMENT PLANS ERROR]:', err);
+    return res.status(500).json({ error: 'FETCH_FAILED', message: err.message });
+  }
+});
+
+/**
+ * PATCH /api/patient/:patientId/reassessment-plan/:planId/cancel
+ * Cancels a reassessment plan.
+ */
+app.patch('/api/patient/:patientId/reassessment-plan/:planId/cancel', requireAuth, async (req, res) => {
+  try {
+    const { patientId, planId } = req.params;
+    const accessCheck = await timelineService.verifyTimelineAccess(req.user, patientId, db);
+    if (!accessCheck.authorized) {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: accessCheck.reason || 'Access denied.' });
+    }
+
+    const plan = await assessmentComparisonService.cancelReassessmentPlan(db, planId, req.user);
+    return res.json({ success: true, message: 'Reassessment plan cancelled.', plan });
+  } catch (err) {
+    console.error('[CANCEL REASSESSMENT PLAN ERROR]:', err);
+    return res.status(500).json({ error: 'CANCEL_FAILED', message: err.message });
+  }
+});
+
+// =============================================================================
 // 🚨 CENTRALIZED ERROR HANDLER & EXCEPTION SANITIZER
 // =============================================================================
 app.use((err, req, res, next) => {
@@ -8390,5 +8788,6 @@ app.monitoringService = monitoringService;
 app.incidentService = incidentService;
 app.analyticsService = analyticsService;
 app.feedbackSupportService = feedbackSupportService;
+app.assessmentComparisonService = assessmentComparisonService;
 
 module.exports = app;

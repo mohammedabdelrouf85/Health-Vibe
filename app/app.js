@@ -8112,6 +8112,15 @@ async function renderReportScreen(targetCaseId = null) {
           <button type="button" class="solid-button large print-report-btn" style="background: #0284c7;" onclick="exportReportToPdf('${caseData.id}', 'en')">
             <span>📄</span> ${isEn ? "Export PDF (English)" : "تصدير PDF (إنجليزي)"}
           </button>
+          <button type="button" class="solid-button large" style="background: #0d9488;" onclick="openAssessmentComparisonModal('${caseData.patientId || caseData.patientUid || user.uid}', '${caseData.id}')">
+            <span>📊</span> ${isEn ? "Compare Assessments & Trends" : "مقارنة التقييمات والاتجاهات"}
+          </button>
+          <button type="button" class="solid-button large" style="background: #0369a1;" onclick="startIndependentNewAssessment('${caseData.id}')">
+            <span>🔄</span> ${isEn ? "New Assessment" : "تقييم جديد مستقل"}
+          </button>
+          <button type="button" class="outline-button large" onclick="exportMedicalSummary('${caseData.patientId || caseData.patientUid || user.uid}')">
+            <span>📑</span> ${isEn ? "Medical Summary" : "ملخص سريري"}
+          </button>
           <button type="button" class="outline-button large" onclick="openShareReportModal('${caseData.id}')">
             <span>🔗</span> ${isEn ? "Share Report (Consent Link)" : "مشاركة التقرير برابط آمن"}
           </button>
@@ -12861,7 +12870,9 @@ function buildAssessmentModel({
   assignedDoctorId = null,
   assignedDoctorName = null,
   clinicId = null,
-  clinicName = null
+  clinicName = null,
+  previousCaseId = null,
+  isIndependentAssessment = false
 }) {
   // 1. Oxygen Vitals (Strict Physiological Validation)
   const parsedOxygen = parseStrictOxygenInput(oxygenLevel);
@@ -13091,6 +13102,8 @@ function buildAssessmentModel({
     },
 
     // ── Top-Level Flattened Fields (100% Backward Compatible) ──
+    previousCaseId: previousCaseId || null,
+    isIndependentAssessment: Boolean(isIndependentAssessment || previousCaseId),
     status: assignedDoctorId ? CASE_STATUS.ASSIGNED : CASE_STATUS.TRIAGED,
     priority: priority,
     oxygenLevel: o2,
@@ -13731,6 +13744,7 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
 
       try {
         // ── بناء وثيقة الحالة عبر الـ Schema المعياري الموحد ────────────
+        const predecessorId = window._independentAssessmentPredecessorCaseId || null;
         const caseData = buildAssessmentModel({
           user,
           oxygenLevel,
@@ -13749,12 +13763,18 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
           assignedDoctorId: window._patientAssignedDoctorId || null,
           assignedDoctorName: linkedDoctorName || null,
           clinicId: window._patientClinicId || null,
-          clinicName: clinicName || null
+          clinicName: clinicName || null,
+          previousCaseId: predecessorId,
+          isIndependentAssessment: Boolean(predecessorId)
         });
 
         // ── حفظ في Firestore ──────────────────────────────────────────
         const docRef = await db.collection("cases").add(caseData);
         console.log("✅ Standardized Case saved to Firestore:", docRef.id);
+        if (window.HealthVibes?.AssessmentComparisonUI?.clearIndependentAssessmentContext) {
+          window.HealthVibes.AssessmentComparisonUI.clearIndependentAssessmentContext();
+        }
+        window._independentAssessmentPredecessorCaseId = null;
         await clearAssessmentDraft();
         await uploadPendingMedicalFilesForCase(docRef.id);
 
