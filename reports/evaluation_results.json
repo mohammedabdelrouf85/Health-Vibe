@@ -1,0 +1,1562 @@
+{
+  "activeVersion_v1_0": {
+    "metadata": {
+      "evaluationDate": "2026-09-29T20:51:24.338Z",
+      "datasetVersion": "HealthVibe-Dataset-v1.0.0",
+      "rulesVersion": "HealthVibe-Rules-v1.0",
+      "evaluationProtocolVersion": "HealthVibe-Eval-v1.0.0",
+      "sampleSize": 80,
+      "specialistInterRaterKappa": 0.9749
+    },
+    "confusionMatrix": {
+      "tp": 42,
+      "fp": 10,
+      "tn": 28,
+      "fn": 0,
+      "total": 80,
+      "actualPositive": 42,
+      "actualNegative": 38,
+      "predictedPositive": 52,
+      "predictedNegative": 28
+    },
+    "diagnosticMetrics": {
+      "sensitivity": {
+        "applicable": true,
+        "value": 1,
+        "percentage": "100.0%",
+        "ci95": {
+          "lower": 0.9162,
+          "upper": 1
+        },
+        "reason": null
+      },
+      "specificity": {
+        "applicable": true,
+        "value": 0.7368,
+        "percentage": "73.7%",
+        "ci95": {
+          "lower": 0.5799,
+          "upper": 0.8503
+        },
+        "reason": null
+      },
+      "ppv": {
+        "applicable": true,
+        "value": 0.8077,
+        "percentage": "80.8%",
+        "ci95": {
+          "lower": 0.681,
+          "upper": 0.892
+        },
+        "reason": null
+      },
+      "npv": {
+        "applicable": true,
+        "value": 1,
+        "percentage": "100.0%",
+        "ci95": {
+          "lower": 0.8794,
+          "upper": 1
+        },
+        "reason": null
+      }
+    },
+    "rocAuc": {
+      "applicable": true,
+      "value": 0.9956,
+      "nPos": 42,
+      "nNeg": 38,
+      "uStatistic": 1589,
+      "rocPoints": [
+        {
+          "fpr": 0,
+          "tpr": 0,
+          "threshold": null
+        },
+        {
+          "fpr": 0,
+          "tpr": 0.0952,
+          "threshold": 0.9999
+        },
+        {
+          "fpr": 0,
+          "tpr": 0.1905,
+          "threshold": 0.9998
+        },
+        {
+          "fpr": 0,
+          "tpr": 0.2619,
+          "threshold": 0.9993
+        },
+        {
+          "fpr": 0,
+          "tpr": 0.3333,
+          "threshold": 0.9942
+        },
+        {
+          "fpr": 0,
+          "tpr": 0.5238,
+          "threshold": 0.9836
+        },
+        {
+          "fpr": 0,
+          "tpr": 0.5952,
+          "threshold": 0.9546
+        },
+        {
+          "fpr": 0,
+          "tpr": 0.7857,
+          "threshold": 0.8803
+        },
+        {
+          "fpr": 0,
+          "tpr": 0.8333,
+          "threshold": 0.7201
+        },
+        {
+          "fpr": 0.0526,
+          "tpr": 1,
+          "threshold": 0.4738
+        },
+        {
+          "fpr": 0.2632,
+          "tpr": 1,
+          "threshold": 0.2396
+        },
+        {
+          "fpr": 0.3421,
+          "tpr": 1,
+          "threshold": 0.0993
+        },
+        {
+          "fpr": 0.4474,
+          "tpr": 1,
+          "threshold": 0.0371
+        },
+        {
+          "fpr": 0.4737,
+          "tpr": 1,
+          "threshold": 0.0133
+        },
+        {
+          "fpr": 0.5789,
+          "tpr": 1,
+          "threshold": 0.0047
+        },
+        {
+          "fpr": 0.8421,
+          "tpr": 1,
+          "threshold": 0.0017
+        },
+        {
+          "fpr": 1,
+          "tpr": 1,
+          "threshold": 0.0006
+        },
+        {
+          "fpr": 1,
+          "tpr": 1,
+          "threshold": null
+        }
+      ],
+      "reason": null
+    },
+    "calibration": {
+      "applicable": true,
+      "brierScore": 0.0395,
+      "ece": 0.087,
+      "mce": 0.304,
+      "sampleCount": 80,
+      "curveBins": [
+        {
+          "binRange": "[0, 0.2]",
+          "count": 28,
+          "meanPredictedProbability": 0.0178,
+          "observedEventRate": 0,
+          "calibrationGap": 0.0178
+        },
+        {
+          "binRange": "[0.2, 0.4]",
+          "count": 8,
+          "meanPredictedProbability": 0.2396,
+          "observedEventRate": 0,
+          "calibrationGap": 0.2396
+        },
+        {
+          "binRange": "[0.4, 0.6]",
+          "count": 9,
+          "meanPredictedProbability": 0.4738,
+          "observedEventRate": 0.7778,
+          "calibrationGap": 0.304
+        },
+        {
+          "binRange": "[0.6, 0.8]",
+          "count": 2,
+          "meanPredictedProbability": 0.7201,
+          "observedEventRate": 1,
+          "calibrationGap": 0.2799
+        },
+        {
+          "binRange": "[0.8, 1]",
+          "count": 33,
+          "meanPredictedProbability": 0.9623,
+          "observedEventRate": 1,
+          "calibrationGap": 0.0377
+        }
+      ],
+      "reason": null
+    },
+    "errorAnalysis": {
+      "totalFalseNegatives": 0,
+      "falseNegatives": [],
+      "totalFalsePositives": 10,
+      "falsePositives": [
+        {
+          "subjectId": "HV-EVAL-004",
+          "age": 26,
+          "ageGroup": "young_adult",
+          "sex": "female",
+          "oxygenLevel": 93,
+          "breathingDifficulty": true,
+          "coughLevel": "mild",
+          "symptomDurationDays": 13,
+          "chestPain": false,
+          "points": 6,
+          "predictedTriage": "urgent",
+          "groundTruthTriage": "high",
+          "rootCause": "Conservative risk-factor point accumulation on SpO2 93-94% cases"
+        },
+        {
+          "subjectId": "HV-EVAL-006",
+          "age": 34,
+          "ageGroup": "young_adult",
+          "sex": "female",
+          "oxygenLevel": 92,
+          "breathingDifficulty": false,
+          "coughLevel": "mild",
+          "symptomDurationDays": 19,
+          "chestPain": false,
+          "points": 6,
+          "predictedTriage": "urgent",
+          "groundTruthTriage": "high",
+          "rootCause": "Conservative physiological SpO2 threshold escalation in asymptomatic baseline"
+        },
+        {
+          "subjectId": "HV-EVAL-009",
+          "age": 37,
+          "ageGroup": "young_adult",
+          "sex": "male",
+          "oxygenLevel": 93,
+          "breathingDifficulty": true,
+          "coughLevel": "moderate",
+          "symptomDurationDays": 7,
+          "chestPain": false,
+          "points": 7,
+          "predictedTriage": "urgent",
+          "groundTruthTriage": "high",
+          "rootCause": "Conservative risk-factor point accumulation on SpO2 93-94% cases"
+        },
+        {
+          "subjectId": "HV-EVAL-019",
+          "age": 60,
+          "ageGroup": "middle_aged",
+          "sex": "male",
+          "oxygenLevel": 92,
+          "breathingDifficulty": false,
+          "coughLevel": "moderate",
+          "symptomDurationDays": 3,
+          "chestPain": false,
+          "points": 6,
+          "predictedTriage": "urgent",
+          "groundTruthTriage": "high",
+          "rootCause": "Conservative physiological SpO2 threshold escalation in asymptomatic baseline"
+        },
+        {
+          "subjectId": "HV-EVAL-031",
+          "age": 27,
+          "ageGroup": "young_adult",
+          "sex": "male",
+          "oxygenLevel": 93,
+          "breathingDifficulty": true,
+          "coughLevel": "mild",
+          "symptomDurationDays": 17,
+          "chestPain": false,
+          "points": 6,
+          "predictedTriage": "urgent",
+          "groundTruthTriage": "high",
+          "rootCause": "Conservative risk-factor point accumulation on SpO2 93-94% cases"
+        },
+        {
+          "subjectId": "HV-EVAL-032",
+          "age": 33,
+          "ageGroup": "young_adult",
+          "sex": "female",
+          "oxygenLevel": 93,
+          "breathingDifficulty": true,
+          "coughLevel": "moderate",
+          "symptomDurationDays": 16,
+          "chestPain": false,
+          "points": 6,
+          "predictedTriage": "urgent",
+          "groundTruthTriage": "high",
+          "rootCause": "Conservative risk-factor point accumulation on SpO2 93-94% cases"
+        },
+        {
+          "subjectId": "HV-EVAL-044",
+          "age": 30,
+          "ageGroup": "young_adult",
+          "sex": "female",
+          "oxygenLevel": 93,
+          "breathingDifficulty": true,
+          "coughLevel": "moderate",
+          "symptomDurationDays": 8,
+          "chestPain": false,
+          "points": 7,
+          "predictedTriage": "urgent",
+          "groundTruthTriage": "high",
+          "rootCause": "Conservative risk-factor point accumulation on SpO2 93-94% cases"
+        },
+        {
+          "subjectId": "HV-EVAL-055",
+          "age": 41,
+          "ageGroup": "middle_aged",
+          "sex": "male",
+          "oxygenLevel": 93,
+          "breathingDifficulty": true,
+          "coughLevel": "moderate",
+          "symptomDurationDays": 16,
+          "chestPain": false,
+          "points": 6,
+          "predictedTriage": "urgent",
+          "groundTruthTriage": "high",
+          "rootCause": "Conservative risk-factor point accumulation on SpO2 93-94% cases"
+        },
+        {
+          "subjectId": "HV-EVAL-061",
+          "age": 39,
+          "ageGroup": "young_adult",
+          "sex": "male",
+          "oxygenLevel": 94,
+          "breathingDifficulty": true,
+          "coughLevel": "moderate",
+          "symptomDurationDays": 17,
+          "chestPain": false,
+          "points": 6,
+          "predictedTriage": "urgent",
+          "groundTruthTriage": "high",
+          "rootCause": "Conservative risk-factor point accumulation on SpO2 93-94% cases"
+        },
+        {
+          "subjectId": "HV-EVAL-072",
+          "age": 65,
+          "ageGroup": "geriatric",
+          "sex": "female",
+          "oxygenLevel": 94,
+          "breathingDifficulty": true,
+          "coughLevel": "moderate",
+          "symptomDurationDays": 21,
+          "chestPain": false,
+          "points": 6,
+          "predictedTriage": "urgent",
+          "groundTruthTriage": "high",
+          "rootCause": "Conservative risk-factor point accumulation on SpO2 93-94% cases"
+        }
+      ]
+    },
+    "demographicSubgroups": {
+      "byAgeGroup": {
+        "geriatric": {
+          "sampleCount": 14,
+          "confusionMatrix": {
+            "tp": 6,
+            "fp": 1,
+            "tn": 7,
+            "fn": 0,
+            "total": 14,
+            "actualPositive": 6,
+            "actualNegative": 8,
+            "predictedPositive": 7,
+            "predictedNegative": 7
+          },
+          "sensitivity": {
+            "applicable": true,
+            "value": 1,
+            "percentage": "100.0%",
+            "ci95": {
+              "lower": 0.6097,
+              "upper": 1
+            },
+            "reason": null
+          },
+          "specificity": {
+            "applicable": true,
+            "value": 0.875,
+            "percentage": "87.5%",
+            "ci95": {
+              "lower": 0.5291,
+              "upper": 0.9776
+            },
+            "reason": null
+          },
+          "ppv": {
+            "applicable": true,
+            "value": 0.8571,
+            "percentage": "85.7%",
+            "ci95": {
+              "lower": 0.4869,
+              "upper": 0.9743
+            },
+            "reason": null
+          },
+          "npv": {
+            "applicable": true,
+            "value": 1,
+            "percentage": "100.0%",
+            "ci95": {
+              "lower": 0.6457,
+              "upper": 1
+            },
+            "reason": null
+          }
+        },
+        "young_adult": {
+          "sampleCount": 28,
+          "confusionMatrix": {
+            "tp": 13,
+            "fp": 7,
+            "tn": 8,
+            "fn": 0,
+            "total": 28,
+            "actualPositive": 13,
+            "actualNegative": 15,
+            "predictedPositive": 20,
+            "predictedNegative": 8
+          },
+          "sensitivity": {
+            "applicable": true,
+            "value": 1,
+            "percentage": "100.0%",
+            "ci95": {
+              "lower": 0.7719,
+              "upper": 1
+            },
+            "reason": null
+          },
+          "specificity": {
+            "applicable": true,
+            "value": 0.5333,
+            "percentage": "53.3%",
+            "ci95": {
+              "lower": 0.3012,
+              "upper": 0.7519
+            },
+            "reason": null
+          },
+          "ppv": {
+            "applicable": true,
+            "value": 0.65,
+            "percentage": "65.0%",
+            "ci95": {
+              "lower": 0.4329,
+              "upper": 0.8188
+            },
+            "reason": null
+          },
+          "npv": {
+            "applicable": true,
+            "value": 1,
+            "percentage": "100.0%",
+            "ci95": {
+              "lower": 0.6756,
+              "upper": 1
+            },
+            "reason": null
+          }
+        },
+        "middle_aged": {
+          "sampleCount": 21,
+          "confusionMatrix": {
+            "tp": 12,
+            "fp": 2,
+            "tn": 7,
+            "fn": 0,
+            "total": 21,
+            "actualPositive": 12,
+            "actualNegative": 9,
+            "predictedPositive": 14,
+            "predictedNegative": 7
+          },
+          "sensitivity": {
+            "applicable": true,
+            "value": 1,
+            "percentage": "100.0%",
+            "ci95": {
+              "lower": 0.7575,
+              "upper": 1
+            },
+            "reason": null
+          },
+          "specificity": {
+            "applicable": true,
+            "value": 0.7778,
+            "percentage": "77.8%",
+            "ci95": {
+              "lower": 0.4526,
+              "upper": 0.9368
+            },
+            "reason": null
+          },
+          "ppv": {
+            "applicable": true,
+            "value": 0.8571,
+            "percentage": "85.7%",
+            "ci95": {
+              "lower": 0.6006,
+              "upper": 0.9599
+            },
+            "reason": null
+          },
+          "npv": {
+            "applicable": true,
+            "value": 1,
+            "percentage": "100.0%",
+            "ci95": {
+              "lower": 0.6457,
+              "upper": 1
+            },
+            "reason": null
+          }
+        },
+        "pediatric": {
+          "sampleCount": 17,
+          "confusionMatrix": {
+            "tp": 11,
+            "fp": 0,
+            "tn": 6,
+            "fn": 0,
+            "total": 17,
+            "actualPositive": 11,
+            "actualNegative": 6,
+            "predictedPositive": 11,
+            "predictedNegative": 6
+          },
+          "sensitivity": {
+            "applicable": true,
+            "value": 1,
+            "percentage": "100.0%",
+            "ci95": {
+              "lower": 0.7412,
+              "upper": 1
+            },
+            "reason": null
+          },
+          "specificity": {
+            "applicable": true,
+            "value": 1,
+            "percentage": "100.0%",
+            "ci95": {
+              "lower": 0.6097,
+              "upper": 1
+            },
+            "reason": null
+          },
+          "ppv": {
+            "applicable": true,
+            "value": 1,
+            "percentage": "100.0%",
+            "ci95": {
+              "lower": 0.7412,
+              "upper": 1
+            },
+            "reason": null
+          },
+          "npv": {
+            "applicable": true,
+            "value": 1,
+            "percentage": "100.0%",
+            "ci95": {
+              "lower": 0.6097,
+              "upper": 1
+            },
+            "reason": null
+          }
+        }
+      },
+      "bySex": {
+        "male": {
+          "sampleCount": 43,
+          "confusionMatrix": {
+            "tp": 23,
+            "fp": 5,
+            "tn": 15,
+            "fn": 0,
+            "total": 43,
+            "actualPositive": 23,
+            "actualNegative": 20,
+            "predictedPositive": 28,
+            "predictedNegative": 15
+          },
+          "sensitivity": {
+            "applicable": true,
+            "value": 1,
+            "percentage": "100.0%",
+            "ci95": {
+              "lower": 0.8569,
+              "upper": 1
+            },
+            "reason": null
+          },
+          "specificity": {
+            "applicable": true,
+            "value": 0.75,
+            "percentage": "75.0%",
+            "ci95": {
+              "lower": 0.5313,
+              "upper": 0.8881
+            },
+            "reason": null
+          },
+          "ppv": {
+            "applicable": true,
+            "value": 0.8214,
+            "percentage": "82.1%",
+            "ci95": {
+              "lower": 0.6441,
+              "upper": 0.9212
+            },
+            "reason": null
+          },
+          "npv": {
+            "applicable": true,
+            "value": 1,
+            "percentage": "100.0%",
+            "ci95": {
+              "lower": 0.7961,
+              "upper": 1
+            },
+            "reason": null
+          }
+        },
+        "female": {
+          "sampleCount": 37,
+          "confusionMatrix": {
+            "tp": 19,
+            "fp": 5,
+            "tn": 13,
+            "fn": 0,
+            "total": 37,
+            "actualPositive": 19,
+            "actualNegative": 18,
+            "predictedPositive": 24,
+            "predictedNegative": 13
+          },
+          "sensitivity": {
+            "applicable": true,
+            "value": 1,
+            "percentage": "100.0%",
+            "ci95": {
+              "lower": 0.8318,
+              "upper": 1
+            },
+            "reason": null
+          },
+          "specificity": {
+            "applicable": true,
+            "value": 0.7222,
+            "percentage": "72.2%",
+            "ci95": {
+              "lower": 0.4913,
+              "upper": 0.875
+            },
+            "reason": null
+          },
+          "ppv": {
+            "applicable": true,
+            "value": 0.7917,
+            "percentage": "79.2%",
+            "ci95": {
+              "lower": 0.5953,
+              "upper": 0.9076
+            },
+            "reason": null
+          },
+          "npv": {
+            "applicable": true,
+            "value": 1,
+            "percentage": "100.0%",
+            "ci95": {
+              "lower": 0.7719,
+              "upper": 1
+            },
+            "reason": null
+          }
+        }
+      },
+      "byComorbidity": {
+        "no_chronic_lung": {
+          "sampleCount": 52,
+          "confusionMatrix": {
+            "tp": 28,
+            "fp": 4,
+            "tn": 20,
+            "fn": 0,
+            "total": 52,
+            "actualPositive": 28,
+            "actualNegative": 24,
+            "predictedPositive": 32,
+            "predictedNegative": 20
+          },
+          "sensitivity": {
+            "applicable": true,
+            "value": 1,
+            "percentage": "100.0%",
+            "ci95": {
+              "lower": 0.8794,
+              "upper": 1
+            },
+            "reason": null
+          },
+          "specificity": {
+            "applicable": true,
+            "value": 0.8333,
+            "percentage": "83.3%",
+            "ci95": {
+              "lower": 0.6415,
+              "upper": 0.9332
+            },
+            "reason": null
+          },
+          "ppv": {
+            "applicable": true,
+            "value": 0.875,
+            "percentage": "87.5%",
+            "ci95": {
+              "lower": 0.7193,
+              "upper": 0.9503
+            },
+            "reason": null
+          },
+          "npv": {
+            "applicable": true,
+            "value": 1,
+            "percentage": "100.0%",
+            "ci95": {
+              "lower": 0.8389,
+              "upper": 1
+            },
+            "reason": null
+          }
+        },
+        "chronic_lung_disease": {
+          "sampleCount": 28,
+          "confusionMatrix": {
+            "tp": 14,
+            "fp": 6,
+            "tn": 8,
+            "fn": 0,
+            "total": 28,
+            "actualPositive": 14,
+            "actualNegative": 14,
+            "predictedPositive": 20,
+            "predictedNegative": 8
+          },
+          "sensitivity": {
+            "applicable": true,
+            "value": 1,
+            "percentage": "100.0%",
+            "ci95": {
+              "lower": 0.7847,
+              "upper": 1
+            },
+            "reason": null
+          },
+          "specificity": {
+            "applicable": true,
+            "value": 0.5714,
+            "percentage": "57.1%",
+            "ci95": {
+              "lower": 0.3259,
+              "upper": 0.7862
+            },
+            "reason": null
+          },
+          "ppv": {
+            "applicable": true,
+            "value": 0.7,
+            "percentage": "70.0%",
+            "ci95": {
+              "lower": 0.481,
+              "upper": 0.8545
+            },
+            "reason": null
+          },
+          "npv": {
+            "applicable": true,
+            "value": 1,
+            "percentage": "100.0%",
+            "ci95": {
+              "lower": 0.6756,
+              "upper": 1
+            },
+            "reason": null
+          }
+        }
+      }
+    },
+    "acceptanceCriteriaResults": {
+      "overallPassed": false,
+      "criteria": {
+        "sensitivity": {
+          "expected": ">= 0.950",
+          "actual": 1,
+          "passed": true
+        },
+        "specificity": {
+          "expected": ">= 0.800",
+          "actual": 0.7368,
+          "passed": false
+        },
+        "npv": {
+          "expected": ">= 0.950",
+          "actual": 1,
+          "passed": true
+        },
+        "rocAuc": {
+          "expected": ">= 0.880",
+          "actual": 0.9956,
+          "passed": true
+        },
+        "brierScore": {
+          "expected": "<= 0.150",
+          "actual": 0.0395,
+          "passed": true
+        },
+        "ece": {
+          "expected": "<= 0.100",
+          "actual": 0.087,
+          "passed": true
+        }
+      }
+    }
+  },
+  "candidateVersion_v1_1": {
+    "metadata": {
+      "evaluationDate": "2026-09-29T20:51:24.342Z",
+      "datasetVersion": "HealthVibe-Dataset-v1.0.0",
+      "rulesVersion": "HealthVibe-Rules-v1.1",
+      "evaluationProtocolVersion": "HealthVibe-Eval-v1.0.0",
+      "sampleSize": 80,
+      "specialistInterRaterKappa": 0.9749
+    },
+    "confusionMatrix": {
+      "tp": 42,
+      "fp": 2,
+      "tn": 36,
+      "fn": 0,
+      "total": 80,
+      "actualPositive": 42,
+      "actualNegative": 38,
+      "predictedPositive": 44,
+      "predictedNegative": 36
+    },
+    "diagnosticMetrics": {
+      "sensitivity": {
+        "applicable": true,
+        "value": 1,
+        "percentage": "100.0%",
+        "ci95": {
+          "lower": 0.9162,
+          "upper": 1
+        },
+        "reason": null
+      },
+      "specificity": {
+        "applicable": true,
+        "value": 0.9474,
+        "percentage": "94.7%",
+        "ci95": {
+          "lower": 0.8271,
+          "upper": 0.9854
+        },
+        "reason": null
+      },
+      "ppv": {
+        "applicable": true,
+        "value": 0.9545,
+        "percentage": "95.5%",
+        "ci95": {
+          "lower": 0.8486,
+          "upper": 0.9874
+        },
+        "reason": null
+      },
+      "npv": {
+        "applicable": true,
+        "value": 1,
+        "percentage": "100.0%",
+        "ci95": {
+          "lower": 0.9036,
+          "upper": 1
+        },
+        "reason": null
+      }
+    },
+    "rocAuc": {
+      "applicable": true,
+      "value": 0.9956,
+      "nPos": 42,
+      "nNeg": 38,
+      "uStatistic": 1589,
+      "rocPoints": [
+        {
+          "fpr": 0,
+          "tpr": 0,
+          "threshold": null
+        },
+        {
+          "fpr": 0,
+          "tpr": 0.0952,
+          "threshold": 0.9999
+        },
+        {
+          "fpr": 0,
+          "tpr": 0.1905,
+          "threshold": 0.9998
+        },
+        {
+          "fpr": 0,
+          "tpr": 0.2619,
+          "threshold": 0.9993
+        },
+        {
+          "fpr": 0,
+          "tpr": 0.3333,
+          "threshold": 0.9942
+        },
+        {
+          "fpr": 0,
+          "tpr": 0.5238,
+          "threshold": 0.9836
+        },
+        {
+          "fpr": 0,
+          "tpr": 0.5952,
+          "threshold": 0.9546
+        },
+        {
+          "fpr": 0,
+          "tpr": 0.7857,
+          "threshold": 0.8803
+        },
+        {
+          "fpr": 0,
+          "tpr": 0.8333,
+          "threshold": 0.7201
+        },
+        {
+          "fpr": 0.0526,
+          "tpr": 1,
+          "threshold": 0.4738
+        },
+        {
+          "fpr": 0.2632,
+          "tpr": 1,
+          "threshold": 0.2396
+        },
+        {
+          "fpr": 0.3421,
+          "tpr": 1,
+          "threshold": 0.0993
+        },
+        {
+          "fpr": 0.4474,
+          "tpr": 1,
+          "threshold": 0.0371
+        },
+        {
+          "fpr": 0.4737,
+          "tpr": 1,
+          "threshold": 0.0133
+        },
+        {
+          "fpr": 0.5789,
+          "tpr": 1,
+          "threshold": 0.0047
+        },
+        {
+          "fpr": 0.8421,
+          "tpr": 1,
+          "threshold": 0.0017
+        },
+        {
+          "fpr": 1,
+          "tpr": 1,
+          "threshold": 0.0006
+        },
+        {
+          "fpr": 1,
+          "tpr": 1,
+          "threshold": null
+        }
+      ],
+      "reason": null
+    },
+    "calibration": {
+      "applicable": true,
+      "brierScore": 0.0395,
+      "ece": 0.087,
+      "mce": 0.304,
+      "sampleCount": 80,
+      "curveBins": [
+        {
+          "binRange": "[0, 0.2]",
+          "count": 28,
+          "meanPredictedProbability": 0.0178,
+          "observedEventRate": 0,
+          "calibrationGap": 0.0178
+        },
+        {
+          "binRange": "[0.2, 0.4]",
+          "count": 8,
+          "meanPredictedProbability": 0.2396,
+          "observedEventRate": 0,
+          "calibrationGap": 0.2396
+        },
+        {
+          "binRange": "[0.4, 0.6]",
+          "count": 9,
+          "meanPredictedProbability": 0.4738,
+          "observedEventRate": 0.7778,
+          "calibrationGap": 0.304
+        },
+        {
+          "binRange": "[0.6, 0.8]",
+          "count": 2,
+          "meanPredictedProbability": 0.7201,
+          "observedEventRate": 1,
+          "calibrationGap": 0.2799
+        },
+        {
+          "binRange": "[0.8, 1]",
+          "count": 33,
+          "meanPredictedProbability": 0.9623,
+          "observedEventRate": 1,
+          "calibrationGap": 0.0377
+        }
+      ],
+      "reason": null
+    },
+    "errorAnalysis": {
+      "totalFalseNegatives": 0,
+      "falseNegatives": [],
+      "totalFalsePositives": 2,
+      "falsePositives": [
+        {
+          "subjectId": "HV-EVAL-009",
+          "age": 37,
+          "ageGroup": "young_adult",
+          "sex": "male",
+          "oxygenLevel": 93,
+          "breathingDifficulty": true,
+          "coughLevel": "moderate",
+          "symptomDurationDays": 7,
+          "chestPain": false,
+          "points": 7,
+          "predictedTriage": "urgent",
+          "groundTruthTriage": "high",
+          "rootCause": "Conservative risk-factor point accumulation on SpO2 93-94% cases"
+        },
+        {
+          "subjectId": "HV-EVAL-044",
+          "age": 30,
+          "ageGroup": "young_adult",
+          "sex": "female",
+          "oxygenLevel": 93,
+          "breathingDifficulty": true,
+          "coughLevel": "moderate",
+          "symptomDurationDays": 8,
+          "chestPain": false,
+          "points": 7,
+          "predictedTriage": "urgent",
+          "groundTruthTriage": "high",
+          "rootCause": "Conservative risk-factor point accumulation on SpO2 93-94% cases"
+        }
+      ]
+    },
+    "demographicSubgroups": {
+      "byAgeGroup": {
+        "geriatric": {
+          "sampleCount": 14,
+          "confusionMatrix": {
+            "tp": 6,
+            "fp": 0,
+            "tn": 8,
+            "fn": 0,
+            "total": 14,
+            "actualPositive": 6,
+            "actualNegative": 8,
+            "predictedPositive": 6,
+            "predictedNegative": 8
+          },
+          "sensitivity": {
+            "applicable": true,
+            "value": 1,
+            "percentage": "100.0%",
+            "ci95": {
+              "lower": 0.6097,
+              "upper": 1
+            },
+            "reason": null
+          },
+          "specificity": {
+            "applicable": true,
+            "value": 1,
+            "percentage": "100.0%",
+            "ci95": {
+              "lower": 0.6756,
+              "upper": 1
+            },
+            "reason": null
+          },
+          "ppv": {
+            "applicable": true,
+            "value": 1,
+            "percentage": "100.0%",
+            "ci95": {
+              "lower": 0.6097,
+              "upper": 1
+            },
+            "reason": null
+          },
+          "npv": {
+            "applicable": true,
+            "value": 1,
+            "percentage": "100.0%",
+            "ci95": {
+              "lower": 0.6756,
+              "upper": 1
+            },
+            "reason": null
+          }
+        },
+        "young_adult": {
+          "sampleCount": 28,
+          "confusionMatrix": {
+            "tp": 13,
+            "fp": 2,
+            "tn": 13,
+            "fn": 0,
+            "total": 28,
+            "actualPositive": 13,
+            "actualNegative": 15,
+            "predictedPositive": 15,
+            "predictedNegative": 13
+          },
+          "sensitivity": {
+            "applicable": true,
+            "value": 1,
+            "percentage": "100.0%",
+            "ci95": {
+              "lower": 0.7719,
+              "upper": 1
+            },
+            "reason": null
+          },
+          "specificity": {
+            "applicable": true,
+            "value": 0.8667,
+            "percentage": "86.7%",
+            "ci95": {
+              "lower": 0.6212,
+              "upper": 0.9626
+            },
+            "reason": null
+          },
+          "ppv": {
+            "applicable": true,
+            "value": 0.8667,
+            "percentage": "86.7%",
+            "ci95": {
+              "lower": 0.6212,
+              "upper": 0.9626
+            },
+            "reason": null
+          },
+          "npv": {
+            "applicable": true,
+            "value": 1,
+            "percentage": "100.0%",
+            "ci95": {
+              "lower": 0.7719,
+              "upper": 1
+            },
+            "reason": null
+          }
+        },
+        "middle_aged": {
+          "sampleCount": 21,
+          "confusionMatrix": {
+            "tp": 12,
+            "fp": 0,
+            "tn": 9,
+            "fn": 0,
+            "total": 21,
+            "actualPositive": 12,
+            "actualNegative": 9,
+            "predictedPositive": 12,
+            "predictedNegative": 9
+          },
+          "sensitivity": {
+            "applicable": true,
+            "value": 1,
+            "percentage": "100.0%",
+            "ci95": {
+              "lower": 0.7575,
+              "upper": 1
+            },
+            "reason": null
+          },
+          "specificity": {
+            "applicable": true,
+            "value": 1,
+            "percentage": "100.0%",
+            "ci95": {
+              "lower": 0.7008,
+              "upper": 1
+            },
+            "reason": null
+          },
+          "ppv": {
+            "applicable": true,
+            "value": 1,
+            "percentage": "100.0%",
+            "ci95": {
+              "lower": 0.7575,
+              "upper": 1
+            },
+            "reason": null
+          },
+          "npv": {
+            "applicable": true,
+            "value": 1,
+            "percentage": "100.0%",
+            "ci95": {
+              "lower": 0.7008,
+              "upper": 1
+            },
+            "reason": null
+          }
+        },
+        "pediatric": {
+          "sampleCount": 17,
+          "confusionMatrix": {
+            "tp": 11,
+            "fp": 0,
+            "tn": 6,
+            "fn": 0,
+            "total": 17,
+            "actualPositive": 11,
+            "actualNegative": 6,
+            "predictedPositive": 11,
+            "predictedNegative": 6
+          },
+          "sensitivity": {
+            "applicable": true,
+            "value": 1,
+            "percentage": "100.0%",
+            "ci95": {
+              "lower": 0.7412,
+              "upper": 1
+            },
+            "reason": null
+          },
+          "specificity": {
+            "applicable": true,
+            "value": 1,
+            "percentage": "100.0%",
+            "ci95": {
+              "lower": 0.6097,
+              "upper": 1
+            },
+            "reason": null
+          },
+          "ppv": {
+            "applicable": true,
+            "value": 1,
+            "percentage": "100.0%",
+            "ci95": {
+              "lower": 0.7412,
+              "upper": 1
+            },
+            "reason": null
+          },
+          "npv": {
+            "applicable": true,
+            "value": 1,
+            "percentage": "100.0%",
+            "ci95": {
+              "lower": 0.6097,
+              "upper": 1
+            },
+            "reason": null
+          }
+        }
+      },
+      "bySex": {
+        "male": {
+          "sampleCount": 43,
+          "confusionMatrix": {
+            "tp": 23,
+            "fp": 1,
+            "tn": 19,
+            "fn": 0,
+            "total": 43,
+            "actualPositive": 23,
+            "actualNegative": 20,
+            "predictedPositive": 24,
+            "predictedNegative": 19
+          },
+          "sensitivity": {
+            "applicable": true,
+            "value": 1,
+            "percentage": "100.0%",
+            "ci95": {
+              "lower": 0.8569,
+              "upper": 1
+            },
+            "reason": null
+          },
+          "specificity": {
+            "applicable": true,
+            "value": 0.95,
+            "percentage": "95.0%",
+            "ci95": {
+              "lower": 0.7639,
+              "upper": 0.9911
+            },
+            "reason": null
+          },
+          "ppv": {
+            "applicable": true,
+            "value": 0.9583,
+            "percentage": "95.8%",
+            "ci95": {
+              "lower": 0.7976,
+              "upper": 0.9926
+            },
+            "reason": null
+          },
+          "npv": {
+            "applicable": true,
+            "value": 1,
+            "percentage": "100.0%",
+            "ci95": {
+              "lower": 0.8318,
+              "upper": 1
+            },
+            "reason": null
+          }
+        },
+        "female": {
+          "sampleCount": 37,
+          "confusionMatrix": {
+            "tp": 19,
+            "fp": 1,
+            "tn": 17,
+            "fn": 0,
+            "total": 37,
+            "actualPositive": 19,
+            "actualNegative": 18,
+            "predictedPositive": 20,
+            "predictedNegative": 17
+          },
+          "sensitivity": {
+            "applicable": true,
+            "value": 1,
+            "percentage": "100.0%",
+            "ci95": {
+              "lower": 0.8318,
+              "upper": 1
+            },
+            "reason": null
+          },
+          "specificity": {
+            "applicable": true,
+            "value": 0.9444,
+            "percentage": "94.4%",
+            "ci95": {
+              "lower": 0.7424,
+              "upper": 0.9901
+            },
+            "reason": null
+          },
+          "ppv": {
+            "applicable": true,
+            "value": 0.95,
+            "percentage": "95.0%",
+            "ci95": {
+              "lower": 0.7639,
+              "upper": 0.9911
+            },
+            "reason": null
+          },
+          "npv": {
+            "applicable": true,
+            "value": 1,
+            "percentage": "100.0%",
+            "ci95": {
+              "lower": 0.8157,
+              "upper": 1
+            },
+            "reason": null
+          }
+        }
+      },
+      "byComorbidity": {
+        "no_chronic_lung": {
+          "sampleCount": 52,
+          "confusionMatrix": {
+            "tp": 28,
+            "fp": 0,
+            "tn": 24,
+            "fn": 0,
+            "total": 52,
+            "actualPositive": 28,
+            "actualNegative": 24,
+            "predictedPositive": 28,
+            "predictedNegative": 24
+          },
+          "sensitivity": {
+            "applicable": true,
+            "value": 1,
+            "percentage": "100.0%",
+            "ci95": {
+              "lower": 0.8794,
+              "upper": 1
+            },
+            "reason": null
+          },
+          "specificity": {
+            "applicable": true,
+            "value": 1,
+            "percentage": "100.0%",
+            "ci95": {
+              "lower": 0.862,
+              "upper": 1
+            },
+            "reason": null
+          },
+          "ppv": {
+            "applicable": true,
+            "value": 1,
+            "percentage": "100.0%",
+            "ci95": {
+              "lower": 0.8794,
+              "upper": 1
+            },
+            "reason": null
+          },
+          "npv": {
+            "applicable": true,
+            "value": 1,
+            "percentage": "100.0%",
+            "ci95": {
+              "lower": 0.862,
+              "upper": 1
+            },
+            "reason": null
+          }
+        },
+        "chronic_lung_disease": {
+          "sampleCount": 28,
+          "confusionMatrix": {
+            "tp": 14,
+            "fp": 2,
+            "tn": 12,
+            "fn": 0,
+            "total": 28,
+            "actualPositive": 14,
+            "actualNegative": 14,
+            "predictedPositive": 16,
+            "predictedNegative": 12
+          },
+          "sensitivity": {
+            "applicable": true,
+            "value": 1,
+            "percentage": "100.0%",
+            "ci95": {
+              "lower": 0.7847,
+              "upper": 1
+            },
+            "reason": null
+          },
+          "specificity": {
+            "applicable": true,
+            "value": 0.8571,
+            "percentage": "85.7%",
+            "ci95": {
+              "lower": 0.6006,
+              "upper": 0.9599
+            },
+            "reason": null
+          },
+          "ppv": {
+            "applicable": true,
+            "value": 0.875,
+            "percentage": "87.5%",
+            "ci95": {
+              "lower": 0.6398,
+              "upper": 0.965
+            },
+            "reason": null
+          },
+          "npv": {
+            "applicable": true,
+            "value": 1,
+            "percentage": "100.0%",
+            "ci95": {
+              "lower": 0.7575,
+              "upper": 1
+            },
+            "reason": null
+          }
+        }
+      }
+    },
+    "acceptanceCriteriaResults": {
+      "overallPassed": true,
+      "criteria": {
+        "sensitivity": {
+          "expected": ">= 0.950",
+          "actual": 1,
+          "passed": true
+        },
+        "specificity": {
+          "expected": ">= 0.800",
+          "actual": 0.9474,
+          "passed": true
+        },
+        "npv": {
+          "expected": ">= 0.950",
+          "actual": 1,
+          "passed": true
+        },
+        "rocAuc": {
+          "expected": ">= 0.880",
+          "actual": 0.9956,
+          "passed": true
+        },
+        "brierScore": {
+          "expected": "<= 0.150",
+          "actual": 0.0395,
+          "passed": true
+        },
+        "ece": {
+          "expected": "<= 0.100",
+          "actual": 0.087,
+          "passed": true
+        }
+      }
+    }
+  }
+}

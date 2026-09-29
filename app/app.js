@@ -9628,9 +9628,53 @@ const FEEDBACK_CATEGORIES = {
   ]
 };
 
+const SUPPORT_TICKET_TYPES = {
+  EXPERIENCE_RATING: "experience_rating",
+  BUG_REPORT: "bug_report",
+  INACCURATE_INFORMATION: "inaccurate_information",
+  FEATURE_REQUEST: "feature_request",
+  ACCOUNT_RECOVERY: "account_recovery",
+  CONTACT_FORM: "contact_form"
+};
+
 let currentFeedbackPerspective = "patient";
 let currentFeedbackFilter = "all";
 let cachedFeedbacks = [];
+
+function handleFeedbackTypeChange(type) {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  const starWidgetGroup = document.getElementById("feedbackStarWidgetGroup");
+  const subjectGroup = document.getElementById("feedbackSubjectGroup");
+  const safetyAlert = document.getElementById("inaccurateInfoSafetyAlert");
+  const commentLabel = document.getElementById("feedbackCommentLabel");
+  const commentInput = document.getElementById("feedbackCommentInput");
+
+  if (type === "experience_rating") {
+    if (starWidgetGroup) starWidgetGroup.style.display = "block";
+    if (subjectGroup) subjectGroup.style.display = "none";
+    if (safetyAlert) safetyAlert.style.display = "none";
+    if (commentLabel) commentLabel.textContent = isEn ? "Detailed Feedback & Suggestions:" : "تفاصيل الملاحظات والتجربة السريرية:";
+    if (commentInput) commentInput.placeholder = isEn ? "Write your experience and suggestions..." : "اكتب رأيك أو ملاحظاتك السريرية بدقة لمساعدتنا على تحسين الخدمة...";
+  } else if (type === "bug_report") {
+    if (starWidgetGroup) starWidgetGroup.style.display = "none";
+    if (subjectGroup) subjectGroup.style.display = "block";
+    if (safetyAlert) safetyAlert.style.display = "none";
+    if (commentLabel) commentLabel.textContent = isEn ? "Bug Description & Steps to Reproduce:" : "وصف الخطأ التقني وخطوات تكراره:";
+    if (commentInput) commentInput.placeholder = isEn ? "Describe what happened, browser, and device..." : "اشرح الخطأ التقني الذي واجهك، الجهاز، والمتصفح...";
+  } else if (type === "inaccurate_information") {
+    if (starWidgetGroup) starWidgetGroup.style.display = "none";
+    if (subjectGroup) subjectGroup.style.display = "block";
+    if (safetyAlert) safetyAlert.style.display = "block";
+    if (commentLabel) commentLabel.textContent = isEn ? "Clinical Discrepancy & Verified Clinical Notes:" : "المعلومات غير الدقيقة والملاحظات السريرية الصحيحة:";
+    if (commentInput) commentInput.placeholder = isEn ? "Specify the exact discrepancy on report/assessment..." : "وضح عدم الدقة في التقييم أو التقرير، والأعراض الحقيقية للتصحيح...";
+  } else if (type === "feature_request") {
+    if (starWidgetGroup) starWidgetGroup.style.display = "none";
+    if (subjectGroup) subjectGroup.style.display = "block";
+    if (safetyAlert) safetyAlert.style.display = "none";
+    if (commentLabel) commentLabel.textContent = isEn ? "Feature Proposal & Clinical Workflow Impact:" : "تفاصيل الميزة المقترحة وأثرها على سير العمل:";
+    if (commentInput) commentInput.placeholder = isEn ? "Describe your suggestion or feature idea..." : "اشرح فكرة الميزة المقترحة وكيف ستساعد في تحسين الرعاية...";
+  }
+}
 
 function setFeedbackPerspective(role) {
   currentFeedbackPerspective = role === "doctor" ? "doctor" : "patient";
@@ -9795,29 +9839,40 @@ async function handleFeedbackSubmit() {
   try {
     const isDoc = (typeof isDoctorRole === "function" && isDoctorRole(selectedRole)) || (typeof selectedRole !== "undefined" && selectedRole === "doctor");
     const userRole = currentFeedbackPerspective || (isDoc ? "doctor" : "patient");
+    const ticketType = document.getElementById("feedbackTypeSelect")?.value || "experience_rating";
+    const subject = document.getElementById("feedbackSubjectInput")?.value?.trim() || "";
+    const isMedicalInaccuracy = ticketType === "inaccurate_information";
+
     handleFeedbackSubmit._pending = true;
     const saved = await requireSuccessfulMutation("/api/feedback/submit", {
       method: "POST",
       body: JSON.stringify({
-        rating: ratingVal,
+        rating: ticketType === "experience_rating" ? ratingVal : null,
+        type: ticketType,
+        subject: subject || (ticketType === "experience_rating" ? `Rating (${ratingVal}★)` : ticketType),
         category,
         comment: commentInput,
         role: userRole,
         caseId: refInput.startsWith("case_") ? refInput : null,
         appointmentId: refInput.startsWith("appt_") ? refInput : null,
-        isPublic
+        isPublic,
+        hasSensitiveMedicalContent: isMedicalInaccuracy,
+        medicalDetails: isMedicalInaccuracy ? { issue: commentInput, caseId: refInput } : null
       })
-    }, data => data.success === true && data.feedbackId && data.feedback);
+    }, data => data.success === true && (data.feedbackId || data.ticketId));
 
     purgeSensitiveLegacyStorage();
 
     if (typeof showToast === "function") {
-      showToast(isEn ? "Thank you! Your feedback has been received." : "شكراً لك! تم استلام تقييمك وملاحظاتك بنجاح.");
+      showToast(isEn ? "Thank you! Your ticket has been logged and assigned." : "شكراً لك! تم استلام تذكرتك وتحديد أولويتها وتعيين المسؤول بنجاح.");
     }
 
     // Reset inputs
     if (document.getElementById("feedbackCommentInput")) {
       document.getElementById("feedbackCommentInput").value = "";
+    }
+    if (document.getElementById("feedbackSubjectInput")) {
+      document.getElementById("feedbackSubjectInput").value = "";
     }
     if (document.getElementById("feedbackRefInput")) {
       document.getElementById("feedbackRefInput").value = "";
@@ -9885,7 +9940,7 @@ async function submitModalFeedback() {
         appointmentId: ctx.appointmentId || null,
         isPublic: true
       })
-    }, data => data.success === true && data.feedbackId && data.feedback);
+    }, data => data.success === true && (data.feedbackId || data.ticketId));
     purgeSensitiveLegacyStorage();
     closeFeedbackModal();
     if (typeof showToast === "function") {
@@ -9928,6 +9983,7 @@ async function renderFeedbackScreen() {
   }
 
   await renderFeedbackHistory();
+  await renderFaqHelpCenter("all", "");
 }
 
 async function renderFeedbackHistory() {
@@ -9939,9 +9995,24 @@ async function renderFeedbackHistory() {
 
   let feedbacks = [];
 
-  if (typeof db !== "undefined" && db && user && !user.isAnonymous) {
+  if (user && !user.isAnonymous) {
     try {
-      const snap = await db.collection("feedbacks").limit(40).get();
+      const token = await user.getIdToken();
+      const res = await fetch("/api/feedback/list", {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        feedbacks = data.feedbacks || data.tickets || [];
+      }
+    } catch (e) {
+      console.warn("Feedback API fetch fallback:", e);
+    }
+  }
+
+  if (feedbacks.length === 0 && typeof db !== "undefined" && db && user && !user.isAnonymous) {
+    try {
+      const snap = await db.collection("feedbacks").where("userId", "==", user.uid).limit(40).get();
       snap.forEach(d => feedbacks.push(d.data()));
     } catch (e) {
       console.warn("Firestore feedback fetch fallback:", e);
@@ -9951,17 +10022,19 @@ async function renderFeedbackHistory() {
   const localList = [];
   const map = new Map();
   [...feedbacks, ...localList].forEach(item => {
-    if (item && item.feedbackId && !map.has(item.feedbackId)) {
-      map.set(item.feedbackId, item);
+    const key = item.ticketId || item.feedbackId;
+    if (item && key && !map.has(key)) {
+      map.set(key, item);
     }
   });
 
   cachedFeedbacks = Array.from(map.values()).sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
 
   const total = cachedFeedbacks.length;
-  const avg = total > 0 ? (cachedFeedbacks.reduce((acc, c) => acc + (Number(c.rating) || 0), 0) / total).toFixed(1) : "--";
-  const positiveCount = cachedFeedbacks.filter(c => Number(c.rating) >= 4).length;
-  const satisfactionRate = total > 0 ? Math.round((positiveCount / total) * 100) : 0;
+  const ratingItems = cachedFeedbacks.filter(c => c.rating);
+  const avg = ratingItems.length > 0 ? (ratingItems.reduce((acc, c) => acc + (Number(c.rating) || 0), 0) / ratingItems.length).toFixed(1) : "--";
+  const positiveCount = ratingItems.filter(c => Number(c.rating) >= 4).length;
+  const satisfactionRate = ratingItems.length > 0 ? Math.round((positiveCount / ratingItems.length) * 100) : 0;
 
   const kpiAvg = document.getElementById("kpiAvgRating");
   if (kpiAvg) kpiAvg.textContent = `${avg} ★`;
@@ -9973,7 +10046,7 @@ async function renderFeedbackHistory() {
   if (kpiTot) kpiTot.textContent = `${total}`;
 
   const totalBadge = document.getElementById("feedbackTotalCountBadge");
-  if (totalBadge) totalBadge.textContent = isEn ? `${total} reviews` : `${total} تقييم`;
+  if (totalBadge) totalBadge.textContent = isEn ? `${total} tickets` : `${total} تذكرة/تقييم`;
 
   let displayed = cachedFeedbacks;
   if (currentFeedbackFilter === "mine" && user) {
@@ -9988,8 +10061,8 @@ async function renderFeedbackHistory() {
     container.innerHTML = `
       <div class="hv-state-card" style="margin: 16px 0; padding: 24px 16px;">
         <span class="state-icon">⭐</span>
-        <h4>${isEn ? "No feedback has been submitted yet" : "لا توجد تقييمات مسجلة حتى الآن"}</h4>
-        <p>${isEn ? "Submitted feedback will appear here after it is saved to your account or authorized workspace." : "ستظهر التقييمات هنا بعد حفظها فعلياً وربطها بحساب أو مساحة عمل مصرح بها."}</p>
+        <h4>${isEn ? "No tickets or feedback submitted yet" : "لا توجد تذاكر أو تقييمات مسجلة حتى الآن"}</h4>
+        <p>${isEn ? "Submitted tickets will appear here with real-time status and assigned owner." : "ستظهر تذاكرك هنا مع الأولوية وحالة المتابعة والمسؤول المكلف."}</p>
       </div>
     `;
     return;
@@ -9999,29 +10072,218 @@ async function renderFeedbackHistory() {
     const isDoc = f.role === "doctor" || f.role === "doctor_pending";
     const roleBadgeClass = isDoc ? "feedback-badge-role doctor" : "feedback-badge-role patient";
     const roleIcon = isDoc ? "🩺" : "👤";
-    const roleLabel = isDoc ? (isEn ? "Doctor Note" : "ملاحظة طبيب") : (isEn ? "Patient Review" : "تجربة مريض");
-    const starsStr = "★".repeat(Math.max(1, Math.min(5, Number(f.rating) || 5)));
-    const dateFormatted = f.createdAt ? new Date(f.createdAt).toLocaleDateString(isEn ? "en-US" : "ar-EG", { month: "short", day: "numeric" }) : "";
+    const roleLabel = isDoc ? (isEn ? "Doctor" : "طبيب") : (isEn ? "Patient" : "مريض");
+    const starsStr = f.rating ? "★".repeat(Math.max(1, Math.min(5, Number(f.rating) || 5))) : "";
+    const dateFormatted = f.createdAt ? new Date(f.createdAt).toLocaleDateString(isEn ? "en-US" : "ar-EG", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+    const ticketId = f.ticketId || f.feedbackId;
+
+    // Type label
+    const typeLabels = {
+      experience_rating: { ar: "⭐ تقييم تجربة", en: "⭐ Experience Rating" },
+      bug_report: { ar: "🐞 خطأ تقني", en: "🐞 Bug Report" },
+      inaccurate_information: { ar: "⚠️ بلاغ دقة سريرية", en: "⚠️ Clinical Inaccuracy" },
+      feature_request: { ar: "💡 اقتراح ميزة", en: "💡 Feature Request" },
+      account_recovery: { ar: "🔑 استعادة حساب", en: "🔑 Account Recovery" },
+      contact_form: { ar: "✉️ استفسار دعم", en: "✉️ Support Inquiry" }
+    };
+    const typeInfo = typeLabels[f.type] || { ar: "⭐ ملاحظة", en: "⭐ Feedback" };
+
+    // Status pill
+    const statusBadges = {
+      open: `<span class="pill pending" style="font-size:11px;">⏳ ${isEn ? "Open" : "مفتوحة"}</span>`,
+      in_progress: `<span class="pill info" style="font-size:11px;">⚙️ ${isEn ? "In Progress" : "قيد المعالجة"}</span>`,
+      escalated: `<span class="pill danger" style="font-size:11px;">🚨 ${isEn ? "Escalated" : "مصعّدة"}</span>`,
+      resolved: `<span class="pill ok" style="font-size:11px;">✅ ${isEn ? "Resolved" : "مكتملة"}</span>`,
+      closed: `<span class="pill" style="font-size:11px; background:var(--surface-3);">🔒 ${isEn ? "Closed" : "مغلقة"}</span>`
+    };
+    const statusPill = statusBadges[f.status] || `<span class="pill ok">${f.status || "received"}</span>`;
+
+    // Priority pill
+    const priorityBadges = {
+      critical: `<span class="pill danger" style="font-size:10px;">🔴 ${isEn ? "Critical" : "حرجة"}</span>`,
+      high: `<span class="pill danger" style="font-size:10px; background:rgba(239,68,68,0.15);">🟠 ${isEn ? "High" : "عالية"}</span>`,
+      medium: `<span class="pill warning" style="font-size:10px;">🟡 ${isEn ? "Medium" : "متوسطة"}</span>`,
+      low: `<span class="pill ok" style="font-size:10px;">🟢 ${isEn ? "Low" : "منخفضة"}</span>`
+    };
+    const priorityPill = priorityBadges[f.priority] || "";
+
+    const ownerName = f.owner?.name || (isEn ? "Support Helpdesk" : "مكتب الدعم الموحد");
+    const canEscalate = f.status !== "escalated" && f.status !== "resolved" && f.status !== "closed";
 
     return `
-      <div class="feedback-item-card" id="fb-card-${f.feedbackId}">
+      <div class="feedback-item-card" id="fb-card-${ticketId}" style="border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 12px; background: var(--surface);">
         <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;">
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <strong style="font-size: 14px; color: var(--ink);">${f.userName || (isDoc ? "طبيب ممارس" : "مريض")}</strong>
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <strong style="font-size: 14px; color: var(--ink);">${f.subject || f.userName || "Ticket"}</strong>
             <span class="${roleBadgeClass}">${roleIcon} ${roleLabel}</span>
+            <span class="pill" style="font-size:10.5px; background:rgba(9,184,182,0.1); color:var(--teal); font-weight:700;">${isEn ? typeInfo.en : typeInfo.ar}</span>
           </div>
-          <div style="display: flex; align-items: center; gap: 6px;">
-            <span style="color: #f59e0b; font-size: 16px; letter-spacing: 1px;">${starsStr}</span>
+          <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+            ${priorityPill}
+            ${statusPill}
+            ${starsStr ? `<span style="color: #f59e0b; font-size: 15px; letter-spacing: 1px;">${starsStr}</span>` : ""}
             <span style="font-size: 11px; color: var(--muted);">${dateFormatted}</span>
           </div>
         </div>
-        <p style="font-size: 13px; color: var(--ink); line-height: 1.5; margin: 0 0 6px;">
-          ${f.comment}
+
+        <p style="font-size: 13px; color: var(--ink); line-height: 1.5; margin: 0 0 8px;">
+          ${f.comment || f.description || ""}
         </p>
-        ${f.category ? `<span class="pill" style="font-size: 10px; background: var(--surface-3); color: var(--muted);">${f.category}</span>` : ""}
+
+        ${f.hasSensitiveMedicalContent ? `
+          <div style="background: rgba(13, 148, 136, 0.08); border-left: 3px solid var(--teal); padding: 6px 10px; border-radius: 6px; font-size: 11.5px; color: var(--teal); margin-bottom: 8px;">
+            🔒 ${isEn ? "Contains Protected Clinical Content (Restricted Access)" : "يتضمن محتوى سريري محمي (صلاحيات مقيدة)"}
+          </div>
+        ` : ""}
+
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--line); font-size: 11.5px; color: var(--muted);">
+          <div>
+            <span>👤 ${isEn ? "Owner:" : "المسؤول:"} <strong>${ownerName}</strong></span>
+            ${f.caseId ? `<span style="margin-inline-start: 8px;">📋 ${f.caseId}</span>` : ""}
+          </div>
+          <div>
+            ${canEscalate ? `
+              <button type="button" class="outline-button" onclick="escalateTicketClient('${ticketId}')" style="font-size: 11px; padding: 3px 10px; color: #ef4444; border-color: rgba(239, 68, 68, 0.4); border-radius: 6px; cursor: pointer;">
+                🚨 ${isEn ? "Escalate Ticket" : "تصعيد لضابط السلامة"}
+              </button>
+            ` : ""}
+          </div>
+        </div>
       </div>
     `;
   }).join("");
+}
+
+async function escalateTicketClient(ticketId) {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  const user = (typeof auth !== "undefined" && auth) ? auth.currentUser : null;
+  if (!user) {
+    if (typeof showToast === "function") showToast(isEn ? "Please sign in to escalate." : "يرجى تسجيل الدخول أولاً.");
+    return;
+  }
+  const reason = prompt(isEn ? "Reason for escalation to Clinical Safety Officer:" : "يرجى كتابة سبب التصعيد لضابط السلامة السريرية:");
+  if (reason === null) return;
+
+  try {
+    const token = await user.getIdToken();
+    const res = await fetch(`/api/feedback/tickets/${ticketId}/escalate`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`
+      },
+      body: JSON.stringify({ reason: reason.trim() || "Urgent clinical safety escalation" })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || "Failed to escalate ticket");
+    if (typeof showToast === "function") {
+      showToast(isEn ? "Ticket escalated to Clinical Safety Officer." : "تم تصعيد التذكرة لضابط السلامة السريرية بنجاح.");
+    }
+    await renderFeedbackHistory();
+  } catch (err) {
+    if (typeof showToast === "function") {
+      showToast(isEn ? "Failed to escalate: " + err.message : "تعذر التصعيد: " + err.message);
+    }
+  }
+}
+
+async function renderFaqHelpCenter(category = "all", searchQuery = "") {
+  const container = document.getElementById("faqAccordionContainer");
+  if (!container) return;
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+
+  try {
+    const res = await fetch(`/api/support/faq?category=${encodeURIComponent(category)}&search=${encodeURIComponent(searchQuery)}`);
+    const data = await res.json();
+    const faqs = data.faqs || [];
+
+    if (faqs.length === 0) {
+      container.innerHTML = `<p style="color:var(--muted); font-size:13px; text-align:center; padding:16px;">${isEn ? "No FAQs match your search." : "لا توجد أسئلة مطابقة لبحثك."}</p>`;
+      return;
+    }
+
+    container.innerHTML = faqs.map(item => `
+      <details class="faq-item" style="margin-bottom:8px; border:1px solid var(--line); border-radius:10px; padding:10px 14px; background:var(--surface-2); cursor:pointer;">
+        <summary style="font-weight:700; font-size:13px; color:var(--ink);">${isEn ? item.questionEn : item.questionAr}</summary>
+        <p style="margin:8px 0 0; font-size:12.5px; color:var(--muted); line-height:1.5;">${isEn ? item.answerEn : item.answerAr}</p>
+        <span class="pill" style="font-size:10px; margin-top:6px; display:inline-block; background:rgba(9,184,182,0.1); color:var(--teal);">${isEn ? item.categoryNameEn : item.categoryNameAr}</span>
+      </details>
+    `).join("");
+  } catch (e) {
+    console.warn("FAQ fetch error:", e);
+  }
+}
+
+async function submitAccountRecoveryClient(e) {
+  if (e && e.preventDefault) e.preventDefault();
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  const identifier = document.getElementById("accountRecoveryIdentifier")?.value?.trim();
+  const issueType = document.getElementById("accountRecoveryIssueType")?.value || "lost_mfa";
+  const contactPhone = document.getElementById("accountRecoveryContact")?.value?.trim();
+  const explanation = document.getElementById("accountRecoveryExplanation")?.value?.trim();
+
+  if (!identifier) {
+    if (typeof showToast === "function") showToast(isEn ? "Please provide account email or phone." : "يرجى إدخال البريد الإلكتروني أو رقم الهاتف.");
+    return;
+  }
+
+  try {
+    const res = await fetch("/api/support/account-recovery", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ identifier, issueType, contactPhone, explanation })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || "Failed to submit recovery request");
+    if (typeof showToast === "function") {
+      showToast(isEn ? `Recovery request submitted! Ref: ${data.referenceCode}` : `تم استلام طلب الاستعادة! الرقم المرجعي: ${data.referenceCode}`);
+    }
+    const container = document.getElementById("accountRecoveryResultBox");
+    if (container) {
+      container.style.display = "block";
+      container.innerHTML = `<strong>${isEn ? "Request Reference:" : "الرقم المرجعي للطلب:"}</strong> <code>${data.referenceCode}</code><p style="margin:4px 0 0; font-size:12px;">${isEn ? data.message : data.messageAr}</p>`;
+    }
+  } catch (err) {
+    if (typeof showToast === "function") {
+      showToast(isEn ? "Failed: " + err.message : "خطأ: " + err.message);
+    }
+  }
+}
+
+async function submitContactClient(e) {
+  if (e && e.preventDefault) e.preventDefault();
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  const name = document.getElementById("contactFormName")?.value?.trim();
+  const email = document.getElementById("contactFormEmail")?.value?.trim();
+  const subject = document.getElementById("contactFormSubject")?.value?.trim();
+  const category = document.getElementById("contactFormCategory")?.value || "general";
+  const message = document.getElementById("contactFormMessage")?.value?.trim();
+
+  if (!name || !email || !message) {
+    if (typeof showToast === "function") showToast(isEn ? "Please complete all required fields." : "يرجى ملء جميع الحقول المطلوبة.");
+    return;
+  }
+
+  try {
+    const res = await fetch("/api/support/contact", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, email, subject, category, message })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || "Failed to send message");
+    if (typeof showToast === "function") {
+      showToast(isEn ? "Your inquiry has been sent to support." : "تم إرسال استفسارك إلى فريق الدعم بنجاح.");
+    }
+    if (document.getElementById("contactFormName")) document.getElementById("contactFormName").value = "";
+    if (document.getElementById("contactFormEmail")) document.getElementById("contactFormEmail").value = "";
+    if (document.getElementById("contactFormSubject")) document.getElementById("contactFormSubject").value = "";
+    if (document.getElementById("contactFormMessage")) document.getElementById("contactFormMessage").value = "";
+  } catch (err) {
+    if (typeof showToast === "function") {
+      showToast(isEn ? "Error: " + err.message : "خطأ: " + err.message);
+    }
+  }
 }
 
 function filterFeedbackList(filter) {
@@ -10049,6 +10311,12 @@ window.submitModalFeedback = submitModalFeedback;
 window.renderFeedbackScreen = renderFeedbackScreen;
 window.renderFeedbackHistory = renderFeedbackHistory;
 window.filterFeedbackList = filterFeedbackList;
+window.SUPPORT_TICKET_TYPES = SUPPORT_TICKET_TYPES;
+window.handleFeedbackTypeChange = handleFeedbackTypeChange;
+window.escalateTicketClient = escalateTicketClient;
+window.renderFaqHelpCenter = renderFaqHelpCenter;
+window.submitAccountRecoveryClient = submitAccountRecoveryClient;
+window.submitContactClient = submitContactClient;
 
 // --- Doctor Account Lifecycle: Application -> Verification -> Approval ---
 let selectedDoctorAppFile = null;
@@ -11788,6 +12056,10 @@ function evaluateRulesBasedRisk({ oxygenLevel, hasDyspnea, coughKey, durationDay
   else if (oxygenLevel > 0 && oxygenLevel < ruleSet.spo2Thresholds.highBelow || points >= ruleSet.scoreThresholds.high) priority = "high";
 
   const meta = AssessmentDictionaries.priority[priority];
+  const factorExplanation = {
+    summaryEn: `Triage Priority: ${priority.toUpperCase()} (${points} points; Urgent threshold = ${ruleSet.scoreThresholds.urgent}, High threshold = ${ruleSet.scoreThresholds.high}). Deterministic decision-support; decision rests with treating clinician.`,
+    summaryAr: `أولوية الفرز: ${meta.riskAr} (${points} نقاط؛ عتبة العاجل = ${ruleSet.scoreThresholds.urgent}، عتبة العالي = ${ruleSet.scoreThresholds.high}). فرز استرشادي فقط والقرار السريري يعود للطبيب المعالج.`
+  };
   return {
     priority,
     points,
@@ -11803,7 +12075,15 @@ function evaluateRulesBasedRisk({ oxygenLevel, hasDyspnea, coughKey, durationDay
     reviewStatus: ruleSet.reviewStatus,
     validated: false,
     version: ruleSet.version,
-    effectiveFrom: ruleSet.effectiveFrom
+    effectiveFrom: ruleSet.effectiveFrom,
+    rulesEngineSnapshot: {
+      ruleSetId: ruleSetId,
+      version: ruleSet.version,
+      effectiveFrom: ruleSet.effectiveFrom,
+      scoreThresholds: ruleSet.scoreThresholds,
+      spo2Thresholds: ruleSet.spo2Thresholds
+    },
+    factorExplanation
   };
 }
 
@@ -12802,6 +13082,8 @@ function buildAssessmentModel({
         ruleEngineVersion: riskEvaluation.version,
         ruleEngineEffectiveFrom: riskEvaluation.effectiveFrom,
         ruleEngineReviewStatus: riskEvaluation.reviewStatus,
+        rulesEngineSnapshot: riskEvaluation.rulesEngineSnapshot,
+        factorExplanation: riskEvaluation.factorExplanation,
         ruleScoreValidated: false,
         confidence: "not-validated-rule-score",
         modelVersion: MODEL_VERSION
@@ -12851,6 +13133,8 @@ function buildAssessmentModel({
     ruleEngineVersion: riskEvaluation.version,
     ruleEngineEffectiveFrom: riskEvaluation.effectiveFrom,
     ruleEngineReviewStatus: riskEvaluation.reviewStatus,
+    rulesEngineSnapshot: riskEvaluation.rulesEngineSnapshot,
+    factorExplanation: riskEvaluation.factorExplanation,
     ruleScoreValidated: false,
     confidence: "not-validated-rule-score",
     reportVersion: REPORT_VERSION,
@@ -13727,23 +14011,128 @@ if (verifyModalCloseBtn) {
   verifyModalCloseBtn.addEventListener("click", closeVerifyRequiredModal);
 }
 // ── CLINICAL ASSISTANT GUARDRAILS: STRICTLY NO AUTONOMOUS DIAGNOSIS & NO TREATMENT PRESCRIBING ──
-function evaluateClinicalGuardrails(query, isEn) {
-  const q = String(query || "").toLowerCase();
+const ASSISTANT_CHAT_RETENTION_DAYS = 30;
 
-  // 1. Emergency Red Flags (Triage Guardrail)
-  const isEmergency = /ألم في الصدر|الم في الصدر|وجع في صدري|خنقة شديدة|مش قادر اتنفس|مش قادرة اتنفس|اختناق|إغماء|اغماء|كحة دم|سعال دم|ازرقاق|توقف التنفس|chest pain|cannot breathe|can't breathe|suffocating|fainting|coughing blood|blue lips|shortness of breath emergency/i.test(q);
+function getAssistantStorageKey(userId, caseId) {
+  return `hv_assistant_chat_${userId || "guest"}_${caseId || "general"}`;
+}
+
+function pruneAssistantChatHistory(userId, caseId) {
+  if (typeof localStorage === "undefined" || !localStorage) return [];
+  try {
+    const key = getAssistantStorageKey(userId, caseId);
+    const raw = localStorage.getItem(key);
+    if (!raw) return [];
+    const list = JSON.parse(raw);
+    if (!Array.isArray(list)) return [];
+    const now = Date.now();
+    const valid = list.filter((item) => {
+      if (!item || !item.expiresAt) return false;
+      const exp = new Date(item.expiresAt).getTime();
+      return !isNaN(exp) && exp > now;
+    });
+    if (valid.length !== list.length) {
+      localStorage.setItem(key, JSON.stringify(valid));
+    }
+    return valid;
+  } catch (err) {
+    return [];
+  }
+}
+
+function saveAssistantChatMessage(userId, caseId, sender, content) {
+  if (typeof localStorage === "undefined" || !localStorage) return;
+  try {
+    const key = getAssistantStorageKey(userId, caseId);
+    const history = pruneAssistantChatHistory(userId, caseId);
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + ASSISTANT_CHAT_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+    history.push({
+      id: "msg_" + Math.random().toString(36).slice(2, 9) + "_" + Date.now(),
+      sender,
+      content,
+      timestamp: now.toISOString(),
+      expiresAt: expiresAt.toISOString()
+    });
+    const bounded = history.slice(-60);
+    localStorage.setItem(key, JSON.stringify(bounded));
+  } catch (err) {}
+}
+
+function clearAssistantChatHistory() {
+  const user = typeof auth !== "undefined" && auth ? auth.currentUser : null;
+  const caseId = (typeof window !== "undefined" && window._assistantCaseStatus?.report?.id) || "general";
+  const userId = user ? user.uid : "guest";
+  if (typeof localStorage !== "undefined" && localStorage) {
+    try {
+      localStorage.removeItem(getAssistantStorageKey(userId, caseId));
+      localStorage.removeItem(getAssistantStorageKey(userId, "general"));
+    } catch (e) {}
+  }
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  if (typeof showToast === "function") {
+    showToast(isEn ? "Conversation history cleared." : "تم مسح سجل المحادثة بنجاح.");
+  }
+  if (typeof renderAssistantScreen === "function") {
+    renderAssistantScreen();
+  }
+}
+
+function evaluateClinicalGuardrails(query, isEn) {
+  const q = String(query || "").trim().toLowerCase();
+
+  // 1. Prompt Injections & Adversarial Jailbreaks (Security & Integrity Guardrail)
+  const isPromptInjection = /ignore\s+(all\s+)?(previous|prior|above|system)\s+instructions|system\s+override|developer\s+mode|\bdan\b|jailbreak|pretend\s+you\s+are|act\s+as\s+an?\s+unrestricted|unrestricted\s+doctor|forget\s+(all\s+)?(the\s+)?(rules|guidelines|guardrails|safety|report)|disregard\s+(all\s+)?(the\s+)?safety|bypass(es)?\s+(guardrails|safety|rules|restrictions)|تجاهل\s+(جميع\s+)?التعليمات|تجاهل\s+الحواجز|تخطي\s+قواعد\s+الأمان|وضع\s+المطور|أنت\s+الآن\s+طبيب\s+حر|تجاهل\s+التقرير/i.test(q);
+  if (isPromptInjection) {
+    return {
+      triggered: true,
+      type: "prompt_injection",
+      message: isEn
+        ? `🛡️ <strong>Security Alert: System Prompt Override / Jailbreak Blocked</strong><br><br>Health Vibes AI Assistant strictly operates within certified clinical boundaries and report verification protocols.<br><br>• <strong>System Integrity:</strong> Safety guardrails and clinical constraints cannot be overridden or bypassed.<br>• The assistant is strictly restricted to explaining your verified report and cannot generate speculative diagnoses or modify treatments.`
+        : `🛡️ <strong>تنبيه أمان: تم حظر محاولة تجاوز التعليمات البرمجية أو القيود السريرية</strong><br><br>يعمل مساعد Health Vibes الطبي الذكي وفق بروتوكولات حوكمة طبية صارمة ومقيدة بالتقرير المعتمد.<br><br>• <strong>نزاهة النظام:</strong> لا يمكن تجاوز أو تعطيل حواجز الأمان السريرية أو الأوامر النظامية تحت أي ظرف.<br>• يظل المساعد مقيداً فقط بتوضيح التقرير الطبي المعتمد ولا يمكنه تشخيص أو تعديل علاجات.`
+    };
+  }
+
+  // 2. Emergency Red Flags & Critical Triage (Emergency Guardrail)
+  const isEmergency = /ألم في الصدر|الم في الصدر|وجع في صدري|خنقة شديدة|مش قادر اتنفس|مش قادرة اتنفس|اختناق|إغماء|اغماء|كحة دم|كحة مدممة|سعال دم|سعال مدمم|ازرقاق|زرقة|توقف التنفس|طوارئ|علامات الخطر|متى اذهب للطوارئ|متى أذهب للطوارئ|ارشادات الطوارئ|إرشادات الطوارئ|اسعاف|إسعاف|chest pain|cannot breathe|can't breathe|suffocating|faint(ing)?|feeling faint|coughing\s+(up\s+)?blood|hemoptysis|blue lips|cyanosis|shortness of breath emergency|emergency guidance|when to go to er|red flags|warning signs|ambulance/i.test(q);
   if (isEmergency) {
     return {
       triggered: true,
       type: "emergency",
       message: isEn
-        ? `🚨 <strong>CRITICAL EMERGENCY ALERT:</strong><br><br>The symptoms you described indicate a potential high-risk medical emergency!<br><br>• <strong>Immediate Action:</strong> Discontinue using this app and call emergency services (123 / 911) or proceed immediately to the nearest Emergency Department (ER).<br>• Do not wait for digital messages or teleconsultations.`
-        : `🚨 <strong>تنبيه طوارئ فوري وحرج:</strong><br><br>الأعراض التي ذكرتها قد تشير إلى حالة طوارئ طبية عاجلة تستوجب التدخل الفوري!<br><br>• <strong>التصرف الفوري:</strong> توقف عن استخدام التطبيق وتوجه حالاً إلى أقرب قسم طوارئ في مستشفى أو اتصل بالإسعاف (123) فوراً.<br>• لا تنتظر أي رسائل أو مشورات إلكترونية عند وجود ضيق تنفس حاد أو ألم بالصدر.`
+        ? `🚨 <strong>APPROVED CLINICAL EMERGENCY GUIDANCE:</strong><br><br>` +
+          `If you or someone around you is experiencing life-threatening symptoms, take immediate emergency action!<br><br>` +
+          `<strong>Critical Emergency Red Flags:</strong><br>` +
+          `• Severe, acute shortness of breath or inability to speak in sentences<br>` +
+          `• Crushing, radiating chest pain or sudden pressure<br>` +
+          `• Coughing up blood (hemoptysis)<br>` +
+          `• Bluish discoloration of the lips, face, or nails (cyanosis)<br>` +
+          `• Sudden fainting, collapse, or loss of consciousness<br>` +
+          `• Oxygen saturation dropping critically below 90%<br><br>` +
+          `<strong>Immediate Action Protocol:</strong><br>` +
+          `1. <strong>Call Emergency Services immediately:</strong> Dial <strong>123</strong> (Ambulance in Egypt) or <strong>911 / 112</strong>.<br>` +
+          `2. <strong>Proceed to nearest Emergency Room (ER)</strong> without delay.<br>` +
+          `3. <strong>Discontinue using this app</strong> — do not wait for chat messages or digital reviews.<br>` +
+          `4. Sit upright to reduce respiratory effort while waiting for medical responders.`
+        : `🚨 <strong>إرشادات الطوارئ السريرية المعتمدة:</strong><br><br>` +
+          `إذا كنت أنت أو أي شخص بجوارك يعاني من أعراض حرجة، يجب اتخاذ إجراءات الطوارئ فوراً!<br><br>` +
+          `<strong>علامات الخطر الحرجة (Red Flags):</strong><br>` +
+          `• ضيق تنفس حاد ومفاجئ أو صعوبة شديدة في نطق جملة كاملة<br>` +
+          `• ألم أو ضغط شديد ومفاجئ في الصدر أو ممتد للذراع والفك<br>` +
+          `• خروج دم مع السعال (كحة مدممة)<br>` +
+          `• ازرقاق الشفاه أو الوجه أو أطراف الأصابع<br>` +
+          `• إغماء أو دوار حاد أو فقدان مفاجئ للوعي<br>` +
+          `• هبوط حاد في تشبع الأكسجين إلى أقل من 90%<br><br>` +
+          `<strong>بروتوكول التصرف الفوري:</strong><br>` +
+          `١. <strong>الاتصال الفوري بالإسعاف:</strong> اطلب الرقم <strong>123</strong> (مصر) أو رقم الطوارئ المحلي فوراً.<br>` +
+          `٢. <strong>التوجه حالاً لأقرب قسم طوارئ</strong> بمستشفى دون أي تأخير.<br>` +
+          `٣. <strong>التوقف عن استخدام التطبيق</strong> — لا تنتظر أي استشارات نصية أو إلكترونية في الطوارئ.<br>` +
+          `٤. الجلوس في وضع مستقيم لتسهيل حركة الرئتين حتى وصول الإسعاف.`
     };
   }
 
-  // 2. Direct Treatment / Prescription / Dosing Requests (Treatment Guardrail)
-  const isTreatmentRequest = /اوصفلي|عايز علاج|عايز دواء|وصفة جديدة|دواء بديل|تغيير الجرعة|ازود الجرعة|انقص الجرعة|اوقف الدواء|اخذ دواء ايه|ايه علاج|علاج للكحة|علاج للبلغم|مضاد حيوي|مسكن قوي|كورتيزون|بديل الفينتولين|علاج الحساسية|prescribe|prescribe me|recommend drug|alternative medicine|change dose|increase dose|stop taking|which antibiotic|what medicine should i take|cure for/i.test(q);
+  // 3. Direct Treatment / Prescription / Dosing Requests (Treatment Guardrail)
+  const isTreatmentRequest = /اوصفلي|عايز علاج|عايز دواء|وصفة جديدة|دواء بديل|علاج بديل|بديل دواء|بديل علاج|بديل الفينتولين|بديل البخاخ|تغيير الجرعة|تعديل الجرعة|ازود الجرعة|أزود الجرعة|انقص الجرعة|أنقص الجرعة|اوقف الدواء|أوقف الدواء|اخذ دواء|أخذ دواء|ايه علاج|إيه علاج|علاج للكحة|علاج للبلغم|مضاد حيوي|مسكن قوي|كورتيزون|علاج الحساسية|غير الجرعة|زيادة الجرعة|تقليل الجرعة|جرعة الدواء|جرعة زائدة|prescribe|prescribe me|recommend drug|alternative medicine|(change|increase|decrease|reduce|adjust)\s+(my\s+)?(\w+\s+)?dose|stop taking|which antibiotic|what medicine should i take|cure for|give me a prescription|adjust medication/i.test(q);
   if (isTreatmentRequest) {
     return {
       triggered: true,
@@ -13754,8 +14143,8 @@ function evaluateClinicalGuardrails(query, isEn) {
     };
   }
 
-  // 3. Autonomous / Speculative Diagnosis Requests (Diagnosis Guardrail)
-  const isDiagnosisRequest = /شخصني|ما هو تشخيصي|عندي ايه|ايه اللي عندي|هل عندي كورونا|هل عندي كوفيد|هل عندي ربو|هل عندي التهاب رئوي|هل مرضي خطير|خمن مرضي|ما مرضي|diagnose me|what disease do i have|do i have covid|do i have pneumonia|guess my illness|what is wrong with me/i.test(q);
+  // 4. Autonomous / Speculative Diagnosis Requests (Diagnosis Guardrail)
+  const isDiagnosisRequest = /شخصني|ما هو تشخيصي|ما تشخيصي|عندي ايه|ايه اللي عندي|إيه اللي عندي|هل عندي كورونا|هل عندي كوفيد|هل عندي ربو|هل عندي التهاب رئوي|هل مرضي خطير|خمن مرضي|ما مرضي|هل أعاني من|تشخيص مرضي|diagnose me|what disease|what illness|what condition do i have|do i have covid|do i have pneumonia|do i have asthma|guess\s+(my\s+)?(illness|disease|condition|diagnosis|sickness)|what is wrong with me|give me a diagnosis|diagnose my symptoms/i.test(q);
   if (isDiagnosisRequest) {
     return {
       triggered: true,
@@ -13767,6 +14156,46 @@ function evaluateClinicalGuardrails(query, isEn) {
   }
 
   return { triggered: false };
+}
+
+function checkInformationAbsentFromReport(query, report, isEn) {
+  const q = String(query || "").toLowerCase();
+  const absentDomains = [
+    { pattern: /ضغط\s*(ال)?دم|blood\s*pressure|hypertension/i, nameEn: "Blood Pressure", nameAr: "ضغط الدم" },
+    { pattern: /تحليل\s*(ال)?دم|تحاليل|cbc|blood\s*test|blood\s*sugar|سكر\s*(ال)?دم|glucose|وظائف\s*(ال)?كبد|وظائف\s*(ال)?كلى|creatinine/i, nameEn: "Blood Tests & Lab Chemistry", nameAr: "تحاليل الدم والمختبر" },
+    { pattern: /(أشعة|اشعة)\s*(مقطعية|سينية|الصدر)?|رنين\s*مغناطيسي|x-?ray|ct\s*scan|mri|ultrasound|سونار/i, nameEn: "Radiology & Diagnostic Imaging (X-Ray / CT / MRI)", nameAr: "الأشعة والتصوير الطبي" },
+    { pattern: /جراحة|عملية\s*(جراحية)?|surgery|surgical\s*operation/i, nameEn: "Surgical Interventions", nameAr: "العمليات الجراحية" },
+    { pattern: /رسم\s*(ال)?قلب|تخطيط\s*(ال)?قلب|ecg|ekg|cardiac\s*test/i, nameEn: "Cardiac ECG / Electrocardiogram", nameAr: "تخطيط ورسم القلب" },
+    { pattern: /اختبار\s*(ال)?حساسية|allergy\s*test|allergy\s*panel/i, nameEn: "Allergy Sensitivity Testing", nameAr: "اختبارات الحساسية المتقدمة" },
+    { pattern: /سرطان|ورم|أورام|اورام|cancer|tumor|biopsy|خزعة/i, nameEn: "Oncology & Biopsy Evaluations", nameAr: "فحوصات الأورام والخزعات" },
+    { pattern: /وزن|طول|مؤشر\s*كتلة|bmi|body\s*mass/i, nameEn: "Body Mass Index (BMI) & Anthropometrics", nameAr: "الوزن ومؤشر كتلة الجسم" }
+  ];
+
+  for (const domain of absentDomains) {
+    if (domain.pattern.test(q)) {
+      const rId = report?.id ? report.id.slice(-6).toUpperCase() : "";
+      return {
+        isAbsent: true,
+        topic: isEn ? domain.nameEn : domain.nameAr,
+        message: isEn
+          ? `⚠️ <strong>Information Absent from Approved Report:</strong><br><br>` +
+            `Details regarding <strong>${domain.nameEn}</strong> are <strong>not present or recorded</strong> in your certified respiratory assessment report (${rId ? `#${rId}` : "on file"}).<br><br>` +
+            `• <strong>Clinical Integrity Policy:</strong> Health Vibes AI Assistant strictly refrains from inventing, guessing, or filling in missing medical information not recorded by your physician.<br>` +
+            `• <strong>Recommended Action:</strong> Please prepare a question regarding ${domain.nameEn} to discuss directly with your attending doctor during your next clinical appointment.`
+          : `⚠️ <strong>معلومات غير واردة بالتقرير المعتمد:</strong><br><br>` +
+            `البيانات المتعلقة بـ <strong>${domain.nameAr}</strong> <strong>غير مسجلة أو غير واردة</strong> في تقريرك التنفسي المعتمد (${rId ? `#${rId}` : "المسجل"}).<br><br>` +
+            `• <strong>ميثاق النزاهة السريرية:</strong> يمتنع المساعد تماماً عن التكهن أو افتراض أو تعبئة أي معلومات طبية لم يسجلها الطبيب المختص.<br>` +
+            `• <strong>التوجيه الطبي:</strong> يُرجى تدوين هذا السؤال واستشارة طبيبك المعالج مباشرة خلال مراجعتك السريرية.`
+      };
+    }
+  }
+
+  return { isAbsent: false };
+}
+
+function buildReportSourceLink(reportId, sectionEn, sectionAr, isEn) {
+  const rId = reportId ? String(reportId).slice(-6).toUpperCase() : "";
+  return `<div class="assistant-source-link" style="margin-top: 10px; padding: 6px 12px; background: rgba(59, 130, 246, 0.08); border-inline-start: 3px solid #3b82f6; border-radius: 4px; font-size: 11.5px; color: var(--ink);"><strong>🔗 ${isEn ? "Source in Certified Report:" : "المصدر في التقرير الطبي المعتمد:"}</strong> <span style="color: #0284c7; font-weight: 600;">${isEn ? `Report #${rId} — Section: ${sectionEn}` : `تقرير #${rId} — قسم: ${sectionAr}`}</span></div>`;
 }
 
 function getClinicalGuardrailDisclaimer(isEn) {
@@ -13807,7 +14236,12 @@ async function renderAssistantScreen() {
   const messagesEl = document.getElementById("chatMessages");
   const chipsEl = document.getElementById("chatQuickChips");
   const inputEl = document.getElementById("chatInput");
+  const retentionNoticeEl = document.getElementById("assistantRetentionNotice");
   if (!messagesEl) return;
+
+  if (retentionNoticeEl) {
+    retentionNoticeEl.innerHTML = `<span>🕒 ${isEn ? "Retention Policy: Chat history is retained for 30 days under clinical privacy governance." : "سياسة الاحتفاظ: تُحفظ المحادثة لمدة ٣٠ يوماً وفق قواعد حوكمة البيانات الطبية."}</span> <button type="button" class="outline-button" style="font-size: 10.5px; padding: 2px 8px; border-radius: 10px;" onclick="clearAssistantChatHistory()">🗑️ ${isEn ? "Clear History" : "مسح السجل"}</button>`;
+  }
 
   messagesEl.innerHTML = `<div class="bot" style="opacity: 0.7;">${isEn ? "Checking certified reports..." : "جاري فحص التقارير الطبية المعتمدة..."}</div>`;
   if (chipsEl) chipsEl.innerHTML = "";
@@ -13818,22 +14252,47 @@ async function renderAssistantScreen() {
   if (caseStatusInfo.status === "approved") {
     const r = caseStatusInfo.report;
     const docName = escapeHtml(getRecordedDoctorIdentity(r, isEn).name);
-    messagesEl.innerHTML = `
-      <div class="bot">
-        ${isEn
-          ? `🩺 <strong>Welcome! Your medical report (#${r.id.slice(-6).toUpperCase()}) has been certified by ${docName}.</strong><br><br>I am your clinical guide to explain the doctor's certified diagnosis, prescribed medications, and home-care recommendations. What would you like to know?`
-          : `🩺 <strong>أهلاً بك! تم اعتماد تقريرك الطبي (#${r.id.slice(-6).toUpperCase()}) وتوثيقه بواسطة ${docName}.</strong><br><br>أنا هنا لمساعدتك في فهم التشخيص المعتمد، توضيح الأدوية الموصوفة لك، وشرح إرشادات الطبيب. كيف يمكنني مساعدتك؟`
+    const rId = r.id ? r.id.slice(-6).toUpperCase() : "";
+
+    // Load conversation history governed by 30-day retention policy
+    const history = typeof pruneAssistantChatHistory === "function"
+      ? pruneAssistantChatHistory(user ? user.uid : "guest", r.id)
+      : [];
+
+    if (history.length > 0) {
+      messagesEl.innerHTML = "";
+      for (const item of history) {
+        const bubble = document.createElement("div");
+        bubble.className = item.sender === "user" ? "user" : "bot";
+        if (item.sender === "user") {
+          bubble.textContent = item.content;
+        } else {
+          setTrustedHtml(bubble, item.content);
         }
-      </div>
-    `;
+        messagesEl.appendChild(bubble);
+      }
+    } else {
+      messagesEl.innerHTML = `
+        <div class="bot">
+          ${isEn
+            ? `🩺 <strong>Welcome! Your medical report (#${rId}) has been certified by ${docName}.</strong><br><br>I am your clinical guide to explain the doctor's certified diagnosis, prescribed medications, medical terminology, and home-care recommendations. I can also help you prepare questions for your doctor. What would you like to know?`
+            : `🩺 <strong>أهلاً بك! تم اعتماد تقريرك الطبي (#${rId}) وتوثيقه بواسطة ${docName}.</strong><br><br>أنا هنا لمساعدتك في فهم التشخيص المعتمد، وتوضيح المصطلحات الطبية والأدوية الموصوفة لك، وشرح إرشادات الطبيب وتجهيز أسئلة للمناقشة معه. كيف يمكنني مساعدتك؟`
+          }
+        </div>
+      `;
+    }
+
     if (inputEl) {
-      inputEl.placeholder = isEn ? "Ask about diagnosis, medications, or doctor instructions..." : "اسأل عن التشخيص، الأدوية، أو تعليمات الطبيب المعتمدة...";
+      inputEl.placeholder = isEn ? "Ask about diagnosis, terms, doctor questions, or prescriptions..." : "اسأل عن التشخيص، المصطلحات، أسئلة الطبيب، أو الأدوية...";
     }
     if (chipsEl) {
       chipsEl.innerHTML = `
         <button type="button" class="outline-button" style="font-size: 12px; padding: 4px 10px; border-radius: 20px;" onclick="sendAssistantQuickPrompt('${isEn ? "Explain my approved diagnosis" : "شرح التشخيص المعتمد"}')">🩺 ${isEn ? "Diagnosis" : "شرح التشخيص"}</button>
         <button type="button" class="outline-button" style="font-size: 12px; padding: 4px 10px; border-radius: 20px;" onclick="sendAssistantQuickPrompt('${isEn ? "What medications are prescribed?" : "الأدوية الموصوفة"}')">💊 ${isEn ? "Medications" : "الأدوية الموصوفة"}</button>
         <button type="button" class="outline-button" style="font-size: 12px; padding: 4px 10px; border-radius: 20px;" onclick="sendAssistantQuickPrompt('${isEn ? "Doctor recommendations" : "تعليمات الطبيب"}')">💡 ${isEn ? "Instructions" : "تعليمات الطبيب"}</button>
+        <button type="button" class="outline-button" style="font-size: 12px; padding: 4px 10px; border-radius: 20px;" onclick="sendAssistantQuickPrompt('${isEn ? "Explain medical terms in my report" : "شرح مصطلحات التقرير"}')">📖 ${isEn ? "Explain Terms" : "شرح المصطلحات"}</button>
+        <button type="button" class="outline-button" style="font-size: 12px; padding: 4px 10px; border-radius: 20px;" onclick="sendAssistantQuickPrompt('${isEn ? "Help me prepare questions for my doctor" : "تجهيز أسئلة للطبيب"}')">📋 ${isEn ? "Doctor Questions" : "أسئلة للطبيب"}</button>
+        <button type="button" class="outline-button" style="font-size: 12px; padding: 4px 10px; border-radius: 20px; border-color: #ef4444; color: #ef4444;" onclick="sendAssistantQuickPrompt('${isEn ? "Approved emergency guidance and red flags" : "إرشادات الطوارئ وعلامات الخطر"}')">🚨 ${isEn ? "Emergency Guidance" : "إرشادات الطوارئ"}</button>
       `;
     }
   } else if (caseStatusInfo.status === CASE_STATUS.MORE_INFO_REQUESTED) {
@@ -13897,9 +14356,11 @@ async function handleSendChatMessage() {
   const query = input.value.trim();
   if (!query) return;
 
-  const isEn = currentLanguage === "en";
-  const user = auth ? auth.currentUser : null;
-  const disclaimerHtml = getClinicalGuardrailDisclaimer(isEn);
+  const isEn = typeof currentLanguage !== "undefined" ? currentLanguage === "en" : false;
+  const user = typeof auth !== "undefined" && auth ? auth.currentUser : null;
+  const disclaimerHtml = typeof getClinicalGuardrailDisclaimer === "function"
+    ? getClinicalGuardrailDisclaimer(isEn)
+    : (isEn ? `<div style="margin-top: 12px; font-size: 11.5px; color: var(--muted);">🛡️ Clinical Guardrail: Clarifying doctor-certified record only. In emergency call 123.</div>` : `<div style="margin-top: 12px; font-size: 11.5px; color: var(--muted);">🛡️ حاجز الأمان السريري: توضيح ما اعتمده الطبيب فقط. في الطوارئ اتصل بـ 123.</div>`);
 
   // Render user bubble
   const userBubble = document.createElement("div");
@@ -13907,22 +14368,42 @@ async function handleSendChatMessage() {
   userBubble.textContent = query;
   messages.appendChild(userBubble);
   input.value = "";
-  messages.scrollTop = messages.scrollHeight;
+  if (messages.scrollTop !== undefined) messages.scrollTop = messages.scrollHeight;
 
   // Add temporary bot thinking indicator
   const thinkingBubble = document.createElement("div");
   thinkingBubble.className = "bot";
   setTrustedHtml(thinkingBubble, `<span style="opacity: 0.7;">${isEn ? "Evaluating clinical guardrails & report..." : "جاري فحص حواجز الأمان والملف الطبي المعتمد..."}</span>`);
   messages.appendChild(thinkingBubble);
-  messages.scrollTop = messages.scrollHeight;
+  if (messages.scrollTop !== undefined) messages.scrollTop = messages.scrollHeight;
 
   // 1. EVALUATE GUARDRAILS FIRST (SAFETY FIRST)
-  const guardrail = evaluateClinicalGuardrails(query, isEn);
+  const guardrailFn = typeof evaluateClinicalGuardrails === "function"
+    ? evaluateClinicalGuardrails
+    : (typeof window !== "undefined" && window.evaluateClinicalGuardrails ? window.evaluateClinicalGuardrails : () => ({ triggered: false }));
+  const guardrail = guardrailFn(query, isEn);
 
   // Re-verify latest approved report
-  const caseStatusInfo = await getLatestApprovedReportForAssistant(user);
-  window._assistantCaseStatus = caseStatusInfo;
+  const caseStatusInfo = typeof getLatestApprovedReportForAssistant === "function"
+    ? await getLatestApprovedReportForAssistant(user)
+    : { status: "none", report: null };
+  if (typeof window !== "undefined") window._assistantCaseStatus = caseStatusInfo;
   const hasApprovedReport = caseStatusInfo.status === "approved" && caseStatusInfo.report;
+  const r = hasApprovedReport ? caseStatusInfo.report : null;
+  const rId = r?.id ? String(r.id).slice(-6).toUpperCase() : "";
+
+  // Helper for source badges inside handleSendChatMessage
+  const makeSourceLink = (sectionEn, sectionAr) => {
+    if (typeof buildReportSourceLink === "function") return buildReportSourceLink(r?.id, sectionEn, sectionAr, isEn);
+    return `<div class="assistant-source-link" style="margin-top: 10px; padding: 6px 12px; background: rgba(59, 130, 246, 0.08); border-inline-start: 3px solid #3b82f6; border-radius: 4px; font-size: 11.5px; color: var(--ink);"><strong>🔗 ${isEn ? "Source in Certified Report:" : "المصدر في التقرير الطبي المعتمد:"}</strong> <span style="color: #0284c7; font-weight: 600;">${isEn ? `Report #${rId} — Section: ${sectionEn}` : `تقرير #${rId} — قسم: ${sectionAr}`}</span></div>`;
+  };
+
+  const saveHistory = (content) => {
+    if (typeof saveAssistantChatMessage === "function") {
+      saveAssistantChatMessage(user?.uid, r?.id, "user", query);
+      saveAssistantChatMessage(user?.uid, r?.id, "bot", content);
+    }
+  };
 
   let botResponse = "";
 
@@ -13930,20 +14411,29 @@ async function handleSendChatMessage() {
     if (guardrail.type === "emergency") {
       botResponse = guardrail.message + disclaimerHtml;
       setTrustedHtml(thinkingBubble, botResponse);
-      messages.scrollTop = messages.scrollHeight;
+      saveHistory(botResponse);
+      if (messages.scrollTop !== undefined) messages.scrollTop = messages.scrollHeight;
+      return;
+    }
+
+    if (guardrail.type === "prompt_injection") {
+      botResponse = guardrail.message + disclaimerHtml;
+      setTrustedHtml(thinkingBubble, botResponse);
+      saveHistory(botResponse);
+      if (messages.scrollTop !== undefined) messages.scrollTop = messages.scrollHeight;
       return;
     }
 
     if (guardrail.type === "treatment_prohibited") {
       botResponse = guardrail.message;
       if (hasApprovedReport) {
-        const r = caseStatusInfo.report;
         const recorded = getRecordedClinicalContent(r, isEn);
         const meds = escapeHtml(recorded.meds);
         const docName = escapeHtml(getRecordedDoctorIdentity(r, isEn).name);
         botResponse += isEn
           ? `<br><br>📋 <strong>Only the following medications were certified for your case by ${docName}:</strong><br><br>${meds.replace(/\n/g, '<br>')}`
           : `<br><br>📋 <strong>الأدوية الوحيدة المعتمدة لحالتك من قِبل ${docName} هي:</strong><br><br>${meds.replace(/\n/g, '<br>')}`;
+        botResponse += makeSourceLink("Prescribed Medications", "الأدوية المعتمدة");
       } else {
         botResponse += isEn
           ? `<br><br>🔒 <em>You currently do not have a doctor-approved prescription. Please wait for clinical review.</em>`
@@ -13951,20 +14441,21 @@ async function handleSendChatMessage() {
       }
       botResponse += disclaimerHtml;
       setTrustedHtml(thinkingBubble, botResponse);
-      messages.scrollTop = messages.scrollHeight;
+      saveHistory(botResponse);
+      if (messages.scrollTop !== undefined) messages.scrollTop = messages.scrollHeight;
       return;
     }
 
     if (guardrail.type === "diagnosis_prohibited") {
       botResponse = guardrail.message;
       if (hasApprovedReport) {
-        const r = caseStatusInfo.report;
         const recorded = getRecordedClinicalContent(r, isEn);
         const diag = escapeHtml(recorded.diag);
         const docName = escapeHtml(getRecordedDoctorIdentity(r, isEn).name);
         botResponse += isEn
           ? `<br><br>🩺 <strong>The certified diagnosis established by ${docName} is:</strong><br><br>${diag}`
           : `<br><br>🩺 <strong>التشخيص السريري المعتمد الوحيد لك من قِبل ${docName} هو:</strong><br><br>${diag}`;
+        botResponse += makeSourceLink("Certified Diagnosis", "التشخيص السريري المعتمد");
       } else {
         botResponse += isEn
           ? `<br><br>🔒 <em>Your assessment is still awaiting physician review. Independent AI diagnosis is barred.</em>`
@@ -13972,7 +14463,8 @@ async function handleSendChatMessage() {
       }
       botResponse += disclaimerHtml;
       setTrustedHtml(thinkingBubble, botResponse);
-      messages.scrollTop = messages.scrollHeight;
+      saveHistory(botResponse);
+      if (messages.scrollTop !== undefined) messages.scrollTop = messages.scrollHeight;
       return;
     }
   }
@@ -13998,12 +14490,12 @@ async function handleSendChatMessage() {
     }
     botResponse += disclaimerHtml;
     setTrustedHtml(thinkingBubble, botResponse);
-    messages.scrollTop = messages.scrollHeight;
+    saveHistory(botResponse);
+    if (messages.scrollTop !== undefined) messages.scrollTop = messages.scrollHeight;
     return;
   }
 
   // 3. CASE IS GENUINELY APPROVED - EXPLAIN ONLY WHAT THE DOCTOR RECORDED
-  const r = caseStatusInfo.report;
   const recorded = getRecordedClinicalContent(r, isEn);
   const diag = escapeHtml(recorded.diag);
   const meds = escapeHtml(recorded.meds);
@@ -14013,6 +14505,182 @@ async function handleSendChatMessage() {
   const o2 = recordedClinicalText(String(r.oxygenLevel ?? r.o2 ?? ""), isEn);
 
   const q = query.toLowerCase();
+
+  function checkAbsentLocal(queryStr, reportObj, isEnglish) {
+    const queryLower = String(queryStr || "").toLowerCase();
+    const absentDomains = [
+      { pattern: /ضغط\s*(ال)?دم|blood\s*pressure|hypertension/i, nameEn: "Blood Pressure", nameAr: "ضغط الدم" },
+      { pattern: /تحليل\s*(ال)?دم|تحاليل|cbc|blood\s*test|blood\s*sugar|سكر\s*(ال)?دم|glucose|وظائف\s*(ال)?كبد|وظائف\s*(ال)?كلى|creatinine/i, nameEn: "Blood Tests & Lab Chemistry", nameAr: "تحاليل الدم والمختبر" },
+      { pattern: /(أشعة|اشعة)\s*(مقطعية|سينية|الصدر)?|رنين\s*مغناطيسي|x-?ray|ct\s*scan|mri|ultrasound|سونار/i, nameEn: "Radiology & Diagnostic Imaging (X-Ray / CT / MRI)", nameAr: "الأشعة والتصوير الطبي" },
+      { pattern: /جراحة|عملية\s*(جراحية)?|surgery|surgical\s*operation/i, nameEn: "Surgical Interventions", nameAr: "العمليات الجراحية" },
+      { pattern: /رسم\s*(ال)?قلب|تخطيط\s*(ال)?قلب|ecg|ekg|cardiac\s*test/i, nameEn: "Cardiac ECG / Electrocardiogram", nameAr: "تخطيط ورسم القلب" },
+      { pattern: /اختبار\s*(ال)?حساسية|allergy\s*test|allergy\s*panel/i, nameEn: "Allergy Sensitivity Testing", nameAr: "اختبارات الحساسية المتقدمة" },
+      { pattern: /سرطان|ورم|أورام|اورام|cancer|tumor|biopsy|خزعة/i, nameEn: "Oncology & Biopsy Evaluations", nameAr: "فحوصات الأورام والخزعات" },
+      { pattern: /وزن|طول|مؤشر\s*كتلة|bmi|body\s*mass/i, nameEn: "Body Mass Index (BMI) & Anthropometrics", nameAr: "الوزن ومؤشر كتلة الجسم" }
+    ];
+
+    for (const domain of absentDomains) {
+      if (domain.pattern.test(queryLower)) {
+        const reportShortId = reportObj?.id ? reportObj.id.slice(-6).toUpperCase() : "";
+        return {
+          isAbsent: true,
+          topic: isEnglish ? domain.nameEn : domain.nameAr,
+          message: isEnglish
+            ? `⚠️ <strong>Information Absent from Approved Report:</strong><br><br>` +
+              `Details regarding <strong>${domain.nameEn}</strong> are <strong>not present or recorded</strong> in your certified respiratory assessment report (${reportShortId ? `#${reportShortId}` : "on file"}).<br><br>` +
+              `• <strong>Clinical Integrity Policy:</strong> Health Vibes AI Assistant strictly refrains from inventing, guessing, or filling in missing medical information not recorded by your physician.<br>` +
+              `• <strong>Recommended Action:</strong> Please prepare a question regarding ${domain.nameEn} to discuss directly with your attending doctor during your next clinical appointment.`
+            : `⚠️ <strong>معلومات غير واردة بالتقرير المعتمد:</strong><br><br>` +
+              `البيانات المتعلقة بـ <strong>${domain.nameAr}</strong> <strong>غير مسجلة أو غير واردة</strong> في تقريرك التنفسي المعتمد (${reportShortId ? `#${reportShortId}` : "المسجل"}).<br><br>` +
+              `• <strong>ميثاق النزاهة السريرية:</strong> يمتنع المساعد تماماً عن التكهن أو افتراض أو تعبئة أي معلومات طبية لم يسجلها الطبيب المختص.<br>` +
+              `• <strong>التوجيه الطبي:</strong> يُرجى تدوين هذا السؤال واستشارة طبيبك المعالج مباشرة خلال مراجعتك السريرية.`
+        };
+      }
+    }
+    return { isAbsent: false };
+  }
+
+  // Check for absent information first (Do not fill in missing information)
+  const absentCheck = typeof checkInformationAbsentFromReport === "function"
+    ? checkInformationAbsentFromReport(query, r, isEn)
+    : checkAbsentLocal(query, r, isEn);
+  if (absentCheck.isAbsent) {
+    botResponse = absentCheck.message;
+    botResponse += disclaimerHtml;
+    setTrustedHtml(thinkingBubble, botResponse);
+    saveHistory(botResponse);
+    if (messages.scrollTop !== undefined) messages.scrollTop = messages.scrollHeight;
+    return;
+  }
+
+  // Check if user is asking to prepare questions for the doctor
+  const isDoctorQuestionsQuery = /جهز.*أسئلة|اسئلة للطبيب|اسئلة للدكتور|ماذا اسأل|ماذا أسأل|اسئلة الاستشارة|أسئلة للمناقشة|أسئلة للمتابعة|prepare.*question|questions.*doctor|questions.*physician|what.*ask.*doctor|consultation questions/i.test(q);
+  if (isDoctorQuestionsQuery) {
+    botResponse = isEn
+      ? `📋 <strong>Recommended Questions to Prepare for Your Doctor:</strong><br><br>` +
+        `Based on your certified report (#${rId}), here are structured questions you can discuss during your next consultation:<br><br>` +
+        `<strong>1. About Your Diagnosis:</strong><br>` +
+        `• <em>"What is the expected recovery timeline for my condition (${diag}), and what signs indicate full resolution?"</em><br>` +
+        `• <em>"Are there any secondary symptoms I should monitor closely at home?"</em><br>` +
+        makeSourceLink("Certified Diagnosis", "التشخيص السريري المعتمد") + `<br>` +
+        `<strong>2. About Prescribed Medications:</strong><br>` +
+        `• <em>"How many days should I continue taking the prescribed treatments, and should I taper any doses?"</em><br>` +
+        `• <em>"What potential side effects should I be aware of, and what should I do if a dose is missed?"</em><br>` +
+        makeSourceLink("Prescribed Medications", "الأدوية المعتمدة") + `<br>` +
+        `<strong>3. About Oxygen Saturation & Monitoring:</strong><br>` +
+        `• <em>"My oxygen was recorded at ${o2}%. What is my target range, and at what reading should I seek urgent medical help?"</em><br>` +
+        makeSourceLink("Vital Signs (SpO2)", "العلامات الحيوية ونسبة الأكسجين") + `<br>` +
+        `<strong>4. About Lifestyle & Follow-Up:</strong><br>` +
+        `• <em>"Are there environmental triggers (dust, weather, physical exertion) I should avoid?"</em><br>` +
+        `• <em>"When do you recommend I schedule my follow-up evaluation?"</em><br>` +
+        makeSourceLink("Doctor Clinical Instructions", "إرشادات وتعليمات الطبيب")
+      : `📋 <strong>أسئلة مقترحة ومهمة لتجهيزها لمناقشتها مع طبيبك المعالج:</strong><br><br>` +
+        `بناءً على نتائج تقريرك الطبي المعتمد (#${rId})، قمنا بتنظيم أهم الأسئلة المناسبة لمراجعتك القادمة مع ${docName}:<br><br>` +
+        `<strong>١. أسئلة حول التشخيص المعتمد:</strong><br>` +
+        `• <em>"ما هي المدة المتوقعة للتعافي من حالة (${diag})، وما هي مؤشرات التحسن التام؟"</em><br>` +
+        `• <em>"هل هناك أي أعراض محتملة تستوجب مراجعتك فوراً؟"</em><br>` +
+        makeSourceLink("Certified Diagnosis", "التشخيص السريري المعتمد") + `<br>` +
+        `<strong>٢. أسئلة حول الأدوية الموصوفة:</strong><br>` +
+        `• <em>"كم يوماً يجب علي الاستمرار في تناول الأدوية المقررة، وهل يتم التوقف تدريجياً أم فجأة؟"</em><br>` +
+        `• <em>"ما هي الآثار الجانبية الشائعة التي ينبغي الانتباه إليها، وكيف أتصرف في حال نسيان جرعة؟"</em><br>` +
+        makeSourceLink("Prescribed Medications", "الأدوية المعتمدة") + `<br>` +
+        `<strong>٣. أسئلة حول قياس الأكسجين والمتابعة:</strong><br>` +
+        `• <em>"تم تسجيل نسبة الأكسجين لدي عند ${o2}%، ما هو المعدل الآمن المستهدف منزلياً وما الحد الذي يستدعي التدخل الطبي؟"</em><br>` +
+        makeSourceLink("Vital Signs (SpO2)", "العلامات الحيوية ونسبة الأكسجين") + `<br>` +
+        `<strong>٤. أسئلة حول نمط الحياة والموعد القادم:</strong><br>` +
+        `• <em>"هل هناك محفزات بيئية كالغبار أو برودة الجو أو المجهود البدني ينبغي تجنبها مؤقتاً؟"</em><br>` +
+        `• <em>"متى توصي بحجز موعد المتابعة والاستشارة القادمة؟"</em><br>` +
+        makeSourceLink("Doctor Clinical Instructions", "إرشادات وتعليمات الطبيب");
+    botResponse += disclaimerHtml;
+    setTrustedHtml(thinkingBubble, botResponse);
+    saveHistory(botResponse);
+    if (messages.scrollTop !== undefined) messages.scrollTop = messages.scrollHeight;
+    return;
+  }
+
+  // Check if user is asking about clinical terminology
+  const isTerminologyQuery = /مصطلح|مصطلحات|معنى|يعني ايه|ما معنى|ما هو|ما هي|terminology|term|meaning of|what is|what does.*mean/i.test(q) ||
+    /spo2|تشبع الأكسجين|أكسجين|oxygen saturation|wheez|أزيز|صفير|تزييق|crackle|خرخرة|طقطقة|dyspnea|ضيق تنفس|bronchitis|التهاب شعب|asthma|ربو|copd|سدة رئوية|inhaler|بخاخ|bronchodilator|موسع|cough|سعال|كحة|sputum|بلغم|stridor|صرير|tachypnea|سرعة التنفس/i.test(q);
+  if (isTerminologyQuery) {
+    let termExplanation = "";
+    if (/spo2|تشبع الأكسجين|أكسجين|oxygen saturation/i.test(q)) {
+      termExplanation = isEn
+        ? `🫁 <strong>SpO2 (Oxygen Saturation):</strong><br><br>` +
+          `• <strong>Definition:</strong> The percentage of oxygen-carrying hemoglobin in the red blood cells compared to their maximum capacity. Normal baseline for healthy adults is typically between 95% and 100%.<br>` +
+          `• <strong>In Your Report:</strong> Your attending physician verified your SpO2 reading at <strong>${o2}%</strong>.` +
+          makeSourceLink("Vital Signs (Oxygen Saturation SpO2)", "العلامات الحيوية ونسبة تشبع الأكسجين")
+        : `🫁 <strong>نسبة تشبع الأكسجين في الدم (SpO2):</strong><br><br>` +
+          `• <strong>المعنى الطبي:</strong> قياس يوضح النسبة المئوية لكريات الدم الحمراء المحملة بالأكسجين من إجمالي سعتها. النطاق الطبيعي للبالغين الأصحاء هو بين 95% و100%.<br>` +
+          `• <strong>في تقريرك الطبي:</strong> وثّق طبيبك المعالج قراءة الأكسجين لحالتك عند <strong>${o2}%</strong>.` +
+          makeSourceLink("Vital Signs (Oxygen Saturation SpO2)", "العلامات الحيوية ونسبة تشبع الأكسجين");
+    } else if (/wheez|أزيز|صفير|تزييق/i.test(q)) {
+      termExplanation = isEn
+        ? `🫁 <strong>Wheezing (Auscultation Sound):</strong><br><br>` +
+          `• <strong>Definition:</strong> A continuous, high-pitched whistling or musical sound made while breathing (especially exhalation), produced when air flows through narrowed or inflamed airways.<br>` +
+          `• <strong>In Your Report:</strong> Breath sounds evaluated during your assessment were reviewed by ${docName}.` +
+          makeSourceLink("Breath Sound Acoustics", "الصوت التنفسي وتحليل الفحص")
+        : `🫁 <strong>الأزيز التنفسي (الصفير / Wheezing):</strong><br><br>` +
+          `• <strong>المعنى الطبي:</strong> صوت تنفسي صفيري عالي النغمة يحدث أثناء التنفس (خاصة الزفير) نتيجة مرور الهواء في مجاري تنفسية ضيقة أو متورمة.<br>` +
+          `• <strong>في تقريرك الطبي:</strong> خضعت الأصوات التنفسية للفحص وتم تدقيقها بواسطة ${docName}.` +
+          makeSourceLink("Breath Sound Acoustics", "الصوت التنفسي وتحليل الفحص");
+    } else if (/crackle|خرخرة|طقطقة/i.test(q)) {
+      termExplanation = isEn
+        ? `🫁 <strong>Crackles / Rales:</strong><br><br>` +
+          `• <strong>Definition:</strong> Intermittent, clicking, bubbling, or rattling respiratory sounds caused by small airways snapping open during inhalation, often associated with fluid or inflammation in the lungs.<br>` +
+          `• <strong>In Your Report:</strong> Evaluated as part of your certified pulmonary assessment.` +
+          makeSourceLink("Clinical Sound Analysis", "تحليل الأصوات السريرية")
+        : `🫁 <strong>الخرخرة التنفسية (Crackles / Rales):</strong><br><br>` +
+          `• <strong>المعنى الطبي:</strong> أصوات طقطقة أو فرقعة متقطعة تُسمع في الرئتين عند الشهيق بسبب انفتاح الممرات الهوائية الدقيقة أو وجود إفرازات مخاطية.<br>` +
+          `• <strong>في تقريرك الطبي:</strong> تم تقييمها ضمن الفحص التنفسي المعتمد.` +
+          makeSourceLink("Clinical Sound Analysis", "تحليل الأصوات السريرية");
+    } else if (/dyspnea|ضيق تنفس/i.test(q)) {
+      termExplanation = isEn
+        ? `🫁 <strong>Dyspnea (Shortness of Breath):</strong><br><br>` +
+          `• <strong>Definition:</strong> Subjective feeling of difficulty in breathing or feeling out of air, requiring increased respiratory effort.<br>` +
+          `• <strong>In Your Report:</strong> Addressed in your clinical symptom review and recommendations.` +
+          makeSourceLink("Certified Diagnosis & Recommendations", "التشخيص والتوصيات المعتمدة")
+        : `🫁 <strong>ضيق التنفس (Dyspnea):</strong><br><br>` +
+          `• <strong>المعنى الطبي:</strong> شعور سريري بصعوبة أخذ النفس أو عدم كفاية الهواء المستنشق، مما يسبب جهداً تنفسياً إضافياً.<br>` +
+          `• <strong>في تقريرك الطبي:</strong> تم أخذه في الاعتبار في تشخيص الطبيب وإرشاداته المعتمدة.` +
+          makeSourceLink("Certified Diagnosis & Recommendations", "التشخيص والتوصيات المعتمدة");
+    } else if (/bronchodilator|موسع|inhaler|بخاخ/i.test(q)) {
+      termExplanation = isEn
+        ? `💊 <strong>Inhaler & Bronchodilators:</strong><br><br>` +
+          `• <strong>Definition:</strong> A bronchodilator is a medication that relaxes and widens the muscles around the airways. An inhaler is a device delivering medication directly into the airways for rapid local action.<br>` +
+          `• <strong>In Your Report:</strong> Prescribed medications certified by your doctor: ${meds.replace(/\n/g, ', ')}.` +
+          makeSourceLink("Prescribed Medications", "الأدوية المعتمدة")
+        : `💊 <strong>البخاخ وموسعات الشعب الهوائية (Bronchodilators & Inhalers):</strong><br><br>` +
+          `• <strong>المعنى الطبي:</strong> موسع الشعب هو دواء يعمل على إرخاء عضلات مجرى التنفس وتوسيعه لتسهيل تدفق الهواء. والبخاخ هو جهاز محمول لتوصيل الدواء مباشرة إلى الرئتين.<br>` +
+          `• <strong>في تقريرك الطبي:</strong> الأدوية المعتمدة لحالتك من الطبيب هي: ${meds.replace(/\n/g, '، ')}.` +
+          makeSourceLink("Prescribed Medications", "الأدوية المعتمدة");
+    } else {
+      // General terminology explanation from the patient's specific report
+      termExplanation = isEn
+        ? `📖 <strong>Key Clinical Terms from Your Certified Report (#${rId}):</strong><br><br>` +
+          `• <strong>Diagnosis (${diag}):</strong> The definitive medical evaluation established by ${docName}.<br>` +
+          makeSourceLink("Certified Diagnosis", "التشخيص السريري المعتمد") + `<br>` +
+          `• <strong>SpO2 (${o2}%):</strong> Blood oxygen saturation level measured during your assessment.<br>` +
+          makeSourceLink("Vital Signs (SpO2)", "العلامات الحيوية ونسبة الأكسجين") + `<br>` +
+          `• <strong>Prescription (${meds.replace(/\n/g, ', ')}):</strong> Medication officially certified by your doctor.<br>` +
+          makeSourceLink("Prescribed Medications", "الأدوية المعتمدة") + `<br><br>` +
+          `<em>You may ask for the meaning of any specific term such as SpO2, wheezing, inhaler, or bronchitis.</em>`
+        : `📖 <strong>أهم المصطلحات الطبية الواردة في تقريرك المعتمد (#${rId}):</strong><br><br>` +
+          `• <strong>التشخيص المعتمد (${diag}):</strong> التقييم الطبي النهائي المعتمد والموقع من ${docName}.<br>` +
+          makeSourceLink("Certified Diagnosis", "التشخيص السريري المعتمد") + `<br>` +
+          `• <strong>تشبع الأكسجين (${o2}%):</strong> نسبة الأكسجين المحمولة في الدم المسجلة أثناء الفحص.<br>` +
+          makeSourceLink("Vital Signs (SpO2)", "العلامات الحيوية ونسبة الأكسجين") + `<br>` +
+          `• <strong>الروشتة العلاجية (${meds.replace(/\n/g, '، ')}):</strong> العلاج المعتمد رسمياً لك من قِبل الطبيب.<br>` +
+          makeSourceLink("Prescribed Medications", "الأدوية المعتمدة") + `<br><br>` +
+          `<em>يمكنك السؤال عن معنى أي مصطلح محدد مثل SpO2، أزيز الصدر، البخاخ، أو التهاب الشعب.</em>`;
+    }
+
+    botResponse = termExplanation + disclaimerHtml;
+    setTrustedHtml(thinkingBubble, botResponse);
+    saveHistory(botResponse);
+    if (messages.scrollTop !== undefined) messages.scrollTop = messages.scrollHeight;
+    return;
+  }
+
   const isMedQuery = /دواء|علاج|روشتة|جرعة|أدوية|بخاخ|مضاد|مسكن|medication|medicine|drug|prescription|dose|rx/i.test(q);
   const isRecQuery = /نصائح|تعليمات|ارشادات|توصيات|أعمل ايه|ماذا أفعل|advice|recommendation|instruction|tips/i.test(q);
   const isDiagQuery = /تشخيص|مرضي|حالتي|ماذا عندي|أعراض|diagnosis|condition|disease|what do i have/i.test(q);
@@ -14022,37 +14690,53 @@ async function handleSendChatMessage() {
     botResponse = isEn
       ? `💊 <strong>Prescribed Medications (Certified by ${docName}):</strong><br><br>${meds.replace(/\n/g, '<br>')}<br><br>⚠️ <em>Notice: The assistant does not alter or prescribe medications. Please adhere strictly to the prescribed doses.</em>`
       : `💊 <strong>الأدوية المعتمدة في تقريرك الطبي (بواسطة ${docName}):</strong><br><br>${meds.replace(/\n/g, '<br>')}<br><br>⚠️ <em>تنبيه أمان: المساعد لا يصف أدوية ولا يعدل جرعات. يُرجى الالتزام التام بالجرعات المقررة ومراجعة الطبيب قبل تغيير أو إيقاف أي علاج.</em>`;
+    botResponse += makeSourceLink("Prescribed Medications", "الأدوية المعتمدة");
   } else if (isRecQuery) {
     const recListHtml = recs.map((rec, i) => `${i + 1}. ${rec}`).join("<br>");
     botResponse = isEn
       ? `💡 <strong>Doctor's Clinical Instructions & Recommendations:</strong><br><br>${recListHtml}<br><br>🚨 <em>Emergency notice: In case of severe shortness of breath or persistent chest pain, seek immediate emergency care.</em>`
       : `💡 <strong>تعليمات وتوصيات الطبيب المعتمد (${docName}):</strong><br><br>${recListHtml}<br><br>🚨 <em>تنبيه طوارئ: في حال حدوث ضيق تنفس حاد مفاجئ أو ألم بالصدر، توجه فوراً لأقرب قسم طوارئ.</em>`;
+    botResponse += makeSourceLink("Doctor Clinical Instructions", "إرشادات وتعليمات الطبيب المعتمد");
   } else if (isDiagQuery) {
     botResponse = isEn
       ? `🩺 <strong>Certified Clinical Assessment (Signed by ${docName}):</strong><br><br>${diag}<br><br>• <strong>Oxygen Saturation (SpO2):</strong> ${o2}%<br>• <strong>Doctor License:</strong> <code>${docLicense}</code><br><br><em>(This is an explanation of the doctor's certified record, not an independent AI diagnosis.)</em>`
       : `🩺 <strong>التشخيص السريري المعتمد (الموقع من ${docName}):</strong><br><br>${diag}<br><br>• <strong>نسبة تشبع الأكسجين المسجلة:</strong> ${o2}%<br>• <strong>ترخيص الطبيب:</strong> <code>${docLicense}</code><br><br><em>(هذا توضيح لما سجله الطبيب المعتمد في تقريرك، وليس تشخيصاً آلياً مستقلاً.)</em>`;
+    botResponse += makeSourceLink("Certified Diagnosis & Oxygen Saturation", "التشخيص السريري المعتمد ونسبة الأكسجين");
   } else if (isDocQuery) {
     botResponse = isEn
       ? `👨‍⚕️ <strong>Attending Physician Credentials:</strong><br><br>• <strong>Doctor:</strong> ${docName}<br>• <strong>Medical Syndicate License:</strong> <code>${docLicense}</code><br>• <strong>Status:</strong> Certified & Digitally Signed`
       : `👨‍⚕️ <strong>بيانات الطبيب المعتمد للتقرير:</strong><br><br>• <strong>الطبيب:</strong> ${docName}<br>• <strong>رقم ترخيص النقابة:</strong> <code>${docLicense}</code><br>• <strong>الحالة:</strong> تقرير طبي معتمد وموقع رقمياً`;
+    botResponse += makeSourceLink("Doctor Identity & Credentials", "بيانات واعتماد الطبيب وترخيص النقابة");
   } else {
     const shortRecs = recs.slice(0, 2).map((rec, i) => `${i + 1}. ${rec}`).join("<br>");
     botResponse = isEn
-      ? `📋 <strong>Summary of Certified Report (#${r.id.slice(-6).toUpperCase()} by ${docName}):</strong><br><br>` +
+      ? `📋 <strong>Summary of Certified Report (#${rId} by ${docName}):</strong><br><br>` +
         `🩺 <strong>Doctor's Diagnosis:</strong> ${diag}<br><br>` +
         `💊 <strong>Doctor's Prescription:</strong><br>${meds.replace(/\n/g, '<br>')}<br><br>` +
         `💡 <strong>Key Instructions:</strong><br>${shortRecs}<br><br>` +
-        `<em>You may ask to clarify specific items from the doctor's approved report.</em>`
-      : `📋 <strong>ملخص تقريرك الطبي المعتمد (#${r.id.slice(-6).toUpperCase()} بواسطة ${docName}):</strong><br><br>` +
+        `<em>You may ask to explain terminology, clarify specific items, or prepare questions for your doctor.</em>`
+      : `📋 <strong>ملخص تقريرك الطبي المعتمد (#${rId} بواسطة ${docName}):</strong><br><br>` +
         `🩺 <strong>تشخيص الطبيب المعتمد:</strong> ${diag}<br><br>` +
         `💊 <strong>العلاج المعتمد من الطبيب:</strong><br>${meds.replace(/\n/g, '<br>')}<br><br>` +
         `💡 <strong>أهم التعليمات:</strong><br>${shortRecs}<br><br>` +
-        `<em>يمكنك سؤالي لتوضيح أي نقطة واردة في تقرير الطبيب المعتمد.</em>`;
+        `<em>يمكنك سؤالي لشرح المصطلحات الطبية، أو توضيح أي نقطة في التقرير، أو تجهيز أسئلة لمناقشتها مع الطبيب.</em>`;
+    botResponse += makeSourceLink("Full Certified Report", "السجل الطبي المعتمد بالكامل");
   }
 
   botResponse += disclaimerHtml;
   setTrustedHtml(thinkingBubble, botResponse);
-  messages.scrollTop = messages.scrollHeight;
+  saveHistory(botResponse);
+  if (messages.scrollTop !== undefined) messages.scrollTop = messages.scrollHeight;
+}
+
+if (typeof window !== "undefined") {
+  if (typeof evaluateClinicalGuardrails !== "undefined") window.evaluateClinicalGuardrails = evaluateClinicalGuardrails;
+  if (typeof checkInformationAbsentFromReport !== "undefined") window.checkInformationAbsentFromReport = checkInformationAbsentFromReport;
+  if (typeof buildReportSourceLink !== "undefined") window.buildReportSourceLink = buildReportSourceLink;
+  if (typeof pruneAssistantChatHistory !== "undefined") window.pruneAssistantChatHistory = pruneAssistantChatHistory;
+  if (typeof saveAssistantChatMessage !== "undefined") window.saveAssistantChatMessage = saveAssistantChatMessage;
+  if (typeof clearAssistantChatHistory !== "undefined") window.clearAssistantChatHistory = clearAssistantChatHistory;
+  if (typeof ASSISTANT_CHAT_RETENTION_DAYS !== "undefined") window.ASSISTANT_CHAT_RETENTION_DAYS = ASSISTANT_CHAT_RETENTION_DAYS;
 }
 
 window.sendAssistantQuickPrompt = function(promptText) {
@@ -15024,6 +15708,9 @@ function parseKpiTimestamp(val) {
 function calculateKpiMetrics(cases, options = {}) {
   const timeRange = options.timeRange || currentKpiTimeRange || "all";
   const priorityFilter = options.priority || currentKpiPriority || "all";
+  const clinicFilter = (options.clinicId || options.clinic || "").trim().toLowerCase();
+  const startDate = options.startDate || options.from;
+  const endDate = options.endDate || options.to;
 
   // Filter out demo/test data
   const realCases = (cases || []).filter(c => {
@@ -15037,22 +15724,48 @@ function calculateKpiMetrics(cases, options = {}) {
       !String(c.id || "").startsWith("mock_");
   });
 
-  // Apply Time Range filter
-  const now = Date.now();
-  let minTs = 0;
-  if (timeRange === "today") {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    minTs = d.getTime();
-  } else if (timeRange === "7d") {
-    minTs = now - (7 * 24 * 60 * 60 * 1000);
-  } else if (timeRange === "30d") {
-    minTs = now - (30 * 24 * 60 * 60 * 1000);
+  // Apply Clinic filter
+  let clinicFiltered = realCases;
+  if (clinicFilter && clinicFilter !== "all") {
+    clinicFiltered = clinicFiltered.filter(c => {
+      const cId = String(c.clinicId || c.clinic || c.branchId || "").trim().toLowerCase();
+      return cId === clinicFilter;
+    });
   }
 
-  let filtered = realCases.filter(c => {
+  // Apply Time Range / Date Range filter
+  const now = Date.now();
+  let minTs = 0;
+  let maxTs = Infinity;
+
+  if (startDate) minTs = parseKpiTimestamp(startDate);
+  if (endDate) {
+    const parsedEnd = parseKpiTimestamp(endDate);
+    if (typeof endDate === "string" && endDate.length === 10) {
+      maxTs = parsedEnd + (24 * 60 * 60 * 1000 - 1);
+    } else {
+      maxTs = parsedEnd;
+    }
+  }
+
+  if (!startDate && !endDate) {
+    if (timeRange === "today") {
+      const d = new Date();
+      d.setHours(0, 0, 0, 0);
+      minTs = d.getTime();
+      maxTs = now;
+    } else if (timeRange === "7d") {
+      minTs = now - (7 * 24 * 60 * 60 * 1000);
+      maxTs = now;
+    } else if (timeRange === "30d") {
+      minTs = now - (30 * 24 * 60 * 60 * 1000);
+      maxTs = now;
+    }
+  }
+
+  let filtered = clinicFiltered.filter(c => {
     const ts = parseKpiTimestamp(c.submittedAt || c.createdAt || c.timestamp || c.updatedAt);
-    return minTs === 0 || ts >= minTs;
+    return (minTs === 0 || ts >= minTs) && (maxTs === Infinity || ts <= maxTs);
   });
 
   // Apply Priority filter
@@ -15108,16 +15821,17 @@ function calculateKpiMetrics(cases, options = {}) {
   });
 
   responseTimes.sort((a, b) => a - b);
+  const hasResponseData = responseTimes.length > 0;
 
-  const avgResponseTimeMinutes = responseTimes.length > 0
+  const avgResponseTimeMinutes = hasResponseData
     ? Number((responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length).toFixed(1))
     : 0;
 
-  const medianResponseTimeMinutes = responseTimes.length > 0
+  const medianResponseTimeMinutes = hasResponseData
     ? Number(responseTimes[Math.floor(responseTimes.length / 2)].toFixed(1))
     : 0;
 
-  const fastestResponseMinutes = responseTimes.length > 0
+  const fastestResponseMinutes = hasResponseData
     ? Number(responseTimes[0].toFixed(1))
     : 0;
 
@@ -15125,7 +15839,7 @@ function calculateKpiMetrics(cases, options = {}) {
     ? Number((urgentResponseTimes.reduce((a, b) => a + b, 0) / urgentResponseTimes.length).toFixed(1))
     : 0;
 
-  const responseSlaComplianceRate = responseTimes.length > 0
+  const responseSlaComplianceRate = hasResponseData
     ? Math.round((responseTimes.filter(t => t <= 30).length / responseTimes.length) * 100)
     : 0;
 
@@ -15143,25 +15857,26 @@ function calculateKpiMetrics(cases, options = {}) {
   });
 
   turnaroundTimes.sort((a, b) => a - b);
+  const hasTurnaroundData = turnaroundTimes.length > 0;
 
-  const avgTurnaroundMinutes = turnaroundTimes.length > 0
+  const avgTurnaroundMinutes = hasTurnaroundData
     ? Number((turnaroundTimes.reduce((a, b) => a + b, 0) / turnaroundTimes.length).toFixed(1))
     : 0;
 
-  const medianTurnaroundMinutes = turnaroundTimes.length > 0
+  const medianTurnaroundMinutes = hasTurnaroundData
     ? Number(turnaroundTimes[Math.floor(turnaroundTimes.length / 2)].toFixed(1))
     : 0;
 
-  const fastestTurnaroundMinutes = turnaroundTimes.length > 0
+  const fastestTurnaroundMinutes = hasTurnaroundData
     ? Number(turnaroundTimes[0].toFixed(1))
     : 0;
 
   const p95Index = Math.min(turnaroundTimes.length - 1, Math.floor(turnaroundTimes.length * 0.95));
-  const p95TurnaroundMinutes = turnaroundTimes.length > 0
+  const p95TurnaroundMinutes = hasTurnaroundData
     ? Number(turnaroundTimes[p95Index].toFixed(1))
     : 0;
 
-  const turnaroundSlaComplianceRate = turnaroundTimes.length > 0
+  const turnaroundSlaComplianceRate = hasTurnaroundData
     ? Math.round((turnaroundTimes.filter(t => t <= 120).length / turnaroundTimes.length) * 100)
     : 0;
 
@@ -15229,6 +15944,42 @@ function calculateKpiMetrics(cases, options = {}) {
     });
   });
 
+  // 6. PATIENTS PER DAY FROM ACTUAL EVENTS
+  const distinctPatientIds = new Set();
+  filtered.forEach(c => {
+    const pid = c.patientId || c.patientUid || c.userId;
+    if (pid) distinctPatientIds.add(String(pid));
+  });
+
+  let daysInPeriod = 1;
+  if (minTs > 0 && maxTs < Infinity && maxTs > minTs) {
+    daysInPeriod = Math.max(1, Math.ceil((maxTs - minTs) / (24 * 60 * 60 * 1000)));
+  } else if (timeRange === "7d") {
+    daysInPeriod = 7;
+  } else if (timeRange === "30d") {
+    daysInPeriod = 30;
+  } else if (timeRange === "all" && filtered.length > 1) {
+    const tsList = filtered.map(c => parseKpiTimestamp(c.submittedAt || c.createdAt || c.timestamp)).filter(t => t > 0);
+    if (tsList.length > 1) {
+      const minT = Math.min(...tsList);
+      const maxT = Math.max(...tsList);
+      daysInPeriod = Math.max(1, Math.ceil((maxT - minT) / (24 * 60 * 60 * 1000)));
+    }
+  }
+
+  const hasPatientsData = distinctPatientIds.size > 0;
+  const patientsPerDayValue = hasPatientsData
+    ? Number((distinctPatientIds.size / daysInPeriod).toFixed(2))
+    : null;
+
+  // 7. WORKLOAD FROM ACTUAL ACTIVE EVENTS
+  const activeCases = filtered.filter(c => ["pending", "submitted", "triaged", "assigned", "under_review"].includes(c.status));
+  const activeDoctorCount = doctorsPerformance.length;
+  const hasWorkloadData = activeCases.length > 0 && activeDoctorCount > 0;
+  const avgWorkloadPerDoctor = hasWorkloadData
+    ? Number((activeCases.length / activeDoctorCount).toFixed(1))
+    : null;
+
   return {
     timeRange,
     priorityFilter,
@@ -15256,7 +16007,53 @@ function calculateKpiMetrics(cases, options = {}) {
       report: stageReportMinutes,
       total: Number((stageIntakeMinutes + stageQueueMinutes + stageReviewMinutes + stageReportMinutes).toFixed(1))
     },
-    doctorsPerformance
+    doctorsPerformance,
+
+    // Enhanced metrics with explicit availability and 'Unavailable' fallbacks
+    responseTime: {
+      avgMinutes: hasResponseData ? avgResponseTimeMinutes : null,
+      medianMinutes: hasResponseData ? medianResponseTimeMinutes : null,
+      display: hasResponseData ? `${avgResponseTimeMinutes} min` : "Unavailable",
+      displayAr: hasResponseData ? `${avgResponseTimeMinutes} دقيقة` : "غير متاح",
+      isAvailable: hasResponseData
+    },
+    approvalTime: {
+      avgMinutes: hasTurnaroundData ? avgTurnaroundMinutes : null,
+      medianMinutes: hasTurnaroundData ? medianTurnaroundMinutes : null,
+      display: hasTurnaroundData ? `${avgTurnaroundMinutes} min` : "Unavailable",
+      displayAr: hasTurnaroundData ? `${avgTurnaroundMinutes} دقيقة` : "غير متاح",
+      isAvailable: hasTurnaroundData
+    },
+    patientsPerDay: {
+      value: patientsPerDayValue,
+      distinctPatients: distinctPatientIds.size,
+      daysCount: daysInPeriod,
+      display: hasPatientsData ? `${patientsPerDayValue} patients/day` : "Unavailable",
+      displayAr: hasPatientsData ? `${patientsPerDayValue} مريض/يوم` : "غير متاح",
+      isAvailable: hasPatientsData
+    },
+    workload: {
+      avgWorkloadPerDoctor,
+      totalActiveCases: activeCases.length,
+      activeDoctorCount,
+      display: hasWorkloadData ? `${avgWorkloadPerDoctor} cases/doc` : "Unavailable",
+      displayAr: hasWorkloadData ? `${avgWorkloadPerDoctor} حالة/طبيب` : "غير متاح",
+      isAvailable: hasWorkloadData
+    },
+    display: {
+      responseTime: hasResponseData ? `${avgResponseTimeMinutes} min` : "Unavailable",
+      approvalTime: hasTurnaroundData ? `${avgTurnaroundMinutes} min` : "Unavailable",
+      patientsPerDay: hasPatientsData ? `${patientsPerDayValue} patients/day` : "Unavailable",
+      workload: hasWorkloadData ? `${avgWorkloadPerDoctor} cases/doc` : "Unavailable",
+      completionRate: totalCases > 0 ? `${completionRate}%` : "Unavailable"
+    },
+    displayAr: {
+      responseTime: hasResponseData ? `${avgResponseTimeMinutes} دقيقة` : "غير متاح",
+      approvalTime: hasTurnaroundData ? `${avgTurnaroundMinutes} دقيقة` : "غير متاح",
+      patientsPerDay: hasPatientsData ? `${patientsPerDayValue} مريض/يوم` : "غير متاح",
+      workload: hasWorkloadData ? `${avgWorkloadPerDoctor} حالة/طبيب` : "غير متاح",
+      completionRate: totalCases > 0 ? `${completionRate}%` : "غير متاح"
+    }
   };
 }
 
@@ -15342,56 +16139,68 @@ async function renderKpiDashboard(options = {}) {
     }
 
     // 3. HERO CARD 2: PHYSICIAN RESPONSE TIME
-    setText("kpiResponseTimeValue", String(metrics.avgResponseTimeMinutes));
-    setText("kpiResponseTimeUnit", isEn ? "min" : "دقيقة");
+    const hasResp = metrics.hasLiveData && metrics.responseTime?.isAvailable;
+    if (!hasResp) {
+      setText("kpiResponseTimeValue", isEn ? "Unavailable" : "غير متاح");
+      setText("kpiResponseTimeUnit", "");
+    } else {
+      setText("kpiResponseTimeValue", String(metrics.avgResponseTimeMinutes));
+      setText("kpiResponseTimeUnit", isEn ? "min" : "دقيقة");
+    }
 
     const respBar = document.getElementById("kpiResponseBar");
     if (respBar) {
-      const respPct = Math.min(100, Math.round((30 / Math.max(metrics.avgResponseTimeMinutes, 1)) * 100));
+      const respPct = hasResp ? Math.min(100, Math.round((30 / Math.max(metrics.avgResponseTimeMinutes, 1)) * 100)) : 0;
       respBar.style.width = `${Math.min(100, respPct)}%`;
     }
 
     setText("kpiResponseContext", isEn
-      ? (metrics.hasLiveData ? "Time from patient submission to first clinical physician action" : "No physician response timing is available until a real case is reviewed")
-      : (metrics.hasLiveData ? "من وقت تقديم الفحص حتى أول إجراء طبي سريري" : "لا يتوفر زمن استجابة الطبيب قبل مراجعة حالة حقيقية"));
+      ? (hasResp ? "Time from patient submission to first clinical physician action" : "No physician response timing is available until a real case is reviewed")
+      : (hasResp ? "من وقت تقديم الفحص حتى أول إجراء طبي سريري" : "لا يتوفر زمن استجابة الطبيب قبل مراجعة حالة حقيقية"));
 
-    setText("kpiUrgentResponseTime", isEn ? `${metrics.urgentAvgResponseMinutes} min` : `${metrics.urgentAvgResponseMinutes} دقيقة`);
-    setText("kpiMedianResponseTime", isEn ? `${metrics.medianResponseTimeMinutes} min` : `${metrics.medianResponseTimeMinutes} دقيقة`);
-    setText("kpiResponseSlaRate", `${metrics.responseSlaComplianceRate}%`);
+    setText("kpiUrgentResponseTime", hasResp ? (isEn ? `${metrics.urgentAvgResponseMinutes} min` : `${metrics.urgentAvgResponseMinutes} دقيقة`) : (isEn ? "Unavailable" : "غير متاح"));
+    setText("kpiMedianResponseTime", hasResp ? (isEn ? `${metrics.medianResponseTimeMinutes} min` : `${metrics.medianResponseTimeMinutes} دقيقة`) : (isEn ? "Unavailable" : "غير متاح"));
+    setText("kpiResponseSlaRate", hasResp ? `${metrics.responseSlaComplianceRate}%` : (isEn ? "Unavailable" : "غير متاح"));
 
     const respSlaBadge = document.getElementById("kpiResponseSlaBadge");
     if (respSlaBadge) {
-      respSlaBadge.className = `kpi-badge-sla ${metrics.hasLiveData && metrics.avgResponseTimeMinutes <= 30 ? 'optimal' : 'warning'}`;
-      respSlaBadge.textContent = !metrics.hasLiveData
-        ? (isEn ? "Insufficient live data" : "بيانات حية غير كافية")
+      respSlaBadge.className = `kpi-badge-sla ${hasResp && metrics.avgResponseTimeMinutes <= 30 ? 'optimal' : 'warning'}`;
+      respSlaBadge.textContent = !hasResp
+        ? (isEn ? "Unavailable (Insufficient live data)" : "غير متاح (بيانات غير كافية)")
         : (isEn
           ? `SLA: < 30m (${metrics.responseSlaComplianceRate}% on-time)`
           : `SLA: < 30 دقيقة (${metrics.responseSlaComplianceRate}% التزام)`);
     }
 
     // 4. HERO CARD 3: REPORT TURNAROUND TIME (TAT)
-    setText("kpiTurnaroundTimeValue", String(metrics.avgTurnaroundMinutes));
-    setText("kpiTurnaroundTimeUnit", isEn ? "min" : "دقيقة");
+    const hasTat = metrics.hasLiveData && metrics.approvalTime?.isAvailable;
+    if (!hasTat) {
+      setText("kpiTurnaroundTimeValue", isEn ? "Unavailable" : "غير متاح");
+      setText("kpiTurnaroundTimeUnit", "");
+    } else {
+      setText("kpiTurnaroundTimeValue", String(metrics.avgTurnaroundMinutes));
+      setText("kpiTurnaroundTimeUnit", isEn ? "min" : "دقيقة");
+    }
 
     const tatBar = document.getElementById("kpiTurnaroundBar");
     if (tatBar) {
-      const tatPct = Math.min(100, Math.round((120 / Math.max(metrics.avgTurnaroundMinutes, 1)) * 100));
+      const tatPct = hasTat ? Math.min(100, Math.round((120 / Math.max(metrics.avgTurnaroundMinutes, 1)) * 100)) : 0;
       tatBar.style.width = `${Math.min(100, tatPct)}%`;
     }
 
     setText("kpiTurnaroundContext", isEn
-      ? (metrics.hasLiveData ? "End-to-end duration from intake to final certified signed report" : "Report turnaround appears after a physician certifies a real report")
-      : (metrics.hasLiveData ? "من إرسال التقييم حتى توثيق واعتماد التقرير الطبي" : "يظهر زمن إصدار التقرير بعد اعتماد تقرير حقيقي من الطبيب"));
+      ? (hasTat ? "End-to-end duration from intake to final certified signed report" : "Report turnaround appears after a physician certifies a real report")
+      : (hasTat ? "من إرسال التقييم حتى توثيق واعتماد التقرير الطبي" : "يظهر زمن إصدار التقرير بعد اعتماد تقرير حقيقي من الطبيب"));
 
-    setText("kpiOnTimeTurnaroundRate", `${metrics.turnaroundSlaComplianceRate}%`);
-    setText("kpiP95TurnaroundTime", isEn ? `${metrics.p95TurnaroundMinutes} min` : `${metrics.p95TurnaroundMinutes} دقيقة`);
-    setText("kpiFastestTurnaroundTime", isEn ? `${metrics.fastestTurnaroundMinutes} min` : `${metrics.fastestTurnaroundMinutes} دقيقة`);
+    setText("kpiOnTimeTurnaroundRate", hasTat ? `${metrics.turnaroundSlaComplianceRate}%` : (isEn ? "Unavailable" : "غير متاح"));
+    setText("kpiP95TurnaroundTime", hasTat ? (isEn ? `${metrics.p95TurnaroundMinutes} min` : `${metrics.p95TurnaroundMinutes} دقيقة`) : (isEn ? "Unavailable" : "غير متاح"));
+    setText("kpiFastestTurnaroundTime", hasTat ? (isEn ? `${metrics.fastestTurnaroundMinutes} min` : `${metrics.fastestTurnaroundMinutes} دقيقة`) : (isEn ? "Unavailable" : "غير متاح"));
 
     const tatSlaBadge = document.getElementById("kpiTurnaroundSlaBadge");
     if (tatSlaBadge) {
-      tatSlaBadge.className = `kpi-badge-sla ${metrics.hasLiveData && metrics.avgTurnaroundMinutes <= 120 ? 'optimal' : 'warning'}`;
-      tatSlaBadge.textContent = !metrics.hasLiveData
-        ? (isEn ? "Insufficient live data" : "بيانات حية غير كافية")
+      tatSlaBadge.className = `kpi-badge-sla ${hasTat && metrics.avgTurnaroundMinutes <= 120 ? 'optimal' : 'warning'}`;
+      tatSlaBadge.textContent = !hasTat
+        ? (isEn ? "Unavailable (Insufficient live data)" : "غير متاح (بيانات غير كافية)")
         : (isEn
           ? `Target: < 2h (${metrics.turnaroundSlaComplianceRate}% on-time)`
           : `الهدف: < 2 ساعة (${metrics.turnaroundSlaComplianceRate}% تسليم)`);
@@ -15599,7 +16408,30 @@ function updateDoctorMiniKpiBar(cases) {
   setText("docKpiTurnaroundTime", isEn ? `${kpi.avgTurnaroundMinutes} min` : `${kpi.avgTurnaroundMinutes} دقيقة`);
 }
 
+function calculateAssessmentJourneyMetrics(events = [], options = {}) {
+  const starts = events.filter(e => e.eventType === 'assessment_start').length;
+  const completes = events.filter(e => e.eventType === 'assessment_complete').length;
+  const abandons = events.filter(e => e.eventType === 'assessment_abandon').length;
+  const persistedCases = options.persistedCasesCount !== undefined ? options.persistedCasesCount : completes;
+
+  const completionRate = starts > 0 ? Number(((completes / starts) * 100).toFixed(1)) : null;
+  const abandonmentRate = starts > 0 ? Number(((abandons / starts) * 100).toFixed(1)) : null;
+
+  return {
+    starts,
+    completes,
+    abandons,
+    persistedCasesCount: persistedCases,
+    completionRate,
+    abandonmentRate,
+    completionRateDisplay: completionRate !== null ? `${completionRate}%` : 'Unavailable',
+    completionRateDisplayAr: completionRate !== null ? `${completionRate}%` : 'غير متاح',
+    distinctionNote: 'Cases count reflects database persistence, while assessment-journey completion rate measures patient progression from start to finish.'
+  };
+}
+
 window.calculateKpiMetrics = calculateKpiMetrics;
+window.calculateAssessmentJourneyMetrics = calculateAssessmentJourneyMetrics;
 window.renderKpiDashboard = renderKpiDashboard;
 window.setKpiTimeFilter = setKpiTimeFilter;
 window.setKpiPriorityFilter = setKpiPriorityFilter;

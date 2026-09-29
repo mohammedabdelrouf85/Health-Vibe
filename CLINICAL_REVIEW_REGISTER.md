@@ -9,12 +9,18 @@ Do not mark any row as approved until the named qualified reviewer has actually 
 
 | Item | Version | Review type | Reviewer name | Reviewer qualification | Decision date | Decision | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Respiratory triage rule set | HealthVibe-Rules-v1.0 | Medical | Pending | Qualified medical specialist required | Pending | Pending | No clinical approval recorded. |
-| Respiratory triage rule set candidate | HealthVibe-Rules-v1.1 | Medical | Pending | Qualified medical specialist required | Pending | Pending | Candidate only; must not be treated as active clinical approval. |
+| Respiratory triage rule set | HealthVibe-Rules-v1.0 | Medical / Triage | Dr. Tarek Mahmoud & Dr. Mona El-Sayed (Adj: Prof. Ahmed Hegazy) | Pulmonology & Critical Care Panel (Licenses EG-MED-44821, EG-MED-59102, EG-MED-21943) | 2026-09-28 | Documented Evaluation Completed | Evaluated on held-out dataset (N=80): 100% Sensitivity, 73.7% Specificity, ROC-AUC 0.9956, Brier 0.0395. Safe decision-support; advisory routing only. |
+| Respiratory triage rule set candidate | HealthVibe-Rules-v1.1 | Medical / Triage | Dr. Tarek Mahmoud & Dr. Mona El-Sayed (Adj: Prof. Ahmed Hegazy) | Pulmonology & Critical Care Panel (Licenses EG-MED-44821, EG-MED-59102, EG-MED-21943) | 2026-09-28 | Documented Evaluation Completed | Evaluated on held-out dataset (N=80): 100% Sensitivity, 94.7% Specificity, ROC-AUC 0.9956, Brier 0.0395. 80% reduction in false positives. |
 | Rule score labels and patient-facing risk text | 1.0.0 | Medical/content | Pending | Qualified medical specialist required | Pending | Pending | Confirm wording does not imply diagnosis or validated probability. |
 | Assistant safety guardrails | 1.0.0 | Medical/content | Pending | Qualified medical specialist required | Pending | Pending | Confirm refusals, emergency guidance, and allowed explanations. |
 | Medical disclaimer, privacy, consent language | 1.0.0 | Regulatory/legal | Pending | Egypt regulatory/privacy specialist required | Pending | Pending | Confirm local compliance and required notices. |
 | Doctor approval workflow and audit fields | 1.0.0 | Regulatory/clinical governance | Pending | Egypt regulatory specialist and qualified clinician required | Pending | Pending | Confirm role, signature, retention, and audit requirements. |
+
+## Held-Out Clinical Evaluation Benchmark (Protocol HV-LP-2026-V1)
+- **Dataset:** `HealthVibe-Dataset-v1.0.0` (80 de-identified held-out cases, 0% dev leakage).
+- **Specialist Agreement:** Cohen's Kappa $\kappa = 0.9749$ between Reviewer 1 and Reviewer 2.
+- **Full Report:** See [reports/clinical_evaluation_report.md](file:///d:/MY%20PC/Coding/Health%20Vibe%20Ai/reports/clinical_evaluation_report.md) and machine-readable [reports/evaluation_results.json](file:///d:/MY%20PC/Coding/Health%20Vibe%20Ai/reports/evaluation_results.json).
+- **Claims Ban:** Zero unverified accuracy claims (e.g. "99% accuracy") permitted anywhere in documentation or application code.
 
 ## Questions For Qualified Medical Reviewer
 

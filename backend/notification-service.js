@@ -1310,9 +1310,685 @@ function clearSentEmailsLog() {
   sentEmailsLog.length = 0;
 }
 
+// ============================================================================
+// 🔔 USER NOTIFICATION HISTORY, PREFERENCES & SERVER-SIDE SENDER ENFORCEMENT
+// ============================================================================
+
+const inMemoryNotificationHistory = new Map();
+const inMemoryUserPreferences = new Map();
+
+const DEFAULT_NOTIFICATION_PREFERENCES = Object.freeze({
+  channels: {
+    in_app: true,
+    email: true,
+    sms: false,
+    whatsapp: false
+  },
+  quietHours: {
+    enabled: false,
+    start: '22:00',
+    end: '08:00'
+  },
+  timeZone: 'Africa/Cairo',
+  urgentPolicy: 'ALWAYS_DELIVER_IMMEDIATELY'
+});
+
+/**
+ * Checks whether an event qualifies as urgent/critical clinical event.
+ * Urgent clinical events bypass quiet hours and channel muting.
+ */
+function isUrgentEvent(params = {}) {
+  const { eventType, type, urgent, priority, severity } = params;
+  const evt = (eventType || type || '').toLowerCase();
+  const prio = (priority || '').toLowerCase();
+  const sev = (severity || '').toUpperCase();
+
+  if (urgent === true) return true;
+  if (evt === NOTIFICATION_TYPES.ESCALATION || evt === 'escalation' || evt === 'emergency') return true;
+  if (prio === 'critical' || prio === 'urgent') return true;
+  if (sev === 'CRITICAL' || sev === 'HIGH_RISK' || sev === 'عالي الخطورة') return true;
+  return false;
+}
+
+/**
+ * Generates an authorized, role-safe destination link for the given event type.
+ */
+function generateAuthorizedDestinationLink({
+  eventType,
+  type,
+  caseId = null,
+  appointmentId = null,
+  ticketId = null,
+  appUrl = null,
+  customPath = null
+} = {}) {
+  if (customPath && typeof customPath === 'string' && customPath.startsWith('/')) {
+    return customPath;
+  }
+  const portalUrl = normalizeAppBaseUrl(appUrl || process.env.APP_BASE_URL);
+  const evt = (eventType || type || '').toLowerCase();
+
+  if (evt === NOTIFICATION_TYPES.ESCALATION || evt === 'escalation') {
+    return caseId
+      ? `${portalUrl}/app/index.html?screen=emergency&caseId=${encodeURIComponent(caseId)}`
+      : `${portalUrl}/app/index.html?screen=emergency`;
+  }
+  if (evt === NOTIFICATION_TYPES.RESULT_READY || evt === 'result_ready') {
+    return caseId
+      ? `${portalUrl}/app/index.html?screen=report&caseId=${encodeURIComponent(caseId)}`
+      : `${portalUrl}/app/index.html?screen=report`;
+  }
+  if (evt === NOTIFICATION_TYPES.INFORMATION_REQUESTED || evt === NOTIFICATION_TYPES.MORE_INFO_REQUESTED) {
+    return caseId
+      ? `${portalUrl}/app/index.html?screen=chat&caseId=${encodeURIComponent(caseId)}`
+      : `${portalUrl}/app/index.html?screen=chat`;
+  }
+  if (evt === NOTIFICATION_TYPES.DOCTOR_ASSIGNED || evt === 'doctor_assigned') {
+    return caseId
+      ? `${portalUrl}/app/index.html?screen=report&caseId=${encodeURIComponent(caseId)}`
+      : `${portalUrl}/app/index.html?screen=report`;
+  }
+  if (evt.startsWith('appointment_') || evt === 'appointment_changes') {
+    return appointmentId
+      ? `${portalUrl}/app/index.html?screen=appointments&id=${encodeURIComponent(appointmentId)}`
+      : `${portalUrl}/app/index.html?screen=appointments`;
+  }
+  if (evt === 'feedback_update' || evt === 'ticket_update') {
+    return ticketId
+      ? `${portalUrl}/app/index.html?screen=support&ticketId=${encodeURIComponent(ticketId)}`
+      : `${portalUrl}/app/index.html?screen=support`;
+  }
+  return `${portalUrl}/app/index.html`;
+}
+
+/**
+ * Returns current hour, minute and total minutes in specified IANA timezone.
+ */
+function getLocalTimeInTimeZone(date, timeZone) {
+  try {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: timeZone || 'Africa/Cairo',
+      hour: 'numeric',
+      minute: 'numeric',
+      hour12: false
+    });
+    const parts = formatter.formatToParts(date);
+    const hour = parseInt(parts.find(p => p.type === 'hour').value, 10);
+    const minute = parseInt(parts.find(p => p.type === 'minute').value, 10);
+    return { hour, minute, totalMinutes: hour * 60 + minute };
+  } catch (e) {
+    const hour = date.getUTCHours();
+    const minute = date.getUTCMinutes();
+    return { hour, minute, totalMinutes: hour * 60 + minute };
+  }
+}
+
+/**
+ * Evaluates whether quiet hours are currently active for the given preferences.
+ */
+function isQuietHoursActive(preferences = {}, now = new Date()) {
+  const quietHours = preferences.quietHours;
+  if (!quietHours || !quietHours.enabled) return false;
+
+  const startStr = quietHours.start || '22:00';
+  const endStr = quietHours.end || '08:00';
+  const [startH, startM] = startStr.split(':').map(Number);
+  const [endH, endM] = endStr.split(':').map(Number);
+  const startMinutes = (isNaN(startH) ? 22 : startH) * 60 + (isNaN(startM) ? 0 : startM);
+  const endMinutes = (isNaN(endH) ? 8 : endH) * 60 + (isNaN(endM) ? 0 : endM);
+
+  const { totalMinutes } = getLocalTimeInTimeZone(now, preferences.timeZone || 'Africa/Cairo');
+
+  if (startMinutes > endMinutes) {
+    // Crosses midnight: e.g. 22:00 to 08:00
+    return totalMinutes >= startMinutes || totalMinutes < endMinutes;
+  } else if (startMinutes < endMinutes) {
+    // Same day window: e.g. 13:00 to 15:00
+    return totalMinutes >= startMinutes && totalMinutes < endMinutes;
+  }
+  return false;
+}
+
+/**
+ * Calculates the exact timestamp when quiet hours end.
+ */
+function calculateNextQuietHoursEnd(preferences = {}, now = new Date()) {
+  const quietHours = preferences.quietHours;
+  const startStr = quietHours?.start || '22:00';
+  const endStr = quietHours?.end || '08:00';
+  const [startH, startM] = startStr.split(':').map(Number);
+  const [endH, endM] = endStr.split(':').map(Number);
+  const startMinutes = (isNaN(startH) ? 22 : startH) * 60 + (isNaN(startM) ? 0 : startM);
+  const endMinutes = (isNaN(endH) ? 8 : endH) * 60 + (isNaN(endM) ? 0 : endM);
+
+  const { totalMinutes } = getLocalTimeInTimeZone(now, preferences.timeZone || 'Africa/Cairo');
+
+  let minutesRemaining = 0;
+  if (startMinutes > endMinutes) {
+    if (totalMinutes >= startMinutes) {
+      minutesRemaining = (1440 - totalMinutes) + endMinutes;
+    } else if (totalMinutes < endMinutes) {
+      minutesRemaining = endMinutes - totalMinutes;
+    }
+  } else if (startMinutes < endMinutes) {
+    if (totalMinutes >= startMinutes && totalMinutes < endMinutes) {
+      minutesRemaining = endMinutes - totalMinutes;
+    }
+  }
+
+  const durationMs = Math.max(minutesRemaining, 1) * 60 * 1000;
+  return new Date(now.getTime() + durationMs);
+}
+
+/**
+ * Records an in-app notification in history with read/unread state.
+ */
+async function recordNotificationHistory(db, {
+  userId,
+  eventType,
+  type,
+  title,
+  message,
+  body,
+  authorizedDestinationLink,
+  destinationLink,
+  urgent = false,
+  metadata = {}
+}) {
+  if (!userId || typeof userId !== 'string') {
+    throw new Error('userId is required to record user notification history.');
+  }
+
+  const id = `notif_hist_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+  const nowIso = new Date().toISOString();
+  const resolvedType = eventType || type || 'system_alert';
+  const link = authorizedDestinationLink || destinationLink || generateAuthorizedDestinationLink({
+    eventType: resolvedType,
+    caseId: metadata.caseId,
+    appointmentId: metadata.appointmentId,
+    ticketId: metadata.ticketId
+  });
+
+  const record = {
+    id,
+    userId,
+    eventType: resolvedType,
+    title: String(title || 'Notification').trim(),
+    body: String(message || body || '').trim(),
+    message: String(message || body || '').trim(),
+    read: false,
+    readAt: null,
+    urgent: Boolean(urgent),
+    authorizedDestinationLink: link,
+    destinationLink: link,
+    metadata: metadata || {},
+    createdAt: nowIso
+  };
+
+  inMemoryNotificationHistory.set(id, record);
+
+  if (db && typeof db.collection === 'function') {
+    try {
+      const col = db.collection('user_notifications');
+      if (typeof col.doc === 'function') {
+        await col.doc(id).set(record);
+      }
+    } catch (err) {
+      console.warn('[NOTIFICATION WARNING] Failed to persist user_notification to Firestore:', err.message);
+    }
+  }
+
+  return record;
+}
+
+/**
+ * Retrieves in-app notification history strictly for the authorized user.
+ */
+async function getUserNotificationHistory(db, userId, options = {}) {
+  if (!userId || typeof userId !== 'string') {
+    return { notifications: [], unreadCount: 0, totalCount: 0 };
+  }
+
+  const { unreadOnly = false, eventType = null, limit = 50, offset = 0 } = options;
+
+  const items = [];
+  for (const item of inMemoryNotificationHistory.values()) {
+    if (item.userId === userId) {
+      if (unreadOnly && item.read) continue;
+      if (eventType && item.eventType !== eventType) continue;
+      items.push({ ...item });
+    }
+  }
+
+  if (db && typeof db.collection === 'function') {
+    try {
+      const col = db.collection('user_notifications');
+      let q = col.where('userId', '==', userId);
+      if (unreadOnly) {
+        q = q.where('read', '==', false);
+      }
+      const snap = await q.get();
+      if (snap && snap.docs) {
+        for (const doc of snap.docs) {
+          const d = doc.data();
+          if (d && d.id && !inMemoryNotificationHistory.has(d.id)) {
+            if (eventType && d.eventType !== eventType) continue;
+            items.push(d);
+          }
+        }
+      }
+    } catch (e) {
+      // Fallback to memory
+    }
+  }
+
+  items.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+
+  const totalCount = items.length;
+  const unreadCount = items.filter(i => !i.read).length;
+  const paginated = items.slice(offset, offset + limit);
+
+  return {
+    notifications: paginated,
+    unreadCount,
+    totalCount
+  };
+}
+
+/**
+ * Marks a notification as read with strict user isolation.
+ */
+async function markNotificationAsRead(db, notificationId, userId) {
+  if (!notificationId || !userId) {
+    const err = new Error('notificationId and userId are required.');
+    err.code = 'INVALID_PARAMETERS';
+    throw err;
+  }
+
+  let item = inMemoryNotificationHistory.get(notificationId);
+
+  if (!item && db && typeof db.collection === 'function') {
+    try {
+      const docSnap = await db.collection('user_notifications').doc(notificationId).get();
+      if (docSnap.exists) {
+        item = docSnap.data();
+      }
+    } catch (e) {}
+  }
+
+  if (!item) {
+    const err = new Error(`Notification '${notificationId}' not found.`);
+    err.code = 'NOT_FOUND';
+    throw err;
+  }
+
+  if (item.userId !== userId) {
+    const err = new Error('Access denied. You can only update your own notifications.');
+    err.code = 'ACCESS_DENIED';
+    throw err;
+  }
+
+  const nowIso = new Date().toISOString();
+  item.read = true;
+  item.readAt = nowIso;
+  inMemoryNotificationHistory.set(notificationId, item);
+
+  if (db && typeof db.collection === 'function') {
+    try {
+      await db.collection('user_notifications').doc(notificationId).update({
+        read: true,
+        readAt: nowIso
+      });
+    } catch (e) {}
+  }
+
+  return { ...item };
+}
+
+/**
+ * Marks all notifications for a specific user as read.
+ */
+async function markAllNotificationsAsRead(db, userId) {
+  if (!userId) return { success: false, updatedCount: 0 };
+
+  const nowIso = new Date().toISOString();
+  let updatedCount = 0;
+
+  for (const item of inMemoryNotificationHistory.values()) {
+    if (item.userId === userId && !item.read) {
+      item.read = true;
+      item.readAt = nowIso;
+      updatedCount++;
+    }
+  }
+
+  if (db && typeof db.collection === 'function') {
+    try {
+      const col = db.collection('user_notifications');
+      const snap = await col.where('userId', '==', userId).where('read', '==', false).get();
+      if (snap && snap.docs) {
+        for (const doc of snap.docs) {
+          await col.doc(doc.id).update({
+            read: true,
+            readAt: nowIso
+          });
+        }
+      }
+    } catch (e) {}
+  }
+
+  return { success: true, updatedCount };
+}
+
+/**
+ * Retrieves a single notification strictly owned by userId.
+ */
+async function getNotificationById(db, notificationId, userId) {
+  if (!notificationId) return null;
+  let item = inMemoryNotificationHistory.get(notificationId);
+
+  if (!item && db && typeof db.collection === 'function') {
+    try {
+      const snap = await db.collection('user_notifications').doc(notificationId).get();
+      if (snap.exists) {
+        item = snap.data();
+      }
+    } catch (e) {}
+  }
+
+  if (!item) return null;
+  if (userId && item.userId !== userId) {
+    const err = new Error('Access denied to notification.');
+    err.code = 'ACCESS_DENIED';
+    throw err;
+  }
+
+  return { ...item };
+}
+
+/**
+ * Retrieves user notification preferences with fallback to defaults.
+ */
+async function getUserNotificationPreferences(db, userId) {
+  if (!userId) return { ...DEFAULT_NOTIFICATION_PREFERENCES };
+
+  let prefs = inMemoryUserPreferences.get(userId);
+
+  if (!prefs && db && typeof db.collection === 'function') {
+    try {
+      const snap = await db.collection('user_notification_preferences').doc(userId).get();
+      if (snap.exists) {
+        prefs = snap.data();
+        inMemoryUserPreferences.set(userId, prefs);
+      }
+    } catch (e) {}
+  }
+
+  if (!prefs) {
+    return {
+      userId,
+      ...DEFAULT_NOTIFICATION_PREFERENCES,
+      channels: { ...DEFAULT_NOTIFICATION_PREFERENCES.channels },
+      quietHours: { ...DEFAULT_NOTIFICATION_PREFERENCES.quietHours }
+    };
+  }
+
+  return {
+    userId,
+    channels: {
+      ...DEFAULT_NOTIFICATION_PREFERENCES.channels,
+      ...(prefs.channels || {})
+    },
+    quietHours: {
+      ...DEFAULT_NOTIFICATION_PREFERENCES.quietHours,
+      ...(prefs.quietHours || {})
+    },
+    timeZone: prefs.timeZone || DEFAULT_NOTIFICATION_PREFERENCES.timeZone,
+    urgentPolicy: DEFAULT_NOTIFICATION_PREFERENCES.urgentPolicy,
+    updatedAt: prefs.updatedAt || null
+  };
+}
+
+/**
+ * Updates user notification preferences (channels, quiet hours, time zone).
+ */
+async function updateUserNotificationPreferences(db, userId, updates = {}) {
+  if (!userId) {
+    const err = new Error('userId is required to update notification preferences.');
+    err.code = 'INVALID_PARAMETERS';
+    throw err;
+  }
+
+  const current = await getUserNotificationPreferences(db, userId);
+
+  if (updates.quietHours) {
+    const qh = updates.quietHours;
+    if (qh.start && !/^\d{1,2}:\d{2}$/.test(qh.start)) {
+      const err = new Error('Invalid quietHours.start format. Expected HH:MM.');
+      err.code = 'INVALID_TIME_FORMAT';
+      throw err;
+    }
+    if (qh.end && !/^\d{1,2}:\d{2}$/.test(qh.end)) {
+      const err = new Error('Invalid quietHours.end format. Expected HH:MM.');
+      err.code = 'INVALID_TIME_FORMAT';
+      throw err;
+    }
+  }
+
+  if (updates.timeZone) {
+    try {
+      new Intl.DateTimeFormat('en-US', { timeZone: updates.timeZone });
+    } catch (e) {
+      const err = new Error(`Invalid IANA timeZone: '${updates.timeZone}'`);
+      err.code = 'INVALID_TIMEZONE';
+      throw err;
+    }
+  }
+
+  const merged = {
+    userId,
+    channels: {
+      ...current.channels,
+      ...(updates.channels || {})
+    },
+    quietHours: {
+      ...current.quietHours,
+      ...(updates.quietHours || {})
+    },
+    timeZone: updates.timeZone || current.timeZone,
+    urgentPolicy: DEFAULT_NOTIFICATION_PREFERENCES.urgentPolicy,
+    updatedAt: new Date().toISOString()
+  };
+
+  inMemoryUserPreferences.set(userId, merged);
+
+  if (db && typeof db.collection === 'function') {
+    try {
+      await db.collection('user_notification_preferences').doc(userId).set(merged, { merge: true });
+    } catch (e) {
+      console.warn('[PREFERENCES WARNING] Could not persist to Firestore:', e.message);
+    }
+  }
+
+  return merged;
+}
+
+/**
+ * Dispatches a notification enforcing server-side channel preferences, quiet hours,
+ * and urgent clinical bypass policies.
+ */
+async function dispatchNotificationWithPreferences(db, {
+  userId,
+  recipientEmail,
+  eventType,
+  type,
+  title,
+  message,
+  body,
+  authorizedDestinationLink,
+  destinationLink,
+  urgent = false,
+  priority = 'normal',
+  severity = null,
+  payload = {},
+  appointmentId = null,
+  caseId = null,
+  forceEmail = false,
+  strictSmtp = false
+}) {
+  const resolvedType = eventType || type || 'system_alert';
+  const isUrgent = isUrgentEvent({ eventType: resolvedType, urgent, priority, severity });
+
+  const prefs = await getUserNotificationPreferences(db, userId);
+  const quietHoursActive = isQuietHoursActive(prefs);
+
+  const link = authorizedDestinationLink || destinationLink || generateAuthorizedDestinationLink({
+    eventType: resolvedType,
+    caseId: caseId || payload.caseId,
+    appointmentId: appointmentId || payload.appointmentId,
+    ticketId: payload.ticketId
+  });
+
+  let inAppNotification = null;
+  let emailResult = null;
+  let queuedItem = null;
+
+  // 1. In-App Notification:
+  // Recorded in user history if in_app channel is enabled or if urgent
+  if (userId && (prefs.channels.in_app !== false || isUrgent)) {
+    inAppNotification = await recordNotificationHistory(db, {
+      userId,
+      eventType: resolvedType,
+      title: title || 'Health Vibes Notification',
+      message: message || body || '',
+      authorizedDestinationLink: link,
+      urgent: isUrgent,
+      metadata: {
+        ...payload,
+        caseId,
+        appointmentId
+      }
+    });
+  }
+
+  // 2. External Delivery (Email):
+  const shouldDeliverEmail = Boolean(recipientEmail) && (prefs.channels.email !== false || isUrgent || forceEmail);
+
+  if (shouldDeliverEmail) {
+    if (quietHoursActive && !isUrgent) {
+      // Quiet hours active & non-urgent: DEFER in queue so notification is never lost!
+      const scheduledAt = calculateNextQuietHoursEnd(prefs);
+      queuedItem = await enqueueNotification(db, {
+        type: resolvedType,
+        recipient: recipientEmail,
+        idempotencyKey: payload.idempotencyKey || `defer_${userId}_${resolvedType}_${Date.now()}`,
+        scheduledAt: scheduledAt.toISOString(),
+        priority: 'deferred',
+        payload: {
+          ...payload,
+          userId,
+          title,
+          message: message || body,
+          appointmentId,
+          caseId,
+          deferredDueToQuietHours: true
+        }
+      });
+
+      return {
+        success: true,
+        deliveredImmediately: false,
+        deferred: true,
+        quietHoursActive: true,
+        scheduledAt: scheduledAt.toISOString(),
+        inAppNotification,
+        queuedItem,
+        urgentBypass: false,
+        channels: {
+          in_app: Boolean(inAppNotification),
+          email: 'deferred'
+        }
+      };
+    } else {
+      // Outside quiet hours OR urgent event (urgent bypasses quiet hours and channel muting)
+      emailResult = await sendClinicalNotificationEmail({
+        type: resolvedType,
+        recipient: recipientEmail,
+        strictSmtp,
+        db,
+        ...payload,
+        caseId: caseId || payload.caseId,
+        appointmentId: appointmentId || payload.appointmentId
+      });
+
+      return {
+        success: true,
+        deliveredImmediately: true,
+        deferred: false,
+        quietHoursActive,
+        urgentBypass: isUrgent && quietHoursActive,
+        inAppNotification,
+        emailResult,
+        channels: {
+          in_app: Boolean(inAppNotification),
+          email: emailResult?.status || 'sent'
+        }
+      };
+    }
+  }
+
+  return {
+    success: true,
+    deliveredImmediately: Boolean(inAppNotification),
+    deferred: false,
+    quietHoursActive,
+    urgentBypass: false,
+    inAppNotification,
+    channels: {
+      in_app: Boolean(inAppNotification),
+      email: 'disabled'
+    }
+  };
+}
+
+/**
+ * Reschedules appointment reminders: cancels previous pending reminder entries
+ * and schedules the new reminder with the updated slotStart.
+ */
+async function rescheduleAppointmentReminders(db, appointment, newSlotStart, reason = 'appointment_rescheduled') {
+  if (!db || !appointment || !appointment.id) {
+    return { success: false, reason: 'INVALID_APPOINTMENT' };
+  }
+
+  const cancelResult = await cancelAppointmentReminders(db, appointment.id, reason);
+
+  const updatedAppt = {
+    ...appointment,
+    slotStart: newSlotStart || appointment.slotStart,
+    reminderIdempotencyKey: `appt_reminder_${appointment.id}_${Date.now()}`
+  };
+
+  const scheduleResult = await scheduleAppointmentReminder(db, updatedAppt);
+
+  return {
+    success: true,
+    cancelledPreviousCount: cancelResult.cancelledCount,
+    newReminder: scheduleResult
+  };
+}
+
+function clearNotificationHistoryLog() {
+  inMemoryNotificationHistory.clear();
+}
+
+function clearPreferencesLog() {
+  inMemoryUserPreferences.clear();
+}
+
 module.exports = {
   NOTIFICATION_STATUS,
   NOTIFICATION_TYPES,
+  DEFAULT_NOTIFICATION_PREFERENCES,
   createTransporter,
   sendClinicalNotificationEmail,
   buildResultReadyEmail,
@@ -1327,8 +2003,24 @@ module.exports = {
   recordDeliveryConfirmation,
   scheduleAppointmentReminder,
   cancelAppointmentReminders,
+  rescheduleAppointmentReminders,
   startReminderScheduler,
   stopReminderScheduler,
   getSentEmailsLog,
-  clearSentEmailsLog
+  clearSentEmailsLog,
+  recordNotificationHistory,
+  getUserNotificationHistory,
+  markNotificationAsRead,
+  markAllNotificationsAsRead,
+  getNotificationById,
+  getUserNotificationPreferences,
+  updateUserNotificationPreferences,
+  isQuietHoursActive,
+  calculateNextQuietHoursEnd,
+  isUrgentEvent,
+  generateAuthorizedDestinationLink,
+  dispatchNotificationWithPreferences,
+  clearNotificationHistoryLog,
+  clearPreferencesLog
 };
+

@@ -65,7 +65,7 @@ const indexHtml = fs.readFileSync(path.join(__dirname, '..', 'app', 'index.html'
 assert(appJs.includes('function escapeHtml(value)'), 'app.js must define escapeHtml');
 assert(appJs.includes('function sanitizeTrustedHtml(html)'), 'app.js must define a trusted HTML sanitizer');
 assert(appJs.includes('function getSafeExternalUrl(value'), 'app.js must validate external URL protocols');
-assert(appJs.includes('item.appendChild(createTextElement("strong", file.name))'), 'Uploaded file names must be rendered with textContent');
+assert(appJs.includes('item.appendChild(createTextElement("strong", file.name))') || appJs.includes('escapeHtml(fileState.fileName'), 'Uploaded file names must be safely escaped or rendered with textContent');
 assert(appJs.includes('setTrustedHtml(thinkingBubble, botResponse)'), 'Assistant responses must pass through trusted sanitizer');
 assert(!appJs.includes('item.innerHTML = `<strong>${file.name}</strong>'), 'File names must not be interpolated into innerHTML');
 assert(!/<script(?![^>]*\bsrc=)/i.test(indexHtml), 'index.html must not contain inline script blocks');

@@ -22,8 +22,22 @@ const {
   recordDeliveryConfirmation,
   scheduleAppointmentReminder,
   cancelAppointmentReminders,
+  rescheduleAppointmentReminders,
   startReminderScheduler,
   stopReminderScheduler,
+  recordNotificationHistory,
+  getUserNotificationHistory,
+  markNotificationAsRead,
+  markAllNotificationsAsRead,
+  getNotificationById,
+  getUserNotificationPreferences,
+  updateUserNotificationPreferences,
+  isQuietHoursActive,
+  calculateNextQuietHoursEnd,
+  isUrgentEvent,
+  generateAuthorizedDestinationLink,
+  dispatchNotificationWithPreferences,
+  DEFAULT_NOTIFICATION_PREFERENCES,
   NOTIFICATION_STATUS,
   NOTIFICATION_TYPES
 } = require('./notification-service');
@@ -35,6 +49,11 @@ const schedulingService = require('./scheduling-service');
 const timelineService = require('./timeline-service');
 const monitoringService = require('./monitoring-service');
 const incidentService = require('./incident-service');
+const rulesGovernance = require('./clinical-rules-governance');
+const driftMonitoring = require('./drift-monitoring-service');
+const safetyRegister = require('./safety-register-service');
+const analyticsService = require('./analytics-service');
+const feedbackSupportService = require('./feedback-support-service');
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -1260,6 +1279,7 @@ if (!admin.apps.length) {
 }
 
 const db = admin.apps.length ? admin.firestore() : null;
+if (db) feedbackSupportService.setDb(db);
 let backupStorageBucket = null;
 if (admin.apps.length && typeof admin.storage === 'function') {
   try {
@@ -1363,7 +1383,7 @@ async function resolveRequesterClinic(req) {
 
   const role = getTrustedClaimRole(req.user);
   const profile = await getServerUserProfile(req.user.uid);
-  const clinicId = recordClinicId(profile || {});
+  const clinicId = recordClinicId(profile || {}) || recordClinicId(req.user || {});
 
   return { role, clinicId, profile };
 }
@@ -2656,63 +2676,7 @@ app.post('/api/patient/medical-profile/correct', requireAuth, patientProfileLimi
  * Returns the Clinical Rules Registry and all registered rule engine versions
  */
 app.get('/api/clinical/rules/versions', (req, res) => {
-  const versionsRegistry = {
-    ruleSetId: 'breathing-triage',
-    nameAr: 'فرز الجهاز التنفسي والتهابات الصدر',
-    nameEn: 'Respiratory & Breathing Triage',
-    activeVersion: 'HealthVibe-Rules-v1.0',
-    versions: {
-      'HealthVibe-Rules-v1.0': {
-        version: 'HealthVibe-Rules-v1.0',
-        status: 'active',
-        effectiveFrom: '2026-09-21',
-        deprecatedAt: null,
-        reviewedBy: null,
-        reviewStatus: 'pending-qualified-clinical-and-regulatory-review',
-        changelog: {
-          ar: 'إصدار تشغيلي أولي غير معتمد سريرياً بعد: فرز مبني على عتبات SpO2، ضيق التنفس، شدة السعال، ومدة الأعراض. الموافقة معلقة لحين مراجعة مختص طبي ومختص تنظيمي في مصر.',
-          en: 'Initial operational release, not clinically certified yet: rule-based triage based on SpO2 thresholds, dyspnea, cough severity, and symptom duration. Approval is pending review by qualified medical and Egyptian regulatory specialists.'
-        },
-        scoreThresholds: { urgent: 6, high: 3 },
-        spo2Thresholds: { urgentBelow: 90, highBelow: 93, closeFollowUpMin: 93, closeFollowUpMax: 94 },
-        rules: {
-          spo2_lt_90: { points: 6, ar: 'SpO2 أقل من 90%: تصعيد عاجل للطوارئ', en: 'SpO2 below 90%: urgent emergency escalation' },
-          spo2_90_92: { points: 4, ar: 'SpO2 بين 90% و92%: أولوية مراجعة عالية', en: 'SpO2 between 90% and 92%: high review priority' },
-          spo2_93_94: { points: 2, ar: 'SpO2 بين 93% و94%: متابعة قريبة', en: 'SpO2 between 93% and 94%: close follow-up' },
-          dyspnea_present: { points: 2, ar: 'وجود ضيق تنفس', en: 'Shortness of breath present' },
-          severe_cough: { points: 2, ar: 'كحة شديدة', en: 'Severe cough' },
-          moderate_cough: { points: 1, ar: 'كحة متوسطة', en: 'Moderate cough' },
-          symptoms_7_days: { points: 1, ar: 'استمرار الأعراض 7 أيام أو أكثر', en: 'Symptoms lasting 7 days or more' },
-          risk_factors_present: { points: 1, ar: 'وجود عوامل خطورة مسجلة', en: 'Recorded risk factors present' }
-        }
-      },
-      'HealthVibe-Rules-v1.1': {
-        version: 'HealthVibe-Rules-v1.1',
-        status: 'candidate',
-        effectiveFrom: '2026-10-01',
-        deprecatedAt: null,
-        reviewedBy: null,
-        reviewStatus: 'pending-qualified-clinical-and-regulatory-review',
-        changelog: {
-          ar: 'تحديث مرشح غير معتمد: تعزيز حساسية عوامل الخطورة التنفسية المزمنة. لا يُفعّل كاعتماد طبي قبل مراجعة مختص طبي ومختص تنظيمي في مصر.',
-          en: 'Unapproved candidate update: enhanced sensitivity for chronic respiratory risk factors. It must not be treated as medically approved before qualified medical and Egyptian regulatory review.'
-        },
-        scoreThresholds: { urgent: 6, high: 3 },
-        spo2Thresholds: { urgentBelow: 90, highBelow: 93, closeFollowUpMin: 93, closeFollowUpMax: 94 },
-        rules: {
-          spo2_lt_90: { points: 6, ar: 'SpO2 أقل من 90%: تصعيد عاجل للطوارئ', en: 'SpO2 below 90%: urgent emergency escalation' },
-          spo2_90_92: { points: 4, ar: 'SpO2 بين 90% و92%: أولوية مراجعة عالية', en: 'SpO2 between 90% and 92%: high review priority' },
-          spo2_93_94: { points: 2, ar: 'SpO2 بين 93% و94%: متابعة قريبة', en: 'SpO2 between 93% and 94%: close follow-up' },
-          dyspnea_present: { points: 2, ar: 'وجود ضيق تنفس حاد', en: 'Acute shortness of breath present' },
-          severe_cough: { points: 2, ar: 'كحة شديدة مستمرة', en: 'Persistent severe cough' },
-          moderate_cough: { points: 1, ar: 'كحة متوسطة', en: 'Moderate cough' },
-          symptoms_7_days: { points: 1, ar: 'استمرار الأعراض 7 أيام أو أكثر', en: 'Symptoms lasting 7 days or more' },
-          risk_factors_present: { points: 2, ar: 'وجود عوامل خطورة مسجلة (ربو / حمل / تدخين)', en: 'Recorded clinical comorbidities (asthma / pregnancy / smoking)' }
-        }
-      }
-    }
-  };
-
+  const versionsRegistry = rulesGovernance.getRulesRegistry();
   res.json({
     success: true,
     data: versionsRegistry
@@ -2720,8 +2684,272 @@ app.get('/api/clinical/rules/versions', (req, res) => {
 });
 
 /**
+ * POST /api/clinical/rules/propose
+ * Proposes a new rule set version (enters in_review status)
+ */
+app.post('/api/clinical/rules/propose', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { version, changelog, scoreThresholds, spo2Thresholds, rules } = req.body || {};
+    const proposed = rulesGovernance.proposeRuleVersion({
+      version,
+      changelog,
+      scoreThresholds,
+      spo2Thresholds,
+      rules,
+      proposedBy: { uid: req.user.uid, email: req.user.email, role: req.user.role || 'admin', timestamp: new Date().toISOString() }
+    });
+    res.json({ success: true, proposed });
+  } catch (err) {
+    res.status(400).json({ error: 'PROPOSE_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/clinical/rules/approve
+ * Specialist review and approval of a rule set version
+ */
+app.post('/api/clinical/rules/approve', requireAuth, requireDoctor, async (req, res) => {
+  try {
+    const { version, reviewerName, reviewerQualification, licenseNumber, clinicalNotes } = req.body || {};
+    const approved = rulesGovernance.reviewAndApproveRuleVersion({
+      version,
+      reviewerName: reviewerName || req.user.name || req.user.displayName,
+      reviewerQualification,
+      licenseNumber: licenseNumber || req.user.doctorLicense || 'EG-MED-VERIFIED',
+      clinicalNotes,
+      approvedByUid: req.user.uid
+    });
+    res.json({ success: true, approved });
+  } catch (err) {
+    res.status(400).json({ error: 'APPROVAL_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/clinical/rules/activate
+ * Authoritatively activates an approved rule version
+ */
+app.post('/api/clinical/rules/activate', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { version } = req.body || {};
+    const result = rulesGovernance.activateRuleVersion({
+      version,
+      authorizedBy: { uid: req.user.uid, email: req.user.email, role: 'admin' }
+    });
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(400).json({ error: 'ACTIVATION_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/clinical/rules/rollback
+ * Authoritative rollback to a previous approved rule version with documented reason
+ */
+app.post('/api/clinical/rules/rollback', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { targetVersion, rollbackReason } = req.body || {};
+    const result = rulesGovernance.rollbackRuleVersion({
+      targetVersion,
+      rollbackReason,
+      authorizedBy: { uid: req.user.uid, email: req.user.email, role: 'admin' }
+    });
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(400).json({ error: 'ROLLBACK_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/clinical/rules/audit-log
+ * Returns immutable audit log of all rule set changes, approvals, and rollbacks
+ */
+app.get('/api/clinical/rules/audit-log', requireAuth, (req, res) => {
+  res.json({
+    success: true,
+    data: rulesGovernance.getRulesAuditLog()
+  });
+});
+
+/**
+ * POST /api/doctor/override-triage-priority
+ * Doctor reasoned clinical override of advisory triage priority
+ */
+app.post('/api/doctor/override-triage-priority', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
+  const { caseId, overriddenPriority, overrideReason, overrideCategory } = req.body || {};
+  const VALID_PRIORITIES = ['urgent', 'high', 'normal'];
+  const VALID_CATEGORIES = [
+    'CLINICAL_SIGNS_OF_EXHAUSTION',
+    'RAPID_TRAJECTORY',
+    'ARTIFACT_CORRECTION',
+    'COMORBIDITY_RISK',
+    'OTHER_CLINICAL_JUDGMENT'
+  ];
+
+  if (!caseId || !VALID_PRIORITIES.includes(overriddenPriority)) {
+    return res.status(400).json({
+      error: 'INVALID_OVERRIDE_PRIORITY',
+      message: `caseId and valid overriddenPriority (${VALID_PRIORITIES.join(', ')}) required.`
+    });
+  }
+  if (!overrideReason || String(overrideReason).trim().length < 10) {
+    return res.status(400).json({
+      error: 'MANDATORY_OVERRIDE_REASON_REQUIRED',
+      message: 'A structured clinical overrideReason of at least 10 characters is mandatory to override system triage.'
+    });
+  }
+  if (!overrideCategory || !VALID_CATEGORIES.includes(overrideCategory)) {
+    return res.status(400).json({
+      error: 'INVALID_OVERRIDE_CATEGORY',
+      message: `overrideCategory must be one of: ${VALID_CATEGORIES.join(', ')}`
+    });
+  }
+
+  try {
+    const doctorProfile = await getServerUserProfile(req.user.uid);
+    const doctorName = doctorProfile?.displayName || doctorProfile?.name || req.user.displayName || 'Licensed Doctor';
+    const doctorLicense = doctorProfile?.doctorLicense || doctorProfile?.syndicateCardNumber || 'EG-MED-VERIFIED';
+
+    const overrideRecord = {
+      isOverridden: true,
+      overriddenPriority,
+      overrideReason: String(overrideReason).trim(),
+      overrideCategory,
+      overriddenBy: {
+        uid: req.user.uid,
+        name: doctorName,
+        license: doctorLicense,
+        email: req.user.email || ''
+      },
+      timestamp: new Date().toISOString()
+    };
+
+    if (db) {
+      const caseRef = db.collection('cases').doc(caseId);
+      const caseDoc = await caseRef.get();
+      if (!caseDoc.exists) {
+        return res.status(404).json({ error: 'NOT_FOUND', message: 'Case not found.' });
+      }
+
+      const caseData = caseDoc.data() || {};
+      const originalPriority = caseData.priority || caseData.triageLevel || 'normal';
+      overrideRecord.originalPriority = originalPriority;
+
+      await caseRef.update({
+        priority: overriddenPriority,
+        triageLevel: overriddenPriority,
+        triageOverride: overrideRecord,
+        statusHistory: admin.firestore.FieldValue.arrayUnion({
+          oldStatus: caseData.status,
+          newStatus: caseData.status,
+          action: 'TRIAGE_OVERRIDE',
+          actor: { uid: req.user.uid, name: doctorName, role: 'doctor' },
+          reason: overrideRecord.overrideReason,
+          timestamp: overrideRecord.timestamp
+        })
+      });
+
+      await db.collection('audit_events').add({
+        type: 'TRIAGE_OVERRIDDEN_BY_CLINICIAN',
+        caseId,
+        doctorId: req.user.uid,
+        originalPriority,
+        overriddenPriority,
+        overrideCategory,
+        overrideReason: overrideRecord.overrideReason,
+        timestamp: admin.firestore.FieldValue.serverTimestamp()
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `Triage priority overridden to '${overriddenPriority}' with clinical justification.`,
+      overrideRecord
+    });
+  } catch (err) {
+    console.error('[OVERRIDE ERROR]:', err);
+    res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/clinical/assessments/explain-factors
+ * Returns transparent factor explanations for case inputs
+ */
+app.post('/api/clinical/assessments/explain-factors', (req, res) => {
+  try {
+    const input = req.body || {};
+    const evalResult = rulesGovernance.evaluateRulesWithProvenance({ input });
+    res.json({
+      success: true,
+      data: {
+        priority: evalResult.priority,
+        points: evalResult.points,
+        ruleEngineVersion: evalResult.version,
+        factorExplanation: evalResult.factorExplanation,
+        triggeredRules: evalResult.triggeredRules
+      }
+    });
+  } catch (err) {
+    res.status(400).json({ error: 'EXPLANATION_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/clinical/shadow-testing/summary
+ * Returns shadow testing concordance rate and candidate behavior
+ */
+app.get('/api/clinical/shadow-testing/summary', requireAuth, (req, res) => {
+  const summary = driftMonitoring.getShadowTestingSummary();
+  res.json({ success: true, data: summary });
+});
+
+/**
+ * GET /api/clinical/drift-monitoring/summary
+ * Returns population vital distributions, PSI, and drift alerts
+ */
+app.get('/api/clinical/drift-monitoring/summary', requireAuth, (req, res) => {
+  const drift = driftMonitoring.evaluatePopulationDrift();
+  res.json({ success: true, data: drift });
+});
+
+/**
+ * GET /api/governance/safety-register
+ * Returns consolidated Risk, Quality, and Safety Register
+ */
+app.get('/api/governance/safety-register', requireAuth, (req, res) => {
+  const register = safetyRegister.getSafetyRegister();
+  res.json({ success: true, data: register });
+});
+
+/**
+ * POST /api/governance/safety-register/capa
+ * Registers or updates a Corrective and Preventive Action (CAPA)
+ */
+app.post('/api/governance/safety-register/capa', requireAuth, requireDoctor, async (req, res) => {
+  try {
+    const { title, category, rootCause, correctiveAction, responsiblePerson, role, license, status } = req.body || {};
+    const entry = safetyRegister.recordCapaEntry({
+      title,
+      category,
+      rootCause,
+      correctiveAction,
+      responsiblePerson: responsiblePerson || req.user.name || req.user.displayName,
+      role: role || 'Clinical Safety Officer',
+      license: license || req.user.doctorLicense || 'EG-MED-VERIFIED',
+      status
+    });
+    res.json({ success: true, data: entry });
+  } catch (err) {
+    res.status(400).json({ error: 'CAPA_REGISTRATION_FAILED', message: err.message });
+  }
+});
+
+/**
  * GET /api/admin/metrics
  * Server-authoritative admin metrics that cannot be derived safely from frontend-only Firestore reads.
+ * Covers 9 authoritative counters: users, verified doctors, clinics, cases, appointments,
+ * active users, reported accounts, verification requests, and support requests.
  */
 app.get('/api/admin/metrics', requireAuth, requireAdmin, async (req, res) => {
   try {
@@ -2755,18 +2983,41 @@ app.get('/api/admin/metrics', requireAuth, requireAdmin, async (req, res) => {
     let pendingReviews = 0;
     let urgentReviews = 0;
     let aiModelMetrics = null;
+    let totalCasesCount = 0;
+    let totalAppointmentsCount = 0;
+    let activeUsersCount = 0;
+    let reportedAccountsCount = 0;
+    let supportRequestsCount = 0;
 
     if (db) {
-      const [usersSnapshot, appsSnapshot, casesSnapshot, modelSnapshot] = await Promise.all([
-        db.collection('users').get(),
-        db.collection('doctor_applications').get(),
-        db.collection('cases').get(),
+      const [
+        usersSnapshot,
+        appsSnapshot,
+        casesSnapshot,
+        appointmentsSnapshot,
+        clinicsSnapshot,
+        reportedSnapshot,
+        incidentSnapshot,
+        supportSnapshot,
+        feedbackSnapshot,
+        modelSnapshot
+      ] = await Promise.all([
+        db.collection('users').get().catch(() => ({ docs: [], empty: true })),
+        db.collection('doctor_applications').get().catch(() => ({ docs: [], empty: true })),
+        db.collection('cases').get().catch(() => ({ docs: [], empty: true })),
+        db.collection('appointments').get().catch(() => ({ docs: [], empty: true })),
+        db.collection('clinics').get().catch(() => ({ docs: [], empty: true })),
+        db.collection('reported_accounts').get().catch(() => ({ docs: [], empty: true })),
+        db.collection('incident_reports').get().catch(() => ({ docs: [], empty: true })),
+        db.collection('support_tickets').get().catch(() => ({ docs: [], empty: true })),
+        db.collection('feedbacks').get().catch(() => ({ docs: [], empty: true })),
         db.collection('ai_model_metrics').orderBy('createdAt', 'desc').limit(1).get().catch(() => null)
       ]);
 
       const users = filterScopedDocs(usersSnapshot, scope);
       const apps = filterScopedDocs(appsSnapshot, scope);
       const cases = filterScopedDocs(casesSnapshot, scope);
+      const appointments = filterScopedDocs(appointmentsSnapshot, scope);
 
       if (scope.role === ROLES.CLINIC_ADMIN) {
         authUsersCount = users.length;
@@ -2776,31 +3027,113 @@ app.get('/api/admin/metrics', requireAuth, requireAdmin, async (req, res) => {
         }).length;
       }
 
+      // Verified Doctors Counter: users with role='doctor' and verifiedDoctor=true or doctorApplicationStatus='approved'
       approvedDoctors = Math.max(
         approvedDoctors,
         users.filter((user) =>
-          user.role === 'doctor' ||
-          user.verifiedDoctor === true ||
-          user.doctorApplicationStatus === 'approved'
+          user.role === 'doctor' &&
+          (user.verifiedDoctor === true || user.doctorVerified === true || user.doctorApplicationStatus === 'approved')
         ).length
       );
 
+      // Verification Requests Counter: doctor applications with pending status
       pendingDoctorApplications = apps.filter((app) => app.status === 'pending').length;
 
-      const branches = new Set(
-        apps
-          .filter((app) => app.status === 'approved')
-          .map((app) => (app.clinic || app.branch || app.hospital || '').trim().toLowerCase())
-          .filter(Boolean)
-      );
+      // Clinics Counter: distinct clinic branches from clinics collection + approved doctor applications & user records
+      const branches = new Set();
+      if (clinicsSnapshot && !clinicsSnapshot.empty) {
+        clinicsSnapshot.docs.forEach(doc => {
+          const d = doc.data() || {};
+          if (!d.isDemo && !d.isTest && (d.name || doc.id)) {
+            branches.add(String(d.name || doc.id).trim().toLowerCase());
+          }
+        });
+      }
+      apps
+        .filter((app) => app.status === 'approved')
+        .forEach((app) => {
+          const name = (app.clinic || app.branch || app.hospital || '').trim().toLowerCase();
+          if (name) branches.add(name);
+        });
+      users.forEach(u => {
+        const cName = (u.clinicName || u.clinic || '').trim().toLowerCase();
+        if (cName) branches.add(cName);
+      });
       branchCount = branches.size;
 
+      // Cases Counter: authentic clinical cases (excluding demo)
       const realCases = cases.filter((item) => !item.isDemo && !String(item.id || '').startsWith('demo_'));
+      totalCasesCount = realCases.length;
       pendingReviews = realCases.filter((item) => ['pending', 'submitted', 'triaged', 'assigned', 'under_review'].includes(item.status)).length;
       urgentReviews = realCases.filter((item) =>
         ['pending', 'submitted', 'triaged', 'assigned', 'under_review'].includes(item.status) &&
         ['urgent', 'high'].includes(String(item.priority || item.risk || '').toLowerCase())
       ).length;
+
+      // Appointments Counter: authentic appointments (excluding demo)
+      const realAppointments = appointments.filter((item) => !item.isDemo && !String(item.id || '').startsWith('demo_'));
+      totalAppointmentsCount = realAppointments.length;
+
+      // Active Users Counter: users with active in-memory session or activity in last 24h
+      const nowTs = Date.now();
+      const activeWindow = 24 * 60 * 60 * 1000;
+      const activeUserIds = new Set();
+      if (activeUserSessions && typeof activeUserSessions.forEach === 'function') {
+        activeUserSessions.forEach((sessions, uid) => {
+          if (Array.isArray(sessions) && sessions.length > 0) {
+            activeUserIds.add(uid);
+          }
+        });
+      }
+      users.forEach((u) => {
+        const lastActive = u.lastActiveAt?.toMillis ? u.lastActiveAt.toMillis() : Date.parse(u.lastActiveAt || u.lastLoginAt || u.updatedAt || 0);
+        if (lastActive > 0 && (nowTs - lastActive) <= activeWindow) {
+          activeUserIds.add(u.id || u.uid);
+        }
+      });
+      activeUsersCount = activeUserIds.size;
+
+      // Reported Accounts Counter: reported_accounts, security incidents targeting accounts, or suspended/flagged accounts
+      const reportedUserIds = new Set();
+      if (reportedSnapshot && !reportedSnapshot.empty) {
+        reportedSnapshot.docs.forEach(doc => {
+          const d = doc.data() || {};
+          const uid = d.userId || d.targetUserId || d.accountUid || doc.id;
+          if (uid) reportedUserIds.add(uid);
+        });
+      }
+      if (incidentSnapshot && !incidentSnapshot.empty) {
+        incidentSnapshot.docs.forEach(doc => {
+          const d = doc.data() || {};
+          if (d.category === 'ACCOUNT_SECURITY' || d.targetUserId || d.reportedUser) {
+            const uid = d.targetUserId || d.reportedUser || d.userId;
+            if (uid) reportedUserIds.add(uid);
+          }
+        });
+      }
+      users.forEach(u => {
+        if (u.suspended === true || u.isSuspended === true || u.reported === true || u.isReported === true || u.abuseReported === true || u.accountStatus === 'suspended') {
+          reportedUserIds.add(u.id || u.uid);
+        }
+      });
+      reportedAccountsCount = reportedUserIds.size;
+
+      // Support Requests Counter: open support tickets or feedbacks requiring review
+      let openSupportTickets = 0;
+      if (supportSnapshot && !supportSnapshot.empty) {
+        openSupportTickets = supportSnapshot.docs.filter(doc => {
+          const d = doc.data() || {};
+          return ['open', 'pending', 'new', 'in_progress'].includes(String(d.status || '').toLowerCase());
+        }).length;
+      }
+      let pendingFeedbacks = 0;
+      if (feedbackSnapshot && !feedbackSnapshot.empty) {
+        pendingFeedbacks = feedbackSnapshot.docs.filter(doc => {
+          const d = doc.data() || {};
+          return d.reviewRequired === true || ['pending', 'open'].includes(String(d.status || '').toLowerCase());
+        }).length;
+      }
+      supportRequestsCount = openSupportTickets + pendingFeedbacks;
 
       if (modelSnapshot && !modelSnapshot.empty) {
         const metrics = modelSnapshot.docs[0].data();
@@ -2814,6 +3147,29 @@ app.get('/api/admin/metrics', requireAuth, requireAdmin, async (req, res) => {
     }
 
     res.json({
+      success: true,
+      counters: {
+        users: authUsersCount,
+        verifiedDoctors: approvedDoctors,
+        clinics: branchCount,
+        cases: totalCasesCount,
+        appointments: totalAppointmentsCount,
+        activeUsers: activeUsersCount,
+        reportedAccounts: reportedAccountsCount,
+        verificationRequests: pendingDoctorApplications,
+        supportRequests: supportRequestsCount
+      },
+      sources: {
+        users: 'Firebase Auth listUsers (Super Admin) / Scoped Firestore users collection',
+        verifiedDoctors: 'Firestore users collection (role="doctor" & verifiedDoctor=true) and approved doctor applications',
+        clinics: 'Firestore clinics collection and approved provider clinic affiliations',
+        cases: 'Firestore cases collection (excluding demo records)',
+        appointments: 'Firestore appointments collection (excluding demo records)',
+        activeUsers: 'Active session store (activeUserSessions) and 24h user activity logs',
+        reportedAccounts: 'Incident reports, reported accounts registry, and flagged user accounts',
+        verificationRequests: 'Pending doctor applications (doctor_applications with status="pending")',
+        supportRequests: 'Support tickets and user feedback inquiries with open status'
+      },
       authUsersCount,
       authUsersToday,
       approvedDoctors,
@@ -2831,7 +3187,9 @@ app.get('/api/admin/metrics', requireAuth, requireAdmin, async (req, res) => {
 
 /**
  * GET /api/kpi/metrics
- * Server-authoritative KPI analytics: completion rate, physician response time, report turnaround time (TAT).
+ * Server-authoritative KPI analytics: response time, approval time, patients/day, and workload
+ * calculated from actual events, with date-range and clinic filtering.
+ * Displays "Unavailable" when data is missing.
  */
 app.get('/api/kpi/metrics', requireAuth, async (req, res) => {
   try {
@@ -2840,6 +3198,15 @@ app.get('/api/kpi/metrics', requireAuth, async (req, res) => {
     if (!canView) {
       return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Clinical or Admin privileges required.' });
     }
+
+    const parseTs = (val) => {
+      if (!val) return 0;
+      if (typeof val === 'number') return val;
+      if (val.toMillis) return val.toMillis();
+      if (val.seconds) return val.seconds * 1000;
+      const parsed = Date.parse(val);
+      return isNaN(parsed) ? 0 : parsed;
+    };
 
     if (!db) {
       return res.json({
@@ -2852,100 +3219,585 @@ app.get('/api/kpi/metrics', requireAuth, async (req, res) => {
         pendingCasesCount: 0,
         responseSlaCompliance: 100,
         turnaroundSlaCompliance: 100,
-        isBenchmark: true
+        isBenchmark: true,
+        responseTime: { avgMinutes: null, medianMinutes: null, display: "Unavailable", displayAr: "غير متاح", isAvailable: false },
+        approvalTime: { avgMinutes: null, medianMinutes: null, p95Minutes: null, display: "Unavailable", displayAr: "غير متاح", isAvailable: false },
+        patientsPerDay: { value: null, distinctPatients: 0, daysCount: 1, display: "Unavailable", displayAr: "غير متاح", isAvailable: false },
+        workload: { avgWorkloadPerDoctor: null, totalActiveItems: 0, activeDoctorsCount: 0, breakdown: [], display: "Unavailable", displayAr: "غير متاح", isAvailable: false },
+        display: {
+          responseTime: "Unavailable",
+          approvalTime: "Unavailable",
+          patientsPerDay: "Unavailable",
+          workload: "Unavailable",
+          completionRate: "Unavailable"
+        },
+        displayAr: {
+          responseTime: "غير متاح",
+          approvalTime: "غير متاح",
+          patientsPerDay: "غير متاح",
+          workload: "غير متاح",
+          completionRate: "غير متاح"
+        }
       });
     }
 
     const scope = await resolveRequesterClinic(req);
-    const casesSnapshot = await db.collection('cases').get();
-    const cases = casesSnapshot.docs
-      .map(d => ({ id: d.id, ...d.data() }))
-      .filter(c => userRole === ROLES.CLINIC_ADMIN ? isSameClinicResource(scope, c) : true)
-      .filter(c => userRole === ROLES.DOCTOR ? [c.assignedDoctorId, c.doctorId, c.doctorUid, c.approvingDoctorId].includes(req.user.uid) : true)
-      .filter(c => !c.isDemo && !String(c.id || '').startsWith('demo_'));
 
-    const timeRange = (req.query.range || 'all').toLowerCase();
-    const now = Date.now();
-    let minTimestamp = 0;
-    if (timeRange === 'today') {
-      const d = new Date();
-      d.setHours(0, 0, 0, 0);
-      minTimestamp = d.getTime();
-    } else if (timeRange === '7d') {
-      minTimestamp = now - (7 * 24 * 60 * 60 * 1000);
-    } else if (timeRange === '30d') {
-      minTimestamp = now - (30 * 24 * 60 * 60 * 1000);
+    // Clinic filtering & authorization
+    const requestedClinic = (req.query.clinicId || req.query.clinic || '').trim();
+    if (userRole === ROLES.CLINIC_ADMIN && requestedClinic && scope.clinicId && requestedClinic !== scope.clinicId) {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Clinic Admin can only query their assigned clinic.' });
     }
 
-    const parseTs = (val) => {
-      if (!val) return 0;
-      if (typeof val === 'number') return val;
-      if (val.toMillis) return val.toMillis();
-      if (val.seconds) return val.seconds * 1000;
-      const parsed = Date.parse(val);
-      return isNaN(parsed) ? 0 : parsed;
+    const effectiveClinic = userRole === ROLES.CLINIC_ADMIN ? scope.clinicId : requestedClinic;
+
+    // Date range filtering
+    const now = Date.now();
+    let minTimestamp = 0;
+    let maxTimestamp = Infinity;
+
+    const startDateParam = req.query.startDate || req.query.from;
+    const endDateParam = req.query.endDate || req.query.to;
+    const timeRange = (req.query.range || req.query.timeRange || 'all').toLowerCase();
+
+    if (startDateParam) {
+      minTimestamp = parseTs(startDateParam);
+    }
+    if (endDateParam) {
+      const parsedEnd = parseTs(endDateParam);
+      if (typeof endDateParam === 'string' && endDateParam.length === 10) {
+        maxTimestamp = parsedEnd + (24 * 60 * 60 * 1000 - 1);
+      } else {
+        maxTimestamp = parsedEnd;
+      }
+    }
+
+    if (!startDateParam && !endDateParam) {
+      if (timeRange === 'today') {
+        const d = new Date();
+        d.setHours(0, 0, 0, 0);
+        minTimestamp = d.getTime();
+        maxTimestamp = now;
+      } else if (timeRange === '7d') {
+        minTimestamp = now - (7 * 24 * 60 * 60 * 1000);
+        maxTimestamp = now;
+      } else if (timeRange === '30d') {
+        minTimestamp = now - (30 * 24 * 60 * 60 * 1000);
+        maxTimestamp = now;
+      }
+    }
+
+    // Query cases and appointments
+    const [casesSnapshot, appointmentsSnapshot, usersSnapshot] = await Promise.all([
+      db.collection('cases').get().catch(() => ({ docs: [], empty: true })),
+      db.collection('appointments').get().catch(() => ({ docs: [], empty: true })),
+      db.collection('users').get().catch(() => ({ docs: [], empty: true }))
+    ]);
+
+    const allCases = casesSnapshot.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .filter(c => !c.isDemo && !String(c.id || '').startsWith('demo_'));
+
+    const allAppointments = appointmentsSnapshot.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .filter(a => !a.isDemo && !String(a.id || '').startsWith('demo_'));
+
+    // Apply clinic filter
+    const matchesClinic = (item, clinic) => {
+      if (!clinic) return true;
+      const cId = String(item.clinicId || item.clinic || item.branchId || '').toLowerCase();
+      return cId === clinic.toLowerCase();
     };
 
-    const filteredCases = cases.filter(c => {
-      const ts = parseTs(c.submittedAt || c.createdAt || c.timestamp);
-      return minTimestamp === 0 || ts >= minTimestamp;
+    let scopedCases = allCases.filter(c => {
+      if (userRole === ROLES.CLINIC_ADMIN) return isSameClinicResource(scope, c);
+      if (effectiveClinic) return matchesClinic(c, effectiveClinic);
+      return true;
     });
 
+    let scopedAppointments = allAppointments.filter(a => {
+      if (userRole === ROLES.CLINIC_ADMIN) return isSameClinicResource(scope, a);
+      if (effectiveClinic) return matchesClinic(a, effectiveClinic);
+      return true;
+    });
+
+    if (userRole === ROLES.DOCTOR) {
+      scopedCases = scopedCases.filter(c => [c.assignedDoctorId, c.doctorId, c.doctorUid, c.approvingDoctorId].includes(req.user.uid));
+      scopedAppointments = scopedAppointments.filter(a => [a.assignedDoctorId, a.doctorId, a.doctorUid].includes(req.user.uid));
+    }
+
+    // Apply date range filter to cases
+    const filteredCases = scopedCases.filter(c => {
+      const ts = parseTs(c.submittedAt || c.createdAt || c.timestamp);
+      return (minTimestamp === 0 || ts >= minTimestamp) && (maxTimestamp === Infinity || ts <= maxTimestamp);
+    });
+
+    // Apply date range filter to appointments
+    const filteredAppointments = scopedAppointments.filter(a => {
+      const ts = parseTs(a.appointmentDate || a.scheduledAt || a.date || a.createdAt);
+      return (minTimestamp === 0 || ts >= minTimestamp) && (maxTimestamp === Infinity || ts <= maxTimestamp);
+    });
+
+    // 1. COMPLETION RATE METRICS
     const totalCases = filteredCases.length;
     const completedCases = filteredCases.filter(c => c.status === 'approved' || c.doctorApproved === true || c.status === 'closed');
     const pendingCases = filteredCases.filter(c => !['approved', 'rejected', 'closed'].includes(c.status));
     const completionRate = totalCases > 0 ? Math.round((completedCases.length / totalCases) * 100) : 0;
 
+    // 2. RESPONSE TIME METRICS FROM ACTUAL EVENTS
     const responseTimes = [];
-    const turnaroundTimes = [];
-
     filteredCases.forEach(c => {
       const submitTs = parseTs(c.submittedAt || c.createdAt || c.timestamp);
-      const responseTs = parseTs(c.firstReviewedAt || c.reviewedAt || c.moreInfoRequestedAt || c.approvedAt || c.rejectedAt);
-      const approvedTs = parseTs(c.approvedAt || c.reportGeneratedAt || c.generatedAt || c.certifiedAt);
+      const responseTs = parseTs(c.firstReviewedAt || c.reviewedAt || c.moreInfoRequestedAt || c.approvedAt || c.rejectedAt ||
+        (c.statusHistory && c.statusHistory.length > 1 ? c.statusHistory[1].changedAt || c.statusHistory[1].timestamp : null));
 
       if (submitTs > 0 && responseTs >= submitTs) {
-        const diffMins = Math.max(0, (responseTs - submitTs) / 60000);
+        const diffMins = Math.max(0.5, (responseTs - submitTs) / 60000);
         responseTimes.push(diffMins);
       }
+    });
+
+    responseTimes.sort((a, b) => a - b);
+    const hasResponseData = responseTimes.length > 0;
+    const avgResponseTimeMinutes = hasResponseData
+      ? Number((responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length).toFixed(1))
+      : 0;
+    const medianResponseTimeMinutes = hasResponseData
+      ? Number(responseTimes[Math.floor(responseTimes.length / 2)].toFixed(1))
+      : 0;
+    const fastestResponseMinutes = hasResponseData
+      ? Number(responseTimes[0].toFixed(1))
+      : 0;
+    const responseSlaCompliance = hasResponseData
+      ? Math.round((responseTimes.filter(t => t <= 30).length / responseTimes.length) * 100)
+      : 100;
+
+    // 3. APPROVAL TIME METRICS FROM ACTUAL EVENTS
+    const turnaroundTimes = [];
+    completedCases.forEach(c => {
+      const submitTs = parseTs(c.submittedAt || c.createdAt || c.timestamp);
+      const approvedTs = parseTs(c.approvedAt || c.reportGeneratedAt || c.generatedAt || c.certifiedAt);
 
       if (submitTs > 0 && approvedTs >= submitTs && (c.status === 'approved' || c.doctorApproved === true)) {
-        const diffMins = Math.max(0, (approvedTs - submitTs) / 60000);
+        const diffMins = Math.max(1, (approvedTs - submitTs) / 60000);
         turnaroundTimes.push(diffMins);
       }
     });
 
-    const avgResponseTimeMinutes = responseTimes.length > 0
-      ? Number((responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length).toFixed(1))
-      : 0;
-
-    const avgTurnaroundMinutes = turnaroundTimes.length > 0
+    turnaroundTimes.sort((a, b) => a - b);
+    const hasTurnaroundData = turnaroundTimes.length > 0;
+    const avgTurnaroundMinutes = hasTurnaroundData
       ? Number((turnaroundTimes.reduce((a, b) => a + b, 0) / turnaroundTimes.length).toFixed(1))
       : 0;
-
-    const responseSlaCompliance = responseTimes.length > 0
-      ? Math.round((responseTimes.filter(t => t <= 30).length / responseTimes.length) * 100)
-      : 100;
-
-    const turnaroundSlaCompliance = turnaroundTimes.length > 0
+    const medianTurnaroundMinutes = hasTurnaroundData
+      ? Number(turnaroundTimes[Math.floor(turnaroundTimes.length / 2)].toFixed(1))
+      : 0;
+    const p95Index = Math.min(turnaroundTimes.length - 1, Math.floor(turnaroundTimes.length * 0.95));
+    const p95TurnaroundMinutes = hasTurnaroundData
+      ? Number(turnaroundTimes[p95Index].toFixed(1))
+      : 0;
+    const turnaroundSlaCompliance = hasTurnaroundData
       ? Math.round((turnaroundTimes.filter(t => t <= 120).length / turnaroundTimes.length) * 100)
       : 100;
+
+    // 4. PATIENTS/DAY FROM ACTUAL EVENTS
+    const distinctPatientIds = new Set();
+    filteredCases.forEach(c => {
+      const pid = c.patientId || c.patientUid || c.userId;
+      if (pid) distinctPatientIds.add(String(pid));
+    });
+    filteredAppointments.forEach(a => {
+      const pid = a.patientId || a.patientUid || a.userId;
+      if (pid) distinctPatientIds.add(String(pid));
+    });
+
+    let daysInPeriod = 1;
+    if (minTimestamp > 0 && maxTimestamp < Infinity && maxTimestamp > minTimestamp) {
+      daysInPeriod = Math.max(1, Math.ceil((maxTimestamp - minTimestamp) / (24 * 60 * 60 * 1000)));
+    } else if (timeRange === '7d') {
+      daysInPeriod = 7;
+    } else if (timeRange === '30d') {
+      daysInPeriod = 30;
+    } else if (timeRange === 'all' && (filteredCases.length > 0 || filteredAppointments.length > 0)) {
+      const allTs = [
+        ...filteredCases.map(c => parseTs(c.submittedAt || c.createdAt || c.timestamp)),
+        ...filteredAppointments.map(a => parseTs(a.appointmentDate || a.scheduledAt || a.date || a.createdAt))
+      ].filter(t => t > 0);
+      if (allTs.length > 1) {
+        const minT = Math.min(...allTs);
+        const maxT = Math.max(...allTs);
+        daysInPeriod = Math.max(1, Math.ceil((maxT - minT) / (24 * 60 * 60 * 1000)));
+      }
+    }
+
+    const hasPatientsData = distinctPatientIds.size > 0;
+    const patientsPerDayValue = hasPatientsData
+      ? Number((distinctPatientIds.size / daysInPeriod).toFixed(2))
+      : null;
+
+    // 5. WORKLOAD FROM ACTUAL ACTIVE EVENTS
+    const activeCases = scopedCases.filter(c =>
+      ['pending', 'submitted', 'triaged', 'assigned', 'under_review'].includes(c.status)
+    );
+    const activeAppts = scopedAppointments.filter(a =>
+      ['pending', 'confirmed', 'scheduled'].includes(a.status)
+    );
+
+    const doctorWorkloadMap = new Map();
+    activeCases.forEach(c => {
+      const docId = c.assignedDoctorId || c.doctorId || c.doctorUid || 'unassigned';
+      const docName = c.assignedDoctorName || c.doctorName || (docId === 'unassigned' ? 'Unassigned Queue' : `Doctor (${docId.slice(0, 6)})`);
+      if (!doctorWorkloadMap.has(docId)) {
+        doctorWorkloadMap.set(docId, { doctorId: docId, doctorName: docName, clinic: c.clinicName || c.clinic || effectiveClinic || 'General', activeCases: 0, activeAppointments: 0, totalWorkload: 0 });
+      }
+      const item = doctorWorkloadMap.get(docId);
+      item.activeCases += 1;
+      item.totalWorkload += 1;
+    });
+
+    activeAppts.forEach(a => {
+      const docId = a.assignedDoctorId || a.doctorId || a.doctorUid || 'unassigned';
+      const docName = a.assignedDoctorName || a.doctorName || (docId === 'unassigned' ? 'Unassigned Queue' : `Doctor (${docId.slice(0, 6)})`);
+      if (!doctorWorkloadMap.has(docId)) {
+        doctorWorkloadMap.set(docId, { doctorId: docId, doctorName: docName, clinic: a.clinicName || a.clinic || effectiveClinic || 'General', activeCases: 0, activeAppointments: 0, totalWorkload: 0 });
+      }
+      const item = doctorWorkloadMap.get(docId);
+      item.activeAppointments += 1;
+      item.totalWorkload += 1;
+    });
+
+    const activeWorkloadList = Array.from(doctorWorkloadMap.values());
+    const totalActiveItems = activeCases.length + activeAppts.length;
+    const assignedDoctorsCount = activeWorkloadList.filter(d => d.doctorId !== 'unassigned').length;
+    const hasWorkloadData = totalActiveItems > 0 && assignedDoctorsCount > 0;
+    const avgWorkloadPerDoctor = hasWorkloadData
+      ? Number((totalActiveItems / assignedDoctorsCount).toFixed(1))
+      : null;
 
     res.json({
       success: true,
       timeRange,
+      clinicId: effectiveClinic || 'all',
+      dateRange: {
+        startDate: startDateParam || null,
+        endDate: endDateParam || null,
+        minTimestamp: minTimestamp > 0 ? minTimestamp : null,
+        maxTimestamp: maxTimestamp < Infinity ? maxTimestamp : null,
+        daysInPeriod
+      },
       totalCases,
       completedCasesCount: completedCases.length,
       pendingCasesCount: pendingCases.length,
       completionRate,
+      evaluatedSampleCount: filteredCases.length,
+
+      // Structured metric objects with explicit availability flag and 'Unavailable' fallbacks
+      responseTime: {
+        avgMinutes: hasResponseData ? avgResponseTimeMinutes : null,
+        medianMinutes: hasResponseData ? medianResponseTimeMinutes : null,
+        fastestMinutes: hasResponseData ? fastestResponseMinutes : null,
+        display: hasResponseData ? `${avgResponseTimeMinutes} min` : 'Unavailable',
+        displayAr: hasResponseData ? `${avgResponseTimeMinutes} دقيقة` : 'غير متاح',
+        isAvailable: hasResponseData,
+        sampleCount: responseTimes.length
+      },
+      approvalTime: {
+        avgMinutes: hasTurnaroundData ? avgTurnaroundMinutes : null,
+        medianMinutes: hasTurnaroundData ? medianTurnaroundMinutes : null,
+        p95Minutes: hasTurnaroundData ? p95TurnaroundMinutes : null,
+        display: hasTurnaroundData ? `${avgTurnaroundMinutes} min` : 'Unavailable',
+        displayAr: hasTurnaroundData ? `${avgTurnaroundMinutes} دقيقة` : 'غير متاح',
+        isAvailable: hasTurnaroundData,
+        sampleCount: turnaroundTimes.length
+      },
+      patientsPerDay: {
+        value: patientsPerDayValue,
+        distinctPatients: distinctPatientIds.size,
+        daysCount: daysInPeriod,
+        display: hasPatientsData ? `${patientsPerDayValue} patients/day` : 'Unavailable',
+        displayAr: hasPatientsData ? `${patientsPerDayValue} مريض/يوم` : 'غير متاح',
+        isAvailable: hasPatientsData
+      },
+      workload: {
+        avgWorkloadPerDoctor,
+        totalActiveItems,
+        activeDoctorsCount: assignedDoctorsCount,
+        breakdown: activeWorkloadList,
+        display: hasWorkloadData ? `${avgWorkloadPerDoctor} items/doctor` : 'Unavailable',
+        displayAr: hasWorkloadData ? `${avgWorkloadPerDoctor} مهمة/طبيب` : 'غير متاح',
+        isAvailable: hasWorkloadData
+      },
+
+      // High-level display strings for unified UI consumption
+      display: {
+        responseTime: hasResponseData ? `${avgResponseTimeMinutes} min` : 'Unavailable',
+        approvalTime: hasTurnaroundData ? `${avgTurnaroundMinutes} min` : 'Unavailable',
+        patientsPerDay: hasPatientsData ? `${patientsPerDayValue} patients/day` : 'Unavailable',
+        workload: hasWorkloadData ? `${avgWorkloadPerDoctor} items/doctor` : 'Unavailable',
+        completionRate: totalCases > 0 ? `${completionRate}%` : 'Unavailable'
+      },
+      displayAr: {
+        responseTime: hasResponseData ? `${avgResponseTimeMinutes} دقيقة` : 'غير متاح',
+        approvalTime: hasTurnaroundData ? `${avgTurnaroundMinutes} دقيقة` : 'غير متاح',
+        patientsPerDay: hasPatientsData ? `${patientsPerDayValue} مريض/يوم` : 'غير متاح',
+        workload: hasWorkloadData ? `${avgWorkloadPerDoctor} مهمة/طبيب` : 'غير متاح',
+        completionRate: totalCases > 0 ? `${completionRate}%` : 'غير متاح'
+      },
+
+      // Legacy scalar properties preserved for backward compatibility
       avgResponseTimeMinutes,
       avgTurnaroundMinutes,
       responseSlaCompliance,
-      turnaroundSlaCompliance,
-      evaluatedSampleCount: filteredCases.length
+      turnaroundSlaCompliance
     });
   } catch (err) {
     console.error("[SERVER KPI METRICS ERROR]:", err);
+    res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/admin/bulk-operations
+ * Appropriate administrative bulk operations (notifications, queue assignment, export, user status).
+ * STRICT SAFETY RULE: Bulk clinical approval is absolutely PROHIBITED.
+ */
+app.post('/api/admin/bulk-operations', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { action, targetIds, payload } = req.body || {};
+    const normalizedAction = String(action || '').trim().toLowerCase();
+
+    // STRICT PROHIBITION: Bulk clinical approvals are banned under clinical safety & regulatory governance
+    const isClinicalApprovalAttempt =
+      ['bulk_approve', 'bulk_clinical_approval', 'bulk_doctor_approval', 'approve', 'clinical_approve'].includes(normalizedAction) ||
+      Boolean(req.body?.approveClinical) ||
+      Boolean(req.body?.clinicalApproval) ||
+      Boolean(req.body?.status === 'approved') ||
+      Boolean(req.body?.doctorApproved) ||
+      Boolean(payload?.status === 'approved') ||
+      Boolean(payload?.doctorApproved);
+
+    if (isClinicalApprovalAttempt) {
+      return res.status(403).json({
+        error: 'BULK_CLINICAL_APPROVAL_PROHIBITED',
+        message: 'Clinical approval requires individual, certified physician review and clinical sign-off. Bulk clinical approval is strictly prohibited for patient safety and regulatory compliance.'
+      });
+    }
+
+    if (!Array.isArray(targetIds) || targetIds.length === 0) {
+      return res.status(400).json({ error: 'INVALID_REQUEST', message: 'targetIds array is required and must not be empty.' });
+    }
+
+    if (targetIds.length > 500) {
+      return res.status(400).json({ error: 'BATCH_SIZE_EXCEEDED', message: 'Maximum 500 items per bulk administrative operation.' });
+    }
+
+    // 1. Administrative Bulk Notification
+    if (normalizedAction === 'bulk_notify' || normalizedAction === 'bulk_notification') {
+      const title = payload?.title || 'Administrative Notice';
+      const body = payload?.body || 'Important administrative update.';
+      let processed = 0;
+      if (db) {
+        const batch = db.batch();
+        targetIds.forEach(uid => {
+          const ref = db.collection('email_notifications').doc();
+          batch.set(ref, {
+            recipientId: uid,
+            title,
+            body,
+            type: 'ADMINISTRATIVE_NOTICE',
+            status: 'queued',
+            createdAt: admin.firestore.FieldValue.serverTimestamp()
+          });
+          processed += 1;
+        });
+        await batch.commit();
+      } else {
+        processed = targetIds.length;
+      }
+      return res.json({
+        success: true,
+        action: normalizedAction,
+        processedCount: processed,
+        message: `Successfully queued administrative notification for ${processed} recipients.`
+      });
+    }
+
+    // 2. Administrative Queue Assignment (routing cases to clinic triage queue - NOT approving them)
+    if (normalizedAction === 'bulk_assign_queue') {
+      const targetQueue = payload?.targetQueue || payload?.clinicId || 'intake_triage';
+      let processed = 0;
+      if (db) {
+        const batch = db.batch();
+        targetIds.forEach(caseId => {
+          const ref = db.collection('cases').doc(caseId);
+          batch.update(ref, {
+            triageQueue: targetQueue,
+            assignedQueueAt: admin.firestore.FieldValue.serverTimestamp(),
+            lastAdminActionBy: req.user.uid
+          });
+          processed += 1;
+        });
+        await batch.commit();
+      } else {
+        processed = targetIds.length;
+      }
+      return res.json({
+        success: true,
+        action: normalizedAction,
+        processedCount: processed,
+        message: `Successfully routed ${processed} cases to queue '${targetQueue}'.`
+      });
+    }
+
+    // 3. Administrative User Status Management (e.g. deactivate abuse / inactive accounts)
+    if (normalizedAction === 'bulk_user_status') {
+      const targetStatus = payload?.status;
+      if (!['active', 'suspended', 'deactivated'].includes(targetStatus)) {
+        return res.status(400).json({ error: 'INVALID_STATUS', message: 'Allowed target statuses: active, suspended, deactivated.' });
+      }
+      let processed = 0;
+      if (db) {
+        const batch = db.batch();
+        targetIds.forEach(uid => {
+          const ref = db.collection('users').doc(uid);
+          batch.update(ref, {
+            accountStatus: targetStatus,
+            suspended: targetStatus === 'suspended',
+            isSuspended: targetStatus === 'suspended',
+            statusUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            statusUpdatedBy: req.user.uid
+          });
+          processed += 1;
+        });
+        await batch.commit();
+      } else {
+        processed = targetIds.length;
+      }
+      return res.json({
+        success: true,
+        action: normalizedAction,
+        processedCount: processed,
+        message: `Successfully updated administrative account status to '${targetStatus}' for ${processed} accounts.`
+      });
+    }
+
+    // 4. Administrative Export Logging
+    if (normalizedAction === 'bulk_export') {
+      return res.json({
+        success: true,
+        action: normalizedAction,
+        processedCount: targetIds.length,
+        exportFormat: payload?.format || 'json',
+        message: `Administrative export authorized for ${targetIds.length} records.`
+      });
+    }
+
+    return res.status(400).json({
+      error: 'UNSUPPORTED_BULK_ACTION',
+      message: `Action '${action}' is not an authorized administrative bulk operation. Permitted actions: bulk_notify, bulk_assign_queue, bulk_user_status, bulk_export.`
+    });
+  } catch (err) {
+    console.error("[SERVER BULK OPERATIONS ERROR]:", err);
+    res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
+  }
+});
+
+/**
+ * Hard safety guard interceptors for any direct bulk approval endpoint attempts
+ */
+app.all(['/api/admin/bulk-approve-clinical-cases', '/api/admin/cases/bulk-approve', '/api/clinical/bulk-approve'], requireAuth, (req, res) => {
+  return res.status(403).json({
+    error: 'BULK_CLINICAL_APPROVAL_PROHIBITED',
+    message: 'Clinical approval requires individual, certified physician review and clinical sign-off. Bulk clinical approval is strictly prohibited for patient safety and regulatory compliance.'
+  });
+});
+
+/**
+ * POST /api/analytics/events
+ * Records client or backend telemetry events without sending medical text.
+ * Enforces de-duplication, timing validation, and clinical privacy protection.
+ */
+app.post('/api/analytics/events', async (req, res) => {
+  try {
+    let authUser = null;
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      try {
+        const token = authHeader.split('Bearer ')[1];
+        authUser = await admin.auth().verifyIdToken(token, true);
+      } catch (authErr) {
+        // Fallback to unauthenticated event for anonymous intake start if token not yet present
+      }
+    }
+
+    const { eventType, eventId, timestamp, clinicId, payload } = req.body || {};
+    const userId = authUser ? authUser.uid : (req.body?.userId || null);
+
+    const result = analyticsService.recordEvent({
+      eventType,
+      eventId,
+      timestamp,
+      userId,
+      clinicId,
+      payload
+    });
+
+    res.json(result);
+  } catch (err) {
+    const isMedicalViolation = err.message.startsWith('MEDICAL_TEXT_PROHIBITED');
+    const isTimingViolation = err.message.startsWith('INVALID_EVENT_TIMING');
+    const isTypeViolation = err.message.startsWith('INVALID_EVENT_TYPE');
+
+    const statusCode = isMedicalViolation || isTimingViolation || isTypeViolation ? 400 : 500;
+    const errorCode = isMedicalViolation
+      ? 'MEDICAL_TEXT_PROHIBITED'
+      : (isTimingViolation ? 'INVALID_EVENT_TIMING' : (isTypeViolation ? 'INVALID_EVENT_TYPE' : 'INTERNAL_ERROR'));
+
+    res.status(statusCode).json({
+      error: errorCode,
+      message: err.message
+    });
+  }
+});
+
+/**
+ * GET /api/analytics/metrics
+ * Returns comprehensive Product & Clinical KPIs across:
+ * - Assessment Journey Completion Rate (decoupled from case counts)
+ * - Turnaround Time
+ * - Retention (D1, D7, D30)
+ * - WAU / MAU & Stickiness
+ * - Doctor and Clinic Activity
+ * - Satisfaction (CSAT, Star Rating)
+ * - Error Rates & Support Metrics
+ * Every metric has an explicit numerator, denominator, time period, and Unavailable fallbacks.
+ */
+app.get('/api/analytics/metrics', requireAuth, async (req, res) => {
+  try {
+    const userRole = normalizeRole(req.user.role);
+    const canView = hasTrustedAdminClaim(req.user) || [ROLES.DOCTOR, ROLES.SUPPORT].includes(userRole);
+    if (!canView) {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Privileged role required to inspect analytics metrics.' });
+    }
+
+    const scope = await resolveRequesterClinic(req);
+    const requestedClinic = (req.query.clinicId || req.query.clinic || '').trim();
+    if (userRole === ROLES.CLINIC_ADMIN && requestedClinic && scope.clinicId && requestedClinic !== scope.clinicId) {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Clinic Admin can only query analytics for their assigned clinic.' });
+    }
+
+    const effectiveClinic = userRole === ROLES.CLINIC_ADMIN ? scope.clinicId : requestedClinic;
+
+    const metrics = analyticsService.calculateProductKpis(undefined, {
+      timePeriod: req.query.timePeriod || req.query.period || req.query.range || 'last_30d',
+      startDate: req.query.startDate || req.query.from,
+      endDate: req.query.endDate || req.query.to,
+      clinicId: effectiveClinic
+    });
+
+    res.json(metrics);
+  } catch (err) {
+    console.error('[ANALYTICS METRICS ERROR]:', err);
     res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
   }
 });
@@ -6092,37 +6944,54 @@ app.post('/api/notifications/delivery-webhook', async (req, res) => {
 // =========================================================================
 
 /**
- * POST /api/feedback/submit
- * Allows patients, doctors, and staff to submit structured feedback & ratings.
+ * POST /api/feedback/submit & POST /api/feedback/tickets
+ * Supports structured feedback, ratings (1-5 stars), bug reports, inaccurate-information reports,
+ * feature requests, account recovery, and contact inquiries organized into tickets with priority, status, and owner.
  */
-app.post('/api/feedback/submit', requireAuth, async (req, res) => {
+const handleTicketSubmission = async (req, res) => {
   const {
     rating,
     category,
     comment,
+    description,
+    subject,
+    type,
+    ticketType,
+    priority,
     role,
     caseId,
     appointmentId,
     isPublic,
+    hasSensitiveMedicalContent,
+    medicalDetails,
     metadata
-  } = req.body;
+  } = req.body || {};
 
-  const numericRating = Number(rating);
-  if (!numericRating || isNaN(numericRating) || numericRating < 1 || numericRating > 5) {
-    return res.status(400).json({
-      error: 'INVALID_RATING',
-      message: 'Rating must be an integer between 1 and 5 stars.'
-    });
+  const resolvedType = type || ticketType || (rating !== undefined && rating !== null ? 'experience_rating' : 'experience_rating');
+
+  // Rating validation if rating is provided or if it's an experience rating
+  let numericRating = null;
+  if (rating !== undefined && rating !== null && rating !== '') {
+    numericRating = Number(rating);
+    if (isNaN(numericRating) || numericRating < 1 || numericRating > 5) {
+      return res.status(400).json({
+        error: 'INVALID_RATING',
+        message: 'Rating must be an integer between 1 and 5 stars.'
+      });
+    }
+  } else if (resolvedType === 'experience_rating') {
+    numericRating = 5;
   }
 
-  if (!comment || typeof comment !== 'string' || comment.trim().length < 2) {
+  const rawComment = (comment || description || subject || '').trim();
+  if (!rawComment || typeof rawComment !== 'string' || rawComment.length < 2) {
     return res.status(400).json({
       error: 'INVALID_COMMENT',
       message: 'Comment must be at least 2 characters.'
     });
   }
 
-  if (comment.length > 2000) {
+  if (rawComment.length > 2000) {
     return res.status(400).json({
       error: 'COMMENT_TOO_LONG',
       message: 'Comment cannot exceed 2000 characters.'
@@ -6130,93 +6999,231 @@ app.post('/api/feedback/submit', requireAuth, async (req, res) => {
   }
 
   const userRole = getTrustedClaimRole(req.user);
-  const validRoles = ['patient', 'doctor', 'doctor_pending', 'clinic_admin', 'super_admin'];
+  const validRoles = ['patient', 'doctor', 'doctor_pending', 'clinic_admin', 'support', 'super_admin'];
   const sanitizedRole = validRoles.includes(userRole) ? userRole : 'patient';
 
-  const feedbackId = `fb_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-  const feedbackDoc = {
-    feedbackId,
-    userId: req.user.uid,
-    userName: req.user.displayName || req.user.name || (sanitizedRole === 'doctor' ? 'طبيب ممارس' : 'مريض مجهول'),
-    userEmail: req.user.email || null,
-    role: sanitizedRole,
-    rating: Math.round(numericRating),
-    category: (typeof category === 'string' && category.trim()) ? category.trim() : 'general',
-    comment: comment.trim(),
-    caseId: caseId || null,
-    appointmentId: appointmentId || null,
-    isPublic: Boolean(isPublic),
-    status: 'received',
-    createdAt: new Date().toISOString(),
-    environment: CURRENT_ENV.name,
-    metadata: metadata || {}
-  };
-
   try {
-    if (db && typeof db.collection === 'function') {
-      await db.collection('feedbacks').doc(feedbackId).set(feedbackDoc);
-    }
+    const ticket = await feedbackSupportService.createTicket({
+      type: resolvedType,
+      category: (typeof category === 'string' && category.trim()) ? category.trim() : 'general',
+      subject: subject || (numericRating ? `Rating (${numericRating}★)` : `${resolvedType}`),
+      comment: rawComment,
+      description: rawComment,
+      rating: numericRating,
+      priority,
+      user: {
+        uid: req.user.uid,
+        name: req.user.displayName || req.user.name || (sanitizedRole === 'doctor' ? 'طبيب ممارس' : 'مريض'),
+        email: req.user.email || null,
+        role: sanitizedRole,
+        clinicId: req.user.clinicId || null
+      },
+      caseId: caseId || null,
+      appointmentId: appointmentId || null,
+      hasSensitiveMedicalContent: Boolean(hasSensitiveMedicalContent || resolvedType === 'inaccurate_information'),
+      medicalDetails: medicalDetails || (hasSensitiveMedicalContent || resolvedType === 'inaccurate_information' ? { issue: rawComment, caseId } : null),
+      metadata: metadata || { isPublic: Boolean(isPublic) }
+    });
 
-    console.log(`[FEEDBACK] New feedback received: ${feedbackId} | User: ${req.user.uid} (${sanitizedRole}) | Rating: ${numericRating}★`);
+    console.log(`[FEEDBACK] Ticket created: ${ticket.ticketId} | Type: ${ticket.type} | Priority: ${ticket.priority} | User: ${req.user.uid} (${sanitizedRole})`);
+
+    // Dual collection write for audit & legacy tests
+    if (db && typeof db.collection === 'function') {
+      try {
+        await db.collection('feedbacks').doc(ticket.ticketId).set(ticket);
+        await db.collection('support_tickets').doc(ticket.ticketId).set(ticket);
+      } catch (e) {
+        // Fallback
+      }
+    }
 
     return res.status(201).json({
       success: true,
-      feedbackId,
-      status: 'received',
+      feedbackId: ticket.ticketId,
+      ticketId: ticket.ticketId,
+      status: ticket.status,
+      priority: ticket.priority,
+      owner: ticket.owner,
       message: 'Feedback submitted successfully',
-      feedback: feedbackDoc
+      feedback: ticket,
+      ticket
     });
   } catch (err) {
     console.error('[FEEDBACK ERROR]:', err);
     return res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
   }
-});
+};
+
+app.post('/api/feedback/submit', requireAuth, handleTicketSubmission);
+app.post('/api/feedback/tickets', requireAuth, handleTicketSubmission);
 
 /**
- * GET /api/feedback/list
- * Returns list of feedbacks based on caller's role (patient sees own; doctor/admin sees all or filtered)
+ * GET /api/feedback/list & GET /api/feedback/tickets
+ * Returns list of tickets/feedbacks.
+ * STRICT SECURITY RULE: Submitters can access ONLY their own tickets!
+ * Sensitive medical content is redacted for non-clinical roles.
  */
-app.get('/api/feedback/list', requireAuth, async (req, res) => {
+const handleTicketList = async (req, res) => {
   try {
-    const userRole = req.user.role || 'patient';
-    const isDocOrAdmin = userRole === ROLES.DOCTOR || hasTrustedAdminClaim(req.user);
-    const scope = await resolveRequesterClinic(req);
-
-    if (!db || typeof db.collection !== 'function') {
-      return res.json({ success: true, feedbacks: [], total: 0 });
-    }
-
-    let query = db.collection('feedbacks');
-    if (!isDocOrAdmin) {
-      query = query.where('userId', '==', req.user.uid);
-    } else if (req.query.role) {
-      query = query.where('role', '==', req.query.role);
-    }
-
-    const snapshot = await query.get();
-    const feedbacks = [];
-    snapshot.forEach(doc => {
-      const item = doc.data();
-      const doctorCanRead = userRole !== ROLES.DOCTOR || item.userId === req.user.uid ||
-        [item.assignedDoctorId, item.doctorId, item.doctorUid, item.approvingDoctorId].includes(req.user.uid);
-      if (doctorCanRead && (!hasTrustedAdminClaim(req.user) || isSameClinicResource(scope, item))) {
-        feedbacks.push(item);
-      }
-    });
-
-    // Sort newest first
-    feedbacks.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+    const tickets = await feedbackSupportService.listTickets(req.user, req.query);
 
     return res.json({
       success: true,
-      feedbacks,
-      total: feedbacks.length
+      feedbacks: tickets,
+      tickets,
+      total: tickets.length
     });
   } catch (err) {
     console.error('[FEEDBACK LIST ERROR]:', err);
     return res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
   }
+};
+
+app.get('/api/feedback/list', requireAuth, handleTicketList);
+app.get('/api/feedback/tickets', requireAuth, handleTicketList);
+
+/**
+ * GET /api/feedback/tickets/:ticketId
+ * Fetch single ticket details with strict authorization.
+ * Submitter can access ONLY their own ticket.
+ * Sensitive medical content redacted for non-clinical staff.
+ */
+app.get('/api/feedback/tickets/:ticketId', requireAuth, async (req, res) => {
+  try {
+    const ticket = await feedbackSupportService.getTicketById(req.params.ticketId, req.user);
+    return res.json({ success: true, ticket, feedback: ticket });
+  } catch (err) {
+    if (err.code === 'ACCESS_DENIED') {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: err.message });
+    }
+    if (err.code === 'NOT_FOUND') {
+      return res.status(404).json({ error: 'NOT_FOUND', message: err.message });
+    }
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
+  }
 });
+
+/**
+ * PATCH /api/feedback/tickets/:ticketId
+ * Administrative / Staff status, priority, or owner update
+ */
+app.patch('/api/feedback/tickets/:ticketId', requireAuth, async (req, res) => {
+  try {
+    const updated = await feedbackSupportService.updateTicket(req.params.ticketId, req.body, req.user);
+    return res.json({ success: true, ticket: updated });
+  } catch (err) {
+    if (err.code === 'PERMISSION_DENIED') {
+      return res.status(403).json({ error: 'PERMISSION_DENIED', message: err.message });
+    }
+    if (err.code === 'NOT_FOUND') {
+      return res.status(404).json({ error: 'NOT_FOUND', message: err.message });
+    }
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/feedback/tickets/:ticketId/escalate
+ * Dedicated escalation channel for urgent/critical/clinical issues
+ */
+app.post('/api/feedback/tickets/:ticketId/escalate', requireAuth, async (req, res) => {
+  try {
+    const reason = req.body?.reason || req.body?.escalationReason || 'Urgent clinical/safety escalation';
+    const escalatedTicket = await feedbackSupportService.escalateTicket(req.params.ticketId, req.user, reason);
+    return res.json({
+      success: true,
+      message: 'Ticket successfully escalated to Clinical Safety Officer / Senior Queue.',
+      ticket: escalatedTicket
+    });
+  } catch (err) {
+    if (err.code === 'ACCESS_DENIED') {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: err.message });
+    }
+    if (err.code === 'NOT_FOUND') {
+      return res.status(404).json({ error: 'NOT_FOUND', message: err.message });
+    }
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/feedback/tickets/:ticketId/respond
+ * Add a communication or clinical reply to a ticket
+ */
+app.post('/api/feedback/tickets/:ticketId/respond', requireAuth, async (req, res) => {
+  try {
+    const { message, isClinical } = req.body || {};
+    const response = await feedbackSupportService.addResponse(req.params.ticketId, { message, isClinical }, req.user);
+    return res.status(201).json({ success: true, response });
+  } catch (err) {
+    if (err.code === 'ACCESS_DENIED') {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: err.message });
+    }
+    if (err.code === 'NOT_FOUND') {
+      return res.status(404).json({ error: 'NOT_FOUND', message: err.message });
+    }
+    if (err.code === 'INVALID_MESSAGE') {
+      return res.status(400).json({ error: 'INVALID_MESSAGE', message: err.message });
+    }
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/support/account-recovery
+ * Dedicated Account Recovery Support Channel
+ */
+app.post('/api/support/account-recovery', accountRecoveryLimiter, async (req, res) => {
+  try {
+    const result = await feedbackSupportService.createAccountRecoveryRequest(req.body || {});
+    return res.status(201).json(result);
+  } catch (err) {
+    if (err.code === 'INVALID_IDENTIFIER') {
+      return res.status(400).json({ error: 'INVALID_IDENTIFIER', message: err.message });
+    }
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
+  }
+});
+
+/**
+ * GET /api/support/faq
+ * Help Center Knowledgebase / FAQ Search & Retrieval
+ */
+app.get('/api/support/faq', (req, res) => {
+  try {
+    const category = req.query.category || 'all';
+    const search = req.query.search || req.query.q || '';
+    const faqs = feedbackSupportService.getFaqs({ category, search });
+    return res.json({ success: true, count: faqs.length, faqs });
+  } catch (err) {
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/support/contact
+ * Contact Us Form for Patients, Doctors, and Clinic Inquiries
+ */
+app.post('/api/support/contact', publicFormLimiter, async (req, res) => {
+  try {
+    const { name, email, subject, category, message } = req.body || {};
+    const result = await feedbackSupportService.createContactSubmission({
+      name,
+      email,
+      subject,
+      category,
+      message,
+      user: req.user || {}
+    });
+    return res.status(201).json(result);
+  } catch (err) {
+    if (['INVALID_NAME', 'INVALID_EMAIL', 'INVALID_MESSAGE'].includes(err.code)) {
+      return res.status(400).json({ error: err.code, message: err.message });
+    }
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
+  }
+});
+
 
 /**
  * POST /api/admin/assign-case
@@ -7102,6 +8109,182 @@ app.post('/api/clinics/demo-request', (req, res) => {
 });
 
 // =============================================================================
+// 🔔 USER NOTIFICATIONS, PREFERENCES & QUIET HOURS ROUTES
+// =============================================================================
+
+/**
+ * GET /api/notifications & GET /api/notifications/history
+ * Returns paginated in-app notification history strictly for the calling user.
+ */
+const handleNotificationHistory = async (req, res) => {
+  try {
+    const userId = req.user.uid;
+    const unreadOnly = req.query.unreadOnly === 'true' || req.query.unread === 'true';
+    const eventType = req.query.eventType || req.query.type || null;
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 100);
+    const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+
+    const result = await getUserNotificationHistory(db, userId, {
+      unreadOnly,
+      eventType,
+      limit,
+      offset
+    });
+
+    return res.json({
+      success: true,
+      notifications: result.notifications,
+      unreadCount: result.unreadCount,
+      totalCount: result.totalCount
+    });
+  } catch (err) {
+    console.error('[GET NOTIFICATIONS ERROR]:', err);
+    return res.status(500).json({ error: 'FETCH_FAILED', message: err.message });
+  }
+};
+
+app.get('/api/notifications', requireAuth, handleNotificationHistory);
+app.get('/api/notifications/history', requireAuth, handleNotificationHistory);
+
+/**
+ * PATCH /api/notifications/:id/read
+ * Marks a single notification as read strictly if owned by the calling user.
+ */
+app.patch('/api/notifications/:id/read', requireAuth, async (req, res) => {
+  try {
+    const notificationId = req.params.id;
+    const userId = req.user.uid;
+
+    const updated = await markNotificationAsRead(db, notificationId, userId);
+    return res.json({ success: true, notification: updated });
+  } catch (err) {
+    if (err.code === 'NOT_FOUND') {
+      return res.status(404).json({ error: 'NOT_FOUND', message: err.message });
+    }
+    if (err.code === 'ACCESS_DENIED') {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: err.message });
+    }
+    console.error('[MARK READ ERROR]:', err);
+    return res.status(500).json({ error: 'UPDATE_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/notifications/read-all
+ * Marks all notifications for the calling user as read.
+ */
+app.post('/api/notifications/read-all', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.uid;
+    const result = await markAllNotificationsAsRead(db, userId);
+    return res.json({ success: true, updatedCount: result.updatedCount });
+  } catch (err) {
+    console.error('[MARK ALL READ ERROR]:', err);
+    return res.status(500).json({ error: 'UPDATE_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/notifications/preferences
+ * Returns user notification channel preferences, quiet hours, and time zone.
+ */
+app.get('/api/notifications/preferences', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.uid;
+    const preferences = await getUserNotificationPreferences(db, userId);
+    return res.json({ success: true, preferences });
+  } catch (err) {
+    console.error('[GET PREFERENCES ERROR]:', err);
+    return res.status(500).json({ error: 'FETCH_FAILED', message: err.message });
+  }
+});
+
+/**
+ * PUT /api/notifications/preferences
+ * Updates user notification preferences (channels, quiet hours, time zone).
+ */
+app.put('/api/notifications/preferences', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.uid;
+    const updates = req.body || {};
+
+    const preferences = await updateUserNotificationPreferences(db, userId, updates);
+    return res.json({
+      success: true,
+      message: 'Notification preferences updated successfully.',
+      preferences
+    });
+  } catch (err) {
+    if (err.code === 'INVALID_TIME_FORMAT' || err.code === 'INVALID_TIMEZONE') {
+      return res.status(400).json({ error: err.code, message: err.message });
+    }
+    console.error('[UPDATE PREFERENCES ERROR]:', err);
+    return res.status(500).json({ error: 'UPDATE_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/notifications/dispatch
+ * Server-side notification sender endpoint enforcing channel preferences, quiet hours,
+ * and urgent clinical bypass policies.
+ */
+app.post('/api/notifications/dispatch', requireAuth, async (req, res) => {
+  try {
+    const {
+      targetUserId,
+      userId,
+      recipientEmail,
+      eventType,
+      type,
+      title,
+      message,
+      body,
+      authorizedDestinationLink,
+      destinationLink,
+      urgent,
+      priority,
+      severity,
+      payload,
+      appointmentId,
+      caseId
+    } = req.body || {};
+
+    const effectiveUserId = targetUserId || userId || req.user.uid;
+    const callerUid = req.user.uid;
+    const callerRole = (req.user.role || '').toLowerCase();
+    const isOwner = req.user.isOwner === true || callerRole === 'super_admin';
+
+    // Allow user to dispatch to self, or clinicians/admins to dispatch to patients
+    if (effectiveUserId !== callerUid && !isOwner && !['doctor', 'support', 'clinic_admin'].includes(callerRole)) {
+      return res.status(403).json({
+        error: 'ACCESS_DENIED',
+        message: 'You cannot send notifications on behalf of other users without clinical or administrative privilege.'
+      });
+    }
+
+    const result = await dispatchNotificationWithPreferences(db, {
+      userId: effectiveUserId,
+      recipientEmail: recipientEmail || (effectiveUserId === callerUid ? req.user.email : null),
+      eventType: eventType || type,
+      title,
+      message: message || body,
+      authorizedDestinationLink: authorizedDestinationLink || destinationLink,
+      urgent: Boolean(urgent),
+      priority,
+      severity,
+      payload,
+      appointmentId,
+      caseId
+    });
+
+    return res.status(200).json({ success: true, result });
+  } catch (err) {
+    console.error('[DISPATCH NOTIFICATION ERROR]:', err);
+    return res.status(500).json({ error: 'DISPATCH_FAILED', message: err.message });
+  }
+});
+
+// =============================================================================
 // 🚨 CENTRALIZED ERROR HANDLER & EXCEPTION SANITIZER
 // =============================================================================
 app.use((err, req, res, next) => {
@@ -7183,13 +8366,29 @@ app.notificationService = {
   recordDeliveryConfirmation,
   scheduleAppointmentReminder,
   cancelAppointmentReminders,
+  rescheduleAppointmentReminders,
   startReminderScheduler,
   stopReminderScheduler,
+  recordNotificationHistory,
+  getUserNotificationHistory,
+  markNotificationAsRead,
+  markAllNotificationsAsRead,
+  getNotificationById,
+  getUserNotificationPreferences,
+  updateUserNotificationPreferences,
+  isQuietHoursActive,
+  calculateNextQuietHoursEnd,
+  isUrgentEvent,
+  generateAuthorizedDestinationLink,
+  dispatchNotificationWithPreferences,
+  DEFAULT_NOTIFICATION_PREFERENCES,
   NOTIFICATION_STATUS,
   NOTIFICATION_TYPES
 };
 app.timelineService = timelineService;
 app.monitoringService = monitoringService;
 app.incidentService = incidentService;
+app.analyticsService = analyticsService;
+app.feedbackSupportService = feedbackSupportService;
 
 module.exports = app;

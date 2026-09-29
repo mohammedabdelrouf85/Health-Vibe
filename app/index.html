@@ -1265,8 +1265,36 @@
               </div>
             </div>
 
+            <!-- Ticket Type Selector -->
+            <div class="form-group" style="margin-bottom: 14px;">
+              <label for="feedbackTypeSelect" style="display:block; margin-bottom:6px; font-weight:600; font-size:13px;">
+                <span class="lang-ar">نوع التذكرة / البلاغ:</span>
+                <span class="lang-en">Ticket / Report Type:</span>
+              </label>
+              <select id="feedbackTypeSelect" class="form-control" onchange="handleFeedbackTypeChange(this.value)" style="width: 100%; padding: 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-weight: 600;">
+                <option value="experience_rating">⭐ تقييم التجربة (1-5 نجوم) / Experience Rating</option>
+                <option value="bug_report">🐞 بلاغ عن خطأ تقني / Bug Report</option>
+                <option value="inaccurate_information">⚠️ بلاغ عن عدم دقة معلومات طبية / Inaccurate Information Report</option>
+                <option value="feature_request">💡 اقتراح ميزة جديدة / Feature Request</option>
+              </select>
+            </div>
+
+            <!-- Clinical Inaccuracy Safety Alert Banner -->
+            <div id="inaccurateInfoSafetyAlert" style="display:none; background:rgba(239, 68, 68, 0.08); border: 1.5px solid rgba(239, 68, 68, 0.35); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; font-size: 12.5px; color: #dc2626; line-height: 1.5;">
+              🚨 <strong>تنبيه السلامة السريرية:</strong> يتم تصعيد بلاغات عدم دقة التقييمات أو تقارير الفحص فوراً كأولوية قصوى إلى ضابط السلامة السريرية (Clinical Safety Officer) وتخضع للسرية والتدقيق السريري الصارم.
+            </div>
+
+            <!-- Subject Input (for bugs, inaccurate info, feature requests) -->
+            <div class="form-group" id="feedbackSubjectGroup" style="margin-bottom: 14px; display: none;">
+              <label for="feedbackSubjectInput" style="display:block; margin-bottom:6px; font-weight:600; font-size:13px;">
+                <span class="lang-ar">عنوان البلاغ / التذكرة:</span>
+                <span class="lang-en">Subject / Title:</span>
+              </label>
+              <input type="text" id="feedbackSubjectInput" class="form-control" placeholder="اكتب عنواناً مختصراً للمشكلة أو الاقتراح..." style="width: 100%; padding: 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);">
+            </div>
+
             <!-- Star Rating Widget -->
-            <div class="form-group" style="margin-bottom: 16px;">
+            <div id="feedbackStarWidgetGroup" class="form-group" style="margin-bottom: 16px;">
               <label style="display:block; margin-bottom:6px; font-weight:600; font-size:13px;">
                 <span class="lang-ar">التقييم العام (من 1 إلى 5 نجوم):</span>
                 <span class="lang-en">Overall Rating (1 to 5 Stars):</span>
@@ -1309,7 +1337,7 @@
             <!-- Comment / Notes Textarea -->
             <div class="form-group" style="margin-bottom: 14px;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                <label for="feedbackCommentInput" style="font-weight:600; font-size:13px;">
+                <label id="feedbackCommentLabel" for="feedbackCommentInput" style="font-weight:600; font-size:13px;">
                   <span class="lang-ar">تفاصيل الملاحظات والتجربة السريرية:</span>
                   <span class="lang-en">Detailed Feedback &amp; Suggestions:</span>
                 </label>
@@ -1339,8 +1367,8 @@
           <article class="panel">
             <div class="panel-head">
               <h3>
-                <span class="lang-ar">مؤشرات الرضا وسجل التقييمات</span>
-                <span class="lang-en">Satisfaction &amp; Feedback History</span>
+                <span class="lang-ar">مؤشرات الرضا وسجل التذاكر</span>
+                <span class="lang-en">Satisfaction &amp; Ticket History</span>
               </h3>
               <span class="pill info" id="feedbackTotalCountBadge">0 تقييم</span>
             </div>
@@ -1357,14 +1385,14 @@
               </div>
               <div style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px; text-align: center;">
                 <div style="font-size: 20px; font-weight: 800; color: var(--ink);" id="kpiTotalFeedbacks">0</div>
-                <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">إجمالي الملاحظات</div>
+                <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">إجمالي التذاكر</div>
               </div>
             </div>
 
             <!-- Feed Filter Tabs -->
             <div style="display: flex; gap: 6px; margin-bottom: 12px; overflow-x: auto; padding-bottom: 4px;">
               <button type="button" class="filter-tab active" data-filter="all" onclick="filterFeedbackList('all')" style="padding: 6px 12px; border-radius: 8px; border: 1px solid var(--teal); background: rgba(9, 184, 182, 0.12); color: var(--teal); font-size: 12px; font-weight: 700; cursor: pointer;">الكل</button>
-              <button type="button" class="filter-tab" data-filter="mine" onclick="filterFeedbackList('mine')" style="padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); font-size: 12px; font-weight: 600; cursor: pointer;">تقييماتي</button>
+              <button type="button" class="filter-tab" data-filter="mine" onclick="filterFeedbackList('mine')" style="padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); font-size: 12px; font-weight: 600; cursor: pointer;">تذاكري</button>
               <button type="button" class="filter-tab" data-filter="patient" onclick="filterFeedbackList('patient')" style="padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); font-size: 12px; font-weight: 600; cursor: pointer;">تجارب المرضى</button>
               <button type="button" class="filter-tab" data-filter="doctor" onclick="filterFeedbackList('doctor')" style="padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); font-size: 12px; font-weight: 600; cursor: pointer;">ملاحظات الأطباء</button>
             </div>
@@ -1375,14 +1403,129 @@
             </div>
           </article>
         </div>
+
+        <!-- 3. Help Center, Account Recovery & Contact Form -->
+        <div class="content-grid" style="margin-top: 24px;">
+          <!-- FAQ / Help Center -->
+          <article class="panel">
+            <div class="panel-head">
+              <h3>
+                <span>❓</span>
+                <span class="lang-ar">مركز المساعدة والأسئلة الشائعة</span>
+                <span class="lang-en">Help Center &amp; FAQs</span>
+              </h3>
+              <span class="pill info">معتمد طبياً</span>
+            </div>
+            <div style="margin-bottom: 12px;">
+              <input type="text" id="faqSearchInput" placeholder="ابحث في الأسئلة الشائعة أو اكتب كلمة دلالية (مثل: أكسجين، موعد، تقرير)..." oninput="renderFaqHelpCenter('all', this.value)" style="width: 100%; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 13px;">
+            </div>
+            <div style="display: flex; gap: 6px; margin-bottom: 14px; overflow-x: auto; padding-bottom: 4px;">
+              <button type="button" class="soft-button" onclick="renderFaqHelpCenter('all', document.getElementById('faqSearchInput').value)" style="font-size: 11.5px; padding: 4px 10px;">الكل</button>
+              <button type="button" class="soft-button" onclick="renderFaqHelpCenter('clinical_assessment', document.getElementById('faqSearchInput').value)" style="font-size: 11.5px; padding: 4px 10px;">الفحص الذكي</button>
+              <button type="button" class="soft-button" onclick="renderFaqHelpCenter('privacy_security', document.getElementById('faqSearchInput').value)" style="font-size: 11.5px; padding: 4px 10px;">الخصوصية</button>
+              <button type="button" class="soft-button" onclick="renderFaqHelpCenter('appointments_reviews', document.getElementById('faqSearchInput').value)" style="font-size: 11.5px; padding: 4px 10px;">المواعيد</button>
+              <button type="button" class="soft-button" onclick="renderFaqHelpCenter('clinical_safety', document.getElementById('faqSearchInput').value)" style="font-size: 11.5px; padding: 4px 10px;">السلامة السريرية</button>
+            </div>
+            <div id="faqAccordionContainer">
+              <!-- Rendered via renderFaqHelpCenter() -->
+            </div>
+          </article>
+
+          <!-- Account Recovery Support & Contact Form -->
+          <article class="panel">
+            <div class="panel-head">
+              <h3>
+                <span>🛡️</span>
+                <span class="lang-ar">الدعم الفني واستعادة الحساب</span>
+                <span class="lang-en">Account Recovery &amp; Contact</span>
+              </h3>
+              <span class="pill ok">مكتب أمان الحسابات</span>
+            </div>
+
+            <!-- Tab Switcher for Recovery vs Contact -->
+            <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+              <button type="button" id="tabBtnRecovery" onclick="document.getElementById('recoverySectionCard').style.display='block'; document.getElementById('contactSectionCard').style.display='none'; this.style.borderColor='var(--teal)'; document.getElementById('tabBtnContact').style.borderColor='var(--line)';" class="soft-button" style="flex: 1; padding: 8px; border: 1.5px solid var(--teal); border-radius: 8px; font-weight: 700; font-size: 12.5px;">
+                🔑 استعادة الحساب / Account Recovery
+              </button>
+              <button type="button" id="tabBtnContact" onclick="document.getElementById('recoverySectionCard').style.display='none'; document.getElementById('contactSectionCard').style.display='block'; this.style.borderColor='var(--teal)'; document.getElementById('tabBtnRecovery').style.borderColor='var(--line)';" class="soft-button" style="flex: 1; padding: 8px; border: 1px solid var(--line); border-radius: 8px; font-weight: 700; font-size: 12.5px;">
+                ✉️ اتصل بالدعم / Contact Support
+              </button>
+            </div>
+
+            <!-- Account Recovery Card -->
+            <div id="recoverySectionCard" style="display: block;">
+              <form onsubmit="submitAccountRecoveryClient(event)">
+                <div class="form-group" style="margin-bottom: 10px;">
+                  <label for="accountRecoveryIdentifier" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;">البريد الإلكتروني أو الهاتف المسجل</label>
+                  <input type="text" id="accountRecoveryIdentifier" placeholder="name@example.com أو 05XXXXXXXX" required style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);">
+                </div>
+                <div class="form-group" style="margin-bottom: 10px;">
+                  <label for="accountRecoveryIssueType" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;">نوع المشكلة</label>
+                  <select id="accountRecoveryIssueType" style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);">
+                    <option value="lost_mfa">فقدان الهاتف / تعذر استقبال رمز التحقق (MFA / OTP)</option>
+                    <option value="locked_account">الحساب مقفل بسبب محاولات دخول خاطئة</option>
+                    <option value="lost_email">فقدان الوصول إلى البريد الإلكتروني المسجل</option>
+                    <option value="other">مشكلة أخرى في صلاحيات الحساب</option>
+                  </select>
+                </div>
+                <div class="form-group" style="margin-bottom: 10px;">
+                  <label for="accountRecoveryContact" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;">وسيلة تواصل بديلة (هاتف أو بريد مؤكد)</label>
+                  <input type="text" id="accountRecoveryContact" placeholder="05XXXXXXXX" style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);">
+                </div>
+                <div class="form-group" style="margin-bottom: 12px;">
+                  <label for="accountRecoveryExplanation" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;">توضيح إضافي لإثبات الملكية</label>
+                  <textarea id="accountRecoveryExplanation" rows="2" placeholder="اذكر أي تفاصيل تساعد في التحقق من هويتك بأمان..." style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);"></textarea>
+                </div>
+                <div id="accountRecoveryResultBox" style="display: none; background: rgba(9, 184, 182, 0.08); border: 1px solid var(--teal); border-radius: 8px; padding: 10px; margin-bottom: 12px; font-size: 12px;"></div>
+                <button type="submit" class="solid-button full" style="padding: 10px; font-size: 13px; font-weight: 700;">
+                  🔑 إرسال طلب استعادة الحساب
+                </button>
+              </form>
+            </div>
+
+            <!-- Contact Support Card -->
+            <div id="contactSectionCard" style="display: none;">
+              <form onsubmit="submitContactClient(event)">
+                <div class="form-group" style="margin-bottom: 10px;">
+                  <label for="contactFormName" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;">الاسم الكامل</label>
+                  <input type="text" id="contactFormName" placeholder="الاسم الكامل" required style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);">
+                </div>
+                <div class="form-group" style="margin-bottom: 10px;">
+                  <label for="contactFormEmail" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;">البريد الإلكتروني للرد</label>
+                  <input type="email" id="contactFormEmail" placeholder="name@example.com" required style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);">
+                </div>
+                <div class="form-group" style="margin-bottom: 10px;">
+                  <label for="contactFormSubject" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;">موضوع الاستفسار</label>
+                  <input type="text" id="contactFormSubject" placeholder="عنوان الاستفسار..." required style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);">
+                </div>
+                <div class="form-group" style="margin-bottom: 12px;">
+                  <label for="contactFormMessage" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;">نص الرسالة أو الاستفسار</label>
+                  <textarea id="contactFormMessage" rows="3" placeholder="اكتب استفسارك بالتفصيل..." required style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);"></textarea>
+                </div>
+                <button type="submit" class="solid-button full" style="padding: 10px; font-size: 13px; font-weight: 700;">
+                  ✉️ إرسال الاستفسار للدعم
+                </button>
+              </form>
+            </div>
+          </article>
+        </div>
       </section>
 
       <section id="screen-assistant" class="screen">
         <div class="assistant-layout">
           <article class="panel chat-panel">
-            <div class="panel-head"><h3>مساعد طبي إرشادي</h3><span class="pill pending">ليس تشخيصًا</span></div>
+            <div class="panel-head">
+              <h3>مساعد طبي إرشادي</h3>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="pill pending">ليس تشخيصًا</span>
+                <button type="button" id="clearAssistantChatBtn" class="outline-button" style="font-size: 11px; padding: 2px 10px; border-radius: 12px;" onclick="clearAssistantChatHistory()" title="مسح سجل المحادثة">🗑️ مسح السجل</button>
+              </div>
+            </div>
+            <div id="assistantRetentionNotice" style="font-size: 11.5px; color: var(--muted); padding: 6px 12px; margin-bottom: 10px; background: rgba(0,0,0,0.03); border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
+              <span>🕒 سياسة الاحتفاظ: تُحفظ المحادثة لمدة ٣٠ يوماً وفق قواعد حوكمة البيانات الطبية.</span>
+            </div>
             <div id="chatMessages" class="chat-messages">
-              <div class="bot">أقدر أشرح لك معنى الحالة أو أساعدك تجهز أسئلة للطبيب. في الطوارئ اطلب رعاية عاجلة فورًا.</div>
+              <div class="bot">أقدر أشرح لك معنى الحالة وتوضيح المصطلحات أو أساعدك تجهز أسئلة للطبيب. في الطوارئ اطلب رعاية عاجلة فورًا.</div>
             </div>
             <div id="chatQuickChips" style="display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap;"></div>
             <div class="chat-compose">
@@ -1395,7 +1538,10 @@
             <div class="access-matrix">
               <div><strong>لا تشخيص مستقل</strong><span>محظور تشخيص أي حالة جديدة؛ يوضح تشخيص الطبيب المعتمد فقط.</span></div>
               <div><strong>لا وصف ولا تعديل علاج</strong><span>محظور وصف أدوية أو اقتراح بدائل أو تعديل الجرعات.</span></div>
-              <div><strong>طوارئ فورية</strong><span>تصعيد إسعافي فوري عند ذكر أي أعراض حادة أو مهددة للحياة.</span></div>
+              <div><strong>طوارئ فورية</strong><span>تصعيد إسعافي فوري وإرشادات معتمدة عند ذكر أي أعراض حادة.</span></div>
+              <div><strong>ربط الشرح بالتقرير</strong><span>ربط كل حقيقة وتفسير بالمصدر الموثق في التقرير الطبي.</span></div>
+              <div><strong>حظر استكمال المفقود</strong><span>منع تخمين أو استنتاج أي معلومات أو تحاليل غير مدونة.</span></div>
+              <div><strong>سياسة الاحتفاظ</strong><span>حفظ المحادثة لمدة ٣٠ يوماً مع إمكانية مسح السجل في أي وقت.</span></div>
             </div>
           </article>
         </div>

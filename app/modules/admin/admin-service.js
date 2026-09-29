@@ -24,6 +24,9 @@
   function calculateKpiMetrics(cases = [], options = {}) {
     const timeRange = options.timeRange || "all";
     const priorityFilter = options.priority || "all";
+    const clinicFilter = (options.clinicId || options.clinic || "").trim().toLowerCase();
+    const startDate = options.startDate || options.from;
+    const endDate = options.endDate || options.to;
 
     // Filter out demo/test data
     const realCases = cases.filter(c => {
@@ -37,22 +40,48 @@
         !String(c.id || "").startsWith("mock_");
     });
 
-    // Apply Time Range filter
-    const now = Date.now();
-    let minTs = 0;
-    if (timeRange === "today") {
-      const d = new Date();
-      d.setHours(0, 0, 0, 0);
-      minTs = d.getTime();
-    } else if (timeRange === "7d") {
-      minTs = now - (7 * 24 * 60 * 60 * 1000);
-    } else if (timeRange === "30d") {
-      minTs = now - (30 * 24 * 60 * 60 * 1000);
+    // Apply Clinic filter
+    let clinicFiltered = realCases;
+    if (clinicFilter && clinicFilter !== "all") {
+      clinicFiltered = clinicFiltered.filter(c => {
+        const cId = String(c.clinicId || c.clinic || c.branchId || "").trim().toLowerCase();
+        return cId === clinicFilter;
+      });
     }
 
-    let filtered = realCases.filter(c => {
+    // Apply Time Range / Date Range filter
+    const now = Date.now();
+    let minTs = 0;
+    let maxTs = Infinity;
+
+    if (startDate) minTs = parseKpiTimestamp(startDate);
+    if (endDate) {
+      const parsedEnd = parseKpiTimestamp(endDate);
+      if (typeof endDate === "string" && endDate.length === 10) {
+        maxTs = parsedEnd + (24 * 60 * 60 * 1000 - 1);
+      } else {
+        maxTs = parsedEnd;
+      }
+    }
+
+    if (!startDate && !endDate) {
+      if (timeRange === "today") {
+        const d = new Date();
+        d.setHours(0, 0, 0, 0);
+        minTs = d.getTime();
+        maxTs = now;
+      } else if (timeRange === "7d") {
+        minTs = now - (7 * 24 * 60 * 60 * 1000);
+        maxTs = now;
+      } else if (timeRange === "30d") {
+        minTs = now - (30 * 24 * 60 * 60 * 1000);
+        maxTs = now;
+      }
+    }
+
+    let filtered = clinicFiltered.filter(c => {
       const ts = parseKpiTimestamp(c.submittedAt || c.createdAt || c.timestamp || c.updatedAt);
-      return minTs === 0 || ts >= minTs;
+      return (minTs === 0 || ts >= minTs) && (maxTs === Infinity || ts <= maxTs);
     });
 
     // Apply Priority filter
@@ -105,16 +134,17 @@
     });
 
     responseTimes.sort((a, b) => a - b);
+    const hasResponseData = responseTimes.length > 0;
 
-    const avgResponseTimeMinutes = responseTimes.length > 0
+    const avgResponseTimeMinutes = hasResponseData
       ? Number((responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length).toFixed(1))
       : 0;
 
-    const medianResponseTimeMinutes = responseTimes.length > 0
+    const medianResponseTimeMinutes = hasResponseData
       ? Number(responseTimes[Math.floor(responseTimes.length / 2)].toFixed(1))
       : 0;
 
-    const responseSlaComplianceRate = responseTimes.length > 0
+    const responseSlaComplianceRate = hasResponseData
       ? Math.round((responseTimes.filter(t => t <= 30).length / responseTimes.length) * 100)
       : 0;
 
@@ -132,18 +162,60 @@
     });
 
     turnaroundTimes.sort((a, b) => a - b);
+    const hasTurnaroundData = turnaroundTimes.length > 0;
 
-    const avgTurnaroundMinutes = turnaroundTimes.length > 0
+    const avgTurnaroundMinutes = hasTurnaroundData
       ? Number((turnaroundTimes.reduce((a, b) => a + b, 0) / turnaroundTimes.length).toFixed(1))
       : 0;
 
-    const medianTurnaroundMinutes = turnaroundTimes.length > 0
+    const medianTurnaroundMinutes = hasTurnaroundData
       ? Number(turnaroundTimes[Math.floor(turnaroundTimes.length / 2)].toFixed(1))
       : 0;
 
-    const turnaroundSlaComplianceRate = turnaroundTimes.length > 0
+    const turnaroundSlaComplianceRate = hasTurnaroundData
       ? Math.round((turnaroundTimes.filter(t => t <= 120).length / turnaroundTimes.length) * 100)
       : 0;
+
+    // 4. PATIENTS PER DAY FROM ACTUAL EVENTS
+    const distinctPatientIds = new Set();
+    filtered.forEach(c => {
+      const pid = c.patientId || c.patientUid || c.userId;
+      if (pid) distinctPatientIds.add(String(pid));
+    });
+
+    let daysInPeriod = 1;
+    if (minTs > 0 && maxTs < Infinity && maxTs > minTs) {
+      daysInPeriod = Math.max(1, Math.ceil((maxTs - minTs) / (24 * 60 * 60 * 1000)));
+    } else if (timeRange === "7d") {
+      daysInPeriod = 7;
+    } else if (timeRange === "30d") {
+      daysInPeriod = 30;
+    } else if (timeRange === "all" && filtered.length > 1) {
+      const tsList = filtered.map(c => parseKpiTimestamp(c.submittedAt || c.createdAt || c.timestamp)).filter(t => t > 0);
+      if (tsList.length > 1) {
+        const minT = Math.min(...tsList);
+        const maxT = Math.max(...tsList);
+        daysInPeriod = Math.max(1, Math.ceil((maxT - minT) / (24 * 60 * 60 * 1000)));
+      }
+    }
+
+    const hasPatientsData = distinctPatientIds.size > 0;
+    const patientsPerDayValue = hasPatientsData
+      ? Number((distinctPatientIds.size / daysInPeriod).toFixed(2))
+      : null;
+
+    // 5. WORKLOAD FROM ACTUAL ACTIVE EVENTS
+    const activeCases = filtered.filter(c => ["pending", "submitted", "triaged", "assigned", "under_review"].includes(c.status));
+    const doctorWorkloadMap = new Map();
+    activeCases.forEach(c => {
+      const docName = c.approvingDoctorName || c.assignedDoctorName || c.doctorName || "Unassigned";
+      doctorWorkloadMap.set(docName, (doctorWorkloadMap.get(docName) || 0) + 1);
+    });
+    const activeDoctorCount = Array.from(doctorWorkloadMap.keys()).filter(k => k !== "Unassigned").length;
+    const hasWorkloadData = activeCases.length > 0 && activeDoctorCount > 0;
+    const avgWorkloadPerDoctor = hasWorkloadData
+      ? Number((activeCases.length / activeDoctorCount).toFixed(1))
+      : null;
 
     return {
       totalCases,
@@ -158,13 +230,141 @@
       responseSlaComplianceRate,
       avgTurnaroundMinutes,
       medianTurnaroundMinutes,
-      turnaroundSlaComplianceRate
+      turnaroundSlaComplianceRate,
+
+      // Enhanced event-based metrics with availability indicators
+      responseTime: {
+        avgMinutes: hasResponseData ? avgResponseTimeMinutes : null,
+        medianMinutes: hasResponseData ? medianResponseTimeMinutes : null,
+        display: hasResponseData ? `${avgResponseTimeMinutes} min` : "Unavailable",
+        displayAr: hasResponseData ? `${avgResponseTimeMinutes} دقيقة` : "غير متاح",
+        isAvailable: hasResponseData
+      },
+      approvalTime: {
+        avgMinutes: hasTurnaroundData ? avgTurnaroundMinutes : null,
+        medianMinutes: hasTurnaroundData ? medianTurnaroundMinutes : null,
+        display: hasTurnaroundData ? `${avgTurnaroundMinutes} min` : "Unavailable",
+        displayAr: hasTurnaroundData ? `${avgTurnaroundMinutes} دقيقة` : "غير متاح",
+        isAvailable: hasTurnaroundData
+      },
+      patientsPerDay: {
+        value: patientsPerDayValue,
+        distinctPatients: distinctPatientIds.size,
+        daysCount: daysInPeriod,
+        display: hasPatientsData ? `${patientsPerDayValue} patients/day` : "Unavailable",
+        displayAr: hasPatientsData ? `${patientsPerDayValue} مريض/يوم` : "غير متاح",
+        isAvailable: hasPatientsData
+      },
+      workload: {
+        avgWorkloadPerDoctor,
+        totalActiveCases: activeCases.length,
+        activeDoctorCount,
+        display: hasWorkloadData ? `${avgWorkloadPerDoctor} cases/doc` : "Unavailable",
+        displayAr: hasWorkloadData ? `${avgWorkloadPerDoctor} حالة/طبيب` : "غير متاح",
+        isAvailable: hasWorkloadData
+      },
+      display: {
+        responseTime: hasResponseData ? `${avgResponseTimeMinutes} min` : "Unavailable",
+        approvalTime: hasTurnaroundData ? `${avgTurnaroundMinutes} min` : "Unavailable",
+        patientsPerDay: hasPatientsData ? `${patientsPerDayValue} patients/day` : "Unavailable",
+        workload: hasWorkloadData ? `${avgWorkloadPerDoctor} cases/doc` : "Unavailable",
+        completionRate: totalCases > 0 ? `${completionRate}%` : "Unavailable"
+      },
+      displayAr: {
+        responseTime: hasResponseData ? `${avgResponseTimeMinutes} دقيقة` : "غير متاح",
+        approvalTime: hasTurnaroundData ? `${avgTurnaroundMinutes} دقيقة` : "غير متاح",
+        patientsPerDay: hasPatientsData ? `${patientsPerDayValue} مريض/يوم` : "غير متاح",
+        workload: hasWorkloadData ? `${avgWorkloadPerDoctor} حالة/طبيب` : "غير متاح",
+        completionRate: totalCases > 0 ? `${completionRate}%` : "غير متاح"
+      }
+    };
+  }
+
+  function calculateAssessmentJourneyMetrics(events = [], options = {}) {
+    const starts = events.filter(e => e.eventType === 'assessment_start').length;
+    const completes = events.filter(e => e.eventType === 'assessment_complete').length;
+    const abandons = events.filter(e => e.eventType === 'assessment_abandon').length;
+    const persistedCases = options.persistedCasesCount !== undefined ? options.persistedCasesCount : completes;
+
+    const completionRate = starts > 0 ? Number(((completes / starts) * 100).toFixed(1)) : null;
+    const abandonmentRate = starts > 0 ? Number(((abandons / starts) * 100).toFixed(1)) : null;
+
+    return {
+      starts,
+      completes,
+      abandons,
+      persistedCasesCount: persistedCases,
+      completionRate,
+      abandonmentRate,
+      completionRateDisplay: completionRate !== null ? `${completionRate}%` : 'Unavailable',
+      completionRateDisplayAr: completionRate !== null ? `${completionRate}%` : 'غير متاح',
+      distinctionNote: 'Cases count reflects database persistence, while assessment-journey completion rate measures patient progression from start to finish.'
+    };
+  }
+
+  const EVENT_TYPES = Object.freeze({
+    SIGNUP: 'signup',
+    ONBOARDING: 'onboarding',
+    ASSESSMENT_START: 'assessment_start',
+    ASSESSMENT_COMPLETE: 'assessment_complete',
+    ASSESSMENT_ABANDON: 'assessment_abandon',
+    DOCTOR_REVIEW: 'doctor_review',
+    RESULT_OPENED: 'result_opened',
+    FOLLOW_UP_BOOKED: 'follow_up_booked'
+  });
+
+  const SUPPORT_TICKET_TYPES = Object.freeze({
+    EXPERIENCE_RATING: 'experience_rating',
+    BUG_REPORT: 'bug_report',
+    INACCURATE_INFORMATION: 'inaccurate_information',
+    FEATURE_REQUEST: 'feature_request',
+    ACCOUNT_RECOVERY: 'account_recovery',
+    CONTACT_FORM: 'contact_form'
+  });
+
+  function filterTickets(tickets = [], filters = {}) {
+    if (!Array.isArray(tickets)) return [];
+    return tickets.filter(t => {
+      if (filters.type && filters.type !== 'all' && t.type !== filters.type) return false;
+      if (filters.status && filters.status !== 'all' && t.status !== filters.status) return false;
+      if (filters.priority && filters.priority !== 'all' && t.priority !== filters.priority) return false;
+      if (filters.search && filters.search.trim()) {
+        const q = filters.search.trim().toLowerCase();
+        const content = `${t.ticketId || ''} ${t.subject || ''} ${t.comment || ''} ${t.userName || ''}`.toLowerCase();
+        if (!content.includes(q)) return false;
+      }
+      return true;
+    });
+  }
+
+  function calculateTicketMetrics(tickets = []) {
+    const total = tickets.length;
+    const open = tickets.filter(t => t.status === 'open').length;
+    const inProgress = tickets.filter(t => t.status === 'in_progress').length;
+    const escalated = tickets.filter(t => t.status === 'escalated').length;
+    const resolved = tickets.filter(t => t.status === 'resolved' || t.status === 'closed').length;
+    const resolutionRate = total > 0 ? Number(((resolved / total) * 100).toFixed(1)) : null;
+
+    return {
+      total,
+      open,
+      inProgress,
+      escalated,
+      resolved,
+      resolutionRate,
+      resolutionRateDisplay: resolutionRate !== null ? `${resolutionRate}%` : 'Unavailable',
+      resolutionRateDisplayAr: resolutionRate !== null ? `${resolutionRate}%` : 'غير متاح'
     };
   }
 
   const AdminService = {
     parseKpiTimestamp,
-    calculateKpiMetrics
+    calculateKpiMetrics,
+    calculateAssessmentJourneyMetrics,
+    EVENT_TYPES,
+    SUPPORT_TICKET_TYPES,
+    filterTickets,
+    calculateTicketMetrics
   };
 
   global.HealthVibes = global.HealthVibes || {};
