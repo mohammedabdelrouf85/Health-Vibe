@@ -55,6 +55,7 @@ const safetyRegister = require('./safety-register-service');
 const analyticsService = require('./analytics-service');
 const feedbackSupportService = require('./feedback-support-service');
 const assessmentComparisonService = require('./assessment-comparison-service');
+const pilotReadinessService = require('./pilot-readiness-service');
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -3244,12 +3245,8 @@ app.get('/api/kpi/metrics', requireAuth, async (req, res) => {
 
     const scope = await resolveRequesterClinic(req);
 
-    // Clinic filtering & authorization
+    // Clinic filtering & authorization: Clinic Admin is always scoped strictly to their assigned clinic
     const requestedClinic = (req.query.clinicId || req.query.clinic || '').trim();
-    if (userRole === ROLES.CLINIC_ADMIN && requestedClinic && scope.clinicId && requestedClinic !== scope.clinicId) {
-      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Clinic Admin can only query their assigned clinic.' });
-    }
-
     const effectiveClinic = userRole === ROLES.CLINIC_ADMIN ? scope.clinicId : requestedClinic;
 
     // Date range filtering
@@ -8789,5 +8786,27 @@ app.incidentService = incidentService;
 app.analyticsService = analyticsService;
 app.feedbackSupportService = feedbackSupportService;
 app.assessmentComparisonService = assessmentComparisonService;
+app.pilotReadinessService = pilotReadinessService;
+
+// =============================================================================
+// 🏥 CLINICAL PILOT GOVERNANCE & READINESS ROUTES
+// =============================================================================
+app.get('/api/clinics/pilot/readiness', (req, res) => {
+  try {
+    const report = pilotReadinessService.verifyPilotPrerequisites();
+    res.json(report);
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+app.post('/api/clinics/pilot/circuit-breaker/evaluate', requireAuth, requireDoctor, (req, res) => {
+  try {
+    const evaluation = pilotReadinessService.evaluateCircuitBreakerTriggers(req.body || {});
+    res.json(evaluation);
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
 
 module.exports = app;
