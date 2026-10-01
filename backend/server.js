@@ -56,6 +56,7 @@ const analyticsService = require('./analytics-service');
 const feedbackSupportService = require('./feedback-support-service');
 const assessmentComparisonService = require('./assessment-comparison-service');
 const pilotReadinessService = require('./pilot-readiness-service');
+const billingService = require('./billing-service');
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -8790,6 +8791,7 @@ app.analyticsService = analyticsService;
 app.feedbackSupportService = feedbackSupportService;
 app.assessmentComparisonService = assessmentComparisonService;
 app.pilotReadinessService = pilotReadinessService;
+app.billingService = billingService;
 
 // =============================================================================
 // 🏥 CLINICAL PILOT GOVERNANCE & READINESS ROUTES
@@ -8807,6 +8809,293 @@ app.post('/api/clinics/pilot/circuit-breaker/evaluate', requireAuth, requireDoct
   try {
     const evaluation = pilotReadinessService.evaluateCircuitBreakerTriggers(req.body || {});
     res.json(evaluation);
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+// =============================================================================
+// 💳 SUBSCRIPTION, BILLING & REVENUE LEDGER ROUTES
+// =============================================================================
+
+/**
+ * GET /api/billing/plans
+ * Comparison of Free Patient, Doctor Starter, Clinic Basic/Pro, Enterprise plans
+ * Includes limits, features, onboarding fees, operating cost model, and provisional pricing notice.
+ */
+app.get('/api/billing/plans', (req, res) => {
+  try {
+    res.json({
+      success: true,
+      plans: billingService.PLANS,
+      operatingCostModel: billingService.OPERATING_COST_MODEL,
+      initialSellablePlan: billingService.OPERATING_COST_MODEL.commercialRecommendation.initialSellablePlan,
+      pricingDecisionPending: billingService.PRICING_DECISION_PENDING,
+      pricingDisclaimer: billingService.PRICING_DISCLAIMER
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * GET /api/billing/subscription
+ * Get clinic subscription status, current entitlements, and usage vs limits
+ */
+app.get('/api/billing/subscription', requireAuth, async (req, res) => {
+  try {
+    const scope = await resolveRequesterClinic(req);
+    const targetClinicId = req.query.clinicId && scope.role === ROLES.SUPER_ADMIN
+      ? req.query.clinicId
+      : (scope.clinicId || 'default_clinic');
+
+    const subscription = await billingService.getClinicSubscription(db, targetClinicId);
+    const plan = billingService.PLANS[subscription.planId] || billingService.PLANS.CLINIC_BASIC;
+
+    // Check entitlements for standard clinical actions
+    const intakeEntitlement = billingService.checkSubscriptionEntitlement(subscription, 'CREATE_ASSESSMENT');
+    const approvalEntitlement = billingService.checkSubscriptionEntitlement(subscription, 'APPROVE_ASSESSMENT');
+    const archiveEntitlement = billingService.checkSubscriptionEntitlement(subscription, 'READ_MEDICAL_RECORDS');
+
+    res.json({
+      success: true,
+      clinicId: targetClinicId,
+      subscription,
+      plan,
+      entitlements: {
+        canIntakeCases: intakeEntitlement.allowed,
+        canCertifyCases: approvalEntitlement.allowed,
+        canAccessMedicalArchive: archiveEntitlement.allowed,
+        intakeStatus: intakeEntitlement,
+        approvalStatus: approvalEntitlement
+      },
+      pricingDisclaimer: billingService.PRICING_DISCLAIMER
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/billing/subscription/subscribe
+ * Subscribes or upgrades a clinic to a plan (e.g. Doctor Starter, Clinic Basic)
+ */
+app.post('/api/billing/subscription/subscribe', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const scope = await resolveRequesterClinic(req);
+    const targetClinicId = req.body.clinicId && scope.role === ROLES.SUPER_ADMIN
+      ? req.body.clinicId
+      : (scope.clinicId || req.body.clinicId || 'default_clinic');
+
+    const { planId, billingCycle = 'monthly', paymentMethod, notes } = req.body || {};
+
+    if (!planId || !billingService.PLANS[planId]) {
+      return res.status(400).json({
+        error: 'INVALID_PLAN',
+        message: `Plan '${planId}' does not exist. Available: ${Object.keys(billingService.PLANS).join(', ')}`
+      });
+    }
+
+    const updatedSub = await billingService.updateSubscription(db, targetClinicId, {
+      planId,
+      billingCycle,
+      paymentMethod,
+      notes,
+      actorUid: req.user.uid
+    });
+
+    if (db) {
+      auditService.recordAuditEvent(db, {
+        type: 'SUBSCRIPTION_PLAN_CHANGED',
+        req,
+        clinicId: targetClinicId,
+        details: { planId, billingCycle, paymentMethod }
+      }).catch(() => {});
+    }
+
+    res.json({
+      success: true,
+      message: `Subscription successfully updated to ${billingService.PLANS[planId].name}.`,
+      subscription: updatedSub,
+      pricingDisclaimer: billingService.PRICING_DISCLAIMER
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/billing/subscription/payment-status
+ * Updates subscription payment state (active, past_due, canceled)
+ * If recordPayment is provided, automatically writes an immutable ledger entry.
+ */
+app.post('/api/billing/subscription/payment-status', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const scope = await resolveRequesterClinic(req);
+    const targetClinicId = req.body.clinicId && scope.role === ROLES.SUPER_ADMIN
+      ? req.body.clinicId
+      : (scope.clinicId || req.body.clinicId || 'default_clinic');
+
+    const { status, reason, recordPayment } = req.body || {};
+
+    if (!status || !Object.values(billingService.SUBSCRIPTION_STATUS).includes(status)) {
+      return res.status(400).json({
+        error: 'INVALID_STATUS',
+        message: `Status must be one of: ${Object.values(billingService.SUBSCRIPTION_STATUS).join(', ')}`
+      });
+    }
+
+    const updatedSub = await billingService.setSubscriptionPaymentStatus(db, targetClinicId, {
+      status,
+      reason,
+      actorUid: req.user.uid
+    });
+
+    let ledgerRecord = null;
+    if (recordPayment && typeof recordPayment.grossAmount === 'number') {
+      ledgerRecord = await billingService.recordLedgerEntry(db, {
+        entryType: billingService.LEDGER_ENTRY_TYPES.PAYMENT_RECEIVED,
+        subscriptionId: updatedSub.subscriptionId,
+        clinicId: targetClinicId,
+        planId: updatedSub.planId,
+        grossAmount: recordPayment.grossAmount,
+        taxAmount: recordPayment.taxAmount || 0,
+        currency: recordPayment.currency || 'EGP',
+        paymentMethod: recordPayment.paymentMethod || updatedSub.paymentMethod,
+        gatewayRef: recordPayment.gatewayRef || null,
+        notes: reason || 'Subscription renewal payment',
+        recordedBy: req.user.uid
+      });
+    }
+
+    if (db) {
+      auditService.recordAuditEvent(db, {
+        type: 'SUBSCRIPTION_PAYMENT_STATUS_UPDATED',
+        req,
+        clinicId: targetClinicId,
+        details: { newStatus: status, reason, ledgerId: ledgerRecord?.id || null }
+      }).catch(() => {});
+    }
+
+    res.json({
+      success: true,
+      subscription: updatedSub,
+      ledgerRecord
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * GET /api/billing/ledger
+ * Retrieve append-only revenue ledger entries
+ * Scoped strictly to requester's clinic, or platform-wide for Super Admin.
+ */
+app.get('/api/billing/ledger', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const scope = await resolveRequesterClinic(req);
+    const targetClinicId = scope.role === ROLES.SUPER_ADMIN
+      ? (req.query.clinicId || null)
+      : scope.clinicId;
+
+    const entries = await billingService.getLedgerEntries(db, {
+      clinicId: targetClinicId,
+      entryType: req.query.entryType || null,
+      limit: parseInt(req.query.limit, 10) || 100
+    });
+
+    res.json({
+      success: true,
+      clinicId: targetClinicId || 'all_clinics',
+      entriesCount: entries.length,
+      entries
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/billing/ledger/record
+ * Authoritatively record an immutable financial transaction in the revenue ledger
+ */
+app.post('/api/billing/ledger/record', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const scope = await resolveRequesterClinic(req);
+    const targetClinicId = req.body.clinicId && scope.role === ROLES.SUPER_ADMIN
+      ? req.body.clinicId
+      : (scope.clinicId || req.body.clinicId || 'default_clinic');
+
+    const {
+      entryType,
+      subscriptionId,
+      planId,
+      grossAmount,
+      taxAmount = 0,
+      currency = 'EGP',
+      paymentMethod,
+      gatewayRef,
+      notes
+    } = req.body || {};
+
+    if (!entryType || typeof grossAmount !== 'number') {
+      return res.status(400).json({
+        error: 'INVALID_PAYLOAD',
+        message: 'entryType and numeric grossAmount are required.'
+      });
+    }
+
+    const entry = await billingService.recordLedgerEntry(db, {
+      entryType,
+      subscriptionId,
+      clinicId: targetClinicId,
+      planId,
+      grossAmount,
+      taxAmount,
+      currency,
+      paymentMethod,
+      gatewayRef,
+      notes,
+      recordedBy: req.user.uid
+    });
+
+    if (db) {
+      auditService.recordAuditEvent(db, {
+        type: 'REVENUE_LEDGER_ENTRY_RECORDED',
+        req,
+        clinicId: targetClinicId,
+        details: { ledgerId: entry.id, entryType, grossAmount, currency }
+      }).catch(() => {});
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'Ledger entry recorded successfully and marked immutable.',
+      entry
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * GET /api/billing/summary
+ * Reconciled financial revenue summary (gross, refunds, net)
+ */
+app.get('/api/billing/summary', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const scope = await resolveRequesterClinic(req);
+    const targetClinicId = scope.role === ROLES.SUPER_ADMIN
+      ? (req.query.clinicId || null)
+      : scope.clinicId;
+
+    const summary = await billingService.getRevenueSummary(db, { clinicId: targetClinicId });
+
+    res.json({
+      success: true,
+      summary
+    });
   } catch (err) {
     res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
   }
