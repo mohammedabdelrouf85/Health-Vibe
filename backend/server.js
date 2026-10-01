@@ -7530,9 +7530,26 @@ app.post('/api/auth/verify-email-otp', requireAuth, async (req, res) => {
  */
 
 /**
+ * -------------------------------------------------------------
+ * AUTOMATED WHATSAPP BOT & SECURE OTP ENDPOINTS
+ * -------------------------------------------------------------
+ */
+
+/**
+ * GET /api/messaging/provider-config
+ * Returns active WhatsApp provider metadata and configuration (secrets masked).
+ */
+app.get('/api/messaging/provider-config', requireAuth, (req, res) => {
+  res.json({
+    success: true,
+    config: whatsappBot.getProviderConfig()
+  });
+});
+
+/**
  * POST /api/bot/request-code
  * Triggers automated WhatsApp bot to generate and send a secret OTP code.
- * Note: The generated code is NEVER returned to the client to guarantee zero leakage.
+ * Strict Security Guard: The generated code is NEVER returned in the API response.
  */
 app.post('/api/bot/request-code', requireAuth, async (req, res) => {
   const userId = req.user.uid;
@@ -7550,24 +7567,36 @@ app.post('/api/bot/request-code', requireAuth, async (req, res) => {
     const result = await whatsappBot.requestVerificationCode({
       userId,
       userEmail,
-      phoneNumber
+      phoneNumber,
+      ip: getClientIp(req)
     });
 
     res.json({
       success: true,
       expiresInSeconds: result.expiresInSeconds || 300,
+      retryAfterSeconds: result.retryAfterSeconds || 60,
+      provider: result.provider,
+      maskedPhone: result.maskedPhone,
       message: result.message || "تم إرسال كود التفعيل السري تلقائياً عبر بوت الواتساب."
     });
   } catch(err) {
-    console.error("[WHATSAPP BOT REQUEST ERROR]:", err);
-    res.status(err.statusCode || 500).json({ error: err.code || 'BOT_DISPATCH_FAILED', message: err.message, retryAfterSeconds: err.retryAfterSeconds || null });
+    console.error("[WHATSAPP BOT REQUEST ERROR]:", err.message);
+    res.status(err.statusCode || 500).json({
+      error: err.code || 'BOT_DISPATCH_FAILED',
+      message: err.message,
+      retryAfterSeconds: err.retryAfterSeconds || null
+    });
   }
 });
 
 /**
  * POST /api/bot/verify-code
  * Verifies code submitted by user against WhatsApp bot active registry.
- * Upon match, elevates user to verified across Firebase Auth & Firestore.
+ * Enforces TTL expiration, attempt limits, code reuse guards, and lockout.
+ *
+ * CRITICAL SECURITY GOVERNANCE:
+ * Phone verification strictly verifies phone number possession.
+ * It DOES NOT automatically verify email or doctor licensing/identity!
  */
 app.post('/api/bot/verify-code', requireAuth, async (req, res) => {
   const userId = req.user.uid;
@@ -7595,20 +7624,34 @@ app.post('/api/bot/verify-code', requireAuth, async (req, res) => {
     });
   }
 
-  const isValid = whatsappBot.verifyCode({
+  const verifyResult = whatsappBot.verifyCodeDetailed({
     userId,
     userEmail,
     code: String(code).trim(),
     phoneNumber
   });
 
-  if (!isValid) {
+  if (!verifyResult.isValid) {
     const status = recordOtpFailure(lockoutKey);
     const remaining = Math.max(5 - status.attempts, 0);
+
+    if (verifyResult.reason === 'CODE_EXPIRED') {
+      return res.status(400).json({ error: 'CODE_EXPIRED', message: verifyResult.message });
+    }
+    if (verifyResult.reason === 'CODE_ALREADY_USED') {
+      return res.status(400).json({ error: 'CODE_ALREADY_USED', message: verifyResult.message });
+    }
+    if (verifyResult.reason === 'TOO_MANY_FAILED_ATTEMPTS' || status.locked) {
+      return res.status(429).json({
+        error: 'TOO_MANY_FAILED_ATTEMPTS',
+        message: 'تم استنفاد محاولات إدخال الكود. تم قفل التحقق مؤقتاً لمدة 15 دقيقة.'
+      });
+    }
+
     return res.status(400).json({
       error: 'CODE_MISMATCH',
       message: remaining > 0
-        ? `كود التحقق غير صحيح أو انتهت صلاحيته. تبقى لك ${remaining} محاولات.`
+        ? `كود التحقق غير صحيح. تبقى لك ${remaining} محاولات.`
         : 'تم استنفاد محاولات إدخال الكود. تم قفل التحقق مؤقتاً لمدة 15 دقيقة.'
     });
   }
@@ -7616,41 +7659,110 @@ app.post('/api/bot/verify-code', requireAuth, async (req, res) => {
   clearOtpLockout(lockoutKey);
 
   try {
-    // 1. Mark verified in Firebase Auth
-    if (userId) {
-      await admin.auth().updateUser(userId, {
-        emailVerified: true
-      }).catch(err => console.warn("[BOT VERIFY AUTH WARNING]:", err.message));
-    }
-
-    // 2. Mark verified in Firestore user document
+    // 1. Mark phoneVerified in Firestore user document (STRICTLY NO emailVerified alteration!)
     if (db && userId) {
       await db.collection('users').doc(userId).set({
-        emailVerified: true,
         phoneVerified: true,
-        phoneNumber: phoneNumber || null,
-        verificationMethod: 'whatsapp_bot',
-        verifiedAt: admin.firestore.FieldValue.serverTimestamp()
+        phoneNumber: verifyResult.phoneNumber,
+        phoneVerifiedAt: admin.firestore.FieldValue.serverTimestamp(),
+        phoneVerificationMethod: 'whatsapp_bot'
       }, { merge: true });
 
-      // 3. Append audit log
+      // 2. Append audit log with masked phone number
       await db.collection('audit_events').add({
-        type: 'USER_VERIFIED_VIA_WHATSAPP_BOT',
+        type: 'USER_PHONE_VERIFIED_VIA_WHATSAPP_BOT',
         userId: userId,
         userEmail: userEmail || null,
+        phoneNumberMasked: whatsappBot.maskPhoneNumber(verifyResult.phoneNumber),
         timestamp: admin.firestore.FieldValue.serverTimestamp()
       }).catch(() => {});
     }
 
     res.json({
       success: true,
-      verified: true,
-      message: 'تم تأكيد الكود وتفعيل الحساب بنجاح عبر بوت الواتساب!'
+      phoneVerified: true,
+      emailVerified: Boolean(req.user.email_verified || req.user.emailVerified),
+      message: 'تم تأكيد رقم الهاتف بنجاح عبر بوت الواتساب!'
     });
   } catch(err) {
     console.error("[BOT VERIFY ERROR]:", err);
     res.status(500).json({ error: 'VERIFICATION_UPDATE_FAILED', message: err.message });
   }
+});
+
+/**
+ * POST /api/messaging/consent
+ * Record or update user opt-in messaging consent.
+ */
+app.post('/api/messaging/consent', requireAuth, async (req, res) => {
+  try {
+    const { consentGiven, phoneNumber, categories, channels } = req.body || {};
+    const consent = whatsappBot.saveMessagingConsent({
+      userId: req.user.uid,
+      phoneNumber: phoneNumber || req.user.phoneNumber,
+      consentGiven: Boolean(consentGiven),
+      categories,
+      channels,
+      ip: getClientIp(req),
+      userAgent: req.headers['user-agent']
+    });
+
+    if (db) {
+      await db.collection('messaging_consents').doc(req.user.uid).set(consent, { merge: true }).catch(() => {});
+    }
+
+    res.json({ success: true, consent });
+  } catch (err) {
+    res.status(400).json({ error: 'CONSENT_RECORD_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/messaging/preferences
+ * Returns user messaging preferences and consent status.
+ */
+app.get('/api/messaging/preferences', requireAuth, (req, res) => {
+  const prefs = whatsappBot.getMessagingPreferences(req.user.uid, req.query.phoneNumber);
+  res.json({ success: true, preferences: prefs });
+});
+
+/**
+ * PATCH /api/messaging/preferences
+ * Updates user notification preferences and channel toggles.
+ */
+app.patch('/api/messaging/preferences', requireAuth, async (req, res) => {
+  try {
+    const { channels, categories } = req.body || {};
+    const current = whatsappBot.getMessagingPreferences(req.user.uid);
+    const updated = whatsappBot.saveMessagingConsent({
+      userId: req.user.uid,
+      phoneNumber: current.phoneNumberMasked,
+      consentGiven: current.consentGiven,
+      channels: { ...current.channels, ...channels },
+      categories: { ...current.categories, ...categories },
+      ip: getClientIp(req),
+      userAgent: req.headers['user-agent']
+    });
+
+    if (db) {
+      await db.collection('messaging_consents').doc(req.user.uid).set(updated, { merge: true }).catch(() => {});
+    }
+
+    res.json({ success: true, preferences: updated });
+  } catch (err) {
+    res.status(400).json({ error: 'PREFERENCES_UPDATE_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/messaging/delivery-records
+ * Returns delivery records with masked recipients and status tracking.
+ */
+app.get('/api/messaging/delivery-records', requireAuth, (req, res) => {
+  const isStaff = [ROLES.DOCTOR, ROLES.CLINIC_ADMIN, ROLES.SUPER_ADMIN].includes(req.user.role);
+  const userId = isStaff && req.query.all === 'true' ? null : req.user.uid;
+  const records = whatsappBot.getDeliveryRecords({ userId, limit: Number(req.query.limit) || 50 });
+  res.json({ success: true, count: records.length, records });
 });
 
 /**
@@ -7661,6 +7773,7 @@ app.get('/api/bot/status', (req, res) => {
   res.json({
     status: 'online',
     botName: whatsappBot.botName,
+    activeProvider: whatsappBot.getActiveProvider(),
     ready: true,
     timestamp: new Date().toISOString()
   });
