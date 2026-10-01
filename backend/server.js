@@ -57,6 +57,7 @@ const feedbackSupportService = require('./feedback-support-service');
 const assessmentComparisonService = require('./assessment-comparison-service');
 const pilotReadinessService = require('./pilot-readiness-service');
 const billingService = require('./billing-service');
+const expansionAnalyticsService = require('./expansion-analytics-service');
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -8792,6 +8793,7 @@ app.feedbackSupportService = feedbackSupportService;
 app.assessmentComparisonService = assessmentComparisonService;
 app.pilotReadinessService = pilotReadinessService;
 app.billingService = billingService;
+app.expansionAnalyticsService = expansionAnalyticsService;
 
 // =============================================================================
 // 🏥 CLINICAL PILOT GOVERNANCE & READINESS ROUTES
@@ -9095,6 +9097,90 @@ app.get('/api/billing/summary', requireAuth, requireAdmin, async (req, res) => {
     res.json({
       success: true,
       summary
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+// =============================================================================
+// 🚀 GRADUAL EXPANSION, RETENTION & PROGRESSION CRITERIA ROUTES
+// =============================================================================
+
+/**
+ * GET /api/expansion/stages
+ * Returns the multi-stage expansion roadmap, progression criteria gates, and current status.
+ */
+app.get('/api/expansion/stages', (req, res) => {
+  try {
+    const progressionReport = expansionAnalyticsService.evaluateStageProgression();
+    res.json({
+      success: true,
+      stages: expansionAnalyticsService.EXPANSION_STAGES,
+      progressionGates: expansionAnalyticsService.STAGE_PROGRESSION_GATES,
+      currentProgressionEvaluation: progressionReport
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * GET /api/expansion/metrics
+ * Returns verified active clinics, cohort retention, ARPC, and feature adoption.
+ * GUARANTEE: Never counts registration requests, demo submissions, or leads as active usage.
+ */
+app.get('/api/expansion/metrics', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    // Collect registered clinics from memory subscriptions or Firestore
+    const subscriptions = Array.from(billingService._memorySubscriptions.values());
+    const ledger = Array.from(billingService._memoryRevenueLedger);
+
+    const retention = expansionAnalyticsService.calculateClinicRetention(subscriptions);
+    const arpc = expansionAnalyticsService.calculateRevenuePerClinic(subscriptions, ledger);
+    const adoption = expansionAnalyticsService.calculateFeatureAdoption(subscriptions);
+
+    res.json({
+      success: true,
+      activeUsageGuaranteed: true,
+      note: 'Registration requests and demo submissions are strictly isolated from verified active usage.',
+      retention,
+      revenuePerClinic: arpc,
+      featureAdoption: adoption
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * GET /api/expansion/case-study
+ * Returns the sanitized pilot clinical case study and de-identified aggregate metrics.
+ * 100% de-identified; zero Patient Health Information (PHI).
+ */
+app.get('/api/expansion/case-study', (req, res) => {
+  try {
+    res.json({
+      success: true,
+      caseStudy: expansionAnalyticsService.PILOT_CASE_STUDY,
+      deidentified: true,
+      phiExposed: false
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/expansion/evaluate-gate
+ * Evaluates whether telemetry satisfies stage progression criteria.
+ */
+app.post('/api/expansion/evaluate-gate', requireAuth, requireAdmin, (req, res) => {
+  try {
+    const evaluation = expansionAnalyticsService.evaluateStageProgression(req.body || {});
+    res.json({
+      success: true,
+      evaluation
     });
   } catch (err) {
     res.status(500).json({ error: 'SERVER_ERROR', message: err.message });

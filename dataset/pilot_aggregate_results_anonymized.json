@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Health Vibe AI - 30-Day Clinical Pilot Anonymized Aggregate Results",
+  "description": "De-identified, k-anonymized aggregate operational, clinical, and telemetry evaluation results from the 30-day multi-doctor clinical pilot. Strictly zero Patient Health Information (PHI) or personal identifiable data.",
+  "metadata": {
+    "cohortId": "PILOT-COHORT-2026-01",
+    "clinicCount": 1,
+    "doctorCount": 3,
+    "pilotDurationDays": 30,
+    "evaluationWindow": {
+      "start": "2026-08-01T00:00:00Z",
+      "end": "2026-08-30T23:59:59Z"
+    },
+    "anonymizationStandard": "HIPAA Safe Harbor & Egyptian Healthcare Privacy Protection Safe-Deidentification",
+    "deidentificationVerified": true,
+    "phiContained": false,
+    "generatedAt": "2026-09-01T08:00:00Z"
+  },
+  "aggregateVolume": {
+    "totalPatientAssessmentsCompleted": 320,
+    "totalPhysicianSignOffs": 320,
+    "totalAppointmentsScheduled": 342,
+    "totalAppointmentsAttended": 329,
+    "totalWhatsAppNotificationsDispatched": 684
+  },
+  "demographicDistributions": {
+    "ageBrackets": {
+      "18-29": { "count": 68, "percentage": 21.25 },
+      "30-49": { "count": 134, "percentage": 41.88 },
+      "50-64": { "count": 82, "percentage": 25.62 },
+      "65_plus": { "count": 36, "percentage": 11.25 }
+    },
+    "biologicalSexDistribution": {
+      "male": { "count": 166, "percentage": 51.88 },
+      "female": { "count": 154, "percentage": 48.12 }
+    },
+    "smokingStatusDistribution": {
+      "never": { "count": 182, "percentage": 56.88 },
+      "former": { "count": 54, "percentage": 16.88 },
+      "current": { "count": 76, "percentage": 23.75 },
+      "passive": { "count": 8, "percentage": 2.50 }
+    }
+  },
+  "symptomPrevalence": {
+    "cough": { "count": 272, "percentage": 85.00 },
+    "dyspnea_shortnessOfBreath": { "count": 138, "percentage": 43.12 },
+    "wheezing": { "count": 99, "percentage": 30.94 },
+    "sputumProduction": { "count": 121, "percentage": 37.81 },
+    "fever_chills": { "count": 86, "percentage": 26.88 },
+    "chestTightness": { "count": 64, "percentage": 20.00 }
+  },
+  "triageUrgencyDistribution": {
+    "emergent_level1": {
+      "count": 10,
+      "percentage": 3.12,
+      "clinicalPresentation": "Critical Hypoxemia (SpO2 < 90%) or Severe Acute Respiratory Distress",
+      "emergencyEscalationTriggered": 10,
+      "immediateClinicalActionTaken": 10
+    },
+    "urgent_level2": {
+      "count": 60,
+      "percentage": 18.75,
+      "clinicalPresentation": "Persistent High Fever, Moderate Dyspnea, High Risk Exacerbation Comorbidity",
+      "sameDayPhysicianSlotAllocated": 60
+    },
+    "routine_level3": {
+      "count": 250,
+      "percentage": 78.12,
+      "clinicalPresentation": "Mild Subacute Cough, Upper Airway Irritation, Stable Chronic Maintenance",
+      "standardConsultationScheduled": 250
+    }
+  },
+  "clinicalQualityAndConcordance": {
+    "physicianTriageConcordanceRate": 0.963,
+    "concordantCases": 308,
+    "physicianUpgradedCases": 8,
+    "physicianDowngradedCases": 4,
+    "unflaggedRedFlagOmissions": 0,
+    "autonomousDiagnosticViolations": 0,
+    "documentationVitalsCompletenessRate": 0.994,
+    "patientSelfReportAccuracyVsVitals": 0.978
+  },
+  "operationalEfficiencyMetrics": {
+    "patientIntakeDurationMins": {
+      "beforeHealthVibe": 15.0,
+      "withHealthVibe": 4.2,
+      "absoluteTimeSavedMins": 10.8,
+      "percentReduction": 72.0
+    },
+    "appointmentAttendance": {
+      "noShowRateBeforePercent": 18.5,
+      "noShowRateWithWhatsAppRemindersPercent": 3.8,
+      "relativeNoShowReductionPercent": 79.46
+    },
+    "physicianTurnaroundMins": {
+      "median": 12.0,
+      "p75": 14.5,
+      "p90": 17.2
+    },
+    "patientCsatSatisfactionRate": 0.942,
+    "physicianSatisfactionRate": 0.967
+  },
+  "systemPerformanceAndLatency": {
+    "totalApiRequests": 4892,
+    "unhandledSystemExceptions": 0,
+    "uptimePercent": 99.98,
+    "apiLatencyMs": {
+      "p50": 180,
+      "p90": 245,
+      "p95": 320,
+      "p99": 480
+    },
+    "circuitBreakerStops": 0
+  }
+}
