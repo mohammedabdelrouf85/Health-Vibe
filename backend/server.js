@@ -64,6 +64,7 @@ const waitingListService = require('./waiting-list-service');
 const googleCalendarService = require('./google-calendar-service');
 const telehealthVideoService = require('./telehealth-video-service');
 const medicalOcrService = require('./medical-ocr-service');
+const unusualAccessService = require('./unusual-access-service');
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -345,6 +346,7 @@ function sanitizeClientErrorMessage(err) {
 
 // 🔗 Distributed Tracing & Request Performance Telemetry
 app.use(monitoringService.traceMiddleware);
+app.use(unusualAccessService.unusualAccessMiddleware);
 
 // 🛡️ Global JSON response sanitizer: never expose stack traces or internal Firebase errors to client
 app.use((req, res, next) => {
@@ -10121,11 +10123,68 @@ app.post('/api/ocr/drafts/:draftId/reject', requireAuth, async (req, res) => {
   }
 });
 
+// =============================================================================
+// 🚨 UNUSUAL ACCESS & ANOMALY MONITORING ENDPOINTS
+// =============================================================================
+
+/**
+ * GET /api/admin/security/unusual-access/alerts
+ * Retrieves active or filtered unusual access and security anomaly alerts.
+ */
+app.get('/api/admin/security/unusual-access/alerts', requireAuth, requireAdmin, (req, res) => {
+  try {
+    const { status, severity, limit } = req.query || {};
+    const alerts = unusualAccessService.getActiveAnomalies({
+      status: status || null,
+      severity: severity || null,
+      limit: parseInt(limit, 10) || 50
+    });
+    res.json({ success: true, alerts, count: alerts.length });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * GET /api/admin/security/unusual-access/metrics
+ * Returns aggregate anomaly telemetry and blocked probe metrics.
+ */
+app.get('/api/admin/security/unusual-access/metrics', requireAuth, requireAdmin, (req, res) => {
+  try {
+    const metrics = unusualAccessService.getUnusualAccessMetrics();
+    res.json({ success: true, metrics });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/admin/security/unusual-access/resolve/:alertId
+ * Resolves an unusual access alert with resolution notes.
+ */
+app.post('/api/admin/security/unusual-access/resolve/:alertId', requireAuth, requireAdmin, (req, res) => {
+  try {
+    const { alertId } = req.params;
+    const { resolutionNotes, isFalsePositive } = req.body || {};
+
+    const alert = unusualAccessService.resolveUnusualAccessAlert(alertId, {
+      resolvedBy: req.user.uid,
+      resolutionNotes,
+      isFalsePositive: Boolean(isFalsePositive)
+    });
+
+    res.json({ success: true, alert });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'RESOLVE_ERROR', message: err.message });
+  }
+});
+
 app.pushNotificationService = pushNotificationService;
 app.waitingListService = waitingListService;
 app.googleCalendarService = googleCalendarService;
 app.schedulingService = schedulingService;
 app.telehealthVideoService = telehealthVideoService;
 app.medicalOcrService = medicalOcrService;
+app.unusualAccessService = unusualAccessService;
 
 module.exports = app;
