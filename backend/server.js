@@ -196,6 +196,11 @@ app.use((req, res, next) => {
   } else if (req.path.startsWith('/api/public') || req.path.startsWith('/api/clinics') || req.path.startsWith('/api/config')) {
     res.setHeader('Cache-Control', 'public, max-age=300, stale-while-revalidate=600');
   }
+
+  // 🛑 Anti-Scraping & Indexing Guard: Prevent search engines from indexing private API routes or personal data
+  if (req.path.startsWith('/api/') || req.path.startsWith('/records/') || req.path.startsWith('/private/')) {
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive, nosnippet');
+  }
   next();
 });
 
@@ -9184,6 +9189,27 @@ app.post('/api/expansion/evaluate-gate', requireAuth, requireAdmin, (req, res) =
     });
   } catch (err) {
     res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+// =============================================================================
+// 🤖 SEARCH ENGINE & ROBOTS DIRECTIVES
+// =============================================================================
+app.get('/robots.txt', (req, res) => {
+  const robotsPath = path.resolve(__dirname, '../app/robots.txt');
+  if (fs.existsSync(robotsPath)) {
+    res.type('text/plain').sendFile(robotsPath);
+  } else {
+    res.type('text/plain').send("User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /records/\nSitemap: https://healthvibe.ai/sitemap.xml\n");
+  }
+});
+
+app.get('/sitemap.xml', (req, res) => {
+  const sitemapPath = path.resolve(__dirname, '../app/sitemap.xml');
+  if (fs.existsSync(sitemapPath)) {
+    res.type('application/xml').sendFile(sitemapPath);
+  } else {
+    res.status(404).send('Not Found');
   }
 });
 

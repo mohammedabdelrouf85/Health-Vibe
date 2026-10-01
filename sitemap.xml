@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <!-- Health Vibe AI Public Homepage Launcher -->
+  <url>
+    <loc>https://healthvibe.ai/</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://healthvibe.ai/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://healthvibe.ai/?lang=en" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://healthvibe.ai/" />
+    <lastmod>2026-10-01</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+
+  <!-- Health Vibe AI Patient & Community Health Hub -->
+  <url>
+    <loc>https://healthvibe.ai/app/</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://healthvibe.ai/app/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://healthvibe.ai/app/?lang=en" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://healthvibe.ai/app/" />
+    <lastmod>2026-10-01</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <!-- B2B Clinics & Specialized Medical Centers Hub -->
+  <url>
+    <loc>https://healthvibe.ai/app/clinics.html</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://healthvibe.ai/app/clinics.html?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://healthvibe.ai/app/clinics.html?lang=en" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://healthvibe.ai/app/clinics.html" />
+    <lastmod>2026-10-01</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+</urlset>

@@ -1,0 +1,32 @@
+# Health Vibe AI - Production Robots Directives
+# Allow indexing of public marketing, informational, and B2B clinic landing pages.
+# Strictly prohibit crawling of patient clinical records, doctor queues, administrative portals, and API routes.
+
+User-agent: *
+
+# Public indexable pages & assets
+Allow: /
+Allow: /index.html
+Allow: /clinics.html
+Allow: /sitemap.xml
+Allow: /*.css
+Allow: /*.js
+Allow: /*.png
+Allow: /*.jpg
+Allow: /*.webp
+
+# Protected private, patient-identifiable, account, and administrative routes (DO NOT INDEX)
+Disallow: /api/
+Disallow: /records/
+Disallow: /private/
+Disallow: /?view=patient
+Disallow: /?view=doctor
+Disallow: /?view=admin
+Disallow: /?screen=*
+Disallow: /pitch.html
+Disallow: /output/
+Disallow: /scratch/
+Disallow: /.deployments/
+
+# Sitemap location
+Sitemap: https://healthvibe.ai/sitemap.xml
