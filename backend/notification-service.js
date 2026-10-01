@@ -1322,7 +1322,8 @@ const DEFAULT_NOTIFICATION_PREFERENCES = Object.freeze({
     in_app: true,
     email: true,
     sms: false,
-    whatsapp: false
+    whatsapp: false,
+    push: true
   },
   quietHours: {
     enabled: false,

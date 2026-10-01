@@ -59,6 +59,7 @@ const pilotReadinessService = require('./pilot-readiness-service');
 const billingService = require('./billing-service');
 const expansionAnalyticsService = require('./expansion-analytics-service');
 const doctorProfileService = require('./doctor-profile-service');
+const pushNotificationService = require('./push-notification-service');
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -8399,10 +8400,134 @@ app.post('/api/notifications/dispatch', requireAuth, async (req, res) => {
       caseId
     });
 
-    return res.status(200).json({ success: true, result });
+    let pushResult = null;
+    try {
+      pushResult = await pushNotificationService.sendPushNotification(db, {
+        targetUserId: effectiveUserId,
+        eventType: eventType || type,
+        title,
+        body: message || body,
+        caseId,
+        appointmentId,
+        urgent: Boolean(urgent),
+        priority,
+        severity
+      });
+    } catch (pushErr) {
+      console.warn('[PUSH DISPATCH WARNING]:', pushErr.message);
+    }
+
+    return res.status(200).json({ success: true, result, pushResult });
   } catch (err) {
     console.error('[DISPATCH NOTIFICATION ERROR]:', err);
     return res.status(500).json({ error: 'DISPATCH_FAILED', message: err.message });
+  }
+});
+
+// =============================================================================
+// 📲 REVOCABLE PUSH NOTIFICATIONS & DEVICE REGISTRY ENDPOINTS
+// =============================================================================
+
+/**
+ * POST /api/notifications/push-subscription
+ * Register or update device push notification subscription with explicit consent.
+ */
+app.post('/api/notifications/push-subscription', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.uid;
+    const { token, deviceId, platform, browser, consent } = req.body || {};
+
+    const result = await pushNotificationService.registerPushSubscription(db, {
+      userId,
+      token,
+      deviceId,
+      platform,
+      browser,
+      userAgent: req.headers['user-agent'],
+      consent: consent === true
+    });
+
+    res.json({ success: true, subscription: result });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'REGISTRATION_FAILED', message: err.message });
+  }
+});
+
+/**
+ * DELETE /api/notifications/push-subscription
+ * Revoke push notification subscription on current device or specific token.
+ */
+app.delete('/api/notifications/push-subscription', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.uid;
+    const { deviceId, token } = req.body || req.query || {};
+
+    const result = await pushNotificationService.revokePushSubscription(db, {
+      userId,
+      deviceId,
+      token
+    });
+
+    res.json({ success: true, message: 'Push notification subscription revoked.', result });
+  } catch (err) {
+    res.status(500).json({ error: 'REVOCATION_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/notifications/push-subscriptions
+ * Returns user's active push subscriptions (tokens masked).
+ */
+app.get('/api/notifications/push-subscriptions', requireAuth, (req, res) => {
+  try {
+    const userId = req.user.uid;
+    const subscriptions = pushNotificationService.getActiveSubscriptionsForUser(userId).map(s => ({
+      subscriptionId: s.subscriptionId,
+      deviceId: s.deviceId,
+      tokenMasked: s.tokenMasked,
+      platform: s.platform,
+      consentGiven: s.consentGiven,
+      createdAt: s.createdAt,
+      expiresAt: s.expiresAt
+    }));
+
+    res.json({ success: true, count: subscriptions.length, subscriptions });
+  } catch (err) {
+    res.status(500).json({ error: 'FETCH_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/auth/logout
+ * Signs user out, revokes push subscriptions on current device, and records audit event.
+ */
+app.post('/api/auth/logout', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.uid;
+    const { deviceId } = req.body || {};
+
+    const revocation = await pushNotificationService.handleUserLogout(db, {
+      userId,
+      deviceId
+    });
+
+    if (db) {
+      await db.collection('audit_events').add({
+        type: 'USER_LOGOUT',
+        userId,
+        deviceId: deviceId || 'unknown',
+        revokedPushTokensCount: revocation.revokedCount,
+        timestamp: admin.firestore.FieldValue.serverTimestamp()
+      }).catch(() => {});
+    }
+
+    res.json({
+      success: true,
+      message: 'Signed out successfully. Push notifications on this device have been deactivated.',
+      revokedPushTokensCount: revocation.revokedCount
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'LOGOUT_FAILED', message: err.message });
   }
 });
 
@@ -9489,5 +9614,7 @@ app.get('/api/doctors/:doctorId/availability', async (req, res) => {
     res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
   }
 });
+
+app.pushNotificationService = pushNotificationService;
 
 module.exports = app;
