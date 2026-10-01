@@ -63,6 +63,7 @@ const pushNotificationService = require('./push-notification-service');
 const waitingListService = require('./waiting-list-service');
 const googleCalendarService = require('./google-calendar-service');
 const telehealthVideoService = require('./telehealth-video-service');
+const medicalOcrService = require('./medical-ocr-service');
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -9976,10 +9977,155 @@ app.get('/api/telehealth/rooms/:roomId', requireAuth, (req, res) => {
   res.json({ success: true, room });
 });
 
+// =============================================================================
+// 📑 MEDICAL OCR & CLINICAL LAB EXTRACTION ENDPOINTS
+// =============================================================================
+
+/**
+ * POST /api/ocr/process-file
+ * Processes OCR on a medical file that has successfully passed security scanning.
+ * Extracts text, source metadata, page image, confidence, and clinical lab items.
+ * Strictly generates DRAFT results requiring doctor review, not approved facts.
+ */
+app.post('/api/ocr/process-file', requireAuth, async (req, res) => {
+  try {
+    const { fileId, caseId, rawTextOverride, pageImageOverride, simulatePoorQuality } = req.body || {};
+
+    if (!fileId) {
+      return res.status(400).json({ error: 'MISSING_FILE_ID', message: 'fileId is required.' });
+    }
+
+    const draft = await medicalOcrService.processMedicalFileOcr(db, {
+      fileId,
+      caseId,
+      rawTextOverride,
+      pageImageOverride,
+      simulatePoorQuality
+    }, req.user);
+
+    res.status(201).json({ success: true, draft });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({
+      error: err.code || 'OCR_PROCESSING_FAILED',
+      message: err.message,
+      scanStatus: err.scanStatus || null
+    });
+  }
+});
+
+/**
+ * GET /api/ocr/drafts/:draftId
+ * Retrieves an OCR draft with its extracted text, page image, confidence, and items.
+ */
+app.get('/api/ocr/drafts/:draftId', requireAuth, async (req, res) => {
+  try {
+    const { draftId } = req.params;
+    let draft = medicalOcrService.inMemoryOcrDrafts.get(draftId);
+
+    if (!draft && db) {
+      try {
+        const snap = await db.collection('ocr_drafts').doc(draftId).get();
+        if (snap && snap.exists) {
+          draft = snap.data();
+        }
+      } catch (_) {}
+    }
+
+    if (!draft) {
+      return res.status(404).json({ error: 'DRAFT_NOT_FOUND', message: 'OCR draft not found.' });
+    }
+
+    // Access control: Patient owner, doctor, or admin
+    const isOwner = req.user.uid === draft.patientId || req.user.uid === draft.createdBy;
+    const isClinician = req.user.role === 'doctor' || req.user.role === 'clinic_admin' || req.user.role === 'super_admin';
+
+    if (!isOwner && !isClinician) {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'You are not authorized to view this OCR draft.' });
+    }
+
+    res.json({ success: true, draft });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * PUT /api/ocr/drafts/:draftId/correct
+ * Applies manual corrections to extracted lab test items (testName, value, unit, range).
+ * Preserves original values and audit history.
+ */
+app.put('/api/ocr/drafts/:draftId/correct', requireAuth, async (req, res) => {
+  try {
+    const { draftId } = req.params;
+    const { itemId, itemIndex, corrections } = req.body || {};
+
+    const result = await medicalOcrService.correctOcrDraftItem(db, {
+      draftId,
+      itemId,
+      itemIndex,
+      corrections: corrections || req.body
+    }, req.user);
+
+    res.json(result);
+  } catch (err) {
+    res.status(err.statusCode || 400).json({
+      error: err.code || 'CORRECTION_FAILED',
+      message: err.message
+    });
+  }
+});
+
+/**
+ * POST /api/ocr/drafts/:draftId/approve
+ * Formal doctor approval converting the draft into verified clinical EHR facts.
+ */
+app.post('/api/ocr/drafts/:draftId/approve', requireAuth, async (req, res) => {
+  try {
+    const { draftId } = req.params;
+    const { doctorNotes } = req.body || {};
+
+    const result = await medicalOcrService.approveOcrDraftAsFact(db, {
+      draftId,
+      doctorNotes
+    }, req.user);
+
+    res.json(result);
+  } catch (err) {
+    res.status(err.statusCode || 400).json({
+      error: err.code || 'APPROVAL_FAILED',
+      message: err.message
+    });
+  }
+});
+
+/**
+ * POST /api/ocr/drafts/:draftId/reject
+ * Rejects an OCR draft upon doctor clinical review.
+ */
+app.post('/api/ocr/drafts/:draftId/reject', requireAuth, async (req, res) => {
+  try {
+    const { draftId } = req.params;
+    const { rejectionReason } = req.body || {};
+
+    const result = await medicalOcrService.rejectOcrDraft(db, {
+      draftId,
+      rejectionReason
+    }, req.user);
+
+    res.json(result);
+  } catch (err) {
+    res.status(err.statusCode || 400).json({
+      error: err.code || 'REJECTION_FAILED',
+      message: err.message
+    });
+  }
+});
+
 app.pushNotificationService = pushNotificationService;
 app.waitingListService = waitingListService;
 app.googleCalendarService = googleCalendarService;
 app.schedulingService = schedulingService;
 app.telehealthVideoService = telehealthVideoService;
+app.medicalOcrService = medicalOcrService;
 
 module.exports = app;

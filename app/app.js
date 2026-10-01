@@ -10486,6 +10486,7 @@ function renderMedicalFileItem(fileState) {
     <div class="medical-file-progress" aria-label="Upload progress"><span style="width:${pct}%"></span></div>
     <div class="medical-file-actions">
       ${isAvailable ? `<button type="button" onclick="previewMedicalCaseFile('${escapeHtmlAttr(fileState.id)}')">${currentLanguage === "en" ? "Preview" : "معاينة"}</button>` : ""}
+      ${isAvailable ? `<button type="button" class="btn-ocr-extract" onclick="openMedicalOcrModal('${escapeHtmlAttr(fileState.id)}')">${currentLanguage === "en" ? "🔍 OCR Data (Draft)" : "🔍 استخراج الفحوصات (OCR)"}</button>` : ""}
       ${fileState.id ? `<button type="button" onclick="deleteMedicalCaseFile('${escapeHtmlAttr(fileState.id)}')">${currentLanguage === "en" ? "Delete" : "حذف"}</button>` : ""}
       ${status === "uploading" ? `<button type="button" onclick="cancelMedicalCaseUpload('${escapeHtmlAttr(fileState.id || fileState.localId)}')">${currentLanguage === "en" ? "Cancel" : "إلغاء"}</button>` : ""}
     </div>
@@ -10682,6 +10683,307 @@ window.deleteMedicalCaseFile = async function(fileId) {
     showToast(error.message || (currentLanguage === "en" ? "Could not delete file." : "تعذر حذف الملف."));
   }
   return false;
+};
+
+// =============================================================================
+// 📑 MEDICAL OCR EXTRACTION, DRAFT DISPLAY & MANUAL CORRECTION MODAL
+// =============================================================================
+
+window.closeMedicalOcrModal = function() {
+  const modal = document.getElementById("medicalOcrModal");
+  if (modal) modal.style.display = "none";
+};
+
+window.openMedicalOcrModal = async function(fileId) {
+  const user = auth.currentUser;
+  if (!user || !fileId) return false;
+  const isEn = currentLanguage === "en";
+
+  // 1. Strict Security Scan Check: OCR allowed ONLY for clean & available files
+  const doc = await db.collection("case_files").doc(fileId).get();
+  if (!doc.exists) {
+    showToast(isEn ? "Medical file record not found." : "لم يتم العثور على سجل الملف الطبي.");
+    return false;
+  }
+  const data = doc.data();
+  if (data.scanStatus !== "clean" || data.availability !== "available") {
+    showToast(isEn ? "OCR extraction is prohibited until the file passes security scanning." : "استخراج البيانات محظور حتى يكتمل الفحص الأمني للملف بنجاح.");
+    return false;
+  }
+
+  // 2. Open or create modal
+  let modal = document.getElementById("medicalOcrModal");
+  if (!modal) {
+    modal = document.createElement("div");
+    modal.id = "medicalOcrModal";
+    modal.className = "hv-modal-overlay";
+    modal.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto;";
+    document.body.appendChild(modal);
+  }
+  modal.style.display = "flex";
+
+  modal.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--line);border-radius:18px;max-width:960px;width:100%;max-height:92vh;overflow-y:auto;padding:26px;box-shadow:0 25px 50px rgba(0,0,0,0.35);position:relative;">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:12px;justify-content:center;padding:48px 20px;color:var(--teal);">
+        <div class="spinner" style="width:28px;height:28px;"></div>
+        <strong style="font-size:15px;">${isEn ? 'Running OCR extraction & clinical laboratory parsing...' : 'جاري الفحص واستخراج الفحوصات الطبية عبر OCR...'}</strong>
+        <small style="color:var(--muted);">${isEn ? 'Verifying clean security scan and extracting test values...' : 'تم التحقق من اجتياز الفحص الأمني وجاري تحليل النتائج...'}</small>
+      </div>
+    </div>
+  `;
+
+  try {
+    const res = await authenticatedFetch('/api/ocr/process-file', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fileId, caseId: data.caseId })
+    });
+    const result = await res.json();
+    if (!res.ok || !result.draft) {
+      throw new Error(result.message || (isEn ? "Failed to process OCR." : "تعذر استخراج بيانات الملف."));
+    }
+    renderOcrModalContent(result.draft, data);
+  } catch (err) {
+    modal.innerHTML = `
+      <div style="background:var(--surface);border:1px solid var(--line);border-radius:18px;max-width:550px;width:100%;padding:26px;text-align:center;">
+        <span style="font-size:36px;">⚠️</span>
+        <h4 style="margin:12px 0 6px;">${isEn ? 'OCR Extraction Blocked or Failed' : 'تعذر استخراج البيانات عبر OCR'}</h4>
+        <p style="color:var(--muted);font-size:13px;line-height:1.5;">${escapeHtml(err.message)}</p>
+        <button type="button" class="solid-button" onclick="closeMedicalOcrModal()" style="margin-top:16px;padding:8px 24px;">
+          ${isEn ? 'Close' : 'إغلاق'}
+        </button>
+      </div>
+    `;
+  }
+};
+
+function renderOcrModalContent(draft, fileData) {
+  const modal = document.getElementById("medicalOcrModal");
+  if (!modal || !draft) return;
+  const isEn = currentLanguage === "en";
+
+  const isPoorQuality = draft.qualityScore === 'poor' || draft.confidence < 0.70;
+  const confidencePct = Math.round(draft.confidence * 100);
+  const confidenceColor = isPoorQuality ? '#f59e0b' : '#10b981';
+  const confidenceBadge = `<span class="pill ${isPoorQuality ? 'pending' : 'ok'}" style="font-size:12px;font-weight:700;">
+    ${confidencePct}% ${isEn ? (isPoorQuality ? 'Low Confidence (Manual Verification Needed)' : 'High Confidence') : (isPoorQuality ? 'ثقة منخفضة (يتطلب تدقيق يدوي)' : 'ثقة استخراج عالية')}
+  </span>`;
+
+  const isApproved = draft.isApprovedFact || draft.reviewStatus === 'approved_by_doctor';
+  const reviewPill = `<span class="pill ${isApproved ? 'ok' : 'pending'}" style="font-size:12.5px;padding:4px 12px;font-weight:800;">
+    ${isApproved ? '✅ ' + (isEn ? 'Approved Clinical Fact' : 'حقيقة طبية معتمدة') : '⚠️ ' + (isEn ? 'Draft - Under Doctor Review' : 'مسودة - بانتظار مراجعة الطبيب')}
+  </span>`;
+
+  const disclaimerText = isEn ? draft.clinicalDisclaimerEn : draft.clinicalDisclaimerAr;
+  const testsList = Array.isArray(draft.tests) ? draft.tests : [];
+
+  const userRole = selectedRole || (auth.currentUser ? auth.currentUser.role : 'patient');
+  const isDoctor = userRole === ROLES.DOCTOR || userRole === 'clinic_admin' || userRole === 'super_admin';
+
+  modal.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--line);border-radius:18px;max-width:1040px;width:100%;max-height:92vh;overflow-y:auto;padding:24px;box-shadow:0 25px 50px rgba(0,0,0,0.35);position:relative;">
+      <!-- Header -->
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:16px;border-bottom:1px solid var(--line);padding-bottom:14px;">
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <h3 style="margin:0;font-size:17px;display:flex;align-items:center;gap:6px;">
+              <span>📑</span> ${isEn ? 'Medical OCR Extraction & Clinical Lab Review' : 'نتائج الفحص والتعرف الضوئي (OCR) للملف الطبي'}
+            </h3>
+            ${reviewPill}
+          </div>
+          <small style="color:var(--muted);font-size:12px;">
+            ${isEn ? 'Source File: ' : 'الملف المصدر: '}<strong>${escapeHtml(draft.source?.fileName || fileData?.fileName || 'Document')}</strong> •
+            ${isEn ? 'Scan Passed: ' : 'فحص الأمان: '}<span style="color:#10b981;font-weight:700;">✅ Clean & Scanned</span>
+          </small>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          ${confidenceBadge}
+          <button type="button" class="soft-button" onclick="closeMedicalOcrModal()" style="padding:6px 12px;font-size:13px;">✕</button>
+        </div>
+      </div>
+
+      <!-- MANDATORY DRAFT NOTICE BANNER -->
+      <div style="background:rgba(245, 158, 11, 0.12);border:1.5px dashed #f59e0b;border-radius:12px;padding:12px 16px;margin-bottom:16px;font-size:12.5px;color:#b45309;line-height:1.5;display:flex;align-items:center;gap:10px;">
+        <span style="font-size:22px;">⚠️</span>
+        <div>
+          <strong>${isEn ? 'Clinical Governance Notice (Draft Status Only):' : 'تنبيه الحوكمة السريرية (مسودة استخراج آلي):'}</strong>
+          <div>${escapeHtml(disclaimerText)}</div>
+        </div>
+      </div>
+
+      <!-- Main Layout: Grid with Image/Source on Left, Lab Items & Manual Correction on Right -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(320px, 1fr));gap:20px;">
+        <!-- Left Column: Source, Page Image & Extracted Raw Text -->
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          <!-- Page Image Card -->
+          <div style="background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:14px;">
+            <strong style="font-size:13px;display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+              <span>🖼️</span> ${isEn ? 'Page Image Preview & Source Reference' : 'معاينة صورة المستند والمرجع'}
+            </strong>
+            <div style="border-radius:8px;overflow:hidden;border:1px solid var(--line);background:rgba(0,0,0,0.03);text-align:center;padding:10px;min-height:160px;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+              <span style="font-size:40px;margin-bottom:6px;">📄</span>
+              <strong style="font-size:12px;color:var(--ink);">${escapeHtml(draft.source?.fileName || 'Lab Report Document')}</strong>
+              <small style="color:var(--muted);font-size:11px;margin-top:2px;">
+                ${escapeHtml(draft.source?.contentType || 'application/pdf')} • ${formatMedicalFileSize(draft.source?.fileSize || 0)}
+              </small>
+              <button type="button" class="soft-button" onclick="previewMedicalCaseFile('${escapeHtmlAttr(draft.fileId)}')" style="font-size:11.5px;padding:4px 12px;margin-top:8px;">
+                👁️ ${isEn ? 'Open Full Original' : 'فتح المستند الأصلي'}
+              </button>
+            </div>
+          </div>
+
+          <!-- Raw Extracted Text -->
+          <div style="background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:14px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+              <strong style="font-size:13px;display:flex;align-items:center;gap:6px;">
+                <span>📝</span> ${isEn ? 'Extracted Raw OCR Text' : 'النص الخام المستخرج عبر OCR'}
+              </strong>
+              <small style="color:var(--muted);font-size:11px;">${draft.source?.ocrEngine || 'HealthVibe OCR'}</small>
+            </div>
+            <pre style="background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px;font-family:monospace;font-size:11px;color:var(--ink);max-height:160px;overflow-y:auto;white-space:pre-wrap;line-height:1.4;margin:0;">${escapeHtml(draft.extractedText || (isEn ? 'No text extracted.' : 'لم يتم استخراج نص.'))}</pre>
+          </div>
+        </div>
+
+        <!-- Right Column: Extracted Lab Items with Manual Correction -->
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          <div style="background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:14px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+              <strong style="font-size:13px;display:flex;align-items:center;gap:6px;">
+                <span>🧪</span> ${isEn ? 'Extracted Lab Tests (Editable Draft)' : 'النتائج والفحوصات المستخرجة (مسودة قابلة للتصحيح)'}
+              </strong>
+              <span class="pill info" style="font-size:11px;">${testsList.length} ${isEn ? 'tests identified' : 'فحص مستخرج'}</span>
+            </div>
+
+            ${testsList.length === 0 ? `
+              <div style="text-align:center;padding:24px;color:var(--muted);font-size:13px;">
+                ${isEn ? 'No laboratory test entities automatically recognized. Clinicians can enter values manually in the doctor notes.' : 'لم يتم التعرف على فحوصات معيارية تلقائياً. يمكن للطبيب تدوين الملاحظات يدوياً.'}
+              </div>
+            ` : `
+              <div style="display:flex;flex-direction:column;gap:10px;">
+                ${testsList.map((t, idx) => {
+                  const isCorrected = t.isManuallyCorrected || (Array.isArray(t.correctionHistory) && t.correctionHistory.length > 0);
+                  const flagColor = t.flag === 'LOW' || t.flag === 'HIGH' || t.flag === 'CRITICAL' ? '#ef4444' : '#10b981';
+                  return `
+                    <div id="ocr-item-card-${idx}" style="background:var(--surface);border:1px solid ${isCorrected ? 'var(--teal)' : 'var(--line)'};border-radius:10px;padding:12px;">
+                      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                        <div style="display:flex;align-items:center;gap:6px;">
+                          <strong style="font-size:13px;color:var(--teal);">${escapeHtml(t.testName)}</strong>
+                          ${isCorrected ? `<span class="pill ok" style="font-size:10px;padding:1px 6px;">✏️ ${isEn ? 'Corrected' : 'مصحح يدوياً'}</span>` : ''}
+                        </div>
+                        <div style="display:flex;gap:6px;align-items:center;">
+                          <span style="font-size:11px;font-weight:700;color:${flagColor};">${escapeHtml(t.flag || 'NORMAL')}</span>
+                          <span style="font-size:10.5px;color:var(--muted);">(${(t.confidence * 100).toFixed(0)}%)</span>
+                        </div>
+                      </div>
+
+                      <!-- Editable Fields for Manual Correction -->
+                      <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1.5fr;gap:6px;margin-bottom:8px;">
+                        <div>
+                          <label style="font-size:10px;color:var(--muted);">${isEn ? 'Test Name' : 'اسم الفحص'}</label>
+                          <input type="text" id="ocr-edit-name-${idx}" value="${escapeHtmlAttr(t.testName)}" style="width:100%;padding:4px 8px;font-size:12px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);" />
+                        </div>
+                        <div>
+                          <label style="font-size:10px;color:var(--muted);">${isEn ? 'Value' : 'القيمة'}</label>
+                          <input type="text" id="ocr-edit-val-${idx}" value="${escapeHtmlAttr(t.value || '')}" style="width:100%;padding:4px 8px;font-size:12px;font-weight:700;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);" />
+                        </div>
+                        <div>
+                          <label style="font-size:10px;color:var(--muted);">${isEn ? 'Unit' : 'الوحدة'}</label>
+                          <input type="text" id="ocr-edit-unit-${idx}" value="${escapeHtmlAttr(t.unit || '')}" style="width:100%;padding:4px 8px;font-size:12px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);" />
+                        </div>
+                        <div>
+                          <label style="font-size:10px;color:var(--muted);">${isEn ? 'Ref Range' : 'المعدل الطبيعي'}</label>
+                          <input type="text" id="ocr-edit-range-${idx}" value="${escapeHtmlAttr(t.referenceRange || '')}" style="width:100%;padding:4px 8px;font-size:12px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);" />
+                        </div>
+                      </div>
+
+                      <div style="display:flex;justify-content:space-between;align-items:center;">
+                        <small style="font-size:10.5px;color:var(--muted);font-style:italic;">
+                          ${isEn ? 'Raw snippet: ' : 'النص المقروء: '}"${escapeHtml(t.rawSnippet || '')}"
+                        </small>
+                        <button type="button" class="soft-button" onclick="saveOcrCorrection('${escapeHtmlAttr(draft.draftId)}', ${idx})" style="font-size:11px;padding:3px 10px;">
+                          💾 ${isEn ? 'Save Edit' : 'حفظ التصحيح'}
+                        </button>
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            `}
+          </div>
+
+          <!-- Bottom Action Buttons: Doctor Approval & Close -->
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;padding-top:6px;">
+            ${isDoctor && !isApproved ? `
+              <button type="button" class="solid-button" onclick="approveOcrDraft('${escapeHtmlAttr(draft.draftId)}')" style="font-size:13px;padding:8px 18px;background:var(--teal);color:#fff;display:inline-flex;align-items:center;gap:6px;">
+                <span>🩺</span> ${isEn ? 'Approve as Certified EHR Clinical Fact' : 'اعتماد رسمي كحقيقة سريرية في سجل المريض'}
+              </button>
+            ` : (isApproved ? `
+              <span style="color:#10b981;font-size:13px;font-weight:700;display:inline-flex;align-items:center;gap:6px;">
+                <span>✅</span> ${isEn ? 'Formally Certified by Doctor' : 'معتمد رسمياً في سجل الحالة'}
+              </span>
+            ` : `
+              <small style="color:var(--muted);font-size:11.5px;">
+                ℹ️ ${isEn ? 'Physicians can approve and incorporate these lab values during case review.' : 'يمكن للطبيب المعالج تدقيق واعتماد هذه النتائج أثناء مراجعة الحالة.'}
+              </small>
+            `)}
+            <button type="button" class="soft-button" onclick="closeMedicalOcrModal()" style="font-size:13px;padding:8px 18px;">
+              ${isEn ? 'Close' : 'إغلاق'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+window.saveOcrCorrection = async function(draftId, itemIndex) {
+  const isEn = currentLanguage === "en";
+  const nameInput = document.getElementById(`ocr-edit-name-${itemIndex}`);
+  const valInput = document.getElementById(`ocr-edit-val-${itemIndex}`);
+  const unitInput = document.getElementById(`ocr-edit-unit-${itemIndex}`);
+  const rangeInput = document.getElementById(`ocr-edit-range-${itemIndex}`);
+
+  if (!valInput) return;
+
+  const corrections = {
+    testName: nameInput ? nameInput.value.trim() : undefined,
+    value: valInput.value.trim(),
+    unit: unitInput ? unitInput.value.trim() : undefined,
+    referenceRange: rangeInput ? rangeInput.value.trim() : undefined
+  };
+
+  try {
+    const res = await authenticatedFetch(`/api/ocr/drafts/${encodeURIComponent(draftId)}/correct`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ itemIndex, corrections })
+    });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.message || (isEn ? "Failed to save correction." : "تعذر حفظ التصحيح."));
+
+    showToast(isEn ? "Correction saved to draft." : "تم حفظ التصحيح بنجاح في المسودة.");
+    renderOcrModalContent(result.draft);
+  } catch (err) {
+    showToast(err.message || (isEn ? "Failed to save correction." : "تعذر حفظ التصحيح."));
+  }
+};
+
+window.approveOcrDraft = async function(draftId) {
+  const isEn = currentLanguage === "en";
+  try {
+    const res = await authenticatedFetch(`/api/ocr/drafts/${encodeURIComponent(draftId)}/approve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ doctorNotes: isEn ? "Doctor verified OCR observations." : "تم التدقيق والاعتماد السريري للفحوصات." })
+    });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.message || (isEn ? "Approval failed." : "تعذر اعتماد المسودة."));
+
+    showToast(isEn ? "Draft approved as verified clinical observation." : "تم اعتماد الفحوصات رسمياً وتوثيقها في سجل المريض.");
+    renderOcrModalContent(result.draft);
+  } catch (err) {
+    showToast(err.message || (isEn ? "Approval failed." : "تعذر اعتماد المسودة."));
+  }
 };
 
 function onDoctorFilePicked(input) {
