@@ -20,6 +20,7 @@ const {
 } = require('./notification-service');
 const waitingListService = require('./waiting-list-service');
 const googleCalendarService = require('./google-calendar-service');
+const telehealthVideoService = require('./telehealth-video-service');
 
 // ============================================================================
 // 🏥 CLINICS REGISTRY
@@ -1363,6 +1364,15 @@ async function cancelAppointmentTransaction(db, targetAppt, actorUser, options =
     console.warn('[WAITING LIST OFFER CANCEL WARNING]:', wlErr.message);
   }
 
+  // Terminate any active telehealth video room for this cancelled appointment
+  try {
+    if (telehealthVideoService && typeof telehealthVideoService.terminateRoomsForAppointment === 'function') {
+      await telehealthVideoService.terminateRoomsForAppointment(db, appt.id || appointmentId, opts.reason);
+    }
+  } catch (tvErr) {
+    console.warn('[TELEHEALTH ROOM CANCEL WARNING]:', tvErr.message);
+  }
+
   const finalCancelledAppt = { ...appt, ...updatePayload };
   return { success: true, ...finalCancelledAppt, appointment: finalCancelledAppt };
 }
@@ -1734,5 +1744,6 @@ module.exports = {
   clearMemorySlotLocks,
   _activeMemorySlotLocks: activeMemorySlotLocks,
   waitingListService,
-  googleCalendarService
+  googleCalendarService,
+  telehealthVideoService
 };

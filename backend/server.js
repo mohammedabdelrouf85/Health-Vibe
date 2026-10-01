@@ -62,6 +62,7 @@ const doctorProfileService = require('./doctor-profile-service');
 const pushNotificationService = require('./push-notification-service');
 const waitingListService = require('./waiting-list-service');
 const googleCalendarService = require('./google-calendar-service');
+const telehealthVideoService = require('./telehealth-video-service');
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -9826,9 +9827,159 @@ app.post('/api/doctors/google-calendar/reconcile/:appointmentId', requireAuth, a
   }
 });
 
+// =============================================================================
+// 📹 TELEHEALTH VIDEO CONSULTATION & CONSENT ENDPOINTS
+// =============================================================================
+
+/**
+ * GET /api/telehealth/provider
+ * Retrieves active telehealth video provider capabilities and privacy compliance schema.
+ */
+app.get('/api/telehealth/provider', (req, res) => {
+  const config = telehealthVideoService.getTelehealthProviderConfig();
+  res.json({ success: true, config });
+});
+
+/**
+ * POST /api/telehealth/rooms/create
+ * Creates an encrypted video consultation room linked to a confirmed appointment.
+ */
+app.post('/api/telehealth/rooms/create', requireAuth, async (req, res) => {
+  try {
+    const { appointmentId, provider, earlyJoinMinutes, graceWindowMinutes } = req.body || {};
+    const room = await telehealthVideoService.createTelehealthRoom(db, {
+      appointmentId,
+      provider,
+      earlyJoinMinutes,
+      graceWindowMinutes
+    }, req.user);
+
+    res.status(201).json({ success: true, room });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'ROOM_CREATION_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/telehealth/rooms/:roomId/join
+ * Verifies participant identity, temporal access window, and patient informed consent.
+ */
+app.post('/api/telehealth/rooms/:roomId/join', requireAuth, async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const { consent, clientTimestamp } = req.body || {};
+
+    const result = await telehealthVideoService.joinTelehealthRoom(db, {
+      roomId,
+      consent: consent || {},
+      now: clientTimestamp ? new Date(clientTimestamp) : new Date()
+    }, req.user);
+
+    res.json(result);
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'ROOM_JOIN_FAILED', message: err.message, minutesRemaining: err.minutesRemaining });
+  }
+});
+
+/**
+ * POST /api/telehealth/rooms/:roomId/failure
+ * Handles device hardware or permission failures with audio-only graceful degradation.
+ */
+app.post('/api/telehealth/rooms/:roomId/failure', requireAuth, (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const { failureType, details } = req.body || {};
+
+    const result = telehealthVideoService.handleMediaDeviceFailure({
+      roomId,
+      failureType,
+      details
+    }, req.user);
+
+    res.json({ success: true, result });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'FAILURE_HANDLING_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/telehealth/rooms/:roomId/disconnect
+ * Transitions session to disconnected state with reconnection grace period.
+ */
+app.post('/api/telehealth/rooms/:roomId/disconnect', requireAuth, async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const result = await telehealthVideoService.handleNetworkDisconnection(db, {
+      roomId,
+      participantId: req.user.uid
+    }, req.user);
+
+    res.json({ success: true, result });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'DISCONNECT_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/telehealth/rooms/:roomId/reconnect
+ * Reconnects participant back to active session within grace period.
+ */
+app.post('/api/telehealth/rooms/:roomId/reconnect', requireAuth, async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const result = await telehealthVideoService.reconnectTelehealthSession(db, { roomId }, req.user);
+    res.json(result);
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'RECONNECT_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/telehealth/rooms/:roomId/end
+ * Concludes consultation session cleanly.
+ */
+app.post('/api/telehealth/rooms/:roomId/end', requireAuth, async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const { reason } = req.body || {};
+
+    const result = await telehealthVideoService.endTelehealthRoom(db, {
+      roomId,
+      reason: reason || 'Consultation concluded'
+    }, req.user);
+
+    res.json(result);
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'END_ROOM_ERROR', message: err.message });
+  }
+});
+
+/**
+ * GET /api/telehealth/rooms/:roomId
+ * Retrieves room status and session information.
+ */
+app.get('/api/telehealth/rooms/:roomId', requireAuth, (req, res) => {
+  const room = telehealthVideoService._inMemoryTelehealthRooms.get(req.params.roomId);
+  if (!room) {
+    return res.status(404).json({ error: 'ROOM_NOT_FOUND', message: 'Telehealth room not found.' });
+  }
+
+  // Permission check
+  const isDoctor = req.user.uid === room.doctorId;
+  const isPatient = req.user.uid === room.patientId;
+  const isAdmin = req.user.role === 'clinic_admin' || req.user.role === 'super_admin';
+
+  if (!isDoctor && !isPatient && !isAdmin) {
+    return res.status(403).json({ error: 'ACCESS_DENIED', message: 'You are not authorized to view this room.' });
+  }
+
+  res.json({ success: true, room });
+});
+
 app.pushNotificationService = pushNotificationService;
 app.waitingListService = waitingListService;
 app.googleCalendarService = googleCalendarService;
 app.schedulingService = schedulingService;
+app.telehealthVideoService = telehealthVideoService;
 
 module.exports = app;
