@@ -58,6 +58,7 @@ const assessmentComparisonService = require('./assessment-comparison-service');
 const pilotReadinessService = require('./pilot-readiness-service');
 const billingService = require('./billing-service');
 const expansionAnalyticsService = require('./expansion-analytics-service');
+const doctorProfileService = require('./doctor-profile-service');
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -8799,6 +8800,7 @@ app.assessmentComparisonService = assessmentComparisonService;
 app.pilotReadinessService = pilotReadinessService;
 app.billingService = billingService;
 app.expansionAnalyticsService = expansionAnalyticsService;
+app.doctorProfileService = doctorProfileService;
 
 // =============================================================================
 // 🏥 CLINICAL PILOT GOVERNANCE & READINESS ROUTES
@@ -9210,6 +9212,168 @@ app.get('/sitemap.xml', (req, res) => {
     res.type('application/xml').sendFile(sitemapPath);
   } else {
     res.status(404).send('Not Found');
+  }
+});
+
+// =============================================================================
+// 👨‍⚕️ DOCTOR PUBLIC PROFILES, CLINIC MEMBERSHIPS & BOOKING AVAILABILITY
+// =============================================================================
+
+/**
+ * GET /api/doctors/public
+ * Returns public directory of approved practitioners with sanitized profiles.
+ */
+app.get('/api/doctors/public', async (req, res) => {
+  try {
+    const { clinicId, specialty } = req.query;
+    const doctors = await doctorProfileService.listPublicDoctors(db, { clinicId, specialty });
+    res.json({ success: true, count: doctors.length, doctors });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * GET /api/doctors/public/:doctorId
+ * Returns sanitized public profile for a specific practitioner.
+ * Displays ONLY clinics where the doctor has actual approved membership.
+ */
+app.get('/api/doctors/public/:doctorId', async (req, res) => {
+  try {
+    const doctor = await doctorProfileService.getDoctorPublicProfile(db, req.params.doctorId);
+    if (!doctor) {
+      return res.status(404).json({ error: 'DOCTOR_NOT_FOUND', message: 'Doctor profile not found or not approved.' });
+    }
+    res.json({ success: true, doctor });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * GET /api/doctor/profile
+ * Returns authenticated doctor's full profile (including private administrative fields).
+ */
+app.get('/api/doctor/profile', requireAuth, requireDoctor, async (req, res) => {
+  try {
+    const doctorId = req.user.uid;
+    const profile = doctorProfileService.DOCTOR_PROFILES[doctorId] || await doctorProfileService.getDoctorPublicProfile(db, doctorId);
+    if (!profile) {
+      return res.status(404).json({ error: 'PROFILE_NOT_FOUND' });
+    }
+    res.json({ success: true, profile });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * PATCH /api/doctor/profile
+ * Authenticated doctor updates their public profile fields.
+ * CRITICAL SECURITY GUARD:
+ * Strictly rejects any attempts to modify licensing, approval status, clinic membership approvals, or role.
+ */
+app.patch('/api/doctor/profile', requireAuth, requireDoctor, async (req, res) => {
+  try {
+    const doctorId = req.user.uid;
+    const actor = { uid: req.user.uid, role: req.user.role || 'doctor', isOwner: hasTrustedOwnerClaim(req.user) };
+
+    const existing = doctorProfileService.DOCTOR_PROFILES[doctorId] || { doctorId, status: 'approved' };
+    const validation = doctorProfileService.sanitizeDoctorProfileUpdate(req.body || {}, existing, actor);
+
+    if (!validation.allowed) {
+      if (db) {
+        auditService.recordAuditEvent(db, {
+          type: 'UNAUTHORIZED_PROFILE_TAMPERING_ATTEMPT',
+          req,
+          details: { attemptedFields: validation.violatingFields }
+        }).catch(() => {});
+      }
+      return res.status(403).json({
+        error: validation.error,
+        message: validation.message,
+        violatingFields: validation.violatingFields
+      });
+    }
+
+    const updated = await doctorProfileService.updateDoctorProfile(db, doctorId, req.body || {}, actor);
+
+    if (db) {
+      auditService.recordAuditEvent(db, {
+        type: 'DOCTOR_PROFILE_UPDATED',
+        req,
+        details: { updatedFields: Object.keys(validation.cleanUpdate) }
+      }).catch(() => {});
+    }
+
+    res.json({
+      success: true,
+      message: 'Doctor profile updated successfully.',
+      doctor: updated
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/clinics/:clinicId/doctors/:doctorId/membership
+ * Clinic admin approves, pauses, or rejects doctor membership at their clinic.
+ */
+app.post('/api/clinics/:clinicId/doctors/:doctorId/membership', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { clinicId, doctorId } = req.params;
+    const { status } = req.body || {};
+
+    const scope = await resolveRequesterClinic(req);
+    if (scope.role !== ROLES.SUPER_ADMIN && scope.clinicId !== clinicId) {
+      return res.status(403).json({
+        error: 'ACCESS_DENIED',
+        message: 'Clinic administrators can only manage memberships for their assigned clinic.'
+      });
+    }
+
+    const result = await doctorProfileService.updateDoctorClinicMembership(
+      db,
+      doctorId,
+      clinicId,
+      status || 'approved',
+      { uid: req.user.uid }
+    );
+
+    if (db) {
+      auditService.recordAuditEvent(db, {
+        type: 'DOCTOR_CLINIC_MEMBERSHIP_UPDATED',
+        req,
+        clinicId,
+        targetUserId: doctorId,
+        details: { newStatus: status }
+      }).catch(() => {});
+    }
+
+    res.json({ success: true, result });
+  } catch (err) {
+    res.status(400).json({ error: 'MEMBERSHIP_UPDATE_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/doctors/:doctorId/availability
+ * Returns dynamic booking slots strictly connected to the doctor's approved working hours & clinics.
+ */
+app.get('/api/doctors/:doctorId/availability', async (req, res) => {
+  const { doctorId } = req.params;
+  const { date, clinicId } = req.query;
+
+  if (!date) {
+    return res.status(400).json({ error: 'MISSING_DATE', message: 'date query parameter (YYYY-MM-DD) is required.' });
+  }
+
+  try {
+    const availability = doctorProfileService.calculateDoctorBookingAvailability(doctorId, date, clinicId || null);
+    res.json({ success: true, availability });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
   }
 });
 
