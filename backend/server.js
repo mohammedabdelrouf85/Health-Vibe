@@ -60,6 +60,8 @@ const billingService = require('./billing-service');
 const expansionAnalyticsService = require('./expansion-analytics-service');
 const doctorProfileService = require('./doctor-profile-service');
 const pushNotificationService = require('./push-notification-service');
+const waitingListService = require('./waiting-list-service');
+const googleCalendarService = require('./google-calendar-service');
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -9615,6 +9617,218 @@ app.get('/api/doctors/:doctorId/availability', async (req, res) => {
   }
 });
 
+// =============================================================================
+// 📋 WAITING LIST & NO-SHOW TRACKING ENDPOINTS
+// =============================================================================
+
+/**
+ * POST /api/appointments/waiting-list
+ * Patient joins waiting list for an appointment slot.
+ */
+app.post('/api/appointments/waiting-list', requireAuth, async (req, res) => {
+  try {
+    const { doctorId, desiredDate, clinicId, preferredTimeRange, urgencyTier, reason, notes } = req.body || {};
+    const patientId = req.user.role === 'patient' ? req.user.uid : (req.body.patientId || req.user.uid);
+
+    const result = await waitingListService.addToWaitingList(db, {
+      patientId,
+      patientName: req.user.displayName || req.user.name || 'Patient',
+      patientEmail: req.user.email,
+      patientPhone: req.user.phone,
+      doctorId,
+      clinicId,
+      desiredDate,
+      preferredTimeRange,
+      urgencyTier,
+      reason,
+      notes
+    }, req.user);
+
+    res.status(201).json({ success: true, waitingListEntry: result });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'WAITING_LIST_ERROR', message: err.message });
+  }
+});
+
+/**
+ * GET /api/appointments/waiting-list
+ * Retrieves waiting list entries with RBAC filtering.
+ */
+app.get('/api/appointments/waiting-list', requireAuth, async (req, res) => {
+  try {
+    const filters = {
+      doctorId: req.query.doctorId,
+      clinicId: req.query.clinicId,
+      desiredDate: req.query.date,
+      status: req.query.status
+    };
+    const entries = await waitingListService.getWaitingList(db, filters, req.user);
+    res.json({ success: true, count: entries.length, entries });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.code || 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/appointments/waiting-list/:id/accept
+ * Accepts offered slot atomically without double-booking.
+ */
+app.post('/api/appointments/waiting-list/:id/accept', requireAuth, async (req, res) => {
+  try {
+    const result = await waitingListService.acceptWaitingListOffer(db, {
+      waitingListId: req.params.id,
+      bookingService: schedulingService
+    }, req.user);
+    res.json(result);
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'ACCEPT_OFFER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/appointments/waiting-list/:id/decline
+ * Declines offered slot, cascading it to next waiting candidate.
+ */
+app.post('/api/appointments/waiting-list/:id/decline', requireAuth, async (req, res) => {
+  try {
+    const result = await waitingListService.declineWaitingListOffer(db, {
+      waitingListId: req.params.id,
+      reason: req.body?.reason
+    }, req.user);
+    res.json(result);
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'DECLINE_OFFER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * DELETE /api/appointments/waiting-list/:id
+ * Removes entry from waiting list.
+ */
+app.delete('/api/appointments/waiting-list/:id', requireAuth, async (req, res) => {
+  try {
+    const result = await waitingListService.removeFromWaitingList(db, req.params.id, req.user, req.body?.reason);
+    res.json(result);
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'REMOVE_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/appointments/:id/no-show
+ * Marks appointment as No-Show, strictly recording WHO changed it and WHY.
+ */
+app.post('/api/appointments/:id/no-show', requireAuth, async (req, res) => {
+  try {
+    const { reason, notes } = req.body || {};
+    const result = await waitingListService.recordNoShow(db, {
+      appointmentId: req.params.id,
+      reason,
+      notes
+    }, req.user);
+    res.json(result);
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'NO_SHOW_ERROR', message: err.message });
+  }
+});
+
+/**
+ * GET /api/appointments/no-shows/patient/:patientId
+ * Retrieves no-show metrics for a patient.
+ */
+app.get('/api/appointments/no-shows/patient/:patientId', requireAuth, async (req, res) => {
+  try {
+    const summary = await waitingListService.getPatientNoShowSummary(db, req.params.patientId, req.user);
+    res.json({ success: true, summary });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'SUMMARY_ERROR', message: err.message });
+  }
+});
+
+/**
+ * GET /api/appointments/no-shows/clinic/:clinicId
+ * Retrieves aggregated clinic-level no-show statistics for staff review.
+ */
+app.get('/api/appointments/no-shows/clinic/:clinicId', requireAuth, async (req, res) => {
+  try {
+    const stats = await waitingListService.getClinicNoShowStats(db, req.params.clinicId, req.user);
+    res.json({ success: true, stats });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'STATS_ERROR', message: err.message });
+  }
+});
+
+// =============================================================================
+// 📅 DOCTOR GOOGLE CALENDAR INTEGRATION ENDPOINTS
+// =============================================================================
+
+/**
+ * POST /api/doctors/google-calendar/connect
+ * Doctor connects Google Calendar with explicit consent and minimum scopes.
+ */
+app.post('/api/doctors/google-calendar/connect', requireAuth, async (req, res) => {
+  try {
+    const doctorId = req.user.role === 'doctor' ? req.user.uid : (req.body.doctorId || req.user.uid);
+    const { consent, googleEmail, refreshToken, scopes, calendarId } = req.body || {};
+
+    const result = await googleCalendarService.connectDoctorGoogleCalendar(db, doctorId, {
+      consent,
+      googleEmail,
+      refreshToken,
+      scopes,
+      calendarId
+    }, req.user);
+
+    res.json(result);
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'CONNECT_ERROR', message: err.message });
+  }
+});
+
+/**
+ * DELETE /api/doctors/google-calendar/disconnect
+ * Doctor disconnects Google Calendar and revokes consent.
+ */
+app.delete('/api/doctors/google-calendar/disconnect', requireAuth, async (req, res) => {
+  try {
+    const doctorId = req.user.role === 'doctor' ? req.user.uid : (req.body.doctorId || req.user.uid);
+    const result = await googleCalendarService.disconnectDoctorGoogleCalendar(db, doctorId, req.user);
+    res.json(result);
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'DISCONNECT_ERROR', message: err.message });
+  }
+});
+
+/**
+ * GET /api/doctors/google-calendar/status
+ * Retrieves Google Calendar integration status and confirms Source of Truth.
+ */
+app.get('/api/doctors/google-calendar/status', requireAuth, async (req, res) => {
+  try {
+    const doctorId = req.user.role === 'doctor' ? req.user.uid : (req.query.doctorId || req.user.uid);
+    const status = await googleCalendarService.getDoctorGoogleCalendarStatus(db, doctorId);
+    res.json({ success: true, status });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/doctors/google-calendar/reconcile/:appointmentId
+ * Reconciles external Google Calendar conflict against authoritative Health Vibe DB record.
+ */
+app.post('/api/doctors/google-calendar/reconcile/:appointmentId', requireAuth, async (req, res) => {
+  try {
+    const result = await googleCalendarService.reconcileGoogleCalendarEvent(db, req.params.appointmentId, req.body?.externalEvent || {});
+    res.json(result);
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.code || 'RECONCILE_ERROR', message: err.message });
+  }
+});
+
 app.pushNotificationService = pushNotificationService;
+app.waitingListService = waitingListService;
+app.googleCalendarService = googleCalendarService;
+app.schedulingService = schedulingService;
 
 module.exports = app;

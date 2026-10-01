@@ -18,6 +18,8 @@ const {
   scheduleAppointmentReminder,
   cancelAppointmentReminders
 } = require('./notification-service');
+const waitingListService = require('./waiting-list-service');
+const googleCalendarService = require('./google-calendar-service');
 
 // ============================================================================
 // 🏥 CLINICS REGISTRY
@@ -760,11 +762,34 @@ async function bookAppointmentTransaction(db, payload, authUser) {
           transaction.get(apptRef)
         ]);
 
-        if (docLockSnap.exists && docLockSnap.data()?.status === 'active') {
-          const err = new Error('This doctor already has a confirmed appointment in that slot.');
-          err.code = 'DOCTOR_SLOT_CONFLICT';
-          err.statusCode = 409;
-          throw err;
+        if (docLockSnap.exists) {
+          const docLock = docLockSnap.data();
+          if (docLock?.status === 'active') {
+            const err = new Error('This doctor already has a confirmed appointment in that slot.');
+            err.code = 'DOCTOR_SLOT_CONFLICT';
+            err.statusCode = 409;
+            throw err;
+          }
+          if (docLock?.status === 'offered_hold' && docLock?.offeredToPatientId !== patientId) {
+            const now = new Date();
+            if (new Date(docLock.expiresAt) > now) {
+              const err = new Error('This slot is currently held for an eligible waiting list patient.');
+              err.code = 'DOCTOR_SLOT_OFFER_HOLD';
+              err.statusCode = 409;
+              throw err;
+            }
+          }
+        }
+
+        // In-memory offer hold check
+        const inMemHold = waitingListService._inMemorySlotOfferHolds.get(doctorSlotKey);
+        if (inMemHold && inMemHold.status === 'active' && inMemHold.patientId !== patientId) {
+          if (new Date(inMemHold.expiresAt) > new Date()) {
+            const err = new Error('This slot is currently held for an eligible waiting list patient.');
+            err.code = 'DOCTOR_SLOT_OFFER_HOLD';
+            err.statusCode = 409;
+            throw err;
+          }
         }
 
         if (patLockSnap.exists && patLockSnap.data()?.status === 'active') {
@@ -897,6 +922,13 @@ async function bookAppointmentTransaction(db, payload, authUser) {
       await scheduleAppointmentReminder(db, savedAppointment, { hoursBefore: 24 });
     } catch (remErr) {
       console.warn('[REMINDER SCHEDULE WARNING]:', remErr.message);
+    }
+
+    // Sync to doctor's Google Calendar if connected with consent
+    try {
+      await googleCalendarService.syncAppointmentCreated(db, savedAppointment);
+    } catch (gcalErr) {
+      console.warn('[GCAL BOOKING SYNC WARNING]:', gcalErr.message);
     }
 
     return savedAppointment;
@@ -1169,6 +1201,27 @@ async function rescheduleAppointmentTransaction(db, { appointmentId, newDate, ne
       console.warn('[REMINDER RESCHEDULE WARNING]:', remErr.message);
     }
 
+    // Sync to doctor's Google Calendar if connected with consent
+    try {
+      await googleCalendarService.syncAppointmentRescheduled(db, updatedAppointment);
+    } catch (gcalErr) {
+      console.warn('[GCAL RESCHEDULE SYNC WARNING]:', gcalErr.message);
+    }
+
+    // Offer the newly-freed old slot to the waiting list!
+    try {
+      await waitingListService.processAvailableSlotForWaitingList(db, {
+        doctorId: appointment.doctorId,
+        clinicId: appointment.clinicId,
+        date: appointment.date,
+        slotId: appointment.slotId,
+        timeSlot: appointment.timeSlot,
+        timeSlotEn: appointment.timeSlotEn
+      });
+    } catch (wlErr) {
+      console.warn('[WAITING LIST OFFER RESCHEDULE WARNING]:', wlErr.message);
+    }
+
     return { success: true, ...updatedAppointment, appointment: updatedAppointment };
   } finally {
     releaseLock();
@@ -1289,6 +1342,27 @@ async function cancelAppointmentTransaction(db, targetAppt, actorUser, options =
     console.warn('[REMINDER CANCEL WARNING]:', remErr.message);
   }
 
+  // Sync to doctor's Google Calendar if connected with consent
+  try {
+    await googleCalendarService.syncAppointmentCancelled(db, appt, opts.reason);
+  } catch (gcalErr) {
+    console.warn('[GCAL CANCEL SYNC WARNING]:', gcalErr.message);
+  }
+
+  // Offer the newly-freed slot to the waiting list!
+  try {
+    await waitingListService.processAvailableSlotForWaitingList(db, {
+      doctorId: appt.doctorId,
+      clinicId: appt.clinicId,
+      date: appt.date,
+      slotId: appt.slotId,
+      timeSlot: appt.timeSlot,
+      timeSlotEn: appt.timeSlotEn
+    });
+  } catch (wlErr) {
+    console.warn('[WAITING LIST OFFER CANCEL WARNING]:', wlErr.message);
+  }
+
   const finalCancelledAppt = { ...appt, ...updatePayload };
   return { success: true, ...finalCancelledAppt, appointment: finalCancelledAppt };
 }
@@ -1383,7 +1457,14 @@ async function updateAppointmentStatusTransaction(db, { appointmentId, status, n
   if (status === APPOINTMENT_STATUSES.COMPLETED) {
     updatePayload.completedAt = nowIso;
   } else if (status === APPOINTMENT_STATUSES.NO_SHOW) {
+    if (!reason && !notes) {
+      const err = new Error('A reason explaining why the patient is marked as No-Show is required.');
+      err.code = 'MISSING_NO_SHOW_REASON';
+      err.statusCode = 400;
+      throw err;
+    }
     updatePayload.noShowAt = nowIso;
+    updatePayload.noShowReason = (reason || notes).trim();
   }
 
   await apptRef.update(updatePayload);
@@ -1651,5 +1732,7 @@ module.exports = {
   scheduleAppointmentReminder,
   cancelAppointmentReminders,
   clearMemorySlotLocks,
-  _activeMemorySlotLocks: activeMemorySlotLocks
+  _activeMemorySlotLocks: activeMemorySlotLocks,
+  waitingListService,
+  googleCalendarService
 };
