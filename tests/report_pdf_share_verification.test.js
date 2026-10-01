@@ -46,7 +46,7 @@ const testApplications = {
     name: 'Dr. Tarek Mansour',
     licenseNumber: 'EGY-MED-9942',
     specialty: 'Consultant Pulmonologist',
-    clinic: 'Health Vibes Respiratory Unit',
+    clinic: 'Health Vibe Respiratory Unit',
     clinicId: 'clinic-a'
   }
 };
@@ -214,7 +214,7 @@ async function runTests() {
       approvingDoctorName: 'Dr. Tarek Mansour',
       doctorSpecialty: 'Consultant Pulmonologist',
       doctorLicense: 'EGY-MED-9942',
-      clinicName: 'Health Vibes Respiratory Unit',
+      clinicName: 'Health Vibe Respiratory Unit',
       status: 'approved',
       doctorApproved: true,
       reportRef: 'HV-REP-CERT101',
@@ -254,7 +254,7 @@ async function runTests() {
           name: 'Dr. Tarek Mansour',
           specialty: 'Consultant Pulmonologist',
           licenseNumber: 'EGY-MED-9942',
-          clinic: 'Health Vibes Respiratory Unit',
+          clinic: 'Health Vibe Respiratory Unit',
           applicationId: 'app-9942'
         },
         clinicalContent: {
@@ -447,7 +447,7 @@ async function runTests() {
       assert.equal(verifyRes.data.status, 'certified');
       assert.equal(verifyRes.data.doctor.name, 'Dr. Tarek Mansour');
       assert.equal(verifyRes.data.doctor.licenseNumber, 'EGY-MED-9942');
-      assert.equal(verifyRes.data.clinic, 'Health Vibes Respiratory Unit');
+      assert.equal(verifyRes.data.clinic, 'Health Vibe Respiratory Unit');
       assert.ok(verifyRes.data.digitalSignature.hash);
 
       // STRICT PRIVACY AUDIT: Assert that sensitive medical fields are 100% ABSENT

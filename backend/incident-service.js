@@ -1,5 +1,5 @@
 /**
- * Health Vibes AI - Security Incident, Clinical Adverse Event & Vulnerability Reporting Service
+ * Health Vibe AI - Security Incident, Clinical Adverse Event & Vulnerability Reporting Service
  *
  * Implements:
  * 1. Vulnerability-Reporting Channel: submission, sanitization, tracking, and audit trail.

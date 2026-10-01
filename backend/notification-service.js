@@ -174,7 +174,7 @@ function buildResultReadyEmail({
     ? savedRecommendations.map(r => `<li style="margin-bottom:6px;">${escapeHtml(r)}</li>`).join('')
     : '<li>المتابعة الدورية والالتزام بإرشادات الوقاية.</li>';
 
-  const subject = `🩺 نتيجة فحصك التنفسي جاهزة ومعتمدة - Health Vibes AI (${safeReportRef})`;
+  const subject = `🩺 نتيجة فحصك التنفسي جاهزة ومعتمدة - Health Vibe AI (${safeReportRef})`;
 
   const html = `
 <!DOCTYPE html>
@@ -187,7 +187,7 @@ function buildResultReadyEmail({
   <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
     <div style="background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%); padding: 28px 24px; color: #ffffff;">
       <div style="display: flex; align-items: center; justify-content: space-between;">
-        <h1 style="margin: 0; font-size: 20px; font-weight: 700;">Health Vibes AI 🩺</h1>
+        <h1 style="margin: 0; font-size: 20px; font-weight: 700;">Health Vibe AI 🩺</h1>
         <span style="background: rgba(255,255,255,0.2); padding: 4px 12px; border-radius: 999px; font-size: 12px;">معتمد سريرياً</span>
       </div>
       <p style="margin: 8px 0 0; font-size: 14px; opacity: 0.9;">تقرير الفحص السريري والاستشارة التنفسية</p>
@@ -229,13 +229,13 @@ function buildResultReadyEmail({
     </div>
     <div style="background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 18px 24px; font-size: 12px; color: #64748b; text-align: center; line-height: 1.5;">
       <p style="margin: 0 0 6px;">⚠️ <strong>تنبيه طبي:</strong> في حال الشعور بضيق تنفس حاد، هبوط سريع في الأكسجين، أو ألم بالصدر، يرجى التوجه فوراً لأقرب قسم طوارئ.</p>
-      <p style="margin: 0;">© Health Vibes AI - منظومة الذكاء الاصطناعي للرعاية التنفسية السريرية.</p>
+      <p style="margin: 0;">© Health Vibe AI - منظومة الذكاء الاصطناعي للرعاية التنفسية السريرية.</p>
     </div>
   </div>
 </body>
 </html>`;
 
-  const text = `Health Vibes AI - نتيجة الفحص التنفسي السريري
+  const text = `Health Vibe AI - نتيجة الفحص التنفسي السريري
 ==============================================
 عزيزي المريض / ${patientName || 'المحترم'}،
 تم اعتماد تقرير فحصك السريري من قبل ${doctorName || 'غير مسجل'} (${doctorSpecialty || 'غير مسجل'}).
@@ -247,7 +247,7 @@ function buildResultReadyEmail({
 ${reportLink}
 
 تنبيه: في حالات الطوارئ الطبية توجه فورًا إلى أقرب مستشفى.
-© Health Vibes AI`;
+© Health Vibe AI`;
 
   return { subject, html, text };
 }
@@ -269,7 +269,7 @@ function buildMoreInfoEmail({
   const safeMoreInfoNote = escapeHtml(moreInfoNote || 'يرجى إعادة قياس نسبة الأكسجين SpO2 وإرفاق الروشتة السابقة أو توضيح تطور الأعراض.');
   const safeCaseRef = escapeHtml(caseId.slice(-6).toUpperCase());
 
-  const subject = `⚠️ مطلوب استكمال بيانات لفحصك الطبي - Health Vibes AI (#${safeCaseRef})`;
+  const subject = `⚠️ مطلوب استكمال بيانات لفحصك الطبي - Health Vibe AI (#${safeCaseRef})`;
 
   const html = `
 <!DOCTYPE html>
@@ -282,7 +282,7 @@ function buildMoreInfoEmail({
   <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
     <div style="background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%); padding: 28px 24px; color: #ffffff;">
       <div style="display: flex; align-items: center; justify-content: space-between;">
-        <h1 style="margin: 0; font-size: 20px; font-weight: 700;">Health Vibes AI ⚠️</h1>
+        <h1 style="margin: 0; font-size: 20px; font-weight: 700;">Health Vibe AI ⚠️</h1>
         <span style="background: rgba(255,255,255,0.25); padding: 4px 12px; border-radius: 999px; font-size: 12px;">مطلوب بيانات</span>
       </div>
       <p style="margin: 8px 0 0; font-size: 14px; opacity: 0.95;">تحديث بخصوص فحصك السريري رقم #${safeCaseRef}</p>
@@ -305,13 +305,13 @@ function buildMoreInfoEmail({
       </div>
     </div>
     <div style="background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 18px 24px; font-size: 12px; color: #64748b; text-align: center; line-height: 1.5;">
-      <p style="margin: 0;">© Health Vibes AI - منظومة الذكاء الاصطناعي للرعاية التنفسية السريرية.</p>
+      <p style="margin: 0;">© Health Vibe AI - منظومة الذكاء الاصطناعي للرعاية التنفسية السريرية.</p>
     </div>
   </div>
 </body>
 </html>`;
 
-  const text = `Health Vibes AI - مطلوب استكمال بيانات لفحصك الطبي
+  const text = `Health Vibe AI - مطلوب استكمال بيانات لفحصك الطبي
 ===================================================
 عزيزي المريض / ${patientName || 'المحترم'}،
 طلب ${doctorName || 'غير مسجل'} تزويده ببيانات إضافية لإتمام فحصك السريري #${safeCaseRef}:
@@ -320,7 +320,7 @@ function buildMoreInfoEmail({
 
 إرسال الرد عبر الرابط:
 ${reviewLink}
-© Health Vibes AI`;
+© Health Vibe AI`;
 
   return { subject, html, text };
 }
@@ -345,7 +345,7 @@ function buildDoctorAssignedEmail({
   const safeClinic = escapeHtml(clinicName || 'عيادة الصدر المتخصصة');
   const safeEst = escapeHtml(estimatedTime);
 
-  const subject = `👨‍⚕️ تم تعيين الطبيب لمراجعة حالتك السريرية - Health Vibes AI`;
+  const subject = `👨‍⚕️ تم تعيين الطبيب لمراجعة حالتك السريرية - Health Vibe AI`;
 
   const html = `
 <!DOCTYPE html>
@@ -357,7 +357,7 @@ function buildDoctorAssignedEmail({
 <body style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8fafc; margin: 0; padding: 24px; color: #1e293b; direction: rtl; text-align: right;">
   <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
     <div style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); padding: 28px 24px; color: #ffffff;">
-      <h1 style="margin: 0; font-size: 20px; font-weight: 700;">Health Vibes AI 👨‍⚕️</h1>
+      <h1 style="margin: 0; font-size: 20px; font-weight: 700;">Health Vibe AI 👨‍⚕️</h1>
       <p style="margin: 8px 0 0; font-size: 14px; opacity: 0.95;">إسناد الحالة إلى طبيب استشاري معتمد</p>
     </div>
     <div style="padding: 28px 24px;">
@@ -378,13 +378,13 @@ function buildDoctorAssignedEmail({
       </div>
     </div>
     <div style="background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 16px; font-size: 12px; color: #64748b; text-align: center;">
-      © Health Vibes AI - رعاية تنفسية ذكية وموثوقة
+      © Health Vibe AI - رعاية تنفسية ذكية وموثوقة
     </div>
   </div>
 </body>
 </html>`;
 
-  const text = `Health Vibes AI - تم تعيين الطبيب لمراجعة حالتك
+  const text = `Health Vibe AI - تم تعيين الطبيب لمراجعة حالتك
 =============================================
 مرحباً / ${patientName || 'المحترم'}،
 تم إسناد حالتك الطبية إلى ${doctorName || 'طبيب استشاري'} (${doctorSpecialty || 'أمراض صدرية'}).
@@ -392,7 +392,7 @@ function buildDoctorAssignedEmail({
 الوقت المتوقع للاعتماد: ${estimatedTime}
 
 المتابعة عبر الرابط: ${caseLink}
-© Health Vibes AI`;
+© Health Vibe AI`;
 
   return { subject, html, text };
 }
@@ -417,7 +417,7 @@ function buildEscalationEmail({
   const safeFindings = escapeHtml(criticalFindings || 'علامات استغاثة تنفسية تتطلب تقييماً فورياً');
   const safeInstructions = escapeHtml(instructions || 'يرجى التوجه فوراً لأقرب قسم طوارئ ومستشفى لتقييم مجرى الهواء ونسبة الأكسجين.');
 
-  const subject = `🚨 تنبيه طبي عاجل: تصعيد الحالة السريرية - Health Vibes AI`;
+  const subject = `🚨 تنبيه طبي عاجل: تصعيد الحالة السريرية - Health Vibe AI`;
 
   const html = `
 <!DOCTYPE html>
@@ -459,7 +459,7 @@ function buildEscalationEmail({
 </body>
 </html>`;
 
-  const text = `🚨 تنبيه طبي عاجل - Health Vibes AI
+  const text = `🚨 تنبيه طبي عاجل - Health Vibe AI
 =================================
 عناية المريض / ${patientName || 'المحترم'}،
 تم رصد مؤشرات سريرية تستدعي تصعيد الحالة فوراً:
@@ -468,7 +468,7 @@ function buildEscalationEmail({
 التعليمات العاجلة: ${instructions || 'التوجه فوراً لأقرب قسم طوارئ.'}
 
 رابط الطوارئ: ${emergencyLink}
-© Health Vibes AI`;
+© Health Vibe AI`;
 
   return { subject, html, text };
 }
@@ -512,22 +512,22 @@ function buildAppointmentEmail({
     title = 'تأكيد حجز الموعد الطبي';
     badge = 'مؤكد ✓';
     bannerColor = 'linear-gradient(135deg, #0d9488 0%, #0f766e 100%)';
-    subject = `🗓️ تأكيد حجز موعدك الطبي - Health Vibes AI (${safeDate} ${safeTime})`.trim();
+    subject = `🗓️ تأكيد حجز موعدك الطبي - Health Vibe AI (${safeDate} ${safeTime})`.trim();
   } else if (effectiveAction === 'rescheduled') {
     title = 'تعديل موعد الاستشارة الطبية';
     badge = 'تمت الجدولة 🔄';
     bannerColor = 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)';
-    subject = `🔄 تم تعديل موعدك الطبي بنجاح - Health Vibes AI (${safeDate} ${safeTime})`.trim();
+    subject = `🔄 تم تعديل موعدك الطبي بنجاح - Health Vibe AI (${safeDate} ${safeTime})`.trim();
   } else if (effectiveAction === 'cancelled') {
     title = 'إلغاء الموعد الطبي';
     badge = 'ملغي ✕';
     bannerColor = 'linear-gradient(135deg, #64748b 0%, #475569 100%)';
-    subject = `❌ إشعار بإلغاء موعدك الطبي - Health Vibes AI (${safeDate})`.trim();
+    subject = `❌ إشعار بإلغاء موعدك الطبي - Health Vibe AI (${safeDate})`.trim();
   } else if (effectiveAction === 'reminder') {
     title = 'تذكير بموعد استشارتك القادمة';
     badge = 'تذكير ⏰';
     bannerColor = 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)';
-    subject = `⏰ تذكير: موعد استشارتك الطبية القادمة - Health Vibes AI (${safeDate} ${safeTime})`.trim();
+    subject = `⏰ تذكير: موعد استشارتك الطبية القادمة - Health Vibe AI (${safeDate} ${safeTime})`.trim();
   }
 
   const html = `
@@ -541,7 +541,7 @@ function buildAppointmentEmail({
   <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
     <div style="background: ${bannerColor}; padding: 28px 24px; color: #ffffff;">
       <div style="display: flex; align-items: center; justify-content: space-between;">
-        <h1 style="margin: 0; font-size: 20px; font-weight: 700;">Health Vibes AI</h1>
+        <h1 style="margin: 0; font-size: 20px; font-weight: 700;">Health Vibe AI</h1>
         <span style="background: rgba(255,255,255,0.25); padding: 4px 12px; border-radius: 999px; font-size: 12px;">${badge}</span>
       </div>
       <p style="margin: 8px 0 0; font-size: 14px; opacity: 0.95;">${title}</p>
@@ -579,13 +579,13 @@ function buildAppointmentEmail({
       </div>
     </div>
     <div style="background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 14px; font-size: 12px; color: #64748b; text-align: center;">
-      © Health Vibes AI - حجز وإدارة المواعيد الطبية الآمنة
+      © Health Vibe AI - حجز وإدارة المواعيد الطبية الآمنة
     </div>
   </div>
 </body>
 </html>`;
 
-  const text = `Health Vibes AI - ${title}
+  const text = `Health Vibe AI - ${title}
 ====================================
 عزيزي المريض / ${patientName || 'المحترم'}،
 حالة الموعد: ${badge}
@@ -594,7 +594,7 @@ function buildAppointmentEmail({
 التاريخ: ${date || ''} - الوقت: ${timeSlot || ''}
 ${reason ? `الملاحظات: ${reason}\n` : ''}
 رابط المواعيد: ${apptLink}
-© Health Vibes AI`;
+© Health Vibe AI`;
 
   return { subject, html, text };
 }
@@ -614,7 +614,7 @@ function buildVerificationEmail({
   const safePurpose = escapeHtml(purpose);
   const safeExp = escapeHtml(expiresMinutes);
 
-  const subject = `🔐 رمز التحقق الخاص بك: ${safeCode} - Health Vibes AI`;
+  const subject = `🔐 رمز التحقق الخاص بك: ${safeCode} - Health Vibe AI`;
 
   const html = `
 <!DOCTYPE html>
@@ -626,7 +626,7 @@ function buildVerificationEmail({
 <body style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8fafc; margin: 0; padding: 24px; color: #1e293b; direction: rtl; text-align: right;">
   <div style="max-width: 500px; margin: 0 auto; background: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
     <div style="background: linear-gradient(135deg, #0f766e 0%, #115e59 100%); padding: 24px; color: #ffffff; text-align: center;">
-      <h1 style="margin: 0; font-size: 20px; font-weight: 700;">Health Vibes AI 🔐</h1>
+      <h1 style="margin: 0; font-size: 20px; font-weight: 700;">Health Vibe AI 🔐</h1>
       <p style="margin: 6px 0 0; font-size: 13.5px; opacity: 0.9;">رمز الأمان والتحقق الرقمي</p>
     </div>
     <div style="padding: 28px 24px; text-align: center;">
@@ -647,13 +647,13 @@ function buildVerificationEmail({
       </p>
     </div>
     <div style="background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 14px; font-size: 12px; color: #94a3b8; text-align: center;">
-      © Health Vibes AI - منظومة الأمان والتحقق المعتمدة
+      © Health Vibe AI - منظومة الأمان والتحقق المعتمدة
     </div>
   </div>
 </body>
 </html>`;
 
-  const text = `Health Vibes AI - رمز التحقق
+  const text = `Health Vibe AI - رمز التحقق
 ============================
 مرحباً / ${recipientName || 'المستخدم'}،
 رمز التحقق الخاص بك لإتمام ${purpose} هو:
@@ -662,7 +662,7 @@ ${code}
 
 ينتهي هذا الرمز خلال ${expiresMinutes} دقائق.
 لا تشارك هذا الرمز مع أي شخص.
-© Health Vibes AI`;
+© Health Vibe AI`;
 
   return { subject, html, text };
 }
@@ -747,7 +747,7 @@ async function sendClinicalNotificationEmail(options = {}) {
   });
 
   const transporter = createTransporter({ strictSmtp });
-  const fromAddress = process.env.SMTP_FROM || 'Health Vibes AI <notifications@healthvibe.ai>';
+  const fromAddress = process.env.SMTP_FROM || 'Health Vibe AI <notifications@healthvibe.ai>';
 
   const mailOptions = {
     from: fromAddress,
@@ -1859,7 +1859,7 @@ async function dispatchNotificationWithPreferences(db, {
     inAppNotification = await recordNotificationHistory(db, {
       userId,
       eventType: resolvedType,
-      title: title || 'Health Vibes Notification',
+      title: title || 'Health Vibe Notification',
       message: message || body || '',
       authorizedDestinationLink: link,
       urgent: isUrgent,

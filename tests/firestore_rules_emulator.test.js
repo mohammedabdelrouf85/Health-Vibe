@@ -1,5 +1,5 @@
 /**
- * Health Vibes Firebase security rules tests.
+ * Health Vibe AI Firebase security rules tests.
  *
  * These tests use the Firebase Emulator Suite with the real firestore.rules and
  * storage.rules files. They fail fast if Auth, Firestore, or Storage emulators

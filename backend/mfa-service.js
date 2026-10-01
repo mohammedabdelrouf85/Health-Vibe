@@ -125,7 +125,7 @@ function verifyTotp(token, secret, window = 1) {
 /**
  * Generate standard otpauth URI for QR codes and authenticator apps
  */
-function generateOtpAuthUri({ email, secret, issuer = 'Health Vibes AI' }) {
+function generateOtpAuthUri({ email, secret, issuer = 'Health Vibe AI' }) {
   const cleanEmail = encodeURIComponent(String(email || 'user').trim());
   const cleanIssuer = encodeURIComponent(issuer);
   return `otpauth://totp/${cleanIssuer}:${cleanEmail}?secret=${secret}&issuer=${cleanIssuer}&algorithm=SHA1&digits=6&period=${TOTP_STEP_SECONDS}`;

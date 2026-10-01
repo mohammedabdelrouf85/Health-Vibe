@@ -1,5 +1,5 @@
 /**
- * Health Vibes AI - Production & Staging Build Pipeline
+ * Health Vibe AI - Production & Staging Build Pipeline
  *
  * Verifies dependencies, validates configurations, indexes, rules, and CSP,
  * and outputs deterministic build metadata (app/build-info.json).
@@ -40,7 +40,7 @@ function getGitBranch() {
 
 function runBuild(targetEnv) {
   const rootDir = path.resolve(__dirname, '..');
-  console.log(`[Health Vibes Build] Starting build validation for environment: [${targetEnv.toUpperCase()}]`);
+  console.log(`[Health Vibe Build] Starting build validation for environment: [${targetEnv.toUpperCase()}]`);
 
   const errors = [];
 
@@ -147,7 +147,7 @@ function runBuild(targetEnv) {
   }
 
   if (errors.length > 0) {
-    console.error(`[Health Vibes Build] FAILED with ${errors.length} error(s):`);
+    console.error(`[Health Vibe Build] FAILED with ${errors.length} error(s):`);
     errors.forEach((err, idx) => console.error(`  ${idx + 1}. ${err}`));
     throw new Error(`Build validation failed with ${errors.length} error(s).`);
   }
@@ -165,9 +165,9 @@ function runBuild(targetEnv) {
 
   const buildInfoPath = path.join(rootDir, 'app', 'build-info.json');
   fs.writeFileSync(buildInfoPath, JSON.stringify(buildInfo, null, 2), 'utf8');
-  console.log(`[Health Vibes Build] Build info generated successfully at ${buildInfoPath}:`);
+  console.log(`[Health Vibe Build] Build info generated successfully at ${buildInfoPath}:`);
   console.log(JSON.stringify(buildInfo, null, 2));
-  console.log(`[Health Vibes Build] Build completed successfully for [${targetEnv.toUpperCase()}].`);
+  console.log(`[Health Vibe Build] Build completed successfully for [${targetEnv.toUpperCase()}].`);
   return buildInfo;
 }
 
@@ -177,7 +177,7 @@ if (require.main === module) {
     runBuild(env);
     process.exit(0);
   } catch (err) {
-    console.error(`[Health Vibes Build] Error: ${err.message}`);
+    console.error(`[Health Vibe Build] Error: ${err.message}`);
     process.exit(1);
   }
 }

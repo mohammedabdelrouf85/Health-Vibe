@@ -1,9 +1,9 @@
-# Health Vibes Clinical Governance Brief
+# Health Vibe AI Clinical Governance Brief
 
 Status: Pending qualified medical and Egyptian regulatory review
-Last updated: 2026-09-27
+Last updated: 2026-09-30
 
-This document defines the current intended use of the Health Vibes assessment flow, rule engine, and assistant. It does not record clinical, legal, or regulatory approval. All approvals remain pending until qualified reviewers complete and sign their decisions.
+This document defines the current intended use of the Health Vibe AI assessment flow, rule engine, and assistant. It does not record clinical, legal, or regulatory approval. All approvals remain pending until qualified reviewers complete and sign their decisions.
 
 ## Target Users
 

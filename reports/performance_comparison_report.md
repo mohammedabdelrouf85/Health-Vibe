@@ -1,4 +1,4 @@
-# Health Vibes AI - Performance, Core Web Vitals & Firebase Query Optimization Report
+# Health Vibe AI - Performance, Core Web Vitals & Firebase Query Optimization Report
 
 **Date:** September 29, 2026  
 **Environment:** Staging / Production Architecture  
@@ -9,7 +9,7 @@
 
 ## 1. Executive Summary
 
-A comprehensive optimization was conducted across the Health Vibes client and backend architectures to improve Core Web Vitals, asset payload weights, and database read efficiency:
+A comprehensive optimization was conducted across the Health Vibe AI client and backend architectures to improve Core Web Vitals, asset payload weights, and database read efficiency:
 1. **58.9% reduction in Total Page Load Time** (from 2,883 ms down to 1,186 ms).
 2. **56.2% improvement in LCP / FCP** (from 2,876 ms down to 1,260 ms).
 3. **59.7% improvement in DOMContentLoaded** (from 2,826 ms down to 1,138 ms).

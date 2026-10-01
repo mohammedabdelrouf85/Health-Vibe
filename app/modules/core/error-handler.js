@@ -141,7 +141,7 @@
         category: isEn ? "Registration" : "إنشاء حساب",
         title: isEn ? "Email Already Registered" : "البريد مسجل بالفعل",
         message: isEn
-          ? "An existing Health Vibes account is already associated with this email address."
+          ? "An existing Health Vibe account is already associated with this email address."
           : "يوجد حساب مسجل مسبقاً بهذا البريد الإلكتروني في النظام.",
         action: isEn ? "Please switch to 'Sign In' or recover your password if you forgot it." : "يرجى التبديل إلى 'تسجيل الدخول' أو استعادة كلمة المرور إذا كنت قد نسيتها.",
         ref: code || "auth/email-already-in-use"

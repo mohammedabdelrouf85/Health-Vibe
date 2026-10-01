@@ -55,7 +55,7 @@
     }
     const dateFormatted = new Date().toLocaleDateString(isEn ? "en-US" : "ar-EG");
     paginationEl.innerHTML = `
-      <span>Health Vibes Medical Center • ${reportRef}</span>
+      <span>Health Vibe Medical Center • ${reportRef}</span>
       <span>${isEn ? `Printed: ${dateFormatted}` : `تاريخ الطباعة: ${dateFormatted}`}</span>
       <span class="page-counter">${isEn ? "Page 1 of 1 (Approved Record)" : "صفحة 1 من 1 (نسخة معتمدة)"}</span>
     `;
@@ -180,8 +180,8 @@
               <span>
                 <strong>${isEn ? "Explicit Patient Consent Required:" : "الموافقة الصريحة المطلوبة:"}</strong>
                 ${isEn
-                  ? "I hereby explicitly authorize Health Vibes to generate a temporary, revocable access link to my certified medical assessment record. I understand this link can be revoked at any time."
-                  : "أقر بموافقتي الصريحة والتامة على قيام Health Vibes بإنشاء رابط مؤقت وقابل للإلغاء لمشاركة تقريري الطبي المعتمد، وأعلم أنه يمكنني إلغاء الرابط فوراً في أي وقت."}
+                  ? "I hereby explicitly authorize Health Vibe to generate a temporary, revocable access link to my certified medical assessment record. I understand this link can be revoked at any time."
+                  : "أقر بموافقتي الصريحة والتامة على قيام Health Vibe بإنشاء رابط مؤقت وقابل للإلغاء لمشاركة تقريري الطبي المعتمد، وأعلم أنه يمكنني إلغاء الرابط فوراً في أي وقت."}
               </span>
             </label>
           </div>
@@ -330,7 +330,7 @@
             <h2 style="color: #dc2626; margin: 0 0 10px;">${isEn ? "Authenticity Verification Failed" : "فشل التحقق من صحة التقرير"}</h2>
             <p style="font-size: 13.5px; color: var(--muted); line-height: 1.6; margin-bottom: 20px;">
               ${isEn
-                ? `No certified clinical record was found matching reference <strong>${escapeHtml(reportRef)}</strong> in the authentic Health Vibes registry.`
+                ? `No certified clinical record was found matching reference <strong>${escapeHtml(reportRef)}</strong> in the authentic Health Vibe registry.`
                 : `لم يتم العثور على أي تقرير سريري معتمد يحمل الرقم المرجعي <strong>${escapeHtml(reportRef)}</strong> في سجل الاعتماد الرسمي.`}
             </p>
             <button type="button" class="solid-button" onclick="window.location.href='/'">
@@ -409,7 +409,7 @@
             </div>
             <div>
               <span style="color: var(--muted);">${isEn ? "Issuing Medical Center:" : "المركز الطبي المصدر:"}</span>
-              <strong style="margin-inline-start: 6px;">${escapeHtml(data.clinic || "Health Vibes Medical Center")}</strong>
+              <strong style="margin-inline-start: 6px;">${escapeHtml(data.clinic || "Health Vibe Medical Center")}</strong>
             </div>
             <div>
               <span style="color: var(--muted);">${isEn ? "Approval Timestamp:" : "تاريخ وتوقيت الاعتماد:"}</span>

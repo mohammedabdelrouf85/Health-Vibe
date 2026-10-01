@@ -37,7 +37,7 @@ jobs:
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
 
-          echo "## Health Vibes AI Release ${TAG}" > RELEASE_NOTES.md
+          echo "## Health Vibe AI Release ${TAG}" > RELEASE_NOTES.md
           echo "" >> RELEASE_NOTES.md
           echo "### 📦 Deployment Overview" >> RELEASE_NOTES.md
           echo "- **Base Version**: ${VERSION}" >> RELEASE_NOTES.md
@@ -58,7 +58,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.release_notes.outputs.tag }}
-          name: Health Vibes AI Release ${{ steps.release_notes.outputs.tag }}
+          name: Health Vibe AI Release ${{ steps.release_notes.outputs.tag }}
           body_path: RELEASE_NOTES.md
           draft: false
           prerelease: false

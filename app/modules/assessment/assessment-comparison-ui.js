@@ -813,7 +813,7 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `HealthVibes_Medical_Summary_${patientId}_${Date.now()}.json`;
+      a.download = `HealthVibe_Medical_Summary_${patientId}_${Date.now()}.json`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);

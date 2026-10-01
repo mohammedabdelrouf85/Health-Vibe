@@ -29,7 +29,7 @@
     if (title) {
       title.textContent = isSignUp
         ? (isEn ? "Create Patient Account" : "إنشاء حساب مريض جديد")
-        : (isEn ? "Sign in to Health Vibes" : "تسجيل الدخول إلى المنصة");
+        : (isEn ? "Sign in to Health Vibe AI" : "تسجيل الدخول إلى المنصة");
     }
 
     if (sub) {

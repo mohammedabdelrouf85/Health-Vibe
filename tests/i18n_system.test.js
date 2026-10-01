@@ -311,7 +311,7 @@ const reportDiag = engine.t('report.clinicalDiagnosis');
 const reportDisclaimer = engine.t('report.clinicalDisclaimer');
 const reportDigital = engine.t('report.digitalVerification');
 
-assert.ok(reportCenter.includes('مركز هيلث فايبز الطبي التخصصي'), 'Formal clinical center name');
+assert.ok(reportCenter.includes('مركز هيلث فايب الطبي التخصصي'), 'Formal clinical center name');
 assert.ok(reportTitle.includes('التقرير الطبي السريري المعتمد'), 'Formal certified report title');
 assert.ok(reportDiag.includes('التشخيص الإكلينيكي المعتمد'), 'Formal certified clinical diagnosis label');
 assert.ok(reportDisclaimer.includes('إخلاء مسؤولية سريري معتمد'), 'Formal certified clinical disclaimer');

@@ -1,11 +1,11 @@
-# Health Vibes AI - Clinical Pilot Plan (1 Clinic, 3 Doctors)
+# Health Vibe AI - Clinical Pilot Plan (1 Clinic, 3 Doctors)
 ## Structured Evaluation, Safety Verification, Acceptance Scenarios & Stopping Protocol
 
 **Document ID:** HV-PILOT-PLAN-2026-V1  
 **Target Organization:** One Partner Outpatient Pulmonary / Medical Clinic (`[Partner Clinic Name]`)  
 **Participating Clinicians:** Three (3) Licensed Physicians (`[Doctor 1]`, `[Doctor 2]`, `[Doctor 3]`)  
 **Pilot Duration:** 30 Days (4 Weeks active clinical intake + 1 week closeout audit)  
-**Governance Standard:** Good Clinical Practice (GCP), Egyptian Personal Data Protection Law (Law 151/2020), ISO/IEC 27035, Health Vibes Clinical Governance Framework  
+**Governance Standard:** Good Clinical Practice (GCP), Egyptian Personal Data Protection Law (Law 151/2020), ISO/IEC 27035, Health Vibe AI Clinical Governance Framework  
 **Ethical Guardrail:** Zero fabricated approvals, organizations, or users. Unsigned and unverified items are explicitly marked as `[Pending Formal Partner Execution]`.
 
 ---
@@ -79,7 +79,7 @@ The pilot is planned for **30 calendar days (4 active clinical intake weeks)** p
 ### Phase 1: Calibrated Pilot (Week 1, Days 1 – 7)
 - **Target Volume:** 8 – 12 patients/day (Controlled intake).
 - **Protocol:** Dual-verification mode. The doctor examines the patient in person first, reviews the platform's intake and rule-based priority signal, and records any discrepancies.
-- **Daily Debrief:** 15-minute end-of-day check-in between Lead Pulmonologist and Health Vibes Technical Liaison.
+- **Daily Debrief:** 15-minute end-of-day check-in between Lead Pulmonologist and Health Vibe AI Technical Liaison.
 
 ### Phase 2: Full Clinical Operational Flow (Weeks 2 – 3, Days 8 – 21)
 - **Target Volume:** 20 – 30 patients/day.
@@ -194,7 +194,7 @@ Prior to initiating live patient intake, the three physicians and clinic adminis
                                │ Escalates technical / platform issues
                                ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│ Tier 2: Health Vibes Engineering Support                        │
+│ Tier 2: Health Vibe AI Engineering Support                      │
 │ • Email: support@healthvibe.ai | Dedicated Hotline: [Hotline]   │
 │ • Handles: Platform errors, sync failures, account provisioning │
 │ • Response SLA: < 15 mins (Urgent), < 1 hour (Routine)          │
@@ -211,8 +211,8 @@ Prior to initiating live patient intake, the three physicians and clinic adminis
 
 ### 6.2 Contact Escalation Roster
 - **Tier 1 (Clinic Liaison):** `[Clinic Coordinator Name]`, Phone: `[Local Phone]`
-- **Tier 2 (Engineering Lead):** Health Vibes Operations Team, Email: `support@healthvibe.ai`
-- **Tier 3 (Clinical Safety Lead):** Health Vibes Medical Director, Emergency Bridge: `safety@healthvibe.ai`
+- **Tier 2 (Engineering Lead):** Health Vibe AI Operations Team, Email: `support@healthvibe.ai`
+- **Tier 3 (Clinical Safety Lead):** Health Vibe AI Medical Director, Emergency Bridge: `safety@healthvibe.ai`
 
 ---
 
@@ -259,7 +259,7 @@ Step 3: Patient Safety Reconciliation
   └─ Any patient whose assessment was pending or in question is contacted by telephone within 2 hours.
 
 Step 4: Emergency Incident Bridge (Within 4 Hours)
-  └─ Joint emergency session convened between Doctor 1, Clinic Admin, Health Vibes Technical Lead, and Medical Director.
+  └─ Joint emergency session convened between Doctor 1, Clinic Admin, Health Vibe AI Technical Lead, and Medical Director.
   └─ Root-cause analysis initiated; system logs, rule traces, and audit records locked for forensic review.
 
 Step 5: Written Resolution or Formal Termination (Within 24 Hours)

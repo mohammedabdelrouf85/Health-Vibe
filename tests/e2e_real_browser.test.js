@@ -74,7 +74,7 @@ const SYNTHETIC_DATA = {
     password: 'DoctorSecretPassword!2026',
     license: 'LIC-EGY-MED-99410',
     specialty: 'أمراض صدرية وجهاز تنفسي (Pulmonology)',
-    clinic: 'مركز هيلث فايبز التخصصي - فرع المعادي'
+    clinic: 'مركز هيلث فايب التخصصي - فرع المعادي'
   },
   assessment: {
     caseId: 'CASE-SYNTH-E2E-8801',
@@ -886,7 +886,7 @@ function generateMarkdownReport(results) {
   const failed = results.scenarios.filter(s => s.status === 'FAILED').length;
   const totalDuration = results.scenarios.reduce((acc, s) => acc + s.durationMs, 0);
 
-  return `# Health Vibes AI — End-to-End (E2E) Real Browser Test Report
+  return `# Health Vibe AI — End-to-End (E2E) Real Browser Test Report
 
 **Execution Timestamp:** ${results.metadata.timestamp}  
 **Target Environment:** Staging / Local Emulation Harness (\`${results.metadata.targetUrl}\`)  

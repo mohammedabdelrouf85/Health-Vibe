@@ -266,7 +266,7 @@ function verifyNonFabricationIntegrity(textContent = '') {
   // Forbidden phrases implying fabricated active governmental or syndicate registration
   const forbiddenFabrications = [
     /ministry of health officially approved this platform on/i,
-    /syndicate has certified health vibes as diagnostic medical device/i,
+    /syndicate has certified health vibes? as diagnostic medical device/i,
     /full legal approval granted by regulatory authority on/i
   ];
 

@@ -40,7 +40,7 @@ function runTest(testName, fn) {
 }
 
 console.log('\n============================================================');
-console.log('🧪 Health Vibes AI: Staging Deployment & Rollback Test Suite');
+console.log('🧪 Health Vibe AI: Staging Deployment & Rollback Test Suite');
 console.log('============================================================\n');
 
 // 1. firebase.json

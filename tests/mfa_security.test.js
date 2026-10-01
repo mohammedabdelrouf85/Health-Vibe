@@ -61,7 +61,7 @@ console.log('==================================================================\
       const uri = mfaService.generateOtpAuthUri({
         email: 'dr.sarah@healthvibe.ai',
         secret,
-        issuer: 'Health Vibes AI'
+        issuer: 'Health Vibe AI'
       });
       assert.ok(uri.startsWith('otpauth://totp/'), 'URI must follow standard otpauth protocol');
       assert.ok(uri.includes('secret=' + secret), 'URI must contain secret');

@@ -1,5 +1,5 @@
 /**
- * Health Vibes AI - Enterprise Observability, Telemetry & Alerting Engine
+ * Health Vibe AI - Enterprise Observability, Telemetry & Alerting Engine
  *
  * Implements:
  * 1. PII/PHI Redaction: Emails, phone numbers, national IDs, credentials, DOB, credit cards, JWTs.

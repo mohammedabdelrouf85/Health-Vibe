@@ -1,5 +1,5 @@
 /**
- * Health Vibes AI - Product Analytics, Journey Telemetry & Clinical KPI Engine
+ * Health Vibe AI - Product Analytics, Journey Telemetry & Clinical KPI Engine
  *
  * Implements:
  * 1. Event Telemetry without sending medical text:

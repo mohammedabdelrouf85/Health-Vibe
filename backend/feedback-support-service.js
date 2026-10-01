@@ -81,8 +81,8 @@ const FAQ_DATABASE = [
     category: 'clinical_assessment',
     categoryNameAr: 'الفحص السريري الذكي',
     categoryNameEn: 'Smart Clinical Assessment',
-    questionAr: 'كيف يعمل فحص الجهاز التنفسي الذكي في Health Vibes؟',
-    questionEn: 'How does the Health Vibes smart respiratory assessment work?',
+    questionAr: 'كيف يعمل فحص الجهاز التنفسي الذكي في Health Vibe AI؟',
+    questionEn: 'How does the Health Vibe AI smart respiratory assessment work?',
     answerAr: 'يحلل النظام الأعراض المدخلة (السعال، ضيق التنفس، درجة الحرارة، وأكسجة الدم SpO2) وفق خوارزميات سريرية معتمدة ومقيدة بحواجز أمان صارمة. يقوم النظام بتصنيف أولي للمخاطر وتوجيهه مباشرة للطبيب الممارس للمراجعة والاعتماد.',
     answerEn: 'The system evaluates entered symptoms (cough, dyspnea, temperature, and SpO2 oxygenation) using certified clinical algorithms bounded by strict safety guardrails. It produces a preliminary risk triage routed directly to a verified doctor for review and approval.'
   },

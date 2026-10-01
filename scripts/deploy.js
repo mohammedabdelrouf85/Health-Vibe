@@ -1,5 +1,5 @@
 /**
- * Health Vibes AI - Automated Deployment Pipeline
+ * Health Vibe AI - Automated Deployment Pipeline
  *
  * Supports Staging and Production deployments with pre-flight checks,
  * gatekeeping, release tracking, and automated rollback points.
@@ -69,10 +69,10 @@ function checkStagingGate(rootDir) {
 
   if (!hasSuccessfulStaging && !envApproved) {
     throw new Error(
-      '[Health Vibes Deploy Gate] Production deployment BLOCKED: Staging deployment & verification must be successfully executed first. (Override with HEALTH_VIBE_STAGING_APPROVED=true or --force for hotfixes)'
+      '[Health Vibe Deploy Gate] Production deployment BLOCKED: Staging deployment & verification must be successfully executed first. (Override with HEALTH_VIBE_STAGING_APPROVED=true or --force for hotfixes)'
     );
   }
-  console.log('[Health Vibes Deploy Gate] Staging verification gate PASSED.');
+  console.log('[Health Vibe Deploy Gate] Staging verification gate PASSED.');
 }
 
 function runDeploy({ env = 'staging', dryRun = false, force = false } = {}) {
@@ -84,7 +84,7 @@ function runDeploy({ env = 'staging', dryRun = false, force = false } = {}) {
   }
 
   console.log(`\n============================================================`);
-  console.log(`🚀 [Health Vibes Deploy] Target: [${env.toUpperCase()}] Project: [${targetProject}]`);
+  console.log(`🚀 [Health Vibe Deploy] Target: [${env.toUpperCase()}] Project: [${targetProject}]`);
   console.log(`   Mode: ${dryRun ? 'DRY-RUN (Simulated)' : 'LIVE DEPLOYMENT'}`);
   console.log(`============================================================\n`);
 
@@ -144,7 +144,7 @@ function runDeploy({ env = 'staging', dryRun = false, force = false } = {}) {
   releaseRecord.deployedAt = new Date().toISOString();
   saveHistory(depDir, env, history);
 
-  console.log(`\n✅ [Health Vibes Deploy] Successfully deployed release [${releaseId}] to [${env.toUpperCase()}].`);
+  console.log(`\n✅ [Health Vibe Deploy] Successfully deployed release [${releaseId}] to [${env.toUpperCase()}].`);
   console.log(`   Audit record saved to .deployments/${env}-history.json\n`);
 
   return releaseRecord;
@@ -156,7 +156,7 @@ if (require.main === module) {
     runDeploy(options);
     process.exit(0);
   } catch (err) {
-    console.error(`\n❌ [Health Vibes Deploy Error]: ${err.message}\n`);
+    console.error(`\n❌ [Health Vibe Deploy Error]: ${err.message}\n`);
     process.exit(1);
   }
 }

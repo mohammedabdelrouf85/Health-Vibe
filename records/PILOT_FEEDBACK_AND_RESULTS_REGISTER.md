@@ -1,4 +1,4 @@
-# Health Vibes AI - Pilot Clinical Feedback & Actual Results Register
+# Health Vibe AI - Pilot Clinical Feedback & Actual Results Register
 
 **Document Ref:** HV-PILOT-REG-2026-V1  
 **Associated Pilot Plan:** [PILOT_PLAN_AND_CLINICAL_ONBOARDING.md](file:///d:/MY%20PC/Coding/Health%20Vibe%20Ai/PILOT_PLAN_AND_CLINICAL_ONBOARDING.md)  
@@ -95,7 +95,7 @@
 
 | Incident ID | Date & Time | Severity (P0–P3) | Description of Event / Anomaly | Impacted Case(s) | Containment & Resolution Action | Circuit Breaker Triggered? (Yes/No) | Investigating Lead |
 |---|---|---|---|---|---|---|---|
-| `INC-PLT-001` | `[Date]` | `[Sev]` | `[No safety anomalies logged during pre-pilot verification]` | `None` | `Pre-pilot dry run completed cleanly across Scenarios 1–7.` | No | Health Vibes SRE |
+| `INC-PLT-001` | `[Date]` | `[Sev]` | `[No safety anomalies logged during pre-pilot verification]` | `None` | `Pre-pilot dry run completed cleanly across Scenarios 1–7.` | No | Health Vibe AI SRE |
 | `[Next Entry]`| `[Date]` | `[Sev]` | `[To be populated immediately upon any operational incident]` | `[Case ID]` | `[Step-by-step remediation executed according to Section 8 Runbook]` | `[Yes/No]` | `[Investigator Name]` |
 
 ---

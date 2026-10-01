@@ -609,13 +609,13 @@ async function emitAppointmentNotificationEvent(db, { type, appointment, actorUs
 
   let subject = '';
   if (type === 'APPOINTMENT_BOOKED') {
-    subject = `✅ تأكيد حجز موعدك الطبي - Health Vibes AI (${appointment.date} ${appointment.timeSlot || ''})`;
+    subject = `✅ تأكيد حجز موعدك الطبي - Health Vibe AI (${appointment.date} ${appointment.timeSlot || ''})`;
   } else if (type === 'APPOINTMENT_RESCHEDULED') {
-    subject = `🔄 تم تعديل موعدك الطبي بنجاح - Health Vibes AI (${appointment.date} ${appointment.timeSlot || ''})`;
+    subject = `🔄 تم تعديل موعدك الطبي بنجاح - Health Vibe AI (${appointment.date} ${appointment.timeSlot || ''})`;
   } else if (type === 'APPOINTMENT_CANCELLED') {
-    subject = `❌ إشعار بإلغاء موعدك الطبي - Health Vibes AI (${appointment.date})`;
+    subject = `❌ إشعار بإلغاء موعدك الطبي - Health Vibe AI (${appointment.date})`;
   } else if (type === 'APPOINTMENT_STATUS_CHANGED') {
-    subject = `📋 تحديث حالة موعدك الطبي: ${appointment.status} - Health Vibes AI`;
+    subject = `📋 تحديث حالة موعدك الطبي: ${appointment.status} - Health Vibe AI`;
   }
 
   // 1. Record email notification record

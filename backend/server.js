@@ -1244,7 +1244,7 @@ app.post('/api/admin/backup/restore', requireAuth, auditOperationalAccess('DATAB
 app.get(['/health', '/api/health'], (req, res) => {
   res.json({
     status: 'ok',
-    service: 'Health Vibes AI Server-Authoritative Backend',
+    service: 'Health Vibe AI Server-Authoritative Backend',
     environment: NODE_ENV,
     isDevelopment,
     isStaging,
@@ -3247,6 +3247,9 @@ app.get('/api/kpi/metrics', requireAuth, async (req, res) => {
 
     // Clinic filtering & authorization: Clinic Admin is always scoped strictly to their assigned clinic
     const requestedClinic = (req.query.clinicId || req.query.clinic || '').trim();
+    if (userRole === ROLES.CLINIC_ADMIN && requestedClinic && scope.clinicId && requestedClinic !== scope.clinicId) {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Cross-clinic query denied. Clinic administrators can only query metrics for their assigned clinic.' });
+    }
     const effectiveClinic = userRole === ROLES.CLINIC_ADMIN ? scope.clinicId : requestedClinic;
 
     // Date range filtering
@@ -3938,7 +3941,7 @@ app.post('/api/user/sync-role', requireAuth, async (req, res) => {
           caseId: 'SECURITY_ALERT',
           patientName: 'Account Owner',
           status: 'suspicious_login',
-          clinicName: 'Health Vibes Security',
+          clinicName: 'Health Vibe Security',
           notes: `A new sign-in was detected from ${session.platform} (${session.browser}) at IP subnet ${session.subnetMask}. If this was not you, please sign out of all devices immediately.`
         }).catch(() => {});
       }
@@ -4260,13 +4263,13 @@ app.post('/api/auth/recover-account', async (req, res) => {
       if (resetLink) {
         sendClinicalNotificationEmail({
           to: cleanEmail,
-          subject: 'Health Vibes - Account Recovery Link',
+          subject: 'Health Vibe - Account Recovery Link',
           recipientName: userRecord.displayName || cleanEmail.split('@')[0],
           role: 'patient',
           caseId: 'ACCOUNT_RECOVERY',
           patientName: 'Account Owner',
           status: 'password_reset',
-          clinicName: 'Health Vibes Security',
+          clinicName: 'Health Vibe Security',
           notes: `A request was made to recover your account. Click the secure link to reset your password: ${resetLink}. If you did not request this, please ignore this email.`
         }).catch(() => {});
       }
@@ -4328,7 +4331,7 @@ app.post('/api/user/mfa/enroll', requireAuth, requireRecentAuth(900), async (req
   const otpauthUri = mfaService.generateOtpAuthUri({
     email: userEmail,
     secret,
-    issuer: 'Health Vibes AI'
+    issuer: 'Health Vibe AI'
   });
 
   mfaService.setUserMfaRecord(userId, {
@@ -5116,7 +5119,7 @@ app.post('/api/doctor/submit-application', requireAuth, async (req, res) => {
     email: req.user.email || '',
     licenseNumber: String(licenseNumber).trim(),
     specialty: String(specialty || 'General Practitioner').trim(),
-    clinic: String(clinic || 'Health Vibes Clinic').trim(),
+    clinic: String(clinic || 'Health Vibe Clinic').trim(),
     clinicId: clinicId || null,
     licenseExpiryDate: licenseExpiryDate || null,
     maskedNationalId: nationalIdValidation.maskedNationalId,
@@ -5620,7 +5623,7 @@ async function handleSharedReportAccess(req, res) {
         name: doctorId.name || caseData.approvingDoctorName || 'Verified Physician',
         specialty: doctorId.specialty || caseData.doctorSpecialty || 'Pulmonology',
         licenseNumber: doctorId.licenseNumber || caseData.doctorLicense || 'VERIFIED-LICENSE',
-        clinic: doctorId.clinic || caseData.clinicName || 'Health Vibes Medical Center'
+        clinic: doctorId.clinic || caseData.clinicName || 'Health Vibe Medical Center'
       },
       clinicalDiagnosis: clinical.clinicalDiagnosis,
       medications: clinical.medications,
@@ -5697,7 +5700,7 @@ app.get('/api/reports/verify/:reportRefOrId', async (req, res) => {
       name: doctorId.name || caseData.approvingDoctorName || 'Verified Physician',
       specialty: doctorId.specialty || caseData.doctorSpecialty || 'Pulmonology',
       licenseNumber: doctorId.licenseNumber || caseData.doctorLicense || 'VERIFIED-LICENSE',
-      clinic: doctorId.clinic || caseData.clinicName || 'Health Vibes Medical Center'
+      clinic: doctorId.clinic || caseData.clinicName || 'Health Vibe Medical Center'
     };
 
     if (isWithdrawn) {
@@ -5745,7 +5748,7 @@ app.get('/api/reports/verify/:reportRefOrId', async (req, res) => {
         hash: digitalHash
       },
       statusDescription: 'Digitally Certified & Authenticated by Attending Physician',
-      authenticityStatement: 'This digital certificate confirms that the clinical report was officially reviewed, approved, and digitally signed by a verified licensed physician on the Health Vibes platform.',
+      authenticityStatement: 'This digital certificate confirms that the clinical report was officially reviewed, approved, and digitally signed by a verified licensed physician on the Health Vibe platform.',
       medicalPrivacyNotice: 'Confidential clinical content (diagnosis, medications, vitals) is protected under HIPAA/GDPR and excluded from public authenticity verification.'
     });
   } catch (err) {
@@ -5818,8 +5821,8 @@ function buildApprovedReportSnapshot({ caseId, caseData, updateData, doctorIdent
     },
     signature,
     disclaimer: {
-      en: 'This report records physician-reviewed clinical information from Health Vibes. It supports care coordination and does not replace emergency medical care.',
-      ar: 'يوثق هذا التقرير معلومات سريرية راجعها الطبيب عبر Health Vibes. يدعم تنسيق الرعاية ولا يستبدل رعاية الطوارئ الطبية.'
+      en: 'This report records physician-reviewed clinical information from Health Vibe. It supports care coordination and does not replace emergency medical care.',
+      ar: 'يوثق هذا التقرير معلومات سريرية راجعها الطبيب عبر Health Vibe. يدعم تنسيق الرعاية ولا يستبدل رعاية الطوارئ الطبية.'
     },
     versions: {
       reportVersion: REPORT_VERSION,
@@ -7706,7 +7709,7 @@ function buildConsentRecord(req, accepted, body = {}) {
     revokedAt: accepted ? null : now,
     userId: req.user.uid,
     userEmail: req.user.email || null,
-    purpose: accepted ? 'Explicit consent for Health Vibes clinical assessment, doctor review, report workflow, and selected communications.' : 'Withdrawal of explicit Health Vibes clinical data processing consent.',
+    purpose: accepted ? 'Explicit consent for Health Vibe clinical assessment, doctor review, report workflow, and selected communications.' : 'Withdrawal of explicit Health Vibe clinical data processing consent.',
     purposes: {
       dataProcessing: { accepted: dataProcessing, purpose: CONSENT_PURPOSES.DATA_PROCESSING, mandatory: true },
       aiAdvisory: { accepted: aiAdvisory, purpose: CONSENT_PURPOSES.AI_ADVISORY, mandatory: true },
@@ -8724,7 +8727,7 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || (isDevelopment ? 4000 : 8080);
 if (require.main === module) {
   app.listen(PORT, () => {
-    console.log(`[Health Vibes AI Backend] Server running in [${NODE_ENV.toUpperCase()}] mode on port ${PORT}`);
+    console.log(`[Health Vibe AI Backend] Server running in [${NODE_ENV.toUpperCase()}] mode on port ${PORT}`);
     if (db) {
       startReminderScheduler(db);
     }

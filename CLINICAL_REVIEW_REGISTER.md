@@ -1,7 +1,7 @@
-# Health Vibes Clinical Review Register
+# Health Vibe AI Clinical Review Register
 
 Status: Pending external review
-Last updated: 2026-09-27
+Last updated: 2026-09-30
 
 Do not mark any row as approved until the named qualified reviewer has actually reviewed the material and supplied a decision. Empty reviewer fields are intentional and mean no approval has occurred.
 
@@ -39,7 +39,7 @@ Do not mark any row as approved until the named qualified reviewer has actually 
 
 ## Questions For Egypt Regulatory Specialist
 
-1. How should Health Vibes be classified under applicable Egyptian digital health, telemedicine, medical device, data protection, consumer protection, and professional practice rules?
+1. How should Health Vibe AI be classified under applicable Egyptian digital health, telemedicine, medical device, data protection, consumer protection, and professional practice rules?
 2. Does a deterministic triage rule engine require registration, notification, approval, or specific disclaimers before production use?
 3. What wording is required to avoid implying the app provides autonomous diagnosis or treatment?
 4. What consent language is required for processing health data, AI-assisted advisory routing, notifications, and sharing with a treating doctor or clinic?

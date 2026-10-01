@@ -1,5 +1,5 @@
 /**
- * Health Vibes AI - Automated Rollback Pipeline
+ * Health Vibe AI - Automated Rollback Pipeline
  *
  * Fast and reliable rollback for Staging and Production deployments.
  * Restores previous working release snapshot, triggers Firebase Hosting rollback,
@@ -66,7 +66,7 @@ function runRollback({ env = 'staging', dryRun = false, targetRelease = null } =
   }
 
   console.log(`\n============================================================`);
-  console.log(`⏪ [Health Vibes Rollback] Target: [${env.toUpperCase()}] Project: [${targetProject}]`);
+  console.log(`⏪ [Health Vibe Rollback] Target: [${env.toUpperCase()}] Project: [${targetProject}]`);
   console.log(`   Mode: ${dryRun ? 'DRY-RUN (Simulated)' : 'LIVE ROLLBACK'}`);
   console.log(`============================================================\n`);
 
@@ -74,7 +74,7 @@ function runRollback({ env = 'staging', dryRun = false, targetRelease = null } =
   const history = loadHistory(depDir, env);
 
   if (history.length === 0) {
-    throw new Error(`[Health Vibes Rollback] No deployment history found for ${env}. Cannot determine previous release.`);
+    throw new Error(`[Health Vibe Rollback] No deployment history found for ${env}. Cannot determine previous release.`);
   }
 
   // Find candidate release to roll back to
@@ -82,7 +82,7 @@ function runRollback({ env = 'staging', dryRun = false, targetRelease = null } =
   if (targetRelease) {
     rollbackCandidate = history.find(r => r.releaseId === targetRelease || r.gitCommit === targetRelease);
     if (!rollbackCandidate) {
-      throw new Error(`[Health Vibes Rollback] Specified target release "${targetRelease}" was not found in deployment history.`);
+      throw new Error(`[Health Vibe Rollback] Specified target release "${targetRelease}" was not found in deployment history.`);
     }
   } else {
     // Look for the last successful release before the latest one
@@ -98,7 +98,7 @@ function runRollback({ env = 'staging', dryRun = false, targetRelease = null } =
           status: 'baseline'
         };
       } else {
-        throw new Error(`[Health Vibes Rollback] No previous successful deployment found in history to revert to.`);
+        throw new Error(`[Health Vibe Rollback] No previous successful deployment found in history to revert to.`);
       }
     } else {
       rollbackCandidate = successful[successful.length - 2];
@@ -119,7 +119,7 @@ function runRollback({ env = 'staging', dryRun = false, targetRelease = null } =
     try {
       execSync(rollbackCmd, { cwd: rootDir, stdio: 'inherit' });
     } catch (err) {
-      console.warn(`[Health Vibes Rollback] Hosting rollback command returned: ${err.message}. Proceeding with fallback checkout...`);
+      console.warn(`[Health Vibe Rollback] Hosting rollback command returned: ${err.message}. Proceeding with fallback checkout...`);
     }
   }
 
@@ -138,7 +138,7 @@ function runRollback({ env = 'staging', dryRun = false, targetRelease = null } =
   history.push(rollbackRecord);
   saveHistory(depDir, env, history);
 
-  console.log(`\n✅ [Health Vibes Rollback] Successfully rolled back [${env.toUpperCase()}] to [${rollbackCandidate.releaseId}].`);
+  console.log(`\n✅ [Health Vibe Rollback] Successfully rolled back [${env.toUpperCase()}] to [${rollbackCandidate.releaseId}].`);
   console.log(`   History audit updated in .deployments/${env}-history.json\n`);
 
   return rollbackRecord;
@@ -150,7 +150,7 @@ if (require.main === module) {
     runRollback(options);
     process.exit(0);
   } catch (err) {
-    console.error(`\n❌ [Health Vibes Rollback Error]: ${err.message}\n`);
+    console.error(`\n❌ [Health Vibe Rollback Error]: ${err.message}\n`);
     process.exit(1);
   }
 }

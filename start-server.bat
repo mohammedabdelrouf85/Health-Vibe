@@ -1,9 +1,9 @@
 @echo off
-title Health Vibes AI Web Server
+title Health Vibe AI Web Server
 cd /d "%~dp0"
 
 echo ===================================================
-echo           Health Vibes AI - Local Server
+echo           Health Vibe AI - Local Server
 echo ===================================================
 echo.
 echo Starting local web server on port 3000...

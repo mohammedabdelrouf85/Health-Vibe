@@ -9,7 +9,7 @@
 
 ### BETWEEN:
 
-1. **HEALTH VIBES AI** ("**Technology Provider**"), an AI-assisted healthcare software platform operating under the commercial and clinical governance framework of Health Vibes AI, represented by its Authorized System Owner & Clinical Engineering Lead.
+1. **HEALTH VIBES AI** ("**Technology Provider**"), an AI-assisted healthcare software platform operating under the commercial and clinical governance framework of Health Vibe AI, represented by its Authorized System Owner & Clinical Engineering Lead.
 
    *Address for Notices:* `[Technology Provider Registered Address / Contact Email: legal@healthvibe.ai]`
 
@@ -26,11 +26,11 @@
 
 ### RECITALS:
 
-**WHEREAS**, the Technology Provider has developed a smart respiratory clinical assessment and decision-support web application ("**Health Vibes AI Platform**") incorporating deterministic respiratory triage routing, vital signs intake, multi-assessment longitudinal comparisons, doctor verification queues, and cryptographically sealed clinical reporting;
+**WHEREAS**, the Technology Provider has developed a smart respiratory clinical assessment and decision-support web application ("**Health Vibe AI Platform**") incorporating deterministic respiratory triage routing, vital signs intake, multi-assessment longitudinal comparisons, doctor verification queues, and cryptographically sealed clinical reporting;
 
 **WHEREAS**, the Clinical Partner operates an outpatient medical facility specializing in pulmonary and respiratory healthcare and employs licensed medical practitioners;
 
-**WHEREAS**, the Parties desire to collaborate in a structured, non-commercial clinical pilot to evaluate the usability, clinical workflow compatibility, turnaround efficiency, and decision-support accuracy of the Health Vibes AI Platform across **one (1) medical clinic** and **three (3) participating licensed physicians** over a defined period of **thirty (30) days**;
+**WHEREAS**, the Parties desire to collaborate in a structured, non-commercial clinical pilot to evaluate the usability, clinical workflow compatibility, turnaround efficiency, and decision-support accuracy of the Health Vibe AI Platform across **one (1) medical clinic** and **three (3) participating licensed physicians** over a defined period of **thirty (30) days**;
 
 **NOW, THEREFORE**, the Parties set forth their mutual understanding and intentions as follows:
 
@@ -58,13 +58,13 @@
 
 ### 3. Confidentiality & Intellectual Property (Binding)
 3.1. **Confidential Information:** Each Party agrees that all technical, clinical, algorithmic, operational, and financial information disclosed in connection with this pilot shall be maintained in strict confidence and shall not be disclosed to any third party without prior written consent.  
-3.2. **Technology Ownership:** Health Vibes AI retains all worldwide right, title, and interest in and to the platform, source code, deterministic rules engine, user interfaces, algorithms, and documentation. No intellectual property rights are transferred to the Clinical Partner.  
+3.2. **Technology Ownership:** Health Vibe AI retains all worldwide right, title, and interest in and to the platform, source code, deterministic rules engine, user interfaces, algorithms, and documentation. No intellectual property rights are transferred to the Clinical Partner.  
 3.3. **Clinical Feedback Rights:** Technology Provider is granted a non-exclusive, royalty-free, perpetual license to use de-identified, aggregated feedback, workflow metrics, and feature suggestions to improve the platform.
 
 ---
 
 ### 4. Clinical Responsibility & Medical Liability (Binding)
-4.1. **Physician Independence:** The Parties explicitly agree that the Health Vibes AI Platform is an **administrative and decision-support tool only**. It does **NOT** practice medicine, does **NOT** provide autonomous medical diagnoses, and does **NOT** prescribe medical treatments.  
+4.1. **Physician Independence:** The Parties explicitly agree that the Health Vibe AI Platform is an **administrative and decision-support tool only**. It does **NOT** practice medicine, does **NOT** provide autonomous medical diagnoses, and does **NOT** prescribe medical treatments.  
 4.2. **Attending Physician Sole Authority:** The Clinical Partner and its licensed attending physicians retain 100% independent clinical authority, judgment, and responsibility for patient examination, differential diagnosis, diagnostic orders, prescription regimens, and therapeutic management.  
 4.3. **Mandatory Doctor Sign-Off:** No medical report or diagnostic result generated through the platform shall be issued or accessible to a patient without the explicit, digital signature and clinical verification of a licensed attending physician.
 

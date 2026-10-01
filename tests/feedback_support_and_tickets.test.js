@@ -340,9 +340,9 @@ const sandboxedApp = sandbox.module.exports;
     const contactRes = await request('POST', '/api/support/contact', null, {
       name: 'Mohamed Salah',
       email: 'm.salah@cairo-clinic.eg',
-      subject: 'Inquiry regarding clinic integration with Health Vibes',
+      subject: 'Inquiry regarding clinic integration with Health Vibe AI',
       category: 'clinic_sales',
-      message: 'We are a 5-branch pulmonology center in Giza and would like to integrate Health Vibes AI with our EMR.'
+      message: 'We are a 5-branch pulmonology center in Giza and would like to integrate Health Vibe AI with our EMR.'
     });
     assert.equal(contactRes.status, 201);
     assert.equal(contactRes.body.success, true);

@@ -1,6 +1,6 @@
-# Health Vibes AI — End-to-End (E2E) Real Browser Test Report
+# Health Vibe AI — End-to-End (E2E) Real Browser Test Report
 
-**Execution Timestamp:** 2026-09-29T21:06:19.060Z  
+**Execution Timestamp:** 2026-09-30T22:40:43.962Z  
 **Target Environment:** Staging / Local Emulation Harness (`http://localhost:3940`)  
 **Browser Engine:** Chrome/154.0.8037.58  
 **Browser Binary:** `C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe`  
@@ -14,7 +14,7 @@
 
 | Total Scenarios | Passed | Failed | Overall Success Rate | Total Duration |
 |:---:|:---:|:---:|:---:|:---:|
-| **14** | **14** | **0** | **100.0%** | **1864 ms** |
+| **14** | **14** | **0** | **100.0%** | **2320 ms** |
 
 > [!NOTE]
 > All automated tests were executed using a **real Chromium browser** against the actual application code (`app/index.html`, `app/styles.css`, `app/app.js`, `app/i18n.js`).
@@ -26,20 +26,20 @@
 
 | # | Scenario Description | Viewport | Status | Duration | Assertions Verified |
 |---|----------------------|:--------:|:------:|:--------:|---------------------|
-| 1 | 1. Patient Registration & Auth Modal | `desktop` | ✅ PASS | 788ms | DOM element presence, HTTP status, and state transitions verified |
-| 2 | 2. OTP & Email Verification Guard | `desktop` | ✅ PASS | 24ms | DOM element presence, HTTP status, and state transitions verified |
-| 3 | 3. Respiratory Assessment Form & Triage Submission | `desktop` | ✅ PASS | 130ms | DOM element presence, HTTP status, and state transitions verified |
-| 4 | 4. Routing to Assigned Doctor & Pending Orbit Display | `desktop` | ✅ PASS | 22ms | DOM element presence, HTTP status, and state transitions verified |
-| 5 | 5. Doctor Queue Loading & Case Review | `desktop` | ✅ PASS | 81ms | DOM element presence, HTTP status, and state transitions verified |
+| 1 | 1. Patient Registration & Auth Modal | `desktop` | ✅ PASS | 1352ms | DOM element presence, HTTP status, and state transitions verified |
+| 2 | 2. OTP & Email Verification Guard | `desktop` | ✅ PASS | 16ms | DOM element presence, HTTP status, and state transitions verified |
+| 3 | 3. Respiratory Assessment Form & Triage Submission | `desktop` | ✅ PASS | 30ms | DOM element presence, HTTP status, and state transitions verified |
+| 4 | 4. Routing to Assigned Doctor & Pending Orbit Display | `desktop` | ✅ PASS | 6ms | DOM element presence, HTTP status, and state transitions verified |
+| 5 | 5. Doctor Queue Loading & Case Review | `desktop` | ✅ PASS | 77ms | DOM element presence, HTTP status, and state transitions verified |
 | 6 | 6. Doctor Information Request & Clinical Notice | `desktop` | ✅ PASS | 15ms | DOM element presence, HTTP status, and state transitions verified |
-| 7 | 7. Certified Diagnosis & Approval Submission | `desktop` | ✅ PASS | 10ms | DOM element presence, HTTP status, and state transitions verified |
-| 8 | 8. Unmasked Certified Clinical Report View | `desktop` | ✅ PASS | 38ms | DOM element presence, HTTP status, and state transitions verified |
-| 9 | 9. Appointment Booking (Telehealth / In-Clinic) | `desktop` | ✅ PASS | 45ms | DOM element presence, HTTP status, and state transitions verified |
-| 10 | 10. Unauthorized-Access Route Guard Interception | `desktop` | ✅ PASS | 24ms | DOM element presence, HTTP status, and state transitions verified |
-| 11 | 11. Simulated Network Drop & Graceful Retry Hint | `desktop` | ✅ PASS | 27ms | DOM element presence, HTTP status, and state transitions verified |
-| 12 | 12. Repeated Clicks Idempotency & Debounce Guard | `desktop` | ✅ PASS | 60ms | DOM element presence, HTTP status, and state transitions verified |
-| 13 | 13. Mobile Viewport Responsive Layout & Touch Targets | `mobile` | ✅ PASS | 487ms | DOM element presence, HTTP status, and state transitions verified |
-| 14 | 14. Mobile Assessment & Appointments Touch Interactions | `mobile` | ✅ PASS | 113ms | DOM element presence, HTTP status, and state transitions verified |
+| 7 | 7. Certified Diagnosis & Approval Submission | `desktop` | ✅ PASS | 9ms | DOM element presence, HTTP status, and state transitions verified |
+| 8 | 8. Unmasked Certified Clinical Report View | `desktop` | ✅ PASS | 60ms | DOM element presence, HTTP status, and state transitions verified |
+| 9 | 9. Appointment Booking (Telehealth / In-Clinic) | `desktop` | ✅ PASS | 48ms | DOM element presence, HTTP status, and state transitions verified |
+| 10 | 10. Unauthorized-Access Route Guard Interception | `desktop` | ✅ PASS | 26ms | DOM element presence, HTTP status, and state transitions verified |
+| 11 | 11. Simulated Network Drop & Graceful Retry Hint | `desktop` | ✅ PASS | 29ms | DOM element presence, HTTP status, and state transitions verified |
+| 12 | 12. Repeated Clicks Idempotency & Debounce Guard | `desktop` | ✅ PASS | 62ms | DOM element presence, HTTP status, and state transitions verified |
+| 13 | 13. Mobile Viewport Responsive Layout & Touch Targets | `mobile` | ✅ PASS | 424ms | DOM element presence, HTTP status, and state transitions verified |
+| 14 | 14. Mobile Assessment & Appointments Touch Interactions | `mobile` | ✅ PASS | 166ms | DOM element presence, HTTP status, and state transitions verified |
 
 ---
 

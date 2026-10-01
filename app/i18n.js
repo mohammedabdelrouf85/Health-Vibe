@@ -22,7 +22,7 @@
   const translations = {
     ar: {
       common: {
-        appName: "Health Vibes",
+        appName: "Health Vibe AI",
         tagline: "رعاية صحية مدعومة بالذكاء الاصطناعي وتحت مراجعة الطبيب",
         save: "حفظ",
         saved: "تم الحفظ",
@@ -173,7 +173,7 @@
         title: "الموافقة الطبية وسياسة الخصوصية",
         badgeRequired: "مطلوبة قبل الفحص",
         badgeAccepted: "تمت الموافقة بنجاح",
-        desc: "Health Vibes يجمع بياناتك الصحية لتقييم خطورة إرشادي ثم يرسلها لطبيب معتمد قبل ظهور أي نتيجة نهائية. لحماية بياناتك والامتثال للمعايير الطبية، نرجو مراجعة وتأكيد بنود الموافقة أدناه:",
+        desc: "Health Vibe يجمع بياناتك الصحية لتقييم خطورة إرشادي ثم يرسلها لطبيب معتمد قبل ظهور أي نتيجة نهائية. لحماية بياناتك والامتثال للمعايير الطبية، نرجو مراجعة وتأكيد بنود الموافقة أدناه:",
         dataProcessing: "معالجة البيانات السريرية (إلزامي): أوافق على استخدام بيانات الأعراض والقياسات الحيوية داخل مسار التقييم ومشاركتها مع الطبيب المعالج المعتمد.",
         aiAdvisory: "الطبيعة الإرشادية للذكاء الاصطناعي (إلزامي): أفهم أن مؤشر الذكاء الاصطناعي أداة فرز إرشادية غير مدققة سريرياً ولا تُعد تشخيصاً طبياً مستقلاً ولا تغني عن فحص الطبيب.",
         telemedicine: "التطبيب عن بعد والاستشارات السريرية: أوافق على تلقي التوجيهات الطبية والاستشارات الرقمية من الأطباء المرخصين عبر المنصة.",
@@ -280,7 +280,7 @@
         viewHistory: "عرض سجل الفحوصات"
       },
       report: {
-        centerName: "مركز هيلث فايبز الطبي التخصصي",
+        centerName: "مركز هيلث فايب الطبي التخصصي",
         certifiedReport: "التقرير الطبي السريري المعتمد",
         physicianApproved: "معتمد سريرياً ورسمياً",
         caseRef: "رقم الحالة",
@@ -408,7 +408,7 @@
 
     en: {
       common: {
-        appName: "Health Vibes",
+        appName: "Health Vibe AI",
         tagline: "AI-supported healthcare reviewed by doctors",
         save: "Save",
         saved: "Saved",
@@ -559,7 +559,7 @@
         title: "Medical Consent & Privacy Policy",
         badgeRequired: "Required before assessment",
         badgeAccepted: "Consent Accepted",
-        desc: "Health Vibes collects your health data for indicative risk triage and forwards it to a certified physician before any final report is issued. To safeguard your privacy and comply with medical standards, please review and confirm the consent terms below:",
+        desc: "Health Vibe collects your health data for indicative risk triage and forwards it to a certified physician before any final report is issued. To safeguard your privacy and comply with medical standards, please review and confirm the consent terms below:",
         dataProcessing: "Clinical Data Processing (Mandatory): I agree to the processing of symptom data and vitals within the assessment workflow and sharing them with the attending certified physician.",
         aiAdvisory: "Advisory AI Nature (Mandatory): I understand that the AI score is an unvalidated indicative triage tool, does not constitute an independent diagnosis, and never replaces a physician examination.",
         telemedicine: "Telehealth & Clinical Consultations: I consent to receiving digital medical guidance and telehealth consults from licensed physicians via the platform.",
@@ -666,7 +666,7 @@
         viewHistory: "View Assessment History"
       },
       report: {
-        centerName: "Health Vibes Specialized Medical Center",
+        centerName: "Health Vibe Specialized Medical Center",
         certifiedReport: "Certified Clinical Assessment Report",
         physicianApproved: "Approved by Attending Physician",
         caseRef: "Case Reference",

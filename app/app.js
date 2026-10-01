@@ -749,7 +749,9 @@ const englishNames = {
 };
 
 const uiText = {
-  "Health Vibes": "Health Vibes",
+  "Health Vibes": "Health Vibe AI",
+  "Health Vibe": "Health Vibe",
+  "Health Vibe AI": "Health Vibe AI",
   "نجهز تجربة رعاية صحية أوضح وأكثر أمانًا": "Preparing a clearer, safer healthcare experience",
   "رعاية صحية مدعومة بالذكاء الاصطناعي وتحت مراجعة الطبيب": "AI-supported healthcare reviewed by doctors",
   "المسار": "Workflow",
@@ -761,7 +763,8 @@ const uiText = {
   "ابدأ الآن": "Get started",
   "الوحدة الأولى لتقييم التنفس": "Respiratory assessment module",
   "رعاية صحية رقمية تربط المريض بالطبيب قبل ظهور أي نتيجة نهائية": "Digital healthcare that connects patients with doctors before any final result appears",
-  "Health Vibes يجمع التقييم، مراجعة الطبيب، التقارير، المواعيد، والسجل الطبي في تجربة عربية واحدة مبنية للأفراد والعيادات في مصر.": "Health Vibes brings assessment, doctor review, reports, appointments, and medical history into one experience built for people and clinics in Egypt.",
+  "Health Vibe يجمع التقييم، مراجعة الطبيب، التقارير، المواعيد، والسجل الطبي في تجربة عربية واحدة مبنية للأفراد والعيادات في مصر.": "Health Vibe brings assessment, doctor review, reports, appointments, and medical history into one experience built for people and clinics in Egypt.",
+  "Health Vibes يجمع التقييم، مراجعة الطبيب، التقارير، المواعيد، والسجل الطبي في تجربة عربية واحدة مبنية للأفراد والعيادات في مصر.": "Health Vibe brings assessment, doctor review, reports, appointments, and medical history into one experience built for people and clinics in Egypt.",
   "تجربة البرنامج": "Try the app",
   "معاينة بدون حساب": "Preview without account",
   "الذكاء الاصطناعي لا يصدر تشخيصًا مستقلًا": "AI does not issue an independent diagnosis",
@@ -863,7 +866,8 @@ const uiText = {
   "غدًا 7:30 مساءً": "Tomorrow 7:30 PM",
   "الموافقة الطبية": "Medical consent",
   "مطلوبة": "Required",
-  "Health Vibes يستخدم بياناتك الصحية لتقييم خطورة إرشادي ثم يرسلها لطبيب معتمد قبل ظهور أي نتيجة نهائية.": "Health Vibes uses your health data for a guidance-only risk assessment, then sends it to a verified doctor before any final result appears.",
+  "Health Vibe يستخدم بياناتك الصحية لتقييم خطورة إرشادي ثم يرسلها لطبيب معتمد قبل ظهور أي نتيجة نهائية.": "Health Vibe uses your health data for a guidance-only risk assessment, then sends it to a verified doctor before any final result appears.",
+  "Health Vibes يستخدم بياناتك الصحية لتقييم خطورة إرشادي ثم يرسلها لطبيب معتمد قبل ظهور أي نتيجة نهائية.": "Health Vibe uses your health data for a guidance-only risk assessment, then sends it to a verified doctor before any final result appears.",
   "أوافق على استخدام البيانات الطبية داخل مسار التقييم والمراجعة.": "I agree to use my medical data inside the assessment and review path.",
   "أفهم أن الذكاء الاصطناعي لا يقدم تشخيصًا مستقلًا ولا يغني عن الطبيب.": "I understand that AI does not provide an independent diagnosis and does not replace a doctor.",
   "أوافق على استقبال تنبيهات المواعيد والتقارير عبر البريد أو رابط آمن.": "I agree to receive appointment and report alerts by email or secure link.",
@@ -1061,7 +1065,8 @@ const uiText = {
   "راقب نسبة الأكسجين إذا توفر جهاز موثوق.": "Monitor oxygen level if a reliable device is available.",
   "تابع مع الطبيب الذي راجع الحالة.": "Follow up with the reviewing doctor.",
   "اطلب رعاية عاجلة إذا زاد ضيق التنفس.": "Seek urgent care if shortness of breath worsens.",
-  "تنبيه طبي: Health Vibes يساعد في دعم القرار الطبي ولا يستبدل التقييم الطبي المؤهل أو رعاية الطوارئ.": "Medical notice: Health Vibes supports clinical decision-making and does not replace qualified medical evaluation or emergency care.",
+  "تنبيه طبي: Health Vibe يساعد في دعم القرار الطبي ولا يستبدل التقييم الطبي المؤهل أو رعاية الطوارئ.": "Medical notice: Health Vibe supports clinical decision-making and does not replace qualified medical evaluation or emergency care.",
+  "تنبيه طبي: Health Vibes يساعد في دعم القرار الطبي ولا يستبدل التقييم الطبي المؤهل أو رعاية الطوارئ.": "Medical notice: Health Vibe supports clinical decision-making and does not replace qualified medical evaluation or emergency care.",
   "تأكيد اعتماد التقرير": "Confirm report approval",
   "بعد الاعتماد ستظهر النتيجة والتوصيات للمريض وسيتم حفظ الحدث في سجل التدقيق.": "After approval, the result and recommendations will appear to the patient and the event will be saved in the audit log.",
   "تأكيد الاعتماد": "Confirm approval",
@@ -1112,7 +1117,8 @@ const uiText = {
   "تفعيل عبر بوت الواتساب": "Activate via WhatsApp Bot",
   "الموافقة الطبية وسياسة الخصوصية": "Medical Consent & Privacy Policy",
   "مطلوبة قبل الفحص": "Required before assessment",
-  "Health Vibes يجمع بياناتك الصحية لتقييم خطورة إرشادي ثم يرسلها لطبيب معتمد قبل ظهور أي نتيجة نهائية. لحماية بياناتك والامتثال للمعايير الطبية، نرجو مراجعة وتأكيد بنود الموافقة أدناه:": "Health Vibes collects your health data for guidance-only risk assessment, then sends it to a verified doctor before any final result appears. To protect your data and comply with medical standards, please review and confirm the consent terms below:",
+  "Health Vibe يجمع بياناتك الصحية لتقييم خطورة إرشادي ثم يرسلها لطبيب معتمد قبل ظهور أي نتيجة نهائية. لحماية بياناتك والامتثال للمعايير الطبية، نرجو مراجعة وتأكيد بنود الموافقة أدناه:": "Health Vibe collects your health data for guidance-only risk assessment, then sends it to a verified doctor before any final result appears. To protect your data and comply with medical standards, please review and confirm the consent terms below:",
+  "Health Vibes يجمع بياناتك الصحية لتقييم خطورة إرشادي ثم يرسلها لطبيب معتمد قبل ظهور أي نتيجة نهائية. لحماية بياناتك والامتثال للمعايير الطبية، نرجو مراجعة وتأكيد بنود الموافقة أدناه:": "Health Vibe collects your health data for guidance-only risk assessment, then sends it to a verified doctor before any final result appears. To protect your data and comply with medical standards, please review and confirm the consent terms below:",
   "معالجة البيانات السريرية (إلزامي):": "Clinical Data Processing (Mandatory):",
   "أوافق على استخدام بيانات الأعراض والقياسات الحيوية داخل مسار التقييم ومشاركتها مع الطبيب المعالج المعتمد.": "I agree to the use of symptom data and vital signs in the assessment workflow and sharing them with the verified attending physician.",
   "الطبيعة الإرشادية للذكاء الاصطناعي (إلزامي):": "Guidance Nature of AI (Mandatory):",
@@ -1176,8 +1182,8 @@ const uiText = {
   "لضمان سلامة وسرية الملفات الطبية، يرجى تفعيل وتوثيق حسابك عبر كود الواتساب السريع أو رسالة الهاتف أو رابط البريد.": "To ensure medical records security, please activate and verify your account via WhatsApp code, SMS, or email link.",
   "بوت الواتساب الآلي": "Automated WhatsApp Bot",
   "رابط البريد الإلكتروني": "Email Link",
-  "بوت الواتساب الآلي (Health Vibes Bot)": "Automated WhatsApp Bot (Health Vibes Bot)",
-  "اكتب رقم واتساب بصيغة دولية، ثم سيقوم بوت Health Vibes بإرسال كود تفعيل سري مكون من 6 أرقام.": "Enter a WhatsApp number in international format, then the Health Vibes Bot will send a secure 6-digit activation code.",
+  "بوت الواتساب الآلي (Health Vibe Bot)": "Automated WhatsApp Bot (Health Vibe Bot)",
+  "اكتب رقم واتساب بصيغة دولية، ثم سيقوم بوت Health Vibe بإرسال كود تفعيل سري مكون من 6 أرقام.": "Enter a WhatsApp number in international format, then the Health Vibe Bot will send a secure 6-digit activation code.",
   "رقم واتساب لاستلام الكود": "WhatsApp number to receive the code",
   "استخدم كود الدولة، مثال مصر: +201001234567.": "Use the country code, for Egypt for example: +201001234567.",
   "إرسال كود التفعيل تلقائياً عبر بوت الواتساب": "Send activation code automatically via WhatsApp Bot",
@@ -1370,7 +1376,7 @@ function applyLanguage(language) {
     document.documentElement.lang = language;
     document.documentElement.dir = language === "ar" ? "rtl" : "ltr";
   }
-  document.title = (window.i18n && window.i18n.t("common.appName")) || localized("Health Vibes");
+  document.title = (window.i18n && window.i18n.t("common.appName")) || localized("Health Vibe AI");
 
   // 2. Direct update for navigation buttons
   document.querySelectorAll(".nav-item").forEach((btn) => {
@@ -1673,19 +1679,19 @@ function validateClientRuntimeConfig(config, firebaseClientConfig) {
   const productionProjectId = "health-vibes-a4b3b";
 
   if (!projectId) {
-    throw new Error("[Health Vibes] Firebase projectId is required.");
+    throw new Error("[Health Vibe] Firebase projectId is required.");
   }
   if (expectedProjectId && projectId !== expectedProjectId) {
-    throw new Error(`[Health Vibes] ${env} expected Firebase project ${expectedProjectId}; got ${projectId}.`);
+    throw new Error(`[Health Vibe] ${env} expected Firebase project ${expectedProjectId}; got ${projectId}.`);
   }
   if (env === "production" && (emulatorsEnabled || config.allowDemoSeed === true || config.debug === true)) {
-    throw new Error("[Health Vibes] Production cannot enable emulators, demo data, or debug mode.");
+    throw new Error("[Health Vibe] Production cannot enable emulators, demo data, or debug mode.");
   }
   if (env === "production" && projectId !== productionProjectId) {
-    throw new Error(`[Health Vibes] Production must use Firebase project ${productionProjectId}; got ${projectId}.`);
+    throw new Error(`[Health Vibe] Production must use Firebase project ${productionProjectId}; got ${projectId}.`);
   }
   if (env === "development" && projectId === productionProjectId && !emulatorsEnabled) {
-    throw new Error("[Health Vibes] Development cannot use the production Firebase project unless emulators are enabled.");
+    throw new Error("[Health Vibe] Development cannot use the production Firebase project unless emulators are enabled.");
   }
 }
 
@@ -2377,7 +2383,7 @@ function renderDevEnvironmentBadge() {
 
   const badge = document.createElement("div");
   badge.id = "hvDevEnvBadge";
-  badge.setAttribute("title", `Health Vibes AI - Development Mode\nAPI: ${API_BASE_URL || 'Local'}\nProject: ${firebaseConfig.projectId}`);
+  badge.setAttribute("title", `Health Vibe AI - Development Mode\nAPI: ${API_BASE_URL || 'Local'}\nProject: ${firebaseConfig.projectId}`);
   badge.style.cssText = "position:fixed;bottom:14px;right:14px;z-index:99999;background:#0f172a;color:#38bdf8;border:1px solid #38bdf8;border-radius:20px;padding:4px 12px;font-size:11px;font-weight:700;font-family:inherit;box-shadow:0 4px 12px rgba(0,0,0,0.3);display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;letter-spacing:0.5px;";
   badge.innerHTML = `<span>🛠️ DEV</span><span style="opacity:0.75;font-weight:normal;font-size:10px;">(تطوير)</span>`;
   badge.onclick = () => {
@@ -2409,7 +2415,7 @@ if (typeof document !== "undefined") {
 
 // Protocol environment check: Firebase Auth requires http/https
 if (typeof window !== "undefined" && window.location.protocol === "file:") {
-  console.warn("[Health Vibes] Running on file:// protocol. Attempting auto-redirect to localhost:3000...");
+  console.warn("[Health Vibe] Running on file:// protocol. Attempting auto-redirect to localhost:3000...");
   fetch("http://localhost:3000/index.html", { method: "HEAD", mode: "no-cors" })
     .then(() => {
       window.location.href = "http://localhost:3000";
@@ -4850,7 +4856,7 @@ function toFriendlyAppError(err, context = "") {
       category: isEn ? "Registration" : "إنشاء حساب",
       title: isEn ? "Email Already Registered" : "البريد مسجل بالفعل",
       message: isEn
-        ? "An existing Health Vibes account is already associated with this email address."
+        ? "An existing Health Vibe account is already associated with this email address."
         : "يوجد حساب مسجل مسبقاً بهذا البريد الإلكتروني في النظام.",
       action: isEn ? "Please switch to 'Sign In' or recover your password if you forgot it." : "يرجى التبديل إلى 'تسجيل الدخول' أو استعادة كلمة المرور إذا كنت قد نسيتها.",
       ref: code || "auth/email-already-in-use"
@@ -6230,8 +6236,8 @@ async function savePrivacyConsent(accepted = true, options = {}) {
     userId: user ? user.uid : "guest",
     userEmail: user ? user.email : "guest",
     purpose: accepted
-      ? "Explicit consent for Health Vibes clinical assessment, doctor review, report workflow, and selected communications."
-      : "Withdrawal of explicit Health Vibes clinical data processing consent.",
+      ? "Explicit consent for Health Vibe clinical assessment, doctor review, report workflow, and selected communications."
+      : "Withdrawal of explicit Health Vibe clinical data processing consent.",
     dataProcessing: options.dataProcessing !== undefined ? options.dataProcessing : true,
     aiAdvisory: options.aiAdvisory !== undefined ? options.aiAdvisory : true,
     notifications: options.notifications !== undefined ? options.notifications : false,
@@ -6822,7 +6828,7 @@ function showScreen(name) {
     button.classList.toggle("active", button.dataset.mobileScreen === name);
   });
 
-  screenTitle.textContent = currentLanguage === "en" ? englishTitles[name] || "Health Vibes" : titles[name] || "Health Vibes";
+  screenTitle.textContent = currentLanguage === "en" ? englishTitles[name] || "Health Vibe AI" : titles[name] || "Health Vibe AI";
   setScreenBreadcrumb(name);
   if (typeof closeSidebarDrawer === "function") {
     closeSidebarDrawer();
@@ -7821,9 +7827,9 @@ async function renderReportScreen(targetCaseId = null) {
         <!-- OFFICIAL REPORT HEADER -->
         <div class="report-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--line); padding-bottom: 18px; margin-bottom: 20px;">
           <div class="brand" style="display: flex; align-items: center; gap: 14px;">
-            <img src="${document.body.classList.contains("dark") ? LOGO_MARK_ASSETS.dark : LOGO_MARK_ASSETS.light}" alt="Health Vibes" class="report-logo" data-logo-mark />
+            <img src="${document.body.classList.contains("dark") ? LOGO_MARK_ASSETS.dark : LOGO_MARK_ASSETS.light}" alt="Health Vibe AI" class="report-logo" data-logo-mark />
             <div>
-              <strong style="font-size: 20px; display: block; color: var(--ink);">${isEn ? "Health Vibes Medical Center" : "مركز هيلث فايبز الطبي التخصصي"}</strong>
+              <strong style="font-size: 20px; display: block; color: var(--ink);">${isEn ? "Health Vibe Medical Center" : "مركز هيلث فايب الطبي التخصصي"}</strong>
               <span style="font-size: 12.5px; color: var(--teal); font-weight: 700;">${isEn ? "Certified Clinical Assessment Report" : "التقرير الطبي السريري المعتمد"}</span>
             </div>
           </div>
@@ -8080,7 +8086,7 @@ async function renderReportScreen(targetCaseId = null) {
           <!-- OFFICIAL CLINICAL SEAL -->
           <div class="official-clinical-seal" style="text-align: center; border: 2.5px dashed #16a34a; border-radius: 50%; width: 105px; height: 105px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 6px; background: rgba(22, 163, 74, 0.05); transform: rotate(-5deg); box-shadow: 0 4px 12px rgba(22, 163, 74, 0.08);">
             <span style="font-size: 22px;">🩺</span>
-            <strong style="font-size: 9px; color: #16a34a; text-transform: uppercase; letter-spacing: 0.6px; line-height: 1.1;">Health Vibes</strong>
+            <strong style="font-size: 9px; color: #16a34a; text-transform: uppercase; letter-spacing: 0.6px; line-height: 1.1;">Health Vibe AI</strong>
             <span style="font-size: 8px; color: #15803d; font-weight: 800; margin-top: 2px;">CERTIFIED REPORT</span>
             <span style="font-size: 7px; color: var(--muted);">${new Date().getFullYear()} OFFICIAL</span>
           </div>
@@ -8279,7 +8285,7 @@ async function renderResultScreen() {
           <ul class="recommendations">
             ${recorded.recs.map(rec => `<li>${escapeHtml(rec)}</li>`).join("")}
           </ul>
-          <div class="safety-note">${isEn ? "Medical notice: Health Vibes supports clinical workflows and does not replace qualified emergency care." : "تنبيه طبي: Health Vibes يساعد في دعم القرار الطبي ولا يستبدل التقييم الطبي المؤهل أو رعاية الطوارئ."}</div>
+          <div class="safety-note">${isEn ? "Medical notice: Health Vibe supports clinical workflows and does not replace qualified emergency care." : "تنبيه طبي: Health Vibe يساعد في دعم القرار الطبي ولا يستبدل التقييم الطبي المؤهل أو رعاية الطوارئ."}</div>
           <button class="solid-button full" onclick="openCaseReport('${latest.id}')">
             <span>📄</span> ${isEn ? "View Certified Medical Report" : "عرض التقرير الطبي المعتمد"}
           </button>
@@ -13189,7 +13195,7 @@ function buildAssessmentModel({
         previousStatus: CASE_STATUS.SUBMITTED,
         changedAt: new Date().toISOString(),
         changedBy: "system",
-        changedByName: "Health Vibes AI Triage Engine",
+        changedByName: "Health Vibe AI Triage Engine",
         changedByRole: "system",
         note: `AI Triage determined priority: ${priority} (${prioMeta.riskAr})`
       },
@@ -14108,8 +14114,8 @@ function evaluateClinicalGuardrails(query, isEn) {
       triggered: true,
       type: "prompt_injection",
       message: isEn
-        ? `🛡️ <strong>Security Alert: System Prompt Override / Jailbreak Blocked</strong><br><br>Health Vibes AI Assistant strictly operates within certified clinical boundaries and report verification protocols.<br><br>• <strong>System Integrity:</strong> Safety guardrails and clinical constraints cannot be overridden or bypassed.<br>• The assistant is strictly restricted to explaining your verified report and cannot generate speculative diagnoses or modify treatments.`
-        : `🛡️ <strong>تنبيه أمان: تم حظر محاولة تجاوز التعليمات البرمجية أو القيود السريرية</strong><br><br>يعمل مساعد Health Vibes الطبي الذكي وفق بروتوكولات حوكمة طبية صارمة ومقيدة بالتقرير المعتمد.<br><br>• <strong>نزاهة النظام:</strong> لا يمكن تجاوز أو تعطيل حواجز الأمان السريرية أو الأوامر النظامية تحت أي ظرف.<br>• يظل المساعد مقيداً فقط بتوضيح التقرير الطبي المعتمد ولا يمكنه تشخيص أو تعديل علاجات.`
+        ? `🛡️ <strong>Security Alert: System Prompt Override / Jailbreak Blocked</strong><br><br>Health Vibe AI Assistant strictly operates within certified clinical boundaries and report verification protocols.<br><br>• <strong>System Integrity:</strong> Safety guardrails and clinical constraints cannot be overridden or bypassed.<br>• The assistant is strictly restricted to explaining your verified report and cannot generate speculative diagnoses or modify treatments.`
+        : `🛡️ <strong>تنبيه أمان: تم حظر محاولة تجاوز التعليمات البرمجية أو القيود السريرية</strong><br><br>يعمل مساعد Health Vibe الطبي الذكي وفق بروتوكولات حوكمة طبية صارمة ومقيدة بالتقرير المعتمد.<br><br>• <strong>نزاهة النظام:</strong> لا يمكن تجاوز أو تعطيل حواجز الأمان السريرية أو الأوامر النظامية تحت أي ظرف.<br>• يظل المساعد مقيداً فقط بتوضيح التقرير الطبي المعتمد ولا يمكنه تشخيص أو تعديل علاجات.`
     };
   }
 
@@ -14200,7 +14206,7 @@ function checkInformationAbsentFromReport(query, report, isEn) {
         message: isEn
           ? `⚠️ <strong>Information Absent from Approved Report:</strong><br><br>` +
             `Details regarding <strong>${domain.nameEn}</strong> are <strong>not present or recorded</strong> in your certified respiratory assessment report (${rId ? `#${rId}` : "on file"}).<br><br>` +
-            `• <strong>Clinical Integrity Policy:</strong> Health Vibes AI Assistant strictly refrains from inventing, guessing, or filling in missing medical information not recorded by your physician.<br>` +
+            `• <strong>Clinical Integrity Policy:</strong> Health Vibe AI Assistant strictly refrains from inventing, guessing, or filling in missing medical information not recorded by your physician.<br>` +
             `• <strong>Recommended Action:</strong> Please prepare a question regarding ${domain.nameEn} to discuss directly with your attending doctor during your next clinical appointment.`
           : `⚠️ <strong>معلومات غير واردة بالتقرير المعتمد:</strong><br><br>` +
             `البيانات المتعلقة بـ <strong>${domain.nameAr}</strong> <strong>غير مسجلة أو غير واردة</strong> في تقريرك التنفسي المعتمد (${rId ? `#${rId}` : "المسجل"}).<br><br>` +
@@ -14343,7 +14349,7 @@ async function renderAssistantScreen() {
     messagesEl.innerHTML = `
       <div class="bot">
         ${isEn
-          ? `👋 <strong>Welcome to Health Vibes Assistant!</strong><br><br>No certified medical reports were found in your account yet. You can submit a new breathing assessment through the app to be evaluated and certified by a physician.`
+          ? `👋 <strong>Welcome to Health Vibe Assistant!</strong><br><br>No certified medical reports were found in your account yet. You can submit a new breathing assessment through the app to be evaluated and certified by a physician.`
           : `👋 <strong>أهلاً بك في المساعد الطبي الذكي!</strong><br><br>لم يتم العثور على تقرير طبي معتمد في حسابك حتى الآن. يمكنك بدء فحص تنفسي جديد عبر التطبيق ليقوم الطبيب بمراجعته واعتماده رسمياً.`
         }
       </div>
@@ -14548,7 +14554,7 @@ async function handleSendChatMessage() {
           message: isEnglish
             ? `⚠️ <strong>Information Absent from Approved Report:</strong><br><br>` +
               `Details regarding <strong>${domain.nameEn}</strong> are <strong>not present or recorded</strong> in your certified respiratory assessment report (${reportShortId ? `#${reportShortId}` : "on file"}).<br><br>` +
-              `• <strong>Clinical Integrity Policy:</strong> Health Vibes AI Assistant strictly refrains from inventing, guessing, or filling in missing medical information not recorded by your physician.<br>` +
+              `• <strong>Clinical Integrity Policy:</strong> Health Vibe AI Assistant strictly refrains from inventing, guessing, or filling in missing medical information not recorded by your physician.<br>` +
               `• <strong>Recommended Action:</strong> Please prepare a question regarding ${domain.nameEn} to discuss directly with your attending doctor during your next clinical appointment.`
             : `⚠️ <strong>معلومات غير واردة بالتقرير المعتمد:</strong><br><br>` +
               `البيانات المتعلقة بـ <strong>${domain.nameAr}</strong> <strong>غير مسجلة أو غير واردة</strong> في تقريرك التنفسي المعتمد (${reportShortId ? `#${reportShortId}` : "المسجل"}).<br><br>` +
@@ -14827,7 +14833,7 @@ function initHVAuthListener() {
           // 🛑 Check if user account is suspended by administration
           const isUserSuspended = Boolean(udata.suspended === true || udata.isSuspended === true || udata.status === "suspended" || udata.accountStatus === "suspended" || udata.disabled === true);
           if (isUserSuspended && !isOwner) {
-            console.warn("[Health Vibes] Account suspended by administration. Blocking access:", user.email);
+            console.warn("[Health Vibe] Account suspended by administration. Blocking access:", user.email);
             clearActiveSession();
             window._isSigningOut = true;
             await auth.signOut();
@@ -14881,7 +14887,7 @@ function initHVAuthListener() {
           callBackend("/api/user/sync-role", { method: "POST" })
             .then(syncRes => {
               if (syncRes && syncRes.role && syncRes.role !== selectedRole) {
-                console.log(`[Health Vibes] Synced authoritative role from Backend: ${syncRes.role}`);
+                console.log(`[Health Vibe] Synced authoritative role from Backend: ${syncRes.role}`);
                 selectedRole = syncRes.role;
                 saveActiveSession(user, selectedRole);
                 if (typeof updateNavVisibility === "function") updateNavVisibility(user);
