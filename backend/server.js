@@ -70,6 +70,7 @@ const chronicHypertensionService = require('./chronic-hypertension-service');
 const wearableIntegrationService = require('./wearable-integration-service');
 const caseFollowupService = require('./case-followup-service');
 const clinicalScribeService = require('./clinical-scribe-service');
+const diagnosticIntegrationService = require('./diagnostic-integration-service');
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -11218,4 +11219,273 @@ app.post('/api/scribe/purge-recordings', requireAuth, requireAdmin, (req, res) =
   }
 });
 
+// =============================================================================
+// 🧪 DIAGNOSTIC LABORATORY & IMAGING INTEGRATION API ROUTES
+// =============================================================================
+
+/**
+ * POST /api/integration/diagnostics/consent
+ * Patient grants explicit opt-in consent for diagnostic data exchange with accredited partner.
+ */
+app.post('/api/integration/diagnostics/consent', requireAuth, (req, res) => {
+  try {
+    const { partnerId, purpose, validityDays } = req.body || {};
+    const patientId = req.user.uid;
+
+    const consent = diagnosticIntegrationService.recordPatientConsent({
+      patientId,
+      partnerId: partnerId || 'PARTNER_ALBORG_MOKHTABAR',
+      purpose,
+      validityDays: validityDays ? parseInt(validityDays, 10) : undefined
+    });
+
+    res.status(201).json({ success: true, consent });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'CONSENT_FAILED', message: err.message });
+  }
+});
+
+/**
+ * DELETE /api/integration/diagnostics/consent
+ * Patient revokes previously granted diagnostic data sharing consent.
+ */
+app.delete('/api/integration/diagnostics/consent', requireAuth, (req, res) => {
+  try {
+    const { partnerId, reason } = req.body || {};
+    const patientId = req.user.uid;
+
+    const revokedConsent = diagnosticIntegrationService.revokePatientConsent({
+      patientId,
+      partnerId: partnerId || 'PARTNER_ALBORG_MOKHTABAR',
+      reason
+    });
+
+    res.json({ success: true, consent: revokedConsent });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'REVOCATION_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/integration/diagnostics/orders
+ * Doctor issues and cryptographically signs a diagnostic laboratory or imaging order.
+ */
+app.post('/api/integration/diagnostics/orders', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
+  try {
+    const doctorIdentity = await getVerifiedDoctorIdentity(req.user.uid);
+    if (!doctorIdentity || doctorIdentity.status !== 'approved' || doctorIdentity.isLicenseExpired || doctorIdentity.licenseStatus === 'revoked') {
+      return res.status(403).json({
+        error: 'DOCTOR_CREDENTIALS_REQUIRED',
+        message: 'Only actively licensed physicians can issue diagnostic test orders.'
+      });
+    }
+
+    const { patientId, patientName, patientGender, patientDob, nationalId, partnerId, tests, clinicalIndication, priority, visitId } = req.body || {};
+
+    const order = diagnosticIntegrationService.createDiagnosticOrder({
+      doctor: doctorIdentity,
+      patient: {
+        id: patientId,
+        name: patientName,
+        gender: patientGender,
+        birthDate: patientDob,
+        nationalId
+      },
+      partnerId: partnerId || 'PARTNER_ALBORG_MOKHTABAR',
+      tests,
+      clinicalIndication,
+      priority,
+      visitId
+    });
+
+    res.status(201).json({ success: true, order });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'ORDER_CREATION_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/integration/diagnostics/orders/:orderId
+ * Fetches order record and dispatch history.
+ */
+app.get('/api/integration/diagnostics/orders/:orderId', requireAuth, (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const order = diagnosticIntegrationService.getOrder(orderId);
+    if (!order) return res.status(404).json({ error: 'ORDER_NOT_FOUND', message: 'Order does not exist.' });
+
+    // Ensure requesting user is authorized (doctor, admin, or target patient)
+    if (req.user.role === 'patient' && order.patient.id !== req.user.uid) {
+      return res.status(403).json({ error: 'FORBIDDEN', message: 'Access denied.' });
+    }
+
+    res.json({ success: true, order });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/integration/diagnostics/orders/:orderId/dispatch
+ * Dispatches diagnostic order to external partner node with exponential retry and consent validation.
+ */
+app.post('/api/integration/diagnostics/orders/:orderId/dispatch', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { simulateSandbox, maxRetries } = req.body || {};
+
+    const dispatchResult = await diagnosticIntegrationService.dispatchOrderToPartner(orderId, {
+      simulateSandbox: simulateSandbox !== undefined ? Boolean(simulateSandbox) : undefined,
+      maxRetries: maxRetries ? parseInt(maxRetries, 10) : undefined
+    });
+
+    res.json({ success: true, dispatch: dispatchResult });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({
+      error: err.code || 'DISPATCH_FAILED',
+      message: err.message,
+      dlqId: err.dlqId || null
+    });
+  }
+});
+
+/**
+ * POST /api/integration/diagnostics/webhook/results
+ * External Diagnostic Partner Webhook with HMAC-SHA256 signature verification.
+ */
+app.post('/api/integration/diagnostics/webhook/results', (req, res) => {
+  try {
+    const signatureHeader = req.headers['x-diagnostic-signature'];
+    const partnerId = req.headers['x-partner-id'] || 'PARTNER_ALBORG_MOKHTABAR';
+
+    const resultRecord = diagnosticIntegrationService.ingestDiagnosticResult({
+      partnerId,
+      payload: req.body,
+      signatureHeader
+    });
+
+    res.status(200).json({
+      success: true,
+      resultId: resultRecord.resultId,
+      status: resultRecord.status,
+      hasPanicValue: resultRecord.hasPanicValue
+    });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'WEBHOOK_INGESTION_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/integration/diagnostics/results/:resultId/approve
+ * Mandatory Physician Review Gate: Interprets findings and approves release to patient.
+ */
+app.post('/api/integration/diagnostics/results/:resultId/approve', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
+  try {
+    const doctorIdentity = await getVerifiedDoctorIdentity(req.user.uid);
+    if (!doctorIdentity || doctorIdentity.status !== 'approved' || doctorIdentity.isLicenseExpired || doctorIdentity.licenseStatus === 'revoked') {
+      return res.status(403).json({
+        error: 'DOCTOR_CREDENTIALS_REQUIRED',
+        message: 'Only actively licensed physicians can approve diagnostic results.'
+      });
+    }
+
+    const { resultId } = req.params;
+    const { clinicalInterpretation, followUpPlan } = req.body || {};
+
+    const approvedResult = diagnosticIntegrationService.doctorReviewAndApproveResult({
+      resultId,
+      doctor: doctorIdentity,
+      clinicalInterpretation,
+      followUpPlan
+    });
+
+    res.json({ success: true, result: approvedResult });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'APPROVAL_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/integration/diagnostics/results/patient/:patientId
+ * Retrieves diagnostic findings. Patients can only view physician-approved results.
+ */
+app.get('/api/integration/diagnostics/results/patient/:patientId', requireAuth, (req, res) => {
+  try {
+    const { patientId } = req.params;
+
+    if (req.user.role === 'patient' && patientId !== req.user.uid) {
+      return res.status(403).json({ error: 'FORBIDDEN', message: 'You can only view your own diagnostic records.' });
+    }
+
+    const results = diagnosticIntegrationService.getPatientResults(patientId, req.user);
+    res.json({ success: true, count: results.length, results });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/integration/diagnostics/sync
+ * Secure synchronization worker pulling pending updates from partner gateway.
+ */
+app.post('/api/integration/diagnostics/sync', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { partnerId } = req.body || {};
+    const syncSummary = await diagnosticIntegrationService.syncPartnerPendingResults(
+      partnerId || 'PARTNER_ALBORG_MOKHTABAR'
+    );
+    res.json({ success: true, sync: syncSummary });
+  } catch (err) {
+    res.status(500).json({ error: 'SYNC_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/integration/diagnostics/metrics
+ * Returns real-time latency, error rates, DLQ size, and partner reliability metrics.
+ */
+app.get('/api/integration/diagnostics/metrics', requireAuth, requireAdmin, (req, res) => {
+  try {
+    const metrics = diagnosticIntegrationService.getMonitoringMetrics();
+    res.json({ success: true, metrics });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * GET /api/integration/diagnostics/audit
+ * Fetches structured integration audit trails.
+ */
+app.get('/api/integration/diagnostics/audit', requireAuth, requireAdmin, (req, res) => {
+  try {
+    const { eventType, partnerId, orderId } = req.query || {};
+    const logs = diagnosticIntegrationService.getAuditLogs({ eventType, partnerId, orderId });
+    res.json({ success: true, count: logs.length, logs });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/integration/diagnostics/sandbox/simulate-result
+ * Sandbox testing endpoint for end-to-end partner verification.
+ */
+app.post('/api/integration/diagnostics/sandbox/simulate-result', requireAuth, (req, res) => {
+  try {
+    const { orderId, partnerId, customObservations, triggerPanic } = req.body || {};
+    const simResult = diagnosticIntegrationService.simulateSandboxResult({
+      orderId,
+      partnerId,
+      customObservations,
+      triggerPanic: Boolean(triggerPanic)
+    });
+
+    res.json({ success: true, result: simResult });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'SIMULATION_FAILED', message: err.message });
+  }
+});
+
 module.exports = app;
+
