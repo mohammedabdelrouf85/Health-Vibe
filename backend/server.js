@@ -71,6 +71,7 @@ const wearableIntegrationService = require('./wearable-integration-service');
 const caseFollowupService = require('./case-followup-service');
 const clinicalScribeService = require('./clinical-scribe-service');
 const diagnosticIntegrationService = require('./diagnostic-integration-service');
+const clinicalInfoExchangeService = require('./clinical-info-exchange-service');
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -6391,11 +6392,249 @@ app.post('/api/doctor/reject-clinical-case', requireAuth, requireVerifiedEmail, 
 
 /**
  * POST /api/doctor/request-more-info
- * Server-authoritative endpoint to request more information from patient
+ * Server-authoritative endpoint to request more information from patient.
+ * Generates a stable request ID, tracks cycles, and creates a versioned InformationRequestRecord.
  */
 app.post('/api/doctor/request-more-info', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
-  const { caseId, note, infoRequired } = req.body;
-  return executeDoctorTransition({ req, res, caseId, targetStatus: 'more_info_requested', note: infoRequired || note });
+  const { caseId, note, infoRequired, requestedFields, priority } = req.body || {};
+  if (!caseId) {
+    return res.status(400).json({ error: 'MISSING_CASE_ID', message: 'caseId is required.' });
+  }
+
+  const rationale = String(infoRequired || note || '').trim();
+  if (!rationale) {
+    return res.status(400).json({ error: 'MISSING_TRANSITION_NOTE', message: 'A doctor note or clinical explanation is required.' });
+  }
+
+  try {
+    const doctorIdentity = await getVerifiedDoctorIdentity(req.user.uid);
+    if (!doctorIdentity || doctorIdentity.status !== 'approved' || doctorIdentity.isLicenseExpired || doctorIdentity.licenseStatus === 'revoked') {
+      return res.status(403).json({
+        error: 'DOCTOR_CREDENTIALS_REQUIRED',
+        message: 'Only actively licensed physicians can request additional clinical information.'
+      });
+    }
+
+    // Sync from Firestore if available
+    let caseData = null;
+    let caseRef = null;
+    if (db) {
+      caseRef = db.collection('cases').doc(caseId);
+      const caseSnap = await caseRef.get();
+      if (!caseSnap.exists) {
+        return res.status(404).json({ error: 'CASE_NOT_FOUND', message: 'Case not found.' });
+      }
+      caseData = caseSnap.data();
+      clinicalInfoExchangeService.registerCase({ id: caseId, ...caseData });
+    }
+
+    const requestRecord = clinicalInfoExchangeService.createInformationRequest({
+      caseId,
+      doctor: {
+        uid: req.user.uid,
+        name: doctorIdentity.name || req.user.displayName || 'Physician',
+        licenseNumber: doctorIdentity.licenseNumber,
+        specialty: doctorIdentity.specialty,
+        role: 'doctor',
+        status: doctorIdentity.status,
+        licenseStatus: doctorIdentity.licenseStatus,
+        isLicenseExpired: doctorIdentity.isLicenseExpired
+      },
+      requestedFields,
+      clinicalRationale: rationale,
+      priority
+    });
+
+    if (db && caseRef) {
+      await caseRef.update({
+        status: 'more_info_requested',
+        activeRequestId: requestRecord.requestId,
+        lastInfoRequestedAt: admin.firestore.FieldValue.serverTimestamp(),
+        moreInfoNote: rationale,
+        infoCycle: requestRecord.cycle,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      const patientRecipient = caseData?.patientEmail || caseData?.patient?.email;
+      if (patientRecipient) {
+        sendClinicalNotificationEmail({
+          type: 'more_info_requested',
+          patientEmail: patientRecipient,
+          patientName: caseData.patientName || caseData.patient?.name || 'المريض',
+          caseId,
+          doctorName: doctorIdentity.name || 'الطبيب المعالج',
+          moreInfoNote: rationale,
+          db
+        }).catch(err => console.warn('[NOTIFICATION WARNING]:', err.message));
+      }
+    }
+
+    return res.status(201).json({
+      success: true,
+      status: 'more_info_requested',
+      request: requestRecord
+    });
+  } catch (err) {
+    return res.status(err.statusCode || 400).json({
+      error: err.code || 'REQUEST_MORE_INFO_FAILED',
+      message: err.message
+    });
+  }
+});
+
+/**
+ * POST /api/patient/reply-more-info
+ * Server-authoritative endpoint for patients to reply to a specific information request.
+ * Enforces ownership, validates measurements, prevents overwriting historical data,
+ * updates canonical current assessment, and increments clinical revision.
+ */
+app.post(['/api/patient/reply-more-info', '/api/cases/:caseId/reply-more-info'], requireAuth, async (req, res) => {
+  const caseId = req.params.caseId || req.body.caseId;
+  const { requestId, patientNotes, measurements, symptoms, files, provenance } = req.body || {};
+
+  if (!caseId) {
+    return res.status(400).json({ error: 'MISSING_CASE_ID', message: 'caseId is required.' });
+  }
+
+  try {
+    // If db available, sync latest state into memory service
+    let caseRef = null;
+    let caseData = null;
+    if (db) {
+      caseRef = db.collection('cases').doc(caseId);
+      const caseSnap = await caseRef.get();
+      if (!caseSnap.exists) {
+        return res.status(404).json({ error: 'CASE_NOT_FOUND', message: 'Case not found.' });
+      }
+      caseData = caseSnap.data();
+      clinicalInfoExchangeService.registerCase({ id: caseId, ...caseData });
+    }
+
+    const replyResult = clinicalInfoExchangeService.submitInformationReply({
+      caseId,
+      requestId,
+      patient: {
+        uid: req.user.uid,
+        name: req.user.displayName || req.user.name || 'Patient'
+      },
+      patientNotes,
+      measurements,
+      symptoms,
+      files,
+      provenance
+    });
+
+    // Update Firestore if db active
+    if (db && caseRef) {
+      const updatedCaseInMemory = clinicalInfoExchangeService.getCase(caseId);
+      const updateData = {
+        status: 'under_review',
+        activeRequestId: null,
+        clinicalRevision: updatedCaseInMemory.clinicalRevision,
+        lastRevisionAt: admin.firestore.FieldValue.serverTimestamp(),
+        lastInfoRepliedAt: admin.firestore.FieldValue.serverTimestamp(),
+        currentAssessment: updatedCaseInMemory.currentAssessment,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      };
+
+      // Top-level aliases for backward compatibility
+      if (updatedCaseInMemory.currentAssessment.oxygenLevel !== undefined) {
+        updateData.o2 = updatedCaseInMemory.currentAssessment.oxygenLevel;
+      }
+      if (updatedCaseInMemory.currentAssessment.temperature !== undefined) {
+        updateData.temperature = updatedCaseInMemory.currentAssessment.temperature;
+      }
+      if (updatedCaseInMemory.currentAssessment.heartRate !== undefined) {
+        updateData.heartRate = updatedCaseInMemory.currentAssessment.heartRate;
+      }
+      if (updatedCaseInMemory.currentAssessment.systolicBp !== undefined) {
+        updateData.systolicBp = updatedCaseInMemory.currentAssessment.systolicBp;
+      }
+      if (updatedCaseInMemory.currentAssessment.diastolicBp !== undefined) {
+        updateData.diastolicBp = updatedCaseInMemory.currentAssessment.diastolicBp;
+      }
+
+      await caseRef.update(updateData);
+    }
+
+    return res.status(200).json(replyResult);
+  } catch (err) {
+    return res.status(err.statusCode || 400).json({
+      error: err.code || 'REPLY_FAILED',
+      message: err.message
+    });
+  }
+});
+
+/**
+ * GET /api/cases/:caseId/info-requests
+ * Returns chronological history of all information request and response cycles.
+ */
+app.get('/api/cases/:caseId/info-requests', requireAuth, (req, res) => {
+  try {
+    const { caseId } = req.params;
+    const clinicalCase = clinicalInfoExchangeService.getCase(caseId);
+    if (!clinicalCase) {
+      return res.status(404).json({ error: 'CASE_NOT_FOUND', message: 'Case not found.' });
+    }
+
+    // Role check: patient can only view their own case requests
+    if (req.user.role === 'patient' && clinicalCase.patientId !== req.user.uid) {
+      return res.status(403).json({ error: 'FORBIDDEN', message: 'Access denied.' });
+    }
+
+    const requests = clinicalInfoExchangeService.getCaseRequestHistory(caseId);
+    res.json({ success: true, count: requests.length, requests });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * GET /api/cases/:caseId/observations
+ * Returns complete append-only historical observations log with units, timestamps, and provenance.
+ */
+app.get('/api/cases/:caseId/observations', requireAuth, (req, res) => {
+  try {
+    const { caseId } = req.params;
+    const { type } = req.query;
+    const clinicalCase = clinicalInfoExchangeService.getCase(caseId);
+    if (!clinicalCase) {
+      return res.status(404).json({ error: 'CASE_NOT_FOUND', message: 'Case not found.' });
+    }
+
+    if (req.user.role === 'patient' && clinicalCase.patientId !== req.user.uid) {
+      return res.status(403).json({ error: 'FORBIDDEN', message: 'Access denied.' });
+    }
+
+    const observations = clinicalInfoExchangeService.getCaseObservationHistory(caseId, type);
+    res.json({ success: true, count: observations.length, observations });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * GET /api/cases/:caseId/revisions
+ * Returns clinical revision trajectory and historical changelog for the assessment.
+ */
+app.get('/api/cases/:caseId/revisions', requireAuth, (req, res) => {
+  try {
+    const { caseId } = req.params;
+    const clinicalCase = clinicalInfoExchangeService.getCase(caseId);
+    if (!clinicalCase) {
+      return res.status(404).json({ error: 'CASE_NOT_FOUND', message: 'Case not found.' });
+    }
+
+    if (req.user.role === 'patient' && clinicalCase.patientId !== req.user.uid) {
+      return res.status(403).json({ error: 'FORBIDDEN', message: 'Access denied.' });
+    }
+
+    const revisions = clinicalInfoExchangeService.getCaseRevisionHistory(caseId);
+    res.json({ success: true, currentRevision: clinicalCase.clinicalRevision, revisions });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
 });
 
 /**
