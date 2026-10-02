@@ -69,6 +69,7 @@ const prescriptionService = require('./prescription-service');
 const chronicHypertensionService = require('./chronic-hypertension-service');
 const wearableIntegrationService = require('./wearable-integration-service');
 const caseFollowupService = require('./case-followup-service');
+const clinicalScribeService = require('./clinical-scribe-service');
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -11094,6 +11095,126 @@ app.post('/api/cases/:caseId/followup-plan/:planId/decision-guard', requireAuth,
     res.json({ success: true, guardResult });
   } catch (err) {
     res.status(err.statusCode || 400).json({ error: err.code || 'DECISION_BLOCKED', message: err.message });
+  }
+});
+
+app.clinicalScribeService = clinicalScribeService;
+
+// =============================================================================
+// 🎙️ CLINICAL SCRIBE & DOCTOR VISIT ASSISTANT ROUTES
+// Voice Summarization, Consent, Retention, Doctor Review & Dual Presentation Modes
+// =============================================================================
+
+/**
+ * POST /api/scribe/draft
+ * Ingests visit voice transcript, audits recording consent & anti-hallucination fidelity,
+ * and generates an unapproved structured draft (SOAP) with source provenance links.
+ */
+app.post('/api/scribe/draft', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
+  try {
+    const doctorIdentity = await getVerifiedDoctorIdentity(req.user.uid);
+    if (!doctorIdentity || doctorIdentity.status !== 'approved' || doctorIdentity.isLicenseExpired || doctorIdentity.licenseStatus === 'revoked') {
+      return res.status(403).json({
+        error: 'DOCTOR_CREDENTIALS_REQUIRED',
+        message: 'Only actively licensed and approved physicians can generate clinical visit summaries.'
+      });
+    }
+
+    const {
+      visitId,
+      patientId,
+      patientName,
+      recordingConsent,
+      rawAudioMetadata,
+      transcriptText,
+      transcriptSegments,
+      clinicalContext
+    } = req.body || {};
+
+    const draft = await clinicalScribeService.createVisitVoiceDraft({
+      visitId,
+      patientId,
+      patientName,
+      doctorIdentity,
+      recordingConsent,
+      rawAudioMetadata,
+      transcriptText,
+      transcriptSegments,
+      clinicalContext
+    });
+
+    res.status(201).json({ success: true, draft });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'SCRIBE_DRAFT_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/scribe/draft/:draftId/approve
+ * Mandatory Review Gate: Attending physician reviews, edits, and cryptographically approves the draft.
+ */
+app.post('/api/scribe/draft/:draftId/approve', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
+  try {
+    const doctorIdentity = await getVerifiedDoctorIdentity(req.user.uid);
+    if (!doctorIdentity || doctorIdentity.status !== 'approved' || doctorIdentity.isLicenseExpired || doctorIdentity.licenseStatus === 'revoked') {
+      return res.status(403).json({
+        error: 'DOCTOR_CREDENTIALS_REQUIRED',
+        message: 'Only actively licensed and approved physicians can review and approve clinical notes.'
+      });
+    }
+
+    const { draftId } = req.params;
+    const { editedSummary, approvalNotes } = req.body || {};
+
+    const approvedDraft = clinicalScribeService.reviewAndApproveDraft({
+      draftId,
+      doctorIdentity,
+      editedSummary,
+      approvalNotes
+    });
+
+    res.json({ success: true, approvedDraft });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'APPROVAL_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/scribe/draft/:draftId
+ * Retrieves structured summary in requested presentation mode:
+ * - 'doctor' (default): Full clinical SOAP, ICD-10 suggestions, evidence-based citations, and source provenance.
+ * - 'patient': Simplified, plain-language summary (bilingual or Arabic), actionable care steps, and red-flags.
+ */
+app.get('/api/scribe/draft/:draftId', requireAuth, (req, res) => {
+  try {
+    const { draftId } = req.params;
+    const { mode, language } = req.query;
+
+    const summary = clinicalScribeService.getStructuredSummary(draftId, {
+      mode: mode || (req.user.role === 'doctor' ? 'doctor' : 'patient'),
+      language: language || 'ar'
+    });
+
+    res.json({ success: true, summary });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.code || 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/scribe/purge-recordings
+ * Enforces raw audio retention policy and purges audio recordings older than retention window.
+ */
+app.post('/api/scribe/purge-recordings', requireAuth, requireAdmin, (req, res) => {
+  try {
+    const { olderThanDays } = req.body || {};
+    const purgeReport = clinicalScribeService.purgeExpiredAudioRecordings(
+      olderThanDays ? parseInt(olderThanDays, 10) : undefined
+    );
+
+    res.json({ success: true, purgeReport });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
   }
 });
 
