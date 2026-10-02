@@ -67,6 +67,7 @@ const medicalOcrService = require('./medical-ocr-service');
 const unusualAccessService = require('./unusual-access-service');
 const prescriptionService = require('./prescription-service');
 const chronicHypertensionService = require('./chronic-hypertension-service');
+const wearableIntegrationService = require('./wearable-integration-service');
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -10675,6 +10676,191 @@ app.get('/api/chronic/hypertension/patient/:patientId/report', requireAuth, (req
     }
 
     res.json({ success: true, report });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+app.wearableIntegrationService = wearableIntegrationService;
+
+// =============================================================================
+// ⌚ WEARABLE & HEALTH TELEMETRY INTEGRATION ROUTES
+// Apple Health, Health Connect, Smartwatches & Continuous Monitors
+// =============================================================================
+
+/**
+ * POST /api/wearables/consent
+ * Registers or updates user consent for specific wearable platforms and health metrics.
+ */
+app.post('/api/wearables/consent', requireAuth, (req, res) => {
+  try {
+    const { provider, metricsAllowed, consented, consentVersion } = req.body || {};
+    const patientId = req.user.uid;
+
+    if (!provider) {
+      return res.status(400).json({ error: 'MISSING_PROVIDER', message: 'provider is required (e.g., apple_health, health_connect, garmin_connect).' });
+    }
+
+    const consent = wearableIntegrationService.registerUserConsent({
+      patientId,
+      provider,
+      metricsAllowed,
+      consented: consented !== undefined ? Boolean(consented) : true,
+      consentVersion
+    });
+
+    res.status(200).json({ success: true, consent });
+  } catch (err) {
+    res.status(400).json({ error: 'CONSENT_UPDATE_FAILED', message: err.message });
+  }
+});
+
+/**
+ * DELETE /api/wearables/consent/:provider
+ * Revokes consent and disconnects the specified wearable provider.
+ */
+app.delete('/api/wearables/consent/:provider', requireAuth, (req, res) => {
+  try {
+    const { provider } = req.params;
+    const { reason } = req.body || {};
+    const patientId = req.user.uid;
+
+    const revokedConsent = wearableIntegrationService.revokeUserConsent({
+      patientId,
+      provider,
+      reason: reason || 'USER_DISCONNECTED'
+    });
+
+    res.json({ success: true, revokedConsent });
+  } catch (err) {
+    res.status(400).json({ error: 'REVOCATION_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/wearables/status
+ * Retrieves connection and sync status for all integrated wearable providers for the user.
+ */
+app.get('/api/wearables/status', requireAuth, (req, res) => {
+  try {
+    const patientId = req.query.patientId && (req.user.role === 'doctor' || req.user.role === 'clinic_admin' || req.user.role === 'super_admin')
+      ? req.query.patientId
+      : req.user.uid;
+
+    const connections = wearableIntegrationService.getConnectionSummary(patientId);
+    res.json({
+      success: true,
+      patientId,
+      supportedPlatforms: wearableIntegrationService.SUPPORTED_PLATFORMS,
+      supportedMetrics: wearableIntegrationService.SUPPORTED_METRICS,
+      connections
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/wearables/connection
+ * Updates provider connection lifecycle state (connected, syncing, token_expired, permission_revoked).
+ */
+app.post('/api/wearables/connection', requireAuth, (req, res) => {
+  try {
+    const { provider, status, deviceDetails, errorDetails } = req.body || {};
+    const patientId = req.user.uid;
+
+    if (!provider || !status) {
+      return res.status(400).json({ error: 'MISSING_FIELDS', message: 'provider and status are required.' });
+    }
+
+    const connection = wearableIntegrationService.updateConnectionStatus({
+      patientId,
+      provider,
+      status,
+      deviceDetails,
+      errorDetails
+    });
+
+    res.json({ success: true, connection });
+  } catch (err) {
+    res.status(400).json({ error: 'UPDATE_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/wearables/sync
+ * Ingests a batch of Blood Pressure and/or Glucose readings from Apple Health, Health Connect, or smartwatches.
+ * Enforces consent, deduplication, plausibility filtering, and clock-skew/delay detection.
+ */
+app.post('/api/wearables/sync', requireAuth, async (req, res) => {
+  try {
+    const { provider, readings, deviceDetails, syncTimestamp } = req.body || {};
+    const patientId = req.user.uid;
+
+    if (!provider || !Array.isArray(readings)) {
+      return res.status(400).json({
+        error: 'INVALID_PAYLOAD',
+        message: 'provider string and readings array are required.'
+      });
+    }
+
+    const syncReport = await wearableIntegrationService.ingestWearableReadings({
+      patientId,
+      provider,
+      readings,
+      deviceDetails,
+      syncTimestamp
+    });
+
+    res.status(200).json({ success: true, syncReport });
+  } catch (err) {
+    res.status(400).json({ error: 'SYNC_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/wearables/readings/:metricType
+ * Retrieves stored normalized wearable readings for a patient with quality flags.
+ */
+app.get('/api/wearables/readings/:metricType', requireAuth, (req, res) => {
+  try {
+    const { metricType } = req.params;
+    const { limit } = req.query;
+    const targetPatientId = req.query.patientId && (req.user.role === 'doctor' || req.user.role === 'clinic_admin' || req.user.role === 'super_admin')
+      ? req.query.patientId
+      : req.user.uid;
+
+    const readings = wearableIntegrationService.getPatientWearableReadings(
+      targetPatientId,
+      metricType,
+      parseInt(limit, 10) || 100
+    );
+
+    res.json({ success: true, count: readings.length, readings });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * GET /api/wearables/trends/:metricType
+ * Computes longitudinal observational wearable trends (moving averages, time-in-range, diurnal variance).
+ * 🛡️ STRICT NON-DIAGNOSTIC BOUNDARY:
+ * Explicitly flagged as non-diagnostic telemetry for physician review; strictly prohibits autonomous medical decisions.
+ */
+app.get('/api/wearables/trends/:metricType', requireAuth, (req, res) => {
+  try {
+    const { metricType } = req.params;
+    const { timeframeDays } = req.query;
+    const targetPatientId = req.query.patientId && (req.user.role === 'doctor' || req.user.role === 'clinic_admin' || req.user.role === 'super_admin')
+      ? req.query.patientId
+      : req.user.uid;
+
+    const trends = wearableIntegrationService.calculateWearableTrends(targetPatientId, metricType, {
+      timeframeDays: parseInt(timeframeDays, 10) || 14
+    });
+
+    res.json({ success: true, trends });
   } catch (err) {
     res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
   }
