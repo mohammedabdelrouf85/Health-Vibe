@@ -224,11 +224,13 @@ body:not(.dark) .loader-card {
 }
 
 .loader-logo {
-  width: 142px;
-  height: 142px;
+  width: 140px;
+  height: 140px;
   object-fit: contain;
   position: relative;
   z-index: 2;
+  mix-blend-mode: screen;
+  border-radius: 50%;
   filter: drop-shadow(0 0 24px rgba(9, 184, 182, 0.6));
   animation: logoBreath 3.24s ease-in-out infinite;
 }
@@ -428,6 +430,7 @@ body.dark .brand strong { color: var(--ink); }
   object-position: left center;
   margin: 0 0 14px;
   border-radius: 0;
+  mix-blend-mode: screen;
 }
 
 body[dir="rtl"] .hero-brand-logo {
