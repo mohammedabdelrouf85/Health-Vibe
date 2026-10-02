@@ -2452,9 +2452,12 @@ async function callBackend(path, options = {}) {
       : "خادم الباك إند غير مهيأ لهذا الموقع المنشور.");
   }
 
+  const capturedContext = window.asyncContextManager ? window.asyncContextManager.captureContext() : null;
   const token = await auth.currentUser.getIdToken();
   const timeoutMs = options.timeoutMs || 12000;
-  const controller = new AbortController();
+  const controller = window.asyncContextManager
+    ? window.asyncContextManager.createAbortController(`backend_${path}`)
+    : new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
   let response;
   try {
@@ -2469,6 +2472,12 @@ async function callBackend(path, options = {}) {
     });
   } catch (err) {
     if (err.name === "AbortError") {
+      if (controller.signal && controller.signal.aborted && controller.signal.reason && String(controller.signal.reason).startsWith("AUTH_")) {
+        console.log(`[Health Vibe] In-flight backend call aborted cleanly: ${controller.signal.reason}`);
+        const abortErr = new Error(`Request cancelled: ${controller.signal.reason}`);
+        abortErr.isContextCancelled = true;
+        throw abortErr;
+      }
       throw new Error(currentLanguage === "en"
         ? "Backend request timed out. Please try again."
         : "انتهت مهلة الاتصال بخادم الباك إند. حاول مرة أخرى.");
@@ -2476,6 +2485,20 @@ async function callBackend(path, options = {}) {
     throw err;
   } finally {
     window.clearTimeout(timeoutId);
+    if (window.asyncContextManager) {
+      window.asyncContextManager.unregisterAbortController(controller);
+    }
+  }
+
+  // Pre-application validation: recheck context before applying or returning payload
+  if (window.asyncContextManager && capturedContext) {
+    const valid = window.asyncContextManager.isContextValid(capturedContext, { requireSameUser: true });
+    if (!valid.valid) {
+      const obsoleteErr = new Error(`Request discarded: context became obsolete (${valid.reason})`);
+      obsoleteErr.isObsoleteContext = true;
+      obsoleteErr.code = valid.reason;
+      throw obsoleteErr;
+    }
   }
 
   const payload = await response.json().catch(() => ({}));
@@ -4186,6 +4209,12 @@ async function renderDoctorQueue() {
         : db.collection("cases");
       window._doctorQueueUnsub = queueQuery.onSnapshot(
         (snapshot) => {
+          if (window.asyncContextManager) {
+            const check = window.asyncContextManager.isContextValid(window.asyncContextManager.captureContext(), {
+              requireSameUser: true
+            });
+            if (!check.valid) return;
+          }
           if (!snapshot.empty) {
             const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             docs.sort((a, b) => {
@@ -4211,6 +4240,9 @@ async function renderDoctorQueue() {
           }
         }
       );
+      if (window.asyncContextManager && window._doctorQueueUnsub) {
+        window.asyncContextManager.registerSubscription(window._doctorQueueUnsub, { name: "doctorQueue" });
+      }
     } catch(e) {
       console.warn("Could not bind real-time doctor queue:", e.message);
       try {
@@ -4249,7 +4281,22 @@ function renderDoctorQueueError(err) {
 }
 async function selectDoctorCase(id) {
   activeCaseId = id;
+  if (window.asyncContextManager) {
+    window.asyncContextManager.switchCase(id);
+  }
+  const caseContextSnapshot = window.asyncContextManager ? window.asyncContextManager.captureContext() : null;
+
   const cases = await getCases({ includeTest: true });
+
+  // Guard rapid case switching: if user clicked another case while fetching, discard this result
+  if (window.asyncContextManager && caseContextSnapshot) {
+    const check = window.asyncContextManager.isContextValid(caseContextSnapshot, { requireSameCase: true });
+    if (!check.valid) {
+      console.warn(`[Health Vibe] Discarded stale case render for case ${id}: ${check.message}`);
+      return;
+    }
+  }
+
   const c = cases.find(c => c.id === id);
   const reviewPanel = document.getElementById("doctorReviewPanel");
   if (!c || !reviewPanel || (selectedRole === ROLES.DOCTOR && !isTestOrDemoRecord(c) && !isCaseAssignedToCurrentDoctor(c))) {
@@ -5448,6 +5495,9 @@ async function leaveApp(event) {
   if (lockScreen) lockScreen.style.display = "none";
   window._isIdleLocked = false;
   clearActiveSession();
+  if (window.asyncContextManager) {
+    window.asyncContextManager.handleAuthChange("LOGOUT");
+  }
   // ── إيقاف الـ real-time listener عند تسجيل الخروج ────────────
   if (window._patientCasesUnsub) {
     try { window._patientCasesUnsub(); } catch(e) {}
@@ -5495,10 +5545,17 @@ async function switchAccount(event) {
   if (lockScreen) lockScreen.style.display = "none";
   window._isIdleLocked = false;
   clearActiveSession();
+  if (window.asyncContextManager) {
+    window.asyncContextManager.handleAuthChange("SWITCH_ACCOUNT");
+  }
 
   if (window._patientCasesUnsub) {
     window._patientCasesUnsub();
     window._patientCasesUnsub = null;
+  }
+  if (window._doctorQueueUnsub) {
+    try { window._doctorQueueUnsub(); } catch(e) {}
+    window._doctorQueueUnsub = null;
   }
   window._currentCaseId = null;
   window._isUserVerified = false;
@@ -6970,6 +7027,12 @@ async function renderPatientDashboard() {
     : db.collection("cases").where("patientId", "==", user.uid);
   window._patientCasesUnsub = patientCasesQuery.onSnapshot(
       async (snapshot) => {
+        if (window.asyncContextManager) {
+          const check = window.asyncContextManager.isContextValid(window.asyncContextManager.captureContext(), {
+            requireSameUser: true
+          });
+          if (!check.valid) return;
+        }
         let c = null;
 
         if (!snapshot.empty) {
@@ -15118,6 +15181,13 @@ function initHVAuthListener() {
       return;
     }
     if (user) {
+      if (window.asyncContextManager) {
+        window.asyncContextManager.handleAuthChange("LOGIN", {
+          uid: user.uid,
+          email: user.email,
+          role: selectedRole
+        });
+      }
       window._restoredSessionUser = user;
       saveActiveSession(user, selectedRole);
       // 1. Instantly transition UI into the app so user never hangs
@@ -15206,6 +15276,9 @@ function initHVAuthListener() {
       transitionToApp(user);
     } else {
       // Truly signed out
+      if (window.asyncContextManager) {
+        window.asyncContextManager.handleAuthChange("LOGOUT");
+      }
       clearActiveSession();
       window._isUserVerified = false;
       window._verifiedPhone = "";
@@ -17117,13 +17190,66 @@ window.auditFileAccessed = auditFileAccessed;
 window.loadAuditEvents = loadAuditEvents;
 window.exportAuditTrail = exportAuditTrail;
 
+// Initialize Async Context Protections (Cache purgers & DOM scrubbers)
+function initAsyncContextProtections() {
+  if (typeof window === "undefined" || !window.asyncContextManager) return;
+  const acm = window.asyncContextManager;
+
+  // 1. Register Cache Purger
+  acm.registerCachePurger(() => {
+    window._cachedUserDoc = null;
+    window._currentCaseId = null;
+    window.__doctorPreviewCase = null;
+    if (typeof activeCaseId !== "undefined") activeCaseId = null;
+    if (typeof state !== "undefined" && state.doctorQueue) {
+      state.doctorQueue = [];
+    }
+  });
+
+  // 2. Register DOM Scrubber for sensitive data
+  acm.registerDomScrubber(() => {
+    const sensitiveInputIds = [
+      "authEmail", "authPassword", "patientName", "patientPhone", "patientAge",
+      "patientSymptoms", "patientNotes", "profileFullName", "profilePhone",
+      "profileDOB", "profileBloodType", "profileHeight", "profileWeight",
+      "doctorDiagnosisInput", "doctorNoteInput"
+    ];
+    for (const id of sensitiveInputIds) {
+      const el = document.getElementById(id);
+      if (el) el.value = "";
+    }
+
+    const reviewPanel = document.getElementById("doctorReviewPanel");
+    if (reviewPanel) {
+      reviewPanel.style.display = "none";
+      reviewPanel.innerHTML = "";
+    }
+
+    const doctorQueueList = document.getElementById("doctorQueueList");
+    if (doctorQueueList) {
+      doctorQueueList.innerHTML = "";
+    }
+
+    const statusEl = document.getElementById("patientClinicalStatus");
+    if (statusEl) statusEl.textContent = "";
+
+    const reportEl = document.getElementById("patientLatestReport");
+    if (reportEl) reportEl.textContent = "";
+
+    const resultStatusEl = document.getElementById("patientResultStatus");
+    if (resultStatusEl) resultStatusEl.textContent = "";
+  });
+}
+
 // Initialize on DOM ready
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", () => {
+    initAsyncContextProtections();
     initMobileTouchGestures();
     updateMobileBottomNav();
   });
 } else {
+  initAsyncContextProtections();
   initMobileTouchGestures();
   updateMobileBottomNav();
 }
