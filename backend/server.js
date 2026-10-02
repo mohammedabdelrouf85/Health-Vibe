@@ -73,6 +73,7 @@ const clinicalScribeService = require('./clinical-scribe-service');
 const diagnosticIntegrationService = require('./diagnostic-integration-service');
 const clinicalInfoExchangeService = require('./clinical-info-exchange-service');
 const operationalSwitchesService = require('./operational-switches-service');
+const caseHandoverService = require('./case-handover-service');
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -11788,6 +11789,223 @@ app.post('/api/cases/intake', operationalSwitchesService.requireFeatureEnabled('
     });
   } catch (err) {
     res.status(500).json({ error: 'INTAKE_ERROR', message: err.message });
+  }
+});
+
+app.caseHandoverService = caseHandoverService;
+
+// =============================================================================
+// 🔄 CLINICAL HANDOVER, ATOMIC REASSIGNMENT & ESCALATION ROUTES
+// =============================================================================
+
+/**
+ * POST /api/cases/:caseId/handover/request
+ * Initiates an explicit case handover to another clinician or queue.
+ */
+app.post('/api/cases/:caseId/handover/request', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
+  try {
+    const { caseId } = req.params;
+    const { toDoctorId, targetQueue, handoverReason, clinicalNotes, slaMinutes, routeToQueueIfUnavailable } = req.body || {};
+    const fromDoctor = {
+      uid: req.user.uid,
+      name: req.user.displayName || req.user.email,
+      role: req.user.role,
+      clinicId: req.user.clinicId || null,
+      isOwner: Boolean(req.user.isOwner)
+    };
+
+    const handover = await caseHandoverService.requestHandover({
+      caseId,
+      fromDoctor,
+      toDoctorId,
+      targetQueue,
+      handoverReason,
+      clinicalNotes,
+      slaMinutes,
+      routeToQueueIfUnavailable
+    });
+
+    res.status(201).json({ success: true, handover });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'HANDOVER_REQUEST_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/cases/handover/:handoverId/accept
+ * Receiving clinician accepts handover; atomically reassigns case and revokes previous doctor's access.
+ */
+app.post('/api/cases/handover/:handoverId/accept', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
+  try {
+    const { handoverId } = req.params;
+    const { ackReferenceId, channel } = req.body || {};
+    const acceptingDoctor = {
+      uid: req.user.uid,
+      name: req.user.displayName || req.user.email,
+      role: req.user.role,
+      clinicId: req.user.clinicId || null,
+      isOwner: Boolean(req.user.isOwner)
+    };
+
+    const result = await caseHandoverService.acceptHandover({
+      handoverId,
+      acceptingDoctor,
+      ackReferenceId,
+      channel: channel || 'in_app'
+    });
+
+    res.json(result);
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'HANDOVER_ACCEPTANCE_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/cases/handover/:handoverId/reject
+ * Receiving clinician rejects handover with mandatory clinical reason.
+ */
+app.post('/api/cases/handover/:handoverId/reject', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
+  try {
+    const { handoverId } = req.params;
+    const { rejectionReason } = req.body || {};
+    const rejectingDoctor = {
+      uid: req.user.uid,
+      name: req.user.displayName || req.user.email
+    };
+
+    const result = await caseHandoverService.rejectHandover({
+      handoverId,
+      rejectingDoctor,
+      rejectionReason
+    });
+
+    res.json(result);
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'HANDOVER_REJECTION_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/cases/handover/:handoverId/cancel
+ * Originating clinician cancels pending handover.
+ */
+app.post('/api/cases/handover/:handoverId/cancel', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
+  try {
+    const { handoverId } = req.params;
+    const { cancelReason } = req.body || {};
+    const result = await caseHandoverService.cancelHandover({
+      handoverId,
+      doctor: req.user,
+      cancelReason
+    });
+
+    res.json(result);
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'HANDOVER_CANCEL_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/cases/:caseId/escalate
+ * Deduplicated case escalation with strict acknowledgment verification.
+ */
+app.post('/api/cases/:caseId/escalate', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
+  try {
+    const { caseId } = req.params;
+    const { severity, reason, targetRecipient, recordedAck, deduplicationWindowMs } = req.body || {};
+    const originatingDoctor = {
+      uid: req.user.uid,
+      name: req.user.displayName || req.user.email
+    };
+
+    const escalation = await caseHandoverService.escalateCase({
+      caseId,
+      clinicId: req.user.clinicId || null,
+      severity,
+      reason,
+      originatingDoctor,
+      targetRecipient,
+      recordedAck,
+      deduplicationWindowMs
+    });
+
+    res.status(201).json({ success: true, escalation });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'ESCALATION_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/cases/escalation/:escalationId/acknowledge
+ * Confirms explicit clinical acknowledgment of an escalated case.
+ */
+app.post('/api/cases/escalation/:escalationId/acknowledge', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
+  try {
+    const { escalationId } = req.params;
+    const { ackMethod, ackToken } = req.body || {};
+    const ackRecord = await caseHandoverService.recordEscalationAcknowledgment({
+      escalationId,
+      acknowledgedBy: req.user.uid,
+      acknowledgedByName: req.user.displayName || req.user.email,
+      ackMethod,
+      ackToken
+    });
+
+    res.json({ success: true, escalation: ackRecord });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'ACK_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/cases/handover/overdue
+ * Scans and returns overdue handovers with automated escalation triggers.
+ */
+app.get('/api/cases/handover/overdue', requireAuth, requireAdmin, (req, res) => {
+  try {
+    const { clinicId } = req.query;
+    const effectiveClinicId = req.user.isOwner || req.user.role === 'super_admin' ? clinicId : req.user.clinicId;
+    const overdueList = caseHandoverService.checkOverdueHandovers({ clinicId: effectiveClinicId });
+    res.json({ success: true, count: overdueList.length, overdueList });
+  } catch (err) {
+    res.status(500).json({ error: 'OVERDUE_SCAN_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/cases/unassigned
+ * Returns unassigned cases in clinic triage pool.
+ */
+app.get('/api/cases/unassigned', requireAuth, requireDoctor, (req, res) => {
+  try {
+    const { clinicId } = req.query;
+    const effectiveClinicId = req.user.isOwner || req.user.role === 'super_admin' ? clinicId : req.user.clinicId;
+    const cases = caseHandoverService.getUnassignedCases({ clinicId: effectiveClinicId });
+    res.json({ success: true, count: cases.length, cases });
+  } catch (err) {
+    res.status(500).json({ error: 'UNASSIGNED_QUERY_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/cases/:caseId/claim
+ * Allows an active doctor from the same clinic to claim an unassigned case.
+ */
+app.post('/api/cases/:caseId/claim', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
+  try {
+    const { caseId } = req.params;
+    const claimingDoctor = {
+      uid: req.user.uid,
+      name: req.user.displayName || req.user.email,
+      clinicId: req.user.clinicId || null,
+      role: req.user.role,
+      isOwner: Boolean(req.user.isOwner)
+    };
+
+    const result = await caseHandoverService.claimCase({ caseId, claimingDoctor });
+    res.json(result);
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'CLAIM_FAILED', message: err.message });
   }
 });
 

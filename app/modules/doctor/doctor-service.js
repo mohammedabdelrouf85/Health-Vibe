@@ -163,6 +163,92 @@
     return items;
   }
 
+  /**
+   * Helper to perform authenticated calls to the backend.
+   */
+  async function apiCall(endpoint, options = {}) {
+    if (typeof global.callBackend === "function") {
+      return await global.callBackend(endpoint, options.body ? JSON.parse(options.body) : undefined, options.method || "GET");
+    }
+    const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+    if (global.auth && global.auth.currentUser && typeof global.auth.currentUser.getIdToken === "function") {
+      try {
+        const token = await global.auth.currentUser.getIdToken();
+        headers["Authorization"] = `Bearer ${token}`;
+      } catch (e) {
+        console.warn("[DoctorService] Could not retrieve ID token:", e);
+      }
+    }
+    const res = await fetch(endpoint, { ...options, headers });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = new Error(data.message || `Request failed with status ${res.status}`);
+      err.code = data.error || "API_ERROR";
+      err.status = res.status;
+      err.data = data;
+      throw err;
+    }
+    return data;
+  }
+
+  async function requestHandover({ caseId, toDoctorId, targetQueue, handoverReason, clinicalNotes, slaMinutes, routeToQueueIfUnavailable = true }) {
+    return await apiCall(`/api/cases/${encodeURIComponent(caseId)}/handover/request`, {
+      method: "POST",
+      body: JSON.stringify({ toDoctorId, targetQueue, handoverReason, clinicalNotes, slaMinutes, routeToQueueIfUnavailable })
+    });
+  }
+
+  async function acceptHandover({ handoverId, ackReferenceId, channel = "in_app" }) {
+    return await apiCall(`/api/cases/handover/${encodeURIComponent(handoverId)}/accept`, {
+      method: "POST",
+      body: JSON.stringify({ ackReferenceId, channel })
+    });
+  }
+
+  async function rejectHandover({ handoverId, rejectionReason }) {
+    return await apiCall(`/api/cases/handover/${encodeURIComponent(handoverId)}/reject`, {
+      method: "POST",
+      body: JSON.stringify({ rejectionReason })
+    });
+  }
+
+  async function cancelHandover({ handoverId, cancelReason }) {
+    return await apiCall(`/api/cases/handover/${encodeURIComponent(handoverId)}/cancel`, {
+      method: "POST",
+      body: JSON.stringify({ cancelReason })
+    });
+  }
+
+  async function escalateCase({ caseId, severity, reason, targetRecipient, deduplicationWindowMs }) {
+    return await apiCall(`/api/cases/${encodeURIComponent(caseId)}/escalate`, {
+      method: "POST",
+      body: JSON.stringify({ severity, reason, targetRecipient, deduplicationWindowMs })
+    });
+  }
+
+  async function acknowledgeEscalation({ escalationId, ackMethod, ackToken }) {
+    return await apiCall(`/api/cases/escalation/${encodeURIComponent(escalationId)}/acknowledge`, {
+      method: "POST",
+      body: JSON.stringify({ ackMethod, ackToken })
+    });
+  }
+
+  async function getOverdueHandovers(clinicId = null) {
+    const q = clinicId ? `?clinicId=${encodeURIComponent(clinicId)}` : "";
+    return await apiCall(`/api/cases/handover/overdue${q}`);
+  }
+
+  async function getUnassignedCases(clinicId = null) {
+    const q = clinicId ? `?clinicId=${encodeURIComponent(clinicId)}` : "";
+    return await apiCall(`/api/cases/unassigned${q}`);
+  }
+
+  async function claimCase(caseId) {
+    return await apiCall(`/api/cases/${encodeURIComponent(caseId)}/claim`, {
+      method: "POST"
+    });
+  }
+
   const DoctorService = {
     getCaseOxygenValue,
     getCaseSubmittedMillis,
@@ -172,7 +258,16 @@
     getPriorityMeta,
     getCaseSlaInfo,
     parseDoctorRecommendations,
-    filterDoctorQueue
+    filterDoctorQueue,
+    requestHandover,
+    acceptHandover,
+    rejectHandover,
+    cancelHandover,
+    escalateCase,
+    acknowledgeEscalation,
+    getOverdueHandovers,
+    getUnassignedCases,
+    claimCase
   };
 
   global.HealthVibes = global.HealthVibes || {};
@@ -182,3 +277,4 @@
     module.exports = DoctorService;
   }
 })(typeof window !== "undefined" ? window : globalThis);
+
