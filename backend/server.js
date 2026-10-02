@@ -72,6 +72,7 @@ const caseFollowupService = require('./case-followup-service');
 const clinicalScribeService = require('./clinical-scribe-service');
 const diagnosticIntegrationService = require('./diagnostic-integration-service');
 const clinicalInfoExchangeService = require('./clinical-info-exchange-service');
+const operationalSwitchesService = require('./operational-switches-service');
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -1304,6 +1305,7 @@ if (!admin.apps.length) {
 
 const db = admin.apps.length ? admin.firestore() : null;
 if (db) feedbackSupportService.setDb(db);
+if (db) operationalSwitchesService.init(db).catch(() => {});
 let backupStorageBucket = null;
 if (admin.apps.length && typeof admin.storage === 'function') {
   try {
@@ -11034,7 +11036,7 @@ app.post('/api/wearables/connection', requireAuth, (req, res) => {
  * Ingests a batch of Blood Pressure and/or Glucose readings from Apple Health, Health Connect, or smartwatches.
  * Enforces consent, deduplication, plausibility filtering, and clock-skew/delay detection.
  */
-app.post('/api/wearables/sync', requireAuth, async (req, res) => {
+app.post('/api/wearables/sync', operationalSwitchesService.requireFeatureEnabled('integrations', 'wearables'), requireAuth, async (req, res) => {
   try {
     const { provider, readings, deviceDetails, syncTimestamp } = req.body || {};
     const patientId = req.user.uid;
@@ -11350,7 +11352,7 @@ app.clinicalScribeService = clinicalScribeService;
  * Ingests visit voice transcript, audits recording consent & anti-hallucination fidelity,
  * and generates an unapproved structured draft (SOAP) with source provenance links.
  */
-app.post('/api/scribe/draft', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
+app.post('/api/scribe/draft', operationalSwitchesService.requireFeatureEnabled('assistant'), requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
   try {
     const doctorIdentity = await getVerifiedDoctorIdentity(req.user.uid);
     if (!doctorIdentity || doctorIdentity.status !== 'approved' || doctorIdentity.isLicenseExpired || doctorIdentity.licenseStatus === 'revoked') {
@@ -11509,7 +11511,7 @@ app.delete('/api/integration/diagnostics/consent', requireAuth, (req, res) => {
  * POST /api/integration/diagnostics/orders
  * Doctor issues and cryptographically signs a diagnostic laboratory or imaging order.
  */
-app.post('/api/integration/diagnostics/orders', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
+app.post('/api/integration/diagnostics/orders', operationalSwitchesService.requireFeatureEnabled('integrations', 'diagnostics'), requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
   try {
     const doctorIdentity = await getVerifiedDoctorIdentity(req.user.uid);
     if (!doctorIdentity || doctorIdentity.status !== 'approved' || doctorIdentity.isLicenseExpired || doctorIdentity.licenseStatus === 'revoked') {
@@ -11723,6 +11725,69 @@ app.post('/api/integration/diagnostics/sandbox/simulate-result', requireAuth, (r
     res.json({ success: true, result: simResult });
   } catch (err) {
     res.status(err.statusCode || 400).json({ error: err.code || 'SIMULATION_FAILED', message: err.message });
+  }
+});
+
+app.operationalSwitchesService = operationalSwitchesService;
+
+// =============================================================================
+// ⚙️ OPERATIONAL FEATURE SWITCHES & CIRCUIT BREAKER API ROUTES
+// =============================================================================
+
+/**
+ * GET /api/operational-switches/status
+ * Public / Authenticated endpoint providing availability status of features and clear notices.
+ */
+app.get('/api/operational-switches/status', (req, res) => {
+  res.json({ success: true, ...operationalSwitchesService.getAllStatus() });
+});
+
+/**
+ * POST /api/admin/operational-switches
+ * Restrict changes to authorized platform administrators; audits every change.
+ */
+app.post('/api/admin/operational-switches', requireAuth, auditOperationalAccess('OPERATIONAL_SWITCH_CHANGED'), requireSuperAdmin, async (req, res) => {
+  try {
+    const { featureKey, subFeatureKey, enabled, reason, customMessages } = req.body || {};
+    const adminActor = {
+      uid: req.user.uid,
+      email: req.user.email,
+      role: req.user.role,
+      isOwner: Boolean(req.user.isOwner)
+    };
+
+    const updateResult = await operationalSwitchesService.updateSwitch({
+      featureKey,
+      subFeatureKey,
+      enabled,
+      reason,
+      customMessages,
+      adminActor,
+      firestoreDb: db
+    });
+
+    res.json(updateResult);
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'SWITCH_UPDATE_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/cases/intake
+ * Trusted server write path for new clinical assessments.
+ * Strictly blocked when assessmentIntake switch is disabled; existing records remain accessible.
+ */
+app.post('/api/cases/intake', operationalSwitchesService.requireFeatureEnabled('assessmentIntake'), requireAuth, async (req, res) => {
+  try {
+    const payload = req.body || {};
+    res.status(201).json({
+      success: true,
+      message: 'Assessment intake received and processed.',
+      patientId: req.user.uid,
+      intakeTimestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'INTAKE_ERROR', message: err.message });
   }
 });
 

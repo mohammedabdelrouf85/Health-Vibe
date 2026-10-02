@@ -6885,6 +6885,10 @@ function showScreen(name) {
     button.classList.toggle("active", button.dataset.mobileScreen === name);
   });
 
+  if (window.operationalSwitchesClient && typeof window.operationalSwitchesClient.renderAvailabilityBanners === "function") {
+    window.operationalSwitchesClient.renderAvailabilityBanners();
+  }
+
   screenTitle.textContent = currentLanguage === "en" ? englishTitles[name] || "Health Vibe AI" : titles[name] || "Health Vibe AI";
   setScreenBreadcrumb(name);
   if (typeof closeSidebarDrawer === "function") {
@@ -13943,6 +13947,20 @@ function validateAssessmentFields({
 }
 
 document.getElementById("submitAssessment").addEventListener("click", async () => {
+  if (window.operationalSwitchesClient && !window.operationalSwitchesClient.isAssessmentIntakeEnabled()) {
+    const isEn = currentLanguage === "en";
+    const msg = window.operationalSwitchesClient.getIntakeMessage(isEn);
+    showToast(msg);
+    if (typeof showCentralErrorModal === "function") {
+      showCentralErrorModal({
+        category: isEn ? "Operational Notice" : "تنبيه تشغيلي",
+        title: isEn ? "Assessment Intake Paused" : "استقبال التقييمات متوقف مؤقتاً",
+        message: msg,
+        action: isEn ? "You can safely view all your existing assessments in History." : "يمكنك مراجعة كافة تقاريرك وفحوصاتك السابقة في سجل الحالات."
+      });
+    }
+    return;
+  }
   if (_assessmentSubmitting) {
     showToast(currentLanguage === "en" ? "Submission already in progress. Please wait." : "الإرسال جارٍ بالفعل. يرجى الانتظار.");
     return;
@@ -14632,6 +14650,20 @@ async function renderAssistantScreen() {
 
   if (retentionNoticeEl) {
     retentionNoticeEl.innerHTML = `<span>🕒 ${isEn ? "Retention Policy: Chat history is retained for 30 days under clinical privacy governance." : "سياسة الاحتفاظ: تُحفظ المحادثة لمدة ٣٠ يوماً وفق قواعد حوكمة البيانات الطبية."}</span> <button type="button" class="outline-button" style="font-size: 10.5px; padding: 2px 8px; border-radius: 10px;" onclick="clearAssistantChatHistory()">🗑️ ${isEn ? "Clear History" : "مسح السجل"}</button>`;
+  }
+
+  if (window.operationalSwitchesClient && !window.operationalSwitchesClient.isAssistantEnabled()) {
+    const msg = window.operationalSwitchesClient.getAssistantMessage(isEn);
+    messagesEl.innerHTML = `
+      <div class="bot warning" style="border: 1px solid #eab308; background: rgba(234,179,8,0.1); padding: 12px; border-radius: 8px; color: #ca8a04;">
+        ⚠️ <strong>${isEn ? "Assistant Offline for Maintenance" : "المساعد الطبي في وضع الصيانة"}</strong><br>
+        <span style="font-size: 13px;">${msg}</span>
+      </div>
+    `;
+    if (inputEl) inputEl.disabled = true;
+    const sendBtn = document.getElementById("sendChat");
+    if (sendBtn) sendBtn.disabled = true;
+    return;
   }
 
   messagesEl.innerHTML = `<div class="bot" style="opacity: 0.7;">${isEn ? "Checking certified reports..." : "جاري فحص التقارير الطبية المعتمدة..."}</div>`;

@@ -356,6 +356,13 @@ service cloud.firestore {
               (data.role == 'super_admin' && isSuperAdmin()));
     }
 
+    // ⚙️ Operational Feature Switch: New Assessment Intake
+    function isAssessmentIntakeEnabled() {
+      return !exists(/databases/$(database)/documents/system_settings/operational_switches) ||
+             !('assessmentIntake' in get(/databases/$(database)/documents/system_settings/operational_switches).data) ||
+             get(/databases/$(database)/documents/system_settings/operational_switches).data.assessmentIntake == true;
+    }
+
     function isDoctorLinkedRecord(data) {
       return isOwner() || (isVerifiedDoctor() && (
         ('assignedDoctorId' in data && data.assignedDoctorId == request.auth.uid) ||
@@ -456,6 +463,7 @@ service cloud.firestore {
                        tokenClinicAdminFor(resource.data));
 
       allow create: if isAuthenticated() &&
+                       isAssessmentIntakeEnabled() &&
                        request.auth.token.role == 'patient' &&
                        request.auth.token.email_verified == true && (
                         request.resource.data.patientId == request.auth.uid &&
@@ -695,6 +703,14 @@ service cloud.firestore {
 
     match /system_config/admin_access {
       allow read, write: if isOwner();
+    }
+
+    // =========================================================================
+    // ⚙️ OPERATIONAL FEATURE SWITCHES (/system_settings/operational_switches)
+    // =========================================================================
+    match /system_settings/operational_switches {
+      allow read: if isAuthenticated();
+      allow write: if isPlatformAdmin();
     }
 
     // =========================================================================

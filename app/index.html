@@ -950,6 +950,7 @@
           <article class="panel form-panel">
             <div class="panel-head"><h3 data-i18n="assessment.title">تقييم التنفس</h3><span id="assessmentProgressLabel" class="pill info">الخطوة 2 من 4</span></div>
             <div class="progress" aria-label="Assessment completion progress"><span id="assessmentProgressBar" style="width:0%"></span></div>
+            <div id="intakeOperationalBanner" style="display: none;"></div>
             <div id="assessmentDraftStatus" class="field-hint" style="margin: 8px 0 12px;" data-i18n="assessment.draftStatusEmpty">لم يتم حفظ مسودة بعد</div>
             <div id="assessmentRecoveryBanner" class="clinical-note" hidden style="margin-bottom: 14px;">
               <span data-i18n="assessment.draftBannerText">توجد مسودة محفوظة لهذا الحساب. يمكنك المتابعة أو البدء من جديد.</span>
@@ -1565,6 +1566,7 @@
             <div id="assistantRetentionNotice" style="font-size: 11.5px; color: var(--muted); padding: 6px 12px; margin-bottom: 10px; background: rgba(0,0,0,0.03); border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
               <span>🕒 سياسة الاحتفاظ: تُحفظ المحادثة لمدة ٣٠ يوماً وفق قواعد حوكمة البيانات الطبية.</span>
             </div>
+            <div id="assistantOperationalBanner" style="display: none;"></div>
             <div id="chatMessages" class="chat-messages">
               <div class="bot">أقدر أشرح لك معنى الحالة وتوضيح المصطلحات أو أساعدك تجهز أسئلة للطبيب. في الطوارئ اطلب رعاية عاجلة فورًا.</div>
             </div>
@@ -2975,6 +2977,7 @@
   <script src="./i18n.js?v=4.6"></script>
   <!-- Modular Architecture: Core, Auth, Permissions, Patient, Assessment, Doctor, Reports, Appointments, Admin, Notifications -->
   <script defer src="./modules/core/async-context-manager.js?v=1.0"></script>
+  <script defer src="./modules/core/operational-switches-client.js?v=1.0"></script>
   <script defer src="./modules/core/validation.js?v=1.0"></script>
   <script defer src="./modules/core/error-handler.js?v=1.0"></script>
   <script defer src="./modules/permissions/permissions.js?v=1.0"></script>
