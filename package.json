@@ -7,6 +7,7 @@
     "test:hypertension": "node tests/chronic_hypertension_module.test.js",
     "test:prescriptions": "node tests/prescriptions_and_pharmacy_sandbox.test.js",
     "test:wearables": "node tests/wearable_health_integration.test.js",
+    "test:case-followup": "node tests/case_followup_and_remote_monitoring.test.js",
     "test:unusual-access": "node tests/unusual_access_and_architectural_governance.test.js",
     "test:ocr": "node tests/medical_ocr_and_clinical_extraction.test.js",
     "test:telehealth": "node tests/telehealth_video_provider_privacy_and_consent.test.js",

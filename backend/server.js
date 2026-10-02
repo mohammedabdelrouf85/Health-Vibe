@@ -68,6 +68,7 @@ const unusualAccessService = require('./unusual-access-service');
 const prescriptionService = require('./prescription-service');
 const chronicHypertensionService = require('./chronic-hypertension-service');
 const wearableIntegrationService = require('./wearable-integration-service');
+const caseFollowupService = require('./case-followup-service');
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -10863,6 +10864,236 @@ app.get('/api/wearables/trends/:metricType', requireAuth, (req, res) => {
     res.json({ success: true, trends });
   } catch (err) {
     res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+app.caseFollowupService = caseFollowupService;
+
+// =============================================================================
+// 📋 DOCTOR-APPROVED CASE FOLLOW-UP & REMOTE MONITORING ROUTES
+// Post-Discharge, Task Tracking, Delays, Escalations & Patient Risk Timeline
+// =============================================================================
+
+/**
+ * POST /api/cases/:caseId/followup-plan
+ * Doctor establishes a case-linked follow-up plan with tasks, appointments, reminders, and discharge protocol.
+ */
+app.post('/api/cases/:caseId/followup-plan', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
+  try {
+    const doctorIdentity = await getVerifiedDoctorIdentity(req.user.uid);
+    if (!doctorIdentity || doctorIdentity.status !== 'approved' || doctorIdentity.isLicenseExpired || doctorIdentity.licenseStatus === 'revoked') {
+      return res.status(403).json({
+        error: 'DOCTOR_CREDENTIALS_REQUIRED',
+        message: 'Only actively licensed and approved physicians can establish follow-up plans.'
+      });
+    }
+
+    const { caseId } = req.params;
+    const {
+      patientId,
+      patientName,
+      title,
+      protocolType,
+      tasks,
+      appointments,
+      reminders,
+      reassessment,
+      postDischargeDetails,
+      remoteMonitoringConfig
+    } = req.body || {};
+
+    const plan = await caseFollowupService.createFollowupPlan({
+      caseId,
+      patientId,
+      patientName,
+      doctorIdentity,
+      title,
+      protocolType,
+      tasks,
+      appointments,
+      reminders,
+      reassessment,
+      postDischargeDetails,
+      remoteMonitoringConfig
+    });
+
+    res.status(201).json({ success: true, plan });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'PLAN_CREATION_FAILED', message: err.message });
+  }
+});
+
+/**
+ * PUT /api/cases/:caseId/followup-plan/:planId
+ * Doctor amends an active follow-up plan (increments version, updates digital signature).
+ */
+app.put('/api/cases/:caseId/followup-plan/:planId', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
+  try {
+    const doctorIdentity = await getVerifiedDoctorIdentity(req.user.uid);
+    if (!doctorIdentity || doctorIdentity.status !== 'approved' || doctorIdentity.isLicenseExpired || doctorIdentity.licenseStatus === 'revoked') {
+      return res.status(403).json({
+        error: 'DOCTOR_CREDENTIALS_REQUIRED',
+        message: 'Only actively licensed and approved physicians can modify follow-up plans.'
+      });
+    }
+
+    const { planId } = req.params;
+    const {
+      modificationReason,
+      updatedTasks,
+      updatedAppointments,
+      updatedReminders,
+      updatedReassessment,
+      updatedRemoteMonitoringConfig
+    } = req.body || {};
+
+    const updatedPlan = caseFollowupService.modifyFollowupPlan({
+      planId,
+      doctorIdentity,
+      modificationReason,
+      updatedTasks,
+      updatedAppointments,
+      updatedReminders,
+      updatedReassessment,
+      updatedRemoteMonitoringConfig
+    });
+
+    res.json({ success: true, plan: updatedPlan });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'PLAN_MODIFICATION_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/cases/:caseId/followup-plan/:planId/cancel
+ * Doctor cancels an active plan; immediately purges pending tasks and stops reminders.
+ */
+app.post('/api/cases/:caseId/followup-plan/:planId/cancel', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
+  try {
+    const doctorIdentity = await getVerifiedDoctorIdentity(req.user.uid);
+    if (!doctorIdentity || doctorIdentity.status !== 'approved' || doctorIdentity.isLicenseExpired || doctorIdentity.licenseStatus === 'revoked') {
+      return res.status(403).json({
+        error: 'DOCTOR_CREDENTIALS_REQUIRED',
+        message: 'Only actively licensed and approved physicians can cancel follow-up plans.'
+      });
+    }
+
+    const { planId } = req.params;
+    const { cancellationReason } = req.body || {};
+
+    const result = caseFollowupService.cancelFollowupPlan({
+      planId,
+      doctorIdentity,
+      cancellationReason
+    });
+
+    res.json({ success: true, plan: result.plan, cancelledTasksCount: result.cancelledTasksCount });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'PLAN_CANCEL_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/cases/:caseId/followup-plan/:planId/tasks/:taskId/complete
+ * Records a completed task step with completion notes, metrics, and delay latency.
+ */
+app.post('/api/cases/:caseId/followup-plan/:planId/tasks/:taskId/complete', requireAuth, (req, res) => {
+  try {
+    const { planId, taskId } = req.params;
+    const { completionNotes, actualMetrics } = req.body || {};
+
+    const result = caseFollowupService.completeTaskStep({
+      planId,
+      taskId,
+      completedBy: { uid: req.user.uid, name: req.user.name || 'User', role: req.user.role },
+      completionNotes,
+      actualMetrics
+    });
+
+    res.json({ success: true, task: result.task, isDelayed: result.isDelayed, delayHours: result.delayHours });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'STEP_COMPLETION_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/cases/:caseId/followup-plan/:planId/delays
+ * Audits overdue tasks and returns automatic escalations (nurse outreach / urgent physician notification).
+ */
+app.get('/api/cases/:caseId/followup-plan/:planId/delays', requireAuth, (req, res) => {
+  try {
+    const { planId } = req.params;
+    const auditReport = caseFollowupService.auditPlanDelaysAndOverdue(planId);
+    res.json({ success: true, auditReport });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/cases/:caseId/followup-plan/:planId/remote-monitoring
+ * Records RPM telemetry. Enforces reliable source gating and prevents unapproved alerts from unreliable sources.
+ */
+app.post('/api/cases/:caseId/followup-plan/:planId/remote-monitoring', requireAuth, (req, res) => {
+  try {
+    const { planId } = req.params;
+    const { patientId, metricType, value, unit, source, isReliableSource, sourceDetails } = req.body || {};
+
+    const result = caseFollowupService.recordRemoteMonitoringTelemetry({
+      planId,
+      patientId: patientId || req.user.uid,
+      metricType,
+      value,
+      unit,
+      source,
+      isReliableSource: Boolean(isReliableSource),
+      sourceDetails
+    });
+
+    res.json({ success: true, result });
+  } catch (err) {
+    res.status(400).json({ error: 'TELEMETRY_RECORD_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/patients/:patientId/risk-timeline
+ * Returns the longitudinal patient risk trajectory with chronological milestones and alerts.
+ */
+app.get('/api/patients/:patientId/risk-timeline', requireAuth, (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const { caseId } = req.query;
+
+    if (req.user.uid !== patientId && req.user.role !== 'doctor' && req.user.role !== 'clinic_admin' && req.user.role !== 'super_admin') {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Unauthorized to view patient risk timeline.' });
+    }
+
+    const timeline = caseFollowupService.getPatientRiskTimeline(patientId, caseId || null);
+    res.json({ success: true, riskTimeline: timeline });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/cases/:caseId/followup-plan/:planId/decision-guard
+ * Governance test endpoint: blocks autonomous or unapproved medical decisions from non-physicians.
+ */
+app.post('/api/cases/:caseId/followup-plan/:planId/decision-guard', requireAuth, (req, res) => {
+  try {
+    const { planId } = req.params;
+    const { proposedAction } = req.body || {};
+
+    const guardResult = caseFollowupService.evaluateClinicalDecisionGuard({
+      planId,
+      proposedAction,
+      requestingUser: req.user
+    });
+
+    res.json({ success: true, guardResult });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'DECISION_BLOCKED', message: err.message });
   }
 });
 
