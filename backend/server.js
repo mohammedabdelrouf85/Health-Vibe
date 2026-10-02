@@ -65,6 +65,8 @@ const googleCalendarService = require('./google-calendar-service');
 const telehealthVideoService = require('./telehealth-video-service');
 const medicalOcrService = require('./medical-ocr-service');
 const unusualAccessService = require('./unusual-access-service');
+const prescriptionService = require('./prescription-service');
+const chronicHypertensionService = require('./chronic-hypertension-service');
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -10186,5 +10188,496 @@ app.schedulingService = schedulingService;
 app.telehealthVideoService = telehealthVideoService;
 app.medicalOcrService = medicalOcrService;
 app.unusualAccessService = unusualAccessService;
+app.prescriptionService = prescriptionService;
+
+// =============================================================================
+// 💊 CERTIFIED PRESCRIPTIONS, REMINDERS & PHARMACY SANDBOX ROUTES
+// =============================================================================
+
+/**
+ * POST /api/prescriptions/issue
+ * Issues a new prescription (v1). Only approved doctors can call this.
+ */
+app.post('/api/prescriptions/issue', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
+  try {
+    const doctorIdentity = await getVerifiedDoctorIdentity(req.user.uid);
+    if (!doctorIdentity || doctorIdentity.status !== 'approved' || doctorIdentity.isLicenseExpired || doctorIdentity.licenseStatus === 'revoked') {
+      return res.status(403).json({
+        error: 'DOCTOR_CREDENTIALS_REQUIRED',
+        message: 'Only actively licensed and approved doctors can issue prescriptions.'
+      });
+    }
+
+    const { caseId, patientId, patientName, medications, clinicalNotes } = req.body || {};
+    const prescription = await prescriptionService.issuePrescription({
+      caseId,
+      patientId,
+      patientName,
+      doctorIdentity,
+      medications,
+      clinicalNotes
+    });
+
+    res.status(201).json({ success: true, prescription });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'PRESCRIPTION_ISSUE_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/prescriptions/:prescriptionId/amend
+ * Creates an amended version of a prescription (v2, v3...).
+ * Automatically cancels active reminders for the superseded version.
+ */
+app.post('/api/prescriptions/:prescriptionId/amend', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
+  try {
+    const doctorIdentity = await getVerifiedDoctorIdentity(req.user.uid);
+    if (!doctorIdentity || doctorIdentity.status !== 'approved' || doctorIdentity.isLicenseExpired || doctorIdentity.licenseStatus === 'revoked') {
+      return res.status(403).json({
+        error: 'DOCTOR_CREDENTIALS_REQUIRED',
+        message: 'Only actively licensed and approved doctors can amend prescriptions.'
+      });
+    }
+
+    const { prescriptionId } = req.params;
+    const { medications, clinicalNotes, amendmentReason } = req.body || {};
+
+    const prescription = await prescriptionService.amendPrescription({
+      previousPrescriptionId: prescriptionId,
+      doctorIdentity,
+      medications,
+      clinicalNotes,
+      amendmentReason
+    });
+
+    res.json({ success: true, prescription });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'PRESCRIPTION_AMEND_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/prescriptions/:prescriptionId/cancel
+ * Cancels a prescription. Immediately stops and cancels all scheduled dose reminders.
+ */
+app.post('/api/prescriptions/:prescriptionId/cancel', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
+  try {
+    const doctorIdentity = await getVerifiedDoctorIdentity(req.user.uid);
+    if (!doctorIdentity || doctorIdentity.status !== 'approved' || doctorIdentity.isLicenseExpired || doctorIdentity.licenseStatus === 'revoked') {
+      return res.status(403).json({
+        error: 'DOCTOR_CREDENTIALS_REQUIRED',
+        message: 'Only actively licensed and approved doctors can cancel prescriptions.'
+      });
+    }
+
+    const { prescriptionId } = req.params;
+    const { cancellationReason } = req.body || {};
+
+    const result = await prescriptionService.cancelPrescription({
+      prescriptionId,
+      doctorIdentity,
+      cancellationReason
+    });
+
+    res.json({ success: true, prescription: result.prescription, cancelledRemindersCount: result.cancelledRemindersCount });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'PRESCRIPTION_CANCEL_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/prescriptions/:prescriptionId
+ * Fetches a single prescription with signature verification status.
+ */
+app.get('/api/prescriptions/:prescriptionId', requireAuth, async (req, res) => {
+  try {
+    const { prescriptionId } = req.params;
+    const prescription = prescriptionService.getPrescriptionById(prescriptionId);
+    if (!prescription) {
+      return res.status(404).json({ error: 'NOT_FOUND', message: 'Prescription not found.' });
+    }
+
+    const isPatient = req.user.uid === prescription.patientId;
+    const isDoctor = req.user.uid === prescription.doctorId;
+    const isAdmin = req.user.role === 'clinic_admin' || req.user.role === 'super_admin';
+
+    if (!isPatient && !isDoctor && !isAdmin) {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Unauthorized access to prescription.' });
+    }
+
+    const isValidSignature = prescriptionService.verifyPrescriptionSignature(prescription);
+    res.json({ success: true, prescription, isValidSignature });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * GET /api/cases/:caseId/prescriptions
+ * Returns all prescription versions and history for a given case.
+ */
+app.get('/api/cases/:caseId/prescriptions', requireAuth, async (req, res) => {
+  try {
+    const { caseId } = req.params;
+    const prescriptions = prescriptionService.getCasePrescriptions(caseId);
+    res.json({ success: true, count: prescriptions.length, prescriptions });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/prescriptions/:prescriptionId/pharmacy-consent
+ * Patient explicitly grants consent to share prescription data with pharmacy.
+ */
+app.post('/api/prescriptions/:prescriptionId/pharmacy-consent', requireAuth, async (req, res) => {
+  try {
+    const { prescriptionId } = req.params;
+    const { pharmacyId, accepted, expiresAt } = req.body || {};
+
+    const consent = await prescriptionService.recordPharmacyConsent({
+      prescriptionId,
+      patientId: req.user.uid,
+      pharmacyId,
+      accepted: Boolean(accepted),
+      expiresAt
+    });
+
+    res.json({ success: true, consent });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'CONSENT_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/prescriptions/:prescriptionId/send-to-pharmacy
+ * Dispatches prescription to accredited pharmacy or sandbox.
+ */
+app.post('/api/prescriptions/:prescriptionId/send-to-pharmacy', requireAuth, async (req, res) => {
+  try {
+    const { prescriptionId } = req.params;
+    const { pharmacyId } = req.body || {};
+
+    const dispatchResult = await prescriptionService.sendToPharmacy({
+      prescriptionId,
+      user: req.user,
+      targetPharmacyId: pharmacyId
+    });
+
+    res.json({ success: true, result: dispatchResult });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'DISPATCH_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/pharmacy/sandbox/simulate-dispense
+ * Sandbox partner callback endpoint simulating medication dispensing.
+ */
+app.post('/api/pharmacy/sandbox/simulate-dispense', requireAuth, async (req, res) => {
+  try {
+    const { transmissionId, status, dispenseReference, notes } = req.body || {};
+
+    const result = await prescriptionService.updatePharmacyDispenseStatus({
+      transmissionId,
+      status: status || prescriptionService.PHARMACY_STATUS.DISPENSED,
+      dispenseReference: dispenseReference || `DISP_SANDBOX_${Date.now()}`,
+      notes
+    });
+
+    res.json({ success: true, result });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'DISPENSE_UPDATE_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/prescriptions/patient/:patientId/reminders
+ * Retrieves active dose reminders for a patient.
+ */
+app.get('/api/prescriptions/patient/:patientId/reminders', requireAuth, (req, res) => {
+  try {
+    const { patientId } = req.params;
+    if (req.user.uid !== patientId && req.user.role !== 'doctor' && req.user.role !== 'clinic_admin' && req.user.role !== 'super_admin') {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Unauthorized to view patient reminders.' });
+    }
+
+    const reminders = prescriptionService.getPatientActiveReminders(patientId);
+    res.json({ success: true, count: reminders.length, reminders });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+app.chronicHypertensionService = chronicHypertensionService;
+
+// =============================================================================
+// 🫀 CHRONIC HYPERTENSION & BLOOD PRESSURE MANAGEMENT ROUTES
+// =============================================================================
+
+/**
+ * GET /api/chronic/specialties/readiness
+ * Returns formal clinical readiness & specialist verification status across all chronic disease specialties.
+ */
+app.get('/api/chronic/specialties/readiness', requireAuth, (req, res) => {
+  res.json({
+    success: true,
+    specialties: chronicHypertensionService.SPECIALTY_READINESS,
+    verifiedActiveSpecialty: 'hypertension',
+    governanceNotes: 'Hypertension is VERIFIED_ACTIVE. Diabetes, Cardiac Risk, Weight & Metabolic, and Clinical Nutrition remain UNDER_SPECIALIST_REVIEW pending formal specialist sign-off.'
+  });
+});
+
+/**
+ * POST /api/chronic/hypertension/readings
+ * Ingests a new blood pressure reading with real-time classification, obstetric pre-eclampsia safeguards & alert triage.
+ */
+app.post('/api/chronic/hypertension/readings', requireAuth, async (req, res) => {
+  try {
+    const {
+      patientId, patientName, clinicId,
+      systolic, diastolic, pulse,
+      measurementSource, arm, posture, cuffSize, timing,
+      symptoms, medicationTaken, patientNotes,
+      pregnancyStage, ageGroup, specialtyConsent, attachedFiles, linkedAppointmentId
+    } = req.body || {};
+
+    const targetPatientId = patientId || req.user.uid;
+
+    if (req.user.uid !== targetPatientId && req.user.role !== 'doctor' && req.user.role !== 'clinic_admin' && req.user.role !== 'super_admin') {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Unauthorized to record reading for target patient.' });
+    }
+
+    const reading = await chronicHypertensionService.recordBloodPressureReading({
+      patientId: targetPatientId,
+      patientName: patientName || req.user.name || 'Patient',
+      clinicId: clinicId || req.user.clinicId,
+      systolic,
+      diastolic,
+      pulse,
+      measurementSource,
+      arm,
+      posture,
+      cuffSize,
+      timing,
+      symptoms,
+      medicationTaken,
+      patientNotes,
+      recordedByUid: req.user.uid,
+      pregnancyStage,
+      ageGroup,
+      specialtyConsent,
+      attachedFiles,
+      linkedAppointmentId
+    });
+
+    res.status(201).json({ success: true, reading });
+  } catch (err) {
+    res.status(400).json({ error: 'RECORD_READING_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/chronic/hypertension/patient/:patientId/dashboard
+ * Computes longitudinal chronic metrics: control rate, average MAP, diurnal morning surge, stage distribution.
+ */
+app.get('/api/chronic/hypertension/patient/:patientId/dashboard', requireAuth, (req, res) => {
+  try {
+    const { patientId } = req.params;
+    if (req.user.uid !== patientId && req.user.role !== 'doctor' && req.user.role !== 'clinic_admin' && req.user.role !== 'super_admin') {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Unauthorized to view patient chronic dashboard.' });
+    }
+
+    const dashboard = chronicHypertensionService.calculateHypertensionDashboard(patientId);
+    res.json({ success: true, dashboard });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * GET /api/chronic/hypertension/patient/:patientId/history
+ * Retrieves blood pressure history and timeline events.
+ */
+app.get('/api/chronic/hypertension/patient/:patientId/history', requireAuth, (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const { limit } = req.query;
+
+    if (req.user.uid !== patientId && req.user.role !== 'doctor' && req.user.role !== 'clinic_admin' && req.user.role !== 'super_admin') {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Unauthorized to view patient readings.' });
+    }
+
+    const readings = chronicHypertensionService.getPatientReadings(patientId, parseInt(limit, 10) || 50);
+    res.json({ success: true, count: readings.length, readings });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/chronic/hypertension/patient/:patientId/followup-plan
+ * Specialist prescribes or updates monitoring protocol and target blood pressure goals.
+ */
+app.post('/api/chronic/hypertension/patient/:patientId/followup-plan', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
+  try {
+    const doctorIdentity = await getVerifiedDoctorIdentity(req.user.uid);
+    if (!doctorIdentity || doctorIdentity.status !== 'approved' || doctorIdentity.isLicenseExpired || doctorIdentity.licenseStatus === 'revoked') {
+      return res.status(403).json({
+        error: 'DOCTOR_CREDENTIALS_REQUIRED',
+        message: 'Only actively licensed and approved physicians can establish follow-up plans.'
+      });
+    }
+
+    const { patientId } = req.params;
+    const {
+      targetSystolic,
+      targetDiastolic,
+      protocol,
+      nextReviewDate,
+      clinicalGuidance,
+      dietarySodiumTargetMg,
+      prescribedRegimen,
+      linkedAppointmentId,
+      pregnancyStage,
+      ageGroup,
+      attachedFiles
+    } = req.body || {};
+
+    const plan = await chronicHypertensionService.createOrUpdateFollowupPlan({
+      patientId,
+      doctorIdentity,
+      targetSystolic,
+      targetDiastolic,
+      protocol,
+      nextReviewDate,
+      clinicalGuidance,
+      dietarySodiumTargetMg,
+      prescribedRegimen,
+      linkedAppointmentId,
+      pregnancyStage,
+      ageGroup,
+      attachedFiles
+    });
+
+    res.status(200).json({ success: true, plan });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'FOLLOWUP_PLAN_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/chronic/hypertension/patient/:patientId/book-consultation
+ * Bridges chronic hypertension follow-up care directly into the existing appointment & calendar scheduling system.
+ */
+app.post('/api/chronic/hypertension/patient/:patientId/book-consultation', requireAuth, async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const targetPatientId = patientId || req.user.uid;
+
+    if (req.user.uid !== targetPatientId && req.user.role !== 'doctor' && req.user.role !== 'clinic_admin' && req.user.role !== 'super_admin') {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Unauthorized to schedule consultation for this patient.' });
+    }
+
+    const { doctorId, clinicId, appointmentDate, appointmentTime, notes } = req.body || {};
+    if (!doctorId || !appointmentDate || !appointmentTime) {
+      return res.status(400).json({
+        error: 'MISSING_FIELDS',
+        message: 'doctorId, appointmentDate, and appointmentTime are required.'
+      });
+    }
+
+    const appointmentPayload = {
+      patientId: targetPatientId,
+      patientName: req.user.displayName || req.user.name || 'Patient',
+      patientEmail: req.user.email,
+      patientPhone: req.user.phone,
+      doctorId,
+      clinicId: clinicId || null,
+      appointmentDate,
+      appointmentTime,
+      type: 'CHRONIC_HYPERTENSION_FOLLOWUP',
+      reason: 'Chronic Hypertension Follow-up Consultation',
+      notes: notes || 'Chronic Blood Pressure monitoring follow-up'
+    };
+
+    const bookedAppointment = await schedulingService.bookAppointment(db, appointmentPayload, req.user);
+    res.status(201).json({ success: true, appointment: bookedAppointment });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'BOOKING_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/chronic/hypertension/patient/:patientId/followup-plan
+ * Retrieves active follow-up protocol and targets.
+ */
+app.get('/api/chronic/hypertension/patient/:patientId/followup-plan', requireAuth, (req, res) => {
+  try {
+    const { patientId } = req.params;
+    if (req.user.uid !== patientId && req.user.role !== 'doctor' && req.user.role !== 'clinic_admin' && req.user.role !== 'super_admin') {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Unauthorized.' });
+    }
+
+    const plan = chronicHypertensionService.getFollowupPlan(patientId);
+    res.json({ success: true, plan });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/chronic/hypertension/patient/:patientId/certify-report
+ * Doctor certifies longitudinal chronic evaluation report with digital license stamp.
+ */
+app.post('/api/chronic/hypertension/patient/:patientId/certify-report', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
+  try {
+    const doctorIdentity = await getVerifiedDoctorIdentity(req.user.uid);
+    if (!doctorIdentity || doctorIdentity.status !== 'approved' || doctorIdentity.isLicenseExpired || doctorIdentity.licenseStatus === 'revoked') {
+      return res.status(403).json({
+        error: 'DOCTOR_CREDENTIALS_REQUIRED',
+        message: 'Only actively licensed and approved physicians can certify chronic disease reports.'
+      });
+    }
+
+    const { patientId } = req.params;
+    const { clinicalDiagnosis, managementPlan, riskStratification, selectedReadingIds } = req.body || {};
+
+    const report = await chronicHypertensionService.certifyChronicHypertensionReport({
+      patientId,
+      doctorIdentity,
+      clinicalDiagnosis,
+      managementPlan,
+      riskStratification,
+      selectedReadingIds
+    });
+
+    res.status(201).json({ success: true, report });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'CERTIFICATION_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/chronic/hypertension/patient/:patientId/report
+ * Retrieves latest certified chronic disease report.
+ */
+app.get('/api/chronic/hypertension/patient/:patientId/report', requireAuth, (req, res) => {
+  try {
+    const { patientId } = req.params;
+    if (req.user.uid !== patientId && req.user.role !== 'doctor' && req.user.role !== 'clinic_admin' && req.user.role !== 'super_admin') {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Unauthorized to view report.' });
+    }
+
+    const report = chronicHypertensionService.getLatestCertifiedReport(patientId);
+    if (!report) {
+      return res.status(404).json({ error: 'REPORT_NOT_FOUND', message: 'No certified chronic disease report found for this patient.' });
+    }
+
+    res.json({ success: true, report });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
 
 module.exports = app;
