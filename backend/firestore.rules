@@ -311,9 +311,20 @@ service cloud.firestore {
       ));
     }
 
-    // =========================================================================
-    // 3. 📋 CLINICAL CASES (/cases/{caseId})
-    // =========================================================================
+    // Direct client writes must never bypass doctor review, report approval, or modify closed cases.
+    function preservesServerApproval() {
+      return resource.data.status != 'closed' &&
+             request.resource.data.status != 'closed' &&
+             request.resource.data.status != 'approved' &&
+             !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+               'doctorApproved', 'approvingDoctorId', 'approvingDoctorEmail',
+               'approvingDoctorName', 'doctorLicense', 'doctorSpecialty', 'clinicName',
+               'doctorIdentity', 'approvedAt', 'reportGeneratedAt', 'generatedAt', 'reportRef',
+               'clinicalDiagnosis', 'clinicalNotes', 'doctorNotes', 'doctorNote',
+               'medications', 'recommendation', 'recommendations', 'reviewedBy', 'reviewedAt', 'result'
+             ]);
+    }
+
     match /cases/{caseId} {
       allow read: if isOwner() || (isAuthenticated() && 
                      ((resource.data.patientId == request.auth.uid &&
@@ -327,11 +338,11 @@ service cloud.firestore {
                        hasNoPatientForgedClinicalResult(request.resource.data) &&
                        isValidAssessment(request.resource.data));
 
-      allow update: if isOwner() || (isAuthenticated() &&
+      allow update: if preservesServerApproval() && (isOwner() || (isAuthenticated() &&
                         (isAssignedDoctor() || isAdmin() || isPatientMoreInfoResponse()) &&
                         request.resource.data.patientId == resource.data.patientId &&
                         isValidCaseStatus(request.resource.data.status) &&
-                        isValidAssessment(request.resource.data));
+                        isValidAssessment(request.resource.data)));
 
       allow delete: if isOwner() || isAdmin();
     }

@@ -1464,6 +1464,13 @@ app.get('/api/reports/:caseId/doctor-identity', requireAuth, async (req, res) =>
 
 /**
  * Helper: Authoritative Doctor Case Transition Executor
+ *
+ * Executes a clinical state machine transition inside a single Firestore
+ * transaction so that concurrent or duplicate requests are handled safely:
+ *  - Closed cases → 409 CASE_ALREADY_CLOSED
+ *  - Already-at-target-status → 200 idempotent success
+ *  - Invalid transition → 400 INVALID_STATUS_TRANSITION
+ * The case update and audit_events write are committed atomically.
  */
 async function executeDoctorTransition({
   req,
@@ -1499,95 +1506,214 @@ async function executeDoctorTransition({
     });
   }
 
+  // ── Pre-transaction: validate clinical data and resolve doctor identity ──
+  // Pre-transaction: validate clinical data and resolve doctor identity
+  const normalizedClinicalNotes = String(clinicalNotes || note || '').trim();
+  const normalizedRecommendations = normalizeRecommendations(recommendations, recommendation);
+
+  if (targetStatus === 'approved' && (!normalizedClinicalNotes || normalizedRecommendations.length === 0)) {
+    return res.status(400).json({
+      error: 'MISSING_CLINICAL_REPORT_DATA',
+      message: 'Doctor clinical notes and at least one patient recommendation are required before approving a report.'
+    });
+  }
+
+  // Doctor approval requires the clinical data revision that was reviewed
+  const reviewedRevisionRaw = req.body?.clinicalRevision ?? req.body?.reviewedRevision ?? req.body?.revision;
+  if (targetStatus === 'approved') {
+    if (reviewedRevisionRaw === undefined || reviewedRevisionRaw === null || reviewedRevisionRaw === '') {
+      return res.status(400).json({
+        error: 'CLINICAL_REVISION_REQUIRED',
+        message: 'Approval requests must include the clinical data revision the physician reviewed.'
+      });
+    }
+  }
+
+  // Resolve doctor identity before entering transaction (async I/O not supported inside Firestore transaction)
+  let doctorIdentity = null;
+  if (targetStatus === 'approved') {
+    doctorIdentity = req.doctorIdentity || await getVerifiedDoctorIdentity(req.user.uid);
+    if (!doctorIdentity) {
+      return res.status(403).json({ error: 'DOCTOR_CREDENTIALS_NOT_VERIFIED' });
+    }
+  }
+
+  // State machine: defines reachable statuses from each source status.
+  // Role enforcement is handled upstream by requireDoctor middleware.
+  const VALID_TRANSITIONS = {
+    draft: ['submitted'],
+    submitted: ['triaged', 'assigned', 'under_review'],
+    triaged: ['assigned', 'under_review'],
+    assigned: ['under_review'],
+    pending: ['triaged', 'assigned', 'under_review'], // backward compat alias
+    under_review: ['more_info_requested', 'approved', 'rejected', 'escalated', 'closed'],
+    more_info_requested: ['under_review', 'closed'],
+    approved: ['closed'],
+    rejected: ['closed'],
+    escalated: ['under_review', 'closed'],
+    closed: [] // terminal — no transitions allowed
+  };
+
   try {
-    if (db) {
-      const caseDoc = await db.collection('cases').doc(caseId).get();
-      if (!caseDoc.exists) {
-        return res.status(404).json({ error: 'NOT_FOUND', message: 'Case not found.' });
+    if (!db) {
+      return res.status(503).json({ error: 'CLINICAL_STORAGE_UNAVAILABLE' });
+    }
+
+    const caseRef = db.collection('cases').doc(caseId);
+    const auditRef = db.collection('audit_events').doc(); // pre-generate ref outside transaction
+
+    let snapshotData = null; // captured inside transaction, used after for email dispatch
+    let updateDataCapture = null;
+    let isIdempotent = false;
+
+    const runTxn = typeof db.runTransaction === 'function'
+      ? (cb) => db.runTransaction(cb)
+      : async (cb) => {
+          const txn = {
+            get: async (ref) => ref.get(),
+            update: (ref, data) => ref.update(data),
+            set: (ref, data) => (ref.set ? ref.set(data) : ref.update ? ref.update(data) : null)
+          };
+          return cb(txn);
+        };
+
+    await runTxn(async (txn) => {
+      const caseSnap = await txn.get(caseRef);
+
+      if (!caseSnap.exists) {
+        const err = new Error('NOT_FOUND');
+        err.httpStatus = 404;
+        err.detail = 'Case not found.';
+        throw err;
       }
 
-      const caseData = caseDoc.data();
+      const caseData = caseSnap.data();
       const currentStatus = caseData.status || 'pending';
-      const normalizedClinicalNotes = String(clinicalNotes || note || '').trim();
-      const normalizedRecommendations = normalizeRecommendations(recommendations, recommendation);
+      snapshotData = caseData;
 
-      if (targetStatus === 'approved' && (!normalizedClinicalNotes || normalizedRecommendations.length === 0)) {
-        return res.status(400).json({
-          error: 'MISSING_CLINICAL_REPORT_DATA',
-          message: 'Doctor clinical notes and at least one patient recommendation are required before approving a report.'
-        });
+      // Guard: closed cases are immutable — reject any modification attempt
+      if (currentStatus === 'closed') {
+        const err = new Error('CASE_ALREADY_CLOSED');
+        err.httpStatus = 409;
+        err.detail = 'This clinical case is closed and cannot be modified.';
+        throw err;
       }
 
-      // Zero-trust assigned physician check
+      // Guard: idempotent duplicate — case already in target status, no-op
+      if (currentStatus === targetStatus) {
+        isIdempotent = true;
+        return; // abort writes, but do not throw
+      }
+
+      // Zero-trust: verify the requesting doctor is the assigned physician
       const assignedDoctor = caseData.assignedDoctorId || caseData.doctorId || caseData.doctorUid;
       if (!assignedDoctor) {
-        return res.status(403).json({
-          error: 'CASE_NOT_ASSIGNED',
-          message: 'This clinical case must be assigned by an authorized administrator before a doctor can process it.'
-        });
+        const err = new Error('CASE_NOT_ASSIGNED');
+        err.httpStatus = 403;
+        err.detail = 'This clinical case must be assigned by an authorized administrator before a doctor can process it.';
+        throw err;
       }
       if (assignedDoctor !== req.user.uid) {
-        return res.status(403).json({
-          error: 'ACCESS_DENIED',
-          message: 'Zero-Trust enforcement: This clinical case is assigned to another physician.'
-        });
+        const err = new Error('ACCESS_DENIED');
+        err.httpStatus = 403;
+        err.detail = 'Zero-Trust enforcement: This clinical case is assigned to another physician.';
+        throw err;
       }
 
-      // Valid State Machine Transitions
-      const VALID_TRANSITIONS = {
-        draft: ['submitted'],
-        submitted: ['triaged', 'assigned', 'under_review'],
-        triaged: ['assigned', 'under_review'],
-        assigned: ['under_review'],
-        pending: ['triaged', 'assigned', 'under_review'], // backward compat
-        under_review: ['more_info_requested', 'approved', 'rejected', 'escalated', 'closed'],
-        more_info_requested: ['under_review', 'closed'],
-        approved: ['closed'],
-        rejected: ['closed'],
-        escalated: ['under_review', 'closed'],
-        closed: []
-      };
-
+      // State machine validation
       const allowedNext = VALID_TRANSITIONS[currentStatus] || [];
       if (!allowedNext.includes(targetStatus)) {
-        return res.status(400).json({
-          error: 'INVALID_STATUS_TRANSITION',
-          message: `Cannot transition from '${currentStatus}' to '${targetStatus}'. Allowed: [${allowedNext.join(', ')}]`
-        });
+        const err = new Error('INVALID_STATUS_TRANSITION');
+        err.httpStatus = 400;
+        err.detail = `Cannot transition from '${currentStatus}' to '${targetStatus}'. Allowed: [${allowedNext.join(', ')}]`;
+        throw err;
       }
+
+      // Guard: verify clinical data revision and atomic conflict check on approval
+      if (targetStatus === 'approved') {
+        const currentRevision = caseData.clinicalRevision !== undefined ? Number(caseData.clinicalRevision) : 1;
+        const expectedRevision = Number(reviewedRevisionRaw);
+
+        const changedFields = [];
+        if (currentRevision !== expectedRevision) {
+          changedFields.push('clinicalRevision');
+        }
+
+        const baseline = req.body?.reviewedSnapshot || {};
+        if (baseline.patientResponse !== undefined && baseline.patientResponse !== (caseData.patientResponse || null)) {
+          if (!changedFields.includes('patientResponse')) changedFields.push('patientResponse');
+        }
+        if (baseline.oxygenLevel !== undefined && Number(baseline.oxygenLevel) !== Number(caseData.oxygenLevel ?? caseData.o2)) {
+          if (!changedFields.includes('oxygenLevel')) changedFields.push('oxygenLevel');
+        }
+        if (baseline.o2 !== undefined && Number(baseline.o2) !== Number(caseData.o2 ?? caseData.oxygenLevel)) {
+          if (!changedFields.includes('oxygenLevel')) changedFields.push('oxygenLevel');
+        }
+        if (baseline.assignedDoctorId !== undefined && baseline.assignedDoctorId !== caseData.assignedDoctorId) {
+          if (!changedFields.includes('assignedDoctorId')) changedFields.push('assignedDoctorId');
+        }
+
+        if (currentRevision !== expectedRevision || changedFields.length > 0) {
+          const conflictErr = new Error('CLINICAL_DATA_CONFLICT');
+          conflictErr.httpStatus = 409;
+          conflictErr.error = 'CLINICAL_DATA_CONFLICT';
+          conflictErr.detail = 'Clinical inputs, patient reply, or assignment have changed since review. Please review the updated information before approving.';
+          conflictErr.conflict = {
+            caseId,
+            currentRevision,
+            reviewedRevision: expectedRevision,
+            changedFields: changedFields.length > 0 ? changedFields : ['clinicalRevision'],
+            updatedCase: {
+              caseId,
+              clinicalRevision: currentRevision,
+              status: currentStatus,
+              oxygenLevel: caseData.oxygenLevel ?? caseData.o2 ?? null,
+              o2: caseData.o2 ?? caseData.oxygenLevel ?? null,
+              patientResponse: caseData.patientResponse || null,
+              patientRespondedAt: caseData.patientRespondedAt || null,
+              assignedDoctorId: caseData.assignedDoctorId || null,
+              assignedDoctorName: caseData.assignedDoctorName || null,
+              clinicId: caseData.clinicId || null
+            }
+          };
+          throw conflictErr;
+        }
+      }
+
+      // Build atomic update payload with full statusHistory entry
+      const now = new Date().toISOString();
+      const historyEntry = {
+        status: targetStatus,
+        previousStatus: currentStatus,
+        changedAt: now,
+        changedBy: req.user.uid,
+        changedByEmail: req.user.email,
+        changedByName: req.user.name || req.user.displayName || 'Doctor',
+        changedByRole: 'doctor',
+        reason: note || normalizedClinicalNotes || recommendation || `Status transitioned to ${targetStatus}`
+      };
 
       const updateData = {
         status: targetStatus,
         statusUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
         lastUpdatedBy: req.user.uid,
         lastUpdatedByEmail: req.user.email,
-        statusHistory: admin.firestore.FieldValue.arrayUnion({
-          status: targetStatus,
-          previousStatus: currentStatus,
-          changedAt: new Date().toISOString(),
-          changedBy: req.user.uid,
-          changedByEmail: req.user.email,
-          changedByName: req.user.name || req.user.displayName || 'Doctor',
-          changedByRole: 'doctor',
-          note: note || normalizedClinicalNotes || recommendation || `Status transitioned to ${targetStatus}`
-        })
+        statusHistory: admin.firestore.FieldValue.arrayUnion(historyEntry)
       };
 
       if (targetStatus === 'approved') {
+        const currentRevision = caseData.clinicalRevision !== undefined ? Number(caseData.clinicalRevision) : 1;
+        updateData.clinicalRevision = currentRevision;
         updateData.doctorApproved = true;
         updateData.approvingDoctorId = req.user.uid;
         updateData.approvingDoctorEmail = req.user.email;
-        const doctorIdentity = req.doctorIdentity || await getVerifiedDoctorIdentity(req.user.uid);
-        if (!doctorIdentity) {
-          return res.status(403).json({ error: 'DOCTOR_CREDENTIALS_NOT_VERIFIED' });
-        }
         updateData.doctorIdentity = doctorIdentity;
         updateData.approvingDoctorName = doctorIdentity.name;
         updateData.doctorSpecialty = doctorIdentity.specialty;
         updateData.doctorLicense = doctorIdentity.licenseNumber;
         updateData.clinicName = doctorIdentity.clinic;
         updateData.reportRef = reportRef || `HV-REP-${caseId.slice(-8).toUpperCase()}`;
-        updateData.reportGeneratedAt = reportGeneratedAt || new Date().toISOString();
+        updateData.reportGeneratedAt = reportGeneratedAt || now;
         updateData.approvedAt = admin.firestore.FieldValue.serverTimestamp();
         updateData.generatedAt = admin.firestore.FieldValue.serverTimestamp();
         updateData.reportVersion = REPORT_VERSION;
@@ -1609,26 +1735,42 @@ async function executeDoctorTransition({
         updateData.closedBy = req.user.uid;
       }
 
-      await db.collection('cases').doc(caseId).update(updateData);
-
-      await db.collection('audit_events').add({
+      // Atomic commit: case update + audit log in a single transaction
+      txn.update(caseRef, updateData);
+      txn.set(auditRef, {
         type: `CLINICAL_CASE_${targetStatus.toUpperCase()}`,
-        caseId: caseId,
-        doctorId: req.user.uid,
+        caseId,
+        actorId: req.user.uid,
+        actorEmail: req.user.email,
+        actorRole: 'doctor',
         fromStatus: currentStatus,
         toStatus: targetStatus,
-        note: note || normalizedClinicalNotes || '',
+        reason: note || normalizedClinicalNotes || '',
         timestamp: admin.firestore.FieldValue.serverTimestamp()
       });
 
-      // 📧 CLINICAL NOTIFICATION DISPATCH (Result Ready / More Info Requested)
-      let notificationResult = null;
-      let targetRecipient = caseData.patientEmail || caseData.email || null;
-      let targetPatientName = caseData.patientName || caseData.name || null;
+      updateDataCapture = updateData;
+    });
 
-      if (!targetRecipient && caseData.patientId) {
+    // Idempotent duplicate — case was already at target status
+    if (isIdempotent) {
+      return res.json({
+        success: true,
+        message: `Case is already in '${targetStatus}' status. No changes made.`,
+        targetStatus,
+        idempotent: true
+      });
+    }
+
+    // 📧 Post-transaction email notification (must happen outside transaction)
+    let notificationResult = null;
+    if (snapshotData && updateDataCapture) {
+      let targetRecipient = snapshotData.patientEmail || snapshotData.email || null;
+      let targetPatientName = snapshotData.patientName || snapshotData.name || null;
+
+      if (!targetRecipient && snapshotData.patientId) {
         try {
-          const patientUserDoc = await db.collection('users').doc(caseData.patientId).get();
+          const patientUserDoc = await db.collection('users').doc(snapshotData.patientId).get();
           if (patientUserDoc.exists) {
             const pud = patientUserDoc.data();
             targetRecipient = pud.email || pud.patientEmail || null;
@@ -1645,13 +1787,13 @@ async function executeDoctorTransition({
             type: 'result_ready',
             patientEmail: targetRecipient,
             patientName: targetPatientName,
-            caseId: caseId,
-            reportRef: updateData.reportRef,
-            doctorName: updateData.approvingDoctorName,
-            doctorSpecialty: updateData.doctorSpecialty,
-            clinicalDiagnosis: updateData.clinicalDiagnosis,
-            medications: updateData.medications,
-            recommendations: updateData.recommendations,
+            caseId,
+            reportRef: updateDataCapture.reportRef,
+            doctorName: updateDataCapture.approvingDoctorName,
+            doctorSpecialty: updateDataCapture.doctorSpecialty,
+            clinicalDiagnosis: updateDataCapture.clinicalDiagnosis,
+            medications: updateDataCapture.medications,
+            recommendations: updateDataCapture.recommendations,
             db
           });
         } else if (targetStatus === 'more_info_requested') {
@@ -1659,24 +1801,31 @@ async function executeDoctorTransition({
             type: 'more_info_requested',
             patientEmail: targetRecipient,
             patientName: targetPatientName,
-            caseId: caseId,
+            caseId,
             doctorName: req.user.displayName || req.user.name || 'الطبيب المعالج',
             moreInfoNote: note || '',
             db
           });
         }
       }
-
-      return res.json({
-        success: true,
-        message: `Case status successfully updated to ${targetStatus}.`,
-        targetStatus,
-        notification: notificationResult
-      });
     }
 
-    return res.status(503).json({ error: 'CLINICAL_STORAGE_UNAVAILABLE' });
+    return res.json({
+      success: true,
+      message: `Case status successfully updated to ${targetStatus}.`,
+      targetStatus,
+      notification: notificationResult
+    });
+
   } catch (err) {
+    const httpStatus = err.httpStatus;
+    if (httpStatus) {
+      return res.status(httpStatus).json({
+        error: err.error || err.message,
+        message: err.detail || err.message,
+        ...(err.conflict ? { conflict: err.conflict } : {})
+      });
+    }
     console.error(`[SERVER DOCTOR TRANSITION ERROR (${targetStatus})]:`, err);
     return res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
   }
@@ -2023,6 +2172,9 @@ app.post('/api/admin/assign-case', requireAuth, requireVerifiedEmail, requireAdm
           note: `Case assigned to Dr. ${doctorName || doctorId}`
         })
       };
+      const currentRevision = caseData.clinicalRevision !== undefined ? Number(caseData.clinicalRevision) : 1;
+      updateData.clinicalRevision = currentRevision + 1;
+
       if (clinicId && scope.role === ROLES.SUPER_ADMIN) updateData.clinicId = clinicId;
       if (clinicName) updateData.clinicName = clinicName;
 
@@ -2034,6 +2186,7 @@ app.post('/api/admin/assign-case', requireAuth, requireVerifiedEmail, requireAdm
         assignedDoctorId: doctorId,
         clinicId: recordClinicId(caseData),
         assignedBy: req.user.email,
+        clinicalRevision: updateData.clinicalRevision,
         timestamp: admin.firestore.FieldValue.serverTimestamp()
       });
     }
@@ -2042,6 +2195,192 @@ app.post('/api/admin/assign-case', requireAuth, requireVerifiedEmail, requireAdm
   } catch (err) {
     console.error("[SERVER ASSIGN CASE ERROR]:", err);
     res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/patient/submit-more-info
+ * Server-authoritative endpoint for patients to reply with additional information or updated vitals.
+ * Atomically increments the server-managed clinicalRevision.
+ */
+app.post(['/api/patient/submit-more-info', '/api/cases/:caseId/patient-reply'], requireAuth, async (req, res) => {
+  const caseId = req.params.caseId || req.body.caseId;
+  const { patientResponse, oxygenLevel, o2 } = req.body;
+
+  if (!caseId) {
+    return res.status(400).json({ error: 'MISSING_CASE_ID', message: 'caseId is required.' });
+  }
+  if (!patientResponse && oxygenLevel === undefined && o2 === undefined) {
+    return res.status(400).json({ error: 'EMPTY_RESPONSE', message: 'patientResponse or vitals required.' });
+  }
+
+  try {
+    if (!db) {
+      return res.status(503).json({ error: 'CLINICAL_STORAGE_UNAVAILABLE' });
+    }
+
+    const caseRef = db.collection('cases').doc(caseId);
+    let updatedRevision = 1;
+
+    const runTxn = typeof db.runTransaction === 'function'
+      ? (cb) => db.runTransaction(cb)
+      : async (cb) => {
+          const txn = {
+            get: async (ref) => ref.get(),
+            update: (ref, data) => ref.update(data),
+            set: (ref, data) => (ref.set ? ref.set(data) : ref.update ? ref.update(data) : null)
+          };
+          return cb(txn);
+        };
+
+    await runTxn(async (txn) => {
+      const snap = await txn.get(caseRef);
+      if (!snap.exists) {
+        const err = new Error('NOT_FOUND');
+        err.httpStatus = 404;
+        throw err;
+      }
+
+      const caseData = snap.data();
+      if (caseData.status === 'closed') {
+        const err = new Error('CASE_ALREADY_CLOSED');
+        err.httpStatus = 409;
+        err.detail = 'Case is closed and cannot receive replies.';
+        throw err;
+      }
+
+      // Authorization: patient owner or admin
+      if (caseData.patientId && caseData.patientId !== req.user.uid && !hasTrustedAdminClaim(req.user) && !hasTrustedOwnerClaim(req.user)) {
+        const err = new Error('ACCESS_DENIED');
+        err.httpStatus = 403;
+        err.detail = 'You do not have permission to reply to this case.';
+        throw err;
+      }
+
+      const currentRev = caseData.clinicalRevision !== undefined ? Number(caseData.clinicalRevision) : 1;
+      updatedRevision = currentRev + 1;
+
+      const now = new Date().toISOString();
+      const responseText = String(patientResponse || '').trim();
+      const updateData = {
+        status: 'under_review',
+        patientResponse: responseText,
+        patientRespondedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        clinicalRevision: updatedRevision,
+        statusHistory: admin.firestore.FieldValue.arrayUnion({
+          status: 'under_review',
+          previousStatus: caseData.status,
+          changedAt: now,
+          changedBy: req.user.uid,
+          changedByName: req.user.name || 'Patient',
+          changedByRole: 'patient',
+          reason: `Patient submitted information: ${responseText.slice(0, 100)}`
+        })
+      };
+
+      const parsedO2 = parseInt(oxygenLevel ?? o2, 10);
+      if (!isNaN(parsedO2) && parsedO2 >= 50 && parsedO2 <= 100) {
+        updateData.oxygenLevel = parsedO2;
+        updateData.o2 = parsedO2;
+      }
+
+      txn.update(caseRef, updateData);
+    });
+
+    return res.json({
+      success: true,
+      message: 'Patient reply submitted successfully. Case is back under clinical review.',
+      clinicalRevision: updatedRevision
+    });
+  } catch (err) {
+    if (err.httpStatus) {
+      return res.status(err.httpStatus).json({ error: err.message, message: err.detail || err.message });
+    }
+    console.error('[PATIENT SUBMIT MORE INFO ERROR]:', err);
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/cases/:caseId/update-clinical-inputs
+ * Server-authoritative endpoint to update clinical inputs (vitals, symptoms) on a case.
+ * Atomically increments the server-managed clinicalRevision.
+ */
+app.post('/api/cases/:caseId/update-clinical-inputs', requireAuth, async (req, res) => {
+  const caseId = req.params.caseId;
+  const { oxygenLevel, o2, breathingDifficulty, coughLevel, symptomDuration, riskFactors } = req.body || {};
+
+  if (!caseId) {
+    return res.status(400).json({ error: 'MISSING_CASE_ID' });
+  }
+
+  try {
+    if (!db) {
+      return res.status(503).json({ error: 'CLINICAL_STORAGE_UNAVAILABLE' });
+    }
+
+    const caseRef = db.collection('cases').doc(caseId);
+    let updatedRevision = 1;
+
+    const runTxn = typeof db.runTransaction === 'function'
+      ? (cb) => db.runTransaction(cb)
+      : async (cb) => {
+          const txn = {
+            get: async (ref) => ref.get(),
+            update: (ref, data) => ref.update(data),
+            set: (ref, data) => (ref.set ? ref.set(data) : ref.update ? ref.update(data) : null)
+          };
+          return cb(txn);
+        };
+
+    await runTxn(async (txn) => {
+      const snap = await txn.get(caseRef);
+      if (!snap.exists) {
+        const err = new Error('NOT_FOUND');
+        err.httpStatus = 404;
+        throw err;
+      }
+
+      const caseData = snap.data();
+      if (caseData.status === 'closed') {
+        const err = new Error('CASE_ALREADY_CLOSED');
+        err.httpStatus = 409;
+        throw err;
+      }
+
+      const currentRev = caseData.clinicalRevision !== undefined ? Number(caseData.clinicalRevision) : 1;
+      updatedRevision = currentRev + 1;
+
+      const updateData = {
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        clinicalRevision: updatedRevision
+      };
+
+      const parsedO2 = parseInt(oxygenLevel ?? o2, 10);
+      if (!isNaN(parsedO2) && parsedO2 >= 50 && parsedO2 <= 100) {
+        updateData.oxygenLevel = parsedO2;
+        updateData.o2 = parsedO2;
+      }
+      if (breathingDifficulty !== undefined) updateData.breathingDifficulty = breathingDifficulty;
+      if (coughLevel !== undefined) updateData.coughLevel = coughLevel;
+      if (symptomDuration !== undefined) updateData.symptomDuration = symptomDuration;
+      if (riskFactors !== undefined) updateData.riskFactors = riskFactors;
+
+      txn.update(caseRef, updateData);
+    });
+
+    return res.json({
+      success: true,
+      message: 'Clinical inputs updated successfully.',
+      clinicalRevision: updatedRevision
+    });
+  } catch (err) {
+    if (err.httpStatus) {
+      return res.status(err.httpStatus).json({ error: err.message, message: err.detail || err.message });
+    }
+    console.error('[UPDATE CLINICAL INPUTS ERROR]:', err);
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
   }
 });
 

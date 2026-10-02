@@ -6,7 +6,7 @@ const { createRequire } = require('node:module');
 const appSource = fs.readFileSync(path.resolve(__dirname, '../app/app.js'), 'utf8');
 const serverPath = path.resolve(__dirname, '../backend/server.js');
 const backendRequire = createRequire(serverPath);
-const record = { id: 'case-clinical', patientId: 'patient-1', assignedDoctorId: 'doctor-1', status: 'under_review', oxygenLevel: 85 };
+const record = { id: 'case-clinical', patientId: 'patient-1', assignedDoctorId: 'doctor-1', status: 'under_review', oxygenLevel: 85, clinicalRevision: 1 };
 let application = { userId: 'doctor-1', status: 'approved', name: 'Verified Doctor', licenseNumber: 'VERIFIED-LICENSE', specialty: 'Recorded specialty', clinic: 'Recorded clinic' };
 let writes = 0;
 const profiles = {
@@ -99,7 +99,7 @@ include('window.generateAndApproveReport =', 'window.openCaseReport =');
     return result.data;
   };
   try {
-    const approval = { caseId: record.id, clinicalDiagnosis: 'Recorded diagnosis', clinicalNotes: 'Recorded note', recommendations: ['Recorded instruction'], medications: '', approvingDoctorName: 'FORGED', doctorLicense: 'FORGED' };
+    const approval = { caseId: record.id, clinicalRevision: 1, clinicalDiagnosis: 'Recorded diagnosis', clinicalNotes: 'Recorded note', recommendations: ['Recorded instruction'], medications: '', approvingDoctorName: 'FORGED', doctorLicense: 'FORGED' };
     let result = await request('/api/doctor/approve-clinical-case', 'doctor-1', approval);
     assert.equal(result.status, 200, JSON.stringify(result.data));
     assert.equal(record.medications, '');

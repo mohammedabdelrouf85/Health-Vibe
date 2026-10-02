@@ -2130,7 +2130,13 @@ async function callBackend(path, options = {}) {
 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(payload.message || payload.error || `Backend request failed (${response.status})`);
+    const error = new Error(payload.message || payload.error || `Backend request failed (${response.status})`);
+    error.status = response.status;
+    error.statusCode = response.status;
+    error.payload = payload;
+    error.error = payload.error;
+    error.conflict = payload.conflict;
+    throw error;
   }
 
   return payload;
@@ -3080,10 +3086,17 @@ async function updateCaseStatus(id, newStatus, note, extraFields = {}) {
 
   try {
     if (newStatus === CASE_STATUS.APPROVED) {
+      const reviewedRev = extraFields.clinicalRevision !== undefined
+        ? Number(extraFields.clinicalRevision)
+        : (window._doctorActiveCaseReviewedRevision !== undefined ? Number(window._doctorActiveCaseReviewedRevision) : 1);
+
       await callBackend("/api/doctor/approve-clinical-case", {
         method: "POST",
         body: JSON.stringify({
           caseId: id,
+          clinicalRevision: reviewedRev,
+          reviewedRevision: extraFields.reviewedRevision !== undefined ? Number(extraFields.reviewedRevision) : reviewedRev,
+          reviewedSnapshot: extraFields.reviewedSnapshot || window._doctorActiveCaseReviewedSnapshot || null,
           clinicalDiagnosis: extraFields.clinicalDiagnosis || "",
           clinicalNotes: extraFields.clinicalNotes || note || "",
           medications: extraFields.medications || "",
@@ -3126,6 +3139,10 @@ async function updateCaseStatus(id, newStatus, note, extraFields = {}) {
     return true;
   } catch (err) {
     console.error("❌ Error updating case status through backend:", err);
+    if ((err.status === 409 || err.statusCode === 409) && (err.payload?.error === 'CLINICAL_DATA_CONFLICT' || err.error === 'CLINICAL_DATA_CONFLICT' || err.conflict || err.payload?.conflict)) {
+      handleDoctorApprovalConflict(id, err.payload || { error: err.error, message: err.message, conflict: err.conflict });
+      return false;
+    }
     if (handleServerPermissionDenied(err, "Update Case Status")) return false;
     showToast(getAuthErrorMessage(err) || (isEn ? "Failed to update case status." : "فشل تحديث حالة الملف الطبي."));
     return false;
@@ -3189,6 +3206,176 @@ function parseDoctorRecommendations(rawText) {
     .map((item) => item.replace(/^[\s\-*•\d.)]+/, "").trim())
     .filter(Boolean);
 }
+
+function handleDoctorApprovalConflict(caseId, conflictData) {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  const conflict = conflictData?.conflict || {};
+  const updatedCase = conflict.updatedCase || {};
+  const currentRev = conflict.currentRevision || (window._doctorActiveCaseReviewedRevision ? window._doctorActiveCaseReviewedRevision + 1 : 2);
+  const reviewedRev = conflict.reviewedRevision || window._doctorActiveCaseReviewedRevision || 1;
+
+  // 1. Preserve doctor's unsaved notes without saving/applying them to the database
+  const diagInput = document.getElementById("doctorDiagnosisInput") || document.getElementById("doctorNoteInput");
+  const medInput = document.getElementById("doctorMedicationsInput");
+  const recInput = document.getElementById("doctorRecommendationsInput");
+
+  const unsavedNotes = {
+    diagnosis: diagInput ? diagInput.value : "",
+    medications: medInput ? medInput.value : "",
+    recommendations: recInput ? recInput.value : ""
+  };
+  window._doctorPreservedUnsavedNotes = unsavedNotes;
+  window._doctorActiveConflictUpdatedCase = updatedCase;
+
+  // 2. Render structured conflict banner in review panel
+  let banner = document.getElementById("doctorConflictBanner");
+  if (!banner) {
+    banner = document.createElement("div");
+    banner.id = "doctorConflictBanner";
+    const panel = document.getElementById("doctorReviewPanel");
+    if (panel) panel.insertBefore(banner, panel.firstChild);
+  }
+
+  const changed = Array.isArray(conflict.changedFields) ? conflict.changedFields : ['clinicalRevision'];
+  const badges = changed.map(f => {
+    let lbl = f;
+    if (f === 'patientResponse') lbl = isEn ? 'New Patient Reply' : 'رد جديد من المريض';
+    else if (f === 'oxygenLevel' || f === 'o2') lbl = isEn ? 'Updated Oxygen Level' : 'تحديث نسبة الأكسجين';
+    else if (f === 'assignedDoctorId') lbl = isEn ? 'Doctor Reassignment' : 'تغيير الطبيب المعالج';
+    else if (f === 'clinicalRevision') lbl = isEn ? 'Clinical Revision Incremented' : 'تحديث مراجعة البيانات';
+    return `<span class="pill danger" style="font-size: 11px; padding: 2px 7px; margin: 2px;">${lbl}</span>`;
+  }).join(' ');
+
+  const newO2 = updatedCase.oxygenLevel ?? updatedCase.o2;
+  const newReply = updatedCase.patientResponse;
+
+  banner.style.display = "block";
+  banner.className = "doctor-conflict-banner";
+  banner.style.cssText = "background: rgba(239, 68, 68, 0.08); border: 2px solid #ef4444; border-radius: 12px; padding: 14px; margin-bottom: 16px;";
+
+  banner.innerHTML = `
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap;">
+      <div style="display: flex; gap: 10px; align-items: center;">
+        <span style="font-size: 24px;">⚠️</span>
+        <div>
+          <strong style="color: #dc2626; font-size: 14px; display: block;">
+            ${isEn ? 'Clinical Data Update Conflict — Approval Rejected' : 'تعارض سريري: تم تعديل بيانات الحالة أثناء المراجعة'}
+          </strong>
+          <span style="font-size: 12px; color: var(--ink);">
+            ${isEn
+              ? `Case was updated while under review (Revision #${reviewedRev} ➔ #${currentRev}). Approval was atomically blocked to ensure patient safety.`
+              : `تم تحديث بيانات الحالة أثناء قيامك بالفحص (المراجعة #${reviewedRev} ➔ #${currentRev}). تم إيقاف الاعتماد آلياً للحفاظ على سلامة المريض.`}
+          </span>
+        </div>
+      </div>
+      <span class="pill danger" style="font-weight: 800; font-size: 11px;">HTTP 409 Conflict</span>
+    </div>
+
+    <div style="margin: 10px 0; padding: 8px 12px; background: var(--surface); border-radius: 8px; border: 1px dashed rgba(239, 68, 68, 0.3);">
+      <div style="font-size: 12px; font-weight: 700; margin-bottom: 4px; color: var(--muted);">
+        ${isEn ? 'Updated Attributes:' : 'التغييرات المسجلة:'} ${badges}
+      </div>
+      ${newO2 !== undefined && newO2 !== null ? `
+        <div style="font-size: 12.5px; margin-bottom: 3px;">
+          🫁 <strong>${isEn ? 'Updated Oxygen Saturation (SpO2):' : 'نسبة الأكسجين المحدثة:'}</strong> <span style="font-weight: 800; color: ${newO2 < 90 ? '#ef4444' : 'var(--teal)'};">${newO2}%</span>
+        </div>
+      ` : ''}
+      ${newReply ? `
+        <div style="font-size: 12.5px; margin-bottom: 3px;">
+          📩 <strong>${isEn ? 'Patient Follow-up Response:' : 'رد المريض الوارد:'}</strong> <span style="font-weight: 600; color: var(--ink); background: rgba(14, 165, 164, 0.1); padding: 1px 6px; border-radius: 4px;">"${escapeHtml(newReply)}"</span>
+        </div>
+      ` : ''}
+    </div>
+
+    <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid #10b981; border-radius: 8px; padding: 6px 10px; margin-bottom: 10px; font-size: 12px; color: #047857;">
+      🛡️ <strong>${isEn ? "Unsaved Doctor Notes Preserved:" : "تم الحفاظ على مسودة ملاحظاتك السريرية:"}</strong>
+      ${isEn
+        ? "Your diagnosis, medications, and care plan remain in the form. They have NOT been applied to the patient record."
+        : "التشخيص والروشتة والتوصيات التي كتبتها لا تزال محفوظة في الحقول، ولم تُسجل أو تُطبق تلقائياً على الملف الطبي."}
+    </div>
+
+    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+      <button type="button" id="btnAcknowledgeConflict" class="btn-clinical resume" style="padding: 7px 14px; font-size: 12.5px; font-weight: 700;" onclick="acknowledgeConflictAndReview('${caseId}', ${currentRev})">
+        👁️ ${isEn ? 'Review Updated Information & Enable Approval' : 'مراجعة البيانات المحدثة وتمكين الاعتماد'}
+      </button>
+    </div>
+  `;
+
+  banner.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+window.acknowledgeConflictAndReview = function(caseId, newRevision, newSnapshot) {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+
+  // Retain unsaved doctor inputs
+  const diagInput = document.getElementById("doctorDiagnosisInput") || document.getElementById("doctorNoteInput");
+  const medInput = document.getElementById("doctorMedicationsInput");
+  const recInput = document.getElementById("doctorRecommendationsInput");
+  const curDiag = diagInput ? diagInput.value : "";
+  const curMeds = medInput ? medInput.value : "";
+  const curRecs = recInput ? recInput.value : "";
+
+  // Advance reviewed revision pointer
+  window._doctorActiveCaseReviewedRevision = Number(newRevision);
+
+  // Advance reviewed snapshot baseline to match acknowledged update
+  if (newSnapshot) {
+    window._doctorActiveCaseReviewedSnapshot = newSnapshot;
+  } else if (window._doctorActiveConflictUpdatedCase) {
+    const uc = window._doctorActiveConflictUpdatedCase;
+    window._doctorActiveCaseReviewedSnapshot = {
+      oxygenLevel: uc.oxygenLevel ?? uc.o2 ?? null,
+      o2: uc.o2 ?? uc.oxygenLevel ?? null,
+      patientResponse: uc.patientResponse || null,
+      assignedDoctorId: uc.assignedDoctorId || null
+    };
+  }
+
+  const revBadge = document.getElementById("doctorCaseRevisionBadge");
+  if (revBadge) {
+    revBadge.textContent = isEn ? `Rev #${newRevision}` : `مراجعة #${newRevision}`;
+  }
+
+  const banner = document.getElementById("doctorConflictBanner");
+  if (banner) {
+    banner.style.background = "rgba(16, 185, 129, 0.08)";
+    banner.style.borderColor = "#10b981";
+    banner.innerHTML = `
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 18px;">✅</span>
+          <div>
+            <strong style="color: #047857; font-size: 13px; display: block;">
+              ${isEn ? `Updated Case Reviewed (Revision #${newRevision})` : `تمت مراجعة تحديثات الحالة (مراجعة #${newRevision})`}
+            </strong>
+            <span style="font-size: 11.5px; color: var(--ink);">
+              ${isEn
+                ? "Your unsaved notes are preserved. You may now review/modify them and submit approval."
+                : "تم الحفاظ على ملاحظاتك دون تعديل. يمكنك تدقيقها والضغط على 'توليد واعتماد التقرير' لإتمام العملية."}
+            </span>
+          </div>
+        </div>
+        <button type="button" class="soft-button" style="font-size: 11px; padding: 2px 6px;" onclick="clearDoctorConflictBanner()">✕</button>
+      </div>
+    `;
+  }
+
+  // Ensure inputs still hold doctor notes
+  if (diagInput) diagInput.value = curDiag;
+  if (medInput) medInput.value = curMeds;
+  if (recInput) recInput.value = curRecs;
+
+  showToast(isEn ? `Reviewed revision #${newRevision}. You can now approve.` : `تمت مراجعة التحديثات (#${newRevision}). يمكنك الآن اعتماد التقرير.`);
+};
+
+function clearDoctorConflictBanner() {
+  const banner = document.getElementById("doctorConflictBanner");
+  if (banner) {
+    banner.style.display = "none";
+    banner.innerHTML = "";
+  }
+}
+window.clearDoctorConflictBanner = clearDoctorConflictBanner;
 
 window.setDoctorQueueFilter = function(filterKey) {
   currentDoctorQueueFilter = filterKey;
@@ -3291,6 +3478,10 @@ window.generateAndApproveReport = async function(id) {
 
   const reportRef = `HV-REP-${id.slice(-8).toUpperCase()}`;
 
+  const reviewedRevision = window._doctorActiveCaseReviewedRevision !== undefined
+    ? Number(window._doctorActiveCaseReviewedRevision)
+    : 1;
+
   const payload = {
     clinicalDiagnosis,
     clinicalNotes: clinicalDiagnosis,
@@ -3299,11 +3490,15 @@ window.generateAndApproveReport = async function(id) {
     recommendations,
     recommendation: recommendations.join("\n"),
     reportRef,
-    reportGeneratedAt: new Date().toISOString()
+    reportGeneratedAt: new Date().toISOString(),
+    clinicalRevision: reviewedRevision,
+    reviewedRevision: reviewedRevision,
+    reviewedSnapshot: window._doctorActiveCaseReviewedSnapshot || null
   };
 
   const success = await updateCaseStatus(id, CASE_STATUS.APPROVED, clinicalDiagnosis, payload);
   if (success) {
+    if (typeof clearDoctorConflictBanner === "function") clearDoctorConflictBanner();
     showToast(isEn ? "Official Certified Medical Report Generated & Approved!" : "تم توليد واعتماد التقرير الطبي السريري بنجاح!");
     await renderDoctorQueue();
     selectDoctorCase(id);
@@ -3753,6 +3948,15 @@ async function selectDoctorCase(id) {
     }
   }
 
+  const currentRev = c.clinicalRevision !== undefined ? Number(c.clinicalRevision) : 1;
+  window._doctorActiveCaseReviewedRevision = currentRev;
+  window._doctorActiveCaseReviewedSnapshot = {
+    oxygenLevel: c.oxygenLevel ?? c.o2 ?? null,
+    o2: c.o2 ?? c.oxygenLevel ?? null,
+    patientResponse: c.patientResponse || null,
+    assignedDoctorId: c.assignedDoctorId || null
+  };
+
   reviewPanel.style.display = "block";
 
   const statusMeta = getCaseStatusMeta(c.status);
@@ -4020,7 +4224,10 @@ if (isUnderReview) {
     <div class="panel-head">
       <div>
         <h3 style="margin: 0;">${isEn ? 'Reviewing ' + c.nameEn : 'مراجعة حالة ' + c.name}</h3>
-        <small style="color: var(--muted);">${isEn ? 'Case ID: #' + c.id.slice(-6).toUpperCase() : 'رقم الحالة: #' + c.id.slice(-6).toUpperCase()}</small>
+        <div style="display: flex; gap: 8px; align-items: center; margin-top: 2px;">
+          <small style="color: var(--muted);">${isEn ? 'Case ID: #' + c.id.slice(-6).toUpperCase() : 'رقم الحالة: #' + c.id.slice(-6).toUpperCase()}</small>
+          <span class="pill info" id="doctorCaseRevisionBadge" style="font-size: 11px; padding: 1px 7px;">${isEn ? 'Rev #' + currentRev : 'مراجعة #' + currentRev}</span>
+        </div>
       </div>
       ${statusPill}
     </div>
@@ -10803,6 +11010,7 @@ function buildAssessmentModel({
   return {
     // ── Document Metadata & Complete Patient Linkage ──
     schemaVersion: ASSESSMENT_SCHEMA_VERSION,
+    clinicalRevision: 1,
     isDemo: false,
     isTest: false,
     environment: "production",
@@ -12357,30 +12565,53 @@ window.submitPatientMoreInfo = async function(caseId) {
 
   try {
     const finalResponseText = responseText || (isEn ? `Updated vitals submitted: SpO2 ${rawO2}%` : `تم تسجيل نسبة أكسجين محدثة: ${rawO2}%`);
-    const historyItem = {
-      status: CASE_STATUS.UNDER_REVIEW,
-      changedAt: new Date().toISOString(),
-      changedBy: user.uid,
-      changedByName: user.displayName || (user.email ? user.email.split('@')[0] : "Patient"),
-      changedByEmail: user.email || "",
-      changedByRole: "patient",
-      note: isEn ? `Patient submitted requested info: ${finalResponseText.slice(0, 120)}` : `أرسل المريض البيانات المطلوبة: ${finalResponseText.slice(0, 120)}`
-    };
 
-    const updatePayload = {
-      status: CASE_STATUS.UNDER_REVIEW,
-      patientResponse: finalResponseText,
-      patientRespondedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      statusHistory: firebase.firestore.FieldValue.arrayUnion(historyItem)
-    };
-
-    if (!isNaN(rawO2) && rawO2 >= 50 && rawO2 <= 100) {
-      updatePayload.oxygenLevel = rawO2;
-      updatePayload.o2 = rawO2;
+    let backendSuccess = false;
+    try {
+      const payload = {
+        caseId,
+        patientResponse: finalResponseText
+      };
+      if (!isNaN(rawO2) && rawO2 >= 50 && rawO2 <= 100) {
+        payload.oxygenLevel = rawO2;
+        payload.o2 = rawO2;
+      }
+      await callBackend("/api/patient/submit-more-info", {
+        method: "POST",
+        body: JSON.stringify(payload)
+      });
+      backendSuccess = true;
+    } catch (backendErr) {
+      console.warn("Backend submit-more-info call failed, falling back to direct Firestore update:", backendErr);
     }
 
-    await db.collection("cases").doc(caseId).update(updatePayload);
+    if (!backendSuccess) {
+      const historyItem = {
+        status: CASE_STATUS.UNDER_REVIEW,
+        changedAt: new Date().toISOString(),
+        changedBy: user.uid,
+        changedByName: user.displayName || (user.email ? user.email.split('@')[0] : "Patient"),
+        changedByEmail: user.email || "",
+        changedByRole: "patient",
+        note: isEn ? `Patient submitted requested info: ${finalResponseText.slice(0, 120)}` : `أرسل المريض البيانات المطلوبة: ${finalResponseText.slice(0, 120)}`
+      };
+
+      const updatePayload = {
+        status: CASE_STATUS.UNDER_REVIEW,
+        patientResponse: finalResponseText,
+        patientRespondedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        clinicalRevision: firebase.firestore.FieldValue.increment(1),
+        statusHistory: firebase.firestore.FieldValue.arrayUnion(historyItem)
+      };
+
+      if (!isNaN(rawO2) && rawO2 >= 50 && rawO2 <= 100) {
+        updatePayload.oxygenLevel = rawO2;
+        updatePayload.o2 = rawO2;
+      }
+
+      await db.collection("cases").doc(caseId).update(updatePayload);
+    }
     console.info(`✅ Patient successfully provided more info for case ${caseId}`);
 
     showToast(isEn ? "Information sent to physician! Case is back under clinical review." : "تم إرسال البيانات للطبيب بنجاح! الحالة الآن قيد الفحص السريري.");
