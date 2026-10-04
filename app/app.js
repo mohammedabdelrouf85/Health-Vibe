@@ -3774,6 +3774,12 @@ window.generateAndApproveReport = async function(id) {
   if (!enforcePermission(PERMISSIONS.APPROVE_CASE, "Approve Clinical Result")) return;
   const isEn = currentLanguage === "en";
 
+  const targetCase = (typeof cases !== "undefined" && Array.isArray(cases) ? cases : (state?.doctorQueue || [])).find(item => item.id === id);
+  if (window.HealthVibes?.DoctorUI?.isRevisionStale && window.HealthVibes.DoctorUI.isRevisionStale(targetCase)) {
+    showToast(isEn ? "Approval locked: Please review and acknowledge new patient information first." : "الاعتماد مقفل: يرجى مراجعة وتأكيد البيانات الجديدة أولاً.");
+    return;
+  }
+
   const diagInput = document.getElementById("doctorDiagnosisInput") || document.getElementById("doctorNoteInput");
   const medInput = document.getElementById("doctorMedicationsInput");
   const recInput = document.getElementById("doctorRecommendationsInput");
@@ -3801,6 +3807,9 @@ window.generateAndApproveReport = async function(id) {
 
   const success = await updateCaseStatus(id, CASE_STATUS.APPROVED, clinicalDiagnosis, payload);
   if (success) {
+    if (window.HealthVibes?.DoctorUI?.clearDraftNotes) {
+      window.HealthVibes.DoctorUI.clearDraftNotes(id);
+    }
     await renderDoctorQueue();
     selectDoctorCase(id);
     const refreshed = (await getCases({ includeTest: true })).find(item => item.id === id);
@@ -4406,12 +4415,32 @@ async function selectDoctorCase(id) {
   const isRejected = c.status === CASE_STATUS.REJECTED;
   const isUnderReview = (c.status === CASE_STATUS.UNDER_REVIEW || (!isClosed && !isApproved && !isMoreInfo && !isEscalated && !isRejected));
 
-if (isUnderReview) {
+  const isStale = (window.HealthVibes?.DoctorUI?.isRevisionStale) ? window.HealthVibes.DoctorUI.isRevisionStale(c) : false;
+
+  const approveButtonHtml = isStale
+    ? `
+      <button type="button" class="btn-clinical approve locked" disabled="disabled" onclick="generateAndApproveReport('${c.id}')" title="${isEn ? 'Approval locked: Review new information before approval' : 'الاعتماد مقفل: يجب مراجعة المعلومات السريرية الجديدة أولاً'}" style="opacity: 0.65; cursor: not-allowed; background: #64748b;">
+        <span>🔒</span> ${isEn ? 'Approval Locked (Review Required)' : 'الاعتماد مقفل (مطلوب المراجعة)'}
+      </button>
+    `
+    : `
+      <button type="button" class="btn-clinical approve" onclick="generateAndApproveReport('${c.id}')" title="${isEn ? 'Approve and generate official certified report' : 'اعتماد سريري وتوليد التقرير الطبي المعتمد'}">
+        <span>✨</span> ${isEn ? 'Generate & Approve Report' : 'توليد واعتماد التقرير'}
+      </button>
+    `;
+
+  const lockWarningNoticeHtml = isStale
+    ? `
+      <div id="approvalLockedNotice" style="margin-top: 6px; font-size: 12px; color: #c2410c; font-weight: 700; display: flex; align-items: center; gap: 6px;">
+        <span>⚠️</span> ${isEn ? 'You must review and acknowledge the updated patient revision before final certification.' : 'يجب مراجعة وتأكيد المراجعة السريرية المحدثة قبل إتمام الاعتماد النهائي.'}
+      </div>
+    `
+    : '';
+
+  if (isUnderReview) {
     actionToolbarHtml = `
       <div class="doctor-actions-toolbar">
-        <button type="button" class="btn-clinical approve" onclick="generateAndApproveReport('${c.id}')" title="${isEn ? 'Approve and generate official certified report' : 'اعتماد سريري وتوليد التقرير الطبي المعتمد'}">
-          <span>✨</span> ${isEn ? 'Generate & Approve Report' : 'توليد واعتماد التقرير'}
-        </button>
+        ${approveButtonHtml}
         <button type="button" class="btn-clinical resume" onclick="previewCaseReport('${c.id}')" title="${isEn ? 'Preview report before final approval' : 'معاينة شكل التقرير الطبي قبل الاعتماد'}">
           <span>👁️</span> ${isEn ? 'Preview Report' : 'معاينة التقرير'}
         </button>
@@ -4428,6 +4457,7 @@ if (isUnderReview) {
           <span>🔒</span> ${isEn ? 'Close Case' : 'إغلاق الحالة'}
         </button>
       </div>
+      ${lockWarningNoticeHtml}
     `;
   } else if (isMoreInfo) {
     actionToolbarHtml = `
@@ -4521,11 +4551,12 @@ if (isUnderReview) {
     `;
   }
 
-  const existingDoctorNote = c.clinicalDiagnosis || c.clinicalNotes || c.doctorNotes || c.doctorNote || "";
-  const existingRecommendations = Array.isArray(c.recommendations) && c.recommendations.length > 0
+  const preservedDraft = (window.HealthVibes?.DoctorUI?.getDraftNotes) ? window.HealthVibes.DoctorUI.getDraftNotes(c.id) : null;
+  const existingDoctorNote = preservedDraft ? preservedDraft.diagnosis : (c.clinicalDiagnosis || c.clinicalNotes || c.doctorNotes || c.doctorNote || "");
+  const existingRecommendations = preservedDraft ? preservedDraft.recommendations : (Array.isArray(c.recommendations) && c.recommendations.length > 0
     ? c.recommendations.join("\n")
-    : (c.recommendation || "");
-  const existingMedications = c.medications || "";
+    : (c.recommendation || ""));
+  const existingMedications = preservedDraft ? preservedDraft.medications : (c.medications || "");
 
   // Display credentials from the verified application; they are not editable.
   const verifiedIdentity = await getCurrentVerifiedDoctorIdentity();
@@ -4621,22 +4652,27 @@ if (isUnderReview) {
     </div>
   `;
 
-  reviewPanel.innerHTML = `
-    <div class="panel-head">
-      <div>
-        <h3 style="margin: 0;">${isEn ? 'Reviewing ' + c.nameEn : 'مراجعة حالة ' + c.name}</h3>
-        <small style="color: var(--muted);">${isEn ? 'Case ID: #' + c.id.slice(-6).toUpperCase() : 'رقم الحالة: #' + c.id.slice(-6).toUpperCase()}</small>
+  const persistentHeaderHtml = (window.HealthVibes?.DoctorUI?.renderPersistentCaseHeader)
+    ? window.HealthVibes.DoctorUI.renderPersistentCaseHeader(c, isEn)
+    : `
+      <div class="panel-head">
+        <div>
+          <h3 style="margin: 0;">${isEn ? 'Reviewing ' + (c.nameEn || c.name) : 'مراجعة حالة ' + c.name}</h3>
+          <small style="color: var(--muted);">${isEn ? 'Case ID: #' + c.id.slice(-6).toUpperCase() : 'رقم الحالة: #' + c.id.slice(-6).toUpperCase()}</small>
+        </div>
+        ${statusPill}
       </div>
-      ${statusPill}
-    </div>
+    `;
+
+  const staleRevisionBannerHtml = (window.HealthVibes?.DoctorUI?.renderStaleRevisionBanner)
+    ? window.HealthVibes.DoctorUI.renderStaleRevisionBanner(c, isEn)
+    : '';
+
+  reviewPanel.innerHTML = `
+    ${persistentHeaderHtml}
+    ${staleRevisionBannerHtml}
+    <div id="doctorReviewAriaLive" aria-live="polite" class="sr-only" style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0;"></div>
     ${demoCaseBanner}
-    <div style="background: rgba(14, 165, 164, 0.08); border: 1px solid var(--teal); border-radius: 12px; padding: 12px 16px; margin: 12px 0; display: flex; flex-wrap: wrap; gap: 16px; align-items: center; font-size: 13px;">
-      <div><span style="color: var(--muted);">${isEn ? 'Patient:' : 'المريض:'}</span> <strong>${c.patientName || c.name || '--'}${isDemoCase ? ' (Demo)' : ''}</strong></div>
-      <div><span style="color: var(--muted);">${isEn ? 'Email:' : 'البريد:'}</span> <strong>${c.patientEmail || c.userEmail || '--'}</strong></div>
-      ${c.patientPhone || c.phone ? `<div><span style="color: var(--muted);">${isEn ? 'Phone:' : 'الهاتف:'}</span> <strong>${c.patientPhone || c.phone}</strong></div>` : ''}
-      ${(c.dateOfBirth || c.dob || c.patientAge || c.age) ? `<div><span style="color: var(--muted);">${isEn ? 'Age:' : 'العمر:'}</span> <strong>${(c.dateOfBirth || c.dob) ? (calculateAge(c.dateOfBirth || c.dob) + (isEn ? ' yrs' : ' سنة')) : (c.patientAge || c.age)}</strong></div>` : ''}
-      <div><span style="color: var(--muted);">${isEn ? 'Patient ID:' : 'معرّف المريض:'}</span> <code style="font-size: 11px;">${(c.patientId || c.userId || '--').slice(0, 10)}...</code></div>
-    </div>
     ${emergencyDoctorBanner}
     <div class="summary-list">
       <div><span>${isEn ? 'Rules-based suggestion' : 'اقتراح مبني على قواعد'}</span><strong>${(isEn ? c.aiScoreEn : c.aiScore) || (isEn ? 'Not clinically validated' : 'غير مدقق سريرياً')}${isDemoCase ? ' (Demo Data)' : ''}</strong></div>
@@ -4733,6 +4769,11 @@ if (isUnderReview) {
     Array.from(queueList.children).forEach(btn => btn.style.border = "none");
     const activeBtn = Array.from(queueList.children).find(btn => btn.dataset && btn.dataset.caseId === id);
     if (activeBtn) activeBtn.style.border = "2px solid var(--teal)";
+  }
+
+  // Attach auto-save listeners to draft textareas to preserve doctor notes
+  if (window.HealthVibes?.DoctorUI?.attachDraftPreservationListeners) {
+    window.HealthVibes.DoctorUI.attachDraftPreservationListeners(id);
   }
 }
 

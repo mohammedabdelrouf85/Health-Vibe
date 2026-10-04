@@ -298,5 +298,16 @@
     "rolledBackToReleaseId": "rel_staging_1790715976039",
     "rolledBackToCommit": "d8f79a6d4cf294e1ac0a0e7715cb9d434e923afc",
     "status": "rolled_back"
+  },
+  {
+    "releaseId": "rel_staging_1790974559717",
+    "timestamp": "2026-10-02T20:55:59.717Z",
+    "environment": "staging",
+    "projectId": "health-vibes-staging",
+    "gitCommit": "286188cb4da68b07793d4df572e6a56a83f16d7e",
+    "gitBranch": "main",
+    "version": "1.0.0",
+    "status": "failed",
+    "error": "Command failed: npx firebase-tools deploy --project health-vibes-staging --only hosting,functions,firestore,storage"
   }
 ]

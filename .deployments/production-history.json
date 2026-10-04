@@ -152,5 +152,16 @@
     "version": "1.0.0",
     "status": "deployed",
     "deployedAt": "2026-09-30T22:40:37.849Z"
+  },
+  {
+    "releaseId": "rel_production_1790974660408",
+    "timestamp": "2026-10-02T20:57:40.409Z",
+    "environment": "production",
+    "projectId": "health-vibes-a4b3b",
+    "gitCommit": "286188cb4da68b07793d4df572e6a56a83f16d7e",
+    "gitBranch": "main",
+    "version": "1.0.0",
+    "status": "failed",
+    "error": "Command failed: npx firebase-tools deploy --project health-vibes-a4b3b --only hosting,functions,firestore,storage"
   }
 ]
