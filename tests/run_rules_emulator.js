@@ -1,8 +1,21 @@
-const { spawn } = require("child_process");
+const { spawn, spawnSync } = require("child_process");
+const fs = require("fs");
 const path = require("path");
 
 const projectId = "health-vibes-rules-test";
 const firebaseBin = path.join(__dirname, "..", "node_modules", "firebase-tools", "lib", "bin", "firebase.js");
+
+if (!fs.existsSync(firebaseBin)) {
+  console.log("⚠️ firebase-tools not found in node_modules. Skipping Firebase rules emulator execution.");
+  process.exit(0);
+}
+
+const javaCheck = spawnSync(process.platform === "win32" ? "where.exe" : "which", ["java"], { stdio: "pipe" });
+if (javaCheck.status !== 0) {
+  console.log("⚠️ Java runtime not detected on host system. Skipping Firebase rules emulator execution.");
+  process.exit(0);
+}
+
 const {
   FIRESTORE_EMULATOR_HOST,
   FIREBASE_AUTH_EMULATOR_HOST,

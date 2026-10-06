@@ -532,7 +532,31 @@ service cloud.firestore {
     }
 
     // =========================================================================
-    // 11. 👑 MASTER CATCH-ALL OVERRIDE
+    // 11. 🏢 MULTI-TENANT ORGANIZATIONS, CLINICS & MEMBERSHIPS
+    // =========================================================================
+    match /organizations/{orgId} {
+      // Public branding lookup is allowed for custom domain/portal resolution; writes restricted to platform admins
+      allow read: if true;
+      allow write: if isOwner() || isSuperAdmin();
+    }
+
+    match /org_private_config/{orgId} {
+      // Strictly shielded: secrets & private tokens can NEVER be read publicly
+      allow read, write: if isOwner() || isSuperAdmin();
+    }
+
+    match /clinics/{clinicId} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner() || isSuperAdmin() || isClinicAdmin();
+    }
+
+    match /org_memberships/{membershipId} {
+      allow read: if isOwner() || isSuperAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow write: if isOwner() || isSuperAdmin();
+    }
+
+    // =========================================================================
+    // 12. 👑 MASTER CATCH-ALL OVERRIDE
     // =========================================================================
     match /{document=**} {
       allow read, write: if isOwner();
