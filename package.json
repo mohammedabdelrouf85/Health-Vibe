@@ -30,7 +30,8 @@
     "test:operations": "node tests/operational_access.test.js",
     "test:clinical": "node tests/clinical_report_integrity.test.js",
     "test:state-machine": "node tests/state_machine_guards.test.js",
-    "test:concurrency": "node tests/two_browser_tabs_approval_conflict.test.js"
+    "test:concurrency": "node tests/two_browser_tabs_approval_conflict.test.js",
+    "test:partner": "node tests/partner_ecosystem_marketplace.test.js"
   },
   "keywords": [
     "health-vibe",
