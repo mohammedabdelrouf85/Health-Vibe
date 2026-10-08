@@ -5094,6 +5094,45 @@ function toFriendlyAppError(err, context = "") {
     };
   }
 
+  if (code.includes("credential-already-in-use")) {
+    return {
+      icon: "⚠️",
+      category: isEn ? "Account Conflict" : "تعارض في الحساب",
+      title: isEn ? "Sign-In Method Already Linked" : "وسيلة الدخول مرتبطة بحساب آخر",
+      message: isEn
+        ? "This credential is already connected to another Health Vibes profile. Medical records cannot be merged automatically."
+        : "وسيلة تسجيل الدخول هذه مرتبطة بالفعل بملف مستخدم آخر. لحماية خصوصية وسجلات المرضى، لا يمكن دمج الحسابات تلقائياً.",
+      action: isEn ? "Sign in using that method directly, or verify ownership of both accounts." : "يرجى تسجيل الدخول بتلك الوسيلة مباشرة، أو إثبات ملكية الحسابين للتنسيق.",
+      ref: code || "auth/credential-already-in-use"
+    };
+  }
+
+  if (code.includes("account-exists-with-different-credential")) {
+    return {
+      icon: "⚠️",
+      category: isEn ? "Account Conflict" : "تعارض في الحساب",
+      title: isEn ? "Account Exists with Password" : "الحساب مسجل مسبقاً بكلمة مرور",
+      message: isEn
+        ? "An account with this email address already exists using a password. Please sign in with your email and password first, then link Google from your Profile settings."
+        : "يوجد حساب مسجل بهذا البريد مسبقاً بكلمة المرور. يرجى تسجيل الدخول بالبريد وكلمة المرور أولاً، ثم ربط حساب Google من إعدادات الملف الشخصي.",
+      action: isEn ? "Enter your password to sign in and prove account ownership." : "أدخل كلمة المرور لتسجيل الدخول وإثبات ملكية الحساب.",
+      ref: code || "auth/account-exists-with-different-credential"
+    };
+  }
+
+  if (code.includes("popup-closed-by-user") || code.includes("cancelled-popup-request")) {
+    return {
+      icon: "ℹ️",
+      category: isEn ? "Authentication" : "المصادقة",
+      title: isEn ? "Sign-In Canceled" : "تم إلغاء تسجيل الدخول",
+      message: isEn
+        ? "The authentication popup was closed before completing the process."
+        : "تم إغلاق نافذة المصادقة قبل اكتمال العملية.",
+      action: isEn ? "You can try again whenever you are ready." : "يمكنك المحاولة مجدداً في أي وقت.",
+      ref: code || "auth/popup-closed-by-user"
+    };
+  }
+
   if (code.includes("weak-password")) {
     return {
       icon: "🛡️",
@@ -5619,6 +5658,20 @@ async function enterApp(source = "google") {
       showToast(currentLanguage === "en" ? "Signed in with Google" : "تم تسجيل الدخول بحساب جوجل");
     } catch (error) {
       console.error("Google Auth Error:", error);
+      const code = String(error.code || "").toLowerCase();
+      if (code === "auth/account-exists-with-different-credential") {
+        const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+        const conflict = window.HealthVibes?.AuthLinking?.handleAccountExistsConflict
+          ? window.HealthVibes.AuthLinking.handleAccountExistsConflict(error, isEn)
+          : null;
+        if (conflict) {
+          if (typeof authEmail !== "undefined" && authEmail && conflict.email) authEmail.value = conflict.email;
+          if (typeof setAuthMode === "function") setAuthMode("signin");
+          if (typeof authPassword !== "undefined" && authPassword) authPassword.focus();
+          showAuthError(conflict.message);
+          return;
+        }
+      }
       showAuthError(getAuthErrorMessage(error));
     }
   }
@@ -6926,6 +6979,10 @@ async function loadUserProfileData() {
 
   handleSexOrDobChange();
   updateProfileBmi();
+
+  if (window.HealthVibes?.AuthLinkingUI?.renderProvidersInProfile) {
+    window.HealthVibes.AuthLinkingUI.renderProvidersInProfile(user);
+  }
 }
 
 async function saveUserProfileData() {
