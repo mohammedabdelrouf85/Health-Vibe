@@ -1109,7 +1109,863 @@
   }
 
   // ===========================================================================
-  // 7. EXPORTS & ATTACHMENT TO HEALTHVIBES GLOBAL
+  // 7. STRUCTURED CLINICAL CLARIFICATION THREAD ENGINE
+  // ===========================================================================
+
+  const PERMITTED_ATTACHMENT_CONFIG = {
+    mimeTypes: ["application/pdf", "image/jpeg", "image/png"],
+    extensions: [".pdf", ".jpg", ".jpeg", ".png"],
+    maxSizeBytes: 10 * 1024 * 1024, // 10MB
+    maxSizeLabel: "10 MB"
+  };
+
+  const CLINICAL_MEASUREMENT_UNITS = {
+    oxygenLevel: { nameEn: "Oxygen Saturation (SpO2)", nameAr: "تشبع الأكسجين (SpO2)", unit: "%", icon: "🫁" },
+    temperature: { nameEn: "Body Temperature", nameAr: "حرارة الجسم", unit: "°C", icon: "🌡️" },
+    heartRate: { nameEn: "Heart Rate / Pulse", nameAr: "النبض", unit: "bpm", icon: "💓" },
+    respiratoryRate: { nameEn: "Respiratory Rate", nameAr: "معدل التنفس", unit: "breaths/min", icon: "🫁" },
+    systolicBp: { nameEn: "Systolic Blood Pressure", nameAr: "ضغط الدم الانقباضي", unit: "mmHg", icon: "🩸" },
+    diastolicBp: { nameEn: "Diastolic Blood Pressure", nameAr: "ضغط الدم الانبساطي", unit: "mmHg", icon: "🩸" },
+    bloodGlucose: { nameEn: "Blood Glucose", nameAr: "سكر الدم", unit: "mg/dL", icon: "🩸" }
+  };
+
+  function formatBytes(bytes) {
+    if (!bytes || isNaN(bytes)) return "";
+    const b = Number(bytes);
+    if (b < 1024) return `${b} B`;
+    if (b < 1048576) return `${(b / 1024).toFixed(1)} KB`;
+    return `${(b / 1048576).toFixed(1)} MB`;
+  }
+
+  function validateAttachmentFile(file, isEn = null) {
+    if (!file) return { ok: false, error: "No file provided" };
+    const en = isEn !== null ? Boolean(isEn) : ((global.currentLanguage || "ar") === "en");
+    const name = file.name || "";
+    const ext = name.includes(".") ? name.slice(name.lastIndexOf(".")).toLowerCase() : "";
+    const type = file.type || "";
+    const size = file.size || 0;
+
+    const extAllowed = PERMITTED_ATTACHMENT_CONFIG.extensions.includes(ext);
+    const mimeAllowed = !type || PERMITTED_ATTACHMENT_CONFIG.mimeTypes.includes(type);
+
+    if (!extAllowed || (!mimeAllowed && type)) {
+      return {
+        ok: false,
+        error: en
+          ? `Invalid file type '${ext || "unknown"}'. Permitted types: ${PERMITTED_ATTACHMENT_CONFIG.extensions.join(", ")}`
+          : `نوع الملف '${ext || "غير محدد"}' غير مسموح به. الأنواع المصرح بها: ${PERMITTED_ATTACHMENT_CONFIG.extensions.join(", ")}`
+      };
+    }
+
+    if (size > PERMITTED_ATTACHMENT_CONFIG.maxSizeBytes) {
+      return {
+        ok: false,
+        error: en
+          ? `File size (${formatBytes(size)}) exceeds the 10MB limit.`
+          : `حجم الملف (${formatBytes(size)}) يتجاوز الحد الأقصى المسموح به (10MB).`
+      };
+    }
+
+    return { ok: true };
+  }
+
+  function escapeHtml(str) {
+    if (str == null) return "";
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function formatEventDateTime(isoStr, isEn = false) {
+    if (!isoStr) return isEn ? "Not recorded" : "غير مسجل";
+    try {
+      const d = new Date(isoStr);
+      if (isNaN(d.getTime())) return String(isoStr);
+      return d.toLocaleString(isEn ? "en-US" : "ar-EG", {
+        dateStyle: "medium",
+        timeStyle: "short"
+      });
+    } catch (_) {
+      return String(isoStr);
+    }
+  }
+
+  function extractClarificationThread(c, currentRole = "doctor") {
+    if (!c) return { cycles: [], totalCycles: 0, activeOutstandingCycle: null, hasUnansweredRequest: false };
+
+    const isEn = (global.currentLanguage || "ar") === "en";
+    const cycles = [];
+
+    // Helper: is revision acknowledged by doctor in UI session store?
+    const isAckInStore = (typeof localStorage !== "undefined" && c.id)
+      ? Boolean(localStorage.getItem(`hv_rev_ack_${c.id}`))
+      : false;
+
+    // Helper: find doctor review event occurring AFTER a given timestamp
+    function findDoctorReviewEvent(afterTimestampIso) {
+      if (!Array.isArray(c.statusHistory) || !afterTimestampIso) return null;
+      const afterMs = new Date(afterTimestampIso).getTime();
+      return c.statusHistory.find(evt => {
+        const evtTime = evt.changedAt ? new Date(evt.changedAt).getTime() : 0;
+        if (evtTime <= afterMs) return false;
+        const isDocRole = evt.changedByRole === "doctor" || (evt.actor && evt.actor.role === "doctor");
+        const isReviewStatus = evt.status === "under_review" || evt.status === "approved" || evt.newStatus === "under_review" || evt.newStatus === "approved";
+        return isDocRole || isReviewStatus;
+      }) || null;
+    }
+
+    // 1. Direct explicit clarificationCycles array if stored on case
+    if (Array.isArray(c.clarificationCycles) && c.clarificationCycles.length > 0) {
+      c.clarificationCycles.forEach((rawCycle, idx) => {
+        const cycleNum = rawCycle.cycle || (idx + 1);
+        const reqTime = rawCycle.request?.timestamp || rawCycle.request?.requestedAt || rawCycle.requestedAt || c.lastInfoRequestedAt || c.submittedAt;
+        const respTime = rawCycle.response?.timestamp || rawCycle.response?.submittedAt || rawCycle.response?.respondedAt || rawCycle.respondedAt || null;
+        const hasReply = Boolean(rawCycle.response && (rawCycle.response.patientNotes || rawCycle.response.note || respTime));
+
+        let state = (rawCycle.status === "unanswered" || rawCycle.state === "unanswered") ? "unanswered" : "unanswered";
+        let stateEventTime = rawCycle.eventTimestamp || reqTime;
+        let stateEventDesc = isEn ? "Doctor Information Request Event" : "حدث طلب بيانات سريرية من الطبيب";
+
+        if (hasReply) {
+          const reviewEvt = findDoctorReviewEvent(respTime);
+          const isReviewed = isAckInStore ||
+            c.doctorApproved ||
+            Boolean(reviewEvt) ||
+            rawCycle.reviewed === true ||
+            rawCycle.status === "reviewed" ||
+            rawCycle.state === "reviewed" ||
+            Boolean(rawCycle.reviewedAt);
+
+          if (isReviewed) {
+            state = "reviewed";
+            stateEventTime = rawCycle.reviewedAt || rawCycle.eventTimestamp || reviewEvt?.changedAt || c.approvedAt || c.reviewedAt || respTime;
+            stateEventDesc = isEn ? "Physician Review Verification Event" : "حدث تدقيق واعتماد الطبيب للمراجعة";
+          } else {
+            state = "submitted";
+            stateEventTime = rawCycle.eventTimestamp || respTime;
+            stateEventDesc = isEn ? "Patient Clarification Submission Event" : "حدث تقديم إفادة المريض السريرية";
+          }
+        }
+
+        cycles.push({
+          cycle: cycleNum,
+          requestId: rawCycle.requestId || `req_info_${c.id}_c${cycleNum}`,
+          request: {
+            authorName: rawCycle.request?.doctorName || rawCycle.request?.doctorNameEn || rawCycle.request?.authorName || c.requestingDoctorName || (isEn ? "Attending Physician" : "الطبيب المعالج"),
+            authorRole: "doctor",
+            specialty: rawCycle.request?.specialty || c.doctorSpecialty || (isEn ? "Chest & Respiratory" : "أمراض الصدر والجهاز التنفسي"),
+            timestamp: reqTime,
+            clinicalRationale: rawCycle.request?.note || rawCycle.request?.noteEn || rawCycle.request?.clinicalRationale || rawCycle.clinicalRationale || c.moreInfoNote || c.doctorNote || "",
+            requestedFields: rawCycle.request?.requestedFields || ["oxygenLevel"],
+            permittedAttachments: PERMITTED_ATTACHMENT_CONFIG
+          },
+          response: hasReply ? {
+            authorName: rawCycle.response?.patientName || rawCycle.response?.authorName || c.name || c.patientName || (isEn ? "Patient" : "المريض"),
+            authorRole: "patient",
+            timestamp: respTime,
+            patientNotes: rawCycle.response?.patientNotes || rawCycle.response?.note || rawCycle.patientNotes || c.patientResponse || "",
+            measurements: rawCycle.response?.measurements || [],
+            attachments: rawCycle.response?.attachments || rawCycle.response?.files || c.files || []
+          } : null,
+          state,
+          stateMeta: {
+            code: state,
+            labelEn: state === "unanswered" ? "Unanswered (Awaiting Patient)" : (state === "submitted" ? "Submitted (Pending Doctor Review)" : "Reviewed & Certified"),
+            labelAr: state === "unanswered" ? "بانتظار رد المريض (معلق)" : (state === "submitted" ? "تم تقديم الإفادة (بانتظار تدقيق الطبيب)" : "تمت المراجعة والتدقيق السريري"),
+            icon: state === "unanswered" ? "⏳" : (state === "submitted" ? "📩" : "✅"),
+            pillClass: state === "unanswered" ? "pending" : (state === "submitted" ? "info" : "ok"),
+            eventTimestamp: stateEventTime,
+            eventProvenance: stateEventDesc
+          }
+        });
+      });
+    }
+    // 2. Or parse from statusHistory events
+    else {
+      const history = Array.isArray(c.statusHistory) ? c.statusHistory : [];
+      const reqEvents = [];
+      const replyEvents = [];
+
+      history.forEach(evt => {
+        const st = evt.status || evt.newStatus;
+        if (st === "more_info_requested") {
+          reqEvents.push(evt);
+        } else if (
+          st === "under_review" &&
+          (evt.changedByRole === "patient" || (evt.actor && evt.actor.role === "patient") || (evt.note && String(evt.note).includes("Patient submitted requested info")))
+        ) {
+          replyEvents.push(evt);
+        }
+      });
+
+      if (reqEvents.length > 0) {
+        reqEvents.forEach((rEvt, idx) => {
+          const cycleNum = idx + 1;
+          const pEvt = replyEvents[idx] || null;
+          const reqTime = rEvt.changedAt || rEvt.timestamp || c.lastInfoRequestedAt || c.submittedAt;
+          const respTime = pEvt ? (pEvt.changedAt || pEvt.timestamp) : (idx === reqEvents.length - 1 ? c.patientRespondedAt : null);
+          const hasReply = Boolean(pEvt || (idx === reqEvents.length - 1 && c.patientResponse));
+
+          let state = "unanswered";
+          let stateEventTime = reqTime;
+          let stateEventDesc = isEn ? "Doctor Information Request Event" : "حدث طلب بيانات سريرية من الطبيب";
+
+          if (hasReply) {
+            const reviewEvt = findDoctorReviewEvent(respTime);
+            const isReviewed = isAckInStore || c.doctorApproved || Boolean(reviewEvt) || (idx < reqEvents.length - 1);
+
+            if (isReviewed) {
+              state = "reviewed";
+              stateEventTime = reviewEvt?.changedAt || c.approvedAt || c.reviewedAt || respTime;
+              stateEventDesc = isEn ? "Physician Review Verification Event" : "حدث تدقيق واعتماد الطبيب للمراجعة";
+            } else {
+              state = "submitted";
+              stateEventTime = respTime;
+              stateEventDesc = isEn ? "Patient Clarification Submission Event" : "حدث تقديم إفادة المريض السريرية";
+            }
+          }
+
+          // Build measurements array from case vitals
+          const measurements = [];
+          if (hasReply) {
+            if (c.o2 || c.oxygenLevel) {
+              measurements.push({
+                type: "oxygenLevel",
+                nameEn: CLINICAL_MEASUREMENT_UNITS.oxygenLevel.nameEn,
+                nameAr: CLINICAL_MEASUREMENT_UNITS.oxygenLevel.nameAr,
+                value: c.o2 || c.oxygenLevel,
+                unit: "%",
+                icon: "🫁"
+              });
+            }
+            if (c.temperature) {
+              measurements.push({
+                type: "temperature",
+                nameEn: CLINICAL_MEASUREMENT_UNITS.temperature.nameEn,
+                nameAr: CLINICAL_MEASUREMENT_UNITS.temperature.nameAr,
+                value: c.temperature,
+                unit: "°C",
+                icon: "🌡️"
+              });
+            }
+            if (c.bp || c.systolicBp) {
+              const bpVal = c.systolicBp && c.diastolicBp ? `${c.systolicBp}/${c.diastolicBp}` : (c.bp || "--");
+              measurements.push({
+                type: "systolicBp",
+                nameEn: CLINICAL_MEASUREMENT_UNITS.systolicBp.nameEn,
+                nameAr: CLINICAL_MEASUREMENT_UNITS.systolicBp.nameAr,
+                value: bpVal,
+                unit: "mmHg",
+                icon: "🩸"
+              });
+            }
+          }
+
+          cycles.push({
+            cycle: cycleNum,
+            requestId: `req_info_${c.id}_c${cycleNum}`,
+            request: {
+              authorName: rEvt.changedByName || rEvt.actor?.name || c.requestingDoctorName || (isEn ? "Attending Physician" : "الطبيب المعالج"),
+              authorRole: "doctor",
+              specialty: c.doctorSpecialty || (isEn ? "Chest & Respiratory" : "أمراض الصدر والجهاز التنفسي"),
+              timestamp: reqTime,
+              clinicalRationale: rEvt.note || rEvt.reason || c.moreInfoNote || c.doctorNote || "",
+              requestedFields: ["oxygenLevel", "temperature"],
+              permittedAttachments: PERMITTED_ATTACHMENT_CONFIG
+            },
+            response: hasReply ? {
+              authorName: pEvt?.changedByName || pEvt?.actor?.name || c.name || c.patientName || (isEn ? "Patient" : "المريض"),
+              authorRole: "patient",
+              timestamp: respTime,
+              patientNotes: pEvt?.note || c.patientResponse || (isEn ? "Updated clinical observations submitted" : "تم تقديم الإفادة السريرية المطلوبة"),
+              measurements,
+              attachments: Array.isArray(c.files) ? c.files : []
+            } : null,
+            state,
+            stateMeta: {
+              code: state,
+              labelEn: state === "unanswered" ? "Unanswered (Awaiting Patient)" : (state === "submitted" ? "Submitted (Pending Doctor Review)" : "Reviewed & Certified"),
+              labelAr: state === "unanswered" ? "بانتظار رد المريض (معلق)" : (state === "submitted" ? "تم تقديم الإفادة (بانتظار تدقيق الطبيب)" : "تمت المراجعة والتدقيق السريري"),
+              icon: state === "unanswered" ? "⏳" : (state === "submitted" ? "📩" : "✅"),
+              pillClass: state === "unanswered" ? "pending" : (state === "submitted" ? "info" : "ok"),
+              eventTimestamp: stateEventTime,
+              eventProvenance: stateEventDesc
+            }
+          });
+        });
+      }
+      // 3. Fallback to flat case properties if any clarification note exists
+      else if (c.moreInfoNote || c.status === "more_info_requested" || c.patientResponse) {
+        const reqTime = c.lastInfoRequestedAt || c.moreInfoRequestedAt || c.submittedAt || new Date().toISOString();
+        const respTime = c.patientRespondedAt || c.lastInfoRepliedAt || null;
+        const hasReply = Boolean(c.patientResponse);
+
+        let state = "unanswered";
+        let stateEventTime = reqTime;
+        let stateEventDesc = isEn ? "Doctor Information Request Event" : "حدث طلب بيانات سريرية من الطبيب";
+
+        if (hasReply) {
+          const reviewEvt = findDoctorReviewEvent(respTime);
+          const isReviewed = isAckInStore || c.doctorApproved || Boolean(reviewEvt) || (!isRevisionStale(c) && (c.clinicalRevision || 1) > 1);
+
+          if (isReviewed) {
+            state = "reviewed";
+            stateEventTime = reviewEvt?.changedAt || c.approvedAt || c.reviewedAt || respTime;
+            stateEventDesc = isEn ? "Physician Review Verification Event" : "حدث تدقيق واعتماد الطبيب للمراجعة";
+          } else {
+            state = "submitted";
+            stateEventTime = respTime;
+            stateEventDesc = isEn ? "Patient Clarification Submission Event" : "حدث تقديم إفادة المريض السريرية";
+          }
+        }
+
+        const measurements = [];
+        if (hasReply) {
+          if (c.o2 || c.oxygenLevel) {
+            measurements.push({
+              type: "oxygenLevel",
+              nameEn: CLINICAL_MEASUREMENT_UNITS.oxygenLevel.nameEn,
+              nameAr: CLINICAL_MEASUREMENT_UNITS.oxygenLevel.nameAr,
+              value: c.o2 || c.oxygenLevel,
+              unit: "%",
+              icon: "🫁"
+            });
+          }
+          if (c.temperature) {
+            measurements.push({
+              type: "temperature",
+              nameEn: CLINICAL_MEASUREMENT_UNITS.temperature.nameEn,
+              nameAr: CLINICAL_MEASUREMENT_UNITS.temperature.nameAr,
+              value: c.temperature,
+              unit: "°C",
+              icon: "🌡️"
+            });
+          }
+          if (c.bp || c.systolicBp) {
+            const bpVal = c.systolicBp && c.diastolicBp ? `${c.systolicBp}/${c.diastolicBp}` : (c.bp || "--");
+            measurements.push({
+              type: "systolicBp",
+              nameEn: CLINICAL_MEASUREMENT_UNITS.systolicBp.nameEn,
+              nameAr: CLINICAL_MEASUREMENT_UNITS.systolicBp.nameAr,
+              value: bpVal,
+              unit: "mmHg",
+              icon: "🩸"
+            });
+          }
+        }
+
+        cycles.push({
+          cycle: 1,
+          requestId: `req_info_${c.id}_c1`,
+          request: {
+            authorName: c.requestingDoctorName || (isEn ? "Attending Physician" : "الطبيب المعالج"),
+            authorRole: "doctor",
+            specialty: c.doctorSpecialty || (isEn ? "Chest & Respiratory" : "أمراض الصدر والجهاز التنفسي"),
+            timestamp: reqTime,
+            clinicalRationale: c.moreInfoNote || c.doctorNote || (isEn ? "Please provide updated clinical observations" : "يرجى تزويدنا بتحديث للأعراض والقياسات الحالية"),
+            requestedFields: ["oxygenLevel", "temperature"],
+            permittedAttachments: PERMITTED_ATTACHMENT_CONFIG
+          },
+          response: hasReply ? {
+            authorName: c.name || c.patientName || (isEn ? "Patient" : "المريض"),
+            authorRole: "patient",
+            timestamp: respTime,
+            patientNotes: c.patientResponse,
+            measurements,
+            attachments: Array.isArray(c.files) ? c.files : []
+          } : null,
+          state,
+          stateMeta: {
+            code: state,
+            labelEn: state === "unanswered" ? "Unanswered (Awaiting Patient)" : (state === "submitted" ? "Submitted (Pending Doctor Review)" : "Reviewed & Certified"),
+            labelAr: state === "unanswered" ? "بانتظار رد المريض (معلق)" : (state === "submitted" ? "تم تقديم الإفادة (بانتظار تدقيق الطبيب)" : "تمت المراجعة والتدقيق السريري"),
+            icon: state === "unanswered" ? "⏳" : (state === "submitted" ? "📩" : "✅"),
+            pillClass: state === "unanswered" ? "pending" : (state === "submitted" ? "info" : "ok"),
+            eventTimestamp: stateEventTime,
+            eventProvenance: stateEventDesc
+          }
+        });
+      }
+    }
+
+    const activeOutstandingCycle = cycles.find(cyc => cyc.state === "unanswered") || null;
+
+    return {
+      cycles,
+      totalCycles: cycles.length,
+      activeOutstandingCycle,
+      hasUnansweredRequest: Boolean(activeOutstandingCycle)
+    };
+  }
+
+  function renderClarificationThreadHtml(c, isEn = false, currentRole = "doctor") {
+    if (!c) return "";
+
+    const threadData = extractClarificationThread(c, currentRole);
+    const { cycles, totalCycles } = threadData;
+
+    // Strict Role Separation: Clinician private notes are NEVER included in this thread.
+    // Display privacy reassurance notice
+    const privacyNoticeHtml = currentRole === "doctor"
+      ? `
+        <div style="padding: 8px 12px; background: rgba(14, 165, 164, 0.06); border-radius: 8px; border: 1px dashed var(--line); font-size: 11.5px; color: var(--muted); margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+          <span>🔒</span>
+          <span>${isEn ? "Internal Clinician Notes Isolated: Private clinical diagnosis and notes are strictly kept separate and hidden from patients." : "الملاحظات والتشخيصات الداخلية للطبيب منفصلة تماماً ومحجوبة عن المريض."}</span>
+        </div>
+      `
+      : "";
+
+    // Empty state: No requests yet
+    if (cycles.length === 0) {
+      return `
+        <div class="clarification-thread-container">
+          ${privacyNoticeHtml}
+          <div class="clarification-empty-thread" style="text-align: center; padding: 26px 16px; background: var(--surface-2); border-radius: 14px; border: 1px dashed var(--line);">
+            <div style="font-size: 30px; margin-bottom: 8px;">💬</div>
+            <strong style="color: var(--ink); font-size: 14px; display: block; margin-bottom: 4px;">
+              ${isEn ? "No Clarification Requests Issued" : "لا توجد طلبات إيضاحات سريرية لهذه الحالة"}
+            </strong>
+            <p style="margin: 0 0 14px; font-size: 12.5px; color: var(--muted); max-width: 440px; margin-inline: auto; line-height: 1.5;">
+              ${isEn
+                ? "If you require extra clinical tests, resting SpO2, or patient observations, you can issue a formal versioned information request."
+                : "إذا كنت بحاجة إلى فحوصات إضافية، أو إعادة قياس الأكسجين أثناء الراحة، أو توضيحات من المريض، يمكنك إصدار طلب بيانات سريري موثق."}
+            </p>
+            ${currentRole === "doctor" ? `
+              <button type="button" class="btn-clinical request-info" onclick="requestMoreInfo('${c.id}')" style="display: inline-flex; font-size: 12.5px; padding: 7px 16px;">
+                <span>❓</span> <span>${isEn ? "Request Additional Information" : "طلب إيضاحات أو قياسات إضافية"}</span>
+              </button>
+            ` : ""}
+          </div>
+        </div>
+      `;
+    }
+
+    // Render Cycles
+    const cyclesHtml = cycles.map(cycle => {
+      const { stateMeta, request, response } = cycle;
+      const reqDateStr = formatEventDateTime(request.timestamp, isEn);
+      const respDateStr = response ? formatEventDateTime(response.timestamp, isEn) : "";
+      const auditDateStr = formatEventDateTime(stateMeta.eventTimestamp, isEn);
+
+      // Measurements HTML
+      const measurementsHtml = (response && Array.isArray(response.measurements) && response.measurements.length > 0)
+        ? `
+          <div class="thread-measurements-grid">
+            ${response.measurements.map(m => `
+              <div class="measurement-chip">
+                <div class="measurement-chip-header">
+                  <span>${m.icon || "📊"} ${isEn ? (m.nameEn || m.type) : (m.nameAr || m.type)}</span>
+                </div>
+                <div class="measurement-chip-value">
+                  <span>${m.value}</span>
+                  <span class="measurement-chip-unit">${m.unit}</span>
+                </div>
+              </div>
+            `).join("")}
+          </div>
+        `
+        : "";
+
+      // Attachments HTML
+      const attachmentsHtml = (response && Array.isArray(response.attachments) && response.attachments.length > 0)
+        ? `
+          <div style="margin-top: 10px;">
+            <span style="font-size: 11.5px; font-weight: 700; color: var(--muted); display: block; margin-bottom: 4px;">
+              📎 ${isEn ? "Attached Medical Records:" : "الملفات والتقارير المرفقة:"}
+            </span>
+            <div class="thread-attachments-list">
+              ${response.attachments.map(f => {
+                const isPdf = (f.name || "").toLowerCase().endsWith(".pdf") || (f.type || "").includes("pdf");
+                const icon = isPdf ? "📄" : "🖼️";
+                return `
+                  <div class="thread-attachment-chip">
+                    <span>${icon}</span>
+                    <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 170px;">${escapeHtml(f.name || "medical_record")}</span>
+                    <span class="file-size">(${f.sizeLabel || formatBytes(f.size) || "File"})</span>
+                    <span class="pill ok" style="font-size: 9.5px; padding: 1px 5px;">🛡️ ${isEn ? "Verified" : "آمن"}</span>
+                  </div>
+                `;
+              }).join("")}
+            </div>
+          </div>
+        `
+        : "";
+
+      // Patient Response Card or Direct Action Form
+      let responseBlockHtml = "";
+      if (response) {
+        responseBlockHtml = `
+          <div class="thread-message patient-response" tabindex="0">
+            <div class="message-meta-header">
+              <div class="message-author-tag">
+                <span style="font-size: 15px;">👤</span>
+                <strong style="color: var(--teal);">${escapeHtml(response.authorName)}</strong>
+                <span class="pill info" style="font-size: 10px; padding: 1px 6px;">${isEn ? "Patient Submission" : "إفادة المريض"}</span>
+              </div>
+              <span class="message-timestamp">🕒 ${respDateStr}</span>
+            </div>
+            <p class="message-body-text">${escapeHtml(response.patientNotes)}</p>
+            ${measurementsHtml}
+            ${attachmentsHtml}
+          </div>
+        `;
+      } else {
+        // UNANSWERED STATE:
+        // If current role is patient (or action allowed), render DIRECT ACTION FORM!
+        if (currentRole === "patient") {
+          responseBlockHtml = `
+            <div class="thread-direct-action-card" id="threadActionCard_${c.id}_${cycle.cycle}">
+              <div class="thread-action-header">
+                <span class="action-icon">✍️</span>
+                <div>
+                  <h5 style="margin: 0; font-size: 14px; font-weight: 800; color: var(--ink);">
+                    ${isEn ? "Direct Action: Answer Physician Request" : "إجراء مباشر: تقديم الإفادة والرد على الطبيب"}
+                  </h5>
+                  <small style="color: var(--muted); font-size: 11.5px;">
+                    ${isEn ? "Provide your observations and updated measurements to resume clinical review." : "أدخل إفادتك والقياسات المحدثة لاستئناف الفحص السريري من قبل الطبيب."}
+                  </small>
+                </div>
+              </div>
+
+              <div class="thread-action-body">
+                <div style="margin-bottom: 12px;">
+                  <label for="threadReplyText_${c.id}" style="font-size: 12.5px; font-weight: 700; color: var(--ink); display: block; margin-bottom: 6px;">
+                    ${isEn ? "1. Your Clarification Notes / Symptoms *" : "1. إفادتك وتوضيح تطور الأعراض *"}
+                  </label>
+                  <textarea id="threadReplyText_${c.id}" class="thread-reply-textarea" placeholder="${isEn ? 'Describe your current symptoms, rest status, or answers to the doctor...' : 'صف تطور الأعراض الحالية، حالتك بعد الراحة، أو إجابات استفسار الطبيب...'}" rows="3"></textarea>
+                </div>
+
+                <div class="thread-vitals-inputs-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 12px;">
+                  <div>
+                    <label for="threadReplyO2_${c.id}" style="font-size: 11.5px; font-weight: 700; color: var(--muted); display: block; margin-bottom: 4px;">
+                      🫁 ${isEn ? "Oxygen (SpO2 %)" : "الأكسجين (SpO2 %)"}
+                    </label>
+                    <div style="display: flex; align-items: center; position: relative;">
+                      <input type="number" id="threadReplyO2_${c.id}" min="50" max="100" placeholder="${c.oxygenLevel || c.o2 || '98'}" style="width: 100%; padding: 7px 10px; font-size: 13px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); scroll-margin-bottom: 120px;" />
+                      <span style="position: absolute; inset-inline-end: 8px; font-size: 11px; font-weight: 700; color: var(--muted); pointer-events: none;">%</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label for="threadReplyTemp_${c.id}" style="font-size: 11.5px; font-weight: 700; color: var(--muted); display: block; margin-bottom: 4px;">
+                      🌡️ ${isEn ? "Temp (°C)" : "الحرارة (°C)"}
+                    </label>
+                    <div style="display: flex; align-items: center; position: relative;">
+                      <input type="number" id="threadReplyTemp_${c.id}" step="0.1" min="34" max="43" placeholder="${c.temperature || '37.0'}" style="width: 100%; padding: 7px 10px; font-size: 13px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); scroll-margin-bottom: 120px;" />
+                      <span style="position: absolute; inset-inline-end: 8px; font-size: 11px; font-weight: 700; color: var(--muted); pointer-events: none;">°C</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label for="threadReplyBp_${c.id}" style="font-size: 11.5px; font-weight: 700; color: var(--muted); display: block; margin-bottom: 4px;">
+                      🩸 ${isEn ? "Blood Pressure" : "ضغط الدم"}
+                    </label>
+                    <div style="display: flex; align-items: center; position: relative;">
+                      <input type="text" id="threadReplyBp_${c.id}" placeholder="120/80" style="width: 100%; padding: 7px 10px; font-size: 13px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); scroll-margin-bottom: 120px;" />
+                      <span style="position: absolute; inset-inline-end: 8px; font-size: 10px; font-weight: 700; color: var(--muted); pointer-events: none;">mmHg</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div style="margin-bottom: 14px; padding: 10px 12px; background: var(--surface); border: 1px dashed var(--line); border-radius: 10px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 6px;">
+                    <label for="threadReplyFiles_${c.id}" style="font-size: 12px; font-weight: 700; color: var(--ink); cursor: pointer;">
+                      📎 ${isEn ? "Attach Medical Reports / Images (Optional):" : "إرفاق تقارير طبية أو صور فحوصات (اختياري):"}
+                    </label>
+                    <span class="pill info" style="font-size: 10px;">${isEn ? "Permitted: PDF, JPEG, PNG • Max 10MB" : "المسموح: PDF, JPEG, PNG • بحد أقصى 10MB"}</span>
+                  </div>
+                  <input type="file" id="threadReplyFiles_${c.id}" accept=".pdf,.jpg,.jpeg,.png" multiple style="font-size: 12px; width: 100%; color: var(--ink);" />
+                  <div id="threadFileValidationMsg_${c.id}" style="font-size: 11px; color: #ef4444; margin-top: 4px; display: none;"></div>
+                </div>
+
+                <div style="display: flex; justify-content: flex-end;">
+                  <button type="button" class="solid-button" id="btnSubmitClarificationReply_${c.id}" onclick="HealthVibes.DoctorUI.submitClarificationReply('${c.id}', '${cycle.requestId}')" style="background: #ea580c; border-color: #ea580c; padding: 9px 22px; font-size: 13px; font-weight: 800; display: inline-flex; align-items: center; gap: 8px; border-radius: 10px;">
+                    <span>📤</span> <span>${isEn ? "Submit Clarification to Doctor" : "إرسال الإفادة والقياسات للطبيب"}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          `;
+        } else {
+          // Doctor view when unanswered
+          responseBlockHtml = `
+            <div class="thread-doctor-waiting-notice" style="background: rgba(251, 146, 60, 0.08); border: 1.5px dashed #fb923c; border-radius: 12px; padding: 14px; margin-top: 10px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span style="font-size: 20px;">⏳</span>
+                  <div>
+                    <strong style="color: #c2410c; font-size: 13.5px; display: block;">
+                      ${isEn ? "Outstanding Request: Awaiting Patient Response" : "طلب معلق: بانتظار إفادة ورد المريض"}
+                    </strong>
+                    <span style="font-size: 11.5px; color: var(--muted);">
+                      ${isEn ? "Issued on: " + reqDateStr : "تاريخ الطلب: " + reqDateStr}
+                    </span>
+                  </div>
+                </div>
+                <span class="pill pending" style="font-size: 11px; font-weight: 700;">
+                  ${isEn ? "Action Required from Patient" : "مطلوب الإفادة من المريض"}
+                </span>
+              </div>
+            </div>
+          `;
+        }
+      }
+
+      // Quick action for Doctor when submitted
+      const doctorSubmittedActionHtml = (currentRole === "doctor" && cycle.state === "submitted")
+        ? `
+          <div style="margin-top: 10px; padding: 10px 14px; background: rgba(16, 185, 129, 0.08); border: 1.5px solid #10b981; border-radius: 10px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span>📩</span>
+              <strong style="font-size: 12.5px; color: #047857;">${isEn ? "New Clarification Received: Review & Certification Required" : "تم استلام الإفادة: مطلوب تدقيق واعتماد الطبيب للمراجعة"}</strong>
+            </div>
+            <button type="button" class="btn-clinical resume" onclick="HealthVibes.DoctorUI.openFieldComparisonModal('${c.id}')" style="font-size: 11.5px; padding: 5px 12px;">
+              <span>🔍</span> <span>${isEn ? "Compare Changes & Review" : "مقارنة التغييرات والتدقيق"}</span>
+            </button>
+          </div>
+        `
+        : "";
+
+      return `
+        <article class="clarification-cycle-card state-${cycle.state}" id="clarificationCycle_${cycle.cycle}" aria-labelledby="cycleTitle_${cycle.cycle}">
+          <!-- Cycle Card Header -->
+          <header class="cycle-card-header">
+            <div class="cycle-title-row">
+              <span class="cycle-badge" id="cycleTitle_${cycle.cycle}">
+                📑 ${isEn ? "Cycle " + cycle.cycle + " of " + totalCycles : "الدورة " + cycle.cycle + " من " + totalCycles}
+              </span>
+              <span class="pill ${stateMeta.pillClass}">
+                <span class="state-icon">${stateMeta.icon}</span>
+                <span>${isEn ? stateMeta.labelEn : stateMeta.labelAr}</span>
+              </span>
+            </div>
+            <div style="font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 4px;">
+              <span>📍</span> <span>${stateMeta.eventProvenance}</span>
+            </div>
+          </header>
+
+          <!-- 1. Doctor Request Message -->
+          <div class="thread-message doctor-request" tabindex="0">
+            <div class="message-meta-header">
+              <div class="message-author-tag">
+                <span style="font-size: 15px;">🩺</span>
+                <strong style="color: #c2410c;">${escapeHtml(request.authorName)}</strong>
+                <span style="font-size: 11px; color: var(--muted);">(${escapeHtml(request.specialty)})</span>
+              </div>
+              <span class="message-timestamp">🕒 ${reqDateStr}</span>
+            </div>
+            <p class="message-body-text">${escapeHtml(request.clinicalRationale)}</p>
+
+            <!-- Permitted Attachments Guideline Box -->
+            <div class="permitted-attachments-notice">
+              <span>📎</span>
+              <div>
+                <strong>${isEn ? "Permitted Medical Attachments:" : "المرفقات والتقارير المسموح بها:"}</strong>
+                <span>${isEn ? "PDF reports, lab slips, JPEG/PNG diagnostic images (Max 10 MB per file)." : "تقارير PDF، صور الأشعة والتحاليل JPEG/PNG (بحد أقصى 10 ميجابايت لكل ملف)."}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. Patient Response Block (or Direct Action Form) -->
+          ${responseBlockHtml}
+
+          <!-- Quick review action for doctor when submitted -->
+          ${doctorSubmittedActionHtml}
+
+          <!-- Stored Event Audit Footer (strictly verifying state without fabricated receipts) -->
+          <footer class="thread-audit-footer">
+            <span>🛡️ ${isEn ? "Audit Verification:" : "التوثيق السريري المعتمد:"}</span>
+            <span class="thread-audit-provenance">
+              <span>${stateMeta.eventProvenance}</span> • <span>${auditDateStr}</span>
+            </span>
+          </footer>
+        </article>
+      `;
+    }).join("");
+
+    return `
+      <section class="clarification-thread-container" role="feed" aria-label="${isEn ? 'Clinical Clarification Thread' : 'مسار الاستفسارات والتدقيق السريري'}">
+        ${privacyNoticeHtml}
+        ${cyclesHtml}
+      </section>
+    `;
+  }
+
+  async function submitClarificationReply(caseId, requestId) {
+    if (typeof document === "undefined") return;
+    const isEn = (global.currentLanguage || "ar") === "en";
+
+    const notesInput = document.getElementById(`threadReplyText_${caseId}`);
+    const o2Input = document.getElementById(`threadReplyO2_${caseId}`);
+    const tempInput = document.getElementById(`threadReplyTemp_${caseId}`);
+    const bpInput = document.getElementById(`threadReplyBp_${caseId}`);
+    const fileInput = document.getElementById(`threadReplyFiles_${caseId}`);
+    const fileValidationMsg = document.getElementById(`threadFileValidationMsg_${caseId}`);
+
+    const notes = notesInput ? notesInput.value.trim() : "";
+    const rawO2 = o2Input ? o2Input.value.trim() : "";
+    const rawTemp = tempInput ? tempInput.value.trim() : "";
+    const rawBp = bpInput ? bpInput.value.trim() : "";
+
+    // Validate that at least something was provided
+    if (!notes && !rawO2 && !rawTemp && !rawBp && (!fileInput || !fileInput.files.length)) {
+      if (typeof global.showToast === "function") {
+        global.showToast(isEn ? "Please provide your clarification notes or updated measurements." : "يرجى كتابة إفادتك أو تزويدنا بالقياسات المطلوبة.");
+      }
+      if (notesInput) notesInput.focus();
+      return;
+    }
+
+    // Validate SpO2 if given
+    let parsedO2 = null;
+    if (rawO2) {
+      const val = parseFloat(rawO2);
+      if (isNaN(val) || val < 50 || val > 100) {
+        if (typeof global.showToast === "function") {
+          global.showToast(isEn ? "SpO2 must be a percentage between 50% and 100%." : "نسبة الأكسجين يجب أن تكون بين 50% و 100%.");
+        }
+        if (o2Input) o2Input.focus();
+        return;
+      }
+      parsedO2 = val;
+    }
+
+    // Validate temperature if given
+    let parsedTemp = null;
+    if (rawTemp) {
+      const val = parseFloat(rawTemp);
+      if (isNaN(val) || val < 34 || val > 43) {
+        if (typeof global.showToast === "function") {
+          global.showToast(isEn ? "Temperature must be between 34°C and 43°C." : "درجة الحرارة يجب أن تكون بين 34 و 43 مئوية.");
+        }
+        if (tempInput) tempInput.focus();
+        return;
+      }
+      parsedTemp = val;
+    }
+
+    // Validate attachments if given
+    const attachedFilesMeta = [];
+    if (fileInput && fileInput.files && fileInput.files.length > 0) {
+      for (const file of fileInput.files) {
+        const valRes = validateAttachmentFile(file);
+        if (!valRes.ok) {
+          if (fileValidationMsg) {
+            fileValidationMsg.textContent = valRes.error;
+            fileValidationMsg.style.display = "block";
+          }
+          if (typeof global.showToast === "function") {
+            global.showToast(valRes.error);
+          }
+          return;
+        }
+        attachedFilesMeta.push({
+          name: file.name,
+          size: file.size,
+          sizeLabel: formatBytes(file.size),
+          type: file.type || "application/octet-stream",
+          uploadedAt: new Date().toISOString()
+        });
+      }
+    }
+
+    // Disable button to prevent double-submit
+    const submitBtn = document.getElementById(`btnSubmitClarificationReply_${caseId}`);
+    if (submitBtn) {
+      submitBtn.setAttribute("disabled", "disabled");
+      submitBtn.style.opacity = "0.6";
+      submitBtn.innerHTML = `<span>⏳</span> <span>${isEn ? "Submitting..." : "جاري الإرسال..."}</span>`;
+    }
+
+    try {
+      const nowIso = new Date().toISOString();
+      const currentUser = global.auth?.currentUser || null;
+      const patientName = currentUser?.displayName || currentUser?.email || "Patient";
+      const finalReplyText = notes || (isEn ? "Submitted updated clinical observations." : "تم تسجيل القياسات المحدثة المطلوبة.");
+
+      // Check if global submitPatientMoreInfo pipeline exists
+      if (typeof global.submitPatientMoreInfo === "function" && document.getElementById("patientResponseInput")) {
+        const pRespEl = document.getElementById("patientResponseInput");
+        const pO2El = document.getElementById("patientNewO2Input");
+        if (pRespEl) pRespEl.value = finalReplyText;
+        if (pO2El && parsedO2 !== null) pO2El.value = parsedO2;
+        await global.submitPatientMoreInfo(caseId);
+      } else if (global.db) {
+        const historyItem = {
+          status: "under_review",
+          changedAt: nowIso,
+          changedBy: currentUser?.uid || "patient",
+          changedByName: patientName,
+          changedByRole: "patient",
+          note: isEn ? `Patient submitted requested info: ${finalReplyText.slice(0, 120)}` : `أرسل المريض البيانات المطلوبة: ${finalReplyText.slice(0, 120)}`
+        };
+
+        const updatePayload = {
+          status: "under_review",
+          patientResponse: finalReplyText,
+          patientRespondedAt: nowIso,
+          lastInfoRepliedAt: nowIso,
+          updatedAt: nowIso,
+          statusHistory: global.firebase?.firestore?.FieldValue
+            ? global.firebase.firestore.FieldValue.arrayUnion(historyItem)
+            : [historyItem]
+        };
+
+        if (parsedO2 !== null) {
+          updatePayload.oxygenLevel = parsedO2;
+          updatePayload.o2 = parsedO2;
+        }
+        if (parsedTemp !== null) {
+          updatePayload.temperature = parsedTemp;
+        }
+        if (rawBp) {
+          updatePayload.bp = rawBp;
+        }
+        if (attachedFilesMeta.length > 0) {
+          updatePayload.files = attachedFilesMeta;
+        }
+
+        await global.db.collection("cases").doc(caseId).update(updatePayload);
+      }
+
+      // Update in-memory state
+      const caseInState = (global.cases || []).find(c => c.id === caseId) ||
+                          (global.state?.doctorQueue || []).find(c => c.id === caseId);
+      if (caseInState) {
+        caseInState.status = "under_review";
+        caseInState.patientResponse = finalReplyText;
+        caseInState.patientRespondedAt = nowIso;
+        if (parsedO2 !== null) caseInState.o2 = parsedO2;
+        if (parsedTemp !== null) caseInState.temperature = parsedTemp;
+        if (attachedFilesMeta.length > 0) caseInState.files = attachedFilesMeta;
+      }
+
+      if (typeof global.showToast === "function") {
+        global.showToast(isEn ? "Clarification submitted! Case returned to physician." : "تم إرسال الإفادة بنجاح! الحالة الآن قيد فحص الطبيب.");
+      }
+
+      // Re-render UI
+      if (typeof global.renderDoctorDetail === "function" && global.activeCaseId === caseId) {
+        global.renderDoctorDetail(caseId);
+      } else if (typeof global.renderReportScreen === "function") {
+        global.renderReportScreen(caseId);
+      }
+    } catch (err) {
+      console.error("Error submitting clarification reply:", err);
+      if (typeof global.showToast === "function") {
+        global.showToast(isEn ? "Failed to submit clarification. Please try again." : "فشل إرسال الإفادة، يرجى المحاولة مرة أخرى.");
+      }
+      if (submitBtn) {
+        submitBtn.removeAttribute("disabled");
+        submitBtn.style.opacity = "1";
+        submitBtn.innerHTML = `<span>📤</span> <span>${isEn ? "Submit Clarification to Doctor" : "إرسال الإفادة والقياسات للطبيب"}</span>`;
+      }
+    }
+  }
+
+  // ===========================================================================
+  // 8. EXPORTS & ATTACHMENT TO HEALTHVIBES GLOBAL
   // ===========================================================================
 
   const DoctorUI = {
@@ -1143,13 +1999,30 @@
     returnToQueue,
     openCaseOnMobile,
     renderMobileNavBar,
-    renderReviewTabs
+    renderReviewTabs,
+    // Structured Clarification Thread
+    PERMITTED_ATTACHMENT_CONFIG,
+    CLINICAL_MEASUREMENT_UNITS,
+    validateAttachmentFile,
+    formatBytes,
+    extractClarificationThread,
+    renderClarificationThreadHtml,
+    submitClarificationReply
   };
 
   global.HealthVibes = global.HealthVibes || {};
   global.HealthVibes.DoctorUI = DoctorUI;
+  global.HealthVibes.ClarificationThread = {
+    extractClarificationThread,
+    renderClarificationThreadHtml,
+    submitClarificationReply,
+    validateAttachmentFile,
+    PERMITTED_ATTACHMENT_CONFIG,
+    CLINICAL_MEASUREMENT_UNITS
+  };
 
   if (typeof module !== "undefined" && module.exports) {
     module.exports = DoctorUI;
   }
 })(typeof window !== "undefined" ? window : globalThis);
+

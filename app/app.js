@@ -4761,44 +4761,25 @@ async function selectDoctorCase(id) {
     </section>
   `;
 
-  // 2. Grouped Patient Clarifications & Communications
+  // 2. Grouped Patient Clarifications & Structured Clarification Thread
+  const clarificationThreadContent = (window.HealthVibes?.DoctorUI?.renderClarificationThreadHtml)
+    ? window.HealthVibes.DoctorUI.renderClarificationThreadHtml(c, isEn, "doctor")
+    : `
+      <div style="padding: 16px; text-align: center; color: var(--muted); background: var(--surface-2); border-radius: 10px; font-size: 13px;">
+        💬 ${isEn ? "No active patient clarifications or pending information requests for this case." : "لا توجد استفسارات معلقة أو طلبات بيانات إضافية مفتوحة لهذه الحالة."}
+      </div>
+    `;
+
   const clarificationsSectionHtml = `
-    <section class="clinical-group-card" id="docSection-clarifications" role="region" aria-label="${isEn ? 'Patient Clarifications & Updates' : 'الاستفسارات وإفادات المريض'}">
+    <section class="clinical-group-card" id="docSection-clarifications" role="region" aria-label="${isEn ? 'Structured Clinical Clarification Thread' : 'مسار الاستفسارات والتدقيق السريري'}">
       <div class="clinical-group-header">
         <div class="group-title-row">
           <span class="group-icon">💬</span>
-          <h4>${isEn ? 'Patient Clarifications & Updates' : 'الاستفسارات وإفادات المريض'}</h4>
+          <h4>${isEn ? 'Structured Clinical Clarification Thread' : 'مسار الاستفسارات والتدقيق السريري'}</h4>
         </div>
         ${c.patientResponse ? `<span class="pill ok" style="font-size: 11px;">${isEn ? 'Response Received' : 'تم استلام الرد'}</span>` : (isMoreInfo ? `<span class="pill pending" style="font-size: 11px;">${isEn ? 'Awaiting Reply' : 'بانتظار الرد'}</span>` : `<span class="pill info" style="font-size: 11px;">${isEn ? 'No Pending Inquiry' : 'لا استفسار معلق'}</span>`)}
       </div>
-      ${(c.moreInfoNote || c.patientResponse || isMoreInfo) ? `
-        <div style="background: rgba(251, 146, 60, 0.08); border: 1.5px solid #fb923c; border-radius: 12px; padding: 14px; margin-bottom: 12px;">
-          <strong style="color: #c2410c; display: flex; align-items: center; gap: 6px; font-size: 13.5px; margin-bottom: 8px;">
-            <span>❓</span> ${isEn ? 'Physician Inquiry to Patient:' : 'استفسار الطبيب الموجه للمريض:'}
-          </strong>
-          <p style="margin: 0; font-size: 13px; color: var(--ink); line-height: 1.5; background: var(--surface); padding: 8px 12px; border-radius: 8px; border: 1px dashed rgba(251, 146, 60, 0.4);">
-            ${c.moreInfoNote || c.doctorNote || (isEn ? 'Please clarify current symptoms' : 'يرجى توضيح تطور الأعراض')}
-          </p>
-        </div>
-        ${c.patientResponse ? `
-          <div style="background: rgba(14, 165, 164, 0.1); border: 1.5px solid var(--teal); border-radius: 12px; padding: 14px;">
-            <strong style="color: var(--teal); display: flex; align-items: center; gap: 6px; font-size: 13.5px; margin-bottom: 8px;">
-              <span>📩</span> ${isEn ? 'Patient Clarification Response:' : 'رد وإفادة المريض الواردة:'}
-            </strong>
-            <p style="margin: 0; font-size: 13.5px; color: var(--ink); font-weight: 600; line-height: 1.5; background: var(--surface); padding: 10px 12px; border-radius: 8px;">
-              ${c.patientResponse}
-            </p>
-          </div>
-        ` : `
-          <div style="padding: 10px 12px; background: var(--surface-2); border-radius: 8px; font-size: 12.5px; color: var(--muted);">
-            🕒 ${isEn ? 'Waiting for patient to provide additional clarification.' : 'بانتظار إفادة المريض بالبيانات المطلوبة.'}
-          </div>
-        `}
-      ` : `
-        <div style="padding: 16px; text-align: center; color: var(--muted); background: var(--surface-2); border-radius: 10px; font-size: 13px;">
-          💬 ${isEn ? 'No active patient clarifications or pending information requests for this case.' : 'لا توجد استفسارات معلقة أو طلبات بيانات إضافية مفتوحة لهذه الحالة.'}
-        </div>
-      `}
+      ${clarificationThreadContent}
     </section>
   `;
 
@@ -7763,7 +7744,16 @@ async function renderReportScreen(targetCaseId = null) {
         </div>
       ` : '';
 
-      const moreInfoAlertHtml = caseData.status === CASE_STATUS.MORE_INFO_REQUESTED ? `
+      // Structured Clinical Clarification Thread (Patient Role)
+      const hasClarificationInfo = caseData.status === CASE_STATUS.MORE_INFO_REQUESTED
+        || (Array.isArray(caseData.clarificationCycles) && caseData.clarificationCycles.length > 0)
+        || (Array.isArray(caseData.requestHistory) && caseData.requestHistory.length > 0)
+        || Boolean(caseData.patientResponse)
+        || Boolean(caseData.moreInfoNote);
+
+      const moreInfoAlertHtml = (hasClarificationInfo && window.HealthVibes?.DoctorUI?.renderClarificationThreadHtml)
+        ? window.HealthVibes.DoctorUI.renderClarificationThreadHtml(caseData, isEn, "patient")
+        : (caseData.status === CASE_STATUS.MORE_INFO_REQUESTED ? `
         <div style="background: rgba(234, 88, 12, 0.08); border: 1.5px solid #ea580c; border-radius: 14px; padding: 18px; margin-bottom: 24px; text-align: ${isEn ? 'left' : 'right'};">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
             <strong style="color: #c2410c; display: flex; align-items: center; gap: 8px; font-size: 15px;">
@@ -7800,7 +7790,7 @@ async function renderReportScreen(targetCaseId = null) {
             </div>
           </div>
         </div>
-      ` : '';
+      ` : '');
 
       const rejectionAlertHtml = caseData.status === CASE_STATUS.REJECTED ? `
         <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; border-radius: 12px; padding: 14px; margin-bottom: 20px; text-align: ${isEn ? 'left' : 'right'};">
@@ -16256,8 +16246,8 @@ window.submitPatientMoreInfo = async function(caseId) {
     return;
   }
 
-  const responseEl = document.getElementById("patientResponseInput");
-  const newO2El = document.getElementById("patientNewO2Input");
+  const responseEl = document.getElementById("patientResponseInput") || document.getElementById(`threadReplyText_${caseId}`);
+  const newO2El = document.getElementById("patientNewO2Input") || document.getElementById(`threadReplyO2_${caseId}`);
   const responseText = responseEl ? responseEl.value.trim() : "";
   const parsedO2 = newO2El && newO2El.value.trim() ? parseStrictOxygenInput(newO2El.value) : { ok: false, value: null, reason: "empty" };
 
