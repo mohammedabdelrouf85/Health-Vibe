@@ -142,7 +142,12 @@ const titles = {
   audit: "سجل التدقيق",
   report: "التقرير",
   feedback: "التقييم والملاحظات",
-  kpi: "مؤشرات الأداء السريري (KPIs)"
+  kpi: "مؤشرات الأداء السريري (KPIs)",
+  disease: "الأمراض",
+  diabetes: "داء السكري",
+  hypertension: "ارتفاع ضغط الدم",
+  "blood-disorders": "تجلط الدم / اضطرابات الدم",
+  obesity: "السمنة"
 };
 
 // --- Real Role-Based Access Control (RBAC) Engine ---
@@ -275,24 +280,30 @@ const ROLE_PERMISSIONS_MAP = {
 const ROLE_ALLOWED_SCREENS = {
   [ROLES.PATIENT]: [
     "patient", "consent", "profile", "assessment", "pending", "result",
-    "history", "appointments", "feedback", "assistant", "report", "verify-report", "verify"
+    "history", "appointments", "feedback", "assistant", "report", "verify-report", "verify",
+    "diabetes", "hypertension", "blood-disorders", "obesity"
   ],
   [ROLES.DOCTOR_PENDING]: [
-    "patient", "verification", "history", "appointments", "feedback", "report", "profile", "verify-report", "verify"
+    "patient", "verification", "history", "appointments", "feedback", "report", "profile", "verify-report", "verify",
+    "diabetes", "hypertension", "blood-disorders", "obesity"
   ],
   [ROLES.DOCTOR]: [
-    "doctor", "verification", "history", "appointments", "feedback", "report", "profile", "kpi", "patient", "verify-report", "verify"
+    "doctor", "verification", "history", "appointments", "feedback", "report", "profile", "kpi", "patient", "verify-report", "verify",
+    "diabetes", "hypertension", "blood-disorders", "obesity"
   ],
   [ROLES.CLINIC_ADMIN]: [
-    "profile", "history", "appointments", "feedback", "doctor", "report", "admin", "audit", "kpi", "verify-report", "verify"
+    "profile", "history", "appointments", "feedback", "doctor", "report", "admin", "audit", "kpi", "verify-report", "verify",
+    "diabetes", "hypertension", "blood-disorders", "obesity"
   ],
   [ROLES.SUPPORT]: [
-    "profile", "kpi", "verify-report", "verify"
+    "profile", "kpi", "verify-report", "verify",
+    "diabetes", "hypertension", "blood-disorders", "obesity"
   ],
   [ROLES.SUPER_ADMIN]: [
     "patient", "consent", "profile", "assessment", "pending", "result",
     "history", "appointments", "feedback", "assistant", "verification",
-    "doctor", "kpi", "report", "admin", "audit", "verify-report", "verify"
+    "doctor", "kpi", "report", "admin", "audit", "verify-report", "verify",
+    "diabetes", "hypertension", "blood-disorders", "obesity"
   ]
 };
 
@@ -317,7 +328,8 @@ window.handleOpenDoctorApply = handleOpenDoctorApply;
 const AUTH_REQUIRED_SCREENS = [
   "consent", "profile", "assessment", "pending", "result",
   "history", "appointments", "feedback", "assistant", "report",
-  "verification", "doctor", "kpi", "admin", "audit"
+  "verification", "doctor", "kpi", "admin", "audit",
+  "diabetes", "hypertension", "blood-disorders", "obesity"
 ];
 
 /**
@@ -544,7 +556,7 @@ function hvSkeletonRows(count = 3, height = 72) {
 
 function setScreenBreadcrumb(name) {
   const screen = document.getElementById(`screen-${name}`);
-  if (!screen || !["admin", "doctor", "kpi", "audit", "verification", "report"].includes(name)) return;
+  if (!screen || !["admin", "doctor", "kpi", "audit", "verification", "report", "diabetes", "hypertension", "blood-disorders", "obesity"].includes(name)) return;
   let crumb = screen.querySelector(":scope > .hv-breadcrumb");
   if (!crumb) {
     crumb = document.createElement("nav");
@@ -730,7 +742,12 @@ const englishTitles = {
   audit: "Audit Log",
   report: "Report",
   feedback: "Feedback & Rating",
-  kpi: "KPI Dashboard"
+  kpi: "KPI Dashboard",
+  disease: "Disease",
+  diabetes: "Diabetes",
+  hypertension: "Hypertension",
+  "blood-disorders": "Blood Clotting / Blood Disorders",
+  obesity: "Obesity"
 };
 
 const englishRoleLabels = {
@@ -6668,7 +6685,43 @@ function updateNavVisibility() {
   bindScreenNavigation();
 }
 
+function toggleDiseaseCategory(forceExpand) {
+  const diseaseHeader = document.getElementById("navCategoryDisease");
+  const diseaseSubmenu = document.getElementById("diseaseSubmenu");
+  if (!diseaseHeader || !diseaseSubmenu) return;
+  const isExpanded = diseaseHeader.getAttribute("aria-expanded") === "true";
+  const nextState = typeof forceExpand === "boolean" ? forceExpand : !isExpanded;
+  diseaseHeader.setAttribute("aria-expanded", String(nextState));
+  if (nextState) {
+    diseaseSubmenu.removeAttribute("hidden");
+  } else {
+    diseaseSubmenu.setAttribute("hidden", "");
+  }
+}
+window.toggleDiseaseCategory = toggleDiseaseCategory;
+
+function initCategoryToggles() {
+  const diseaseHeader = document.getElementById("navCategoryDisease");
+  if (!diseaseHeader || diseaseHeader.dataset.categoryBound === "true") return;
+  diseaseHeader.dataset.categoryBound = "true";
+
+  diseaseHeader.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    toggleDiseaseCategory();
+  });
+
+  diseaseHeader.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      toggleDiseaseCategory();
+    }
+  });
+}
+window.initCategoryToggles = initCategoryToggles;
+
 function bindScreenNavigation() {
+  initCategoryToggles();
   document.querySelectorAll("[data-screen]").forEach((button) => {
     if (button.dataset.navBound === "true") return;
     button.dataset.navBound = "true";
@@ -7327,6 +7380,13 @@ function showScreen(name) {
   document.querySelectorAll(".nav-item").forEach((button) => {
     button.classList.toggle("active", button.dataset.screen === name);
   });
+
+  const DISEASE_SCREENS = ["diabetes", "hypertension", "blood-disorders", "obesity"];
+  if (DISEASE_SCREENS.includes(name)) {
+    if (typeof toggleDiseaseCategory === "function") {
+      toggleDiseaseCategory(true);
+    }
+  }
 
   // Update mobile bottom nav active item
   document.querySelectorAll(".mobile-nav-btn").forEach((button) => {
@@ -15859,7 +15919,8 @@ checkUrlAuthAction();
     const allScreenNames = [
       "patient","consent","profile","assessment","pending","result",
       "history","appointments","feedback","assistant","report",
-      "verification","doctor","kpi","admin","audit","verify-report","verify"
+      "verification","doctor","kpi","admin","audit","verify-report","verify",
+      "diabetes","hypertension","blood-disorders","obesity"
     ];
     if (allScreenNames.includes(screenFromHash)) {
       console.info(`[HashRouter] Hash navigation to '${screenFromHash}'.`);

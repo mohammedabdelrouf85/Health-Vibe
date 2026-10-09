@@ -69,7 +69,19 @@
         breathsPerMin: "نفس/دقيقة",
         percent: "%",
         selected: "تم الاختيار",
-        notAvailable: "غير متوفر"
+        notAvailable: "غير متوفر",
+        diseaseCategoryTitle: "الأمراض",
+        diseaseUnderPrep: "قيد الإعداد والتجهيز السريري",
+        diabetesTitle: "وحدة داء السكري",
+        diabetesDesc: "قسم سريري متخصص لمتابعة مستويات السكر في الدم، واستشارات الغدد الصماء، والخطط العلاجية المعتمدة.",
+        hypertensionTitle: "وحدة ارتفاع ضغط الدم",
+        hypertensionDesc: "قسم سريري لمراقبة ضغط الدم، ومؤشرات الدورة الدموية، ومتابعة صحة القلب والأوعية الدموية.",
+        bloodDisordersTitle: "وحدة تجلط الدم واضطرابات الدم",
+        bloodDisordersDesc: "قسم سريري متخصص لمتابعة سيولة وتجلط الدم واعتلالات الدم ومراجعة التحاليل التخصصية.",
+        obesityTitle: "وحدة علاج السمنة والتمثيل الغذائي",
+        obesityDesc: "قسم سريري متخصص في إدارة الوزن، ومؤشر كتلة الجسم، وخطط التغذية العلاجية تحت إشراف طبي.",
+        diseaseClinicalNotice: "الوحدة التخصصية تخضع للتجهيز السريري المعتمد وفق معايير الرعاية الطبية. لا يتم عرض أي بيانات أو نتائج غير موثقة سريرياً.",
+        backToHome: "العودة للرئيسية"
       },
       nav: {
         home: "الرئيسية",
@@ -94,7 +106,12 @@
         signOut: "تسجيل الخروج",
         switchAccount: "تبديل الحساب",
         deleteAccount: "حذف الحساب",
-        menu: "المزيد"
+        menu: "المزيد",
+        disease: "الأمراض",
+        diabetes: "داء السكري",
+        hypertension: "ارتفاع ضغط الدم",
+        bloodDisorders: "تجلط الدم / اضطرابات الدم",
+        obesity: "السمنة"
       },
       roles: {
         patient: "حساب مريض",
@@ -520,7 +537,19 @@
         breathsPerMin: "breaths/min",
         percent: "%",
         selected: "Selected",
-        notAvailable: "N/A"
+        notAvailable: "N/A",
+        diseaseCategoryTitle: "Disease",
+        diseaseUnderPrep: "Under Clinical Preparation",
+        diabetesTitle: "Diabetes Module",
+        diabetesDesc: "Specialized clinical module for blood glucose monitoring, endocrine consultations, and certified care plans.",
+        hypertensionTitle: "Hypertension Module",
+        hypertensionDesc: "Clinical module for blood pressure tracking, hemodynamic indicators, and cardiovascular health follow-up.",
+        bloodDisordersTitle: "Blood Clotting & Blood Disorders Module",
+        bloodDisordersDesc: "Specialized clinical module for coagulation profiles, hematology consultations, and lab review.",
+        obesityTitle: "Obesity & Metabolic Health Module",
+        obesityDesc: "Specialized clinical module for weight management, BMI assessment, and clinical nutrition plans.",
+        diseaseClinicalNotice: "This specialized module is under certified clinical preparation adhering to medical care standards. No unverified data or clinical results are displayed.",
+        backToHome: "Return to Home"
       },
       nav: {
         home: "Home",
@@ -545,7 +574,12 @@
         signOut: "Sign out",
         switchAccount: "Switch account",
         deleteAccount: "Delete account",
-        menu: "Menu"
+        menu: "Menu",
+        disease: "Disease",
+        diabetes: "Diabetes",
+        hypertension: "Hypertension",
+        bloodDisorders: "Blood Clotting / Blood Disorders",
+        obesity: "Obesity"
       },
       roles: {
         patient: "Patient account",
