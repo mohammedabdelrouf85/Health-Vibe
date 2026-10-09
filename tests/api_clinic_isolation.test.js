@@ -127,10 +127,13 @@ vm.runInNewContext(fs.readFileSync(serverPath, 'utf8'), sandbox, { filename: ser
   }
 
   try {
-    const kpiA = await request('GET', '/api/kpi/metrics?clinicId=clinic-b', 'clinic-a-token');
+    const kpiA = await request('GET', '/api/kpi/metrics', 'clinic-a-token');
     assert.equal(kpiA.status, 200);
     assert.equal(kpiA.body.totalCases, 1);
     assert.equal(kpiA.body.completedCasesCount, 0);
+
+    const crossClinicKpi = await request('GET', '/api/kpi/metrics?clinicId=clinic-b', 'clinic-a-token');
+    assert.equal(crossClinicKpi.status, 403);
 
     const kpiB = await request('GET', '/api/kpi/metrics', 'clinic-b-token');
     assert.equal(kpiB.status, 200);

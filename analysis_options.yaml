@@ -1,0 +1,11 @@
+# Health Vibe AI - Root Dart Analyzer Options
+# Excludes Node.js dependencies, templates, and backend folders from Dart analysis
+
+analyzer:
+  exclude:
+    - node_modules/**
+    - backend/**
+    - functions/**
+    - .deployments/**
+    - build/**
+    - .dart_tool/**

@@ -9,6 +9,7 @@ const backendRequire = createRequire(serverPath);
 const record = { id: 'case-clinical', patientId: 'patient-1', assignedDoctorId: 'doctor-1', status: 'under_review', oxygenLevel: 85, clinicalRevision: 1 };
 let application = { userId: 'doctor-1', status: 'approved', name: 'Verified Doctor', licenseNumber: 'VERIFIED-LICENSE', specialty: 'Recorded specialty', clinic: 'Recorded clinic' };
 let writes = 0;
+const clinicalReports = {};
 const profiles = {
   'doctor-1': { role: 'doctor', doctorApplicationStatus: 'approved', verifiedDoctor: true, clinicId: 'clinic-a', status: 'active' },
   'doctor-2': { role: 'doctor', doctorApplicationStatus: 'approved', verifiedDoctor: true, clinicId: 'clinic-a', status: 'active' },
@@ -19,13 +20,25 @@ const database = { collection: name => ({
   where: (field, op, uid) => ({ get: async () => ({ docs: name === 'cases' ? [{ id: record.id, data: () => record }] : (application && application.userId === uid ? [{ id: 'verified-app', data: () => application }] : []) }) }),
   doc: id => ({
     get: async () => ({
-      exists: (name === 'cases' && id === record.id) || (name === 'users' && Boolean(profiles[id])),
-      data: () => name === 'users' ? profiles[id] : record
+      exists: (name === 'cases' && id === record.id) || (name === 'users' && Boolean(profiles[id])) || (name === 'clinical_reports' && Boolean(clinicalReports[id])),
+      data: () => name === 'users' ? profiles[id] : (name === 'clinical_reports' ? clinicalReports[id] : record)
     }),
-    update: async data => { writes++; Object.assign(record, data); }
+    update: async data => {
+      writes++;
+      if (name === 'clinical_reports') Object.assign(clinicalReports[id], data);
+      else Object.assign(record, data);
+    },
+    set: async data => {
+      if (name === 'clinical_reports') clinicalReports[id] = { id, ...data };
+    }
   }),
   add: async () => ({ id: 'audit-1' })
 }) };
+database.runTransaction = async fn => fn({
+  get: ref => ref.get(),
+  update: (ref, data) => ref.update(data),
+  set: (ref, data) => ref.set(data)
+});
 const firestore = () => database;
 firestore.FieldValue = { serverTimestamp: () => '2026-09-26T10:00:00Z', arrayUnion: value => [value] };
 const firebase = { apps: [{}], firestore, auth: () => ({ verifyIdToken: async token => ({ uid: token, email: `${token}@example.test`, role: profiles[token]?.role || 'patient', email_verified: true }) }) };
@@ -60,6 +73,7 @@ const client = {
   LOGO_MARK_ASSETS: { light: 'logo', dark: 'logo' },
   document: { body: { classList: { contains: () => false } }, getElementById: id => elements[id] || null, createElement: () => ({ innerHTML: '' }) },
   db: database, escapeHtml, normalizeRole: value => value,
+  setTrustedHtml: (el, html) => { if (el) el.innerHTML = html; },
   ROLES: { DOCTOR: 'doctor', PATIENT: 'patient', SUPER_ADMIN: 'super_admin' },
   CASE_STATUS: { APPROVED: 'approved', SUBMITTED: 'submitted', REJECTED: 'rejected', MORE_INFO_REQUESTED: 'more_info_requested' },
   isRealProductionRecord: () => true, toMillis: () => 0, getCaseStatusMeta: () => ({ icon: '', en: 'Pending', ar: 'قيد المراجعة' }), isTestOrDemoRecord: () => false, isOwnerUser: () => false, isAdminRole: () => false, isSupportRole: () => false, isSupportUser: () => false,
@@ -106,8 +120,55 @@ include('window.generateAndApproveReport =', 'window.openCaseReport =');
     assert.equal(record.doctorLicense, 'VERIFIED-LICENSE');
     assert.equal(record.approvingDoctorName, 'Verified Doctor');
     assert.equal(record.doctorIdentity.applicationId, 'verified-app');
-    assert.equal((await request(`/api/reports/${record.id}/doctor-identity`, 'unrelated-patient')).status, 403);
+    assert.equal(record.reportSnapshot.patient.patientName, '');
+    assert.equal(record.reportSnapshot.clinicalContent.clinicalDiagnosis, 'Recorded diagnosis');
+    assert.equal(record.reportSnapshot.doctorIdentity.licenseNumber, 'VERIFIED-LICENSE');
+    assert.equal(record.reportSnapshot.signature.workflow, 'doctor_electronic_approval_v1');
+    assert.equal(record.reportSnapshot.approval.approvedBy.uid, 'doctor-1');
+    assert.equal(record.reportRevisionNumber, 1);
+    assert.equal(record.currentReportRevisionId, 'case-clinical_v1');
+    assert.equal(clinicalReports['case-clinical_v1'].previousRevisionId, null);
+    assert.equal(clinicalReports['case-clinical_v1'].published, true);
+    assert.equal(record.statusHistory[0].oldStatus, 'under_review');
+    assert.equal(record.statusHistory[0].newStatus, 'approved');
+    assert.equal(record.statusHistory[0].actor.uid, 'doctor-1');
+    assert.equal(record.statusHistory[0].reason, 'Recorded note');
+    assert.ok(record.statusHistory[0].timestamp);
+    const approvedWrites = writes;
+    result = await request('/api/doctor/approve-clinical-case', 'doctor-1', approval);
+    assert.equal(result.status, 200, JSON.stringify(result.data));
+    assert.equal(result.data.duplicate, true);
+    assert.equal(writes, approvedWrites, 'Duplicate same-status approval must be idempotent');
+    application = { ...application, name: 'Edited Doctor', licenseNumber: 'EDITED-LICENSE', specialty: 'Edited specialty', clinic: 'Edited clinic' };
+    profiles['patient-1'].name = 'Edited Patient';
+    record.patientName = 'Edited Patient On Case';
+    record.patientPhone = '999';
+    await client.renderReportScreen(record.id);
+    let immutableHtml = elements.reportContainer.innerHTML;
+    assert.ok(immutableHtml.includes('Verified Doctor'), immutableHtml.slice(0, 1000));
+    assert.ok(immutableHtml.includes('VERIFIED-LICENSE'), immutableHtml.slice(0, 1000));
+    assert.doesNotMatch(immutableHtml, /Edited Doctor|EDITED-LICENSE|Edited Patient/);
+    result = await request('/api/doctor/withdraw-clinical-report', 'doctor-1', { caseId: record.id, reason: 'Clinical correction required' });
+    assert.equal(result.status, 200, JSON.stringify(result.data));
+    assert.equal(record.reportWithdrawal.reason, 'Clinical correction required');
+    assert.equal(clinicalReports['case-clinical_v1'].published, false);
+    await client.renderReportScreen(record.id);
+    assert.ok(elements.reportContainer.innerHTML.includes('Clinical correction required'));
+    const postWithdrawalWrites = writes;
+    result = await request('/api/doctor/request-more-info', 'doctor-1', { caseId: record.id, note: 'Need more data' });
+    assert.equal(result.status, 400);
+    assert.equal(writes, postWithdrawalWrites, 'Invalid approved -> more_info_requested transition must not write');
+    record.status = 'closed';
+    result = await request('/api/doctor/request-more-info', 'doctor-1', { caseId: record.id, note: 'Need more data' });
+    assert.equal(result.status, 400);
+    assert.equal(result.data.error, 'CASE_CLOSED');
+    assert.equal(writes, postWithdrawalWrites, 'Closed case must not be mutated');
     record.status = 'under_review';
+    result = await request('/api/doctor/reject-clinical-case', 'doctor-1', { caseId: record.id, note: '   ' });
+    assert.equal(result.status, 400);
+    assert.equal(result.data.error, 'MISSING_TRANSITION_NOTE');
+    assert.equal(writes, postWithdrawalWrites, 'Reject without a note must not write');
+    assert.equal((await request(`/api/reports/${record.id}/doctor-identity`, 'unrelated-patient')).status, 403);
     const assignedWrites = writes;
     result = await request('/api/doctor/request-more-info', 'doctor-2', { caseId: record.id, note: 'Need more data' });
     assert.equal(result.status, 403);
@@ -154,21 +215,26 @@ include('window.generateAndApproveReport =', 'window.openCaseReport =');
     record.clinicalDiagnosis = '';
     record.doctorNote = 'This note is not a diagnosis';
     record.recommendations = [];
-    assert.equal(client.getRecordedClinicalContent(record, false).diag, 'غير مسجل');
-    assert.equal(client.getRecordedClinicalContent(record, false).recs[0], 'غير مسجل');
+    const legacyRecordWithoutSnapshot = { ...record, reportSnapshot: null };
+    assert.equal(client.getRecordedClinicalContent(legacyRecordWithoutSnapshot, false).diag, 'غير مسجل');
+    assert.equal(client.getRecordedClinicalContent(legacyRecordWithoutSnapshot, false).recs[0], 'غير مسجل');
     await client.renderResultScreen();
-    assert.ok(elements.resultContainer.innerHTML.includes('Not recorded'));
+    assert.ok(elements.resultContainer.innerHTML.includes('Recorded diagnosis'));
     assert.doesNotMatch(elements.resultContainer.innerHTML, /Monitor oxygen level twice daily|Follow-up with your doctor within 24-48/);
     delete record.oxygenLevel;
     await client.renderReportScreen(record.id);
     assert.doesNotMatch(elements.reportContainer.innerHTML, /95%|3 Days|Optimal Normal/);
     record.medications = 'Doctor recorded medication only';
     await client.renderReportScreen(record.id);
-    assert.ok(elements.reportContainer.innerHTML.includes(record.medications));
-    // Older free-text credentials cannot masquerade as verified credentials.
+    assert.ok(!elements.reportContainer.innerHTML.includes(record.medications));
+    assert.ok(elements.reportContainer.innerHTML.includes('VERIFIED-LICENSE'));
+    // Older free-text credentials cannot masquerade as verified credentials when no immutable snapshot exists.
+    const savedSnapshot = record.reportSnapshot;
+    record.reportSnapshot = null;
     application = null;
     await client.renderReportScreen(record.id);
     assert.ok(!elements.reportContainer.innerHTML.includes('VERIFIED-LICENSE'));
+    record.reportSnapshot = savedSnapshot;
     record.status = 'under_review';
     const before = writes;
     result = await request('/api/doctor/approve-clinical-case', 'doctor-1', approval);
@@ -196,6 +262,20 @@ include('window.generateAndApproveReport =', 'window.openCaseReport =');
     const beforeFailure = writes;
     assert.equal(await client.updateCaseStatus(record.id, 'approved', 'Recorded note', { clinicalDiagnosis: 'Recorded diagnosis', recommendations: ['Recorded instruction'] }), false);
     assert.equal(writes, beforeFailure);
+    let backendCalls = 0;
+    client.callBackend = async () => {
+      backendCalls += 1;
+      await new Promise(resolve => setTimeout(resolve, 25));
+      return { success: true, saved: true, targetStatus: 'rejected' };
+    };
+    const repeated = await Promise.all([
+      client.updateCaseStatus(record.id, 'rejected', 'Duplicate click guard'),
+      client.updateCaseStatus(record.id, 'rejected', 'Duplicate click guard')
+    ]);
+    assert.deepEqual(repeated, [true, false]);
+    assert.equal(backendCalls, 1, 'Repeated clicks must be collapsed to one backend transition');
+    client.callBackend = async () => ({ success: true, targetStatus: 'approved' });
+    assert.equal(await client.updateCaseStatus(record.id, 'approved', 'Recorded note', { clinicalNotes: 'Recorded note', recommendations: ['Recorded instruction'] }), false);
     const { buildResultReadyEmail } = backendRequire('./notification-service');
     const email = buildResultReadyEmail({ caseId: record.id, medications: '', recommendations: [] });
     assert.ok(email.html.includes('غير مسجل'));
@@ -203,4 +283,4 @@ include('window.generateAndApproveReport =', 'window.openCaseReport =');
     assert.ok(!appSource.includes('synthesizeClinicalAssessment'));
     console.log('PASS: real approval API, verified credentials, report HTML, assistant branches, empty prescriptions, and email regression tests.');
   } finally { await new Promise(resolve => server.close(resolve)); }
-})().catch(err => { console.error(err); process.exitCode = 1; });
+})().catch(err => { console.error(err && err.stack ? err.stack : err); process.exitCode = 1; });

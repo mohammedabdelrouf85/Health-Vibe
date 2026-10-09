@@ -8,7 +8,7 @@ $listener.Prefixes.Add("http://localhost:$port/")
 $listener.Start()
 
 Write-Host "==========================================" -ForegroundColor Cyan
-Write-Host "[OK] Health Vibes Web Server is running!" -ForegroundColor Green
+Write-Host "[OK] Health Vibe AI Web Server is running!" -ForegroundColor Green
 Write-Host "[URL] http://localhost:$port" -ForegroundColor Cyan
 Write-Host "[ROOT] Serving folder: $root" -ForegroundColor Gray
 Write-Host "Press Ctrl+C to stop." -ForegroundColor Yellow

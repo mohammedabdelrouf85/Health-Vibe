@@ -3,7 +3,10 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
     function isAuthenticated() {
-      return request.auth != null;
+      return request.auth != null &&
+        (!firestore.exists(/databases/(default)/documents/users/$(request.auth.uid)) ||
+         !('authzVersion' in userDoc(request.auth.uid).data) ||
+         ('authzVersion' in request.auth.token && request.auth.token.authzVersion == userDoc(request.auth.uid).data.authzVersion));
     }
 
     function isOwner(userId) {
@@ -22,9 +25,26 @@ service firebase.storage {
       return firestore.exists(/databases/(default)/documents/doctor_applications/$(appId));
     }
 
+    function caseDoc(caseId) {
+      return firestore.get(/databases/(default)/documents/cases/$(caseId));
+    }
+
+    function caseExists(caseId) {
+      return firestore.exists(/databases/(default)/documents/cases/$(caseId));
+    }
+
+    function fileDoc(fileId) {
+      return firestore.get(/databases/(default)/documents/case_files/$(fileId));
+    }
+
+    function fileExists(fileId) {
+      return firestore.exists(/databases/(default)/documents/case_files/$(fileId));
+    }
+
     function isAdmin() {
       return isAuthenticated() &&
-             request.auth.token.role in ['clinic_admin', 'super_admin'];
+             (request.auth.token.role in ['clinic_admin', 'super_admin'] ||
+              ('isOwner' in request.auth.token && request.auth.token.isOwner == true));
     }
 
     function isSuspended() {
@@ -33,11 +53,11 @@ service firebase.storage {
         ('isSuspended' in request.auth.token && request.auth.token.isSuspended == true) ||
         ('status' in request.auth.token && request.auth.token.status == 'suspended') ||
         ('disabled' in request.auth.token && request.auth.token.disabled == true) ||
-        userDoc(request.auth.uid).data.suspended == true ||
-        userDoc(request.auth.uid).data.isSuspended == true ||
-        userDoc(request.auth.uid).data.status == 'suspended' ||
-        userDoc(request.auth.uid).data.accountStatus == 'suspended' ||
-        userDoc(request.auth.uid).data.disabled == true
+        ('suspended' in userDoc(request.auth.uid).data && userDoc(request.auth.uid).data.suspended == true) ||
+        ('isSuspended' in userDoc(request.auth.uid).data && userDoc(request.auth.uid).data.isSuspended == true) ||
+        ('status' in userDoc(request.auth.uid).data && userDoc(request.auth.uid).data.status == 'suspended') ||
+        ('accountStatus' in userDoc(request.auth.uid).data && userDoc(request.auth.uid).data.accountStatus == 'suspended') ||
+        ('disabled' in userDoc(request.auth.uid).data && userDoc(request.auth.uid).data.disabled == true)
       );
     }
 
@@ -49,7 +69,10 @@ service firebase.storage {
     }
 
     function isPlatformAdmin() {
-      return isAuthenticated() && request.auth.token.role == 'super_admin';
+      return isAuthenticated() && (
+        request.auth.token.role in ['super_admin', 'owner'] ||
+        ('isOwner' in request.auth.token && request.auth.token.isOwner == true)
+      );
     }
 
     function isClinicAdminForApplication(appId) {
@@ -106,11 +129,74 @@ service firebase.storage {
              !hasBlockedExecutableExtension(fileName);
     }
 
+    function isAssignedDoctorForCase(caseId) {
+      return isAuthenticated() &&
+             request.auth.token.role == 'doctor' &&
+             request.auth.token.verifiedDoctor == true &&
+             caseExists(caseId) &&
+             (
+               caseDoc(caseId).data.assignedDoctorId == request.auth.uid ||
+               caseDoc(caseId).data.doctorId == request.auth.uid ||
+               caseDoc(caseId).data.doctorUid == request.auth.uid ||
+               caseDoc(caseId).data.approvingDoctorId == request.auth.uid
+             );
+    }
+
+    function hasAllowedCaseFileExtension(fileName) {
+      return fileName.matches('.*\\.([pP][dD][fF]|[jJ][pP][gG]|[jJ][pP][eE][gG]|[pP][nN][gG]|[wW][eE][bB][pP])$');
+    }
+
+    function isAllowedCaseFile(fileName) {
+      return request.resource != null &&
+             request.resource.size <= 10 * 1024 * 1024 &&
+             request.resource.contentType in [
+               'application/pdf',
+               'image/jpeg',
+               'image/png',
+               'image/webp'
+             ] &&
+             hasAllowedCaseFileExtension(fileName) &&
+             !hasBlockedExecutableExtension(fileName);
+    }
+
+    function canReadCleanCaseFile(patientId, caseId, fileId) {
+      return fileExists(fileId) &&
+             fileDoc(fileId).data.patientId == patientId &&
+             fileDoc(fileId).data.caseId == caseId &&
+             fileDoc(fileId).data.scanStatus == 'clean' &&
+             fileDoc(fileId).data.availability == 'available' &&
+             (isOwner(patientId) || isAssignedDoctorForCase(caseId) || isPlatformAdmin());
+    }
+
+    function canCreateCaseFile(patientId, caseId, fileId, fileName) {
+      return isOwner(patientId) &&
+             !isSuspended() &&
+             caseExists(caseId) &&
+             caseDoc(caseId).data.patientId == patientId &&
+             fileExists(fileId) &&
+             fileDoc(fileId).data.patientId == patientId &&
+             fileDoc(fileId).data.caseId == caseId &&
+             fileDoc(fileId).data.storagePath == 'case_files/' + patientId + '/' + caseId + '/' + fileId + '/' + fileName &&
+             fileDoc(fileId).data.scanStatus in ['upload_pending', 'pending', 'quarantined'] &&
+             fileDoc(fileId).data.availability == 'quarantined' &&
+             isAllowedCaseFile(fileName);
+    }
+
     match /doctor_applications/{userId}/{appId}/{fileName} {
-      allow read: if isOwner(userId) || adminCanReadDoctorApplicationFile(userId, appId);
+      allow read: if !isSuspended() && (isOwner(userId) || adminCanReadDoctorApplicationFile(userId, appId));
       allow create, update: if ownerCanWriteDoctorApplicationFile(userId, appId) &&
                             isAllowedDoctorApplicationFile(fileName);
       allow delete: if ownerCanWriteDoctorApplicationFile(userId, appId);
+    }
+
+    match /case_files/{patientId}/{caseId}/{fileId}/{fileName} {
+      allow read: if !isSuspended() && canReadCleanCaseFile(patientId, caseId, fileId);
+      allow create, update: if canCreateCaseFile(patientId, caseId, fileId, fileName);
+      allow delete: if !isSuspended() &&
+                    fileExists(fileId) &&
+                    fileDoc(fileId).data.patientId == patientId &&
+                    fileDoc(fileId).data.caseId == caseId &&
+                    (isOwner(patientId) || isPlatformAdmin());
     }
 
     match /{allPaths=**} {

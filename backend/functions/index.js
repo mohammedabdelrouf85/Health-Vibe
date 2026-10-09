@@ -54,51 +54,23 @@ exports.onDoctorApplicationUpdated = functions.firestore
     const afterData = change.after.data();
 
     const targetUserId = afterData.userId;
-    if (!targetUserId || beforeData.status === afterData.status) return null;
-
-    if (afterData.status === 'pending') {
-      await admin.auth().setCustomUserClaims(targetUserId, {
-        role: ROLES.DOCTOR_PENDING,
-        doctorVerified: false
-      });
-      await admin.firestore().collection('users').doc(targetUserId).set({
-        role: ROLES.DOCTOR_PENDING,
-        doctorApplicationStatus: 'pending'
-      }, { merge: true });
-    } else if (afterData.status === 'rejected' || afterData.status === 'cancelled') {
-      await admin.auth().setCustomUserClaims(targetUserId, {
-        role: ROLES.PATIENT,
-        doctorVerified: false
-      });
-      await admin.firestore().collection('users').doc(targetUserId).set({
-        role: ROLES.PATIENT,
-        verifiedDoctor: false,
-        doctorApplicationStatus: afterData.status
-      }, { merge: true });
-    } else if (afterData.status === 'approved') {
-      // Update Custom Claims on Firebase Auth
-      await admin.auth().setCustomUserClaims(targetUserId, {
-        role: ROLES.DOCTOR,
-        doctorVerified: true
-      });
-
-      // Update User Document
-      await admin.firestore().collection('users').doc(targetUserId).set({
-        role: ROLES.DOCTOR,
-        verifiedDoctor: true
-      }, { merge: true });
-
-      // Log to immutable audit trail
-      await admin.firestore().collection('audit_events').add({
-        type: 'SERVER_PROMOTED_DOCTOR_ROLE',
-        userId: targetUserId,
-        applicationId: context.params.appId,
-        approvedBy: afterData.approvedBy || 'Admin',
-        timestamp: admin.firestore.FieldValue.serverTimestamp()
-      });
-
-      console.log(`[CLOUD FUNCTION] Automatically granted doctor custom claims to user: ${targetUserId}`);
-    }
+    // Approval/rejection is performed and audited by the authenticated API.
+    // The only client-driven transition is cancellation of one's pending request.
+    if (!targetUserId || beforeData.status !== 'pending' || afterData.status !== 'cancelled' ||
+        beforeData.userId !== targetUserId) return null;
+    const latest = await change.after.ref.get();
+    const account = await admin.auth().getUser(targetUserId);
+    if (!latest.exists || latest.data().status !== 'cancelled' ||
+        account.customClaims?.role !== 'doctor_pending') return null;
+    await admin.auth().setCustomUserClaims(targetUserId, {
+      ...account.customClaims, role: ROLES.PATIENT, verifiedDoctor: false, doctorVerified: false
+    });
+    await admin.firestore().collection('users').doc(targetUserId).set({
+      role: ROLES.PATIENT, verifiedDoctor: false, doctorVerified: false, doctorApplicationStatus: 'cancelled'
+    }, { merge: true });
+    await admin.firestore().collection('audit_events').add({ type: 'DOCTOR_APPLICATION_CANCELLED',
+      userId: targetUserId, applicationId: context.params.appId,
+      timestamp: admin.firestore.FieldValue.serverTimestamp() });
     return null;
   });
 
@@ -108,12 +80,17 @@ exports.onDoctorApplicationCreated = functions.firestore
     const data = snapshot.data();
     if (!data || data.status !== 'pending' || !data.userId) return null;
 
+    const latest = await snapshot.ref.get();
+    const account = await admin.auth().getUser(data.userId);
+    if (!latest.exists || latest.data().status !== 'pending' ||
+        !['patient', 'doctor_pending'].includes(account.customClaims?.role || 'patient')) return null;
     await admin.firestore().collection('users').doc(data.userId).set({
       role: ROLES.DOCTOR_PENDING,
       doctorApplicationStatus: 'pending'
     }, { merge: true });
 
     await admin.auth().setCustomUserClaims(data.userId, {
+      ...account.customClaims, verifiedDoctor: false,
       role: ROLES.DOCTOR_PENDING,
       doctorVerified: false
     });

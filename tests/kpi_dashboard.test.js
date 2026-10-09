@@ -159,9 +159,22 @@ assert.strictEqual(resFiltered.totalCases, 10, 'Demo records are strictly exclud
 console.log('  ✓ Demo and test records are completely isolated and never contaminate authentic KPI metrics.\n');
 
 // -----------------------------------------------------------------------------
-// TEST 7: DOM Structure & Containers in index.html
+// TEST 7: Empty KPI State Does Not Invent Clinical Activity
 // -----------------------------------------------------------------------------
-console.log('▶ TEST 7: DOM Structure & Containers in index.html');
+console.log('▶ TEST 7: Empty KPI State Does Not Invent Clinical Activity');
+const emptyMetrics = calculateKpiMetrics([], { timeRange: 'all', priority: 'all' });
+assert.strictEqual(emptyMetrics.totalCases, 0, 'Empty KPI state has zero total cases');
+assert.strictEqual(emptyMetrics.completionRate, 0, 'Empty KPI state has zero completion rate');
+assert.strictEqual(emptyMetrics.avgResponseTimeMinutes, 0, 'Empty KPI state has zero response time');
+assert.strictEqual(emptyMetrics.avgTurnaroundMinutes, 0, 'Empty KPI state has zero turnaround time');
+assert.deepStrictEqual(emptyMetrics.doctorsPerformance, [], 'Empty KPI state does not synthesize a doctor leaderboard row');
+assert(!appJsContent.includes('Clinical Benchmarks (Simulated Baseline)'), 'KPI UI must not label empty production data as simulated benchmark activity');
+console.log('  ✓ Empty KPI dashboards stay empty and do not fabricate physicians, clinics, or benchmark results.\n');
+
+// -----------------------------------------------------------------------------
+// TEST 8: DOM Structure & Containers in index.html
+// -----------------------------------------------------------------------------
+console.log('▶ TEST 8: DOM Structure & Containers in index.html');
 assert(indexHtmlContent.includes('id="screen-kpi"'), 'screen-kpi section container exists');
 assert(indexHtmlContent.includes('id="kpiCompletionRateValue"'), 'Completion rate value element exists');
 assert(indexHtmlContent.includes('id="kpiResponseTimeValue"'), 'Response time value element exists');
@@ -178,9 +191,9 @@ assert(indexHtmlContent.includes('id="docKpiCompletionRate"'), 'Doctor queue com
 console.log('  ✓ All UI elements, KPI hero cards, SLA tables, and navigation links present in app/index.html.\n');
 
 // -----------------------------------------------------------------------------
-// TEST 8: Backend Endpoint Definition in server.js
+// TEST 9: Backend Endpoint Definition in server.js
 // -----------------------------------------------------------------------------
-console.log('▶ TEST 8: Backend Endpoint Definition in server.js');
+console.log('▶ TEST 9: Backend Endpoint Definition in server.js');
 assert(serverJsContent.includes("app.get('/api/kpi/metrics'"), 'GET /api/kpi/metrics endpoint declared');
 assert(serverJsContent.includes('requireAuth'), 'Endpoint protected with authentication');
 assert(serverJsContent.includes('completionRate'), 'Endpoint computes completion rate');
@@ -189,9 +202,9 @@ assert(serverJsContent.includes('avgTurnaroundMinutes'), 'Endpoint computes aver
 console.log('  ✓ Backend server.js has authoritative /api/kpi/metrics endpoint with full RBAC protection.\n');
 
 // -----------------------------------------------------------------------------
-// TEST 9: Global Function Exports on Window in app.js
+// TEST 10: Global Function Exports on Window in app.js
 // -----------------------------------------------------------------------------
-console.log('▶ TEST 9: Global Function Exports on Window in app.js');
+console.log('▶ TEST 10: Global Function Exports on Window in app.js');
 assert(appJsContent.includes('window.calculateKpiMetrics = calculateKpiMetrics;'), 'calculateKpiMetrics exported on window');
 assert(appJsContent.includes('window.renderKpiDashboard = renderKpiDashboard;'), 'renderKpiDashboard exported on window');
 assert(appJsContent.includes('window.setKpiTimeFilter = setKpiTimeFilter;'), 'setKpiTimeFilter exported on window');
@@ -201,5 +214,5 @@ assert(appJsContent.includes('window.exportKpiReport = exportKpiReport;'), 'expo
 console.log('  ✓ All 6 KPI management functions successfully exposed on window.\n');
 
 console.log('==================================================================');
-console.log('🎉 ALL 9 KPI DASHBOARD TESTS PASSED WITH 100% SUCCESS!');
+console.log('🎉 ALL 10 KPI DASHBOARD TESTS PASSED WITH 100% SUCCESS!');
 console.log('==================================================================');

@@ -1,0 +1,30 @@
+{
+  "label": "BASELINE",
+  "timestamp": "2026-09-28T22:38:22.424Z",
+  "coreWebVitals": {
+    "ttfbMs": 21,
+    "fcpMs": 2876,
+    "lcpMs": 2876,
+    "cls": 0,
+    "dclMs": 2826,
+    "loadMs": 2883
+  },
+  "network": {
+    "totalRequests": 36,
+    "totalSizeKb": 3748.7,
+    "jsRequests": 30,
+    "jsSizeKb": 1121.9,
+    "cssRequests": 1,
+    "cssSizeKb": 113.5,
+    "imageRequests": 3,
+    "imageSizeKb": 2301.9
+  },
+  "firebaseQueries": {
+    "activeListeners": 0,
+    "unboundedQueriesIdentified": 4,
+    "casesUnboundedRead": true,
+    "doctorQueueUnboundedRead": true,
+    "auditLogUnboundedRead": true,
+    "patientHistoryUnboundedRead": true
+  }
+}

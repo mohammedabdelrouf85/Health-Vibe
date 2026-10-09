@@ -1,5 +1,5 @@
 /**
- * Health Vibes AI - B2B Clinic Sales Landing Page Test Suite
+ * Health Vibe AI - B2B Clinic Sales Landing Page Test Suite
  * Item 32: Sales landing page للعيادات (B2B Clinic Landing Page & Lead Ingestion)
  */
 
@@ -28,7 +28,7 @@ const serverJsContent = fs.readFileSync(serverJsPath, 'utf8');
 // -----------------------------------------------------------------------------
 console.log('▶ TEST 1: Clinic Landing Page Structure & SEO Elements');
 assert(clinicsHtmlContent.includes('<title>'), 'HTML contains title tag');
-assert(clinicsHtmlContent.includes('Health Vibes AI للعيادات والمراكز الطبية'), 'Title reflects clinic B2B focus');
+assert(clinicsHtmlContent.includes('Health Vibe AI للعيادات والمراكز الطبية'), 'Title reflects clinic B2B focus');
 assert(clinicsHtmlContent.includes('<meta name="description"'), 'Meta description exists for SEO');
 assert(clinicsHtmlContent.includes('<meta property="og:title"'), 'OpenGraph meta title exists');
 assert(clinicsHtmlContent.includes('id="heroHeadline"'), 'Hero headline element exists');

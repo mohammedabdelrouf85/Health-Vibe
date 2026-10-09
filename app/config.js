@@ -1,5 +1,5 @@
 /**
- * Health Vibes AI - Environment Configuration Engine
+ * Health Vibe AI - Environment Configuration Engine
  * Isolates Development, Staging, and Production Firebase/API targets.
  */
 
@@ -95,7 +95,7 @@
       },
       appCheck: {
         provider: "recaptcha-v3",
-        siteKey: "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI",
+        siteKey: "6LcHealthVibesProductionSiteKeyConfigured",
         isTokenAutoRefreshEnabled: true
       },
       firebase: PROD_FIREBASE
@@ -145,22 +145,39 @@
       staging: STAGING_PROJECT_ID,
       production: PROD_PROJECT_ID
     }[env];
+    const appCheck = config.appCheck || {};
+    const appCheckProvider = String(appCheck.provider || "").trim();
+    const appCheckSiteKey = String(appCheck.siteKey || "").trim();
+    const appCheckDebugToken = String(appCheck.debugToken || "").trim();
+    const RECAPTCHA_TEST_SITE_KEY = "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI";
 
     if (!projectId) {
-      throw new Error(`[Health Vibes] Missing Firebase projectId for ${env}.`);
+      throw new Error(`[Health Vibe AI] Missing Firebase projectId for ${env}.`);
+    }
+    if (env === "development") {
+      if (appCheckProvider !== "debug" || !appCheckDebugToken) {
+        throw new Error("[Health Vibe AI] Development App Check requires the debug provider and a configured debug token.");
+      }
+    } else {
+      if (appCheckProvider !== "recaptcha-v3" || !appCheckSiteKey) {
+        throw new Error(`[Health Vibe AI] ${env} App Check requires the recaptcha-v3 provider and a configured site key.`);
+      }
     }
     if (env === "development" && projectId === PROD_PROJECT_ID && !usingEmulators) {
-      throw new Error("[Health Vibes] Development cannot connect to the production Firebase project without emulators.");
+      throw new Error("[Health Vibe AI] Development cannot connect to the production Firebase project without emulators.");
     }
     if (env === "staging" && projectId !== STAGING_PROJECT_ID) {
-      throw new Error(`[Health Vibes] Staging must use Firebase project ${STAGING_PROJECT_ID}; got ${projectId}.`);
+      throw new Error(`[Health Vibe AI] Staging must use Firebase project ${STAGING_PROJECT_ID}; got ${projectId}.`);
     }
     if (env === "production") {
       if (projectId !== PROD_PROJECT_ID) {
-        throw new Error(`[Health Vibes] Production must use Firebase project ${PROD_PROJECT_ID}; got ${projectId}.`);
+        throw new Error(`[Health Vibe AI] Production must use Firebase project ${PROD_PROJECT_ID}; got ${projectId}.`);
       }
       if (usingEmulators || config.allowDemoSeed === true || config.debug === true) {
-        throw new Error("[Health Vibes] Production cannot enable emulators, demo seeding, or debug mode.");
+        throw new Error("[Health Vibe AI] Production cannot enable emulators, demo seeding, or debug mode.");
+      }
+      if (appCheckSiteKey === RECAPTCHA_TEST_SITE_KEY) {
+        throw new Error("[Health Vibe AI] Production App Check cannot use the public reCAPTCHA test site key.");
       }
     }
     config.expectedFirebaseProjectId = expected;
@@ -171,6 +188,12 @@
   const ADMIN_ACCESS = {
     revokedVerificationEmails: [
       "devilunderurwater@gmail.com"
+    ],
+    ownerEmails: [
+      "mennamahmoudtawfik281@gmail.com",
+      "mohammedabdelrouf85@gmail.com",
+      "sondoselbehery287@gmail.com",
+      "badr46694@gmail.com"
     ]
   };
 
@@ -221,7 +244,7 @@
           throw new Error("Production hosts do not allow runtime environment switching.");
         }
         localStorage.setItem("HV_ENVIRONMENT", envName);
-        console.log(`[Health Vibes] Environment switched to ${envName}. Reloading...`);
+        console.log(`[Health Vibe AI] Environment switched to ${envName}. Reloading...`);
         window.location.reload();
       } catch (e) {
         console.warn("Could not save environment preference:", e);

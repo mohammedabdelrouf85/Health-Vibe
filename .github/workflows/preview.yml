@@ -1,0 +1,38 @@
+name: Preview - Firebase Hosting Preview Channel
+
+on:
+  pull_request:
+    branches: [ main, staging ]
+
+jobs:
+  build_and_preview:
+    name: Deploy PR Preview Channel
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: |
+          npm ci
+          cd backend && npm ci && cd ..
+
+      - name: Build Preview Assets
+        run: npm run build:staging
+
+      - name: Deploy to Firebase Hosting Preview Channel
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: '${{ secrets.GITHUB_TOKEN }}'
+          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_HEALTH_VIBES_STAGING }}'
+          projectId: health-vibes-staging
+          channelId: 'pr-${{ github.event.number }}'
+          expires: 7d
+        continue-on-error: true

@@ -1,11 +1,11 @@
-# 🚀 Pitch Deck مختصر — Health Vibes AI
+# 🚀 Pitch Deck مختصر — Health Vibe AI
 ## Concise Investor & B2B Clinic Presentation (11 Slides)
 
-> **المشروع:** هيلث فايبز للذكاء الاصطناعي السريري (**Health Vibes AI**)  
+> **المشروع:** هيلث فايب للذكاء الاصطناعي السريري (**Health Vibe AI**)  
 > **الصناعة:** HealthTech / Clinical B2B SaaS  
 > **الجمهور المستهدف:** المستثمرون (Angel & VC)، شركاء القطاع الطبي، وأصحاب سلاسل العيادات والمراكز  
 > **المدة المقترحة للإلقاء:** 3 إلى 5 دقائق  
-> **المنصة الحية:** [Health Vibes AI](https://mohammedabdelrouf85.github.io/Health-Vibe/app/index.html) | [بوابة العيادات والمبيعات](https://mohammedabdelrouf85.github.io/Health-Vibe/app/clinics.html)
+> **المنصة الحية:** [Health Vibe AI](https://mohammedabdelrouf85.github.io/Health-Vibe/app/index.html) | [بوابة العيادات والمبيعات](https://mohammedabdelrouf85.github.io/Health-Vibe/app/clinics.html)
 
 ---
 
@@ -25,7 +25,7 @@
 
 ### 🌟 الشريحة 1: الغلاف ورسالة القيمة (Title & Value Proposition)
 
-- **العنوان:** Health Vibes AI | هيلث فايبز للذكاء الاصطناعي
+- **العنوان:** Health Vibe AI | هيلث فايب للذكاء الاصطناعي
 - **العنوان الفرعي:** نظام الفرز والتشغيل السريري الذكي لعيادات ومراكز الصدر والباطنة
 - **شعار الانطلاق (One-Liner):**
   > *"نضاعف القدرة الاستيعابية للعيادات الطبية ونختصر وقت التوثيق السريري بنسبة 70% عبر الفرز الذكي قبل الزيارة والتقارير المعتمدة برمز QR."*
@@ -33,7 +33,7 @@
 - **روابط الوصول:** `app/index.html` • `app/clinics.html`
 
 > 🗣️ **ملاحظة المتحدث (Speaker Note):**  
-> "مساء الخير. نحن في Health Vibes AI نعيد ابتكار تجربة العيادات الخارجية لأمراض الصدر والباطنة في مصر والمنطقة العربية، من خلال منظومة ذكاء اصطناعي سريرية متكاملة تعمل بنموذج Doctor-in-the-Loop."
+> "مساء الخير. نحن في Health Vibe AI نعيد ابتكار تجربة العيادات الخارجية لأمراض الصدر والباطنة في مصر والمنطقة العربية، من خلال منظومة ذكاء اصطناعي سريرية متكاملة تعمل بنموذج Doctor-in-the-Loop."
 
 ---
 
@@ -51,7 +51,7 @@
 
 ---
 
-### 💡 الشريحة 3: الحل — Health Vibes AI (The Solution)
+### 💡 الشريحة 3: الحل — Health Vibe AI (The Solution)
 
 نظام تشغيل سريري شامل يربط المريض بالطبيب وإدارة العيادة في دائرة رقمية مغلقة:
 
@@ -120,7 +120,7 @@
 
 ### 🏆 الشريحة 8: الميزة التنافسية وخندق الدفاع (Competitive Advantage)
 
-| الميزة | البرامج الطبية التقليدية | تطبيقات المرضى العامة | Health Vibes AI |
+| الميزة | البرامج الطبية التقليدية | تطبيقات المرضى العامة | Health Vibe AI |
 |---|---|---|---|
 | **الفرز بالذكاء الاصطناعي** | ❌ غير متوفر | ⚠️ تشخيص آلي بدون طبيب | ✅ فرز استباقي Doctor-in-the-Loop |
 | **استقلالية واعتماد الطبيب** | ⚠️ توثيق يدوي بحت | ❌ لا يوجد | ✅ الطبيب هو صاحب القرار المعتمد |
@@ -163,7 +163,7 @@
   - جولة تمويل أولي (Pre-Seed Round) لتسريع وتيرة المبيعات وتوسيع الربط مع أنظمة EMR الكبرى وتطوير خوارزميات تحليل السعال الصوتي (Acoustic Cough AI).
 - **للتواصل وحجز العرض التجريبي:**
   - **البريد الإلكتروني:** `mohammedabdelrouf85@gmail.com`
-  - **الموقع الإلكتروني:** [Health Vibes AI for Clinics](https://mohammedabdelrouf85.github.io/Health-Vibe/app/clinics.html)
+  - **الموقع الإلكتروني:** [Health Vibe AI for Clinics](https://mohammedabdelrouf85.github.io/Health-Vibe/app/clinics.html)
   - **واتساب:** متوفر للتواصل المباشر والشراكات.
 
 ---

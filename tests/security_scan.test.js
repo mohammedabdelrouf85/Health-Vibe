@@ -184,7 +184,9 @@ assert.ok(storageRules.includes("request.auth.token.role in ['clinic_admin', 'su
 assert.ok(!/userDoc\(request\.auth\.uid\)\.data\.role in \[/.test(storageRules), "Storage rules must not grant admin access from user document role.");
 
 const serverCodeForAuth = fs.readFileSync(path.join(ROOT_DIR, 'backend/server.js'), 'utf-8');
-const syncRoleSlice = serverCodeForAuth.slice(serverCodeForAuth.indexOf("app.post('/api/user/sync-role'"), serverCodeForAuth.indexOf("app.post('/api/admin/set-user-role'"));
+const syncRoleStart = serverCodeForAuth.indexOf("app.post('/api/user/sync-role'");
+const syncRoleEnd = serverCodeForAuth.indexOf("\napp.", syncRoleStart + 1);
+const syncRoleSlice = serverCodeForAuth.slice(syncRoleStart, syncRoleEnd !== -1 ? syncRoleEnd : serverCodeForAuth.indexOf("app.post('/api/admin/set-user-role'"));
 assert.ok(!syncRoleSlice.includes('req.body'), "sync-role must not trust browser-provided role fields.");
 assert.ok(syncRoleSlice.includes('privilegedRoleQuarantined'), "sync-role must quarantine existing admin roles that lack trusted custom claims.");
 assert.ok(serverCodeForAuth.includes('function hasTrustedAdminClaim'), "Backend must centralize trusted custom-claim admin checks.");

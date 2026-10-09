@@ -1,4 +1,16 @@
 {
+  "functions": [
+    {
+      "source": "backend",
+      "codebase": "default",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firestore-debug.log"
+      ]
+    }
+  ],
   "hosting": {
     "public": "app",
     "ignore": [
@@ -7,6 +19,10 @@
       "**/node_modules/**"
     ],
     "rewrites": [
+      {
+        "source": "/api/**",
+        "function": "api"
+      },
       {
         "source": "**",
         "destination": "/index.html"
@@ -18,7 +34,7 @@
         "headers": [
           {
             "key": "Content-Security-Policy",
-            "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://apis.google.com https://www.google.com https://www.recaptcha.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://www.gstatic.com https://*.googleusercontent.com https://firebasestorage.googleapis.com; media-src 'self' data: blob:; connect-src 'self' http://localhost:4000 http://127.0.0.1:4000 https://healthvibe.ai https://*.firebaseio.com https://*.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://firebasestorage.googleapis.com https://firebaseinstallations.googleapis.com https://firebaseappcheck.googleapis.com https://www.google.com https://www.recaptcha.net; frame-src 'self' https://health-vibes-a4b3b.firebaseapp.com https://*.firebaseapp.com https://www.google.com https://recaptcha.google.com https://www.recaptcha.net; object-src 'none'; base-uri 'self'; form-action 'self';"
+            "value": "default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com https://www.google.com https://www.recaptcha.net; script-src-attr 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://www.gstatic.com https://*.googleusercontent.com https://firebasestorage.googleapis.com https://*.firebasestorage.app; media-src 'self' data: blob:; connect-src 'self' http://localhost:4000 http://127.0.0.1:4000 https://healthvibe.ai https://*.healthvibe.ai https://staging.healthvibe.ai https://*.cloudfunctions.net https://*.firebaseio.com https://*.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://firebasestorage.googleapis.com https://*.firebasestorage.app https://firebaseinstallations.googleapis.com https://firebaseappcheck.googleapis.com https://www.google.com https://www.recaptcha.net; frame-src 'self' https://health-vibes-a4b3b.firebaseapp.com https://health-vibes-staging.firebaseapp.com https://*.firebaseapp.com https://www.google.com https://recaptcha.google.com https://www.recaptcha.net; object-src 'none'; base-uri 'self'; form-action 'self';"
           },
           {
             "key": "X-Content-Type-Options",
@@ -59,6 +75,9 @@
     "auth": {
       "port": 9099
     },
+    "functions": {
+      "port": 5001
+    },
     "firestore": {
       "port": 8080
     },
@@ -67,7 +86,7 @@
     },
     "ui": {
       "enabled": true,
-      "port": 4000
+      "port": 4040
     }
   }
 }

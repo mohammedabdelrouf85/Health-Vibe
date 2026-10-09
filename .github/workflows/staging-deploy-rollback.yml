@@ -1,0 +1,75 @@
+name: Staging - Deploy & Fast Rollback
+
+on:
+  push:
+    branches:
+      - staging
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Operation to perform'
+        required: true
+        default: 'deploy'
+        type: choice
+        options:
+          - deploy
+          - rollback
+      targetRelease:
+        description: 'Target Release ID or Git commit for rollback (optional, defaults to previous)'
+        required: false
+        default: ''
+        type: string
+      dryRun:
+        description: 'Run in dry-run mode (simulated execution)'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: staging-operations
+  cancel-in-progress: false
+
+jobs:
+  staging-operation:
+    name: Staging ${{ github.event.inputs.action || 'deploy' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: |
+          npm ci
+          cd backend && npm ci && cd ..
+
+      # DEPLOY STEP
+      - name: Execute Staging Deployment
+        if: "${{ (github.event.inputs.action || 'deploy') == 'deploy' }}"
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+          DRY_RUN: ${{ github.event.inputs.dryRun || 'false' }}
+        run: |
+          npm run test:staging
+          node scripts/deploy.js --env=staging ${{ (github.event.inputs.dryRun == 'true') && '--dry-run' || '' }}
+
+      # ROLLBACK STEP
+      - name: Execute Staging Rollback
+        if: "${{ github.event.inputs.action == 'rollback' }}"
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+          DRY_RUN: ${{ github.event.inputs.dryRun || 'false' }}
+        run: |
+          TARGET_ARG=""
+          if [ -n "${{ github.event.inputs.targetRelease }}" ]; then
+            TARGET_ARG="--target=${{ github.event.inputs.targetRelease }}"
+          fi
+          node scripts/rollback.js --env=staging $TARGET_ARG ${{ (github.event.inputs.dryRun == 'true') && '--dry-run' || '' }}

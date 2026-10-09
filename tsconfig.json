@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "strict": false,
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "typeRoots": ["./types", "./node_modules/@types"]
+  },
+  "include": [
+    "types/**/*",
+    "backend/**/*.js"
+  ],
+  "exclude": [
+    "node_modules",
+    "app/node_modules"
+  ]
+}

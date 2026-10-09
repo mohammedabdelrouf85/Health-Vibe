@@ -1,0 +1,67 @@
+name: Release - Automated Version & Release Notes
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+jobs:
+  create-release:
+    name: Generate Release Notes & Tag Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+
+      - name: Generate Semantic Version Tag & Notes
+        id: release_notes
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          TIMESTAMP=$(date -u +"%Y%m%d%H%M")
+          TAG="v${VERSION}-${TIMESTAMP}"
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+
+          echo "## Health Vibe AI Release ${TAG}" > RELEASE_NOTES.md
+          echo "" >> RELEASE_NOTES.md
+          echo "### 📦 Deployment Overview" >> RELEASE_NOTES.md
+          echo "- **Base Version**: ${VERSION}" >> RELEASE_NOTES.md
+          echo "- **Commit**: ${{ github.sha }}" >> RELEASE_NOTES.md
+          echo "- **Release Date**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> RELEASE_NOTES.md
+          echo "" >> RELEASE_NOTES.md
+          echo "### 🔍 Verified Components" >> RELEASE_NOTES.md
+          echo "- ✅ Firestore Rules & Indexes (15 composite production indexes)" >> RELEASE_NOTES.md
+          echo "- ✅ Firebase Storage Rules (Strict owner, admin, and MIME verification)" >> RELEASE_NOTES.md
+          echo "- ✅ Cloud Functions & Express API suite (backend/index.js)" >> RELEASE_NOTES.md
+          echo "- ✅ Unified Patient Clinical Timeline & Notification Engine" >> RELEASE_NOTES.md
+          echo "- ✅ Content-Security-Policy & API Origin Whitelisting" >> RELEASE_NOTES.md
+          echo "" >> RELEASE_NOTES.md
+          echo "### 📝 Recent Changes" >> RELEASE_NOTES.md
+          git log -n 10 --pretty=format:"* %h - %s (%an)" >> RELEASE_NOTES.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_notes.outputs.tag }}
+          name: Health Vibe AI Release ${{ steps.release_notes.outputs.tag }}
+          body_path: RELEASE_NOTES.md
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true

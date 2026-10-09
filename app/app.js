@@ -1,8 +1,29 @@
 const loader = document.getElementById("loader");
+const loaderStartTime = Date.now();
+const LOADER_MIN_DISPLAY_MS = 2700; // +35% longer display time to showcase the brand intro animation
+
+function dismissLoader(immediate = false) {
+  if (!loader || loader.classList.contains("is-done")) return;
+  if (immediate) {
+    loader.classList.add("is-done");
+    return;
+  }
+  const elapsed = Date.now() - loaderStartTime;
+  const remaining = Math.max(0, LOADER_MIN_DISPLAY_MS - elapsed);
+  if (remaining > 0) {
+    window.setTimeout(() => {
+      if (loader) loader.classList.add("is-done");
+    }, remaining);
+  } else {
+    loader.classList.add("is-done");
+  }
+}
+window.dismissLoader = dismissLoader;
 const publicSite = document.getElementById("publicSite");
 const authScreen = document.getElementById("authScreen");
 const app = document.getElementById("app");
 const toast = document.getElementById("toast");
+const srStatus = document.getElementById("srStatus");
 const screenTitle = document.getElementById("screenTitle");
 const themeToggle = document.getElementById("themeToggle");
 const siteThemeToggle = document.getElementById("siteThemeToggle") || null;
@@ -42,12 +63,16 @@ const accountLabel = document.getElementById("accountLabel");
 const userName = document.getElementById("userName");
 const userEmail = document.getElementById("userEmail");
 const LOGO_ASSETS = {
-  light: "./logo-light.png",
-  dark: "./logo-dark.png"
+  light: "./logo-light.webp",
+  dark: "./logo-dark.webp",
+  lightPng: "./logo-light.png",
+  darkPng: "./logo-dark.png"
 };
 const LOGO_MARK_ASSETS = {
-  light: "./logo-light-mark.png",
-  dark: "./logo-dark-mark.png"
+  light: "./logo-light-mark.webp",
+  dark: "./logo-dark-mark.webp",
+  lightPng: "./logo-light-mark.png",
+  darkPng: "./logo-dark-mark.png"
 };
 
 function getThemeLogoSrc() {
@@ -98,7 +123,7 @@ async function setupLoaderVideo() {
   video.addEventListener("error", hideVideo);
   window.setTimeout(() => {
     if (!video.src || video.readyState === 0) hideVideo();
-  }, 900);
+  }, 1215);
 }
 
 const titles = {
@@ -162,6 +187,7 @@ function getRoleDefaultScreen(role) {
   if (isAdminRole(r)) return "admin";
   if (r === ROLES.DOCTOR) return "doctor";
   if (r === ROLES.DOCTOR_PENDING) return "verification";
+  if (r === ROLES.SUPPORT) return "kpi";
   return "patient";
 }
 
@@ -223,9 +249,6 @@ const ROLE_PERMISSIONS_MAP = {
   [ROLES.CLINIC_ADMIN]: [
     PERMISSIONS.VIEW_ADMIN_DASHBOARD,
     PERMISSIONS.VIEW_DOCTOR_QUEUE,
-    PERMISSIONS.REVIEW_CASE,
-    PERMISSIONS.APPROVE_CASE,
-    PERMISSIONS.REJECT_CASE,
     PERMISSIONS.VIEW_OWN_CASES,
     PERMISSIONS.VIEW_AUDIT_LOG,
     PERMISSIONS.APPROVE_DOCTOR_APPLICATION,
@@ -234,37 +257,42 @@ const ROLE_PERMISSIONS_MAP = {
     PERMISSIONS.MANAGE_USERS,
     PERMISSIONS.VIEW_SYSTEM_METRICS
   ],
-  [ROLES.SUPPORT]: [
+  [ROLES.SUPPORT]: [PERMISSIONS.VIEW_SYSTEM_METRICS],
+  [ROLES.SUPER_ADMIN]: [
+    PERMISSIONS.VIEW_ADMIN_DASHBOARD,
+    PERMISSIONS.VIEW_AUDIT_LOG,
+    PERMISSIONS.APPROVE_DOCTOR_APPLICATION,
+    PERMISSIONS.REJECT_DOCTOR_APPLICATION,
+    PERMISSIONS.MANAGE_AI_MODELS,
+    PERMISSIONS.MANAGE_USER_ROLES,
+    PERMISSIONS.MANAGE_USERS,
+    PERMISSIONS.VIEW_SYSTEM_METRICS,
     PERMISSIONS.VIEW_PATIENT_DASHBOARD,
-    PERMISSIONS.VIEW_OWN_CASES,
-    PERMISSIONS.VIEW_SYSTEM_METRICS
-  ],
-  [ROLES.SUPER_ADMIN]: Object.values(PERMISSIONS)
+    PERMISSIONS.VIEW_OWN_CASES
+  ]
 };
 
 const ROLE_ALLOWED_SCREENS = {
   [ROLES.PATIENT]: [
     "patient", "consent", "profile", "assessment", "pending", "result",
-    "history", "appointments", "feedback", "assistant", "report"
+    "history", "appointments", "feedback", "assistant", "report", "verify-report", "verify"
   ],
   [ROLES.DOCTOR_PENDING]: [
-    "patient", "verification", "history", "appointments", "feedback", "report", "profile"
+    "patient", "verification", "history", "appointments", "feedback", "report", "profile", "verify-report", "verify"
   ],
   [ROLES.DOCTOR]: [
-    "doctor", "verification", "history", "appointments", "feedback", "report", "profile", "kpi", "patient"
+    "doctor", "verification", "history", "appointments", "feedback", "report", "profile", "kpi", "patient", "verify-report", "verify"
   ],
   [ROLES.CLINIC_ADMIN]: [
-    "patient", "consent", "profile", "assessment", "pending", "result",
-    "history", "appointments", "feedback", "assistant", "verification", "doctor",
-    "report", "admin", "audit", "kpi"
+    "profile", "history", "appointments", "feedback", "doctor", "report", "admin", "audit", "kpi", "verify-report", "verify"
   ],
   [ROLES.SUPPORT]: [
-    "patient", "history", "appointments", "feedback", "assistant", "report", "kpi"
+    "profile", "kpi", "verify-report", "verify"
   ],
   [ROLES.SUPER_ADMIN]: [
     "patient", "consent", "profile", "assessment", "pending", "result",
-    "history", "appointments", "feedback", "assistant", "verification", "doctor",
-    "report", "admin", "audit", "kpi"
+    "history", "appointments", "feedback", "assistant", "verification",
+    "doctor", "kpi", "report", "admin", "audit", "verify-report", "verify"
   ]
 };
 
@@ -426,24 +454,132 @@ function hasPermission(permission) {
   const isOwner = Boolean(user && isOwnerUser(user));
   if (isOwner) return true;
   const role = normalizeRole((typeof selectedRole !== "undefined" && selectedRole) ? selectedRole : ROLES.PATIENT, isOwner);
-  if (role === ROLES.SUPER_ADMIN) return true;
   const perms = ROLE_PERMISSIONS_MAP[role] || [];
   return perms.includes(permission);
 }
 
 function canAccessScreen(screenName) {
-  const user = (typeof auth !== "undefined" && auth) ? auth.currentUser : null;
+  const user = (typeof getActiveUser === "function") ? getActiveUser() : ((typeof auth !== "undefined" && auth) ? auth.currentUser : null);
   const isOwner = Boolean(user && isOwnerUser(user));
   // Resolve the active role: respect selectedRole (owner may be testing as patient/doctor).
-  const role = normalizeRole((typeof selectedRole !== "undefined" && selectedRole) ? selectedRole : ROLES.PATIENT, isOwner);
-  // Full access only when the active role is SUPER_ADMIN (not merely isOwner).
-  if (role === ROLES.SUPER_ADMIN) return true;
-  if (screenName === "verification" && tempAllowDoctorApplication) {
+  const role = normalizeRole((typeof selectedRole !== "undefined" && selectedRole) ? selectedRole : (user?.role || ROLES.PATIENT), isOwner);
+  if (screenName === "verification" && tempAllowDoctorApplication && role === ROLES.PATIENT) {
     return true;
   }
   const allowed = ROLE_ALLOWED_SCREENS[role] || ROLE_ALLOWED_SCREENS[ROLES.PATIENT];
+  if (role === ROLES.SUPER_ADMIN) {
+    return allowed.includes(screenName);
+  }
   return allowed.includes(screenName);
 }
+window.setSelectedRole = function(r) { selectedRole = r; };
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function textToHtml(value) {
+  return escapeHtml(value).replace(/\n/g, "<br>");
+}
+
+function createTextElement(tagName, text, className = "") {
+  const element = document.createElement(tagName);
+  if (className) element.className = className;
+  element.textContent = String(text ?? "");
+  return element;
+}
+
+function sanitizeTrustedHtml(html) {
+  const template = document.createElement("template");
+  template.innerHTML = String(html || "");
+  const allowedTags = new Set(["DIV", "SPAN", "STRONG", "EM", "BR", "P", "UL", "OL", "LI", "CODE", "SMALL"]);
+  const allowedAttrs = new Set(["class", "style", "dir", "lang", "aria-hidden"]);
+  template.content.querySelectorAll("*").forEach((node) => {
+    if (!allowedTags.has(node.tagName)) {
+      node.replaceWith(document.createTextNode(node.textContent || ""));
+      return;
+    }
+    [...node.attributes].forEach((attr) => {
+      const name = attr.name.toLowerCase();
+      if (name.startsWith("on") || !allowedAttrs.has(name)) node.removeAttribute(attr.name);
+    });
+  });
+  return template.innerHTML;
+}
+
+function setTrustedHtml(element, html) {
+  if (element) element.innerHTML = sanitizeTrustedHtml(html);
+}
+
+function hvStateCard({ type = "empty", title = "", message = "", actionText = "", action = "", icon = "" } = {}) {
+  const iconMap = {
+    loading: "⌛",
+    empty: "—",
+    error: "⚠",
+    success: "✓",
+    offline: "↻",
+  };
+  const safeType = ["loading", "empty", "error", "success", "offline"].includes(type) ? type : "empty";
+  const classes = ["hv-state-card"];
+  if (safeType === "error" || safeType === "offline") classes.push("error-card");
+  if (safeType === "success") classes.push("success-card");
+  return `
+    <div class="${classes.join(" ")}" data-state="${safeType}">
+      <span class="state-icon" aria-hidden="true">${escapeHtml(icon || iconMap[safeType] || iconMap.empty)}</span>
+      ${title ? `<h4>${escapeHtml(title)}</h4>` : ""}
+      ${message ? `<p>${escapeHtml(message)}</p>` : ""}
+      ${actionText && action ? `<button type="button" class="solid-button" onclick="${escapeHtml(action)}">${escapeHtml(actionText)}</button>` : ""}
+    </div>
+  `;
+}
+
+function hvSkeletonRows(count = 3, height = 72) {
+  return Array.from({ length: Math.max(1, count) }, () => `<div class="hv-skeleton" style="height: ${height}px; width: 100%;"></div>`).join("");
+}
+
+function setScreenBreadcrumb(name) {
+  const screen = document.getElementById(`screen-${name}`);
+  if (!screen || !["admin", "doctor", "kpi", "audit", "verification", "report"].includes(name)) return;
+  let crumb = screen.querySelector(":scope > .hv-breadcrumb");
+  if (!crumb) {
+    crumb = document.createElement("nav");
+    crumb.className = "hv-breadcrumb";
+    crumb.setAttribute("aria-label", "Breadcrumb");
+    screen.insertBefore(crumb, screen.firstChild);
+  }
+  const isEn = currentLanguage === "en";
+  const roleLabel = (isEn ? englishRoleLabels[selectedRole] : roleLabels[selectedRole]) || (isEn ? "Workspace" : "مساحة العمل");
+  const title = isEn ? (englishTitles[name] || "Dashboard") : (titles[name] || "لوحة التحكم");
+  crumb.innerHTML = `
+    <button type="button" onclick="showScreen('${getRoleDefaultScreen(selectedRole)}')">${escapeHtml(roleLabel)}</button>
+    <span aria-hidden="true">/</span>
+    <strong>${escapeHtml(title)}</strong>
+  `;
+}
+
+function isOfflineNow() {
+  return typeof navigator !== "undefined" && navigator.onLine === false;
+}
+
+function getSafeExternalUrl(value, fallback = "") {
+  const raw = String(value || "").trim();
+  if (!raw) return fallback;
+  try {
+    const url = new URL(raw, window.location.origin);
+    if (["https:", "http:"].includes(url.protocol)) return url.href;
+  } catch (error) {
+    return fallback;
+  }
+  return fallback;
+}
+
+window.escapeHtml = escapeHtml;
+window.textToHtml = textToHtml;
 
 // Client-side quick check for UI feedback only
 function enforcePermission(permission, actionDescription = "") {
@@ -521,6 +657,13 @@ const DEFAULT_REVOKED_VERIFICATION_EMAILS = [
   "devilunderurwater@gmail.com"
 ];
 
+const DEFAULT_OWNER_EMAILS = [
+  "mennamahmoudtawfik281@gmail.com",
+  "mohammedabdelrouf85@gmail.com",
+  "sondoselbehery287@gmail.com",
+  "badr46694@gmail.com"
+];
+
 function getConfiguredEmailList(configKey, fallback) {
   const config = typeof window !== "undefined" ? window.HEALTH_VIBE_CONFIG : null;
   const values = config && config.adminAccess && Array.isArray(config.adminAccess[configKey])
@@ -535,12 +678,25 @@ function getRevokedVerificationEmails() {
   return getConfiguredEmailList("revokedVerificationEmails", DEFAULT_REVOKED_VERIFICATION_EMAILS);
 }
 
+function getTrustedOwnerEmails() {
+  return getConfiguredEmailList("ownerEmails", DEFAULT_OWNER_EMAILS);
+}
+
 function isOwnerUser(userOrEmail) {
-  return Boolean(
-    typeof userOrEmail === "object" &&
-    userOrEmail &&
-    (userOrEmail.isOwner === true || userOrEmail.role === "super_admin")
-  );
+  if (!userOrEmail) return false;
+  const trustedList = getTrustedOwnerEmails();
+  if (typeof userOrEmail === "string") {
+    return trustedList.includes(userOrEmail.trim().toLowerCase());
+  }
+  if (typeof userOrEmail === "object") {
+    const email = (userOrEmail.email || "").trim().toLowerCase();
+    return Boolean(
+      userOrEmail.isOwner === true ||
+      userOrEmail.role === "super_admin" ||
+      (email && trustedList.includes(email))
+    );
+  }
+  return false;
 }
 
 function isVerificationRevoked(userOrEmail) {
@@ -555,7 +711,7 @@ const roleLabels = {
   doctor: "حساب طبيب موثق",
   clinic_admin: "مدير عيادة",
   support: "دعم فني",
-  super_admin: "مدير عام للنظام"
+  super_admin: "Owner"
 };
 
 const englishTitles = {
@@ -583,17 +739,19 @@ const englishRoleLabels = {
   doctor: "Verified doctor account",
   clinic_admin: "Clinic admin account",
   support: "Support account",
-  super_admin: "Super admin account"
+  super_admin: "Owner"
 };
 
 const englishNames = {
-  patient: "Ahmed Mohamed",
-  doctor: "Dr. Mona Samy",
+  patient: "Patient",
+  doctor: "Verified physician",
   admin: "Operations Admin"
 };
 
 const uiText = {
-  "Health Vibes": "Health Vibes",
+  "Health Vibes": "Health Vibe AI",
+  "Health Vibe": "Health Vibe",
+  "Health Vibe AI": "Health Vibe AI",
   "نجهز تجربة رعاية صحية أوضح وأكثر أمانًا": "Preparing a clearer, safer healthcare experience",
   "رعاية صحية مدعومة بالذكاء الاصطناعي وتحت مراجعة الطبيب": "AI-supported healthcare reviewed by doctors",
   "المسار": "Workflow",
@@ -605,13 +763,14 @@ const uiText = {
   "ابدأ الآن": "Get started",
   "الوحدة الأولى لتقييم التنفس": "Respiratory assessment module",
   "رعاية صحية رقمية تربط المريض بالطبيب قبل ظهور أي نتيجة نهائية": "Digital healthcare that connects patients with doctors before any final result appears",
-  "Health Vibes يجمع التقييم، مراجعة الطبيب، التقارير، المواعيد، والسجل الطبي في تجربة عربية واحدة مبنية للأفراد والعيادات في مصر.": "Health Vibes brings assessment, doctor review, reports, appointments, and medical history into one experience built for people and clinics in Egypt.",
+  "Health Vibe يجمع التقييم، مراجعة الطبيب، التقارير، المواعيد، والسجل الطبي في تجربة عربية واحدة مبنية للأفراد والعيادات في مصر.": "Health Vibe brings assessment, doctor review, reports, appointments, and medical history into one experience built for people and clinics in Egypt.",
+  "Health Vibes يجمع التقييم، مراجعة الطبيب، التقارير، المواعيد، والسجل الطبي في تجربة عربية واحدة مبنية للأفراد والعيادات في مصر.": "Health Vibe brings assessment, doctor review, reports, appointments, and medical history into one experience built for people and clinics in Egypt.",
   "تجربة البرنامج": "Try the app",
   "معاينة بدون حساب": "Preview without account",
   "الذكاء الاصطناعي لا يصدر تشخيصًا مستقلًا": "AI does not issue an independent diagnosis",
   "مراجعة طبيب إلزامية": "Doctor review is required",
   "واجهة عربية كاملة": "Full Arabic interface",
-  "أحمد": "Ahmed",
+  "المستخدم": "User",
   "قيد المراجعة": "Under review",
   "تقييم التنفس": "Breathing assessment",
   "نسبة الأكسجين 95% - كحة متوسطة - 3 أيام": "Oxygen level 95% - moderate cough - 3 days",
@@ -679,7 +838,7 @@ const uiText = {
   "سجل التدقيق": "Audit Log",
   "تسجيل الخروج": "Sign out",
   "عربي": "English",
-  "مرحبًا أحمد": "Welcome, Ahmed",
+  "مرحبًا": "Welcome",
   "متابعة التنفس مع طبيبك في مسار واحد واضح": "Track breathing with your doctor in one clear path",
   "أدخل الأعراض والقياسات. يحصل الطبيب على تقدير خطورة مبني على قواعد قبل اعتماد أي تقرير يظهر لك.": "Enter symptoms and measurements. The doctor receives a rule-based risk preview before approving any report shown to you.",
   "بدء تقييم التنفس": "Start breathing assessment",
@@ -687,7 +846,7 @@ const uiText = {
   "آخر حالة": "Latest status",
   "نسبة الأكسجين": "Oxygen level",
   "مؤشر قواعد": "Rule score",
-  "د. منى سامي": "Dr. Mona Samy",
+  "طبيب معتمد": "Verified physician",
   "الموعد القادم": "Next appointment",
   "غدًا 7:30م": "Tomorrow 7:30 PM",
   "استشارة متابعة": "Follow-up consultation",
@@ -707,7 +866,8 @@ const uiText = {
   "غدًا 7:30 مساءً": "Tomorrow 7:30 PM",
   "الموافقة الطبية": "Medical consent",
   "مطلوبة": "Required",
-  "Health Vibes يستخدم بياناتك الصحية لتقييم خطورة إرشادي ثم يرسلها لطبيب معتمد قبل ظهور أي نتيجة نهائية.": "Health Vibes uses your health data for a guidance-only risk assessment, then sends it to a verified doctor before any final result appears.",
+  "Health Vibe يستخدم بياناتك الصحية لتقييم خطورة إرشادي ثم يرسلها لطبيب معتمد قبل ظهور أي نتيجة نهائية.": "Health Vibe uses your health data for a guidance-only risk assessment, then sends it to a verified doctor before any final result appears.",
+  "Health Vibes يستخدم بياناتك الصحية لتقييم خطورة إرشادي ثم يرسلها لطبيب معتمد قبل ظهور أي نتيجة نهائية.": "Health Vibe uses your health data for a guidance-only risk assessment, then sends it to a verified doctor before any final result appears.",
   "أوافق على استخدام البيانات الطبية داخل مسار التقييم والمراجعة.": "I agree to use my medical data inside the assessment and review path.",
   "أفهم أن الذكاء الاصطناعي لا يقدم تشخيصًا مستقلًا ولا يغني عن الطبيب.": "I understand that AI does not provide an independent diagnosis and does not replace a doctor.",
   "أوافق على استقبال تنبيهات المواعيد والتقارير عبر البريد أو رابط آمن.": "I agree to receive appointment and report alerts by email or secure link.",
@@ -720,11 +880,11 @@ const uiText = {
   "صلاحيات تشغيلية مقيدة حسب الدور مع سجل تدقيق.": "Operational permissions limited by role with an audit log.",
   "92% مكتمل": "92% complete",
   "الاسم": "Name",
-  "أحمد محمد": "Ahmed Mohamed",
+  "اسم المريض": "Patient name",
   "العمر": "Age",
   "34 سنة": "34 years",
   "الطبيب المرتبط": "Linked doctor",
-  "د. منى سامي - عيادة مدينة نصر": "Dr. Mona Samy - Nasr City Clinic",
+  "لا يوجد طبيب مرتبط حتى الآن": "No linked doctor yet",
   "أمراض مزمنة أو حساسية": "Chronic conditions or allergies",
   "لا يوجد حساسية معروفة. تاريخ سابق لكحة موسمية.": "No known allergies. Previous history of seasonal cough.",
   "حفظ وبدء تقييم التنفس": "Save and start breathing assessment",
@@ -786,7 +946,7 @@ const uiText = {
   "السجل والتقارير": "History & Reports",
   "3 عناصر": "3 items",
   "20 سبتمبر 2026 - خطر متوسط - الإصدار الأول": "September 20, 2026 - medium risk - version 1",
-  "12 سبتمبر 2026 - خطر منخفض - د. منى": "September 12, 2026 - low risk - Dr. Mona",
+  "12 سبتمبر 2026 - خطر منخفض": "September 12, 2026 - low risk",
   "مطمئن": "Reassuring",
   "استكمال الملف": "Complete profile",
   "10 سبتمبر 2026 - الموافقة مفعلة": "September 10, 2026 - consent active",
@@ -832,12 +992,12 @@ const uiText = {
   "طبيب موثق": "Verified doctor",
   "نسبة الأكسجين 91% - كحة شديدة": "Oxygen level 91% - severe cough",
   "عاجل": "Urgent",
-  "سارة علي": "Sara Ali",
+  "حالة مريض": "Patient case",
   "خطر متوسط - منذ 14 دقيقة": "Medium risk - 14 minutes ago",
-  "محمد حسن": "Mohamed Hassan",
+  "حالة متابعة": "Follow-up case",
   "خطر منخفض - تقرير جاهز": "Low risk - report ready",
   "منخفض": "Low",
-  "مراجعة حالة أحمد": "Ahmed case review",
+  "مراجعة حالة المريض": "Patient case review",
   "خطورة الذكاء الاصطناعي": "AI risk",
   "ملاحظة الطبيب": "Doctor note",
   "اعتماد النتيجة": "Approve result",
@@ -873,7 +1033,7 @@ const uiText = {
   "بدون ملاحظات طبية": "No medical notes",
   "مراجعة الجودة الطبية": "Clinical QA",
   "وصول بدون هوية المريض": "De-identified access",
-  "الإدارة العليا": "Super admin",
+  "الإدارة العليا": "Owner",
   "للطوارئ فقط": "Emergency only",
   "أحداث التدقيق": "Audit events",
   "مفعلة": "Enabled",
@@ -891,12 +1051,12 @@ const uiText = {
   "الإدارة راجعت لوحة جودة النموذج": "Admin viewed model quality dashboard",
   "المريض: 2048": "patient: 2048",
   "إصدار النموذج: الأول": "model version: 1",
-  "الطبيب: منى 17": "doctor: Mona 17",
+  "الطبيب: --": "doctor: --",
   "الدور: مراجعة الجودة الطبية": "role: Clinical QA",
   "تقرير تقييم التنفس": "Breathing Assessment Report",
   "تنبيه": "Caution",
-  "أحمد محمد - رقم 2048": "Ahmed Mohamed - No. 2048",
-  "د. منى سامي - موثقة": "Dr. Mona Samy - verified",
+  "المريض - رقم الحالة": "Patient - Case No.",
+  "طبيب معتمد - موثق": "Verified physician - approved",
   "التاريخ": "Date",
   "20 سبتمبر 2026": "September 20, 2026",
   "النتيجة": "Result",
@@ -905,7 +1065,8 @@ const uiText = {
   "راقب نسبة الأكسجين إذا توفر جهاز موثوق.": "Monitor oxygen level if a reliable device is available.",
   "تابع مع الطبيب الذي راجع الحالة.": "Follow up with the reviewing doctor.",
   "اطلب رعاية عاجلة إذا زاد ضيق التنفس.": "Seek urgent care if shortness of breath worsens.",
-  "تنبيه طبي: Health Vibes يساعد في دعم القرار الطبي ولا يستبدل التقييم الطبي المؤهل أو رعاية الطوارئ.": "Medical notice: Health Vibes supports clinical decision-making and does not replace qualified medical evaluation or emergency care.",
+  "تنبيه طبي: Health Vibe يساعد في دعم القرار الطبي ولا يستبدل التقييم الطبي المؤهل أو رعاية الطوارئ.": "Medical notice: Health Vibe supports clinical decision-making and does not replace qualified medical evaluation or emergency care.",
+  "تنبيه طبي: Health Vibes يساعد في دعم القرار الطبي ولا يستبدل التقييم الطبي المؤهل أو رعاية الطوارئ.": "Medical notice: Health Vibe supports clinical decision-making and does not replace qualified medical evaluation or emergency care.",
   "تأكيد اعتماد التقرير": "Confirm report approval",
   "بعد الاعتماد ستظهر النتيجة والتوصيات للمريض وسيتم حفظ الحدث في سجل التدقيق.": "After approval, the result and recommendations will appear to the patient and the event will be saved in the audit log.",
   "تأكيد الاعتماد": "Confirm approval",
@@ -956,7 +1117,8 @@ const uiText = {
   "تفعيل عبر بوت الواتساب": "Activate via WhatsApp Bot",
   "الموافقة الطبية وسياسة الخصوصية": "Medical Consent & Privacy Policy",
   "مطلوبة قبل الفحص": "Required before assessment",
-  "Health Vibes يجمع بياناتك الصحية لتقييم خطورة إرشادي ثم يرسلها لطبيب معتمد قبل ظهور أي نتيجة نهائية. لحماية بياناتك والامتثال للمعايير الطبية، نرجو مراجعة وتأكيد بنود الموافقة أدناه:": "Health Vibes collects your health data for guidance-only risk assessment, then sends it to a verified doctor before any final result appears. To protect your data and comply with medical standards, please review and confirm the consent terms below:",
+  "Health Vibe يجمع بياناتك الصحية لتقييم خطورة إرشادي ثم يرسلها لطبيب معتمد قبل ظهور أي نتيجة نهائية. لحماية بياناتك والامتثال للمعايير الطبية، نرجو مراجعة وتأكيد بنود الموافقة أدناه:": "Health Vibe collects your health data for guidance-only risk assessment, then sends it to a verified doctor before any final result appears. To protect your data and comply with medical standards, please review and confirm the consent terms below:",
+  "Health Vibes يجمع بياناتك الصحية لتقييم خطورة إرشادي ثم يرسلها لطبيب معتمد قبل ظهور أي نتيجة نهائية. لحماية بياناتك والامتثال للمعايير الطبية، نرجو مراجعة وتأكيد بنود الموافقة أدناه:": "Health Vibe collects your health data for guidance-only risk assessment, then sends it to a verified doctor before any final result appears. To protect your data and comply with medical standards, please review and confirm the consent terms below:",
   "معالجة البيانات السريرية (إلزامي):": "Clinical Data Processing (Mandatory):",
   "أوافق على استخدام بيانات الأعراض والقياسات الحيوية داخل مسار التقييم ومشاركتها مع الطبيب المعالج المعتمد.": "I agree to the use of symptom data and vital signs in the assessment workflow and sharing them with the verified attending physician.",
   "الطبيعة الإرشادية للذكاء الاصطناعي (إلزامي):": "Guidance Nature of AI (Mandatory):",
@@ -1020,8 +1182,8 @@ const uiText = {
   "لضمان سلامة وسرية الملفات الطبية، يرجى تفعيل وتوثيق حسابك عبر كود الواتساب السريع أو رسالة الهاتف أو رابط البريد.": "To ensure medical records security, please activate and verify your account via WhatsApp code, SMS, or email link.",
   "بوت الواتساب الآلي": "Automated WhatsApp Bot",
   "رابط البريد الإلكتروني": "Email Link",
-  "بوت الواتساب الآلي (Health Vibes Bot)": "Automated WhatsApp Bot (Health Vibes Bot)",
-  "اكتب رقم واتساب بصيغة دولية، ثم سيقوم بوت Health Vibes بإرسال كود تفعيل سري مكون من 6 أرقام.": "Enter a WhatsApp number in international format, then the Health Vibes Bot will send a secure 6-digit activation code.",
+  "بوت الواتساب الآلي (Health Vibe Bot)": "Automated WhatsApp Bot (Health Vibe Bot)",
+  "اكتب رقم واتساب بصيغة دولية، ثم سيقوم بوت Health Vibe بإرسال كود تفعيل سري مكون من 6 أرقام.": "Enter a WhatsApp number in international format, then the Health Vibe Bot will send a secure 6-digit activation code.",
   "رقم واتساب لاستلام الكود": "WhatsApp number to receive the code",
   "استخدم كود الدولة، مثال مصر: +201001234567.": "Use the country code, for Egypt for example: +201001234567.",
   "إرسال كود التفعيل تلقائياً عبر بوت الواتساب": "Send activation code automatically via WhatsApp Bot",
@@ -1214,7 +1376,7 @@ function applyLanguage(language) {
     document.documentElement.lang = language;
     document.documentElement.dir = language === "ar" ? "rtl" : "ltr";
   }
-  document.title = (window.i18n && window.i18n.t("common.appName")) || localized("Health Vibes");
+  document.title = (window.i18n && window.i18n.t("common.appName")) || localized("Health Vibe AI");
 
   // 2. Direct update for navigation buttons
   document.querySelectorAll(".nav-item").forEach((btn) => {
@@ -1293,6 +1455,7 @@ function applyLanguage(language) {
     }
     screenTitle.textContent = title;
   }
+  if (typeof setScreenBreadcrumb === "function") setScreenBreadcrumb(activeScreenName);
   if (typeof updateVerificationSoonState === "function") {
     updateVerificationSoonState();
   }
@@ -1310,9 +1473,31 @@ function applyLanguage(language) {
   if (typeof updateEmailVerificationUI === "function" && typeof auth !== "undefined") updateEmailVerificationUI(auth.currentUser);
   if (typeof updateOxygenWarning === "function") updateOxygenWarning();
 
-  // 10. Re-render dynamic active screen
+  // 10. Re-render dynamic active screen without wiping user inputs
   if (activeScreenName === "patient" && typeof renderPatientDashboard === "function") {
     renderPatientDashboard();
+  } else if (activeScreenName === "report" && typeof renderReportScreen === "function") {
+    renderReportScreen(window._selectedReportCaseId || null);
+  } else if (activeScreenName === "pending" && typeof renderPendingScreen === "function") {
+    renderPendingScreen();
+  } else if (activeScreenName === "doctor" && typeof renderDoctorQueue === "function") {
+    renderDoctorQueue();
+  } else if (activeScreenName === "history" && typeof renderPatientHistory === "function") {
+    renderPatientHistory();
+  } else if (activeScreenName === "appointments" && typeof renderAppointmentsScreen === "function") {
+    renderAppointmentsScreen();
+  } else if (activeScreenName === "kpi" && typeof loadKpiMetrics === "function") {
+    loadKpiMetrics();
+  } else if (activeScreenName === "audit" && typeof renderAuditScreen === "function") {
+    renderAuditScreen();
+  } else if (activeScreenName === "consent" && typeof renderConsentScreen === "function") {
+    renderConsentScreen();
+  } else if (activeScreenName === "verification" && typeof renderVerificationScreen === "function") {
+    renderVerificationScreen();
+  } else if (activeScreenName === "result" && typeof renderResultScreen === "function") {
+    renderResultScreen();
+  } else if (activeScreenName === "assistant" && typeof renderAssistantScreen === "function") {
+    renderAssistantScreen();
   }
 }
 
@@ -1320,10 +1505,154 @@ function showToast(message) {
   if (!message || String(message).trim() === "" || String(message).includes("undefined")) {
     return;
   }
-  toast.textContent = localized(message);
+  const text = localized(message);
+  toast.textContent = text;
+  if (srStatus) srStatus.textContent = text;
   toast.classList.add("show");
   window.clearTimeout(showToast.timer);
   showToast.timer = window.setTimeout(() => toast.classList.remove("show"), 2600);
+}
+
+const focusableSelector = [
+  "a[href]",
+  "button:not([disabled])",
+  "input:not([disabled]):not([type='hidden'])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  "summary",
+  "[tabindex]:not([tabindex='-1'])"
+].join(",");
+let lastFocusedBeforeDialog = null;
+
+function getFocusableElements(container) {
+  if (!container) return [];
+  return Array.from(container.querySelectorAll(focusableSelector)).filter((el) => {
+    const style = window.getComputedStyle(el);
+    return style.display !== "none" && style.visibility !== "hidden" && el.offsetParent !== null;
+  });
+}
+
+function focusFirstInteractiveElement(container) {
+  const focusables = getFocusableElements(container);
+  const target = focusables[0] || container;
+  if (target && typeof target.focus === "function") {
+    window.setTimeout(() => target.focus({ preventScroll: true }), 0);
+  }
+}
+
+function trapDialogFocus(event) {
+  const dialog = event.currentTarget;
+  if (event.key === "Escape") {
+    const closeControl = dialog.querySelector("[data-dialog-close], .close-button, [id*='CloseBtn'], [onclick*='close'], [onclick*='Close']");
+    if (closeControl && typeof closeControl.click === "function") {
+      event.preventDefault();
+      closeControl.click();
+    }
+    return;
+  }
+  if (event.key !== "Tab") return;
+  const focusables = getFocusableElements(dialog);
+  if (!focusables.length) {
+    event.preventDefault();
+    dialog.focus();
+    return;
+  }
+  const first = focusables[0];
+  const last = focusables[focusables.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
+function setDialogAccessibility(dialog, isOpen) {
+  if (!dialog) return;
+  if (!dialog.hasAttribute("role")) dialog.setAttribute("role", "dialog");
+  if (!dialog.hasAttribute("aria-modal")) dialog.setAttribute("aria-modal", "true");
+  dialog.setAttribute("aria-hidden", isOpen ? "false" : "true");
+  if (isOpen) {
+    lastFocusedBeforeDialog = document.activeElement;
+    dialog.setAttribute("tabindex", "-1");
+    dialog.addEventListener("keydown", trapDialogFocus);
+    focusFirstInteractiveElement(dialog);
+  } else {
+    dialog.removeEventListener("keydown", trapDialogFocus);
+    if (lastFocusedBeforeDialog && typeof lastFocusedBeforeDialog.focus === "function" && document.contains(lastFocusedBeforeDialog)) {
+      window.setTimeout(() => lastFocusedBeforeDialog.focus({ preventScroll: true }), 0);
+    }
+  }
+}
+
+function initializeDialogAccessibility() {
+  const dialogs = document.querySelectorAll(".confirm-modal, .modal-overlay, .auth-screen");
+  dialogs.forEach((dialog) => {
+    setDialogAccessibility(dialog, dialog.classList.contains("open") || dialog.style.display === "grid" || dialog.style.display === "flex");
+    const observer = new MutationObserver(() => {
+      const isOpen = dialog.classList.contains("open") || dialog.style.display === "grid" || dialog.style.display === "flex";
+      setDialogAccessibility(dialog, isOpen);
+    });
+    observer.observe(dialog, { attributes: true, attributeFilter: ["class", "style"] });
+  });
+}
+
+function getApiBaseUrl() {
+  return (typeof runtimeConfig !== "undefined" && runtimeConfig && runtimeConfig.apiBaseUrl) ? runtimeConfig.apiBaseUrl : "";
+}
+
+async function parseJsonResponse(res) {
+  try {
+    return await res.json();
+  } catch (e) {
+    return {};
+  }
+}
+
+async function requireSuccessfulMutation(url, options = {}, successPredicate) {
+  if (typeof navigator !== "undefined" && navigator && navigator.onLine === false) {
+    const err = new Error(currentLanguage === "en" ? "You appear to be offline. Please check your connection and retry." : "يبدو أن الاتصال منقطع. تحقق من الشبكة ثم أعد المحاولة.");
+    err.code = "OFFLINE";
+    throw err;
+  }
+  const fetchFn = typeof authenticatedFetch === "function" ? authenticatedFetch : fetch;
+  const authHeaders = {};
+  if (typeof authenticatedFetch !== "function" && typeof auth !== "undefined" && auth && auth.currentUser && typeof auth.currentUser.getIdToken === "function") {
+    const token = await auth.currentUser.getIdToken();
+    if (token) authHeaders.Authorization = `Bearer ${token}`;
+  }
+  const res = await fetchFn(`${getApiBaseUrl()}${url}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders,
+      ...(options.headers || {})
+    }
+  });
+  const data = await parseJsonResponse(res);
+  const ok = res.ok && (typeof successPredicate === "function" ? successPredicate(data) : data.success !== false);
+  if (!ok) {
+    const err = new Error(data.message || data.error || `Request failed with status ${res.status}`);
+    err.status = res.status;
+    err.code = data.error || "REQUEST_FAILED";
+    err.response = data;
+    throw err;
+  }
+  return data;
+}
+
+function showRetryFailure(message, retryFn) {
+  const retryText = currentLanguage === "en" ? "Retry" : "إعادة المحاولة";
+  if (typeof showToast === "function") showToast(message);
+  if (typeof window !== "undefined" && typeof retryFn === "function") {
+    window._lastSensitiveRetry = retryFn;
+  }
+  const activeButton = document.activeElement;
+  if (activeButton && activeButton.tagName === "BUTTON") {
+    activeButton.disabled = false;
+    activeButton.title = retryText;
+  }
 }
 
 // --- Environment Config + Real Database (Firebase Firestore) ---
@@ -1350,30 +1679,68 @@ function validateClientRuntimeConfig(config, firebaseClientConfig) {
   const productionProjectId = "health-vibes-a4b3b";
 
   if (!projectId) {
-    throw new Error("[Health Vibes] Firebase projectId is required.");
+    throw new Error("[Health Vibe] Firebase projectId is required.");
   }
   if (expectedProjectId && projectId !== expectedProjectId) {
-    throw new Error(`[Health Vibes] ${env} expected Firebase project ${expectedProjectId}; got ${projectId}.`);
+    throw new Error(`[Health Vibe] ${env} expected Firebase project ${expectedProjectId}; got ${projectId}.`);
   }
   if (env === "production" && (emulatorsEnabled || config.allowDemoSeed === true || config.debug === true)) {
-    throw new Error("[Health Vibes] Production cannot enable emulators, demo data, or debug mode.");
+    throw new Error("[Health Vibe] Production cannot enable emulators, demo data, or debug mode.");
   }
   if (env === "production" && projectId !== productionProjectId) {
-    throw new Error(`[Health Vibes] Production must use Firebase project ${productionProjectId}; got ${projectId}.`);
+    throw new Error(`[Health Vibe] Production must use Firebase project ${productionProjectId}; got ${projectId}.`);
   }
   if (env === "development" && projectId === productionProjectId && !emulatorsEnabled) {
-    throw new Error("[Health Vibes] Development cannot use the production Firebase project unless emulators are enabled.");
+    throw new Error("[Health Vibe] Development cannot use the production Firebase project unless emulators are enabled.");
   }
 }
 
 validateClientRuntimeConfig(runtimeConfig, firebaseConfig);
 
+// ── Client Storage Privacy Guard ─────────────────────────────
+const SENSITIVE_LEGACY_STORAGE_KEYS = [
+  "hv_active_session",
+  "hv_user_logged_in",
+  "hv_last_user_uid",
+  "hv_last_user_role",
+  "hv_session_security",
+  "hv_local_feedbacks",
+  "health_vibe_phone_verified",
+  "hv_known_accounts_registry",
+  "HV_LAST_ERRORS"
+];
+const SENSITIVE_LEGACY_STORAGE_PREFIXES = [
+  "hv_appointments",
+  "hv_medical_notes",
+  "hv_medical_files",
+  "hv_uploaded_files",
+  "hv_patient_files",
+  "hv_feedback",
+  "hv_privacy_consent"
+];
+
+function isSensitiveLegacyStorageKey(key) {
+  return SENSITIVE_LEGACY_STORAGE_KEYS.includes(key) ||
+    SENSITIVE_LEGACY_STORAGE_PREFIXES.some(prefix => key === prefix || key.startsWith(`${prefix}_`));
+}
+
+function purgeSensitiveLegacyStorage() {
+  try {
+    Object.keys(localStorage).forEach((key) => {
+      if (isSensitiveLegacyStorageKey(key)) localStorage.removeItem(key);
+    });
+  } catch(e) {}
+  try {
+    Object.keys(sessionStorage).forEach((key) => {
+      if (isSensitiveLegacyStorageKey(key)) sessionStorage.removeItem(key);
+    });
+  } catch(e) {}
+}
+
+purgeSensitiveLegacyStorage();
+
 // ── Session Persistence Manager ─────────────────────────────
 function getActiveSession() {
-  try {
-    const raw = sessionStorage.getItem("hv_active_session") || localStorage.getItem("hv_active_session");
-    if (raw) return JSON.parse(raw);
-  } catch(e) {}
   return null;
 }
 
@@ -1384,17 +1751,8 @@ function getActiveUser() {
   if (window._restoredSessionUser) {
     return window._restoredSessionUser;
   }
-  const session = getActiveSession();
-  if (session && session.uid) {
-    return {
-      uid: session.uid,
-      email: session.email || "",
-      displayName: session.displayName || session.name || (session.email ? session.email.split('@')[0] : ""),
-      name: session.name || session.displayName || "",
-      phoneNumber: session.phoneNumber || window._verifiedPhone || "",
-      role: session.role || ROLES.PATIENT,
-      emailVerified: session.emailVerified !== false
-    };
+  if (window._activeUser) {
+    return window._activeUser;
   }
   return null;
 }
@@ -1403,80 +1761,21 @@ window.getActiveUser = getActiveUser;
 function saveActiveSession(user, role) {
   if (!user) return;
   try {
-    const r = role || selectedRole || ROLES.PATIENT;
-    const remember = (typeof shouldRememberSession === "function") ? shouldRememberSession() : true;
-    const session = {
-      uid: user.uid || "persisted_user",
-      email: user.email || "",
-      displayName: user.displayName || (user.email ? user.email.split("@")[0] : "User"),
-      photoURL: user.photoURL || null,
-      role: r,
-      emailVerified: Boolean(user.emailVerified),
-      remember: Boolean(remember),
-      timestamp: Date.now()
-    };
-
-    // Always maintain in active tab session
-    sessionStorage.setItem("hv_active_session", JSON.stringify(session));
-    sessionStorage.setItem("hv_user_logged_in", "true");
-
-    if (remember) {
-      // Personal / Authorized Workstation: persist across browser restarts
-      localStorage.setItem("hv_active_session", JSON.stringify(session));
-      localStorage.setItem("hv_user_logged_in", "true");
-      localStorage.setItem("hv_last_user_uid", session.uid);
-      localStorage.setItem("hv_last_user_role", session.role);
-    } else {
-      // Shared / Clinical Desk: sanitize persistent storage to protect patient PHI
-      localStorage.removeItem("hv_active_session");
-      localStorage.removeItem("hv_user_logged_in");
-      localStorage.removeItem("hv_last_user_uid");
-      localStorage.removeItem("hv_last_user_role");
-    }
+    purgeSensitiveLegacyStorage();
     document.documentElement.classList.add("hv-has-session");
   } catch(e) {}
 }
 
 function clearActiveSession() {
   try {
-    sessionStorage.removeItem("hv_active_session");
-    sessionStorage.removeItem("hv_user_logged_in");
-    sessionStorage.removeItem("hv_session_security");
-    localStorage.removeItem("hv_active_session");
-    localStorage.removeItem("hv_user_logged_in");
-    localStorage.removeItem("hv_last_user_role");
-    localStorage.removeItem("hv_last_user_uid");
+    purgeSensitiveLegacyStorage();
     localStorage.removeItem("hv_active_screen");
-    localStorage.removeItem("hv_session_security");
     document.documentElement.classList.remove("hv-has-session");
   } catch(e) {}
 }
 
 function restorePersistedSession() {
-  const session = getActiveSession();
-  if (session && session.email) {
-    console.log("[Health Vibes] Restoring persisted session for:", session.email);
-    document.documentElement.classList.add("hv-has-session");
-    selectedRole = normalizeRole(session.role || ROLES.PATIENT);
-    const pseudoUser = {
-      uid: session.uid || "persisted_user",
-      email: session.email,
-      displayName: session.displayName || session.email.split("@")[0],
-      photoURL: session.photoURL || null,
-      emailVerified: session.emailVerified !== false,
-      role: session.role || ROLES.PATIENT,
-      getIdToken: async () => {
-        if (auth && auth.currentUser) {
-          try { return await auth.currentUser.getIdToken(); } catch(e) {}
-        }
-        return "";
-      },
-      reload: async () => {}
-    };
-    window._restoredSessionUser = pseudoUser;
-    transitionToApp(pseudoUser, { navigate: true });
-    return pseudoUser;
-  }
+  purgeSensitiveLegacyStorage();
   return null;
 }
 
@@ -1502,8 +1801,6 @@ try {
 
 function hasSavedAuthSession() {
   try {
-    if (localStorage.getItem("hv_active_session")) return true;
-    if (localStorage.getItem("hv_user_logged_in") === "true") return true;
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
       if (k && (k.startsWith("firebase:authUser:") || k.startsWith("firebase:persistence:"))) {
@@ -1514,12 +1811,12 @@ function hasSavedAuthSession() {
   return false;
 }
 
-// Fallback loader dismiss timer: if a session is being restored, give ample time to verify
-const loaderSafetyTimeoutMs = hasSavedAuthSession() ? 10000 : 3000;
+// Fallback loader dismiss timer: if a session is being restored, give ample time to verify (+35% longer duration)
+const loaderSafetyTimeoutMs = hasSavedAuthSession() ? 13500 : 4050;
 const loaderSafetyTimer = window.setTimeout(() => {
   if (loader && !loader.classList.contains("is-done")) {
     console.warn("Loader safety timeout: dismissing loader.");
-    loader.classList.add("is-done");
+    dismissLoader(true);
     if (!auth.currentUser && !hasSavedAuthSession()) {
       if (publicSite && publicSite.classList.contains("is-hidden")) {
         publicSite.classList.remove("is-hidden");
@@ -1536,6 +1833,22 @@ const db = firebase.firestore();
 const auth = firebase.auth();
 const storage = firebase.storage();
 const googleProvider = new firebase.auth.GoogleAuthProvider();
+
+if (runtimeConfig.emulators && runtimeConfig.emulators.enabled) {
+  const emu = runtimeConfig.emulators;
+  if (emu.firestore && db && typeof db.useEmulator === "function") {
+    try {
+      db.useEmulator(emu.firestore.host || "localhost", emu.firestore.port || 8080);
+    } catch (e) {}
+  }
+  if (emu.auth && auth && typeof auth.useEmulator === "function") {
+    try {
+      const authHost = emu.auth.host || "localhost";
+      const authPort = emu.auth.port || 9099;
+      auth.useEmulator(`http://${authHost}:${authPort}`, { disableWarnings: true });
+    } catch (e) {}
+  }
+}
 
 // =============================================================================
 // 🛡️ FIREBASE APP CHECK INITIALIZATION (Zero-Trust App Attestation)
@@ -1567,11 +1880,14 @@ function initAppCheck() {
           appCheckCfg.isTokenAutoRefreshEnabled !== false
         );
       } else {
-        appCheckInstance.activate(appCheckCfg.siteKey || "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI", true);
+        appCheckInstance.activate(appCheckCfg.siteKey, appCheckCfg.isTokenAutoRefreshEnabled !== false);
       }
       console.log("[APP CHECK] Initialized in Development mode (Debug Provider active).");
     } else {
-      const siteKey = appCheckCfg.siteKey || (typeof window !== "undefined" && window.HV_RECAPTCHA_KEY) || "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI";
+      const siteKey = appCheckCfg.siteKey || (typeof window !== "undefined" && window.HV_RECAPTCHA_KEY);
+      if (!siteKey) {
+        throw new Error("Missing App Check reCAPTCHA v3 site key.");
+      }
       appCheckInstance = firebase.appCheck();
       if (firebase.appCheck.ReCaptchaV3Provider) {
         appCheckInstance.activate(
@@ -1670,12 +1986,71 @@ function initErrorMonitoring() {
   console.log("[ERROR MONITORING] Global telemetry active (listeners installed).");
 }
 
+function redactClientPii(input) {
+  if (input === null || input === undefined) return input;
+  if (typeof input === "string") {
+    return input
+      .replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/gi, "[REDACTED_EMAIL]")
+      .replace(/\b[23]\d{13}\b/g, "[REDACTED_NATIONAL_ID]")
+      .replace(/\b\d{3}-\d{2}-\d{4}\b/g, "[REDACTED_NATIONAL_ID]")
+      .replace(/(?:\+?20|0)?1[0125]\d{8}\b/g, "[REDACTED_PHONE]")
+      .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, "[REDACTED_JWT]")
+      .replace(/\b(?:\d{4}[-\s]?){3}\d{4}\b/g, "[REDACTED_CARD]")
+      .replace(/(["']?(?:password|passwd|secret|api[_-]?key|token|auth[a-z]*|bearer)["']?\s*[:=]\s*["']?)([^"',;&\s]{3,})/gi, "$1[REDACTED_SECRET]")
+      .replace(/(["']?(?:dob|birthdate)["']?\s*[:=]\s*["']?)(\d{4}[-/]\d{2}[-/]\d{2}|\d{2}[-/]\d{2}[-/]\d{4})/gi, "$1[REDACTED_DOB]");
+  }
+  return input;
+}
+
+function categorizeClientError(type = "", message = "", source = "") {
+  const t = String(type).toLowerCase();
+  const m = String(message).toLowerCase();
+  const s = String(source).toLowerCase();
+
+  if (t.includes("ai") || t.includes("gemini") || m.includes("gemini") || m.includes("triage") || s.includes("ai")) {
+    return "ai_service";
+  }
+  if (t.includes("notification") || t.includes("smtp") || t.includes("email") || m.includes("smtp") || m.includes("mail")) {
+    return "notification";
+  }
+  if (t.includes("auth") || t.includes("token") || m.includes("unauthorized") || m.includes("auth/")) {
+    return "auth";
+  }
+  if (t.includes("firestore") || t.includes("firebase") || t.includes("storage") || m.includes("permission_denied") || m.includes("firestore")) {
+    return "firebase";
+  }
+  if (t.includes("api") || t.includes("fetch") || t.includes("http") || s.includes("server")) {
+    return "api";
+  }
+  return "javascript";
+}
+
+function getClientSessionId() {
+  if (typeof window !== "undefined") {
+    if (!window.__HV_SESSION_ID) {
+      window.__HV_SESSION_ID = `sess_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+      // Send session ping to backend
+      try {
+        const apiUrl = (typeof runtimeConfig !== "undefined" && runtimeConfig && runtimeConfig.apiBaseUrl) ? runtimeConfig.apiBaseUrl : "";
+        fetch(`${apiUrl}/api/monitoring/sessions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionId: window.__HV_SESSION_ID })
+        }).catch(() => {});
+      } catch (e) {}
+    }
+    return window.__HV_SESSION_ID;
+  }
+  return null;
+}
+
 function captureError(details = {}) {
   try {
     const now = Date.now();
     const type = details.type || "generic_error";
-    const message = details.message || "Unknown error occurred";
-    const signature = `${type}:${message}:${details.lineno || 0}`;
+    const rawMessage = details.message || "Unknown error occurred";
+    const cleanMessage = redactClientPii(rawMessage);
+    const signature = `${type}:${cleanMessage}:${details.lineno || 0}`;
 
     // De-duplication: skip if identical error occurred within last 5 seconds
     if (signature === lastErrorSignature && (now - lastErrorTimestamp) < 5000) {
@@ -1699,16 +2074,23 @@ function captureError(details = {}) {
       : null;
     const currentScreen = activeScreenEl ? (activeScreenEl.id || "unknown") : "unknown";
 
+    const traceId = details.traceId || (typeof window !== "undefined" ? (window.__HV_TRACE_ID || `trc_${now}_${Math.random().toString(36).substring(2, 7)}`) : null);
+    const sessionId = getClientSessionId();
+    const category = details.category || categorizeClientError(type, cleanMessage, details.source);
+
     const payload = {
       errorId: `err_${now}_${Math.random().toString(36).substring(2, 7)}`,
+      traceId: traceId,
+      sessionId: sessionId,
+      category: category,
       type: type,
-      message: message,
-      stack: details.stack ? String(details.stack).substring(0, 3000) : null,
+      message: cleanMessage,
+      stack: details.stack ? redactClientPii(String(details.stack).substring(0, 3000)) : null,
       source: details.source || (typeof window !== "undefined" ? window.location.href : "unknown"),
       lineno: details.lineno || null,
       colno: details.colno || null,
       screen: currentScreen,
-      url: typeof window !== "undefined" ? window.location.href : "",
+      url: typeof window !== "undefined" ? redactClientPii(window.location.href) : "",
       userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "node",
       userId: (typeof auth !== "undefined" && auth && auth.currentUser) ? auth.currentUser.uid : "anonymous",
       environment: (typeof runtimeConfig !== "undefined" && runtimeConfig && runtimeConfig.environment) ? runtimeConfig.environment : "development",
@@ -1724,24 +2106,26 @@ function captureError(details = {}) {
     }
 
     try {
-      if (typeof localStorage !== "undefined") {
-        localStorage.setItem("HV_LAST_ERRORS", JSON.stringify(HV_ERROR_BUFFER.slice(0, 10)));
-      }
+      purgeSensitiveLegacyStorage();
     } catch (e) {}
 
     // Dispatch to backend if within rate limit
     if (errorDispatchCount <= 15) {
       const apiUrl = (typeof runtimeConfig !== "undefined" && runtimeConfig && runtimeConfig.apiBaseUrl) ? runtimeConfig.apiBaseUrl : "";
+      const headers = {
+        "Content-Type": "application/json",
+        "X-Trace-Id": traceId || ""
+      };
       if (typeof authenticatedFetch === "function") {
         authenticatedFetch(`${apiUrl}/api/monitoring/errors`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers,
           body: JSON.stringify(payload)
         }).catch(() => {});
       } else if (typeof fetch === "function") {
         fetch(`${apiUrl}/api/monitoring/errors`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers,
           body: JSON.stringify(payload)
         }).catch(() => {});
       }
@@ -1759,6 +2143,7 @@ function captureError(details = {}) {
 function reportManualError(message, context = {}) {
   captureError({
     type: context.type || "manual_reported_error",
+    category: context.category || null,
     message: message,
     stack: context.stack || (new Error().stack),
     severity: context.severity || "WARN",
@@ -1773,9 +2158,7 @@ function getErrorLogs() {
 function clearErrorLogs() {
   HV_ERROR_BUFFER.length = 0;
   try {
-    if (typeof localStorage !== "undefined") {
-      localStorage.removeItem("HV_LAST_ERRORS");
-    }
+    purgeSensitiveLegacyStorage();
   } catch (e) {}
 }
 
@@ -1794,7 +2177,7 @@ async function fetchErrorMonitoringSummary() {
     status: "ok",
     environment: (typeof runtimeConfig !== "undefined" && runtimeConfig) ? runtimeConfig.environment : "development",
     totalErrors: HV_ERROR_BUFFER.length,
-    crashFreeRate: HV_ERROR_BUFFER.length === 0 ? "100%" : "99.4%",
+    crashFreeRate: "Unavailable",
     recentErrors: HV_ERROR_BUFFER
   };
 }
@@ -1810,20 +2193,33 @@ async function updateAdminErrorMonitoringUI() {
   const tableBody = document.getElementById("monitoringErrorsTableBody");
 
   if (totalCountEl) totalCountEl.textContent = summary.totalErrors || 0;
-  if (crashFreeEl) crashFreeEl.textContent = summary.crashFreeRate || "100%";
+  if (crashFreeEl) crashFreeEl.textContent = summary.crashFreeRate || "Unavailable";
+
+  // Display alert banner if active
+  const alertsBanner = document.getElementById("monitoringActiveAlertsBanner");
+  if (alertsBanner) {
+    const active = summary.activeAlerts || [];
+    if (active.length > 0) {
+      alertsBanner.style.display = "block";
+      alertsBanner.innerHTML = `⚠️ تنبيه نشط: ${active.map(a => a.message).join(" | ")}`;
+    } else {
+      alertsBanner.style.display = "none";
+    }
+  }
 
   if (tableBody) {
     const errors = summary.recentErrors || [];
     if (errors.length === 0) {
-      tableBody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--muted); padding: 18px;">✅ لا توجد أخطاء مسجلة حالياً - النظام يعمل بكفاءة تامة</td></tr>`;
+      tableBody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--muted); padding: 18px;">✅ لا توجد أخطاء مسجلة حالياً - النظام يعمل بكفاءة تامة</td></tr>`;
       return;
     }
     tableBody.innerHTML = errors.slice(0, 15).map(err => `
       <tr style="border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.06));">
         <td style="padding: 10px; font-size: 12px; font-family: monospace;">${new Date(err.timestamp).toLocaleTimeString()}</td>
         <td style="padding: 10px;"><span class="pill ${err.severity === 'CRITICAL' ? 'danger' : err.severity === 'WARN' ? 'warning' : 'danger'}" style="font-size: 11px;">${err.severity || 'ERROR'}</span></td>
-        <td style="padding: 10px; font-size: 12.5px; font-weight: 600;">${typeof escapeHtml === 'function' ? escapeHtml(err.message || '') : (err.message || '')}</td>
-        <td style="padding: 10px; font-size: 11.5px; color: var(--muted);">${err.type || ''} (${err.screen || ''})</td>
+        <td style="padding: 10px; font-size: 11px; font-family: monospace; color: var(--accent-light, #38bdf8);">${err.traceId ? err.traceId.slice(0, 14) + '...' : '-'}</td>
+        <td style="padding: 10px; font-size: 12px; font-weight: 600;">${typeof escapeHtml === 'function' ? escapeHtml(err.message || '') : (err.message || '')}</td>
+        <td style="padding: 10px; font-size: 11px; color: var(--muted);"><span class="badge" style="font-size: 10px; background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px;">${err.category || 'javascript'}</span> ${err.type || ''}</td>
         <td style="padding: 10px; font-size: 11px; color: var(--muted);">${err.userRole || 'anon'}</td>
       </tr>
     `).join("");
@@ -1838,30 +2234,18 @@ async function triggerBackupSnapshot() {
   if (btn) btn.disabled = true;
 
   try {
-    const apiUrl = (typeof runtimeConfig !== "undefined" && runtimeConfig && runtimeConfig.apiBaseUrl) ? runtimeConfig.apiBaseUrl : "";
-    const fetchFn = typeof authenticatedFetch === "function" ? authenticatedFetch : fetch;
     const initiator = (auth && auth.currentUser) ? auth.currentUser.uid : "admin_manual";
-
-    const res = await fetchFn(`${apiUrl}/api/admin/backup/create`, {
+    const data = await requireSuccessfulMutation("/api/admin/backup/create", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ initiator })
-    });
-
-    const data = await res.json();
-    if (res.ok) {
-      if (typeof showToast === "function") {
-        showToast(`✅ تم إنشاء نسخة احتياطية مشفرة بنجاح: ${data.manifest.backupId}`, "success");
-      }
-      await renderAdminBackupUI();
-      return data;
-    } else {
-      throw new Error(data.message || "Failed to create backup snapshot.");
-    }
-  } catch (err) {
+    }, data => data.success === true && data.manifest && data.manifest.backupId);
     if (typeof showToast === "function") {
-      showToast(`❌ فشل إنشاء النسخة الاحتياطية: ${err.message}`, "error");
+      showToast(`تم إنشاء نسخة احتياطية مشفرة بنجاح: ${data.manifest.backupId}`, "success");
     }
+    await renderAdminBackupUI();
+    return data;
+  } catch (err) {
+    showRetryFailure(`فشل إنشاء النسخة الاحتياطية: ${err.message}`, () => triggerBackupSnapshot());
     console.error("[BACKUP ERROR]:", err);
     return null;
   } finally {
@@ -1871,81 +2255,53 @@ async function triggerBackupSnapshot() {
 
 async function fetchBackupSnapshotsList() {
   try {
-    const apiUrl = (typeof runtimeConfig !== "undefined" && runtimeConfig && runtimeConfig.apiBaseUrl) ? runtimeConfig.apiBaseUrl : "";
     const fetchFn = typeof authenticatedFetch === "function" ? authenticatedFetch : fetch;
-    const res = await fetchFn(`${apiUrl}/api/admin/backup/list`);
+    const res = await fetchFn(`${getApiBaseUrl()}/api/admin/backup/list`);
     if (res.ok) {
       return await res.json();
     }
-  } catch (e) {}
-
-  return {
-    status: "ok",
-    count: 1,
-    rpoCompliance: "< 15 minutes (PITR active)",
-    rtoTarget: "< 30 minutes",
-    snapshots: [
-      {
-        backupId: `backup_${new Date().toISOString().slice(0, 10)}_auto`,
-        timestamp: new Date().toISOString(),
-        totalRecords: 120,
-        status: "COMPLETED",
-        checksum: { algorithm: "SHA-256", hash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" }
-      }
-    ]
-  };
+    const data = await parseJsonResponse(res);
+    throw new Error(data.message || data.error || "Failed to fetch backup snapshots.");
+  } catch (e) {
+    showRetryFailure(`فشل تحميل النسخ الاحتياطية: ${e.message}`, () => renderAdminBackupUI());
+    return { status: "error", count: 0, snapshots: [], error: e.message };
+  }
 }
 
 async function verifyBackupSnapshot(backupId) {
   try {
-    const apiUrl = (typeof runtimeConfig !== "undefined" && runtimeConfig && runtimeConfig.apiBaseUrl) ? runtimeConfig.apiBaseUrl : "";
-    const fetchFn = typeof authenticatedFetch === "function" ? authenticatedFetch : fetch;
-    const res = await fetchFn(`${apiUrl}/api/admin/backup/verify`, {
+    const result = await requireSuccessfulMutation("/api/admin/backup/verify", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ backupId })
-    });
-    const result = await res.json();
+    }, data => typeof data.valid === "boolean");
     if (result.valid) {
       if (typeof showToast === "function") {
-        showToast(`🔒 سلامة النسخة الاحتياطية مؤكدة: SHA-256 سليم`, "success");
+        showToast(`سلامة النسخة الاحتياطية مؤكدة: SHA-256 سليم`, "success");
       }
     } else {
       if (typeof showToast === "function") {
-        showToast(`⚠️ تحذير: فشل فحص سلامة النسخة الاحتياطية!`, "error");
+        showToast(`تحذير: فشل فحص سلامة النسخة الاحتياطية!`, "error");
       }
     }
     return result;
   } catch (err) {
-    if (typeof showToast === "function") {
-      showToast(`فشل التحقق: ${err.message}`, "error");
-    }
+    showRetryFailure(`فشل التحقق: ${err.message}`, () => verifyBackupSnapshot(backupId));
     return { valid: false, error: err.message };
   }
 }
 
 async function restoreBackupSnapshot(backupId, confirmToken, dryRun = true) {
   try {
-    const apiUrl = (typeof runtimeConfig !== "undefined" && runtimeConfig && runtimeConfig.apiBaseUrl) ? runtimeConfig.apiBaseUrl : "";
-    const fetchFn = typeof authenticatedFetch === "function" ? authenticatedFetch : fetch;
-    const res = await fetchFn(`${apiUrl}/api/admin/backup/restore`, {
+    const data = await requireSuccessfulMutation("/api/admin/backup/restore", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ backupId, confirmToken, dryRun })
-    });
-    const data = await res.json();
-    if (res.ok) {
-      if (typeof showToast === "function") {
-        showToast(dryRun ? `🧪 اكتملت المحاكاة الاختبارية للاستعادة بنجاح` : `✅ تم استعادة قاعدة البيانات بنجاح`, "success");
-      }
-      return data;
-    } else {
-      throw new Error(data.message || "Restoration rejected.");
-    }
-  } catch (err) {
+    }, data => data.success === true);
     if (typeof showToast === "function") {
-      showToast(`فشل الاستعادة: ${err.message}`, "error");
+      showToast(dryRun ? `اكتملت المحاكاة الاختبارية للاستعادة بنجاح` : `تم استعادة قاعدة البيانات بنجاح`, "success");
     }
+    return data;
+  } catch (err) {
+    showRetryFailure(`فشل الاستعادة: ${err.message}`, () => restoreBackupSnapshot(backupId, confirmToken, dryRun));
     return { success: false, error: err.message };
   }
 }
@@ -2010,12 +2366,6 @@ if (runtimeConfig.environment === "development" && runtimeConfig.emulators && ru
   }
 }
 
-// Immediately enforce permanent LOCAL persistence so user stays logged in across sessions
-if (auth && firebase.auth && firebase.auth.Auth && firebase.auth.Auth.Persistence) {
-  auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(err => {
-    console.warn("Could not set initial auth persistence:", err);
-  });
-}
 const API_BASE_URL = (runtimeConfig.apiBaseUrl || "").replace(/\/$/, "");
 
 const APP_ENV = {
@@ -2033,7 +2383,7 @@ function renderDevEnvironmentBadge() {
 
   const badge = document.createElement("div");
   badge.id = "hvDevEnvBadge";
-  badge.setAttribute("title", `Health Vibes AI - Development Mode\nAPI: ${API_BASE_URL || 'Local'}\nProject: ${firebaseConfig.projectId}`);
+  badge.setAttribute("title", `Health Vibe AI - Development Mode\nAPI: ${API_BASE_URL || 'Local'}\nProject: ${firebaseConfig.projectId}`);
   badge.style.cssText = "position:fixed;bottom:14px;right:14px;z-index:99999;background:#0f172a;color:#38bdf8;border:1px solid #38bdf8;border-radius:20px;padding:4px 12px;font-size:11px;font-weight:700;font-family:inherit;box-shadow:0 4px 12px rgba(0,0,0,0.3);display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;letter-spacing:0.5px;";
   badge.innerHTML = `<span>🛠️ DEV</span><span style="opacity:0.75;font-weight:normal;font-size:10px;">(تطوير)</span>`;
   badge.onclick = () => {
@@ -2065,7 +2415,7 @@ if (typeof document !== "undefined") {
 
 // Protocol environment check: Firebase Auth requires http/https
 if (typeof window !== "undefined" && window.location.protocol === "file:") {
-  console.warn("[Health Vibes] Running on file:// protocol. Attempting auto-redirect to localhost:3000...");
+  console.warn("[Health Vibe] Running on file:// protocol. Attempting auto-redirect to localhost:3000...");
   fetch("http://localhost:3000/index.html", { method: "HEAD", mode: "no-cors" })
     .then(() => {
       window.location.href = "http://localhost:3000";
@@ -2078,8 +2428,8 @@ if (typeof window !== "undefined" && window.location.protocol === "file:") {
           banner.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:99999;background:linear-gradient(90deg, #b91c1c, #991b1b);color:#ffffff;padding:12px 24px;text-align:center;font-size:14px;font-family:inherit;font-weight:600;box-shadow:0 4px 14px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;";
           const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
           banner.innerHTML = isEn
-            ? "<span>⚠️ <strong>Notice:</strong> You are viewing this page via <code>file://</code>. Firebase Authentication requires HTTP. Please open <a href=\"http://localhost:3000\" style=\"color:#fef08a;text-decoration:underline;font-weight:bold;\">http://localhost:3000</a> (run <code>start-server.bat</code>).</span>"
-            : "<span>⚠️ <strong>تنبيه:</strong> أنت تتصفح التطبيق كملف محلي (<code>file://</code>). لتفعيل تسجيل الدخول، يرجى تشغيل <code>start-server.bat</code> وفتح <a href=\"http://localhost:3000\" style=\"color:#fef08a;text-decoration:underline;font-weight:bold;\">http://localhost:3000</a></span>";
+            ? "<span>⚠️ <strong>Notice:</strong> You are viewing this page via <code>file://</code>. Firebase Authentication requires HTTP. Please open <a href=\"http://localhost:3000\" style=\"color:#fef08a;text-decoration:underline;font-weight:bold;display:inline-flex;align-items:center;min-height:44px;padding:0 6px;\">http://localhost:3000</a> (run <code>start-server.bat</code>).</span>"
+            : "<span>⚠️ <strong>تنبيه:</strong> أنت تتصفح التطبيق كملف محلي (<code>file://</code>). لتفعيل تسجيل الدخول، يرجى تشغيل <code>start-server.bat</code> وفتح <a href=\"http://localhost:3000\" style=\"color:#fef08a;text-decoration:underline;font-weight:bold;display:inline-flex;align-items:center;min-height:44px;padding:0 6px;\">http://localhost:3000</a></span>";
           document.body.prepend(banner);
         }
       };
@@ -2102,9 +2452,12 @@ async function callBackend(path, options = {}) {
       : "خادم الباك إند غير مهيأ لهذا الموقع المنشور.");
   }
 
+  const capturedContext = window.asyncContextManager ? window.asyncContextManager.captureContext() : null;
   const token = await auth.currentUser.getIdToken();
   const timeoutMs = options.timeoutMs || 12000;
-  const controller = new AbortController();
+  const controller = window.asyncContextManager
+    ? window.asyncContextManager.createAbortController(`backend_${path}`)
+    : new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
   let response;
   try {
@@ -2119,6 +2472,12 @@ async function callBackend(path, options = {}) {
     });
   } catch (err) {
     if (err.name === "AbortError") {
+      if (controller.signal && controller.signal.aborted && controller.signal.reason && String(controller.signal.reason).startsWith("AUTH_")) {
+        console.log(`[Health Vibe] In-flight backend call aborted cleanly: ${controller.signal.reason}`);
+        const abortErr = new Error(`Request cancelled: ${controller.signal.reason}`);
+        abortErr.isContextCancelled = true;
+        throw abortErr;
+      }
       throw new Error(currentLanguage === "en"
         ? "Backend request timed out. Please try again."
         : "انتهت مهلة الاتصال بخادم الباك إند. حاول مرة أخرى.");
@@ -2126,10 +2485,34 @@ async function callBackend(path, options = {}) {
     throw err;
   } finally {
     window.clearTimeout(timeoutId);
+    if (window.asyncContextManager) {
+      window.asyncContextManager.unregisterAbortController(controller);
+    }
   }
 
+  // Pre-application validation: recheck context before applying or returning payload
+  if (window.asyncContextManager && capturedContext) {
+    const valid = window.asyncContextManager.isContextValid(capturedContext, { requireSameUser: true });
+    if (!valid.valid) {
+      const obsoleteErr = new Error(`Request discarded: context became obsolete (${valid.reason})`);
+      obsoleteErr.isObsoleteContext = true;
+      obsoleteErr.code = valid.reason;
+      throw obsoleteErr;
+    }
+  }
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
+    if (response.status === 401 && payload.error === 'TOKEN_REVOKED') {
+      console.warn('[AUTH REVOKED] Server revoked active session/token. Forcing clean sign-out.');
+      if (typeof leaveApp === 'function') {
+        leaveApp();
+      }
+      if (typeof showToast === 'function') {
+        showToast(currentLanguage === 'en'
+          ? 'Your session was revoked across all devices. Please sign in again.'
+          : 'تم إنهاء جلستك من كافة الأجهزة. يرجى تسجيل الدخول مجدداً.');
+      }
+    }
     const error = new Error(payload.message || payload.error || `Backend request failed (${response.status})`);
     error.status = response.status;
     error.statusCode = response.status;
@@ -2185,14 +2568,7 @@ async function applyAuthPersistence(remember) {
 
   try {
     localStorage.setItem(REMEMBER_ME_KEY, remember ? "true" : "false");
-    const securityMeta = {
-      remember: Boolean(remember),
-      mode: remember ? "LOCAL" : "SESSION",
-      updatedAt: Date.now(),
-      origin: window.location.origin
-    };
-    localStorage.setItem(SESSION_SECURITY_KEY, JSON.stringify(securityMeta));
-    sessionStorage.setItem(SESSION_SECURITY_KEY, JSON.stringify(securityMeta));
+    purgeSensitiveLegacyStorage();
   } catch(e) {}
 }
 
@@ -2358,67 +2734,12 @@ function initIdleSessionLockMonitor() {
 }
 
 function getLocalAccountsRegistry() {
-  try {
-    const raw = localStorage.getItem(ACCOUNTS_REGISTRY_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        // Filter out any mock/dummy/placeholder accounts
-        const cleaned = parsed.filter(u => {
-          if (!u || !u.email) return false;
-          const id = String(u.id || "");
-          const email = String(u.email || "").toLowerCase();
-          if (id.startsWith("usr_doc_") || id.startsWith("usr_reg_") || id.startsWith("demo_") || id.startsWith("mock_") || id.startsWith("test_")) return false;
-          if (email.includes("@healthvibe.ai") && !isOwnerUser(email)) return false;
-          return true;
-        });
-        if (cleaned.length !== parsed.length) {
-          localStorage.setItem(ACCOUNTS_REGISTRY_KEY, JSON.stringify(cleaned));
-        }
-        return cleaned;
-      }
-    }
-  } catch(e) {}
+  purgeSensitiveLegacyStorage();
   return [];
 }
 
 function saveToAccountsRegistry(userObj) {
-  if (!userObj || !userObj.email) return;
-  const emailNorm = userObj.email.trim().toLowerCase();
-  const idStr = String(userObj.id || userObj.uid || "");
-
-  // Exclude fake/mock identifiers
-  if (idStr.startsWith("usr_doc_") || idStr.startsWith("usr_reg_") || idStr.startsWith("demo_") || idStr.startsWith("mock_")) return;
-  if (emailNorm.includes("@healthvibe.ai") && !isOwnerUser(emailNorm)) return;
-
-  const list = getLocalAccountsRegistry();
-  const idx = list.findIndex(u => (u.email && u.email.trim().toLowerCase() === emailNorm) || (u.id && u.id === (userObj.id || userObj.uid)));
-
-  const isOwner = isOwnerUser(userObj.email);
-  const verificationRevoked = isVerificationRevoked(userObj.email);
-  const role = userObj.role || (isOwner ? ROLES.SUPER_ADMIN : ROLES.PATIENT);
-  const record = {
-    id: userObj.id || userObj.uid || `user_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
-    name: userObj.name || userObj.displayName || userObj.email.split('@')[0],
-    displayName: userObj.name || userObj.displayName || userObj.email.split('@')[0],
-    email: userObj.email,
-    role: role,
-    emailVerified: verificationRevoked ? false : Boolean(userObj.emailVerified || isOwner),
-    isOwner: isOwner,
-    clinic: userObj.clinic || "",
-    createdAt: userObj.createdAt || Date.now(),
-    lastSeen: Date.now()
-  };
-
-  if (idx >= 0) {
-    list[idx] = { ...list[idx], ...record };
-  } else {
-    list.unshift(record);
-  }
-
-  try {
-    localStorage.setItem(ACCOUNTS_REGISTRY_KEY, JSON.stringify(list));
-  } catch(e) {}
+  purgeSensitiveLegacyStorage();
 }
 
 function renderSavedAccountsSwitcher() {
@@ -2492,6 +2813,46 @@ async function getAllKnownAccounts() {
       saveToAccountsRegistry(curRec);
     }
   }
+
+  // 1.5. Ensure all designated system owner profiles are registered & visible
+  const KNOWN_OWNER_PROFILES = [
+    { email: "mohammedabdelrouf85@gmail.com", name: "Mohammed Abdelrouf" },
+    { email: "mennamahmoudtawfik281@gmail.com", name: "Menna Mahmoud Tawfik" },
+    { email: "sondoselbehery287@gmail.com", name: "Sondos Elbehery" },
+    { email: "badr46694@gmail.com", name: "Badr Ahmed" }
+  ];
+
+  KNOWN_OWNER_PROFILES.forEach(profile => {
+    const e = profile.email.toLowerCase();
+    if (!accountMap.has(e)) {
+      const ownerRec = {
+        id: `owner_${e.replace(/[^a-zA-Z0-9]/g, '_')}`,
+        name: profile.name,
+        displayName: profile.name,
+        email: profile.email,
+        role: ROLES.SUPER_ADMIN,
+        emailVerified: true,
+        isOwner: true,
+        accountStatus: "active",
+        status: "active",
+        createdAt: 1710000000000,
+        lastSeen: Date.now()
+      };
+      accountMap.set(e, ownerRec);
+      saveToAccountsRegistry(ownerRec);
+    } else {
+      const existing = accountMap.get(e);
+      existing.isOwner = true;
+      existing.emailVerified = true;
+      if (!existing.role || existing.role === ROLES.PATIENT) {
+        existing.role = ROLES.SUPER_ADMIN;
+      }
+      if (!existing.name || existing.name === e.split('@')[0]) {
+        existing.name = profile.name;
+        existing.displayName = profile.name;
+      }
+    }
+  });
 
   // 2. Local accounts registry (all verified & regular accounts that ever entered)
   const localList = getLocalAccountsRegistry();
@@ -2719,51 +3080,26 @@ async function getCases(options = {}) {
     const isOwner = isOwnerUser(user.email);
     const role = normalizeRole(selectedRole, isOwner);
 
+    if (role === ROLES.SUPPORT) return [];
     let cases = [];
-    if (role === ROLES.DOCTOR || isAdminRole(role) || isOwner) {
-      // 🩺 DOCTOR & ADMIN: Fetch all cases for clinical review queue
-      try {
-        const snap = await db.collection("cases").get();
-        cases = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      } catch (e) {
-        console.warn("Direct cases collection get failed, trying fallback:", e.message);
-        try {
-          const snapAssigned = await db.collection("cases").where("assignedDoctorId", "==", user.uid).get();
-          cases = snapAssigned.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        } catch (e2) {}
-        try {
-          const snapUnassigned = await db.collection("cases").where("assignedDoctorId", "==", null).get();
-          const byId = new Map(cases.map(c => [c.id, c]));
-          snapUnassigned.docs.forEach(doc => {
-            if (!byId.has(doc.id)) byId.set(doc.id, { id: doc.id, ...doc.data() });
-          });
-          cases = Array.from(byId.values());
-        } catch (e3) {}
-      }
-    } else if (role === ROLES.PATIENT) {
-      // 👤 PATIENT PRIVACY: Fetch only own cases
-      try {
-        const snap = await db.collection("cases").where("patientId", "==", user.uid).get();
-        cases = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      } catch(e) {}
-      if (user.email) {
-        try {
-          const emailSnap = await db.collection("cases").where("patientEmail", "==", user.email).get();
-          const byId = new Map(cases.map(c => [c.id, c]));
-          emailSnap.docs.forEach(doc => {
-            if (!byId.has(doc.id)) byId.set(doc.id, { id: doc.id, ...doc.data() });
-          });
-          cases = Array.from(byId.values());
-        } catch (e) {
-          console.warn("Patient cases email fallback failed:", e.message);
-        }
-      }
-    } else {
-      try {
-        const snapshot = await db.collection("cases").get();
-        cases = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      } catch(e) {}
+    let query = db.collection("cases");
+    if (role === ROLES.DOCTOR) query = query.where("assignedDoctorId", "==", user.uid);
+    else if (role === ROLES.CLINIC_ADMIN) {
+      const profile = await db.collection("users").doc(user.uid).get();
+      const clinicId = profile.exists && (profile.data().clinicId || profile.data().clinic);
+      if (!clinicId) return [];
+      query = query.where("clinicId", "==", clinicId);
+    } else if ([ROLES.PATIENT, ROLES.DOCTOR_PENDING].includes(role)) {
+      query = query.where("patientId", "==", user.uid);
+      // Rules cannot filter hidden drafts out of a query. Query published records explicitly.
+      query = query.where("doctorApproved", "==", true);
+    } else if (role !== ROLES.SUPER_ADMIN) return [];
+    const maxLimit = (options && options.limit) ? options.limit : 50;
+    if (typeof query.limit === "function") {
+      query = query.limit(maxLimit);
     }
+    const snap = await query.get();
+    cases = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
     // Client-side sort by submittedAt or createdAt descending
     cases.sort((a, b) => {
@@ -2781,7 +3117,7 @@ async function getCases(options = {}) {
       return hasPatient && hasVitals;
     });
 
-    return role === ROLES.PATIENT ? cases.map(maskUnapprovedPatientCase) : cases;
+    return [ROLES.PATIENT, ROLES.DOCTOR_PENDING].includes(role) ? cases.map(maskUnapprovedPatientCase) : cases;
   } catch (err) {
     console.error("getCases error:", err);
     return [];
@@ -3081,36 +3417,39 @@ async function writeClientAuditLog(action, details = {}) {
 
 async function updateCaseStatus(id, newStatus, note, extraFields = {}) {
   if (!enforcePermission(PERMISSIONS.REVIEW_CASE, "Update Case Status")) return false;
-  const user = auth ? auth.currentUser : null;
   const isEn = currentLanguage === "en";
+  const transitionKey = `${id}:${newStatus}`;
+  const transitionLocks = window.__activeDoctorTransitions || new Set();
+  window.__activeDoctorTransitions = transitionLocks;
+
+  if (transitionLocks.has(transitionKey)) {
+    showToast(isEn ? "This clinical action is already being saved." : "جاري حفظ هذا الإجراء السريري بالفعل.");
+    return false;
+  }
 
   try {
-    if (newStatus === CASE_STATUS.APPROVED) {
-      const reviewedRev = extraFields.clinicalRevision !== undefined
-        ? Number(extraFields.clinicalRevision)
-        : (window._doctorActiveCaseReviewedRevision !== undefined ? Number(window._doctorActiveCaseReviewedRevision) : 1);
-
-      await callBackend("/api/doctor/approve-clinical-case", {
-        method: "POST",
-        body: JSON.stringify({
-          caseId: id,
-          clinicalRevision: reviewedRev,
-          reviewedRevision: extraFields.reviewedRevision !== undefined ? Number(extraFields.reviewedRevision) : reviewedRev,
-          reviewedSnapshot: extraFields.reviewedSnapshot || window._doctorActiveCaseReviewedSnapshot || null,
-          clinicalDiagnosis: extraFields.clinicalDiagnosis || "",
-          clinicalNotes: extraFields.clinicalNotes || note || "",
-          medications: extraFields.medications || "",
-          recommendations: extraFields.recommendations || [],
-          recommendation: extraFields.recommendation || ""
-        })
-      });
-      return true;
+    transitionLocks.add(transitionKey);
+    if (newStatus === CASE_STATUS.APPROVED && (!(extraFields.clinicalNotes || note || "").trim() || !((extraFields.recommendations || []).length || (extraFields.recommendation || "").trim()))) {
+      showToast(isEn ? "Clinical notes and at least one recommendation are required before approval." : "يجب تسجيل الملاحظات السريرية وتوصية واحدة على الأقل قبل الاعتماد.");
+      return false;
     }
+    if ([CASE_STATUS.REJECTED, CASE_STATUS.MORE_INFO_REQUESTED, CASE_STATUS.ESCALATED].includes(newStatus) && !String(note || "").trim()) {
+      showToast(isEn ? "A note or reason is required before saving this action." : "يجب تسجيل ملاحظة أو سبب قبل حفظ هذا الإجراء.");
+      return false;
+    }
+
+    const reviewedRev = extraFields.clinicalRevision !== undefined
+      ? Number(extraFields.clinicalRevision)
+      : (window._doctorActiveCaseReviewedRevision !== undefined ? Number(window._doctorActiveCaseReviewedRevision) : 1);
+
     const res = await callBackend("/api/doctor/transition-case-status", {
       method: "POST",
       body: JSON.stringify({
         caseId: id,
         targetStatus: newStatus,
+        clinicalRevision: reviewedRev,
+        reviewedRevision: extraFields.reviewedRevision !== undefined ? Number(extraFields.reviewedRevision) : reviewedRev,
+        reviewedSnapshot: extraFields.reviewedSnapshot || window._doctorActiveCaseReviewedSnapshot || null,
         note: note || "",
         clinicalNotes: extraFields.clinicalNotes || note || "",
         clinicalDiagnosis: extraFields.clinicalDiagnosis || extraFields.clinicalNotes || note || "",
@@ -3124,17 +3463,22 @@ async function updateCaseStatus(id, newStatus, note, extraFields = {}) {
         reportRef: extraFields.reportRef || ""
       })
     });
+    if (!res || res.success !== true || res.saved !== true) {
+      throw new Error(isEn ? "The server did not confirm that the clinical action was saved." : "لم يؤكد الخادم حفظ الإجراء السريري.");
+    }
     if (res && res.notification && res.notification.success) {
       console.info(`[Email Notification] Successfully dispatched ${res.notification.type} to ${res.notification.recipient}`);
     }
 
-    await writeClientAuditLog("CASE_STATUS_TRANSITIONED", {
-      caseId: id,
-      targetStatus: newStatus,
-      auditCategory: newStatus === CASE_STATUS.APPROVED ? "approval" : (newStatus === CASE_STATUS.REJECTED ? "rejection" : "edit"),
-      note: note || "",
-      backendAuthoritative: true
-    });
+    if (typeof writeClientAuditLog === "function") {
+      await writeClientAuditLog("CASE_STATUS_TRANSITIONED", {
+        caseId: id,
+        targetStatus: newStatus,
+        auditCategory: newStatus === CASE_STATUS.APPROVED ? "approval" : (newStatus === CASE_STATUS.REJECTED ? "rejection" : "edit"),
+        note: note || "",
+        backendAuthoritative: true
+      });
+    }
 
     return true;
   } catch (err) {
@@ -3146,11 +3490,16 @@ async function updateCaseStatus(id, newStatus, note, extraFields = {}) {
     if (handleServerPermissionDenied(err, "Update Case Status")) return false;
     showToast(getAuthErrorMessage(err) || (isEn ? "Failed to update case status." : "فشل تحديث حالة الملف الطبي."));
     return false;
+  } finally {
+    transitionLocks.delete(transitionKey);
   }
 }
 
 let activeCaseId = null;
 let currentDoctorQueueFilter = 'all';
+let currentDoctorPriorityFilter = 'all';
+let currentDoctorQueueSort = 'waiting_desc';
+let currentDoctorQueueSearch = '';
 
 // Missing approved fields remain missing; never synthesize clinical content.
 function recordedClinicalText(value, isEn) {
@@ -3158,7 +3507,7 @@ function recordedClinicalText(value, isEn) {
 }
 
 function getRecordedClinicalContent(record, isEn) {
-  const c = record || {};
+  const c = (record && record.reportSnapshot && record.reportSnapshot.clinicalContent) || record || {};
   const saved = Array.isArray(c.recommendations)
     ? c.recommendations.filter(value => typeof value === "string" && value.trim()).map(value => value.trim())
     : parseDoctorRecommendations(c.recommendation);
@@ -3170,8 +3519,10 @@ function getRecordedClinicalContent(record, isEn) {
 }
 
 function getRecordedDoctorIdentity(record, isEn) {
-  const identity = record && record.doctorIdentity;
-  const verified = identity && identity.uid === record.approvingDoctorId && identity.applicationId ? identity : {};
+  const snapshotIdentity = record && record.reportSnapshot && record.reportSnapshot.doctorIdentity;
+  const identity = snapshotIdentity || (record && record.doctorIdentity);
+  const approvedDoctorId = record && (record.approvingDoctorId || record.reportSnapshot?.approval?.approvedBy?.uid);
+  const verified = identity && identity.uid === approvedDoctorId && identity.applicationId ? identity : {};
   return {
     name: recordedClinicalText(verified.name, isEn),
     licenseNumber: recordedClinicalText(verified.licenseNumber, isEn),
@@ -3180,7 +3531,31 @@ function getRecordedDoctorIdentity(record, isEn) {
   };
 }
 
+function applyApprovedReportSnapshot(record) {
+  const snapshot = record && record.reportSnapshot;
+  if (!snapshot) return record;
+  return {
+    ...record,
+    ...(snapshot.patient || {}),
+    ...(snapshot.caseDetails || {}),
+    ...(snapshot.clinicalContent || {}),
+    doctorIdentity: snapshot.doctorIdentity || record.doctorIdentity,
+    reportVersion: snapshot.versions?.reportVersion || record.reportVersion,
+    modelVersion: snapshot.versions?.modelVersion || record.modelVersion,
+    ruleEngineVersion: snapshot.versions?.ruleEngineVersion || record.ruleEngineVersion,
+    approvedAt: snapshot.dates?.approvedAt || record.approvedAt,
+    generatedAt: snapshot.dates?.generatedAt || record.generatedAt,
+    reportGeneratedAt: snapshot.dates?.generatedAt || record.reportGeneratedAt,
+    submittedAt: snapshot.dates?.submittedAt || record.submittedAt,
+    reportRevisionNumber: snapshot.revisionNumber || record.reportRevisionNumber,
+    currentReportRevisionId: snapshot.revisionId || record.currentReportRevisionId,
+    previousReportRevisionId: snapshot.previousRevisionId || record.previousReportRevisionId,
+    reportWithdrawal: record.reportWithdrawal || snapshot.withdrawal
+  };
+}
+
 async function loadReportDoctorIdentity(record) {
+  if (record && record.reportSnapshot && record.reportSnapshot.doctorIdentity) return record;
   // Refresh legacy reports from the verified record too; never trust old
   // free-text names or licenses. A failed lookup renders "Not recorded".
   try {
@@ -3377,9 +3752,131 @@ function clearDoctorConflictBanner() {
 }
 window.clearDoctorConflictBanner = clearDoctorConflictBanner;
 
+function getCaseOxygenValue(c) {
+  const value = Number(c && (c.o2 ?? c.oxygenLevel ?? c.assessment?.oxygenLevel ?? c.assessment?.o2));
+  return Number.isFinite(value) ? value : 0;
+}
+
+function getCaseSubmittedMillis(c) {
+  return toMillis(c && (c.submittedAt || c.createdAt || c.created_at || c.date || c.assessment?.submittedAt));
+}
+
+function getCaseWaitingMinutes(c, nowMs = Date.now()) {
+  const start = getCaseSubmittedMillis(c);
+  return start > 0 ? Math.max(0, Math.floor((nowMs - start) / 60000)) : 0;
+}
+
+function formatElapsedMinutes(minutes, isEn) {
+  const total = Number(minutes) || 0;
+  if (total < 60) return isEn ? `${total} min` : `${total} دقيقة`;
+  const hours = Math.floor(total / 60);
+  const mins = total % 60;
+  if (hours < 24) return isEn ? `${hours}h ${mins}m` : `${hours}س ${mins}د`;
+  const days = Math.floor(hours / 24);
+  const rest = hours % 24;
+  return isEn ? `${days}d ${rest}h` : `${days}ي ${rest}س`;
+}
+
+function getCasePriorityKey(c) {
+  const priority = String(c?.priority || c?.risk || c?.assessment?.aiTriage?.priority || "").toLowerCase();
+  const o2 = getCaseOxygenValue(c);
+  if (priority.includes("urgent") || priority.includes("emergency") || priority.includes("عاجل") || o2 > 0 && o2 < 90) return "urgent";
+  if (priority.includes("high") || priority.includes("medium") || priority.includes("عالية") || o2 >= 90 && o2 < 93) return "high";
+  return "normal";
+}
+
+function getPriorityMeta(priority, isEn) {
+  const key = priority || "normal";
+  const meta = {
+    urgent: { weight: 3, pill: "danger", en: "Urgent", ar: "عاجل" },
+    high: { weight: 2, pill: "pending", en: "High", ar: "أولوية عالية" },
+    normal: { weight: 1, pill: "ok", en: "Routine", ar: "عادية" }
+  };
+  const item = meta[key] || meta.normal;
+  return { ...item, label: isEn ? item.en : item.ar };
+}
+
+function getCaseSlaInfo(c, isEn) {
+  const priority = getCasePriorityKey(c);
+  const target = priority === "urgent" ? 15 : (priority === "high" ? 30 : 120);
+  const elapsed = getCaseWaitingMinutes(c);
+  const respondedAt = toMillis(c?.reviewStartedAt || c?.firstReviewedAt || c?.underReviewAt || c?.approvedAt || c?.updatedAt);
+  const responseMinutes = respondedAt && getCaseSubmittedMillis(c)
+    ? Math.max(0, Math.floor((respondedAt - getCaseSubmittedMillis(c)) / 60000))
+    : null;
+  const compare = responseMinutes ?? elapsed;
+  const met = compare <= target;
+  return {
+    priority,
+    target,
+    elapsed,
+    responseMinutes,
+    met,
+    label: isEn
+      ? `SLA ${target} min - ${met ? "on track" : "overdue"}`
+      : `SLA ${target} دقيقة - ${met ? "ضمن الوقت" : "متأخر"}`
+  };
+}
+
+function isCaseAssignedToCurrentDoctor(c) {
+  const user = typeof auth !== "undefined" && auth ? auth.currentUser : null;
+  if (!user || !c) return false;
+  const uid = user.uid;
+  const email = String(user.email || "").toLowerCase();
+  return Boolean(
+    (c.assignedDoctorId && c.assignedDoctorId === uid) ||
+    (c.doctorId && c.doctorId === uid) ||
+    (c.doctorUid && c.doctorUid === uid) ||
+    (c.assignedDoctorEmail && String(c.assignedDoctorEmail).toLowerCase() === email) ||
+    (c.doctorEmail && String(c.doctorEmail).toLowerCase() === email)
+  );
+}
+
+function formatCaseAnswers(c, isEn) {
+  const assessment = c?.assessment || {};
+  const fields = [
+    [isEn ? "Symptoms" : "الأعراض", c?.symptomsEn || c?.symptoms || assessment.symptomsText],
+    [isEn ? "Patient notes" : "ملاحظات المريض", c?.notes || c?.patientNotes || assessment.notes],
+    [isEn ? "Duration" : "مدة الأعراض", c?.durationEn || c?.duration || assessment.duration],
+    [isEn ? "Medications reported by patient" : "الأدوية التي ذكرها المريض", assessment.medications || c?.patientMedications],
+    [isEn ? "Follow-up request/response" : "المتابعة والردود", c?.patientResponse || c?.followUpResponse || c?.moreInfoResponse]
+  ];
+  if (assessment.answers && typeof assessment.answers === "object") {
+    Object.entries(assessment.answers).forEach(([key, value]) => fields.push([key, value]));
+  }
+  return fields
+    .filter(([, value]) => value !== undefined && value !== null && String(value).trim())
+    .map(([label, value]) => `
+      <div><span>${escapeHtml(label)}</span><strong>${escapeHtml(Array.isArray(value) ? value.join(", ") : value)}</strong></div>
+    `).join("") || `<div><span>${isEn ? "Answers" : "الإجابات"}</span><strong>${isEn ? "Not recorded" : "غير مسجل"}</strong></div>`;
+}
+
 window.setDoctorQueueFilter = function(filterKey) {
   currentDoctorQueueFilter = filterKey;
-  renderDoctorQueue();
+  const filterTabsContainer = document.getElementById("doctorQueueFilterTabs");
+  if (filterTabsContainer) {
+    filterTabsContainer.querySelectorAll(".status-filter-tab").forEach(btn => {
+      btn.classList.toggle("active", btn.dataset.filter === filterKey);
+    });
+  }
+  const queue = state.doctorQueue || [];
+  if (queue.length) renderDoctorQueueItems(queue);
+  else renderDoctorQueue();
+};
+
+window.setDoctorPriorityFilter = function(priority) {
+  currentDoctorPriorityFilter = priority || "all";
+  renderDoctorQueueItems(state.doctorQueue || []);
+};
+
+window.setDoctorQueueSort = function(sortKey) {
+  currentDoctorQueueSort = sortKey || "waiting_desc";
+  renderDoctorQueueItems(state.doctorQueue || []);
+};
+
+window.setDoctorQueueSearch = function(value) {
+  currentDoctorQueueSearch = String(value || "").trim().toLowerCase();
+  renderDoctorQueueItems(state.doctorQueue || []);
 };
 
 window.applyDiagPreset = function(presetKey) {
@@ -3464,6 +3961,12 @@ window.generateAndApproveReport = async function(id) {
   if (!enforcePermission(PERMISSIONS.APPROVE_CASE, "Approve Clinical Result")) return;
   const isEn = currentLanguage === "en";
 
+  const targetCase = (typeof cases !== "undefined" && Array.isArray(cases) ? cases : (state?.doctorQueue || [])).find(item => item.id === id);
+  if (window.HealthVibes?.DoctorUI?.isRevisionStale && window.HealthVibes.DoctorUI.isRevisionStale(targetCase)) {
+    showToast(isEn ? "Approval locked: Please review and acknowledge new patient information first." : "الاعتماد مقفل: يرجى مراجعة وتأكيد البيانات الجديدة أولاً.");
+    return;
+  }
+
   const diagInput = document.getElementById("doctorDiagnosisInput") || document.getElementById("doctorNoteInput");
   const medInput = document.getElementById("doctorMedicationsInput");
   const recInput = document.getElementById("doctorRecommendationsInput");
@@ -3499,11 +4002,19 @@ window.generateAndApproveReport = async function(id) {
   const success = await updateCaseStatus(id, CASE_STATUS.APPROVED, clinicalDiagnosis, payload);
   if (success) {
     if (typeof clearDoctorConflictBanner === "function") clearDoctorConflictBanner();
-    showToast(isEn ? "Official Certified Medical Report Generated & Approved!" : "تم توليد واعتماد التقرير الطبي السريري بنجاح!");
+    if (window.HealthVibes?.DoctorUI?.clearDraftNotes) {
+      window.HealthVibes.DoctorUI.clearDraftNotes(id);
+    }
     await renderDoctorQueue();
     selectDoctorCase(id);
-    showScreen("report");
-    renderReportScreen(id);
+    const refreshed = (await getCases({ includeTest: true })).find(item => item.id === id);
+    if (refreshed && isCaseApprovedForPatient(refreshed)) {
+      showToast(isEn ? "Official certified medical report saved and approved." : "تم حفظ واعتماد التقرير الطبي السريري بنجاح.");
+      showScreen("report");
+      renderReportScreen(id);
+    } else {
+      showToast(isEn ? "Approval was saved, but the approved report is not available yet. Please reopen the case." : "تم حفظ الإجراء، لكن التقرير المعتمد لم يظهر بعد. يرجى إعادة فتح الحالة.");
+    }
   }
 };
 
@@ -3633,6 +4144,8 @@ function renderDoctorQueueItems(allCases) {
   // 🛡️ STRICT ISOLATION: Partition cases into authentic patients vs test/demo data
   const realCases = (allCases || []).filter(c => {
     if (!c || !isRealProductionRecord(c)) return false;
+    if (c.status === CASE_STATUS.DRAFT || c.status === "draft") return false;
+    if (selectedRole === ROLES.DOCTOR && !isCaseAssignedToCurrentDoctor(c)) return false;
     const hasPatient = Boolean(c.patientId || c.patientUid || c.patientEmail);
     const hasVitals = typeof c.o2 === "number" || typeof c.oxygenLevel === "number";
     return hasPatient && hasVitals;
@@ -3687,6 +4200,22 @@ function renderDoctorQueueItems(allCases) {
     }
   }
 
+  if (!isSandbox && currentDoctorPriorityFilter !== "all") {
+    cases = cases.filter(c => getCasePriorityKey(c) === currentDoctorPriorityFilter);
+  }
+
+  if (!isSandbox && currentDoctorQueueSearch) {
+    cases = cases.filter(c => {
+      const haystack = [
+        c.id, c.patientId, c.patientName, c.patientNameEn, c.name, c.nameEn,
+        c.patientEmail, c.userEmail, c.patientPhone, c.phone,
+        c.symptoms, c.symptomsEn, c.notes, c.patientNotes, c.clinicalDiagnosis,
+        c.doctorNote, c.moreInfoNote
+      ].map(value => String(value || "").toLowerCase()).join(" ");
+      return haystack.includes(currentDoctorQueueSearch);
+    });
+  }
+
   if (cases.length === 0) {
     if (isSandbox) {
       queueList.innerHTML += `
@@ -3736,7 +4265,7 @@ function renderDoctorQueueItems(allCases) {
     return;
   }
 
-  // Sort: under_review and emergency first, then assigned/pending, then approved/closed
+  // Sort by selected queue mode, defaulting to longest waiting urgent cases first.
   const statusWeight = {
     [CASE_STATUS.UNDER_REVIEW]: 1,
     [CASE_STATUS.ASSIGNED]: 2,
@@ -3751,26 +4280,34 @@ function renderDoctorQueueItems(allCases) {
   };
 
   cases.sort((a, b) => {
-    const isCritA = a.o2 > 0 && a.o2 < 90;
-    const isCritB = b.o2 > 0 && b.o2 < 90;
-    if (isCritA && !isCritB) return -1;
-    if (!isCritA && isCritB) return 1;
+    const priorityA = getPriorityMeta(getCasePriorityKey(a), isEn).weight;
+    const priorityB = getPriorityMeta(getCasePriorityKey(b), isEn).weight;
+    const waitA = getCaseWaitingMinutes(a);
+    const waitB = getCaseWaitingMinutes(b);
+    if (currentDoctorQueueSort === "priority_desc" && priorityA !== priorityB) return priorityB - priorityA;
+    if (currentDoctorQueueSort === "waiting_desc" && waitA !== waitB) return waitB - waitA;
+    if (currentDoctorQueueSort === "newest") return getCaseSubmittedMillis(b) - getCaseSubmittedMillis(a);
     const wA = statusWeight[a.status] || 99;
     const wB = statusWeight[b.status] || 99;
-    return wA - wB;
+    if (wA !== wB) return wA - wB;
+    if (priorityA !== priorityB) return priorityB - priorityA;
+    return waitB - waitA;
   });
 
   cases.forEach(c => {
     const btn = document.createElement("button");
     btn.dataset.caseId = c.id;
-    const isCritO2 = c.o2 > 0 && c.o2 < 90;
+    const o2Value = getCaseOxygenValue(c);
+    const isCritO2 = o2Value > 0 && o2Value < 90;
     const meta = getCaseStatusMeta(c.status);
+    const priorityMeta = getPriorityMeta(getCasePriorityKey(c), isEn);
+    const sla = getCaseSlaInfo(c, isEn);
 
     btn.className = c.status === CASE_STATUS.APPROVED ? "ok" : (isCritO2 || c.risk === "عاجل" || c.status === CASE_STATUS.ESCALATED ? "danger" : "pending");
     if (c.id === activeCaseId) btn.style.border = "2px solid var(--teal)";
 
     const riskBadge = isCritO2
-      ? `<em class="doctor-emergency-pill">${isEn ? '🚨 CRITICAL O2 ' + c.o2 + '%' : '🚨 أكسجين حرج ' + c.o2 + '%'}</em>`
+      ? `<em class="doctor-emergency-pill">${isEn ? 'Critical O2 ' + o2Value + '%' : 'أكسجين حرج ' + o2Value + '%'}</em>`
       : `<em>${isEn ? c.riskEn : c.risk}</em>`;
 
     const statusPillHtml = `<span class="pill ${meta.pillClass} case-status-badge" style="font-size: 11px; margin-inline-end: 6px;">${meta.icon} ${isEn ? meta.en : meta.ar}</span>`;
@@ -3778,8 +4315,8 @@ function renderDoctorQueueItems(allCases) {
     const isDemoCase = isTestOrDemoRecord(c);
     const demoTag = isDemoCase ? `<span class="pill demo-pill" style="font-size: 10px; background: rgba(245, 158, 11, 0.18); color: #b45309; border: 1px solid rgba(245, 158, 11, 0.4); padding: 1px 6px; margin-inline-end: 4px; font-weight: bold;">🧪 ${isEn ? 'Demo Data' : 'بيانات تجريبية'}</span>` : '';
     const o2Text = isEn
-      ? `O2 ${c.o2}%${isDemoCase ? ' (Demo Data)' : ''} - ${(c.symptomsEn || c.symptoms || '')}`
-      : `نسبة الأكسجين ${c.o2}%${isDemoCase ? ' (بيانات تجريبية)' : ''} - ${(c.symptoms || c.symptomsEn || '')}`;
+      ? `O2 ${o2Value || '--'}%${isDemoCase ? ' (Demo Data)' : ''} - ${(c.symptomsEn || c.symptoms || '')}`
+      : `نسبة الأكسجين ${o2Value || '--'}%${isDemoCase ? ' (بيانات تجريبية)' : ''} - ${(c.symptoms || c.symptomsEn || '')}`;
 
     btn.innerHTML = `
       <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 4px;">
@@ -3790,7 +4327,11 @@ function renderDoctorQueueItems(allCases) {
         ${statusPillHtml}
       </div>
       <span>${o2Text}</span>
-      ${riskBadge}
+      <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;">
+        <em class="pill ${priorityMeta.pill}" style="font-style:normal; font-size:10.5px;">${priorityMeta.label}</em>
+        <em class="pill ${sla.met ? 'ok' : 'danger'}" style="font-style:normal; font-size:10.5px;">${isEn ? 'Waiting ' : 'انتظار '}${formatElapsedMinutes(sla.elapsed, isEn)}</em>
+      </div>
+      ${riskBadge || ''}
     `;
     btn.onclick = () => selectDoctorCase(c.id);
     queueList.appendChild(btn);
@@ -3821,10 +4362,26 @@ async function renderDoctorQueue() {
     ];
 
     filterTabsContainer.innerHTML = filters.map(f => `
-      <button type="button" class="status-filter-tab ${currentDoctorQueueFilter === f.key ? 'active' : ''}" onclick="setDoctorQueueFilter('${f.key}')">
+      <button type="button" class="status-filter-tab ${currentDoctorQueueFilter === f.key ? 'active' : ''}" data-filter="${f.key}" onclick="setDoctorQueueFilter('${f.key}')">
         ${isEn ? f.en : f.ar}
       </button>
-    `).join('');
+    `).join('') + `
+      <div style="display:grid; grid-template-columns: minmax(160px, 1fr) minmax(130px, auto) minmax(150px, auto); gap:8px; width:100%; margin-top:10px;">
+        <input type="search" value="${escapeHtml(currentDoctorQueueSearch)}" oninput="setDoctorQueueSearch(this.value)" placeholder="${isEn ? 'Search patient, case, symptoms...' : 'بحث بالاسم أو الحالة أو الأعراض...'}" style="min-width:0; border:1px solid var(--line); border-radius:10px; padding:8px 10px; background:var(--surface); color:var(--ink); font-family:inherit; font-size:12.5px;" />
+        <select onchange="setDoctorPriorityFilter(this.value)" style="border:1px solid var(--line); border-radius:10px; padding:8px 10px; background:var(--surface); color:var(--ink); font-family:inherit; font-size:12.5px;">
+          <option value="all" ${currentDoctorPriorityFilter === "all" ? "selected" : ""}>${isEn ? "All priorities" : "كل الأولويات"}</option>
+          <option value="urgent" ${currentDoctorPriorityFilter === "urgent" ? "selected" : ""}>${isEn ? "Urgent" : "عاجل"}</option>
+          <option value="high" ${currentDoctorPriorityFilter === "high" ? "selected" : ""}>${isEn ? "High" : "عالية"}</option>
+          <option value="normal" ${currentDoctorPriorityFilter === "normal" ? "selected" : ""}>${isEn ? "Routine" : "عادية"}</option>
+        </select>
+        <select onchange="setDoctorQueueSort(this.value)" style="border:1px solid var(--line); border-radius:10px; padding:8px 10px; background:var(--surface); color:var(--ink); font-family:inherit; font-size:12.5px;">
+          <option value="waiting_desc" ${currentDoctorQueueSort === "waiting_desc" ? "selected" : ""}>${isEn ? "Longest waiting" : "الأطول انتظاراً"}</option>
+          <option value="priority_desc" ${currentDoctorQueueSort === "priority_desc" ? "selected" : ""}>${isEn ? "Highest priority" : "الأعلى أولوية"}</option>
+          <option value="status" ${currentDoctorQueueSort === "status" ? "selected" : ""}>${isEn ? "Workflow status" : "حالة سير العمل"}</option>
+          <option value="newest" ${currentDoctorQueueSort === "newest" ? "selected" : ""}>${isEn ? "Newest first" : "الأحدث أولاً"}</option>
+        </select>
+      </div>
+    `;
   }
 
   // ── إلغاء المستمع السابق لتجنب التسريب ────────────────────────
@@ -3840,17 +4397,28 @@ async function renderDoctorQueue() {
         <div class="spinner" style="width: 15px; height: 15px;"></div>
         <span>${isEn ? 'Synchronizing clinical queue with cloud...' : 'جاري مزامنة قائمة الانتظار السريرية مع السحابة...'}</span>
       </div>
-      <div class="hv-skeleton" style="height: 72px; width: 100%;"></div>
-      <div class="hv-skeleton" style="height: 72px; width: 100%;"></div>
-      <div class="hv-skeleton" style="height: 72px; width: 100%;"></div>
+      ${hvSkeletonRows(3, 72)}
     </div>
   `;
 
-  // ── مستمع حي Real-Time Listener لاستقبال التقييمات فورياً ──────
+  // ── مستمع حي Real-Time Listener لاستقبال التقييمات فورياً مع ترقيم وتقييد ──────
+  if (window._doctorQueueUnsub) {
+    try { window._doctorQueueUnsub(); } catch(e) {}
+    window._doctorQueueUnsub = null;
+  }
   if (typeof db !== "undefined" && db) {
     try {
-      window._doctorQueueUnsub = db.collection("cases").onSnapshot(
+      const queueQuery = typeof db.collection("cases").limit === "function"
+        ? db.collection("cases").limit(50)
+        : db.collection("cases");
+      window._doctorQueueUnsub = queueQuery.onSnapshot(
         (snapshot) => {
+          if (window.asyncContextManager) {
+            const check = window.asyncContextManager.isContextValid(window.asyncContextManager.captureContext(), {
+              requireSameUser: true
+            });
+            if (!check.valid) return;
+          }
           if (!snapshot.empty) {
             const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             docs.sort((a, b) => {
@@ -3858,8 +4426,10 @@ async function renderDoctorQueue() {
               const tB = toMillis(b.submittedAt || b.createdAt || b.updatedAt) || 0;
               return tB - tA;
             });
+            state.doctorQueue = docs;
             renderDoctorQueueItems(docs);
           } else {
+            state.doctorQueue = [];
             renderDoctorQueueItems([]);
           }
         },
@@ -3867,16 +4437,21 @@ async function renderDoctorQueue() {
           console.warn("Doctor queue real-time listener error, fallback to getCases():", err.message);
           try {
             const cases = await getCases({ includeTest: true });
+            state.doctorQueue = cases;
             renderDoctorQueueItems(cases);
           } catch(e) {
             renderDoctorQueueError(e);
           }
         }
       );
+      if (window.asyncContextManager && window._doctorQueueUnsub) {
+        window.asyncContextManager.registerSubscription(window._doctorQueueUnsub, { name: "doctorQueue" });
+      }
     } catch(e) {
       console.warn("Could not bind real-time doctor queue:", e.message);
       try {
         const cases = await getCases({ includeTest: true });
+        state.doctorQueue = cases;
         renderDoctorQueueItems(cases);
       } catch(errFallback) {
         renderDoctorQueueError(errFallback);
@@ -3885,6 +4460,7 @@ async function renderDoctorQueue() {
   } else {
     try {
       const cases = await getCases({ includeTest: true });
+      state.doctorQueue = cases;
       renderDoctorQueueItems(cases);
     } catch(e) {
       renderDoctorQueueError(e);
@@ -3909,10 +4485,25 @@ function renderDoctorQueueError(err) {
 }
 async function selectDoctorCase(id) {
   activeCaseId = id;
+  if (window.asyncContextManager) {
+    window.asyncContextManager.switchCase(id);
+  }
+  const caseContextSnapshot = window.asyncContextManager ? window.asyncContextManager.captureContext() : null;
+
   const cases = await getCases({ includeTest: true });
+
+  // Guard rapid case switching: if user clicked another case while fetching, discard this result
+  if (window.asyncContextManager && caseContextSnapshot) {
+    const check = window.asyncContextManager.isContextValid(caseContextSnapshot, { requireSameCase: true });
+    if (!check.valid) {
+      console.warn(`[Health Vibe] Discarded stale case render for case ${id}: ${check.message}`);
+      return;
+    }
+  }
+
   const c = cases.find(c => c.id === id);
   const reviewPanel = document.getElementById("doctorReviewPanel");
-  if (!c || !reviewPanel) {
+  if (!c || !reviewPanel || (selectedRole === ROLES.DOCTOR && !isTestOrDemoRecord(c) && !isCaseAssignedToCurrentDoctor(c))) {
     if (reviewPanel) {
       reviewPanel.style.display = "none";
       reviewPanel.innerHTML = "";
@@ -3961,12 +4552,17 @@ async function selectDoctorCase(id) {
 
   const statusMeta = getCaseStatusMeta(c.status);
   const statusPill = `<span class="pill ${statusMeta.pillClass}" style="font-size: 12.5px; padding: 5px 12px;">${statusMeta.icon} ${isEn ? statusMeta.en : statusMeta.ar}</span>`;
+  const o2Value = getCaseOxygenValue(c);
+  const priorityMeta = getPriorityMeta(getCasePriorityKey(c), isEn);
+  const slaInfo = getCaseSlaInfo(c, isEn);
+  const submittedMs = getCaseSubmittedMillis(c);
+  const submittedLabel = submittedMs ? new Date(submittedMs).toLocaleString(isEn ? "en-US" : "ar-EG", { dateStyle: "medium", timeStyle: "short" }) : (isEn ? "Not recorded" : "غير مسجل");
 
-  const emergencyDoctorBanner = (c.o2 > 0 && c.o2 < 90) ? `
+  const emergencyDoctorBanner = (o2Value > 0 && o2Value < 90) ? `
     <div class="doctor-emergency-alert-banner">
       <span class="icon">🚨</span>
       <div>
-        <strong>${isEn ? 'Clinical Emergency: Critical Hypoxemia (SpO2 ' + c.o2 + '%)' : 'تنبيه سريري عاجل: نقص أكسجين حاد (SpO2 ' + c.o2 + '%)'}</strong>
+        <strong>${isEn ? 'Clinical Emergency: Critical Hypoxemia (SpO2 ' + o2Value + '%)' : 'تنبيه سريري عاجل: نقص أكسجين حاد (SpO2 ' + o2Value + '%)'}</strong>
         <p>${isEn ? 'Patient oxygen saturation is critically low. Urgent contact and immediate referral to Emergency Room / Ambulance (123) is advised.' : 'نسبة تشبع الأكسجين لدى المريض حرجة للغاية. يوصى بالتواصل المباشر العاجل وتوجيه الحالة فوراً لأقرب قسم طوارئ أو استدعاء الإسعاف (123).'}</p>
       </div>
     </div>
@@ -4023,12 +4619,32 @@ async function selectDoctorCase(id) {
   const isRejected = c.status === CASE_STATUS.REJECTED;
   const isUnderReview = (c.status === CASE_STATUS.UNDER_REVIEW || (!isClosed && !isApproved && !isMoreInfo && !isEscalated && !isRejected));
 
-if (isUnderReview) {
+  const isStale = (window.HealthVibes?.DoctorUI?.isRevisionStale) ? window.HealthVibes.DoctorUI.isRevisionStale(c) : false;
+
+  const approveButtonHtml = isStale
+    ? `
+      <button type="button" class="btn-clinical approve locked" disabled="disabled" onclick="generateAndApproveReport('${c.id}')" title="${isEn ? 'Approval locked: Review new information before approval' : 'الاعتماد مقفل: يجب مراجعة المعلومات السريرية الجديدة أولاً'}" style="opacity: 0.65; cursor: not-allowed; background: #64748b;">
+        <span>🔒</span> ${isEn ? 'Approval Locked (Review Required)' : 'الاعتماد مقفل (مطلوب المراجعة)'}
+      </button>
+    `
+    : `
+      <button type="button" class="btn-clinical approve" onclick="generateAndApproveReport('${c.id}')" title="${isEn ? 'Approve and generate official certified report' : 'اعتماد سريري وتوليد التقرير الطبي المعتمد'}">
+        <span>✨</span> ${isEn ? 'Generate & Approve Report' : 'توليد واعتماد التقرير'}
+      </button>
+    `;
+
+  const lockWarningNoticeHtml = isStale
+    ? `
+      <div id="approvalLockedNotice" style="margin-top: 6px; font-size: 12px; color: #c2410c; font-weight: 700; display: flex; align-items: center; gap: 6px;">
+        <span>⚠️</span> ${isEn ? 'You must review and acknowledge the updated patient revision before final certification.' : 'يجب مراجعة وتأكيد المراجعة السريرية المحدثة قبل إتمام الاعتماد النهائي.'}
+      </div>
+    `
+    : '';
+
+  if (isUnderReview) {
     actionToolbarHtml = `
       <div class="doctor-actions-toolbar">
-        <button type="button" class="btn-clinical approve" onclick="generateAndApproveReport('${c.id}')" title="${isEn ? 'Approve and generate official certified report' : 'اعتماد سريري وتوليد التقرير الطبي المعتمد'}">
-          <span>✨</span> ${isEn ? 'Generate & Approve Report' : 'توليد واعتماد التقرير'}
-        </button>
+        ${approveButtonHtml}
         <button type="button" class="btn-clinical resume" onclick="previewCaseReport('${c.id}')" title="${isEn ? 'Preview report before final approval' : 'معاينة شكل التقرير الطبي قبل الاعتماد'}">
           <span>👁️</span> ${isEn ? 'Preview Report' : 'معاينة التقرير'}
         </button>
@@ -4045,6 +4661,7 @@ if (isUnderReview) {
           <span>🔒</span> ${isEn ? 'Close Case' : 'إغلاق الحالة'}
         </button>
       </div>
+      ${lockWarningNoticeHtml}
     `;
   } else if (isMoreInfo) {
     actionToolbarHtml = `
@@ -4138,11 +4755,12 @@ if (isUnderReview) {
     `;
   }
 
-  const existingDoctorNote = c.clinicalDiagnosis || "";
-  const existingRecommendations = Array.isArray(c.recommendations) && c.recommendations.length > 0
+  const preservedDraft = (window.HealthVibes?.DoctorUI?.getDraftNotes) ? window.HealthVibes.DoctorUI.getDraftNotes(c.id) : null;
+  const existingDoctorNote = preservedDraft ? preservedDraft.diagnosis : (c.clinicalDiagnosis || c.clinicalNotes || c.doctorNotes || c.doctorNote || "");
+  const existingRecommendations = preservedDraft ? preservedDraft.recommendations : (Array.isArray(c.recommendations) && c.recommendations.length > 0
     ? c.recommendations.join("\n")
-    : (c.recommendation || "");
-  const existingMedications = c.medications || "";
+    : (c.recommendation || ""));
+  const existingMedications = preservedDraft ? preservedDraft.medications : (c.medications || "");
 
   // Display credentials from the verified application; they are not editable.
   const verifiedIdentity = await getCurrentVerifiedDoctorIdentity();
@@ -4183,7 +4801,7 @@ if (isUnderReview) {
             <span>📐</span> ${isEn ? 'Rules-Based Risk Evaluation' : 'تقييم مؤشر القواعد السريرية'}
           </strong>
           <span class="pill info" style="font-size: 11px; padding: 2px 8px; font-family: monospace;">${caseRuleVersion}</span>
-          <span class="pill ok" style="font-size: 10.5px; padding: 2px 8px;">${isEn ? 'Clinician-Reviewed' : 'معتمد سريرياً'}</span>
+          <span class="pill pending" style="font-size: 10.5px; padding: 2px 8px;">${isEn ? 'Pending Review' : 'المراجعة معلقة'}</span>
         </div>
         <div style="display: flex; align-items: center; gap: 6px;">
           <span style="font-size: 12px; color: var(--muted);">${isEn ? 'Total Points:' : 'مجموع النقاط:'}</span>
@@ -4200,8 +4818,8 @@ if (isUnderReview) {
       </ul>
       <div style="margin-top: 10px; padding: 6px 10px; background: rgba(14, 165, 233, 0.08); border-radius: 6px; font-size: 11px; color: var(--muted); line-height: 1.4;">
         ℹ️ ${isEn
-          ? "Notice: This score is generated by deterministic, clinician-reviewed triage rules (unvalidated model score). It is purely advisory to assist doctor triage and does not replace medical judgment."
-          : "تنبيه: هذا المؤشر ناتج عن قواعد فرز ثابتة قابلة لمراجعة الطبيب (مؤشر غير مُتحقق منه سريرياً كنموذج إحصائي). يُستخدم كدليل استرشادي لتسهيل الفرز ولا يحل محل التشخيص الطبي."}
+          ? "Notice: This score is generated by deterministic triage rules pending qualified clinical and regulatory review (unvalidated model score). It is purely advisory to assist doctor triage and does not replace medical judgment."
+          : "تنبيه: هذا المؤشر ناتج عن قواعد فرز ثابتة معلقة لحين مراجعة طبية وتنظيمية مؤهلة (مؤشر غير مُتحقق منه سريرياً كنموذج إحصائي). يُستخدم كدليل استرشادي لتسهيل الفرز ولا يحل محل التشخيص الطبي."}
       </div>
     </div>
   `;
@@ -4220,32 +4838,59 @@ if (isUnderReview) {
     </div>
   ` : '';
 
-  reviewPanel.innerHTML = `
-    <div class="panel-head">
-      <div>
-        <h3 style="margin: 0;">${isEn ? 'Reviewing ' + c.nameEn : 'مراجعة حالة ' + c.name}</h3>
-        <div style="display: flex; gap: 8px; align-items: center; margin-top: 2px;">
-          <small style="color: var(--muted);">${isEn ? 'Case ID: #' + c.id.slice(-6).toUpperCase() : 'رقم الحالة: #' + c.id.slice(-6).toUpperCase()}</small>
-          <span class="pill info" id="doctorCaseRevisionBadge" style="font-size: 11px; padding: 1px 7px;">${isEn ? 'Rev #' + currentRev : 'مراجعة #' + currentRev}</span>
+  const patientDataHtml = `
+    <div class="summary-list" style="margin-top: 12px;">
+      <div><span>${isEn ? 'Submitted' : 'تاريخ الإرسال'}</span><strong>${submittedLabel}</strong></div>
+      <div><span>${isEn ? 'Elapsed waiting time' : 'زمن الانتظار'}</span><strong>${formatElapsedMinutes(slaInfo.elapsed, isEn)}</strong></div>
+      <div><span>${isEn ? 'SLA target' : 'هدف SLA'}</span><strong class="pill ${slaInfo.met ? 'ok' : 'danger'}" style="display:inline-flex;">${slaInfo.label}</strong></div>
+      <div><span>${isEn ? 'Priority' : 'الأولوية'}</span><strong class="pill ${priorityMeta.pill}" style="display:inline-flex;">${priorityMeta.label}</strong></div>
+      ${formatCaseAnswers(c, isEn)}
+    </div>
+  `;
+
+  const doctorNotesHtml = `
+    <div class="summary-list" style="margin-top: 12px;">
+      <div><span>${isEn ? 'Doctor notes' : 'ملاحظات الطبيب'}</span><strong>${escapeHtml(c.clinicalNotes || c.doctorNotes || c.doctorNote || (isEn ? 'Not recorded' : 'غير مسجل'))}</strong></div>
+      <div><span>${isEn ? 'Manual diagnosis' : 'التشخيص اليدوي'}</span><strong>${escapeHtml(c.clinicalDiagnosis || (isEn ? 'Not recorded' : 'غير مسجل'))}</strong></div>
+      <div><span>${isEn ? 'Follow-up' : 'المتابعة'}</span><strong>${escapeHtml(c.moreInfoNote || c.followUpPlan || c.patientResponse || (isEn ? 'Not recorded' : 'غير مسجل'))}</strong></div>
+    </div>
+  `;
+
+  const persistentHeaderHtml = (window.HealthVibes?.DoctorUI?.renderPersistentCaseHeader)
+    ? window.HealthVibes.DoctorUI.renderPersistentCaseHeader(c, isEn)
+    : `
+      <div class="panel-head">
+        <div>
+          <h3 style="margin: 0;">${isEn ? 'Reviewing ' + (c.nameEn || c.name) : 'مراجعة حالة ' + c.name}</h3>
+          <div style="display: flex; gap: 8px; align-items: center; margin-top: 2px;">
+            <small style="color: var(--muted);">${isEn ? 'Case ID: #' + c.id.slice(-6).toUpperCase() : 'رقم الحالة: #' + c.id.slice(-6).toUpperCase()}</small>
+            <span class="pill info" id="doctorCaseRevisionBadge" style="font-size: 11px; padding: 1px 7px;">${isEn ? 'Rev #' + currentRev : 'مراجعة #' + currentRev}</span>
+          </div>
         </div>
+        ${statusPill}
       </div>
-      ${statusPill}
-    </div>
+    `;
+
+  const staleRevisionBannerHtml = (window.HealthVibes?.DoctorUI?.renderStaleRevisionBanner)
+    ? window.HealthVibes.DoctorUI.renderStaleRevisionBanner(c, isEn)
+    : '';
+
+  reviewPanel.innerHTML = `
+    ${persistentHeaderHtml}
+    ${staleRevisionBannerHtml}
+    <div id="doctorReviewAriaLive" aria-live="polite" class="sr-only" style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0;"></div>
     ${demoCaseBanner}
-    <div style="background: rgba(14, 165, 164, 0.08); border: 1px solid var(--teal); border-radius: 12px; padding: 12px 16px; margin: 12px 0; display: flex; flex-wrap: wrap; gap: 16px; align-items: center; font-size: 13px;">
-      <div><span style="color: var(--muted);">${isEn ? 'Patient:' : 'المريض:'}</span> <strong>${c.patientName || c.name || '--'}${isDemoCase ? ' (Demo)' : ''}</strong></div>
-      <div><span style="color: var(--muted);">${isEn ? 'Email:' : 'البريد:'}</span> <strong>${c.patientEmail || c.userEmail || '--'}</strong></div>
-      ${c.patientPhone || c.phone ? `<div><span style="color: var(--muted);">${isEn ? 'Phone:' : 'الهاتف:'}</span> <strong>${c.patientPhone || c.phone}</strong></div>` : ''}
-      ${c.patientAge || c.age ? `<div><span style="color: var(--muted);">${isEn ? 'Age:' : 'العمر:'}</span> <strong>${c.patientAge || c.age}</strong></div>` : ''}
-      <div><span style="color: var(--muted);">${isEn ? 'Patient ID:' : 'معرّف المريض:'}</span> <code style="font-size: 11px;">${(c.patientId || c.userId || '--').slice(0, 10)}...</code></div>
-    </div>
     ${emergencyDoctorBanner}
     <div class="summary-list">
-      <div><span>${isEn ? 'AI Risk Score' : 'تصنيف الذكاء الاصطناعي'}</span><strong>${isEn ? c.aiScoreEn : c.aiScore}${isDemoCase ? ' (Demo Data)' : ''}</strong></div>
-      <div><span>${isEn ? 'Rule score' : 'مؤشر القواعد'}</span><strong>${(isEn ? c.ruleScoreLabelEn : c.ruleScoreLabelAr) || c.ruleScore || (isEn ? 'Not clinically validated' : 'غير مدقق سريرياً')}</strong></div>
-      <div><span>${isEn ? 'Oxygen Level' : 'نسبة الأكسجين'}</span><strong style="${c.o2 < 90 ? 'color: #ef4444;' : ''}">${c.o2}%${isDemoCase ? ' (Demo Data)' : ''}</strong></div>
+      <div><span>${isEn ? 'Rules-based suggestion' : 'اقتراح مبني على قواعد'}</span><strong>${(isEn ? c.aiScoreEn : c.aiScore) || (isEn ? 'Not clinically validated' : 'غير مدقق سريرياً')}${isDemoCase ? ' (Demo Data)' : ''}</strong></div>
+      <div><span>${isEn ? 'Rule score' : 'مؤشر القواعد'}</span><strong>${(isEn ? c.ruleScoreLabelEn : c.ruleScoreLabelAr) || c.ruleScore || (isEn ? 'No validated confidence value' : 'لا توجد قيمة ثقة معتمدة')}</strong></div>
+      <div><span>${isEn ? 'Oxygen Level' : 'نسبة الأكسجين'}</span><strong style="${o2Value < 90 ? 'color: #ef4444;' : ''}">${o2Value || '--'}%${isDemoCase ? ' (Demo Data)' : ''}</strong></div>
       <div><span>${isEn ? 'Duration' : 'مدة الأعراض'}</span><strong>${isEn ? c.durationEn : c.duration}${isDemoCase ? ' (Demo Data)' : ''}</strong></div>
     </div>
+    <h4 style="margin: 16px 0 6px; font-size: 14px;">${isEn ? 'Patient History & Answers' : 'تاريخ المريض وإجاباته'}</h4>
+    ${patientDataHtml}
+    <h4 style="margin: 16px 0 6px; font-size: 14px;">${isEn ? 'Doctor Notes & Follow-up' : 'ملاحظات الطبيب والمتابعة'}</h4>
+    ${doctorNotesHtml}
     ${triggeredRulesHtml}
 
     <!-- DYNAMIC CLINICAL REPORT BUILDER STATION -->
@@ -4260,7 +4905,7 @@ if (isUnderReview) {
       <!-- Quick Diagnostic Presets -->
       <div style="margin-bottom: 12px;">
         <label style="font-size: 12px; font-weight: 700; color: var(--muted); display: block; margin-bottom: 6px;">
-          ${isEn ? '⚡ Quick Diagnostic Presets:' : '⚡ قوالب تشخيصية وخطة علاج سريعة:'}
+          ${isEn ? 'Manual diagnosis shortcuts:' : 'اختصارات إدخال التشخيص اليدوي:'}
         </label>
         <div style="display: flex; gap: 6px; flex-wrap: wrap;">
           <button type="button" class="soft-button" style="font-size: 11.5px; padding: 4px 10px;" onclick="applyDiagPreset('asthma')">🫁 ${isEn ? 'Asthma Flare' : 'حساسية صدرية وربو'}</button>
@@ -4275,7 +4920,7 @@ if (isUnderReview) {
         <label for="doctorDiagnosisInput" style="font-weight: 800; font-size: 13px; display: block; margin-bottom: 4px;">
           ${isEn ? '1. Physician Clinical Diagnosis & Assessment *' : '1. التشخيص الطبي السريري المعتمد *'}
         </label>
-        <textarea id="doctorDiagnosisInput" ${isClosed ? 'disabled' : ''} placeholder="${isEn ? 'Enter verified clinical diagnosis...' : 'اكتب التشخيص الطبي والملاحظات السريرية المعتمدة...'}" style="width: 100%; min-height: 75px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 10px; font-family: inherit; font-size: 13px;">${existingDoctorNote || (isEn ? 'Patient assessment verified. Normal breathing sounds with mild bronchial irritation.' : 'تمت المراجعة والتدقيق السريري. أعراض حساسية صدرية موسمية مع كحة خفيفة واستقرار تشبع الأكسجين.')}</textarea>
+        <textarea id="doctorDiagnosisInput" ${isClosed ? 'disabled' : ''} placeholder="${isEn ? 'Manually enter the physician diagnosis and clinical notes. Do not rely on rule suggestions as a diagnosis.' : 'أدخل التشخيص والملاحظات السريرية يدوياً. لا تعتمد اقتراحات القواعد كتشخيص.'}" style="width: 100%; min-height: 75px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 10px; font-family: inherit; font-size: 13px;">${escapeHtml(existingDoctorNote)}</textarea>
         <input type="hidden" id="doctorNoteInput" value="${escapeHtml(existingDoctorNote)}" />
       </div>
 
@@ -4292,7 +4937,7 @@ if (isUnderReview) {
         <label for="doctorRecommendationsInput" style="font-weight: 800; font-size: 13px; display: block; margin-bottom: 4px;">
           ${isEn ? '3. Clinical Recommendations & Care Plan' : '3. التوصيات الطبية وخطة المتابعة'}
         </label>
-        <textarea id="doctorRecommendationsInput" ${isClosed ? 'disabled' : ''} placeholder="${isEn ? 'Add one recommendation per line.' : 'أضف كل توصية في سطر منفصل.'}" style="width: 100%; min-height: 85px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 10px; font-family: inherit; font-size: 13px;">${existingRecommendations || (isEn ? '• Monitor oxygen saturation SpO2 twice daily.\n• Increase warm fluid intake and practice deep breathing.\n• Return for clinical evaluation within 48 hours.\n• Seek immediate emergency care (123) if breathing worsens.' : '• قياس نسبة تشبع الأكسجين مرتين يومياً بجهاز نبض موثوق.\n• الحرص على شرب السوائل الدافئة وتمارين التنفس العميق.\n• متابعة الاستشارة في العيادة أو عن بُعد خلال 48 ساعة.\n• التوجه الفوري للطوارئ أو الاتصال بالإسعاف (123) في حال زيادة ضيق التنفس.')}</textarea>
+        <textarea id="doctorRecommendationsInput" ${isClosed ? 'disabled' : ''} placeholder="${isEn ? 'Add one recommendation per line.' : 'أضف كل توصية في سطر منفصل.'}" style="width: 100%; min-height: 85px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 10px; font-family: inherit; font-size: 13px;">${escapeHtml(existingRecommendations)}</textarea>
       </div>
 
       <!-- Doctor Identity & Credentials Box -->
@@ -4332,6 +4977,11 @@ if (isUnderReview) {
     const activeBtn = Array.from(queueList.children).find(btn => btn.dataset && btn.dataset.caseId === id);
     if (activeBtn) activeBtn.style.border = "2px solid var(--teal)";
   }
+
+  // Attach auto-save listeners to draft textareas to preserve doctor notes
+  if (window.HealthVibes?.DoctorUI?.attachDraftPreservationListeners) {
+    window.HealthVibes.DoctorUI.attachDraftPreservationListeners(id);
+  }
 }
 
 if (APP_ENV.isLocalhost && APP_ENV.allowDemoSeed) {
@@ -4342,6 +4992,7 @@ function showAuth() {
   if (authScreen) {
     authScreen.classList.add("open");
     authScreen.style.display = "grid";
+    setDialogAccessibility(authScreen, true);
   }
   clearAuthError();
   if (window.location.protocol === "file:") {
@@ -4365,6 +5016,7 @@ function hideAuth() {
   if (authScreen) {
     authScreen.classList.remove("open");
     authScreen.style.display = "none";
+    setDialogAccessibility(authScreen, false);
   }
   clearAuthError();
 }
@@ -4499,7 +5151,7 @@ function toFriendlyAppError(err, context = "") {
       category: isEn ? "Registration" : "إنشاء حساب",
       title: isEn ? "Email Already Registered" : "البريد مسجل بالفعل",
       message: isEn
-        ? "An existing Health Vibes account is already associated with this email address."
+        ? "An existing Health Vibe account is already associated with this email address."
         : "يوجد حساب مسجل مسبقاً بهذا البريد الإلكتروني في النظام.",
       action: isEn ? "Please switch to 'Sign In' or recover your password if you forgot it." : "يرجى التبديل إلى 'تسجيل الدخول' أو استعادة كلمة المرور إذا كنت قد نسيتها.",
       ref: code || "auth/email-already-in-use"
@@ -4768,7 +5420,6 @@ async function handleEmailAuth(e) {
       await db.collection("users").doc(user.uid).set({
         name: displayName,
         email: user.email,
-        emailVerified: false,
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
 
@@ -4929,21 +5580,49 @@ function transitionToApp(user, options = {}) {
   }
   if (navigate && typeof showScreen === "function") {
     let savedScreen = "";
-    try { savedScreen = localStorage.getItem("hv_active_screen"); } catch(e) {}
+    try { savedScreen = ""; } catch(e) {}
     const defaultScreen = getRoleDefaultScreen(selectedRole);
     const targetScreen = (savedScreen && canAccessScreen(savedScreen)) ? savedScreen : defaultScreen;
     showScreen(targetScreen);
   }
   applyLanguage(currentLanguage);
-  if (loader) {
-    loader.classList.add("is-done");
-  }
+  dismissLoader();
   try { updateAvatar(user); } catch(e) {}
   try { updateEmailVerificationUI(user); } catch(e) {}
   try { updateNavVisibility(); } catch(e) {}
 }
 
 window.transitionToApp = transitionToApp;
+
+function showPublicLandingPage() {
+  if (publicSite) {
+    publicSite.hidden = false;
+    publicSite.removeAttribute("hidden");
+    publicSite.style.display = "block";
+    publicSite.classList.remove("is-hidden");
+    const siteBackBtn = document.getElementById("siteBackToAppBtn");
+    if (siteBackBtn) siteBackBtn.style.display = "inline-flex";
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+}
+window.showPublicLandingPage = showPublicLandingPage;
+
+function showAppView(event) {
+  if (event && event.preventDefault) event.preventDefault();
+  if (publicSite) {
+    publicSite.hidden = true;
+    publicSite.setAttribute("hidden", "true");
+    publicSite.style.display = "none";
+  }
+  if (app) {
+    app.hidden = false;
+    app.removeAttribute("hidden");
+    app.style.display = "grid";
+  }
+  const defaultScreen = typeof getRoleDefaultScreen === "function" ? getRoleDefaultScreen(selectedRole) : "patient";
+  if (typeof showScreen === "function") showScreen(defaultScreen || "patient");
+}
+window.showAppView = showAppView;
 
 async function enterApp(source = "google") {
   if (source === "google") {
@@ -4964,7 +5643,6 @@ async function enterApp(source = "google") {
           await db.collection("users").doc(user.uid).set({
             name: user.displayName || user.email.split('@')[0],
             email: user.email,
-            emailVerified: verificationRevoked ? false : true,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
           });
         } else {
@@ -5014,9 +5692,7 @@ window.enterApp = enterApp;
 
 function showSignedOutUI() {
   try {
-    localStorage.removeItem("hv_user_logged_in");
-    localStorage.removeItem("hv_last_user_role");
-    localStorage.removeItem("hv_last_user_uid");
+    purgeSensitiveLegacyStorage();
     document.documentElement.classList.remove("hv-has-session");
   } catch(e) {}
   if (app) {
@@ -5067,22 +5743,28 @@ async function leaveApp(event) {
   if (lockScreen) lockScreen.style.display = "none";
   window._isIdleLocked = false;
   clearActiveSession();
+  if (window.asyncContextManager) {
+    window.asyncContextManager.handleAuthChange("LOGOUT");
+  }
   // ── إيقاف الـ real-time listener عند تسجيل الخروج ────────────
   if (window._patientCasesUnsub) {
-    window._patientCasesUnsub();
+    try { window._patientCasesUnsub(); } catch(e) {}
     window._patientCasesUnsub = null;
+  }
+  if (window._doctorQueueUnsub) {
+    try { window._doctorQueueUnsub(); } catch(e) {}
+    window._doctorQueueUnsub = null;
   }
   window._currentCaseId = null;
   window._isUserVerified = false;
   window._verifiedPhone = "";
   window._cachedUserDoc = null;
-  try {
-    sessionStorage.removeItem("health_vibe_phone_verified");
-  } catch(e) {}
+  purgeSensitiveLegacyStorage();
 
   showSignedOutUI();
 
   try {
+    if (typeof auditSessionLogout === "function") await auditSessionLogout().catch(() => {});
     await auth.signOut();
   } catch(e) {
     console.error("Sign out error:", e);
@@ -5111,25 +5793,30 @@ async function switchAccount(event) {
   if (lockScreen) lockScreen.style.display = "none";
   window._isIdleLocked = false;
   clearActiveSession();
+  if (window.asyncContextManager) {
+    window.asyncContextManager.handleAuthChange("SWITCH_ACCOUNT");
+  }
 
   if (window._patientCasesUnsub) {
     window._patientCasesUnsub();
     window._patientCasesUnsub = null;
+  }
+  if (window._doctorQueueUnsub) {
+    try { window._doctorQueueUnsub(); } catch(e) {}
+    window._doctorQueueUnsub = null;
   }
   window._currentCaseId = null;
   window._isUserVerified = false;
   window._verifiedPhone = "";
   window._cachedUserDoc = null;
   try {
-    sessionStorage.removeItem("health_vibe_phone_verified");
-    sessionStorage.removeItem("hv_active_session");
-    localStorage.removeItem("hv_active_session");
-    localStorage.removeItem("hv_user_logged_in");
+    purgeSensitiveLegacyStorage();
   } catch(e) {}
 
   showSignedOutUI();
 
   try {
+    if (typeof auditSessionLogout === "function") await auditSessionLogout().catch(() => {});
     if (auth) await auth.signOut();
   } catch(e) {
     console.error("Sign out error during switch account:", e);
@@ -5185,13 +5872,10 @@ function normalizePhoneNumberInput(value) {
 function isUserVerified(user) {
   if (!user) return false;
   if (isVerificationRevoked(user)) return false;
-  if (isOwnerUser(user.email)) return true;
+  if (isOwnerUser(user)) return true;
   if (user.emailVerified) return true;
   if (window._isUserVerified) return true;
-  try {
-    if (sessionStorage.getItem("health_vibe_phone_verified") === "true") return true;
-  } catch(e) {}
-  if (window._cachedUserDoc && (window._cachedUserDoc.emailVerified || window._cachedUserDoc.phoneVerified)) {
+  if (window._cachedUserDoc && (window._cachedUserDoc.emailVerified === true || window._cachedUserDoc.isVerified === true)) {
     return true;
   }
   return false;
@@ -5515,7 +6199,7 @@ async function verifyPhoneOtp() {
     // 1. Update client verified state
     window._isUserVerified = true;
     try {
-      sessionStorage.setItem("health_vibe_phone_verified", "true");
+      window._isUserVerified = true;
     } catch(e) {}
 
     // 2. Update Firestore user document
@@ -5529,14 +6213,7 @@ async function verifyPhoneOtp() {
       }, { merge: true }).catch(err => console.warn("Firestore user verification update warning:", err));
     }
 
-    // 3. Update local accounts registry (offline & admin reports)
-    const list = getLocalAccountsRegistry();
-    const target = list.find(x => (user && x.id === user.uid) || (user && x.email && x.email.toLowerCase() === (user.email || '').toLowerCase()));
-    if (target) {
-      target.emailVerified = true;
-      target.phoneVerified = true;
-      try { localStorage.setItem(ACCOUNTS_REGISTRY_KEY, JSON.stringify(list)); } catch (e) {}
-    }
+    purgeSensitiveLegacyStorage();
 
     // 4. Update UI
     if (user) {
@@ -5736,12 +6413,7 @@ async function enforceEmailVerification(actionNameAr = "هذا الإجراء", 
     return false;
   }
 
-  // System owner bypasses for disaster recovery
-  if (isOwnerUser(user.email)) {
-    return true;
-  }
-
-  // If already verified via OTP or cached document
+  // If already verified by Firebase Auth or the backend-owned user document
   if (isUserVerified(user)) {
     return true;
   }
@@ -5777,8 +6449,7 @@ async function enforceEmailVerification(actionNameAr = "هذا الإجراء", 
 }
 
 function updateNavVisibility() {
-  // Navigation visibility is strictly driven by the active selectedRole.
-  // isOwner does NOT auto-show all screens — it only matters when selectedRole is SUPER_ADMIN.
+  // Owners see every product surface; other accounts are driven by active selectedRole.
   document.querySelectorAll(".nav-item").forEach((btn) => {
     const screen = btn.dataset.screen;
     if (!screen) return;
@@ -5790,6 +6461,10 @@ function updateNavVisibility() {
   const docApplyCard = document.getElementById("doctorApplyCard");
   if (docApplyCard) {
     docApplyCard.style.display = (selectedRole === ROLES.PATIENT) ? "block" : "none";
+  }
+  const siteBackBtn = document.getElementById("siteBackToAppBtn");
+  if (siteBackBtn) {
+    siteBackBtn.style.display = (auth && auth.currentUser) ? "inline-flex" : "none";
   }
   if (typeof updateMobileBottomNav === "function") {
     updateMobileBottomNav();
@@ -5823,44 +6498,92 @@ function getConsentStorageKey() {
 }
 
 function hasAcceptedPrivacyConsent() {
-  try {
-    const raw = localStorage.getItem(getConsentStorageKey());
-    if (!raw) return false;
-    const parsed = JSON.parse(raw);
-    return Boolean(parsed && parsed.accepted === true);
-  } catch {
-    return false;
-  }
+  const user = auth ? auth.currentUser : null;
+  const profileConsent = window._cachedUserDoc && window._cachedUserDoc.privacyConsent;
+  const activeRecord = window._privacyConsentRecord || profileConsent;
+  return Boolean(
+    activeRecord &&
+    activeRecord.accepted === true &&
+    !activeRecord.revokedAt &&
+    (!user || !activeRecord.userId || activeRecord.userId === user.uid)
+  );
 }
 
 function getStoredPrivacyConsent() {
-  try {
-    const raw = localStorage.getItem(getConsentStorageKey());
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
+  const profileConsent = window._cachedUserDoc && window._cachedUserDoc.privacyConsent;
+  return window._privacyConsentRecord || profileConsent || null;
 }
 
-function savePrivacyConsent(accepted = true, options = {}) {
+async function syncPrivacyConsentToServer(consentRecord, withdraw = false) {
+  if (!auth?.currentUser || typeof callBackend !== "function") return null;
+  const endpoint = withdraw ? "/api/user/privacy-consent/withdraw" : "/api/user/privacy-consent";
+  return callBackend(endpoint, {
+    method: "POST",
+    body: JSON.stringify({
+      version: consentRecord.version,
+      dataProcessing: consentRecord.dataProcessing,
+      aiAdvisory: consentRecord.aiAdvisory,
+      notifications: consentRecord.notifications,
+      purposes: consentRecord.purposes || undefined
+    })
+  });
+}
+
+async function savePrivacyConsent(accepted = true, options = {}) {
   const user = auth ? auth.currentUser : null;
+  const now = new Date().toISOString();
   const consentRecord = {
     accepted: Boolean(accepted),
     version: PRIVACY_CONSENT_VERSION,
-    acceptedAt: new Date().toISOString(),
+    timestamp: now,
+    acceptedAt: accepted ? now : null,
+    revokedAt: accepted ? null : now,
     userId: user ? user.uid : "guest",
     userEmail: user ? user.email : "guest",
+    purpose: accepted
+      ? "Explicit consent for Health Vibe clinical assessment, doctor review, report workflow, and selected communications."
+      : "Withdrawal of explicit Health Vibe clinical data processing consent.",
     dataProcessing: options.dataProcessing !== undefined ? options.dataProcessing : true,
     aiAdvisory: options.aiAdvisory !== undefined ? options.aiAdvisory : true,
-    notifications: options.notifications !== undefined ? options.notifications : false
+    notifications: options.notifications !== undefined ? options.notifications : false,
+    purposes: {
+      dataProcessing: {
+        accepted: options.dataProcessing !== undefined ? Boolean(options.dataProcessing) : true,
+        purpose: "clinical_assessment_and_doctor_review",
+        mandatory: true
+      },
+      aiAdvisory: {
+        accepted: options.aiAdvisory !== undefined ? Boolean(options.aiAdvisory) : true,
+        purpose: "guidance_only_ai_triage_support",
+        mandatory: true
+      },
+      notifications: {
+        accepted: options.notifications !== undefined ? Boolean(options.notifications) : false,
+        purpose: "case_status_report_and_follow_up_notifications",
+        mandatory: false
+      }
+    }
   };
 
-  localStorage.setItem(getConsentStorageKey(), JSON.stringify(consentRecord));
+  window._privacyConsentRecord = consentRecord;
+  purgeSensitiveLegacyStorage();
 
-  // Sync to Firestore user profile if authenticated
+  try {
+    const serverResult = await syncPrivacyConsentToServer(consentRecord, !accepted);
+    if (serverResult && serverResult.privacyConsent) {
+      window._privacyConsentRecord = serverResult.privacyConsent;
+      if (window._cachedUserDoc) window._cachedUserDoc.privacyConsent = serverResult.privacyConsent;
+      return serverResult.privacyConsent;
+    }
+  } catch (err) {
+    console.warn("[Consent] Server consent sync failed; using Firestore client fallback:", err);
+  }
+
+  // Fallback for local/emulator use when the API is unavailable.
   if (user && db) {
     db.collection("users").doc(user.uid).set({
-      privacyConsent: consentRecord
+      privacyConsent: consentRecord,
+      privacyConsentStatus: accepted ? "active" : "withdrawn"
     }, { merge: true }).catch(err => {
       console.warn("[Consent] Could not sync consent to Firestore:", err);
     });
@@ -5868,6 +6591,27 @@ function savePrivacyConsent(accepted = true, options = {}) {
 
   return consentRecord;
 }
+
+async function withdrawPrivacyConsent() {
+  const isEn = currentLanguage === "en";
+  if (!confirm(isEn
+    ? "Withdraw medical privacy consent? New breathing assessments will be blocked until you accept again. Existing medical records may be retained where legally or clinically required."
+    : "هل تريد سحب موافقة الخصوصية الطبية؟ سيتم منع فحوصات التنفس الجديدة حتى توافق مرة أخرى، وقد يتم الاحتفاظ بالسجلات الطبية السابقة عند وجود متطلبات قانونية أو سريرية.")) {
+    return null;
+  }
+  const record = await savePrivacyConsent(false, {
+    dataProcessing: false,
+    aiAdvisory: false,
+    notifications: false
+  });
+  updateAssessmentConsentBadge();
+  renderConsentScreen();
+  showToast(isEn
+    ? "Consent withdrawn. Assessment is paused until consent is renewed."
+    : "تم سحب الموافقة. تم إيقاف التقييمات الجديدة حتى تجديد الموافقة.");
+  return record;
+}
+window.withdrawPrivacyConsent = withdrawPrivacyConsent;
 
 function renderConsentScreen() {
   const isEn = currentLanguage === "en";
@@ -5886,7 +6630,7 @@ function renderConsentScreen() {
 
   const proceedBtn = document.getElementById("btnConsentProceed");
   if (proceedBtn) {
-    proceedBtn.onclick = () => {
+    proceedBtn.onclick = async () => {
       const chkProcessing = document.getElementById("consentDataProcessing");
       const chkAi = document.getElementById("consentAiAdvisory");
       const chkNotify = document.getElementById("consentNotifications");
@@ -5903,15 +6647,29 @@ function renderConsentScreen() {
         return;
       }
 
-      savePrivacyConsent(true, {
-        dataProcessing: isProcessingOk,
-        aiAdvisory: isAiOk,
-        notifications: chkNotify ? chkNotify.checked : false
-      });
+      proceedBtn.disabled = true;
+      const originalText = proceedBtn.textContent;
+      proceedBtn.textContent = isEn ? "Saving consent..." : "جاري حفظ الموافقة...";
+      try {
+        await savePrivacyConsent(true, {
+          dataProcessing: isProcessingOk,
+          aiAdvisory: isAiOk,
+          notifications: chkNotify ? chkNotify.checked : false
+        });
+      } finally {
+        proceedBtn.disabled = false;
+        proceedBtn.textContent = originalText;
+      }
 
       showToast(isEn ? "Privacy consent verified! Opening assessment..." : "تم توثيق الموافقة بنجاح! جاري فتح فحص التنفس...");
       showScreen("assessment");
     };
+  }
+
+  const withdrawBtn = document.getElementById("btnWithdrawConsent");
+  if (withdrawBtn) {
+    withdrawBtn.style.display = isConsented ? "inline-flex" : "none";
+    withdrawBtn.onclick = () => withdrawPrivacyConsent();
   }
 }
 
@@ -5942,63 +6700,350 @@ function updateAssessmentConsentBadge() {
 }
 
 
-// ── Medical Profile Loading & Saving ──
+// ── Medical Profile Helpers, Calculations, Loading & Saving ──
+
+/**
+ * Calculate exact age in years from Date of Birth
+ */
+function calculateAge(dateOfBirth, referenceDate = new Date()) {
+  if (!dateOfBirth) return null;
+  const dob = (dateOfBirth instanceof Date) ? dateOfBirth : new Date(dateOfBirth);
+  if (isNaN(dob.getTime())) return null;
+
+  const ref = (referenceDate instanceof Date) ? referenceDate : new Date(referenceDate);
+  if (isNaN(ref.getTime())) return null;
+
+  let age = ref.getFullYear() - dob.getFullYear();
+  const m = ref.getMonth() - dob.getMonth();
+  if (m < 0 || (m === 0 && ref.getDate() < dob.getDate())) {
+    age--;
+  }
+  return age >= 0 ? age : 0;
+}
+
+/**
+ * Calculate Body Mass Index (BMI)
+ */
+function calculateBmi(heightCm, weightKg) {
+  const h = Number(heightCm);
+  const w = Number(weightKg);
+  if (!h || !w || h <= 0 || w <= 0) return null;
+  const heightM = h / 100;
+  const bmi = w / (heightM * heightM);
+  return Math.round(bmi * 10) / 10;
+}
+
+function updateProfileCalculatedAge() {
+  const dobEl = document.getElementById("profileDob");
+  const ageBadge = document.getElementById("profileCalculatedAgeBadge");
+  const hiddenAgeEl = document.getElementById("profileAge");
+  if (!dobEl) return;
+
+  const dobVal = dobEl.value;
+  if (!dobVal) {
+    if (ageBadge) ageBadge.textContent = currentLanguage === "en" ? "Age: --" : "العمر: --";
+    return;
+  }
+
+  const age = calculateAge(dobVal);
+  if (age !== null) {
+    if (ageBadge) {
+      ageBadge.textContent = currentLanguage === "en" ? `Age: ${age} yrs` : `العمر: ${age} سنة`;
+    }
+    if (hiddenAgeEl) hiddenAgeEl.value = String(age);
+  }
+}
+
+function updateProfileBmi() {
+  const heightEl = document.getElementById("profileHeight");
+  const weightEl = document.getElementById("profileWeight");
+  const bmiBadge = document.getElementById("profileBmiBadge");
+  if (!heightEl || !weightEl || !bmiBadge) return;
+
+  const h = parseFloat(heightEl.value);
+  const w = parseFloat(weightEl.value);
+  const bmi = calculateBmi(h, w);
+  if (bmi !== null && !isNaN(bmi)) {
+    let category = "";
+    if (bmi < 18.5) category = currentLanguage === "en" ? "Underweight" : "نقص وزن";
+    else if (bmi < 25) category = currentLanguage === "en" ? "Normal" : "طبيعي";
+    else if (bmi < 30) category = currentLanguage === "en" ? "Overweight" : "زيادة وزن";
+    else category = currentLanguage === "en" ? "Obese" : "سمنة";
+
+    bmiBadge.textContent = currentLanguage === "en" ? `BMI: ${bmi} (${category})` : `مؤشر الكتلة: ${bmi} (${category})`;
+  } else {
+    bmiBadge.textContent = currentLanguage === "en" ? "BMI: --" : "مؤشر الكتلة (BMI): --";
+  }
+}
+
+function handleSexOrDobChange() {
+  updateProfileCalculatedAge();
+  const dobEl = document.getElementById("profileDob");
+  const sexEl = document.getElementById("profileSex");
+  const pregContainer = document.getElementById("profilePregnancyContainer");
+  if (!pregContainer) return;
+
+  const sex = sexEl ? sexEl.value : "not_specified";
+  const age = dobEl?.value ? calculateAge(dobEl.value) : null;
+
+  // Clinical relevance guard: biological female in reproductive age (12 to 55)
+  const isClinicallyRelevant = (sex === "female") && (age !== null && age >= 12 && age <= 55);
+
+  if (isClinicallyRelevant) {
+    pregContainer.style.display = "block";
+  } else {
+    pregContainer.style.display = "none";
+  }
+}
+
+function handleDobChange() {
+  handleSexOrDobChange();
+}
+
+function gatherMedicalProfileFormData() {
+  const nameEl = document.getElementById("profileName");
+  const dobEl = document.getElementById("profileDob");
+  const phoneEl = document.getElementById("profilePhone");
+  const emergencyNameEl = document.getElementById("profileEmergencyName");
+  const emergencyRelationEl = document.getElementById("profileEmergencyRelation");
+  const emergencyPhoneEl = document.getElementById("profileEmergencyPhone");
+  const bloodTypeEl = document.getElementById("profileBloodType");
+  const heightEl = document.getElementById("profileHeight");
+  const weightEl = document.getElementById("profileWeight");
+  const sexEl = document.getElementById("profileSex");
+  const pregStatusEl = document.getElementById("profilePregnancyStatus");
+  const pregTrimesterEl = document.getElementById("profilePregnancyTrimester");
+  const pregDueDateEl = document.getElementById("profilePregnancyDueDate");
+  const allergiesEl = document.getElementById("profileAllergies");
+  const chronicEl = document.getElementById("profileChronicConditions");
+  const medEl = document.getElementById("profileMedications");
+  const surgeriesEl = document.getElementById("profileSurgeries");
+  const familyEl = document.getElementById("profileFamilyHistory");
+  const admissionsEl = document.getElementById("profileHospitalAdmissions");
+  const smokingStatusEl = document.getElementById("profileSmokingStatus");
+  const smokingDetailsEl = document.getElementById("profileSmokingDetails");
+  const insProviderEl = document.getElementById("profileInsuranceProvider");
+  const insPolicyEl = document.getElementById("profileInsurancePolicyNumber");
+  const insGroupEl = document.getElementById("profileInsuranceGroupNumber");
+  const insExpiryEl = document.getElementById("profileInsuranceExpiry");
+  const clinicSelectEl = document.getElementById("profileClinicSelect");
+  const doctorEl = document.getElementById("profileLinkedDoctor");
+  const doctorIdEl = document.getElementById("profileLinkedDoctorId");
+
+  const splitList = (val) => String(val || "").split(/[\n,;]+/).map(s => s.trim()).filter(Boolean);
+
+  const payload = {
+    fullName: nameEl ? nameEl.value.trim() : "",
+    dateOfBirth: dobEl ? dobEl.value : null,
+    phone: phoneEl ? phoneEl.value.trim() : "",
+    emergencyContact: {
+      name: emergencyNameEl ? emergencyNameEl.value.trim() : "",
+      relationship: emergencyRelationEl ? emergencyRelationEl.value.trim() : "",
+      phone: emergencyPhoneEl ? emergencyPhoneEl.value.trim() : ""
+    },
+    bloodType: bloodTypeEl ? bloodTypeEl.value : "unknown",
+    heightCm: heightEl && heightEl.value ? Number(heightEl.value) : null,
+    weightKg: weightEl && weightEl.value ? Number(weightEl.value) : null,
+    biologicalSex: sexEl ? sexEl.value : "not_specified",
+    pregnancy: {
+      status: pregStatusEl ? pregStatusEl.value : "not_pregnant",
+      trimester: pregTrimesterEl && pregTrimesterEl.value ? Number(pregTrimesterEl.value) : null,
+      dueDate: pregDueDateEl && pregDueDateEl.value ? pregDueDateEl.value : null
+    },
+    allergies: splitList(allergiesEl ? allergiesEl.value : ""),
+    chronicConditions: splitList(chronicEl ? chronicEl.value : ""),
+    medications: splitList(medEl ? medEl.value : ""),
+    surgeries: splitList(surgeriesEl ? surgeriesEl.value : ""),
+    familyHistory: splitList(familyEl ? familyEl.value : ""),
+    hospitalAdmissions: splitList(admissionsEl ? admissionsEl.value : ""),
+    smoking: {
+      status: smokingStatusEl ? smokingStatusEl.value : "never",
+      details: smokingDetailsEl ? smokingDetailsEl.value.trim() : ""
+    },
+    insurance: {
+      hasInsurance: Boolean(insProviderEl?.value?.trim() || insPolicyEl?.value?.trim()),
+      provider: insProviderEl ? insProviderEl.value.trim() : "",
+      policyNumber: insPolicyEl ? insPolicyEl.value.trim() : "",
+      groupNumber: insGroupEl ? insGroupEl.value.trim() : "",
+      expiryDate: insExpiryEl ? insExpiryEl.value : null
+    },
+    clinicLinkage: {
+      clinicId: clinicSelectEl ? clinicSelectEl.value : null,
+      clinicName: clinicSelectEl && clinicSelectEl.selectedOptions && clinicSelectEl.selectedOptions[0] ? clinicSelectEl.selectedOptions[0].text : null,
+      linkedDoctorId: doctorIdEl ? doctorIdEl.value.trim() : null,
+      linkedDoctorName: doctorEl ? doctorEl.value.trim() : null
+    },
+    source: "web_portal"
+  };
+
+  return payload;
+}
+
 async function loadUserProfileData() {
   const user = getActiveUser();
   if (!user) return;
 
+  let profileData = null;
+
+  try {
+    const res = await authenticatedFetch('/api/patient/medical-profile');
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.profile) {
+        profileData = data.profile;
+      }
+    }
+  } catch (err) {
+    console.warn("Could not fetch profile from server, using local cache:", err);
+  }
+
   const cachedDoc = window._cachedUserDoc || {};
-  const activeSession = (typeof getActiveSession === "function" ? getActiveSession() : null) || {};
 
   const nameEl = document.getElementById("profileName");
+  const dobEl = document.getElementById("profileDob");
   const ageEl = document.getElementById("profileAge");
   const phoneEl = document.getElementById("profilePhone");
-  const historyEl = document.getElementById("profileMedicalHistory");
+  const emergencyNameEl = document.getElementById("profileEmergencyName");
+  const emergencyRelationEl = document.getElementById("profileEmergencyRelation");
+  const emergencyPhoneEl = document.getElementById("profileEmergencyPhone");
+  const bloodTypeEl = document.getElementById("profileBloodType");
+  const heightEl = document.getElementById("profileHeight");
+  const weightEl = document.getElementById("profileWeight");
+  const sexEl = document.getElementById("profileSex");
+  const pregStatusEl = document.getElementById("profilePregnancyStatus");
+  const pregTrimesterEl = document.getElementById("profilePregnancyTrimester");
+  const pregDueDateEl = document.getElementById("profilePregnancyDueDate");
+  const allergiesEl = document.getElementById("profileAllergies");
+  const chronicEl = document.getElementById("profileChronicConditions");
+  const medEl = document.getElementById("profileMedications");
+  const surgeriesEl = document.getElementById("profileSurgeries");
+  const familyEl = document.getElementById("profileFamilyHistory");
+  const admissionsEl = document.getElementById("profileHospitalAdmissions");
+  const smokingStatusEl = document.getElementById("profileSmokingStatus");
+  const smokingDetailsEl = document.getElementById("profileSmokingDetails");
+  const insProviderEl = document.getElementById("profileInsuranceProvider");
+  const insPolicyEl = document.getElementById("profileInsurancePolicyNumber");
+  const insGroupEl = document.getElementById("profileInsuranceGroupNumber");
+  const insExpiryEl = document.getElementById("profileInsuranceExpiry");
+  const clinicSelectEl = document.getElementById("profileClinicSelect");
   const doctorEl = document.getElementById("profileLinkedDoctor");
+  const doctorIdEl = document.getElementById("profileLinkedDoctorId");
+  const provenanceBadge = document.getElementById("profileProvenanceBadge");
+  const provenanceDetailText = document.getElementById("profileProvenanceDetailText");
 
-  const nameVal = cachedDoc.name || cachedDoc.displayName || user.displayName || user.name || activeSession.displayName || activeSession.name || (user.email ? user.email.split('@')[0] : "");
-  const ageVal = cachedDoc.age || "";
-  const phoneVal = cachedDoc.phoneNumber || window._verifiedPhone || user.phoneNumber || activeSession.phoneNumber || "";
-  const historyVal = cachedDoc.medicalHistory || "";
-  const docVal = cachedDoc.linkedDoctor || (currentLanguage === "en" ? "Dr. Mona Samy - Nasr City Clinic" : "د. منى سامي - عيادة مدينة نصر");
+  const p = profileData || {};
+  const medHistory = p.medicalHistory || {};
+  const biometrics = p.biometrics || {};
+  const emergency = p.emergencyContact || {};
+  const insurance = p.insurance || {};
+  const linkage = p.clinicLinkage || {};
+  const provenance = p.dataProvenance || {};
 
-  if (nameEl && (!nameEl.value || nameEl.value === "أحمد محمد")) nameEl.value = nameVal;
-  if (ageEl && (!ageEl.value || ageEl.value === "34 سنة")) ageEl.value = ageVal;
-  if (phoneEl && !phoneEl.value) phoneEl.value = phoneVal;
-  if (historyEl && (!historyEl.value || historyEl.value.includes("لا يوجد حساسية معروفة"))) historyEl.value = historyVal;
-  if (doctorEl && !doctorEl.value) doctorEl.value = docVal;
+  if (nameEl) nameEl.value = p.fullName || cachedDoc.name || cachedDoc.displayName || user.displayName || user.name || (user.email ? user.email.split('@')[0] : "");
+  if (dobEl) dobEl.value = p.dateOfBirth || cachedDoc.dateOfBirth || cachedDoc.dob || "";
+  if (ageEl) ageEl.value = p.calculatedAge ? String(p.calculatedAge) : (cachedDoc.age || "");
+  if (phoneEl) phoneEl.value = p.phoneNumber || cachedDoc.phoneNumber || window._verifiedPhone || user.phoneNumber || "";
+
+  if (emergencyNameEl) emergencyNameEl.value = emergency.name || cachedDoc.emergencyContactName || "";
+  if (emergencyRelationEl) emergencyRelationEl.value = emergency.relationship || cachedDoc.emergencyContactRelation || "";
+  if (emergencyPhoneEl) emergencyPhoneEl.value = emergency.phone || cachedDoc.emergencyContactPhone || "";
+
+  if (bloodTypeEl) bloodTypeEl.value = biometrics.bloodType || cachedDoc.bloodType || "unknown";
+  if (heightEl) heightEl.value = biometrics.heightCm || cachedDoc.height || "";
+  if (weightEl) weightEl.value = biometrics.weightKg || cachedDoc.weight || "";
+
+  if (sexEl) sexEl.value = p.biologicalSex || cachedDoc.biologicalSex || cachedDoc.sex || "not_specified";
+
+  if (p.pregnancy) {
+    if (pregStatusEl) pregStatusEl.value = p.pregnancy.status || "not_pregnant";
+    if (pregTrimesterEl) pregTrimesterEl.value = p.pregnancy.trimester ? String(p.pregnancy.trimester) : "";
+    if (pregDueDateEl) pregDueDateEl.value = p.pregnancy.dueDate || "";
+  }
+
+  const joinList = (arr) => Array.isArray(arr) ? arr.join(", ") : (arr || "");
+  if (allergiesEl) allergiesEl.value = joinList(medHistory.allergies) || cachedDoc.allergies || "";
+  if (chronicEl) chronicEl.value = joinList(medHistory.chronicConditions) || cachedDoc.chronicConditions || cachedDoc.medicalHistory || "";
+  if (medEl) medEl.value = joinList(medHistory.medications) || cachedDoc.medications || "";
+  if (surgeriesEl) surgeriesEl.value = joinList(medHistory.surgeries) || cachedDoc.surgeries || "";
+  if (familyEl) familyEl.value = joinList(medHistory.familyHistory) || cachedDoc.familyHistory || "";
+  if (admissionsEl) admissionsEl.value = joinList(medHistory.hospitalAdmissions) || cachedDoc.hospitalAdmissions || "";
+
+  if (smokingStatusEl) smokingStatusEl.value = medHistory.smoking?.status || cachedDoc.smokingStatus || "never";
+  if (smokingDetailsEl) smokingDetailsEl.value = medHistory.smoking?.details || cachedDoc.smokingDetails || "";
+
+  if (insProviderEl) insProviderEl.value = insurance.provider || cachedDoc.insuranceProvider || "";
+  if (insPolicyEl) insPolicyEl.value = insurance.policyNumber || cachedDoc.insurancePolicyNumber || "";
+  if (insGroupEl) insGroupEl.value = insurance.groupNumber || cachedDoc.insuranceGroupNumber || "";
+  if (insExpiryEl) insExpiryEl.value = insurance.expiryDate || cachedDoc.insuranceExpiry || "";
+
+  if (clinicSelectEl) clinicSelectEl.value = linkage.clinicId || cachedDoc.clinicId || "";
+  if (doctorEl) doctorEl.value = linkage.linkedDoctorName || linkage.linkedDoctorId || cachedDoc.linkedDoctor || "";
+  if (doctorIdEl) doctorIdEl.value = linkage.linkedDoctorId || cachedDoc.linkedDoctorId || "";
+
+  if (provenanceBadge && provenance.version) {
+    provenanceBadge.textContent = currentLanguage === "en" ? `Version v${provenance.version}` : `الإصدار v${provenance.version}`;
+  }
+  if (provenanceDetailText && provenance.updatedAt) {
+    const d = new Date(provenance.updatedAt).toLocaleDateString(currentLanguage === "en" ? "en-US" : "ar-EG");
+    provenanceDetailText.textContent = currentLanguage === "en" ? `Last updated: ${d} | Source: ${provenance.source || 'web_portal'}` : `آخر تحديث: ${d} | المصدر: ${provenance.source || 'بوابة الويب'}`;
+  }
+
+  handleSexOrDobChange();
+  updateProfileBmi();
 }
 
 async function saveUserProfileData() {
   const user = getActiveUser();
-  const nameEl = document.getElementById("profileName");
-  const ageEl = document.getElementById("profileAge");
-  const phoneEl = document.getElementById("profilePhone");
-  const historyEl = document.getElementById("profileMedicalHistory");
-  const doctorEl = document.getElementById("profileLinkedDoctor");
+  const payload = gatherMedicalProfileFormData();
 
-  const name = nameEl ? nameEl.value.trim() : "";
-  const age = ageEl ? ageEl.value.trim() : "";
-  const phone = phoneEl ? phoneEl.value.trim() : "";
-  const medicalHistory = historyEl ? historyEl.value.trim() : "";
-  const linkedDoctor = doctorEl ? doctorEl.value.trim() : "";
-
+  const calculatedAge = payload.dateOfBirth ? calculateAge(payload.dateOfBirth) : null;
   if (!window._cachedUserDoc) window._cachedUserDoc = {};
-  if (name) window._cachedUserDoc.name = name;
-  if (age) window._cachedUserDoc.age = age;
-  if (phone) window._cachedUserDoc.phoneNumber = phone;
-  if (medicalHistory) window._cachedUserDoc.medicalHistory = medicalHistory;
-  if (linkedDoctor) window._cachedUserDoc.linkedDoctor = linkedDoctor;
+  window._cachedUserDoc.name = payload.fullName;
+  window._cachedUserDoc.dateOfBirth = payload.dateOfBirth;
+  window._cachedUserDoc.dob = payload.dateOfBirth;
+  window._cachedUserDoc.age = calculatedAge !== null ? String(calculatedAge) : "";
+  window._cachedUserDoc.phoneNumber = payload.phone;
+  window._cachedUserDoc.bloodType = payload.bloodType;
+  window._cachedUserDoc.height = payload.heightCm;
+  window._cachedUserDoc.weight = payload.weightKg;
+  window._cachedUserDoc.sex = payload.biologicalSex;
+  window._cachedUserDoc.biologicalSex = payload.biologicalSex;
+  window._cachedUserDoc.clinicId = payload.clinicLinkage.clinicId;
+  window._cachedUserDoc.linkedDoctor = payload.clinicLinkage.linkedDoctorName;
 
-  if (user && user.uid && typeof db !== "undefined" && db) {
+  let savedOnBackend = false;
+  try {
+    const res = await authenticatedFetch('/api/patient/medical-profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (res.ok) {
+      savedOnBackend = true;
+      const data = await res.json();
+      if (data.profile?.dataProvenance) {
+        const badge = document.getElementById("profileProvenanceBadge");
+        if (badge) badge.textContent = currentLanguage === "en" ? `Version v${data.profile.dataProvenance.version}` : `الإصدار v${data.profile.dataProvenance.version}`;
+      }
+    }
+  } catch (err) {
+    console.warn("Backend save error, attempting direct Firestore save:", err);
+  }
+
+  if (!savedOnBackend && user && user.uid && typeof db !== "undefined" && db) {
     try {
       await db.collection("users").doc(user.uid).set({
-        name: name || user.displayName || (user.email ? user.email.split('@')[0] : "مريض"),
-        displayName: name || user.displayName || (user.email ? user.email.split('@')[0] : "مريض"),
-        age: age || null,
-        phoneNumber: phone || null,
-        medicalHistory: medicalHistory || null,
-        linkedDoctor: linkedDoctor || null,
+        name: payload.fullName || user.displayName || "مريض",
+        displayName: payload.fullName || user.displayName || "مريض",
+        dateOfBirth: payload.dateOfBirth || null,
+        age: calculatedAge !== null ? String(calculatedAge) : null,
+        phoneNumber: payload.phone || null,
+        bloodType: payload.bloodType || 'unknown',
+        height: payload.heightCm || null,
+        weight: payload.weightKg || null,
+        sex: payload.biologicalSex || 'not_specified',
+        clinicId: payload.clinicLinkage.clinicId || null,
+        linkedDoctor: payload.clinicLinkage.linkedDoctorName || null,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
     } catch(err) {
@@ -6006,18 +7051,53 @@ async function saveUserProfileData() {
     }
   }
 
-  try {
-    const rawSession = localStorage.getItem("hv_active_session");
-    if (rawSession) {
-      const s = JSON.parse(rawSession);
-      if (name) s.displayName = name;
-      if (phone) s.phoneNumber = phone;
-      localStorage.setItem("hv_active_session", JSON.stringify(s));
-    }
-  } catch(e) {}
-
+  purgeSensitiveLegacyStorage();
   showToast(currentLanguage === "en" ? "Medical profile updated successfully!" : "تم حفظ وتحديث الملف الطبي بنجاح!");
 }
+
+async function handleCorrectProfileClick() {
+  const reasonEl = document.getElementById("profileCorrectionReason");
+  const reason = reasonEl ? reasonEl.value.trim() : "";
+
+  if (!reason || reason.length < 5) {
+    showToast(currentLanguage === "en" ? "Please enter a clinical correction reason (min 5 characters)." : "يرجى كتابة سبب التصحيح السريري بالتفصيل (5 أحرف على الأقل).");
+    if (reasonEl) reasonEl.focus();
+    return;
+  }
+
+  const payload = gatherMedicalProfileFormData();
+  payload.correctionReason = reason;
+
+  try {
+    const res = await authenticatedFetch('/api/patient/medical-profile/correct', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.profile?.dataProvenance) {
+        const badge = document.getElementById("profileProvenanceBadge");
+        if (badge) badge.textContent = currentLanguage === "en" ? `Version v${data.profile.dataProvenance.version}` : `الإصدار v${data.profile.dataProvenance.version}`;
+      }
+      if (reasonEl) reasonEl.value = "";
+      showToast(currentLanguage === "en" ? "Clinical correction recorded and audited successfully!" : "تم تسجيل وتوثيق التصحيح الطبي السريري بنجاح!");
+    } else {
+      const errData = await res.json().catch(() => ({}));
+      showToast(errData.message || (currentLanguage === "en" ? "Correction failed." : "تعذر تسجيل التصحيح."));
+    }
+  } catch (err) {
+    showToast(currentLanguage === "en" ? "Correction error. Please try again." : "حدث خطأ أثناء حفظ التصحيح.");
+  }
+}
+
+window.calculateAge = calculateAge;
+window.calculateBmi = calculateBmi;
+window.handleDobChange = handleDobChange;
+window.handleSexOrDobChange = handleSexOrDobChange;
+window.updateProfileBmi = updateProfileBmi;
+window.handleCorrectProfileClick = handleCorrectProfileClick;
 window.loadUserProfileData = loadUserProfileData;
 window.saveUserProfileData = saveUserProfileData;
 
@@ -6035,7 +7115,7 @@ function showScreen(name) {
   }
 
   try {
-    localStorage.setItem("hv_active_screen", name);
+  purgeSensitiveLegacyStorage();
   } catch(e) {}
 
   updateNavVisibility();
@@ -6053,7 +7133,12 @@ function showScreen(name) {
     button.classList.toggle("active", button.dataset.mobileScreen === name);
   });
 
-  screenTitle.textContent = currentLanguage === "en" ? englishTitles[name] || "Health Vibes" : titles[name] || "Health Vibes";
+  if (window.operationalSwitchesClient && typeof window.operationalSwitchesClient.renderAvailabilityBanners === "function") {
+    window.operationalSwitchesClient.renderAvailabilityBanners();
+  }
+
+  screenTitle.textContent = currentLanguage === "en" ? englishTitles[name] || "Health Vibe AI" : titles[name] || "Health Vibe AI";
+  setScreenBreadcrumb(name);
   if (typeof closeSidebarDrawer === "function") {
     closeSidebarDrawer();
   } else {
@@ -6068,9 +7153,20 @@ function showScreen(name) {
   }
   if (name === "patient") {
     renderPatientDashboard();
+  } else if (window._patientCasesUnsub) {
+    try { window._patientCasesUnsub(); } catch(e) {}
+    window._patientCasesUnsub = null;
   }
   if (name === "verification") {
     renderVerificationScreen();
+  }
+  if (name === "verify-report" || name === "verify") {
+    const urlParams = new URLSearchParams(window.location.search);
+    const ref = urlParams.get("ref") || (window._selectedReportCaseId ? `HV-REP-${window._selectedReportCaseId.slice(-8).toUpperCase()}` : "");
+    const verifyContainer = document.getElementById("verifyReportContainer") || document.getElementById("reportContainer");
+    if (window.HealthVibes?.ReportsUI?.renderVerificationView) {
+      window.HealthVibes.ReportsUI.renderVerificationView(verifyContainer, ref);
+    }
   }
   if (name === "report") {
     renderReportScreen(window._selectedReportCaseId || null);
@@ -6091,6 +7187,8 @@ function showScreen(name) {
   }
   if (name === "assessment") {
     updateAssessmentConsentBadge();
+    initAssessmentDraftAutosave();
+    loadAssessmentDraft();
   }
   if (name === "profile") {
     loadUserProfileData();
@@ -6107,6 +7205,9 @@ function showScreen(name) {
   if (name === "kpi") {
     renderKpiDashboard();
   }
+  if (name === "audit") {
+    loadAuditEvents();
+  }
 }
 
 async function renderPatientDashboard() {
@@ -6115,8 +7216,7 @@ async function renderPatientDashboard() {
 
   // ── تحية المريض بالاسم الفعلي ────────────────────────────────────
   const cachedDoc = window._cachedUserDoc || {};
-  const activeSession = (typeof getActiveSession === "function" ? getActiveSession() : null) || {};
-  const fullPatientName = cachedDoc.name || cachedDoc.displayName || user?.displayName || user?.name || activeSession.displayName || activeSession.name || (user?.email ? user.email.split("@")[0] : (isEn ? "Patient" : "مريض"));
+  const fullPatientName = cachedDoc.name || cachedDoc.displayName || user?.displayName || user?.name || (user?.email ? user.email.split("@")[0] : (isEn ? "Patient" : "مريض"));
   const firstName = fullPatientName.split(" ")[0];
   const titleEl = document.getElementById("patientHeroTitle");
   if (titleEl) titleEl.textContent = isEn ? `Welcome, ${firstName}` : `مرحبًا ${firstName}`;
@@ -6142,8 +7242,16 @@ async function renderPatientDashboard() {
   if (profileCompletionEl) {
     profileCompletionEl.textContent = `${completionPct}%`;
   }
-  document.getElementById("patientAlertsCount").textContent = isEn ? "0 new" : "0 جديد";
-  document.getElementById("patientAlertsList").innerHTML = `<div><strong>${isEn ? 'No new alerts' : 'لا توجد تنبيهات جديدة'}</strong><span>--</span></div>`;
+  document.getElementById("patientAlertsCount").textContent = isEn ? "No live alerts yet" : "لا توجد تنبيهات حية بعد";
+  document.getElementById("patientAlertsList").innerHTML = hvStateCard({
+    type: "empty",
+    title: isEn ? "No assessments submitted yet" : "لم يتم إرسال أي فحص بعد",
+    message: isEn
+      ? "Start the breathing assessment when you are ready. Results stay locked until a physician reviews them."
+      : "ابدأ تقييم التنفس عندما تكون جاهزاً. ستظل النتائج مغلقة حتى يراجعها الطبيب.",
+    actionText: isEn ? "Start assessment" : "بدء التقييم",
+    action: "showScreen('assessment')"
+  });
 
   const heroAssessmentBtn = document.querySelector("#screen-patient .hero-actions [data-screen='assessment']");
   if (heroAssessmentBtn) {
@@ -6166,12 +7274,17 @@ async function renderPatientDashboard() {
     window._patientCasesUnsub = null;
   }
 
-  // ── Real-Time Listener — حالات المريض مربوطة بـ patientId ─────────
-  window._patientCasesUnsub = db
-    .collection("cases")
-    .where("patientId", "==", user.uid)
-    .onSnapshot(
+  const patientCasesQuery = typeof db.collection("cases").where("patientId", "==", user.uid).limit === "function"
+    ? db.collection("cases").where("patientId", "==", user.uid).limit(10)
+    : db.collection("cases").where("patientId", "==", user.uid);
+  window._patientCasesUnsub = patientCasesQuery.onSnapshot(
       async (snapshot) => {
+        if (window.asyncContextManager) {
+          const check = window.asyncContextManager.isContextValid(window.asyncContextManager.captureContext(), {
+            requireSameUser: true
+          });
+          if (!check.valid) return;
+        }
         let c = null;
 
         if (!snapshot.empty) {
@@ -6192,7 +7305,12 @@ async function renderPatientDashboard() {
           c = fallbackCases[0] || null;
         }
 
-        if (!c) return;
+        if (!c) {
+          document.getElementById("patientClinicalStatus").textContent = isEn ? "Ready for your first assessment" : "جاهز لأول فحص";
+          document.getElementById("patientLatestReport").textContent = isEn ? "No report yet" : "لا يوجد تقرير بعد";
+          document.getElementById("patientResultStatus").textContent = isEn ? "Not submitted" : "لم يتم الإرسال";
+          return;
+        }
 
         // فورمات التاريخ
         const tsMillis = toMillis(c.submittedAt || c.createdAt || c.updatedAt) || 0;
@@ -6298,6 +7416,19 @@ async function renderPatientDashboard() {
       },
       (error) => {
         console.warn("❌ Patient cases listener error:", error);
+        const title = isOfflineNow()
+          ? (isEn ? "You are offline" : "أنت غير متصل بالإنترنت")
+          : (isEn ? "Could not load latest status" : "تعذر تحميل آخر حالة");
+        document.getElementById("patientAlertsCount").textContent = isEn ? "Needs retry" : "يحتاج إعادة محاولة";
+        document.getElementById("patientAlertsList").innerHTML = hvStateCard({
+          type: isOfflineNow() ? "offline" : "error",
+          title,
+          message: isEn
+            ? "Your saved account is safe. Reconnect or retry to refresh clinical updates."
+            : "حسابك محفوظ بأمان. أعد الاتصال أو حاول مرة أخرى لتحديث المتابعة الطبية.",
+          actionText: isEn ? "Retry loading status" : "إعادة تحميل الحالة",
+          action: "renderPatientDashboard()"
+        });
       }
     );
 }
@@ -6497,7 +7628,7 @@ async function renderAdminAccountsReportView(container, isEn, hasCaseData) {
                 const uName = u.name || u.displayName || u.email.split('@')[0];
                 return `
                   <tr style="border-bottom: 1px solid var(--line);">
-                    <td style="padding: 10px 12px; font-weight: 600;">${uName} ${isOwner ? '<span class="owner-badge">Super Admin</span>' : ''}</td>
+                    <td style="padding: 10px 12px; font-weight: 600;">${uName} ${isOwner ? '<span class="owner-badge">👑 Owner</span>' : ''}</td>
                     <td style="padding: 10px 12px; font-family: monospace; color: var(--muted);">${u.email}</td>
                     <td style="padding: 10px 12px;"><span class="pill info">${englishRoleLabels[u.role] || u.role}</span></td>
                     <td style="padding: 10px 12px;">
@@ -6520,6 +7651,7 @@ async function renderAdminAccountsReportView(container, isEn, hasCaseData) {
 window.renderAdminAccountsReportView = renderAdminAccountsReportView;
 
 async function renderReportScreen(targetCaseId = null) {
+  if (isSupportUser()) return;
   const container = document.getElementById("reportContainer");
   if (!container) return;
 
@@ -6571,6 +7703,9 @@ async function renderReportScreen(targetCaseId = null) {
             if (d.patientId === user.uid && normalizeRole(selectedRole) === ROLES.PATIENT) {
               caseData = maskUnapprovedPatientCase(caseData);
             }
+            if (typeof auditRecordViewed === "function" && caseId) {
+              auditRecordViewed(caseId).catch(() => {});
+            }
           }
         }
       } catch (docErr) {
@@ -6607,7 +7742,7 @@ async function renderReportScreen(targetCaseId = null) {
       }
     }
 
-    // ADMIN CHECK: If Admin or Super Admin and viewing accounts report (or no clinical case)
+    // ADMIN CHECK: If Admin or Owner and viewing accounts report (or no clinical case)
     const isUserAdmin = isOwnerUser(user.email) || isAdminRole(selectedRole) || selectedRole === ROLES.SUPER_ADMIN;
     if (isUserAdmin && (!caseData || window._adminReportView === "accounts")) {
       await renderAdminAccountsReportView(container, isEn, Boolean(caseData));
@@ -6822,6 +7957,7 @@ async function renderReportScreen(targetCaseId = null) {
     if (isPreview && window.__doctorPreviewCase) {
       caseData = window.__doctorPreviewCase;
     }
+    window._currentViewingCase = caseData;
 
     const missing = recordedClinicalText(null, isEn);
     const formatRecordedDate = value => {
@@ -6840,23 +7976,26 @@ async function renderReportScreen(targetCaseId = null) {
     const o2StatusText = isSupport ? (isEn ? "Concealed" : "محجوب") : (isEn ? "Recorded measurement" : "القياس المسجل");
     const o2Display = isSupport ? "**%" : (o2Val === null || o2Val === "" ? missing : `${escapeHtml(String(o2Val))}%`);
 
-    if (!isPreview) caseData = await loadReportDoctorIdentity(caseData);
+    if (!isPreview) caseData = applyApprovedReportSnapshot(await loadReportDoctorIdentity(caseData));
     const identity = getRecordedDoctorIdentity(caseData, isEn);
     const doctorName = escapeHtml(identity.name);
     const doctorSpecialty = escapeHtml(identity.specialty);
     const doctorLicense = escapeHtml(identity.licenseNumber);
     const clinicName = escapeHtml(identity.clinic);
-    const reportRef = caseData.reportRef || `HV-REP-${caseData.id.slice(-8).toUpperCase()}`;
-    const reportVersion = caseData.reportVersion || missing;
-    const modelVersion = caseData.modelVersion || caseData.assessment?.aiTriage?.modelVersion || missing;
-    const ruleEngineVersion = caseData.assessment?.aiTriage?.ruleEngineVersion || caseData.ruleEngineVersion || missing;
+    const reportRef = escapeHtml(caseData.reportRef || `HV-REP-${caseData.id.slice(-8).toUpperCase()}`);
+    const reportVersion = escapeHtml(caseData.reportVersion || missing);
+    const reportRevisionLabel = escapeHtml(caseData.reportRevisionNumber ? `v${caseData.reportRevisionNumber}` : missing);
+    const reportWithdrawal = caseData.reportWithdrawal || {};
+    const isWithdrawnReport = reportWithdrawal.status === "withdrawn";
+    const modelVersion = escapeHtml(caseData.modelVersion || caseData.assessment?.aiTriage?.modelVersion || missing);
+    const ruleEngineVersion = escapeHtml(caseData.assessment?.aiTriage?.ruleEngineVersion || caseData.ruleEngineVersion || missing);
     const ruleScorePoints = typeof caseData.assessment?.aiTriage?.ruleScorePoints === 'number'
       ? caseData.assessment.aiTriage.ruleScorePoints
       : (typeof caseData.ruleScorePoints === 'number' ? caseData.ruleScorePoints : missing);
     const rawPatientName = recordedClinicalText(caseData.name || caseData.patientName, isEn);
-    const patientName = isSupport
+    const patientName = escapeHtml(isSupport
       ? (isEn ? `Patient #${caseData.id.slice(-6).toUpperCase()} (Identity Masked)` : `مريض #${caseData.id.slice(-6).toUpperCase()} (الاسم محجوب لدواعي الخصوصية)`)
-      : rawPatientName;
+      : rawPatientName);
 
     const recorded = getRecordedClinicalContent(caseData, isEn);
     const clinicalDiagnosis = escapeHtml(recorded.diag);
@@ -6870,15 +8009,38 @@ async function renderReportScreen(targetCaseId = null) {
 
     const doctorRecommendations = recorded.recs.map(escapeHtml);
 
-    const breathingDifficultyDisplay = isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوب") : (recordedClinicalText(caseData.breathingDifficulty || caseData.difficulty, isEn));
-    const coughLevelDisplay = isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوبة") : (recordedClinicalText(caseData.coughLevel, isEn));
-    const durationDisplay = isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوب") : (recordedClinicalText(caseData.symptomDuration || caseData.duration, isEn));
+    const breathingDifficultyDisplay = escapeHtml(isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوب") : (recordedClinicalText(caseData.breathingDifficulty || caseData.difficulty, isEn)));
+    const coughLevelDisplay = escapeHtml(isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوبة") : (recordedClinicalText(caseData.coughLevel, isEn)));
+    const durationDisplay = escapeHtml(isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوب") : (recordedClinicalText(caseData.symptomDuration || caseData.duration, isEn)));
+    const formatOptionalMetric = (value, unit, status) => {
+      if (isSupport) return isEn ? "🔒 Masked" : "🔒 محجوب";
+      if (status === "unknown") return isEn ? "Unknown" : "غير معروف";
+      if (value === null || value === undefined || value === "") return recordedClinicalText(null, isEn);
+      return `${escapeHtml(String(value))}${unit ? ` ${escapeHtml(unit)}` : ""}`;
+    };
+    const temperatureDisplay = formatOptionalMetric(
+      caseData.assessment?.vitals?.temperature ?? caseData.temperature,
+      caseData.assessment?.vitals?.temperatureUnit || caseData.temperatureUnit || "°C",
+      caseData.assessment?.vitals?.temperatureStatus || caseData.temperatureStatus
+    );
+    const respiratoryRateDisplay = formatOptionalMetric(
+      caseData.assessment?.vitals?.respiratoryRate ?? caseData.respiratoryRate,
+      caseData.assessment?.vitals?.respiratoryRateUnit || caseData.respiratoryRateUnit || (isEn ? "breaths/min" : "نفس/دقيقة"),
+      caseData.assessment?.vitals?.respiratoryRateStatus || caseData.respiratoryRateStatus
+    );
+    const symptomsObj = caseData.assessment?.symptoms || {};
+    const chestPainDisplay = escapeHtml(isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوب") : recordedClinicalText(isEn ? symptomsObj.chestPainLabelEn : (symptomsObj.chestPainLabelAr || caseData.chestPain), isEn));
+    const progressionDisplay = escapeHtml(isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوب") : recordedClinicalText(isEn ? symptomsObj.symptomProgressionLabelEn : (symptomsObj.symptomProgressionLabelAr || caseData.symptomProgression), isEn));
+    const infectionDisplay = escapeHtml(isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوب") : recordedClinicalText(isEn ? symptomsObj.recentInfectionLabelEn : (symptomsObj.recentInfectionLabelAr || caseData.recentInfection), isEn));
+    const asthmaCopdDisplay = escapeHtml(isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوب") : recordedClinicalText(isEn ? symptomsObj.asthmaCopdLabelEn : (symptomsObj.asthmaCopdLabelAr || caseData.asthmaCopd), isEn));
+    const currentMedicationsDisplay = escapeHtml(isSupport ? (isEn ? "🔒 Medical data redacted" : "🔒 بيانات سريرية محجوبة") : recordedClinicalText(caseData.assessment?.medications?.current || caseData.currentMedications, isEn));
+    const patientNotesDisplay = escapeHtml(isSupport ? (isEn ? "🔒 Medical data redacted" : "🔒 بيانات سريرية محجوبة") : recordedClinicalText(caseData.assessment?.notes || caseData.patientNotes || caseData.notes, isEn));
     const riskFactorsDisplay = isSupport
-      ? (isEn ? "🔒 Medical data redacted" : "🔒 بيانات سريرية محجوبة")
-      : (Array.isArray(caseData.riskFactors) && caseData.riskFactors.length > 0 ? caseData.riskFactors.join('، ') : recordedClinicalText(null, isEn));
+      ? escapeHtml(isEn ? "🔒 Medical data redacted" : "🔒 بيانات سريرية محجوبة")
+      : escapeHtml(Array.isArray(caseData.riskFactors) && caseData.riskFactors.length > 0 ? caseData.riskFactors.join('، ') : recordedClinicalText(null, isEn));
     const aiScoreDisplay = isSupport
-      ? (isEn ? "🔒 Triage score redacted" : "🔒 تصنيف الفرز محجوب للدعم")
-      : (isEn ? (caseData.aiScoreEn || caseData.aiScore || missing) : (caseData.aiScore || missing));
+      ? escapeHtml(isEn ? "🔒 Triage score redacted" : "🔒 تصنيف الفرز محجوب للدعم")
+      : escapeHtml(isEn ? (caseData.aiScoreEn || caseData.aiScore || missing) : (caseData.aiScore || missing));
     const ruleScorePointsDisplay = isSupport
       ? (isEn ? "🔒 Masked" : "🔒 محجوب")
       : `${ruleScorePoints} ${isEn ? "pts" : "نقطة"}`;
@@ -6980,9 +8142,9 @@ async function renderReportScreen(targetCaseId = null) {
         <!-- OFFICIAL REPORT HEADER -->
         <div class="report-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--line); padding-bottom: 18px; margin-bottom: 20px;">
           <div class="brand" style="display: flex; align-items: center; gap: 14px;">
-            <img src="${document.body.classList.contains("dark") ? LOGO_MARK_ASSETS.dark : LOGO_MARK_ASSETS.light}" alt="Health Vibes" class="report-logo" data-logo-mark />
+            <img src="${document.body.classList.contains("dark") ? LOGO_MARK_ASSETS.dark : LOGO_MARK_ASSETS.light}" alt="Health Vibe AI" class="report-logo" data-logo-mark />
             <div>
-              <strong style="font-size: 20px; display: block; color: var(--ink);">${isEn ? "Health Vibes Medical Center" : "مركز هيلث فايبز الطبي التخصصي"}</strong>
+              <strong style="font-size: 20px; display: block; color: var(--ink);">${isEn ? "Health Vibe Medical Center" : "مركز هيلث فايب الطبي التخصصي"}</strong>
               <span style="font-size: 12.5px; color: var(--teal); font-weight: 700;">${isEn ? "Certified Clinical Assessment Report" : "التقرير الطبي السريري المعتمد"}</span>
             </div>
           </div>
@@ -7003,7 +8165,12 @@ async function renderReportScreen(targetCaseId = null) {
           <div>
             <span style="font-size: 11.5px; color: var(--muted); display: block;">${isEn ? "Patient Name" : "اسم المريض"}</span>
             <strong style="font-size: 13.5px; color: var(--ink);">${patientName}</strong>
-            ${`<small style="display: block; color: var(--muted); font-size: 11px;">${isEn ? "Age:" : "العمر:"} ${escapeHtml(recordedClinicalText(String(caseData.patientAge ?? caseData.age ?? ""), isEn))} ${caseData.patientAge != null || caseData.age != null ? (isEn ? "yrs" : "سنة") : ""}</small>`}
+            ${(() => {
+              const dob = caseData.dateOfBirth || caseData.dob;
+              const computedAge = dob ? calculateAge(dob) : (caseData.patientAge ?? caseData.age ?? "");
+              const hasAge = computedAge !== "" && computedAge !== null && computedAge !== undefined;
+              return hasAge ? `<small style="display: block; color: var(--muted); font-size: 11px;">${isEn ? "Age:" : "العمر:"} ${escapeHtml(recordedClinicalText(String(computedAge), isEn))} ${isEn ? "yrs" : "سنة"}</small>` : '';
+            })()}
           </div>
           <div>
             <span style="font-size: 11.5px; color: var(--muted); display: block;">${isEn ? "Patient Phone / Contact" : "هاتف المريض"}</span>
@@ -7064,6 +8231,26 @@ async function renderReportScreen(targetCaseId = null) {
               <span style="font-size: 11.5px; color: var(--muted); display: block; margin-bottom: 4px;">${isEn ? "Duration" : "مدة الأعراض"}</span>
               <strong style="font-size: 15px; color: var(--ink); display: block; margin-top: 6px;">${durationDisplay}</strong>
             </div>
+
+            <div style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px; text-align: center;">
+              <span style="font-size: 11.5px; color: var(--muted); display: block; margin-bottom: 4px;">${isEn ? "Temperature" : "درجة الحرارة"}</span>
+              <strong style="font-size: 15px; color: var(--ink); display: block; margin-top: 6px;">${temperatureDisplay}</strong>
+            </div>
+
+            <div style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px; text-align: center;">
+              <span style="font-size: 11.5px; color: var(--muted); display: block; margin-bottom: 4px;">${isEn ? "Respiratory Rate" : "معدل التنفس"}</span>
+              <strong style="font-size: 15px; color: var(--ink); display: block; margin-top: 6px;">${respiratoryRateDisplay}</strong>
+            </div>
+
+            <div style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px; text-align: center;">
+              <span style="font-size: 11.5px; color: var(--muted); display: block; margin-bottom: 4px;">${isEn ? "Chest Pain" : "ألم الصدر"}</span>
+              <strong style="font-size: 15px; color: var(--ink); display: block; margin-top: 6px;">${chestPainDisplay}</strong>
+            </div>
+
+            <div style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px; text-align: center;">
+              <span style="font-size: 11.5px; color: var(--muted); display: block; margin-bottom: 4px;">${isEn ? "Progression" : "تطور الأعراض"}</span>
+              <strong style="font-size: 15px; color: var(--ink); display: block; margin-top: 6px;">${progressionDisplay}</strong>
+            </div>
           </div>
 
           <!-- RISK FACTORS & AI EVALUATION COMPARISON -->
@@ -7078,13 +8265,32 @@ async function renderReportScreen(targetCaseId = null) {
             </div>
           </div>
 
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 10px; font-size: 12.5px;">
+            <div style="background: var(--surface-2); border-radius: 10px; padding: 10px 12px;">
+              <span style="color: var(--muted);">${isEn ? "Recent infection" : "عدوى حديثة"}</span>
+              <strong style="display: block; color: var(--ink); margin-top: 4px;">${infectionDisplay}</strong>
+            </div>
+            <div style="background: var(--surface-2); border-radius: 10px; padding: 10px 12px;">
+              <span style="color: var(--muted);">${isEn ? "Asthma/COPD" : "ربو أو COPD"}</span>
+              <strong style="display: block; color: var(--ink); margin-top: 4px;">${asthmaCopdDisplay}</strong>
+            </div>
+            <div style="background: var(--surface-2); border-radius: 10px; padding: 10px 12px;">
+              <span style="color: var(--muted);">${isEn ? "Current medications" : "الأدوية الحالية"}</span>
+              <strong style="display: block; color: var(--ink); margin-top: 4px;">${currentMedicationsDisplay}</strong>
+            </div>
+            <div style="background: var(--surface-2); border-radius: 10px; padding: 10px 12px;">
+              <span style="color: var(--muted);">${isEn ? "Patient notes" : "ملاحظات المريض"}</span>
+              <strong style="display: block; color: var(--ink); margin-top: 4px;">${patientNotesDisplay}</strong>
+            </div>
+          </div>
+
           <!-- CLINICAL RULES TRIAGE BADGE IN REPORT -->
           <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(14, 165, 233, 0.06); border: 1px solid rgba(14, 165, 233, 0.2); border-radius: 10px; padding: 8px 14px; font-size: 12px; margin-top: 10px; flex-wrap: wrap; gap: 8px;">
             <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
               <span>📐</span>
               <span style="color: var(--muted);">${isEn ? "Clinical Triage Rule Engine:" : "محرك قواعد الفرز السريري:"}</span>
               <strong style="color: var(--teal); font-family: monospace;">${ruleEngineVersion}</strong>
-              <span class="pill ok" style="font-size: 10px; padding: 1px 6px;">${isEn ? "Clinician-Reviewed" : "معتمد سريرياً"}</span>
+              <span class="pill pending" style="font-size: 10px; padding: 1px 6px;">${isEn ? "Pending Review" : "المراجعة معلقة"}</span>
             </div>
             <div>
               <span style="color: var(--muted);">${isEn ? "Rule Score Points:" : "نقاط المؤشر:"}</span>
@@ -7173,8 +8379,10 @@ async function renderReportScreen(targetCaseId = null) {
           <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
             <!-- QR CODE BOX -->
             <div class="qr-verify-box" style="text-align: center;">
-              ${qrSvg}
-              <small style="display: block; font-size: 9.5px; color: var(--muted); margin-top: 4px; font-family: monospace;">SCAN TO VERIFY</small>
+              <a href="./index.html?screen=verify-report&ref=${encodeURIComponent(reportRef)}" target="_blank" rel="noopener" title="${isEn ? 'Verify Report Authenticity' : 'التحقق من صحة التقرير والاعتماد الرسمي'}" style="text-decoration: none; color: inherit; display: inline-block;">
+                ${qrSvg}
+                <small style="display: block; font-size: 9.5px; color: var(--teal); margin-top: 4px; font-family: monospace; font-weight: 700;">SCAN TO VERIFY</small>
+              </a>
             </div>
 
             <div>
@@ -7185,7 +8393,7 @@ async function renderReportScreen(targetCaseId = null) {
                 Digital Hash: SHA256-${caseData.id.slice(0, 14).toUpperCase()}
               </div>
               <div style="font-size: 11px; color: var(--muted); font-family: monospace;">
-                Audit Ref: ${reportRef} | Ver: ${reportVersion} | Rules: ${ruleEngineVersion}
+                Audit Ref: ${reportRef} | Ver: ${reportVersion} | Revision: ${reportRevisionLabel} | Rules: ${ruleEngineVersion}
               </div>
             </div>
           </div>
@@ -7193,11 +8401,19 @@ async function renderReportScreen(targetCaseId = null) {
           <!-- OFFICIAL CLINICAL SEAL -->
           <div class="official-clinical-seal" style="text-align: center; border: 2.5px dashed #16a34a; border-radius: 50%; width: 105px; height: 105px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 6px; background: rgba(22, 163, 74, 0.05); transform: rotate(-5deg); box-shadow: 0 4px 12px rgba(22, 163, 74, 0.08);">
             <span style="font-size: 22px;">🩺</span>
-            <strong style="font-size: 9px; color: #16a34a; text-transform: uppercase; letter-spacing: 0.6px; line-height: 1.1;">Health Vibes</strong>
+            <strong style="font-size: 9px; color: #16a34a; text-transform: uppercase; letter-spacing: 0.6px; line-height: 1.1;">Health Vibe AI</strong>
             <span style="font-size: 8px; color: #15803d; font-weight: 800; margin-top: 2px;">CERTIFIED REPORT</span>
             <span style="font-size: 7px; color: var(--muted);">${new Date().getFullYear()} OFFICIAL</span>
           </div>
         </div>
+
+        ${isWithdrawnReport ? `
+          <div class="safety-note" style="font-size: 12px; line-height: 1.5; margin-bottom: 20px; padding: 12px 16px; background: rgba(239, 68, 68, 0.08); border-left: 4px solid #ef4444; border-radius: 8px;">
+            <strong style="color: #dc2626;">${isEn ? "Report withdrawn" : "تم سحب التقرير"}</strong>
+            <div>${escapeHtml(reportWithdrawal.reason || missing)}</div>
+            <small>${escapeHtml(formatRecordedDate(reportWithdrawal.withdrawnAt))}</small>
+          </div>
+        ` : ''}
 
         <!-- MANDATORY MEDICAL NOTICE -->
         <div class="safety-note" style="font-size: 12px; line-height: 1.5; margin-bottom: 24px; padding: 12px 16px; background: var(--surface-2); border-left: 4px solid ${isSupport ? '#f59e0b' : 'var(--teal)'}; border-radius: 8px;">
@@ -7210,12 +8426,24 @@ async function renderReportScreen(targetCaseId = null) {
         </div>
 
         <!-- REPORT ACTION TOOLBAR (Hidden on Print) -->
-        <div class="report-actions-toolbar no-print" style="display: flex; gap: 12px; flex-wrap: wrap;">
-          <button type="button" class="solid-button large print-report-btn" onclick="window.print()">
-            <span>🖨️</span> ${isSupport ? (isEn ? "Print Support Summary" : "طباعة ملخص الدعم الفني") : (isEn ? "Print Official Report (PDF)" : "طباعة التقرير الطبي (PDF)")}
+        <div class="report-actions-toolbar no-print" style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px;">
+          <button type="button" class="solid-button large print-report-btn" onclick="exportReportToPdf('${caseData.id}', 'ar')">
+            <span>📄</span> ${isEn ? "Export PDF (Arabic)" : "تصدير PDF (عربي)"}
           </button>
-          <button type="button" class="outline-button large" onclick="navigator.clipboard.writeText(window.location.href); showToast(currentLanguage === 'en' ? 'Report link copied' : 'تم نسخ رابط التقرير')">
-            <span>🔗</span> ${isEn ? "Copy Report Link" : "نسخ رابط التقرير"}
+          <button type="button" class="solid-button large print-report-btn" style="background: #0284c7;" onclick="exportReportToPdf('${caseData.id}', 'en')">
+            <span>📄</span> ${isEn ? "Export PDF (English)" : "تصدير PDF (إنجليزي)"}
+          </button>
+          <button type="button" class="solid-button large" style="background: #0d9488;" onclick="openAssessmentComparisonModal('${caseData.patientId || caseData.patientUid || user.uid}', '${caseData.id}')">
+            <span>📊</span> ${isEn ? "Compare Assessments & Trends" : "مقارنة التقييمات والاتجاهات"}
+          </button>
+          <button type="button" class="solid-button large" style="background: #0369a1;" onclick="startIndependentNewAssessment('${caseData.id}')">
+            <span>🔄</span> ${isEn ? "New Assessment" : "تقييم جديد مستقل"}
+          </button>
+          <button type="button" class="outline-button large" onclick="exportMedicalSummary('${caseData.patientId || caseData.patientUid || user.uid}')">
+            <span>📑</span> ${isEn ? "Medical Summary" : "ملخص سريري"}
+          </button>
+          <button type="button" class="outline-button large" onclick="openShareReportModal('${caseData.id}')">
+            <span>🔗</span> ${isEn ? "Share Report (Consent Link)" : "مشاركة التقرير برابط آمن"}
           </button>
           ${!isSupport ? `
             <button type="button" class="outline-button large" onclick="showScreen('appointments')">
@@ -7242,6 +8470,22 @@ async function renderReportScreen(targetCaseId = null) {
     `;
   }
 }
+
+window.exportReportToPdf = function(caseId, language) {
+  const caseObj = (window._currentViewingCase && window._currentViewingCase.id === caseId) ? window._currentViewingCase : { id: caseId };
+  if (window.HealthVibes?.ReportsUI?.exportReportToPdf) {
+    window.HealthVibes.ReportsUI.exportReportToPdf(caseObj, language);
+  } else if (typeof window !== "undefined") {
+    window.print();
+  }
+};
+
+window.openShareReportModal = function(caseId) {
+  const caseObj = (window._currentViewingCase && window._currentViewingCase.id === caseId) ? window._currentViewingCase : { id: caseId };
+  if (window.HealthVibes?.ReportsUI?.openShareReportModal) {
+    window.HealthVibes.ReportsUI.openShareReportModal(caseObj);
+  }
+};
 
 async function renderResultScreen() {
   const container = document.getElementById("resultContainer");
@@ -7356,7 +8600,7 @@ async function renderResultScreen() {
           <ul class="recommendations">
             ${recorded.recs.map(rec => `<li>${escapeHtml(rec)}</li>`).join("")}
           </ul>
-          <div class="safety-note">${isEn ? "Medical notice: Health Vibes supports clinical workflows and does not replace qualified emergency care." : "تنبيه طبي: Health Vibes يساعد في دعم القرار الطبي ولا يستبدل التقييم الطبي المؤهل أو رعاية الطوارئ."}</div>
+          <div class="safety-note">${isEn ? "Medical notice: Health Vibe supports clinical workflows and does not replace qualified emergency care." : "تنبيه طبي: Health Vibe يساعد في دعم القرار الطبي ولا يستبدل التقييم الطبي المؤهل أو رعاية الطوارئ."}</div>
           <button class="solid-button full" onclick="openCaseReport('${latest.id}')">
             <span>📄</span> ${isEn ? "View Certified Medical Report" : "عرض التقرير الطبي المعتمد"}
           </button>
@@ -7369,7 +8613,53 @@ async function renderResultScreen() {
   }
 }
 
+let timelineActiveFilter = {
+  type: 'all',
+  search: '',
+  startDate: '',
+  endDate: ''
+};
+
+function setTimelineTypeFilter(type) {
+  timelineActiveFilter.type = type || 'all';
+  document.querySelectorAll('.timeline-filter-btn').forEach(btn => {
+    if (btn.getAttribute('data-timeline-type') === timelineActiveFilter.type) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
+  renderPatientHistory();
+}
+
+function onTimelineFilterChange() {
+  const searchInput = document.getElementById('timelineSearchInput');
+  const startDateInput = document.getElementById('timelineStartDate');
+  const endDateInput = document.getElementById('timelineEndDate');
+
+  timelineActiveFilter.search = searchInput ? searchInput.value.trim() : '';
+  timelineActiveFilter.startDate = startDateInput ? startDateInput.value : '';
+  timelineActiveFilter.endDate = endDateInput ? endDateInput.value : '';
+
+  renderPatientHistory();
+}
+
+function clearTimelineFilters() {
+  timelineActiveFilter = { type: 'all', search: '', startDate: '', endDate: '' };
+  const searchInput = document.getElementById('timelineSearchInput');
+  const startDateInput = document.getElementById('timelineStartDate');
+  const endDateInput = document.getElementById('timelineEndDate');
+  if (searchInput) searchInput.value = '';
+  if (startDateInput) startDateInput.value = '';
+  if (endDateInput) endDateInput.value = '';
+  document.querySelectorAll('.timeline-filter-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.getAttribute('data-timeline-type') === 'all');
+  });
+  renderPatientHistory();
+}
+
 async function renderPatientHistory() {
+  if (isSupportUser && isSupportUser()) return;
   const container = document.getElementById("patientHistoryContainer");
   const countBadge = document.getElementById("patientHistoryCount");
   if (!container) return;
@@ -7378,92 +8668,222 @@ async function renderPatientHistory() {
   const user = auth ? auth.currentUser : null;
 
   if (!user) {
-    container.innerHTML = `<div style="padding: 20px; text-align: center;">${isEn ? "Please sign in" : "يرجى تسجيل الدخول"}</div>`;
+    container.innerHTML = `<div style="padding: 24px; text-align: center; color: var(--muted);">${isEn ? "Please sign in to view your clinical timeline." : "يرجى تسجيل الدخول لاستعراض الجدول الزمني وسجلك الطبي الموحد."}</div>`;
     return;
   }
 
+  // Clear Loading State: Skeleton pulse cards & animated spinner
   container.innerHTML = `
     <div style="padding: 16px 0; display: flex; flex-direction: column; gap: 12px;">
-      <div style="display: flex; align-items: center; gap: 8px; color: var(--teal); font-size: 13px; font-weight: 600;">
-        <div class="spinner" style="width: 15px; height: 15px;"></div>
-        <span>${isEn ? "Retrieving complete medical history..." : "جاري استرجاع السجل الطبي الشامل..."}</span>
+      <div style="display: flex; align-items: center; gap: 8px; color: var(--teal); font-size: 13.5px; font-weight: 600;">
+        <div class="spinner" style="width: 16px; height: 16px;"></div>
+        <span>${isEn ? "Aggregating unified clinical timeline & history..." : "جاري استرجاع وتجميع الجدول الزمني الطبي الشامل..."}</span>
       </div>
-      <div class="hv-skeleton" style="height: 68px; width: 100%;"></div>
-      <div class="hv-skeleton" style="height: 68px; width: 100%;"></div>
-      <div class="hv-skeleton" style="height: 68px; width: 100%;"></div>
+      <div class="hv-skeleton" style="height: 78px; width: 100%; border-radius: 12px;"></div>
+      <div class="hv-skeleton" style="height: 78px; width: 100%; border-radius: 12px;"></div>
+      <div class="hv-skeleton" style="height: 78px; width: 100%; border-radius: 12px;"></div>
     </div>
   `;
 
   try {
-    let records = await getPatientDatabaseHistoryRecords(user);
-    if (records.length === 0) records = await getCases();
+    let timelineItems = [];
+    let isApiSuccess = false;
 
-    if (countBadge) {
-      const reportCount = records.filter((item) => item.historyType === "report").length;
-      const assessmentCount = records.length - reportCount;
-      countBadge.textContent = isEn
-        ? `${assessmentCount} assessments / ${reportCount} reports`
-        : `${assessmentCount} تقييم / ${reportCount} تقرير`;
+    // 1. Attempt Server-Authoritative API Fetch
+    try {
+      const params = new URLSearchParams();
+      if (timelineActiveFilter.type && timelineActiveFilter.type !== 'all') params.append('type', timelineActiveFilter.type);
+      if (timelineActiveFilter.search) params.append('search', timelineActiveFilter.search);
+      if (timelineActiveFilter.startDate) params.append('startDate', timelineActiveFilter.startDate);
+      if (timelineActiveFilter.endDate) params.append('endDate', timelineActiveFilter.endDate);
+
+      const res = await authenticatedFetch(`/api/patient/timeline?${params.toString()}`);
+      if (res && res.ok) {
+        const data = await res.json();
+        if (data && data.success && Array.isArray(data.timeline)) {
+          timelineItems = data.timeline;
+          isApiSuccess = true;
+        }
+      }
+    } catch (apiErr) {
+      console.warn('[TIMELINE] API fetch fallback to local consolidation:', apiErr.message);
     }
 
-    if (records.length === 0) {
+    // 2. Fallback to client-side multi-source consolidation if API was unavailable
+    if (!isApiSuccess) {
+      const rawRecords = await getPatientDatabaseHistoryRecords(user);
+      timelineItems = rawRecords.map(c => {
+        const isReport = c.historyType === 'report' || c.status === 'approved';
+        const ts = toMillis(c.approvedAt || c.reportGeneratedAt || c.submittedAt || c.createdAt || c.updatedAt) || Date.now();
+        const dateStr = new Date(ts).toISOString().slice(0, 10);
+        return {
+          id: c.id,
+          type: isReport ? 'report' : 'assessment',
+          title: isReport ? (isEn ? 'Certified Diagnostic Report' : 'تقرير طبي معتمد') : (isEn ? 'Breathing Assessment' : 'تقييم سريري للجهاز التنفسي'),
+          titleEn: isReport ? 'Certified Diagnostic Report' : 'Breathing Assessment',
+          timestamp: new Date(ts).toISOString(),
+          date: dateStr,
+          status: c.status || 'pending',
+          category: isReport ? 'diagnostic' : 'clinical',
+          summary: isReport
+            ? `${c.clinicalDiagnosis || (isEn ? 'Verified Diagnosis' : 'تشخيص معتمد')} • ${c.reportRef || c.id}`
+            : `${isEn ? 'Respiratory triage' : 'فرز سريري'}: ${c.triageLevel || 'عادي'} • SpO2: ${c.oxygenLevel || c.o2 || '--'}%`,
+          details: { ...c, caseId: c.id },
+          link: isReport ? `/app/index.html?screen=report&caseId=${encodeURIComponent(c.id)}` : `/app/index.html?screen=pending&caseId=${encodeURIComponent(c.id)}`,
+          recordId: c.id,
+          source: c.sourceCollection || 'cases',
+          author: c.approvingDoctorName || c.patientName || 'الطبيب المعالج',
+          isInternal: false
+        };
+      });
+
+      // Apply client-side filters on fallback
+      if (timelineActiveFilter.type && timelineActiveFilter.type !== 'all') {
+        timelineItems = timelineItems.filter(i => i.type === timelineActiveFilter.type);
+      }
+      if (timelineActiveFilter.startDate) {
+        timelineItems = timelineItems.filter(i => i.date >= timelineActiveFilter.startDate);
+      }
+      if (timelineActiveFilter.endDate) {
+        timelineItems = timelineItems.filter(i => i.date <= timelineActiveFilter.endDate);
+      }
+      if (timelineActiveFilter.search) {
+        const q = timelineActiveFilter.search.toLowerCase();
+        timelineItems = timelineItems.filter(i => (i.title + ' ' + i.summary).toLowerCase().includes(q));
+      }
+    }
+
+    // Update Counter Badge
+    if (countBadge) {
+      countBadge.textContent = isEn
+        ? `${timelineItems.length} records found`
+        : `${timelineItems.length} سجل سريري`;
+    }
+
+    // 3. Clear Empty State Handling
+    if (timelineItems.length === 0) {
+      const hasActiveFilters = Boolean(
+        (timelineActiveFilter.type && timelineActiveFilter.type !== 'all') ||
+        timelineActiveFilter.search ||
+        timelineActiveFilter.startDate ||
+        timelineActiveFilter.endDate
+      );
+
       container.innerHTML = `
-        <div class="hv-state-card" style="margin: 24px 0; padding: 40px 20px;">
-          <span class="state-icon">📂</span>
-          <h4>${isEn ? "Your Medical History is Empty" : "سجلك الطبي خالٍ حتى الآن"}</h4>
-          <p>${isEn ? "No previous respiratory assessments or certified reports were found. Submit your first breathing assessment to start tracking your respiratory health." : "لم تسجل أي فحوصات تنفسية أو تقارير معتمدة سابقة في هذا الحساب. ابدأ تقييمك الأول لتوثيق ومتابعة صحتك بانتظام."}</p>
-          <button type="button" class="solid-button" onclick="showScreen('assessment')" style="margin-top: 8px;">
-            <span>🫁</span> ${isEn ? "Start First Assessment" : "إجراء أول فحص طبي"}
-          </button>
+        <div class="hv-state-card" style="margin: 24px 0; padding: 40px 20px; text-align: center;">
+          <span class="state-icon" style="font-size: 40px;">📂</span>
+          <h4 style="margin: 12px 0 6px; font-size: 17px; font-weight: 700; color: var(--ink);">
+            ${hasActiveFilters ? (isEn ? "No Matching Timeline Records" : "لا توجد سجلات مطابقة للبحث والفلترة") : (isEn ? "Your Medical Timeline is Empty" : "سجلك الطبي خالٍ حتى الآن")}
+          </h4>
+          <p style="font-size: 13.5px; color: var(--muted); max-width: 520px; margin: 0 auto 18px; line-height: 1.6;">
+            ${hasActiveFilters
+              ? (isEn ? "No clinical assessments, certified reports, appointments, files, or medications match your active filter." : "لم يتم العثور على أي فحوصات، تقارير، مواعيد، مرفقات أو أدوية تطابق معايير الفلترة المحددة. جرب تغيير كلمات البحث أو إعادة ضبط الفلاتر.")
+              : (isEn ? "Submit your first respiratory assessment or book a medical consultation to establish your clinical timeline." : "ابدأ أول تقييم سريري للجهاز التنفسي أو احجز موعد استشارة لإنشاء سجلك الطبي المعتمد ومتابعة حالتك بانتظام.")
+            }
+          </p>
+          <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+            ${hasActiveFilters ? `
+              <button type="button" class="soft-button" onclick="clearTimelineFilters()" style="padding: 10px 18px;">
+                <span>🔄</span> ${isEn ? "Reset Filters" : "إلغاء الفلاتر وعرض الكل"}
+              </button>
+            ` : ''}
+            <button type="button" class="solid-button" onclick="showScreen('assessment')" style="padding: 10px 18px;">
+              <span>🫁</span> ${isEn ? "Start Assessment" : "إجراء أول فحص طبي"}
+            </button>
+            <button type="button" class="outline-button" onclick="showScreen('appointments')" style="padding: 10px 18px;">
+              <span>📅</span> ${isEn ? "Book Appointment" : "حجز موعد سريري"}
+            </button>
+          </div>
         </div>
       `;
       return;
     }
 
-    let html = "";
-    const isSupport = isSupportUser();
-    if (isSupport) {
-      html += `
-        <div class="support-history-banner" style="background: rgba(245, 158, 11, 0.1); border: 1px solid #f59e0b; border-radius: 10px; padding: 12px 16px; margin-bottom: 14px; font-size: 13px; color: #92400e; display: flex; align-items: center; gap: 10px;">
-          <span style="font-size: 20px;">🛡️</span>
-          <span>${isEn ? "Support Role Mode: Physiological metrics (SpO2) and clinical diagnoses are hidden to protect patient health privacy." : "وضع الدعم الفني المحدود: يتم إخفاء قياسات الأكسجين (SpO2) والبيانات السريرية التزاماً بمعايير حماية سرية المريض."}</span>
-        </div>
-      `;
-    }
+    // 4. Render Aggregated Timeline Cards with Links
+    const typeIcons = {
+      assessment: '🫁',
+      report: '📄',
+      appointment: '📅',
+      attachment: '📎',
+      medication: '💊',
+      condition: '🩺',
+      doctor_note: '📝'
+    };
 
-    records.forEach(c => {
-      const isApproved = isCaseApprovedForPatient(c);
-      const statusMeta = getCaseStatusMeta(c.status);
-      const ts = toMillis(c.approvedAt || c.reportGeneratedAt || c.submittedAt || c.createdAt || c.updatedAt) || 0;
-      const dt = ts ? new Date(ts).toLocaleDateString(isEn ? "en-US" : "ar-EG", { year: "numeric", month: "short", day: "numeric" }) : "--";
-      const o2Display = isSupport ? `**% (${isEn ? "Masked" : "محجوب للدعم 🔒"})` : `${c.oxygenLevel || c.o2 || "--"}%`;
-      const recordTypeLabel = c.historyType === "report"
-        ? (isEn ? "Certified Report" : "تقرير طبي معتمد")
-        : (isEn ? "Breathing Assessment" : "تقييم التنفس");
-      const sourceLabel = c.sourceCollection ? c.sourceCollection.replace(/_/g, " ") : "cases";
+    let html = '';
+    timelineItems.forEach(item => {
+      const icon = typeIcons[item.type] || '📋';
+      const catClass = item.isInternal ? 'timeline-cat-internal_note' : `timeline-cat-${item.type}`;
+      const dt = item.date || (item.timestamp ? item.timestamp.slice(0, 10) : '--');
+      const timeStr = item.details?.timeSlot || (item.timestamp && item.timestamp.includes('T') ? item.timestamp.slice(11, 16) : '');
+
+      let linkActionHtml = '';
+      if (item.type === 'report' || (item.type === 'doctor_note' && !item.isInternal)) {
+        linkActionHtml = `
+          <button type="button" class="solid-button" onclick="openPatientHistoryRecord('clinical_reports', '${item.recordId || item.details?.caseId}')" style="font-size: 12.5px; padding: 6px 14px; white-space: nowrap;">
+            <span>📄</span> ${isEn ? "View Certified Report" : "عرض التقرير المعتمد"}
+          </button>
+        `;
+      } else if (item.type === 'assessment') {
+        linkActionHtml = `
+          <button type="button" class="outline-button" onclick="openPatientHistoryRecord('cases', '${item.recordId}')" style="font-size: 12.5px; padding: 6px 14px; white-space: nowrap;">
+            <span>🔍</span> ${isEn ? "View Assessment" : "تفاصيل الفحص"}
+          </button>
+        `;
+      } else if (item.type === 'appointment') {
+        linkActionHtml = `
+          <button type="button" class="solid-button" onclick="showScreen('appointments')" style="font-size: 12.5px; padding: 6px 14px; white-space: nowrap; background: #8b5cf6;">
+            <span>📅</span> ${isEn ? "Manage Appointment" : "تفاصيل الحجز"}
+          </button>
+        `;
+      } else if (item.type === 'attachment') {
+        const downloadUrl = item.details?.downloadUrl || item.link;
+        linkActionHtml = downloadUrl ? `
+          <a href="${downloadUrl}" target="_blank" rel="noopener noreferrer" class="soft-button" style="font-size: 12.5px; padding: 6px 14px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;">
+            <span>📥</span> ${isEn ? "Open File" : "معاينة الملف"}
+          </a>
+        ` : '';
+      } else if (item.type === 'medication' || item.type === 'condition') {
+        linkActionHtml = `
+          <button type="button" class="soft-button" onclick="showScreen('profile')" style="font-size: 12.5px; padding: 6px 14px; white-space: nowrap;">
+            <span>👤</span> ${isEn ? "Medical Profile" : "الملف الطبي"}
+          </button>
+        `;
+      } else if (item.isInternal) {
+        linkActionHtml = `
+          <span class="pill danger" style="font-size: 11px; padding: 4px 8px;">
+            🔒 ${isEn ? "Confidential Staff Note" : "ملاحظة سريرية سرية"}
+          </span>
+        `;
+      }
 
       html += `
-        <div class="patient-history-record-card" style="display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line); margin-bottom: 10px; flex-wrap: wrap; gap: 10px;">
-          <div>
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <strong style="font-size: 15px; color: var(--ink);">${recordTypeLabel}</strong>
-              <span class="pill ${statusMeta.pillClass}" style="font-size: 11px; padding: 2px 8px;">
-                ${statusMeta.icon} ${isEn ? statusMeta.en : statusMeta.ar}
-              </span>
+        <div class="unified-timeline-card ${catClass}">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap;">
+            <div style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 220px;">
+              <span style="font-size: 24px; line-height: 1;">${icon}</span>
+              <div>
+                <strong style="font-size: 15px; color: var(--ink); display: block;">
+                  ${isEn && item.titleEn ? item.titleEn : item.title}
+                </strong>
+                <div style="font-size: 12px; color: var(--muted); margin-top: 3px; display: flex; gap: 8px; flex-wrap: wrap;">
+                  <span>📅 ${dt}${timeStr ? ` • ${timeStr}` : ''}</span>
+                  ${item.author ? `<span>👤 ${item.author}</span>` : ''}
+                  ${item.details?.reportRef ? `<span>🔖 #${item.details.reportRef}</span>` : ''}
+                </div>
+              </div>
             </div>
-            <div style="font-size: 12.5px; color: var(--muted); margin-top: 4px;">
-              <span>📅 ${dt}</span> • <span>${isEn ? "DB" : "قاعدة البيانات"}: ${sourceLabel}</span> • <span>🫁 SpO2: ${o2Display}</span> • <span>#${c.id.slice(-6).toUpperCase()}</span>
+
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="pill info" style="font-size: 11px; padding: 3px 8px; text-transform: capitalize;">
+                ${item.status || item.type}
+              </span>
+              ${linkActionHtml}
             </div>
           </div>
-          <div>
-            ${isApproved
-              ? `<button type="button" class="solid-button" onclick="openPatientHistoryRecord('${c.sourceCollection || 'cases'}', '${c.id}')" style="font-size: 13px; padding: 8px 16px;">
-                  <span>${isSupport ? "🛡️" : "✅"}</span> ${isSupport ? (isEn ? "View Support Dossier (Redacted)" : "عرض السجل (محجوب سريرياً)") : (isEn ? "View Certified Report" : "عرض التقرير المعتمد")}
-                 </button>`
-              : `<button type="button" class="outline-button" onclick="openPatientHistoryRecord('${c.sourceCollection || 'cases'}', '${c.id}')" style="font-size: 13px; padding: 8px 16px;">
-                  <span>🔒</span> ${isEn ? "Awaiting Approval (Locked)" : "قيد المراجعة (مغلق)"}
-                 </button>`
-            }
+
+          <div style="font-size: 13px; color: var(--ink); line-height: 1.5; background: var(--surface-1); padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.04);">
+            ${isEn && item.summaryEn ? item.summaryEn : item.summary}
           </div>
         </div>
       `;
@@ -7472,13 +8892,18 @@ async function renderPatientHistory() {
     container.innerHTML = html;
   } catch (err) {
     console.error("renderPatientHistory error:", err);
+    // Clear Error State with Retry CTA
     container.innerHTML = `
-      <div class="hv-state-card error-card" style="margin: 24px 0; padding: 36px 20px;">
-        <span class="state-icon">⚠️</span>
-        <h4>${isEn ? "Failed to Load Medical History" : "تعذر استرجاع السجل الطبي"}</h4>
-        <p>${isEn ? "An unexpected connection issue occurred while fetching your medical records. Please verify your connection." : "حدث خطأ أثناء استرجاع السجلات الطبية من الخادم. يرجى فحص الاتصال وإعادة المحاولة."}</p>
-        <button type="button" class="solid-button" onclick="renderPatientHistory()" style="margin-top: 8px;">
-          <span>🔄</span> ${isEn ? "Retry" : "إعادة المحاولة"}
+      <div class="hv-state-card error-card" style="margin: 24px 0; padding: 36px 20px; text-align: center;">
+        <span class="state-icon" style="font-size: 40px;">⚠️</span>
+        <h4 style="margin: 12px 0 6px; font-size: 17px; font-weight: 700; color: #dc2626;">
+          ${isEn ? "Failed to Load Medical Timeline" : "تعذر استرجاع الجدول الزمني السريري"}
+        </h4>
+        <p style="font-size: 13.5px; color: var(--muted); max-width: 480px; margin: 0 auto 16px; line-height: 1.5;">
+          ${isEn ? "An unexpected communication issue occurred while fetching your medical records. Please verify your connection and try again." : "حدث خطأ غير متوقع أثناء استرجاع بيانات السجل الطبي والجدول الزمني. يرجى فحص الاتصال والمحاولة مرة أخرى."}
+        </p>
+        <button type="button" class="solid-button" onclick="renderPatientHistory()" style="padding: 10px 20px;">
+          <span>🔄</span> ${isEn ? "Retry Connection" : "إعادة المحاولة"}
         </button>
       </div>
     `;
@@ -7497,10 +8922,255 @@ const AVAILABLE_APPOINTMENT_SLOTS = [
   { id: "slot_2000", timeAr: "08:00 مساءً", timeEn: "08:00 PM", periodAr: "استشارة مسائية متقدمة", periodEn: "Late Evening Telehealth" }
 ];
 
+const CLINICS_REGISTRY = {
+  clinic_cairo_main: {
+    clinicId: "clinic_cairo_main",
+    name: "عيادة الصدر والرعاية التنفسية التخصصية",
+    nameEn: "Specialized Chest & Respiratory Clinic",
+    timeZone: "Africa/Cairo",
+    operatingHours: { open: "09:00", close: "21:00", workingDays: [0, 1, 2, 3, 4] }
+  },
+  clinic_riyadh_pulmonary: {
+    clinicId: "clinic_riyadh_pulmonary",
+    name: "مركز الرياض المتقدم للرعاية التنفسية",
+    nameEn: "Riyadh Advanced Pulmonary Care Center",
+    timeZone: "Asia/Riyadh",
+    operatingHours: { open: "09:00", close: "21:00", workingDays: [0, 1, 2, 3, 4] }
+  }
+};
+
+const DOCTORS_WORK_SCHEDULES = {
+  dr_mona: {
+    doctorId: "dr_mona",
+    name: "د. منى سامي",
+    nameEn: "Dr. Mona Samy",
+    specialty: "أمراض الصدر والحساسية",
+    specialtyEn: "Pulmonology & Allergy",
+    clinicId: "clinic_cairo_main",
+    timeZone: "Africa/Cairo",
+    licenseNumber: "EGY-MED-449102",
+    weeklySchedule: {
+      workingDays: [0, 1, 2, 3, 4],
+      shifts: [{ start: "10:00", end: "13:00" }, { start: "16:00", end: "20:30" }],
+      slotDurationMinutes: 30,
+      breakPeriods: [{ start: "13:00", end: "16:00", label: "Mid-day Rounds" }]
+    },
+    leaves: [
+      {
+        id: "leave_mona_conf",
+        startDate: "2026-10-10",
+        endDate: "2026-10-12",
+        reason: "International Pulmonology Summit",
+        reasonAr: "المؤتمر الدولي لأمراض الصدر"
+      }
+    ]
+  },
+  dr_ahmed: {
+    doctorId: "dr_ahmed",
+    name: "د. أحمد السيد",
+    nameEn: "Dr. Ahmed El-Sayed",
+    specialty: "استشاري الأمراض الصدرية والعناية المركزة",
+    specialtyEn: "Critical Care & Pulmonary Consultant",
+    clinicId: "clinic_cairo_main",
+    timeZone: "Africa/Cairo",
+    licenseNumber: "EGY-MED-381044",
+    weeklySchedule: {
+      workingDays: [0, 1, 2, 3, 4],
+      shifts: [{ start: "11:30", end: "15:00" }, { start: "16:00", end: "20:30" }],
+      slotDurationMinutes: 30,
+      breakPeriods: [{ start: "15:00", end: "16:00", label: "ICU Rounds" }]
+    },
+    leaves: [
+      {
+        id: "leave_ahmed_annual",
+        startDate: "2026-10-15",
+        endDate: "2026-10-18",
+        reason: "Annual Leave",
+        reasonAr: "إجازة سنوية معتمدة"
+      }
+    ]
+  }
+};
+
+function checkDoctorLeaveClient(doctor, dateStr) {
+  if (!doctor || !Array.isArray(doctor.leaves)) return { onLeave: false };
+  for (const leave of doctor.leaves) {
+    if (leave.startDate && leave.endDate && dateStr >= leave.startDate && dateStr <= leave.endDate) {
+      return { onLeave: true, leave };
+    }
+    if (leave.date === dateStr) {
+      return { onLeave: true, leave };
+    }
+  }
+  return { onLeave: false };
+}
+
+function calculateSlotsForDoctor(doctor, dateStr) {
+  if (!doctor) {
+    return { available: false, reason: "NO_DOCTOR", slots: [] };
+  }
+  const clinic = CLINICS_REGISTRY[doctor.clinicId] || CLINICS_REGISTRY.clinic_cairo_main;
+  const timeZone = doctor.timeZone || clinic.timeZone || "Africa/Cairo";
+
+  // Check approved leaves
+  const leaveCheck = checkDoctorLeaveClient(doctor, dateStr);
+  if (leaveCheck.onLeave) {
+    return {
+      available: false,
+      reason: "ON_LEAVE",
+      leave: leaveCheck.leave,
+      clinic,
+      timeZone,
+      slots: []
+    };
+  }
+
+  // Check working days
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const dayOfWeek = new Date(Date.UTC(year, month - 1, day, 12, 0, 0)).getUTCDay();
+  const schedule = doctor.weeklySchedule || {};
+  const workingDays = Array.isArray(schedule.workingDays) ? schedule.workingDays : [0, 1, 2, 3, 4];
+
+  if (!workingDays.includes(dayOfWeek)) {
+    return {
+      available: false,
+      reason: "NON_WORKING_DAY",
+      clinic,
+      timeZone,
+      slots: []
+    };
+  }
+
+  return {
+    available: true,
+    reason: "AVAILABLE",
+    clinic,
+    timeZone,
+    slots: AVAILABLE_APPOINTMENT_SLOTS
+  };
+}
+
 let apptDaysList = [];
 let apptSelectedDate = null;
 let apptSelectedSlot = null;
 let apptSelectedType = "video";
+let cachedAppointmentDoctors = null;
+
+async function loadAvailableAppointmentDoctors() {
+  if (Array.isArray(cachedAppointmentDoctors) && cachedAppointmentDoctors.length > 0) {
+    return cachedAppointmentDoctors;
+  }
+
+  const doctors = [];
+
+  // Try fetching from server endpoint first
+  try {
+    const res = await fetch("/api/appointments/doctors");
+    if (res.ok) {
+      const json = await res.json();
+      if (Array.isArray(json.doctors)) {
+        json.doctors.forEach(d => {
+          if (!isTestOrDemoRecord(d) && d.doctorId) {
+            doctors.push({
+              id: d.doctorId,
+              name: d.name,
+              nameEn: d.nameEn || d.name,
+              specialty: d.specialty || "",
+              specialtyEn: d.specialtyEn || d.specialty || "",
+              clinic: d.clinicName || (CLINICS_REGISTRY[d.clinicId]?.name) || "",
+              clinicId: d.clinicId || "clinic_cairo_main",
+              timeZone: d.timeZone || "Africa/Cairo",
+              licenseNumber: d.licenseNumber || "",
+              weeklySchedule: d.weeklySchedule,
+              leaves: d.leaves || []
+            });
+          }
+        });
+      }
+    }
+  } catch (err) {
+    // Non-fatal, proceed with database or local schedules
+  }
+
+  // Fallback to Firestore doctor_applications
+  if (doctors.length === 0 && db) {
+    try {
+      const snap = await db.collection("doctor_applications").where("status", "==", "approved").get();
+      snap.forEach((doc) => {
+        const d = doc.data() || {};
+        const userId = d.userId || d.doctorId || d.uid || "";
+        const name = String(d.name || d.displayName || "").trim();
+        const licenseNumber = String(d.licenseNumber || d.medicalLicense || d.license || "").trim();
+        if (!userId || !name || !licenseNumber || isTestOrDemoRecord({ id: doc.id, ...d })) return;
+        const sched = DOCTORS_WORK_SCHEDULES[userId] || {};
+        doctors.push({
+          id: userId,
+          name,
+          nameEn: String(d.nameEn || d.name || d.displayName || "").trim(),
+          specialty: String(d.specialty || "").trim(),
+          specialtyEn: String(d.specialtyEn || d.specialty || "").trim(),
+          clinic: String(d.clinicName || d.clinic || "").trim(),
+          clinicId: sched.clinicId || "clinic_cairo_main",
+          timeZone: sched.timeZone || "Africa/Cairo",
+          licenseNumber,
+          weeklySchedule: sched.weeklySchedule,
+          leaves: sched.leaves || []
+        });
+      });
+    } catch (err) {
+      console.warn("Could not load approved appointment doctors:", err.message);
+    }
+  }
+
+  // Fallback to DOCTORS_WORK_SCHEDULES registry if Firestore is empty
+  if (doctors.length === 0) {
+    for (const docKey of Object.keys(DOCTORS_WORK_SCHEDULES)) {
+      const s = DOCTORS_WORK_SCHEDULES[docKey];
+      doctors.push({
+        id: s.doctorId,
+        name: s.name,
+        nameEn: s.nameEn,
+        specialty: s.specialty,
+        specialtyEn: s.specialtyEn,
+        clinic: CLINICS_REGISTRY[s.clinicId]?.name || "",
+        clinicId: s.clinicId,
+        timeZone: s.timeZone,
+        licenseNumber: s.licenseNumber,
+        weeklySchedule: s.weeklySchedule,
+        leaves: s.leaves
+      });
+    }
+  }
+
+  cachedAppointmentDoctors = doctors;
+  return doctors;
+}
+
+function renderAppointmentDoctorOptions(doctors) {
+  const isEn = currentLanguage === "en";
+  const doctorSelect = document.getElementById("apptDoctorSelect");
+  if (!doctorSelect) return "";
+
+  const previousValue = doctorSelect.value;
+  if (!doctors || doctors.length === 0) {
+    doctorSelect.innerHTML = `<option value="">${isEn ? "No approved doctors available for booking" : "لا يوجد طبيب معتمد متاح للحجز حالياً"}</option>`;
+    doctorSelect.disabled = true;
+    return "";
+  }
+
+  doctorSelect.disabled = false;
+  doctorSelect.innerHTML = doctors.map((doctor) => {
+    const displayName = isEn ? (doctor.nameEn || doctor.name) : doctor.name;
+    const displaySpec = isEn ? (doctor.specialtyEn || doctor.specialty) : doctor.specialty;
+    const label = [displayName, displaySpec].filter(Boolean).join(" - ");
+    return `<option value="${escapeHtml(doctor.id)}" data-name="${escapeHtml(doctor.name)}" data-name-en="${escapeHtml(doctor.nameEn || doctor.name)}" data-spec="${escapeHtml(doctor.specialty)}" data-spec-en="${escapeHtml(doctor.specialtyEn || doctor.specialty)}" data-clinic="${escapeHtml(doctor.clinic)}" data-license="${escapeHtml(doctor.licenseNumber)}">${escapeHtml(label)}</option>`;
+  }).join("");
+
+  if (previousValue && doctors.some((doctor) => doctor.id === previousValue)) {
+    doctorSelect.value = previousValue;
+  }
+  return doctorSelect.value || "";
+}
 
 function generateAppointmentDays() {
   const days = [];
@@ -7556,7 +9226,9 @@ function updateAppointmentSummary() {
   const isEn = currentLanguage === "en";
   const doctorSelect = document.getElementById("apptDoctorSelect");
   const selectedOption = doctorSelect ? doctorSelect.selectedOptions[0] : null;
-  const docName = selectedOption ? (isEn ? (selectedOption.dataset.nameEn || selectedOption.dataset.name) : selectedOption.dataset.name) : (isEn ? "Dr. Mona Sami" : "د. منى سامي");
+  const docName = selectedOption && selectedOption.value
+    ? (isEn ? (selectedOption.dataset.nameEn || selectedOption.dataset.name) : selectedOption.dataset.name)
+    : "--";
 
   const docEl = document.getElementById("summaryDoctorName");
   if (docEl) docEl.textContent = docName;
@@ -7594,19 +9266,7 @@ function updateAppointmentSummary() {
 
 async function getConfirmedAppointmentsForDoctorAndDate(doctorId, dateStr) {
   const confirmed = [];
-  try {
-    const globalRaw = localStorage.getItem("hv_appointments");
-    if (globalRaw) {
-      const list = JSON.parse(globalRaw);
-      list.forEach(a => {
-        if (a.status === "confirmed" && a.date === dateStr && a.doctorId === doctorId) {
-          confirmed.push(a);
-        }
-      });
-    }
-  } catch (e) {}
-
-  if (db) {
+  if (db && doctorId) {
     try {
       const snap = await db.collection("appointments")
         .where("doctorId", "==", doctorId)
@@ -7628,28 +9288,6 @@ async function getConfirmedAppointmentsForDoctorAndDate(doctorId, dateStr) {
 
 async function getConfirmedAppointmentsForPatientAndDate(patientId, dateStr) {
   const confirmed = [];
-  try {
-    const key = `hv_appointments_${patientId}`;
-    const raw = localStorage.getItem(key);
-    if (raw) {
-      const list = JSON.parse(raw);
-      list.forEach(a => {
-        if (a.status === "confirmed" && a.date === dateStr) {
-          confirmed.push(a);
-        }
-      });
-    }
-    const globalRaw = localStorage.getItem("hv_appointments");
-    if (globalRaw) {
-      const list = JSON.parse(globalRaw);
-      list.forEach(a => {
-        if (a.status === "confirmed" && a.date === dateStr && a.patientId === patientId && !confirmed.some(c => c.id === a.id)) {
-          confirmed.push(a);
-        }
-      });
-    }
-  } catch (e) {}
-
   if (db && patientId && patientId !== "anon_patient") {
     try {
       const snap = await db.collection("appointments")
@@ -7672,6 +9310,8 @@ async function getConfirmedAppointmentsForPatientAndDate(patientId, dateStr) {
 
 async function renderAppointmentsScreen() {
   const isEn = currentLanguage === "en";
+  const approvedDoctors = await loadAvailableAppointmentDoctors();
+  const selectedDoctorId = renderAppointmentDoctorOptions(approvedDoctors);
   apptDaysList = generateAppointmentDays();
 
   if (!apptSelectedDate) {
@@ -7683,11 +9323,19 @@ async function renderAppointmentsScreen() {
 
   // Identify current doctor and patient
   const doctorSelect = document.getElementById("apptDoctorSelect");
-  const doctorId = doctorSelect ? doctorSelect.value : "dr_mona";
+  const doctorId = doctorSelect ? doctorSelect.value : selectedDoctorId;
 
   const user = auth ? auth.currentUser : null;
-  const activeSession = (typeof getActiveSession === "function" ? getActiveSession() : null) || {};
-  const patientId = user ? user.uid : (activeSession.uid || "anon_patient");
+  const patientId = user ? user.uid : "anon_patient";
+
+  // Evaluate doctor availability with work schedules, clinic timezone, and leaves
+  const currentDoctor = (approvedDoctors || []).find(d => d.id === doctorId);
+  const docAvailability = calculateSlotsForDoctor(currentDoctor, apptSelectedDate.dateStr);
+  const isDoctorOnLeave = !docAvailability.available && docAvailability.reason === "ON_LEAVE";
+  const isDoctorOffDuty = !docAvailability.available && docAvailability.reason === "NON_WORKING_DAY";
+  const activeTemplateSlots = docAvailability.available && Array.isArray(docAvailability.slots) && docAvailability.slots.length > 0
+    ? docAvailability.slots
+    : AVAILABLE_APPOINTMENT_SLOTS;
 
   // Query confirmed bookings to prevent double-booking
   const [doctorBookings, patientBookings] = await Promise.all([
@@ -7699,10 +9347,17 @@ async function renderAppointmentsScreen() {
   const patientBookedSlotIds = new Set(patientBookings.map(b => b.slotId));
 
   // Determine available non-booked slots
-  const availableSlots = AVAILABLE_APPOINTMENT_SLOTS.filter(s => !doctorBookedSlotIds.has(s.id) && !patientBookedSlotIds.has(s.id));
+  let availableSlots = [];
+  let canBookDoctor = Boolean(doctorId) && !isDoctorOnLeave && !isDoctorOffDuty;
 
-  // If currently selected slot is booked, auto-select first available non-booked slot
-  if (!apptSelectedSlot || doctorBookedSlotIds.has(apptSelectedSlot.id) || patientBookedSlotIds.has(apptSelectedSlot.id)) {
+  if (canBookDoctor) {
+    availableSlots = activeTemplateSlots.filter(s => !doctorBookedSlotIds.has(s.id) && !patientBookedSlotIds.has(s.id));
+  }
+
+  // If currently selected slot is booked or unavailable, auto-select first available non-booked slot
+  if (!canBookDoctor) {
+    apptSelectedSlot = null;
+  } else if (!apptSelectedSlot || doctorBookedSlotIds.has(apptSelectedSlot.id) || patientBookedSlotIds.has(apptSelectedSlot.id)) {
     apptSelectedSlot = availableSlots.length > 0 ? availableSlots[0] : null;
   }
 
@@ -7721,37 +9376,73 @@ async function renderAppointmentsScreen() {
     }).join("");
   }
 
-  // Render Slots Selector with Double-Booking Guards
+  // Render Slots Selector with Leave and Double-Booking Guards
   const slotsContainer = document.getElementById("appointmentTimeSlots");
   if (slotsContainer) {
-    slotsContainer.innerHTML = AVAILABLE_APPOINTMENT_SLOTS.map((slot) => {
-      const isDocBooked = doctorBookedSlotIds.has(slot.id);
-      const isPatBooked = patientBookedSlotIds.has(slot.id);
-      const isUnavailable = isDocBooked || isPatBooked;
-      const isActive = !isUnavailable && apptSelectedSlot && slot.id === apptSelectedSlot.id;
-
-      const timeText = isEn ? slot.timeEn : slot.timeAr;
-      let descText = isEn ? slot.periodEn : slot.periodAr;
-
-      if (isDocBooked) {
-        descText = isEn ? "⛔ Booked for this doctor" : "⛔ محجوز مسبقاً لدى الطبيب";
-      } else if (isPatBooked) {
-        descText = isEn ? "⚠️ You have another booking" : "⚠️ لديك موعد آخر بنفس الوقت";
-      }
-
-      return `
-        <button type="button" class="${isActive ? 'active' : ''} ${isUnavailable ? 'is-booked' : ''}" ${isUnavailable ? 'disabled="disabled"' : ''} onclick="${isUnavailable ? '' : `selectAppointmentSlot('${slot.id}')`}">
-          <strong>${timeText}</strong>
-          <span>${descText}</span>
-        </button>
+    if (isDoctorOnLeave) {
+      const leaveReason = isEn
+        ? (docAvailability.leave?.reason || "Doctor on approved leave")
+        : (docAvailability.leave?.reasonAr || docAvailability.leave?.reason || "الطبيب في إجازة معتمدة");
+      slotsContainer.innerHTML = `
+        <div class="slot-leave-notice" style="grid-column: 1/-1; padding: 16px; border-radius: 12px; background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.25); text-align: center;">
+          <strong style="display:block; color: #ef4444; font-size: 15px; margin-bottom: 6px;">
+            🏖️ ${isEn ? "Doctor on Approved Leave" : "الطبيب في إجازة معتمدة"}
+          </strong>
+          <span style="font-size: 13px; color: var(--muted);">${escapeHtml(leaveReason)}</span>
+        </div>
       `;
-    }).join("");
+    } else if (isDoctorOffDuty) {
+      slotsContainer.innerHTML = `
+        <div class="slot-offduty-notice" style="grid-column: 1/-1; padding: 16px; border-radius: 12px; background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.25); text-align: center;">
+          <strong style="display:block; color: #f59e0b; font-size: 15px; margin-bottom: 6px;">
+            📅 ${isEn ? "Doctor Off-Duty" : "خارج أوقات العمل الرسمية"}
+          </strong>
+          <span style="font-size: 13px; color: var(--muted);">${isEn ? "No clinic shifts scheduled on this day." : "لا توجد فترات عمل مجدولة في هذا اليوم."}</span>
+        </div>
+      `;
+    } else {
+      slotsContainer.innerHTML = activeTemplateSlots.map((slot) => {
+        const isDocBooked = doctorBookedSlotIds.has(slot.id);
+        const isPatBooked = patientBookedSlotIds.has(slot.id);
+        const isUnavailable = !canBookDoctor || isDocBooked || isPatBooked;
+        const isActive = !isUnavailable && apptSelectedSlot && slot.id === apptSelectedSlot.id;
+
+        const timeText = isEn ? slot.timeEn : slot.timeAr;
+        let descText = isEn ? slot.periodEn : slot.periodAr;
+
+        if (!canBookDoctor) {
+          descText = isEn ? "No approved doctor selected" : "لا يوجد طبيب معتمد محدد";
+        } else if (isDocBooked) {
+          descText = isEn ? "⛔ Booked for this doctor" : "⛔ محجوز مسبقاً لدى الطبيب";
+        } else if (isPatBooked) {
+          descText = isEn ? "⚠️ You have another booking" : "⚠️ لديك موعد آخر بنفس الوقت";
+        }
+
+        return `
+          <button type="button" class="${isActive ? 'active' : ''} ${isUnavailable ? 'is-booked' : ''}" ${isUnavailable ? 'disabled="disabled"' : ''} onclick="${isUnavailable ? '' : `selectAppointmentSlot('${slot.id}')`}">
+            <strong>${timeText}</strong>
+            <span>${descText}</span>
+          </button>
+        `;
+      }).join("");
+    }
   }
 
   // Update Available Slots Badge
   const countBadge = document.getElementById("availableSlotsCount");
   if (countBadge) {
-    if (availableSlots.length > 0) {
+    if (!canBookDoctor) {
+      if (isDoctorOnLeave) {
+        countBadge.textContent = isEn ? "On Leave (0 slots)" : "في إجازة معتمدة (0 متاح)";
+        countBadge.className = "pill danger";
+      } else if (isDoctorOffDuty) {
+        countBadge.textContent = isEn ? "Off-Duty (0 slots)" : "خارج أوقات العمل (0 متاح)";
+        countBadge.className = "pill pending";
+      } else {
+        countBadge.textContent = isEn ? "No approved doctor available" : "لا يوجد طبيب معتمد متاح";
+        countBadge.className = "pill pending";
+      }
+    } else if (availableSlots.length > 0) {
       countBadge.textContent = isEn ? `${availableSlots.length} slots available` : `${availableSlots.length} فترات متاحة`;
       countBadge.className = "pill ok";
     } else {
@@ -7763,7 +9454,7 @@ async function renderAppointmentsScreen() {
   // Enable/Disable Confirm Booking Button
   const confirmBtn = document.getElementById("btnConfirmBooking");
   if (confirmBtn) {
-    confirmBtn.disabled = !apptSelectedSlot;
+    confirmBtn.disabled = !canBookDoctor || !apptSelectedSlot;
   }
 
   // Bind Type Buttons
@@ -7810,133 +9501,24 @@ function selectAppointmentSlot(slotId) {
 }
 
 function getLocalAppointments(patientId) {
-  try {
-    const key = patientId ? `hv_appointments_${patientId}` : "hv_appointments";
-    const raw = localStorage.getItem(key);
-    if (raw) return JSON.parse(raw);
-    const globalRaw = localStorage.getItem("hv_appointments");
-    if (globalRaw) {
-      const list = JSON.parse(globalRaw);
-      return patientId ? list.filter(a => a.patientId === patientId) : list;
-    }
-  } catch (e) {}
   return [];
 }
 
 function saveAppointmentToLocalStorage(appt) {
-  try {
-    const patientKey = `hv_appointments_${appt.patientId}`;
-    let list = [];
-    const raw = localStorage.getItem(patientKey);
-    if (raw) list = JSON.parse(raw);
-    list = list.filter(a => a.id !== appt.id);
-    list.unshift(appt);
-    localStorage.setItem(patientKey, JSON.stringify(list));
-
-    let globalList = [];
-    const globalRaw = localStorage.getItem("hv_appointments");
-    if (globalRaw) globalList = JSON.parse(globalRaw);
-    globalList = globalList.filter(a => a.id !== appt.id);
-    globalList.unshift(appt);
-    localStorage.setItem("hv_appointments", JSON.stringify(globalList));
-  } catch (e) {}
+  purgeSensitiveLegacyStorage();
 }
 
 function updateLocalAppointmentStatus(apptId, newStatus) {
-  try {
-    const keys = Object.keys(localStorage).filter(k => k.startsWith("hv_appointments"));
-    keys.forEach(k => {
-      try {
-        const raw = localStorage.getItem(k);
-        if (raw) {
-          const list = JSON.parse(raw);
-          let changed = false;
-          list.forEach(a => {
-            if (a.id === apptId) {
-              a.status = newStatus;
-              changed = true;
-            }
-          });
-          if (changed) localStorage.setItem(k, JSON.stringify(list));
-        }
-      } catch (e) {}
-    });
-  } catch (e) {}
+  purgeSensitiveLegacyStorage();
 }
 
 async function confirmAppointmentBooking() {
   const isEn = currentLanguage === "en";
-  if (!apptSelectedDate || !apptSelectedSlot) {
-    showToast(isEn ? "Please select an available date and time slot." : "يرجى تحديد اليوم والفترة الزمنية المتاحة.");
+  if (confirmAppointmentBooking._pending) {
+    showToast(isEn ? "This booking is already being submitted." : "جاري إرسال هذا الحجز بالفعل.");
     return;
   }
-
-  const doctorSelect = document.getElementById("apptDoctorSelect");
-  const selectedOption = doctorSelect ? doctorSelect.selectedOptions[0] : null;
-  const doctorId = doctorSelect ? doctorSelect.value : "dr_mona";
-  const doctorName = selectedOption ? (selectedOption.dataset.name || "د. منى سامي") : "د. منى سامي";
-  const doctorSpecialty = selectedOption ? (selectedOption.dataset.spec || "استشاري أمراض صدرية") : "استشاري أمراض صدرية";
-  const clinicName = selectedOption ? (selectedOption.dataset.clinic || "عيادة الصدر والرعاية التنفسية") : "عيادة الصدر والرعاية التنفسية";
-
-  const notesInput = document.getElementById("apptNotesInput");
-  const notes = notesInput ? notesInput.value.trim() : "";
-
-  const user = auth ? auth.currentUser : null;
-  const cachedDoc = window._cachedUserDoc || {};
-  const activeSession = (typeof getActiveSession === "function" ? getActiveSession() : null) || {};
-  const patientId = user ? user.uid : (activeSession.uid || "anon_patient");
-  const patientName = cachedDoc.name || cachedDoc.displayName || user?.displayName || activeSession.displayName || activeSession.name || (user?.email ? user.email.split("@")[0] : (isEn ? "Patient" : "مريض"));
-  const patientEmail = user?.email || cachedDoc.email || activeSession.email || "";
-  const patientPhone = cachedDoc.phoneNumber || user?.phoneNumber || activeSession.phoneNumber || "";
-
-  // 🛡️ ANTI-DOUBLE BOOKING GUARD #1: Check if Doctor is already booked for this slot
-  const doctorExisting = await getConfirmedAppointmentsForDoctorAndDate(doctorId, apptSelectedDate.dateStr);
-  const isDoctorDoubleBooked = doctorExisting.some(a => a.slotId === apptSelectedSlot.id && a.status === "confirmed");
-  if (isDoctorDoubleBooked) {
-    showToast(isEn
-      ? "Conflict: This time slot is already booked for this doctor. Please choose another slot."
-      : "تضارب: هذا الموعد محجوز بالفعل لدى الطبيب المختار. يرجى اختيار فترة زمنية أخرى.");
-    await renderAppointmentsScreen();
-    return;
-  }
-
-  // 🛡️ ANTI-DOUBLE BOOKING GUARD #2: Check if Patient already has another active appointment at this exact date and slot
-  const patientExisting = await getConfirmedAppointmentsForPatientAndDate(patientId, apptSelectedDate.dateStr);
-  const isPatientDoubleBooked = patientExisting.some(a => a.slotId === apptSelectedSlot.id && a.status === "confirmed");
-  if (isPatientDoubleBooked) {
-    showToast(isEn
-      ? "Conflict: You already have another active appointment scheduled at this exact time."
-      : "تضارب: لديك موعد طبي آخر محجوز بالفعل في نفس هذا التوقيت.");
-    await renderAppointmentsScreen();
-    return;
-  }
-
-  const apptId = "appt_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6);
-  const dateLabel = isEn ? apptSelectedDate.fullLabelEn : apptSelectedDate.fullLabelAr;
-  const timeLabel = isEn ? apptSelectedSlot.timeEn : apptSelectedSlot.timeAr;
-
-  const apptData = {
-    id: apptId,
-    patientId: patientId,
-    patientName: patientName,
-    patientEmail: patientEmail,
-    patientPhone: patientPhone,
-    doctorId: doctorId,
-    doctorName: doctorName,
-    doctorSpecialty: doctorSpecialty,
-    clinicName: clinicName,
-    type: apptSelectedType,
-    typeLabel: apptSelectedType === "video" ? (isEn ? "Telehealth Video" : "فيديو عن بُعد") : (apptSelectedType === "clinic" ? (isEn ? "In-Clinic Visit" : "حضور العيادة") : (isEn ? "Results Follow-up" : "متابعة نتائج")),
-    date: apptSelectedDate.dateStr,
-    dateLabel: dateLabel,
-    timeSlot: timeLabel,
-    slotId: apptSelectedSlot.id,
-    slotKey: `${doctorId}_${apptSelectedDate.dateStr}_${apptSelectedSlot.id}`,
-    patientSlotKey: `${patientId}_${apptSelectedDate.dateStr}_${apptSelectedSlot.id}`,
-    notes: notes,
-    status: "confirmed",
-    createdAt: new Date().toISOString()
-  };
+  confirmAppointmentBooking._pending = true;
 
   const confirmBtn = document.getElementById("btnConfirmBooking");
   if (confirmBtn) {
@@ -7945,16 +9527,96 @@ async function confirmAppointmentBooking() {
   }
 
   try {
-    if (db && user && !user.isAnonymous) {
-      try {
-        await db.collection("appointments").doc(apptId).set(apptData);
-      } catch (fErr) {
-        console.warn("Firestore appointments write warning:", fErr);
-      }
+    if (!apptSelectedDate || !apptSelectedSlot) {
+      showToast(isEn ? "Please select an available date and time slot." : "يرجى تحديد اليوم والفترة الزمنية المتاحة.");
+      return;
     }
 
-    saveAppointmentToLocalStorage(apptData);
+    const doctorSelect = document.getElementById("apptDoctorSelect");
+    const selectedOption = doctorSelect ? doctorSelect.selectedOptions[0] : null;
+    const doctorId = doctorSelect ? doctorSelect.value : "";
+    const doctorName = selectedOption && selectedOption.value ? (selectedOption.dataset.name || "") : "";
+    const doctorSpecialty = selectedOption && selectedOption.value ? (selectedOption.dataset.spec || "") : "";
+    const clinicName = selectedOption && selectedOption.value ? (selectedOption.dataset.clinic || "") : "";
+    const doctorLicense = selectedOption && selectedOption.value ? (selectedOption.dataset.license || "") : "";
 
+    if (!doctorId || !doctorName || !doctorLicense) {
+      showToast(isEn
+        ? "No approved doctor is available for booking yet."
+        : "لا يوجد طبيب معتمد متاح للحجز حالياً.");
+      return;
+    }
+
+    const notesInput = document.getElementById("apptNotesInput");
+    const notes = notesInput ? notesInput.value.trim() : "";
+
+    const user = auth ? auth.currentUser : null;
+    const cachedDoc = window._cachedUserDoc || {};
+    const patientId = user ? user.uid : "anon_patient";
+    const patientName = cachedDoc.name || cachedDoc.displayName || user?.displayName || (user?.email ? user.email.split("@")[0] : (isEn ? "Patient" : "مريض"));
+    const patientEmail = user?.email || cachedDoc.email || "";
+    const patientPhone = cachedDoc.phoneNumber || user?.phoneNumber || "";
+
+    // 🛡️ ANTI-DOUBLE BOOKING GUARD #1: Check if Doctor is already booked for this slot
+    const doctorExisting = await getConfirmedAppointmentsForDoctorAndDate(doctorId, apptSelectedDate.dateStr);
+    const isDoctorDoubleBooked = doctorExisting.some(a => a.slotId === apptSelectedSlot.id && a.status === "confirmed");
+    if (isDoctorDoubleBooked) {
+      showToast(isEn
+        ? "Conflict: This time slot is already booked for this doctor. Please choose another slot."
+        : "تضارب: هذا الموعد محجوز بالفعل لدى الطبيب المختار. يرجى اختيار فترة زمنية أخرى.");
+      await renderAppointmentsScreen();
+      return;
+    }
+
+    // 🛡️ ANTI-DOUBLE BOOKING GUARD #2: Check if Patient already has another active appointment at this exact date and slot
+    const patientExisting = await getConfirmedAppointmentsForPatientAndDate(patientId, apptSelectedDate.dateStr);
+    const isPatientDoubleBooked = patientExisting.some(a => a.slotId === apptSelectedSlot.id && a.status === "confirmed");
+    if (isPatientDoubleBooked) {
+      showToast(isEn
+        ? "Conflict: You already have another active appointment scheduled at this exact time."
+        : "تضارب: لديك موعد طبي آخر محجوز بالفعل في نفس هذا التوقيت.");
+      await renderAppointmentsScreen();
+      return;
+    }
+
+    const apptId = "appt_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6);
+    const dateLabel = isEn ? apptSelectedDate.fullLabelEn : apptSelectedDate.fullLabelAr;
+    const timeLabel = isEn ? apptSelectedSlot.timeEn : apptSelectedSlot.timeAr;
+
+    const apptData = {
+      id: apptId,
+      patientId: patientId,
+      patientName: patientName,
+      patientEmail: patientEmail,
+      patientPhone: patientPhone,
+      doctorId: doctorId,
+      doctorName: doctorName,
+      doctorSpecialty: doctorSpecialty,
+      doctorLicense: doctorLicense,
+      clinicName: clinicName,
+      type: apptSelectedType,
+      typeLabel: apptSelectedType === "video" ? (isEn ? "Telehealth Video" : "فيديو عن بُعد") : (apptSelectedType === "clinic" ? (isEn ? "In-Clinic Visit" : "حضور العيادة") : (isEn ? "Results Follow-up" : "متابعة نتائج")),
+      date: apptSelectedDate.dateStr,
+      dateLabel: dateLabel,
+      timeSlot: timeLabel,
+      slotId: apptSelectedSlot.id,
+      slotKey: `${doctorId}_${apptSelectedDate.dateStr}_${apptSelectedSlot.id}`,
+      patientSlotKey: `${patientId}_${apptSelectedDate.dateStr}_${apptSelectedSlot.id}`,
+      notes: notes,
+      status: "pending_confirmation",
+      createdAt: new Date().toISOString()
+    };
+
+    if (!user || user.isAnonymous) {
+      throw new Error(isEn ? "Please sign in with a verified account before booking." : "يرجى تسجيل الدخول بحساب موثق قبل الحجز.");
+    }
+
+    const saved = await requireSuccessfulMutation("/api/appointments/book", {
+      method: "POST",
+      body: JSON.stringify(apptData)
+    }, data => data.success === true && data.appointment && data.appointment.id);
+
+    purgeSensitiveLegacyStorage();
     showToast(isEn ? "Appointment confirmed successfully! Reminder notification scheduled." : "تم تأكيد حجز الموعد بنجاح! سيصلك تذكير قبل موعد الاستشارة.");
     if (notesInput) notesInput.value = "";
 
@@ -7963,8 +9625,9 @@ async function confirmAppointmentBooking() {
     updatePatientDashboardNextAppt();
   } catch (err) {
     console.error("Booking appointment error:", err);
-    showToast(isEn ? "Error booking appointment: " + err.message : "حدث خطأ أثناء حجز الموعد: " + err.message);
+    showRetryFailure(isEn ? "Booking failed: " + err.message : "فشل حجز الموعد: " + err.message, () => confirmAppointmentBooking());
   } finally {
+    confirmAppointmentBooking._pending = false;
     if (confirmBtn) {
       confirmBtn.disabled = false;
       confirmBtn.innerHTML = `<span class="lang-ar">✓ تأكيد حجز الموعد</span><span class="lang-en">✓ Confirm Appointment Booking</span>`;
@@ -7978,11 +9641,10 @@ async function renderPatientAppointmentsList() {
 
   const isEn = currentLanguage === "en";
   const user = auth ? auth.currentUser : null;
-  const activeSession = (typeof getActiveSession === "function" ? getActiveSession() : null) || {};
-  const patientId = user ? user.uid : (activeSession.uid || "anon_patient");
+  const patientId = user ? user.uid : "anon_patient";
 
   let appts = [];
-  const localList = getLocalAppointments(patientId);
+  const localList = [];
 
   if (db && user && !user.isAnonymous) {
     try {
@@ -7995,7 +9657,7 @@ async function renderPatientAppointmentsList() {
     }
   }
 
-  // Merge with localList and deduplicate by id
+  // Deduplicate by id
   const map = new Map();
   localList.forEach(a => map.set(a.id, a));
   appts.forEach(a => map.set(a.id, a));
@@ -8017,12 +9679,32 @@ async function renderPatientAppointmentsList() {
     return;
   }
 
-  container.innerHTML = merged.map((appt) => {
+  const todayStr = new Date().toISOString().split("T")[0];
+  const upcoming = merged.filter(a => (a.status === "confirmed" || a.status === "rescheduled") && (a.date >= todayStr));
+  const past = merged.filter(a => a.status === "completed" || a.status === "cancelled" || a.status === "no_show" || (a.date < todayStr));
+
+  const renderCard = (appt) => {
     const isCancelled = appt.status === "cancelled";
-    const statusPillClass = isCancelled ? "pill danger" : "pill ok";
-    const statusLabel = isCancelled
-      ? (isEn ? "Cancelled" : "ملغي")
-      : (isEn ? "Confirmed" : "مؤكد");
+    const isCompleted = appt.status === "completed";
+    const isNoShow = appt.status === "no_show";
+    const isRescheduled = appt.status === "rescheduled";
+    const isConfirmed = appt.status === "confirmed";
+
+    let statusPillClass = "pill ok";
+    let statusLabel = isEn ? "Confirmed" : "مؤكد";
+    if (isCancelled) {
+      statusPillClass = "pill danger";
+      statusLabel = isEn ? "Cancelled" : "ملغي";
+    } else if (isRescheduled) {
+      statusPillClass = "pill info";
+      statusLabel = isEn ? "Rescheduled" : "تمت إعادة الجدولة";
+    } else if (isCompleted) {
+      statusPillClass = "pill ok";
+      statusLabel = isEn ? "Completed" : "مكتمل";
+    } else if (isNoShow) {
+      statusPillClass = "pill warn";
+      statusLabel = isEn ? "No Show" : "لم يحضر";
+    }
 
     let typePillClass = "pill info";
     let typeIcon = "📹";
@@ -8034,13 +9716,15 @@ async function renderPatientAppointmentsList() {
       typeIcon = "📋";
     }
 
+    const canModify = (isConfirmed || isRescheduled) && (appt.date >= todayStr);
+
     return `
-      <div class="appointment-card" id="appt-card-${appt.id}">
+      <div class="appointment-card" id="appt-card-${appt.id}" style="margin-bottom: 12px; border: 1px solid var(--surface-3); border-radius: 8px; padding: 14px; background: var(--surface-2);">
         <div style="flex: 1;">
           <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap;">
             <span class="${statusPillClass}">${statusLabel}</span>
             <span class="${typePillClass}">${typeIcon} ${appt.typeLabel || appt.type}</span>
-            <span class="pill" style="background:var(--surface-3); color:var(--ink); font-size:11px;">⏰ ${appt.dateLabel} - ${appt.timeSlot}</span>
+            <span class="pill" style="background:var(--surface-3); color:var(--ink); font-size:11px;">⏰ ${appt.dateLabel || appt.date} - ${appt.timeSlot}</span>
           </div>
           <strong style="display: block; font-size: 15px; color: var(--ink); margin-bottom: 2px;">
             ${appt.doctorName}
@@ -8049,47 +9733,141 @@ async function renderPatientAppointmentsList() {
             ${appt.clinicName || appt.doctorSpecialty}
           </span>
           ${appt.notes ? `<p style="margin: 6px 0 0; font-size: 12px; color: var(--ink); opacity: 0.85;">💬 ${appt.notes}</p>` : ""}
+          ${appt.history && appt.history.length > 1 ? `
+            <div style="margin-top: 6px; font-size: 11px; color: var(--muted);">
+              📜 ${isEn ? "Audit changes:" : "سجل التعديلات:"} ${appt.history.length - 1} ${isEn ? "events" : "أحداث"}
+            </div>
+          ` : ""}
         </div>
-        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-          ${!isCancelled ? `
+        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px;">
+          ${canModify ? `
             ${appt.type === "video" ? `
-              <button type="button" class="solid-button" style="padding: 8px 14px; font-size: 12px;" onclick="joinAppointmentVideo('${appt.id}')">
+              <button type="button" class="solid-button" style="padding: 6px 12px; font-size: 12px;" onclick="joinAppointmentVideo('${appt.id}')">
                 📹 ${isEn ? "Join Video Call" : "انضمام للاستشارة"}
               </button>
             ` : `
-              <button type="button" class="outline-button" style="padding: 8px 14px; font-size: 12px;" onclick="showClinicDirections('${appt.id}')">
+              <button type="button" class="outline-button" style="padding: 6px 12px; font-size: 12px;" onclick="showClinicDirections('${appt.id}')">
                 📍 ${isEn ? "Clinic Details" : "موقع العيادة"}
               </button>
             `}
-            <button type="button" class="soft-button" style="padding: 8px 14px; font-size: 12px; color: #ef4444;" onclick="cancelAppointment('${appt.id}')">
+            <button type="button" class="outline-button" style="padding: 6px 12px; font-size: 12px;" onclick="promptRescheduleAppointment('${appt.id}', '${appt.doctorId}')">
+              🔄 ${isEn ? "Reschedule" : "إعادة جدولة"}
+            </button>
+            <button type="button" class="soft-button" style="padding: 6px 12px; font-size: 12px; color: #ef4444;" onclick="cancelAppointment('${appt.id}')">
               ✕ ${isEn ? "Cancel" : "إلغاء الموعد"}
             </button>
           ` : `
-            <span style="font-size: 12px; color: var(--muted);">${isEn ? "Booking Cancelled" : "تم إلغاء الحجز"}</span>
+            <span style="font-size: 12px; color: var(--muted);">${isCancelled ? (isEn ? "Booking Cancelled" : "تم إلغاء الحجز") : (isCompleted ? (isEn ? "Consultation Completed" : "اكتملت الاستشارة") : (isEn ? "Past Consultation" : "استشارة سابقة"))}</span>
           `}
         </div>
       </div>
     `;
-  }).join("");
+  };
+
+  let html = "";
+  if (upcoming.length > 0) {
+    html += `
+      <div style="margin-bottom: 16px;">
+        <h4 style="font-size: 14px; margin-bottom: 10px; color: var(--brand-accent, #3b82f6); display: flex; align-items: center; gap: 6px;">
+          <span>🗓️</span> ${isEn ? `Upcoming Appointments (${upcoming.length})` : `المواعيد القادمة (${upcoming.length})`}
+        </h4>
+        ${upcoming.map(renderCard).join("")}
+      </div>
+    `;
+  }
+
+  if (past.length > 0) {
+    html += `
+      <div style="margin-top: ${upcoming.length > 0 ? "20px" : "0"};">
+        <h4 style="font-size: 14px; margin-bottom: 10px; color: var(--muted); display: flex; align-items: center; gap: 6px;">
+          <span>📂</span> ${isEn ? `Past & Cancelled Appointments (${past.length})` : `المواعيد السابقة والملغاة (${past.length})`}
+        </h4>
+        ${past.map(renderCard).join("")}
+      </div>
+    `;
+  }
+
+  container.innerHTML = html;
+}
+
+async function rescheduleAppointment(apptId, newDate, newSlotId, reason = "") {
+  const isEn = currentLanguage === "en";
+  if (rescheduleAppointment._pending && rescheduleAppointment._pending[apptId]) {
+    showToast(isEn ? "This reschedule request is already being processed." : "طلب إعادة الجدولة قيد المعالجة بالفعل.");
+    return;
+  }
+
+  try {
+    const user = auth ? auth.currentUser : null;
+    if (!user || user.isAnonymous) {
+      throw new Error(isEn ? "Please sign in before rescheduling an appointment." : "يرجى تسجيل الدخول قبل إعادة جدولة الموعد.");
+    }
+    rescheduleAppointment._pending = rescheduleAppointment._pending || {};
+    rescheduleAppointment._pending[apptId] = true;
+
+    await requireSuccessfulMutation("/api/appointments/reschedule", {
+      method: "POST",
+      body: JSON.stringify({
+        appointmentId: apptId,
+        newDate: newDate,
+        newSlotId: newSlotId,
+        reason: reason || "Patient requested reschedule via portal"
+      })
+    }, data => data.success === true && data.status === "rescheduled");
+
+    showToast(isEn ? "Appointment rescheduled successfully! Replacement slot reserved." : "تمت إعادة جدولة الموعد بنجاح وحجز الموعد البديل.");
+    await renderPatientAppointmentsList();
+    await renderAppointmentsScreen();
+    updatePatientDashboardNextAppt();
+  } catch (err) {
+    console.error("Reschedule appointment error:", err);
+    showRetryFailure(isEn ? "Failed to reschedule appointment: " + err.message : "تعذر إعادة جدولة الموعد: " + err.message, () => rescheduleAppointment(apptId, newDate, newSlotId, reason));
+  } finally {
+    if (rescheduleAppointment._pending) rescheduleAppointment._pending[apptId] = false;
+  }
+}
+
+async function promptRescheduleAppointment(apptId, doctorId) {
+  const isEn = currentLanguage === "en";
+  if (apptSelectedDate && apptSelectedSlot) {
+    const confirmMsg = isEn
+      ? `Reschedule this appointment to ${apptSelectedDate.dateStr} at ${apptSelectedSlot.timeEn}?`
+      : `هل ترغب في إعادة جدولة هذا الموعد إلى ${apptSelectedDate.dateStr} في تمام ${apptSelectedSlot.timeAr}؟`;
+    if (window.confirm(confirmMsg)) {
+      return rescheduleAppointment(apptId, apptSelectedDate.dateStr, apptSelectedSlot.id, "Rescheduled via UI selection");
+    }
+  }
+
+  const defaultDate = apptDaysList && apptDaysList.length > 0 ? apptDaysList[0].dateStr : "";
+  const targetDate = window.prompt(isEn ? "Enter new appointment date (YYYY-MM-DD):" : "أدخل تاريخ الموعد الجديد (YYYY-MM-DD):", defaultDate);
+  if (!targetDate) return;
+
+  const targetSlot = window.prompt(isEn ? "Enter new time slot ID (e.g., slot_0900, slot_1000, slot_1100, slot_1400, slot_1500, slot_1600):" : "أدخل معرف الفترة الزمنية الجديدة (مثال: slot_0900, slot_1000):", "slot_1000");
+  if (!targetSlot) return;
+
+  return rescheduleAppointment(apptId, targetDate.trim(), targetSlot.trim(), "Rescheduled via patient request");
 }
 
 async function cancelAppointment(apptId) {
   const isEn = currentLanguage === "en";
+  if (cancelAppointment._pending && cancelAppointment._pending[apptId]) {
+    showToast(isEn ? "This cancellation is already being saved." : "جاري حفظ إلغاء هذا الموعد بالفعل.");
+    return;
+  }
   const confirmed = window.confirm(isEn ? "Are you sure you want to cancel this appointment?" : "هل أنت متأكد من رغبتك في إلغاء هذا الموعد الطبي؟");
   if (!confirmed) return;
 
   try {
     const user = auth ? auth.currentUser : null;
-    if (db && user && !user.isAnonymous) {
-      try {
-        await db.collection("appointments").doc(apptId).update({
-          status: "cancelled",
-          cancelledAt: new Date().toISOString()
-        });
-      } catch (e) {
-        console.warn("Could not cancel on Firestore, updating local cache:", e);
-      }
+    if (!user || user.isAnonymous) {
+      throw new Error(isEn ? "Please sign in before cancelling an appointment." : "يرجى تسجيل الدخول قبل إلغاء الموعد.");
     }
+    cancelAppointment._pending = cancelAppointment._pending || {};
+    cancelAppointment._pending[apptId] = true;
+    await requireSuccessfulMutation("/api/appointments/cancel", {
+      method: "POST",
+      body: JSON.stringify({ appointmentId: apptId })
+    }, data => data.success === true && data.status === "cancelled");
 
     updateLocalAppointmentStatus(apptId, "cancelled");
     showToast(isEn ? "Appointment has been cancelled." : "تم إلغاء الموعد الطبي بنجاح.");
@@ -8098,7 +9876,9 @@ async function cancelAppointment(apptId) {
     updatePatientDashboardNextAppt();
   } catch (err) {
     console.error("Cancel appointment error:", err);
-    showToast(isEn ? "Failed to cancel appointment: " + err.message : "تعذر إلغاء الموعد: " + err.message);
+    showRetryFailure(isEn ? "Failed to cancel appointment: " + err.message : "تعذر إلغاء الموعد: " + err.message, () => cancelAppointment(apptId));
+  } finally {
+    if (cancelAppointment._pending) cancelAppointment._pending[apptId] = false;
   }
 }
 
@@ -8122,10 +9902,9 @@ async function updatePatientDashboardNextAppt() {
 
   const isEn = currentLanguage === "en";
   const user = auth ? auth.currentUser : null;
-  const activeSession = (typeof getActiveSession === "function" ? getActiveSession() : null) || {};
-  const patientId = user ? user.uid : (activeSession.uid || "anon_patient");
+  const patientId = user ? user.uid : "anon_patient";
 
-  const localList = getLocalAppointments(patientId);
+  const localList = [];
   const now = new Date();
   const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
 
@@ -8146,11 +9925,17 @@ window.selectAppointmentDate = selectAppointmentDate;
 window.selectAppointmentSlot = selectAppointmentSlot;
 window.confirmAppointmentBooking = confirmAppointmentBooking;
 window.cancelAppointment = cancelAppointment;
+window.rescheduleAppointment = rescheduleAppointment;
+window.promptRescheduleAppointment = promptRescheduleAppointment;
 window.joinAppointmentVideo = joinAppointmentVideo;
 window.showClinicDirections = showClinicDirections;
 window.updatePatientDashboardNextAppt = updatePatientDashboardNextAppt;
 window.getConfirmedAppointmentsForDoctorAndDate = getConfirmedAppointmentsForDoctorAndDate;
 window.getConfirmedAppointmentsForPatientAndDate = getConfirmedAppointmentsForPatientAndDate;
+window.calculateSlotsForDoctor = calculateSlotsForDoctor;
+window.checkDoctorLeaveClient = checkDoctorLeaveClient;
+window.CLINICS_REGISTRY = CLINICS_REGISTRY;
+window.DOCTORS_WORK_SCHEDULES = DOCTORS_WORK_SCHEDULES;
 
 // =========================================================================
 // ⭐ CLINICAL & PATIENT FEEDBACK MODULE
@@ -8173,9 +9958,53 @@ const FEEDBACK_CATEGORIES = {
   ]
 };
 
+const SUPPORT_TICKET_TYPES = {
+  EXPERIENCE_RATING: "experience_rating",
+  BUG_REPORT: "bug_report",
+  INACCURATE_INFORMATION: "inaccurate_information",
+  FEATURE_REQUEST: "feature_request",
+  ACCOUNT_RECOVERY: "account_recovery",
+  CONTACT_FORM: "contact_form"
+};
+
 let currentFeedbackPerspective = "patient";
 let currentFeedbackFilter = "all";
 let cachedFeedbacks = [];
+
+function handleFeedbackTypeChange(type) {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  const starWidgetGroup = document.getElementById("feedbackStarWidgetGroup");
+  const subjectGroup = document.getElementById("feedbackSubjectGroup");
+  const safetyAlert = document.getElementById("inaccurateInfoSafetyAlert");
+  const commentLabel = document.getElementById("feedbackCommentLabel");
+  const commentInput = document.getElementById("feedbackCommentInput");
+
+  if (type === "experience_rating") {
+    if (starWidgetGroup) starWidgetGroup.style.display = "block";
+    if (subjectGroup) subjectGroup.style.display = "none";
+    if (safetyAlert) safetyAlert.style.display = "none";
+    if (commentLabel) commentLabel.textContent = isEn ? "Detailed Feedback & Suggestions:" : "تفاصيل الملاحظات والتجربة السريرية:";
+    if (commentInput) commentInput.placeholder = isEn ? "Write your experience and suggestions..." : "اكتب رأيك أو ملاحظاتك السريرية بدقة لمساعدتنا على تحسين الخدمة...";
+  } else if (type === "bug_report") {
+    if (starWidgetGroup) starWidgetGroup.style.display = "none";
+    if (subjectGroup) subjectGroup.style.display = "block";
+    if (safetyAlert) safetyAlert.style.display = "none";
+    if (commentLabel) commentLabel.textContent = isEn ? "Bug Description & Steps to Reproduce:" : "وصف الخطأ التقني وخطوات تكراره:";
+    if (commentInput) commentInput.placeholder = isEn ? "Describe what happened, browser, and device..." : "اشرح الخطأ التقني الذي واجهك، الجهاز، والمتصفح...";
+  } else if (type === "inaccurate_information") {
+    if (starWidgetGroup) starWidgetGroup.style.display = "none";
+    if (subjectGroup) subjectGroup.style.display = "block";
+    if (safetyAlert) safetyAlert.style.display = "block";
+    if (commentLabel) commentLabel.textContent = isEn ? "Clinical Discrepancy & Verified Clinical Notes:" : "المعلومات غير الدقيقة والملاحظات السريرية الصحيحة:";
+    if (commentInput) commentInput.placeholder = isEn ? "Specify the exact discrepancy on report/assessment..." : "وضح عدم الدقة في التقييم أو التقرير، والأعراض الحقيقية للتصحيح...";
+  } else if (type === "feature_request") {
+    if (starWidgetGroup) starWidgetGroup.style.display = "none";
+    if (subjectGroup) subjectGroup.style.display = "block";
+    if (safetyAlert) safetyAlert.style.display = "none";
+    if (commentLabel) commentLabel.textContent = isEn ? "Feature Proposal & Clinical Workflow Impact:" : "تفاصيل الميزة المقترحة وأثرها على سير العمل:";
+    if (commentInput) commentInput.placeholder = isEn ? "Describe your suggestion or feature idea..." : "اشرح فكرة الميزة المقترحة وكيف ستساعد في تحسين الرعاية...";
+  }
+}
 
 function setFeedbackPerspective(role) {
   currentFeedbackPerspective = role === "doctor" ? "doctor" : "patient";
@@ -8304,6 +10133,10 @@ function closeFeedbackModal() {
 
 async function handleFeedbackSubmit() {
   const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  if (handleFeedbackSubmit._pending) {
+    showToast(isEn ? "This feedback is already being submitted." : "جاري إرسال هذا التقييم بالفعل.");
+    return;
+  }
   const user = (typeof auth !== "undefined" && auth) ? auth.currentUser : null;
   if (!user) {
     if (typeof showToast === "function") {
@@ -8334,70 +10167,42 @@ async function handleFeedbackSubmit() {
   }
 
   try {
-    const feedbackId = `fb_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     const isDoc = (typeof isDoctorRole === "function" && isDoctorRole(selectedRole)) || (typeof selectedRole !== "undefined" && selectedRole === "doctor");
     const userRole = currentFeedbackPerspective || (isDoc ? "doctor" : "patient");
-    const feedbackDoc = {
-      feedbackId,
-      userId: user.uid,
-      userName: user.displayName || (userRole === "doctor" ? "طبيب معالج" : "مريض"),
-      userEmail: user.email || null,
-      role: userRole,
-      rating: ratingVal,
-      category,
-      comment: commentInput,
-      refId: refInput || null,
-      isPublic,
-      status: "received",
-      createdAt: new Date().toISOString()
-    };
+    const ticketType = document.getElementById("feedbackTypeSelect")?.value || "experience_rating";
+    const subject = document.getElementById("feedbackSubjectInput")?.value?.trim() || "";
+    const isMedicalInaccuracy = ticketType === "inaccurate_information";
 
-    // 1. Try sending to backend endpoint
-    let submittedToBackend = false;
-    try {
-      const token = user.getIdToken ? await user.getIdToken() : null;
-      const res = await fetch("/api/feedback/submit", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { "Authorization": `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({
-          rating: ratingVal,
-          category,
-          comment: commentInput,
-          role: userRole,
-          caseId: refInput.startsWith("case_") ? refInput : null,
-          appointmentId: refInput.startsWith("appt_") ? refInput : null,
-          isPublic
-        })
-      });
-      if (res.ok) {
-        submittedToBackend = true;
-      }
-    } catch (netErr) {
-      console.warn("Backend feedback API unreachable, saving to Firestore directly:", netErr);
-    }
+    handleFeedbackSubmit._pending = true;
+    const saved = await requireSuccessfulMutation("/api/feedback/submit", {
+      method: "POST",
+      body: JSON.stringify({
+        rating: ticketType === "experience_rating" ? ratingVal : null,
+        type: ticketType,
+        subject: subject || (ticketType === "experience_rating" ? `Rating (${ratingVal}★)` : ticketType),
+        category,
+        comment: commentInput,
+        role: userRole,
+        caseId: refInput.startsWith("case_") ? refInput : null,
+        appointmentId: refInput.startsWith("appt_") ? refInput : null,
+        isPublic,
+        hasSensitiveMedicalContent: isMedicalInaccuracy,
+        medicalDetails: isMedicalInaccuracy ? { issue: commentInput, caseId: refInput } : null
+      })
+    }, data => data.success === true && (data.feedbackId || data.ticketId));
 
-    // 2. Persist to Firestore if client Firestore is active
-    if (!submittedToBackend && typeof db !== "undefined" && db && !user.isAnonymous) {
-      try {
-        await db.collection("feedbacks").doc(feedbackId).set(feedbackDoc);
-      } catch (dbErr) {
-        console.warn("Firestore feedback write failed, saving to local cache:", dbErr);
-      }
-    }
-
-    // 3. Update local cache
-    saveLocalFeedback(feedbackDoc);
+    purgeSensitiveLegacyStorage();
 
     if (typeof showToast === "function") {
-      showToast(isEn ? "Thank you! Your feedback has been received." : "شكراً لك! تم استلام تقييمك وملاحظاتك بنجاح.");
+      showToast(isEn ? "Thank you! Your ticket has been logged and assigned." : "شكراً لك! تم استلام تذكرتك وتحديد أولويتها وتعيين المسؤول بنجاح.");
     }
 
     // Reset inputs
     if (document.getElementById("feedbackCommentInput")) {
       document.getElementById("feedbackCommentInput").value = "";
+    }
+    if (document.getElementById("feedbackSubjectInput")) {
+      document.getElementById("feedbackSubjectInput").value = "";
     }
     if (document.getElementById("feedbackRefInput")) {
       document.getElementById("feedbackRefInput").value = "";
@@ -8409,10 +10214,9 @@ async function handleFeedbackSubmit() {
     await renderFeedbackHistory();
   } catch (err) {
     console.error("Feedback submit error:", err);
-    if (typeof showToast === "function") {
-      showToast(isEn ? "Failed to submit feedback: " + err.message : "تعذر إرسال التقييم: " + err.message);
-    }
+    showRetryFailure(isEn ? "Failed to submit feedback: " + err.message : "تعذر إرسال التقييم: " + err.message, () => handleFeedbackSubmit());
   } finally {
+    handleFeedbackSubmit._pending = false;
     if (submitBtn) {
       submitBtn.disabled = false;
       submitBtn.innerHTML = `<span>⭐</span> <span class="lang-ar">إرسال التقييم والملاحظات</span><span class="lang-en">Submit Feedback</span>`;
@@ -8422,6 +10226,10 @@ async function handleFeedbackSubmit() {
 
 async function submitModalFeedback() {
   const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  if (submitModalFeedback._pending) {
+    showToast(isEn ? "This feedback is already being submitted." : "جاري إرسال هذا التقييم بالفعل.");
+    return;
+  }
   const user = (typeof auth !== "undefined" && auth) ? auth.currentUser : null;
   if (!user) {
     if (typeof showToast === "function") {
@@ -8446,30 +10254,24 @@ async function submitModalFeedback() {
     return;
   }
 
-  const feedbackId = `fb_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
   const isDoc = (typeof isDoctorRole === "function" && isDoctorRole(selectedRole)) || (typeof selectedRole !== "undefined" && selectedRole === "doctor");
   const userRole = ctx.role || (isDoc ? "doctor" : "patient");
-  const feedbackDoc = {
-    feedbackId,
-    userId: user.uid,
-    userName: user.displayName || (userRole === "doctor" ? "طبيب معالج" : "مريض"),
-    userEmail: user.email || null,
-    role: userRole,
-    rating: ratingVal,
-    category,
-    comment: commentInput,
-    caseId: ctx.caseId || null,
-    appointmentId: ctx.appointmentId || null,
-    isPublic: true,
-    status: "received",
-    createdAt: new Date().toISOString()
-  };
 
   try {
-    if (typeof db !== "undefined" && db && !user.isAnonymous) {
-      db.collection("feedbacks").doc(feedbackId).set(feedbackDoc).catch(e => console.warn(e));
-    }
-    saveLocalFeedback(feedbackDoc);
+    submitModalFeedback._pending = true;
+    const saved = await requireSuccessfulMutation("/api/feedback/submit", {
+      method: "POST",
+      body: JSON.stringify({
+        rating: ratingVal,
+        category,
+        comment: commentInput,
+        role: userRole,
+        caseId: ctx.caseId || null,
+        appointmentId: ctx.appointmentId || null,
+        isPublic: true
+      })
+    }, data => data.success === true && (data.feedbackId || data.ticketId));
+    purgeSensitiveLegacyStorage();
     closeFeedbackModal();
     if (typeof showToast === "function") {
       showToast(isEn ? "Thank you! Your rating has been submitted." : "شكراً لتقييمك! تم حفظ ملاحظاتك بنجاح.");
@@ -8478,27 +10280,19 @@ async function submitModalFeedback() {
       await renderFeedbackHistory();
     }
   } catch (err) {
-    if (typeof showToast === "function") showToast(err.message);
+    showRetryFailure(isEn ? "Failed to submit feedback: " + err.message : "تعذر إرسال التقييم: " + err.message, () => submitModalFeedback());
+  } finally {
+    submitModalFeedback._pending = false;
   }
 }
 
 function getStoredLocalFeedbacks() {
-  try {
-    const raw = localStorage.getItem("hv_local_feedbacks");
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+  purgeSensitiveLegacyStorage();
+  return [];
 }
 
 function saveLocalFeedback(doc) {
-  try {
-    const existing = getStoredLocalFeedbacks();
-    existing.unshift(doc);
-    localStorage.setItem("hv_local_feedbacks", JSON.stringify(existing.slice(0, 50)));
-  } catch (e) {
-    console.warn("Could not save to localStorage:", e);
-  }
+  purgeSensitiveLegacyStorage();
 }
 
 async function renderFeedbackScreen() {
@@ -8519,6 +10313,7 @@ async function renderFeedbackScreen() {
   }
 
   await renderFeedbackHistory();
+  await renderFaqHelpCenter("all", "");
 }
 
 async function renderFeedbackHistory() {
@@ -8530,65 +10325,46 @@ async function renderFeedbackHistory() {
 
   let feedbacks = [];
 
-  if (typeof db !== "undefined" && db && user && !user.isAnonymous) {
+  if (user && !user.isAnonymous) {
     try {
-      const snap = await db.collection("feedbacks").limit(40).get();
+      const token = await user.getIdToken();
+      const res = await fetch("/api/feedback/list", {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        feedbacks = data.feedbacks || data.tickets || [];
+      }
+    } catch (e) {
+      console.warn("Feedback API fetch fallback:", e);
+    }
+  }
+
+  if (feedbacks.length === 0 && typeof db !== "undefined" && db && user && !user.isAnonymous) {
+    try {
+      const snap = await db.collection("feedbacks").where("userId", "==", user.uid).limit(40).get();
       snap.forEach(d => feedbacks.push(d.data()));
     } catch (e) {
       console.warn("Firestore feedback fetch fallback:", e);
     }
   }
 
-  const localList = getStoredLocalFeedbacks();
+  const localList = [];
   const map = new Map();
   [...feedbacks, ...localList].forEach(item => {
-    if (item && item.feedbackId && !map.has(item.feedbackId)) {
-      map.set(item.feedbackId, item);
+    const key = item.ticketId || item.feedbackId;
+    if (item && key && !map.has(key)) {
+      map.set(key, item);
     }
   });
-
-  if (map.size === 0) {
-    const initialSamples = [
-      {
-        feedbackId: "fb_sample_1",
-        userId: "demo_patient_1",
-        userName: "أحمد كمال (مريض)",
-        role: "patient",
-        rating: 5,
-        category: "clinical_assessment",
-        comment: "الفحص الصدري بالذكاء الاصطناعي سريع جداً وملاحظات الطبيب كانت مطمئنة للغاية.",
-        createdAt: new Date(Date.now() - 3600000 * 24).toISOString()
-      },
-      {
-        feedbackId: "fb_sample_2",
-        userId: "demo_doc_1",
-        userName: "د. منى سامي",
-        role: "doctor",
-        rating: 5,
-        category: "ai_triage_accuracy",
-        comment: "نظام تصنيف وتحديد درجة خطورة نقص الأكسجين ممتاز ويختصر وقتاً ثميناً في الطوارئ.",
-        createdAt: new Date(Date.now() - 3600000 * 12).toISOString()
-      },
-      {
-        feedbackId: "fb_sample_3",
-        userId: "demo_patient_2",
-        userName: "سارة عبد الله (مريضة)",
-        role: "patient",
-        rating: 4,
-        category: "doctor_report",
-        comment: "التقرير المعتمد شافي ومفصل، والوصفة الطبية واضحة جداً بالجرعات.",
-        createdAt: new Date(Date.now() - 3600000 * 4).toISOString()
-      }
-    ];
-    initialSamples.forEach(s => map.set(s.feedbackId, s));
-  }
 
   cachedFeedbacks = Array.from(map.values()).sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
 
   const total = cachedFeedbacks.length;
-  const avg = total > 0 ? (cachedFeedbacks.reduce((acc, c) => acc + (Number(c.rating) || 5), 0) / total).toFixed(1) : "5.0";
-  const positiveCount = cachedFeedbacks.filter(c => Number(c.rating) >= 4).length;
-  const satisfactionRate = total > 0 ? Math.round((positiveCount / total) * 100) : 100;
+  const ratingItems = cachedFeedbacks.filter(c => c.rating);
+  const avg = ratingItems.length > 0 ? (ratingItems.reduce((acc, c) => acc + (Number(c.rating) || 0), 0) / ratingItems.length).toFixed(1) : "--";
+  const positiveCount = ratingItems.filter(c => Number(c.rating) >= 4).length;
+  const satisfactionRate = ratingItems.length > 0 ? Math.round((positiveCount / ratingItems.length) * 100) : 0;
 
   const kpiAvg = document.getElementById("kpiAvgRating");
   if (kpiAvg) kpiAvg.textContent = `${avg} ★`;
@@ -8600,7 +10376,7 @@ async function renderFeedbackHistory() {
   if (kpiTot) kpiTot.textContent = `${total}`;
 
   const totalBadge = document.getElementById("feedbackTotalCountBadge");
-  if (totalBadge) totalBadge.textContent = isEn ? `${total} reviews` : `${total} تقييم`;
+  if (totalBadge) totalBadge.textContent = isEn ? `${total} tickets` : `${total} تذكرة/تقييم`;
 
   let displayed = cachedFeedbacks;
   if (currentFeedbackFilter === "mine" && user) {
@@ -8615,8 +10391,8 @@ async function renderFeedbackHistory() {
     container.innerHTML = `
       <div class="hv-state-card" style="margin: 16px 0; padding: 24px 16px;">
         <span class="state-icon">⭐</span>
-        <h4>${isEn ? "No Reviews in this category" : "لا توجد تقييمات في هذا التصنيف حالياً"}</h4>
-        <p>${isEn ? "Be the first to leave your feedback using the form." : "كن أول من يشاركنا تجربته وملاحظاته عبر النموذج أعلاه."}</p>
+        <h4>${isEn ? "No tickets or feedback submitted yet" : "لا توجد تذاكر أو تقييمات مسجلة حتى الآن"}</h4>
+        <p>${isEn ? "Submitted tickets will appear here with real-time status and assigned owner." : "ستظهر تذاكرك هنا مع الأولوية وحالة المتابعة والمسؤول المكلف."}</p>
       </div>
     `;
     return;
@@ -8626,29 +10402,218 @@ async function renderFeedbackHistory() {
     const isDoc = f.role === "doctor" || f.role === "doctor_pending";
     const roleBadgeClass = isDoc ? "feedback-badge-role doctor" : "feedback-badge-role patient";
     const roleIcon = isDoc ? "🩺" : "👤";
-    const roleLabel = isDoc ? (isEn ? "Doctor Note" : "ملاحظة طبيب") : (isEn ? "Patient Review" : "تجربة مريض");
-    const starsStr = "★".repeat(Math.max(1, Math.min(5, Number(f.rating) || 5)));
-    const dateFormatted = f.createdAt ? new Date(f.createdAt).toLocaleDateString(isEn ? "en-US" : "ar-EG", { month: "short", day: "numeric" }) : "";
+    const roleLabel = isDoc ? (isEn ? "Doctor" : "طبيب") : (isEn ? "Patient" : "مريض");
+    const starsStr = f.rating ? "★".repeat(Math.max(1, Math.min(5, Number(f.rating) || 5))) : "";
+    const dateFormatted = f.createdAt ? new Date(f.createdAt).toLocaleDateString(isEn ? "en-US" : "ar-EG", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+    const ticketId = f.ticketId || f.feedbackId;
+
+    // Type label
+    const typeLabels = {
+      experience_rating: { ar: "⭐ تقييم تجربة", en: "⭐ Experience Rating" },
+      bug_report: { ar: "🐞 خطأ تقني", en: "🐞 Bug Report" },
+      inaccurate_information: { ar: "⚠️ بلاغ دقة سريرية", en: "⚠️ Clinical Inaccuracy" },
+      feature_request: { ar: "💡 اقتراح ميزة", en: "💡 Feature Request" },
+      account_recovery: { ar: "🔑 استعادة حساب", en: "🔑 Account Recovery" },
+      contact_form: { ar: "✉️ استفسار دعم", en: "✉️ Support Inquiry" }
+    };
+    const typeInfo = typeLabels[f.type] || { ar: "⭐ ملاحظة", en: "⭐ Feedback" };
+
+    // Status pill
+    const statusBadges = {
+      open: `<span class="pill pending" style="font-size:11px;">⏳ ${isEn ? "Open" : "مفتوحة"}</span>`,
+      in_progress: `<span class="pill info" style="font-size:11px;">⚙️ ${isEn ? "In Progress" : "قيد المعالجة"}</span>`,
+      escalated: `<span class="pill danger" style="font-size:11px;">🚨 ${isEn ? "Escalated" : "مصعّدة"}</span>`,
+      resolved: `<span class="pill ok" style="font-size:11px;">✅ ${isEn ? "Resolved" : "مكتملة"}</span>`,
+      closed: `<span class="pill" style="font-size:11px; background:var(--surface-3);">🔒 ${isEn ? "Closed" : "مغلقة"}</span>`
+    };
+    const statusPill = statusBadges[f.status] || `<span class="pill ok">${f.status || "received"}</span>`;
+
+    // Priority pill
+    const priorityBadges = {
+      critical: `<span class="pill danger" style="font-size:10px;">🔴 ${isEn ? "Critical" : "حرجة"}</span>`,
+      high: `<span class="pill danger" style="font-size:10px; background:rgba(239,68,68,0.15);">🟠 ${isEn ? "High" : "عالية"}</span>`,
+      medium: `<span class="pill warning" style="font-size:10px;">🟡 ${isEn ? "Medium" : "متوسطة"}</span>`,
+      low: `<span class="pill ok" style="font-size:10px;">🟢 ${isEn ? "Low" : "منخفضة"}</span>`
+    };
+    const priorityPill = priorityBadges[f.priority] || "";
+
+    const ownerName = f.owner?.name || (isEn ? "Support Helpdesk" : "مكتب الدعم الموحد");
+    const canEscalate = f.status !== "escalated" && f.status !== "resolved" && f.status !== "closed";
 
     return `
-      <div class="feedback-item-card" id="fb-card-${f.feedbackId}">
+      <div class="feedback-item-card" id="fb-card-${ticketId}" style="border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 12px; background: var(--surface);">
         <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;">
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <strong style="font-size: 14px; color: var(--ink);">${f.userName || (isDoc ? "طبيب ممارس" : "مريض")}</strong>
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <strong style="font-size: 14px; color: var(--ink);">${f.subject || f.userName || "Ticket"}</strong>
             <span class="${roleBadgeClass}">${roleIcon} ${roleLabel}</span>
+            <span class="pill" style="font-size:10.5px; background:rgba(9,184,182,0.1); color:var(--teal); font-weight:700;">${isEn ? typeInfo.en : typeInfo.ar}</span>
           </div>
-          <div style="display: flex; align-items: center; gap: 6px;">
-            <span style="color: #f59e0b; font-size: 16px; letter-spacing: 1px;">${starsStr}</span>
+          <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+            ${priorityPill}
+            ${statusPill}
+            ${starsStr ? `<span style="color: #f59e0b; font-size: 15px; letter-spacing: 1px;">${starsStr}</span>` : ""}
             <span style="font-size: 11px; color: var(--muted);">${dateFormatted}</span>
           </div>
         </div>
-        <p style="font-size: 13px; color: var(--ink); line-height: 1.5; margin: 0 0 6px;">
-          ${f.comment}
+
+        <p style="font-size: 13px; color: var(--ink); line-height: 1.5; margin: 0 0 8px;">
+          ${f.comment || f.description || ""}
         </p>
-        ${f.category ? `<span class="pill" style="font-size: 10px; background: var(--surface-3); color: var(--muted);">${f.category}</span>` : ""}
+
+        ${f.hasSensitiveMedicalContent ? `
+          <div style="background: rgba(13, 148, 136, 0.08); border-left: 3px solid var(--teal); padding: 6px 10px; border-radius: 6px; font-size: 11.5px; color: var(--teal); margin-bottom: 8px;">
+            🔒 ${isEn ? "Contains Protected Clinical Content (Restricted Access)" : "يتضمن محتوى سريري محمي (صلاحيات مقيدة)"}
+          </div>
+        ` : ""}
+
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--line); font-size: 11.5px; color: var(--muted);">
+          <div>
+            <span>👤 ${isEn ? "Owner:" : "المسؤول:"} <strong>${ownerName}</strong></span>
+            ${f.caseId ? `<span style="margin-inline-start: 8px;">📋 ${f.caseId}</span>` : ""}
+          </div>
+          <div>
+            ${canEscalate ? `
+              <button type="button" class="outline-button" onclick="escalateTicketClient('${ticketId}')" style="font-size: 11px; padding: 3px 10px; color: #ef4444; border-color: rgba(239, 68, 68, 0.4); border-radius: 6px; cursor: pointer;">
+                🚨 ${isEn ? "Escalate Ticket" : "تصعيد لضابط السلامة"}
+              </button>
+            ` : ""}
+          </div>
+        </div>
       </div>
     `;
   }).join("");
+}
+
+async function escalateTicketClient(ticketId) {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  const user = (typeof auth !== "undefined" && auth) ? auth.currentUser : null;
+  if (!user) {
+    if (typeof showToast === "function") showToast(isEn ? "Please sign in to escalate." : "يرجى تسجيل الدخول أولاً.");
+    return;
+  }
+  const reason = prompt(isEn ? "Reason for escalation to Clinical Safety Officer:" : "يرجى كتابة سبب التصعيد لضابط السلامة السريرية:");
+  if (reason === null) return;
+
+  try {
+    const token = await user.getIdToken();
+    const res = await fetch(`/api/feedback/tickets/${ticketId}/escalate`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`
+      },
+      body: JSON.stringify({ reason: reason.trim() || "Urgent clinical safety escalation" })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || "Failed to escalate ticket");
+    if (typeof showToast === "function") {
+      showToast(isEn ? "Ticket escalated to Clinical Safety Officer." : "تم تصعيد التذكرة لضابط السلامة السريرية بنجاح.");
+    }
+    await renderFeedbackHistory();
+  } catch (err) {
+    if (typeof showToast === "function") {
+      showToast(isEn ? "Failed to escalate: " + err.message : "تعذر التصعيد: " + err.message);
+    }
+  }
+}
+
+async function renderFaqHelpCenter(category = "all", searchQuery = "") {
+  const container = document.getElementById("faqAccordionContainer");
+  if (!container) return;
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+
+  try {
+    const res = await fetch(`/api/support/faq?category=${encodeURIComponent(category)}&search=${encodeURIComponent(searchQuery)}`);
+    const data = await res.json();
+    const faqs = data.faqs || [];
+
+    if (faqs.length === 0) {
+      container.innerHTML = `<p style="color:var(--muted); font-size:13px; text-align:center; padding:16px;">${isEn ? "No FAQs match your search." : "لا توجد أسئلة مطابقة لبحثك."}</p>`;
+      return;
+    }
+
+    container.innerHTML = faqs.map(item => `
+      <details class="faq-item" style="margin-bottom:8px; border:1px solid var(--line); border-radius:10px; padding:10px 14px; background:var(--surface-2); cursor:pointer;">
+        <summary style="font-weight:700; font-size:13px; color:var(--ink);">${isEn ? item.questionEn : item.questionAr}</summary>
+        <p style="margin:8px 0 0; font-size:12.5px; color:var(--muted); line-height:1.5;">${isEn ? item.answerEn : item.answerAr}</p>
+        <span class="pill" style="font-size:10px; margin-top:6px; display:inline-block; background:rgba(9,184,182,0.1); color:var(--teal);">${isEn ? item.categoryNameEn : item.categoryNameAr}</span>
+      </details>
+    `).join("");
+  } catch (e) {
+    console.warn("FAQ fetch error:", e);
+  }
+}
+
+async function submitAccountRecoveryClient(e) {
+  if (e && e.preventDefault) e.preventDefault();
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  const identifier = document.getElementById("accountRecoveryIdentifier")?.value?.trim();
+  const issueType = document.getElementById("accountRecoveryIssueType")?.value || "lost_mfa";
+  const contactPhone = document.getElementById("accountRecoveryContact")?.value?.trim();
+  const explanation = document.getElementById("accountRecoveryExplanation")?.value?.trim();
+
+  if (!identifier) {
+    if (typeof showToast === "function") showToast(isEn ? "Please provide account email or phone." : "يرجى إدخال البريد الإلكتروني أو رقم الهاتف.");
+    return;
+  }
+
+  try {
+    const res = await fetch("/api/support/account-recovery", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ identifier, issueType, contactPhone, explanation })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || "Failed to submit recovery request");
+    if (typeof showToast === "function") {
+      showToast(isEn ? `Recovery request submitted! Ref: ${data.referenceCode}` : `تم استلام طلب الاستعادة! الرقم المرجعي: ${data.referenceCode}`);
+    }
+    const container = document.getElementById("accountRecoveryResultBox");
+    if (container) {
+      container.style.display = "block";
+      container.innerHTML = `<strong>${isEn ? "Request Reference:" : "الرقم المرجعي للطلب:"}</strong> <code>${data.referenceCode}</code><p style="margin:4px 0 0; font-size:12px;">${isEn ? data.message : data.messageAr}</p>`;
+    }
+  } catch (err) {
+    if (typeof showToast === "function") {
+      showToast(isEn ? "Failed: " + err.message : "خطأ: " + err.message);
+    }
+  }
+}
+
+async function submitContactClient(e) {
+  if (e && e.preventDefault) e.preventDefault();
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  const name = document.getElementById("contactFormName")?.value?.trim();
+  const email = document.getElementById("contactFormEmail")?.value?.trim();
+  const subject = document.getElementById("contactFormSubject")?.value?.trim();
+  const category = document.getElementById("contactFormCategory")?.value || "general";
+  const message = document.getElementById("contactFormMessage")?.value?.trim();
+
+  if (!name || !email || !message) {
+    if (typeof showToast === "function") showToast(isEn ? "Please complete all required fields." : "يرجى ملء جميع الحقول المطلوبة.");
+    return;
+  }
+
+  try {
+    const res = await fetch("/api/support/contact", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, email, subject, category, message })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || "Failed to send message");
+    if (typeof showToast === "function") {
+      showToast(isEn ? "Your inquiry has been sent to support." : "تم إرسال استفسارك إلى فريق الدعم بنجاح.");
+    }
+    if (document.getElementById("contactFormName")) document.getElementById("contactFormName").value = "";
+    if (document.getElementById("contactFormEmail")) document.getElementById("contactFormEmail").value = "";
+    if (document.getElementById("contactFormSubject")) document.getElementById("contactFormSubject").value = "";
+    if (document.getElementById("contactFormMessage")) document.getElementById("contactFormMessage").value = "";
+  } catch (err) {
+    if (typeof showToast === "function") {
+      showToast(isEn ? "Error: " + err.message : "خطأ: " + err.message);
+    }
+  }
 }
 
 function filterFeedbackList(filter) {
@@ -8676,6 +10641,12 @@ window.submitModalFeedback = submitModalFeedback;
 window.renderFeedbackScreen = renderFeedbackScreen;
 window.renderFeedbackHistory = renderFeedbackHistory;
 window.filterFeedbackList = filterFeedbackList;
+window.SUPPORT_TICKET_TYPES = SUPPORT_TICKET_TYPES;
+window.handleFeedbackTypeChange = handleFeedbackTypeChange;
+window.escalateTicketClient = escalateTicketClient;
+window.renderFaqHelpCenter = renderFaqHelpCenter;
+window.submitAccountRecoveryClient = submitAccountRecoveryClient;
+window.submitContactClient = submitContactClient;
 
 // --- Doctor Account Lifecycle: Application -> Verification -> Approval ---
 let selectedDoctorAppFile = null;
@@ -8708,6 +10679,11 @@ function encodeAuditArg(value) {
 window.openDoctorCredentialDocument = async function(encodedUrl, encodedAppId = "", encodedApplicantUserId = "", encodedDocName = "") {
   const url = decodeURIComponent(encodedUrl || "");
   if (!url) return false;
+  const safeUrl = getSafeExternalUrl(url);
+  if (!safeUrl) {
+    showToast(currentLanguage === "en" ? "Blocked unsafe document link." : "تم منع رابط مستند غير آمن.");
+    return false;
+  }
   const appId = decodeURIComponent(encodedAppId || "");
   const applicantUserId = decodeURIComponent(encodedApplicantUserId || "");
   const docName = decodeURIComponent(encodedDocName || "");
@@ -8717,7 +10693,7 @@ window.openDoctorCredentialDocument = async function(encodedUrl, encodedAppId = 
     docName: docName || "",
     auditCategory: "open"
   });
-  window.open(url, "_blank", "noopener");
+  window.open(safeUrl, "_blank", "noopener");
   return false;
 };
 
@@ -8763,6 +10739,568 @@ async function uploadDoctorApplicationDocument({ user, appId, file }) {
   };
 }
 
+const MEDICAL_FILE_ALLOWED_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
+const MEDICAL_FILE_ALLOWED_EXTENSIONS = [".pdf", ".jpg", ".jpeg", ".png", ".webp"];
+const MEDICAL_FILE_BLOCKED_EXECUTABLE_EXTENSIONS = DOCTOR_APP_BLOCKED_EXECUTABLE_EXTENSIONS;
+const MEDICAL_FILE_MAX_SIZE = 10 * 1024 * 1024;
+const pendingMedicalFileUploads = [];
+const activeMedicalUploadTasks = new Map();
+
+function getSafeMedicalFileName(fileName) {
+  const cleaned = getSafeStorageFileName(fileName || "medical-file")
+    .replace(/^\.+/, "")
+    .slice(0, 120);
+  return cleaned || `medical-file-${Date.now()}.pdf`;
+}
+
+function validateMedicalCaseFile(file) {
+  const isEn = currentLanguage === "en";
+  if (!file) {
+    throw new Error(isEn ? "Please choose a medical file first." : "يرجى اختيار ملف طبي أولاً.");
+  }
+  const lowerName = String(file.name || "").toLowerCase();
+  const hasAllowedExtension = MEDICAL_FILE_ALLOWED_EXTENSIONS.some((ext) => lowerName.endsWith(ext));
+  const hasBlockedExecutableExtension = MEDICAL_FILE_BLOCKED_EXECUTABLE_EXTENSIONS.some((ext) => lowerName.endsWith(ext));
+  if (hasBlockedExecutableExtension || !hasAllowedExtension) {
+    throw new Error(isEn ? "Unsupported or unsafe file extension. Upload PDF, JPG, PNG, or WEBP only." : "امتداد الملف غير مدعوم أو غير آمن. ارفع PDF أو JPG أو PNG أو WEBP فقط.");
+  }
+  if (!MEDICAL_FILE_ALLOWED_TYPES.includes(file.type)) {
+    throw new Error(isEn ? "Unsupported file type. Upload PDF, JPG, PNG, or WEBP only." : "نوع الملف غير مدعوم. ارفع PDF أو JPG أو PNG أو WEBP فقط.");
+  }
+  if (file.size <= 0 || file.size > MEDICAL_FILE_MAX_SIZE) {
+    throw new Error(isEn ? "File size must be greater than 0 and no more than 10MB." : "يجب أن يكون حجم الملف أكبر من صفر ولا يتجاوز 10 ميجابايت.");
+  }
+}
+
+function formatMedicalFileSize(size) {
+  const value = Number(size) || 0;
+  if (value >= 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+  if (value >= 1024) return `${Math.round(value / 1024)} KB`;
+  return `${value} B`;
+}
+
+function renderMedicalFileItem(fileState) {
+  const fileList = document.getElementById("fileList");
+  if (!fileList || !fileState) return null;
+  let item = document.getElementById(`medical-file-${fileState.localId || fileState.id}`);
+  if (!item) {
+    item = document.createElement("div");
+    item.className = "medical-file-item";
+    item.id = `medical-file-${fileState.localId || fileState.id}`;
+    fileList.prepend(item);
+  }
+  const pct = Math.max(0, Math.min(100, Number(fileState.progress) || 0));
+  const status = fileState.status || "staged";
+  const scan = fileState.scanStatus || "quarantined";
+  const isAvailable = scan === "clean" && fileState.availability === "available";
+  const safeName = escapeHtml(fileState.fileName || fileState.safeFileName || "Medical file");
+  const meta = `${escapeHtml(fileState.contentType || "")} • ${formatMedicalFileSize(fileState.size)} • ${escapeHtml(status)} • ${escapeHtml(scan)}`;
+  item.innerHTML = `
+    <strong>${safeName}</strong>
+    <span class="medical-file-meta">${meta}</span>
+    <div class="medical-file-progress" aria-label="Upload progress"><span style="width:${pct}%"></span></div>
+    <div class="medical-file-actions">
+      ${isAvailable ? `<button type="button" onclick="previewMedicalCaseFile('${escapeHtmlAttr(fileState.id)}')">${currentLanguage === "en" ? "Preview" : "معاينة"}</button>` : ""}
+      ${isAvailable ? `<button type="button" class="btn-ocr-extract" onclick="openMedicalOcrModal('${escapeHtmlAttr(fileState.id)}')">${currentLanguage === "en" ? "🔍 OCR Data (Draft)" : "🔍 استخراج الفحوصات (OCR)"}</button>` : ""}
+      ${fileState.id ? `<button type="button" onclick="deleteMedicalCaseFile('${escapeHtmlAttr(fileState.id)}')">${currentLanguage === "en" ? "Delete" : "حذف"}</button>` : ""}
+      ${status === "uploading" ? `<button type="button" onclick="cancelMedicalCaseUpload('${escapeHtmlAttr(fileState.id || fileState.localId)}')">${currentLanguage === "en" ? "Cancel" : "إلغاء"}</button>` : ""}
+    </div>
+  `;
+  return item;
+}
+
+function stageMedicalCaseFiles(fileList) {
+  const files = Array.from(fileList || []);
+  let stagedCount = 0;
+  files.forEach((file) => {
+    validateMedicalCaseFile(file);
+    const state = {
+      localId: `local_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+      file,
+      fileName: file.name,
+      safeFileName: getSafeMedicalFileName(file.name),
+      contentType: file.type,
+      size: file.size,
+      progress: 0,
+      status: "staged",
+      scanStatus: "quarantined",
+      availability: "quarantined"
+    };
+    pendingMedicalFileUploads.push(state);
+    renderMedicalFileItem(state);
+    stagedCount += 1;
+  });
+  if (stagedCount) {
+    showToast(currentLanguage === "en" ? "File staged. It will upload after the case is saved." : "تم تجهيز الملف وسيتم رفعه بعد حفظ الحالة.");
+  }
+}
+
+async function getLatestPatientCaseId(user) {
+  if (!user) return null;
+  try {
+    const userDoc = await db.collection("users").doc(user.uid).get();
+    const latestCaseId = userDoc.exists ? userDoc.data().latestCaseId : null;
+    if (latestCaseId) return latestCaseId;
+  } catch (_) {}
+  try {
+    const snap = await db.collection("cases").where("patientId", "==", user.uid).get();
+    const cases = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
+      .sort((a, b) => (toMillis(b.submittedAt || b.createdAt || b.updatedAt) || 0) - (toMillis(a.submittedAt || a.createdAt || a.updatedAt) || 0));
+    return cases[0]?.id || null;
+  } catch (_) {
+    return null;
+  }
+}
+
+async function uploadMedicalCaseFile({ user, caseId, state }) {
+  validateMedicalCaseFile(state.file);
+  const fileDocRef = db.collection("case_files").doc();
+  const fileId = fileDocRef.id;
+  const storagePath = `case_files/${user.uid}/${caseId}/${fileId}/${state.safeFileName}`;
+  const metadata = {
+    patientId: user.uid,
+    caseId,
+    fileName: state.fileName,
+    safeFileName: state.safeFileName,
+    contentType: state.contentType,
+    size: state.size,
+    storagePath,
+    scanStatus: "upload_pending",
+    availability: "quarantined",
+    uploadStatus: "metadata_created",
+    createdBy: user.uid,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  };
+  await fileDocRef.set(metadata);
+  state.id = fileId;
+  state.storagePath = storagePath;
+  state.status = "uploading";
+  renderMedicalFileItem(state);
+
+  const uploadTask = storage.ref().child(storagePath).put(state.file, {
+    contentType: state.contentType,
+    customMetadata: {
+      patientId: user.uid,
+      caseId,
+      fileId,
+      scanStatus: "upload_pending",
+      availability: "quarantined"
+    }
+  });
+  activeMedicalUploadTasks.set(fileId, uploadTask);
+  await fileDocRef.update({ uploadStatus: "uploading", updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+
+  await new Promise((resolve, reject) => {
+    uploadTask.on("state_changed", (snapshot) => {
+      state.progress = snapshot.totalBytes ? Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100) : 0;
+      renderMedicalFileItem(state);
+    }, reject, resolve);
+  });
+
+  activeMedicalUploadTasks.delete(fileId);
+  state.progress = 100;
+  state.status = "uploaded_quarantined";
+  state.scanStatus = "pending";
+  await fileDocRef.update({
+    uploadStatus: "uploaded",
+    progress: 100,
+    scanStatus: "pending",
+    availability: "quarantined",
+    uploadedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+  await writeClientAuditLog("MEDICAL_CASE_FILE_UPLOADED", {
+    patientId: user.uid,
+    caseId,
+    fileId,
+    fileName: state.fileName,
+    contentType: state.contentType,
+    size: state.size,
+    auditCategory: "upload"
+  });
+  renderMedicalFileItem(state);
+}
+
+async function uploadPendingMedicalFilesForCase(caseId) {
+  const user = auth.currentUser;
+  if (!user || !caseId || pendingMedicalFileUploads.length === 0) return;
+  const staged = pendingMedicalFileUploads.splice(0, pendingMedicalFileUploads.length);
+  for (const state of staged) {
+    try {
+      await uploadMedicalCaseFile({ user, caseId, state });
+    } catch (error) {
+      state.status = error && error.code === "storage/canceled" ? "cancelled" : "failed";
+      state.scanStatus = "quarantined";
+      renderMedicalFileItem(state);
+      if (state.id) {
+        await db.collection("case_files").doc(state.id).update({
+          uploadStatus: state.status,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }).catch(() => {});
+      }
+      console.warn("Medical file upload failed:", error);
+      showToast(error.message || (currentLanguage === "en" ? "File upload failed." : "تعذر رفع الملف."));
+    }
+  }
+}
+
+window.cancelMedicalCaseUpload = async function(fileId) {
+  const task = activeMedicalUploadTasks.get(fileId);
+  if (task && typeof task.cancel === "function") task.cancel();
+  await writeClientAuditLog("MEDICAL_CASE_FILE_UPLOAD_CANCELLED", { fileId, auditCategory: "delete" });
+};
+
+window.previewMedicalCaseFile = async function(fileId) {
+  const user = auth.currentUser;
+  if (!user || !fileId) return false;
+  const doc = await db.collection("case_files").doc(fileId).get();
+  if (!doc.exists) return false;
+  const data = doc.data();
+  if (data.scanStatus !== "clean" || data.availability !== "available") {
+    showToast(currentLanguage === "en" ? "Preview is unavailable until the file scan is clean." : "المعاينة غير متاحة حتى يكتمل الفحص الأمني بنجاح.");
+    return false;
+  }
+  if (!MEDICAL_FILE_ALLOWED_TYPES.includes(data.contentType)) return false;
+  await auditFileAccessed(fileId, data.fileName, data.contentType, "preview", data.caseId);
+  const url = await storage.ref().child(data.storagePath).getDownloadURL();
+  window.open(url, "_blank", "noopener");
+  return false;
+};
+
+window.deleteMedicalCaseFile = async function(fileId) {
+  const user = auth.currentUser;
+  if (!user || !fileId) return false;
+  const docRef = db.collection("case_files").doc(fileId);
+  const doc = await docRef.get();
+  if (!doc.exists) return false;
+  const data = doc.data();
+  try {
+    await storage.ref().child(data.storagePath).delete().catch(() => {});
+    await docRef.update({
+      uploadStatus: "deleted",
+      availability: "quarantined",
+      deletedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      deletedBy: user.uid,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    await writeClientAuditLog("MEDICAL_CASE_FILE_DELETED", {
+      patientId: data.patientId,
+      caseId: data.caseId,
+      fileId,
+      fileName: data.fileName,
+      auditCategory: "delete"
+    });
+    const item = document.getElementById(`medical-file-${fileId}`);
+    if (item) item.remove();
+    showToast(currentLanguage === "en" ? "File deleted." : "تم حذف الملف.");
+  } catch (error) {
+    showToast(error.message || (currentLanguage === "en" ? "Could not delete file." : "تعذر حذف الملف."));
+  }
+  return false;
+};
+
+// =============================================================================
+// 📑 MEDICAL OCR EXTRACTION, DRAFT DISPLAY & MANUAL CORRECTION MODAL
+// =============================================================================
+
+window.closeMedicalOcrModal = function() {
+  const modal = document.getElementById("medicalOcrModal");
+  if (modal) modal.style.display = "none";
+};
+
+window.openMedicalOcrModal = async function(fileId) {
+  const user = auth.currentUser;
+  if (!user || !fileId) return false;
+  const isEn = currentLanguage === "en";
+
+  // 1. Strict Security Scan Check: OCR allowed ONLY for clean & available files
+  const doc = await db.collection("case_files").doc(fileId).get();
+  if (!doc.exists) {
+    showToast(isEn ? "Medical file record not found." : "لم يتم العثور على سجل الملف الطبي.");
+    return false;
+  }
+  const data = doc.data();
+  if (data.scanStatus !== "clean" || data.availability !== "available") {
+    showToast(isEn ? "OCR extraction is prohibited until the file passes security scanning." : "استخراج البيانات محظور حتى يكتمل الفحص الأمني للملف بنجاح.");
+    return false;
+  }
+
+  // 2. Open or create modal
+  let modal = document.getElementById("medicalOcrModal");
+  if (!modal) {
+    modal = document.createElement("div");
+    modal.id = "medicalOcrModal";
+    modal.className = "hv-modal-overlay";
+    modal.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto;";
+    document.body.appendChild(modal);
+  }
+  modal.style.display = "flex";
+
+  modal.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--line);border-radius:18px;max-width:960px;width:100%;max-height:92vh;overflow-y:auto;padding:26px;box-shadow:0 25px 50px rgba(0,0,0,0.35);position:relative;">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:12px;justify-content:center;padding:48px 20px;color:var(--teal);">
+        <div class="spinner" style="width:28px;height:28px;"></div>
+        <strong style="font-size:15px;">${isEn ? 'Running OCR extraction & clinical laboratory parsing...' : 'جاري الفحص واستخراج الفحوصات الطبية عبر OCR...'}</strong>
+        <small style="color:var(--muted);">${isEn ? 'Verifying clean security scan and extracting test values...' : 'تم التحقق من اجتياز الفحص الأمني وجاري تحليل النتائج...'}</small>
+      </div>
+    </div>
+  `;
+
+  try {
+    const res = await authenticatedFetch('/api/ocr/process-file', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fileId, caseId: data.caseId })
+    });
+    const result = await res.json();
+    if (!res.ok || !result.draft) {
+      throw new Error(result.message || (isEn ? "Failed to process OCR." : "تعذر استخراج بيانات الملف."));
+    }
+    renderOcrModalContent(result.draft, data);
+  } catch (err) {
+    modal.innerHTML = `
+      <div style="background:var(--surface);border:1px solid var(--line);border-radius:18px;max-width:550px;width:100%;padding:26px;text-align:center;">
+        <span style="font-size:36px;">⚠️</span>
+        <h4 style="margin:12px 0 6px;">${isEn ? 'OCR Extraction Blocked or Failed' : 'تعذر استخراج البيانات عبر OCR'}</h4>
+        <p style="color:var(--muted);font-size:13px;line-height:1.5;">${escapeHtml(err.message)}</p>
+        <button type="button" class="solid-button" onclick="closeMedicalOcrModal()" style="margin-top:16px;padding:8px 24px;">
+          ${isEn ? 'Close' : 'إغلاق'}
+        </button>
+      </div>
+    `;
+  }
+};
+
+function renderOcrModalContent(draft, fileData) {
+  const modal = document.getElementById("medicalOcrModal");
+  if (!modal || !draft) return;
+  const isEn = currentLanguage === "en";
+
+  const isPoorQuality = draft.qualityScore === 'poor' || draft.confidence < 0.70;
+  const confidencePct = Math.round(draft.confidence * 100);
+  const confidenceColor = isPoorQuality ? '#f59e0b' : '#10b981';
+  const confidenceBadge = `<span class="pill ${isPoorQuality ? 'pending' : 'ok'}" style="font-size:12px;font-weight:700;">
+    ${confidencePct}% ${isEn ? (isPoorQuality ? 'Low Confidence (Manual Verification Needed)' : 'High Confidence') : (isPoorQuality ? 'ثقة منخفضة (يتطلب تدقيق يدوي)' : 'ثقة استخراج عالية')}
+  </span>`;
+
+  const isApproved = draft.isApprovedFact || draft.reviewStatus === 'approved_by_doctor';
+  const reviewPill = `<span class="pill ${isApproved ? 'ok' : 'pending'}" style="font-size:12.5px;padding:4px 12px;font-weight:800;">
+    ${isApproved ? '✅ ' + (isEn ? 'Approved Clinical Fact' : 'حقيقة طبية معتمدة') : '⚠️ ' + (isEn ? 'Draft - Under Doctor Review' : 'مسودة - بانتظار مراجعة الطبيب')}
+  </span>`;
+
+  const disclaimerText = isEn ? draft.clinicalDisclaimerEn : draft.clinicalDisclaimerAr;
+  const testsList = Array.isArray(draft.tests) ? draft.tests : [];
+
+  const userRole = selectedRole || (auth.currentUser ? auth.currentUser.role : 'patient');
+  const isDoctor = userRole === ROLES.DOCTOR || userRole === 'clinic_admin' || userRole === 'super_admin';
+
+  modal.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--line);border-radius:18px;max-width:1040px;width:100%;max-height:92vh;overflow-y:auto;padding:24px;box-shadow:0 25px 50px rgba(0,0,0,0.35);position:relative;">
+      <!-- Header -->
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:16px;border-bottom:1px solid var(--line);padding-bottom:14px;">
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <h3 style="margin:0;font-size:17px;display:flex;align-items:center;gap:6px;">
+              <span>📑</span> ${isEn ? 'Medical OCR Extraction & Clinical Lab Review' : 'نتائج الفحص والتعرف الضوئي (OCR) للملف الطبي'}
+            </h3>
+            ${reviewPill}
+          </div>
+          <small style="color:var(--muted);font-size:12px;">
+            ${isEn ? 'Source File: ' : 'الملف المصدر: '}<strong>${escapeHtml(draft.source?.fileName || fileData?.fileName || 'Document')}</strong> •
+            ${isEn ? 'Scan Passed: ' : 'فحص الأمان: '}<span style="color:#10b981;font-weight:700;">✅ Clean & Scanned</span>
+          </small>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          ${confidenceBadge}
+          <button type="button" class="soft-button" onclick="closeMedicalOcrModal()" style="padding:6px 12px;font-size:13px;">✕</button>
+        </div>
+      </div>
+
+      <!-- MANDATORY DRAFT NOTICE BANNER -->
+      <div style="background:rgba(245, 158, 11, 0.12);border:1.5px dashed #f59e0b;border-radius:12px;padding:12px 16px;margin-bottom:16px;font-size:12.5px;color:#b45309;line-height:1.5;display:flex;align-items:center;gap:10px;">
+        <span style="font-size:22px;">⚠️</span>
+        <div>
+          <strong>${isEn ? 'Clinical Governance Notice (Draft Status Only):' : 'تنبيه الحوكمة السريرية (مسودة استخراج آلي):'}</strong>
+          <div>${escapeHtml(disclaimerText)}</div>
+        </div>
+      </div>
+
+      <!-- Main Layout: Grid with Image/Source on Left, Lab Items & Manual Correction on Right -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(320px, 1fr));gap:20px;">
+        <!-- Left Column: Source, Page Image & Extracted Raw Text -->
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          <!-- Page Image Card -->
+          <div style="background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:14px;">
+            <strong style="font-size:13px;display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+              <span>🖼️</span> ${isEn ? 'Page Image Preview & Source Reference' : 'معاينة صورة المستند والمرجع'}
+            </strong>
+            <div style="border-radius:8px;overflow:hidden;border:1px solid var(--line);background:rgba(0,0,0,0.03);text-align:center;padding:10px;min-height:160px;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+              <span style="font-size:40px;margin-bottom:6px;">📄</span>
+              <strong style="font-size:12px;color:var(--ink);">${escapeHtml(draft.source?.fileName || 'Lab Report Document')}</strong>
+              <small style="color:var(--muted);font-size:11px;margin-top:2px;">
+                ${escapeHtml(draft.source?.contentType || 'application/pdf')} • ${formatMedicalFileSize(draft.source?.fileSize || 0)}
+              </small>
+              <button type="button" class="soft-button" onclick="previewMedicalCaseFile('${escapeHtmlAttr(draft.fileId)}')" style="font-size:11.5px;padding:4px 12px;margin-top:8px;">
+                👁️ ${isEn ? 'Open Full Original' : 'فتح المستند الأصلي'}
+              </button>
+            </div>
+          </div>
+
+          <!-- Raw Extracted Text -->
+          <div style="background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:14px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+              <strong style="font-size:13px;display:flex;align-items:center;gap:6px;">
+                <span>📝</span> ${isEn ? 'Extracted Raw OCR Text' : 'النص الخام المستخرج عبر OCR'}
+              </strong>
+              <small style="color:var(--muted);font-size:11px;">${draft.source?.ocrEngine || 'HealthVibe OCR'}</small>
+            </div>
+            <pre style="background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px;font-family:monospace;font-size:11px;color:var(--ink);max-height:160px;overflow-y:auto;white-space:pre-wrap;line-height:1.4;margin:0;">${escapeHtml(draft.extractedText || (isEn ? 'No text extracted.' : 'لم يتم استخراج نص.'))}</pre>
+          </div>
+        </div>
+
+        <!-- Right Column: Extracted Lab Items with Manual Correction -->
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          <div style="background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:14px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+              <strong style="font-size:13px;display:flex;align-items:center;gap:6px;">
+                <span>🧪</span> ${isEn ? 'Extracted Lab Tests (Editable Draft)' : 'النتائج والفحوصات المستخرجة (مسودة قابلة للتصحيح)'}
+              </strong>
+              <span class="pill info" style="font-size:11px;">${testsList.length} ${isEn ? 'tests identified' : 'فحص مستخرج'}</span>
+            </div>
+
+            ${testsList.length === 0 ? `
+              <div style="text-align:center;padding:24px;color:var(--muted);font-size:13px;">
+                ${isEn ? 'No laboratory test entities automatically recognized. Clinicians can enter values manually in the doctor notes.' : 'لم يتم التعرف على فحوصات معيارية تلقائياً. يمكن للطبيب تدوين الملاحظات يدوياً.'}
+              </div>
+            ` : `
+              <div style="display:flex;flex-direction:column;gap:10px;">
+                ${testsList.map((t, idx) => {
+                  const isCorrected = t.isManuallyCorrected || (Array.isArray(t.correctionHistory) && t.correctionHistory.length > 0);
+                  const flagColor = t.flag === 'LOW' || t.flag === 'HIGH' || t.flag === 'CRITICAL' ? '#ef4444' : '#10b981';
+                  return `
+                    <div id="ocr-item-card-${idx}" style="background:var(--surface);border:1px solid ${isCorrected ? 'var(--teal)' : 'var(--line)'};border-radius:10px;padding:12px;">
+                      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                        <div style="display:flex;align-items:center;gap:6px;">
+                          <strong style="font-size:13px;color:var(--teal);">${escapeHtml(t.testName)}</strong>
+                          ${isCorrected ? `<span class="pill ok" style="font-size:10px;padding:1px 6px;">✏️ ${isEn ? 'Corrected' : 'مصحح يدوياً'}</span>` : ''}
+                        </div>
+                        <div style="display:flex;gap:6px;align-items:center;">
+                          <span style="font-size:11px;font-weight:700;color:${flagColor};">${escapeHtml(t.flag || 'NORMAL')}</span>
+                          <span style="font-size:10.5px;color:var(--muted);">(${(t.confidence * 100).toFixed(0)}%)</span>
+                        </div>
+                      </div>
+
+                      <!-- Editable Fields for Manual Correction -->
+                      <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1.5fr;gap:6px;margin-bottom:8px;">
+                        <div>
+                          <label style="font-size:10px;color:var(--muted);">${isEn ? 'Test Name' : 'اسم الفحص'}</label>
+                          <input type="text" id="ocr-edit-name-${idx}" value="${escapeHtmlAttr(t.testName)}" style="width:100%;padding:4px 8px;font-size:12px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);" />
+                        </div>
+                        <div>
+                          <label style="font-size:10px;color:var(--muted);">${isEn ? 'Value' : 'القيمة'}</label>
+                          <input type="text" id="ocr-edit-val-${idx}" value="${escapeHtmlAttr(t.value || '')}" style="width:100%;padding:4px 8px;font-size:12px;font-weight:700;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);" />
+                        </div>
+                        <div>
+                          <label style="font-size:10px;color:var(--muted);">${isEn ? 'Unit' : 'الوحدة'}</label>
+                          <input type="text" id="ocr-edit-unit-${idx}" value="${escapeHtmlAttr(t.unit || '')}" style="width:100%;padding:4px 8px;font-size:12px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);" />
+                        </div>
+                        <div>
+                          <label style="font-size:10px;color:var(--muted);">${isEn ? 'Ref Range' : 'المعدل الطبيعي'}</label>
+                          <input type="text" id="ocr-edit-range-${idx}" value="${escapeHtmlAttr(t.referenceRange || '')}" style="width:100%;padding:4px 8px;font-size:12px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);" />
+                        </div>
+                      </div>
+
+                      <div style="display:flex;justify-content:space-between;align-items:center;">
+                        <small style="font-size:10.5px;color:var(--muted);font-style:italic;">
+                          ${isEn ? 'Raw snippet: ' : 'النص المقروء: '}"${escapeHtml(t.rawSnippet || '')}"
+                        </small>
+                        <button type="button" class="soft-button" onclick="saveOcrCorrection('${escapeHtmlAttr(draft.draftId)}', ${idx})" style="font-size:11px;padding:3px 10px;">
+                          💾 ${isEn ? 'Save Edit' : 'حفظ التصحيح'}
+                        </button>
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            `}
+          </div>
+
+          <!-- Bottom Action Buttons: Doctor Approval & Close -->
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;padding-top:6px;">
+            ${isDoctor && !isApproved ? `
+              <button type="button" class="solid-button" onclick="approveOcrDraft('${escapeHtmlAttr(draft.draftId)}')" style="font-size:13px;padding:8px 18px;background:var(--teal);color:#fff;display:inline-flex;align-items:center;gap:6px;">
+                <span>🩺</span> ${isEn ? 'Approve as Certified EHR Clinical Fact' : 'اعتماد رسمي كحقيقة سريرية في سجل المريض'}
+              </button>
+            ` : (isApproved ? `
+              <span style="color:#10b981;font-size:13px;font-weight:700;display:inline-flex;align-items:center;gap:6px;">
+                <span>✅</span> ${isEn ? 'Formally Certified by Doctor' : 'معتمد رسمياً في سجل الحالة'}
+              </span>
+            ` : `
+              <small style="color:var(--muted);font-size:11.5px;">
+                ℹ️ ${isEn ? 'Physicians can approve and incorporate these lab values during case review.' : 'يمكن للطبيب المعالج تدقيق واعتماد هذه النتائج أثناء مراجعة الحالة.'}
+              </small>
+            `)}
+            <button type="button" class="soft-button" onclick="closeMedicalOcrModal()" style="font-size:13px;padding:8px 18px;">
+              ${isEn ? 'Close' : 'إغلاق'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+window.saveOcrCorrection = async function(draftId, itemIndex) {
+  const isEn = currentLanguage === "en";
+  const nameInput = document.getElementById(`ocr-edit-name-${itemIndex}`);
+  const valInput = document.getElementById(`ocr-edit-val-${itemIndex}`);
+  const unitInput = document.getElementById(`ocr-edit-unit-${itemIndex}`);
+  const rangeInput = document.getElementById(`ocr-edit-range-${itemIndex}`);
+
+  if (!valInput) return;
+
+  const corrections = {
+    testName: nameInput ? nameInput.value.trim() : undefined,
+    value: valInput.value.trim(),
+    unit: unitInput ? unitInput.value.trim() : undefined,
+    referenceRange: rangeInput ? rangeInput.value.trim() : undefined
+  };
+
+  try {
+    const res = await authenticatedFetch(`/api/ocr/drafts/${encodeURIComponent(draftId)}/correct`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ itemIndex, corrections })
+    });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.message || (isEn ? "Failed to save correction." : "تعذر حفظ التصحيح."));
+
+    showToast(isEn ? "Correction saved to draft." : "تم حفظ التصحيح بنجاح في المسودة.");
+    renderOcrModalContent(result.draft);
+  } catch (err) {
+    showToast(err.message || (isEn ? "Failed to save correction." : "تعذر حفظ التصحيح."));
+  }
+};
+
+window.approveOcrDraft = async function(draftId) {
+  const isEn = currentLanguage === "en";
+  try {
+    const res = await authenticatedFetch(`/api/ocr/drafts/${encodeURIComponent(draftId)}/approve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ doctorNotes: isEn ? "Doctor verified OCR observations." : "تم التدقيق والاعتماد السريري للفحوصات." })
+    });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.message || (isEn ? "Approval failed." : "تعذر اعتماد المسودة."));
+
+    showToast(isEn ? "Draft approved as verified clinical observation." : "تم اعتماد الفحوصات رسمياً وتوثيقها في سجل المريض.");
+    renderOcrModalContent(result.draft);
+  } catch (err) {
+    showToast(err.message || (isEn ? "Approval failed." : "تعذر اعتماد المسودة."));
+  }
+};
+
 function onDoctorFilePicked(input) {
   const label = document.getElementById("doctorAppFileName");
   if (input.files && input.files[0]) {
@@ -8795,9 +11333,6 @@ async function cancelOrReapplyDoctorApp() {
       status: "cancelled",
       cancelledAt: firebase.firestore.FieldValue.serverTimestamp()
     });
-    await db.collection("users").doc(user.uid).set({
-      doctorApplicationStatus: "cancelled"
-    }, { merge: true });
     await writeClientAuditLog("DOCTOR_APPLICATION_CANCELLED", {
       applicationId: appId,
       applicantUserId: user.uid,
@@ -8869,15 +11404,16 @@ async function handleDoctorAppSubmit(e) {
       appliedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
 
+    const membership = await db.collection("users").doc(user.uid).get();
+    if (membership.exists && membership.data().clinicId) appData.clinicId = membership.data().clinicId;
     await db.collection("doctor_applications").doc(appId).set(appData);
 
     await db.collection("users").doc(user.uid).set({
-      doctorApplicationStatus: "pending",
       doctorApplicationId: appId,
       doctorAppName: name,
       licenseNumber: license,
       specialty: specialty,
-      clinic: clinic,
+      doctorAppClinicName: clinic,
       doctorAppDocName: uploadedDocument.docName,
       doctorAppDocSize: uploadedDocument.docSize,
       doctorAppDocContentType: uploadedDocument.docContentType,
@@ -9076,7 +11612,7 @@ async function renderVerificationScreen() {
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-bottom: 16px;">
               <div class="form-group">
                 <label for="doctorAppName">${isEn ? "Full Name (as in Medical Syndicate) *" : "الاسم بالكامل (كما هو في ترخيص النقابة) *"}</label>
-                <input type="text" id="doctorAppName" value="${user.displayName || ''}" placeholder="${isEn ? 'Dr. Ahmed Mohamed' : 'د. أحمد محمد علي'}" required />
+                <input type="text" id="doctorAppName" value="${user.displayName || ''}" placeholder="${isEn ? 'Full licensed name' : 'الاسم المهني الكامل'}" required />
               </div>
               <div class="form-group">
                 <label for="doctorAppLicense">${isEn ? "Syndicate License Number *" : "رقم ترخيص مزاولة المهنة / رقم القيد بالنقابة *"}</label>
@@ -9636,39 +12172,11 @@ async function approveDoctorApplication(appId, userId, doctorName) {
   try {
     showToast(isEn ? `Approving ${doctorName}...` : `جاري اعتماد الطبيب ${doctorName}...`);
 
-    if (typeof callBackend === "function") {
-      try {
-        await callBackend("/api/admin/approve-doctor-application", {
-          method: "POST",
-          body: JSON.stringify({
-            applicationId: appId,
-            applicantUserId: userId
-          })
-        });
-      } catch (beErr) {
-        console.warn("Backend API unavailable for approval, fallback to Firestore update:", beErr.message);
-      }
-    }
-
-    await db.collection("doctor_applications").doc(appId).set({
-      status: "approved",
-      approvedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      approvedBy: auth.currentUser ? auth.currentUser.email : "Admin"
-    }, { merge: true }).catch(() => {});
-
-    if (userId) {
-      await db.collection("users").doc(userId).set({
-        role: ROLES.DOCTOR,
-        verifiedDoctor: true,
-        doctorApplicationStatus: "approved"
-      }, { merge: true }).catch(() => {});
-    }
-
-    if (auth.currentUser && auth.currentUser.uid === userId) {
-      selectedRole = ROLES.DOCTOR;
-      updateNavVisibility();
-      accountLabel.textContent = isEn ? englishRoleLabels.doctor : roleLabels.doctor;
-    }
+    if (!enforcePermission(PERMISSIONS.APPROVE_DOCTOR_APPLICATION, "Approve Doctor")) return;
+    const result = await callBackend("/api/admin/approve-doctor-application", {
+      method: "POST", body: JSON.stringify({ applicationId: appId, applicantUserId: userId })
+    });
+    if (!result?.success) throw new Error("Approval was not confirmed by the server");
 
     showToast(isEn ? `🎉 Successfully approved Dr. ${doctorName}!` : `🎉 تم اعتماد الطبيب ${doctorName} وترقيته رسمياً لطبيب موثق!`);
     await renderAdminMetrics();
@@ -9683,17 +12191,11 @@ async function approveDoctorApplication(appId, userId, doctorName) {
 async function rejectDoctorApplication(appId, userId) {
   const isEn = currentLanguage === "en";
   try {
-    await db.collection("doctor_applications").doc(appId).set({
-      status: "rejected",
-      rejectedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      rejectedBy: auth.currentUser ? auth.currentUser.email : "Admin"
-    }, { merge: true }).catch(() => {});
-
-    if (userId) {
-      await db.collection("users").doc(userId).set({
-        doctorApplicationStatus: "rejected"
-      }, { merge: true }).catch(() => {});
-    }
+    if (!enforcePermission(PERMISSIONS.REJECT_DOCTOR_APPLICATION, "Reject Doctor")) return;
+    const result = await callBackend("/api/admin/reject-doctor-application", {
+      method: "POST", body: JSON.stringify({ applicationId: appId, applicantUserId: userId })
+    });
+    if (!result?.success) throw new Error("Rejection was not confirmed by the server");
 
     showToast(isEn ? "Application rejected." : "تم رفض الطلب.");
     await renderAdminMetrics();
@@ -9767,14 +12269,14 @@ async function renderAdminUsers() {
         </button>
       </div>
 
-      <table style="width: 100%; border-collapse: collapse; text-align: start; font-size: 13px;">
+      <table class="admin-users-table">
         <thead>
-          <tr style="border-bottom: 2px solid var(--line); color: var(--muted);">
-            <th style="padding: 10px 12px; text-align: start;">${isEn ? "User" : "المستخدم"}</th>
-            <th style="padding: 10px 12px; text-align: start;">${isEn ? "Email" : "البريد الإلكتروني"}</th>
-            <th style="padding: 10px 12px; text-align: start;">${isEn ? "Role" : "الدور الحالي"}</th>
-            <th style="padding: 10px 12px; text-align: start;">${isEn ? "Verification" : "حالة التوثيق"}</th>
-            <th style="padding: 10px 12px; text-align: end;">${isEn ? "Actions" : "إدارة الصلاحيات والتوثيق"}</th>
+          <tr>
+            <th style="padding: 12px 14px; text-align: start;">${isEn ? "User" : "المستخدم"}</th>
+            <th style="padding: 12px 14px; text-align: start;">${isEn ? "Email" : "البريد الإلكتروني"}</th>
+            <th style="padding: 12px 14px; text-align: start;">${isEn ? "Role" : "الدور الحالي"}</th>
+            <th style="padding: 12px 14px; text-align: start;">${isEn ? "Verification" : "حالة التوثيق"}</th>
+            <th style="padding: 12px 14px; text-align: end;">${isEn ? "Actions" : "إدارة الصلاحيات والتوثيق"}</th>
           </tr>
         </thead>
         <tbody>
@@ -9783,11 +12285,20 @@ async function renderAdminUsers() {
     if (filteredUsers.length === 0) {
       html += `<tr><td colspan="5" style="padding: 24px; text-align: center; color: var(--muted);">${isEn ? "No accounts match this filter" : "لا توجد حسابات تطابق هذا التصنيف"}</td></tr>`;
     } else {
+      // Prioritize owners at the top of the users list
+      filteredUsers.sort((a, b) => {
+        const aIsOwner = isOwnerUser(a.email) || a.isOwner === true;
+        const bIsOwner = isOwnerUser(b.email) || b.isOwner === true;
+        return (bIsOwner ? 1 : 0) - (aIsOwner ? 1 : 0);
+      });
+
       filteredUsers.forEach(u => {
         const isOwner = isOwnerUser(u.email) || u.isOwner === true;
         const role = u.role && VALID_ROLES.includes(u.role) ? u.role : (isOwner ? ROLES.SUPER_ADMIN : ROLES.PATIENT);
-        const roleBadgeClass = role === ROLES.SUPER_ADMIN ? "owner-badge" : (isAdminRole(role) ? "pill danger" : (role === ROLES.DOCTOR ? "pill ok" : "pill info"));
-        const roleText = isEn ? (englishRoleLabels[role] || role) : (roleLabels[role] || role);
+        const roleBadgeClass = isOwner ? "owner-badge" : (role === ROLES.SUPER_ADMIN ? "owner-badge" : (isAdminRole(role) ? "pill danger" : (role === ROLES.DOCTOR ? "pill ok" : "pill info")));
+        const roleText = isOwner
+          ? (isEn ? "👑 Owner" : "👑 Owner")
+          : (isEn ? (englishRoleLabels[role] || role) : (roleLabels[role] || role));
 
         const isVerified = Boolean(u.emailVerified || isOwner);
         const isEmailVerifiedHtml = isVerified
@@ -9803,16 +12314,16 @@ async function renderAdminUsers() {
 
         html += `
           <tr style="border-bottom: 1px solid var(--line); ${isUserSuspended ? 'background: rgba(239, 68, 68, 0.04);' : ''}">
-            <td style="padding: 12px; font-weight: 600; color: var(--ink);">
+            <td style="padding: 12px 14px; font-weight: 600; color: var(--ink);">
               ${userNameStr}
-              ${isOwner ? `<span class="owner-badge" style="margin-inline-start: 6px;">${isEn ? "Super Admin" : "مدير عام"}</span>` : ''}
+              ${isOwner ? `<span class="owner-badge" style="margin-inline-start: 6px;">👑 Owner</span>` : ''}
               ${isUserSuspended ? `<span style="margin-inline-start: 6px; font-size: 11px; color: #ef4444; font-weight: bold;">[BLOCKED]</span>` : ''}
             </td>
-            <td style="padding: 12px; color: var(--muted); font-family: monospace;">${u.email}</td>
-            <td style="padding: 12px;">
+            <td style="padding: 12px 14px; color: var(--muted); font-family: monospace;">${u.email}</td>
+            <td style="padding: 12px 14px;">
               <span class="${roleBadgeClass}" style="font-size: 11.5px; padding: 4px 10px;">${roleText}</span>
             </td>
-            <td style="padding: 12px;">
+            <td style="padding: 12px 14px;">
               <div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start;">
                 ${isEmailVerifiedHtml}
                 ${suspendedBadgeHtml}
@@ -9840,13 +12351,13 @@ async function renderAdminUsers() {
                 ` : ''}
               </div>
             </td>
-            <td style="padding: 12px; text-align: end;">
-              <select onchange="changeUserRole('${u.id}', this.value, '${userNameStr}', '${u.email}')" class="admin-role-select" style="padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 12px; font-weight: 600; cursor: pointer;">
+            <td style="padding: 12px 14px; text-align: end;">
+              <select ${hasPermission(PERMISSIONS.MANAGE_USER_ROLES) ? "" : "disabled"} onchange="changeUserRole('${u.id}', this.value, '${userNameStr}', '${u.email}')" class="admin-role-select">
                 <option value="patient" ${role === 'patient' ? 'selected' : ''}>👤 ${isEn ? 'Patient (مريض)' : 'حساب مريض'}</option>
                 <option value="doctor" ${role === 'doctor' ? 'selected' : ''}>🩺 ${isEn ? 'Doctor (طبيب موثق)' : 'طبيب موثق'}</option>
                 <option value="clinic_admin" ${role === 'clinic_admin' ? 'selected' : ''}>🏥 ${isEn ? 'Clinic admin (مدير عيادة)' : 'مدير عيادة'}</option>
                 <option value="support" ${role === 'support' ? 'selected' : ''}>🎧 ${isEn ? 'Support (دعم فني)' : 'دعم فني (محدود)'}</option>
-                <option value="super_admin" ${role === 'super_admin' ? 'selected' : ''}>👑 ${isEn ? 'Super admin (مدير عام)' : 'مدير عام للنظام'}</option>
+                <option value="super_admin" ${role === 'super_admin' ? 'selected' : ''}>👑 Owner</option>
               </select>
             </td>
           </tr>
@@ -9871,39 +12382,19 @@ async function changeUserRole(userId, newRole, userName, userEmail) {
   try {
     showToast(isEn ? `Updating role to ${englishRoleLabels[newRole] || newRole} for ${userName}...` : `جاري تحديث دور ${userName} إلى ${roleLabels[newRole] || newRole}...`);
 
-    // 1. Server-authoritative role update via Backend Admin SDK
-    let backendSuccess = false;
-    if (typeof callBackend === "function") {
-      try {
-        const resp = await callBackend("/api/admin/set-user-role", {
-          method: "POST",
-          body: JSON.stringify({
-            targetUserId: userId,
-            newRole: newRole
-          })
-        });
-        if (resp && resp.success) backendSuccess = true;
-      } catch (beErr) {
-        console.warn("Backend API role update returned error, attempting direct sync:", beErr.message);
-      }
+    if (!enforcePermission(PERMISSIONS.MANAGE_USER_ROLES, "Change User Role")) return;
+    let clinicId;
+    if (newRole === ROLES.CLINIC_ADMIN) {
+      clinicId = prompt(isEn ? "Clinic ID for this administrator:" : "معرّف العيادة لهذا المدير:");
+      if (!clinicId || !clinicId.trim()) return;
+      clinicId = clinicId.trim();
     }
+    const resp = await callBackend("/api/admin/set-user-role", {
+      method: "POST", body: JSON.stringify({ targetUserId: userId, newRole, clinicId })
+    });
+    if (!resp?.success) throw new Error("Role update was not confirmed by the server");
 
-    // 2. Direct Firestore update as fallback/sync
-    if (db) {
-      await db.collection("users").doc(userId).set({
-        role: newRole,
-        verifiedDoctor: newRole === ROLES.DOCTOR
-      }, { merge: true }).catch(() => {});
-    }
-
-    // 3. Update in local registry
-    const list = getLocalAccountsRegistry();
-    const u = list.find(x => x.id === userId || (userEmail && x.email && x.email.toLowerCase() === userEmail.toLowerCase()));
-    if (u) {
-      u.role = newRole;
-      if (newRole === ROLES.DOCTOR) u.verifiedDoctor = true;
-      try { localStorage.setItem(ACCOUNTS_REGISTRY_KEY, JSON.stringify(list)); } catch(e) {}
-    }
+    purgeSensitiveLegacyStorage();
 
     // 4. If current logged-in user changed their own role, update session and UI!
     if (auth && auth.currentUser && (auth.currentUser.uid === userId || (userEmail && auth.currentUser.email.toLowerCase() === userEmail.toLowerCase()))) {
@@ -9935,22 +12426,12 @@ async function toggleUserVerification(userId, currentStatus, userName, userEmail
   showToast(isEn ? `Updating verification status...` : `جاري تسجيل حالة التوثيق في النظام...`);
 
   try {
-    // 1. Update Firestore users collection
-    if (typeof db !== "undefined" && db) {
-      await db.collection("users").doc(userId).set({
-        emailVerified: newStatus,
-        verifiedAt: newStatus ? firebase.firestore.FieldValue.serverTimestamp() : null,
-        verifiedByAdmin: newStatus ? (auth?.currentUser?.email || "super_admin") : null
-      }, { merge: true });
-    }
+    const result = await callBackend("/api/admin/set-user-verification", {
+      method: "POST", body: JSON.stringify({ targetUserId: userId, verified: newStatus })
+    });
+    if (!result?.success) throw new Error("Verification update was not confirmed by the server");
 
-    // 2. Update local registry
-    const list = getLocalAccountsRegistry();
-    const u = list.find(x => x.id === userId || (x.email && x.email.toLowerCase() === (userEmail || '').toLowerCase()));
-    if (u) {
-      u.emailVerified = newStatus;
-      try { localStorage.setItem(ACCOUNTS_REGISTRY_KEY, JSON.stringify(list)); } catch(e) {}
-    }
+    purgeSensitiveLegacyStorage();
 
     // 3. Write audit log
     if (typeof writeClientAuditLog === "function") {
@@ -9986,39 +12467,13 @@ async function toggleUserSuspension(userId, currentSuspended, userName, userEmai
   try {
     showToast(isEn ? "Updating account suspension status..." : "جاري تحديث حالة إيقاف الحساب...");
 
-    // 1. Authoritative Backend Call
-    await callBackend("/api/admin/toggle-user-suspension", {
-      method: "POST",
-      body: JSON.stringify({
-        targetUserId: userId,
-        suspend: targetSuspend,
-        reason: targetSuspend ? "Suspended via Admin Dashboard" : "Re-activated via Admin Dashboard"
-      })
-    }).catch(err => {
-      console.warn("Backend toggle-user-suspension error:", err);
+    const result = await callBackend("/api/admin/toggle-user-suspension", {
+      method: "POST", body: JSON.stringify({ targetUserId: userId, suspend: targetSuspend,
+        reason: "Admin Dashboard" })
     });
+    if (!result?.success) throw new Error("Suspension update was not confirmed by the server");
 
-    // 2. Direct Firestore fallback/sync
-    if (typeof db !== "undefined" && db) {
-      await db.collection("users").doc(userId).set({
-        suspended: targetSuspend,
-        isSuspended: targetSuspend,
-        status: targetSuspend ? "suspended" : "active",
-        accountStatus: targetSuspend ? "suspended" : "active",
-        suspendedAt: targetSuspend ? firebase.firestore.FieldValue.serverTimestamp() : null,
-        suspendedBy: targetSuspend ? (auth?.currentUser?.email || "admin") : null
-      }, { merge: true });
-    }
-
-    // 3. Local registry update
-    const list = getLocalAccountsRegistry();
-    const u = list.find(x => x.id === userId || (x.email && x.email.toLowerCase() === (userEmail || '').toLowerCase()));
-    if (u) {
-      u.suspended = targetSuspend;
-      u.isSuspended = targetSuspend;
-      u.status = targetSuspend ? "suspended" : "active";
-      try { localStorage.setItem(ACCOUNTS_REGISTRY_KEY, JSON.stringify(list)); } catch(e) {}
-    }
+    purgeSensitiveLegacyStorage();
 
     showToast(isEn ? `Account ${userName} is now ${targetSuspend ? 'SUSPENDED 🛑' : 'ACTIVE ✅'}!` : `تم ${targetSuspend ? 'إيقاف وحظر 🛑' : 'إعادة تفعيل ✅'} حساب ${userName} بنجاح!`);
     await renderAdminUsers();
@@ -10092,10 +12547,7 @@ async function verifyAllUnverifiedAccounts() {
         count++;
       }
     }
-    // Update local registry
-    try {
-      localStorage.setItem(ACCOUNTS_REGISTRY_KEY, JSON.stringify(users));
-    } catch(e) {}
+    purgeSensitiveLegacyStorage();
     showToast(isEn ? `Successfully verified ${count} accounts on system!` : `تم توثيق وتأكيد ${count} حساب بنجاح على السيستم!`);
     await renderAdminUsers();
     await renderAdminMetrics();
@@ -10124,11 +12576,11 @@ const RISK_RULESETS_REGISTRY = Object.freeze({
         status: "active",
         effectiveFrom: "2026-09-21",
         deprecatedAt: null,
-        reviewedBy: "Clinical Governance & Pulmonology Board",
-        reviewStatus: "clinician-reviewed-rules",
+        reviewedBy: null,
+        reviewStatus: "pending-qualified-clinical-and-regulatory-review",
         changelog: Object.freeze({
-          ar: "الإصدار السريري الأساسي المعتمد: فرز مبني على عتبات SpO2، ضيق التنفس، شدة السعال، ومدة الأعراض.",
-          en: "Baseline certified clinical release: rule-based triage based on SpO2 thresholds, dyspnea, cough severity, and symptom duration."
+          ar: "إصدار تشغيلي أولي غير معتمد سريرياً بعد: فرز مبني على عتبات SpO2، ضيق التنفس، شدة السعال، ومدة الأعراض. الموافقة معلقة لحين مراجعة مختص طبي ومختص تنظيمي في مصر.",
+          en: "Initial operational release, not clinically certified yet: rule-based triage based on SpO2 thresholds, dyspnea, cough severity, and symptom duration. Approval is pending review by qualified medical and Egyptian regulatory specialists."
         }),
         scoreThresholds: Object.freeze({
           urgent: 6,
@@ -10156,11 +12608,11 @@ const RISK_RULESETS_REGISTRY = Object.freeze({
         status: "candidate",
         effectiveFrom: "2026-10-01",
         deprecatedAt: null,
-        reviewedBy: "Clinical Governance & Pulmonology Board",
-        reviewStatus: "clinician-reviewed-rules",
+        reviewedBy: null,
+        reviewStatus: "pending-qualified-clinical-and-regulatory-review",
         changelog: Object.freeze({
-          ar: "تحديث سريري مرتقب: تعزيز حساسية عوامل الخطورة التنفسية المزمنة ومطابقة معايير الفرز الرئوي الإقليمية.",
-          en: "Candidate clinical update: enhanced sensitivity for chronic respiratory risk factors and aligned regional pulmonology triage."
+          ar: "تحديث مرشح غير معتمد: تعزيز حساسية عوامل الخطورة التنفسية المزمنة. لا يُفعّل كاعتماد طبي قبل مراجعة مختص طبي ومختص تنظيمي في مصر.",
+          en: "Unapproved candidate update: enhanced sensitivity for chronic respiratory risk factors. It must not be treated as medically approved before qualified medical and Egyptian regulatory review."
         }),
         scoreThresholds: Object.freeze({
           urgent: 6,
@@ -10236,6 +12688,10 @@ function evaluateRulesBasedRisk({ oxygenLevel, hasDyspnea, coughKey, durationDay
   else if (oxygenLevel > 0 && oxygenLevel < ruleSet.spo2Thresholds.highBelow || points >= ruleSet.scoreThresholds.high) priority = "high";
 
   const meta = AssessmentDictionaries.priority[priority];
+  const factorExplanation = {
+    summaryEn: `Triage Priority: ${priority.toUpperCase()} (${points} points; Urgent threshold = ${ruleSet.scoreThresholds.urgent}, High threshold = ${ruleSet.scoreThresholds.high}). Deterministic decision-support; decision rests with treating clinician.`,
+    summaryAr: `أولوية الفرز: ${meta.riskAr} (${points} نقاط؛ عتبة العاجل = ${ruleSet.scoreThresholds.urgent}، عتبة العالي = ${ruleSet.scoreThresholds.high}). فرز استرشادي فقط والقرار السريري يعود للطبيب المعالج.`
+  };
   return {
     priority,
     points,
@@ -10251,7 +12707,15 @@ function evaluateRulesBasedRisk({ oxygenLevel, hasDyspnea, coughKey, durationDay
     reviewStatus: ruleSet.reviewStatus,
     validated: false,
     version: ruleSet.version,
-    effectiveFrom: ruleSet.effectiveFrom
+    effectiveFrom: ruleSet.effectiveFrom,
+    rulesEngineSnapshot: {
+      ruleSetId: ruleSetId,
+      version: ruleSet.version,
+      effectiveFrom: ruleSet.effectiveFrom,
+      scoreThresholds: ruleSet.scoreThresholds,
+      spo2Thresholds: ruleSet.spo2Thresholds
+    },
+    factorExplanation
   };
 }
 
@@ -10259,10 +12723,132 @@ function getActiveScreen() {
   return document.querySelector(".screen.active")?.id.replace("screen-", "") || "patient";
 }
 
-function readOxygenValue() {
+function normalizeArabicIndicDigits(value) {
+  return String(value ?? "")
+    .replace(/[\u0660-\u0669]/g, digit => String(digit.charCodeAt(0) - 0x0660))
+    .replace(/[\u06F0-\u06F9]/g, digit => String(digit.charCodeAt(0) - 0x06F0));
+}
+
+function parseStrictOxygenInput(value) {
+  const raw = String(value ?? "").trim();
+  const normalized = normalizeArabicIndicDigits(raw).trim();
+  if (!normalized) {
+    return { ok: false, value: null, reason: "empty" };
+  }
+  const match = normalized.match(/^(\d{1,3})\s*%?$/);
+  if (!match) {
+    return { ok: false, value: null, reason: "format" };
+  }
+  const parsed = Number.parseInt(match[1], 10);
+  if (!Number.isInteger(parsed)) {
+    return { ok: false, value: null, reason: "format" };
+  }
+  if (parsed < 50 || parsed > 100) {
+    return { ok: false, value: parsed, reason: parsed > 100 ? "above-range" : "below-range" };
+  }
+  return { ok: true, value: parsed, reason: null };
+}
+
+function parseStrictSymptomDurationInput(value) {
+  const raw = String(value ?? "").trim();
+  const normalized = normalizeArabicIndicDigits(raw).trim();
+  if (!normalized || normalized === "غير محدد") {
+    return { ok: false, value: null, text: raw, reason: "empty" };
+  }
+  const match = normalized.match(/^(\d{1,3})\s*(?:days?|day|d|يوم|أيام|ايام|يوما|يوماً)?$/i);
+  if (!match) {
+    return { ok: false, value: null, text: raw, reason: "format" };
+  }
+  const days = Number.parseInt(match[1], 10);
+  if (!Number.isInteger(days) || days < 1 || days > 365) {
+    return { ok: false, value: days, text: raw, reason: days > 365 ? "above-range" : "below-range" };
+  }
+  return { ok: true, value: days, text: raw, reason: null };
+}
+
+function parseOptionalTemperatureInput(value) {
+  const raw = String(value ?? "").trim();
+  const normalized = normalizeArabicIndicDigits(raw).replace(/°/g, "").replace(/\s*c$/i, "").trim();
+  if (!normalized) return { ok: true, value: null, unit: "°C", reason: "not-provided" };
+  if (/^(unknown|غير معروف|غير معلوم|لا اعرف)$/i.test(normalized)) {
+    return { ok: true, value: null, unit: "°C", reason: "unknown" };
+  }
+  const match = normalized.match(/^(\d{2})(?:[.,](\d))?$/);
+  if (!match) return { ok: false, value: null, unit: "°C", reason: "format" };
+  const parsed = Number(`${match[1]}.${match[2] || "0"}`);
+  if (parsed < 34 || parsed > 43) {
+    return { ok: false, value: parsed, unit: "°C", reason: parsed > 43 ? "above-range" : "below-range" };
+  }
+  return { ok: true, value: parsed, unit: "°C", reason: null };
+}
+
+function parseOptionalRespiratoryRateInput(value) {
+  const raw = String(value ?? "").trim();
+  const normalized = normalizeArabicIndicDigits(raw).trim();
+  if (!normalized) return { ok: true, value: null, unit: "breaths/min", reason: "not-provided" };
+  if (/^(unknown|غير معروف|غير معلوم|لا اعرف)$/i.test(normalized)) {
+    return { ok: true, value: null, unit: "breaths/min", reason: "unknown" };
+  }
+  if (!/^\d{1,2}$/.test(normalized)) return { ok: false, value: null, unit: "breaths/min", reason: "format" };
+  const parsed = Number.parseInt(normalized, 10);
+  if (parsed < 5 || parsed > 60) {
+    return { ok: false, value: parsed, unit: "breaths/min", reason: parsed > 60 ? "above-range" : "below-range" };
+  }
+  return { ok: true, value: parsed, unit: "breaths/min", reason: null };
+}
+
+function normalizeYesNoUnknown(value) {
+  const clean = String(value ?? "").trim().toLowerCase();
+  if (clean === "نعم" || clean === "yes") return "yes";
+  if (clean === "لا" || clean === "no") return "no";
+  if (clean === "غير معروف" || clean === "unknown") return "unknown";
+  return "";
+}
+
+function normalizeSymptomProgression(value) {
+  const clean = String(value ?? "").trim().toLowerCase();
+  if (clean === "تتحسن" || clean === "improving") return "improving";
+  if (clean === "ثابتة" || clean === "stable") return "stable";
+  if (clean === "تسوء" || clean === "worsening") return "worsening";
+  if (clean === "غير معروف" || clean === "unknown") return "unknown";
+  return "";
+}
+
+function yesNoUnknownLabel(key, isEn = false) {
+  const labels = {
+    yes: { ar: "نعم", en: "Yes" },
+    no: { ar: "لا", en: "No" },
+    unknown: { ar: "غير معروف", en: "Unknown" }
+  };
+  return labels[key]?.[isEn ? "en" : "ar"] || recordedClinicalText(null, isEn);
+}
+
+function symptomProgressionLabel(key, isEn = false) {
+  const labels = {
+    improving: { ar: "تتحسن", en: "Improving" },
+    stable: { ar: "ثابتة", en: "Stable" },
+    worsening: { ar: "تسوء", en: "Worsening" },
+    unknown: { ar: "غير معروف", en: "Unknown" }
+  };
+  return labels[key]?.[isEn ? "en" : "ar"] || recordedClinicalText(null, isEn);
+}
+
+function readOxygenRawValue() {
   const field = document.getElementById("oxygenInput");
-  if (!field) return 0;
-  return Number.parseInt((field.value || "").replace(/[^\d]/g, ""), 10) || 0;
+  return field ? field.value : "";
+}
+
+function readOxygenValue() {
+  const parsed = parseStrictOxygenInput(readOxygenRawValue());
+  return parsed.ok ? parsed.value : 0;
+}
+
+function readActiveChoiceText(containerId, fallback = "غير معروف") {
+  let value = fallback;
+  document.querySelectorAll(`#${containerId} .choice`).forEach((btn) => {
+    if (btn.classList.contains("active")) value = btn.textContent.trim();
+  });
+  return value;
 }
 
 function updateOxygenWarning() {
@@ -10271,10 +12857,33 @@ function updateOxygenWarning() {
   if (!warning) return;
 
   const isEn = currentLanguage === "en";
-  const oxygen = readOxygenValue();
+  const parsedOxygen = parseStrictOxygenInput(readOxygenRawValue());
+  const oxygen = parsedOxygen.value;
   if (field) field.style.borderColor = "";
 
-  if (oxygen > 100) {
+  if (parsedOxygen.reason === "format" || parsedOxygen.reason === "empty") {
+    if (parsedOxygen.reason === "empty") {
+      warning.hidden = true;
+      warning.className = "field-warning";
+      warning.innerHTML = "";
+      return;
+    }
+    warning.hidden = false;
+    warning.className = "field-warning has-emergency-card";
+    warning.innerHTML = `
+      <div class="emergency-alert-card invalid-reading">
+        <div class="emergency-header">
+          <span class="emergency-warning-badge">⚠️ ${isEn ? 'Cannot Measure SpO2' : 'تعذر قياس الأكسجين'}</span>
+          <h4>${isEn ? 'Please enter the reading exactly as shown' : 'يرجى إدخال القراءة كما تظهر على الجهاز'}</h4>
+        </div>
+        <p class="emergency-lead">${isEn ? 'Use a whole-number SpO2 value from 50 to 100. Fractions, negative values, and mixed text cannot be interpreted safely.' : 'أدخل رقم تشبع أكسجين صحيحاً بين 50 و100. الكسور والقيم السالبة والنصوص المختلطة لا يمكن تفسيرها بأمان.'}</p>
+      </div>
+    `;
+    if (field) field.style.borderColor = "var(--red)";
+    return;
+  }
+
+  if (parsedOxygen.reason === "above-range") {
     warning.hidden = false;
     warning.className = "field-warning has-emergency-card";
     warning.innerHTML = `
@@ -10289,7 +12898,7 @@ function updateOxygenWarning() {
     if (field) field.style.borderColor = "var(--red)";
     return;
   }
-  if (oxygen > 0 && oxygen < 50) {
+  if (parsedOxygen.reason === "below-range") {
     warning.hidden = false;
     warning.className = "field-warning has-emergency-card";
     warning.innerHTML = `
@@ -10432,9 +13041,17 @@ window.openConfirmAssessmentModal = function(data, onConfirm) {
   safeSet("confirmDyspnea", data.breathingDifficulty);
   safeSet("confirmCough", data.coughLevel);
   safeSet("confirmDuration", data.symptomDuration);
+  safeSet("confirmTemperature", data.temperature);
+  safeSet("confirmRespiratoryRate", data.respiratoryRate);
+  safeSet("confirmChestPain", data.chestPain);
+  safeSet("confirmProgression", data.symptomProgression);
+  safeSet("confirmRecentInfection", data.recentInfection);
+  safeSet("confirmAsthmaCopd", data.asthmaCopd);
   safeSet("confirmRisks", data.riskFactors && data.riskFactors.length ? data.riskFactors.join("، ") : (isEn ? "None" : "لا يوجد"));
-  safeSet("confirmDoctor", data.assignedDoctorName || (isEn ? "Dr. Mona Samy" : "د. منى سامي"));
-  safeSet("confirmClinic", data.clinicName || (isEn ? "Nasr City Clinic" : "عيادة مدينة نصر"));
+  safeSet("confirmMedications", data.currentMedications || (isEn ? "Not provided" : "غير مسجل"));
+  safeSet("confirmNotes", data.notes || (isEn ? "Not provided" : "غير مسجل"));
+  safeSet("confirmDoctor", data.assignedDoctorName || "--");
+  safeSet("confirmClinic", data.clinicName || "--");
   safeSet("confirmConsentStatus", isEn ? "🔒 Verified & Accepted" : "🔒 موثقة ومقبولة");
 
   const prioPill = document.getElementById("confirmModalPriorityPill");
@@ -10503,7 +13120,7 @@ window.openRulesGovernanceModal = function(selectedVersion = null) {
 
     const isActive = verKey === registry.activeVersion;
     if (activeBadge) {
-      activeBadge.textContent = isActive ? (isEn ? "Active Version" : "الإصدار النشط المعتمد") : (isEn ? `Status: ${v.status}` : `الحالة: ${v.status}`);
+      activeBadge.textContent = isActive ? (isEn ? "Active Operational Version" : "الإصدار التشغيلي النشط") : (isEn ? `Status: ${v.status}` : `الحالة: ${v.status}`);
       activeBadge.className = `pill ${isActive ? 'ok' : (v.status === 'candidate' ? 'pending' : 'info')}`;
     }
 
@@ -10520,7 +13137,7 @@ window.openRulesGovernanceModal = function(selectedVersion = null) {
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; font-size: 12.5px;">
           <div><span style="color: var(--muted);">${isEn ? 'Target Ruleset:' : 'مجموعة القواعد:'}</span> <strong>${isEn ? registry.nameEn : registry.nameAr}</strong></div>
           <div><span style="color: var(--muted);">${isEn ? 'Effective Date:' : 'تاريخ السريان:'}</span> <strong style="font-family: monospace;">${v.effectiveFrom || '--'}</strong></div>
-          <div><span style="color: var(--muted);">${isEn ? 'Review Authority:' : 'جهة الاعتماد والتدقيق:'}</span> <strong>${v.reviewedBy || 'Clinical Governance'}</strong></div>
+          <div><span style="color: var(--muted);">${isEn ? 'Review Authority:' : 'جهة الاعتماد والتدقيق:'}</span> <strong>${v.reviewedBy || (isEn ? 'Pending qualified review' : 'معلقة لحين مراجعة مختصة')}</strong></div>
           <div><span style="color: var(--muted);">${isEn ? 'Score Thresholds:' : 'حدود الفرز والتصنيف:'}</span> <strong>${isEn ? `Urgent ≥ ${v.scoreThresholds.urgent} pts, High ≥ ${v.scoreThresholds.high} pts` : `عاجل ≥ ${v.scoreThresholds.urgent} نقاط، عالي ≥ ${v.scoreThresholds.high} نقاط`}</strong></div>
         </div>
         <div style="margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--line); font-size: 12px; color: var(--ink);">
@@ -10572,6 +13189,8 @@ window.closeRulesGovernanceModal = function() {
 
 // Bind interactive modals (Emergency & Confirmation)
 document.addEventListener("DOMContentLoaded", () => {
+  initializeDialogAccessibility();
+
   const closeGuideBtn = document.getElementById("closeEmergencyGuideBtn");
   if (closeGuideBtn) closeGuideBtn.addEventListener("click", closeEmergencyGuideModal);
   const closeRulesGovBtn = document.getElementById("closeRulesGovModalBtn");
@@ -10637,97 +13256,40 @@ function closeApprovalModal() {
   modal.setAttribute("aria-hidden", "true");
 }
 
-function applyTheme(theme) {
-  const isDark = theme === "dark";
-  document.body.classList.toggle("dark", isDark);
-  if (!isDark) {
-    document.documentElement.classList.add("hv-theme-light");
-    document.documentElement.classList.remove("hv-theme-dark");
-  } else {
-    document.documentElement.classList.remove("hv-theme-light");
-    document.documentElement.classList.add("hv-theme-dark");
-  }
+function applyTheme(theme = "dark") {
+  document.body.classList.add("dark");
+  document.documentElement.classList.add("hv-theme-dark");
+  document.documentElement.classList.remove("hv-theme-light");
   try {
-    localStorage.setItem("hv_theme", isDark ? "dark" : "light");
+    localStorage.setItem("hv_theme", "dark");
   } catch(e) {}
-
-  const isAr = typeof currentLanguage !== "undefined" ? currentLanguage === "ar" : true;
-  const nextModeText = isDark
-    ? (window.i18n ? window.i18n.t("common.lightMode") : (isAr ? "الوضع الفاتح" : "Light Mode"))
-    : (window.i18n ? window.i18n.t("common.darkMode") : (isAr ? "الوضع الداكن" : "Dark Mode"));
-
-  const tooltip = isDark
-    ? (isAr ? "تفعيل الوضع الفاتح" : "Switch to Light Mode")
-    : (isAr ? "تفعيل الوضع الداكن" : "Switch to Dark Mode");
-
-  // 1. Floating FAB
-  if (themeToggle) {
-    const fabIcon = themeToggle.querySelector(".theme-fab-icon");
-    if (fabIcon) fabIcon.textContent = isDark ? "☀️" : "🌙";
-    themeToggle.title = tooltip;
-    themeToggle.setAttribute("aria-label", tooltip);
-  }
-
-  // 2. Topbar Theme Toggle
-  const topToggle = document.getElementById("topbarThemeToggle") || (typeof topbarThemeToggle !== "undefined" ? topbarThemeToggle : null);
-  if (topToggle) {
-    const icon = topToggle.querySelector(".theme-toggle-icon");
-    const label = topToggle.querySelector(".theme-toggle-label");
-    if (icon) icon.textContent = isDark ? "☀️" : "🌙";
-    if (label) label.textContent = nextModeText;
-    topToggle.title = tooltip;
-    topToggle.setAttribute("aria-label", tooltip);
-  }
-
-  // 3. Site Nav Theme Toggle
-  const siteToggle = document.getElementById("siteThemeToggle") || (typeof siteThemeToggle !== "undefined" ? siteThemeToggle : null);
-  if (siteToggle) {
-    const siteIcon = siteToggle.querySelector(".site-theme-icon");
-    const siteLabel = siteToggle.querySelector(".site-theme-label");
-    if (siteIcon) siteIcon.textContent = isDark ? "☀️" : "🌙";
-    if (siteLabel) {
-      siteLabel.textContent = nextModeText;
-    } else {
-      siteToggle.textContent = nextModeText;
-    }
-    siteToggle.title = tooltip;
-    siteToggle.setAttribute("aria-label", tooltip);
-  }
-
   updateThemeLogos();
 }
 
 let _themeToggling = false;
 function toggleTheme() {
-  if (_themeToggling) return;
-  _themeToggling = true;
-  window.setTimeout(() => { _themeToggling = false; }, 250);
-
-  const willBeDark = !document.body.classList.contains("dark");
-  applyTheme(willBeDark ? "dark" : "light");
+  applyTheme("dark");
 }
 
 function initTheme() {
-  let theme = "dark";
+  const themeDefaultVersion = "2026-09-25-dark-v5";
   try {
-    const themeDefaultVersion = "2026-09-25-dark-v5";
     if (localStorage.getItem("hv_theme_default_version") !== themeDefaultVersion) {
       localStorage.setItem("hv_theme_default_version", themeDefaultVersion);
       localStorage.setItem("hv_theme", "dark");
     }
-    const saved = localStorage.getItem("hv_theme");
-    if (saved) theme = saved;
   } catch(e) {}
-  applyTheme(theme);
+  applyTheme("dark");
 }
 window.toggleTheme = toggleTheme;
 window.applyTheme = applyTheme;
 window.initTheme = initTheme;
 
-// Global theme toggle delegation to guarantee clicks always register
+// Global theme toggle delegation handler
 document.addEventListener("click", (event) => {
   const toggleBtn = event.target.closest("#themeToggle, #topbarThemeToggle, #siteThemeToggle, .theme-fab");
   if (toggleBtn) {
+    event.preventDefault();
     toggleTheme();
   }
 });
@@ -10919,20 +13481,30 @@ function buildAssessmentModel({
   breathingRaw,
   coughRaw,
   symptomDurationRaw,
+  temperatureRaw = "",
+  respiratoryRateRaw = "",
+  chestPainRaw = "غير معروف",
+  symptomProgressionRaw = "غير معروف",
+  recentInfectionRaw = "غير معروف",
+  asthmaCopdRaw = "غير معروف",
+  currentMedicationsRaw = "",
+  notesRaw = "",
   riskFactorsRaw = [],
   assignedDoctorId = null,
   assignedDoctorName = null,
-  clinicId = "clinic_cairo_nasr_city",
-  clinicName = "عيادة مدينة نصر"
+  clinicId = null,
+  clinicName = null,
+  previousCaseId = null,
+  isIndependentAssessment = false
 }) {
   // 1. Oxygen Vitals (Strict Physiological Validation)
-  const o2Raw = Number.parseInt(String(oxygenLevel).replace(/[^\d]/g, ""), 10) || 0;
-  if (o2Raw > 100 || (o2Raw < 50 && o2Raw > 0)) {
+  const parsedOxygen = parseStrictOxygenInput(oxygenLevel);
+  if (!parsedOxygen.ok) {
     throw new Error(currentLanguage === "en"
       ? "Invalid oxygen level: SpO2 must be between 50% and 100%."
       : "نسبة الأكسجين غير صحيحة: يجب أن تكون بين 50% و 100%.");
   }
-  const o2 = o2Raw;
+  const o2 = parsedOxygen.value;
   const isCritical = o2 > 0 && o2 < 90;
   const isHighRisk = o2 > 0 && o2 < 93;
 
@@ -10951,10 +13523,34 @@ function buildAssessmentModel({
   const coughMeta = AssessmentDictionaries.cough[coughKey];
 
   // 5. Symptom Duration Normalization
-  const durationStr = String(symptomDurationRaw || "غير محدد").trim();
-  const daysMatch = durationStr.match(/\d+/);
-  const durationDays = daysMatch ? Number.parseInt(daysMatch[0], 10) : 0;
+  const parsedDuration = parseStrictSymptomDurationInput(symptomDurationRaw);
+  if (!parsedDuration.ok) {
+    throw new Error(currentLanguage === "en"
+      ? "Invalid symptom duration: enter a whole number of days between 1 and 365."
+      : "مدة الأعراض غير صحيحة: أدخل عدد أيام صحيحاً بين 1 و 365.");
+  }
+  const durationStr = parsedDuration.text;
+  const durationDays = parsedDuration.value;
   const durationEn = durationDays > 0 ? `${durationDays} ${durationDays === 1 ? 'day' : 'days'}` : "Unspecified";
+
+  const parsedTemperature = parseOptionalTemperatureInput(temperatureRaw);
+  if (!parsedTemperature.ok) {
+    throw new Error(currentLanguage === "en"
+      ? "Invalid temperature: enter Celsius between 34.0 and 43.0, leave blank, or write unknown."
+      : "درجة الحرارة غير صحيحة: أدخل قيمة مئوية بين 34.0 و 43.0 أو اتركها فارغة أو اكتب غير معروف.");
+  }
+  const parsedRespiratoryRate = parseOptionalRespiratoryRateInput(respiratoryRateRaw);
+  if (!parsedRespiratoryRate.ok) {
+    throw new Error(currentLanguage === "en"
+      ? "Invalid respiratory rate: enter a whole number between 5 and 60 breaths/min, leave blank, or write unknown."
+      : "معدل التنفس غير صحيح: أدخل رقماً صحيحاً بين 5 و 60 نفس/دقيقة أو اتركه فارغاً أو اكتب غير معروف.");
+  }
+  const chestPain = normalizeYesNoUnknown(chestPainRaw) || "unknown";
+  const symptomProgression = normalizeSymptomProgression(symptomProgressionRaw) || "unknown";
+  const recentInfection = normalizeYesNoUnknown(recentInfectionRaw) || "unknown";
+  const asthmaCopd = normalizeYesNoUnknown(asthmaCopdRaw) || "unknown";
+  const currentMedications = String(currentMedicationsRaw || "").trim().slice(0, 500);
+  const patientNotes = String(notesRaw || "").trim().slice(0, 1000);
 
   // 6. Risk Factors Normalization
   const rfKeys = [];
@@ -10991,20 +13587,22 @@ function buildAssessmentModel({
 
   // Resolve authentic patient identity
   const cachedDoc = window._cachedUserDoc || {};
-  const activeSession = (typeof getActiveSession === "function" ? getActiveSession() : null) || {};
   const profileNameInput = document.getElementById("profileName");
+  const profileDobInput = document.getElementById("profileDob");
   const profileAgeInput = document.getElementById("profileAge");
   const profilePhoneInput = document.getElementById("profilePhone");
   const profileHistoryInput = document.getElementById("profileMedicalHistory");
 
-  const patientName = (profileNameInput && profileNameInput.value.trim() && profileNameInput.value.trim() !== "أحمد محمد")
+  const patientName = (profileNameInput && profileNameInput.value.trim() && profileNameInput.value.trim() !== "اسم المريض")
     ? profileNameInput.value.trim()
-    : (cachedDoc.name || cachedDoc.displayName || user?.displayName || user?.name || activeSession.displayName || activeSession.name || (user?.email ? user.email.split('@')[0] : "مريض"));
+    : (cachedDoc.name || cachedDoc.displayName || user?.displayName || user?.name || (user?.email ? user.email.split('@')[0] : ""));
 
-  const patientEmail = (user && user.email) || cachedDoc.email || activeSession.email || "";
-  const patientUid = (user && user.uid) || activeSession.uid || "";
-  const patientPhone = (profilePhoneInput && profilePhoneInput.value.trim()) || window._verifiedPhone || cachedDoc.phoneNumber || user?.phoneNumber || activeSession.phoneNumber || "";
-  const patientAge = (profileAgeInput && profileAgeInput.value.trim()) || cachedDoc.age || "";
+  const patientEmail = (user && user.email) || cachedDoc.email || "";
+  const patientUid = (user && user.uid) || "";
+  const patientPhone = (profilePhoneInput && profilePhoneInput.value.trim()) || window._verifiedPhone || cachedDoc.phoneNumber || user?.phoneNumber || "";
+  const patientDob = (profileDobInput && profileDobInput.value) || cachedDoc.dateOfBirth || cachedDoc.dob || "";
+  const calculatedAge = patientDob ? calculateAge(patientDob) : null;
+  const patientAge = calculatedAge !== null ? String(calculatedAge) : ((profileAgeInput && profileAgeInput.value.trim()) || cachedDoc.age || "");
   const patientHistory = (profileHistoryInput && profileHistoryInput.value.trim()) || cachedDoc.medicalHistory || "";
 
   return {
@@ -11028,6 +13626,9 @@ function buildAssessmentModel({
     nameEn: patientName,
     patientPhone: patientPhone,
     phone: patientPhone,
+    patientDob: patientDob || null,
+    dateOfBirth: patientDob || null,
+    dob: patientDob || null,
     patientAge: patientAge,
     age: patientAge,
     patientMedicalHistory: patientHistory,
@@ -11035,8 +13636,8 @@ function buildAssessmentModel({
     // ── Clinical Tenant & Doctor Assignment ──
     assignedDoctorId: assignedDoctorId || null,
     assignedDoctorName: assignedDoctorName || null,
-    clinicId: clinicId || "clinic_cairo_nasr_city",
-    clinicName: clinicName || "عيادة مدينة نصر",
+    clinicId: clinicId || null,
+    clinicName: clinicName || null,
 
     // ── Privacy Consent Gate (Document Root - Before Assessment) ──
     privacyConsent: getStoredPrivacyConsent() || {
@@ -11059,7 +13660,13 @@ function buildAssessmentModel({
         oxygenLevel: o2,
         isLowOxygen: isHighRisk,
         isCriticalOxygen: isCritical,
-        unit: "%"
+        unit: "%",
+        temperature: parsedTemperature.value,
+        temperatureUnit: parsedTemperature.unit,
+        temperatureStatus: parsedTemperature.reason || "recorded",
+        respiratoryRate: parsedRespiratoryRate.value,
+        respiratoryRateUnit: parsedRespiratoryRate.unit,
+        respiratoryRateStatus: parsedRespiratoryRate.reason || "recorded"
       },
       symptoms: {
         breathingDifficulty: breathingKey,
@@ -11070,8 +13677,25 @@ function buildAssessmentModel({
         coughSeverityLabelEn: coughMeta.en,
         durationDays: durationDays,
         durationText: durationStr,
-        durationTextEn: durationEn
+        durationTextEn: durationEn,
+        chestPain,
+        chestPainLabelAr: yesNoUnknownLabel(chestPain, false),
+        chestPainLabelEn: yesNoUnknownLabel(chestPain, true),
+        symptomProgression,
+        symptomProgressionLabelAr: symptomProgressionLabel(symptomProgression, false),
+        symptomProgressionLabelEn: symptomProgressionLabel(symptomProgression, true),
+        recentInfection,
+        recentInfectionLabelAr: yesNoUnknownLabel(recentInfection, false),
+        recentInfectionLabelEn: yesNoUnknownLabel(recentInfection, true),
+        asthmaCopd,
+        asthmaCopdLabelAr: yesNoUnknownLabel(asthmaCopd, false),
+        asthmaCopdLabelEn: yesNoUnknownLabel(asthmaCopd, true)
       },
+      medications: {
+        current: currentMedications || null,
+        status: currentMedications ? "provided" : "not-provided"
+      },
+      notes: patientNotes || null,
       riskFactors: {
         keys: rfKeys,
         labelsAr: rfLabelsAr,
@@ -11093,6 +13717,8 @@ function buildAssessmentModel({
         ruleEngineVersion: riskEvaluation.version,
         ruleEngineEffectiveFrom: riskEvaluation.effectiveFrom,
         ruleEngineReviewStatus: riskEvaluation.reviewStatus,
+        rulesEngineSnapshot: riskEvaluation.rulesEngineSnapshot,
+        factorExplanation: riskEvaluation.factorExplanation,
         ruleScoreValidated: false,
         confidence: "not-validated-rule-score",
         modelVersion: MODEL_VERSION
@@ -11100,15 +13726,34 @@ function buildAssessmentModel({
     },
 
     // ── Top-Level Flattened Fields (100% Backward Compatible) ──
+    previousCaseId: previousCaseId || null,
+    isIndependentAssessment: Boolean(isIndependentAssessment || previousCaseId),
     status: assignedDoctorId ? CASE_STATUS.ASSIGNED : CASE_STATUS.TRIAGED,
     priority: priority,
     oxygenLevel: o2,
     o2: o2,
+    temperature: parsedTemperature.value,
+    temperatureUnit: parsedTemperature.unit,
+    temperatureStatus: parsedTemperature.reason || "recorded",
+    respiratoryRate: parsedRespiratoryRate.value,
+    respiratoryRateUnit: parsedRespiratoryRate.unit,
+    respiratoryRateStatus: parsedRespiratoryRate.reason || "recorded",
     breathingDifficulty: breathingMeta.ar,
     coughLevel: coughMeta.ar,
     symptomDuration: durationStr,
     duration: durationStr,
     durationEn: durationEn,
+    chestPain: yesNoUnknownLabel(chestPain, false),
+    chestPainKey: chestPain,
+    symptomProgression: symptomProgressionLabel(symptomProgression, false),
+    symptomProgressionKey: symptomProgression,
+    recentInfection: yesNoUnknownLabel(recentInfection, false),
+    recentInfectionKey: recentInfection,
+    asthmaCopd: yesNoUnknownLabel(asthmaCopd, false),
+    asthmaCopdKey: asthmaCopd,
+    currentMedications: currentMedications || null,
+    patientNotes: patientNotes || null,
+    calculatedAge: calculatedAge,
     riskFactors: rfLabelsAr,
     symptoms: symptomsSummaryAr,
     symptomsEn: symptomsSummaryEn,
@@ -11125,6 +13770,8 @@ function buildAssessmentModel({
     ruleEngineVersion: riskEvaluation.version,
     ruleEngineEffectiveFrom: riskEvaluation.effectiveFrom,
     ruleEngineReviewStatus: riskEvaluation.reviewStatus,
+    rulesEngineSnapshot: riskEvaluation.rulesEngineSnapshot,
+    factorExplanation: riskEvaluation.factorExplanation,
     ruleScoreValidated: false,
     confidence: "not-validated-rule-score",
     reportVersion: REPORT_VERSION,
@@ -11166,7 +13813,7 @@ function buildAssessmentModel({
         previousStatus: CASE_STATUS.SUBMITTED,
         changedAt: new Date().toISOString(),
         changedBy: "system",
-        changedByName: "Health Vibes AI Triage Engine",
+        changedByName: "Health Vibe AI Triage Engine",
         changedByRole: "system",
         note: `AI Triage determined priority: ${priority} (${prioMeta.riskAr})`
       },
@@ -11184,6 +13831,226 @@ function buildAssessmentModel({
 }
 window.buildAssessmentModel = buildAssessmentModel;
 
+const ASSESSMENT_DRAFT_COLLECTION = "assessmentDrafts";
+const ASSESSMENT_DRAFT_VERSION = "2026-09-draft-v1";
+let _assessmentDraftSaveTimer = null;
+let _assessmentSubmitting = false;
+let _assessmentLoadedDraft = null;
+
+function getAssessmentDraftKey(user = getActiveUser()) {
+  const uid = user && user.uid ? user.uid : "guest";
+  return `hv_assessment_draft_${uid}`;
+}
+
+function getAssessmentDraftDocId(user = getActiveUser()) {
+  return user && user.uid ? user.uid : null;
+}
+
+function setChoiceGroupValue(groupId, value) {
+  const group = document.getElementById(groupId);
+  if (!group) return;
+  group.querySelectorAll(".choice").forEach((btn) => {
+    btn.classList.toggle("active", btn.textContent.trim() === value);
+  });
+}
+
+function gatherAssessmentDraftFields() {
+  const readChoices = (groupId) => Array.from(document.querySelectorAll(`#${groupId} .choice.active`)).map(btn => btn.textContent.trim());
+  const firstChoice = (groupId) => readChoices(groupId)[0] || "";
+  return {
+    oxygenRaw: readOxygenRawValue(),
+    breathingDifficulty: firstChoice("breathingChoices"),
+    coughLevel: firstChoice("coughChoices"),
+    symptomDuration: document.getElementById("symptomDuration")?.value.trim() || "",
+    temperatureRaw: document.getElementById("temperatureInput")?.value.trim() || "",
+    respiratoryRateRaw: document.getElementById("respiratoryRateInput")?.value.trim() || "",
+    chestPain: firstChoice("chestPainChoices"),
+    symptomProgression: firstChoice("symptomProgressionChoices"),
+    recentInfection: firstChoice("recentInfectionChoices"),
+    asthmaCopd: firstChoice("asthmaCopdChoices"),
+    riskFactors: readChoices("riskChoices"),
+    currentMedications: document.getElementById("currentMedicationsInput")?.value.trim() || "",
+    notes: document.getElementById("assessmentNotesInput")?.value.trim() || "",
+    inlineConsent: Boolean(document.getElementById("assessmentInlineConsent")?.checked)
+  };
+}
+
+function applyAssessmentDraftFields(fields = {}) {
+  const setValue = (id, value) => {
+    const el = document.getElementById(id);
+    if (el && value !== undefined && value !== null) el.value = value;
+  };
+  setValue("oxygenInput", fields.oxygenRaw);
+  setValue("symptomDuration", fields.symptomDuration);
+  setValue("temperatureInput", fields.temperatureRaw);
+  setValue("respiratoryRateInput", fields.respiratoryRateRaw);
+  setValue("currentMedicationsInput", fields.currentMedications);
+  setValue("assessmentNotesInput", fields.notes);
+  setChoiceGroupValue("breathingChoices", fields.breathingDifficulty);
+  setChoiceGroupValue("coughChoices", fields.coughLevel);
+  setChoiceGroupValue("chestPainChoices", fields.chestPain);
+  setChoiceGroupValue("symptomProgressionChoices", fields.symptomProgression);
+  setChoiceGroupValue("recentInfectionChoices", fields.recentInfection);
+  setChoiceGroupValue("asthmaCopdChoices", fields.asthmaCopd);
+  const riskGroup = document.getElementById("riskChoices");
+  if (riskGroup && Array.isArray(fields.riskFactors) && fields.riskFactors.length) {
+    riskGroup.querySelectorAll(".choice").forEach(btn => {
+      btn.classList.toggle("active", fields.riskFactors.includes(btn.textContent.trim()));
+    });
+  }
+  const inlineConsent = document.getElementById("assessmentInlineConsent");
+  if (inlineConsent && typeof fields.inlineConsent === "boolean") inlineConsent.checked = fields.inlineConsent;
+  updateAssessmentProgress();
+  updateOxygenWarning();
+}
+
+function buildAssessmentDraftPayload(user = getActiveUser()) {
+  const fields = gatherAssessmentDraftFields();
+  return {
+    schemaVersion: ASSESSMENT_DRAFT_VERSION,
+    status: "draft",
+    patientId: user?.uid || null,
+    createdBy: user?.uid || null,
+    patientEmail: user?.email || null,
+    fields,
+    updatedAtClient: new Date().toISOString(),
+    isSubmittedToDoctor: false
+  };
+}
+
+function updateAssessmentProgress() {
+  const fields = gatherAssessmentDraftFields();
+  const checks = [
+    fields.breathingDifficulty,
+    fields.coughLevel,
+    fields.oxygenRaw,
+    fields.symptomDuration,
+    fields.chestPain,
+    fields.symptomProgression,
+    fields.recentInfection,
+    fields.asthmaCopd,
+    Array.isArray(fields.riskFactors) && fields.riskFactors.length > 0,
+    fields.inlineConsent
+  ];
+  const completed = checks.filter(Boolean).length;
+  const pct = Math.round((completed / checks.length) * 100);
+  const bar = document.getElementById("assessmentProgressBar");
+  const label = document.getElementById("assessmentProgressLabel");
+  if (bar) bar.style.width = `${pct}%`;
+  if (label) label.textContent = currentLanguage === "en" ? `${pct}% complete` : `مكتمل ${pct}%`;
+  return pct;
+}
+
+async function saveAssessmentDraftNow() {
+  const user = getActiveUser();
+  const payload = buildAssessmentDraftPayload(user);
+  updateAssessmentProgress();
+  try {
+    localStorage.setItem(getAssessmentDraftKey(user), JSON.stringify(payload));
+  } catch(e) {}
+  if (user?.uid && typeof db !== "undefined" && db) {
+    try {
+      await db.collection(ASSESSMENT_DRAFT_COLLECTION).doc(getAssessmentDraftDocId(user)).set({
+        ...payload,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+      const status = document.getElementById("assessmentDraftStatus");
+      if (status) status.textContent = currentLanguage === "en" ? "Draft saved securely to your account" : "تم حفظ المسودة بأمان على حسابك";
+    } catch (err) {
+      console.warn("Assessment draft cloud save failed:", err);
+      const status = document.getElementById("assessmentDraftStatus");
+      if (status) status.textContent = currentLanguage === "en" ? "Draft saved on this device; cloud sync pending" : "تم حفظ المسودة على هذا الجهاز؛ مزامنة السحابة معلقة";
+    }
+  }
+}
+
+function scheduleAssessmentDraftSave() {
+  updateAssessmentProgress();
+  window.clearTimeout(_assessmentDraftSaveTimer);
+  _assessmentDraftSaveTimer = window.setTimeout(saveAssessmentDraftNow, 450);
+}
+
+async function loadAssessmentDraft() {
+  const user = getActiveUser();
+  let draft = null;
+  if (user?.uid && typeof db !== "undefined" && db) {
+    try {
+      const snap = await db.collection(ASSESSMENT_DRAFT_COLLECTION).doc(getAssessmentDraftDocId(user)).get();
+      if (snap.exists) draft = { id: snap.id, ...snap.data() };
+    } catch (err) {
+      console.warn("Assessment draft cloud load failed:", err);
+    }
+  }
+  if (!draft) {
+    try {
+      draft = JSON.parse(localStorage.getItem(getAssessmentDraftKey(user)) || "null");
+    } catch(e) {
+      draft = null;
+    }
+  }
+  _assessmentLoadedDraft = draft && draft.status === "draft" && !draft.isSubmittedToDoctor ? draft : null;
+  const banner = document.getElementById("assessmentRecoveryBanner");
+  if (banner) banner.hidden = !_assessmentLoadedDraft;
+  updateAssessmentProgress();
+  return _assessmentLoadedDraft;
+}
+
+async function clearAssessmentDraft() {
+  const user = getActiveUser();
+  try {
+    localStorage.removeItem(getAssessmentDraftKey(user));
+  } catch(e) {}
+  if (user?.uid && typeof db !== "undefined" && db) {
+    try {
+      await db.collection(ASSESSMENT_DRAFT_COLLECTION).doc(getAssessmentDraftDocId(user)).set({
+        status: "submitted",
+        isSubmittedToDoctor: true,
+        clearedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+    } catch(e) {
+      console.warn("Could not mark assessment draft cleared:", e);
+    }
+  }
+  _assessmentLoadedDraft = null;
+  const banner = document.getElementById("assessmentRecoveryBanner");
+  if (banner) banner.hidden = true;
+}
+
+function initAssessmentDraftAutosave() {
+  const root = document.getElementById("screen-assessment");
+  if (!root || root.dataset.draftAutosaveBound === "true") return;
+  root.dataset.draftAutosaveBound = "true";
+  root.addEventListener("input", scheduleAssessmentDraftSave);
+  root.addEventListener("change", scheduleAssessmentDraftSave);
+  root.addEventListener("click", (event) => {
+    if (event.target.closest(".choice")) window.setTimeout(scheduleAssessmentDraftSave, 0);
+  });
+  document.getElementById("btnResumeAssessmentDraft")?.addEventListener("click", () => {
+    if (_assessmentLoadedDraft?.fields) {
+      applyAssessmentDraftFields(_assessmentLoadedDraft.fields);
+      document.getElementById("assessmentRecoveryBanner").hidden = true;
+      showToast(currentLanguage === "en" ? "Draft restored." : "تم استرجاع المسودة.");
+    }
+  });
+  document.getElementById("btnDiscardAssessmentDraft")?.addEventListener("click", async () => {
+    await clearAssessmentDraft();
+    showToast(currentLanguage === "en" ? "Draft discarded." : "تم حذف المسودة.");
+  });
+  document.getElementById("btnAssessmentPrev")?.addEventListener("click", () => {
+    saveAssessmentDraftNow();
+    showScreen("profile");
+  });
+  document.getElementById("btnAssessmentNext")?.addEventListener("click", () => {
+    saveAssessmentDraftNow();
+    document.getElementById("submitAssessment")?.focus();
+  });
+}
+
+window.gatherAssessmentDraftFields = gatherAssessmentDraftFields;
+window.applyAssessmentDraftFields = applyAssessmentDraftFields;
+window.saveAssessmentDraftNow = saveAssessmentDraftNow;
+window.loadAssessmentDraft = loadAssessmentDraft;
+
 /**
  * Comprehensive Validation Engine for Clinical Assessment Fields
  * Validates oxygenLevel, breathingDifficulty, coughLevel, symptomDuration, riskFactors
@@ -11194,19 +14061,29 @@ function validateAssessmentFields({
   breathingDifficulty,
   coughLevel,
   symptomDuration,
+  temperature,
+  respiratoryRate,
+  chestPain,
+  symptomProgression,
+  recentInfection,
+  asthmaCopd,
+  currentMedications,
+  notes,
   riskFactors,
   isEn = false
 }) {
   const errors = [];
 
   // 1. Oxygen Level (SpO2: 50% - 100%)
-  const o2 = Number.parseInt(String(oxygenLevel).replace(/[^\d]/g, ""), 10);
-  if (isNaN(o2) || o2 < 50 || o2 > 100) {
+  const parsedOxygen = parseStrictOxygenInput(oxygenLevel);
+  if (!parsedOxygen.ok) {
     errors.push({
       field: "oxygenInput",
-      message: o2 > 100
+      message: parsedOxygen.reason === "above-range"
         ? (isEn ? "Oxygen level cannot exceed 100%." : "نسبة الأكسجين لا يمكن أن تتجاوز 100%.")
-        : (isEn ? "Please enter a valid oxygen level between 50% and 100%." : "نسبة الأكسجين يجب أن تكون قيمة صحيحة بين 50% و 100%.")
+        : parsedOxygen.reason === "below-range"
+          ? (isEn ? "SpO2 below 50% cannot be recorded reliably. Please re-check the device or seek urgent care if symptoms are severe." : "قراءة الأكسجين أقل من 50% لا يمكن تسجيلها كقياس موثوق. يرجى إعادة القياس أو طلب الطوارئ عند وجود أعراض شديدة.")
+          : (isEn ? "Unable to measure SpO2 from this input. Enter a whole number between 50 and 100." : "تعذر قياس الأكسجين من هذا الإدخال. أدخل رقماً صحيحاً بين 50 و 100.")
     });
   }
 
@@ -11235,15 +14112,58 @@ function validateAssessmentFields({
   }
 
   // 4. Symptom Duration (Must contain valid day count: 1 - 365)
-  const durationStr = String(symptomDuration || "").trim();
-  const daysMatch = durationStr.match(/\d+/);
-  const days = daysMatch ? Number.parseInt(daysMatch[0], 10) : 0;
-  if (!durationStr || durationStr === "غير محدد" || days <= 0 || days > 365) {
+  const parsedDuration = parseStrictSymptomDurationInput(symptomDuration);
+  if (!parsedDuration.ok) {
     errors.push({
       field: "symptomDuration",
       message: isEn
-        ? "Please enter a valid symptom duration (between 1 and 365 days)."
-        : "يرجى إدخال مدة أعراض صحيحة (بين 1 و 365 يوماً)."
+        ? "Please enter symptom duration as a whole number of days between 1 and 365."
+        : "يرجى إدخال مدة الأعراض كعدد أيام صحيح بين 1 و 365."
+    });
+  }
+
+  const parsedTemperature = parseOptionalTemperatureInput(temperature);
+  if (!parsedTemperature.ok) {
+    errors.push({
+      field: "temperatureInput",
+      message: isEn
+        ? "Temperature must be Celsius between 34.0 and 43.0, blank, or unknown."
+        : "درجة الحرارة يجب أن تكون مئوية بين 34.0 و 43.0 أو فارغة أو غير معروف."
+    });
+  }
+
+  const parsedRespiratoryRate = parseOptionalRespiratoryRateInput(respiratoryRate);
+  if (!parsedRespiratoryRate.ok) {
+    errors.push({
+      field: "respiratoryRateInput",
+      message: isEn
+        ? "Respiratory rate must be a whole number between 5 and 60 breaths/min, blank, or unknown."
+        : "معدل التنفس يجب أن يكون رقماً صحيحاً بين 5 و 60 نفس/دقيقة أو فارغاً أو غير معروف."
+    });
+  }
+
+  [
+    ["chestPainChoices", chestPain, normalizeYesNoUnknown, isEn ? "Please record chest pain as Yes, No, or Unknown." : "يرجى تسجيل ألم الصدر: نعم أو لا أو غير معروف."],
+    ["recentInfectionChoices", recentInfection, normalizeYesNoUnknown, isEn ? "Please record recent infection as Yes, No, or Unknown." : "يرجى تسجيل العدوى الحديثة: نعم أو لا أو غير معروف."],
+    ["asthmaCopdChoices", asthmaCopd, normalizeYesNoUnknown, isEn ? "Please record asthma/COPD as Yes, No, or Unknown." : "يرجى تسجيل الربو/COPD: نعم أو لا أو غير معروف."],
+    ["symptomProgressionChoices", symptomProgression, normalizeSymptomProgression, isEn ? "Please record symptom progression." : "يرجى تسجيل تطور الأعراض."]
+  ].forEach(([field, raw, normalizer, message]) => {
+    if (!normalizer(raw)) {
+      errors.push({ field, message });
+    }
+  });
+
+  if (String(currentMedications || "").length > 500) {
+    errors.push({
+      field: "currentMedicationsInput",
+      message: isEn ? "Current medications must be 500 characters or fewer." : "الأدوية الحالية يجب ألا تتجاوز 500 حرف."
+    });
+  }
+
+  if (String(notes || "").length > 1000) {
+    errors.push({
+      field: "assessmentNotesInput",
+      message: isEn ? "Notes must be 1000 characters or fewer." : "الملاحظات يجب ألا تتجاوز 1000 حرف."
     });
   }
 
@@ -11276,6 +14196,24 @@ function validateAssessmentFields({
 }
 
 document.getElementById("submitAssessment").addEventListener("click", async () => {
+  if (window.operationalSwitchesClient && !window.operationalSwitchesClient.isAssessmentIntakeEnabled()) {
+    const isEn = currentLanguage === "en";
+    const msg = window.operationalSwitchesClient.getIntakeMessage(isEn);
+    showToast(msg);
+    if (typeof showCentralErrorModal === "function") {
+      showCentralErrorModal({
+        category: isEn ? "Operational Notice" : "تنبيه تشغيلي",
+        title: isEn ? "Assessment Intake Paused" : "استقبال التقييمات متوقف مؤقتاً",
+        message: msg,
+        action: isEn ? "You can safely view all your existing assessments in History." : "يمكنك مراجعة كافة تقاريرك وفحوصاتك السابقة في سجل الحالات."
+      });
+    }
+    return;
+  }
+  if (_assessmentSubmitting) {
+    showToast(currentLanguage === "en" ? "Submission already in progress. Please wait." : "الإرسال جارٍ بالفعل. يرجى الانتظار.");
+    return;
+  }
   updateOxygenWarning();
 
   const inlineConsentChk = document.getElementById("assessmentInlineConsent");
@@ -11308,8 +14246,9 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
   const isEn = currentLanguage === "en";
 
   try {
+    await saveAssessmentDraftNow();
     // ── جمع بيانات النموذج ──────────────────────────────────────────
-    const oxygenLevel = readOxygenValue();
+    const oxygenRaw = readOxygenRawValue();
 
     // ضيق التنفس (نعم/لا)
     const breathingChoices = document.querySelectorAll("#breathingChoices .choice");
@@ -11328,6 +14267,14 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
     // مدة الأعراض
     const durationField = document.getElementById("symptomDuration");
     const symptomDuration = durationField ? durationField.value.trim() : "غير محدد";
+    const temperatureRaw = document.getElementById("temperatureInput")?.value.trim() || "";
+    const respiratoryRateRaw = document.getElementById("respiratoryRateInput")?.value.trim() || "";
+    const chestPain = readActiveChoiceText("chestPainChoices");
+    const symptomProgression = readActiveChoiceText("symptomProgressionChoices");
+    const recentInfection = readActiveChoiceText("recentInfectionChoices");
+    const asthmaCopd = readActiveChoiceText("asthmaCopdChoices");
+    const currentMedications = document.getElementById("currentMedicationsInput")?.value.trim() || "";
+    const notes = document.getElementById("assessmentNotesInput")?.value.trim() || "";
 
     // عوامل الخطورة (يمكن أكثر من واحد)
     const riskChoices = document.querySelectorAll("#riskChoices .choice");
@@ -11338,21 +14285,29 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
 
     // ── التحقق الشامل الصارم من كافة حقول التقييم (Full Assessment Validation) ──
     const validation = validateAssessmentFields({
-      oxygenLevel,
+      oxygenLevel: oxygenRaw,
       breathingDifficulty,
       coughLevel,
       symptomDuration,
+      temperature: temperatureRaw,
+      respiratoryRate: respiratoryRateRaw,
+      chestPain,
+      symptomProgression,
+      recentInfection,
+      asthmaCopd,
+      currentMedications,
+      notes,
       riskFactors,
       isEn
     });
 
     if (!validation.isValid) {
       // تنظيف الحدود السابقة
-      ["oxygenInput", "symptomDuration"].forEach(id => {
+      ["oxygenInput", "symptomDuration", "temperatureInput", "respiratoryRateInput", "currentMedicationsInput", "assessmentNotesInput"].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.borderColor = "";
       });
-      ["breathingChoices", "coughChoices", "riskChoices"].forEach(id => {
+      ["breathingChoices", "coughChoices", "riskChoices", "chestPainChoices", "symptomProgressionChoices", "recentInfectionChoices", "asthmaCopdChoices"].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.outline = "";
       });
@@ -11377,6 +14332,7 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
       submitBtn.textContent = isEn ? "Send to Doctor" : "إرسال للطبيب";
       return;
     }
+    const oxygenLevel = parseStrictOxygenInput(oxygenRaw).value;
 
     // ── اعتراض الحالات الحرجة جداً للتأكد من التوجه للطوارئ ─────────
     if (oxygenLevel > 0 && oxygenLevel < 90 && !window._emergencySubmissionConfirmed) {
@@ -11392,8 +14348,8 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
 
     // ── قراءة الطبيب المرتبط وبيانات العيادة ───────────────────────
     const linkedDoctorEl = document.getElementById("profileLinkedDoctor");
-    const linkedDoctorName = linkedDoctorEl ? linkedDoctorEl.value.trim() : (isEn ? "Dr. Mona Samy - Nasr City Clinic" : "د. منى سامي - عيادة مدينة نصر");
-    const clinicName = isEn ? "Nasr City Clinic" : "عيادة مدينة نصر";
+    const linkedDoctorName = linkedDoctorEl ? linkedDoctorEl.value.trim() : "";
+    const clinicName = window._patientClinicName || "";
 
     // حساب الأولوية المتوقعة
     const priority = oxygenLevel > 0 && oxygenLevel < 90 ? "urgent" : (oxygenLevel > 0 && oxygenLevel < 93 ? "high" : "normal");
@@ -11405,33 +14361,60 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
       breathingDifficulty,
       coughLevel,
       symptomDuration,
+      temperature: temperatureRaw || (isEn ? "Not provided" : "غير مسجل"),
+      respiratoryRate: respiratoryRateRaw || (isEn ? "Not provided" : "غير مسجل"),
+      chestPain,
+      symptomProgression,
+      recentInfection,
+      asthmaCopd,
+      currentMedications: currentMedications || (isEn ? "Not provided" : "غير مسجل"),
+      notes: notes || (isEn ? "Not provided" : "غير مسجل"),
       riskFactors,
       assignedDoctorName: linkedDoctorName,
       clinicName,
       priority,
       priorityAr: priorityAr[priority]
     }, async () => {
+      if (_assessmentSubmitting) return;
+      _assessmentSubmitting = true;
       submitBtn.disabled = true;
       submitBtn.textContent = isEn ? "Submitting..." : "جاري الإرسال...";
 
       try {
         // ── بناء وثيقة الحالة عبر الـ Schema المعياري الموحد ────────────
+        const predecessorId = window._independentAssessmentPredecessorCaseId || null;
         const caseData = buildAssessmentModel({
           user,
           oxygenLevel,
           breathingRaw: breathingDifficulty,
           coughRaw: coughLevel,
           symptomDurationRaw: symptomDuration,
+          temperatureRaw,
+          respiratoryRateRaw,
+          chestPainRaw: chestPain,
+          symptomProgressionRaw: symptomProgression,
+          recentInfectionRaw: recentInfection,
+          asthmaCopdRaw: asthmaCopd,
+          currentMedicationsRaw: currentMedications,
+          notesRaw: notes,
           riskFactorsRaw: riskFactors,
           assignedDoctorId: window._patientAssignedDoctorId || null,
           assignedDoctorName: linkedDoctorName || null,
-          clinicId: window._patientClinicId || "clinic_cairo_nasr_city",
-          clinicName
+          clinicId: window._patientClinicId || null,
+          clinicName: clinicName || null,
+          previousCaseId: predecessorId,
+          isIndependentAssessment: Boolean(predecessorId)
         });
 
         // ── حفظ في Firestore ──────────────────────────────────────────
         const docRef = await db.collection("cases").add(caseData);
         console.log("✅ Standardized Case saved to Firestore:", docRef.id);
+        if (window.HealthVibes?.AssessmentComparisonUI?.clearIndependentAssessmentContext) {
+          window.HealthVibes.AssessmentComparisonUI.clearIndependentAssessmentContext();
+        }
+        window._independentAssessmentPredecessorCaseId = null;
+        await clearAssessmentDraft();
+        await uploadPendingMedicalFilesForCase(docRef.id);
 
         // ── ربط الحالة مباشرة بسجل المستخدم في Firestore ──────────────
         if (db && user.uid) {
@@ -11552,6 +14535,7 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
           showToast(isEn ? "Error sending assessment. Please try again." : "حدث خطأ أثناء الإرسال. حاول مرة أخرى.");
         }
       } finally {
+        _assessmentSubmitting = false;
         submitBtn.disabled = false;
         submitBtn.textContent = isEn ? "Send to Doctor" : "إرسال للطبيب";
       }
@@ -11593,13 +14577,18 @@ if (fileUploadInput) {
       event.target.value = "";
       return;
     }
-    const fileList = document.getElementById("fileList");
-    [...event.target.files].forEach((file) => {
-      const item = document.createElement("div");
-      item.innerHTML = `<strong>${file.name}</strong><span>${localized("جاهز لمراجعة الطبيب - بدون تحليل ذكاء اصطناعي")}</span>`;
-      if (fileList) fileList.prepend(item);
-    });
-    if (event.target.files.length) showToast("تمت إضافة الملف كمرجع للطبيب");
+    try {
+      stageMedicalCaseFiles(event.target.files);
+      const user = auth.currentUser;
+      const latestCaseId = await getLatestPatientCaseId(user);
+      if (latestCaseId) {
+        await uploadPendingMedicalFilesForCase(latestCaseId);
+      }
+    } catch (error) {
+      showToast(error.message || (currentLanguage === "en" ? "Could not stage this file." : "تعذر تجهيز الملف."));
+    } finally {
+      event.target.value = "";
+    }
   });
 }
 
@@ -11680,23 +14669,128 @@ if (verifyModalCloseBtn) {
   verifyModalCloseBtn.addEventListener("click", closeVerifyRequiredModal);
 }
 // ── CLINICAL ASSISTANT GUARDRAILS: STRICTLY NO AUTONOMOUS DIAGNOSIS & NO TREATMENT PRESCRIBING ──
-function evaluateClinicalGuardrails(query, isEn) {
-  const q = String(query || "").toLowerCase();
+const ASSISTANT_CHAT_RETENTION_DAYS = 30;
 
-  // 1. Emergency Red Flags (Triage Guardrail)
-  const isEmergency = /ألم في الصدر|الم في الصدر|وجع في صدري|خنقة شديدة|مش قادر اتنفس|مش قادرة اتنفس|اختناق|إغماء|اغماء|كحة دم|سعال دم|ازرقاق|توقف التنفس|chest pain|cannot breathe|can't breathe|suffocating|fainting|coughing blood|blue lips|shortness of breath emergency/i.test(q);
+function getAssistantStorageKey(userId, caseId) {
+  return `hv_assistant_chat_${userId || "guest"}_${caseId || "general"}`;
+}
+
+function pruneAssistantChatHistory(userId, caseId) {
+  if (typeof localStorage === "undefined" || !localStorage) return [];
+  try {
+    const key = getAssistantStorageKey(userId, caseId);
+    const raw = localStorage.getItem(key);
+    if (!raw) return [];
+    const list = JSON.parse(raw);
+    if (!Array.isArray(list)) return [];
+    const now = Date.now();
+    const valid = list.filter((item) => {
+      if (!item || !item.expiresAt) return false;
+      const exp = new Date(item.expiresAt).getTime();
+      return !isNaN(exp) && exp > now;
+    });
+    if (valid.length !== list.length) {
+      localStorage.setItem(key, JSON.stringify(valid));
+    }
+    return valid;
+  } catch (err) {
+    return [];
+  }
+}
+
+function saveAssistantChatMessage(userId, caseId, sender, content) {
+  if (typeof localStorage === "undefined" || !localStorage) return;
+  try {
+    const key = getAssistantStorageKey(userId, caseId);
+    const history = pruneAssistantChatHistory(userId, caseId);
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + ASSISTANT_CHAT_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+    history.push({
+      id: "msg_" + Math.random().toString(36).slice(2, 9) + "_" + Date.now(),
+      sender,
+      content,
+      timestamp: now.toISOString(),
+      expiresAt: expiresAt.toISOString()
+    });
+    const bounded = history.slice(-60);
+    localStorage.setItem(key, JSON.stringify(bounded));
+  } catch (err) {}
+}
+
+function clearAssistantChatHistory() {
+  const user = typeof auth !== "undefined" && auth ? auth.currentUser : null;
+  const caseId = (typeof window !== "undefined" && window._assistantCaseStatus?.report?.id) || "general";
+  const userId = user ? user.uid : "guest";
+  if (typeof localStorage !== "undefined" && localStorage) {
+    try {
+      localStorage.removeItem(getAssistantStorageKey(userId, caseId));
+      localStorage.removeItem(getAssistantStorageKey(userId, "general"));
+    } catch (e) {}
+  }
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  if (typeof showToast === "function") {
+    showToast(isEn ? "Conversation history cleared." : "تم مسح سجل المحادثة بنجاح.");
+  }
+  if (typeof renderAssistantScreen === "function") {
+    renderAssistantScreen();
+  }
+}
+
+function evaluateClinicalGuardrails(query, isEn) {
+  const q = String(query || "").trim().toLowerCase();
+
+  // 1. Prompt Injections & Adversarial Jailbreaks (Security & Integrity Guardrail)
+  const isPromptInjection = /ignore\s+(all\s+)?(previous|prior|above|system)\s+instructions|system\s+override|developer\s+mode|\bdan\b|jailbreak|pretend\s+you\s+are|act\s+as\s+an?\s+unrestricted|unrestricted\s+doctor|forget\s+(all\s+)?(the\s+)?(rules|guidelines|guardrails|safety|report)|disregard\s+(all\s+)?(the\s+)?safety|bypass(es)?\s+(guardrails|safety|rules|restrictions)|تجاهل\s+(جميع\s+)?التعليمات|تجاهل\s+الحواجز|تخطي\s+قواعد\s+الأمان|وضع\s+المطور|أنت\s+الآن\s+طبيب\s+حر|تجاهل\s+التقرير/i.test(q);
+  if (isPromptInjection) {
+    return {
+      triggered: true,
+      type: "prompt_injection",
+      message: isEn
+        ? `🛡️ <strong>Security Alert: System Prompt Override / Jailbreak Blocked</strong><br><br>Health Vibe AI Assistant strictly operates within certified clinical boundaries and report verification protocols.<br><br>• <strong>System Integrity:</strong> Safety guardrails and clinical constraints cannot be overridden or bypassed.<br>• The assistant is strictly restricted to explaining your verified report and cannot generate speculative diagnoses or modify treatments.`
+        : `🛡️ <strong>تنبيه أمان: تم حظر محاولة تجاوز التعليمات البرمجية أو القيود السريرية</strong><br><br>يعمل مساعد Health Vibe الطبي الذكي وفق بروتوكولات حوكمة طبية صارمة ومقيدة بالتقرير المعتمد.<br><br>• <strong>نزاهة النظام:</strong> لا يمكن تجاوز أو تعطيل حواجز الأمان السريرية أو الأوامر النظامية تحت أي ظرف.<br>• يظل المساعد مقيداً فقط بتوضيح التقرير الطبي المعتمد ولا يمكنه تشخيص أو تعديل علاجات.`
+    };
+  }
+
+  // 2. Emergency Red Flags & Critical Triage (Emergency Guardrail)
+  const isEmergency = /ألم في الصدر|الم في الصدر|وجع في صدري|خنقة شديدة|مش قادر اتنفس|مش قادرة اتنفس|اختناق|إغماء|اغماء|كحة دم|كحة مدممة|سعال دم|سعال مدمم|ازرقاق|زرقة|توقف التنفس|طوارئ|علامات الخطر|متى اذهب للطوارئ|متى أذهب للطوارئ|ارشادات الطوارئ|إرشادات الطوارئ|اسعاف|إسعاف|chest pain|cannot breathe|can't breathe|suffocating|faint(ing)?|feeling faint|coughing\s+(up\s+)?blood|hemoptysis|blue lips|cyanosis|shortness of breath emergency|emergency guidance|when to go to er|red flags|warning signs|ambulance/i.test(q);
   if (isEmergency) {
     return {
       triggered: true,
       type: "emergency",
       message: isEn
-        ? `🚨 <strong>CRITICAL EMERGENCY ALERT:</strong><br><br>The symptoms you described indicate a potential high-risk medical emergency!<br><br>• <strong>Immediate Action:</strong> Discontinue using this app and call emergency services (123 / 911) or proceed immediately to the nearest Emergency Department (ER).<br>• Do not wait for digital messages or teleconsultations.`
-        : `🚨 <strong>تنبيه طوارئ فوري وحرج:</strong><br><br>الأعراض التي ذكرتها قد تشير إلى حالة طوارئ طبية عاجلة تستوجب التدخل الفوري!<br><br>• <strong>التصرف الفوري:</strong> توقف عن استخدام التطبيق وتوجه حالاً إلى أقرب قسم طوارئ في مستشفى أو اتصل بالإسعاف (123) فوراً.<br>• لا تنتظر أي رسائل أو مشورات إلكترونية عند وجود ضيق تنفس حاد أو ألم بالصدر.`
+        ? `🚨 <strong>APPROVED CLINICAL EMERGENCY GUIDANCE:</strong><br><br>` +
+          `If you or someone around you is experiencing life-threatening symptoms, take immediate emergency action!<br><br>` +
+          `<strong>Critical Emergency Red Flags:</strong><br>` +
+          `• Severe, acute shortness of breath or inability to speak in sentences<br>` +
+          `• Crushing, radiating chest pain or sudden pressure<br>` +
+          `• Coughing up blood (hemoptysis)<br>` +
+          `• Bluish discoloration of the lips, face, or nails (cyanosis)<br>` +
+          `• Sudden fainting, collapse, or loss of consciousness<br>` +
+          `• Oxygen saturation dropping critically below 90%<br><br>` +
+          `<strong>Immediate Action Protocol:</strong><br>` +
+          `1. <strong>Call Emergency Services immediately:</strong> Dial <strong>123</strong> (Ambulance in Egypt) or <strong>911 / 112</strong>.<br>` +
+          `2. <strong>Proceed to nearest Emergency Room (ER)</strong> without delay.<br>` +
+          `3. <strong>Discontinue using this app</strong> — do not wait for chat messages or digital reviews.<br>` +
+          `4. Sit upright to reduce respiratory effort while waiting for medical responders.`
+        : `🚨 <strong>إرشادات الطوارئ السريرية المعتمدة:</strong><br><br>` +
+          `إذا كنت أنت أو أي شخص بجوارك يعاني من أعراض حرجة، يجب اتخاذ إجراءات الطوارئ فوراً!<br><br>` +
+          `<strong>علامات الخطر الحرجة (Red Flags):</strong><br>` +
+          `• ضيق تنفس حاد ومفاجئ أو صعوبة شديدة في نطق جملة كاملة<br>` +
+          `• ألم أو ضغط شديد ومفاجئ في الصدر أو ممتد للذراع والفك<br>` +
+          `• خروج دم مع السعال (كحة مدممة)<br>` +
+          `• ازرقاق الشفاه أو الوجه أو أطراف الأصابع<br>` +
+          `• إغماء أو دوار حاد أو فقدان مفاجئ للوعي<br>` +
+          `• هبوط حاد في تشبع الأكسجين إلى أقل من 90%<br><br>` +
+          `<strong>بروتوكول التصرف الفوري:</strong><br>` +
+          `١. <strong>الاتصال الفوري بالإسعاف:</strong> اطلب الرقم <strong>123</strong> (مصر) أو رقم الطوارئ المحلي فوراً.<br>` +
+          `٢. <strong>التوجه حالاً لأقرب قسم طوارئ</strong> بمستشفى دون أي تأخير.<br>` +
+          `٣. <strong>التوقف عن استخدام التطبيق</strong> — لا تنتظر أي استشارات نصية أو إلكترونية في الطوارئ.<br>` +
+          `٤. الجلوس في وضع مستقيم لتسهيل حركة الرئتين حتى وصول الإسعاف.`
     };
   }
 
-  // 2. Direct Treatment / Prescription / Dosing Requests (Treatment Guardrail)
-  const isTreatmentRequest = /اوصفلي|عايز علاج|عايز دواء|وصفة جديدة|دواء بديل|تغيير الجرعة|ازود الجرعة|انقص الجرعة|اوقف الدواء|اخذ دواء ايه|ايه علاج|علاج للكحة|علاج للبلغم|مضاد حيوي|مسكن قوي|كورتيزون|بديل الفينتولين|علاج الحساسية|prescribe|prescribe me|recommend drug|alternative medicine|change dose|increase dose|stop taking|which antibiotic|what medicine should i take|cure for/i.test(q);
+  // 3. Direct Treatment / Prescription / Dosing Requests (Treatment Guardrail)
+  const isTreatmentRequest = /اوصفلي|عايز علاج|عايز دواء|وصفة جديدة|دواء بديل|علاج بديل|بديل دواء|بديل علاج|بديل الفينتولين|بديل البخاخ|تغيير الجرعة|تعديل الجرعة|ازود الجرعة|أزود الجرعة|انقص الجرعة|أنقص الجرعة|اوقف الدواء|أوقف الدواء|اخذ دواء|أخذ دواء|ايه علاج|إيه علاج|علاج للكحة|علاج للبلغم|مضاد حيوي|مسكن قوي|كورتيزون|علاج الحساسية|غير الجرعة|زيادة الجرعة|تقليل الجرعة|جرعة الدواء|جرعة زائدة|prescribe|prescribe me|recommend drug|alternative medicine|(change|increase|decrease|reduce|adjust)\s+(my\s+)?(\w+\s+)?dose|stop taking|which antibiotic|what medicine should i take|cure for|give me a prescription|adjust medication/i.test(q);
   if (isTreatmentRequest) {
     return {
       triggered: true,
@@ -11707,8 +14801,8 @@ function evaluateClinicalGuardrails(query, isEn) {
     };
   }
 
-  // 3. Autonomous / Speculative Diagnosis Requests (Diagnosis Guardrail)
-  const isDiagnosisRequest = /شخصني|ما هو تشخيصي|عندي ايه|ايه اللي عندي|هل عندي كورونا|هل عندي كوفيد|هل عندي ربو|هل عندي التهاب رئوي|هل مرضي خطير|خمن مرضي|ما مرضي|diagnose me|what disease do i have|do i have covid|do i have pneumonia|guess my illness|what is wrong with me/i.test(q);
+  // 4. Autonomous / Speculative Diagnosis Requests (Diagnosis Guardrail)
+  const isDiagnosisRequest = /شخصني|ما هو تشخيصي|ما تشخيصي|عندي ايه|ايه اللي عندي|إيه اللي عندي|هل عندي كورونا|هل عندي كوفيد|هل عندي ربو|هل عندي التهاب رئوي|هل مرضي خطير|خمن مرضي|ما مرضي|هل أعاني من|تشخيص مرضي|diagnose me|what disease|what illness|what condition do i have|do i have covid|do i have pneumonia|do i have asthma|guess\s+(my\s+)?(illness|disease|condition|diagnosis|sickness)|what is wrong with me|give me a diagnosis|diagnose my symptoms/i.test(q);
   if (isDiagnosisRequest) {
     return {
       triggered: true,
@@ -11720,6 +14814,46 @@ function evaluateClinicalGuardrails(query, isEn) {
   }
 
   return { triggered: false };
+}
+
+function checkInformationAbsentFromReport(query, report, isEn) {
+  const q = String(query || "").toLowerCase();
+  const absentDomains = [
+    { pattern: /ضغط\s*(ال)?دم|blood\s*pressure|hypertension/i, nameEn: "Blood Pressure", nameAr: "ضغط الدم" },
+    { pattern: /تحليل\s*(ال)?دم|تحاليل|cbc|blood\s*test|blood\s*sugar|سكر\s*(ال)?دم|glucose|وظائف\s*(ال)?كبد|وظائف\s*(ال)?كلى|creatinine/i, nameEn: "Blood Tests & Lab Chemistry", nameAr: "تحاليل الدم والمختبر" },
+    { pattern: /(أشعة|اشعة)\s*(مقطعية|سينية|الصدر)?|رنين\s*مغناطيسي|x-?ray|ct\s*scan|mri|ultrasound|سونار/i, nameEn: "Radiology & Diagnostic Imaging (X-Ray / CT / MRI)", nameAr: "الأشعة والتصوير الطبي" },
+    { pattern: /جراحة|عملية\s*(جراحية)?|surgery|surgical\s*operation/i, nameEn: "Surgical Interventions", nameAr: "العمليات الجراحية" },
+    { pattern: /رسم\s*(ال)?قلب|تخطيط\s*(ال)?قلب|ecg|ekg|cardiac\s*test/i, nameEn: "Cardiac ECG / Electrocardiogram", nameAr: "تخطيط ورسم القلب" },
+    { pattern: /اختبار\s*(ال)?حساسية|allergy\s*test|allergy\s*panel/i, nameEn: "Allergy Sensitivity Testing", nameAr: "اختبارات الحساسية المتقدمة" },
+    { pattern: /سرطان|ورم|أورام|اورام|cancer|tumor|biopsy|خزعة/i, nameEn: "Oncology & Biopsy Evaluations", nameAr: "فحوصات الأورام والخزعات" },
+    { pattern: /وزن|طول|مؤشر\s*كتلة|bmi|body\s*mass/i, nameEn: "Body Mass Index (BMI) & Anthropometrics", nameAr: "الوزن ومؤشر كتلة الجسم" }
+  ];
+
+  for (const domain of absentDomains) {
+    if (domain.pattern.test(q)) {
+      const rId = report?.id ? report.id.slice(-6).toUpperCase() : "";
+      return {
+        isAbsent: true,
+        topic: isEn ? domain.nameEn : domain.nameAr,
+        message: isEn
+          ? `⚠️ <strong>Information Absent from Approved Report:</strong><br><br>` +
+            `Details regarding <strong>${domain.nameEn}</strong> are <strong>not present or recorded</strong> in your certified respiratory assessment report (${rId ? `#${rId}` : "on file"}).<br><br>` +
+            `• <strong>Clinical Integrity Policy:</strong> Health Vibe AI Assistant strictly refrains from inventing, guessing, or filling in missing medical information not recorded by your physician.<br>` +
+            `• <strong>Recommended Action:</strong> Please prepare a question regarding ${domain.nameEn} to discuss directly with your attending doctor during your next clinical appointment.`
+          : `⚠️ <strong>معلومات غير واردة بالتقرير المعتمد:</strong><br><br>` +
+            `البيانات المتعلقة بـ <strong>${domain.nameAr}</strong> <strong>غير مسجلة أو غير واردة</strong> في تقريرك التنفسي المعتمد (${rId ? `#${rId}` : "المسجل"}).<br><br>` +
+            `• <strong>ميثاق النزاهة السريرية:</strong> يمتنع المساعد تماماً عن التكهن أو افتراض أو تعبئة أي معلومات طبية لم يسجلها الطبيب المختص.<br>` +
+            `• <strong>التوجيه الطبي:</strong> يُرجى تدوين هذا السؤال واستشارة طبيبك المعالج مباشرة خلال مراجعتك السريرية.`
+      };
+    }
+  }
+
+  return { isAbsent: false };
+}
+
+function buildReportSourceLink(reportId, sectionEn, sectionAr, isEn) {
+  const rId = reportId ? String(reportId).slice(-6).toUpperCase() : "";
+  return `<div class="assistant-source-link" style="margin-top: 10px; padding: 6px 12px; background: rgba(59, 130, 246, 0.08); border-inline-start: 3px solid #3b82f6; border-radius: 4px; font-size: 11.5px; color: var(--ink);"><strong>🔗 ${isEn ? "Source in Certified Report:" : "المصدر في التقرير الطبي المعتمد:"}</strong> <span style="color: #0284c7; font-weight: 600;">${isEn ? `Report #${rId} — Section: ${sectionEn}` : `تقرير #${rId} — قسم: ${sectionAr}`}</span></div>`;
 }
 
 function getClinicalGuardrailDisclaimer(isEn) {
@@ -11760,7 +14894,26 @@ async function renderAssistantScreen() {
   const messagesEl = document.getElementById("chatMessages");
   const chipsEl = document.getElementById("chatQuickChips");
   const inputEl = document.getElementById("chatInput");
+  const retentionNoticeEl = document.getElementById("assistantRetentionNotice");
   if (!messagesEl) return;
+
+  if (retentionNoticeEl) {
+    retentionNoticeEl.innerHTML = `<span>🕒 ${isEn ? "Retention Policy: Chat history is retained for 30 days under clinical privacy governance." : "سياسة الاحتفاظ: تُحفظ المحادثة لمدة ٣٠ يوماً وفق قواعد حوكمة البيانات الطبية."}</span> <button type="button" class="outline-button" style="font-size: 10.5px; padding: 2px 8px; border-radius: 10px;" onclick="clearAssistantChatHistory()">🗑️ ${isEn ? "Clear History" : "مسح السجل"}</button>`;
+  }
+
+  if (window.operationalSwitchesClient && !window.operationalSwitchesClient.isAssistantEnabled()) {
+    const msg = window.operationalSwitchesClient.getAssistantMessage(isEn);
+    messagesEl.innerHTML = `
+      <div class="bot warning" style="border: 1px solid #eab308; background: rgba(234,179,8,0.1); padding: 12px; border-radius: 8px; color: #ca8a04;">
+        ⚠️ <strong>${isEn ? "Assistant Offline for Maintenance" : "المساعد الطبي في وضع الصيانة"}</strong><br>
+        <span style="font-size: 13px;">${msg}</span>
+      </div>
+    `;
+    if (inputEl) inputEl.disabled = true;
+    const sendBtn = document.getElementById("sendChat");
+    if (sendBtn) sendBtn.disabled = true;
+    return;
+  }
 
   messagesEl.innerHTML = `<div class="bot" style="opacity: 0.7;">${isEn ? "Checking certified reports..." : "جاري فحص التقارير الطبية المعتمدة..."}</div>`;
   if (chipsEl) chipsEl.innerHTML = "";
@@ -11771,22 +14924,47 @@ async function renderAssistantScreen() {
   if (caseStatusInfo.status === "approved") {
     const r = caseStatusInfo.report;
     const docName = escapeHtml(getRecordedDoctorIdentity(r, isEn).name);
-    messagesEl.innerHTML = `
-      <div class="bot">
-        ${isEn
-          ? `🩺 <strong>Welcome! Your medical report (#${r.id.slice(-6).toUpperCase()}) has been certified by ${docName}.</strong><br><br>I am your clinical guide to explain the doctor's certified diagnosis, prescribed medications, and home-care recommendations. What would you like to know?`
-          : `🩺 <strong>أهلاً بك! تم اعتماد تقريرك الطبي (#${r.id.slice(-6).toUpperCase()}) وتوثيقه بواسطة ${docName}.</strong><br><br>أنا هنا لمساعدتك في فهم التشخيص المعتمد، توضيح الأدوية الموصوفة لك، وشرح إرشادات الطبيب. كيف يمكنني مساعدتك؟`
+    const rId = r.id ? r.id.slice(-6).toUpperCase() : "";
+
+    // Load conversation history governed by 30-day retention policy
+    const history = typeof pruneAssistantChatHistory === "function"
+      ? pruneAssistantChatHistory(user ? user.uid : "guest", r.id)
+      : [];
+
+    if (history.length > 0) {
+      messagesEl.innerHTML = "";
+      for (const item of history) {
+        const bubble = document.createElement("div");
+        bubble.className = item.sender === "user" ? "user" : "bot";
+        if (item.sender === "user") {
+          bubble.textContent = item.content;
+        } else {
+          setTrustedHtml(bubble, item.content);
         }
-      </div>
-    `;
+        messagesEl.appendChild(bubble);
+      }
+    } else {
+      messagesEl.innerHTML = `
+        <div class="bot">
+          ${isEn
+            ? `🩺 <strong>Welcome! Your medical report (#${rId}) has been certified by ${docName}.</strong><br><br>I am your clinical guide to explain the doctor's certified diagnosis, prescribed medications, medical terminology, and home-care recommendations. I can also help you prepare questions for your doctor. What would you like to know?`
+            : `🩺 <strong>أهلاً بك! تم اعتماد تقريرك الطبي (#${rId}) وتوثيقه بواسطة ${docName}.</strong><br><br>أنا هنا لمساعدتك في فهم التشخيص المعتمد، وتوضيح المصطلحات الطبية والأدوية الموصوفة لك، وشرح إرشادات الطبيب وتجهيز أسئلة للمناقشة معه. كيف يمكنني مساعدتك؟`
+          }
+        </div>
+      `;
+    }
+
     if (inputEl) {
-      inputEl.placeholder = isEn ? "Ask about diagnosis, medications, or doctor instructions..." : "اسأل عن التشخيص، الأدوية، أو تعليمات الطبيب المعتمدة...";
+      inputEl.placeholder = isEn ? "Ask about diagnosis, terms, doctor questions, or prescriptions..." : "اسأل عن التشخيص، المصطلحات، أسئلة الطبيب، أو الأدوية...";
     }
     if (chipsEl) {
       chipsEl.innerHTML = `
         <button type="button" class="outline-button" style="font-size: 12px; padding: 4px 10px; border-radius: 20px;" onclick="sendAssistantQuickPrompt('${isEn ? "Explain my approved diagnosis" : "شرح التشخيص المعتمد"}')">🩺 ${isEn ? "Diagnosis" : "شرح التشخيص"}</button>
         <button type="button" class="outline-button" style="font-size: 12px; padding: 4px 10px; border-radius: 20px;" onclick="sendAssistantQuickPrompt('${isEn ? "What medications are prescribed?" : "الأدوية الموصوفة"}')">💊 ${isEn ? "Medications" : "الأدوية الموصوفة"}</button>
         <button type="button" class="outline-button" style="font-size: 12px; padding: 4px 10px; border-radius: 20px;" onclick="sendAssistantQuickPrompt('${isEn ? "Doctor recommendations" : "تعليمات الطبيب"}')">💡 ${isEn ? "Instructions" : "تعليمات الطبيب"}</button>
+        <button type="button" class="outline-button" style="font-size: 12px; padding: 4px 10px; border-radius: 20px;" onclick="sendAssistantQuickPrompt('${isEn ? "Explain medical terms in my report" : "شرح مصطلحات التقرير"}')">📖 ${isEn ? "Explain Terms" : "شرح المصطلحات"}</button>
+        <button type="button" class="outline-button" style="font-size: 12px; padding: 4px 10px; border-radius: 20px;" onclick="sendAssistantQuickPrompt('${isEn ? "Help me prepare questions for my doctor" : "تجهيز أسئلة للطبيب"}')">📋 ${isEn ? "Doctor Questions" : "أسئلة للطبيب"}</button>
+        <button type="button" class="outline-button" style="font-size: 12px; padding: 4px 10px; border-radius: 20px; border-color: #ef4444; color: #ef4444;" onclick="sendAssistantQuickPrompt('${isEn ? "Approved emergency guidance and red flags" : "إرشادات الطوارئ وعلامات الخطر"}')">🚨 ${isEn ? "Emergency Guidance" : "إرشادات الطوارئ"}</button>
       `;
     }
   } else if (caseStatusInfo.status === CASE_STATUS.MORE_INFO_REQUESTED) {
@@ -11817,7 +14995,7 @@ async function renderAssistantScreen() {
     messagesEl.innerHTML = `
       <div class="bot">
         ${isEn
-          ? `👋 <strong>Welcome to Health Vibes Assistant!</strong><br><br>No certified medical reports were found in your account yet. You can submit a new breathing assessment through the app to be evaluated and certified by a physician.`
+          ? `👋 <strong>Welcome to Health Vibe Assistant!</strong><br><br>No certified medical reports were found in your account yet. You can submit a new breathing assessment through the app to be evaluated and certified by a physician.`
           : `👋 <strong>أهلاً بك في المساعد الطبي الذكي!</strong><br><br>لم يتم العثور على تقرير طبي معتمد في حسابك حتى الآن. يمكنك بدء فحص تنفسي جديد عبر التطبيق ليقوم الطبيب بمراجعته واعتماده رسمياً.`
         }
       </div>
@@ -11850,9 +15028,11 @@ async function handleSendChatMessage() {
   const query = input.value.trim();
   if (!query) return;
 
-  const isEn = currentLanguage === "en";
-  const user = auth ? auth.currentUser : null;
-  const disclaimerHtml = getClinicalGuardrailDisclaimer(isEn);
+  const isEn = typeof currentLanguage !== "undefined" ? currentLanguage === "en" : false;
+  const user = typeof auth !== "undefined" && auth ? auth.currentUser : null;
+  const disclaimerHtml = typeof getClinicalGuardrailDisclaimer === "function"
+    ? getClinicalGuardrailDisclaimer(isEn)
+    : (isEn ? `<div style="margin-top: 12px; font-size: 11.5px; color: var(--muted);">🛡️ Clinical Guardrail: Clarifying doctor-certified record only. In emergency call 123.</div>` : `<div style="margin-top: 12px; font-size: 11.5px; color: var(--muted);">🛡️ حاجز الأمان السريري: توضيح ما اعتمده الطبيب فقط. في الطوارئ اتصل بـ 123.</div>`);
 
   // Render user bubble
   const userBubble = document.createElement("div");
@@ -11860,72 +15040,103 @@ async function handleSendChatMessage() {
   userBubble.textContent = query;
   messages.appendChild(userBubble);
   input.value = "";
-  messages.scrollTop = messages.scrollHeight;
+  if (messages.scrollTop !== undefined) messages.scrollTop = messages.scrollHeight;
 
   // Add temporary bot thinking indicator
   const thinkingBubble = document.createElement("div");
   thinkingBubble.className = "bot";
-  thinkingBubble.innerHTML = `<span style="opacity: 0.7;">${isEn ? "Evaluating clinical guardrails & report..." : "جاري فحص حواجز الأمان والملف الطبي المعتمد..."}</span>`;
+  setTrustedHtml(thinkingBubble, `<span style="opacity: 0.7;">${isEn ? "Evaluating clinical guardrails & report..." : "جاري فحص حواجز الأمان والملف الطبي المعتمد..."}</span>`);
   messages.appendChild(thinkingBubble);
-  messages.scrollTop = messages.scrollHeight;
+  if (messages.scrollTop !== undefined) messages.scrollTop = messages.scrollHeight;
 
   // 1. EVALUATE GUARDRAILS FIRST (SAFETY FIRST)
-  const guardrail = evaluateClinicalGuardrails(query, isEn);
+  const guardrailFn = typeof evaluateClinicalGuardrails === "function"
+    ? evaluateClinicalGuardrails
+    : (typeof window !== "undefined" && window.evaluateClinicalGuardrails ? window.evaluateClinicalGuardrails : () => ({ triggered: false }));
+  const guardrail = guardrailFn(query, isEn);
 
   // Re-verify latest approved report
-  const caseStatusInfo = await getLatestApprovedReportForAssistant(user);
-  window._assistantCaseStatus = caseStatusInfo;
+  const caseStatusInfo = typeof getLatestApprovedReportForAssistant === "function"
+    ? await getLatestApprovedReportForAssistant(user)
+    : { status: "none", report: null };
+  if (typeof window !== "undefined") window._assistantCaseStatus = caseStatusInfo;
   const hasApprovedReport = caseStatusInfo.status === "approved" && caseStatusInfo.report;
+  const r = hasApprovedReport ? caseStatusInfo.report : null;
+  const rId = r?.id ? String(r.id).slice(-6).toUpperCase() : "";
+
+  // Helper for source badges inside handleSendChatMessage
+  const makeSourceLink = (sectionEn, sectionAr) => {
+    if (typeof buildReportSourceLink === "function") return buildReportSourceLink(r?.id, sectionEn, sectionAr, isEn);
+    return `<div class="assistant-source-link" style="margin-top: 10px; padding: 6px 12px; background: rgba(59, 130, 246, 0.08); border-inline-start: 3px solid #3b82f6; border-radius: 4px; font-size: 11.5px; color: var(--ink);"><strong>🔗 ${isEn ? "Source in Certified Report:" : "المصدر في التقرير الطبي المعتمد:"}</strong> <span style="color: #0284c7; font-weight: 600;">${isEn ? `Report #${rId} — Section: ${sectionEn}` : `تقرير #${rId} — قسم: ${sectionAr}`}</span></div>`;
+  };
+
+  const saveHistory = (content) => {
+    if (typeof saveAssistantChatMessage === "function") {
+      saveAssistantChatMessage(user?.uid, r?.id, "user", query);
+      saveAssistantChatMessage(user?.uid, r?.id, "bot", content);
+    }
+  };
 
   let botResponse = "";
 
   if (guardrail.triggered) {
     if (guardrail.type === "emergency") {
       botResponse = guardrail.message + disclaimerHtml;
-      thinkingBubble.innerHTML = botResponse;
-      messages.scrollTop = messages.scrollHeight;
+      setTrustedHtml(thinkingBubble, botResponse);
+      saveHistory(botResponse);
+      if (messages.scrollTop !== undefined) messages.scrollTop = messages.scrollHeight;
+      return;
+    }
+
+    if (guardrail.type === "prompt_injection") {
+      botResponse = guardrail.message + disclaimerHtml;
+      setTrustedHtml(thinkingBubble, botResponse);
+      saveHistory(botResponse);
+      if (messages.scrollTop !== undefined) messages.scrollTop = messages.scrollHeight;
       return;
     }
 
     if (guardrail.type === "treatment_prohibited") {
       botResponse = guardrail.message;
       if (hasApprovedReport) {
-        const r = caseStatusInfo.report;
         const recorded = getRecordedClinicalContent(r, isEn);
         const meds = escapeHtml(recorded.meds);
         const docName = escapeHtml(getRecordedDoctorIdentity(r, isEn).name);
         botResponse += isEn
           ? `<br><br>📋 <strong>Only the following medications were certified for your case by ${docName}:</strong><br><br>${meds.replace(/\n/g, '<br>')}`
           : `<br><br>📋 <strong>الأدوية الوحيدة المعتمدة لحالتك من قِبل ${docName} هي:</strong><br><br>${meds.replace(/\n/g, '<br>')}`;
+        botResponse += makeSourceLink("Prescribed Medications", "الأدوية المعتمدة");
       } else {
         botResponse += isEn
           ? `<br><br>🔒 <em>You currently do not have a doctor-approved prescription. Please wait for clinical review.</em>`
           : `<br><br>🔒 <em>لا توجد روشتة معتمدة من الطبيب لحسابك حالياً. يُرجى انتظار اعتماد الطبيب.</em>`;
       }
       botResponse += disclaimerHtml;
-      thinkingBubble.innerHTML = botResponse;
-      messages.scrollTop = messages.scrollHeight;
+      setTrustedHtml(thinkingBubble, botResponse);
+      saveHistory(botResponse);
+      if (messages.scrollTop !== undefined) messages.scrollTop = messages.scrollHeight;
       return;
     }
 
     if (guardrail.type === "diagnosis_prohibited") {
       botResponse = guardrail.message;
       if (hasApprovedReport) {
-        const r = caseStatusInfo.report;
         const recorded = getRecordedClinicalContent(r, isEn);
         const diag = escapeHtml(recorded.diag);
         const docName = escapeHtml(getRecordedDoctorIdentity(r, isEn).name);
         botResponse += isEn
           ? `<br><br>🩺 <strong>The certified diagnosis established by ${docName} is:</strong><br><br>${diag}`
           : `<br><br>🩺 <strong>التشخيص السريري المعتمد الوحيد لك من قِبل ${docName} هو:</strong><br><br>${diag}`;
+        botResponse += makeSourceLink("Certified Diagnosis", "التشخيص السريري المعتمد");
       } else {
         botResponse += isEn
           ? `<br><br>🔒 <em>Your assessment is still awaiting physician review. Independent AI diagnosis is barred.</em>`
           : `<br><br>🔒 <em>فحصك الطبي قيد مراجعة الطبيب حالياً. يمنع النظام أي تشخيص آلي قبل اعتماد الطبيب.</em>`;
       }
       botResponse += disclaimerHtml;
-      thinkingBubble.innerHTML = botResponse;
-      messages.scrollTop = messages.scrollHeight;
+      setTrustedHtml(thinkingBubble, botResponse);
+      saveHistory(botResponse);
+      if (messages.scrollTop !== undefined) messages.scrollTop = messages.scrollHeight;
       return;
     }
   }
@@ -11950,13 +15161,13 @@ async function handleSendChatMessage() {
         : "🔒 تنبيه طبي: فحصك الطبي ما زال قيد المراجعة والتدقيق بواسطة الطبيب المختص. وفقاً لحواجز الأمان السريرية، يمتنع المساعد تماماً عن تقديم تشخيصات أو وصف علاجات قبل صدور الاعتماد الرسمي من الطبيب. يرجى الانتظار حتى اعتماد التقرير.";
     }
     botResponse += disclaimerHtml;
-    thinkingBubble.innerHTML = botResponse;
-    messages.scrollTop = messages.scrollHeight;
+    setTrustedHtml(thinkingBubble, botResponse);
+    saveHistory(botResponse);
+    if (messages.scrollTop !== undefined) messages.scrollTop = messages.scrollHeight;
     return;
   }
 
   // 3. CASE IS GENUINELY APPROVED - EXPLAIN ONLY WHAT THE DOCTOR RECORDED
-  const r = caseStatusInfo.report;
   const recorded = getRecordedClinicalContent(r, isEn);
   const diag = escapeHtml(recorded.diag);
   const meds = escapeHtml(recorded.meds);
@@ -11966,6 +15177,182 @@ async function handleSendChatMessage() {
   const o2 = recordedClinicalText(String(r.oxygenLevel ?? r.o2 ?? ""), isEn);
 
   const q = query.toLowerCase();
+
+  function checkAbsentLocal(queryStr, reportObj, isEnglish) {
+    const queryLower = String(queryStr || "").toLowerCase();
+    const absentDomains = [
+      { pattern: /ضغط\s*(ال)?دم|blood\s*pressure|hypertension/i, nameEn: "Blood Pressure", nameAr: "ضغط الدم" },
+      { pattern: /تحليل\s*(ال)?دم|تحاليل|cbc|blood\s*test|blood\s*sugar|سكر\s*(ال)?دم|glucose|وظائف\s*(ال)?كبد|وظائف\s*(ال)?كلى|creatinine/i, nameEn: "Blood Tests & Lab Chemistry", nameAr: "تحاليل الدم والمختبر" },
+      { pattern: /(أشعة|اشعة)\s*(مقطعية|سينية|الصدر)?|رنين\s*مغناطيسي|x-?ray|ct\s*scan|mri|ultrasound|سونار/i, nameEn: "Radiology & Diagnostic Imaging (X-Ray / CT / MRI)", nameAr: "الأشعة والتصوير الطبي" },
+      { pattern: /جراحة|عملية\s*(جراحية)?|surgery|surgical\s*operation/i, nameEn: "Surgical Interventions", nameAr: "العمليات الجراحية" },
+      { pattern: /رسم\s*(ال)?قلب|تخطيط\s*(ال)?قلب|ecg|ekg|cardiac\s*test/i, nameEn: "Cardiac ECG / Electrocardiogram", nameAr: "تخطيط ورسم القلب" },
+      { pattern: /اختبار\s*(ال)?حساسية|allergy\s*test|allergy\s*panel/i, nameEn: "Allergy Sensitivity Testing", nameAr: "اختبارات الحساسية المتقدمة" },
+      { pattern: /سرطان|ورم|أورام|اورام|cancer|tumor|biopsy|خزعة/i, nameEn: "Oncology & Biopsy Evaluations", nameAr: "فحوصات الأورام والخزعات" },
+      { pattern: /وزن|طول|مؤشر\s*كتلة|bmi|body\s*mass/i, nameEn: "Body Mass Index (BMI) & Anthropometrics", nameAr: "الوزن ومؤشر كتلة الجسم" }
+    ];
+
+    for (const domain of absentDomains) {
+      if (domain.pattern.test(queryLower)) {
+        const reportShortId = reportObj?.id ? reportObj.id.slice(-6).toUpperCase() : "";
+        return {
+          isAbsent: true,
+          topic: isEnglish ? domain.nameEn : domain.nameAr,
+          message: isEnglish
+            ? `⚠️ <strong>Information Absent from Approved Report:</strong><br><br>` +
+              `Details regarding <strong>${domain.nameEn}</strong> are <strong>not present or recorded</strong> in your certified respiratory assessment report (${reportShortId ? `#${reportShortId}` : "on file"}).<br><br>` +
+              `• <strong>Clinical Integrity Policy:</strong> Health Vibe AI Assistant strictly refrains from inventing, guessing, or filling in missing medical information not recorded by your physician.<br>` +
+              `• <strong>Recommended Action:</strong> Please prepare a question regarding ${domain.nameEn} to discuss directly with your attending doctor during your next clinical appointment.`
+            : `⚠️ <strong>معلومات غير واردة بالتقرير المعتمد:</strong><br><br>` +
+              `البيانات المتعلقة بـ <strong>${domain.nameAr}</strong> <strong>غير مسجلة أو غير واردة</strong> في تقريرك التنفسي المعتمد (${reportShortId ? `#${reportShortId}` : "المسجل"}).<br><br>` +
+              `• <strong>ميثاق النزاهة السريرية:</strong> يمتنع المساعد تماماً عن التكهن أو افتراض أو تعبئة أي معلومات طبية لم يسجلها الطبيب المختص.<br>` +
+              `• <strong>التوجيه الطبي:</strong> يُرجى تدوين هذا السؤال واستشارة طبيبك المعالج مباشرة خلال مراجعتك السريرية.`
+        };
+      }
+    }
+    return { isAbsent: false };
+  }
+
+  // Check for absent information first (Do not fill in missing information)
+  const absentCheck = typeof checkInformationAbsentFromReport === "function"
+    ? checkInformationAbsentFromReport(query, r, isEn)
+    : checkAbsentLocal(query, r, isEn);
+  if (absentCheck.isAbsent) {
+    botResponse = absentCheck.message;
+    botResponse += disclaimerHtml;
+    setTrustedHtml(thinkingBubble, botResponse);
+    saveHistory(botResponse);
+    if (messages.scrollTop !== undefined) messages.scrollTop = messages.scrollHeight;
+    return;
+  }
+
+  // Check if user is asking to prepare questions for the doctor
+  const isDoctorQuestionsQuery = /جهز.*أسئلة|اسئلة للطبيب|اسئلة للدكتور|ماذا اسأل|ماذا أسأل|اسئلة الاستشارة|أسئلة للمناقشة|أسئلة للمتابعة|prepare.*question|questions.*doctor|questions.*physician|what.*ask.*doctor|consultation questions/i.test(q);
+  if (isDoctorQuestionsQuery) {
+    botResponse = isEn
+      ? `📋 <strong>Recommended Questions to Prepare for Your Doctor:</strong><br><br>` +
+        `Based on your certified report (#${rId}), here are structured questions you can discuss during your next consultation:<br><br>` +
+        `<strong>1. About Your Diagnosis:</strong><br>` +
+        `• <em>"What is the expected recovery timeline for my condition (${diag}), and what signs indicate full resolution?"</em><br>` +
+        `• <em>"Are there any secondary symptoms I should monitor closely at home?"</em><br>` +
+        makeSourceLink("Certified Diagnosis", "التشخيص السريري المعتمد") + `<br>` +
+        `<strong>2. About Prescribed Medications:</strong><br>` +
+        `• <em>"How many days should I continue taking the prescribed treatments, and should I taper any doses?"</em><br>` +
+        `• <em>"What potential side effects should I be aware of, and what should I do if a dose is missed?"</em><br>` +
+        makeSourceLink("Prescribed Medications", "الأدوية المعتمدة") + `<br>` +
+        `<strong>3. About Oxygen Saturation & Monitoring:</strong><br>` +
+        `• <em>"My oxygen was recorded at ${o2}%. What is my target range, and at what reading should I seek urgent medical help?"</em><br>` +
+        makeSourceLink("Vital Signs (SpO2)", "العلامات الحيوية ونسبة الأكسجين") + `<br>` +
+        `<strong>4. About Lifestyle & Follow-Up:</strong><br>` +
+        `• <em>"Are there environmental triggers (dust, weather, physical exertion) I should avoid?"</em><br>` +
+        `• <em>"When do you recommend I schedule my follow-up evaluation?"</em><br>` +
+        makeSourceLink("Doctor Clinical Instructions", "إرشادات وتعليمات الطبيب")
+      : `📋 <strong>أسئلة مقترحة ومهمة لتجهيزها لمناقشتها مع طبيبك المعالج:</strong><br><br>` +
+        `بناءً على نتائج تقريرك الطبي المعتمد (#${rId})، قمنا بتنظيم أهم الأسئلة المناسبة لمراجعتك القادمة مع ${docName}:<br><br>` +
+        `<strong>١. أسئلة حول التشخيص المعتمد:</strong><br>` +
+        `• <em>"ما هي المدة المتوقعة للتعافي من حالة (${diag})، وما هي مؤشرات التحسن التام؟"</em><br>` +
+        `• <em>"هل هناك أي أعراض محتملة تستوجب مراجعتك فوراً؟"</em><br>` +
+        makeSourceLink("Certified Diagnosis", "التشخيص السريري المعتمد") + `<br>` +
+        `<strong>٢. أسئلة حول الأدوية الموصوفة:</strong><br>` +
+        `• <em>"كم يوماً يجب علي الاستمرار في تناول الأدوية المقررة، وهل يتم التوقف تدريجياً أم فجأة؟"</em><br>` +
+        `• <em>"ما هي الآثار الجانبية الشائعة التي ينبغي الانتباه إليها، وكيف أتصرف في حال نسيان جرعة؟"</em><br>` +
+        makeSourceLink("Prescribed Medications", "الأدوية المعتمدة") + `<br>` +
+        `<strong>٣. أسئلة حول قياس الأكسجين والمتابعة:</strong><br>` +
+        `• <em>"تم تسجيل نسبة الأكسجين لدي عند ${o2}%، ما هو المعدل الآمن المستهدف منزلياً وما الحد الذي يستدعي التدخل الطبي؟"</em><br>` +
+        makeSourceLink("Vital Signs (SpO2)", "العلامات الحيوية ونسبة الأكسجين") + `<br>` +
+        `<strong>٤. أسئلة حول نمط الحياة والموعد القادم:</strong><br>` +
+        `• <em>"هل هناك محفزات بيئية كالغبار أو برودة الجو أو المجهود البدني ينبغي تجنبها مؤقتاً؟"</em><br>` +
+        `• <em>"متى توصي بحجز موعد المتابعة والاستشارة القادمة؟"</em><br>` +
+        makeSourceLink("Doctor Clinical Instructions", "إرشادات وتعليمات الطبيب");
+    botResponse += disclaimerHtml;
+    setTrustedHtml(thinkingBubble, botResponse);
+    saveHistory(botResponse);
+    if (messages.scrollTop !== undefined) messages.scrollTop = messages.scrollHeight;
+    return;
+  }
+
+  // Check if user is asking about clinical terminology
+  const isTerminologyQuery = /مصطلح|مصطلحات|معنى|يعني ايه|ما معنى|ما هو|ما هي|terminology|term|meaning of|what is|what does.*mean/i.test(q) ||
+    /spo2|تشبع الأكسجين|أكسجين|oxygen saturation|wheez|أزيز|صفير|تزييق|crackle|خرخرة|طقطقة|dyspnea|ضيق تنفس|bronchitis|التهاب شعب|asthma|ربو|copd|سدة رئوية|inhaler|بخاخ|bronchodilator|موسع|cough|سعال|كحة|sputum|بلغم|stridor|صرير|tachypnea|سرعة التنفس/i.test(q);
+  if (isTerminologyQuery) {
+    let termExplanation = "";
+    if (/spo2|تشبع الأكسجين|أكسجين|oxygen saturation/i.test(q)) {
+      termExplanation = isEn
+        ? `🫁 <strong>SpO2 (Oxygen Saturation):</strong><br><br>` +
+          `• <strong>Definition:</strong> The percentage of oxygen-carrying hemoglobin in the red blood cells compared to their maximum capacity. Normal baseline for healthy adults is typically between 95% and 100%.<br>` +
+          `• <strong>In Your Report:</strong> Your attending physician verified your SpO2 reading at <strong>${o2}%</strong>.` +
+          makeSourceLink("Vital Signs (Oxygen Saturation SpO2)", "العلامات الحيوية ونسبة تشبع الأكسجين")
+        : `🫁 <strong>نسبة تشبع الأكسجين في الدم (SpO2):</strong><br><br>` +
+          `• <strong>المعنى الطبي:</strong> قياس يوضح النسبة المئوية لكريات الدم الحمراء المحملة بالأكسجين من إجمالي سعتها. النطاق الطبيعي للبالغين الأصحاء هو بين 95% و100%.<br>` +
+          `• <strong>في تقريرك الطبي:</strong> وثّق طبيبك المعالج قراءة الأكسجين لحالتك عند <strong>${o2}%</strong>.` +
+          makeSourceLink("Vital Signs (Oxygen Saturation SpO2)", "العلامات الحيوية ونسبة تشبع الأكسجين");
+    } else if (/wheez|أزيز|صفير|تزييق/i.test(q)) {
+      termExplanation = isEn
+        ? `🫁 <strong>Wheezing (Auscultation Sound):</strong><br><br>` +
+          `• <strong>Definition:</strong> A continuous, high-pitched whistling or musical sound made while breathing (especially exhalation), produced when air flows through narrowed or inflamed airways.<br>` +
+          `• <strong>In Your Report:</strong> Breath sounds evaluated during your assessment were reviewed by ${docName}.` +
+          makeSourceLink("Breath Sound Acoustics", "الصوت التنفسي وتحليل الفحص")
+        : `🫁 <strong>الأزيز التنفسي (الصفير / Wheezing):</strong><br><br>` +
+          `• <strong>المعنى الطبي:</strong> صوت تنفسي صفيري عالي النغمة يحدث أثناء التنفس (خاصة الزفير) نتيجة مرور الهواء في مجاري تنفسية ضيقة أو متورمة.<br>` +
+          `• <strong>في تقريرك الطبي:</strong> خضعت الأصوات التنفسية للفحص وتم تدقيقها بواسطة ${docName}.` +
+          makeSourceLink("Breath Sound Acoustics", "الصوت التنفسي وتحليل الفحص");
+    } else if (/crackle|خرخرة|طقطقة/i.test(q)) {
+      termExplanation = isEn
+        ? `🫁 <strong>Crackles / Rales:</strong><br><br>` +
+          `• <strong>Definition:</strong> Intermittent, clicking, bubbling, or rattling respiratory sounds caused by small airways snapping open during inhalation, often associated with fluid or inflammation in the lungs.<br>` +
+          `• <strong>In Your Report:</strong> Evaluated as part of your certified pulmonary assessment.` +
+          makeSourceLink("Clinical Sound Analysis", "تحليل الأصوات السريرية")
+        : `🫁 <strong>الخرخرة التنفسية (Crackles / Rales):</strong><br><br>` +
+          `• <strong>المعنى الطبي:</strong> أصوات طقطقة أو فرقعة متقطعة تُسمع في الرئتين عند الشهيق بسبب انفتاح الممرات الهوائية الدقيقة أو وجود إفرازات مخاطية.<br>` +
+          `• <strong>في تقريرك الطبي:</strong> تم تقييمها ضمن الفحص التنفسي المعتمد.` +
+          makeSourceLink("Clinical Sound Analysis", "تحليل الأصوات السريرية");
+    } else if (/dyspnea|ضيق تنفس/i.test(q)) {
+      termExplanation = isEn
+        ? `🫁 <strong>Dyspnea (Shortness of Breath):</strong><br><br>` +
+          `• <strong>Definition:</strong> Subjective feeling of difficulty in breathing or feeling out of air, requiring increased respiratory effort.<br>` +
+          `• <strong>In Your Report:</strong> Addressed in your clinical symptom review and recommendations.` +
+          makeSourceLink("Certified Diagnosis & Recommendations", "التشخيص والتوصيات المعتمدة")
+        : `🫁 <strong>ضيق التنفس (Dyspnea):</strong><br><br>` +
+          `• <strong>المعنى الطبي:</strong> شعور سريري بصعوبة أخذ النفس أو عدم كفاية الهواء المستنشق، مما يسبب جهداً تنفسياً إضافياً.<br>` +
+          `• <strong>في تقريرك الطبي:</strong> تم أخذه في الاعتبار في تشخيص الطبيب وإرشاداته المعتمدة.` +
+          makeSourceLink("Certified Diagnosis & Recommendations", "التشخيص والتوصيات المعتمدة");
+    } else if (/bronchodilator|موسع|inhaler|بخاخ/i.test(q)) {
+      termExplanation = isEn
+        ? `💊 <strong>Inhaler & Bronchodilators:</strong><br><br>` +
+          `• <strong>Definition:</strong> A bronchodilator is a medication that relaxes and widens the muscles around the airways. An inhaler is a device delivering medication directly into the airways for rapid local action.<br>` +
+          `• <strong>In Your Report:</strong> Prescribed medications certified by your doctor: ${meds.replace(/\n/g, ', ')}.` +
+          makeSourceLink("Prescribed Medications", "الأدوية المعتمدة")
+        : `💊 <strong>البخاخ وموسعات الشعب الهوائية (Bronchodilators & Inhalers):</strong><br><br>` +
+          `• <strong>المعنى الطبي:</strong> موسع الشعب هو دواء يعمل على إرخاء عضلات مجرى التنفس وتوسيعه لتسهيل تدفق الهواء. والبخاخ هو جهاز محمول لتوصيل الدواء مباشرة إلى الرئتين.<br>` +
+          `• <strong>في تقريرك الطبي:</strong> الأدوية المعتمدة لحالتك من الطبيب هي: ${meds.replace(/\n/g, '، ')}.` +
+          makeSourceLink("Prescribed Medications", "الأدوية المعتمدة");
+    } else {
+      // General terminology explanation from the patient's specific report
+      termExplanation = isEn
+        ? `📖 <strong>Key Clinical Terms from Your Certified Report (#${rId}):</strong><br><br>` +
+          `• <strong>Diagnosis (${diag}):</strong> The definitive medical evaluation established by ${docName}.<br>` +
+          makeSourceLink("Certified Diagnosis", "التشخيص السريري المعتمد") + `<br>` +
+          `• <strong>SpO2 (${o2}%):</strong> Blood oxygen saturation level measured during your assessment.<br>` +
+          makeSourceLink("Vital Signs (SpO2)", "العلامات الحيوية ونسبة الأكسجين") + `<br>` +
+          `• <strong>Prescription (${meds.replace(/\n/g, ', ')}):</strong> Medication officially certified by your doctor.<br>` +
+          makeSourceLink("Prescribed Medications", "الأدوية المعتمدة") + `<br><br>` +
+          `<em>You may ask for the meaning of any specific term such as SpO2, wheezing, inhaler, or bronchitis.</em>`
+        : `📖 <strong>أهم المصطلحات الطبية الواردة في تقريرك المعتمد (#${rId}):</strong><br><br>` +
+          `• <strong>التشخيص المعتمد (${diag}):</strong> التقييم الطبي النهائي المعتمد والموقع من ${docName}.<br>` +
+          makeSourceLink("Certified Diagnosis", "التشخيص السريري المعتمد") + `<br>` +
+          `• <strong>تشبع الأكسجين (${o2}%):</strong> نسبة الأكسجين المحمولة في الدم المسجلة أثناء الفحص.<br>` +
+          makeSourceLink("Vital Signs (SpO2)", "العلامات الحيوية ونسبة الأكسجين") + `<br>` +
+          `• <strong>الروشتة العلاجية (${meds.replace(/\n/g, '، ')}):</strong> العلاج المعتمد رسمياً لك من قِبل الطبيب.<br>` +
+          makeSourceLink("Prescribed Medications", "الأدوية المعتمدة") + `<br><br>` +
+          `<em>يمكنك السؤال عن معنى أي مصطلح محدد مثل SpO2، أزيز الصدر، البخاخ، أو التهاب الشعب.</em>`;
+    }
+
+    botResponse = termExplanation + disclaimerHtml;
+    setTrustedHtml(thinkingBubble, botResponse);
+    saveHistory(botResponse);
+    if (messages.scrollTop !== undefined) messages.scrollTop = messages.scrollHeight;
+    return;
+  }
+
   const isMedQuery = /دواء|علاج|روشتة|جرعة|أدوية|بخاخ|مضاد|مسكن|medication|medicine|drug|prescription|dose|rx/i.test(q);
   const isRecQuery = /نصائح|تعليمات|ارشادات|توصيات|أعمل ايه|ماذا أفعل|advice|recommendation|instruction|tips/i.test(q);
   const isDiagQuery = /تشخيص|مرضي|حالتي|ماذا عندي|أعراض|diagnosis|condition|disease|what do i have/i.test(q);
@@ -11975,37 +15362,53 @@ async function handleSendChatMessage() {
     botResponse = isEn
       ? `💊 <strong>Prescribed Medications (Certified by ${docName}):</strong><br><br>${meds.replace(/\n/g, '<br>')}<br><br>⚠️ <em>Notice: The assistant does not alter or prescribe medications. Please adhere strictly to the prescribed doses.</em>`
       : `💊 <strong>الأدوية المعتمدة في تقريرك الطبي (بواسطة ${docName}):</strong><br><br>${meds.replace(/\n/g, '<br>')}<br><br>⚠️ <em>تنبيه أمان: المساعد لا يصف أدوية ولا يعدل جرعات. يُرجى الالتزام التام بالجرعات المقررة ومراجعة الطبيب قبل تغيير أو إيقاف أي علاج.</em>`;
+    botResponse += makeSourceLink("Prescribed Medications", "الأدوية المعتمدة");
   } else if (isRecQuery) {
     const recListHtml = recs.map((rec, i) => `${i + 1}. ${rec}`).join("<br>");
     botResponse = isEn
       ? `💡 <strong>Doctor's Clinical Instructions & Recommendations:</strong><br><br>${recListHtml}<br><br>🚨 <em>Emergency notice: In case of severe shortness of breath or persistent chest pain, seek immediate emergency care.</em>`
       : `💡 <strong>تعليمات وتوصيات الطبيب المعتمد (${docName}):</strong><br><br>${recListHtml}<br><br>🚨 <em>تنبيه طوارئ: في حال حدوث ضيق تنفس حاد مفاجئ أو ألم بالصدر، توجه فوراً لأقرب قسم طوارئ.</em>`;
+    botResponse += makeSourceLink("Doctor Clinical Instructions", "إرشادات وتعليمات الطبيب المعتمد");
   } else if (isDiagQuery) {
     botResponse = isEn
       ? `🩺 <strong>Certified Clinical Assessment (Signed by ${docName}):</strong><br><br>${diag}<br><br>• <strong>Oxygen Saturation (SpO2):</strong> ${o2}%<br>• <strong>Doctor License:</strong> <code>${docLicense}</code><br><br><em>(This is an explanation of the doctor's certified record, not an independent AI diagnosis.)</em>`
       : `🩺 <strong>التشخيص السريري المعتمد (الموقع من ${docName}):</strong><br><br>${diag}<br><br>• <strong>نسبة تشبع الأكسجين المسجلة:</strong> ${o2}%<br>• <strong>ترخيص الطبيب:</strong> <code>${docLicense}</code><br><br><em>(هذا توضيح لما سجله الطبيب المعتمد في تقريرك، وليس تشخيصاً آلياً مستقلاً.)</em>`;
+    botResponse += makeSourceLink("Certified Diagnosis & Oxygen Saturation", "التشخيص السريري المعتمد ونسبة الأكسجين");
   } else if (isDocQuery) {
     botResponse = isEn
       ? `👨‍⚕️ <strong>Attending Physician Credentials:</strong><br><br>• <strong>Doctor:</strong> ${docName}<br>• <strong>Medical Syndicate License:</strong> <code>${docLicense}</code><br>• <strong>Status:</strong> Certified & Digitally Signed`
       : `👨‍⚕️ <strong>بيانات الطبيب المعتمد للتقرير:</strong><br><br>• <strong>الطبيب:</strong> ${docName}<br>• <strong>رقم ترخيص النقابة:</strong> <code>${docLicense}</code><br>• <strong>الحالة:</strong> تقرير طبي معتمد وموقع رقمياً`;
+    botResponse += makeSourceLink("Doctor Identity & Credentials", "بيانات واعتماد الطبيب وترخيص النقابة");
   } else {
     const shortRecs = recs.slice(0, 2).map((rec, i) => `${i + 1}. ${rec}`).join("<br>");
     botResponse = isEn
-      ? `📋 <strong>Summary of Certified Report (#${r.id.slice(-6).toUpperCase()} by ${docName}):</strong><br><br>` +
+      ? `📋 <strong>Summary of Certified Report (#${rId} by ${docName}):</strong><br><br>` +
         `🩺 <strong>Doctor's Diagnosis:</strong> ${diag}<br><br>` +
         `💊 <strong>Doctor's Prescription:</strong><br>${meds.replace(/\n/g, '<br>')}<br><br>` +
         `💡 <strong>Key Instructions:</strong><br>${shortRecs}<br><br>` +
-        `<em>You may ask to clarify specific items from the doctor's approved report.</em>`
-      : `📋 <strong>ملخص تقريرك الطبي المعتمد (#${r.id.slice(-6).toUpperCase()} بواسطة ${docName}):</strong><br><br>` +
+        `<em>You may ask to explain terminology, clarify specific items, or prepare questions for your doctor.</em>`
+      : `📋 <strong>ملخص تقريرك الطبي المعتمد (#${rId} بواسطة ${docName}):</strong><br><br>` +
         `🩺 <strong>تشخيص الطبيب المعتمد:</strong> ${diag}<br><br>` +
         `💊 <strong>العلاج المعتمد من الطبيب:</strong><br>${meds.replace(/\n/g, '<br>')}<br><br>` +
         `💡 <strong>أهم التعليمات:</strong><br>${shortRecs}<br><br>` +
-        `<em>يمكنك سؤالي لتوضيح أي نقطة واردة في تقرير الطبيب المعتمد.</em>`;
+        `<em>يمكنك سؤالي لشرح المصطلحات الطبية، أو توضيح أي نقطة في التقرير، أو تجهيز أسئلة لمناقشتها مع الطبيب.</em>`;
+    botResponse += makeSourceLink("Full Certified Report", "السجل الطبي المعتمد بالكامل");
   }
 
   botResponse += disclaimerHtml;
-  thinkingBubble.innerHTML = botResponse;
-  messages.scrollTop = messages.scrollHeight;
+  setTrustedHtml(thinkingBubble, botResponse);
+  saveHistory(botResponse);
+  if (messages.scrollTop !== undefined) messages.scrollTop = messages.scrollHeight;
+}
+
+if (typeof window !== "undefined") {
+  if (typeof evaluateClinicalGuardrails !== "undefined") window.evaluateClinicalGuardrails = evaluateClinicalGuardrails;
+  if (typeof checkInformationAbsentFromReport !== "undefined") window.checkInformationAbsentFromReport = checkInformationAbsentFromReport;
+  if (typeof buildReportSourceLink !== "undefined") window.buildReportSourceLink = buildReportSourceLink;
+  if (typeof pruneAssistantChatHistory !== "undefined") window.pruneAssistantChatHistory = pruneAssistantChatHistory;
+  if (typeof saveAssistantChatMessage !== "undefined") window.saveAssistantChatMessage = saveAssistantChatMessage;
+  if (typeof clearAssistantChatHistory !== "undefined") window.clearAssistantChatHistory = clearAssistantChatHistory;
+  if (typeof ASSISTANT_CHAT_RETENTION_DAYS !== "undefined") window.ASSISTANT_CHAT_RETENTION_DAYS = ASSISTANT_CHAT_RETENTION_DAYS;
 }
 
 window.sendAssistantQuickPrompt = function(promptText) {
@@ -12030,21 +15433,10 @@ if (chatInputField) {
   });
 }
 
-if (themeToggle) {
-  themeToggle.addEventListener("click", toggleTheme);
-}
-if (siteThemeToggle) {
-  siteThemeToggle.addEventListener("click", toggleTheme);
-}
-const topbarThemeToggleBtn = document.getElementById("topbarThemeToggle");
-if (topbarThemeToggleBtn) {
-  topbarThemeToggleBtn.addEventListener("click", toggleTheme);
-}
-
 languageToggle.addEventListener("click", () => {
   const nextLanguage = currentLanguage === "ar" ? "en" : "ar";
   applyLanguage(nextLanguage);
-  showToast(nextLanguage === "ar" ? "الواجهة مضبوطة على العربية" : "الواجهة مضبوطة على الإنجليزية");
+  showToast(nextLanguage === "ar" ? "الواجهة مضبوطة على العربية" : "Interface set to English");
 });
 
 menuToggle.addEventListener("click", () => {
@@ -12070,6 +15462,13 @@ function initHVAuthListener() {
       return;
     }
     if (user) {
+      if (window.asyncContextManager) {
+        window.asyncContextManager.handleAuthChange("LOGIN", {
+          uid: user.uid,
+          email: user.email,
+          role: selectedRole
+        });
+      }
       window._restoredSessionUser = user;
       saveActiveSession(user, selectedRole);
       // 1. Instantly transition UI into the app so user never hangs
@@ -12087,7 +15486,7 @@ function initHVAuthListener() {
           // 🛑 Check if user account is suspended by administration
           const isUserSuspended = Boolean(udata.suspended === true || udata.isSuspended === true || udata.status === "suspended" || udata.accountStatus === "suspended" || udata.disabled === true);
           if (isUserSuspended && !isOwner) {
-            console.warn("[Health Vibes] Account suspended by administration. Blocking access:", user.email);
+            console.warn("[Health Vibe] Account suspended by administration. Blocking access:", user.email);
             clearActiveSession();
             window._isSigningOut = true;
             await auth.signOut();
@@ -12113,7 +15512,7 @@ function initHVAuthListener() {
                 verifiedByAdmin: null
               }, { merge: true }).catch(() => {});
             }
-          } else if (udata.phoneVerified || udata.emailVerified) {
+          } else if (udata.emailVerified === true) {
             window._isUserVerified = true;
             window._verifiedPhone = udata.phoneNumber || "";
           }
@@ -12132,9 +15531,6 @@ function initHVAuthListener() {
           await db.collection("users").doc(user.uid).set({
             name: displayName || user.email.split('@')[0],
             email: user.email,
-            role: safeRole,
-            isOwner: isOwner,
-            emailVerified: verificationRevoked ? false : (user.emailVerified || false),
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
           }, { merge: true });
         }
@@ -12144,7 +15540,7 @@ function initHVAuthListener() {
           callBackend("/api/user/sync-role", { method: "POST" })
             .then(syncRes => {
               if (syncRes && syncRes.role && syncRes.role !== selectedRole) {
-                console.log(`[Health Vibes] Synced authoritative role from Backend: ${syncRes.role}`);
+                console.log(`[Health Vibe] Synced authoritative role from Backend: ${syncRes.role}`);
                 selectedRole = syncRes.role;
                 saveActiveSession(user, selectedRole);
                 if (typeof updateNavVisibility === "function") updateNavVisibility(user);
@@ -12160,18 +15556,10 @@ function initHVAuthListener() {
       // Update with enriched details
       transitionToApp(user);
     } else {
-      // Firebase returned null: Check if we have an active saved session!
-      const activeSession = getActiveSession();
-      if (activeSession && !window._isSigningOut) {
-        console.log("[Health Vibes] Retaining persisted user session across refresh.");
-        const restoredUser = window._restoredSessionUser || restorePersistedSession();
-        if (restoredUser) {
-          transitionToApp(restoredUser, { navigate: false });
-        }
-        return;
-      }
-
       // Truly signed out
+      if (window.asyncContextManager) {
+        window.asyncContextManager.handleAuthChange("LOGOUT");
+      }
       clearActiveSession();
       window._isUserVerified = false;
       window._verifiedPhone = "";
@@ -12188,10 +15576,12 @@ function initHVAuthListener() {
         app.removeAttribute("hidden");
         app.style.display = "grid";
       }
+      const elapsed = Date.now() - loaderStartTime;
+      const delay = Math.max(340, LOADER_MIN_DISPLAY_MS - elapsed);
       window.setTimeout(() => {
-        if (loader) loader.classList.add("is-done");
+        dismissLoader(true);
         showScreen("patient");
-      }, 250);
+      }, delay);
     }
   });
 }
@@ -12231,7 +15621,13 @@ function checkUrlAuthAction() {
   }
 }
 
-showScreen("patient");
+const initialParams = new URLSearchParams(window.location.search);
+const initialScreen = initialParams.get("screen");
+if (initialScreen === "verify-report" || initialScreen === "verify") {
+  showScreen("verify-report");
+} else {
+  showScreen("patient");
+}
 bindScreenNavigation();
 applyLanguage(currentLanguage);
 checkUrlAuthAction();
@@ -12254,7 +15650,7 @@ checkUrlAuthAction();
     const allScreenNames = [
       "patient","consent","profile","assessment","pending","result",
       "history","appointments","feedback","assistant","report",
-      "verification","doctor","kpi","admin","audit"
+      "verification","doctor","kpi","admin","audit","verify-report","verify"
     ];
     if (allScreenNames.includes(screenFromHash)) {
       console.info(`[HashRouter] Hash navigation to '${screenFromHash}'.`);
@@ -12293,6 +15689,7 @@ window.openLegalModal = function(tab = "privacy") {
   modal.classList.add("open");
   modal.setAttribute("aria-hidden", "false");
   window.switchLegalTab(tab);
+  setDialogAccessibility(modal, true);
 };
 
 window.closeLegalModal = function() {
@@ -12300,6 +15697,7 @@ window.closeLegalModal = function() {
   if (!modal) return;
   modal.classList.remove("open");
   modal.setAttribute("aria-hidden", "true");
+  setDialogAccessibility(modal, false);
 };
 
 window.switchLegalTab = function(tab = "privacy") {
@@ -12335,48 +15733,193 @@ window.exportUserData = async function() {
     return;
   }
 
-  showToast(isEn ? "Preparing your medical data..." : "جاري تجهيز بياناتك الطبية للتصدير...");
+  showToast(isEn ? "Preparing your complete medical & account data..." : "جاري تجهيز وتشفير بياناتك السريرية والحساب للتصدير...");
 
   try {
-    const exportPayload = {
-      exportVersion: "HealthVibe-Export-v1.0",
-      exportTimestamp: new Date().toISOString(),
-      userProfile: {
-        uid: user.uid,
-        email: user.email,
-        displayName: user.displayName || user.email.split("@")[0],
-        emailVerified: user.emailVerified,
-        role: typeof selectedRole !== "undefined" ? selectedRole : "patient"
-      },
-      privacyConsent: typeof getStoredPrivacyConsent === "function" ? getStoredPrivacyConsent() : null,
-      cases: []
-    };
+    let exportPayload = null;
 
-    if (db) {
-      const snap = await db.collection("cases").where("patientId", "==", user.uid).get();
-      snap.forEach(docSnap => {
-        exportPayload.cases.push({
-          id: docSnap.id,
-          ...docSnap.data()
-        });
-      });
+    // Step A: Attempt server-authoritative GDPR Art. 20 export archive
+    if (typeof callBackend === "function") {
+      try {
+        const resp = await callBackend("/api/user/data-export", { method: "GET" });
+        if (resp && resp.exportArchive) {
+          exportPayload = resp.exportArchive;
+        } else if (resp && (resp.error === "REQUIRES_RECENT_LOGIN" || resp.code === "auth/requires-recent-login")) {
+          showToast(isEn ? "Security check: Please re-authenticate to export sensitive clinical data." : "فحص أمني: يرجى إعادة تسجيل الدخول لتصدير البيانات السريرية الحساسة.");
+          return;
+        }
+      } catch (beErr) {
+        console.warn("Backend export request warning, using client fallback:", beErr);
+      }
+    }
+
+    // Step B: Resilient client fallback if backend unreachable
+    if (!exportPayload) {
+      exportPayload = {
+        exportVersion: "HealthVibe-GDPR-Export-v2.0",
+        exportTimestamp: new Date().toISOString(),
+        userProfile: {
+          uid: user.uid,
+          email: user.email,
+          displayName: user.displayName || user.email.split("@")[0],
+          emailVerified: user.emailVerified,
+          role: typeof selectedRole !== "undefined" ? selectedRole : "patient"
+        },
+        privacyConsent: typeof getStoredPrivacyConsent === "function" ? getStoredPrivacyConsent() : null,
+        cases: [],
+        appointments: [],
+        feedbacks: []
+      };
+
+      if (db) {
+        const snap = await db.collection("cases").where("patientId", "==", user.uid).get().catch(() => null);
+        if (snap) {
+          snap.forEach(docSnap => {
+            exportPayload.cases.push({ id: docSnap.id, ...docSnap.data() });
+          });
+        }
+        const apptSnap = await db.collection("appointments").where("patientId", "==", user.uid).get().catch(() => null);
+        if (apptSnap) {
+          apptSnap.forEach(docSnap => {
+            exportPayload.appointments.push({ id: docSnap.id, ...docSnap.data() });
+          });
+        }
+      }
     }
 
     const dataBlob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(dataBlob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `healthvibe-data-${user.uid.substring(0, 8)}.json`;
+    link.download = `healthvibe-data-export-${user.uid.substring(0, 8)}.json`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
 
-    showToast(isEn ? "Data exported successfully!" : "تم تصدير البيانات بنجاح في ملف JSON!");
+    showToast(isEn ? "Data exported successfully (JSON)!" : "تم تصدير نسخة بياناتك المعتمدة بنجاح بصيغة JSON!");
   } catch (err) {
     console.error("Export error:", err);
     showToast(isEn ? "Export failed: " + err.message : "فشل تصدير البيانات: " + err.message);
   }
+};
+
+window.requestAccessReport = async function() {
+  const user = auth ? auth.currentUser : null;
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  if (!user) {
+    showToast(isEn ? "Please sign in first." : "يجب تسجيل الدخول أولاً.");
+    return;
+  }
+
+  showToast(isEn ? "Fetching your personal data access disclosure..." : "جاري استرجاع تقرير الوصول للبيانات الشخصية...");
+
+  try {
+    let report = null;
+    if (typeof callBackend === "function") {
+      const resp = await callBackend("/api/user/access-request", { method: "GET" });
+      if (resp && resp.report) {
+        report = resp.report;
+      }
+    }
+
+    if (!report) {
+      report = {
+        reportId: `access_${user.uid.substring(0, 6)}_${Date.now()}`,
+        generatedAt: new Date().toISOString(),
+        legalFramework: ["GDPR Art. 15 (Right of Access)", "HIPAA Security Standards"],
+        dataSubject: { userId: user.uid, userEmailMasked: user.email ? `${user.email[0]}***@${user.email.split('@')[1]}` : 'anonymous' },
+        processingPurposes: [
+          "Clinical triage of respiratory symptoms via AI advisory engine",
+          "Human-in-the-loop review and approval by certified physicians",
+          "Clinical appointment booking and schedule management"
+        ],
+        dataCategoriesProcessed: [
+          { category: "User Account & Authentication", status: "Active" },
+          { category: "Clinical Cases & Measurements", status: "Protected Health Information" }
+        ],
+        retentionPolicies: {
+          activeRecords: "Retained during clinical relationship or until patient deletion",
+          approvedClinicalCases: "5 years minimum under clinical retention guidelines",
+          backupSnapshots: "30 days automated cryptographic rotation"
+        }
+      };
+    }
+
+    window.openPrivacyDataModal(report, isEn ? "Data Access Report (GDPR Art. 15)" : "تقرير الوصول للبيانات الشخصية (GDPR Art. 15)");
+  } catch (err) {
+    console.error("Access request error:", err);
+    showToast(isEn ? "Access request failed: " + err.message : "تعذر استرجاع تقرير الوصول: " + err.message);
+  }
+};
+
+window.openPrivacyDataModal = function(reportData, title) {
+  const modal = document.getElementById("privacyDataModal");
+  const modalTitle = document.getElementById("privacyModalTitle");
+  const modalBody = document.getElementById("privacyModalBody");
+  const dlBtn = document.getElementById("btnDownloadPrivacyJson");
+  if (!modal || !modalBody) return;
+
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  if (modalTitle && title) modalTitle.textContent = title;
+
+  let html = `
+    <div style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 14px;">
+      <div style="font-weight: 700; color: var(--teal); margin-bottom: 6px;">
+        🆔 ${isEn ? "Report Reference" : "مرجع التقرير"}: ${reportData.reportId || 'N/A'}
+      </div>
+      <div style="font-size: 12px; color: var(--muted);">
+        📅 ${isEn ? "Generated" : "تاريخ التوليد"}: ${new Date(reportData.generatedAt || Date.now()).toLocaleString()}
+      </div>
+    </div>
+
+    <h4 style="margin: 12px 0 6px; font-size: 14px; color: var(--ink);">${isEn ? "1. Processing Purposes" : "١. أغراض معالجة البيانات"}</h4>
+    <ul style="padding-inline-start: 20px; margin: 0 0 14px; font-size: 12.5px; color: var(--muted); line-height: 1.7;">
+      ${(reportData.processingPurposes || []).map(p => `<li>${p}</li>`).join("")}
+    </ul>
+
+    <h4 style="margin: 12px 0 6px; font-size: 14px; color: var(--ink);">${isEn ? "2. Data Categories & Counts" : "٢. فئات وسجلات البيانات المحفوظة"}</h4>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; margin-bottom: 14px;">
+      ${(reportData.dataCategoriesProcessed || []).map(cat => `
+        <div style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px;">
+          <strong style="font-size: 12px; color: var(--ink); display: block;">${cat.category}</strong>
+          <span style="font-size: 11px; color: var(--teal);">${cat.count !== undefined ? `${cat.count} ${isEn ? 'records' : 'سجلات'}` : cat.status || ''}</span>
+        </div>
+      `).join("")}
+    </div>
+
+    <h4 style="margin: 12px 0 6px; font-size: 14px; color: var(--ink);">${isEn ? "3. Retention & Backup Policy" : "٣. فترات الاحتفاظ والنسخ الاحتياطية"}</h4>
+    <ul style="padding-inline-start: 20px; margin: 0 0 14px; font-size: 12.5px; color: var(--muted); line-height: 1.7;">
+      ${Object.entries(reportData.retentionPolicies || {}).map(([k, v]) => `<li><strong>${k}</strong>: ${v}</li>`).join("")}
+    </ul>
+  `;
+
+  modalBody.innerHTML = html;
+
+  if (dlBtn) {
+    dlBtn.style.display = "inline-flex";
+    dlBtn.onclick = () => {
+      const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: "application/json" });
+      const u = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = u;
+      a.download = `privacy-access-report-${Date.now()}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(u);
+    };
+  }
+
+  modal.style.display = "flex";
+  modal.setAttribute("aria-hidden", "false");
+};
+
+window.closePrivacyDataModal = function() {
+  const modal = document.getElementById("privacyDataModal");
+  if (!modal) return;
+  modal.style.display = "none";
+  modal.setAttribute("aria-hidden", "true");
 };
 
 window.openDeleteAccountModal = function() {
@@ -12386,7 +15929,7 @@ window.openDeleteAccountModal = function() {
   const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
 
   if (user && typeof isOwnerUser === "function" && isOwnerUser(user.email)) {
-    showToast(isEn ? "System owner account cannot be deleted." : "حساب مالك النظام محمي ولا يمكن حذفه.");
+    showToast(isEn ? "Owner account cannot be deleted." : "حساب Owner محمي ولا يمكن حذفه.");
     return;
   }
 
@@ -12397,10 +15940,15 @@ window.openDeleteAccountModal = function() {
   const btn = document.getElementById("btnExecuteAccountDeletion");
   if (btn) {
     btn.disabled = true;
+    btn.style.display = "inline-flex";
     btn.style.opacity = "0.5";
     btn.style.cursor = "not-allowed";
     btn.textContent = isEn ? "🗑️ Confirm & Delete Account" : "🗑️ تأكيد وحذف الحساب نهائياً";
   }
+  const retryBtn = document.getElementById("btnRetryAccountDeletion");
+  if (retryBtn) retryBtn.style.display = "none";
+  const progress = document.getElementById("deleteProgressContainer");
+  if (progress) progress.style.display = "none";
   const reauth = document.getElementById("deleteReauthGroup");
   if (reauth) reauth.style.display = "none";
   modal.classList.add("open");
@@ -12419,6 +15967,8 @@ window.closeDeleteAccountModal = function() {
 document.addEventListener("DOMContentLoaded", () => {
   const confirmInput = document.getElementById("deleteConfirmationInput");
   const deleteBtn = document.getElementById("btnExecuteAccountDeletion");
+  const retryBtn = document.getElementById("btnRetryAccountDeletion");
+
   if (confirmInput && deleteBtn) {
     confirmInput.addEventListener("input", () => {
       const val = confirmInput.value.trim().toUpperCase();
@@ -12428,7 +15978,7 @@ document.addEventListener("DOMContentLoaded", () => {
       deleteBtn.style.cursor = isValid ? "pointer" : "not-allowed";
     });
 
-    deleteBtn.addEventListener("click", async () => {
+    const runDeletionWorkflow = async (isRetry = false) => {
       const user = auth ? auth.currentUser : null;
       const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
       if (!user) {
@@ -12438,111 +15988,311 @@ document.addEventListener("DOMContentLoaded", () => {
 
       deleteBtn.disabled = true;
       deleteBtn.textContent = isEn ? "Deleting account and data..." : "جاري حذف الحساب والبيانات السريرية...";
+      if (retryBtn) retryBtn.style.display = "none";
+
+      const progressContainer = document.getElementById("deleteProgressContainer");
+      const progressStatus = document.getElementById("deleteProgressStatus");
+      const progressBadge = document.getElementById("deleteProgressBadge");
+      const stepsList = document.getElementById("deleteStepsList");
+
+      if (progressContainer) progressContainer.style.display = "block";
+      if (progressBadge) {
+        progressBadge.textContent = isEn ? "In Progress" : "قيد المعالجة";
+        progressBadge.className = "pill";
+        progressBadge.style.color = "var(--teal)";
+      }
+      if (progressStatus) {
+        progressStatus.textContent = isEn
+          ? "Executing clinical inventory, scrubbing PII, and cleaning storage..."
+          : "تنفيذ حصر البيانات، وتعقيم السجلات الطبية، وتطهير التخزين والنسخ الاحتياطية...";
+      }
+
+      const pwdInput = document.getElementById("deletePasswordInput");
+      if (pwdInput && pwdInput.value) {
+        try {
+          const cred = firebase.auth.EmailAuthProvider.credential(user.email, pwdInput.value);
+          await user.reauthenticateWithCredential(cred);
+        } catch (reauthErr) {
+          console.warn("Re-authentication error:", reauthErr.message);
+          deleteBtn.disabled = false;
+          deleteBtn.textContent = isEn ? "Re-authenticate & Delete" : "تأكيد كلمة المرور والحذف";
+          showToast(isEn ? "Invalid password for re-authentication." : "كلمة المرور غير صحيحة لتأكيد الهوية.");
+          return;
+        }
+      }
 
       try {
-        // Step A: Attempt via backend API first
-        let backendSuccess = false;
-        try {
-          if (typeof callBackend === "function") {
-            const resp = await callBackend("/api/user/delete-account", { method: "POST" });
-            if (resp && resp.error === "FORBIDDEN") {
-              throw new Error(resp.message || "Forbidden");
-            }
-            backendSuccess = true;
-          }
-        } catch (backendErr) {
-          if (backendErr.message && backendErr.message.includes("owner")) {
-            throw backendErr;
-          }
-          console.warn("Backend deletion call returned error, proceeding to client deletion fallback:", backendErr);
+        const endpoint = isRetry ? "/api/user/privacy/retry-deletion" : "/api/user/delete-account";
+        let resp = null;
+        if (typeof callBackend === "function") {
+          resp = await callBackend(endpoint, {
+            method: "POST",
+            body: JSON.stringify({
+              userId: user.uid,
+              userEmail: user.email
+            })
+          });
         }
 
-        // Step B: Client fallback if backend was offline
-        if (!backendSuccess) {
-          // 1. Purge or anonymize cases
-          if (db) {
-            const snap = await db.collection("cases").where("patientId", "==", user.uid).get();
-            for (const docSnap of snap.docs) {
-              const cData = docSnap.data();
-              if (cData.status === "pending") {
-                await docSnap.ref.delete().catch(() => {});
-              } else {
-                await docSnap.ref.update({
-                  patientName: "Deleted Patient",
-                  patientNameEn: "Deleted Patient",
-                  name: "Deleted Patient",
-                  nameEn: "Deleted Patient",
-                  patientEmail: "deleted@anonymized.local",
-                  isAnonymized: true
-                }).catch(() => {});
-              }
-            }
-            // 2. Remove user doc
-            await db.collection("users").doc(user.uid).delete().catch(() => {});
-          }
-
-          // 3. Delete Firebase Auth user
-          try {
-            await user.delete();
-          } catch (authDelErr) {
-            if (authDelErr.code === "auth/requires-recent-login") {
-              const reauthGroup = document.getElementById("deleteReauthGroup");
-              const pwdInput = document.getElementById("deletePasswordInput");
-              if (reauthGroup && reauthGroup.style.display === "none") {
-                reauthGroup.style.display = "block";
-                deleteBtn.disabled = false;
-                deleteBtn.textContent = isEn ? "Re-authenticate & Delete" : "تأكيد كلمة المرور والحذف";
-                showToast(isEn ? "Security check: Please enter your password to confirm." : "فحص أمني: يرجى كتابة كلمة المرور لتأكيد الهوية.");
-                if (pwdInput) pwdInput.focus();
-                return;
-              } else if (pwdInput && pwdInput.value) {
-                const cred = firebase.auth.EmailAuthProvider.credential(user.email, pwdInput.value);
-                await user.reauthenticateWithCredential(cred);
-                await user.delete();
-              } else {
-                throw authDelErr;
-              }
-            } else {
-              throw authDelErr;
-            }
-          }
+        // Handle Re-Authentication required response
+        if (resp && (resp.error === "REQUIRES_RECENT_LOGIN" || resp.code === "auth/requires-recent-login")) {
+          const reauthGroup = document.getElementById("deleteReauthGroup");
+          if (reauthGroup) reauthGroup.style.display = "block";
+          if (progressContainer) progressContainer.style.display = "none";
+          deleteBtn.disabled = false;
+          deleteBtn.textContent = isEn ? "Confirm Password & Retry" : "تأكيد كلمة المرور وإعادة المحاولة";
+          showToast(isEn ? "Security check: Please enter your password to confirm identity." : "فحص أمني: يرجى كتابة كلمة المرور لتأكيد الهوية.");
+          if (pwdInput) pwdInput.focus();
+          return;
         }
 
-        // Step C: Cleanup Local Storage, Registry & State
+        // Handle partial failure without false completion claim
+        if (resp && (!resp.success || resp.status === "partially_failed")) {
+          if (progressBadge) {
+            progressBadge.textContent = isEn ? "Partial Failure" : "فشل جزئي";
+            progressBadge.className = "pill danger";
+            progressBadge.style.color = "#ef4444";
+          }
+          if (progressStatus) {
+            progressStatus.textContent = isEn
+              ? `Step failed: ${resp.failedStep || 'Unknown'}. ${resp.message}`
+              : `تعثرت مرحلة: ${resp.failedStep || 'غير محدد'}. ${resp.message}`;
+          }
+          if (stepsList && resp.steps) {
+            stepsList.innerHTML = Object.entries(resp.steps)
+              .map(([sName, sData]) => `<div>${sData.status === 'completed' ? '✅' : sData.status === 'failed' ? '❌' : '⏳'} <strong>${sName}</strong>: ${sData.status}</div>`)
+              .join("");
+          }
+
+          deleteBtn.style.display = "none";
+          if (retryBtn) {
+            retryBtn.style.display = "inline-flex";
+            retryBtn.textContent = isEn ? "🔄 Retry Deletion Safely" : "🔄 إعادة المحاولة الآمنة لاستكمال الحذف";
+          }
+
+          showToast(isEn ? "Partial deletion failure occurred. You can safely retry without losing progress." : "حدث تعثر جزئي أثناء الحذف. يمكنك إعادة المحاولة بأمان دون فقدان ما تم إنجازه.");
+          return;
+        }
+
+        if (resp && resp.error === "FORBIDDEN") {
+          throw new Error(resp.message || "Forbidden");
+        }
+
+        // Successful completion confirmed across all domains
         try {
           if (typeof getConsentStorageKey === "function") {
             localStorage.removeItem(getConsentStorageKey());
           }
           localStorage.removeItem(`hv_privacy_consent_${user.uid}`);
-          if (typeof getLocalAccountsRegistry === "function") {
-            const list = getLocalAccountsRegistry();
-            const filtered = list.filter(u => u.id !== user.uid && u.email?.toLowerCase() !== user.email?.toLowerCase());
-            localStorage.setItem(ACCOUNTS_REGISTRY_KEY, JSON.stringify(filtered));
-          }
           if (typeof clearActiveSession === "function") clearActiveSession();
-          localStorage.removeItem("hv_active_session");
-          sessionStorage.removeItem("hv_active_session");
-          localStorage.removeItem("hv_user_logged_in");
           localStorage.removeItem(REMEMBER_ME_KEY);
-          sessionStorage.removeItem("health_vibe_phone_verified");
+          purgeSensitiveLegacyStorage();
         } catch {}
 
         closeDeleteAccountModal();
-        showToast(isEn ? "Your account and data have been permanently deleted." : "تم حذف حسابك وبياناتك بنجاح. نتمنى لك دوام الصحة والعافية.");
+        showToast(isEn ? "Your account and personal data have been permanently deleted." : "تم حذف حسابك وبياناتك بنجاح. نتمنى لك دوام الصحة والعافية.");
 
-        // Sign out and redirect
         if (auth) await auth.signOut().catch(() => {});
         window.location.reload();
       } catch (finalErr) {
-        console.error("Account deletion failed:", finalErr);
+        console.error("Account deletion error:", finalErr);
         deleteBtn.disabled = false;
         deleteBtn.textContent = isEn ? "🗑️ Confirm & Delete Account" : "🗑️ تأكيد وحذف الحساب نهائياً";
+        if (progressContainer) progressContainer.style.display = "none";
         showToast(isEn ? "Deletion failed: " + finalErr.message : "فشل حذف الحساب: " + (getAuthErrorMessage ? getAuthErrorMessage(finalErr) : finalErr.message));
       }
-    });
+    };
+
+    deleteBtn.addEventListener("click", () => runDeletionWorkflow(false));
+    if (retryBtn) {
+      retryBtn.addEventListener("click", () => runDeletionWorkflow(true));
+    }
   }
 });
 
+// =========================================================================
+// 🔒 USER SESSIONS, CREDENTIAL RE-AUTHENTICATION & SECURITY MANAGEMENT
+// =========================================================================
+
+async function changeUserPassword(newPassword, confirmPassword) {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  if (!auth?.currentUser) {
+    showToast(isEn ? "Authentication required." : "يجب تسجيل الدخول أولاً.");
+    return false;
+  }
+  if (!newPassword || newPassword.length < 8) {
+    showToast(isEn ? "Password must be at least 8 characters long." : "كلمة المرور يجب أن تتكون من 8 أحرف على الأقل.");
+    return false;
+  }
+  if (confirmPassword && newPassword !== confirmPassword) {
+    showToast(isEn ? "Passwords do not match." : "كلمتا المرور غير متطابقتين.");
+    return false;
+  }
+
+  try {
+    const res = await callBackend("/api/user/change-password", {
+      method: "POST",
+      body: JSON.stringify({ newPassword, confirmPassword })
+    });
+    showToast(isEn ? "Password changed successfully. Other sessions terminated." : "تم تغيير كلمة المرور بنجاح وإنهاء كافة الجلسات الأخرى.");
+    return true;
+  } catch (err) {
+    if (err.message && err.message.includes("REQUIRES_RECENT_LOGIN")) {
+      showToast(isEn ? "Security check: Please re-authenticate before changing credentials." : "فحص أمني: يرجى إعادة تسجيل الدخول لتغيير كلمة المرور.");
+    } else {
+      showToast((isEn ? "Failed to change password: " : "فشل تغيير كلمة المرور: ") + err.message);
+    }
+    return false;
+  }
+}
+
+async function changeUserEmail(newEmail) {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  if (!auth?.currentUser) {
+    showToast(isEn ? "Authentication required." : "يجب تسجيل الدخول أولاً.");
+    return false;
+  }
+  if (!newEmail || !newEmail.includes("@")) {
+    showToast(isEn ? "Please enter a valid email address." : "يرجى إدخال بريد إلكتروني صالح.");
+    return false;
+  }
+
+  try {
+    const res = await callBackend("/api/user/change-email", {
+      method: "POST",
+      body: JSON.stringify({ newEmail })
+    });
+    showToast(isEn ? "Email updated successfully. Please verify your new address." : "تم تحديث البريد الإلكتروني بنجاح. يرجى تفعيل البريد الجديد.");
+    return true;
+  } catch (err) {
+    if (err.message && err.message.includes("REQUIRES_RECENT_LOGIN")) {
+      showToast(isEn ? "Security check: Please re-authenticate before changing your email." : "فحص أمني: يرجى إعادة تسجيل الدخول لتحديث البريد الإلكتروني.");
+    } else {
+      showToast((isEn ? "Failed to change email: " : "فشل تغيير البريد: ") + err.message);
+    }
+    return false;
+  }
+}
+
+async function revokeAllUserSessions() {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  if (!auth?.currentUser) return false;
+
+  const confirmed = confirm(isEn
+    ? "Are you sure you want to sign out from all other devices and terminate all active sessions?"
+    : "هل أنت متأكد من رغبتك في تسجيل الخروج من كافة الأجهزة الأخرى وإلغاء كافة الجلسات النشطة؟");
+  if (!confirmed) return false;
+
+  try {
+    const res = await callBackend("/api/user/revoke-all-sessions", { method: "POST" });
+    showToast(isEn ? "All sessions and device tokens have been revoked." : "تم إبطال جميع الجلسات والأجهزة بنجاح.");
+    await loadUserSessions();
+    return true;
+  } catch (err) {
+    if (err.message && err.message.includes("REQUIRES_RECENT_LOGIN")) {
+      showToast(isEn ? "Security check: Please re-authenticate before revoking all sessions." : "فحص أمني: يرجى إعادة تسجيل الدخول لإبطال الجلسات.");
+    } else {
+      showToast((isEn ? "Revocation failed: " : "فشل إبطال الجلسات: ") + err.message);
+    }
+    return false;
+  }
+}
+
+async function loadUserSessions() {
+  const container = document.getElementById("activeSessionsContainer");
+  if (!container || !auth?.currentUser) return [];
+
+  try {
+    const res = await callBackend("/api/user/sessions", { method: "GET" });
+    const sessions = res.sessions || [];
+    renderSessionsList(sessions);
+    return sessions;
+  } catch (err) {
+    console.warn("Could not load user sessions:", err.message);
+    return [];
+  }
+}
+
+function renderSessionsList(sessions) {
+  const listEl = document.getElementById("activeSessionsList");
+  if (!listEl) return;
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+
+  if (!sessions || sessions.length === 0) {
+    listEl.innerHTML = `<div style="padding: 12px; color: var(--muted); font-size: 13px;">${isEn ? "No active sessions found." : "لا توجد جلسات نشطة مسجلة."}</div>`;
+    return;
+  }
+
+  listEl.innerHTML = sessions.map(s => {
+    const isCurrent = s.isCurrent;
+    const isRevoked = s.revoked;
+    const badgeHtml = isCurrent
+      ? `<span class="pill ok" style="font-size: 11px;">${isEn ? "This Device (Current)" : "هذا الجهاز (الحالي)"}</span>`
+      : (isRevoked
+        ? `<span class="pill" style="font-size: 11px; opacity: 0.6;">${isEn ? "Revoked" : "ملغية"}</span>`
+        : `<button type="button" class="soft-button" style="padding: 4px 8px; font-size: 12px;" onclick="terminateUserSession('${s.sessionId}')">${isEn ? "Terminate" : "إنهاء"}</button>`);
+
+    const icon = s.isMobile ? "📱" : (s.platform === "macOS" || s.platform === "Windows" || s.platform === "Linux" ? "💻" : "🖥️");
+    const dateFormatted = new Date(s.lastActiveAt || s.loginAt).toLocaleDateString(isEn ? "en-US" : "ar-EG", {
+      month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
+    });
+
+    return `
+      <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--border-color, rgba(0,0,0,0.06)); font-size: 13px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 18px;">${icon}</span>
+          <div>
+            <strong>${s.platform} · ${s.browser}</strong>
+            <div style="font-size: 11px; color: var(--muted);">IP: ${s.subnetMask} · ${dateFormatted}</div>
+          </div>
+        </div>
+        <div>${badgeHtml}</div>
+      </div>
+    `;
+  }).join("");
+}
+
+async function terminateUserSession(sessionId) {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  try {
+    await callBackend("/api/user/sessions/terminate", {
+      method: "POST",
+      body: JSON.stringify({ sessionId })
+    });
+    showToast(isEn ? "Session terminated." : "تم إنهاء الجلسة بنجاح.");
+    await loadUserSessions();
+  } catch (err) {
+    showToast((isEn ? "Failed to terminate session: " : "فشل إنهاء الجلسة: ") + err.message);
+  }
+}
+
+async function requestAccountRecovery(email) {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  if (!email || !email.includes("@")) {
+    showToast(isEn ? "Please enter a valid email address." : "يرجى إدخال بريد إلكتروني صالح.");
+    return false;
+  }
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/recover-account`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email })
+    });
+    const data = await res.json().catch(() => ({}));
+    showToast(data.message || (isEn ? "If this email is registered, recovery instructions have been sent." : "إذا كان هذا البريد مسجلاً، فقد تم إرسال تعليمات الاستعادة."));
+    return true;
+  } catch (err) {
+    showToast(isEn ? "Account recovery request failed. Please try again." : "فشل طلب استعادة الحساب. حاول مرة أخرى.");
+    return false;
+  }
+}
+
+window.changeUserPassword = changeUserPassword;
+window.changeUserEmail = changeUserEmail;
+window.revokeAllUserSessions = revokeAllUserSessions;
+window.loadUserSessions = loadUserSessions;
+window.terminateUserSession = terminateUserSession;
+window.requestAccountRecovery = requestAccountRecovery;
 
 window.submitPatientMoreInfo = async function(caseId) {
   const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
@@ -12555,16 +16305,26 @@ window.submitPatientMoreInfo = async function(caseId) {
   const responseEl = document.getElementById("patientResponseInput");
   const newO2El = document.getElementById("patientNewO2Input");
   const responseText = responseEl ? responseEl.value.trim() : "";
-  const rawO2 = newO2El ? parseInt(newO2El.value.trim(), 10) : NaN;
+  const parsedO2 = newO2El && newO2El.value.trim() ? parseStrictOxygenInput(newO2El.value) : { ok: false, value: null, reason: "empty" };
 
-  if (!responseText && isNaN(rawO2)) {
+  if (!responseText && !parsedO2.ok) {
     showToast(isEn ? "Please write your response or provide updated measurements." : "يرجى كتابة ردك أو تزويدنا بالقياسات المطلوبة.");
-    if (responseEl) responseEl.focus();
+    if (parsedO2.reason !== "empty" && newO2El) newO2El.focus();
+    else if (responseEl) responseEl.focus();
+    return;
+  }
+
+  if (newO2El && newO2El.value.trim() && !parsedO2.ok) {
+    showToast(isEn
+      ? "Unable to measure SpO2 from this input. Enter a whole number between 50 and 100."
+      : "تعذر قياس الأكسجين من هذا الإدخال. أدخل رقماً صحيحاً بين 50 و 100.");
+    newO2El.focus();
     return;
   }
 
   try {
-    const finalResponseText = responseText || (isEn ? `Updated vitals submitted: SpO2 ${rawO2}%` : `تم تسجيل نسبة أكسجين محدثة: ${rawO2}%`);
+    const o2Val = parsedO2?.ok ? parsedO2.value : (!isNaN(rawO2) && rawO2 >= 50 && rawO2 <= 100 ? rawO2 : null);
+    const finalResponseText = responseText || (isEn ? `Updated vitals submitted: SpO2 ${o2Val !== null ? o2Val : rawO2}%` : `تم تسجيل نسبة أكسجين محدثة: ${o2Val !== null ? o2Val : rawO2}%`);
 
     let backendSuccess = false;
     try {
@@ -12572,9 +16332,9 @@ window.submitPatientMoreInfo = async function(caseId) {
         caseId,
         patientResponse: finalResponseText
       };
-      if (!isNaN(rawO2) && rawO2 >= 50 && rawO2 <= 100) {
-        payload.oxygenLevel = rawO2;
-        payload.o2 = rawO2;
+      if (o2Val !== null) {
+        payload.oxygenLevel = o2Val;
+        payload.o2 = o2Val;
       }
       await callBackend("/api/patient/submit-more-info", {
         method: "POST",
@@ -12654,6 +16414,9 @@ function parseKpiTimestamp(val) {
 function calculateKpiMetrics(cases, options = {}) {
   const timeRange = options.timeRange || currentKpiTimeRange || "all";
   const priorityFilter = options.priority || currentKpiPriority || "all";
+  const clinicFilter = (options.clinicId || options.clinic || "").trim().toLowerCase();
+  const startDate = options.startDate || options.from;
+  const endDate = options.endDate || options.to;
 
   // Filter out demo/test data
   const realCases = (cases || []).filter(c => {
@@ -12667,22 +16430,48 @@ function calculateKpiMetrics(cases, options = {}) {
       !String(c.id || "").startsWith("mock_");
   });
 
-  // Apply Time Range filter
-  const now = Date.now();
-  let minTs = 0;
-  if (timeRange === "today") {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    minTs = d.getTime();
-  } else if (timeRange === "7d") {
-    minTs = now - (7 * 24 * 60 * 60 * 1000);
-  } else if (timeRange === "30d") {
-    minTs = now - (30 * 24 * 60 * 60 * 1000);
+  // Apply Clinic filter
+  let clinicFiltered = realCases;
+  if (clinicFilter && clinicFilter !== "all") {
+    clinicFiltered = clinicFiltered.filter(c => {
+      const cId = String(c.clinicId || c.clinic || c.branchId || "").trim().toLowerCase();
+      return cId === clinicFilter;
+    });
   }
 
-  let filtered = realCases.filter(c => {
+  // Apply Time Range / Date Range filter
+  const now = Date.now();
+  let minTs = 0;
+  let maxTs = Infinity;
+
+  if (startDate) minTs = parseKpiTimestamp(startDate);
+  if (endDate) {
+    const parsedEnd = parseKpiTimestamp(endDate);
+    if (typeof endDate === "string" && endDate.length === 10) {
+      maxTs = parsedEnd + (24 * 60 * 60 * 1000 - 1);
+    } else {
+      maxTs = parsedEnd;
+    }
+  }
+
+  if (!startDate && !endDate) {
+    if (timeRange === "today") {
+      const d = new Date();
+      d.setHours(0, 0, 0, 0);
+      minTs = d.getTime();
+      maxTs = now;
+    } else if (timeRange === "7d") {
+      minTs = now - (7 * 24 * 60 * 60 * 1000);
+      maxTs = now;
+    } else if (timeRange === "30d") {
+      minTs = now - (30 * 24 * 60 * 60 * 1000);
+      maxTs = now;
+    }
+  }
+
+  let filtered = clinicFiltered.filter(c => {
     const ts = parseKpiTimestamp(c.submittedAt || c.createdAt || c.timestamp || c.updatedAt);
-    return minTs === 0 || ts >= minTs;
+    return (minTs === 0 || ts >= minTs) && (maxTs === Infinity || ts <= maxTs);
   });
 
   // Apply Priority filter
@@ -12697,7 +16486,8 @@ function calculateKpiMetrics(cases, options = {}) {
     });
   }
 
-  const isBenchmark = filtered.length === 0;
+  const isBenchmark = false;
+  const hasLiveData = filtered.length > 0;
 
   // 1. COMPLETION RATE METRICS
   const totalCases = filtered.length;
@@ -12708,11 +16498,11 @@ function calculateKpiMetrics(cases, options = {}) {
 
   const completionRate = totalCases > 0
     ? Math.round((completedCases.length / totalCases) * 100)
-    : 94; // clinical benchmark default
+    : 0;
 
   const urgentCompletionRate = urgentCases.length > 0
     ? Math.round((urgentCompletedCases.length / urgentCases.length) * 100)
-    : 98;
+    : 0;
 
   // 2. RESPONSE TIME METRICS
   const responseTimes = [];
@@ -12737,26 +16527,27 @@ function calculateKpiMetrics(cases, options = {}) {
   });
 
   responseTimes.sort((a, b) => a - b);
+  const hasResponseData = responseTimes.length > 0;
 
-  const avgResponseTimeMinutes = responseTimes.length > 0
+  const avgResponseTimeMinutes = hasResponseData
     ? Number((responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length).toFixed(1))
-    : 18.5; // clinical benchmark default
+    : 0;
 
-  const medianResponseTimeMinutes = responseTimes.length > 0
+  const medianResponseTimeMinutes = hasResponseData
     ? Number(responseTimes[Math.floor(responseTimes.length / 2)].toFixed(1))
-    : 14.0;
+    : 0;
 
-  const fastestResponseMinutes = responseTimes.length > 0
+  const fastestResponseMinutes = hasResponseData
     ? Number(responseTimes[0].toFixed(1))
-    : 4.2;
+    : 0;
 
   const urgentAvgResponseMinutes = urgentResponseTimes.length > 0
     ? Number((urgentResponseTimes.reduce((a, b) => a + b, 0) / urgentResponseTimes.length).toFixed(1))
-    : 8.5;
+    : 0;
 
-  const responseSlaComplianceRate = responseTimes.length > 0
+  const responseSlaComplianceRate = hasResponseData
     ? Math.round((responseTimes.filter(t => t <= 30).length / responseTimes.length) * 100)
-    : 96;
+    : 0;
 
   // 3. REPORT TURNAROUND TIME (TAT) METRICS
   const turnaroundTimes = [];
@@ -12772,39 +16563,41 @@ function calculateKpiMetrics(cases, options = {}) {
   });
 
   turnaroundTimes.sort((a, b) => a - b);
+  const hasTurnaroundData = turnaroundTimes.length > 0;
 
-  const avgTurnaroundMinutes = turnaroundTimes.length > 0
+  const avgTurnaroundMinutes = hasTurnaroundData
     ? Number((turnaroundTimes.reduce((a, b) => a + b, 0) / turnaroundTimes.length).toFixed(1))
-    : 48.0; // clinical benchmark default
+    : 0;
 
-  const medianTurnaroundMinutes = turnaroundTimes.length > 0
+  const medianTurnaroundMinutes = hasTurnaroundData
     ? Number(turnaroundTimes[Math.floor(turnaroundTimes.length / 2)].toFixed(1))
-    : 42.0;
+    : 0;
 
-  const fastestTurnaroundMinutes = turnaroundTimes.length > 0
+  const fastestTurnaroundMinutes = hasTurnaroundData
     ? Number(turnaroundTimes[0].toFixed(1))
-    : 12.0;
+    : 0;
 
   const p95Index = Math.min(turnaroundTimes.length - 1, Math.floor(turnaroundTimes.length * 0.95));
-  const p95TurnaroundMinutes = turnaroundTimes.length > 0
+  const p95TurnaroundMinutes = hasTurnaroundData
     ? Number(turnaroundTimes[p95Index].toFixed(1))
-    : 92.0;
+    : 0;
 
-  const turnaroundSlaComplianceRate = turnaroundTimes.length > 0
+  const turnaroundSlaComplianceRate = hasTurnaroundData
     ? Math.round((turnaroundTimes.filter(t => t <= 120).length / turnaroundTimes.length) * 100)
-    : 98;
+    : 0;
 
   // 4. WATERFALL STAGES (Intake -> Queue -> Clinical Review -> Report Delivery)
-  const stageIntakeMinutes = 1.2;
-  const stageQueueMinutes = Number(Math.max(1, avgResponseTimeMinutes * 0.65).toFixed(1));
-  const stageReviewMinutes = Number(Math.max(2, (avgTurnaroundMinutes - avgResponseTimeMinutes) * 0.85).toFixed(1));
-  const stageReportMinutes = 1.8;
+  const stageIntakeMinutes = hasLiveData ? 1.2 : 0;
+  const stageQueueMinutes = hasLiveData ? Number(Math.max(1, avgResponseTimeMinutes * 0.65).toFixed(1)) : 0;
+  const stageReviewMinutes = hasLiveData ? Number(Math.max(2, (avgTurnaroundMinutes - avgResponseTimeMinutes) * 0.85).toFixed(1)) : 0;
+  const stageReportMinutes = hasLiveData ? 1.8 : 0;
 
   // 5. DOCTOR BREAKDOWN
   const doctorsMap = new Map();
   filtered.forEach(c => {
-    const docName = c.approvingDoctorName || c.assignedDoctorName || c.requestingDoctorName || "Dr. Mona Samy";
-    const docClinic = c.clinicName || "Health Vibes Specialized Clinics";
+    const docName = c.approvingDoctorName || c.assignedDoctorName || c.requestingDoctorName || "";
+    const docClinic = c.clinicName || c.clinic || "";
+    if (!docName) return;
     const key = `${docName}__${docClinic}`;
 
     if (!doctorsMap.has(key)) {
@@ -12857,22 +16650,47 @@ function calculateKpiMetrics(cases, options = {}) {
     });
   });
 
-  if (doctorsPerformance.length === 0) {
-    doctorsPerformance.push({
-      name: "Dr. Mona Samy",
-      clinic: "Pulmonology & Respiratory Medicine",
-      total: totalCases > 0 ? totalCases : 14,
-      completionRate: completionRate,
-      avgResponseMinutes: avgResponseTimeMinutes,
-      avgTurnaroundMinutes: avgTurnaroundMinutes,
-      rating: "4.9 ★"
-    });
+  // 6. PATIENTS PER DAY FROM ACTUAL EVENTS
+  const distinctPatientIds = new Set();
+  filtered.forEach(c => {
+    const pid = c.patientId || c.patientUid || c.userId;
+    if (pid) distinctPatientIds.add(String(pid));
+  });
+
+  let daysInPeriod = 1;
+  if (minTs > 0 && maxTs < Infinity && maxTs > minTs) {
+    daysInPeriod = Math.max(1, Math.ceil((maxTs - minTs) / (24 * 60 * 60 * 1000)));
+  } else if (timeRange === "7d") {
+    daysInPeriod = 7;
+  } else if (timeRange === "30d") {
+    daysInPeriod = 30;
+  } else if (timeRange === "all" && filtered.length > 1) {
+    const tsList = filtered.map(c => parseKpiTimestamp(c.submittedAt || c.createdAt || c.timestamp)).filter(t => t > 0);
+    if (tsList.length > 1) {
+      const minT = Math.min(...tsList);
+      const maxT = Math.max(...tsList);
+      daysInPeriod = Math.max(1, Math.ceil((maxT - minT) / (24 * 60 * 60 * 1000)));
+    }
   }
+
+  const hasPatientsData = distinctPatientIds.size > 0;
+  const patientsPerDayValue = hasPatientsData
+    ? Number((distinctPatientIds.size / daysInPeriod).toFixed(2))
+    : null;
+
+  // 7. WORKLOAD FROM ACTUAL ACTIVE EVENTS
+  const activeCases = filtered.filter(c => ["pending", "submitted", "triaged", "assigned", "under_review"].includes(c.status));
+  const activeDoctorCount = doctorsPerformance.length;
+  const hasWorkloadData = activeCases.length > 0 && activeDoctorCount > 0;
+  const avgWorkloadPerDoctor = hasWorkloadData
+    ? Number((activeCases.length / activeDoctorCount).toFixed(1))
+    : null;
 
   return {
     timeRange,
     priorityFilter,
     isBenchmark,
+    hasLiveData,
     totalCases,
     completedCasesCount: completedCases.length,
     pendingCasesCount: pendingCases.length,
@@ -12895,19 +16713,91 @@ function calculateKpiMetrics(cases, options = {}) {
       report: stageReportMinutes,
       total: Number((stageIntakeMinutes + stageQueueMinutes + stageReviewMinutes + stageReportMinutes).toFixed(1))
     },
-    doctorsPerformance
+    doctorsPerformance,
+
+    // Enhanced metrics with explicit availability and 'Unavailable' fallbacks
+    responseTime: {
+      avgMinutes: hasResponseData ? avgResponseTimeMinutes : null,
+      medianMinutes: hasResponseData ? medianResponseTimeMinutes : null,
+      display: hasResponseData ? `${avgResponseTimeMinutes} min` : "Unavailable",
+      displayAr: hasResponseData ? `${avgResponseTimeMinutes} دقيقة` : "غير متاح",
+      isAvailable: hasResponseData
+    },
+    approvalTime: {
+      avgMinutes: hasTurnaroundData ? avgTurnaroundMinutes : null,
+      medianMinutes: hasTurnaroundData ? medianTurnaroundMinutes : null,
+      display: hasTurnaroundData ? `${avgTurnaroundMinutes} min` : "Unavailable",
+      displayAr: hasTurnaroundData ? `${avgTurnaroundMinutes} دقيقة` : "غير متاح",
+      isAvailable: hasTurnaroundData
+    },
+    patientsPerDay: {
+      value: patientsPerDayValue,
+      distinctPatients: distinctPatientIds.size,
+      daysCount: daysInPeriod,
+      display: hasPatientsData ? `${patientsPerDayValue} patients/day` : "Unavailable",
+      displayAr: hasPatientsData ? `${patientsPerDayValue} مريض/يوم` : "غير متاح",
+      isAvailable: hasPatientsData
+    },
+    workload: {
+      avgWorkloadPerDoctor,
+      totalActiveCases: activeCases.length,
+      activeDoctorCount,
+      display: hasWorkloadData ? `${avgWorkloadPerDoctor} cases/doc` : "Unavailable",
+      displayAr: hasWorkloadData ? `${avgWorkloadPerDoctor} حالة/طبيب` : "غير متاح",
+      isAvailable: hasWorkloadData
+    },
+    display: {
+      responseTime: hasResponseData ? `${avgResponseTimeMinutes} min` : "Unavailable",
+      approvalTime: hasTurnaroundData ? `${avgTurnaroundMinutes} min` : "Unavailable",
+      patientsPerDay: hasPatientsData ? `${patientsPerDayValue} patients/day` : "Unavailable",
+      workload: hasWorkloadData ? `${avgWorkloadPerDoctor} cases/doc` : "Unavailable",
+      completionRate: totalCases > 0 ? `${completionRate}%` : "Unavailable"
+    },
+    displayAr: {
+      responseTime: hasResponseData ? `${avgResponseTimeMinutes} دقيقة` : "غير متاح",
+      approvalTime: hasTurnaroundData ? `${avgTurnaroundMinutes} دقيقة` : "غير متاح",
+      patientsPerDay: hasPatientsData ? `${patientsPerDayValue} مريض/يوم` : "غير متاح",
+      workload: hasWorkloadData ? `${avgWorkloadPerDoctor} حالة/طبيب` : "غير متاح",
+      completionRate: totalCases > 0 ? `${completionRate}%` : "غير متاح"
+    }
   };
 }
 
 async function renderKpiDashboard(options = {}) {
+  if (!canAccessScreen("kpi")) return;
+  const screen = document.getElementById("screen-kpi");
+  let supportPanel = document.getElementById("supportMetrics");
+  if (screen) {
+    for (const child of screen.children) if (child.id !== "supportMetrics") child.hidden = isSupportUser();
+    if (supportPanel) supportPanel.hidden = !isSupportUser();
+  }
+  if (isSupportUser()) {
+    // Fetch only aggregate numbers. Never hydrate clinical records or cached cases.
+    if (!supportPanel && screen) {
+      supportPanel = document.createElement("article");
+      supportPanel.id = "supportMetrics";
+      supportPanel.className = "panel";
+      screen.appendChild(supportPanel);
+    }
+    if (!supportPanel) return;
+    supportPanel.textContent = currentLanguage === "en" ? "Loading operational metrics…" : "جاري تحميل المؤشرات التشغيلية…";
+    try {
+      const metrics = await callBackend("/api/kpi/metrics", { method: "GET" });
+      const en = currentLanguage === "en";
+      supportPanel.textContent = (en ? "Operational metrics: " : "المؤشرات التشغيلية: ") +
+        (en ? "Total: " : "الإجمالي: ") + Number(metrics.totalCases || 0) + " | " +
+        (en ? "Completed: " : "المكتمل: ") + Number(metrics.completedCasesCount || 0) + " | " +
+        (en ? "Pending: " : "قيد الانتظار: ") + Number(metrics.pendingCasesCount || 0);
+    } catch (err) { supportPanel.textContent = currentLanguage === "en" ? "Metrics unavailable." : "المؤشرات غير متاحة حالياً."; }
+    return;
+  }
   const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
 
   try {
     let cases = cachedKpiCases;
     if (!cases) {
       if (typeof db !== "undefined" && db) {
-        const snap = await db.collection("cases").get().catch(() => ({ docs: [] }));
-        cases = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        cases = await getCases({ includeTest: false });
         cachedKpiCases = cases;
       } else if (typeof getCases === "function") {
         cases = await getCases({ includeTest: false });
@@ -12922,9 +16812,9 @@ async function renderKpiDashboard(options = {}) {
     // 1. Data Source Pill
     const liveBadge = document.getElementById("kpiLiveStreamBadge");
     if (liveBadge) {
-      if (metrics.isBenchmark) {
-        liveBadge.className = "pill warning";
-        liveBadge.textContent = isEn ? "🧪 Clinical Benchmarks (Simulated Baseline)" : "🧪 معايير سريرية مرجعية (محاكاة)";
+      if (!metrics.hasLiveData) {
+        liveBadge.className = "pill pending";
+        liveBadge.textContent = isEn ? "No live clinical records yet" : "لا توجد سجلات سريرية حية بعد";
       } else {
         liveBadge.className = "pill ok";
         liveBadge.textContent = isEn ? "🟢 Live Firestore Stream" : "🟢 مباشر من Firestore الحقيقي";
@@ -12946,76 +16836,112 @@ async function renderKpiDashboard(options = {}) {
 
     const compSlaBadge = document.getElementById("kpiCompletionSlaBadge");
     if (compSlaBadge) {
-      compSlaBadge.className = `kpi-badge-sla ${metrics.completionRate >= 90 ? 'optimal' : 'warning'}`;
-      compSlaBadge.textContent = isEn
-        ? `Target: ≥ 90% (${metrics.completionRate >= 90 ? 'Optimal' : 'Needs Focus'})`
-        : `الهدف: ≥ 90% (${metrics.completionRate >= 90 ? 'ممتاز' : 'يتطلب تركيز'})`;
+      compSlaBadge.className = `kpi-badge-sla ${metrics.hasLiveData && metrics.completionRate >= 90 ? 'optimal' : 'warning'}`;
+      compSlaBadge.textContent = !metrics.hasLiveData
+        ? (isEn ? "Waiting for first real case" : "بانتظار أول حالة حقيقية")
+        : (isEn
+          ? `Target: ≥ 90% (${metrics.completionRate >= 90 ? 'Optimal' : 'Needs Focus'})`
+          : `الهدف: ≥ 90% (${metrics.completionRate >= 90 ? 'ممتاز' : 'يتطلب تركيز'})`);
     }
 
     // 3. HERO CARD 2: PHYSICIAN RESPONSE TIME
-    setText("kpiResponseTimeValue", String(metrics.avgResponseTimeMinutes));
-    setText("kpiResponseTimeUnit", isEn ? "min" : "دقيقة");
+    const hasResp = metrics.hasLiveData && metrics.responseTime?.isAvailable;
+    if (!hasResp) {
+      setText("kpiResponseTimeValue", isEn ? "Unavailable" : "غير متاح");
+      setText("kpiResponseTimeUnit", "");
+    } else {
+      setText("kpiResponseTimeValue", String(metrics.avgResponseTimeMinutes));
+      setText("kpiResponseTimeUnit", isEn ? "min" : "دقيقة");
+    }
 
     const respBar = document.getElementById("kpiResponseBar");
     if (respBar) {
-      const respPct = Math.min(100, Math.round((30 / Math.max(metrics.avgResponseTimeMinutes, 1)) * 100));
+      const respPct = hasResp ? Math.min(100, Math.round((30 / Math.max(metrics.avgResponseTimeMinutes, 1)) * 100)) : 0;
       respBar.style.width = `${Math.min(100, respPct)}%`;
     }
 
     setText("kpiResponseContext", isEn
-      ? "Time from patient submission to first clinical physician action"
-      : "من وقت تقديم الفحص حتى أول إجراء طبي سريري");
+      ? (hasResp ? "Time from patient submission to first clinical physician action" : "No physician response timing is available until a real case is reviewed")
+      : (hasResp ? "من وقت تقديم الفحص حتى أول إجراء طبي سريري" : "لا يتوفر زمن استجابة الطبيب قبل مراجعة حالة حقيقية"));
 
-    setText("kpiUrgentResponseTime", isEn ? `${metrics.urgentAvgResponseMinutes} min` : `${metrics.urgentAvgResponseMinutes} دقيقة`);
-    setText("kpiMedianResponseTime", isEn ? `${metrics.medianResponseTimeMinutes} min` : `${metrics.medianResponseTimeMinutes} دقيقة`);
-    setText("kpiResponseSlaRate", `${metrics.responseSlaComplianceRate}%`);
+    setText("kpiUrgentResponseTime", hasResp ? (isEn ? `${metrics.urgentAvgResponseMinutes} min` : `${metrics.urgentAvgResponseMinutes} دقيقة`) : (isEn ? "Unavailable" : "غير متاح"));
+    setText("kpiMedianResponseTime", hasResp ? (isEn ? `${metrics.medianResponseTimeMinutes} min` : `${metrics.medianResponseTimeMinutes} دقيقة`) : (isEn ? "Unavailable" : "غير متاح"));
+    setText("kpiResponseSlaRate", hasResp ? `${metrics.responseSlaComplianceRate}%` : (isEn ? "Unavailable" : "غير متاح"));
 
     const respSlaBadge = document.getElementById("kpiResponseSlaBadge");
     if (respSlaBadge) {
-      respSlaBadge.className = `kpi-badge-sla ${metrics.avgResponseTimeMinutes <= 30 ? 'optimal' : 'warning'}`;
-      respSlaBadge.textContent = isEn
-        ? `SLA: < 30m (${metrics.responseSlaComplianceRate}% on-time)`
-        : `SLA: < 30 دقيقة (${metrics.responseSlaComplianceRate}% التزام)`;
+      respSlaBadge.className = `kpi-badge-sla ${hasResp && metrics.avgResponseTimeMinutes <= 30 ? 'optimal' : 'warning'}`;
+      respSlaBadge.textContent = !hasResp
+        ? (isEn ? "Unavailable (Insufficient live data)" : "غير متاح (بيانات غير كافية)")
+        : (isEn
+          ? `SLA: < 30m (${metrics.responseSlaComplianceRate}% on-time)`
+          : `SLA: < 30 دقيقة (${metrics.responseSlaComplianceRate}% التزام)`);
     }
 
     // 4. HERO CARD 3: REPORT TURNAROUND TIME (TAT)
-    setText("kpiTurnaroundTimeValue", String(metrics.avgTurnaroundMinutes));
-    setText("kpiTurnaroundTimeUnit", isEn ? "min" : "دقيقة");
+    const hasTat = metrics.hasLiveData && metrics.approvalTime?.isAvailable;
+    if (!hasTat) {
+      setText("kpiTurnaroundTimeValue", isEn ? "Unavailable" : "غير متاح");
+      setText("kpiTurnaroundTimeUnit", "");
+    } else {
+      setText("kpiTurnaroundTimeValue", String(metrics.avgTurnaroundMinutes));
+      setText("kpiTurnaroundTimeUnit", isEn ? "min" : "دقيقة");
+    }
 
     const tatBar = document.getElementById("kpiTurnaroundBar");
     if (tatBar) {
-      const tatPct = Math.min(100, Math.round((120 / Math.max(metrics.avgTurnaroundMinutes, 1)) * 100));
+      const tatPct = hasTat ? Math.min(100, Math.round((120 / Math.max(metrics.avgTurnaroundMinutes, 1)) * 100)) : 0;
       tatBar.style.width = `${Math.min(100, tatPct)}%`;
     }
 
     setText("kpiTurnaroundContext", isEn
-      ? "End-to-end duration from intake to final certified signed report"
-      : "من إرسال التقييم حتى توثيق واعتماد التقرير الطبي");
+      ? (hasTat ? "End-to-end duration from intake to final certified signed report" : "Report turnaround appears after a physician certifies a real report")
+      : (hasTat ? "من إرسال التقييم حتى توثيق واعتماد التقرير الطبي" : "يظهر زمن إصدار التقرير بعد اعتماد تقرير حقيقي من الطبيب"));
 
-    setText("kpiOnTimeTurnaroundRate", `${metrics.turnaroundSlaComplianceRate}%`);
-    setText("kpiP95TurnaroundTime", isEn ? `${metrics.p95TurnaroundMinutes} min` : `${metrics.p95TurnaroundMinutes} دقيقة`);
-    setText("kpiFastestTurnaroundTime", isEn ? `${metrics.fastestTurnaroundMinutes} min` : `${metrics.fastestTurnaroundMinutes} دقيقة`);
+    setText("kpiOnTimeTurnaroundRate", hasTat ? `${metrics.turnaroundSlaComplianceRate}%` : (isEn ? "Unavailable" : "غير متاح"));
+    setText("kpiP95TurnaroundTime", hasTat ? (isEn ? `${metrics.p95TurnaroundMinutes} min` : `${metrics.p95TurnaroundMinutes} دقيقة`) : (isEn ? "Unavailable" : "غير متاح"));
+    setText("kpiFastestTurnaroundTime", hasTat ? (isEn ? `${metrics.fastestTurnaroundMinutes} min` : `${metrics.fastestTurnaroundMinutes} دقيقة`) : (isEn ? "Unavailable" : "غير متاح"));
 
     const tatSlaBadge = document.getElementById("kpiTurnaroundSlaBadge");
     if (tatSlaBadge) {
-      tatSlaBadge.className = `kpi-badge-sla ${metrics.avgTurnaroundMinutes <= 120 ? 'optimal' : 'warning'}`;
-      tatSlaBadge.textContent = isEn
-        ? `Target: < 2h (${metrics.turnaroundSlaComplianceRate}% on-time)`
-        : `الهدف: < 2 ساعة (${metrics.turnaroundSlaComplianceRate}% تسليم)`;
+      tatSlaBadge.className = `kpi-badge-sla ${hasTat && metrics.avgTurnaroundMinutes <= 120 ? 'optimal' : 'warning'}`;
+      tatSlaBadge.textContent = !hasTat
+        ? (isEn ? "Unavailable (Insufficient live data)" : "غير متاح (بيانات غير كافية)")
+        : (isEn
+          ? `Target: < 2h (${metrics.turnaroundSlaComplianceRate}% on-time)`
+          : `الهدف: < 2 ساعة (${metrics.turnaroundSlaComplianceRate}% تسليم)`);
     }
 
     // 5. WATERFALL PIPELINE
-    setText("kpiStageIntakeTime", isEn ? `${metrics.stages.intake} min` : `${metrics.stages.intake} دقيقة`);
-    setText("kpiStageQueueTime", isEn ? `${metrics.stages.queue} min` : `${metrics.stages.queue} دقيقة`);
-    setText("kpiStageReviewTime", isEn ? `${metrics.stages.review} min` : `${metrics.stages.review} دقيقة`);
-    setText("kpiStageReportTime", isEn ? `${metrics.stages.report} min` : `${metrics.stages.report} دقيقة`);
-    setText("kpiWaterfallTotalTimeBadge", isEn
-      ? `Full Cycle Average: ${metrics.stages.total} minutes`
-      : `متوسط الدورة الكاملة: ${metrics.stages.total} دقيقة`);
+    const noDataLabel = isEn ? "Not enough data" : "بيانات غير كافية";
+    setText("kpiStageIntakeTime", metrics.hasLiveData ? (isEn ? `${metrics.stages.intake} min` : `${metrics.stages.intake} دقيقة`) : noDataLabel);
+    setText("kpiStageQueueTime", metrics.hasLiveData ? (isEn ? `${metrics.stages.queue} min` : `${metrics.stages.queue} دقيقة`) : noDataLabel);
+    setText("kpiStageReviewTime", metrics.hasLiveData ? (isEn ? `${metrics.stages.review} min` : `${metrics.stages.review} دقيقة`) : noDataLabel);
+    setText("kpiStageReportTime", metrics.hasLiveData ? (isEn ? `${metrics.stages.report} min` : `${metrics.stages.report} دقيقة`) : noDataLabel);
+    setText("kpiWaterfallTotalTimeBadge", !metrics.hasLiveData
+      ? (isEn ? "Waiting for live clinical records" : "بانتظار سجلات سريرية حية")
+      : (isEn
+        ? `Full Cycle Average: ${metrics.stages.total} minutes`
+        : `متوسط الدورة الكاملة: ${metrics.stages.total} دقيقة`));
 
     // 6. SLA TABLE
     const slaTbody = document.getElementById("kpiSlaTableBody");
     if (slaTbody) {
+      if (!metrics.hasLiveData) {
+        slaTbody.innerHTML = `
+          <tr>
+            <td colspan="5" style="text-align:center; padding: 22px;">
+              ${hvStateCard({
+                type: "empty",
+                title: isEn ? "No SLA evidence yet" : "لا توجد أدلة SLA بعد",
+                message: isEn
+                  ? "Operational SLA rows will populate after real clinical submissions and physician actions are recorded."
+                  : "ستظهر صفوف الالتزام التشغيلي بعد تسجيل فحوصات وإجراءات أطباء حقيقية."
+              })}
+            </td>
+          </tr>
+        `;
+      } else {
       const slaRows = [
         {
           name: isEn ? "Physician Response Time" : "سرعة استجابة الأطباء",
@@ -13060,6 +16986,7 @@ async function renderKpiDashboard(options = {}) {
           <td><span class="pill ${row.status}">${row.statusText}</span></td>
         </tr>
       `).join('');
+      }
     }
 
     // 7. DOCTORS LEADERBOARD TABLE
@@ -13069,7 +16996,16 @@ async function renderKpiDashboard(options = {}) {
         ? `${metrics.doctorsPerformance.length} Active Physicians`
         : `${metrics.doctorsPerformance.length} أطباء نشطين`);
 
-      docTbody.innerHTML = metrics.doctorsPerformance.map(doc => `
+      if (metrics.doctorsPerformance.length === 0) {
+        docTbody.innerHTML = `
+          <tr>
+            <td colspan="6" style="text-align:center; color: var(--muted); padding: 18px;">
+              ${isEn ? "No approved physician activity has been recorded yet." : "لا يوجد نشاط موثق لطبيب معتمد حتى الآن."}
+            </td>
+          </tr>
+        `;
+      } else {
+        docTbody.innerHTML = metrics.doctorsPerformance.map(doc => `
         <tr>
           <td>
             <strong>${doc.name}</strong>
@@ -13081,7 +17017,8 @@ async function renderKpiDashboard(options = {}) {
           <td style="color: var(--teal); font-weight: 600;">${doc.avgTurnaroundMinutes} ${isEn ? 'min' : 'دقيقة'}</td>
           <td><span style="color: #f59e0b; font-weight: 800;">${doc.rating}</span></td>
         </tr>
-      `).join('');
+        `).join('');
+      }
     }
 
     // Last Refreshed
@@ -13177,7 +17114,30 @@ function updateDoctorMiniKpiBar(cases) {
   setText("docKpiTurnaroundTime", isEn ? `${kpi.avgTurnaroundMinutes} min` : `${kpi.avgTurnaroundMinutes} دقيقة`);
 }
 
+function calculateAssessmentJourneyMetrics(events = [], options = {}) {
+  const starts = events.filter(e => e.eventType === 'assessment_start').length;
+  const completes = events.filter(e => e.eventType === 'assessment_complete').length;
+  const abandons = events.filter(e => e.eventType === 'assessment_abandon').length;
+  const persistedCases = options.persistedCasesCount !== undefined ? options.persistedCasesCount : completes;
+
+  const completionRate = starts > 0 ? Number(((completes / starts) * 100).toFixed(1)) : null;
+  const abandonmentRate = starts > 0 ? Number(((abandons / starts) * 100).toFixed(1)) : null;
+
+  return {
+    starts,
+    completes,
+    abandons,
+    persistedCasesCount: persistedCases,
+    completionRate,
+    abandonmentRate,
+    completionRateDisplay: completionRate !== null ? `${completionRate}%` : 'Unavailable',
+    completionRateDisplayAr: completionRate !== null ? `${completionRate}%` : 'غير متاح',
+    distinctionNote: 'Cases count reflects database persistence, while assessment-journey completion rate measures patient progression from start to finish.'
+  };
+}
+
 window.calculateKpiMetrics = calculateKpiMetrics;
+window.calculateAssessmentJourneyMetrics = calculateAssessmentJourneyMetrics;
 window.renderKpiDashboard = renderKpiDashboard;
 window.setKpiTimeFilter = setKpiTimeFilter;
 window.setKpiPriorityFilter = setKpiPriorityFilter;
@@ -13228,7 +17188,7 @@ function updateMobileBottomNav() {
       { isMenu: true, icon: "☰", label: isEn ? "Menu" : "المزيد" }
     ];
   } else if (isAdminRole(currentRole)) {
-    // Admin / Super Admin
+    // Admin / Owner
     items = [
       { screen: "admin", icon: "⚙️", label: isEn ? "Admin" : "الإدارة" },
       { screen: "kpi", icon: "📊", label: isEn ? "KPIs" : "المؤشرات" },
@@ -13249,7 +17209,7 @@ function updateMobileBottomNav() {
 
   const activeScreenName = (typeof activeScreen !== "undefined" && activeScreen)
     ? activeScreen
-    : (localStorage.getItem("hv_active_screen") || getRoleDefaultScreen(currentRole));
+    : getRoleDefaultScreen(currentRole);
 
   navContainer.innerHTML = items.map(item => {
     if (item.isMenu) {
@@ -13319,15 +17279,282 @@ window.verifyBackupSnapshot = verifyBackupSnapshot;
 window.restoreBackupSnapshot = restoreBackupSnapshot;
 window.renderAdminBackupUI = renderAdminBackupUI;
 
+// =============================================================================
+// 🛡️ AUTHORITATIVE AUDIT TRAIL CLIENT ENGINE
+// =============================================================================
+
+async function auditSessionLogout() {
+  try {
+    if (auth && auth.currentUser) {
+      await authenticatedFetch('/api/audit/session-logout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: 'user_signed_out' })
+      }).catch(() => {});
+    }
+  } catch (_) {}
+}
+
+async function auditRecordViewed(caseId, recordType = 'clinical_case') {
+  if (!caseId) return;
+  try {
+    if (auth && auth.currentUser) {
+      await authenticatedFetch('/api/audit/record-viewed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ caseId, recordType })
+      }).catch(() => {});
+    }
+  } catch (_) {}
+}
+
+async function auditFileAccessed(fileId, fileName, fileType = 'attachment', purpose = 'clinical_review', caseId = null) {
+  if (!fileId && !fileName) return;
+  try {
+    if (auth && auth.currentUser) {
+      await authenticatedFetch('/api/audit/file-accessed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileId, fileName, fileType, purpose, caseId })
+      }).catch(() => {});
+    }
+  } catch (_) {}
+}
+
+async function loadAuditEvents() {
+  const container = document.getElementById('auditLogsContainer');
+  const countSummary = document.getElementById('auditCountSummary');
+  const scopeBadge = document.getElementById('auditClinicScopeBadge');
+  if (!container) return;
+
+  const isEn = typeof currentLanguage !== 'undefined' && currentLanguage === 'en';
+  container.innerHTML = `
+    <div style="text-align: center; padding: 24px; color: var(--muted);">
+      <div class="spinner" style="width: 20px; height: 20px; margin: 0 auto 10px auto;"></div>
+      <span>${isEn ? 'Querying authoritative audit trail...' : 'جاري جلب سجل التدقيق الموثوق...'}</span>
+    </div>
+  `;
+
+  try {
+    const searchVal = document.getElementById('auditSearchInput')?.value?.trim() || '';
+    const typeVal = document.getElementById('auditTypeFilter')?.value || 'all';
+    const startVal = document.getElementById('auditStartDate')?.value || '';
+    const endVal = document.getElementById('auditEndDate')?.value || '';
+
+    const params = new URLSearchParams();
+    if (searchVal) params.set('search', searchVal);
+    if (typeVal && typeVal !== 'all') params.set('type', typeVal);
+    if (startVal) params.set('startDate', startVal);
+    if (endVal) params.set('endDate', endVal);
+
+    const apiBase = runtimeConfig && runtimeConfig.apiBaseUrl ? runtimeConfig.apiBaseUrl : window.location.origin;
+    const response = await authenticatedFetch(`${apiBase}/api/admin/audit/events?${params.toString()}`);
+
+    if (!response.ok) {
+      const errJson = await response.json().catch(() => ({}));
+      const errMsg = errJson.message || (isEn ? 'Failed to retrieve audit trail.' : 'فشل جلب سجل التدقيق.');
+      container.innerHTML = `
+        <div style="text-align: center; padding: 24px; color: #ef4444;">
+          ⚠️ ${errMsg}
+        </div>
+      `;
+      if (countSummary) countSummary.textContent = isEn ? 'Error loading logs' : 'خطأ أثناء التحميل';
+      return;
+    }
+
+    const data = await response.json();
+    const events = data.events || [];
+    const totalCount = data.totalCount !== undefined ? data.totalCount : events.length;
+
+    if (countSummary) {
+      countSummary.textContent = isEn
+        ? `Found ${totalCount} recorded event(s)`
+        : `إجمالي الأحداث المطابقة: ${totalCount} حدث`;
+    }
+
+    if (scopeBadge) {
+      const userRole = normalizeRole(selectedRole);
+      scopeBadge.textContent = userRole === ROLES.CLINIC_ADMIN
+        ? (isEn ? 'Clinic Scoped' : 'نطاق العيادة المعتمدة')
+        : (isEn ? 'Platform Global Scope' : 'نطاق المنصة الشامل');
+    }
+
+    if (events.length === 0) {
+      container.innerHTML = `
+        <div style="text-align: center; padding: 30px; color: var(--muted);">
+          ${isEn ? 'No audit events found matching the specified filters.' : 'لا توجد أحداث تدقيق مطابقة للشروط المحددة.'}
+        </div>
+      `;
+      return;
+    }
+
+    const getBadgeColor = (type) => {
+      if (type.includes('APPROVED') || type.includes('GRANTED')) return 'success';
+      if (type.includes('REJECTED') || type.includes('WITHDRAWN') || type.includes('DELETED')) return 'danger';
+      if (type.includes('ROLE') || type.includes('VIEWED')) return 'info';
+      return 'warning';
+    };
+
+    container.innerHTML = events.map(evt => {
+      const dateStr = evt.timestamp ? new Date(evt.timestamp).toLocaleString(isEn ? 'en-US' : 'ar-EG') : '--';
+      const actorUid = evt.actor?.uid || evt.userId || 'system';
+      const actorRole = evt.actor?.role || evt.userRole || 'system';
+      const emailMasked = evt.actor?.emailMasked || '';
+      const badgeStyle = getBadgeColor(evt.type || '');
+      const ipSubnet = evt.ipMetadata?.subnetMask || '0.0.0.0/0';
+      const ipHash = evt.ipMetadata?.ipHash || 'unknown';
+      const platform = evt.deviceMetadata?.platform || 'Other';
+      const browser = evt.deviceMetadata?.browser || 'Other';
+      const detailsJson = evt.details ? JSON.stringify(evt.details) : '';
+
+      return `
+        <div style="display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); margin-bottom: 8px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="pill ${badgeStyle}" style="font-size: 11px; font-weight: 700;">${evt.type}</span>
+              <strong style="font-size: 13px;">${dateStr}</strong>
+            </div>
+            <div style="font-size: 11px; color: var(--muted); display: flex; gap: 10px;">
+              <span>🌐 Subnet: <code>${ipSubnet}</code> (Hash: <code>${ipHash}</code>)</span>
+              <span>💻 ${platform} / ${browser}</span>
+            </div>
+          </div>
+          <div style="font-size: 12px; color: var(--ink); line-height: 1.5; display: flex; justify-content: space-between; flex-wrap: wrap;">
+            <span>
+              <strong>${isEn ? 'Actor:' : 'الفاعل:'}</strong> <code>${actorUid}</code>
+              ${emailMasked ? `(${emailMasked})` : ''}
+              <span class="pill info" style="font-size: 10px; padding: 2px 6px;">${actorRole}</span>
+              ${evt.targetUserId ? ` → <strong>${isEn ? 'Target:' : 'المستهدف:'}</strong> <code>${evt.targetUserId}</code>` : ''}
+              ${evt.clinicId ? ` | <strong>${isEn ? 'Clinic:' : 'العيادة:'}</strong> <code>${evt.clinicId}</code>` : ''}
+            </span>
+            <span class="pill ${evt.outcome === 'SUCCESS' ? 'success' : 'danger'}" style="font-size: 10px;">${evt.outcome || 'SUCCESS'}</span>
+          </div>
+          ${detailsJson && detailsJson !== '{}' ? `
+            <div style="font-size: 11px; color: var(--muted); background: rgba(0,0,0,0.03); padding: 4px 8px; border-radius: 6px; font-family: monospace; overflow-x: auto;">
+              ${detailsJson}
+            </div>
+          ` : ''}
+        </div>
+      `;
+    }).join('');
+
+  } catch (err) {
+    console.error('[LOAD AUDIT ERROR]:', err);
+    container.innerHTML = `
+      <div style="text-align: center; padding: 24px; color: #ef4444;">
+        ⚠️ ${isEn ? 'Network error while querying audit trail.' : 'حدث خطأ في الشبكة أثناء جلب سجل التدقيق.'}
+      </div>
+    `;
+  }
+}
+
+async function exportAuditTrail(format = 'csv') {
+  const isEn = typeof currentLanguage !== 'undefined' && currentLanguage === 'en';
+  try {
+    showToast(isEn ? `Preparing ${format.toUpperCase()} export...` : `جاري تجهيز تصدير ${format.toUpperCase()}...`);
+
+    const searchVal = document.getElementById('auditSearchInput')?.value?.trim() || '';
+    const typeVal = document.getElementById('auditTypeFilter')?.value || 'all';
+    const startVal = document.getElementById('auditStartDate')?.value || '';
+    const endVal = document.getElementById('auditEndDate')?.value || '';
+
+    const params = new URLSearchParams();
+    params.set('format', format);
+    if (searchVal) params.set('search', searchVal);
+    if (typeVal && typeVal !== 'all') params.set('type', typeVal);
+    if (startVal) params.set('startDate', startVal);
+    if (endVal) params.set('endDate', endVal);
+
+    const apiBase = runtimeConfig && runtimeConfig.apiBaseUrl ? runtimeConfig.apiBaseUrl : window.location.origin;
+    const response = await authenticatedFetch(`${apiBase}/api/admin/audit/export?${params.toString()}`);
+
+    if (!response.ok) {
+      throw new Error(`Export failed with HTTP ${response.status}`);
+    }
+
+    const blob = await response.blob();
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    a.download = `audit-logs-${format}-${Date.now()}.${format}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(downloadUrl);
+
+    showToast(isEn ? 'Audit logs exported successfully.' : 'تم تصدير سجل التدقيق بنجاح.');
+  } catch (err) {
+    console.error('[EXPORT AUDIT ERROR]:', err);
+    showToast(isEn ? 'Failed to export audit logs.' : 'فشل تصدير سجل التدقيق.');
+  }
+}
+
+window.auditSessionLogout = auditSessionLogout;
+window.auditRecordViewed = auditRecordViewed;
+window.auditFileAccessed = auditFileAccessed;
+window.loadAuditEvents = loadAuditEvents;
+window.exportAuditTrail = exportAuditTrail;
+
+// Initialize Async Context Protections (Cache purgers & DOM scrubbers)
+function initAsyncContextProtections() {
+  if (typeof window === "undefined" || !window.asyncContextManager) return;
+  const acm = window.asyncContextManager;
+
+  // 1. Register Cache Purger
+  acm.registerCachePurger(() => {
+    window._cachedUserDoc = null;
+    window._currentCaseId = null;
+    window.__doctorPreviewCase = null;
+    if (typeof activeCaseId !== "undefined") activeCaseId = null;
+    if (typeof state !== "undefined" && state.doctorQueue) {
+      state.doctorQueue = [];
+    }
+  });
+
+  // 2. Register DOM Scrubber for sensitive data
+  acm.registerDomScrubber(() => {
+    const sensitiveInputIds = [
+      "authEmail", "authPassword", "patientName", "patientPhone", "patientAge",
+      "patientSymptoms", "patientNotes", "profileFullName", "profilePhone",
+      "profileDOB", "profileBloodType", "profileHeight", "profileWeight",
+      "doctorDiagnosisInput", "doctorNoteInput"
+    ];
+    for (const id of sensitiveInputIds) {
+      const el = document.getElementById(id);
+      if (el) el.value = "";
+    }
+
+    const reviewPanel = document.getElementById("doctorReviewPanel");
+    if (reviewPanel) {
+      reviewPanel.style.display = "none";
+      reviewPanel.innerHTML = "";
+    }
+
+    const doctorQueueList = document.getElementById("doctorQueueList");
+    if (doctorQueueList) {
+      doctorQueueList.innerHTML = "";
+    }
+
+    const statusEl = document.getElementById("patientClinicalStatus");
+    if (statusEl) statusEl.textContent = "";
+
+    const reportEl = document.getElementById("patientLatestReport");
+    if (reportEl) reportEl.textContent = "";
+
+    const resultStatusEl = document.getElementById("patientResultStatus");
+    if (resultStatusEl) resultStatusEl.textContent = "";
+  });
+}
+
 // Initialize on DOM ready
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", () => {
+    initAsyncContextProtections();
     initMobileTouchGestures();
     updateMobileBottomNav();
   });
 } else {
+  initAsyncContextProtections();
   initMobileTouchGestures();
   updateMobileBottomNav();
 }
-
-

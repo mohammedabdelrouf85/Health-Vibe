@@ -1,5 +1,5 @@
 /**
- * Health Vibes Firebase security rules tests.
+ * Health Vibe AI Firebase security rules tests.
  *
  * These tests use the Firebase Emulator Suite with the real firestore.rules and
  * storage.rules files. They fail fast if Auth, Firestore, or Storage emulators
@@ -281,9 +281,9 @@ async function run(name, fn) {
       await assertFails(adminDb.collection("users").doc("patient-a").update({ role: "doctor" }));
     });
 
-    await run("super admins can modify role fields through trusted custom claims", async () => {
+    await run("super admins must use the audited API to modify role fields", async () => {
       const ownerDb = db(env, "owner", { email_verified: true, role: "super_admin", isOwner: true });
-      await assertSucceeds(ownerDb.collection("users").doc("patient-a").update({ role: "doctor" }));
+      await assertFails(ownerDb.collection("users").doc("patient-a").update({ role: "doctor" }));
     });
 
     await run("patients can create their own clean case and cannot create for another account", async () => {
@@ -323,7 +323,7 @@ async function run(name, fn) {
       await assertFails(otherDb.collection("cases").doc("case-a-assigned").get());
       await assertFails(unapprovedDb.collection("cases").doc("case-a-assigned").get());
       await assertFails(assignedDb.collection("cases").doc("case-a-unassigned").get());
-      await assertSucceeds(assignedDb.collection("cases").doc("case-a-assigned").update({
+      await assertFails(assignedDb.collection("cases").doc("case-a-assigned").update({
         patientId: "patient-a",
         clinicId: "clinic-a",
         assignedDoctorId: "doctor-a",

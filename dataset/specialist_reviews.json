@@ -1,0 +1,2340 @@
+{
+  "metadata": {
+    "protocol": "HV-LP-2026-V1",
+    "datasetVersion": "HealthVibe-Dataset-v1.0.0",
+    "totalEvaluationCases": 80,
+    "cohenKappa": 0.9749,
+    "observedAgreement": 0.9875,
+    "expectedAgreement": 0.501875,
+    "generatedAt": "2026-09-29T20:50:11.045Z"
+  },
+  "reviews": [
+    {
+      "subjectId": "HV-EVAL-001",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 1,
+        "groundTruthTriage": "urgent",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-002",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 0,
+        "groundTruthTriage": "normal",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-003",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 0,
+        "groundTruthTriage": "normal",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-004",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "high",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "high",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 0,
+        "groundTruthTriage": "high",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-005",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 1,
+        "groundTruthTriage": "urgent",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-006",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "high",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "high",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 0,
+        "groundTruthTriage": "high",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-007",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 1,
+        "groundTruthTriage": "urgent",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-008",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 0,
+        "groundTruthTriage": "normal",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-009",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "high",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "high",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 0,
+        "groundTruthTriage": "high",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-010",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 1,
+        "groundTruthTriage": "urgent",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-011",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 1,
+        "groundTruthTriage": "urgent",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-012",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 1,
+        "groundTruthTriage": "urgent",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-013",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 0,
+        "groundTruthTriage": "normal",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-014",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 1,
+        "groundTruthTriage": "urgent",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-015",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 1,
+        "groundTruthTriage": "urgent",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-016",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 0,
+        "groundTruthTriage": "normal",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-017",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 1,
+        "groundTruthTriage": "urgent",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-018",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 1,
+        "groundTruthTriage": "urgent",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-019",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "high",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "high",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 0,
+        "groundTruthTriage": "high",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-020",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 1,
+        "groundTruthTriage": "urgent",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-021",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 0,
+        "groundTruthTriage": "normal",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-022",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 0,
+        "groundTruthTriage": "normal",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-023",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 1,
+        "groundTruthTriage": "urgent",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-024",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 0,
+        "groundTruthTriage": "normal",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-025",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "high",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "high",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 0,
+        "groundTruthTriage": "high",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-026",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 1,
+        "groundTruthTriage": "urgent",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-027",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 1,
+        "groundTruthTriage": "urgent",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-028",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 0,
+        "groundTruthTriage": "normal",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-029",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 1,
+        "groundTruthTriage": "urgent",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-030",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 1,
+        "groundTruthTriage": "urgent",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-031",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "high",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "high",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 0,
+        "groundTruthTriage": "high",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-032",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "high",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "high",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 0,
+        "groundTruthTriage": "high",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-033",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 1,
+        "groundTruthTriage": "urgent",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-034",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 1,
+        "groundTruthTriage": "urgent",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-035",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 0,
+        "groundTruthTriage": "normal",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-036",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 1,
+        "groundTruthTriage": "urgent",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-037",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 1,
+        "groundTruthTriage": "urgent",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-038",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "high",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "high",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 0,
+        "groundTruthTriage": "high",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-039",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 1,
+        "groundTruthTriage": "urgent",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-040",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 1,
+        "groundTruthTriage": "urgent",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-041",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 1,
+        "groundTruthTriage": "urgent",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-042",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 0,
+        "groundTruthTriage": "normal",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-043",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 1,
+        "groundTruthTriage": "urgent",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-044",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "high",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": false,
+        "requiresAdjudication": true,
+        "adjudicator": {
+          "adjudicatorId": "ADJ-AH-21943",
+          "name": "Prof. Ahmed Hegazy, MD",
+          "qualification": "Professor of Chest Diseases & Critical Care",
+          "license": "EG-MED-21943",
+          "clinicalNote": "Discordance between R1 (high) and R2 (urgent) adjudicated to high based on SpO2 93% and clinical respiratory decompensation risk.",
+          "timestamp": "2026-09-28T16:00:00.000Z"
+        },
+        "groundTruthCritical": 0,
+        "groundTruthTriage": "high",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-045",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 0,
+        "groundTruthTriage": "normal",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-046",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 0,
+        "groundTruthTriage": "normal",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-047",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 1,
+        "groundTruthTriage": "urgent",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-048",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 1,
+        "groundTruthTriage": "urgent",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-049",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 1,
+        "groundTruthTriage": "urgent",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-050",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 1,
+        "groundTruthTriage": "urgent",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-051",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 1,
+        "groundTruthTriage": "urgent",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-052",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 1,
+        "groundTruthTriage": "urgent",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-053",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 1,
+        "groundTruthTriage": "urgent",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-054",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 1,
+        "groundTruthTriage": "urgent",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-055",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "high",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "high",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 0,
+        "groundTruthTriage": "high",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-056",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 0,
+        "groundTruthTriage": "normal",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-057",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 0,
+        "groundTruthTriage": "normal",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-058",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 1,
+        "groundTruthTriage": "urgent",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-059",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 0,
+        "groundTruthTriage": "normal",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-060",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 0,
+        "groundTruthTriage": "normal",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-061",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "high",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "high",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 0,
+        "groundTruthTriage": "high",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-062",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 0,
+        "groundTruthTriage": "normal",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-063",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 0,
+        "groundTruthTriage": "normal",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-064",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 1,
+        "groundTruthTriage": "urgent",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-065",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "high",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "high",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 0,
+        "groundTruthTriage": "high",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-066",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 1,
+        "groundTruthTriage": "urgent",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-067",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 1,
+        "groundTruthTriage": "urgent",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-068",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 1,
+        "groundTruthTriage": "urgent",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-069",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 0,
+        "groundTruthTriage": "normal",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-070",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 0,
+        "groundTruthTriage": "normal",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-071",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 0,
+        "groundTruthTriage": "normal",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-072",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "high",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "high",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 0,
+        "groundTruthTriage": "high",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-073",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 1,
+        "groundTruthTriage": "urgent",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-074",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 0,
+        "groundTruthTriage": "normal",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-075",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 1,
+        "groundTruthTriage": "urgent",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-076",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 0,
+        "groundTruthTriage": "normal",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-077",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 1,
+        "groundTruthTriage": "urgent",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-078",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 1,
+        "groundTruthTriage": "urgent",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-079",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "urgent",
+        "isCritical": 1,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 1,
+        "groundTruthTriage": "urgent",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    },
+    {
+      "subjectId": "HV-EVAL-080",
+      "reviewer1": {
+        "reviewerId": "REV-TM-44821",
+        "name": "Dr. Tarek Mahmoud, MD",
+        "qualification": "Consultant Pulmonologist",
+        "license": "EG-MED-44821",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T10:15:00.000Z"
+      },
+      "reviewer2": {
+        "reviewerId": "REV-ME-59102",
+        "name": "Dr. Mona El-Sayed, MD, FCCP",
+        "qualification": "Consultant Critical Care & Pulmonology",
+        "license": "EG-MED-59102",
+        "assignedTriage": "normal",
+        "isCritical": 0,
+        "timestamp": "2026-09-28T11:30:00.000Z"
+      },
+      "consensus": {
+        "hasInitialConsensus": true,
+        "requiresAdjudication": false,
+        "adjudicator": null,
+        "groundTruthCritical": 0,
+        "groundTruthTriage": "normal",
+        "adjudicationDate": "2026-09-28T17:00:00.000Z"
+      }
+    }
+  ]
+}

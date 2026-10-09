@@ -3,103 +3,87 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://apis.google.com https://www.google.com https://www.recaptcha.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://www.gstatic.com https://*.googleusercontent.com https://firebasestorage.googleapis.com; media-src 'self' data: blob:; connect-src 'self' http://localhost:4000 http://127.0.0.1:4000 https://healthvibe.ai https://*.firebaseio.com https://*.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://firebasestorage.googleapis.com https://firebaseinstallations.googleapis.com https://firebaseappcheck.googleapis.com https://www.google.com https://www.recaptcha.net; frame-src 'self' https://health-vibes-a4b3b.firebaseapp.com https://*.firebaseapp.com https://www.google.com https://recaptcha.google.com https://www.recaptcha.net; object-src 'none'; base-uri 'self'; form-action 'self';">
-  <title>Health Vibes</title>
-  <link rel="icon" type="image/png" href="./logo-light.png">
-  <link rel="stylesheet" href="./styles.css?v=5.0">
-  <script>
-    (function() {
-      try {
-        var themeDefaultVersion = "2026-09-25-dark-v5";
-        if (localStorage.getItem("hv_theme_default_version") !== themeDefaultVersion) {
-          localStorage.setItem("hv_theme_default_version", themeDefaultVersion);
-          localStorage.setItem("hv_theme", "dark");
-        }
-        var savedTheme = localStorage.getItem("hv_theme") || "dark";
-        if (savedTheme === "light") {
-          document.documentElement.classList.add("hv-theme-light");
-          document.documentElement.classList.remove("hv-theme-dark");
-        } else {
-          document.documentElement.classList.remove("hv-theme-light");
-          document.documentElement.classList.add("hv-theme-dark");
-        }
-        var hasSession = localStorage.getItem("hv_user_logged_in") === "true" || !!localStorage.getItem("hv_active_session");
-        if (!hasSession) {
-          for (var i = 0; i < localStorage.length; i++) {
-            var k = localStorage.key(i);
-            if (k && (k.indexOf("firebase:authUser:") === 0 || k.indexOf("firebase:persistence:") === 0)) {
-              hasSession = true;
-              break;
-            }
-          }
-        }
-        if (hasSession) {
-          document.documentElement.classList.add("hv-has-session");
-        }
-      } catch(e) {}
-    })();
-    function showAuth() {
-      var el = document.getElementById("authScreen");
-      if (el) {
-        el.classList.add("open");
-        el.style.display = "grid";
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com https://www.google.com https://www.recaptcha.net; script-src-attr 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://www.gstatic.com https://*.googleusercontent.com https://firebasestorage.googleapis.com https://*.firebasestorage.app; media-src 'self' data: blob:; connect-src 'self' http://localhost:4000 http://127.0.0.1:4000 https://healthvibe.ai https://*.healthvibe.ai https://staging.healthvibe.ai https://*.cloudfunctions.net https://*.firebaseio.com https://*.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://firebasestorage.googleapis.com https://*.firebasestorage.app https://firebaseinstallations.googleapis.com https://firebaseappcheck.googleapis.com https://www.google.com https://www.recaptcha.net; frame-src 'self' https://health-vibes-a4b3b.firebaseapp.com https://health-vibes-staging.firebaseapp.com https://*.firebaseapp.com https://www.google.com https://recaptcha.google.com https://www.recaptcha.net; object-src 'none'; base-uri 'self'; form-action 'self';">
+  <title>Health Vibe AI | Smart Respiratory Clinical Triage & Patient Health Hub</title>
+  <meta name="description" content="منظومة Health Vibe AI الذكية لتقييم الأعراض التنفسية: فرز سريري استباقي مدعوم بالذكاء الاصطناعي وبإشراف طبي كامل. متابعة صحية آمنة لحالات السعال والربو وضيق التنفس.">
+  <link rel="canonical" href="https://healthvibe.ai/app/">
+  <link rel="alternate" hreflang="ar" href="https://healthvibe.ai/app/?lang=ar">
+  <link rel="alternate" hreflang="en" href="https://healthvibe.ai/app/?lang=en">
+  <link rel="alternate" hreflang="x-default" href="https://healthvibe.ai/app/">
+  <meta id="metaRobots" name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
+  <meta property="og:title" content="Health Vibe AI | Smart Respiratory Clinical Triage">
+  <meta property="og:description" content="AI-supported respiratory health pre-triage reviewed by certified doctors. Safe, structured care for respiratory symptoms.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://healthvibe.ai/app/">
+  <meta property="og:image" content="https://healthvibe.ai/app/logo-dark.webp">
+  <meta property="og:site_name" content="Health Vibe AI">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:locale:alternate" content="ar_EG">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Health Vibe AI - Smart Respiratory Assessment">
+  <meta name="twitter:description" content="Clinical pre-triage decision support software with physician review and certification.">
+  <meta name="twitter:image" content="https://healthvibe.ai/app/logo-dark.webp">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "MedicalWebPage",
+        "name": "Health Vibe AI Patient & Clinical Assessment Portal",
+        "url": "https://healthvibe.ai/app/",
+        "description": "Evidence-grounded respiratory pre-triage decision support hub for patients and clinicians.",
+        "medicalAudience": "Patient",
+        "aspect": "Diagnosis and Triage Support",
+        "specialty": "Pulmonology"
+      },
+      {
+        "@type": "Organization",
+        "name": "Health Vibe AI",
+        "url": "https://healthvibe.ai",
+        "logo": "https://healthvibe.ai/app/logo-dark.webp"
       }
-      if (typeof window.showSignInView === "function") window.showSignInView();
-    }
-    function hideAuth() {
-      var el = document.getElementById("authScreen");
-      if (el) {
-        el.classList.remove("open");
-        el.style.display = "none";
-      }
-    }
-    window.showAuth = showAuth;
-    window.hideAuth = hideAuth;
+    ]
+  }
   </script>
-  <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-firestore-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-storage-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-app-check-compat.js"></script>
+  <link rel="icon" type="image/webp" href="./logo-light-mark.webp">
+  <link rel="alternate icon" type="image/png" href="./logo-light.png">
+  <link rel="preload" href="./styles.css?v=5.0" as="style">
+  <link rel="stylesheet" href="./styles.css?v=5.0">
+  <script src="./bootstrap.js?v=5.0"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.4.0/firebase-app-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.4.0/firebase-firestore-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.4.0/firebase-auth-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.4.0/firebase-storage-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.4.0/firebase-app-check-compat.js"></script>
 </head>
 <body class="dark">
-  <script>
-    (function() {
-      try {
-        var saved = localStorage.getItem("hv_theme") || "dark";
-        if (saved === "dark") {
-          document.body.classList.add("dark");
-        } else {
-          document.body.classList.remove("dark");
-        }
-      } catch(e) {}
-    })();
-  </script>
+  <script src="./theme-boot.js?v=5.0"></script>
+  <a class="skip-link" href="#screenTitle">Skip to main content</a>
   <div id="loader" class="loader" aria-live="polite">
     <div class="loader-card">
       <div class="loader-media" aria-hidden="true">
-        <video class="loader-video" autoplay muted loop playsinline hidden poster="./logo-dark.png" data-video-candidates="./intro-animation.webm,./intro-animation.mp4"></video>
-        <img src="./logo-dark.png" alt="" class="loader-logo" data-logo />
+        <img src="./logo-dark.webp" alt="Health Vibe AI" class="loader-logo" data-logo fetchpriority="high" decoding="async" />
         <div class="loader-fallback-animation">
           <span></span>
           <span></span>
           <span></span>
         </div>
       </div>
-      <h1>Health Vibes</h1>
+      <h1>Health Vibe AI</h1>
       <p>Preparing a clearer, safer healthcare experience</p>
       <div class="loading-bar"><span></span></div>
     </div>
   </div>
 
-  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+  <div id="srStatus" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
 
   <main id="publicSite" class="site-shell is-hidden">
     <header class="site-nav">
       <div class="brand">
-        <img src="./logo-dark-mark.png" alt="Health Vibes" class="brand-logo" data-logo-mark />
+        <img src="./logo-dark-mark.webp" alt="Health Vibe AI logo" class="brand-logo" data-logo-mark decoding="async" />
         <div>
-          <strong>Health Vibes</strong>
+          <strong>Health Vibe AI</strong>
           <span>AI-supported healthcare reviewed by doctors</span>
         </div>
       </div>
@@ -111,9 +95,10 @@
         <a href="./pitch.html" target="_blank" rel="noopener" style="color: #38bdf8; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">📽️ Pitch Deck</a>
       </nav>
       <div class="nav-actions">
-        <button id="siteThemeToggle" type="button" class="soft-button" onclick="toggleTheme()" aria-label="Toggle theme" title="Switch to Light Mode" style="font-weight: 700; display: inline-flex; align-items: center; gap: 6px;">
-          <span class="site-theme-icon">☀️</span>
-          <span class="site-theme-label" data-i18n="common.lightMode">الوضع الفاتح</span>
+        <button id="siteThemeToggle" type="button" style="display:none !important;" aria-hidden="true"></button>
+        <button id="siteBackToAppBtn" type="button" class="solid-button" onclick="showAppView(event)" style="display:none; align-items:center; gap:6px; background:linear-gradient(135deg, var(--teal), #00796b); font-weight:700;">
+          <span>📱</span>
+          <span>لوحة التحكم (App)</span>
         </button>
         <button type="button" class="outline-button" data-auth-open onclick="if(typeof setAuthMode==='function') setAuthMode('signin'); showAuth();">Sign in</button>
         <button type="button" class="solid-button" data-auth-open onclick="if(typeof setAuthMode==='function') setAuthMode('signup'); showAuth();">Get started</button>
@@ -122,10 +107,10 @@
 
     <section class="site-hero">
       <div class="hero-copy">
-        <img src="./logo-dark.png" alt="Health Vibes" class="hero-brand-logo" data-logo />
+        <img src="./logo-dark.webp" alt="Health Vibe AI" class="hero-brand-logo" data-logo fetchpriority="high" decoding="async" />
         <span class="eyebrow">First Respiratory Assessment Unit</span>
         <h1>Digital healthcare connecting patients with doctors before any final result</h1>
-        <p>Health Vibes unites clinical evaluation, physician review, verified reports, scheduling, and medical records into one seamless platform built for individuals and clinics.</p>
+        <p>Health Vibe AI unites clinical evaluation, physician review, verified reports, scheduling, and medical records into one seamless platform built for individuals and clinics.</p>
         <div class="hero-actions">
           <button type="button" class="solid-button large" data-auth-open onclick="if(typeof setAuthMode==='function') setAuthMode('signin'); showAuth();">Get Started</button>
           <button type="button" class="soft-button large" data-preview-app onclick="if(typeof setAuthMode==='function') setAuthMode('signin'); showAuth();">Preview Experience</button>
@@ -142,7 +127,7 @@
           <span class="pill demo-preview-badge" style="position: absolute; top: 12px; left: 16px; z-index: 10; font-size: 10px; background: rgba(245, 158, 11, 0.2); color: #d97706; border: 1px solid rgba(245, 158, 11, 0.4); padding: 2px 8px; border-radius: 99px; font-weight: bold;">🧪 Demo Data / معاينة تجريبية</span>
           <div class="phone-screen" style="padding-top: 36px;">
             <div class="mini-top">
-              <span>Ahmed (Demo Patient)</span>
+              <span>New patient account</span>
               <b>In Review</b>
             </div>
             <div class="breath-orb"><span></span></div>
@@ -200,7 +185,7 @@
       <span class="pill" style="background: rgba(9, 184, 182, 0.2); color: #2dd4bf; border: 1px solid rgba(9, 184, 182, 0.4); padding: 4px 14px; border-radius: 99px; font-size: 12px; font-weight: 700;">🏥 للأطباء والمراكز الطبية / For Clinics</span>
       <h2 style="font-size: 28px; font-weight: 800; color: #ffffff; margin: 16px 0 10px;">هل تدير عيادة أو مركزاً متخصصاً للأمراض الصدرية؟</h2>
       <p style="font-size: 15px; color: #92b1af; max-width: 680px; margin: 0 auto 24px; line-height: 1.6;">
-        اكتشف منظومة Health Vibes المتكاملة للعيادات والمراكز: فرز سريري استباقي للمرضى، تقارير طبية معتمدة برمز QR، بوت واتساب للمواعيد، ومضاعفة القدرة الاستيعابية.
+        اكتشف منظومة Health Vibe AI المتكاملة للعيادات والمراكز: فرز سريري استباقي للمرضى، تقارير طبية معتمدة برمز QR، بوت واتساب للمواعيد، ومضاعفة القدرة الاستيعابية.
       </p>
       <div style="display: flex; gap: 14px; justify-content: center; flex-wrap: wrap;">
         <a href="./clinics.html" class="solid-button large" style="background: linear-gradient(135deg, #09b8b6 0%, #0284c7 100%); text-decoration: none; display: inline-flex; align-items: center; gap: 8px;">
@@ -217,7 +202,7 @@
     <!-- Public Site Footer with Legal Links -->
     <footer class="site-footer">
       <div>
-        <strong>Health Vibes AI</strong> &copy; 2026. Clinical AI-assisted respiratory healthcare platform.
+        <strong>Health Vibe AI</strong> &copy; 2026. Clinical AI-assisted respiratory healthcare platform.
       </div>
       <div class="site-footer-links">
         <a href="./clinics.html" style="color: var(--teal); font-weight: 700; text-decoration: none; padding: 4px 8px; border: 1px solid rgba(9, 184, 182, 0.3); border-radius: 6px;">🏥 بوابة العيادات والمراكز</a>
@@ -229,13 +214,13 @@
     </footer>
   </main>
 
-  <section id="authScreen" class="auth-screen" aria-label="Sign in">
+  <section id="authScreen" class="auth-screen" role="dialog" aria-modal="true" aria-labelledby="authDialogTitle" aria-describedby="authDialogDescription" aria-hidden="true" aria-label="Sign in">
     <div class="auth-card">
       <button id="authClose" class="close-button" aria-label="Close" onclick="hideAuth()">×</button>
       <div class="brand auth-brand">
-        <img src="./logo-dark-mark.png" alt="Health Vibes" class="brand-logo" data-logo-mark />
+        <img src="./logo-dark-mark.webp" alt="Health Vibe AI" class="brand-logo" data-logo-mark loading="lazy" decoding="async" />
         <div>
-          <strong>Health Vibes</strong>
+          <strong>Health Vibe AI</strong>
           <span>Secure account login</span>
         </div>
       </div>
@@ -243,8 +228,8 @@
 
       <!-- MAIN SIGN IN / SIGN UP VIEW -->
       <div id="authMainView">
-        <h2 data-i18n="auth.signIn">Access your account</h2>
-        <p data-i18n="auth.accountRole">Sign in with email or Google to proceed securely.</p>
+        <h2 id="authDialogTitle" data-i18n="auth.signIn">Access your account</h2>
+        <p id="authDialogDescription" data-i18n="auth.accountRole">Sign in with email or Google to proceed securely.</p>
 
         <div class="doctor-auth-note">
           <span style="font-size:16px;">🩺</span>
@@ -271,7 +256,7 @@
         <form id="authEmailForm" autocomplete="on" onsubmit="event.preventDefault(); handleEmailAuth(event);">
           <div id="authNameGroup" class="form-group" style="display:none;">
             <label for="authName" data-i18n="auth.fullName">Full Name</label>
-            <input type="text" id="authName" placeholder="e.g. Ahmed Mohamed" data-i18n-placeholder="auth.fullNamePlaceholder" autocomplete="name" />
+            <input type="text" id="authName" placeholder="e.g. Full Name" data-i18n-placeholder="auth.fullNamePlaceholder" autocomplete="name" />
           </div>
 
           <div class="form-group">
@@ -330,7 +315,7 @@
 
         <div id="resetSuccessMessage" class="reset-success-box" style="display:none;">
           <strong>Reset link sent!</strong>
-          <p style="margin:4px 0 0;color:var(--ink);font-size:12.5px;">Please check your Inbox and Spam/Junk folder for the password reset email from Health Vibes.</p>
+          <p style="margin:4px 0 0;color:var(--ink);font-size:12.5px;">Please check your Inbox and Spam/Junk folder for the password reset email from Health Vibe AI.</p>
         </div>
 
         <form id="forgotPasswordForm">
@@ -372,15 +357,15 @@
     </div>
   </section>
 
-  <main id="app" class="app-shell" hidden>
+  <main id="app" class="app-shell" hidden aria-labelledby="screenTitle">
     <!-- Mobile Drawer Backdrop Overlay -->
     <div id="sidebarBackdrop" class="sidebar-backdrop" onclick="closeSidebarDrawer()" aria-hidden="true"></div>
 
     <aside class="sidebar" aria-label="التنقل داخل التطبيق">
       <div class="brand">
-        <img src="./logo-dark-mark.png" alt="Health Vibes" class="brand-logo" data-logo-mark />
+        <img src="./logo-dark-mark.webp" alt="Health Vibe AI" class="brand-logo" data-logo-mark loading="lazy" decoding="async" />
         <div>
-          <strong>Health Vibes</strong>
+          <strong>Health Vibe AI</strong>
           <span id="accountLabel">Patient account</span>
         </div>
       </div>
@@ -402,7 +387,11 @@
         <button class="nav-item" data-screen="report" data-i18n-title="nav.report"><span class="nav-icon">📄</span><span class="nav-label" data-i18n="nav.report">Report</span></button>
         <button class="nav-item" data-screen="admin" style="display:none;" data-i18n-title="nav.admin"><span class="nav-icon">⚙️</span><span class="nav-label" data-i18n="nav.admin">Admin Dashboard</span></button>
         <button class="nav-item" data-screen="audit" style="display:none;" data-i18n-title="nav.audit"><span class="nav-icon">🔍</span><span class="nav-label" data-i18n="nav.audit">Audit Log</span></button>
-        <a href="./clinics.html" target="_blank" rel="noopener" class="nav-item" style="text-decoration: none; color: inherit; display: flex; align-items: center; border-top: 1px solid rgba(255,255,255,0.08); margin-top: 6px; padding-top: 10px;" data-i18n-title="nav.clinicsSales">
+        <button type="button" class="nav-item" onclick="showPublicLandingPage()" data-i18n-title="nav.publicLanding" title="الموقع التعريفي الرئيسي" style="border-top: 1px solid var(--line); margin-top: 6px; padding-top: 8px;">
+          <span class="nav-icon">🌐</span>
+          <span class="nav-label" data-i18n="nav.publicLanding">الموقع التعريفي الرئيسي</span>
+        </button>
+        <a href="./clinics.html" target="_blank" rel="noopener" class="nav-item" style="text-decoration: none; color: inherit; display: flex; align-items: center; margin-top: 2px;" data-i18n-title="nav.clinicsSales">
           <span class="nav-icon">🏥</span>
           <span class="nav-label" style="color: var(--teal); font-weight: 700;" data-i18n="nav.clinicsSales">حلول العيادات (Sales) ↗</span>
         </a>
@@ -434,14 +423,15 @@
       </button>
     </aside>
 
-    <section class="workspace">
+    <section class="workspace" aria-labelledby="screenTitle">
       <header class="topbar">
         <button id="menuToggle" class="icon-button" aria-label="Toggle menu">☰</button>
         <div>
-          <p>Health Vibes</p>
+          <p>Health Vibe AI</p>
           <h2 id="screenTitle">Home</h2>
         </div>
         <div class="top-actions">
+          <button id="topbarThemeToggle" type="button" style="display:none !important;" aria-hidden="true"></button>
           <a href="./clinics.html" target="_blank" rel="noopener" class="soft-button" style="text-decoration:none; padding:6px 12px; font-size:12px; font-weight:700; display:inline-flex; align-items:center; gap:6px; border-radius:8px; border:1px solid rgba(9, 184, 182, 0.4); color:var(--teal); background:rgba(9, 184, 182, 0.08);" data-i18n-title="nav.clinicsSales">
             <span>🏥</span>
             <span data-i18n="nav.clinicsSales">حلول العيادات (Sales) ↗</span>
@@ -484,6 +474,7 @@
             <p data-i18n="patient.heroSubtitle">Enter symptoms and measurements. The doctor receives a rule-based risk preview before approving any report shown to you.</p>
             <div class="hero-actions">
               <button class="solid-button large" data-screen="assessment" data-i18n="patient.startBreathingAssessment">Start breathing assessment</button>
+              <button class="soft-button large" type="button" onclick="if(window.auth && auth.currentUser) openAssessmentComparisonModal(auth.currentUser.uid); else showAuth();">📊 <span data-i18n="patient.compareAssessments">Compare Assessments</span></button>
               <button class="soft-button large" data-screen="history" data-i18n="patient.viewHistory">View history</button>
             </div>
           </div>
@@ -498,6 +489,20 @@
             <div class="clinical-row"><span data-i18n="patient.doctor">Doctor</span><strong id="patientClinicalDoctor">--</strong></div>
           </div>
         </div>
+
+        <article class="hv-onboarding-strip" aria-label="Product onboarding">
+          <div>
+            <span class="eyebrow">How Health Vibe AI Works</span>
+            <h2>From breathing data to doctor-approved guidance</h2>
+            <p>Submit symptoms and vitals, let the system prioritize the case, then wait for a licensed physician to review and release the final report.</p>
+          </div>
+          <ol>
+            <li><strong>1. Share</strong><span>Enter oxygen, symptoms, history, and consent.</span></li>
+            <li><strong>2. Triage</strong><span>Rule-based risk helps prioritize review.</span></li>
+            <li><strong>3. Review</strong><span>A doctor approves, asks follow-up, or escalates.</span></li>
+            <li><strong>4. Receive</strong><span>Your certified report appears only after approval.</span></li>
+          </ol>
+        </article>
 
         <div class="metric-grid">
           <article><span data-i18n="patient.nextAppointment">Next appointment</span><strong id="patientNextAppt">--</strong><small data-i18n="patient.followUpConsultation">Follow-up consultation</small></article>
@@ -518,51 +523,54 @@
         <div class="content-grid">
           <article class="panel">
             <div class="panel-head">
-              <h3>الموافقة الطبية وسياسة الخصوصية</h3>
-              <span id="consentStatusBadge" class="pill pending">مطلوبة قبل الفحص</span>
+              <h3 data-i18n="consent.title">الموافقة الطبية وسياسة الخصوصية</h3>
+              <span id="consentStatusBadge" class="pill pending" data-i18n="consent.badgeRequired">مطلوبة قبل الفحص</span>
             </div>
-            <p class="muted-copy">Health Vibes يجمع بياناتك الصحية لتقييم خطورة إرشادي ثم يرسلها لطبيب معتمد قبل ظهور أي نتيجة نهائية. لحماية بياناتك والامتثال للمعايير الطبية، نرجو مراجعة وتأكيد بنود الموافقة أدناه:</p>
+            <p class="muted-copy" data-i18n="consent.desc">Health Vibe AI يجمع بياناتك الصحية لتقييم خطورة إرشادي ثم يرسلها لطبيب معتمد قبل ظهور أي نتيجة نهائية. لحماية بياناتك والامتثال للمعايير الطبية، نرجو مراجعة وتأكيد بنود الموافقة أدناه:</p>
             <div class="check-list" style="margin: 16px 0; display: flex; flex-direction: column; gap: 12px;">
               <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer;">
                 <input type="checkbox" id="consentDataProcessing" checked style="margin-top: 3px;">
-                <span><strong>معالجة البيانات السريرية (إلزامي):</strong> أوافق على استخدام بيانات الأعراض والقياسات الحيوية داخل مسار التقييم ومشاركتها مع الطبيب المعالج المعتمد.</span>
+                <span data-i18n="consent.dataProcessing"><strong>معالجة البيانات السريرية (إلزامي):</strong> أوافق على استخدام بيانات الأعراض والقياسات الحيوية داخل مسار التقييم ومشاركتها مع الطبيب المعالج المعتمد.</span>
               </label>
               <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer;">
                 <input type="checkbox" id="consentAiAdvisory" checked style="margin-top: 3px;">
-                <span><strong>الطبيعة الإرشادية للذكاء الاصطناعي (إلزامي):</strong> أفهم أن مؤشر الذكاء الاصطناعي أداة فرز إرشادية غير مدققة سريرياً ولا تُعد تشخيصاً طبياً مستقلاً ولا تغني عن فحص الطبيب.</span>
+                <span data-i18n="consent.aiAdvisory"><strong>الطبيعة الإرشادية للذكاء الاصطناعي (إلزامي):</strong> أفهم أن مؤشر الذكاء الاصطناعي أداة فرز إرشادية غير مدققة سريرياً ولا تُعد تشخيصاً طبياً مستقلاً ولا تغني عن فحص الطبيب.</span>
               </label>
               <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer;">
                 <input type="checkbox" id="consentNotifications" checked style="margin-top: 3px;">
-                <span><strong>تنبيهات المتابعة والتقارير (اختياري):</strong> أوافق على استقبال إشعارات تحديث الحالة وتقارير الفحص الصادرة من الطبيب.</span>
+                <span data-i18n="consent.notifications"><strong>تنبيهات المتابعة والتقارير (اختياري):</strong> أوافق على استقبال إشعارات تحديث الحالة وتقارير الفحص الصادرة من الطبيب.</span>
               </label>
             </div>
-            <div class="safety-note" style="margin-bottom: 16px;">
+            <div class="safety-note" style="margin-bottom: 16px;" data-i18n="consent.privacyNote">
               🔒 خصوصيتك أولويتنا: يتم تشفير البيانات ولا يتم مشاركتها مع أي طرف ثالث لأغراض إعلانية. يمكنك مراجعة أو سحب الموافقة في أي وقت.
             </div>
             <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-              <button id="btnConsentProceed" type="button" class="solid-button" style="flex: 1; font-size: 14.5px; padding: 12px;">
+              <button id="btnConsentProceed" type="button" class="solid-button" style="flex: 1; font-size: 14.5px; padding: 12px;" data-i18n="consent.agreeBtn">
                 ✓ أوافق والمتابعة لبدء فحص التنفس
               </button>
-              <button type="button" class="outline-button" style="padding: 12px 16px;" onclick="showScreen('profile')">
+              <button id="btnWithdrawConsent" type="button" class="outline-button" style="display: none; padding: 12px 16px; color: #dc2626; border-color: rgba(220, 38, 38, 0.35);" data-i18n="consent.withdrawBtn">
+                سحب الموافقة
+              </button>
+              <button type="button" class="outline-button" style="padding: 12px 16px;" onclick="showScreen('profile')" data-i18n="consent.profileBtn">
                 الملف الطبي
               </button>
             </div>
           </article>
           <article class="panel">
-            <div class="panel-head"><h3>نطاق الوصول</h3><span class="pill info">صلاحيات الأدوار</span></div>
+            <div class="panel-head"><h3 data-i18n="consent.accessScope">نطاق الوصول</h3><span class="pill info" data-i18n="consent.rolePermissions">صلاحيات الأدوار</span></div>
             <div class="access-matrix">
-              <div><strong>المريض</strong><span>يرى بياناته ونتائجه المعتمدة فقط.</span></div>
-              <div><strong>الطبيب</strong><span>يرى الحالات المرتبطة به فقط مع سجل المراجعة.</span></div>
-              <div><strong>الإدارة</strong><span>صلاحيات تشغيلية مقيدة حسب الدور مع سجل تدقيق.</span></div>
+              <div><span data-i18n="consent.patientAccess"><strong>المريض</strong>: يرى بياناته ونتائجه المعتمدة فقط.</span></div>
+              <div><span data-i18n="consent.doctorAccess"><strong>الطبيب</strong>: يرى الحالات المرتبطة به فقط مع سجل المراجعة.</span></div>
+              <div><span data-i18n="consent.adminAccess"><strong>الإدارة</strong>: صلاحيات تشغيلية مقيدة حسب الدور مع سجل تدقيق.</span></div>
             </div>
 
             <div style="margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line);">
-              <h4 style="font-size: 13.5px; margin-bottom: 8px; color: var(--teal-2);">المعايير والوثائق القانونية والطبية:</h4>
-              <p class="muted-copy" style="font-size: 12px; margin-bottom: 10px;">يمكنك قراءة الوثائق المعتمدة كاملة في أي وقت:</p>
+              <h4 style="font-size: 13.5px; margin-bottom: 8px; color: var(--teal-2);" data-i18n="consent.legalStandards">المعايير والوثائق القانونية والطبية:</h4>
+              <p class="muted-copy" style="font-size: 12px; margin-bottom: 10px;" data-i18n="consent.legalDesc">يمكنك قراءة الوثائق المعتمدة كاملة في أي وقت:</p>
               <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                <button type="button" class="soft-button" style="font-size: 12px; padding: 6px 10px;" onclick="openLegalModal('privacy')">🔒 سياسة الخصوصية</button>
-                <button type="button" class="soft-button" style="font-size: 12px; padding: 6px 10px;" onclick="openLegalModal('terms')">📜 شروط الاستخدام</button>
-                <button type="button" class="soft-button" style="font-size: 12px; padding: 6px 10px; color: #f87171;" onclick="openLegalModal('disclaimer')">🚨 إخلاء المسؤولية</button>
+                <button type="button" class="soft-button" style="font-size: 12px; padding: 6px 10px;" onclick="openLegalModal('privacy')" data-i18n="consent.privacyPolicyBtn">🔒 سياسة الخصوصية</button>
+                <button type="button" class="soft-button" style="font-size: 12px; padding: 6px 10px;" onclick="openLegalModal('terms')" data-i18n="consent.termsBtn">📜 شروط الاستخدام</button>
+                <button type="button" class="soft-button" style="font-size: 12px; padding: 6px 10px; color: #f87171;" onclick="openLegalModal('disclaimer')" data-i18n="consent.disclaimerBtn">🚨 إخلاء المسؤولية</button>
               </div>
             </div>
           </article>
@@ -571,29 +579,297 @@
 
       <section id="screen-profile" class="screen">
         <div class="form-layout">
-          <article class="panel form-panel">
-            <div class="panel-head"><h3>الملف الطبي</h3><span class="pill ok" id="profileCompletionBadge">92% مكتمل</span></div>
-            <label>الاسم بالكامل</label>
-            <input id="profileName" placeholder="اسم المريض بالكامل">
-            <label>العمر</label>
-            <input id="profileAge" placeholder="العمر (مثال: 34 سنة)">
-            <label>رقم الهاتف</label>
-            <input id="profilePhone" placeholder="رقم الهاتف للتواصل">
-            <label>الطبيب المرتبط</label>
-            <input id="profileLinkedDoctor" value="د. منى سامي - عيادة مدينة نصر">
-            <label>أمراض مزمنة أو حساسية</label>
-            <textarea id="profileMedicalHistory" placeholder="أمراض مزمنة أو حساسية إن وجدت"></textarea>
-            <button class="solid-button full" id="btnSaveProfile" data-screen="assessment">حفظ وبدء تقييم التنفس</button>
+          <article class="panel form-panel" style="grid-column: 1 / -1;">
+            <div class="panel-head">
+              <div>
+                <h3 style="margin: 0; display: flex; align-items: center; gap: 8px;">
+                  <span>📋</span> <span data-i18n="profile.title">الملف الطبي السريري للمريض</span>
+                </h3>
+                <small style="color: var(--muted); font-size: 12px;" data-i18n="profile.subtitle">السجل الطبي المعتمد مع حساب العمر وتوثيق المنشأ والتصحيحات المعتمدة</small>
+              </div>
+              <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                <span class="pill info" id="profileProvenanceBadge">الإصدار v1</span>
+                <span class="pill ok" id="profileCompletionBadge">92% مكتمل</span>
+              </div>
+            </div>
+
+            <!-- SECTION 1: Personal Details & Date of Birth -->
+            <div class="profile-section-card" style="background: var(--surface-2, rgba(0,0,0,0.02)); border: 1px solid var(--line, rgba(0,0,0,0.08)); border-radius: 12px; padding: 14px; margin-top: 12px;">
+              <h4 style="margin: 0 0 10px; font-size: 14px; color: var(--teal); display: flex; align-items: center; gap: 6px;">
+                <span>👤</span> <span data-i18n="profile.personalInfo">البيانات الشخصية وتاريخ الميلاد</span>
+              </h4>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;">
+                <div>
+                  <label for="profileName" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;" data-i18n="profile.fullName">الاسم بالكامل</label>
+                  <input id="profileName" placeholder="اسم المريض بالكامل" style="width: 100%; box-sizing: border-box;">
+                </div>
+                <div>
+                  <label for="profileDob" style="font-size: 12px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                    <span data-i18n="profile.dob">تاريخ الميلاد (Date of Birth)</span>
+                    <span class="pill ok" id="profileCalculatedAgeBadge" style="font-size: 11px; padding: 2px 8px;">العمر: --</span>
+                  </label>
+                  <input id="profileDob" type="date" style="width: 100%; box-sizing: border-box;" onchange="handleDobChange()">
+                  <!-- Hidden legacy input for backward compatibility -->
+                  <input id="profileAge" type="hidden">
+                </div>
+                <div>
+                  <label for="profilePhone" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;" data-i18n="profile.phone">رقم الهاتف للتواصل</label>
+                  <input id="profilePhone" type="tel" placeholder="05XXXXXXXX" style="width: 100%; box-sizing: border-box;">
+                </div>
+              </div>
+            </div>
+
+            <!-- SECTION 2: Emergency Contact -->
+            <div class="profile-section-card" style="background: var(--surface-2, rgba(0,0,0,0.02)); border: 1px solid var(--line, rgba(0,0,0,0.08)); border-radius: 12px; padding: 14px; margin-top: 12px;">
+              <h4 style="margin: 0 0 10px; font-size: 14px; color: var(--teal); display: flex; align-items: center; gap: 6px;">
+                <span>🚨</span> <span data-i18n="profile.emergencyContact">بيانات الاتصال في حالات الطوارئ</span>
+              </h4>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+                <div>
+                  <label for="profileEmergencyName" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;" data-i18n="profile.emergencyName">اسم جهة الطوارئ</label>
+                  <input id="profileEmergencyName" placeholder="الاسم ثلاثي" style="width: 100%; box-sizing: border-box;">
+                </div>
+                <div>
+                  <label for="profileEmergencyRelation" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;" data-i18n="profile.emergencyRelation">صلة القرابة</label>
+                  <input id="profileEmergencyRelation" placeholder="أب / أم / زوج / أخ..." style="width: 100%; box-sizing: border-box;">
+                </div>
+                <div>
+                  <label for="profileEmergencyPhone" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;" data-i18n="profile.emergencyPhone">هاتف الطوارئ</label>
+                  <input id="profileEmergencyPhone" type="tel" placeholder="رقم هاتف الطوارئ" style="width: 100%; box-sizing: border-box;">
+                </div>
+              </div>
+            </div>
+
+            <!-- SECTION 3: Biometrics & Baselines -->
+            <div class="profile-section-card" style="background: var(--surface-2, rgba(0,0,0,0.02)); border: 1px solid var(--line, rgba(0,0,0,0.08)); border-radius: 12px; padding: 14px; margin-top: 12px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+                <h4 style="margin: 0; font-size: 14px; color: var(--teal); display: flex; align-items: center; gap: 6px;">
+                  <span>📏</span> <span data-i18n="profile.biometrics">القياسات الحيوية والبدنية</span>
+                </h4>
+                <span class="pill info" id="profileBmiBadge" style="font-size: 11px; padding: 2px 8px;">مؤشر الكتلة (BMI): --</span>
+              </div>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+                <div>
+                  <label for="profileBloodType" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;" data-i18n="profile.bloodType">فصيلة الدم</label>
+                  <select id="profileBloodType" style="width: 100%; box-sizing: border-box; height: 38px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);">
+                    <option value="unknown">غير محدد (Unknown)</option>
+                    <option value="A+">A+</option>
+                    <option value="A-">A-</option>
+                    <option value="B+">B+</option>
+                    <option value="B-">B-</option>
+                    <option value="AB+">AB+</option>
+                    <option value="AB-">AB-</option>
+                    <option value="O+">O+</option>
+                    <option value="O-">O-</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="profileHeight" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;" data-i18n="profile.height">الطول (سم)</label>
+                  <input id="profileHeight" type="number" min="30" max="250" placeholder="170" style="width: 100%; box-sizing: border-box;" oninput="updateProfileBmi()">
+                </div>
+                <div>
+                  <label for="profileWeight" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;" data-i18n="profile.weight">الوزن (كجم)</label>
+                  <input id="profileWeight" type="number" min="2" max="300" placeholder="70" style="width: 100%; box-sizing: border-box;" oninput="updateProfileBmi()">
+                </div>
+              </div>
+            </div>
+
+            <!-- SECTION 4: Biological Sex & Conditional Pregnancy Relevance -->
+            <div class="profile-section-card" style="background: var(--surface-2, rgba(0,0,0,0.02)); border: 1px solid var(--line, rgba(0,0,0,0.08)); border-radius: 12px; padding: 14px; margin-top: 12px;">
+              <h4 style="margin: 0 0 6px; font-size: 14px; color: var(--teal); display: flex; align-items: center; gap: 6px;">
+                <span>🧬</span> <span data-i18n="profile.clinicalSexTitle">البيانات السريرية للجنس والوظائف الحيوية</span>
+              </h4>
+              <p style="margin: 0 0 10px; font-size: 11.5px; color: var(--muted); line-height: 1.4;" data-i18n="profile.clinicalSexNote">
+                تُجمع هذه البيانات حصرياً لأغراض الفرز السريري، ومعادلات وظائف الرئة المرجعية (FEV1/FVC)، وحسابات الجرعات الدوائية.
+              </p>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+                <div>
+                  <label for="profileSex" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;" data-i18n="profile.biologicalSex">الجنس البيولوجي السريري</label>
+                  <select id="profileSex" style="width: 100%; box-sizing: border-box; height: 38px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);" onchange="handleSexOrDobChange()">
+                    <option value="not_specified">غير محدد (Not Specified)</option>
+                    <option value="male">ذكر (Male)</option>
+                    <option value="female">أنثى (Female)</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- CONDITIONAL PREGNANCY SECTION: Displayed strictly when clinically relevant (Female aged 12-55) -->
+              <div id="profilePregnancyContainer" style="display: none; margin-top: 12px; padding: 12px; background: rgba(14, 165, 164, 0.05); border: 1px dashed var(--teal); border-radius: 10px;">
+                <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
+                  <strong style="font-size: 13px; color: var(--teal);">🤰 حالة الحمل والولادة (مطلوبة سريرياً لفئة المريضة)</strong>
+                  <span class="pill info" style="font-size: 10px;">سريرياً ملائم</span>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px;">
+                  <div>
+                    <label for="profilePregnancyStatus" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;">حالة الحمل الحالية</label>
+                    <select id="profilePregnancyStatus" style="width: 100%; box-sizing: border-box; height: 36px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);">
+                      <option value="not_pregnant">غير حامل (Not Pregnant)</option>
+                      <option value="pregnant">حامل حالياً (Currently Pregnant)</option>
+                      <option value="postpartum">فترة النفاس (Postpartum)</option>
+                      <option value="unknown">غير متأكدة (Unknown)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label for="profilePregnancyTrimester" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;">الثلث الحالي للحمل</label>
+                    <select id="profilePregnancyTrimester" style="width: 100%; box-sizing: border-box; height: 36px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);">
+                      <option value="">لا ينطبق</option>
+                      <option value="1">الثلث الأول (الأشهر 1 - 3)</option>
+                      <option value="2">الثلث الثاني (الأشهر 4 - 6)</option>
+                      <option value="3">الثلث الثالث (الأشهر 7 - 9)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label for="profilePregnancyDueDate" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;">تاريخ الولادة المتوقع (EDD)</label>
+                    <input id="profilePregnancyDueDate" type="date" style="width: 100%; box-sizing: border-box; height: 36px;">
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- SECTION 5: Structured Medical History -->
+            <div class="profile-section-card" style="background: var(--surface-2, rgba(0,0,0,0.02)); border: 1px solid var(--line, rgba(0,0,0,0.08)); border-radius: 12px; padding: 14px; margin-top: 12px;">
+              <h4 style="margin: 0 0 10px; font-size: 14px; color: var(--teal); display: flex; align-items: center; gap: 6px;">
+                <span>🩺</span> <span data-i18n="profile.medicalHistoryTitle">التاريخ الطبي المنظم والأدوية والحساسية</span>
+              </h4>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px;">
+                <div>
+                  <label for="profileAllergies" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;" data-i18n="profile.allergies">الحساسية (أدوية، أطعمة، عوامل بيئية)</label>
+                  <input id="profileAllergies" placeholder="مثال: بنسلين، حساسية حبوب اللقاح..." style="width: 100%; box-sizing: border-box;">
+                </div>
+                <div>
+                  <label for="profileChronicConditions" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;" data-i18n="profile.chronic">الأمراض المزمنة</label>
+                  <input id="profileChronicConditions" placeholder="مثال: ربو شعبي، ضغط الدم، سكري..." style="width: 100%; box-sizing: border-box;">
+                </div>
+                <div>
+                  <label for="profileMedications" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;" data-i18n="profile.medications">الأدوية المستخدمة حالياً والجرعات</label>
+                  <input id="profileMedications" placeholder="مثال: بخاخ فنتولين، دواء ضغط..." style="width: 100%; box-sizing: border-box;">
+                </div>
+                <div>
+                  <label for="profileSurgeries" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;" data-i18n="profile.surgeries">العمليات الجراحية السابقة وسنواتها</label>
+                  <input id="profileSurgeries" placeholder="مثال: استئصال الزائدة الدودية 2021..." style="width: 100%; box-sizing: border-box;">
+                </div>
+                <div>
+                  <label for="profileFamilyHistory" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;" data-i18n="profile.familyHistory">التاريخ العائلي للأمراض</label>
+                  <input id="profileFamilyHistory" placeholder="مثال: أمراض صدرية وراثية، ربو عائلي..." style="width: 100%; box-sizing: border-box;">
+                </div>
+                <div>
+                  <label for="profileHospitalAdmissions" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;" data-i18n="profile.hospitalAdmissions">حالات التنويم ودخول المستشفى السابقة</label>
+                  <input id="profileHospitalAdmissions" placeholder="سبب التنويم، التاريخ، المدة..." style="width: 100%; box-sizing: border-box;">
+                </div>
+              </div>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 10px;">
+                <div>
+                  <label for="profileSmokingStatus" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;" data-i18n="profile.smokingStatus">حالة التدخين</label>
+                  <select id="profileSmokingStatus" style="width: 100%; box-sizing: border-box; height: 38px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);">
+                    <option value="never">غير مدخن تماماً (Never smoked)</option>
+                    <option value="former">مدخن سابق وأقلع (Former smoker)</option>
+                    <option value="current">مدخن حالي (Current smoker)</option>
+                    <option value="passive">تدخين سلبي / مخالط (Passive smoking)</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="profileSmokingDetails" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;" data-i18n="profile.smokingDetails">تفاصيل التدخين (النوع، المدة، عدد السجائر)</label>
+                  <input id="profileSmokingDetails" placeholder="مثال: علبة يومياً لمدة 5 سنوات، شيشة إلكترونية..." style="width: 100%; box-sizing: border-box;">
+                </div>
+              </div>
+              <!-- Hidden compatibility textarea -->
+              <textarea id="profileMedicalHistory" style="display: none;"></textarea>
+            </div>
+
+            <!-- SECTION 6: Health Insurance (Strictly Optional) -->
+            <div class="profile-section-card" style="background: var(--surface-2, rgba(0,0,0,0.02)); border: 1px solid var(--line, rgba(0,0,0,0.08)); border-radius: 12px; padding: 14px; margin-top: 12px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+                <h4 style="margin: 0; font-size: 14px; color: var(--teal); display: flex; align-items: center; gap: 6px;">
+                  <span>💳</span> <span data-i18n="profile.insuranceTitle">التأمين الصحي</span>
+                </h4>
+                <span class="pill info" data-i18n="profile.insuranceOptional">اختياري تماماً (Optional)</span>
+              </div>
+              <p style="margin: 0 0 10px; font-size: 11.5px; color: var(--muted);" data-i18n="profile.insuranceNote">
+                لا يشترط وجود تأمين صحي للاستفادة من تقييم الحالة أو المراجعة الطبية.
+              </p>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+                <div>
+                  <label for="profileInsuranceProvider" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;" data-i18n="profile.insuranceProvider">شركة التأمين</label>
+                  <input id="profileInsuranceProvider" placeholder="مثال: بوبا، التعاونية، ميدغلف..." style="width: 100%; box-sizing: border-box;">
+                </div>
+                <div>
+                  <label for="profileInsurancePolicyNumber" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;" data-i18n="profile.insurancePolicy">رقم البوليصة / العضوية</label>
+                  <input id="profileInsurancePolicyNumber" placeholder="رقم العضوية أو البوليصة" style="width: 100%; box-sizing: border-box;">
+                </div>
+                <div>
+                  <label for="profileInsuranceGroupNumber" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;" data-i18n="profile.insuranceGroup">رقم المجموعة</label>
+                  <input id="profileInsuranceGroupNumber" placeholder="رقم المجموعة (إن وجد)" style="width: 100%; box-sizing: border-box;">
+                </div>
+                <div>
+                  <label for="profileInsuranceExpiry" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;" data-i18n="profile.insuranceExpiry">تاريخ انتهاء الوثيقة</label>
+                  <input id="profileInsuranceExpiry" type="date" style="width: 100%; box-sizing: border-box;">
+                </div>
+              </div>
+            </div>
+
+            <!-- SECTION 7: Trusted Clinic & Doctor Linkage -->
+            <div class="profile-section-card" style="background: var(--surface-2, rgba(0,0,0,0.02)); border: 1px solid var(--line, rgba(0,0,0,0.08)); border-radius: 12px; padding: 14px; margin-top: 12px;">
+              <h4 style="margin: 0 0 6px; font-size: 14px; color: var(--teal); display: flex; align-items: center; gap: 6px;">
+                <span>🏥</span> <span data-i18n="profile.trustedLinkageTitle">الربط المعتمد بالعيادة والطبيب المعالج</span>
+              </h4>
+              <p style="margin: 0 0 10px; font-size: 11.5px; color: var(--muted);" data-i18n="profile.trustedLinkageNote">
+                يتم ربط الحالة بالعيادة والطبيب من خلال معرفات موثوقة ومثبتة خادمياً لمنع انتحال الهويات.
+              </p>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;">
+                <div>
+                  <label for="profileClinicSelect" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;" data-i18n="profile.clinicLabel">العيادة المعتمدة</label>
+                  <select id="profileClinicSelect" style="width: 100%; box-sizing: border-box; height: 38px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);">
+                    <option value="">لا يوجد عيادة محددة (مستقل)</option>
+                    <option value="clinic-central-01">مركز الحياة الطبي العام (معتمد)</option>
+                    <option value="clinic-pulmo-care">مركز رعاية الجهاز التنفسي التخصصي (معتمد)</option>
+                    <option value="clinic-wellness-hub">عيادات ويلنس الصحية الشاملة (معتمد)</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="profileLinkedDoctor" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;" data-i18n="profile.doctorLabel">الطبيب المعتمد</label>
+                  <input id="profileLinkedDoctor" placeholder="اسم أو معرّف الطبيب المعتمد" style="width: 100%; box-sizing: border-box;">
+                  <input id="profileLinkedDoctorId" type="hidden">
+                </div>
+              </div>
+            </div>
+
+            <!-- SECTION 8: Data Provenance & Clinical Record Corrections -->
+            <div class="profile-section-card" style="background: rgba(14, 165, 164, 0.03); border: 1px dashed var(--teal); border-radius: 12px; padding: 14px; margin-top: 12px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+                <h4 style="margin: 0; font-size: 14px; color: var(--teal); display: flex; align-items: center; gap: 6px;">
+                  <span>📝</span> <span>توثيق المنشأ والتصحيح السريري المعتمد</span>
+                </h4>
+                <div style="font-size: 11px; color: var(--muted);" id="profileProvenanceDetailText">
+                  آخر تحديث: الآن | المصدر: بوابة المريض
+                </div>
+              </div>
+              <p style="margin: 0 0 10px; font-size: 11.5px; color: var(--muted); line-height: 1.4;">
+                لتعديل بيانات طبية حرجة سابقة (مثل فصيلة الدم أو الحساسية أو تاريخ الميلاد)، أدخل سبب التصحيح السريري لحفظه في سجل التدقيق الموثق.
+              </p>
+              <div>
+                <label for="profileCorrectionReason" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;">سبب التصحيح الطبي (مطلوب عند طلب إجراء تصحيح رسمي)</label>
+                <input id="profileCorrectionReason" placeholder="مثال: تصحيح قياس الطول بعد الفحص السريري، أو تحديث قائمة الحساسية بعد مراجعة الاستشاري..." style="width: 100%; box-sizing: border-box;">
+              </div>
+            </div>
+
+            <!-- ACTION BUTTONS -->
+            <div style="display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap;">
+              <button class="solid-button full" id="btnSaveProfile" data-screen="assessment" style="flex: 2; min-width: 200px;">
+                💾 حفظ وتحديث الملف الطبي وبدء التقييم
+              </button>
+              <button type="button" class="soft-button" id="btnCorrectProfile" onclick="handleCorrectProfileClick()" style="flex: 1; min-width: 160px;">
+                ✍️ حفظ كإجراء تصحيحي موثق
+              </button>
+            </div>
           </article>
           <article class="panel">
             <div class="panel-head"><h3>ملفات طبية</h3><span class="pill info">اختياري</span></div>
             <div class="upload-zone" id="uploadZone">
               <strong>رفع تحليل أو أشعة أو صورة دواء</strong>
-              <span>حالة تجريبية: يتم تسجيل اسم الملف فقط بدون تحليل تلقائي.</span>
-              <input id="fileUpload" type="file" multiple>
+              <span>يتم رفع الملفات بأمان وربطها بالحالة، وتبقى في الحجر حتى اكتمال الفحص الأمني.</span>
+              <input id="fileUpload" type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp">
             </div>
             <div id="fileList" class="file-list">
-              <div><strong>تقرير تحليل الدم</strong><span>محفوظ كمرجع للطبيب</span></div>
             </div>
           </article>
           <article class="panel" id="doctorApplyCard" style="grid-column: 1 / -1; margin-top: 14px; border: 1px dashed var(--teal); background: rgba(14, 165, 164, 0.04);">
@@ -630,9 +906,39 @@
                 <button type="button" class="soft-button" onclick="exportUserData()" style="font-size: 13px; padding: 8px 14px;">
                   📥 تصدير بياناتي (JSON)
                 </button>
+                <button type="button" class="soft-button" onclick="requestAccessReport()" style="font-size: 13px; padding: 8px 14px;">
+                  📋 تقرير الوصول (Art. 15)
+                </button>
                 <button type="button" class="outline-button" onclick="openDeleteAccountModal()" style="border-color: rgba(239, 68, 68, 0.5); color: #ef4444; font-size: 13px; padding: 8px 14px;">
                   ⚠️ حذف الحساب والبيانات
                 </button>
+              </div>
+            </div>
+          </article>
+
+          <!-- Security, Active Sessions & Credentials Management -->
+          <article class="panel" id="securitySessionsCard" style="grid-column: 1 / -1; margin-top: 14px; border: 1px solid var(--border-color, rgba(0,0,0,0.08)); background: var(--panel-bg, #ffffff);">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; margin-bottom: 12px;">
+              <div>
+                <strong style="color: var(--teal, #0ea5a4); font-size: 15px; display: flex; align-items: center; gap: 6px;">
+                  <span>🛡️</span> أمان الحساب وإدارة الجلسات والأجهزة (Active Sessions & Security)
+                </strong>
+                <p style="margin: 4px 0 0; font-size: 13px; color: var(--muted); line-height: 1.5;">
+                  متابعة الأجهزة النشطة، تغيير بيانات الاعتماد مع إعادة التحقق، وتسجيل الخروج من كافة الأجهزة بإبطال خادمي موثوق.
+                </p>
+              </div>
+              <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <button type="button" class="soft-button" onclick="loadUserSessions()" style="font-size: 13px; padding: 8px 14px;">
+                  🔄 تحديث الجلسات
+                </button>
+                <button type="button" class="outline-button" onclick="revokeAllUserSessions()" style="border-color: rgba(239, 68, 68, 0.5); color: #ef4444; font-size: 13px; padding: 8px 14px;">
+                  🛑 خروج من كل الأجهزة
+                </button>
+              </div>
+            </div>
+            <div id="activeSessionsContainer" style="border: 1px solid var(--border-color, rgba(0,0,0,0.06)); border-radius: 8px; background: rgba(0,0,0,0.01); margin-top: 8px;">
+              <div id="activeSessionsList">
+                <div style="padding: 12px; color: var(--muted); font-size: 13px;">انقر "تحديث الجلسات" لعرض الأجهزة المتصلة بحسابك.</div>
               </div>
             </div>
           </article>
@@ -642,32 +948,74 @@
       <section id="screen-assessment" class="screen">
         <div class="form-layout">
           <article class="panel form-panel">
-            <div class="panel-head"><h3>تقييم التنفس</h3><span class="pill info">الخطوة 2 من 4</span></div>
-            <div class="progress"><span style="width:54%"></span></div>
-            <label>هل يوجد ضيق تنفس؟</label>
+            <div class="panel-head"><h3 data-i18n="assessment.title">تقييم التنفس</h3><span id="assessmentProgressLabel" class="pill info">الخطوة 2 من 4</span></div>
+            <div class="progress" aria-label="Assessment completion progress"><span id="assessmentProgressBar" style="width:0%"></span></div>
+            <div id="intakeOperationalBanner" style="display: none;"></div>
+            <div id="assessmentDraftStatus" class="field-hint" style="margin: 8px 0 12px;" data-i18n="assessment.draftStatusEmpty">لم يتم حفظ مسودة بعد</div>
+            <div id="assessmentRecoveryBanner" class="clinical-note" hidden style="margin-bottom: 14px;">
+              <span data-i18n="assessment.draftBannerText">توجد مسودة محفوظة لهذا الحساب. يمكنك المتابعة أو البدء من جديد.</span>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+                <button type="button" id="btnResumeAssessmentDraft" class="solid-button" style="padding:7px 12px;font-size:12px;" data-i18n="assessment.resumeDraft">متابعة المسودة</button>
+                <button type="button" id="btnDiscardAssessmentDraft" class="outline-button" style="padding:7px 12px;font-size:12px;" data-i18n="assessment.discardDraft">بدء جديد</button>
+              </div>
+            </div>
+            <label data-i18n="assessment.shortnessOfBreath">هل يوجد ضيق تنفس؟</label>
             <div id="breathingChoices" class="choice-row">
               <button class="choice active">نعم</button>
               <button class="choice">لا</button>
             </div>
-            <label>درجة الكحة</label>
+            <label data-i18n="assessment.coughLabel">درجة الكحة</label>
             <div id="coughChoices" class="choice-row four">
               <button class="choice">خفيفة</button>
               <button class="choice active">متوسطة</button>
               <button class="choice">شديدة</button>
               <button class="choice">لا توجد</button>
             </div>
-            <label>نسبة الأكسجين (50% - 100%)</label>
+            <label data-i18n="assessment.o2Label">نسبة الأكسجين (50% - 100%)</label>
             <input id="oxygenInput" type="number" min="50" max="100" value="95" aria-label="نسبة الأكسجين" placeholder="95">
             <div id="oxygenWarning" class="field-warning" hidden></div>
-            <label>مدة الأعراض</label>
+            <label data-i18n="assessment.tempLabel">درجة الحرارة (اختياري)</label>
+            <input id="temperatureInput" inputmode="decimal" aria-label="درجة الحرارة" placeholder="37.0 °C أو unknown">
+            <label data-i18n="assessment.respiratoryRateLabel">معدل التنفس (اختياري)</label>
+            <input id="respiratoryRateInput" type="number" min="5" max="60" aria-label="معدل التنفس في الدقيقة" placeholder="مثال: 18">
+            <label data-i18n="assessment.chestPainLabel">ألم بالصدر</label>
+            <div id="chestPainChoices" class="choice-row three">
+              <button class="choice">نعم</button>
+              <button class="choice active">لا</button>
+              <button class="choice">غير معروف</button>
+            </div>
+            <label data-i18n="assessment.symptomDurationLabel">مدة الأعراض</label>
             <input id="symptomDuration" value="3 أيام" aria-label="مدة الأعراض">
-            <label>عوامل خطورة</label>
+            <label data-i18n="assessment.symptomProgressionLabel">تطور الأعراض</label>
+            <div id="symptomProgressionChoices" class="choice-row three">
+              <button class="choice">تتحسن</button>
+              <button class="choice active">ثابتة</button>
+              <button class="choice">تسوء</button>
+              <button class="choice">غير معروف</button>
+            </div>
+            <label data-i18n="assessment.recentInfectionLabel">عدوى حديثة</label>
+            <div id="recentInfectionChoices" class="choice-row three">
+              <button class="choice">نعم</button>
+              <button class="choice active">لا</button>
+              <button class="choice">غير معروف</button>
+            </div>
+            <label data-i18n="assessment.asthmaCopdLabel">ربو أو COPD</label>
+            <div id="asthmaCopdChoices" class="choice-row three">
+              <button class="choice">نعم</button>
+              <button class="choice active">لا</button>
+              <button class="choice">غير معروف</button>
+            </div>
+            <label data-i18n="assessment.riskFactorsLabel">عوامل خطورة</label>
             <div id="riskChoices" class="choice-row four">
               <button class="choice">ربو</button>
               <button class="choice">تدخين</button>
               <button class="choice">حمل</button>
               <button class="choice active">لا يوجد</button>
             </div>
+            <label>الأدوية الحالية (اختياري)</label>
+            <textarea id="currentMedicationsInput" rows="2" maxlength="500" aria-label="الأدوية الحالية" placeholder="اكتب الأدوية أو اتركها فارغة إذا لم يتم تقديمها"></textarea>
+            <label>ملاحظات إضافية (اختياري)</label>
+            <textarea id="assessmentNotesInput" rows="2" maxlength="1000" aria-label="ملاحظات إضافية" placeholder="أي تفاصيل يريد المريض إضافتها"></textarea>
             <div class="safety-note">لن تظهر نتيجة نهائية للمريض قبل مراجعة الطبيب للحالة.</div>
             
             <!-- Privacy Consent Gate Box (Before Assessment Submission) -->
@@ -684,6 +1032,10 @@
               </label>
             </div>
 
+            <div class="doctor-actions" style="display:flex;gap:10px;flex-wrap:wrap;">
+              <button type="button" id="btnAssessmentPrev" class="outline-button" style="flex:1;">السابق</button>
+              <button type="button" id="btnAssessmentNext" class="outline-button" style="flex:1;">التالي</button>
+            </div>
             <button id="submitAssessment" class="solid-button full">إرسال للطبيب</button>
           </article>
           <article class="panel insight-panel">
@@ -702,31 +1054,31 @@
       <section id="screen-pending" class="screen">
         <div class="center-state">
           <div class="review-orbit"><span></span></div>
-          <span class="pill pending">بانتظار مراجعة الطبيب</span>
-          <h1>تم إرسال التقييم بنجاح</h1>
-          <p>يراجع الطبيب الأعراض والقياسات ونتيجة الذكاء الاصطناعي قبل إصدار التقرير النهائي.</p>
+          <span class="pill pending" data-i18n="pending.statusBadge">بانتظار مراجعة الطبيب</span>
+          <h1 data-i18n="pending.successTitle">تم إرسال التقييم بنجاح</h1>
+          <p data-i18n="pending.reviewNote">يراجع الطبيب الأعراض والقياسات ونتيجة الذكاء الاصطناعي قبل إصدار التقرير النهائي.</p>
 
           <!-- بطاقة طوارئ فورية تظهر عند انخفاض نسبة الأكسجين -->
           <div id="pendingEmergencyAlert" class="emergency-pending-banner" hidden></div>
 
           <!-- بيانات الحالة الحقيقية -->
           <div class="summary-list" id="pendingCaseSummary" style="max-width:360px;margin:16px auto;text-align:right;">
-            <div><span>رقم الحالة</span><strong id="pendingCaseId">--</strong></div>
-            <div><span>المريض</span><strong id="pendingCaseName">--</strong></div>
-            <div><span>نسبة الأكسجين</span><strong id="pendingCaseO2">--%</strong></div>
-            <div><span>الأولوية</span><strong id="pendingCasePriority">--</strong></div>
-            <div><span>وقت الإرسال</span><strong id="pendingCaseTime">--</strong></div>
+            <div><span data-i18n="pending.caseId">رقم الحالة</span><strong id="pendingCaseId">--</strong></div>
+            <div><span data-i18n="pending.patientName">المريض</span><strong id="pendingCaseName">--</strong></div>
+            <div><span data-i18n="pending.oxygen">نسبة الأكسجين</span><strong id="pendingCaseO2">--%</strong></div>
+            <div><span data-i18n="pending.priority">الأولوية</span><strong id="pendingCasePriority">--</strong></div>
+            <div><span data-i18n="pending.submittedAt">وقت الإرسال</span><strong id="pendingCaseTime">--</strong></div>
           </div>
 
           <div class="timeline">
-            <div class="done"><b></b><span>استلام البيانات</span></div>
-            <div class="done"><b></b><span>تشغيل الذكاء الاصطناعي</span></div>
-            <div class="active"><b></b><span>مراجعة الطبيب</span></div>
-            <div><b></b><span>إصدار التقرير</span></div>
+            <div class="done"><b></b><span data-i18n="pending.timelineReceive">استلام البيانات</span></div>
+            <div class="done"><b></b><span data-i18n="pending.timelineAi">تشغيل الذكاء الاصطناعي</span></div>
+            <div class="active"><b></b><span data-i18n="pending.timelineReview">مراجعة الطبيب</span></div>
+            <div><b></b><span data-i18n="pending.timelineReport">إصدار التقرير</span></div>
           </div>
           <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 16px;">
-            <button class="solid-button large" data-screen="patient">العودة للرئيسية ومتابعة الحالة</button>
-            <button class="soft-button large" data-screen="history">عرض سجل الفحوصات</button>
+            <button class="solid-button large" data-screen="patient" data-i18n="pending.returnHome">العودة للرئيسية ومتابعة الحالة</button>
+            <button class="soft-button large" data-screen="history" data-i18n="pending.viewHistory">عرض سجل الفحوصات</button>
           </div>
         </div>
       </section>
@@ -741,9 +1093,61 @@
       <section id="screen-history" class="screen">
         <article class="panel">
           <div class="panel-head">
-            <h3>السجل والتقارير الطبية</h3>
+            <div>
+              <h3 style="margin: 0; font-size: 18px; font-weight: 700;">
+                <span class="lang-ar">الجدول الزمني الطبي الموحد والسجل السريري</span>
+                <span class="lang-en">Unified Clinical Timeline &amp; Medical History</span>
+              </h3>
+              <p style="margin: 4px 0 0; font-size: 12.5px; color: var(--muted);">
+                <span class="lang-ar">سجل شامل يجمع التقييمات، التقارير المعتمدة، المواعيد، الفحوصات المرفقة، الأدوية، والحالات المزمنة</span>
+                <span class="lang-en">Comprehensive record combining assessments, reports, appointments, files, medications, and conditions</span>
+              </p>
+            </div>
             <span class="pill info" id="patientHistoryCount">--</span>
           </div>
+
+          <!-- Timeline Search & Filter Bar -->
+          <div class="timeline-filters-toolbar" style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; margin: 16px 0 20px;">
+            <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+              <!-- Search Input -->
+              <div style="flex: 1; min-width: 240px; position: relative;">
+                <span style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: 14px; color: var(--muted); pointer-events: none;">🔍</span>
+                <input type="text" id="timelineSearchInput" class="form-control" placeholder="بحث في السجل (أعراض، أدوية، تشخيص، طبيب)..." style="width: 100%; padding: 9px 36px 9px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-1); color: var(--ink); font-size: 13px;" oninput="onTimelineFilterChange()">
+              </div>
+
+              <!-- Date Range Controls -->
+              <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                <label style="font-size: 12px; font-weight: 600; color: var(--muted); display: flex; align-items: center;">
+                  <span class="lang-ar">من:</span>
+                  <span class="lang-en">From:</span>
+                  <input type="date" id="timelineStartDate" class="form-control" style="padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-1); color: var(--ink); font-size: 12px; margin: 0 4px;" onchange="onTimelineFilterChange()">
+                </label>
+                <label style="font-size: 12px; font-weight: 600; color: var(--muted); display: flex; align-items: center;">
+                  <span class="lang-ar">إلى:</span>
+                  <span class="lang-en">To:</span>
+                  <input type="date" id="timelineEndDate" class="form-control" style="padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-1); color: var(--ink); font-size: 12px; margin: 0 4px;" onchange="onTimelineFilterChange()">
+                </label>
+                <button type="button" class="soft-button" onclick="clearTimelineFilters()" style="padding: 7px 12px; font-size: 12px; border-radius: 8px;">
+                  <span>✕</span>
+                  <span class="lang-ar">إعادة ضبط</span>
+                  <span class="lang-en">Reset</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Category / Type Filter Pills -->
+            <div class="timeline-type-pills" style="display: flex; gap: 6px; flex-wrap: wrap;">
+              <button type="button" class="timeline-filter-btn active" data-timeline-type="all" onclick="setTimelineTypeFilter('all')">🌐 الكل / All</button>
+              <button type="button" class="timeline-filter-btn" data-timeline-type="assessment" onclick="setTimelineTypeFilter('assessment')">🫁 التقييمات / Assessments</button>
+              <button type="button" class="timeline-filter-btn" data-timeline-type="report" onclick="setTimelineTypeFilter('report')">📄 التقارير / Reports</button>
+              <button type="button" class="timeline-filter-btn" data-timeline-type="appointment" onclick="setTimelineTypeFilter('appointment')">📅 المواعيد / Appointments</button>
+              <button type="button" class="timeline-filter-btn" data-timeline-type="attachment" onclick="setTimelineTypeFilter('attachment')">📎 المرفقات / Files</button>
+              <button type="button" class="timeline-filter-btn" data-timeline-type="medication" onclick="setTimelineTypeFilter('medication')">💊 الأدوية / Medications</button>
+              <button type="button" class="timeline-filter-btn" data-timeline-type="condition" onclick="setTimelineTypeFilter('condition')">🩺 الحالات / Conditions</button>
+              <button type="button" class="timeline-filter-btn" data-timeline-type="doctor_note" onclick="setTimelineTypeFilter('doctor_note')">📝 ملاحظات الطبيب / Notes</button>
+            </div>
+          </div>
+
           <div id="patientHistoryContainer" class="records">
             <!-- Dynamically rendered via renderPatientHistory() -->
           </div>
@@ -766,15 +1170,7 @@
                 <span class="lang-en">Select Doctor &amp; Clinic:</span>
               </label>
               <select id="apptDoctorSelect" class="form-control" style="width: 100%; padding: 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);">
-                <option value="dr_mona" data-name="د. منى سامي" data-name-en="Dr. Mona Sami" data-spec="استشاري أمراض صدرية وجهاز تنفسي" data-spec-en="Consultant Pulmonologist" data-clinic="عيادة الصدر والرعاية التنفسية">
-                  د. منى سامي - استشاري أمراض صدرية وجهاز تنفسي
-                </option>
-                <option value="dr_ahmed" data-name="د. أحمد السيد" data-name-en="Dr. Ahmed El-Sayed" data-spec="أخصائي حساسية ومناعة ورعاية تنفسية" data-spec-en="Allergy &amp; Respiratory Specialist" data-clinic="مركز الحساسية والمناعة">
-                  د. أحمد السيد - أخصائي حساسية ومناعة ورعاية تنفسية
-                </option>
-                <option value="dr_sarah" data-name="د. سارة محمود" data-name-en="Dr. Sarah Mahmoud" data-spec="استشاري طب الحالات الحرجة والطوارئ" data-spec-en="Critical Care &amp; Emergency" data-clinic="وحدة الاستشارات العاجلة">
-                  د. سارة محمود - استشاري طب الحالات الحرجة والطوارئ
-                </option>
+                <option value="">لا يوجد طبيب متاح للحجز حالياً</option>
               </select>
             </div>
 
@@ -843,7 +1239,7 @@
             <div id="apptSummaryCard" style="background: var(--surface-3, rgba(13,148,136,0.08)); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin-bottom: 16px; font-size: 13px;">
               <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
                 <span style="color:var(--muted);" class="lang-ar">الطبيب:</span>
-                <strong id="summaryDoctorName" style="color:var(--ink);">د. منى سامي</strong>
+                <strong id="summaryDoctorName" style="color:var(--ink);">--</strong>
               </div>
               <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
                 <span style="color:var(--muted);" class="lang-ar">الموعد:</span>
@@ -911,8 +1307,36 @@
               </div>
             </div>
 
+            <!-- Ticket Type Selector -->
+            <div class="form-group" style="margin-bottom: 14px;">
+              <label for="feedbackTypeSelect" style="display:block; margin-bottom:6px; font-weight:600; font-size:13px;">
+                <span class="lang-ar">نوع التذكرة / البلاغ:</span>
+                <span class="lang-en">Ticket / Report Type:</span>
+              </label>
+              <select id="feedbackTypeSelect" class="form-control" onchange="handleFeedbackTypeChange(this.value)" style="width: 100%; padding: 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-weight: 600;">
+                <option value="experience_rating">⭐ تقييم التجربة (1-5 نجوم) / Experience Rating</option>
+                <option value="bug_report">🐞 بلاغ عن خطأ تقني / Bug Report</option>
+                <option value="inaccurate_information">⚠️ بلاغ عن عدم دقة معلومات طبية / Inaccurate Information Report</option>
+                <option value="feature_request">💡 اقتراح ميزة جديدة / Feature Request</option>
+              </select>
+            </div>
+
+            <!-- Clinical Inaccuracy Safety Alert Banner -->
+            <div id="inaccurateInfoSafetyAlert" style="display:none; background:rgba(239, 68, 68, 0.08); border: 1.5px solid rgba(239, 68, 68, 0.35); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; font-size: 12.5px; color: #dc2626; line-height: 1.5;">
+              🚨 <strong>تنبيه السلامة السريرية:</strong> يتم تصعيد بلاغات عدم دقة التقييمات أو تقارير الفحص فوراً كأولوية قصوى إلى ضابط السلامة السريرية (Clinical Safety Officer) وتخضع للسرية والتدقيق السريري الصارم.
+            </div>
+
+            <!-- Subject Input (for bugs, inaccurate info, feature requests) -->
+            <div class="form-group" id="feedbackSubjectGroup" style="margin-bottom: 14px; display: none;">
+              <label for="feedbackSubjectInput" style="display:block; margin-bottom:6px; font-weight:600; font-size:13px;">
+                <span class="lang-ar">عنوان البلاغ / التذكرة:</span>
+                <span class="lang-en">Subject / Title:</span>
+              </label>
+              <input type="text" id="feedbackSubjectInput" class="form-control" placeholder="اكتب عنواناً مختصراً للمشكلة أو الاقتراح..." style="width: 100%; padding: 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);">
+            </div>
+
             <!-- Star Rating Widget -->
-            <div class="form-group" style="margin-bottom: 16px;">
+            <div id="feedbackStarWidgetGroup" class="form-group" style="margin-bottom: 16px;">
               <label style="display:block; margin-bottom:6px; font-weight:600; font-size:13px;">
                 <span class="lang-ar">التقييم العام (من 1 إلى 5 نجوم):</span>
                 <span class="lang-en">Overall Rating (1 to 5 Stars):</span>
@@ -955,7 +1379,7 @@
             <!-- Comment / Notes Textarea -->
             <div class="form-group" style="margin-bottom: 14px;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                <label for="feedbackCommentInput" style="font-weight:600; font-size:13px;">
+                <label id="feedbackCommentLabel" for="feedbackCommentInput" style="font-weight:600; font-size:13px;">
                   <span class="lang-ar">تفاصيل الملاحظات والتجربة السريرية:</span>
                   <span class="lang-en">Detailed Feedback &amp; Suggestions:</span>
                 </label>
@@ -985,8 +1409,8 @@
           <article class="panel">
             <div class="panel-head">
               <h3>
-                <span class="lang-ar">مؤشرات الرضا وسجل التقييمات</span>
-                <span class="lang-en">Satisfaction &amp; Feedback History</span>
+                <span class="lang-ar">مؤشرات الرضا وسجل التذاكر</span>
+                <span class="lang-en">Satisfaction &amp; Ticket History</span>
               </h3>
               <span class="pill info" id="feedbackTotalCountBadge">0 تقييم</span>
             </div>
@@ -1003,14 +1427,14 @@
               </div>
               <div style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px; text-align: center;">
                 <div style="font-size: 20px; font-weight: 800; color: var(--ink);" id="kpiTotalFeedbacks">0</div>
-                <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">إجمالي الملاحظات</div>
+                <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">إجمالي التذاكر</div>
               </div>
             </div>
 
             <!-- Feed Filter Tabs -->
             <div style="display: flex; gap: 6px; margin-bottom: 12px; overflow-x: auto; padding-bottom: 4px;">
               <button type="button" class="filter-tab active" data-filter="all" onclick="filterFeedbackList('all')" style="padding: 6px 12px; border-radius: 8px; border: 1px solid var(--teal); background: rgba(9, 184, 182, 0.12); color: var(--teal); font-size: 12px; font-weight: 700; cursor: pointer;">الكل</button>
-              <button type="button" class="filter-tab" data-filter="mine" onclick="filterFeedbackList('mine')" style="padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); font-size: 12px; font-weight: 600; cursor: pointer;">تقييماتي</button>
+              <button type="button" class="filter-tab" data-filter="mine" onclick="filterFeedbackList('mine')" style="padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); font-size: 12px; font-weight: 600; cursor: pointer;">تذاكري</button>
               <button type="button" class="filter-tab" data-filter="patient" onclick="filterFeedbackList('patient')" style="padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); font-size: 12px; font-weight: 600; cursor: pointer;">تجارب المرضى</button>
               <button type="button" class="filter-tab" data-filter="doctor" onclick="filterFeedbackList('doctor')" style="padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); font-size: 12px; font-weight: 600; cursor: pointer;">ملاحظات الأطباء</button>
             </div>
@@ -1021,14 +1445,130 @@
             </div>
           </article>
         </div>
+
+        <!-- 3. Help Center, Account Recovery & Contact Form -->
+        <div class="content-grid" style="margin-top: 24px;">
+          <!-- FAQ / Help Center -->
+          <article class="panel">
+            <div class="panel-head">
+              <h3>
+                <span>❓</span>
+                <span class="lang-ar">مركز المساعدة والأسئلة الشائعة</span>
+                <span class="lang-en">Help Center &amp; FAQs</span>
+              </h3>
+              <span class="pill info">معتمد طبياً</span>
+            </div>
+            <div style="margin-bottom: 12px;">
+              <input type="text" id="faqSearchInput" placeholder="ابحث في الأسئلة الشائعة أو اكتب كلمة دلالية (مثل: أكسجين، موعد، تقرير)..." oninput="renderFaqHelpCenter('all', this.value)" style="width: 100%; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 13px;">
+            </div>
+            <div style="display: flex; gap: 6px; margin-bottom: 14px; overflow-x: auto; padding-bottom: 4px;">
+              <button type="button" class="soft-button" onclick="renderFaqHelpCenter('all', document.getElementById('faqSearchInput').value)" style="font-size: 11.5px; padding: 4px 10px;">الكل</button>
+              <button type="button" class="soft-button" onclick="renderFaqHelpCenter('clinical_assessment', document.getElementById('faqSearchInput').value)" style="font-size: 11.5px; padding: 4px 10px;">الفحص الذكي</button>
+              <button type="button" class="soft-button" onclick="renderFaqHelpCenter('privacy_security', document.getElementById('faqSearchInput').value)" style="font-size: 11.5px; padding: 4px 10px;">الخصوصية</button>
+              <button type="button" class="soft-button" onclick="renderFaqHelpCenter('appointments_reviews', document.getElementById('faqSearchInput').value)" style="font-size: 11.5px; padding: 4px 10px;">المواعيد</button>
+              <button type="button" class="soft-button" onclick="renderFaqHelpCenter('clinical_safety', document.getElementById('faqSearchInput').value)" style="font-size: 11.5px; padding: 4px 10px;">السلامة السريرية</button>
+            </div>
+            <div id="faqAccordionContainer">
+              <!-- Rendered via renderFaqHelpCenter() -->
+            </div>
+          </article>
+
+          <!-- Account Recovery Support & Contact Form -->
+          <article class="panel">
+            <div class="panel-head">
+              <h3>
+                <span>🛡️</span>
+                <span class="lang-ar">الدعم الفني واستعادة الحساب</span>
+                <span class="lang-en">Account Recovery &amp; Contact</span>
+              </h3>
+              <span class="pill ok">مكتب أمان الحسابات</span>
+            </div>
+
+            <!-- Tab Switcher for Recovery vs Contact -->
+            <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+              <button type="button" id="tabBtnRecovery" onclick="document.getElementById('recoverySectionCard').style.display='block'; document.getElementById('contactSectionCard').style.display='none'; this.style.borderColor='var(--teal)'; document.getElementById('tabBtnContact').style.borderColor='var(--line)';" class="soft-button" style="flex: 1; padding: 8px; border: 1.5px solid var(--teal); border-radius: 8px; font-weight: 700; font-size: 12.5px;">
+                🔑 استعادة الحساب / Account Recovery
+              </button>
+              <button type="button" id="tabBtnContact" onclick="document.getElementById('recoverySectionCard').style.display='none'; document.getElementById('contactSectionCard').style.display='block'; this.style.borderColor='var(--teal)'; document.getElementById('tabBtnRecovery').style.borderColor='var(--line)';" class="soft-button" style="flex: 1; padding: 8px; border: 1px solid var(--line); border-radius: 8px; font-weight: 700; font-size: 12.5px;">
+                ✉️ اتصل بالدعم / Contact Support
+              </button>
+            </div>
+
+            <!-- Account Recovery Card -->
+            <div id="recoverySectionCard" style="display: block;">
+              <form onsubmit="submitAccountRecoveryClient(event)">
+                <div class="form-group" style="margin-bottom: 10px;">
+                  <label for="accountRecoveryIdentifier" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;">البريد الإلكتروني أو الهاتف المسجل</label>
+                  <input type="text" id="accountRecoveryIdentifier" placeholder="name@example.com أو 05XXXXXXXX" required style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);">
+                </div>
+                <div class="form-group" style="margin-bottom: 10px;">
+                  <label for="accountRecoveryIssueType" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;">نوع المشكلة</label>
+                  <select id="accountRecoveryIssueType" style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);">
+                    <option value="lost_mfa">فقدان الهاتف / تعذر استقبال رمز التحقق (MFA / OTP)</option>
+                    <option value="locked_account">الحساب مقفل بسبب محاولات دخول خاطئة</option>
+                    <option value="lost_email">فقدان الوصول إلى البريد الإلكتروني المسجل</option>
+                    <option value="other">مشكلة أخرى في صلاحيات الحساب</option>
+                  </select>
+                </div>
+                <div class="form-group" style="margin-bottom: 10px;">
+                  <label for="accountRecoveryContact" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;">وسيلة تواصل بديلة (هاتف أو بريد مؤكد)</label>
+                  <input type="text" id="accountRecoveryContact" placeholder="05XXXXXXXX" style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);">
+                </div>
+                <div class="form-group" style="margin-bottom: 12px;">
+                  <label for="accountRecoveryExplanation" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;">توضيح إضافي لإثبات الملكية</label>
+                  <textarea id="accountRecoveryExplanation" rows="2" placeholder="اذكر أي تفاصيل تساعد في التحقق من هويتك بأمان..." style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);"></textarea>
+                </div>
+                <div id="accountRecoveryResultBox" style="display: none; background: rgba(9, 184, 182, 0.08); border: 1px solid var(--teal); border-radius: 8px; padding: 10px; margin-bottom: 12px; font-size: 12px;"></div>
+                <button type="submit" class="solid-button full" style="padding: 10px; font-size: 13px; font-weight: 700;">
+                  🔑 إرسال طلب استعادة الحساب
+                </button>
+              </form>
+            </div>
+
+            <!-- Contact Support Card -->
+            <div id="contactSectionCard" style="display: none;">
+              <form onsubmit="submitContactClient(event)">
+                <div class="form-group" style="margin-bottom: 10px;">
+                  <label for="contactFormName" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;">الاسم الكامل</label>
+                  <input type="text" id="contactFormName" placeholder="الاسم الكامل" required style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);">
+                </div>
+                <div class="form-group" style="margin-bottom: 10px;">
+                  <label for="contactFormEmail" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;">البريد الإلكتروني للرد</label>
+                  <input type="email" id="contactFormEmail" placeholder="name@example.com" required style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);">
+                </div>
+                <div class="form-group" style="margin-bottom: 10px;">
+                  <label for="contactFormSubject" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;">موضوع الاستفسار</label>
+                  <input type="text" id="contactFormSubject" placeholder="عنوان الاستفسار..." required style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);">
+                </div>
+                <div class="form-group" style="margin-bottom: 12px;">
+                  <label for="contactFormMessage" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;">نص الرسالة أو الاستفسار</label>
+                  <textarea id="contactFormMessage" rows="3" placeholder="اكتب استفسارك بالتفصيل..." required style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);"></textarea>
+                </div>
+                <button type="submit" class="solid-button full" style="padding: 10px; font-size: 13px; font-weight: 700;">
+                  ✉️ إرسال الاستفسار للدعم
+                </button>
+              </form>
+            </div>
+          </article>
+        </div>
       </section>
 
       <section id="screen-assistant" class="screen">
         <div class="assistant-layout">
           <article class="panel chat-panel">
-            <div class="panel-head"><h3>مساعد طبي إرشادي</h3><span class="pill pending">ليس تشخيصًا</span></div>
+            <div class="panel-head">
+              <h3>مساعد طبي إرشادي</h3>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="pill pending">ليس تشخيصًا</span>
+                <button type="button" id="clearAssistantChatBtn" class="outline-button" style="font-size: 11px; padding: 2px 10px; border-radius: 12px;" onclick="clearAssistantChatHistory()" title="مسح سجل المحادثة">🗑️ مسح السجل</button>
+              </div>
+            </div>
+            <div id="assistantRetentionNotice" style="font-size: 11.5px; color: var(--muted); padding: 6px 12px; margin-bottom: 10px; background: rgba(0,0,0,0.03); border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
+              <span>🕒 سياسة الاحتفاظ: تُحفظ المحادثة لمدة ٣٠ يوماً وفق قواعد حوكمة البيانات الطبية.</span>
+            </div>
+            <div id="assistantOperationalBanner" style="display: none;"></div>
             <div id="chatMessages" class="chat-messages">
-              <div class="bot">أقدر أشرح لك معنى الحالة أو أساعدك تجهز أسئلة للطبيب. في الطوارئ اطلب رعاية عاجلة فورًا.</div>
+              <div class="bot">أقدر أشرح لك معنى الحالة وتوضيح المصطلحات أو أساعدك تجهز أسئلة للطبيب. في الطوارئ اطلب رعاية عاجلة فورًا.</div>
             </div>
             <div id="chatQuickChips" style="display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap;"></div>
             <div class="chat-compose">
@@ -1041,7 +1581,10 @@
             <div class="access-matrix">
               <div><strong>لا تشخيص مستقل</strong><span>محظور تشخيص أي حالة جديدة؛ يوضح تشخيص الطبيب المعتمد فقط.</span></div>
               <div><strong>لا وصف ولا تعديل علاج</strong><span>محظور وصف أدوية أو اقتراح بدائل أو تعديل الجرعات.</span></div>
-              <div><strong>طوارئ فورية</strong><span>تصعيد إسعافي فوري عند ذكر أي أعراض حادة أو مهددة للحياة.</span></div>
+              <div><strong>طوارئ فورية</strong><span>تصعيد إسعافي فوري وإرشادات معتمدة عند ذكر أي أعراض حادة.</span></div>
+              <div><strong>ربط الشرح بالتقرير</strong><span>ربط كل حقيقة وتفسير بالمصدر الموثق في التقرير الطبي.</span></div>
+              <div><strong>حظر استكمال المفقود</strong><span>منع تخمين أو استنتاج أي معلومات أو تحاليل غير مدونة.</span></div>
+              <div><strong>سياسة الاحتفاظ</strong><span>حفظ المحادثة لمدة ٣٠ يوماً مع إمكانية مسح السجل في أي وقت.</span></div>
             </div>
           </article>
         </div>
@@ -1311,6 +1854,9 @@
             </div>
           </div>
 
+          <!-- Active Monitoring Alerts Banner -->
+          <div id="monitoringActiveAlertsBanner" style="display: none; margin-top: 14px; padding: 10px 14px; border-radius: 8px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: #fca5a5; font-size: 13px; font-weight: 600;"></div>
+
           <!-- Monitoring Hero Metrics Cards -->
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-top: 18px;">
             <div class="kpi-mini-card" style="padding: 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color, rgba(255,255,255,0.06)); border-radius: 12px;">
@@ -1319,7 +1865,7 @@
             </div>
             <div class="kpi-mini-card" style="padding: 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color, rgba(255,255,255,0.06)); border-radius: 12px;">
               <div style="font-size: 12px; color: var(--muted);">معدل الجلسات الخالية من الأخطاء</div>
-              <div id="monitoringCrashFreeRate" style="font-size: 24px; font-weight: 800; color: #10b981; margin-top: 4px;">100%</div>
+              <div id="monitoringCrashFreeRate" style="font-size: 24px; font-weight: 800; color: #10b981; margin-top: 4px;">Unavailable</div>
             </div>
           </div>
 
@@ -1330,13 +1876,14 @@
                 <tr style="border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.1)); color: var(--muted); font-size: 12px;">
                   <th style="padding: 10px;">الوقت</th>
                   <th style="padding: 10px;">الخطورة</th>
+                  <th style="padding: 10px;">معرّف التتبع (Trace ID)</th>
                   <th style="padding: 10px;">رسالة الخطأ</th>
-                  <th style="padding: 10px;">النوع والشاشة</th>
+                  <th style="padding: 10px;">التصنيف والنوع</th>
                   <th style="padding: 10px;">المستخدم</th>
                 </tr>
               </thead>
               <tbody id="monitoringErrorsTableBody">
-                <tr><td colspan="5" style="text-align: center; color: var(--muted); padding: 18px;">✅ لا توجد أخطاء مسجلة حالياً - النظام يعمل بكفاءة تامة</td></tr>
+                <tr><td colspan="6" style="text-align: center; color: var(--muted); padding: 18px;">✅ لا توجد أخطاء مسجلة حالياً - النظام يعمل بكفاءة تامة</td></tr>
               </tbody>
             </table>
           </div>
@@ -1705,12 +2252,78 @@
 
       <section id="screen-audit" class="screen">
         <article class="panel">
-          <div class="panel-head"><h3>سجل التدقيق</h3><span class="pill info">أحداث تجريبية</span></div>
-          <div class="audit-table">
-            <div><strong>20 سبتمبر 2026 - 03:18</strong><span>المريض أرسل تقييم التنفس</span><em>المريض: 2048</em></div>
-            <div><strong>20 سبتمبر 2026 - 03:21</strong><span>نموذج التنفس أصدر تقدير خطورة متوسط</span><em>إصدار النموذج: الأول</em></div>
-            <div><strong>20 سبتمبر 2026 - 03:29</strong><span>الطبيب فتح مراجعة الحالة</span><em>الطبيب: منى 17</em></div>
-            <div><strong>20 سبتمبر 2026 - 03:35</strong><span>الإدارة راجعت لوحة جودة النموذج</span><em>الدور: مراجعة الجودة الطبية</em></div>
+          <div class="panel-head">
+            <div>
+              <h3 id="auditTitle">سجل التدقيق الأمني والامتثال</h3>
+              <p class="muted-copy" style="font-size: 13px; margin: 4px 0 0 0;">
+                سجل رقابي غير قابل للتعديل (Append-Only) خاضع لسياسات الخصوصية وتقليل البيانات وحماية الملكية الفكرية
+              </p>
+            </div>
+            <span class="pill success" style="font-weight: 700;">🔒 غير قابل للتعديل</span>
+          </div>
+
+          <!-- IP & Device Metadata Policy Notice -->
+          <div class="info-box" style="margin: 14px 0; padding: 12px 16px; border-radius: 12px; background: rgba(13, 148, 136, 0.08); border: 1px solid rgba(13, 148, 136, 0.2); font-size: 13px; line-height: 1.6;">
+            <strong>🛡️ سياسة الخصوصية لبيانات الشبكة والأجهزة:</strong>
+            <span style="display: block; color: var(--muted); margin-top: 4px;">
+              يتم إخفاء عناوين IP تلقائيًا عبر قناع الشبكة الفرعية (/24 لـ IPv4 و /48 لـ IPv6) وتجزئة HMAC مشفرة بملح سري لمنع تتبع الأفراد، مع تقليل بيانات الأجهزة وحذف أي بيانات سريرية أو هويات حساسة من السجل.
+            </span>
+          </div>
+
+          <!-- Search & Filter Controls -->
+          <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; align-items: flex-end;">
+            <div style="flex: 2; min-width: 200px;">
+              <label for="auditSearchInput" style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px; color: var(--muted);">بحث سريع:</label>
+              <input type="text" id="auditSearchInput" class="form-control" placeholder="ابحث بالمعرف، البريد المقنع، الإجراء..." style="width: 100%; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);">
+            </div>
+
+            <div style="flex: 1.5; min-width: 180px;">
+              <label for="auditTypeFilter" style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px; color: var(--muted);">نوع الحدث:</label>
+              <select id="auditTypeFilter" class="form-control" style="width: 100%; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);">
+                <option value="all">كافة الأحداث (All Events)</option>
+                <option value="USER_SIGNED_IN">تسجيل الدخول (USER_SIGNED_IN)</option>
+                <option value="USER_SIGNED_OUT">تسجيل الخروج (USER_SIGNED_OUT)</option>
+                <option value="RECORD_VIEWED">فتح / عرض السجل (RECORD_VIEWED)</option>
+                <option value="RECORD_UPDATED">تعديل السجل (RECORD_UPDATED)</option>
+                <option value="CASE_APPROVED">اعتماد الحالة (CASE_APPROVED)</option>
+                <option value="CASE_REJECTED">رفض الحالة (CASE_REJECTED)</option>
+                <option value="ROLE_CHANGED">تغيير الدور (ROLE_CHANGED)</option>
+                <option value="PRIVACY_CONSENT_GRANTED">منح الموافقة (CONSENT_GRANTED)</option>
+                <option value="PRIVACY_CONSENT_WITHDRAWN">سحب الموافقة (CONSENT_WITHDRAWN)</option>
+                <option value="ACCOUNT_DELETED">حذف الحساب (ACCOUNT_DELETED)</option>
+                <option value="FILE_ACCESSED">الوصول للملفات (FILE_ACCESSED)</option>
+                <option value="AUDIT_LOGS_EXPORTED">تصدير السجلات (AUDIT_EXPORTED)</option>
+              </select>
+            </div>
+
+            <div style="flex: 1; min-width: 130px;">
+              <label for="auditStartDate" style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px; color: var(--muted);">من تاريخ:</label>
+              <input type="date" id="auditStartDate" class="form-control" style="width: 100%; padding: 7px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);">
+            </div>
+
+            <div style="flex: 1; min-width: 130px;">
+              <label for="auditEndDate" style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px; color: var(--muted);">إلى تاريخ:</label>
+              <input type="date" id="auditEndDate" class="form-control" style="width: 100%; padding: 7px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);">
+            </div>
+
+            <div style="display: flex; gap: 6px;">
+              <button id="btnFilterAudit" type="button" class="solid-button" onclick="loadAuditEvents()" style="padding: 8px 14px; font-size: 13px;">تصفية</button>
+              <button id="btnExportAuditCsv" type="button" class="outline-button" onclick="exportAuditTrail('csv')" style="padding: 8px 12px; font-size: 13px;" title="تصدير بصيغة CSV">تصدير CSV</button>
+              <button id="btnExportAuditJson" type="button" class="outline-button" onclick="exportAuditTrail('json')" style="padding: 8px 12px; font-size: 13px;" title="تصدير بصيغة JSON">تصدير JSON</button>
+            </div>
+          </div>
+
+          <!-- Total count & status -->
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 13px; color: var(--muted);">
+            <span id="auditCountSummary">جاري تحميل سجل التدقيق...</span>
+            <span id="auditClinicScopeBadge" class="pill info" style="font-size: 11px;">نطاق المنصة</span>
+          </div>
+
+          <!-- Dynamic Events Container -->
+          <div id="auditLogsContainer" class="audit-table">
+            <div style="text-align: center; padding: 24px; color: var(--muted);">
+              جاري فحص وتأكيد الصلاحيات والاتصال بسجل التدقيق الموثوق...
+            </div>
           </div>
         </article>
       </section>
@@ -1718,6 +2331,12 @@
       <section id="screen-report" class="screen">
         <div id="reportContainer">
           <!-- Dynamically rendered via renderReportScreen() strictly requiring physician approval -->
+        </div>
+      </section>
+
+      <section id="screen-verify-report" class="screen">
+        <div id="verifyReportContainer">
+          <!-- Authenticity verification badge & integrity details rendered dynamically -->
         </div>
       </section>
     </section>
@@ -1729,14 +2348,14 @@
   </main>
 
   <!-- Quick Clinical & Patient Feedback Modal -->
-  <div id="feedbackModal" class="confirm-modal" aria-hidden="true">
+  <div id="feedbackModal" class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="modalFeedbackTitle" aria-describedby="modalFeedbackSub" aria-hidden="true">
     <div class="confirm-card" style="text-align: right; max-width: 500px; width: 95%;">
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
         <div style="display: flex; align-items: center; gap: 8px;">
           <span style="font-size: 22px;">⭐</span>
           <h3 id="modalFeedbackTitle" style="margin: 0; font-size: 17px; color: var(--ink);">تقييم الخدمة والملاحظات</h3>
         </div>
-        <button type="button" onclick="closeFeedbackModal()" style="background: none; border: none; font-size: 20px; color: var(--muted); cursor: pointer; line-height: 1;">&times;</button>
+        <button type="button" onclick="closeFeedbackModal()" aria-label="إغلاق نافذة التقييم" style="background: none; border: none; font-size: 20px; color: var(--muted); cursor: pointer; line-height: 1;">&times;</button>
       </div>
       <p id="modalFeedbackSub" style="font-size: 13px; color: var(--muted); margin-bottom: 14px; line-height: 1.5;">
         شاركنا تقييمك ورأيك السريري لمساعدتنا على تحسين جودة التشخيص والرعاية.
@@ -1775,10 +2394,10 @@
     </div>
   </div>
 
-  <div id="confirmModal" class="confirm-modal" aria-hidden="true">
+  <div id="confirmModal" class="confirm-modal" role="alertdialog" aria-modal="true" aria-labelledby="approveConfirmTitle" aria-describedby="approveConfirmDesc" aria-hidden="true">
     <div class="confirm-card">
-      <h3>تأكيد اعتماد التقرير</h3>
-      <p>بعد الاعتماد ستظهر النتيجة والتوصيات للمريض وسيتم حفظ الحدث في سجل التدقيق.</p>
+      <h3 id="approveConfirmTitle">تأكيد اعتماد التقرير</h3>
+      <p id="approveConfirmDesc">بعد الاعتماد ستظهر النتيجة والتوصيات للمريض وسيتم حفظ الحدث في سجل التدقيق.</p>
       <div class="doctor-actions">
         <button id="confirmApprove" class="solid-button">تأكيد الاعتماد</button>
         <button id="cancelApprove" class="outline-button">إلغاء</button>
@@ -1786,14 +2405,14 @@
     </div>
   </div>
 
-  <div id="verifyRequiredModal" class="confirm-modal" aria-hidden="true">
+  <div id="verifyRequiredModal" class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="verifyModalTitle" aria-describedby="verifyModalDesc" aria-hidden="true">
     <div class="confirm-card" style="text-align: right; max-width: 480px; width: 95%; max-height: 90vh; overflow-y: auto;">
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
         <div style="display: flex; align-items: center; gap: 8px;">
           <span style="font-size: 26px;">🛡️</span>
           <h3 id="verifyModalTitle" style="margin: 0; font-size: 18px; color: var(--ink);">توثيق وتفعيل الحساب</h3>
         </div>
-        <button id="verifyModalCloseBtnTop" type="button" onclick="closeVerifyRequiredModal()" style="font-size: 20px; border: 0; background: transparent; cursor: pointer; color: var(--muted); line-height: 1;">&times;</button>
+        <button id="verifyModalCloseBtnTop" type="button" onclick="closeVerifyRequiredModal()" aria-label="إغلاق نافذة توثيق الحساب" style="font-size: 20px; border: 0; background: transparent; cursor: pointer; color: var(--muted); line-height: 1;">&times;</button>
       </div>
 
       <p id="verifyModalDesc" style="margin: 0 0 14px; font-size: 13px; color: var(--muted); line-height: 1.5;">
@@ -1816,9 +2435,9 @@
       <div id="otpVerifySection">
         <div class="bot-trigger-card" style="padding: 16px; border-radius: 14px; background: rgba(37, 211, 102, 0.08); border: 1.5px solid rgba(37, 211, 102, 0.35); margin-bottom: 16px; text-align: center;">
           <div style="font-size: 32px; margin-bottom: 6px;">🤖💬</div>
-          <h4 style="margin: 0 0 6px; font-size: 15px; color: var(--ink);">بوت الواتساب الآلي (Health Vibes Bot)</h4>
+          <h4 style="margin: 0 0 6px; font-size: 15px; color: var(--ink);">بوت الواتساب الآلي (Health Vibe AI Bot)</h4>
           <p style="margin: 0 0 14px; font-size: 12.5px; color: var(--muted); line-height: 1.5;">
-            اكتب رقم واتساب بصيغة دولية، ثم سيقوم بوت Health Vibes بإرسال كود تفعيل سري مكون من 6 أرقام.
+            اكتب رقم واتساب بصيغة دولية، ثم سيقوم بوت Health Vibe AI بإرسال كود تفعيل سري مكون من 6 أرقام.
           </p>
           <div class="form-group" style="text-align: start; margin: 0 0 12px;">
             <label for="verifyPhoneInput" id="verifyPhoneInputLabel" style="display:block; font-size:12.5px; font-weight:800; color:var(--ink); margin-bottom:6px;">رقم واتساب لاستلام الكود</label>
@@ -1874,7 +2493,7 @@
   </div>
 
   <!-- Assessment Submission Confirmation Modal -->
-  <div id="confirmAssessmentModal" class="confirm-modal" aria-hidden="true">
+  <div id="confirmAssessmentModal" class="confirm-modal" role="alertdialog" aria-modal="true" aria-labelledby="confirmModalTitle" aria-describedby="confirmModalDesc confirmAssessmentSummary" aria-hidden="true">
     <div class="confirm-card" style="width: min(500px, 100%); text-align: right; max-height: 90vh; overflow-y: auto;">
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
         <h3 id="confirmModalTitle" style="margin: 0; font-size: 19px; color: var(--teal-2);">تأكيد إرسال التقييم للطبيب</h3>
@@ -1904,7 +2523,15 @@
         <div><span>ضيق التنفس</span><strong id="confirmDyspnea">--</strong></div>
         <div><span>درجة الكحة</span><strong id="confirmCough">--</strong></div>
         <div><span>مدة الأعراض</span><strong id="confirmDuration">--</strong></div>
+        <div><span>درجة الحرارة</span><strong id="confirmTemperature">--</strong></div>
+        <div><span>معدل التنفس</span><strong id="confirmRespiratoryRate">--</strong></div>
+        <div><span>ألم بالصدر</span><strong id="confirmChestPain">--</strong></div>
+        <div><span>تطور الأعراض</span><strong id="confirmProgression">--</strong></div>
+        <div><span>عدوى حديثة</span><strong id="confirmRecentInfection">--</strong></div>
+        <div><span>ربو أو COPD</span><strong id="confirmAsthmaCopd">--</strong></div>
         <div><span>عوامل الخطورة</span><strong id="confirmRisks">--</strong></div>
+        <div><span>الأدوية الحالية</span><strong id="confirmMedications">--</strong></div>
+        <div><span>ملاحظات</span><strong id="confirmNotes">--</strong></div>
         <div><span>الطبيب المرتبط</span><strong id="confirmDoctor">--</strong></div>
         <div><span>العيادة</span><strong id="confirmClinic">--</strong></div>
         <div><span>الموافقة الطبية</span><strong id="confirmConsentStatus" style="color: #10b981;">🔒 موثقة ومقبولة</strong></div>
@@ -1926,16 +2553,16 @@
   </div>
 
   <!-- Emergency Submission Safety Interception Modal -->
-  <div id="emergencySubmitModal" class="confirm-modal" aria-hidden="true">
+  <div id="emergencySubmitModal" class="confirm-modal" role="alertdialog" aria-modal="true" aria-labelledby="emergencySubmitTitle" aria-describedby="emergencySubmitText emergencySubmitGuidance" aria-hidden="true">
     <div class="confirm-card emergency-alert-card critical-oxygen" style="width: min(480px, 100%); text-align: right; padding: 24px;">
       <div class="emergency-header" style="justify-content: flex-start;">
         <span class="emergency-pulsing-badge">🚨 تنبيه طوارئ فوري</span>
-        <h3 style="margin: 0; color: #dc2626; font-size: 19px;">نقص أكسجين حاد — لا تنتظر مراجعة التطبيق</h3>
+        <h3 id="emergencySubmitTitle" style="margin: 0; color: #dc2626; font-size: 19px;">نقص أكسجين حاد — لا تنتظر مراجعة التطبيق</h3>
       </div>
-      <p style="color: var(--ink); font-size: 14px; line-height: 1.6; margin: 12px 0 16px;">
+      <p id="emergencySubmitText" style="color: var(--ink); font-size: 14px; line-height: 1.6; margin: 12px 0 16px;">
         نسبة الأكسجين المدخلة (<strong id="emergencyModalO2Val" style="color:#dc2626;">--%</strong>) حرجة للغاية وتشير إلى نقص أكسجين يستدعي رعاية طبية طارئة ومباشرة فوراً.
       </p>
-      <div style="background: rgba(220, 38, 38, 0.08); border-radius: 12px; padding: 12px 14px; margin-bottom: 16px; border: 1px dashed #ef4444;">
+      <div id="emergencySubmitGuidance" style="background: rgba(220, 38, 38, 0.08); border-radius: 12px; padding: 12px 14px; margin-bottom: 16px; border: 1px dashed #ef4444;">
         <strong style="color: #b91c1c; display: block; margin-bottom: 4px; font-size: 13.5px;">⚠️ إرشادات السلامة الفورية:</strong>
         <ul style="margin: 0; padding-inline-start: 18px; font-size: 12.8px; line-height: 1.55; color: var(--ink);">
           <li>التوجه فوراً لأقرب قسم طوارئ أو استدعاء الإسعاف (123).</li>
@@ -1958,10 +2585,10 @@
   </div>
 
   <!-- Emergency First Aid & Respiration Guide Modal -->
-  <div id="emergencyGuideModal" class="confirm-modal" aria-hidden="true">
+  <div id="emergencyGuideModal" class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="emergencyGuideTitle" aria-hidden="true">
     <div class="confirm-card emergency-guide-card">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
-        <h3 style="margin: 0;">🫁 إرشادات الإسعافات الأولية لتسهيل التنفس</h3>
+        <h3 id="emergencyGuideTitle" style="margin: 0;">🫁 إرشادات الإسعافات الأولية لتسهيل التنفس</h3>
         <button id="closeEmergencyGuideBtn" type="button" class="outline-button" style="padding: 4px 10px; font-size: 12px; border-radius: 8px;">✕ إغلاق</button>
       </div>
 
@@ -2014,7 +2641,7 @@
   </div>
 
   <!-- Clinical Risk Rules Governance & Versioning Modal -->
-  <div id="rulesGovernanceModal" class="confirm-modal" aria-hidden="true">
+  <div id="rulesGovernanceModal" class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="rulesGovModalTitle" aria-hidden="true">
     <div class="confirm-card rules-governance-card">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; border-bottom: 1px solid var(--line); padding-bottom: 10px;">
         <div style="display: flex; align-items: center; gap: 8px;">
@@ -2041,15 +2668,14 @@
     </div>
   </div>
 
-  <!-- Floating dark mode toggle -->
-  <button id="themeToggle" class="theme-fab" type="button" onclick="toggleTheme()" aria-label="Toggle theme" title="Switch to Light Mode">
-    <span class="theme-fab-icon">☀️</span>
-  </button>
 
 
+
+
+  <button id="themeToggle" class="theme-fab" type="button" style="display:none !important;" aria-hidden="true"></button>
 
   <!-- Legal & Compliance Modal (Privacy Policy + Terms + Medical Disclaimer) -->
-  <div id="legalModal" class="confirm-modal" aria-hidden="true">
+  <div id="legalModal" class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="legalModalTitle" aria-describedby="legalModalBody" aria-hidden="true">
     <div class="confirm-card legal-modal-card">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
         <div style="display: flex; align-items: center; gap: 8px;">
@@ -2077,19 +2703,26 @@
         <!-- 1. Privacy Policy -->
         <div id="legal-section-privacy" class="legal-tab-content" style="display: block;">
           <h4>1. الالتزام بحماية البيانات الصحية والسريرية</h4>
-          <p>تلتزم منصة Health Vibes AI بأعلى معايير حماية الخصوصية للمرضى وممارسي الرعاية الصحية وفق مبادئ HIPAA و GDPR وتشريعات حماية السجلات الطبية الإلكترونية.</p>
+          <p>تلتزم منصة Health Vibe AI بأعلى معايير حماية الخصوصية للمرضى وممارسي الرعاية الصحية وفق مبادئ HIPAA و GDPR وتشريعات حماية السجلات الطبية الإلكترونية.</p>
           
           <h4>2. البيانات التي يتم جمعها ومعالجتها</h4>
           <ul>
             <li><strong>البيانات الشخصية والحساب:</strong> الاسم، البريد الإلكتروني، معرف الحساب الرقمي، والدور المصرح.</li>
             <li><strong>المؤشرات الحيوية والأعراض:</strong> نسبة تشبع الأكسجين في الدم (SpO2)، صعوبة التنفس، شدة الكحة، مدة الأعراض، وعوامل الخطورة كالحمل والتدخين وأمراض الصدر المزمنة.</li>
-            <li><strong>سجلات التدقيق:</strong> تاريخ وتوقيت تقديم التقييمات، سجلات دورة حياة الحالة، وسجل قرارات واعتماد الطبيب المعتمد.</li>
+            <li><strong>بيانات التشغيل:</strong> المواعيد، طلبات توثيق الطبيب، المرفقات المهنية، تنبيهات البريد، ومحادثات المساعد الإرشادي المرتبطة بالتقرير المعتمد.</li>
+            <li><strong>سجلات الموافقة والتدقيق:</strong> إصدار الموافقة، وقتها، الغرض منها، تاريخ السحب عند حدوثه، دورة حياة الحالة، وسجل قرارات واعتماد الطبيب المعتمد.</li>
           </ul>
 
           <h4>3. التشفير وحماية البيانات</h4>
           <p>تُنقل جميع البيانات مشفرة بالكامل عبر بروتوكول <code>HTTPS / TLS 1.3</code> وتُخزن في خوادم Google Cloud بمعيار تشفير <code>AES-256</code> المعتمد، مع تطبيق مبدأ انعدام الثقة (Zero-Trust) لعزل بيانات كل مريض عن الآخرين.</p>
 
-          <h4>4. عدم المشاركة الإعلانية أو التجارية</h4>
+          <h4>4. الوصول والاحتفاظ وسحب الموافقة</h4>
+          <p>يقتصر الوصول على المريض، الطبيب أو العيادة المرتبطة بالحالة، وأدوار الإدارة والدعم وفق صلاحيات مقيدة وسجلات تدقيق. يمكن سحب الموافقة من شاشة الموافقة، وبعد السحب تتوقف التقييمات الجديدة إلى أن يتم قبول نسخة الموافقة الحالية مرة أخرى، مع استمرار الاحتفاظ بالسجلات المعتمدة عند وجود متطلبات قانونية أو سريرية.</p>
+
+          <h4>5. ملفات الارتباط والتخزين المحلي</h4>
+          <p>قد يستخدم التطبيق ملفات تعريف ارتباط تقنية أو تخزيناً محلياً لحفظ الجلسة، تفضيل اللغة، تذكر الحساب على الجهاز، وحالة الواجهة. لا تستخدم Health Vibe هذه البيانات للإعلانات أو البيع التجاري.</p>
+
+          <h4>6. عدم المشاركة الإعلانية أو التجارية</h4>
           <p><strong>لا يتم بيع أو مشاركة بياناتك مع أي طرف ثالث لأغراض تجارية أو إعلانية نهائياً.</strong> يتم مشاركة بيانات الحالة حصراً مع الطبيب المعالج المعتمد لإتمام المراجعة السريرية وإصدار التقرير الطبي.</p>
         </div>
 
@@ -2143,17 +2776,17 @@
   </div>
 
   <!-- Delete Account Confirmation Modal -->
-  <div id="deleteAccountModal" class="confirm-modal" aria-hidden="true">
+  <div id="deleteAccountModal" class="confirm-modal" role="alertdialog" aria-modal="true" aria-labelledby="deleteAccountTitle" aria-describedby="deleteAccountWarning" aria-hidden="true">
     <div class="confirm-card" style="width: min(520px, 100%); text-align: right; max-height: 90vh; overflow-y: auto;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
         <div style="display: flex; align-items: center; gap: 8px;">
           <span style="font-size: 22px;">⚠️</span>
-          <h3 style="margin: 0; font-size: 18px; color: #ef4444;" data-i18n="auth.deleteAccountTitle">حذف الحساب والبيانات السريرية</h3>
+          <h3 id="deleteAccountTitle" style="margin: 0; font-size: 18px; color: #ef4444;" data-i18n="auth.deleteAccountTitle">حذف الحساب والبيانات السريرية</h3>
         </div>
         <button type="button" class="close-button" onclick="closeDeleteAccountModal()" aria-label="Close">×</button>
       </div>
 
-      <div class="emergency-alert-card critical-oxygen" style="margin-bottom: 16px; padding: 12px 14px;">
+      <div id="deleteAccountWarning" class="emergency-alert-card critical-oxygen" style="margin-bottom: 16px; padding: 12px 14px;">
         <strong style="color: #dc2626; font-size: 13px;">تنبيه هام: هذا الإجراء نهائي ولا يمكن التراجع عنه!</strong>
         <p style="font-size: 12.5px; margin: 4px 0 0; color: var(--ink); line-height: 1.5;">
           عند إتمام الحذف، ستفقد إمكانية الوصول إلى المنصة وسيتم حذف أو إخفاء هوية كافة بياناتك المسجلة.
@@ -2182,9 +2815,23 @@
         <input type="password" id="deletePasswordInput" placeholder="كلمة المرور الحالية" autocomplete="current-password" style="width: 100%; padding: 10px 14px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; background: var(--surface-2); color: var(--ink);">
       </div>
 
+      <div id="deleteProgressContainer" style="display: none; margin-bottom: 16px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+          <span style="font-size: 13px; font-weight: 700; color: var(--ink);" id="deleteProgressTitle">جاري تنفيذ مراحل الحذف والتعقيم...</span>
+          <span class="pill" id="deleteProgressBadge" style="font-size: 10.5px; padding: 2px 8px; background: rgba(14, 165, 164, 0.15); color: var(--teal);">قيد المعالجة</span>
+        </div>
+        <div style="font-size: 12px; color: var(--muted); line-height: 1.6;" id="deleteProgressStatus">
+          فحص الملفات والسجلات والنسخ الاحتياطية...
+        </div>
+        <div id="deleteStepsList" style="margin-top: 8px; font-size: 11.5px; color: var(--muted); display: flex; flex-direction: column; gap: 4px;"></div>
+      </div>
+
       <div style="display: flex; gap: 10px; flex-direction: column;">
         <button type="button" id="btnExecuteAccountDeletion" class="solid-button" disabled style="width: 100%; justify-content: center; padding: 12px; font-size: 14px; background: #dc2626; border-color: #dc2626; opacity: 0.5; cursor: not-allowed;">
           🗑️ تأكيد وحذف الحساب نهائياً
+        </button>
+        <button type="button" id="btnRetryAccountDeletion" class="solid-button" style="display: none; width: 100%; justify-content: center; padding: 12px; font-size: 14px; background: #ea580c; border-color: #ea580c;">
+          🔄 إعادة المحاولة الآمنة لاستكمال الحذف
         </button>
         <button type="button" class="outline-button" onclick="closeDeleteAccountModal()" style="width: 100%; justify-content: center; padding: 10px; font-size: 13.5px;">
           إلغاء والاحتفاظ بحسابي
@@ -2193,10 +2840,36 @@
     </div>
   </div>
 
+  <!-- Privacy & Data Subject Rights Modal (GDPR Art. 15 / 20) -->
+  <div id="privacyDataModal" class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="privacyModalTitle" aria-describedby="privacyModalBody" aria-hidden="true" style="display: none;">
+    <div class="confirm-card" style="width: min(640px, 100%); text-align: start; max-height: 90vh; overflow-y: auto;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 22px;" id="privacyModalIcon">📋</span>
+          <h3 style="margin: 0; font-size: 18px; color: var(--ink);" id="privacyModalTitle">طلب الوصول للبيانات الشخصية</h3>
+        </div>
+        <button type="button" class="close-button" onclick="closePrivacyDataModal()" aria-label="Close">×</button>
+      </div>
+
+      <div id="privacyModalBody" style="font-size: 13px; color: var(--ink); line-height: 1.65; margin-bottom: 18px;">
+        <!-- Dynamically injected report / export summary -->
+      </div>
+
+      <div style="display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap;">
+        <button type="button" id="btnDownloadPrivacyJson" class="solid-button" style="display: none; padding: 8px 18px; font-size: 13px;">
+          📥 تنزيل الملف (JSON)
+        </button>
+        <button type="button" class="outline-button" onclick="closePrivacyDataModal()" style="padding: 8px 18px; font-size: 13px;">
+          إغلاق
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- ========================================================================= -->
   <!-- 🔒 CLINICAL INACTIVITY & HIPAA WORKSTATION AUTO-LOCK OVERLAY -->
   <!-- ========================================================================= -->
-  <div id="idleLockScreen" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(11, 19, 43, 0.88); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); z-index: 999998; align-items: center; justify-content: center; padding: 20px;">
+  <div id="idleLockScreen" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="idleLockTitle" aria-describedby="idleLockDesc" aria-hidden="true" style="display: none; position: fixed; inset: 0; background: rgba(11, 19, 43, 0.88); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); z-index: 999998; align-items: center; justify-content: center; padding: 20px;">
     <div class="modal-content" style="background: var(--surface); border: 1px solid var(--line); border-radius: 24px; max-width: 460px; width: 100%; padding: 32px 28px; box-shadow: 0 30px 60px -15px rgba(0, 0, 0, 0.6); text-align: center; position: relative;">
       
       <div style="width: 64px; height: 64px; border-radius: 20px; background: rgba(13, 148, 136, 0.14); border: 2px solid rgba(13, 148, 136, 0.3); display: flex; align-items: center; justify-content: center; font-size: 30px; margin: 0 auto 16px; color: var(--teal); box-shadow: 0 8px 20px -4px rgba(13, 148, 136, 0.3);">
@@ -2255,7 +2928,7 @@
   <!-- ========================================================================= -->
   <!-- 🛑 CENTRALIZED APPLICATION ERROR MODAL (Human-Friendly, No Raw Technical Jargon) -->
   <!-- ========================================================================= -->
-  <div id="centralErrorModal" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 999999; align-items: center; justify-content: center; padding: 20px;">
+  <div id="centralErrorModal" class="modal-overlay" role="alertdialog" aria-modal="true" aria-labelledby="centralErrorTitle" aria-describedby="centralErrorMessage centralErrorAction" aria-hidden="true" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 999999; align-items: center; justify-content: center; padding: 20px;">
     <div class="modal-content" style="background: var(--surface); border: 1px solid var(--line); border-radius: 20px; max-width: 480px; width: 100%; padding: 24px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4); text-align: start; position: relative;">
       <div style="display: flex; align-items: flex-start; gap: 14px; margin-bottom: 16px;">
         <div id="centralErrorIcon" style="width: 46px; height: 46px; border-radius: 12px; background: rgba(239, 68, 68, 0.12); display: flex; align-items: center; justify-content: center; font-size: 24px; flex-shrink: 0; color: #ef4444;">
@@ -2302,7 +2975,31 @@
   </div>
 
   <script src="./i18n.js?v=4.6"></script>
-  <script src="./config.js?v=5.0"></script>
-  <script src="./app.js?v=5.0"></script>
+  <!-- Modular Architecture: Core, Auth, Permissions, Patient, Assessment, Doctor, Reports, Appointments, Admin, Notifications -->
+  <script defer src="./modules/core/async-context-manager.js?v=1.0"></script>
+  <script defer src="./modules/core/operational-switches-client.js?v=1.0"></script>
+  <script defer src="./modules/core/validation.js?v=1.0"></script>
+  <script defer src="./modules/core/error-handler.js?v=1.0"></script>
+  <script defer src="./modules/permissions/permissions.js?v=1.0"></script>
+  <script defer src="./modules/auth/auth-service.js?v=1.0"></script>
+  <script defer src="./modules/auth/auth-ui.js?v=1.0"></script>
+  <script defer src="./modules/patient/patient-service.js?v=1.0"></script>
+  <script defer src="./modules/patient/patient-ui.js?v=1.0"></script>
+  <script defer src="./modules/assessment/assessment-validation.js?v=1.0"></script>
+  <script defer src="./modules/assessment/assessment-service.js?v=1.0"></script>
+  <script defer src="./modules/assessment/assessment-ui.js?v=1.0"></script>
+  <script defer src="./modules/assessment/assessment-comparison-ui.js?v=1.0"></script>
+  <script defer src="./modules/doctor/doctor-service.js?v=1.0"></script>
+  <script defer src="./modules/doctor/doctor-ui.js?v=1.0"></script>
+  <script defer src="./modules/reports/reports-service.js?v=1.0"></script>
+  <script defer src="./modules/reports/reports-ui.js?v=1.0"></script>
+  <script defer src="./modules/appointments/appointments-service.js?v=1.0"></script>
+  <script defer src="./modules/appointments/appointments-ui.js?v=1.0"></script>
+  <script defer src="./modules/admin/admin-service.js?v=1.0"></script>
+  <script defer src="./modules/admin/admin-ui.js?v=1.0"></script>
+  <script defer src="./modules/notifications/notifications-service.js?v=1.0"></script>
+  <script defer src="./modules/notifications/notifications-ui.js?v=1.0"></script>
+  <script defer src="./config.js?v=5.0"></script>
+  <script defer src="./app.js?v=5.0"></script>
 </body>
 </html>

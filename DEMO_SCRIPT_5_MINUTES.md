@@ -1,7 +1,7 @@
-# ⏱️ سيناريو العرض الحي لمدة 5 دقائق — Health Vibes AI
+# ⏱️ سيناريو العرض الحي لمدة 5 دقائق — Health Vibe AI
 ## 5-Minute Executive & Clinical Demo Script (B2B Clinics & Investors)
 
-> **الهوية الموحدة:** هيلث فايبز للذكاء الاصطناعي السريري (**Health Vibes AI**)  
+> **الهوية الموحدة:** هيلث فايب للذكاء الاصطناعي السريري (**Health Vibe AI**)  
 > **مدة العرض:** 5:00 دقائق بالضبط (300 ثانية)  
 > **الهدف:** إقناع أصحاب العيادات والمراكز الطبية والمستثمرين بالاشتراك وتشغيل النظام السريري  
 > **الروابط الحية المستخدمة:**
@@ -37,7 +37,7 @@
 
 #### 🖥️ على الشاشة:
 - افتح الصفحة الرئيسية [app/index.html](file:///d:/MY%20PC/Coding/Health%20Vibe%20Ai/app/index.html).
-- قف في منتصف الصفحة حيث تظهر شارة **Health Vibes AI** وشعار *"الفرز والتشغيل السريري الذكي لعيادات الصدر والباطنة"*.
+- قف في منتصف الصفحة حيث تظهر شارة **Health Vibe AI** وشعار *"الفرز والتشغيل السريري الذكي لعيادات الصدر والباطنة"*.
 
 #### 🗣️ الكلام المنطوق (بالعربية):
 > "أهلاً بحضراتكم. لو سألت أي استشاري صدر أو باطنة في مصر والوطن العربي: **إيه أكتر حاجة بتستهلك طاقتك يومياً؟**  
@@ -45,7 +45,7 @@
 > 
 > النتيجة؟ إرهاق للطبيب، أوقات انتظار تتجاوز 45 دقيقة للمريض، وتقارير ورقية تضيع بعد أسبوع.  
 > 
-> هنا يأتي **Health Vibes AI** — أول منظومة فرز وتشغيل سريري ذكي مصممة خصيصاً للعيادات والمراكز التخصصية، بنموذج **Doctor-in-the-Loop** يحافظ على استقلالية الطبيب 100% ويضاعف إنتاجيته السريرية."
+> هنا يأتي **Health Vibe AI** — أول منظومة فرز وتشغيل سريري ذكي مصممة خصيصاً للعيادات والمراكز التخصصية، بنموذج **Doctor-in-the-Loop** يحافظ على استقلالية الطبيب 100% ويضاعف إنتاجيته السريرية."
 
 ---
 
@@ -137,7 +137,7 @@
 
 ## 🌐 النسخة الإنجليزية المختصرة للمؤتمرات الدولية (English Pitch Variant)
 
-> **0:00 - 1:00 (Problem):** "Physicians waste over 40% of consultation time on manual anamnesis and repetitive paperwork. In respiratory care, this creates 45-minute clinic bottlenecks. Health Vibes AI solves this with our smart, Doctor-in-the-Loop clinical operating system."
+> **0:00 - 1:00 (Problem):** "Physicians waste over 40% of consultation time on manual anamnesis and repetitive paperwork. In respiratory care, this creates 45-minute clinic bottlenecks. Health Vibe AI solves this with our smart, Doctor-in-the-Loop clinical operating system."
 >
 > **1:00 - 2:00 (Triage):** "Before the patient even enters the consultation room, they complete a 60-second breathing assessment via mobile or clinic QR. Physiological vitals like SpO2 and dyspnea severity are triaged instantly with strict medical validation."
 >
@@ -155,7 +155,7 @@
 |---|---|
 | **انقطاع الإنترنت المفاجئ** | شغّل السيرفر المحلي بضغطة زر عبر `node backend/server.js` على المنفذ `3000` وافتح `http://localhost:3000/app/index.html` حيث يدعم التخزين المحلي المؤقت بالكامل. |
 | **قائمة الطبيب خالية من المرضى** | انقر مباشرة على تبويب **"🧪 Test Sandbox"** في شاشة الطبيب؛ تظهر فورياً حالات محاكاة حية جاهزة للاعتماد الطبي مع قياسات SpO2 مختلفة. |
-| **سؤال: "هل هذا يحل محل الطبيب؟"** | الإجابة الفورية: *"قطعاً لا؛ Health Vibes AI هو نظام Doctor-in-the-Loop. الذكاء الاصطناعي يقدم فرزاً وتلخيصاً، ولا يصدر أي تقرير إلا بتوقيع الطبيب البشري المرخص."* |
+| **سؤال: "هل هذا يحل محل الطبيب؟"** | الإجابة الفورية: *"قطعاً لا؛ Health Vibe AI هو نظام Doctor-in-the-Loop. الذكاء الاصطناعي يقدم فرزاً وتلخيصاً، ولا يصدر أي تقرير إلا بتوقيع الطبيب البشري المرخص."* |
 | **سؤال: "هل بيانات المرضى آمنة من التسريب؟"** | الإجابة الفورية: *"النظام محمي بقواعد أمان Firestore بدون ثغرات، مشفر بالكامل وفق معايير HIPAA و GDPR، ولا يمكن لأي مريض أو موظف الاطلاع على ملفات مرضى آخرين."* |
 
 ---

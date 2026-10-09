@@ -1,0 +1,30 @@
+{
+  "label": "OPTIMIZED",
+  "timestamp": "2026-09-28T22:51:50.472Z",
+  "coreWebVitals": {
+    "ttfbMs": 5,
+    "fcpMs": 1260,
+    "lcpMs": 1260,
+    "cls": 0,
+    "dclMs": 1138,
+    "loadMs": 1186
+  },
+  "network": {
+    "totalRequests": 37,
+    "totalSizeKb": 2279.6,
+    "jsRequests": 30,
+    "jsSizeKb": 1122.8,
+    "cssRequests": 1,
+    "cssSizeKb": 113.5,
+    "imageRequests": 4,
+    "imageSizeKb": 831.4
+  },
+  "firebaseQueries": {
+    "activeListeners": 0,
+    "unboundedQueriesIdentified": 4,
+    "casesUnboundedRead": true,
+    "doctorQueueUnboundedRead": true,
+    "auditLogUnboundedRead": true,
+    "patientHistoryUnboundedRead": true
+  }
+}

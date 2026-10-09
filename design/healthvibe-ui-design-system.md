@@ -1,4 +1,4 @@
-# HealthVibe AI UI Design Direction
+# Health Vibe AI — UI Design System
 
 ## Source Boundary
 
@@ -6,7 +6,7 @@ The attached PRD and brainstorm deck are treated as project reference material o
 
 ## Product Positioning
 
-HealthVibe AI should feel like a serious healthcare product built for everyday use in Egypt. The interface should reduce anxiety, make medical status easy to understand, and keep the doctor review workflow visible. The design language should avoid playful wellness styling, generic hospital stock visuals, and exaggerated AI futurism.
+Health Vibe AI should feel like a serious healthcare product built for everyday use in Egypt. The interface should reduce anxiety, make medical status easy to understand, and keep the doctor review workflow visible. The design language should avoid playful wellness styling, generic hospital stock visuals, and exaggerated AI futurism.
 
 Core product promise:
 
@@ -110,7 +110,7 @@ Status:
 
 Medical reports:
 
-- Use a structured header with HealthVibe AI, patient, doctor, module, date.
+- Use a structured header with Health Vibe AI, patient, doctor, module, date.
 - Risk status should be visible near the top.
 - Recommendations and disclaimer must remain visible.
 

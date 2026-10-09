@@ -78,7 +78,7 @@ function buildDatabase(initialCaseData) {
         }
       };
 
-      await callback(txn);
+      const result = await callback(txn);
 
       for (const { data } of pendingUpdates) {
         writes++;
@@ -88,6 +88,7 @@ function buildDatabase(initialCaseData) {
       for (const {} of pendingSets) {
         auditWrites++;
       }
+      return result;
     },
     _writes: () => writes,
     _auditWrites: () => auditWrites,
@@ -116,7 +117,8 @@ function buildFirebaseAdmin(db) {
       verifyIdToken: async token => ({
         uid: token,
         email: `${token}@example.test`,
-        email_verified: true
+        email_verified: true,
+        role: 'doctor'
       })
     })
   };
@@ -309,8 +311,9 @@ async function callEndpoint(server, route, doctorToken, body) {
     const server = app.listen(0, '127.0.0.1');
     await new Promise(resolve => server.once('listening', resolve));
     try {
-      const result = await callEndpoint(server, '/api/doctor/request-more-info', 'doctor-1', {
+      const result = await callEndpoint(server, '/api/doctor/transition-case-status', 'doctor-1', {
         caseId: 'case-t3',
+        targetStatus: 'more_info_requested',
         note: 'Already requested — sending again by accident'
       });
       assert.equal(result.status, 200, `Expected 200 idempotent, got ${result.status}: ${JSON.stringify(result.data)}`);
@@ -339,8 +342,9 @@ async function callEndpoint(server, route, doctorToken, body) {
     await new Promise(resolve => server.once('listening', resolve));
     try {
       const reasonNote = 'Need additional imaging results';
-      const result = await callEndpoint(server, '/api/doctor/request-more-info', 'doctor-1', {
+      const result = await callEndpoint(server, '/api/doctor/transition-case-status', 'doctor-1', {
         caseId: 'case-t4',
+        targetStatus: 'more_info_requested',
         note: reasonNote
       });
       assert.equal(result.status, 200, `Expected 200, got ${result.status}: ${JSON.stringify(result.data)}`);
