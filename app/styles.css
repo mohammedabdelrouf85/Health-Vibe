@@ -1459,6 +1459,93 @@ html[dir="ltr"] .nav-item {
   color: var(--teal);
 }
 
+/* Expandable Navigation Category Group */
+.nav-group {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.nav-group-header {
+  position: relative;
+  cursor: pointer;
+  user-select: none;
+  justify-content: flex-start;
+}
+
+.nav-group-header .nav-label {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.nav-group-chevron {
+  font-size: 11px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.7;
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.18s ease;
+  margin-inline-start: auto;
+  padding: 2px;
+}
+
+.nav-group-header:hover .nav-group-chevron {
+  opacity: 1;
+}
+
+.nav-group-header[aria-expanded="true"] .nav-group-chevron {
+  transform: rotate(180deg);
+}
+
+.nav-group-children {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-inline-start: 16px;
+  margin-top: 2px;
+  margin-bottom: 4px;
+}
+
+.nav-group-children[hidden] {
+  display: none !important;
+}
+
+.nav-sub-item {
+  font-size: 13px;
+  min-height: 40px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  position: relative;
+  color: var(--muted);
+}
+
+.nav-sub-item .nav-icon {
+  font-size: 14px;
+  width: 20px;
+}
+
+.nav-sub-item::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  inset-inline-start: 2px;
+  width: 3px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--line);
+  transform: translateY(-50%);
+  opacity: 0.6;
+  transition: background 0.18s ease, opacity 0.18s ease, height 0.18s ease;
+}
+
+.nav-sub-item:hover::before,
+.nav-sub-item.active::before {
+  background: var(--teal);
+  opacity: 1;
+  height: 18px;
+}
+
 .account-card {
   margin-top: auto;
   border-radius: 20px;
