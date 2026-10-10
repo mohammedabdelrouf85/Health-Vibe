@@ -204,7 +204,7 @@
             </div>
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <span>${escapeHtml(t("hypertension.targetBp") || "Target BP")}:</span>
-              ${renderFieldBadge(p.targetSystolic ? { state: 'known', value: `< ${p.targetSystolic?.value || 130}/${p.targetDiastolic?.value || 80}` } : null)}
+              ${renderFieldBadge(p.targetSystolic ? { state: 'known', value: `< ${p.targetSystolic?.value || t("hypertension.stateNotProvided")}/${p.targetDiastolic?.value || t("hypertension.stateNotProvided")}` } : null)}
             </div>
           </div>
         </div>
@@ -240,9 +240,9 @@
               <tr style="border-bottom: 1px solid var(--line);">
                 <td style="padding: 10px;">${new Date(r.measuredAt).toLocaleString()}</td>
                 <td style="padding: 10px;"><strong>${r.systolic}/${r.diastolic}</strong></td>
-                <td style="padding: 10px;">${r.pulse || '--'}</td>
-                <td style="padding: 10px;">${r.map || '--'}</td>
-                <td style="padding: 10px;"><span class="pill ok">${escapeHtml(r.classification?.stage || 'NORMAL')}</span></td>
+                <td style="padding: 10px;">${r.pulse || t("hypertension.stateNotProvided")}</td>
+                <td style="padding: 10px;">${r.map || t("hypertension.stateNotProvided")}</td>
+                <td style="padding: 10px;"><span class="pill ok">${escapeHtml(r.classification?.stage || t("hypertension.stateNotProvided"))}</span></td>
               </tr>
             `).join("")}
           </tbody>
@@ -268,13 +268,13 @@
           <div class="panel" style="padding: 16px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid var(--line); padding-bottom: 8px;">
               <div>
-                <strong>${escapeHtml(t("hypertension.assessmentRev") || "Clinical Revision")}: #${asm.clinicalRevision || 1}</strong>
+                <strong>${escapeHtml(t("hypertension.assessmentRev") || "Clinical Revision")}: #${asm.clinicalRevision || t("hypertension.stateNotProvided")}</strong>
                 <span style="font-size: 12px; color: var(--muted); margin-inline-start: 10px;">${new Date(asm.createdAt || asm.assessedAt).toLocaleString()}</span>
               </div>
-              <span class="pill ok">${escapeHtml(asm.status || 'submitted')}</span>
+              <span class="pill ok">${escapeHtml(asm.status || t("hypertension.stateNotProvided"))}</span>
             </div>
             <div style="font-size: 13px; color: var(--ink);">
-              <p><strong>${escapeHtml(t("hypertension.author") || "Author")}:</strong> ${escapeHtml(asm.author?.name || 'Patient')}</p>
+              <p><strong>${escapeHtml(t("hypertension.author") || "Author")}:</strong> ${escapeHtml(asm.author?.name || t("hypertension.stateNotProvided"))}</p>
             </div>
           </div>
         `).join("")}
@@ -299,10 +299,10 @@
           <div class="panel" style="padding: 16px;">
             <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--line); padding-bottom: 8px; margin-bottom: 12px;">
               <div>
-                <strong>👨‍⚕️ ${escapeHtml(rev.doctor?.name || 'Physician')}</strong>
+                <strong>👨‍⚕️ ${escapeHtml(rev.doctor?.name || t("hypertension.stateNotProvided"))}</strong>
                 <span style="font-size: 12px; color: var(--muted); margin-inline-start: 8px;">(${escapeHtml(rev.doctor?.licenseNumber || '')})</span>
               </div>
-              <span class="pill ok">${escapeHtml(rev.status || 'reviewed')}</span>
+              <span class="pill ok">${escapeHtml(rev.status || t("hypertension.stateNotProvided"))}</span>
             </div>
             <p style="font-size: 13px; margin: 4px 0;">${escapeHtml(rev.observations)}</p>
           </div>
@@ -352,12 +352,12 @@
           <div class="panel" style="padding: 16px;">
             <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--line); padding-bottom: 8px; margin-bottom: 12px;">
               <div>
-                <strong>📄 ${escapeHtml(rep.reportRef || 'Certified Report')}</strong>
+                <strong>📄 ${escapeHtml(rep.reportRef || t("hypertension.stateNotProvided"))}</strong>
                 <span style="font-size: 12px; color: var(--muted); margin-inline-start: 8px;">${new Date(rep.approvedAt || rep.certifiedAt).toLocaleDateString()}</span>
               </div>
               <span class="pill ok">🛡️ ${escapeHtml(t("hypertension.certified") || "Certified")}</span>
             </div>
-            <p style="font-size: 13px;"><strong>${escapeHtml(t("hypertension.diagnosis") || "Diagnosis")}:</strong> ${escapeHtml(rep.clinicalDiagnosis || '')}</p>
+            <p style="font-size: 13px;"><strong>${escapeHtml(t("hypertension.diagnosis") || "Diagnosis")}:</strong> ${escapeHtml(rep.clinicalDiagnosis || t("hypertension.stateNotProvided"))}</p>
           </div>
         `).join("")}
       </div>
@@ -387,7 +387,7 @@
   async function renderScreen(container) {
     if (!container) return;
 
-    activePatientId = global.currentPatientId || global.currentUserUid || "usr_patient_demo";
+    activePatientId = global.currentPatientId || global.currentUserUid || null;
 
     if (!activeBundle) {
       await loadPatientBundle(activePatientId);

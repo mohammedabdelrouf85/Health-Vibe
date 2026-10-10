@@ -111,8 +111,8 @@ function createBloodDisordersAssessment(assessmentData = {}, actor = {}) {
     lastRevisionAt: now,
     inrLevel: assessmentData.inrLevel || null,
     plateletCount: assessmentData.plateletCount || null,
-    bleedingEventsHistory: assessmentData.bleedingEventsHistory || [],
-    medications: assessmentData.medications || [],
+    bleedingEventsHistory: assessmentData.bleedingEventsHistory || null,
+    medications: assessmentData.medications || null,
     author: authorInfo
   };
 

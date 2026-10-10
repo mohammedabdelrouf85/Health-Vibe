@@ -113,7 +113,7 @@ function createObesityAssessment(assessmentData = {}, actor = {}) {
     heightCm: assessmentData.heightCm || null,
     bmi: assessmentData.weightKg && assessmentData.heightCm ? Math.round((assessmentData.weightKg / Math.pow(assessmentData.heightCm / 100, 2)) * 10) / 10 : null,
     waistCircumferenceCm: assessmentData.waistCircumferenceCm || null,
-    comorbidities: assessmentData.comorbidities || [],
+    comorbidities: assessmentData.comorbidities || null,
     author: authorInfo
   };
 
