@@ -69,6 +69,7 @@ const medicalOcrService = require('./medical-ocr-service');
 const unusualAccessService = require('./unusual-access-service');
 const prescriptionService = require('./prescription-service');
 const chronicHypertensionService = require('./chronic-hypertension-service');
+const diabetesService = require('./diabetes-service');
 const wearableIntegrationService = require('./wearable-integration-service');
 const caseFollowupService = require('./case-followup-service');
 const clinicalScribeService = require('./clinical-scribe-service');
@@ -6231,6 +6232,27 @@ async function executeDoctorTransition({
             if (baseline.o2 !== undefined && Number(baseline.o2) !== Number(caseData.o2 ?? caseData.oxygenLevel)) {
               if (!changedFields.includes('oxygenLevel')) changedFields.push('oxygenLevel');
             }
+            if (baseline.fastingGlucose !== undefined && Number(baseline.fastingGlucose) !== Number(caseData.fastingGlucose ?? caseData.measurements?.fasting?.value)) {
+              if (!changedFields.includes('fastingGlucose')) changedFields.push('fastingGlucose');
+            }
+            if (baseline.postprandialGlucose !== undefined && Number(baseline.postprandialGlucose) !== Number(caseData.postprandialGlucose ?? caseData.measurements?.postprandial?.value)) {
+              if (!changedFields.includes('postprandialGlucose')) changedFields.push('postprandialGlucose');
+            }
+            if (baseline.bloodGlucose !== undefined && Number(baseline.bloodGlucose) !== Number(caseData.bloodGlucose ?? caseData.glucose)) {
+              if (!changedFields.includes('bloodGlucose')) changedFields.push('bloodGlucose');
+            }
+            if (baseline.hba1c !== undefined && Number(baseline.hba1c) !== Number(caseData.hba1c ?? caseData.measurements?.hba1c?.value)) {
+              if (!changedFields.includes('hba1c')) changedFields.push('hba1c');
+            }
+            if (baseline.ketones !== undefined && String(baseline.ketones) !== String(caseData.ketones ?? caseData.measurements?.ketones?.value)) {
+              if (!changedFields.includes('ketones')) changedFields.push('ketones');
+            }
+            if (baseline.activeInsulinRegimen !== undefined && baseline.activeInsulinRegimen !== caseData.activeInsulinRegimen) {
+              if (!changedFields.includes('activeInsulinRegimen')) changedFields.push('activeInsulinRegimen');
+            }
+            if (baseline.diabetesType !== undefined && baseline.diabetesType !== caseData.diabetesType) {
+              if (!changedFields.includes('diabetesType')) changedFields.push('diabetesType');
+            }
             if (baseline.assignedDoctorId !== undefined && baseline.assignedDoctorId !== caseData.assignedDoctorId) {
               if (!changedFields.includes('assignedDoctorId')) changedFields.push('assignedDoctorId');
             }
@@ -6368,6 +6390,37 @@ async function executeDoctorTransition({
               published: true,
               createdAt: admin.firestore.FieldValue.serverTimestamp()
             });
+
+            // If this is a diabetes case or contains diabetes data, synchronize diabetes approved report link
+            try {
+              const patientId = caseData.patientId || caseData.userId;
+              if (patientId && (caseData.module === 'diabetes' || caseData.service === 'diabetes' || caseData.diabetesType || caseData.fastingGlucose !== undefined)) {
+                diabetesService.linkApprovedReport(patientId, {
+                  reportRef: updateData.reportRef,
+                  revisionId: updateData.reportSnapshot.revisionId,
+                  doctorId: req.user.uid,
+                  doctorName: updateData.approvingDoctorName,
+                  clinicalDiagnosis: updateData.clinicalDiagnosis,
+                  medications: updateData.medications,
+                  recommendations: updateData.recommendations,
+                  approvedAt: new Date().toISOString()
+                });
+                diabetesService.recordDoctorReview({
+                  patientId,
+                  doctorId: req.user.uid,
+                  doctorName: updateData.approvingDoctorName,
+                  doctorNotes: updateData.clinicalNotes || transitionReason || '',
+                  clinicalDiagnosis: updateData.clinicalDiagnosis,
+                  medications: updateData.medications,
+                  recommendations: updateData.recommendations,
+                  reportRef: updateData.reportRef,
+                  reviewedRevision: updateData.reportSnapshot.revisionId,
+                  status: 'approved'
+                });
+              }
+            } catch (syncErr) {
+              console.warn('[SERVER] Could not sync diabetes report link:', syncErr.message);
+            }
           }
           const auditRef = db.collection('audit_events').doc();
           transaction.set(auditRef, {
@@ -13295,6 +13348,434 @@ app.get('/api/chronic/hypertension/patient/:patientId/report', requireAuth, (req
   }
 });
 
+// =============================================================================
+// 🩸 DIABETES MELLITUS & GLYCEMIC CONTROL SPECIALTY ROUTES
+// Specialized Endocrine Track: Data Ingestion, Doctor Review, Notes, Follow-up
+// =============================================================================
+
+/**
+ * GET /api/diabetes/overview
+ * Returns specialty governance metadata, status, guidelines and clinical disclaimer.
+ */
+app.get('/api/diabetes/overview', (req, res) => {
+  res.json({ success: true, overview: diabetesService.getDiabetesModuleOverview() });
+});
+
+/**
+ * GET /api/diabetes/patient/:patientId
+ * Retrieves full patient diabetes bundle.
+ * Enforces role-based patient privacy & doctor assignment verification.
+ */
+app.get('/api/diabetes/patient/:patientId', requireAuth, (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const bundle = diabetesService.getPatientDiabetesBundle(patientId);
+    const access = diabetesService.verifyAccessPermission(req.user, patientId, bundle?.info);
+
+    if (!access.authorized) {
+      return res.status(403).json({
+        error: 'ACCESS_DENIED',
+        reason: access.reason,
+        message: access.reason === 'DOCTOR_NOT_ASSIGNED_TO_PATIENT'
+          ? 'Doctor is not assigned to this patient.'
+          : 'Unauthorized to view this patient\'s diabetes records.'
+      });
+    }
+
+    res.json({ success: true, bundle });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/diabetes/patient/:patientId/measurement
+ * Logs a real blood glucose, ketone, or HbA1c measurement.
+ */
+app.post('/api/diabetes/patient/:patientId/measurement', requireAuth, async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const bundle = diabetesService.getPatientDiabetesBundle(patientId);
+    const access = diabetesService.verifyAccessPermission(req.user, patientId, bundle?.info);
+
+    if (!access.authorized) {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Unauthorized to log measurement for target patient.' });
+    }
+
+    const { type, value, unit, source, notes, mealContext, ketonesLevel, insulinUnits } = req.body || {};
+    const reading = diabetesService.recordDiabetesMeasurement({
+      patientId,
+      type,
+      value,
+      unit,
+      source,
+      notes,
+      mealContext,
+      ketonesLevel,
+      insulinUnits,
+      recordedByUid: req.user.uid
+    });
+
+    res.status(201).json({ success: true, reading });
+  } catch (err) {
+    res.status(400).json({ error: 'RECORD_MEASUREMENT_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/diabetes/patient/:patientId/clinical-note
+ * Adds an attending physician consultation note.
+ * Doctor must be authorized and assigned.
+ */
+app.post('/api/diabetes/patient/:patientId/clinical-note', requireAuth, async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const bundle = diabetesService.getPatientDiabetesBundle(patientId);
+    const access = diabetesService.verifyAccessPermission(req.user, patientId, bundle?.info);
+
+    if (!access.authorized || (req.user.role !== 'doctor' && req.user.role !== 'clinic_admin' && req.user.role !== 'super_admin')) {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Only authorized attending medical professionals may author clinical notes.' });
+    }
+
+    const { noteText, category, caseId } = req.body || {};
+    const note = diabetesService.addClinicalNote({
+      patientId,
+      caseId,
+      doctorUid: req.user.uid,
+      doctorName: req.user.name || req.user.displayName || 'Physician',
+      doctorLicense: req.user.licenseNumber || 'Not provided',
+      category,
+      noteText
+    });
+
+    res.status(201).json({ success: true, note });
+  } catch (err) {
+    res.status(400).json({ error: 'ADD_NOTE_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/diabetes/patient/:patientId/review
+ * Records a formal doctor review for the patient's diabetes status.
+ */
+app.post('/api/diabetes/patient/:patientId/review', requireAuth, async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const bundle = diabetesService.getPatientDiabetesBundle(patientId);
+    const access = diabetesService.verifyAccessPermission(req.user, patientId, bundle?.info);
+
+    if (!access.authorized || (req.user.role !== 'doctor' && req.user.role !== 'clinic_admin' && req.user.role !== 'super_admin')) {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Only authorized attending medical professionals may record case reviews.' });
+    }
+
+    const { observations, recommendations, status, caseId } = req.body || {};
+    const review = diabetesService.recordDoctorReview({
+      patientId,
+      caseId,
+      doctorUid: req.user.uid,
+      doctorName: req.user.name || req.user.displayName || 'Attending Physician',
+      doctorLicense: req.user.licenseNumber || 'Not provided',
+      observations,
+      recommendations,
+      status: status || 'reviewed'
+    });
+
+    res.status(201).json({ success: true, review });
+  } catch (err) {
+    res.status(400).json({ error: 'RECORD_REVIEW_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/diabetes/patient/:patientId/followup
+ * Sets or updates the chronic follow-up plan.
+ */
+app.post('/api/diabetes/patient/:patientId/followup', requireAuth, async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const bundle = diabetesService.getPatientDiabetesBundle(patientId);
+    const access = diabetesService.verifyAccessPermission(req.user, patientId, bundle?.info);
+
+    if (!access.authorized || (req.user.role !== 'doctor' && req.user.role !== 'clinic_admin' && req.user.role !== 'super_admin')) {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Unauthorized to set follow-up plan.' });
+    }
+
+    const { scheduledDate, intervalDays, protocolType, instructions, screeningGoals } = req.body || {};
+    const plan = diabetesService.recordFollowupPlan({
+      patientId,
+      doctorUid: req.user.uid,
+      doctorName: req.user.name || req.user.displayName || 'Physician',
+      scheduledDate,
+      intervalDays,
+      protocolType,
+      instructions,
+      screeningGoals
+    });
+
+    res.status(201).json({ success: true, plan });
+  } catch (err) {
+    res.status(400).json({ error: 'SET_FOLLOWUP_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/diabetes/patient/:patientId/assessment
+ * Creates a structured diabetes assessment with versioned revision 1 and observations history.
+ */
+app.post('/api/diabetes/patient/:patientId/assessment', requireAuth, async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const bundle = diabetesService.getPatientDiabetesBundle(patientId);
+    const access = diabetesService.verifyAccessPermission(req.user, patientId, bundle?.info);
+
+    if (!access.authorized) {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Unauthorized to create assessment for target patient.' });
+    }
+
+    const assessment = diabetesService.createDiabetesAssessment({
+      ...req.body,
+      patientId
+    }, req.user);
+
+    res.status(201).json({ success: true, assessment });
+  } catch (err) {
+    if (err.code === 'VALIDATION_FAILED') {
+      return res.status(400).json({ error: 'VALIDATION_FAILED', errors: err.errors, message: err.message });
+    }
+    res.status(400).json({ error: 'CREATE_ASSESSMENT_FAILED', message: err.message });
+  }
+});
+
+/**
+ * PUT /api/diabetes/patient/:patientId/assessment/:assessmentId
+ * Revises a structured diabetes assessment (increments clinicalRevision, preserves observations ledger).
+ */
+app.put('/api/diabetes/patient/:patientId/assessment/:assessmentId', requireAuth, async (req, res) => {
+  try {
+    const { patientId, assessmentId } = req.params;
+    const bundle = diabetesService.getPatientDiabetesBundle(patientId);
+    const access = diabetesService.verifyAccessPermission(req.user, patientId, bundle?.info);
+
+    if (!access.authorized) {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Unauthorized to update assessment for target patient.' });
+    }
+
+    const assessment = diabetesService.updateDiabetesAssessment(assessmentId, req.body, req.user);
+    res.json({ success: true, assessment });
+  } catch (err) {
+    if (err.code === 'ASSESSMENT_NOT_FOUND') {
+      return res.status(404).json({ error: 'ASSESSMENT_NOT_FOUND', message: err.message });
+    }
+    if (err.code === 'VALIDATION_FAILED') {
+      return res.status(400).json({ error: 'VALIDATION_FAILED', errors: err.errors, message: err.message });
+    }
+    res.status(400).json({ error: 'UPDATE_ASSESSMENT_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/diabetes/patient/:patientId/assessments
+ * Retrieves all structured assessments for a patient.
+ */
+app.get('/api/diabetes/patient/:patientId/assessments', requireAuth, (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const bundle = diabetesService.getPatientDiabetesBundle(patientId);
+    const access = diabetesService.verifyAccessPermission(req.user, patientId, bundle?.info);
+
+    if (!access.authorized) {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Unauthorized to view assessments for target patient.' });
+    }
+
+    const assessments = diabetesService.getPatientDiabetesAssessments(patientId);
+    res.json({ success: true, assessments });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * GET /api/diabetes/assessment/:assessmentId
+ * Retrieves a single structured assessment along with its observations ledger and revisions ledger.
+ */
+app.get('/api/diabetes/assessment/:assessmentId', requireAuth, (req, res) => {
+  try {
+    const { assessmentId } = req.params;
+    const assessment = diabetesService.getDiabetesAssessment(assessmentId);
+
+    if (!assessment) {
+      return res.status(404).json({ error: 'NOT_FOUND', message: `Diabetes assessment ${assessmentId} not found.` });
+    }
+
+    const access = diabetesService.verifyAccessPermission(req.user, assessment.patientId);
+    if (!access.authorized) {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Unauthorized to view this assessment.' });
+    }
+
+    const observations = diabetesService.getAssessmentObservations(assessmentId);
+    const revisions = diabetesService.getAssessmentRevisions(assessmentId);
+
+    res.json({
+      success: true,
+      assessment,
+      observations,
+      revisions
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/diabetes/patient/:patientId/approve-review
+ * Doctor approval endpoint enforcing:
+ * - legitimate assignment / authorization
+ * - current revision review requirement
+ * - rejection of stale data (HTTP 409)
+ * - requirement of physician-authored diagnosis and recommendations
+ */
+app.post('/api/diabetes/patient/:patientId/approve-review', requireAuth, requireDoctor, async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const {
+      caseId,
+      currentRevisionId,
+      expectedRevisionNumber,
+      baselineSnapshot,
+      clinicalDiagnosis,
+      medications,
+      recommendations,
+      doctorNotes,
+      reportRef
+    } = req.body;
+
+    const bundle = diabetesService.getPatientDiabetesBundle(patientId);
+    const access = diabetesService.verifyDoctorCanReviewDiabetesCase(req.user, patientId, bundle?.info, caseId);
+    if (!access.authorized) {
+      return res.status(403).json({
+        error: 'ACCESS_DENIED',
+        message: access.reason || 'Doctor is not authorized to review or approve this diabetes case.'
+      });
+    }
+
+    const doctorProfile = {
+      doctorId: req.user.uid,
+      doctorName: req.user.displayName || req.user.name || 'الدكتور المعالج',
+      doctorSpecialty: req.user.specialty || 'استشاري أمراض الغدد الصماء والسكري',
+      doctorLicense: req.user.license || req.user.medicalLicense || 'MD-CONSULTANT',
+      clinicName: req.user.clinicName || 'مركز السكري والغدد الصماء التخصصي'
+    };
+
+    const approvalResult = diabetesService.processDiabetesDoctorApproval({
+      patientId,
+      doctorUser: doctorProfile,
+      approvalPayload: {
+        caseId,
+        currentRevisionId,
+        expectedRevisionNumber,
+        baselineSnapshot,
+        clinicalDiagnosis,
+        medications,
+        recommendations,
+        doctorNotes,
+        reportRef
+      }
+    });
+
+    if (!approvalResult.success) {
+      if (approvalResult.conflict) {
+        return res.status(409).json({
+          error: approvalResult.error,
+          message: approvalResult.message,
+          conflict: approvalResult.conflict
+        });
+      }
+      return res.status(400).json({
+        error: approvalResult.error,
+        message: approvalResult.message
+      });
+    }
+
+    // Record audit event
+    try {
+      const auditRef = db.collection('audit_events').doc();
+      await auditRef.set({
+        type: 'DIABETES_CASE_APPROVED',
+        patientId,
+        caseId: caseId || null,
+        doctorId: req.user.uid,
+        doctorName: doctorProfile.doctorName,
+        reportRef: approvalResult.report.reportRef,
+        revisionId: approvalResult.report.revisionId,
+        timestamp: admin.firestore.FieldValue.serverTimestamp()
+      });
+    } catch (auditErr) {
+      console.warn('[SERVER] Audit event write failed:', auditErr.message);
+    }
+
+    res.json({
+      success: true,
+      message: 'Diabetes case successfully approved by doctor.',
+      report: approvalResult.report,
+      review: approvalResult.review,
+      reportRef: approvalResult.report.reportRef
+    });
+  } catch (err) {
+    console.error('[SERVER DIABETES APPROVAL ERROR]:', err);
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/diabetes/patient/:patientId/attachment
+ * Upload / link patient clinical attachment (lab report, SMBG log, etc.)
+ */
+app.post('/api/diabetes/patient/:patientId/attachment', requireAuth, async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const bundle = diabetesService.getPatientDiabetesBundle(patientId);
+    const access = diabetesService.verifyAccessPermission(req.user, patientId, bundle?.info);
+    if (!access.authorized) {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: access.reason || 'Unauthorized.' });
+    }
+
+    const attachment = diabetesService.addPatientAttachment(patientId, {
+      ...req.body,
+      uploadedBy: req.user.uid
+    });
+
+    res.json({ success: true, attachment });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/diabetes/patient/:patientId/clarification
+ * Submit a clarification query or response
+ */
+app.post('/api/diabetes/patient/:patientId/clarification', requireAuth, async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const bundle = diabetesService.getPatientDiabetesBundle(patientId);
+    const access = diabetesService.verifyAccessPermission(req.user, patientId, bundle?.info);
+    if (!access.authorized) {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: access.reason || 'Unauthorized.' });
+    }
+
+    const clarification = diabetesService.addPatientClarification(patientId, {
+      ...req.body,
+      authorId: req.user.uid,
+      authorRole: req.user.role || 'doctor'
+    });
+
+    res.json({ success: true, clarification });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+app.diabetesService = diabetesService;
 app.wearableIntegrationService = wearableIntegrationService;
 
 // =============================================================================

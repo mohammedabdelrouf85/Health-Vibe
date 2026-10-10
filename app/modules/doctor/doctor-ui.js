@@ -656,6 +656,113 @@
       });
     }
 
+    // 9. Diabetes - Fasting Blood Glucose (FBG)
+    const currentFbg = Number(c.fastingGlucose ?? c.fasting ?? c.fbg ?? (c.currentAssessment?.fastingGlucose || 0));
+    const prevFbg = Number(c.previousFastingGlucose ?? c.previousFbg ?? (c.assessment?.fastingGlucose || 0));
+    if (currentFbg > 0 || prevFbg > 0) {
+      const delta = (prevFbg > 0 && currentFbg > 0) ? currentFbg - prevFbg : 0;
+      const trend = delta < 0
+        ? `${delta} mg/dL 🟢 (${isEn ? 'Improved' : 'انخفاض وتحسن'})`
+        : (delta > 0 ? `+${delta} mg/dL 🔴 (${isEn ? 'Elevated' : 'ارتفاع'})` : `= 🟡 (${isEn ? 'Stable' : 'مستقر'})`);
+      diffs.push({
+        id: "fastingGlucose",
+        icon: "🩸",
+        label: isEn ? "Fasting Blood Glucose (FBG)" : "سكر الدم الصائم (FBG)",
+        prevVal: prevFbg > 0 ? `${prevFbg} mg/dL` : (isEn ? "Not measured" : "غير مقاس"),
+        prevTime: baselineTime,
+        prevSource: baselineSource,
+        newVal: currentFbg > 0 ? `${currentFbg} mg/dL` : "--",
+        newTime: revisedTime,
+        newSource: revisedSource,
+        deltaText: trend,
+        isChanged: currentFbg !== prevFbg
+      });
+    }
+
+    // 10. Diabetes - Postprandial Blood Glucose (PPG)
+    const currentPpg = Number(c.postprandialGlucose ?? c.postprandial ?? c.ppg ?? (c.currentAssessment?.postprandialGlucose || 0));
+    const prevPpg = Number(c.previousPostprandialGlucose ?? c.previousPpg ?? (c.assessment?.postprandialGlucose || 0));
+    if (currentPpg > 0 || prevPpg > 0) {
+      const delta = (prevPpg > 0 && currentPpg > 0) ? currentPpg - prevPpg : 0;
+      const trend = delta < 0
+        ? `${delta} mg/dL 🟢 (${isEn ? 'Improved' : 'انخفاض وتحسن'})`
+        : (delta > 0 ? `+${delta} mg/dL 🔴 (${isEn ? 'Elevated' : 'ارتفاع'})` : `= 🟡 (${isEn ? 'Stable' : 'مستقر'})`);
+      diffs.push({
+        id: "postprandialGlucose",
+        icon: "🍽️",
+        label: isEn ? "Postprandial Glucose (2-hr)" : "سكر الدم بعد الأكل (ساعتين)",
+        prevVal: prevPpg > 0 ? `${prevPpg} mg/dL` : (isEn ? "Not measured" : "غير مقاس"),
+        prevTime: baselineTime,
+        prevSource: baselineSource,
+        newVal: currentPpg > 0 ? `${currentPpg} mg/dL` : "--",
+        newTime: revisedTime,
+        newSource: revisedSource,
+        deltaText: trend,
+        isChanged: currentPpg !== prevPpg
+      });
+    }
+
+    // 11. Diabetes - Glycated Hemoglobin (HbA1c)
+    const currentA1c = Number(c.hba1c ?? (c.currentAssessment?.hba1c || 0));
+    const prevA1c = Number(c.previousHba1c ?? (c.assessment?.hba1c || 0));
+    if (currentA1c > 0 || prevA1c > 0) {
+      const delta = (prevA1c > 0 && currentA1c > 0) ? +(currentA1c - prevA1c).toFixed(1) : 0;
+      const trend = delta < 0
+        ? `${delta}% 🟢 (${isEn ? 'Improved' : 'تحسن'})`
+        : (delta > 0 ? `+${delta}% 🔴 (${isEn ? 'Worsened' : 'ارتفاع'})` : `= 🟡 (${isEn ? 'Stable' : 'مستقر'})`);
+      diffs.push({
+        id: "hba1c",
+        icon: "📊",
+        label: isEn ? "Glycated Hemoglobin (HbA1c)" : "السكر التراكمي (HbA1c)",
+        prevVal: prevA1c > 0 ? `${prevA1c}%` : (isEn ? "Not recorded" : "غير مسجل"),
+        prevTime: baselineTime,
+        prevSource: baselineSource,
+        newVal: currentA1c > 0 ? `${currentA1c}%` : "--",
+        newTime: revisedTime,
+        newSource: revisedSource,
+        deltaText: trend,
+        isChanged: currentA1c !== prevA1c
+      });
+    }
+
+    // 12. Diabetes - Ketones
+    if (c.ketones || c.previousKetones || c.currentAssessment?.ketones) {
+      const currentKet = c.ketones ?? c.currentAssessment?.ketones;
+      const prevKet = c.previousKetones ?? (c.assessment?.ketones || (isEn ? "Negative" : "سلبي"));
+      diffs.push({
+        id: "ketones",
+        icon: "🧪",
+        label: isEn ? "Blood / Urine Ketones" : "الكيتونات (بالدم / البول)",
+        prevVal: String(prevKet),
+        prevTime: baselineTime,
+        prevSource: baselineSource,
+        newVal: String(currentKet || "--"),
+        newTime: revisedTime,
+        newSource: revisedSource,
+        deltaText: isEn ? "Updated 🔄" : "محدث 🔄",
+        isChanged: String(currentKet) !== String(prevKet)
+      });
+    }
+
+    // 13. Diabetes - Active Insulin Regimen
+    if (c.activeInsulinRegimen || c.previousInsulinRegimen || c.currentAssessment?.activeInsulinRegimen) {
+      const currIns = c.activeInsulinRegimen ?? c.currentAssessment?.activeInsulinRegimen;
+      const prevIns = c.previousInsulinRegimen ?? (c.assessment?.activeInsulinRegimen || (isEn ? "None / Not provided" : "لا يوجد / غير مسجل"));
+      diffs.push({
+        id: "activeInsulinRegimen",
+        icon: "💉",
+        label: isEn ? "Active Insulin Regimen" : "بروتوكول الأنسولين النشط",
+        prevVal: String(prevIns),
+        prevTime: baselineTime,
+        prevSource: baselineSource,
+        newVal: String(currIns || "--"),
+        newTime: revisedTime,
+        newSource: revisedSource,
+        deltaText: isEn ? "Regimen Details 📋" : "تفاصيل البروتوكول 📋",
+        isChanged: String(currIns) !== String(prevIns)
+      });
+    }
+
     return diffs;
   }
 

@@ -91,31 +91,38 @@
   const ROLE_ALLOWED_SCREENS = {
     [ROLES.PATIENT]: [
       "patient", "consent", "profile", "assessment", "pending", "result",
-      "history", "appointments", "feedback", "assistant", "report", "verify-report"
+      "history", "appointments", "feedback", "assistant", "report", "verify-report",
+      "diabetes", "hypertension", "blood-disorders", "obesity"
     ],
     [ROLES.DOCTOR_PENDING]: [
-      "patient", "verification", "history", "appointments", "feedback", "report", "profile", "verify-report"
+      "patient", "verification", "history", "appointments", "feedback", "report", "profile", "verify-report",
+      "diabetes", "hypertension", "blood-disorders", "obesity"
     ],
     [ROLES.DOCTOR]: [
-      "doctor", "verification", "history", "appointments", "feedback", "report", "profile", "kpi", "patient", "verify-report"
+      "doctor", "verification", "history", "appointments", "feedback", "report", "profile", "kpi", "patient", "verify-report",
+      "diabetes", "hypertension", "blood-disorders", "obesity"
     ],
     [ROLES.CLINIC_ADMIN]: [
-      "profile", "history", "appointments", "feedback", "doctor", "report", "admin", "audit", "kpi", "verify-report"
+      "profile", "history", "appointments", "feedback", "doctor", "report", "admin", "audit", "kpi", "verify-report",
+      "diabetes", "hypertension", "blood-disorders", "obesity"
     ],
     [ROLES.SUPPORT]: [
-      "profile", "kpi", "verify-report"
+      "profile", "kpi", "verify-report",
+      "diabetes", "hypertension", "blood-disorders", "obesity"
     ],
     [ROLES.SUPER_ADMIN]: [
       "patient", "consent", "profile", "assessment", "pending", "result",
       "history", "appointments", "feedback", "assistant", "verification",
-      "doctor", "kpi", "report", "admin", "audit", "verify-report"
+      "doctor", "kpi", "report", "admin", "audit", "verify-report",
+      "diabetes", "hypertension", "blood-disorders", "obesity"
     ]
   };
 
   const AUTH_REQUIRED_SCREENS = [
     "consent", "profile", "assessment", "pending", "result",
     "history", "appointments", "feedback", "assistant", "report",
-    "verification", "doctor", "kpi", "admin", "audit"
+    "verification", "doctor", "kpi", "admin", "audit",
+    "diabetes", "hypertension", "blood-disorders", "obesity"
   ];
 
   const VERIFICATION_REQUIRED_SCREENS = [

@@ -4611,7 +4611,14 @@ async function selectDoctorCase(id) {
     oxygenLevel: c.oxygenLevel ?? c.o2 ?? null,
     o2: c.o2 ?? c.oxygenLevel ?? null,
     patientResponse: c.patientResponse || null,
-    assignedDoctorId: c.assignedDoctorId || null
+    assignedDoctorId: c.assignedDoctorId || null,
+    fastingGlucose: c.fastingGlucose ?? null,
+    postprandialGlucose: c.postprandialGlucose ?? null,
+    bloodGlucose: c.bloodGlucose ?? null,
+    hba1c: c.hba1c ?? null,
+    ketones: c.ketones ?? null,
+    activeInsulinRegimen: c.activeInsulinRegimen ?? null,
+    diabetesType: c.diabetesType ?? null
   };
 
   reviewPanel.style.display = "block";
@@ -7426,6 +7433,12 @@ function showScreen(name) {
     const verifyContainer = document.getElementById("verifyReportContainer") || document.getElementById("reportContainer");
     if (window.HealthVibes?.ReportsUI?.renderVerificationView) {
       window.HealthVibes.ReportsUI.renderVerificationView(verifyContainer, ref);
+    }
+  }
+  if (name === "diabetes") {
+    const diabetesContainer = document.getElementById("screen-diabetes");
+    if (window.HealthVibes?.DiabetesUI?.renderScreen && diabetesContainer) {
+      window.HealthVibes.DiabetesUI.renderScreen(diabetesContainer);
     }
   }
   if (name === "report") {
