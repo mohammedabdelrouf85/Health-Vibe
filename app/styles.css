@@ -6801,3 +6801,194 @@ body.dark .thread-direct-action-card {
   font-family: monospace;
 }
 
+/* =============================================================================
+   PATIENT BLOOD PRESSURE HISTORY & TREND VIEW
+   ============================================================================= */
+
+.patient-bp-view {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  animation: fadeIn 0.25s ease-out;
+}
+
+.bp-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.bp-metric-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.bp-metric-card:hover {
+  transform: translateY(-1px);
+  border-color: var(--teal);
+}
+
+.bp-clinical-disclaimer-banner {
+  background: rgba(9, 184, 182, 0.08);
+  border: 1px solid var(--teal);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.bp-chart-card-wrapper {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.1);
+}
+
+/* Insufficient Data State Card (When < 2 measurements) */
+.bp-insufficient-data-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 24px 20px;
+  background: var(--surface-2);
+  border: 1.5px dashed var(--line);
+  border-radius: 12px;
+  text-align: start;
+}
+
+.bp-insufficient-icon {
+  font-size: 32px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.bp-insufficient-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0 0 6px;
+}
+
+.bp-insufficient-desc {
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.55;
+  margin: 0 0 12px;
+}
+
+.bp-insufficient-status {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.bp-count-pill,
+.bp-unit-pill {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+
+/* Chart SVG Styles */
+.bp-trend-svg {
+  overflow: visible;
+  touch-action: pan-x pan-y;
+}
+
+.chart-dot {
+  cursor: pointer;
+  transition: r 0.2s ease, stroke-width 0.2s ease;
+}
+
+.chart-point-group:hover .chart-dot,
+.chart-point-group:focus .chart-dot {
+  r: 6.5;
+  stroke: #ffffff;
+  stroke-width: 2.5;
+  outline: none;
+}
+
+/* Timeline Cards */
+.bp-timeline-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.bp-timeline-card:hover {
+  border-color: var(--teal);
+  transform: translateY(-1px);
+}
+
+.bp-timeline-card.bp-card-incomplete {
+  border-color: var(--amber);
+  background: rgba(240, 180, 41, 0.03);
+}
+
+.bp-source-badge.badge-bt {
+  border-color: rgba(9, 184, 182, 0.3);
+  color: var(--teal);
+}
+
+.bp-source-badge.badge-clinic {
+  border-color: rgba(44, 197, 112, 0.3);
+  color: var(--green);
+}
+
+.bp-source-badge.badge-manual {
+  border-color: rgba(129, 140, 248, 0.3);
+  color: #818cf8;
+}
+
+.bp-source-badge.badge-ocr {
+  border-color: rgba(240, 180, 41, 0.3);
+  color: var(--amber);
+}
+
+.bp-source-badge.badge-auto {
+  border-color: rgba(56, 189, 248, 0.3);
+  color: #38bdf8;
+}
+
+.bp-gap-alert-card {
+  animation: pulseSlow 3s infinite ease-in-out;
+}
+
+/* Responsive Breakpoints */
+@media (max-width: 640px) {
+  .bp-metrics-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .bp-view-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .bp-header-actions {
+    justify-content: flex-start;
+  }
+
+  .bp-insufficient-data-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .bp-pressure-reading {
+    font-size: 20px !important;
+  }
+}
+

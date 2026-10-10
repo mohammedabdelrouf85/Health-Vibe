@@ -3464,7 +3464,9 @@ async function updateCaseStatus(id, newStatus, note, extraFields = {}) {
         doctorSpecialty: extraFields.doctorSpecialty || "",
         doctorLicense: extraFields.doctorLicense || "",
         clinicName: extraFields.clinicName || "",
-        reportRef: extraFields.reportRef || ""
+        reportRef: extraFields.reportRef || "",
+        reviewedRevision: extraFields.reviewedRevision !== undefined ? extraFields.reviewedRevision : null,
+        expectedRevision: extraFields.expectedRevision !== undefined ? extraFields.expectedRevision : null
       })
     });
     if (!res || res.success !== true || res.saved !== true) {
@@ -3488,6 +3490,19 @@ async function updateCaseStatus(id, newStatus, note, extraFields = {}) {
   } catch (err) {
     console.error("❌ Error updating case status through backend:", err);
     if (handleServerPermissionDenied(err, "Update Case Status")) return false;
+    if (err && (err.status === 409 || err.code === 'STALE_CLINICAL_REVISION' || String(err.message || '').includes('STALE_CLINICAL_REVISION'))) {
+      const targetCase = (typeof cases !== "undefined" && Array.isArray(cases) ? cases : (state?.doctorQueue || [])).find(item => item.id === id);
+      if (targetCase) {
+        targetCase.hasNewInfo = true;
+        targetCase.isRevisionStale = true;
+        if (err.currentRevision) targetCase.clinicalRevision = err.currentRevision;
+      }
+      showToast(isEn
+        ? "Clinical data has changed since review. Please review the updated revision before approval."
+        : "تغيرت البيانات السريرية للحالة منذ المراجعة. يرجى مراجعة وتأكيد المراجعة المحدثة قبل الاعتماد.");
+      if (typeof selectDoctorCase === "function") selectDoctorCase(id);
+      return false;
+    }
     showToast(getAuthErrorMessage(err) || (isEn ? "Failed to update case status." : "فشل تحديث حالة الملف الطبي."));
     return false;
   } finally {
@@ -3665,19 +3680,28 @@ function isCaseAssignedToCurrentDoctor(c) {
 function formatCaseAnswers(c, isEn) {
   const assessment = c?.assessment || {};
   const fields = [
+    [isEn ? "Chief complaint" : "الشكوى الرئيسية", c?.chiefComplaint || assessment.chiefComplaint],
     [isEn ? "Symptoms" : "الأعراض", c?.symptomsEn || c?.symptoms || assessment.symptomsText],
     [isEn ? "Patient notes" : "ملاحظات المريض", c?.notes || c?.patientNotes || assessment.notes],
     [isEn ? "Duration" : "مدة الأعراض", c?.durationEn || c?.duration || assessment.duration],
     [isEn ? "Medications reported by patient" : "الأدوية التي ذكرها المريض", assessment.medications || c?.patientMedications],
+    [isEn ? "Hypertension history" : "التاريخ المرضي للضغط", c?.hypertensionHistory || assessment.hypertensionHistory],
+    [isEn ? "Lifestyle & risk factors" : "نمط الحياة وعوامل الخطورة", c?.lifestyleFactors || assessment.lifestyleFactors],
+    [isEn ? "Family medical history" : "التاريخ العائلي المرضي", c?.familyHistory || assessment.familyHistory],
     [isEn ? "Follow-up request/response" : "المتابعة والردود", c?.patientResponse || c?.followUpResponse || c?.moreInfoResponse]
   ];
   if (assessment.answers && typeof assessment.answers === "object") {
     Object.entries(assessment.answers).forEach(([key, value]) => fields.push([key, value]));
   }
+  if (c?.answers && typeof c.answers === "object") {
+    Object.entries(c.answers).forEach(([key, value]) => {
+      if (!fields.some(([k]) => k === key)) fields.push([key, value]);
+    });
+  }
   return fields
     .filter(([, value]) => value !== undefined && value !== null && String(value).trim())
     .map(([label, value]) => `
-      <div><span>${escapeHtml(label)}</span><strong>${escapeHtml(Array.isArray(value) ? value.join(", ") : value)}</strong></div>
+      <div><span>${escapeHtml(label)}</span><strong>${escapeHtml(Array.isArray(value) ? value.join(", ") : (typeof value === "object" ? JSON.stringify(value) : value))}</strong></div>
     `).join("") || `<div><span>${isEn ? "Answers" : "الإجابات"}</span><strong>${isEn ? "Not recorded" : "غير مسجل"}</strong></div>`;
 }
 
@@ -3820,6 +3844,9 @@ window.generateAndApproveReport = async function(id) {
   }
 
   const reportRef = `HV-REP-${id.slice(-8).toUpperCase()}`;
+  const currentCaseRevision = window.HealthVibes?.DoctorUI?.getCaseRevisionNumber
+    ? window.HealthVibes.DoctorUI.getCaseRevisionNumber(targetCase)
+    : (targetCase ? (targetCase.clinicalRevision || 1) : 1);
 
   const payload = {
     clinicalDiagnosis,
@@ -3829,7 +3856,9 @@ window.generateAndApproveReport = async function(id) {
     recommendations,
     recommendation: recommendations.join("\n"),
     reportRef,
-    reportGeneratedAt: new Date().toISOString()
+    reportGeneratedAt: new Date().toISOString(),
+    reviewedRevision: currentCaseRevision,
+    expectedRevision: currentCaseRevision
   };
 
   const success = await updateCaseStatus(id, CASE_STATUS.APPROVED, clinicalDiagnosis, payload);
@@ -4754,6 +4783,22 @@ async function selectDoctorCase(id) {
     </div>
   `;
 
+  const bpHistoryHtml = (window.HealthVibes?.DoctorUI?.renderHypertensionBpHistorySection)
+    ? window.HealthVibes.DoctorUI.renderHypertensionBpHistorySection(c, isEn)
+    : '';
+
+  const attachmentsHtml = (window.HealthVibes?.DoctorUI?.renderAttachmentsSection)
+    ? window.HealthVibes.DoctorUI.renderAttachmentsSection(c, isEn)
+    : '';
+
+  const internalNotesHtml = (window.HealthVibes?.DoctorUI?.renderInternalDoctorNotesSection)
+    ? window.HealthVibes.DoctorUI.renderInternalDoctorNotesSection(c, isEn)
+    : '';
+
+  const previousReportsHtml = (window.HealthVibes?.DoctorUI?.renderPreviousApprovedReportsSection)
+    ? window.HealthVibes.DoctorUI.renderPreviousApprovedReportsSection(c, isEn)
+    : '';
+
   // 1. Grouped Clinical Inputs & Triage Assessment
   const inputsSectionHtml = `
     <section class="clinical-group-card" id="docSection-inputs" role="region" aria-label="${isEn ? 'Clinical Inputs & Triage Assessment' : 'المدخلات السريرية والفرز الطبي'}">
@@ -4772,8 +4817,10 @@ async function selectDoctorCase(id) {
         <div><span>${isEn ? 'Oxygen Level' : 'نسبة الأكسجين'}</span><strong style="${o2Value < 90 ? 'color: #ef4444;' : ''}">${o2Value || '--'}%${isDemoCase ? ' (Demo Data)' : ''}</strong></div>
         <div><span>${isEn ? 'Duration' : 'مدة الأعراض'}</span><strong>${isEn ? c.durationEn : c.duration}${isDemoCase ? ' (Demo Data)' : ''}</strong></div>
       </div>
+      ${bpHistoryHtml}
       <h5 style="margin: 16px 0 6px; font-size: 13.5px; font-weight: 700; color: var(--ink);">${isEn ? 'Patient History & Answers' : 'تاريخ المريض وإجاباته'}</h5>
       ${patientDataHtml}
+      ${attachmentsHtml}
       ${triggeredRulesHtml}
     </section>
   `;
@@ -4813,6 +4860,8 @@ async function selectDoctorCase(id) {
 
       <h5 style="margin: 0 0 8px; font-size: 13px; font-weight: 700; color: var(--muted);">${isEn ? 'Previously Recorded Clinical Record' : 'الملاحظات السريرية المسجلة سابقاً'}</h5>
       ${doctorNotesHtml}
+      ${internalNotesHtml}
+      ${previousReportsHtml}
 
       <!-- DYNAMIC CLINICAL REPORT BUILDER STATION -->
       <div class="doctor-report-builder-card" style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin: 16px 0;">
@@ -7230,6 +7279,9 @@ function showScreen(name) {
   if (name === "history") {
     renderPatientHistory();
   }
+  if (name === "hypertension") {
+    renderPatientBpDashboard();
+  }
   if (name === "admin") {
     renderAdminMetrics();
     renderAdminApplications();
@@ -8971,6 +9023,240 @@ async function renderPatientHistory() {
     `;
   }
 }
+
+// ============================================================================
+// 🩸 PATIENT BLOOD PRESSURE HISTORY & TREND CONTROLLER
+// ============================================================================
+
+async function renderPatientBpDashboard() {
+  const container = document.getElementById("patientBpViewContainer");
+  if (!container) return;
+
+  const isEn = (currentLanguage || "ar") === "en";
+  const user = (typeof auth !== "undefined" && auth) ? auth.currentUser : null;
+  const patientId = user ? user.uid : "usr_patient_demo";
+  const patientName = user?.displayName || user?.email?.split("@")[0] || (isEn ? "Patient" : "مريض");
+
+  // Initial loading indicator
+  container.innerHTML = `
+    <div style="text-align: center; padding: 36px 16px; color: var(--muted);">
+      <div class="spinner" style="margin: 0 auto 12px; width: 24px; height: 24px;"></div>
+      <p style="font-size: 13.5px; margin: 0;">${isEn ? "Loading persisted blood-pressure history..." : "جاري استرجاع سجل قياسات ضغط الدم المسجلة..."}</p>
+    </div>
+  `;
+
+  let readings = [];
+
+  // 1. In-memory / direct service check (for Node environments or direct service wiring)
+  if (typeof window !== "undefined" && window.chronicHypertensionService && typeof window.chronicHypertensionService.getPatientReadings === "function") {
+    readings = window.chronicHypertensionService.getPatientReadings(patientId) || [];
+  } else if (typeof global !== "undefined" && global.chronicHypertensionService && typeof global.chronicHypertensionService.getPatientReadings === "function") {
+    readings = global.chronicHypertensionService.getPatientReadings(patientId) || [];
+  }
+
+  // 2. Authoritative Backend REST API query
+  if (readings.length === 0 && user && typeof fetch === "function") {
+    try {
+      const token = await (user?.getIdToken ? user.getIdToken() : Promise.resolve(null));
+      const headers = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const res = await fetch(`/api/chronic/hypertension/readings?limit=100`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.readings)) {
+          readings = data.readings;
+        }
+      }
+    } catch (e) {
+      // Backend request error - will fall back to Firestore if available
+    }
+  }
+
+  // 3. Fallback to Firestore cases observations if any exist for this patient
+  if (readings.length === 0 && user && typeof db !== "undefined" && db) {
+    try {
+      const snap = await db.collection("cases").where("patientId", "==", user.uid).limit(25).get();
+      if (!snap.empty) {
+        snap.forEach(doc => {
+          const c = doc.data();
+          if (Array.isArray(c.bpReadings)) {
+            readings.push(...c.bpReadings);
+          } else if (Array.isArray(c.bloodPressureHistory)) {
+            readings.push(...c.bloodPressureHistory);
+          } else if ((c.systolic || c.systolicBp) && (c.diastolic || c.diastolicBp)) {
+            readings.push({
+              id: `case_bp_${doc.id}`,
+              systolic: Number(c.systolic || c.systolicBp),
+              diastolic: Number(c.diastolic || c.diastolicBp),
+              pulse: Number(c.heartRate || c.pulse) || null,
+              unit: c.bpUnit || "mmHg",
+              measuredAt: c.bpMeasuredAt || c.submittedAt || c.createdAt || new Date().toISOString(),
+              measurementSource: c.bpSource || c.measurementSource || "manual_patient_log",
+              context: {
+                arm: c.bpArm || "right_arm",
+                posture: c.bpPosture || "sitting",
+                timing: c.bpTiming || "morning"
+              }
+            });
+          }
+        });
+      }
+    } catch (e) {
+      console.warn("Could not query patient cases for BP history:", e);
+    }
+  }
+
+  // 4. Render with PatientUI module
+  if (window.HealthVibes?.PatientUI?.renderPatientBpTrendView) {
+    window.HealthVibes.PatientUI.renderPatientBpTrendView(container, {
+      readings,
+      isEn,
+      patientName
+    });
+  } else {
+    container.innerHTML = `
+      <div style="padding: 20px; text-align: center; color: var(--amber);">
+        <span>⚠️</span> ${isEn ? "Patient Blood Pressure UI module not loaded." : "تعذر تحميل واجهة قياسات ضغط الدم."}
+      </div>
+    `;
+  }
+}
+
+function openLogBpModal() {
+  const modal = document.getElementById("patientLogBpModal");
+  if (!modal) return;
+  modal.style.display = "flex";
+  modal.setAttribute("aria-hidden", "false");
+  const sysInput = document.getElementById("bpInputSystolic");
+  if (sysInput) sysInput.focus();
+}
+
+function closeLogBpModal() {
+  const modal = document.getElementById("patientLogBpModal");
+  if (!modal) return;
+  modal.style.display = "none";
+  modal.setAttribute("aria-hidden", "true");
+}
+
+async function submitPatientBpMeasurement() {
+  const isEn = (currentLanguage || "ar") === "en";
+  const user = (typeof auth !== "undefined" && auth) ? auth.currentUser : null;
+  const patientId = user ? user.uid : "usr_patient_demo";
+
+  const sysEl = document.getElementById("bpInputSystolic");
+  const diaEl = document.getElementById("bpInputDiastolic");
+  const pulEl = document.getElementById("bpInputPulse");
+  const srcEl = document.getElementById("bpInputSource");
+  const timEl = document.getElementById("bpInputTiming");
+  const armEl = document.getElementById("bpInputArm");
+
+  const systolic = Number(sysEl?.value);
+  const diastolic = Number(diaEl?.value);
+  const pulse = pulEl?.value ? Number(pulEl.value) : null;
+  const measurementSource = srcEl?.value || "manual_patient_log";
+  const timing = timEl?.value || "morning";
+  const arm = armEl?.value || "right_arm";
+
+  if (!systolic || isNaN(systolic) || systolic < 60 || systolic > 260) {
+    if (typeof showToast === "function") {
+      showToast(isEn ? "Please enter a valid systolic value (60 - 260 mmHg)." : "يرجى إدخال قيمة صحيحة للضغط الانقباضي (60 - 260 مم زئبق).");
+    }
+    return;
+  }
+
+  if (!diastolic || isNaN(diastolic) || diastolic < 40 || diastolic > 160) {
+    if (typeof showToast === "function") {
+      showToast(isEn ? "Please enter a valid diastolic value (40 - 160 mmHg)." : "يرجى إدخال قيمة صحيحة للضغط الانبساطي (40 - 160 مم زئبق).");
+    }
+    return;
+  }
+
+  if (systolic <= diastolic) {
+    if (typeof showToast === "function") {
+      showToast(isEn ? "Systolic must be strictly greater than diastolic." : "يجب أن يكون الضغط الانقباضي أعلى من الانبساطي.");
+    }
+    return;
+  }
+
+  const payload = {
+    patientId,
+    systolic,
+    diastolic,
+    pulse,
+    unit: "mmHg",
+    measurementSource,
+    context: {
+      timing,
+      arm,
+      posture: "sitting"
+    },
+    measuredAt: new Date().toISOString()
+  };
+
+  const submitBtn = document.getElementById("btnSubmitBpReading");
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = isEn ? "Saving..." : "جاري الحفظ...";
+  }
+
+  try {
+    let saved = false;
+
+    // Direct service call if present
+    const svc = window.chronicHypertensionService || global.chronicHypertensionService;
+    if (svc && typeof svc.recordBloodPressureReading === "function") {
+      await svc.recordBloodPressureReading(payload);
+      saved = true;
+    }
+
+    // Backend REST API call
+    if (!saved && typeof fetch === "function") {
+      const token = await (user?.getIdToken ? user.getIdToken() : Promise.resolve(null));
+      const headers = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const res = await fetch("/api/chronic/hypertension/readings", {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        saved = true;
+      }
+    }
+
+    closeLogBpModal();
+    if (typeof showToast === "function") {
+      showToast(isEn ? "Measurement saved and persisted successfully." : "تم حفظ قياس ضغط الدم وتثبيته بنجاح.");
+    }
+
+    // Reset inputs
+    if (sysEl) sysEl.value = "";
+    if (diaEl) diaEl.value = "";
+    if (pulEl) pulEl.value = "";
+
+    // Refresh BP dashboard
+    await renderPatientBpDashboard();
+  } catch (err) {
+    console.error("submitPatientBpMeasurement error:", err);
+    if (typeof showToast === "function") {
+      showToast(isEn ? "Failed to record measurement. Please retry." : "تعذر حفظ القياس. يرجى إعادة المحاولة.");
+    }
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = isEn ? "Save" : "حفظ القياس / Save";
+    }
+  }
+}
+
+// Global window registration
+window.renderPatientBpDashboard = renderPatientBpDashboard;
+window.loadPatientBpDashboard = renderPatientBpDashboard;
+window.openLogBpModal = openLogBpModal;
+window.closeLogBpModal = closeLogBpModal;
+window.submitPatientBpMeasurement = submitPatientBpMeasurement;
 
 // ============================================================================
 // 📅 CLINICAL APPOINTMENTS BOOKING & MANAGEMENT ENGINE

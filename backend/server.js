@@ -5888,7 +5888,9 @@ async function executeDoctorTransition({
   doctorLicense,
   clinicName,
   reportRef,
-  reportGeneratedAt
+  reportGeneratedAt,
+  reviewedRevision,
+  expectedRevision
 }) {
   const ALLOWED_DOCTOR_STATUSES = [
     'under_review',
@@ -6000,6 +6002,44 @@ async function executeDoctorTransition({
                 body: {
                   error: 'DOCTOR_CLINIC_MEMBERSHIP_REQUIRED',
                   message: `Doctor does not hold an approved active membership for clinic '${caseClinicId}' handling this case.`
+                }
+              };
+            }
+          }
+
+          // Stale clinical revision guard: Reject stale approval requests when clinical data changes
+          if (targetStatus === 'approved') {
+            const currentCaseRevision = Number(caseData.clinicalRevision || 1);
+            const effectiveReviewedRevision = reviewedRevision !== undefined && reviewedRevision !== null
+              ? Number(reviewedRevision)
+              : (expectedRevision !== undefined && expectedRevision !== null
+                ? Number(expectedRevision)
+                : (req.body?.reviewedRevision !== undefined && req.body?.reviewedRevision !== null
+                  ? Number(req.body.reviewedRevision)
+                  : (req.body?.expectedRevision !== undefined && req.body?.expectedRevision !== null
+                    ? Number(req.body.expectedRevision)
+                    : null)));
+
+            if (effectiveReviewedRevision !== null && effectiveReviewedRevision < currentCaseRevision) {
+              return {
+                statusCode: 409,
+                body: {
+                  error: 'STALE_CLINICAL_REVISION',
+                  message: `The clinical case data has changed to revision ${currentCaseRevision} (reviewed: ${effectiveReviewedRevision}). Please review the latest revision before approval.`,
+                  currentRevision: currentCaseRevision,
+                  reviewedRevision: effectiveReviewedRevision
+                }
+              };
+            }
+
+            if ((caseData.isRevisionStale || caseData.hasNewInfo) && (effectiveReviewedRevision === null || effectiveReviewedRevision < currentCaseRevision)) {
+              return {
+                statusCode: 409,
+                body: {
+                  error: 'STALE_CLINICAL_REVISION',
+                  message: 'New clinical data has been received. Please review and acknowledge the latest revision before approval.',
+                  currentRevision: currentCaseRevision,
+                  reviewedRevision: effectiveReviewedRevision
                 }
               };
             }
@@ -6282,12 +6322,14 @@ app.post('/api/doctor/transition-case-status', requireAuth, requireVerifiedEmail
   const {
     caseId, targetStatus, note, clinicalNotes, clinicalDiagnosis,
     medications, recommendation, recommendations,
-    approvingDoctorName, doctorSpecialty, doctorLicense, clinicName, reportRef, reportGeneratedAt
+    approvingDoctorName, doctorSpecialty, doctorLicense, clinicName, reportRef, reportGeneratedAt,
+    reviewedRevision, expectedRevision
   } = req.body;
   return executeDoctorTransition({
     req, res, caseId, targetStatus, note, clinicalNotes, clinicalDiagnosis,
     medications, recommendation, recommendations,
-    approvingDoctorName, doctorSpecialty, doctorLicense, clinicName, reportRef, reportGeneratedAt
+    approvingDoctorName, doctorSpecialty, doctorLicense, clinicName, reportRef, reportGeneratedAt,
+    reviewedRevision, expectedRevision
   });
 });
 
@@ -6299,12 +6341,14 @@ app.post('/api/doctor/approve-clinical-case', requireAuth, requireVerifiedEmail,
   const {
     caseId, note, clinicalNotes, clinicalDiagnosis,
     medications, recommendation, recommendations,
-    approvingDoctorName, doctorSpecialty, doctorLicense, clinicName, reportRef, reportGeneratedAt
+    approvingDoctorName, doctorSpecialty, doctorLicense, clinicName, reportRef, reportGeneratedAt,
+    reviewedRevision, expectedRevision
   } = req.body;
   return executeDoctorTransition({
     req, res, caseId, targetStatus: 'approved', note, clinicalNotes, clinicalDiagnosis,
     medications, recommendation, recommendations,
-    approvingDoctorName, doctorSpecialty, doctorLicense, clinicName, reportRef, reportGeneratedAt
+    approvingDoctorName, doctorSpecialty, doctorLicense, clinicName, reportRef, reportGeneratedAt,
+    reviewedRevision, expectedRevision
   });
 });
 
@@ -10678,34 +10722,65 @@ app.get('/api/chronic/specialties/readiness', requireAuth, (req, res) => {
  * POST /api/chronic/hypertension/readings
  * Ingests a new blood pressure reading with real-time classification, obstetric pre-eclampsia safeguards & alert triage.
  */
-app.post('/api/chronic/hypertension/readings', requireAuth, async (req, res) => {
+app.post(['/api/chronic/hypertension/readings', '/api/cases/:caseId/blood-pressure'], requireAuth, async (req, res) => {
   try {
     const {
-      patientId, patientName, clinicId,
-      systolic, diastolic, pulse,
+      patientId, caseId: bodyCaseId, patientName, clinicId,
+      systolic, diastolic, pulse, unit,
+      measuredAt, measurementTime, dateTime,
       measurementSource, arm, posture, cuffSize, timing,
+      activity, location, bodyPosition, mealTiming, context,
       symptoms, medicationTaken, patientNotes,
+      author, provenance,
       pregnancyStage, ageGroup, specialtyConsent, attachedFiles, linkedAppointmentId
     } = req.body || {};
 
-    const targetPatientId = patientId || req.user.uid;
+    const targetCaseId = req.params.caseId || bodyCaseId || null;
+    let targetPatientId = patientId || req.user.uid;
 
-    if (req.user.uid !== targetPatientId && req.user.role !== 'doctor' && req.user.role !== 'clinic_admin' && req.user.role !== 'super_admin') {
-      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Unauthorized to record reading for target patient.' });
+    // If caseId is provided, verify case existence and ownership server-side
+    let caseRef = null;
+    let caseData = null;
+    if (targetCaseId && db) {
+      caseRef = db.collection('cases').doc(targetCaseId);
+      const caseSnap = await caseRef.get();
+      if (!caseSnap.exists) {
+        return res.status(404).json({ error: 'CASE_NOT_FOUND', message: `Case ${targetCaseId} not found.` });
+      }
+      caseData = caseSnap.data();
+      if (caseData.patientId) {
+        targetPatientId = caseData.patientId;
+      }
+      clinicalInfoExchangeService.registerCase({ id: targetCaseId, ...caseData });
+    }
+
+    // Server-side authorization check
+    if (req.user.uid !== targetPatientId && req.user.role !== 'doctor' && req.user.role !== 'clinic_admin' && req.user.role !== 'super_admin' && req.user.role !== 'owner') {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Unauthorized to record blood-pressure reading for target patient or case.' });
     }
 
     const reading = await chronicHypertensionService.recordBloodPressureReading({
       patientId: targetPatientId,
-      patientName: patientName || req.user.name || 'Patient',
+      caseId: targetCaseId,
+      patientName: patientName || req.user.displayName || req.user.name || 'Patient',
       clinicId: clinicId || req.user.clinicId,
       systolic,
       diastolic,
       pulse,
+      unit,
+      measuredAt: measuredAt || measurementTime || dateTime,
       measurementSource,
       arm,
       posture,
       cuffSize,
       timing,
+      activity,
+      location,
+      bodyPosition,
+      mealTiming,
+      context,
+      author,
+      provenance,
       symptoms,
       medicationTaken,
       patientNotes,
@@ -10714,12 +10789,63 @@ app.post('/api/chronic/hypertension/readings', requireAuth, async (req, res) => 
       ageGroup,
       specialtyConsent,
       attachedFiles,
-      linkedAppointmentId
+      linkedAppointmentId,
+      authorizedUser: req.user
     });
+
+    // If Firestore is connected and linked to a case, update case and append observation
+    if (db && caseRef && targetCaseId) {
+      await caseRef.update({
+        systolicBp: reading.systolic,
+        diastolicBp: reading.diastolic,
+        bp: `${reading.systolic}/${reading.diastolic} mmHg`,
+        'currentAssessment.systolicBp': reading.systolic,
+        'currentAssessment.diastolicBp': reading.diastolic,
+        'currentAssessment.bp': `${reading.systolic}/${reading.diastolic} mmHg`,
+        clinicalRevision: reading.clinicalRevision,
+        lastRevisionAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      await caseRef.collection('observations').add({
+        readingId: reading.id,
+        type: 'bloodPressure',
+        systolic: reading.systolic,
+        diastolic: reading.diastolic,
+        unit: reading.unit,
+        measuredAt: reading.measuredAt,
+        measurementSource: reading.measurementSource,
+        author: reading.author,
+        provenance: reading.provenance,
+        context: reading.context,
+        clinicalRevision: reading.clinicalRevision,
+        recordedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+    }
 
     res.status(201).json({ success: true, reading });
   } catch (err) {
-    res.status(400).json({ error: 'RECORD_READING_FAILED', message: err.message });
+    res.status(err.statusCode || 400).json({ error: err.code || 'RECORD_READING_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/chronic/hypertension/case/:caseId/readings
+ * Retrieves all blood-pressure readings linked to a specific case.
+ */
+app.get('/api/chronic/hypertension/case/:caseId/readings', requireAuth, (req, res) => {
+  try {
+    const { caseId } = req.params;
+    const readings = chronicHypertensionService.getCaseReadings(caseId);
+    if (readings.length > 0) {
+      const patientId = readings[0].patientId;
+      if (req.user.uid !== patientId && req.user.role !== 'doctor' && req.user.role !== 'clinic_admin' && req.user.role !== 'super_admin' && req.user.role !== 'owner') {
+        return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Unauthorized to view readings for this case.' });
+      }
+    }
+    res.json({ success: true, count: readings.length, readings });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
   }
 });
 
@@ -10760,6 +10886,25 @@ app.get('/api/chronic/hypertension/patient/:patientId/history', requireAuth, (re
     res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
   }
 });
+
+/**
+ * GET /api/chronic/hypertension/readings
+ * Retrieves persisted blood pressure readings for authenticated patient or authorized doctor.
+ */
+app.get('/api/chronic/hypertension/readings', requireAuth, (req, res) => {
+  try {
+    const targetPatientId = req.query.patientId || req.user.uid;
+    if (req.user.uid !== targetPatientId && req.user.role !== 'doctor' && req.user.role !== 'clinic_admin' && req.user.role !== 'super_admin') {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Unauthorized to view patient readings.' });
+    }
+    const limit = parseInt(req.query.limit, 10) || 50;
+    const readings = chronicHypertensionService.getPatientReadings(targetPatientId, limit);
+    res.json({ success: true, count: readings.length, readings });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
 
 /**
  * POST /api/chronic/hypertension/patient/:patientId/followup-plan

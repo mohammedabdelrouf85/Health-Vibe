@@ -108,6 +108,74 @@
   }
 
   /**
+   * Parses and validates systolic blood pressure (60 - 260 mmHg).
+   * Does not silently convert invalid text, rejects negative and empty inputs, supports Arabic numerals & decimals.
+   * Never invents a blood-pressure measurement.
+   * @param {*} value
+   * @returns {{ ok: boolean, value: number|null, unit: string, reason: string|null }}
+   */
+  function parseStrictSystolicInput(value) {
+    if (value === null || value === undefined) return { ok: false, value: null, unit: "mmHg", reason: "empty" };
+    if (typeof value === "boolean" || (typeof value === "object" && !value.isUnknown)) return { ok: false, value: null, unit: "mmHg", reason: "unsupported" };
+    const raw = String(value ?? "").trim();
+    if (!raw) return { ok: false, value: null, unit: "mmHg", reason: "empty" };
+    if (/^(unknown|غير معروف|غير معلوم|not-provided|none)$/i.test(raw)) return { ok: false, value: null, unit: "mmHg", reason: "unknown" };
+    const normalized = normalizeArabicIndicDigits(raw).replace(/\s*mmHg$/i, "").replace(/[\u066B,]/g, ".").trim();
+    if (normalized.startsWith("-")) return { ok: false, value: null, unit: "mmHg", reason: "negative" };
+    if (!/^\d+(?:\.\d+)?$/.test(normalized)) return { ok: false, value: null, unit: "mmHg", reason: "format" };
+    const parsed = Number(normalized);
+    if (!Number.isFinite(parsed) || isNaN(parsed)) return { ok: false, value: null, unit: "mmHg", reason: "format" };
+    const rounded = Math.round(parsed * 10) / 10;
+    if (rounded < 60 || rounded > 260) {
+      return { ok: false, value: rounded, unit: "mmHg", reason: rounded > 260 ? "above-range" : "below-range" };
+    }
+    return { ok: true, value: rounded, unit: "mmHg", reason: null };
+  }
+
+  /**
+   * Parses and validates diastolic blood pressure (40 - 160 mmHg).
+   * @param {*} value
+   * @returns {{ ok: boolean, value: number|null, unit: string, reason: string|null }}
+   */
+  function parseStrictDiastolicInput(value) {
+    if (value === null || value === undefined) return { ok: false, value: null, unit: "mmHg", reason: "empty" };
+    if (typeof value === "boolean" || (typeof value === "object" && !value.isUnknown)) return { ok: false, value: null, unit: "mmHg", reason: "unsupported" };
+    const raw = String(value ?? "").trim();
+    if (!raw) return { ok: false, value: null, unit: "mmHg", reason: "empty" };
+    if (/^(unknown|غير معروف|غير معلوم|not-provided|none)$/i.test(raw)) return { ok: false, value: null, unit: "mmHg", reason: "unknown" };
+    const normalized = normalizeArabicIndicDigits(raw).replace(/\s*mmHg$/i, "").replace(/[\u066B,]/g, ".").trim();
+    if (normalized.startsWith("-")) return { ok: false, value: null, unit: "mmHg", reason: "negative" };
+    if (!/^\d+(?:\.\d+)?$/.test(normalized)) return { ok: false, value: null, unit: "mmHg", reason: "format" };
+    const parsed = Number(normalized);
+    if (!Number.isFinite(parsed) || isNaN(parsed)) return { ok: false, value: null, unit: "mmHg", reason: "format" };
+    const rounded = Math.round(parsed * 10) / 10;
+    if (rounded < 40 || rounded > 160) {
+      return { ok: false, value: rounded, unit: "mmHg", reason: rounded > 160 ? "above-range" : "below-range" };
+    }
+    return { ok: true, value: rounded, unit: "mmHg", reason: null };
+  }
+
+  /**
+   * Validates structured blood-pressure measurement (systolic > diastolic).
+   * @param {{ systolic: *, diastolic: *, unit: string }} param0
+   * @returns {{ ok: boolean, systolic: number|null, diastolic: number|null, unit: string, reason: string|null }}
+   */
+  function parseStrictBloodPressureReading({ systolic, diastolic, unit = "mmHg" } = {}) {
+    const sRes = parseStrictSystolicInput(systolic);
+    if (!sRes.ok) return { ok: false, systolic: sRes.value, diastolic: null, unit: "mmHg", reason: `systolic-${sRes.reason}` };
+    const dRes = parseStrictDiastolicInput(diastolic);
+    if (!dRes.ok) return { ok: false, systolic: sRes.value, diastolic: dRes.value, unit: "mmHg", reason: `diastolic-${dRes.reason}` };
+    if (sRes.value <= dRes.value) {
+      return { ok: false, systolic: sRes.value, diastolic: dRes.value, unit: "mmHg", reason: "systolic-must-exceed-diastolic" };
+    }
+    const cleanUnit = String(unit || "mmHg").trim();
+    if (cleanUnit && !["mmhg", "mm hg"].includes(cleanUnit.toLowerCase())) {
+      return { ok: false, systolic: sRes.value, diastolic: dRes.value, unit: cleanUnit, reason: "invalid-unit" };
+    }
+    return { ok: true, systolic: sRes.value, diastolic: dRes.value, unit: "mmHg", reason: null };
+  }
+
+  /**
    * Normalizes yes/no/unknown clinical values across bilingual inputs.
    * @param {string} value
    * @returns {"yes"|"no"|"unknown"|""}
@@ -211,6 +279,9 @@
     parseStrictSymptomDurationInput,
     parseOptionalTemperatureInput,
     parseOptionalRespiratoryRateInput,
+    parseStrictSystolicInput,
+    parseStrictDiastolicInput,
+    parseStrictBloodPressureReading,
     normalizeYesNoUnknown,
     normalizeSymptomProgression,
     validateEmail,

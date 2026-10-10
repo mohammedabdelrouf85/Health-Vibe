@@ -502,6 +502,7 @@
             <p data-i18n="patient.heroSubtitle">Enter symptoms and measurements. The doctor receives a rule-based risk preview before approving any report shown to you.</p>
             <div class="hero-actions">
               <button class="solid-button large" data-screen="assessment" data-i18n="patient.startBreathingAssessment">Start breathing assessment</button>
+              <button class="soft-button large" type="button" data-screen="hypertension">❤️ <span data-i18n="nav.hypertension">Blood Pressure & Trends</span></button>
               <button class="soft-button large" type="button" onclick="if(window.auth && auth.currentUser) openAssessmentComparisonModal(auth.currentUser.uid); else showAuth();">📊 <span data-i18n="patient.compareAssessments">Compare Assessments</span></button>
               <button class="soft-button large" data-screen="history" data-i18n="patient.viewHistory">View history</button>
             </div>
@@ -2404,22 +2405,23 @@
             <div style="display: flex; align-items: center; gap: 10px;">
               <span style="font-size: 26px;">❤️</span>
               <div>
-                <h3 id="hypertensionModuleTitle" data-i18n="common.hypertensionTitle">Hypertension Module</h3>
-                <p style="font-size: 13px; color: var(--muted); margin: 2px 0 0;" data-i18n="nav.disease">Disease</p>
+                <h3 id="hypertensionModuleTitle" data-i18n="common.hypertensionTitle">Hypertension & Blood Pressure History</h3>
+                <p style="font-size: 13px; color: var(--muted); margin: 2px 0 0;" data-i18n="nav.disease">Cardiovascular & Blood Pressure Vitals</p>
               </div>
             </div>
-            <span class="pill pending" data-i18n="common.diseaseUnderPrep">Under Clinical Preparation</span>
-          </div>
-          <div style="padding: 24px 16px; text-align: center; max-width: 600px; margin: 0 auto;">
-            <p style="font-size: 15px; color: var(--ink); line-height: 1.6; margin-bottom: 16px;" data-i18n="common.hypertensionDesc">
-              Clinical module for blood pressure tracking, hemodynamic indicators, and cardiovascular health follow-up.
-            </p>
-            <div class="notice-card" style="margin-bottom: 24px; text-align: start;">
-              <p style="font-size: 13px; color: var(--muted); margin: 0; line-height: 1.5;" data-i18n="common.diseaseClinicalNotice">
-                This specialized module is under certified clinical preparation adhering to medical care standards. No unverified data or clinical results are displayed.
-              </p>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="pill info" id="hypertensionPersistedStatusPill" style="font-size: 11px;">Persisted Data Only</span>
+              <button type="button" class="soft-button" data-screen="patient" data-i18n="common.backToHome">Return to Home</button>
             </div>
-            <button type="button" class="soft-button" data-screen="patient" data-i18n="common.backToHome">Return to Home</button>
+          </div>
+          <div style="padding: 16px;">
+            <!-- Patient Blood Pressure History & Trend View Container -->
+            <div id="patientBpViewContainer">
+              <div style="text-align: center; padding: 32px 16px; color: var(--muted);">
+                <div class="spinner" style="margin: 0 auto 12px;"></div>
+                <p>Loading persisted blood-pressure history...</p>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -3107,6 +3109,85 @@
           حسناً، فهمت
         </button>
       </div>
+    </div>
+  </div>
+
+  <!-- Log Blood Pressure Measurement Modal (Persisted Storage) -->
+  <div id="patientLogBpModal" class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="logBpModalTitle" aria-hidden="true" style="display: none; position: fixed; inset: 0; background: rgba(11, 19, 43, 0.8); backdrop-filter: blur(8px); z-index: 999990; align-items: center; justify-content: center; padding: 16px;">
+    <div class="confirm-card" style="max-width: 480px; width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 22px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5); text-align: start;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 22px;">🩸</span>
+          <h3 id="logBpModalTitle" style="margin: 0; font-size: 16px; color: var(--ink);">تسجيل قياس ضغط الدم / Log Blood Pressure</h3>
+        </div>
+        <button type="button" class="close-button" onclick="closeLogBpModal()" style="background: none; border: none; font-size: 22px; cursor: pointer; color: var(--muted);">×</button>
+      </div>
+
+      <form id="logBpForm" onsubmit="event.preventDefault(); submitPatientBpMeasurement();">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
+          <div>
+            <label for="bpInputSystolic" style="display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px;">الانقباضي (Systolic) *</label>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <input type="number" id="bpInputSystolic" min="60" max="260" required placeholder="120" style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 14px;">
+              <span style="font-size: 11px; color: var(--muted);">mmHg</span>
+            </div>
+          </div>
+          <div>
+            <label for="bpInputDiastolic" style="display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px;">الانبساطي (Diastolic) *</label>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <input type="number" id="bpInputDiastolic" min="40" max="160" required placeholder="80" style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 14px;">
+              <span style="font-size: 11px; color: var(--muted);">mmHg</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
+          <div>
+            <label for="bpInputPulse" style="display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px;">النبض (Pulse / Heart Rate)</label>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <input type="number" id="bpInputPulse" min="30" max="220" placeholder="72" style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 14px;">
+              <span style="font-size: 11px; color: var(--muted);">bpm</span>
+            </div>
+          </div>
+          <div>
+            <label for="bpInputSource" style="display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px;">مصدر القياس (Source) *</label>
+            <select id="bpInputSource" style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 13px;">
+              <option value="manual_patient_log">✍️ تسجيل يدوي (Manual Log)</option>
+              <option value="bluetooth_device">📶 جهاز بلوتوث (Bluetooth Cuff)</option>
+              <option value="clinic_reading">🏥 قياس بالعيادة (Clinic Reading)</option>
+              <option value="medical_ocr">📄 مسح تقرير طبي (Medical OCR)</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
+          <div>
+            <label for="bpInputTiming" style="display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px;">وقت القياس (Period)</label>
+            <select id="bpInputTiming" style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 13px;">
+              <option value="morning">🌅 صباحاً (Morning)</option>
+              <option value="afternoon">☀️ ظهراً (Afternoon)</option>
+              <option value="evening">🌆 مساءً (Evening)</option>
+              <option value="night">🌙 ليلاً (Night)</option>
+            </select>
+          </div>
+          <div>
+            <label for="bpInputArm" style="display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px;">الذراع (Arm)</label>
+            <select id="bpInputArm" style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 13px;">
+              <option value="right_arm">الذراع الأيمن (Right Arm)</option>
+              <option value="left_arm">الذراع الأيسر (Left Arm)</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="font-size: 11px; color: var(--muted); margin-bottom: 16px; background: rgba(9, 184, 182, 0.08); padding: 8px 12px; border-radius: 8px; border: 1px solid var(--teal);">
+          🛡️ يتم حفظ القياس بشكل دائم وربطه بملفك الطبي السريري دون اصطناع أي بيانات.
+        </div>
+
+        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+          <button type="button" class="outline-button" onclick="closeLogBpModal()" style="padding: 8px 16px; font-size: 13px;">إلغاء / Cancel</button>
+          <button type="submit" id="btnSubmitBpReading" class="solid-button" style="padding: 8px 20px; font-size: 13px; background: var(--teal); color: #07191b; font-weight: 600;">حفظ القياس / Save</button>
+        </div>
+      </form>
     </div>
   </div>
 

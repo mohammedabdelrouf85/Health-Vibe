@@ -640,7 +640,8 @@
     }
 
     // 8. Attachments & Medical Files
-    if (Array.isArray(c.files) && c.files.length > 0) {
+    const actualFiles = Array.isArray(c.files) ? c.files : (Array.isArray(c.attachments) ? c.attachments : (Array.isArray(c.attachedFiles) ? c.attachedFiles : []));
+    if (actualFiles.length > 0) {
       diffs.push({
         id: "attachments",
         icon: "📎",
@@ -648,7 +649,7 @@
         prevVal: isEn ? "None" : "لا توجد ملفات سابقة",
         prevTime: baselineTime,
         prevSource: baselineSource,
-        newVal: `${c.files.length} ${isEn ? "file(s) attached" : "ملفات مرفقة حديثاً"}`,
+        newVal: `${actualFiles.length} ${isEn ? "file(s) attached" : "ملفات مرفقة حديثاً"}`,
         newTime: revisedTime,
         newSource: revisedSource,
         deltaText: isEn ? "New Files 📂" : "مرفقات جديدة 📂",
@@ -1106,6 +1107,390 @@
         </button>
       </div>
     `;
+  }
+
+  // ===========================================================================
+  // 6.5. DOCTOR ASSIGNMENT, HYPERTENSION BP HISTORY, ATTACHMENTS & INTERNAL NOTES
+  // ===========================================================================
+
+  function isCaseAssignedToDoctor(c, doctorUser) {
+    if (!c || !doctorUser) return false;
+    const uid = doctorUser.uid || doctorUser.id;
+    const email = String(doctorUser.email || "").toLowerCase();
+    const assignedDoctorId = c.assignedDoctorId || c.doctorId || c.doctorUid;
+    const assignedDoctorEmail = String(c.assignedDoctorEmail || c.doctorEmail || "").toLowerCase();
+    if (assignedDoctorId && assignedDoctorId === uid) return true;
+    if (assignedDoctorEmail && email && assignedDoctorEmail === email) return true;
+    return false;
+  }
+
+  function renderHypertensionBpHistorySection(c, isEn = false, options = {}) {
+    if (!c) return "";
+
+    let readings = [];
+    if (Array.isArray(options.bpReadings)) {
+      readings = options.bpReadings;
+    } else if (Array.isArray(c.bpReadings)) {
+      readings = c.bpReadings;
+    } else if (Array.isArray(c.bloodPressureHistory)) {
+      readings = c.bloodPressureHistory;
+    } else if (options.chronicService && typeof options.chronicService.getCaseReadings === "function" && c.id) {
+      readings = options.chronicService.getCaseReadings(c.id);
+    } else if (global.chronicHypertensionService && typeof global.chronicHypertensionService.getCaseReadings === "function" && c.id) {
+      readings = global.chronicHypertensionService.getCaseReadings(c.id);
+    }
+
+    if (readings.length === 0 && (c.systolicBp || c.systolic) && (c.diastolicBp || c.diastolic)) {
+      readings = [{
+        systolic: Number(c.systolicBp || c.systolic),
+        diastolic: Number(c.diastolicBp || c.diastolic),
+        pulse: Number(c.heartRate || c.pulse || 0) || null,
+        unit: c.bpUnit || "mmHg",
+        measuredAt: c.bpMeasuredAt || c.submittedAt || new Date().toISOString(),
+        measurementSource: c.bpSource || c.measurementSource || "patient_self_report",
+        author: c.bpAuthor || c.patientName || "Patient",
+        context: {
+          arm: c.bpArm || "right_arm",
+          posture: c.bpPosture || "sitting",
+          timing: c.bpTiming || "morning"
+        }
+      }];
+    }
+
+    if (!readings || readings.length === 0) {
+      return `
+        <div class="bp-history-card" style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin: 12px 0;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <strong style="font-size: 13.5px; display: flex; align-items: center; gap: 6px; color: var(--teal);">
+              <span>🩸</span> ${isEn ? "Blood Pressure History & Measurements" : "سجل قياسات ضغط الدم السريري"}
+            </strong>
+            <span class="pill info" style="font-size: 10.5px;">${isEn ? "0 Readings" : "لا توجد قراءات"}</span>
+          </div>
+          <div class="bp-history-empty" style="padding: 12px; background: var(--surface); border-radius: 8px; border: 1px dashed var(--line); color: var(--muted); text-align: center; font-size: 12.5px;">
+            <span>ℹ️</span> ${isEn ? "No blood-pressure measurements recorded for this patient / case." : "لا توجد قياسات ضغط دم مسجلة لهذا المريض / الحالة."}
+          </div>
+        </div>
+      `;
+    }
+
+    const n = readings.length;
+    let sumSys = 0, sumDia = 0, sumPulse = 0, pulseCount = 0;
+    readings.forEach(r => {
+      sumSys += Number(r.systolic || 0);
+      sumDia += Number(r.diastolic || 0);
+      if (r.pulse) {
+        sumPulse += Number(r.pulse);
+        pulseCount++;
+      }
+    });
+    const avgSys = Math.round(sumSys / n);
+    const avgDia = Math.round(sumDia / n);
+    const avgPulse = pulseCount > 0 ? Math.round(sumPulse / pulseCount) : null;
+    const avgMap = Math.round(((2 * avgDia + avgSys) / 3) * 10) / 10;
+
+    function getStageBadge(sys, dia) {
+      if (sys < 90 || dia < 60) {
+        return { pill: "info", textEn: "Hypotension", textAr: "انخفاض ضغط الدم", icon: "🔵" };
+      }
+      if (sys >= 180 || dia >= 120) {
+        return { pill: "danger", textEn: "Hypertensive Crisis", textAr: "أزمة فرط ضغط الدم", icon: "🚨" };
+      }
+      if (sys >= 140 || dia >= 90) {
+        return { pill: "danger", textEn: "Stage 2 Hypertension", textAr: "ارتفاع ضغط المرحلة 2", icon: "🔴" };
+      }
+      if (sys >= 130 || dia >= 80) {
+        return { pill: "pending", textEn: "Stage 1 Hypertension", textAr: "ارتفاع ضغط المرحلة 1", icon: "🟠" };
+      }
+      if (sys >= 120 && dia < 80) {
+        return { pill: "pending", textEn: "Elevated", textAr: "ضغط دم مرتفع", icon: "🟡" };
+      }
+      return { pill: "ok", textEn: "Normal", textAr: "ضغط دم طبيعي", icon: "🟢" };
+    }
+
+    const latest = readings[0];
+    const latestStage = getStageBadge(latest.systolic, latest.diastolic);
+
+    const readingsRowsHtml = readings.map(r => {
+      const stage = getStageBadge(r.systolic, r.diastolic);
+      const dateStr = r.measuredAt || r.createdAt;
+      const formattedDate = dateStr
+        ? new Date(dateStr).toLocaleString(isEn ? "en-US" : "ar-EG", { dateStyle: "short", timeStyle: "short" })
+        : "--";
+      const armLabel = r.context?.arm ? (isEn ? r.context.arm.replace(/_/g, " ") : (r.context.arm === "left_arm" ? "الذراع الأيسر" : "الذراع الأيمن")) : "--";
+      const postureLabel = r.context?.posture ? (isEn ? r.context.posture : (r.context.posture === "sitting" ? "جلوس" : (r.context.posture === "standing" ? "وقوف" : "استلقاء"))) : "--";
+      const sourceLabel = r.measurementSource ? (isEn ? r.measurementSource.replace(/_/g, " ") : (r.measurementSource === "bluetooth_device" ? "جهاز بلوتوث معتمد" : (r.measurementSource === "clinic_reading" ? "فحص بالعيادة" : "سجل يدوي"))) : "--";
+
+      return `
+        <tr style="border-bottom: 1px solid var(--line); font-size: 12px;">
+          <td style="padding: 8px 6px;">
+            <strong>${r.systolic}/${r.diastolic}</strong> <small style="color: var(--muted);">${r.unit || 'mmHg'}</small>
+          </td>
+          <td style="padding: 8px 6px;">
+            <span class="pill ${stage.pill}" style="font-size: 10px; padding: 2px 6px; display: inline-flex; align-items: center; gap: 4px;">
+              ${stage.icon} ${isEn ? stage.textEn : stage.textAr}
+            </span>
+          </td>
+          <td style="padding: 8px 6px; color: var(--muted);">${r.pulse ? `${r.pulse} bpm` : '--'}</td>
+          <td style="padding: 8px 6px; color: var(--muted);">${armLabel} • ${postureLabel}</td>
+          <td style="padding: 8px 6px; color: var(--muted);">${sourceLabel}</td>
+          <td style="padding: 8px 6px; color: var(--muted);">${formattedDate}</td>
+        </tr>
+      `;
+    }).join("");
+
+    return `
+      <div class="bp-history-card" style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin: 14px 0;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <strong style="font-size: 14px; display: flex; align-items: center; gap: 6px; color: var(--teal);">
+              <span>🩸</span> ${isEn ? "Blood Pressure History & Metrics" : "سجل قياسات ضغط الدم والمؤشرات الحيوية"}
+            </strong>
+            <span class="pill info" style="font-size: 11px;">${n} ${isEn ? "Recorded Readings" : "قياسات مسجلة"}</span>
+          </div>
+          <div>
+            <span class="pill ${latestStage.pill}" style="font-size: 11.5px; padding: 3px 10px; font-weight: 700;">
+              ${latestStage.icon} ${isEn ? "Latest: " + latest.systolic + "/" + latest.diastolic + " mmHg (" + latestStage.textEn + ")" : "الأحدث: " + latest.systolic + "/" + latest.diastolic + " ملم زئبق (" + latestStage.textAr + ")"}
+            </span>
+          </div>
+        </div>
+
+        <!-- Longitudinal Summary Bar -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin-bottom: 12px; background: var(--surface); padding: 10px; border-radius: 10px; border: 1px solid var(--line);">
+          <div>
+            <small style="color: var(--muted); font-size: 11px; display: block;">${isEn ? "Average BP" : "متوسط الضغط"}</small>
+            <strong style="font-size: 13.5px; color: var(--ink);">${avgSys}/${avgDia} <small style="font-size: 10px; color: var(--muted);">mmHg</small></strong>
+          </div>
+          <div>
+            <small style="color: var(--muted); font-size: 11px; display: block;">${isEn ? "Average MAP" : "متوسط الضغط الشرياني"}</small>
+            <strong style="font-size: 13.5px; color: var(--ink);">${avgMap} <small style="font-size: 10px; color: var(--muted);">mmHg</small></strong>
+          </div>
+          <div>
+            <small style="color: var(--muted); font-size: 11px; display: block;">${isEn ? "Average Pulse" : "متوسط النبض"}</small>
+            <strong style="font-size: 13.5px; color: var(--ink);">${avgPulse ? avgPulse + " bpm" : "--"}</strong>
+          </div>
+          <div>
+            <small style="color: var(--muted); font-size: 11px; display: block;">${isEn ? "Total Readings" : "إجمالي القراءات"}</small>
+            <strong style="font-size: 13.5px; color: var(--teal);">${n} ${isEn ? "Readings" : "قراءات"}</strong>
+          </div>
+        </div>
+
+        <!-- Readings Table -->
+        <div style="overflow-x: auto;">
+          <table style="width: 100%; border-collapse: collapse; text-align: ${isEn ? 'left' : 'right'}; font-size: 12px;">
+            <thead>
+              <tr style="border-bottom: 1.5px solid var(--line); color: var(--muted); font-size: 11px;">
+                <th style="padding: 6px;">${isEn ? "Reading" : "القياس"}</th>
+                <th style="padding: 6px;">${isEn ? "Stage" : "المرحلة"}</th>
+                <th style="padding: 6px;">${isEn ? "Pulse" : "النبض"}</th>
+                <th style="padding: 6px;">${isEn ? "Context" : "الموضع"}</th>
+                <th style="padding: 6px;">${isEn ? "Source" : "المصدر"}</th>
+                <th style="padding: 6px;">${isEn ? "Date & Time" : "التاريخ والوقت"}</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${readingsRowsHtml}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderAttachmentsSection(c, isEn = false) {
+    if (!c) return "";
+    const files = Array.isArray(c.attachments)
+      ? c.attachments
+      : (Array.isArray(c.files) ? c.files : (Array.isArray(c.attachedFiles) ? c.attachedFiles : (c.assessment?.attachments || c.assessment?.files || [])));
+
+    if (!files || files.length === 0) {
+      return `
+        <div class="attachments-section-card" style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin: 12px 0;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <strong style="font-size: 13.5px; display: flex; align-items: center; gap: 6px; color: var(--teal);">
+              <span>📎</span> ${isEn ? "Patient Medical Attachments & Reports" : "الملفات والتقارير الطبية المرفقة"}
+            </strong>
+            <span class="pill info" style="font-size: 10.5px;">${isEn ? "0 Files" : "لا توجد ملفات"}</span>
+          </div>
+          <div style="padding: 12px; background: var(--surface); border-radius: 8px; border: 1px dashed var(--line); color: var(--muted); text-align: center; font-size: 12.5px;">
+            <span>ℹ️</span> ${isEn ? "No medical attachments or lab reports uploaded for this case." : "لا توجد مرفقات طبية أو تقارير مخبرية مرفوعة لهذه الحالة."}
+          </div>
+        </div>
+      `;
+    }
+
+    function getFileIcon(fileName = "", mime = "") {
+      const fn = String(fileName).toLowerCase();
+      const m = String(mime).toLowerCase();
+      if (fn.endsWith(".pdf") || m.includes("pdf")) return "📄";
+      if (fn.match(/\.(jpg|jpeg|png|webp|gif)$/) || m.includes("image")) return "🖼️";
+      if (fn.includes("ecg") || fn.includes("ekg")) return "📈";
+      if (fn.includes("lab") || fn.includes("blood") || fn.includes("test")) return "🧪";
+      return "📎";
+    }
+
+    const fileListHtml = files.map(f => {
+      const name = f.name || f.fileName || f.originalName || (isEn ? "Medical Record File" : "ملف طبي مرفق");
+      const size = f.size || f.fileSize ? formatBytes(f.size || f.fileSize) : "";
+      const icon = getFileIcon(name, f.type || f.mimeType);
+      const dateStr = f.uploadedAt || f.createdAt ? new Date(f.uploadedAt || f.createdAt).toLocaleDateString(isEn ? "en-US" : "ar-EG") : "";
+      const url = f.url || f.fileUrl || f.downloadUrl || "#";
+
+      return `
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; margin-bottom: 6px; font-size: 12.5px;">
+          <div style="display: flex; align-items: center; gap: 8px; overflow: hidden;">
+            <span style="font-size: 18px;">${icon}</span>
+            <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+              <strong style="color: var(--ink); font-size: 12.5px; display: block;">${escapeSafe(name)}</strong>
+              <small style="color: var(--muted); font-size: 11px;">${size ? size + " • " : ""}${dateStr || (isEn ? "Attached" : "مرفق")}</small>
+            </div>
+          </div>
+          <div style="display: flex; gap: 6px; flex-shrink: 0;">
+            ${url && url !== "#" ? `
+              <a href="${escapeSafe(url)}" target="_blank" rel="noopener noreferrer" class="soft-button" style="font-size: 11px; padding: 4px 8px; text-decoration: none;">
+                🔍 ${isEn ? "View" : "معاينة"}
+              </a>
+            ` : `
+              <span class="pill info" style="font-size: 10px; padding: 2px 6px;">${isEn ? "Attached" : "مرفق"}</span>
+            `}
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    return `
+      <div class="attachments-section-card" style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin: 14px 0;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+          <strong style="font-size: 14px; display: flex; align-items: center; gap: 6px; color: var(--teal);">
+            <span>📎</span> ${isEn ? "Patient Medical Attachments & Reports" : "الملفات والتقارير الطبية المرفقة"}
+          </strong>
+          <span class="pill ok" style="font-size: 11px;">${files.length} ${isEn ? "File(s)" : "ملفات"}</span>
+        </div>
+        <div>
+          ${fileListHtml}
+        </div>
+      </div>
+    `;
+  }
+
+  function renderPreviousApprovedReportsSection(c, isEn = false) {
+    if (!c) return "";
+    let reports = [];
+    if (Array.isArray(c.approvalHistory) && c.approvalHistory.length > 0) {
+      reports = c.approvalHistory;
+    } else if (Array.isArray(c.previousReports) && c.previousReports.length > 0) {
+      reports = c.previousReports;
+    } else if (c.reportSnapshot) {
+      reports = [c.reportSnapshot];
+    }
+
+    if (!reports || reports.length === 0) {
+      return `
+        <div class="previous-reports-card" style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin: 12px 0;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <strong style="font-size: 13.5px; display: flex; align-items: center; gap: 6px; color: var(--teal);">
+              <span>📑</span> ${isEn ? "Previous Approved Reports" : "التقارير الطبية المعتمدة السابقة"}
+            </strong>
+            <span class="pill info" style="font-size: 10.5px;">${isEn ? "Initial Review" : "فحص أولي"}</span>
+          </div>
+          <div style="padding: 12px; background: var(--surface); border-radius: 8px; border: 1px dashed var(--line); color: var(--muted); text-align: center; font-size: 12.5px;">
+            <span>ℹ️</span> ${isEn ? "Initial clinical review — no previous approved reports." : "الفحص السريري الأولي — لا توجد تقارير معتمدة سابقة."}
+          </div>
+        </div>
+      `;
+    }
+
+    const reportsListHtml = reports.map((r, idx) => {
+      const revNum = r.revisionNumber || (idx + 1);
+      const revId = r.revisionId || r.reportRef || (c.id ? `HV-REP-${c.id.slice(-6).toUpperCase()}_v${revNum}` : `v${revNum}`);
+      const approvedAt = r.approvedAt || r.dates?.approvedAt || r.createdAt;
+      const formattedDate = approvedAt ? new Date(approvedAt).toLocaleString(isEn ? "en-US" : "ar-EG", { dateStyle: "short", timeStyle: "short" }) : "--";
+      const doctorName = r.approvedBy?.name || r.doctorIdentity?.name || (isEn ? "Attending Physician" : "الطبيب المعالج");
+
+      return `
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; margin-bottom: 8px; font-size: 12.5px;">
+          <div>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span class="pill ok" style="font-size: 10.5px; padding: 2px 7px;">${isEn ? "Report Rev #" + revNum : "التقرير نسخة " + revNum}</span>
+              <strong style="color: var(--ink); font-size: 13px;">${escapeSafe(revId)}</strong>
+            </div>
+            <small style="color: var(--muted); display: block; margin-top: 3px;">
+              ${isEn ? "Approved by: " : "معتمد بواسطة: "}${escapeSafe(doctorName)} • 🕒 ${formattedDate}
+            </small>
+          </div>
+          <button type="button" class="soft-button" style="font-size: 11.5px; padding: 4px 10px;" onclick="openCaseReport('${c.id}')" title="${isEn ? 'Inspect Approved Report' : 'استعراض التقرير المعتمد'}">
+            📄 ${isEn ? "View Report" : "عرض التقرير"}
+          </button>
+        </div>
+      `;
+    }).join("");
+
+    return `
+      <div class="previous-reports-card" style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin: 14px 0;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+          <strong style="font-size: 14px; display: flex; align-items: center; gap: 6px; color: var(--teal);">
+            <span>📑</span> ${isEn ? "Previous Approved Reports" : "التقارير الطبية المعتمدة السابقة"}
+          </strong>
+          <span class="pill ok" style="font-size: 11px;">${reports.length} ${isEn ? "Approved Report(s)" : "تقارير معتمدة"}</span>
+        </div>
+        <div>
+          ${reportsListHtml}
+        </div>
+      </div>
+    `;
+  }
+
+  function renderInternalDoctorNotesSection(c, isEn = false) {
+    if (!c) return "";
+    const internalNote = c.internalDoctorNotes || c.internalNotes || c.clinicianQuarantineNotes || "";
+    if (!internalNote || !String(internalNote).trim()) {
+      return `
+        <div class="doctor-internal-notes-card" style="background: rgba(239, 68, 68, 0.03); border: 1px dashed rgba(239, 68, 68, 0.3); border-radius: 10px; padding: 10px 14px; margin: 10px 0;">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <small style="color: #b91c1c; font-weight: 700; display: flex; align-items: center; gap: 6px;">
+              <span>🔒</span> ${isEn ? "Internal Clinician Notes (Hidden from Patient & Reports)" : "ملاحظات الفريق الطبي الداخلية (محجوبة تماماً عن المريض)"}
+            </small>
+            <span style="font-size: 11px; color: var(--muted);">${isEn ? "No internal notes recorded" : "لا توجد ملاحظات داخلية"}</span>
+          </div>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="doctor-internal-notes-card" style="background: rgba(239, 68, 68, 0.06); border: 1.5px dashed #dc2626; border-radius: 12px; padding: 14px; margin: 12px 0;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+          <strong style="color: #b91c1c; font-size: 13px; display: flex; align-items: center; gap: 6px;">
+            <span>🔒</span> ${isEn ? "Internal Clinician Notes (Strictly Quarantined from Patient)" : "ملاحظات الفريق الطبي الداخلية (محجوبة بشكل صارم عن المريض والتقارير)"}
+          </strong>
+          <span class="pill danger" style="font-size: 10.5px; padding: 2px 8px; font-weight: 700;">${isEn ? "Confidential Staff Note" : "سري للفريق الطبي"}</span>
+        </div>
+        <p style="margin: 0; font-size: 13px; color: var(--ink); line-height: 1.5; font-weight: 600; white-space: pre-wrap;">${escapeSafe(internalNote)}</p>
+        <div style="margin-top: 8px; font-size: 11px; color: #b91c1c;">
+          ⚠️ ${isEn ? "Note: This internal text is never printed on patient reports, sent in notifications, or shown in the patient portal." : "تنبيه: هذا النص الداخلي لا يُطبع على تقارير المريض ولا يُرسل في الإشعارات ولا يظهر في بوابة المريض."}
+        </div>
+      </div>
+    `;
+  }
+
+  function scrubInternalNotesForPatient(caseData) {
+    if (!caseData) return caseData;
+    const sanitized = { ...caseData };
+    delete sanitized.internalDoctorNotes;
+    delete sanitized.internalNotes;
+    delete sanitized.clinicianQuarantineNotes;
+    delete sanitized.privatePhysicianNotes;
+    if (sanitized.reportSnapshot) {
+      const rs = { ...sanitized.reportSnapshot };
+      delete rs.internalDoctorNotes;
+      delete rs.internalNotes;
+      delete rs.clinicianQuarantineNotes;
+      sanitized.reportSnapshot = rs;
+    }
+    return sanitized;
+  }
+
+  function escapeSafe(str) {
+    if (typeof global.escapeHtml === "function") return global.escapeHtml(str);
+    return String(str || "").replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
 
   // ===========================================================================
@@ -2007,7 +2392,14 @@
     formatBytes,
     extractClarificationThread,
     renderClarificationThreadHtml,
-    submitClarificationReply
+    submitClarificationReply,
+    // Doctor Access, Hypertension BP History, Attachments, Reports & Internal Notes
+    isCaseAssignedToDoctor,
+    renderHypertensionBpHistorySection,
+    renderAttachmentsSection,
+    renderPreviousApprovedReportsSection,
+    renderInternalDoctorNotesSection,
+    scrubInternalNotesForPatient
   };
 
   global.HealthVibes = global.HealthVibes || {};
