@@ -429,6 +429,151 @@ service cloud.firestore {
     }
 
     // =========================================================================
+    // 🩺 DISEASE MODULES DATA ISOLATION (Diabetes, Hypertension, Blood Disorders, Obesity)
+    // =========================================================================
+    match /diabetes_records/{docId} {
+      allow read: if isAuthenticated() && !isSupport() && (
+        (isPatientOwnedRecord(resource.data) && hasNoUnreleasedClinicalResult(resource.data)) ||
+        isDoctorLinkedRecord(resource.data) ||
+        isClinicAdminFor(resource.data) ||
+        isSuperAdmin()
+      );
+      allow create: if isAuthenticated() && !isSupport() && (
+        (request.resource.data.patientId == request.auth.uid && hasNoPatientForgedClinicalResult(request.resource.data)) ||
+        isVerifiedDoctor() || isSuperAdmin()
+      );
+      allow update: if isAuthenticated() && !isSupport() && (
+        (isPatientOwnedRecord(resource.data) && request.resource.data.patientId == request.auth.uid && hasNoPatientForgedClinicalResult(request.resource.data)) ||
+        isDoctorLinkedRecord(resource.data) || isClinicAdminFor(resource.data) || isSuperAdmin()
+      );
+      allow delete: if isPlatformAdmin() || isClinicAdminFor(resource.data);
+    }
+
+    match /diabetes_readings/{docId} {
+      allow read: if isAuthenticated() && !isSupport() && (
+        isPatientOwnedRecord(resource.data) ||
+        isDoctorLinkedRecord(resource.data) ||
+        isClinicAdminFor(resource.data) ||
+        isSuperAdmin()
+      );
+      allow create: if isAuthenticated() && !isSupport() && (
+        request.resource.data.patientId == request.auth.uid ||
+        isVerifiedDoctor() || isSuperAdmin()
+      );
+      allow update, delete: if isPlatformAdmin() || isClinicAdminFor(resource.data);
+    }
+
+    match /diabetes_assessments/{docId} {
+      allow read: if isAuthenticated() && !isSupport() && (
+        (isPatientOwnedRecord(resource.data) && hasNoUnreleasedClinicalResult(resource.data)) ||
+        isDoctorLinkedRecord(resource.data) ||
+        isClinicAdminFor(resource.data) ||
+        isSuperAdmin()
+      );
+      allow create: if isAuthenticated() && !isSupport() && (
+        (request.resource.data.patientId == request.auth.uid && hasNoPatientForgedClinicalResult(request.resource.data)) ||
+        isVerifiedDoctor() || isSuperAdmin()
+      );
+      allow update: if isAuthenticated() && !isSupport() && (
+        (isPatientOwnedRecord(resource.data) && request.resource.data.patientId == request.auth.uid && hasNoPatientForgedClinicalResult(request.resource.data)) ||
+        isDoctorLinkedRecord(resource.data) || isClinicAdminFor(resource.data) || isSuperAdmin()
+      );
+      allow delete: if isPlatformAdmin() || isClinicAdminFor(resource.data);
+    }
+
+    match /hypertension_records/{docId} {
+      allow read: if isAuthenticated() && !isSupport() && (
+        (isPatientOwnedRecord(resource.data) && hasNoUnreleasedClinicalResult(resource.data)) ||
+        isDoctorLinkedRecord(resource.data) ||
+        isClinicAdminFor(resource.data) ||
+        isSuperAdmin()
+      );
+      allow create: if isAuthenticated() && !isSupport() && (
+        (request.resource.data.patientId == request.auth.uid && hasNoPatientForgedClinicalResult(request.resource.data)) ||
+        isVerifiedDoctor() || isSuperAdmin()
+      );
+      allow update: if isAuthenticated() && !isSupport() && (
+        (isPatientOwnedRecord(resource.data) && request.resource.data.patientId == request.auth.uid && hasNoPatientForgedClinicalResult(request.resource.data)) ||
+        isDoctorLinkedRecord(resource.data) || isClinicAdminFor(resource.data) || isSuperAdmin()
+      );
+      allow delete: if isPlatformAdmin() || isClinicAdminFor(resource.data);
+    }
+
+    match /hypertension_readings/{docId} {
+      allow read: if isAuthenticated() && !isSupport() && (
+        isPatientOwnedRecord(resource.data) ||
+        isDoctorLinkedRecord(resource.data) ||
+        isClinicAdminFor(resource.data) ||
+        isSuperAdmin()
+      );
+      allow create: if isAuthenticated() && !isSupport() && (
+        request.resource.data.patientId == request.auth.uid ||
+        isVerifiedDoctor() || isSuperAdmin()
+      );
+      allow update, delete: if isPlatformAdmin() || isClinicAdminFor(resource.data);
+    }
+
+    match /hypertension_assessments/{docId} {
+      allow read: if isAuthenticated() && !isSupport() && (
+        (isPatientOwnedRecord(resource.data) && hasNoUnreleasedClinicalResult(resource.data)) ||
+        isDoctorLinkedRecord(resource.data) ||
+        isClinicAdminFor(resource.data) ||
+        isSuperAdmin()
+      );
+      allow create: if isAuthenticated() && !isSupport() && (
+        (request.resource.data.patientId == request.auth.uid && hasNoPatientForgedClinicalResult(request.resource.data)) ||
+        isVerifiedDoctor() || isSuperAdmin()
+      );
+      allow update: if isAuthenticated() && !isSupport() && (
+        (isPatientOwnedRecord(resource.data) && request.resource.data.patientId == request.auth.uid && hasNoPatientForgedClinicalResult(request.resource.data)) ||
+        isDoctorLinkedRecord(resource.data) || isClinicAdminFor(resource.data) || isSuperAdmin()
+      );
+      allow delete: if isPlatformAdmin() || isClinicAdminFor(resource.data);
+    }
+
+    match /blood_disorders_records/{docId} {
+      allow read: if isAuthenticated() && !isSupport() && (
+        (isPatientOwnedRecord(resource.data) && hasNoUnreleasedClinicalResult(resource.data)) ||
+        isDoctorLinkedRecord(resource.data) ||
+        isClinicAdminFor(resource.data) ||
+        isSuperAdmin()
+      );
+      allow create, update: if isAuthenticated() && !isSupport() && (
+        (request.resource.data.patientId == request.auth.uid && hasNoPatientForgedClinicalResult(request.resource.data)) ||
+        isVerifiedDoctor() || isSuperAdmin()
+      );
+      allow delete: if isPlatformAdmin() || isClinicAdminFor(resource.data);
+    }
+
+    match /obesity_records/{docId} {
+      allow read: if isAuthenticated() && !isSupport() && (
+        (isPatientOwnedRecord(resource.data) && hasNoUnreleasedClinicalResult(resource.data)) ||
+        isDoctorLinkedRecord(resource.data) ||
+        isClinicAdminFor(resource.data) ||
+        isSuperAdmin()
+      );
+      allow create, update: if isAuthenticated() && !isSupport() && (
+        (request.resource.data.patientId == request.auth.uid && hasNoPatientForgedClinicalResult(request.resource.data)) ||
+        isVerifiedDoctor() || isSuperAdmin()
+      );
+      allow delete: if isPlatformAdmin() || isClinicAdminFor(resource.data);
+    }
+
+    match /disease_attachments/{docId} {
+      allow read: if isAuthenticated() && !isSupport() && (
+        isPatientOwnedRecord(resource.data) ||
+        isDoctorLinkedRecord(resource.data) ||
+        isClinicAdminFor(resource.data) ||
+        isSuperAdmin()
+      );
+      allow create: if isAuthenticated() && !isSupport() && (
+        request.resource.data.patientId == request.auth.uid ||
+        isVerifiedDoctor() || isSuperAdmin()
+      );
+      allow delete: if isPlatformAdmin() || isClinicAdminFor(resource.data);
+    }
+
+    // =========================================================================
     // 4. 🛡️ SERVER AUDIT EVENTS (/audit_events/{eventId})
     // =========================================================================
     match /audit_events/{eventId} {

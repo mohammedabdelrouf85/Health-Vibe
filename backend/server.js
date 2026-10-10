@@ -14905,6 +14905,12 @@ app.get('/api/hypertension/patient/:patientId', requireAuth, (req, res) => {
 app.post('/api/hypertension/reading', requireAuth, (req, res) => {
   try {
     const readingData = req.body || {};
+    const patientId = readingData.patientId;
+    const access = hypertensionService.verifyAccessPermission(req.user, patientId);
+    if (!access.authorized) {
+      return res.status(403).json({ error: 'ACCESS_DENIED', reason: access.reason, message: 'Unauthorized access to patient hypertension readings.' });
+    }
+
     const reading = hypertensionService.recordBloodPressureReading({
       ...readingData,
       recordedByUid: req.user.uid
@@ -14923,6 +14929,12 @@ app.post('/api/hypertension/reading', requireAuth, (req, res) => {
 app.post('/api/hypertension/assessment', requireAuth, (req, res) => {
   try {
     const { assessmentId, updates, triggerReason, ...assessmentData } = req.body || {};
+    const patientId = assessmentData.patientId || req.body?.patientId;
+    const access = hypertensionService.verifyAccessPermission(req.user, patientId);
+    if (!access.authorized) {
+      return res.status(403).json({ error: 'ACCESS_DENIED', reason: access.reason, message: 'Unauthorized access to patient hypertension assessment.' });
+    }
+
     const actor = {
       uid: req.user.uid,
       name: req.user.displayName || req.user.email,
@@ -14950,6 +14962,12 @@ app.post('/api/hypertension/assessment', requireAuth, (req, res) => {
 app.post('/api/hypertension/review', requireAuth, requireDoctor, (req, res) => {
   try {
     const reviewData = req.body || {};
+    const patientId = reviewData.patientId;
+    const access = hypertensionService.verifyAccessPermission(req.user, patientId);
+    if (!access.authorized) {
+      return res.status(403).json({ error: 'ACCESS_DENIED', reason: access.reason, message: 'Doctor is not assigned to this patient.' });
+    }
+
     const review = hypertensionService.recordDoctorReview({
       ...reviewData,
       doctorUid: req.user.uid,
@@ -14970,6 +14988,12 @@ app.post('/api/hypertension/review', requireAuth, requireDoctor, (req, res) => {
 app.post('/api/hypertension/note', requireAuth, requireDoctor, (req, res) => {
   try {
     const noteData = req.body || {};
+    const patientId = noteData.patientId;
+    const access = hypertensionService.verifyAccessPermission(req.user, patientId);
+    if (!access.authorized) {
+      return res.status(403).json({ error: 'ACCESS_DENIED', reason: access.reason, message: 'Doctor is not assigned to this patient.' });
+    }
+
     const note = hypertensionService.addClinicalNote({
       ...noteData,
       doctorUid: req.user.uid,
@@ -14990,6 +15014,12 @@ app.post('/api/hypertension/note', requireAuth, requireDoctor, (req, res) => {
 app.post('/api/hypertension/followup', requireAuth, requireDoctor, (req, res) => {
   try {
     const planData = req.body || {};
+    const patientId = planData.patientId;
+    const access = hypertensionService.verifyAccessPermission(req.user, patientId);
+    if (!access.authorized) {
+      return res.status(403).json({ error: 'ACCESS_DENIED', reason: access.reason, message: 'Doctor is not assigned to this patient.' });
+    }
+
     const plan = hypertensionService.recordFollowupPlan({
       ...planData,
       doctorUid: req.user.uid,
@@ -15009,6 +15039,11 @@ app.post('/api/hypertension/followup', requireAuth, requireDoctor, (req, res) =>
 app.post('/api/hypertension/report/certify', requireAuth, requireDoctor, async (req, res) => {
   try {
     const { patientId, clinicalDiagnosis, managementPlan, riskStratification } = req.body || {};
+    const access = hypertensionService.verifyAccessPermission(req.user, patientId);
+    if (!access.authorized) {
+      return res.status(403).json({ error: 'ACCESS_DENIED', reason: access.reason, message: 'Doctor is not assigned to this patient.' });
+    }
+
     const doctorIdentity = {
       uid: req.user.uid,
       name: req.user.displayName || req.user.email,
@@ -15040,6 +15075,11 @@ app.post('/api/hypertension/report/certify', requireAuth, requireDoctor, async (
 app.post('/api/hypertension/clarification/reply', requireAuth, (req, res) => {
   try {
     const { patientId, cycleId, replyText } = req.body || {};
+    const access = hypertensionService.verifyAccessPermission(req.user, patientId);
+    if (!access.authorized) {
+      return res.status(403).json({ error: 'ACCESS_DENIED', reason: access.reason, message: 'Unauthorized access to clarification reply.' });
+    }
+
     const actor = { uid: req.user.uid };
     const cycle = hypertensionService.replyToClarification(patientId, cycleId, replyText, actor);
 

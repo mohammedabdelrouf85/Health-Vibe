@@ -266,16 +266,20 @@ function verifyAccessPermission(actor, targetPatientId, patientRecord = null) {
     return { authorized: false, reason: 'PATIENT_CAN_ONLY_ACCESS_OWN_DATA' };
   }
 
-  // Doctor: must be assigned to this patient
+  // Doctor: must be assigned to this patient and match clinic
   if (role === 'doctor') {
     const assignedDocId = patientRecord?.assignedDoctorId || patientRecord?.doctorId;
     const assignedDocEmail = patientRecord?.assignedDoctorEmail || patientRecord?.doctorEmail;
 
     const isAssigned = (assignedDocId && assignedDocId === actor.uid) ||
       (assignedDocEmail && actor.email && String(assignedDocEmail).toLowerCase() === String(actor.email).toLowerCase()) ||
-      (Array.isArray(patientRecord?.assignedDoctorIds) && patientRecord.assignedDoctorIds.includes(actor.uid));
+      (Array.isArray(patientRecord?.assignedDoctorIds) && patientRecord.assignedDoctorIds.includes(actor.uid)) ||
+      (Array.isArray(actor.assignedPatientIds) && actor.assignedPatientIds.includes(targetPatientId));
 
     if (isAssigned) {
+      if (actor.clinicId && patientRecord?.clinicId && actor.clinicId !== patientRecord.clinicId) {
+        return { authorized: false, reason: 'CLINIC_MISMATCH' };
+      }
       return { authorized: true };
     }
     return { authorized: false, reason: 'DOCTOR_NOT_ASSIGNED_TO_PATIENT' };
@@ -1639,18 +1643,41 @@ function processDiabetesDoctorApproval(arg1 = {}, arg2 = {}) {
 /**
  * Aggregates a complete patient diabetes bundle while enforcing field-level states.
  */
-function getPatientDiabetesBundle(patientId) {
+function getPatientDiabetesBundle(patientId, actor = null) {
   if (!patientId) return null;
 
   const info = resolvePatientDiabetesInfo(patientId);
+
+  if (actor) {
+    const access = verifyAccessPermission(actor, patientId, info);
+    if (!access.authorized) {
+      const err = new Error(`Access denied to patient diabetes bundle: ${access.reason}`);
+      err.code = 'FORBIDDEN';
+      err.reason = access.reason;
+      throw err;
+    }
+  }
+
+  const isPatient = actor && actor.role === 'patient';
   const measurements = getPatientMeasurements(patientId);
-  const assessments = getPatientDiabetesAssessments(patientId);
-  const notes = getPatientClinicalNotes(patientId);
+  const rawAssessments = getPatientDiabetesAssessments(patientId);
+  const rawNotes = getPatientClinicalNotes(patientId);
   const reviews = getPatientDoctorReviews(patientId);
   const followup = getPatientFollowupPlan(patientId);
   const reports = getPatientApprovedReports(patientId);
   const attachments = getPatientAttachments(patientId);
   const clarifications = getPatientClarifications(patientId);
+
+  const notes = isPatient ? [] : rawNotes;
+  const assessments = rawAssessments.map(asm => {
+    if (isPatient) {
+      const copy = { ...asm };
+      delete copy.doctorNotes;
+      delete copy.internalNotes;
+      return copy;
+    }
+    return asm;
+  });
 
   return {
     patientId,

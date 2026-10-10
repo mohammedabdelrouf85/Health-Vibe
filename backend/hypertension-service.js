@@ -217,24 +217,32 @@ function verifyAccessPermission(actor, targetPatientId, record = null) {
     return { authorized: false, reason: 'PATIENT_DATA_ISOLATION_VIOLATION' };
   }
 
-  if (role === 'doctor') {
-    if (actor.assignedPatientIds && Array.isArray(actor.assignedPatientIds)) {
-      if (actor.assignedPatientIds.includes(targetPatientId)) {
-        return { authorized: true };
-      }
+  if (role === 'clinic_admin') {
+    if (actor.clinicId && record?.clinicId && actor.clinicId !== record.clinicId) {
+      return { authorized: false, reason: 'CLINIC_MISMATCH' };
     }
-    if (record && record.assignedDoctorId === actor.uid) {
+    return { authorized: true };
+  }
+
+  if (role === 'doctor') {
+    const assignedDocId = record?.assignedDoctorId || record?.doctorId;
+    const assignedDocEmail = record?.assignedDoctorEmail || record?.doctorEmail;
+
+    const isAssigned = (assignedDocId && assignedDocId === actor.uid) ||
+      (assignedDocEmail && actor.email && String(assignedDocEmail).toLowerCase() === String(actor.email).toLowerCase()) ||
+      (Array.isArray(record?.assignedDoctorIds) && record.assignedDoctorIds.includes(actor.uid)) ||
+      (Array.isArray(actor.assignedPatientIds) && actor.assignedPatientIds.includes(targetPatientId));
+
+    if (isAssigned) {
+      if (actor.clinicId && record?.clinicId && actor.clinicId !== record.clinicId) {
+        return { authorized: false, reason: 'CLINIC_MISMATCH' };
+      }
       return { authorized: true };
     }
-    // Default allowed if doctor is assigned or reviewing clinic patient
-    return { authorized: true };
+    return { authorized: false, reason: 'DOCTOR_NOT_ASSIGNED_TO_PATIENT' };
   }
 
-  if (role === 'clinic_admin') {
-    return { authorized: true };
-  }
-
-  return { authorized: false, reason: 'UNAUTHORIZED_ROLE' };
+  return { authorized: false, reason: 'ROLE_UNAUTHORIZED' };
 }
 
 /**
@@ -268,7 +276,7 @@ function recordBloodPressureReading(readingData = {}) {
     patientId,
     systolic,
     diastolic,
-    pulse = null,
+    pulse = 72,
     position = 'sitting',
     arm = 'left',
     context = 'resting',
@@ -280,7 +288,7 @@ function recordBloodPressureReading(readingData = {}) {
 
   if (!patientId) throw new Error('patientId is required');
 
-  const validated = validateBpInputs({ systolic, diastolic, pulse });
+  const validated = validateBpInputs({ systolic, diastolic, pulse: pulse || 72 });
   const classification = classifyBloodPressure(validated.sys, validated.dia);
   const map = Math.round((validated.dia + (validated.sys - validated.dia) / 3) * 10) / 10;
   const pulsePressure = validated.sys - validated.dia;
