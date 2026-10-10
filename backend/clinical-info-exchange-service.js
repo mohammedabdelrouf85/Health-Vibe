@@ -56,7 +56,7 @@ const ALLOWED_MEASUREMENT_TYPES = {
   systolicBp: {
     code: 'systolicBp',
     name: 'Systolic Blood Pressure',
-    validUnits: ['mmHg'],
+    validUnits: ['mmHg', 'mm Hg'],
     canonicalUnit: 'mmHg',
     min: 60,
     max: 260
@@ -64,10 +64,18 @@ const ALLOWED_MEASUREMENT_TYPES = {
   diastolicBp: {
     code: 'diastolicBp',
     name: 'Diastolic Blood Pressure',
-    validUnits: ['mmHg'],
+    validUnits: ['mmHg', 'mm Hg'],
     canonicalUnit: 'mmHg',
     min: 40,
-    max: 150
+    max: 160
+  },
+  bloodPressure: {
+    code: 'bloodPressure',
+    name: 'Blood Pressure',
+    validUnits: ['mmHg', 'mm Hg'],
+    canonicalUnit: 'mmHg',
+    min: 40,
+    max: 260
   },
   bloodGlucose: {
     code: 'bloodGlucose',
@@ -548,9 +556,50 @@ class ClinicalInfoExchangeService {
       }
       seenTypes.add(m.type);
 
-      // Validate numeric value
-      const rawVal = parseFloat(m.value);
-      if (isNaN(rawVal)) {
+      // Validate numeric value without silent coercion
+      if (m.value === null || m.value === undefined || (typeof m.value === 'string' && m.value.trim() === '')) {
+        const err = new Error(`Empty value for measurement '${m.type}'.`);
+        err.code = 'EMPTY_MEASUREMENT_VALUE';
+        err.statusCode = 400;
+        throw err;
+      }
+
+      if (typeof m.value === 'boolean' || (typeof m.value === 'object' && m.value !== null)) {
+        const err = new Error(`Unsupported value type for measurement '${m.type}'.`);
+        err.code = 'UNSUPPORTED_MEASUREMENT_VALUE';
+        err.statusCode = 400;
+        throw err;
+      }
+
+      const rawStr = String(m.value).trim();
+      if (/^(unknown|غير معروف|غير معلوم|not-provided|unspecified|none)$/i.test(rawStr)) {
+        const err = new Error(`Unknown measurement for '${m.type}'. Never invent a clinical measurement.`);
+        err.code = 'UNKNOWN_MEASUREMENT';
+        err.statusCode = 400;
+        throw err;
+      }
+
+      const normalizedStr = rawStr
+        .replace(/[\u0660-\u0669]/g, digit => String(digit.charCodeAt(0) - 0x0660))
+        .replace(/[\u06F0-\u06F9]/g, digit => String(digit.charCodeAt(0) - 0x06F0))
+        .replace(/[\u066B,]/g, '.');
+
+      if (normalizedStr.startsWith('-') || /-\d/.test(normalizedStr)) {
+        const err = new Error(`Negative value for measurement '${m.type}' is physiologically impossible.`);
+        err.code = 'NEGATIVE_MEASUREMENT_VALUE';
+        err.statusCode = 400;
+        throw err;
+      }
+
+      if (!/^\d+(?:\.\d+)?$/.test(normalizedStr)) {
+        const err = new Error(`Invalid non-numeric value for measurement '${m.type}'.`);
+        err.code = 'INVALID_MEASUREMENT_VALUE';
+        err.statusCode = 400;
+        throw err;
+      }
+
+      const rawVal = Number(normalizedStr);
+      if (isNaN(rawVal) || !Number.isFinite(rawVal)) {
         const err = new Error(`Invalid non-numeric value for measurement '${m.type}'.`);
         err.code = 'INVALID_MEASUREMENT_VALUE';
         err.statusCode = 400;

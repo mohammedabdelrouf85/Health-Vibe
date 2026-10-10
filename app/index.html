@@ -375,6 +375,34 @@
         <button class="nav-item" data-screen="consent" data-i18n-title="nav.consent"><span class="nav-icon">🔒</span><span class="nav-label" data-i18n="nav.consent">Consent & Privacy</span></button>
         <button class="nav-item" data-screen="profile" data-i18n-title="nav.profile"><span class="nav-icon">👤</span><span class="nav-label" data-i18n="nav.profile">Medical Profile</span></button>
         <button class="nav-item" data-screen="assessment" data-i18n-title="nav.assessment"><span class="nav-icon">🫁</span><span class="nav-label" data-i18n="nav.assessment">Breathing Assessment</span></button>
+
+        <!-- Expandable Disease Category -->
+        <div class="nav-group" id="navGroupDisease">
+          <button type="button" class="nav-item nav-group-header" id="navCategoryDisease" aria-expanded="false" aria-controls="diseaseSubmenu" data-i18n-title="nav.disease">
+            <span class="nav-icon">🩺</span>
+            <span class="nav-label" data-i18n="nav.disease">Disease</span>
+            <span class="nav-group-chevron" aria-hidden="true">▾</span>
+          </button>
+          <div class="nav-group-children" id="diseaseSubmenu" role="group" aria-label="Disease" hidden>
+            <button class="nav-item nav-sub-item" data-screen="diabetes" data-i18n-title="nav.diabetes">
+              <span class="nav-icon">🩸</span>
+              <span class="nav-label" data-i18n="nav.diabetes">Diabetes</span>
+            </button>
+            <button class="nav-item nav-sub-item" data-screen="hypertension" data-i18n-title="nav.hypertension">
+              <span class="nav-icon">❤️</span>
+              <span class="nav-label" data-i18n="nav.hypertension">Hypertension</span>
+            </button>
+            <button class="nav-item nav-sub-item" data-screen="blood-disorders" data-i18n-title="nav.bloodDisorders">
+              <span class="nav-icon">🩹</span>
+              <span class="nav-label" data-i18n="nav.bloodDisorders">Blood Clotting / Blood Disorders</span>
+            </button>
+            <button class="nav-item nav-sub-item" data-screen="obesity" data-i18n-title="nav.obesity">
+              <span class="nav-icon">⚖️</span>
+              <span class="nav-label" data-i18n="nav.obesity">Obesity</span>
+            </button>
+          </div>
+        </div>
+
         <button class="nav-item" data-screen="pending" data-i18n-title="nav.pending"><span class="nav-icon">⏳</span><span class="nav-label" data-i18n="nav.pending">Review Status</span></button>
         <button class="nav-item" data-screen="result" data-i18n-title="nav.result"><span class="nav-icon">📋</span><span class="nav-label" data-i18n="nav.result">Result</span></button>
         <button class="nav-item" data-screen="history" data-i18n-title="nav.history"><span class="nav-icon">📂</span><span class="nav-label" data-i18n="nav.history">History</span></button>
@@ -474,6 +502,7 @@
             <p data-i18n="patient.heroSubtitle">Enter symptoms and measurements. The doctor receives a rule-based risk preview before approving any report shown to you.</p>
             <div class="hero-actions">
               <button class="solid-button large" data-screen="assessment" data-i18n="patient.startBreathingAssessment">Start breathing assessment</button>
+              <button class="soft-button large" type="button" data-screen="hypertension">❤️ <span data-i18n="nav.hypertension">Blood Pressure & Trends</span></button>
               <button class="soft-button large" type="button" onclick="if(window.auth && auth.currentUser) openAssessmentComparisonModal(auth.currentUser.uid); else showAuth();">📊 <span data-i18n="patient.compareAssessments">Compare Assessments</span></button>
               <button class="soft-button large" data-screen="history" data-i18n="patient.viewHistory">View history</button>
             </div>
@@ -887,6 +916,9 @@
               </button>
             </div>
           </article>
+
+          <!-- Authentication Providers & Security Panel -->
+          <div id="authProvidersContainer" style="grid-column: 1 / -1;"></div>
 
           <!-- Account & Data Deletion Card (GDPR / HIPAA Right to Erasure) -->
           <article class="panel" id="accountDeletionCard" style="grid-column: 1 / -1; margin-top: 14px; border: 1px solid rgba(239, 68, 68, 0.25); background: rgba(239, 68, 68, 0.03);">
@@ -1617,8 +1649,8 @@
           </button>
         </div>
 
-        <div class="doctor-layout">
-          <article class="panel">
+        <div class="doctor-layout" id="doctorWorkspaceLayout">
+          <article class="panel doctor-queue-panel" id="doctorQueuePanel">
             <div class="panel-head"><h3>قائمة المرضى</h3><span class="pill ok">طبيب موثق</span></div>
             <div id="doctorQueueFilterTabs" class="status-filter-tabs">
               <!-- Rendered via JS -->
@@ -1627,7 +1659,7 @@
               <!-- Rendered via JS -->
             </div>
           </article>
-          <article class="panel" id="doctorReviewPanel" style="display: none;">
+          <article class="panel doctor-review-panel" id="doctorReviewPanel" style="display: none;">
             <!-- Rendered via JS -->
           </article>
         </div>
@@ -2339,6 +2371,112 @@
           <!-- Authenticity verification badge & integrity details rendered dynamically -->
         </div>
       </section>
+
+      <!-- Disease Module Screens -->
+      <section id="screen-diabetes" class="screen" aria-labelledby="diabetesModuleTitle">
+        <div class="panel">
+          <div class="panel-head">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 26px;">🩸</span>
+              <div>
+                <h3 id="diabetesModuleTitle" data-i18n="common.diabetesTitle">Diabetes Module</h3>
+                <p style="font-size: 13px; color: var(--muted); margin: 2px 0 0;" data-i18n="nav.disease">Disease</p>
+              </div>
+            </div>
+            <span class="pill pending" data-i18n="common.diseaseUnderPrep">Under Clinical Preparation</span>
+          </div>
+          <div style="padding: 24px 16px; text-align: center; max-width: 600px; margin: 0 auto;">
+            <p style="font-size: 15px; color: var(--ink); line-height: 1.6; margin-bottom: 16px;" data-i18n="common.diabetesDesc">
+              Specialized clinical module for blood glucose monitoring, endocrine consultations, and certified care plans.
+            </p>
+            <div class="notice-card" style="margin-bottom: 24px; text-align: start;">
+              <p style="font-size: 13px; color: var(--muted); margin: 0; line-height: 1.5;" data-i18n="common.diseaseClinicalNotice">
+                This specialized module is under certified clinical preparation adhering to medical care standards. No unverified data or clinical results are displayed.
+              </p>
+            </div>
+            <button type="button" class="soft-button" data-screen="patient" data-i18n="common.backToHome">Return to Home</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="screen-hypertension" class="screen" aria-labelledby="hypertensionModuleTitle">
+        <div class="panel">
+          <div class="panel-head">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 26px;">❤️</span>
+              <div>
+                <h3 id="hypertensionModuleTitle" data-i18n="common.hypertensionTitle">Hypertension & Blood Pressure History</h3>
+                <p style="font-size: 13px; color: var(--muted); margin: 2px 0 0;" data-i18n="nav.disease">Cardiovascular & Blood Pressure Vitals</p>
+              </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="pill info" id="hypertensionPersistedStatusPill" style="font-size: 11px;">Persisted Data Only</span>
+              <button type="button" class="soft-button" data-screen="patient" data-i18n="common.backToHome">Return to Home</button>
+            </div>
+          </div>
+          <div style="padding: 16px;">
+            <!-- Patient Blood Pressure History & Trend View Container -->
+            <div id="patientBpViewContainer">
+              <div style="text-align: center; padding: 32px 16px; color: var(--muted);">
+                <div class="spinner" style="margin: 0 auto 12px;"></div>
+                <p>Loading persisted blood-pressure history...</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="screen-blood-disorders" class="screen" aria-labelledby="bloodDisordersModuleTitle">
+        <div class="panel">
+          <div class="panel-head">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 26px;">🩹</span>
+              <div>
+                <h3 id="bloodDisordersModuleTitle" data-i18n="common.bloodDisordersTitle">Blood Clotting & Blood Disorders Module</h3>
+                <p style="font-size: 13px; color: var(--muted); margin: 2px 0 0;" data-i18n="nav.disease">Disease</p>
+              </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="pill info" id="bloodDisordersStatusBadge" style="font-size: 11px;">Configurable & Medically Reviewable</span>
+              <button type="button" class="soft-button" data-screen="patient" data-i18n="common.backToHome">Return to Home</button>
+            </div>
+          </div>
+          <div style="padding: 16px;">
+            <div id="bloodDisordersViewContainer">
+              <div style="text-align: center; padding: 32px 16px; color: var(--muted);">
+                <div class="spinner" style="margin: 0 auto 12px;"></div>
+                <p>Loading Blood Disorders Module...</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="screen-obesity" class="screen" aria-labelledby="obesityModuleTitle">
+        <div class="panel">
+          <div class="panel-head">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 26px;">⚖️</span>
+              <div>
+                <h3 id="obesityModuleTitle" data-i18n="common.obesityTitle">Obesity & Metabolic Health Module</h3>
+                <p style="font-size: 13px; color: var(--muted); margin: 2px 0 0;" data-i18n="nav.disease">Disease</p>
+              </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="pill info" id="obesityStatusBadge" style="font-size: 11px;">Anthropometric & Medically Reviewable</span>
+              <button type="button" class="soft-button" data-screen="patient" data-i18n="common.backToHome">Return to Home</button>
+            </div>
+          </div>
+          <div style="padding: 16px;">
+            <div id="obesityViewContainer">
+              <div style="text-align: center; padding: 32px 16px; color: var(--muted);">
+                <div class="spinner" style="margin: 0 auto 12px;"></div>
+                <p>Loading Obesity & Metabolic Health Module...</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
     </section>
 
     <!-- Mobile Bottom Ergonomic Navigation Bar -->
@@ -2974,6 +3112,85 @@
     </div>
   </div>
 
+  <!-- Log Blood Pressure Measurement Modal (Persisted Storage) -->
+  <div id="patientLogBpModal" class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="logBpModalTitle" aria-hidden="true" style="display: none; position: fixed; inset: 0; background: rgba(11, 19, 43, 0.8); backdrop-filter: blur(8px); z-index: 999990; align-items: center; justify-content: center; padding: 16px;">
+    <div class="confirm-card" style="max-width: 480px; width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 22px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5); text-align: start;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 22px;">🩸</span>
+          <h3 id="logBpModalTitle" style="margin: 0; font-size: 16px; color: var(--ink);">تسجيل قياس ضغط الدم / Log Blood Pressure</h3>
+        </div>
+        <button type="button" class="close-button" onclick="closeLogBpModal()" style="background: none; border: none; font-size: 22px; cursor: pointer; color: var(--muted);">×</button>
+      </div>
+
+      <form id="logBpForm" onsubmit="event.preventDefault(); submitPatientBpMeasurement();">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
+          <div>
+            <label for="bpInputSystolic" style="display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px;">الانقباضي (Systolic) *</label>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <input type="number" id="bpInputSystolic" min="60" max="260" required placeholder="120" style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 14px;">
+              <span style="font-size: 11px; color: var(--muted);">mmHg</span>
+            </div>
+          </div>
+          <div>
+            <label for="bpInputDiastolic" style="display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px;">الانبساطي (Diastolic) *</label>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <input type="number" id="bpInputDiastolic" min="40" max="160" required placeholder="80" style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 14px;">
+              <span style="font-size: 11px; color: var(--muted);">mmHg</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
+          <div>
+            <label for="bpInputPulse" style="display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px;">النبض (Pulse / Heart Rate)</label>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <input type="number" id="bpInputPulse" min="30" max="220" placeholder="72" style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 14px;">
+              <span style="font-size: 11px; color: var(--muted);">bpm</span>
+            </div>
+          </div>
+          <div>
+            <label for="bpInputSource" style="display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px;">مصدر القياس (Source) *</label>
+            <select id="bpInputSource" style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 13px;">
+              <option value="manual_patient_log">✍️ تسجيل يدوي (Manual Log)</option>
+              <option value="bluetooth_device">📶 جهاز بلوتوث (Bluetooth Cuff)</option>
+              <option value="clinic_reading">🏥 قياس بالعيادة (Clinic Reading)</option>
+              <option value="medical_ocr">📄 مسح تقرير طبي (Medical OCR)</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
+          <div>
+            <label for="bpInputTiming" style="display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px;">وقت القياس (Period)</label>
+            <select id="bpInputTiming" style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 13px;">
+              <option value="morning">🌅 صباحاً (Morning)</option>
+              <option value="afternoon">☀️ ظهراً (Afternoon)</option>
+              <option value="evening">🌆 مساءً (Evening)</option>
+              <option value="night">🌙 ليلاً (Night)</option>
+            </select>
+          </div>
+          <div>
+            <label for="bpInputArm" style="display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px;">الذراع (Arm)</label>
+            <select id="bpInputArm" style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 13px;">
+              <option value="right_arm">الذراع الأيمن (Right Arm)</option>
+              <option value="left_arm">الذراع الأيسر (Left Arm)</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="font-size: 11px; color: var(--muted); margin-bottom: 16px; background: rgba(9, 184, 182, 0.08); padding: 8px 12px; border-radius: 8px; border: 1px solid var(--teal);">
+          🛡️ يتم حفظ القياس بشكل دائم وربطه بملفك الطبي السريري دون اصطناع أي بيانات.
+        </div>
+
+        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+          <button type="button" class="outline-button" onclick="closeLogBpModal()" style="padding: 8px 16px; font-size: 13px;">إلغاء / Cancel</button>
+          <button type="submit" id="btnSubmitBpReading" class="solid-button" style="padding: 8px 20px; font-size: 13px; background: var(--teal); color: #07191b; font-weight: 600;">حفظ القياس / Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <script src="./i18n.js?v=4.6"></script>
   <!-- Modular Architecture: Core, Auth, Permissions, Patient, Assessment, Doctor, Reports, Appointments, Admin, Notifications -->
   <script defer src="./modules/core/async-context-manager.js?v=1.0"></script>
@@ -2982,9 +3199,12 @@
   <script defer src="./modules/core/error-handler.js?v=1.0"></script>
   <script defer src="./modules/permissions/permissions.js?v=1.0"></script>
   <script defer src="./modules/auth/auth-service.js?v=1.0"></script>
+  <script defer src="./modules/auth/auth-linking.js?v=1.0"></script>
   <script defer src="./modules/auth/auth-ui.js?v=1.0"></script>
   <script defer src="./modules/patient/patient-service.js?v=1.0"></script>
   <script defer src="./modules/patient/patient-ui.js?v=1.0"></script>
+  <script defer src="./modules/patient/blood-disorders-ui.js?v=1.0"></script>
+  <script defer src="./modules/patient/obesity-ui.js?v=1.0"></script>
   <script defer src="./modules/assessment/assessment-validation.js?v=1.0"></script>
   <script defer src="./modules/assessment/assessment-service.js?v=1.0"></script>
   <script defer src="./modules/assessment/assessment-ui.js?v=1.0"></script>

@@ -142,7 +142,12 @@ const titles = {
   audit: "سجل التدقيق",
   report: "التقرير",
   feedback: "التقييم والملاحظات",
-  kpi: "مؤشرات الأداء السريري (KPIs)"
+  kpi: "مؤشرات الأداء السريري (KPIs)",
+  disease: "الأمراض",
+  diabetes: "داء السكري",
+  hypertension: "ارتفاع ضغط الدم",
+  "blood-disorders": "تجلط الدم / اضطرابات الدم",
+  obesity: "السمنة"
 };
 
 // --- Real Role-Based Access Control (RBAC) Engine ---
@@ -275,16 +280,20 @@ const ROLE_PERMISSIONS_MAP = {
 const ROLE_ALLOWED_SCREENS = {
   [ROLES.PATIENT]: [
     "patient", "consent", "profile", "assessment", "pending", "result",
-    "history", "appointments", "feedback", "assistant", "report", "verify-report", "verify"
+    "history", "appointments", "feedback", "assistant", "report", "verify-report", "verify",
+    "diabetes", "hypertension", "blood-disorders", "obesity"
   ],
   [ROLES.DOCTOR_PENDING]: [
-    "patient", "verification", "history", "appointments", "feedback", "report", "profile", "verify-report", "verify"
+    "patient", "verification", "history", "appointments", "feedback", "report", "profile", "verify-report", "verify",
+    "diabetes", "hypertension", "blood-disorders", "obesity"
   ],
   [ROLES.DOCTOR]: [
-    "doctor", "verification", "history", "appointments", "feedback", "report", "profile", "kpi", "patient", "verify-report", "verify"
+    "doctor", "verification", "history", "appointments", "feedback", "report", "profile", "kpi", "patient", "verify-report", "verify",
+    "diabetes", "hypertension", "blood-disorders", "obesity"
   ],
   [ROLES.CLINIC_ADMIN]: [
-    "profile", "history", "appointments", "feedback", "doctor", "report", "admin", "audit", "kpi", "verify-report", "verify"
+    "profile", "history", "appointments", "feedback", "doctor", "report", "admin", "audit", "kpi", "verify-report", "verify",
+    "diabetes", "hypertension", "blood-disorders", "obesity"
   ],
   [ROLES.SUPPORT]: [
     "profile", "kpi", "verify-report", "verify"
@@ -292,7 +301,8 @@ const ROLE_ALLOWED_SCREENS = {
   [ROLES.SUPER_ADMIN]: [
     "patient", "consent", "profile", "assessment", "pending", "result",
     "history", "appointments", "feedback", "assistant", "verification",
-    "doctor", "kpi", "report", "admin", "audit", "verify-report", "verify"
+    "doctor", "kpi", "report", "admin", "audit", "verify-report", "verify",
+    "diabetes", "hypertension", "blood-disorders", "obesity"
   ]
 };
 
@@ -317,7 +327,8 @@ window.handleOpenDoctorApply = handleOpenDoctorApply;
 const AUTH_REQUIRED_SCREENS = [
   "consent", "profile", "assessment", "pending", "result",
   "history", "appointments", "feedback", "assistant", "report",
-  "verification", "doctor", "kpi", "admin", "audit"
+  "verification", "doctor", "kpi", "admin", "audit",
+  "diabetes", "hypertension", "blood-disorders", "obesity"
 ];
 
 /**
@@ -348,7 +359,7 @@ const CONSENT_REQUIRED_SCREENS = ["assessment"];
 function applyRouteGuards(targetScreen) {
   const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
 
-  // ── GUARD 1: Authentication ────────────────────────────────────────────────
+  // ── GUARD 1: Authentication & Account Standing ───────────────────────────
   const user = (typeof getActiveUser === "function") ? getActiveUser() : (auth && auth.currentUser);
   if (!user && AUTH_REQUIRED_SCREENS.includes(targetScreen)) {
     console.warn(`[RouteGuard] 🔒 Auth required for '${targetScreen}'. Redirecting to login.`);
@@ -362,6 +373,34 @@ function applyRouteGuards(targetScreen) {
     if (typeof setAuthMode === "function") setAuthMode("signin");
     if (typeof showAuthModal === "function") showAuthModal();
     return getRoleDefaultScreen(selectedRole); // stay on safest screen
+  }
+
+  // 🛑 Immediate Suspension Enforcement
+  const isSuspendedAccount = Boolean(
+    user && (
+      user.suspended === true ||
+      user.isSuspended === true ||
+      user.status === "suspended" ||
+      user.accountStatus === "suspended" ||
+      user.disabled === true ||
+      (typeof window !== "undefined" && window._cachedUserDoc && (
+        window._cachedUserDoc.suspended === true ||
+        window._cachedUserDoc.isSuspended === true ||
+        window._cachedUserDoc.status === "suspended" ||
+        window._cachedUserDoc.accountStatus === "suspended" ||
+        window._cachedUserDoc.disabled === true
+      ))
+    )
+  );
+  if (isSuspendedAccount) {
+    console.warn(`[RouteGuard] 🛑 Suspended account blocked from '${targetScreen}'.`);
+    if (typeof showToast === "function") {
+      showToast(isEn
+        ? "🛑 This account is suspended by platform administration."
+        : "🛑 هذا الحساب موقوف بواسطة إدارة المنصة لمراجعة أمنية."
+      );
+    }
+    return getRoleDefaultScreen(selectedRole);
   }
 
   // ── GUARD 2: Role-Based Access Control ────────────────────────────────────
@@ -544,7 +583,7 @@ function hvSkeletonRows(count = 3, height = 72) {
 
 function setScreenBreadcrumb(name) {
   const screen = document.getElementById(`screen-${name}`);
-  if (!screen || !["admin", "doctor", "kpi", "audit", "verification", "report"].includes(name)) return;
+  if (!screen || !["admin", "doctor", "kpi", "audit", "verification", "report", "diabetes", "hypertension", "blood-disorders", "obesity"].includes(name)) return;
   let crumb = screen.querySelector(":scope > .hv-breadcrumb");
   if (!crumb) {
     crumb = document.createElement("nav");
@@ -730,7 +769,12 @@ const englishTitles = {
   audit: "Audit Log",
   report: "Report",
   feedback: "Feedback & Rating",
-  kpi: "KPI Dashboard"
+  kpi: "KPI Dashboard",
+  disease: "Disease",
+  diabetes: "Diabetes",
+  hypertension: "Hypertension",
+  "blood-disorders": "Blood Clotting / Blood Disorders",
+  obesity: "Obesity"
 };
 
 const englishRoleLabels = {
@@ -3447,7 +3491,9 @@ async function updateCaseStatus(id, newStatus, note, extraFields = {}) {
         doctorSpecialty: extraFields.doctorSpecialty || "",
         doctorLicense: extraFields.doctorLicense || "",
         clinicName: extraFields.clinicName || "",
-        reportRef: extraFields.reportRef || ""
+        reportRef: extraFields.reportRef || "",
+        reviewedRevision: extraFields.reviewedRevision !== undefined ? extraFields.reviewedRevision : null,
+        expectedRevision: extraFields.expectedRevision !== undefined ? extraFields.expectedRevision : null
       })
     });
     if (!res || res.success !== true || res.saved !== true) {
@@ -3471,6 +3517,19 @@ async function updateCaseStatus(id, newStatus, note, extraFields = {}) {
   } catch (err) {
     console.error("❌ Error updating case status through backend:", err);
     if (handleServerPermissionDenied(err, "Update Case Status")) return false;
+    if (err && (err.status === 409 || err.code === 'STALE_CLINICAL_REVISION' || String(err.message || '').includes('STALE_CLINICAL_REVISION'))) {
+      const targetCase = (typeof cases !== "undefined" && Array.isArray(cases) ? cases : (state?.doctorQueue || [])).find(item => item.id === id);
+      if (targetCase) {
+        targetCase.hasNewInfo = true;
+        targetCase.isRevisionStale = true;
+        if (err.currentRevision) targetCase.clinicalRevision = err.currentRevision;
+      }
+      showToast(isEn
+        ? "Clinical data has changed since review. Please review the updated revision before approval."
+        : "تغيرت البيانات السريرية للحالة منذ المراجعة. يرجى مراجعة وتأكيد المراجعة المحدثة قبل الاعتماد.");
+      if (typeof selectDoctorCase === "function") selectDoctorCase(id);
+      return false;
+    }
     showToast(getAuthErrorMessage(err) || (isEn ? "Failed to update case status." : "فشل تحديث حالة الملف الطبي."));
     return false;
   } finally {
@@ -3648,19 +3707,28 @@ function isCaseAssignedToCurrentDoctor(c) {
 function formatCaseAnswers(c, isEn) {
   const assessment = c?.assessment || {};
   const fields = [
+    [isEn ? "Chief complaint" : "الشكوى الرئيسية", c?.chiefComplaint || assessment.chiefComplaint],
     [isEn ? "Symptoms" : "الأعراض", c?.symptomsEn || c?.symptoms || assessment.symptomsText],
     [isEn ? "Patient notes" : "ملاحظات المريض", c?.notes || c?.patientNotes || assessment.notes],
     [isEn ? "Duration" : "مدة الأعراض", c?.durationEn || c?.duration || assessment.duration],
     [isEn ? "Medications reported by patient" : "الأدوية التي ذكرها المريض", assessment.medications || c?.patientMedications],
+    [isEn ? "Hypertension history" : "التاريخ المرضي للضغط", c?.hypertensionHistory || assessment.hypertensionHistory],
+    [isEn ? "Lifestyle & risk factors" : "نمط الحياة وعوامل الخطورة", c?.lifestyleFactors || assessment.lifestyleFactors],
+    [isEn ? "Family medical history" : "التاريخ العائلي المرضي", c?.familyHistory || assessment.familyHistory],
     [isEn ? "Follow-up request/response" : "المتابعة والردود", c?.patientResponse || c?.followUpResponse || c?.moreInfoResponse]
   ];
   if (assessment.answers && typeof assessment.answers === "object") {
     Object.entries(assessment.answers).forEach(([key, value]) => fields.push([key, value]));
   }
+  if (c?.answers && typeof c.answers === "object") {
+    Object.entries(c.answers).forEach(([key, value]) => {
+      if (!fields.some(([k]) => k === key)) fields.push([key, value]);
+    });
+  }
   return fields
     .filter(([, value]) => value !== undefined && value !== null && String(value).trim())
     .map(([label, value]) => `
-      <div><span>${escapeHtml(label)}</span><strong>${escapeHtml(Array.isArray(value) ? value.join(", ") : value)}</strong></div>
+      <div><span>${escapeHtml(label)}</span><strong>${escapeHtml(Array.isArray(value) ? value.join(", ") : (typeof value === "object" ? JSON.stringify(value) : value))}</strong></div>
     `).join("") || `<div><span>${isEn ? "Answers" : "الإجابات"}</span><strong>${isEn ? "Not recorded" : "غير مسجل"}</strong></div>`;
 }
 
@@ -3728,6 +3796,16 @@ window.applyDiagPreset = function(presetKey) {
     if (noteInput) noteInput.value = selected.diag;
     if (medInput) medInput.value = selected.meds;
     if (recInput) recInput.value = selected.recs;
+
+    // Immediately preserve applied preset in draft notes
+    if (activeCaseId && window.HealthVibes?.DoctorUI?.saveDraftNotes) {
+      window.HealthVibes.DoctorUI.saveDraftNotes(activeCaseId, {
+        diagnosis: selected.diag,
+        medications: selected.meds,
+        recommendations: selected.recs
+      });
+    }
+
     showToast(isEn ? "Diagnostic preset applied" : "تم تطبيق القالب التشخيصي");
   }
 };
@@ -3793,6 +3871,9 @@ window.generateAndApproveReport = async function(id) {
   }
 
   const reportRef = `HV-REP-${id.slice(-8).toUpperCase()}`;
+  const currentCaseRevision = window.HealthVibes?.DoctorUI?.getCaseRevisionNumber
+    ? window.HealthVibes.DoctorUI.getCaseRevisionNumber(targetCase)
+    : (targetCase ? (targetCase.clinicalRevision || 1) : 1);
 
   const payload = {
     clinicalDiagnosis,
@@ -3802,7 +3883,9 @@ window.generateAndApproveReport = async function(id) {
     recommendations,
     recommendation: recommendations.join("\n"),
     reportRef,
-    reportGeneratedAt: new Date().toISOString()
+    reportGeneratedAt: new Date().toISOString(),
+    reviewedRevision: currentCaseRevision,
+    expectedRevision: currentCaseRevision
   };
 
   const success = await updateCaseStatus(id, CASE_STATUS.APPROVED, clinicalDiagnosis, payload);
@@ -4138,12 +4221,37 @@ function renderDoctorQueueItems(allCases) {
       </div>
       ${riskBadge || ''}
     `;
-    btn.onclick = () => selectDoctorCase(c.id);
+    btn.onclick = () => {
+      if (typeof window !== "undefined" && window.innerWidth <= 1060 && window.HealthVibes?.DoctorUI?.openCaseOnMobile) {
+        window.HealthVibes.DoctorUI.openCaseOnMobile(c.id);
+      } else {
+        selectDoctorCase(c.id);
+      }
+    };
     queueList.appendChild(btn);
   });
 
-  if (cases.length > 0 && (!activeCaseId || !cases.some(c => c.id === activeCaseId))) {
-    selectDoctorCase(cases[0].id);
+  // Track queue scroll position for preservation
+  queueList.onscroll = () => {
+    if (window.HealthVibes?.DoctorUI?.setSavedQueueScrollTop) {
+      window.HealthVibes.DoctorUI.setSavedQueueScrollTop(queueList.scrollTop);
+    }
+  };
+
+  if (cases.length > 0) {
+    if (!activeCaseId || !cases.some(c => c.id === activeCaseId)) {
+      selectDoctorCase(cases[0].id);
+    } else {
+      selectDoctorCase(activeCaseId);
+    }
+  }
+
+  // Restore saved queue scroll position if present
+  if (window.HealthVibes?.DoctorUI?.getSavedQueueScrollTop) {
+    const savedPos = window.HealthVibes.DoctorUI.getSavedQueueScrollTop();
+    if (savedPos > 0) {
+      queueList.scrollTop = savedPos;
+    }
   }
 }
 
@@ -4289,6 +4397,20 @@ function renderDoctorQueueError(err) {
   `;
 }
 async function selectDoctorCase(id) {
+  // Preserve unsaved notes from outgoing case before switching
+  if (activeCaseId && activeCaseId !== id && window.HealthVibes?.DoctorUI?.saveDraftNotes) {
+    const prevDiag = document.getElementById("doctorDiagnosisInput");
+    const prevMeds = document.getElementById("doctorMedicationsInput");
+    const prevRecs = document.getElementById("doctorRecommendationsInput");
+    if (prevDiag || prevMeds || prevRecs) {
+      window.HealthVibes.DoctorUI.saveDraftNotes(activeCaseId, {
+        diagnosis: prevDiag ? prevDiag.value : "",
+        medications: prevMeds ? prevMeds.value : "",
+        recommendations: prevRecs ? prevRecs.value : ""
+      });
+    }
+  }
+
   activeCaseId = id;
   if (window.asyncContextManager) {
     window.asyncContextManager.switchCase(id);
@@ -4668,99 +4790,217 @@ async function selectDoctorCase(id) {
     ? window.HealthVibes.DoctorUI.renderStaleRevisionBanner(c, isEn)
     : '';
 
+  const mobileNavBarHtml = (window.HealthVibes?.DoctorUI?.renderMobileNavBar)
+    ? window.HealthVibes.DoctorUI.renderMobileNavBar(c, isEn, cases.length)
+    : '';
+
+  const reviewTabsHtml = (window.HealthVibes?.DoctorUI?.renderReviewTabs)
+    ? window.HealthVibes.DoctorUI.renderReviewTabs(c, isEn)
+    : '';
+
+  const topActionsToolbarHtml = `
+    <div class="doctor-top-actions">
+      ${approveButtonHtml}
+      <button type="button" class="btn-clinical resume" onclick="previewCaseReport('${c.id}')" title="${isEn ? 'Preview report before final approval' : 'معاينة شكل التقرير الطبي قبل الاعتماد'}">
+        <span>👁️</span> ${isEn ? 'Preview Report' : 'معاينة التقرير'}
+      </button>
+      <button type="button" class="soft-button" onclick="HealthVibes?.DoctorUI?.switchReviewTab('notes')" title="${isEn ? 'Jump to notes' : 'الانتقال للتشخيص والروشتة'}">
+        <span>✏️</span> ${isEn ? 'Write Diagnosis' : 'كتابة التشخيص'}
+      </button>
+    </div>
+  `;
+
+  const bpHistoryHtml = (window.HealthVibes?.DoctorUI?.renderHypertensionBpHistorySection)
+    ? window.HealthVibes.DoctorUI.renderHypertensionBpHistorySection(c, isEn)
+    : '';
+
+  const bloodDisordersReviewHtml = (window.HealthVibes?.DoctorUI?.renderBloodDisordersReviewSection)
+    ? window.HealthVibes.DoctorUI.renderBloodDisordersReviewSection(c, isEn)
+    : '';
+
+  const obesityReviewHtml = (window.HealthVibes?.DoctorUI?.renderObesityReviewSection)
+    ? window.HealthVibes.DoctorUI.renderObesityReviewSection(c, isEn)
+    : '';
+
+  const attachmentsHtml = (window.HealthVibes?.DoctorUI?.renderAttachmentsSection)
+    ? window.HealthVibes.DoctorUI.renderAttachmentsSection(c, isEn)
+    : '';
+
+  const internalNotesHtml = (window.HealthVibes?.DoctorUI?.renderInternalDoctorNotesSection)
+    ? window.HealthVibes.DoctorUI.renderInternalDoctorNotesSection(c, isEn)
+    : '';
+
+  const previousReportsHtml = (window.HealthVibes?.DoctorUI?.renderPreviousApprovedReportsSection)
+    ? window.HealthVibes.DoctorUI.renderPreviousApprovedReportsSection(c, isEn)
+    : '';
+
+  // 1. Grouped Clinical Inputs & Triage Assessment
+  const inputsSectionHtml = `
+    <section class="clinical-group-card" id="docSection-inputs" role="region" aria-label="${isEn ? 'Clinical Inputs & Triage Assessment' : 'المدخلات السريرية والفرز الطبي'}">
+      <div class="clinical-group-header">
+        <div class="group-title-row">
+          <span class="group-icon">📋</span>
+          <h4>${isEn ? 'Clinical Inputs & Triage Assessment' : 'المدخلات السريرية والفرز الطبي'}</h4>
+        </div>
+        <span class="pill info" style="font-size: 11px;">${isEn ? 'Patient Reported Data' : 'بيانات المريض المسجلة'}</span>
+      </div>
+      ${demoCaseBanner}
+      ${emergencyDoctorBanner}
+      <div class="summary-list">
+        <div><span>${isEn ? 'Rules-based suggestion' : 'اقتراح مبني على قواعد'}</span><strong>${(isEn ? c.aiScoreEn : c.aiScore) || (isEn ? 'Not clinically validated' : 'غير مدقق سريرياً')}${isDemoCase ? ' (Demo Data)' : ''}</strong></div>
+        <div><span>${isEn ? 'Rule score' : 'مؤشر القواعد'}</span><strong>${(isEn ? c.ruleScoreLabelEn : c.ruleScoreLabelAr) || c.ruleScore || (isEn ? 'No validated confidence value' : 'لا توجد قيمة ثقة معتمدة')}</strong></div>
+        <div><span>${isEn ? 'Oxygen Level' : 'نسبة الأكسجين'}</span><strong style="${o2Value < 90 ? 'color: #ef4444;' : ''}">${o2Value || '--'}%${isDemoCase ? ' (Demo Data)' : ''}</strong></div>
+        <div><span>${isEn ? 'Duration' : 'مدة الأعراض'}</span><strong>${isEn ? c.durationEn : c.duration}${isDemoCase ? ' (Demo Data)' : ''}</strong></div>
+      </div>
+      ${bpHistoryHtml}
+      ${bloodDisordersReviewHtml}
+      ${obesityReviewHtml}
+      <h5 style="margin: 16px 0 6px; font-size: 13.5px; font-weight: 700; color: var(--ink);">${isEn ? 'Patient History & Answers' : 'تاريخ المريض وإجاباته'}</h5>
+      ${patientDataHtml}
+      ${attachmentsHtml}
+      ${triggeredRulesHtml}
+    </section>
+  `;
+
+  // 2. Grouped Patient Clarifications & Structured Clarification Thread
+  const clarificationThreadContent = (window.HealthVibes?.DoctorUI?.renderClarificationThreadHtml)
+    ? window.HealthVibes.DoctorUI.renderClarificationThreadHtml(c, isEn, "doctor")
+    : `
+      <div style="padding: 16px; text-align: center; color: var(--muted); background: var(--surface-2); border-radius: 10px; font-size: 13px;">
+        💬 ${isEn ? "No active patient clarifications or pending information requests for this case." : "لا توجد استفسارات معلقة أو طلبات بيانات إضافية مفتوحة لهذه الحالة."}
+      </div>
+    `;
+
+  const clarificationsSectionHtml = `
+    <section class="clinical-group-card" id="docSection-clarifications" role="region" aria-label="${isEn ? 'Structured Clinical Clarification Thread' : 'مسار الاستفسارات والتدقيق السريري'}">
+      <div class="clinical-group-header">
+        <div class="group-title-row">
+          <span class="group-icon">💬</span>
+          <h4>${isEn ? 'Structured Clinical Clarification Thread' : 'مسار الاستفسارات والتدقيق السريري'}</h4>
+        </div>
+        ${c.patientResponse ? `<span class="pill ok" style="font-size: 11px;">${isEn ? 'Response Received' : 'تم استلام الرد'}</span>` : (isMoreInfo ? `<span class="pill pending" style="font-size: 11px;">${isEn ? 'Awaiting Reply' : 'بانتظار الرد'}</span>` : `<span class="pill info" style="font-size: 11px;">${isEn ? 'No Pending Inquiry' : 'لا استفسار معلق'}</span>`)}
+      </div>
+      ${clarificationThreadContent}
+    </section>
+  `;
+
+  // 3. Grouped Doctor Notes, Prescriptions & Report Builder
+  const notesSectionHtml = `
+    <section class="clinical-group-card" id="docSection-notes" role="region" aria-label="${isEn ? 'Physician Diagnosis & Report Builder' : 'التشخيص الطبي السريري ومحرر التقرير'}">
+      <div class="clinical-group-header">
+        <div class="group-title-row">
+          <span class="group-icon">🩺</span>
+          <h4>${isEn ? 'Physician Diagnosis & Report Builder' : 'التشخيص الطبي السريري ومحرر التقرير'}</h4>
+        </div>
+        <span class="pill ok" style="font-size: 11px;">${isEn ? 'Physician Review' : 'اعتماد الطبيب'}</span>
+      </div>
+
+      <h5 style="margin: 0 0 8px; font-size: 13px; font-weight: 700; color: var(--muted);">${isEn ? 'Previously Recorded Clinical Record' : 'الملاحظات السريرية المسجلة سابقاً'}</h5>
+      ${doctorNotesHtml}
+      ${internalNotesHtml}
+      ${previousReportsHtml}
+
+      <!-- DYNAMIC CLINICAL REPORT BUILDER STATION -->
+      <div class="doctor-report-builder-card" style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin: 16px 0;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+          <h5 style="margin: 0; font-size: 14px; font-weight: 800; display: flex; align-items: center; gap: 8px; color: var(--teal);">
+            <span>🩺</span> ${isEn ? 'Dynamic Medical Report Builder' : 'محرر وتوليد التقرير الطبي السريري'}
+          </h5>
+          <span class="pill ok" style="font-size: 11px;">${isEn ? 'Official Physician Signature' : 'الاعتماد السريري والتوقيع'}</span>
+        </div>
+
+        <!-- Quick Diagnostic Presets -->
+        <div style="margin-bottom: 12px;">
+          <label style="font-size: 12px; font-weight: 700; color: var(--muted); display: block; margin-bottom: 6px;">
+            ${isEn ? 'Manual diagnosis shortcuts:' : 'اختصارات إدخال التشخيص اليدوي:'}
+          </label>
+          <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+            <button type="button" class="soft-button" style="font-size: 11.5px; padding: 4px 10px;" onclick="applyDiagPreset('asthma')">🫁 ${isEn ? 'Asthma Flare' : 'حساسية صدرية وربو'}</button>
+            <button type="button" class="soft-button" style="font-size: 11.5px; padding: 4px 10px;" onclick="applyDiagPreset('bronchitis')">🌡️ ${isEn ? 'Acute Bronchitis' : 'التهاب شعبي حاد'}</button>
+            <button type="button" class="soft-button" style="font-size: 11.5px; padding: 4px 10px;" onclick="applyDiagPreset('uri')">🤧 ${isEn ? 'Upper Respiratory' : 'عدوى تنفسية علوية'}</button>
+            <button type="button" class="soft-button" style="font-size: 11.5px; padding: 4px 10px;" onclick="applyDiagPreset('stable')">✔️ ${isEn ? 'Stable Assessment' : 'أعراض مستقرة للمتابعة'}</button>
+          </div>
+        </div>
+
+        <!-- Diagnosis Input -->
+        <div style="margin-bottom: 12px;">
+          <label for="doctorDiagnosisInput" style="font-weight: 800; font-size: 13px; display: block; margin-bottom: 4px;">
+            ${isEn ? '1. Physician Clinical Diagnosis & Assessment *' : '1. التشخيص الطبي السريري المعتمد *'}
+          </label>
+          <textarea id="doctorDiagnosisInput" ${isClosed ? 'disabled' : ''} placeholder="${isEn ? 'Manually enter the physician diagnosis and clinical notes. Do not rely on rule suggestions as a diagnosis.' : 'أدخل التشخيص والملاحظات السريرية يدوياً. لا تعتمد اقتراحات القواعد كتشخيص.'}" style="width: 100%; min-height: 75px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 10px; font-family: inherit; font-size: 13px;">${escapeHtml(existingDoctorNote)}</textarea>
+          <input type="hidden" id="doctorNoteInput" value="${escapeHtml(existingDoctorNote)}" />
+        </div>
+
+        <!-- Prescriptions & Medications -->
+        <div style="margin-bottom: 12px;">
+          <label for="doctorMedicationsInput" style="font-weight: 800; font-size: 13px; display: block; margin-bottom: 4px;">
+            ${isEn ? '2. Prescription & Treatment Regimen (Rx)' : '2. الخطة العلاجية والروشتة الدوائية (Rx)'}
+          </label>
+          <textarea id="doctorMedicationsInput" ${isClosed ? 'disabled' : ''} placeholder="${isEn ? 'List prescribed medications, dosage and instructions...' : 'أدخل أسماء الأدوية، الجرعات، وطريقة الاستخدام...'}" style="width: 100%; min-height: 80px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 10px; font-family: inherit; font-size: 13px;">${escapeHtml(existingMedications)}</textarea>
+        </div>
+
+        <!-- Care Plan & Recommendations -->
+        <div style="margin-bottom: 14px;">
+          <label for="doctorRecommendationsInput" style="font-weight: 800; font-size: 13px; display: block; margin-bottom: 4px;">
+            ${isEn ? '3. Clinical Recommendations & Care Plan' : '3. التوصيات الطبية وخطة المتابعة'}
+          </label>
+          <textarea id="doctorRecommendationsInput" ${isClosed ? 'disabled' : ''} placeholder="${isEn ? 'Add one recommendation per line.' : 'أضف كل توصية في سطر منفصل.'}" style="width: 100%; min-height: 85px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 10px; font-family: inherit; font-size: 13px;">${escapeHtml(existingRecommendations)}</textarea>
+        </div>
+
+        <!-- Doctor Identity & Credentials Box -->
+        <div style="background: rgba(var(--teal-rgb, 14, 165, 233), 0.05); border: 1px dashed var(--line); border-radius: 10px; padding: 12px;">
+          <span style="font-size: 12px; font-weight: 800; color: var(--teal); display: block; margin-bottom: 8px;">
+            🪪 ${isEn ? 'Doctor Credentials & Seal (Printed on report):' : 'بيانات الطبيب المعتمد والختم الرسمي (تظهر بالتقرير):'}
+          </span>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px;">
+            <div>
+              <label style="font-size: 11px; color: var(--muted);">${isEn ? 'Doctor Name' : 'اسم الطبيب'}</label>
+              <input type="text" id="doctorNameInput" readonly value="${escapeHtml(currentDocName)}" style="width: 100%; padding: 6px 10px; font-size: 12.5px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);" />
+            </div>
+            <div>
+              <label style="font-size: 11px; color: var(--muted);">${isEn ? 'Specialty' : 'التخصص'}</label>
+              <input type="text" id="doctorSpecialtyInput" readonly value="${escapeHtml(currentDocSpec)}" style="width: 100%; padding: 6px 10px; font-size: 12.5px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);" />
+            </div>
+            <div>
+              <label style="font-size: 11px; color: var(--muted);">${isEn ? 'Syndicate License #' : 'ترخيص النقابة'}</label>
+              <input type="text" id="doctorLicenseInput" readonly value="${escapeHtml(currentDocLic)}" style="width: 100%; padding: 6px 10px; font-size: 12.5px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);" />
+            </div>
+            <div>
+              <label style="font-size: 11px; color: var(--muted);">${isEn ? 'Clinic / Hospital' : 'العيادة / المستشفى'}</label>
+              <input type="text" id="doctorClinicInput" readonly value="${escapeHtml(currentDocClinic)}" style="width: 100%; padding: 6px 10px; font-size: 12.5px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  `;
+
+  // 4. Grouped Timeline & Status Lifecycle
+  const timelineSectionHtml = `
+    <section class="clinical-group-card" id="docSection-timeline" role="region" aria-label="${isEn ? 'Status Lifecycle & Audit Trail' : 'المسار الزمني وسجل التدقيق'}">
+      ${timelineHtml}
+    </section>
+  `;
+
+  // 5. Docked Actions Toolbar
+  const dockedActionsToolbarHtml = `
+    <div class="doctor-docked-actions">
+      ${actionToolbarHtml}
+    </div>
+  `;
+
   reviewPanel.innerHTML = `
+    ${mobileNavBarHtml}
     ${persistentHeaderHtml}
     ${staleRevisionBannerHtml}
+    ${topActionsToolbarHtml}
+    ${reviewTabsHtml}
     <div id="doctorReviewAriaLive" aria-live="polite" class="sr-only" style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0;"></div>
-    ${demoCaseBanner}
-    ${emergencyDoctorBanner}
-    <div class="summary-list">
-      <div><span>${isEn ? 'Rules-based suggestion' : 'اقتراح مبني على قواعد'}</span><strong>${(isEn ? c.aiScoreEn : c.aiScore) || (isEn ? 'Not clinically validated' : 'غير مدقق سريرياً')}${isDemoCase ? ' (Demo Data)' : ''}</strong></div>
-      <div><span>${isEn ? 'Rule score' : 'مؤشر القواعد'}</span><strong>${(isEn ? c.ruleScoreLabelEn : c.ruleScoreLabelAr) || c.ruleScore || (isEn ? 'No validated confidence value' : 'لا توجد قيمة ثقة معتمدة')}</strong></div>
-      <div><span>${isEn ? 'Oxygen Level' : 'نسبة الأكسجين'}</span><strong style="${o2Value < 90 ? 'color: #ef4444;' : ''}">${o2Value || '--'}%${isDemoCase ? ' (Demo Data)' : ''}</strong></div>
-      <div><span>${isEn ? 'Duration' : 'مدة الأعراض'}</span><strong>${isEn ? c.durationEn : c.duration}${isDemoCase ? ' (Demo Data)' : ''}</strong></div>
-    </div>
-    <h4 style="margin: 16px 0 6px; font-size: 14px;">${isEn ? 'Patient History & Answers' : 'تاريخ المريض وإجاباته'}</h4>
-    ${patientDataHtml}
-    <h4 style="margin: 16px 0 6px; font-size: 14px;">${isEn ? 'Doctor Notes & Follow-up' : 'ملاحظات الطبيب والمتابعة'}</h4>
-    ${doctorNotesHtml}
-    ${triggeredRulesHtml}
-
-    <!-- DYNAMIC CLINICAL REPORT BUILDER STATION -->
-    <div class="doctor-report-builder-card" style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin: 16px 0;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
-        <h4 style="margin: 0; font-size: 14.5px; font-weight: 800; display: flex; align-items: center; gap: 8px; color: var(--teal);">
-          <span>🩺</span> ${isEn ? 'Dynamic Medical Report Builder' : 'محرر وتوليد التقرير الطبي السريري'}
-        </h4>
-        <span class="pill ok" style="font-size: 11px;">${isEn ? 'Official Physician Signature' : 'الاعتماد السريري والتوقيع'}</span>
-      </div>
-
-      <!-- Quick Diagnostic Presets -->
-      <div style="margin-bottom: 12px;">
-        <label style="font-size: 12px; font-weight: 700; color: var(--muted); display: block; margin-bottom: 6px;">
-          ${isEn ? 'Manual diagnosis shortcuts:' : 'اختصارات إدخال التشخيص اليدوي:'}
-        </label>
-        <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-          <button type="button" class="soft-button" style="font-size: 11.5px; padding: 4px 10px;" onclick="applyDiagPreset('asthma')">🫁 ${isEn ? 'Asthma Flare' : 'حساسية صدرية وربو'}</button>
-          <button type="button" class="soft-button" style="font-size: 11.5px; padding: 4px 10px;" onclick="applyDiagPreset('bronchitis')">🌡️ ${isEn ? 'Acute Bronchitis' : 'التهاب شعبي حاد'}</button>
-          <button type="button" class="soft-button" style="font-size: 11.5px; padding: 4px 10px;" onclick="applyDiagPreset('uri')">🤧 ${isEn ? 'Upper Respiratory' : 'عدوى تنفسية علوية'}</button>
-          <button type="button" class="soft-button" style="font-size: 11.5px; padding: 4px 10px;" onclick="applyDiagPreset('stable')">✔️ ${isEn ? 'Stable Assessment' : 'أعراض مستقرة للمتابعة'}</button>
-        </div>
-      </div>
-
-      <!-- Diagnosis Input -->
-      <div style="margin-bottom: 12px;">
-        <label for="doctorDiagnosisInput" style="font-weight: 800; font-size: 13px; display: block; margin-bottom: 4px;">
-          ${isEn ? '1. Physician Clinical Diagnosis & Assessment *' : '1. التشخيص الطبي السريري المعتمد *'}
-        </label>
-        <textarea id="doctorDiagnosisInput" ${isClosed ? 'disabled' : ''} placeholder="${isEn ? 'Manually enter the physician diagnosis and clinical notes. Do not rely on rule suggestions as a diagnosis.' : 'أدخل التشخيص والملاحظات السريرية يدوياً. لا تعتمد اقتراحات القواعد كتشخيص.'}" style="width: 100%; min-height: 75px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 10px; font-family: inherit; font-size: 13px;">${escapeHtml(existingDoctorNote)}</textarea>
-        <input type="hidden" id="doctorNoteInput" value="${escapeHtml(existingDoctorNote)}" />
-      </div>
-
-      <!-- Prescriptions & Medications -->
-      <div style="margin-bottom: 12px;">
-        <label for="doctorMedicationsInput" style="font-weight: 800; font-size: 13px; display: block; margin-bottom: 4px;">
-          ${isEn ? '2. Prescription & Treatment Regimen (Rx)' : '2. الخطة العلاجية والروشتة الدوائية (Rx)'}
-        </label>
-        <textarea id="doctorMedicationsInput" ${isClosed ? 'disabled' : ''} placeholder="${isEn ? 'List prescribed medications, dosage and instructions...' : 'أدخل أسماء الأدوية، الجرعات، وطريقة الاستخدام...'}" style="width: 100%; min-height: 80px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 10px; font-family: inherit; font-size: 13px;">${escapeHtml(existingMedications)}</textarea>
-      </div>
-
-      <!-- Care Plan & Recommendations -->
-      <div style="margin-bottom: 14px;">
-        <label for="doctorRecommendationsInput" style="font-weight: 800; font-size: 13px; display: block; margin-bottom: 4px;">
-          ${isEn ? '3. Clinical Recommendations & Care Plan' : '3. التوصيات الطبية وخطة المتابعة'}
-        </label>
-        <textarea id="doctorRecommendationsInput" ${isClosed ? 'disabled' : ''} placeholder="${isEn ? 'Add one recommendation per line.' : 'أضف كل توصية في سطر منفصل.'}" style="width: 100%; min-height: 85px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 10px; font-family: inherit; font-size: 13px;">${escapeHtml(existingRecommendations)}</textarea>
-      </div>
-
-      <!-- Doctor Identity & Credentials Box -->
-      <div style="background: rgba(var(--teal-rgb, 14, 165, 233), 0.05); border: 1px dashed var(--line); border-radius: 10px; padding: 12px;">
-        <span style="font-size: 12px; font-weight: 800; color: var(--teal); display: block; margin-bottom: 8px;">
-          🪪 ${isEn ? 'Doctor Credentials & Seal (Printed on report):' : 'بيانات الطبيب المعتمد والختم الرسمي (تظهر بالتقرير):'}
-        </span>
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px;">
-          <div>
-            <label style="font-size: 11px; color: var(--muted);">${isEn ? 'Doctor Name' : 'اسم الطبيب'}</label>
-            <input type="text" id="doctorNameInput" readonly value="${escapeHtml(currentDocName)}" style="width: 100%; padding: 6px 10px; font-size: 12.5px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);" />
-          </div>
-          <div>
-            <label style="font-size: 11px; color: var(--muted);">${isEn ? 'Specialty' : 'التخصص'}</label>
-            <input type="text" id="doctorSpecialtyInput" readonly value="${escapeHtml(currentDocSpec)}" style="width: 100%; padding: 6px 10px; font-size: 12.5px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);" />
-          </div>
-          <div>
-            <label style="font-size: 11px; color: var(--muted);">${isEn ? 'Syndicate License #' : 'ترخيص النقابة'}</label>
-            <input type="text" id="doctorLicenseInput" readonly value="${escapeHtml(currentDocLic)}" style="width: 100%; padding: 6px 10px; font-size: 12.5px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);" />
-          </div>
-          <div>
-            <label style="font-size: 11px; color: var(--muted);">${isEn ? 'Clinic / Hospital' : 'العيادة / المستشفى'}</label>
-            <input type="text" id="doctorClinicInput" readonly value="${escapeHtml(currentDocClinic)}" style="width: 100%; padding: 6px 10px; font-size: 12.5px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);" />
-          </div>
-        </div>
-      </div>
-    </div>
-
-    ${actionToolbarHtml}
-    ${timelineHtml}
+    ${inputsSectionHtml}
+    ${clarificationsSectionHtml}
+    ${notesSectionHtml}
+    ${timelineSectionHtml}
+    ${dockedActionsToolbarHtml}
   `;
 
   // Highlight active button in queue
@@ -4769,6 +5009,12 @@ async function selectDoctorCase(id) {
     Array.from(queueList.children).forEach(btn => btn.style.border = "none");
     const activeBtn = Array.from(queueList.children).find(btn => btn.dataset && btn.dataset.caseId === id);
     if (activeBtn) activeBtn.style.border = "2px solid var(--teal)";
+  }
+
+  // Sync active review tab visibility
+  if (window.HealthVibes?.DoctorUI?.switchReviewTab) {
+    const curTab = window.HealthVibes.DoctorUI.getActiveReviewTab ? window.HealthVibes.DoctorUI.getActiveReviewTab() : "inputs";
+    window.HealthVibes.DoctorUI.switchReviewTab(curTab);
   }
 
   // Attach auto-save listeners to draft textareas to preserve doctor notes
@@ -4948,6 +5194,45 @@ function toFriendlyAppError(err, context = "") {
         : "يوجد حساب مسجل مسبقاً بهذا البريد الإلكتروني في النظام.",
       action: isEn ? "Please switch to 'Sign In' or recover your password if you forgot it." : "يرجى التبديل إلى 'تسجيل الدخول' أو استعادة كلمة المرور إذا كنت قد نسيتها.",
       ref: code || "auth/email-already-in-use"
+    };
+  }
+
+  if (code.includes("credential-already-in-use")) {
+    return {
+      icon: "⚠️",
+      category: isEn ? "Account Conflict" : "تعارض في الحساب",
+      title: isEn ? "Sign-In Method Already Linked" : "وسيلة الدخول مرتبطة بحساب آخر",
+      message: isEn
+        ? "This credential is already connected to another Health Vibes profile. Medical records cannot be merged automatically."
+        : "وسيلة تسجيل الدخول هذه مرتبطة بالفعل بملف مستخدم آخر. لحماية خصوصية وسجلات المرضى، لا يمكن دمج الحسابات تلقائياً.",
+      action: isEn ? "Sign in using that method directly, or verify ownership of both accounts." : "يرجى تسجيل الدخول بتلك الوسيلة مباشرة، أو إثبات ملكية الحسابين للتنسيق.",
+      ref: code || "auth/credential-already-in-use"
+    };
+  }
+
+  if (code.includes("account-exists-with-different-credential")) {
+    return {
+      icon: "⚠️",
+      category: isEn ? "Account Conflict" : "تعارض في الحساب",
+      title: isEn ? "Account Exists with Password" : "الحساب مسجل مسبقاً بكلمة مرور",
+      message: isEn
+        ? "An account with this email address already exists using a password. Please sign in with your email and password first, then link Google from your Profile settings."
+        : "يوجد حساب مسجل بهذا البريد مسبقاً بكلمة المرور. يرجى تسجيل الدخول بالبريد وكلمة المرور أولاً، ثم ربط حساب Google من إعدادات الملف الشخصي.",
+      action: isEn ? "Enter your password to sign in and prove account ownership." : "أدخل كلمة المرور لتسجيل الدخول وإثبات ملكية الحساب.",
+      ref: code || "auth/account-exists-with-different-credential"
+    };
+  }
+
+  if (code.includes("popup-closed-by-user") || code.includes("cancelled-popup-request")) {
+    return {
+      icon: "ℹ️",
+      category: isEn ? "Authentication" : "المصادقة",
+      title: isEn ? "Sign-In Canceled" : "تم إلغاء تسجيل الدخول",
+      message: isEn
+        ? "The authentication popup was closed before completing the process."
+        : "تم إغلاق نافذة المصادقة قبل اكتمال العملية.",
+      action: isEn ? "You can try again whenever you are ready." : "يمكنك المحاولة مجدداً في أي وقت.",
+      ref: code || "auth/popup-closed-by-user"
     };
   }
 
@@ -5476,6 +5761,20 @@ async function enterApp(source = "google") {
       showToast(currentLanguage === "en" ? "Signed in with Google" : "تم تسجيل الدخول بحساب جوجل");
     } catch (error) {
       console.error("Google Auth Error:", error);
+      const code = String(error.code || "").toLowerCase();
+      if (code === "auth/account-exists-with-different-credential") {
+        const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+        const conflict = window.HealthVibes?.AuthLinking?.handleAccountExistsConflict
+          ? window.HealthVibes.AuthLinking.handleAccountExistsConflict(error, isEn)
+          : null;
+        if (conflict) {
+          if (typeof authEmail !== "undefined" && authEmail && conflict.email) authEmail.value = conflict.email;
+          if (typeof setAuthMode === "function") setAuthMode("signin");
+          if (typeof authPassword !== "undefined" && authPassword) authPassword.focus();
+          showAuthError(conflict.message);
+          return;
+        }
+      }
       showAuthError(getAuthErrorMessage(error));
     }
   }
@@ -6265,7 +6564,43 @@ function updateNavVisibility() {
   bindScreenNavigation();
 }
 
+function toggleDiseaseCategory(forceExpand) {
+  const diseaseHeader = document.getElementById("navCategoryDisease");
+  const diseaseSubmenu = document.getElementById("diseaseSubmenu");
+  if (!diseaseHeader || !diseaseSubmenu) return;
+  const isExpanded = diseaseHeader.getAttribute("aria-expanded") === "true";
+  const nextState = typeof forceExpand === "boolean" ? forceExpand : !isExpanded;
+  diseaseHeader.setAttribute("aria-expanded", String(nextState));
+  if (nextState) {
+    diseaseSubmenu.removeAttribute("hidden");
+  } else {
+    diseaseSubmenu.setAttribute("hidden", "");
+  }
+}
+window.toggleDiseaseCategory = toggleDiseaseCategory;
+
+function initCategoryToggles() {
+  const diseaseHeader = document.getElementById("navCategoryDisease");
+  if (!diseaseHeader || diseaseHeader.dataset.categoryBound === "true") return;
+  diseaseHeader.dataset.categoryBound = "true";
+
+  diseaseHeader.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    toggleDiseaseCategory();
+  });
+
+  diseaseHeader.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      toggleDiseaseCategory();
+    }
+  });
+}
+window.initCategoryToggles = initCategoryToggles;
+
 function bindScreenNavigation() {
+  initCategoryToggles();
   document.querySelectorAll("[data-screen]").forEach((button) => {
     if (button.dataset.navBound === "true") return;
     button.dataset.navBound = "true";
@@ -6783,6 +7118,10 @@ async function loadUserProfileData() {
 
   handleSexOrDobChange();
   updateProfileBmi();
+
+  if (window.HealthVibes?.AuthLinkingUI?.renderProvidersInProfile) {
+    window.HealthVibes.AuthLinkingUI.renderProvidersInProfile(user);
+  }
 }
 
 async function saveUserProfileData() {
@@ -6921,6 +7260,13 @@ function showScreen(name) {
     button.classList.toggle("active", button.dataset.screen === name);
   });
 
+  const DISEASE_SCREENS = ["diabetes", "hypertension", "blood-disorders", "obesity"];
+  if (DISEASE_SCREENS.includes(name)) {
+    if (typeof toggleDiseaseCategory === "function") {
+      toggleDiseaseCategory(true);
+    }
+  }
+
   // Update mobile bottom nav active item
   document.querySelectorAll(".mobile-nav-btn").forEach((button) => {
     button.classList.toggle("active", button.dataset.mobileScreen === name);
@@ -6969,6 +7315,15 @@ function showScreen(name) {
   }
   if (name === "history") {
     renderPatientHistory();
+  }
+  if (name === "hypertension") {
+    renderPatientBpDashboard();
+  }
+  if (name === "blood-disorders") {
+    renderBloodDisordersModule();
+  }
+  if (name === "obesity") {
+    renderObesityModule();
   }
   if (name === "admin") {
     renderAdminMetrics();
@@ -7601,7 +7956,16 @@ async function renderReportScreen(targetCaseId = null) {
         </div>
       ` : '';
 
-      const moreInfoAlertHtml = caseData.status === CASE_STATUS.MORE_INFO_REQUESTED ? `
+      // Structured Clinical Clarification Thread (Patient Role)
+      const hasClarificationInfo = caseData.status === CASE_STATUS.MORE_INFO_REQUESTED
+        || (Array.isArray(caseData.clarificationCycles) && caseData.clarificationCycles.length > 0)
+        || (Array.isArray(caseData.requestHistory) && caseData.requestHistory.length > 0)
+        || Boolean(caseData.patientResponse)
+        || Boolean(caseData.moreInfoNote);
+
+      const moreInfoAlertHtml = (hasClarificationInfo && window.HealthVibes?.DoctorUI?.renderClarificationThreadHtml)
+        ? window.HealthVibes.DoctorUI.renderClarificationThreadHtml(caseData, isEn, "patient")
+        : (caseData.status === CASE_STATUS.MORE_INFO_REQUESTED ? `
         <div style="background: rgba(234, 88, 12, 0.08); border: 1.5px solid #ea580c; border-radius: 14px; padding: 18px; margin-bottom: 24px; text-align: ${isEn ? 'left' : 'right'};">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
             <strong style="color: #c2410c; display: flex; align-items: center; gap: 8px; font-size: 15px;">
@@ -7638,7 +8002,7 @@ async function renderReportScreen(targetCaseId = null) {
             </div>
           </div>
         </div>
-      ` : '';
+      ` : '');
 
       const rejectionAlertHtml = caseData.status === CASE_STATUS.REJECTED ? `
         <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; border-radius: 12px; padding: 14px; margin-bottom: 20px; text-align: ${isEn ? 'left' : 'right'};">
@@ -8702,6 +9066,423 @@ async function renderPatientHistory() {
     `;
   }
 }
+
+// ============================================================================
+// 🩸 PATIENT BLOOD PRESSURE HISTORY & TREND CONTROLLER
+// ============================================================================
+
+async function renderPatientBpDashboard() {
+  const container = document.getElementById("patientBpViewContainer");
+  if (!container) return;
+
+  const isEn = (currentLanguage || "ar") === "en";
+  const user = (typeof auth !== "undefined" && auth) ? auth.currentUser : null;
+  const patientId = user ? user.uid : "usr_patient_demo";
+  const patientName = user?.displayName || user?.email?.split("@")[0] || (isEn ? "Patient" : "مريض");
+
+  // Initial loading indicator
+  container.innerHTML = `
+    <div style="text-align: center; padding: 36px 16px; color: var(--muted);">
+      <div class="spinner" style="margin: 0 auto 12px; width: 24px; height: 24px;"></div>
+      <p style="font-size: 13.5px; margin: 0;">${isEn ? "Loading persisted blood-pressure history..." : "جاري استرجاع سجل قياسات ضغط الدم المسجلة..."}</p>
+    </div>
+  `;
+
+  let readings = [];
+
+  // 1. In-memory / direct service check (for Node environments or direct service wiring)
+  if (typeof window !== "undefined" && window.chronicHypertensionService && typeof window.chronicHypertensionService.getPatientReadings === "function") {
+    readings = window.chronicHypertensionService.getPatientReadings(patientId) || [];
+  } else if (typeof global !== "undefined" && global.chronicHypertensionService && typeof global.chronicHypertensionService.getPatientReadings === "function") {
+    readings = global.chronicHypertensionService.getPatientReadings(patientId) || [];
+  }
+
+  // 2. Authoritative Backend REST API query
+  if (readings.length === 0 && user && typeof fetch === "function") {
+    try {
+      const token = await (user?.getIdToken ? user.getIdToken() : Promise.resolve(null));
+      const headers = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const res = await fetch(`/api/chronic/hypertension/readings?limit=100`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.readings)) {
+          readings = data.readings;
+        }
+      }
+    } catch (e) {
+      // Backend request error - will fall back to Firestore if available
+    }
+  }
+
+  // 3. Fallback to Firestore cases observations if any exist for this patient
+  if (readings.length === 0 && user && typeof db !== "undefined" && db) {
+    try {
+      const snap = await db.collection("cases").where("patientId", "==", user.uid).limit(25).get();
+      if (!snap.empty) {
+        snap.forEach(doc => {
+          const c = doc.data();
+          if (Array.isArray(c.bpReadings)) {
+            readings.push(...c.bpReadings);
+          } else if (Array.isArray(c.bloodPressureHistory)) {
+            readings.push(...c.bloodPressureHistory);
+          } else if ((c.systolic || c.systolicBp) && (c.diastolic || c.diastolicBp)) {
+            readings.push({
+              id: `case_bp_${doc.id}`,
+              systolic: Number(c.systolic || c.systolicBp),
+              diastolic: Number(c.diastolic || c.diastolicBp),
+              pulse: Number(c.heartRate || c.pulse) || null,
+              unit: c.bpUnit || "mmHg",
+              measuredAt: c.bpMeasuredAt || c.submittedAt || c.createdAt || new Date().toISOString(),
+              measurementSource: c.bpSource || c.measurementSource || "manual_patient_log",
+              context: {
+                arm: c.bpArm || "right_arm",
+                posture: c.bpPosture || "sitting",
+                timing: c.bpTiming || "morning"
+              }
+            });
+          }
+        });
+      }
+    } catch (e) {
+      console.warn("Could not query patient cases for BP history:", e);
+    }
+  }
+
+  // 4. Render with PatientUI module
+  if (window.HealthVibes?.PatientUI?.renderPatientBpTrendView) {
+    window.HealthVibes.PatientUI.renderPatientBpTrendView(container, {
+      readings,
+      isEn,
+      patientName
+    });
+  } else {
+    container.innerHTML = `
+      <div style="padding: 20px; text-align: center; color: var(--amber);">
+        <span>⚠️</span> ${isEn ? "Patient Blood Pressure UI module not loaded." : "تعذر تحميل واجهة قياسات ضغط الدم."}
+      </div>
+    `;
+  }
+}
+
+function openLogBpModal() {
+  const modal = document.getElementById("patientLogBpModal");
+  if (!modal) return;
+  modal.style.display = "flex";
+  modal.setAttribute("aria-hidden", "false");
+  const sysInput = document.getElementById("bpInputSystolic");
+  if (sysInput) sysInput.focus();
+}
+
+function closeLogBpModal() {
+  const modal = document.getElementById("patientLogBpModal");
+  if (!modal) return;
+  modal.style.display = "none";
+  modal.setAttribute("aria-hidden", "true");
+}
+
+async function submitPatientBpMeasurement() {
+  const isEn = (currentLanguage || "ar") === "en";
+  const user = (typeof auth !== "undefined" && auth) ? auth.currentUser : null;
+  const patientId = user ? user.uid : "usr_patient_demo";
+
+  const sysEl = document.getElementById("bpInputSystolic");
+  const diaEl = document.getElementById("bpInputDiastolic");
+  const pulEl = document.getElementById("bpInputPulse");
+  const srcEl = document.getElementById("bpInputSource");
+  const timEl = document.getElementById("bpInputTiming");
+  const armEl = document.getElementById("bpInputArm");
+
+  const systolic = Number(sysEl?.value);
+  const diastolic = Number(diaEl?.value);
+  const pulse = pulEl?.value ? Number(pulEl.value) : null;
+  const measurementSource = srcEl?.value || "manual_patient_log";
+  const timing = timEl?.value || "morning";
+  const arm = armEl?.value || "right_arm";
+
+  if (!systolic || isNaN(systolic) || systolic < 60 || systolic > 260) {
+    if (typeof showToast === "function") {
+      showToast(isEn ? "Please enter a valid systolic value (60 - 260 mmHg)." : "يرجى إدخال قيمة صحيحة للضغط الانقباضي (60 - 260 مم زئبق).");
+    }
+    return;
+  }
+
+  if (!diastolic || isNaN(diastolic) || diastolic < 40 || diastolic > 160) {
+    if (typeof showToast === "function") {
+      showToast(isEn ? "Please enter a valid diastolic value (40 - 160 mmHg)." : "يرجى إدخال قيمة صحيحة للضغط الانبساطي (40 - 160 مم زئبق).");
+    }
+    return;
+  }
+
+  if (systolic <= diastolic) {
+    if (typeof showToast === "function") {
+      showToast(isEn ? "Systolic must be strictly greater than diastolic." : "يجب أن يكون الضغط الانقباضي أعلى من الانبساطي.");
+    }
+    return;
+  }
+
+  const payload = {
+    patientId,
+    systolic,
+    diastolic,
+    pulse,
+    unit: "mmHg",
+    measurementSource,
+    context: {
+      timing,
+      arm,
+      posture: "sitting"
+    },
+    measuredAt: new Date().toISOString()
+  };
+
+  const submitBtn = document.getElementById("btnSubmitBpReading");
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = isEn ? "Saving..." : "جاري الحفظ...";
+  }
+
+  try {
+    let saved = false;
+
+    // Direct service call if present
+    const svc = window.chronicHypertensionService || global.chronicHypertensionService;
+    if (svc && typeof svc.recordBloodPressureReading === "function") {
+      await svc.recordBloodPressureReading(payload);
+      saved = true;
+    }
+
+    // Backend REST API call
+    if (!saved && typeof fetch === "function") {
+      const token = await (user?.getIdToken ? user.getIdToken() : Promise.resolve(null));
+      const headers = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const res = await fetch("/api/chronic/hypertension/readings", {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        saved = true;
+      }
+    }
+
+    closeLogBpModal();
+    if (typeof showToast === "function") {
+      showToast(isEn ? "Measurement saved and persisted successfully." : "تم حفظ قياس ضغط الدم وتثبيته بنجاح.");
+    }
+
+    // Reset inputs
+    if (sysEl) sysEl.value = "";
+    if (diaEl) diaEl.value = "";
+    if (pulEl) pulEl.value = "";
+
+    // Refresh BP dashboard
+    await renderPatientBpDashboard();
+  } catch (err) {
+    console.error("submitPatientBpMeasurement error:", err);
+    if (typeof showToast === "function") {
+      showToast(isEn ? "Failed to record measurement. Please retry." : "تعذر حفظ القياس. يرجى إعادة المحاولة.");
+    }
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = isEn ? "Save" : "حفظ القياس / Save";
+    }
+  }
+}
+
+// Global window registration
+window.renderPatientBpDashboard = renderPatientBpDashboard;
+window.openLogBpModal = openLogBpModal;
+window.closeLogBpModal = closeLogBpModal;
+window.submitPatientBpMeasurement = submitPatientBpMeasurement;
+
+// ============================================================================
+// 🩸 BLOOD CLOTTING & BLOOD DISORDERS CONTROLLER
+// ============================================================================
+
+async function renderBloodDisordersModule() {
+  const container = document.getElementById("bloodDisordersViewContainer");
+  if (!container) return;
+
+  const isEn = (currentLanguage || "ar") === "en";
+  const user = (typeof auth !== "undefined" && auth) ? auth.currentUser : null;
+
+  container.innerHTML = `
+    <div style="text-align: center; padding: 36px 16px; color: var(--muted);">
+      <div class="spinner" style="margin: 0 auto 12px; width: 24px; height: 24px;"></div>
+      <p style="font-size: 13.5px; margin: 0;">${isEn ? "Loading Blood Disorders Module..." : "جاري استرجاع منظومة اضطرابات واعتلالات الدم..."}</p>
+    </div>
+  `;
+
+  let conditions = [];
+  let cases = [];
+  let observations = [];
+
+  // 1. Direct service fallback if in Node or shared instance
+  const bdSvc = (typeof window !== "undefined" && window.bloodDisordersService) || (typeof global !== "undefined" && global.bloodDisordersService);
+  if (bdSvc) {
+    conditions = bdSvc.getRegisteredConditions();
+    if (user?.uid) {
+      cases = bdSvc.getPatientCases(user.uid);
+      if (typeof bdSvc.getPatientClinicalObservations === "function") {
+        observations = bdSvc.getPatientClinicalObservations(user.uid);
+      }
+    }
+  }
+
+  // 2. Authoritative REST API query
+  if (conditions.length === 0 && typeof fetch === "function") {
+    try {
+      const token = await (user?.getIdToken ? user.getIdToken() : Promise.resolve(null));
+      const headers = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const res = await fetch("/api/blood-disorders/conditions", { headers });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.conditions)) {
+          conditions = data.conditions;
+        }
+      }
+
+      if (user?.uid) {
+        const casesRes = await fetch(`/api/blood-disorders/patient/${user.uid}/cases`, { headers });
+        if (casesRes.ok) {
+          const casesData = await casesRes.json();
+          if (Array.isArray(casesData.cases)) {
+            cases = casesData.cases;
+          }
+        }
+
+        const obsRes = await fetch(`/api/blood-disorders/patient/${user.uid}/observations`, { headers });
+        if (obsRes.ok) {
+          const obsData = await obsRes.json();
+          if (Array.isArray(obsData.observations)) {
+            observations = obsData.observations;
+          }
+        }
+      }
+    } catch (e) {
+      // Backend error - graceful fallback
+    }
+  }
+
+  // 3. Render UI with BloodDisordersUI module
+  if (window.HealthVibes?.BloodDisordersUI?.renderBloodDisordersScreen) {
+    window.HealthVibes.BloodDisordersUI.renderBloodDisordersScreen(container, {
+      conditions,
+      cases,
+      observations,
+      isEn,
+      currentUser: user || { role: "patient" },
+      activeTab: "conditions"
+    });
+  } else {
+    container.innerHTML = `
+      <div style="padding: 24px; text-align: center; color: var(--amber);">
+        <span>⚠️</span> ${isEn ? "Blood Disorders UI module not loaded." : "تعذر تحميل واجهة اضطرابات الدم."}
+      </div>
+    `;
+  }
+}
+
+window.renderBloodDisordersModule = renderBloodDisordersModule;
+window.loadBloodDisordersModule = renderBloodDisordersModule;
+
+async function renderObesityModule() {
+  const container = document.getElementById("obesityViewContainer");
+  if (!container) return;
+
+  const isEn = (currentLanguage || "ar") === "en";
+  const user = (typeof auth !== "undefined" && auth) ? auth.currentUser : null;
+
+  container.innerHTML = `
+    <div style="text-align: center; padding: 36px 16px; color: var(--muted);">
+      <div class="spinner" style="margin: 0 auto 12px; width: 24px; height: 24px;"></div>
+      <p style="font-size: 13.5px; margin: 0;">${isEn ? "Loading Obesity & Metabolic Health Module..." : "جاري استرجاع منظومة السمنة والصحة الأيضية..."}</p>
+    </div>
+  `;
+
+  let measurements = [];
+  let cases = [];
+
+  // 1. Direct service fallback if in Node or shared instance
+  const obSvc = (typeof window !== "undefined" && window.obesityService) || (typeof global !== "undefined" && global.obesityService);
+  if (obSvc && user?.uid) {
+    measurements = obSvc.getPatientMeasurementHistory(user.uid);
+    cases = obSvc.getPatientObesityCases(user.uid);
+  }
+
+  // 2. Authoritative REST API query
+  if (measurements.length === 0 && user?.uid && typeof fetch === "function") {
+    try {
+      const token = await (user?.getIdToken ? user.getIdToken() : Promise.resolve(null));
+      const headers = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const res = await fetch(`/api/obesity/patient/${user.uid}/measurements`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.measurements)) {
+          measurements = data.measurements;
+        }
+      }
+
+      const casesRes = await fetch(`/api/obesity/patient/${user.uid}/cases`, { headers });
+      if (casesRes.ok) {
+        const casesData = await casesRes.json();
+        if (Array.isArray(casesData.cases)) {
+          cases = casesData.cases;
+        }
+      }
+    } catch (e) {
+      // Backend error - graceful fallback
+    }
+  }
+
+  // 3. Render UI with ObesityUI module
+  if (window.HealthVibes?.ObesityUI?.renderObesityScreen) {
+    window.HealthVibes.ObesityUI.renderObesityScreen(container, {
+      measurements,
+      cases,
+      currentCase: cases.length > 0 ? cases[0] : null,
+      isEn,
+      currentUser: user || { role: "patient" },
+      activeTab: "measurements",
+      onRecordMeasurement: async (newMeas) => {
+        if (obSvc && user?.uid) {
+          obSvc.recordObesityMeasurement({ ...newMeas, patientId: user.uid });
+          renderObesityModule();
+        } else if (typeof fetch === "function" && user?.uid) {
+          try {
+            const token = await (user?.getIdToken ? user.getIdToken() : Promise.resolve(null));
+            const headers = { "Content-Type": "application/json" };
+            if (token) headers["Authorization"] = `Bearer ${token}`;
+            await fetch("/api/obesity/measurements", {
+              method: "POST",
+              headers,
+              body: JSON.stringify({ ...newMeas, patientId: user.uid })
+            });
+            renderObesityModule();
+          } catch (e) {}
+        }
+      }
+    });
+  } else {
+    container.innerHTML = `
+      <div style="padding: 24px; text-align: center; color: var(--amber);">
+        <span>⚠️</span> ${isEn ? "Obesity UI module not loaded." : "تعذر تحميل واجهة السمنة والصحة الأيضية."}
+      </div>
+    `;
+  }
+}
+
+window.renderObesityModule = renderObesityModule;
+window.loadObesityModule = renderObesityModule;
 
 // ============================================================================
 // 📅 CLINICAL APPOINTMENTS BOOKING & MANAGEMENT ENGINE
@@ -15442,7 +16223,8 @@ checkUrlAuthAction();
     const allScreenNames = [
       "patient","consent","profile","assessment","pending","result",
       "history","appointments","feedback","assistant","report",
-      "verification","doctor","kpi","admin","audit","verify-report","verify"
+      "verification","doctor","kpi","admin","audit","verify-report","verify",
+      "diabetes","hypertension","blood-disorders","obesity"
     ];
     if (allScreenNames.includes(screenFromHash)) {
       console.info(`[HashRouter] Hash navigation to '${screenFromHash}'.`);
@@ -16094,8 +16876,8 @@ window.submitPatientMoreInfo = async function(caseId) {
     return;
   }
 
-  const responseEl = document.getElementById("patientResponseInput");
-  const newO2El = document.getElementById("patientNewO2Input");
+  const responseEl = document.getElementById("patientResponseInput") || document.getElementById(`threadReplyText_${caseId}`);
+  const newO2El = document.getElementById("patientNewO2Input") || document.getElementById(`threadReplyO2_${caseId}`);
   const responseText = responseEl ? responseEl.value.trim() : "";
   const parsedO2 = newO2El && newO2El.value.trim() ? parseStrictOxygenInput(newO2El.value) : { ok: false, value: null, reason: "empty" };
 
