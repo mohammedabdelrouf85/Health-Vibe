@@ -1459,6 +1459,93 @@ html[dir="ltr"] .nav-item {
   color: var(--teal);
 }
 
+/* Expandable Navigation Category Group */
+.nav-group {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.nav-group-header {
+  position: relative;
+  cursor: pointer;
+  user-select: none;
+  justify-content: flex-start;
+}
+
+.nav-group-header .nav-label {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.nav-group-chevron {
+  font-size: 11px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.7;
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.18s ease;
+  margin-inline-start: auto;
+  padding: 2px;
+}
+
+.nav-group-header:hover .nav-group-chevron {
+  opacity: 1;
+}
+
+.nav-group-header[aria-expanded="true"] .nav-group-chevron {
+  transform: rotate(180deg);
+}
+
+.nav-group-children {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-inline-start: 16px;
+  margin-top: 2px;
+  margin-bottom: 4px;
+}
+
+.nav-group-children[hidden] {
+  display: none !important;
+}
+
+.nav-sub-item {
+  font-size: 13px;
+  min-height: 40px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  position: relative;
+  color: var(--muted);
+}
+
+.nav-sub-item .nav-icon {
+  font-size: 14px;
+  width: 20px;
+}
+
+.nav-sub-item::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  inset-inline-start: 2px;
+  width: 3px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--line);
+  transform: translateY(-50%);
+  opacity: 0.6;
+  transition: background 0.18s ease, opacity 0.18s ease, height 0.18s ease;
+}
+
+.nav-sub-item:hover::before,
+.nav-sub-item.active::before {
+  background: var(--teal);
+  opacity: 1;
+  height: 18px;
+}
+
 .account-card {
   margin-top: auto;
   border-radius: 20px;
@@ -5886,6 +5973,114 @@ body.dark .diff-val-cell .val-text.highlight-change {
   justify-content: flex-end;
   gap: 10px;
   flex-wrap: wrap;
+  align-items: center;
+}
+
+.btn-discard-draft {
+  background: transparent;
+  border: none;
+  color: #059669;
+  cursor: pointer;
+  padding: 2px 5px;
+  font-size: 11px;
+  border-radius: 4px;
+  line-height: 1;
+  transition: all 0.15s ease;
+}
+
+.btn-discard-draft:hover {
+  background: rgba(239, 68, 68, 0.15);
+  color: #dc2626;
+}
+
+body.dark .btn-discard-draft {
+  color: #34d399;
+}
+
+body.dark .btn-discard-draft:hover {
+  color: #ef4444;
+}
+
+/* Mobile Diff Cards Container (Hidden on Desktop) */
+.doctor-diff-cards-container {
+  display: none;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.doctor-diff-card {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  transition: all 0.18s ease;
+}
+
+.doctor-diff-card.changed {
+  border-inline-start: 4px solid var(--teal);
+  background: rgba(14, 165, 164, 0.04);
+}
+
+.doctor-diff-card:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
+}
+
+.diff-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed var(--line);
+}
+
+.diff-card-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.diff-card-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.diff-col-label {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.diff-card-col .val-text {
+  font-weight: 800;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+
+.diff-card-col .val-text.highlight-change {
+  color: #059669;
+}
+
+body.dark .diff-card-col .val-text.highlight-change {
+  color: #34d399;
+}
+
+.diff-verification-box label:hover {
+  color: var(--teal);
+}
+
+/* Accessible Keyboard Focus Rings */
+.btn-stale-action:focus-visible,
+.btn-clinical:focus-visible,
+.modal-close-btn:focus-visible,
+.diff-row:focus-visible,
+.identity-case-pill:focus-visible,
+.identity-date-pill:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
 }
 
 /* Mobile Layout Responsive Adaptations */
@@ -5893,6 +6088,7 @@ body.dark .diff-val-cell .val-text.highlight-change {
   .doctor-identity-header.sticky-header {
     border-radius: 12px;
     padding: 10px 12px;
+    margin-bottom: 12px;
   }
 
   .identity-header-main {
@@ -5912,12 +6108,25 @@ body.dark .diff-val-cell .val-text.highlight-change {
     gap: 8px;
   }
 
+  .identity-badge-group {
+    justify-content: flex-start;
+  }
+
   .identity-status-group {
     justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 6px;
   }
 
   .doctor-stale-revision-banner {
     padding: 12px;
+    border-radius: 12px;
+    margin-bottom: 12px;
+  }
+
+  .stale-banner-content {
+    flex-direction: column;
+    gap: 8px;
   }
 
   .stale-banner-actions {
@@ -5927,8 +6136,668 @@ body.dark .diff-val-cell .val-text.highlight-change {
 
   .btn-stale-action {
     justify-content: center;
+    width: 100%;
+    min-height: 44px;
+  }
+
+  /* Switch diff table to cards on mobile */
+  .doctor-diff-table-container {
+    display: none;
+  }
+
+  .doctor-diff-cards-container {
+    display: flex;
+  }
+
+  .doctor-modal-dialog {
+    max-height: 94vh;
+    border-radius: 16px;
+  }
+
+  .modal-dialog-header {
+    padding: 14px 16px;
+  }
+
+  .modal-dialog-body {
+    padding: 14px 16px;
+  }
+
+  .modal-dialog-footer {
+    padding: 12px 16px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .modal-dialog-footer button {
+    width: 100%;
+    justify-content: center;
+    min-height: 44px;
   }
 }
 
+@media (max-width: 480px) {
+  .identity-sub-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
 
+  .diff-card-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .identity-date-pill strong {
+    display: none;
+  }
+}
+
+/* ==========================================================================
+   DOCTOR WORKSPACE REDESIGN: SPLIT LAYOUT, GROUPED SECTIONS, TABS & ACTION DOCK
+   ========================================================================== */
+
+/* 1. Wide Screen Split Layout (Master-Detail Workspace) */
+@media (min-width: 1061px) {
+  .doctor-layout {
+    display: grid !important;
+    grid-template-columns: minmax(340px, 390px) minmax(0, 1fr) !important;
+    gap: 22px;
+    align-items: start;
+  }
+
+  .doctor-queue-panel {
+    display: flex !important;
+    flex-direction: column;
+    position: sticky;
+    top: 16px;
+    max-height: calc(100vh - 32px);
+    overflow: hidden;
+  }
+
+  .doctor-queue-panel .queue {
+    overflow-y: auto;
+    flex: 1;
+    max-height: calc(100vh - 270px);
+    padding-inline-end: 4px;
+  }
+
+  .doctor-review-panel {
+    display: block !important;
+    min-width: 0;
+  }
+
+  .doc-mobile-nav-bar {
+    display: none !important;
+  }
+}
+
+/* 2. Mobile Workspace Navigation (Queue Mode vs Review Mode) */
+@media (max-width: 1060px) {
+  .doctor-layout {
+    display: block !important;
+  }
+
+  .doctor-layout.view-queue .doctor-review-panel {
+    display: none !important;
+  }
+
+  .doctor-layout.view-queue .doctor-queue-panel {
+    display: block !important;
+    width: 100%;
+  }
+
+  .doctor-layout.view-review .doctor-queue-panel {
+    display: none !important;
+  }
+
+  .doctor-layout.view-review .doctor-review-panel {
+    display: block !important;
+    width: 100%;
+  }
+
+  .doc-mobile-nav-bar {
+    display: block;
+    margin-bottom: 12px;
+  }
+
+  /* When on mobile, toggle active section display by active review tab */
+  .doctor-review-panel #docSection-inputs,
+  .doctor-review-panel #docSection-clarifications,
+  .doctor-review-panel #docSection-notes,
+  .doctor-review-panel #docSection-timeline {
+    display: none;
+  }
+
+  .doctor-review-panel.tab-active-inputs #docSection-inputs { display: block; }
+  .doctor-review-panel.tab-active-clarifications #docSection-clarifications { display: block; }
+  .doctor-review-panel.tab-active-notes #docSection-notes { display: block; }
+  .doctor-review-panel.tab-active-timeline #docSection-timeline { display: block; }
+  .doctor-review-panel.tab-active-all #docSection-inputs,
+  .doctor-review-panel.tab-active-all #docSection-clarifications,
+  .doctor-review-panel.tab-active-all #docSection-notes,
+  .doctor-review-panel.tab-active-all #docSection-timeline { display: block; }
+}
+
+/* Mobile Back to Patient Queue Button */
+.btn-back-to-queue {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 16px;
+  background: var(--surface);
+  border: 1.5px solid var(--teal);
+  border-radius: 12px;
+  color: var(--teal);
+  font-weight: 800;
+  font-size: 13.5px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(14, 165, 164, 0.1);
+  transition: all 0.18s ease;
+  font-family: inherit;
+}
+
+.btn-back-to-queue:hover {
+  background: rgba(14, 165, 164, 0.08);
+}
+
+.btn-back-to-queue .back-arrow {
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.btn-back-to-queue .queue-count-pill {
+  margin-inline-start: auto;
+  font-size: 11px;
+  padding: 2px 8px;
+}
+
+/* 3. Accessible Review Workspace Section Tabs */
+.doctor-review-tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  margin: 12px 0 16px;
+  padding-bottom: 4px;
+}
+
+.doctor-review-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.doc-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  font-weight: 700;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.18s ease;
+  min-height: 40px;
+  font-family: inherit;
+  position: relative;
+}
+
+.doc-tab-btn:hover {
+  color: var(--ink);
+  background: var(--surface);
+  border-color: var(--teal);
+}
+
+.doc-tab-btn.active {
+  background: var(--teal);
+  color: #fff;
+  border-color: var(--teal);
+  box-shadow: 0 2px 8px rgba(14, 165, 164, 0.3);
+}
+
+.doc-tab-btn:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
+}
+
+.tab-badge-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #f59e0b;
+}
+
+.tab-badge-dot.ok {
+  background: #10b981;
+}
+
+.tab-badge-dot.info {
+  background: #3b82f6;
+}
+
+/* 4. Clearly Grouped Clinical Sections (Cards) */
+.clinical-group-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 18px 20px;
+  margin-bottom: 18px;
+  transition: all 0.2s ease;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+body.dark .clinical-group-card {
+  background: rgba(23, 37, 56, 0.7);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.clinical-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-bottom: 12px;
+  margin-bottom: 14px;
+  border-bottom: 1.5px solid var(--line);
+}
+
+.clinical-group-header .group-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.clinical-group-header h4 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.clinical-group-header .group-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+/* 5. Top Quick Review Actions Toolbar */
+.doctor-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  margin: 12px 0 14px;
+}
+
+/* 6. Bottom Docked Actions Toolbar & Virtual Keyboard Safety */
+.doctor-docked-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 15;
+  background: var(--surface);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-top: 1.5px solid var(--line);
+  border-radius: 0 0 16px 16px;
+  padding: 14px 18px;
+  margin-top: 20px;
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-bottom: max(14px, env(safe-area-inset-bottom, 14px));
+}
+
+body.dark .doctor-docked-actions {
+  background: rgba(19, 29, 45, 0.95);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.25);
+}
+
+/* Ensure Virtual Keyboard NEVER covers textareas */
+.doctor-report-builder-card textarea,
+.clinical-group-card textarea {
+  scroll-margin-bottom: 110px;
+}
+
+/* Safety for Enlarged Text & Long Records */
+.summary-list strong,
+.summary-list span,
+.identity-meta h3,
+.identity-meta span,
+.diff-val-cell .val-text,
+.doctor-diff-card .val-text {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* ==========================================================================
+   STRUCTURED CLINICAL CLARIFICATION THREAD STYLES
+   ========================================================================== */
+
+.clarification-thread-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+
+.clarification-thread-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-bottom: 12px;
+  border-bottom: 1.5px solid var(--line);
+}
+
+.clarification-cycle-card {
+  background: var(--surface);
+  border: 1.5px solid var(--line);
+  border-radius: 14px;
+  padding: 16px 18px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  overflow: hidden;
+}
+
+body.dark .clarification-cycle-card {
+  background: rgba(23, 37, 56, 0.6);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.clarification-cycle-card.state-unanswered {
+  border-color: #f97316;
+  background: color-mix(in srgb, #f97316 3%, var(--surface));
+}
+
+.clarification-cycle-card.state-submitted {
+  border-color: var(--teal);
+  background: color-mix(in srgb, var(--teal) 3%, var(--surface));
+}
+
+.clarification-cycle-card.state-reviewed {
+  border-color: #10b981;
+}
+
+.cycle-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-bottom: 12px;
+  margin-bottom: 14px;
+  border-bottom: 1px dashed var(--line);
+}
+
+.cycle-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cycle-badge {
+  font-size: 12px;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+
+/* Thread Messages */
+.thread-message {
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  line-height: 1.6;
+  font-size: 13.5px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  transition: all 0.2s ease;
+}
+
+.thread-message.doctor-request {
+  background: rgba(249, 115, 22, 0.06);
+  border: 1px solid rgba(249, 115, 22, 0.3);
+  color: var(--ink);
+}
+
+body.dark .thread-message.doctor-request {
+  background: rgba(249, 115, 22, 0.12);
+  border-color: rgba(249, 115, 22, 0.35);
+}
+
+.thread-message.patient-response {
+  background: rgba(14, 165, 164, 0.08);
+  border: 1.5px solid var(--teal);
+  color: var(--ink);
+}
+
+body.dark .thread-message.patient-response {
+  background: rgba(14, 165, 164, 0.14);
+  border-color: rgba(14, 165, 164, 0.5);
+}
+
+.message-meta-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.message-author-tag {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.message-timestamp {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.message-body-text {
+  margin: 0;
+  line-height: 1.65;
+  color: var(--ink);
+}
+
+/* Measurements Grid */
+.thread-measurements-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line);
+}
+
+.measurement-chip {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+body.dark .measurement-chip {
+  background: var(--surface-2);
+}
+
+.measurement-chip-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.measurement-chip-value {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--teal);
+}
+
+.measurement-chip-unit {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+/* Permitted Attachments Notice & Attachment Chips */
+.permitted-attachments-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: var(--surface);
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  padding: 8px 12px;
+  margin-top: 10px;
+  font-size: 11.5px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.thread-attachments-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--line);
+}
+
+.thread-attachment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.18s ease;
+}
+
+.thread-attachment-chip:hover {
+  border-color: var(--teal);
+  background: var(--cyan);
+}
+
+.thread-attachment-chip .file-size {
+  font-size: 10.5px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+/* Direct Action Card to Answer Outstanding Request */
+.thread-direct-action-card {
+  background: color-mix(in srgb, #f97316 6%, var(--surface));
+  border: 1.5px solid #f97316;
+  border-radius: 14px;
+  padding: 16px 18px;
+  margin-top: 14px;
+  box-shadow: 0 4px 14px rgba(249, 115, 22, 0.08);
+}
+
+body.dark .thread-direct-action-card {
+  background: rgba(249, 115, 22, 0.12);
+  border-color: #fb923c;
+}
+
+.thread-action-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px dashed rgba(249, 115, 22, 0.3);
+}
+
+.thread-action-header .action-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.thread-reply-textarea {
+  width: 100%;
+  border-radius: 10px;
+  border: 1.5px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  padding: 10px 14px;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.55;
+  box-sizing: border-box;
+  scroll-margin-bottom: 120px;
+  transition: border-color 0.2s ease;
+}
+
+.thread-reply-textarea:focus {
+  outline: none;
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(14, 165, 164, 0.15);
+}
+
+.thread-direct-action-card input {
+  scroll-margin-bottom: 120px;
+}
+
+/* Stored Event Audit Footer */
+.thread-audit-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dotted var(--line);
+}
+
+.thread-audit-provenance {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: monospace;
+}
 

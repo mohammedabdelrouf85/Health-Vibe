@@ -375,6 +375,38 @@
         <button class="nav-item" data-screen="consent" data-i18n-title="nav.consent"><span class="nav-icon">🔒</span><span class="nav-label" data-i18n="nav.consent">Consent & Privacy</span></button>
         <button class="nav-item" data-screen="profile" data-i18n-title="nav.profile"><span class="nav-icon">👤</span><span class="nav-label" data-i18n="nav.profile">Medical Profile</span></button>
         <button class="nav-item" data-screen="assessment" data-i18n-title="nav.assessment"><span class="nav-icon">🫁</span><span class="nav-label" data-i18n="nav.assessment">Breathing Assessment</span></button>
+
+        <!-- Expandable Disease Category -->
+        <div class="nav-group" id="navGroupDisease">
+          <button type="button" class="nav-item nav-group-header" id="navCategoryDisease" aria-expanded="false" aria-controls="diseaseSubmenu" data-i18n-title="nav.disease">
+            <span class="nav-icon">🩺</span>
+            <span class="nav-label" data-i18n="nav.disease">Disease</span>
+            <span class="nav-group-chevron" aria-hidden="true">▾</span>
+          </button>
+          <div class="nav-group-children" id="diseaseSubmenu" role="group" aria-label="Disease" hidden>
+            <button class="nav-item nav-sub-item" data-screen="disease-dashboard" data-i18n-title="nav.diseaseDashboard">
+              <span class="nav-icon">📊</span>
+              <span class="nav-label" data-i18n="diseaseDashboard.title">Disease Dashboard</span>
+            </button>
+            <button class="nav-item nav-sub-item" data-screen="diabetes" data-i18n-title="nav.diabetes">
+              <span class="nav-icon">🩸</span>
+              <span class="nav-label" data-i18n="nav.diabetes">Diabetes</span>
+            </button>
+            <button class="nav-item nav-sub-item" data-screen="hypertension" data-i18n-title="nav.hypertension">
+              <span class="nav-icon">❤️</span>
+              <span class="nav-label" data-i18n="nav.hypertension">Hypertension</span>
+            </button>
+            <button class="nav-item nav-sub-item" data-screen="blood-disorders" data-i18n-title="nav.bloodDisorders">
+              <span class="nav-icon">🩹</span>
+              <span class="nav-label" data-i18n="nav.bloodDisorders">Blood Clotting / Blood Disorders</span>
+            </button>
+            <button class="nav-item nav-sub-item" data-screen="obesity" data-i18n-title="nav.obesity">
+              <span class="nav-icon">⚖️</span>
+              <span class="nav-label" data-i18n="nav.obesity">Obesity</span>
+            </button>
+          </div>
+        </div>
+
         <button class="nav-item" data-screen="pending" data-i18n-title="nav.pending"><span class="nav-icon">⏳</span><span class="nav-label" data-i18n="nav.pending">Review Status</span></button>
         <button class="nav-item" data-screen="result" data-i18n-title="nav.result"><span class="nav-icon">📋</span><span class="nav-label" data-i18n="nav.result">Result</span></button>
         <button class="nav-item" data-screen="history" data-i18n-title="nav.history"><span class="nav-icon">📂</span><span class="nav-label" data-i18n="nav.history">History</span></button>
@@ -887,6 +919,9 @@
               </button>
             </div>
           </article>
+
+          <!-- Authentication Providers & Security Panel -->
+          <div id="authProvidersContainer" style="grid-column: 1 / -1;"></div>
 
           <!-- Account & Data Deletion Card (GDPR / HIPAA Right to Erasure) -->
           <article class="panel" id="accountDeletionCard" style="grid-column: 1 / -1; margin-top: 14px; border: 1px solid rgba(239, 68, 68, 0.25); background: rgba(239, 68, 68, 0.03);">
@@ -1617,8 +1652,8 @@
           </button>
         </div>
 
-        <div class="doctor-layout">
-          <article class="panel">
+        <div class="doctor-layout" id="doctorWorkspaceLayout">
+          <article class="panel doctor-queue-panel" id="doctorQueuePanel">
             <div class="panel-head"><h3>قائمة المرضى</h3><span class="pill ok">طبيب موثق</span></div>
             <div id="doctorQueueFilterTabs" class="status-filter-tabs">
               <!-- Rendered via JS -->
@@ -1627,7 +1662,7 @@
               <!-- Rendered via JS -->
             </div>
           </article>
-          <article class="panel" id="doctorReviewPanel" style="display: none;">
+          <article class="panel doctor-review-panel" id="doctorReviewPanel" style="display: none;">
             <!-- Rendered via JS -->
           </article>
         </div>
@@ -2339,6 +2374,115 @@
           <!-- Authenticity verification badge & integrity details rendered dynamically -->
         </div>
       </section>
+
+      <!-- Disease Module Screens -->
+      <section id="screen-disease-dashboard" class="screen">
+        <div id="diseaseDashboardContainer"></div>
+      </section>
+
+      <section id="screen-diabetes" class="screen" aria-labelledby="diabetesModuleTitle">
+        <div class="panel">
+          <div class="panel-head">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 26px;">🩸</span>
+              <div>
+                <h3 id="diabetesModuleTitle" data-i18n="common.diabetesTitle">Diabetes Module</h3>
+                <p style="font-size: 13px; color: var(--muted); margin: 2px 0 0;" data-i18n="nav.disease">Disease</p>
+              </div>
+            </div>
+            <span class="pill pending" data-i18n="common.diseaseUnderPrep">Under Clinical Preparation</span>
+          </div>
+          <div style="padding: 24px 16px; text-align: center; max-width: 600px; margin: 0 auto;">
+            <p style="font-size: 15px; color: var(--ink); line-height: 1.6; margin-bottom: 16px;" data-i18n="common.diabetesDesc">
+              Specialized clinical module for blood glucose monitoring, endocrine consultations, and certified care plans.
+            </p>
+            <div class="notice-card" style="margin-bottom: 24px; text-align: start;">
+              <p style="font-size: 13px; color: var(--muted); margin: 0; line-height: 1.5;" data-i18n="common.diseaseClinicalNotice">
+                This specialized module is under certified clinical preparation adhering to medical care standards. No unverified data or clinical results are displayed.
+              </p>
+            </div>
+            <button type="button" class="soft-button" data-screen="patient" data-i18n="common.backToHome">Return to Home</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="screen-hypertension" class="screen" aria-labelledby="hypertensionModuleTitle">
+        <div class="panel">
+          <div class="panel-head">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 26px;">❤️</span>
+              <div>
+                <h3 id="hypertensionModuleTitle" data-i18n="common.hypertensionTitle">Hypertension Module</h3>
+                <p style="font-size: 13px; color: var(--muted); margin: 2px 0 0;" data-i18n="nav.disease">Disease</p>
+              </div>
+            </div>
+            <span class="pill pending" data-i18n="common.diseaseUnderPrep">Under Clinical Preparation</span>
+          </div>
+          <div style="padding: 24px 16px; text-align: center; max-width: 600px; margin: 0 auto;">
+            <p style="font-size: 15px; color: var(--ink); line-height: 1.6; margin-bottom: 16px;" data-i18n="common.hypertensionDesc">
+              Clinical module for blood pressure tracking, hemodynamic indicators, and cardiovascular health follow-up.
+            </p>
+            <div class="notice-card" style="margin-bottom: 24px; text-align: start;">
+              <p style="font-size: 13px; color: var(--muted); margin: 0; line-height: 1.5;" data-i18n="common.diseaseClinicalNotice">
+                This specialized module is under certified clinical preparation adhering to medical care standards. No unverified data or clinical results are displayed.
+              </p>
+            </div>
+            <button type="button" class="soft-button" data-screen="patient" data-i18n="common.backToHome">Return to Home</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="screen-blood-disorders" class="screen" aria-labelledby="bloodDisordersModuleTitle">
+        <div class="panel">
+          <div class="panel-head">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 26px;">🩹</span>
+              <div>
+                <h3 id="bloodDisordersModuleTitle" data-i18n="common.bloodDisordersTitle">Blood Clotting & Blood Disorders Module</h3>
+                <p style="font-size: 13px; color: var(--muted); margin: 2px 0 0;" data-i18n="nav.disease">Disease</p>
+              </div>
+            </div>
+            <span class="pill pending" data-i18n="common.diseaseUnderPrep">Under Clinical Preparation</span>
+          </div>
+          <div style="padding: 24px 16px; text-align: center; max-width: 600px; margin: 0 auto;">
+            <p style="font-size: 15px; color: var(--ink); line-height: 1.6; margin-bottom: 16px;" data-i18n="common.bloodDisordersDesc">
+              Specialized clinical module for coagulation profiles, hematology consultations, and lab review.
+            </p>
+            <div class="notice-card" style="margin-bottom: 24px; text-align: start;">
+              <p style="font-size: 13px; color: var(--muted); margin: 0; line-height: 1.5;" data-i18n="common.diseaseClinicalNotice">
+                This specialized module is under certified clinical preparation adhering to medical care standards. No unverified data or clinical results are displayed.
+              </p>
+            </div>
+            <button type="button" class="soft-button" data-screen="patient" data-i18n="common.backToHome">Return to Home</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="screen-obesity" class="screen" aria-labelledby="obesityModuleTitle">
+        <div class="panel">
+          <div class="panel-head">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 26px;">⚖️</span>
+              <div>
+                <h3 id="obesityModuleTitle" data-i18n="common.obesityTitle">Obesity & Metabolic Health Module</h3>
+                <p style="font-size: 13px; color: var(--muted); margin: 2px 0 0;" data-i18n="nav.disease">Disease</p>
+              </div>
+            </div>
+            <span class="pill pending" data-i18n="common.diseaseUnderPrep">Under Clinical Preparation</span>
+          </div>
+          <div style="padding: 24px 16px; text-align: center; max-width: 600px; margin: 0 auto;">
+            <p style="font-size: 15px; color: var(--ink); line-height: 1.6; margin-bottom: 16px;" data-i18n="common.obesityDesc">
+              Specialized clinical module for weight management, BMI assessment, and clinical nutrition plans.
+            </p>
+            <div class="notice-card" style="margin-bottom: 24px; text-align: start;">
+              <p style="font-size: 13px; color: var(--muted); margin: 0; line-height: 1.5;" data-i18n="common.diseaseClinicalNotice">
+                This specialized module is under certified clinical preparation adhering to medical care standards. No unverified data or clinical results are displayed.
+              </p>
+            </div>
+            <button type="button" class="soft-button" data-screen="patient" data-i18n="common.backToHome">Return to Home</button>
+          </div>
+        </div>
+      </section>
     </section>
 
     <!-- Mobile Bottom Ergonomic Navigation Bar -->
@@ -2982,6 +3126,7 @@
   <script defer src="./modules/core/error-handler.js?v=1.0"></script>
   <script defer src="./modules/permissions/permissions.js?v=1.0"></script>
   <script defer src="./modules/auth/auth-service.js?v=1.0"></script>
+  <script defer src="./modules/auth/auth-linking.js?v=1.0"></script>
   <script defer src="./modules/auth/auth-ui.js?v=1.0"></script>
   <script defer src="./modules/patient/patient-service.js?v=1.0"></script>
   <script defer src="./modules/patient/patient-ui.js?v=1.0"></script>
@@ -2999,6 +3144,12 @@
   <script defer src="./modules/admin/admin-ui.js?v=1.0"></script>
   <script defer src="./modules/notifications/notifications-service.js?v=1.0"></script>
   <script defer src="./modules/notifications/notifications-ui.js?v=1.0"></script>
+  <script defer src="./modules/diabetes/diabetes-service.js?v=1.0"></script>
+  <script defer src="./modules/diabetes/diabetes-ui.js?v=1.0"></script>
+  <script defer src="./modules/hypertension/hypertension-service.js?v=1.0"></script>
+  <script defer src="./modules/hypertension/hypertension-ui.js?v=1.0"></script>
+  <script defer src="./modules/disease/disease-dashboard-service.js?v=1.0"></script>
+  <script defer src="./modules/disease/disease-dashboard-ui.js?v=1.0"></script>
   <script defer src="./config.js?v=5.0"></script>
   <script defer src="./app.js?v=5.0"></script>
 </body>

@@ -332,17 +332,18 @@ service cloud.firestore {
     // =========================================================================
     // 3. 📋 CLINICAL CASES (/cases/{caseId})
     // =========================================================================
-    // Approval and verified identity are written only by the Admin SDK backend.
+    // Direct client writes must never bypass doctor review, report approval, or modify closed cases.
     function preservesServerApproval() {
-      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-        'doctorApproved', 'approvingDoctorId', 'approvingDoctorEmail',
-        'approvingDoctorName', 'doctorLicense', 'doctorSpecialty', 'clinicName',
-        'doctorIdentity', 'approvedAt', 'reportGeneratedAt', 'generatedAt'
-      ]) && (!(request.resource.data.status in ['approved', 'closed']) || request.resource.data.status == resource.data.status) &&
-      (!('doctorApproved' in resource.data) || resource.data.doctorApproved != true ||
-       !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-         'clinicalDiagnosis', 'clinicalNotes', 'medications', 'recommendation', 'recommendations'
-       ]));
+      return resource.data.status != 'closed' &&
+             request.resource.data.status != 'closed' &&
+             request.resource.data.status != 'approved' &&
+             !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+               'doctorApproved', 'approvingDoctorId', 'approvingDoctorEmail',
+               'approvingDoctorName', 'doctorLicense', 'doctorSpecialty', 'clinicName',
+               'doctorIdentity', 'approvedAt', 'reportGeneratedAt', 'generatedAt', 'reportRef',
+               'clinicalDiagnosis', 'clinicalNotes', 'doctorNotes', 'doctorNote',
+               'medications', 'recommendation', 'recommendations', 'reviewedBy', 'reviewedAt', 'result'
+             ]);
     }
 
     match /cases/{caseId} {
@@ -359,16 +360,16 @@ service cloud.firestore {
                        ('role' in request.auth.token && request.auth.token.role == 'super_admin') ||
                        tokenClinicAdminFor(resource.data));
 
-      allow create: if isAuthenticated() &&
+      allow create: if isOwner() || (isAuthenticated() &&
                        request.auth.token.role == 'patient' &&
                        request.auth.token.email_verified == true && (
                         request.resource.data.patientId == request.auth.uid &&
                         (!('clinicId' in request.auth.token) ||
                          !('clinicId' in request.resource.data) ||
                          request.resource.data.clinicId == request.auth.token.clinicId) &&
-                        request.resource.data.status in ['draft', 'submitted', 'triaged', 'pending'] &&
+                        request.resource.data.status in ['draft', 'submitted', 'triaged', 'assigned', 'pending'] &&
                         hasNoPatientForgedClinicalResult(request.resource.data) &&
-                        isValidAssessment(request.resource.data));
+                        isValidAssessment(request.resource.data)));
 
       allow update: if isAuthenticated() &&
                         preservesServerApproval() &&
@@ -425,6 +426,151 @@ service cloud.firestore {
                      ('role' in request.auth.token && request.auth.token.role == 'super_admin') ||
                      tokenClinicAdminFor(resource.data));
       allow create, update, delete: if false;
+    }
+
+    // =========================================================================
+    // 🩺 DISEASE MODULES DATA ISOLATION (Diabetes, Hypertension, Blood Disorders, Obesity)
+    // =========================================================================
+    match /diabetes_records/{docId} {
+      allow read: if isAuthenticated() && !isSupport() && (
+        (isPatientOwnedRecord(resource.data) && hasNoUnreleasedClinicalResult(resource.data)) ||
+        isDoctorLinkedRecord(resource.data) ||
+        isClinicAdminFor(resource.data) ||
+        isSuperAdmin()
+      );
+      allow create: if isAuthenticated() && !isSupport() && (
+        (request.resource.data.patientId == request.auth.uid && hasNoPatientForgedClinicalResult(request.resource.data)) ||
+        isVerifiedDoctor() || isSuperAdmin()
+      );
+      allow update: if isAuthenticated() && !isSupport() && (
+        (isPatientOwnedRecord(resource.data) && request.resource.data.patientId == request.auth.uid && hasNoPatientForgedClinicalResult(request.resource.data)) ||
+        isDoctorLinkedRecord(resource.data) || isClinicAdminFor(resource.data) || isSuperAdmin()
+      );
+      allow delete: if isPlatformAdmin() || isClinicAdminFor(resource.data);
+    }
+
+    match /diabetes_readings/{docId} {
+      allow read: if isAuthenticated() && !isSupport() && (
+        isPatientOwnedRecord(resource.data) ||
+        isDoctorLinkedRecord(resource.data) ||
+        isClinicAdminFor(resource.data) ||
+        isSuperAdmin()
+      );
+      allow create: if isAuthenticated() && !isSupport() && (
+        request.resource.data.patientId == request.auth.uid ||
+        isVerifiedDoctor() || isSuperAdmin()
+      );
+      allow update, delete: if isPlatformAdmin() || isClinicAdminFor(resource.data);
+    }
+
+    match /diabetes_assessments/{docId} {
+      allow read: if isAuthenticated() && !isSupport() && (
+        (isPatientOwnedRecord(resource.data) && hasNoUnreleasedClinicalResult(resource.data)) ||
+        isDoctorLinkedRecord(resource.data) ||
+        isClinicAdminFor(resource.data) ||
+        isSuperAdmin()
+      );
+      allow create: if isAuthenticated() && !isSupport() && (
+        (request.resource.data.patientId == request.auth.uid && hasNoPatientForgedClinicalResult(request.resource.data)) ||
+        isVerifiedDoctor() || isSuperAdmin()
+      );
+      allow update: if isAuthenticated() && !isSupport() && (
+        (isPatientOwnedRecord(resource.data) && request.resource.data.patientId == request.auth.uid && hasNoPatientForgedClinicalResult(request.resource.data)) ||
+        isDoctorLinkedRecord(resource.data) || isClinicAdminFor(resource.data) || isSuperAdmin()
+      );
+      allow delete: if isPlatformAdmin() || isClinicAdminFor(resource.data);
+    }
+
+    match /hypertension_records/{docId} {
+      allow read: if isAuthenticated() && !isSupport() && (
+        (isPatientOwnedRecord(resource.data) && hasNoUnreleasedClinicalResult(resource.data)) ||
+        isDoctorLinkedRecord(resource.data) ||
+        isClinicAdminFor(resource.data) ||
+        isSuperAdmin()
+      );
+      allow create: if isAuthenticated() && !isSupport() && (
+        (request.resource.data.patientId == request.auth.uid && hasNoPatientForgedClinicalResult(request.resource.data)) ||
+        isVerifiedDoctor() || isSuperAdmin()
+      );
+      allow update: if isAuthenticated() && !isSupport() && (
+        (isPatientOwnedRecord(resource.data) && request.resource.data.patientId == request.auth.uid && hasNoPatientForgedClinicalResult(request.resource.data)) ||
+        isDoctorLinkedRecord(resource.data) || isClinicAdminFor(resource.data) || isSuperAdmin()
+      );
+      allow delete: if isPlatformAdmin() || isClinicAdminFor(resource.data);
+    }
+
+    match /hypertension_readings/{docId} {
+      allow read: if isAuthenticated() && !isSupport() && (
+        isPatientOwnedRecord(resource.data) ||
+        isDoctorLinkedRecord(resource.data) ||
+        isClinicAdminFor(resource.data) ||
+        isSuperAdmin()
+      );
+      allow create: if isAuthenticated() && !isSupport() && (
+        request.resource.data.patientId == request.auth.uid ||
+        isVerifiedDoctor() || isSuperAdmin()
+      );
+      allow update, delete: if isPlatformAdmin() || isClinicAdminFor(resource.data);
+    }
+
+    match /hypertension_assessments/{docId} {
+      allow read: if isAuthenticated() && !isSupport() && (
+        (isPatientOwnedRecord(resource.data) && hasNoUnreleasedClinicalResult(resource.data)) ||
+        isDoctorLinkedRecord(resource.data) ||
+        isClinicAdminFor(resource.data) ||
+        isSuperAdmin()
+      );
+      allow create: if isAuthenticated() && !isSupport() && (
+        (request.resource.data.patientId == request.auth.uid && hasNoPatientForgedClinicalResult(request.resource.data)) ||
+        isVerifiedDoctor() || isSuperAdmin()
+      );
+      allow update: if isAuthenticated() && !isSupport() && (
+        (isPatientOwnedRecord(resource.data) && request.resource.data.patientId == request.auth.uid && hasNoPatientForgedClinicalResult(request.resource.data)) ||
+        isDoctorLinkedRecord(resource.data) || isClinicAdminFor(resource.data) || isSuperAdmin()
+      );
+      allow delete: if isPlatformAdmin() || isClinicAdminFor(resource.data);
+    }
+
+    match /blood_disorders_records/{docId} {
+      allow read: if isAuthenticated() && !isSupport() && (
+        (isPatientOwnedRecord(resource.data) && hasNoUnreleasedClinicalResult(resource.data)) ||
+        isDoctorLinkedRecord(resource.data) ||
+        isClinicAdminFor(resource.data) ||
+        isSuperAdmin()
+      );
+      allow create, update: if isAuthenticated() && !isSupport() && (
+        (request.resource.data.patientId == request.auth.uid && hasNoPatientForgedClinicalResult(request.resource.data)) ||
+        isVerifiedDoctor() || isSuperAdmin()
+      );
+      allow delete: if isPlatformAdmin() || isClinicAdminFor(resource.data);
+    }
+
+    match /obesity_records/{docId} {
+      allow read: if isAuthenticated() && !isSupport() && (
+        (isPatientOwnedRecord(resource.data) && hasNoUnreleasedClinicalResult(resource.data)) ||
+        isDoctorLinkedRecord(resource.data) ||
+        isClinicAdminFor(resource.data) ||
+        isSuperAdmin()
+      );
+      allow create, update: if isAuthenticated() && !isSupport() && (
+        (request.resource.data.patientId == request.auth.uid && hasNoPatientForgedClinicalResult(request.resource.data)) ||
+        isVerifiedDoctor() || isSuperAdmin()
+      );
+      allow delete: if isPlatformAdmin() || isClinicAdminFor(resource.data);
+    }
+
+    match /disease_attachments/{docId} {
+      allow read: if isAuthenticated() && !isSupport() && (
+        isPatientOwnedRecord(resource.data) ||
+        isDoctorLinkedRecord(resource.data) ||
+        isClinicAdminFor(resource.data) ||
+        isSuperAdmin()
+      );
+      allow create: if isAuthenticated() && !isSupport() && (
+        request.resource.data.patientId == request.auth.uid ||
+        isVerifiedDoctor() || isSuperAdmin()
+      );
+      allow delete: if isPlatformAdmin() || isClinicAdminFor(resource.data);
     }
 
     // =========================================================================
@@ -553,7 +699,29 @@ service cloud.firestore {
     }
 
     // =========================================================================
-    // 🛡️ PRIVACY TOMBSTONES (/privacy_tombstones/{tombstoneId})
+    // 11. 🏢 MULTI-TENANT ORGANIZATIONS, CLINICS & MEMBERSHIPS
+    // =========================================================================
+    match /organizations/{orgId} {
+      allow read: if true;
+      allow write: if isOwner() || isSuperAdmin();
+    }
+
+    match /org_private_config/{orgId} {
+      allow read, write: if isOwner() || isSuperAdmin();
+    }
+
+    match /clinics/{clinicId} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner() || isSuperAdmin() || isClinicAdmin();
+    }
+
+    match /org_memberships/{membershipId} {
+      allow read: if isOwner() || isSuperAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow write: if isOwner() || isSuperAdmin();
+    }
+
+    // =========================================================================
+    // 12. 🛡️ PRIVACY TOMBSTONES (/privacy_tombstones/{tombstoneId})
     // Server Admin SDK authoritative suppression for GDPR / HIPAA compliance
     // =========================================================================
     match /privacy_tombstones/{tombstoneId} {
@@ -562,7 +730,7 @@ service cloud.firestore {
     }
 
     // =========================================================================
-    // 11. 👑 MASTER CATCH-ALL OVERRIDE
+    // 13. 👑 MASTER CATCH-ALL OVERRIDE
     // =========================================================================
     match /{document=**} {
       allow read, write: if false;

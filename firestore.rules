@@ -435,17 +435,18 @@ service cloud.firestore {
     // =========================================================================
     // 3. 📋 CLINICAL CASES (/cases/{caseId})
     // =========================================================================
-    // Approval and verified identity are written only by the Admin SDK backend.
+    // Direct client writes must never bypass doctor review, report approval, or modify closed cases.
     function preservesServerApproval() {
-      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-        'doctorApproved', 'approvingDoctorId', 'approvingDoctorEmail',
-        'approvingDoctorName', 'doctorLicense', 'doctorSpecialty', 'clinicName',
-        'doctorIdentity', 'approvedAt', 'reportGeneratedAt', 'generatedAt'
-      ]) && (!(request.resource.data.status in ['approved', 'closed']) || request.resource.data.status == resource.data.status) &&
-      (!('doctorApproved' in resource.data) || resource.data.doctorApproved != true ||
-       !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-         'clinicalDiagnosis', 'clinicalNotes', 'medications', 'recommendation', 'recommendations'
-       ]));
+      return resource.data.status != 'closed' &&
+             request.resource.data.status != 'closed' &&
+             request.resource.data.status != 'approved' &&
+             !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+               'doctorApproved', 'approvingDoctorId', 'approvingDoctorEmail',
+               'approvingDoctorName', 'doctorLicense', 'doctorSpecialty', 'clinicName',
+               'doctorIdentity', 'approvedAt', 'reportGeneratedAt', 'generatedAt', 'reportRef',
+               'clinicalDiagnosis', 'clinicalNotes', 'doctorNotes', 'doctorNote',
+               'medications', 'recommendation', 'recommendations', 'reviewedBy', 'reviewedAt', 'result'
+             ]);
     }
 
     match /cases/{caseId} {
@@ -706,7 +707,31 @@ service cloud.firestore {
     }
 
     // =========================================================================
-    // ⚙️ OPERATIONAL FEATURE SWITCHES (/system_settings/operational_switches)
+    // 11. 🏢 MULTI-TENANT ORGANIZATIONS, CLINICS & MEMBERSHIPS
+    // =========================================================================
+    match /organizations/{orgId} {
+      // Public branding lookup is allowed for custom domain/portal resolution; writes restricted to platform admins
+      allow read: if true;
+      allow write: if isOwner() || isSuperAdmin();
+    }
+
+    match /org_private_config/{orgId} {
+      // Strictly shielded: secrets & private tokens can NEVER be read publicly
+      allow read, write: if isOwner() || isSuperAdmin();
+    }
+
+    match /clinics/{clinicId} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner() || isSuperAdmin() || isClinicAdmin();
+    }
+
+    match /org_memberships/{membershipId} {
+      allow read: if isOwner() || isSuperAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow write: if isOwner() || isSuperAdmin();
+    }
+
+    // =========================================================================
+    // 12. ⚙️ OPERATIONAL FEATURE SWITCHES (/system_settings/operational_switches)
     // =========================================================================
     match /system_settings/operational_switches {
       allow read: if isAuthenticated();
@@ -723,7 +748,7 @@ service cloud.firestore {
     }
 
     // =========================================================================
-    // 11. 👑 MASTER CATCH-ALL OVERRIDE
+    // 13. 👑 MASTER CATCH-ALL OVERRIDE
     // =========================================================================
     match /{document=**} {
       allow read, write: if false;

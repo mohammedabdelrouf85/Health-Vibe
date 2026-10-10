@@ -142,7 +142,13 @@ const titles = {
   audit: "سجل التدقيق",
   report: "التقرير",
   feedback: "التقييم والملاحظات",
-  kpi: "مؤشرات الأداء السريري (KPIs)"
+  kpi: "مؤشرات الأداء السريري (KPIs)",
+  disease: "الأمراض",
+  "disease-dashboard": "لوحة الأمراض المزمنة",
+  diabetes: "داء السكري",
+  hypertension: "ارتفاع ضغط الدم",
+  "blood-disorders": "تجلط الدم / اضطرابات الدم",
+  obesity: "السمنة"
 };
 
 // --- Real Role-Based Access Control (RBAC) Engine ---
@@ -275,24 +281,30 @@ const ROLE_PERMISSIONS_MAP = {
 const ROLE_ALLOWED_SCREENS = {
   [ROLES.PATIENT]: [
     "patient", "consent", "profile", "assessment", "pending", "result",
-    "history", "appointments", "feedback", "assistant", "report", "verify-report", "verify"
+    "history", "appointments", "feedback", "assistant", "report", "verify-report", "verify",
+    "diabetes", "hypertension", "blood-disorders", "obesity"
   ],
   [ROLES.DOCTOR_PENDING]: [
-    "patient", "verification", "history", "appointments", "feedback", "report", "profile", "verify-report", "verify"
+    "patient", "verification", "history", "appointments", "feedback", "report", "profile", "verify-report", "verify",
+    "diabetes", "hypertension", "blood-disorders", "obesity"
   ],
   [ROLES.DOCTOR]: [
-    "doctor", "verification", "history", "appointments", "feedback", "report", "profile", "kpi", "patient", "verify-report", "verify"
+    "doctor", "verification", "history", "appointments", "feedback", "report", "profile", "kpi", "patient", "verify-report", "verify",
+    "diabetes", "hypertension", "blood-disorders", "obesity"
   ],
   [ROLES.CLINIC_ADMIN]: [
-    "profile", "history", "appointments", "feedback", "doctor", "report", "admin", "audit", "kpi", "verify-report", "verify"
+    "profile", "history", "appointments", "feedback", "doctor", "report", "admin", "audit", "kpi", "verify-report", "verify",
+    "diabetes", "hypertension", "blood-disorders", "obesity"
   ],
   [ROLES.SUPPORT]: [
-    "profile", "kpi", "verify-report", "verify"
+    "profile", "kpi", "verify-report", "verify",
+    "diabetes", "hypertension", "blood-disorders", "obesity"
   ],
   [ROLES.SUPER_ADMIN]: [
     "patient", "consent", "profile", "assessment", "pending", "result",
     "history", "appointments", "feedback", "assistant", "verification",
-    "doctor", "kpi", "report", "admin", "audit", "verify-report", "verify"
+    "doctor", "kpi", "report", "admin", "audit", "verify-report", "verify",
+    "diabetes", "hypertension", "blood-disorders", "obesity"
   ]
 };
 
@@ -317,7 +329,8 @@ window.handleOpenDoctorApply = handleOpenDoctorApply;
 const AUTH_REQUIRED_SCREENS = [
   "consent", "profile", "assessment", "pending", "result",
   "history", "appointments", "feedback", "assistant", "report",
-  "verification", "doctor", "kpi", "admin", "audit"
+  "verification", "doctor", "kpi", "admin", "audit",
+  "diabetes", "hypertension", "blood-disorders", "obesity"
 ];
 
 /**
@@ -544,7 +557,7 @@ function hvSkeletonRows(count = 3, height = 72) {
 
 function setScreenBreadcrumb(name) {
   const screen = document.getElementById(`screen-${name}`);
-  if (!screen || !["admin", "doctor", "kpi", "audit", "verification", "report"].includes(name)) return;
+  if (!screen || !["admin", "doctor", "kpi", "audit", "verification", "report", "diabetes", "hypertension", "blood-disorders", "obesity"].includes(name)) return;
   let crumb = screen.querySelector(":scope > .hv-breadcrumb");
   if (!crumb) {
     crumb = document.createElement("nav");
@@ -730,7 +743,13 @@ const englishTitles = {
   audit: "Audit Log",
   report: "Report",
   feedback: "Feedback & Rating",
-  kpi: "KPI Dashboard"
+  kpi: "KPI Dashboard",
+  disease: "Disease",
+  "disease-dashboard": "Disease Dashboard",
+  diabetes: "Diabetes",
+  hypertension: "Hypertension",
+  "blood-disorders": "Blood Clotting / Blood Disorders",
+  obesity: "Obesity"
 };
 
 const englishRoleLabels = {
@@ -2500,7 +2519,6 @@ async function callBackend(path, options = {}) {
       throw obsoleteErr;
     }
   }
-
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
     if (response.status === 401 && payload.error === 'TOKEN_REVOKED') {
@@ -2514,7 +2532,13 @@ async function callBackend(path, options = {}) {
           : 'تم إنهاء جلستك من كافة الأجهزة. يرجى تسجيل الدخول مجدداً.');
       }
     }
-    throw new Error(payload.message || payload.error || `Backend request failed (${response.status})`);
+    const error = new Error(payload.message || payload.error || `Backend request failed (${response.status})`);
+    error.status = response.status;
+    error.statusCode = response.status;
+    error.payload = payload;
+    error.error = payload.error;
+    error.conflict = payload.conflict;
+    throw error;
   }
 
   return payload;
@@ -3432,11 +3456,19 @@ async function updateCaseStatus(id, newStatus, note, extraFields = {}) {
       showToast(isEn ? "A note or reason is required before saving this action." : "يجب تسجيل ملاحظة أو سبب قبل حفظ هذا الإجراء.");
       return false;
     }
+
+    const reviewedRev = extraFields.clinicalRevision !== undefined
+      ? Number(extraFields.clinicalRevision)
+      : (window._doctorActiveCaseReviewedRevision !== undefined ? Number(window._doctorActiveCaseReviewedRevision) : 1);
+
     const res = await callBackend("/api/doctor/transition-case-status", {
       method: "POST",
       body: JSON.stringify({
         caseId: id,
         targetStatus: newStatus,
+        clinicalRevision: reviewedRev,
+        reviewedRevision: extraFields.reviewedRevision !== undefined ? Number(extraFields.reviewedRevision) : reviewedRev,
+        reviewedSnapshot: extraFields.reviewedSnapshot || window._doctorActiveCaseReviewedSnapshot || null,
         note: note || "",
         clinicalNotes: extraFields.clinicalNotes || note || "",
         clinicalDiagnosis: extraFields.clinicalDiagnosis || extraFields.clinicalNotes || note || "",
@@ -3470,6 +3502,10 @@ async function updateCaseStatus(id, newStatus, note, extraFields = {}) {
     return true;
   } catch (err) {
     console.error("❌ Error updating case status through backend:", err);
+    if ((err.status === 409 || err.statusCode === 409) && (err.payload?.error === 'CLINICAL_DATA_CONFLICT' || err.error === 'CLINICAL_DATA_CONFLICT' || err.conflict || err.payload?.conflict)) {
+      handleDoctorApprovalConflict(id, err.payload || { error: err.error, message: err.message, conflict: err.conflict });
+      return false;
+    }
     if (handleServerPermissionDenied(err, "Update Case Status")) return false;
     showToast(getAuthErrorMessage(err) || (isEn ? "Failed to update case status." : "فشل تحديث حالة الملف الطبي."));
     return false;
@@ -3564,6 +3600,176 @@ function parseDoctorRecommendations(rawText) {
     .map((item) => item.replace(/^[\s\-*•\d.)]+/, "").trim())
     .filter(Boolean);
 }
+
+function handleDoctorApprovalConflict(caseId, conflictData) {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  const conflict = conflictData?.conflict || {};
+  const updatedCase = conflict.updatedCase || {};
+  const currentRev = conflict.currentRevision || (window._doctorActiveCaseReviewedRevision ? window._doctorActiveCaseReviewedRevision + 1 : 2);
+  const reviewedRev = conflict.reviewedRevision || window._doctorActiveCaseReviewedRevision || 1;
+
+  // 1. Preserve doctor's unsaved notes without saving/applying them to the database
+  const diagInput = document.getElementById("doctorDiagnosisInput") || document.getElementById("doctorNoteInput");
+  const medInput = document.getElementById("doctorMedicationsInput");
+  const recInput = document.getElementById("doctorRecommendationsInput");
+
+  const unsavedNotes = {
+    diagnosis: diagInput ? diagInput.value : "",
+    medications: medInput ? medInput.value : "",
+    recommendations: recInput ? recInput.value : ""
+  };
+  window._doctorPreservedUnsavedNotes = unsavedNotes;
+  window._doctorActiveConflictUpdatedCase = updatedCase;
+
+  // 2. Render structured conflict banner in review panel
+  let banner = document.getElementById("doctorConflictBanner");
+  if (!banner) {
+    banner = document.createElement("div");
+    banner.id = "doctorConflictBanner";
+    const panel = document.getElementById("doctorReviewPanel");
+    if (panel) panel.insertBefore(banner, panel.firstChild);
+  }
+
+  const changed = Array.isArray(conflict.changedFields) ? conflict.changedFields : ['clinicalRevision'];
+  const badges = changed.map(f => {
+    let lbl = f;
+    if (f === 'patientResponse') lbl = isEn ? 'New Patient Reply' : 'رد جديد من المريض';
+    else if (f === 'oxygenLevel' || f === 'o2') lbl = isEn ? 'Updated Oxygen Level' : 'تحديث نسبة الأكسجين';
+    else if (f === 'assignedDoctorId') lbl = isEn ? 'Doctor Reassignment' : 'تغيير الطبيب المعالج';
+    else if (f === 'clinicalRevision') lbl = isEn ? 'Clinical Revision Incremented' : 'تحديث مراجعة البيانات';
+    return `<span class="pill danger" style="font-size: 11px; padding: 2px 7px; margin: 2px;">${lbl}</span>`;
+  }).join(' ');
+
+  const newO2 = updatedCase.oxygenLevel ?? updatedCase.o2;
+  const newReply = updatedCase.patientResponse;
+
+  banner.style.display = "block";
+  banner.className = "doctor-conflict-banner";
+  banner.style.cssText = "background: rgba(239, 68, 68, 0.08); border: 2px solid #ef4444; border-radius: 12px; padding: 14px; margin-bottom: 16px;";
+
+  banner.innerHTML = `
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap;">
+      <div style="display: flex; gap: 10px; align-items: center;">
+        <span style="font-size: 24px;">⚠️</span>
+        <div>
+          <strong style="color: #dc2626; font-size: 14px; display: block;">
+            ${isEn ? 'Clinical Data Update Conflict — Approval Rejected' : 'تعارض سريري: تم تعديل بيانات الحالة أثناء المراجعة'}
+          </strong>
+          <span style="font-size: 12px; color: var(--ink);">
+            ${isEn
+              ? `Case was updated while under review (Revision #${reviewedRev} ➔ #${currentRev}). Approval was atomically blocked to ensure patient safety.`
+              : `تم تحديث بيانات الحالة أثناء قيامك بالفحص (المراجعة #${reviewedRev} ➔ #${currentRev}). تم إيقاف الاعتماد آلياً للحفاظ على سلامة المريض.`}
+          </span>
+        </div>
+      </div>
+      <span class="pill danger" style="font-weight: 800; font-size: 11px;">HTTP 409 Conflict</span>
+    </div>
+
+    <div style="margin: 10px 0; padding: 8px 12px; background: var(--surface); border-radius: 8px; border: 1px dashed rgba(239, 68, 68, 0.3);">
+      <div style="font-size: 12px; font-weight: 700; margin-bottom: 4px; color: var(--muted);">
+        ${isEn ? 'Updated Attributes:' : 'التغييرات المسجلة:'} ${badges}
+      </div>
+      ${newO2 !== undefined && newO2 !== null ? `
+        <div style="font-size: 12.5px; margin-bottom: 3px;">
+          🫁 <strong>${isEn ? 'Updated Oxygen Saturation (SpO2):' : 'نسبة الأكسجين المحدثة:'}</strong> <span style="font-weight: 800; color: ${newO2 < 90 ? '#ef4444' : 'var(--teal)'};">${newO2}%</span>
+        </div>
+      ` : ''}
+      ${newReply ? `
+        <div style="font-size: 12.5px; margin-bottom: 3px;">
+          📩 <strong>${isEn ? 'Patient Follow-up Response:' : 'رد المريض الوارد:'}</strong> <span style="font-weight: 600; color: var(--ink); background: rgba(14, 165, 164, 0.1); padding: 1px 6px; border-radius: 4px;">"${escapeHtml(newReply)}"</span>
+        </div>
+      ` : ''}
+    </div>
+
+    <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid #10b981; border-radius: 8px; padding: 6px 10px; margin-bottom: 10px; font-size: 12px; color: #047857;">
+      🛡️ <strong>${isEn ? "Unsaved Doctor Notes Preserved:" : "تم الحفاظ على مسودة ملاحظاتك السريرية:"}</strong>
+      ${isEn
+        ? "Your diagnosis, medications, and care plan remain in the form. They have NOT been applied to the patient record."
+        : "التشخيص والروشتة والتوصيات التي كتبتها لا تزال محفوظة في الحقول، ولم تُسجل أو تُطبق تلقائياً على الملف الطبي."}
+    </div>
+
+    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+      <button type="button" id="btnAcknowledgeConflict" class="btn-clinical resume" style="padding: 7px 14px; font-size: 12.5px; font-weight: 700;" onclick="acknowledgeConflictAndReview('${caseId}', ${currentRev})">
+        👁️ ${isEn ? 'Review Updated Information & Enable Approval' : 'مراجعة البيانات المحدثة وتمكين الاعتماد'}
+      </button>
+    </div>
+  `;
+
+  banner.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+window.acknowledgeConflictAndReview = function(caseId, newRevision, newSnapshot) {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+
+  // Retain unsaved doctor inputs
+  const diagInput = document.getElementById("doctorDiagnosisInput") || document.getElementById("doctorNoteInput");
+  const medInput = document.getElementById("doctorMedicationsInput");
+  const recInput = document.getElementById("doctorRecommendationsInput");
+  const curDiag = diagInput ? diagInput.value : "";
+  const curMeds = medInput ? medInput.value : "";
+  const curRecs = recInput ? recInput.value : "";
+
+  // Advance reviewed revision pointer
+  window._doctorActiveCaseReviewedRevision = Number(newRevision);
+
+  // Advance reviewed snapshot baseline to match acknowledged update
+  if (newSnapshot) {
+    window._doctorActiveCaseReviewedSnapshot = newSnapshot;
+  } else if (window._doctorActiveConflictUpdatedCase) {
+    const uc = window._doctorActiveConflictUpdatedCase;
+    window._doctorActiveCaseReviewedSnapshot = {
+      oxygenLevel: uc.oxygenLevel ?? uc.o2 ?? null,
+      o2: uc.o2 ?? uc.oxygenLevel ?? null,
+      patientResponse: uc.patientResponse || null,
+      assignedDoctorId: uc.assignedDoctorId || null
+    };
+  }
+
+  const revBadge = document.getElementById("doctorCaseRevisionBadge");
+  if (revBadge) {
+    revBadge.textContent = isEn ? `Rev #${newRevision}` : `مراجعة #${newRevision}`;
+  }
+
+  const banner = document.getElementById("doctorConflictBanner");
+  if (banner) {
+    banner.style.background = "rgba(16, 185, 129, 0.08)";
+    banner.style.borderColor = "#10b981";
+    banner.innerHTML = `
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 18px;">✅</span>
+          <div>
+            <strong style="color: #047857; font-size: 13px; display: block;">
+              ${isEn ? `Updated Case Reviewed (Revision #${newRevision})` : `تمت مراجعة تحديثات الحالة (مراجعة #${newRevision})`}
+            </strong>
+            <span style="font-size: 11.5px; color: var(--ink);">
+              ${isEn
+                ? "Your unsaved notes are preserved. You may now review/modify them and submit approval."
+                : "تم الحفاظ على ملاحظاتك دون تعديل. يمكنك تدقيقها والضغط على 'توليد واعتماد التقرير' لإتمام العملية."}
+            </span>
+          </div>
+        </div>
+        <button type="button" class="soft-button" style="font-size: 11px; padding: 2px 6px;" onclick="clearDoctorConflictBanner()">✕</button>
+      </div>
+    `;
+  }
+
+  // Ensure inputs still hold doctor notes
+  if (diagInput) diagInput.value = curDiag;
+  if (medInput) medInput.value = curMeds;
+  if (recInput) recInput.value = curRecs;
+
+  showToast(isEn ? `Reviewed revision #${newRevision}. You can now approve.` : `تمت مراجعة التحديثات (#${newRevision}). يمكنك الآن اعتماد التقرير.`);
+};
+
+function clearDoctorConflictBanner() {
+  const banner = document.getElementById("doctorConflictBanner");
+  if (banner) {
+    banner.style.display = "none";
+    banner.innerHTML = "";
+  }
+}
+window.clearDoctorConflictBanner = clearDoctorConflictBanner;
 
 function getCaseOxygenValue(c) {
   const value = Number(c && (c.o2 ?? c.oxygenLevel ?? c.assessment?.oxygenLevel ?? c.assessment?.o2));
@@ -3728,6 +3934,16 @@ window.applyDiagPreset = function(presetKey) {
     if (noteInput) noteInput.value = selected.diag;
     if (medInput) medInput.value = selected.meds;
     if (recInput) recInput.value = selected.recs;
+
+    // Immediately preserve applied preset in draft notes
+    if (activeCaseId && window.HealthVibes?.DoctorUI?.saveDraftNotes) {
+      window.HealthVibes.DoctorUI.saveDraftNotes(activeCaseId, {
+        diagnosis: selected.diag,
+        medications: selected.meds,
+        recommendations: selected.recs
+      });
+    }
+
     showToast(isEn ? "Diagnostic preset applied" : "تم تطبيق القالب التشخيصي");
   }
 };
@@ -3794,6 +4010,10 @@ window.generateAndApproveReport = async function(id) {
 
   const reportRef = `HV-REP-${id.slice(-8).toUpperCase()}`;
 
+  const reviewedRevision = window._doctorActiveCaseReviewedRevision !== undefined
+    ? Number(window._doctorActiveCaseReviewedRevision)
+    : 1;
+
   const payload = {
     clinicalDiagnosis,
     clinicalNotes: clinicalDiagnosis,
@@ -3802,11 +4022,15 @@ window.generateAndApproveReport = async function(id) {
     recommendations,
     recommendation: recommendations.join("\n"),
     reportRef,
-    reportGeneratedAt: new Date().toISOString()
+    reportGeneratedAt: new Date().toISOString(),
+    clinicalRevision: reviewedRevision,
+    reviewedRevision: reviewedRevision,
+    reviewedSnapshot: window._doctorActiveCaseReviewedSnapshot || null
   };
 
   const success = await updateCaseStatus(id, CASE_STATUS.APPROVED, clinicalDiagnosis, payload);
   if (success) {
+    if (typeof clearDoctorConflictBanner === "function") clearDoctorConflictBanner();
     if (window.HealthVibes?.DoctorUI?.clearDraftNotes) {
       window.HealthVibes.DoctorUI.clearDraftNotes(id);
     }
@@ -4138,12 +4362,37 @@ function renderDoctorQueueItems(allCases) {
       </div>
       ${riskBadge || ''}
     `;
-    btn.onclick = () => selectDoctorCase(c.id);
+    btn.onclick = () => {
+      if (typeof window !== "undefined" && window.innerWidth <= 1060 && window.HealthVibes?.DoctorUI?.openCaseOnMobile) {
+        window.HealthVibes.DoctorUI.openCaseOnMobile(c.id);
+      } else {
+        selectDoctorCase(c.id);
+      }
+    };
     queueList.appendChild(btn);
   });
 
-  if (cases.length > 0 && (!activeCaseId || !cases.some(c => c.id === activeCaseId))) {
-    selectDoctorCase(cases[0].id);
+  // Track queue scroll position for preservation
+  queueList.onscroll = () => {
+    if (window.HealthVibes?.DoctorUI?.setSavedQueueScrollTop) {
+      window.HealthVibes.DoctorUI.setSavedQueueScrollTop(queueList.scrollTop);
+    }
+  };
+
+  if (cases.length > 0) {
+    if (!activeCaseId || !cases.some(c => c.id === activeCaseId)) {
+      selectDoctorCase(cases[0].id);
+    } else {
+      selectDoctorCase(activeCaseId);
+    }
+  }
+
+  // Restore saved queue scroll position if present
+  if (window.HealthVibes?.DoctorUI?.getSavedQueueScrollTop) {
+    const savedPos = window.HealthVibes.DoctorUI.getSavedQueueScrollTop();
+    if (savedPos > 0) {
+      queueList.scrollTop = savedPos;
+    }
   }
 }
 
@@ -4289,6 +4538,20 @@ function renderDoctorQueueError(err) {
   `;
 }
 async function selectDoctorCase(id) {
+  // Preserve unsaved notes from outgoing case before switching
+  if (activeCaseId && activeCaseId !== id && window.HealthVibes?.DoctorUI?.saveDraftNotes) {
+    const prevDiag = document.getElementById("doctorDiagnosisInput");
+    const prevMeds = document.getElementById("doctorMedicationsInput");
+    const prevRecs = document.getElementById("doctorRecommendationsInput");
+    if (prevDiag || prevMeds || prevRecs) {
+      window.HealthVibes.DoctorUI.saveDraftNotes(activeCaseId, {
+        diagnosis: prevDiag ? prevDiag.value : "",
+        medications: prevMeds ? prevMeds.value : "",
+        recommendations: prevRecs ? prevRecs.value : ""
+      });
+    }
+  }
+
   activeCaseId = id;
   if (window.asyncContextManager) {
     window.asyncContextManager.switchCase(id);
@@ -4343,6 +4606,22 @@ async function selectDoctorCase(id) {
       }
     }
   }
+
+  const currentRev = c.clinicalRevision !== undefined ? Number(c.clinicalRevision) : 1;
+  window._doctorActiveCaseReviewedRevision = currentRev;
+  window._doctorActiveCaseReviewedSnapshot = {
+    oxygenLevel: c.oxygenLevel ?? c.o2 ?? null,
+    o2: c.o2 ?? c.oxygenLevel ?? null,
+    patientResponse: c.patientResponse || null,
+    assignedDoctorId: c.assignedDoctorId || null,
+    fastingGlucose: c.fastingGlucose ?? null,
+    postprandialGlucose: c.postprandialGlucose ?? null,
+    bloodGlucose: c.bloodGlucose ?? null,
+    hba1c: c.hba1c ?? null,
+    ketones: c.ketones ?? null,
+    activeInsulinRegimen: c.activeInsulinRegimen ?? null,
+    diabetesType: c.diabetesType ?? null
+  };
 
   reviewPanel.style.display = "block";
 
@@ -4658,7 +4937,10 @@ async function selectDoctorCase(id) {
       <div class="panel-head">
         <div>
           <h3 style="margin: 0;">${isEn ? 'Reviewing ' + (c.nameEn || c.name) : 'مراجعة حالة ' + c.name}</h3>
-          <small style="color: var(--muted);">${isEn ? 'Case ID: #' + c.id.slice(-6).toUpperCase() : 'رقم الحالة: #' + c.id.slice(-6).toUpperCase()}</small>
+          <div style="display: flex; gap: 8px; align-items: center; margin-top: 2px;">
+            <small style="color: var(--muted);">${isEn ? 'Case ID: #' + c.id.slice(-6).toUpperCase() : 'رقم الحالة: #' + c.id.slice(-6).toUpperCase()}</small>
+            <span class="pill info" id="doctorCaseRevisionBadge" style="font-size: 11px; padding: 1px 7px;">${isEn ? 'Rev #' + currentRev : 'مراجعة #' + currentRev}</span>
+          </div>
         </div>
         ${statusPill}
       </div>
@@ -4668,99 +4950,187 @@ async function selectDoctorCase(id) {
     ? window.HealthVibes.DoctorUI.renderStaleRevisionBanner(c, isEn)
     : '';
 
+  const mobileNavBarHtml = (window.HealthVibes?.DoctorUI?.renderMobileNavBar)
+    ? window.HealthVibes.DoctorUI.renderMobileNavBar(c, isEn, cases.length)
+    : '';
+
+  const reviewTabsHtml = (window.HealthVibes?.DoctorUI?.renderReviewTabs)
+    ? window.HealthVibes.DoctorUI.renderReviewTabs(c, isEn)
+    : '';
+
+  const topActionsToolbarHtml = `
+    <div class="doctor-top-actions">
+      ${approveButtonHtml}
+      <button type="button" class="btn-clinical resume" onclick="previewCaseReport('${c.id}')" title="${isEn ? 'Preview report before final approval' : 'معاينة شكل التقرير الطبي قبل الاعتماد'}">
+        <span>👁️</span> ${isEn ? 'Preview Report' : 'معاينة التقرير'}
+      </button>
+      <button type="button" class="soft-button" onclick="HealthVibes?.DoctorUI?.switchReviewTab('notes')" title="${isEn ? 'Jump to notes' : 'الانتقال للتشخيص والروشتة'}">
+        <span>✏️</span> ${isEn ? 'Write Diagnosis' : 'كتابة التشخيص'}
+      </button>
+    </div>
+  `;
+
+  // 1. Grouped Clinical Inputs & Triage Assessment
+  const inputsSectionHtml = `
+    <section class="clinical-group-card" id="docSection-inputs" role="region" aria-label="${isEn ? 'Clinical Inputs & Triage Assessment' : 'المدخلات السريرية والفرز الطبي'}">
+      <div class="clinical-group-header">
+        <div class="group-title-row">
+          <span class="group-icon">📋</span>
+          <h4>${isEn ? 'Clinical Inputs & Triage Assessment' : 'المدخلات السريرية والفرز الطبي'}</h4>
+        </div>
+        <span class="pill info" style="font-size: 11px;">${isEn ? 'Patient Reported Data' : 'بيانات المريض المسجلة'}</span>
+      </div>
+      ${demoCaseBanner}
+      ${emergencyDoctorBanner}
+      <div class="summary-list">
+        <div><span>${isEn ? 'Rules-based suggestion' : 'اقتراح مبني على قواعد'}</span><strong>${(isEn ? c.aiScoreEn : c.aiScore) || (isEn ? 'Not clinically validated' : 'غير مدقق سريرياً')}${isDemoCase ? ' (Demo Data)' : ''}</strong></div>
+        <div><span>${isEn ? 'Rule score' : 'مؤشر القواعد'}</span><strong>${(isEn ? c.ruleScoreLabelEn : c.ruleScoreLabelAr) || c.ruleScore || (isEn ? 'No validated confidence value' : 'لا توجد قيمة ثقة معتمدة')}</strong></div>
+        <div><span>${isEn ? 'Oxygen Level' : 'نسبة الأكسجين'}</span><strong style="${o2Value < 90 ? 'color: #ef4444;' : ''}">${o2Value || '--'}%${isDemoCase ? ' (Demo Data)' : ''}</strong></div>
+        <div><span>${isEn ? 'Duration' : 'مدة الأعراض'}</span><strong>${isEn ? c.durationEn : c.duration}${isDemoCase ? ' (Demo Data)' : ''}</strong></div>
+      </div>
+      <h5 style="margin: 16px 0 6px; font-size: 13.5px; font-weight: 700; color: var(--ink);">${isEn ? 'Patient History & Answers' : 'تاريخ المريض وإجاباته'}</h5>
+      ${patientDataHtml}
+      ${triggeredRulesHtml}
+    </section>
+  `;
+
+  // 2. Grouped Patient Clarifications & Structured Clarification Thread
+  const clarificationThreadContent = (window.HealthVibes?.DoctorUI?.renderClarificationThreadHtml)
+    ? window.HealthVibes.DoctorUI.renderClarificationThreadHtml(c, isEn, "doctor")
+    : `
+      <div style="padding: 16px; text-align: center; color: var(--muted); background: var(--surface-2); border-radius: 10px; font-size: 13px;">
+        💬 ${isEn ? "No active patient clarifications or pending information requests for this case." : "لا توجد استفسارات معلقة أو طلبات بيانات إضافية مفتوحة لهذه الحالة."}
+      </div>
+    `;
+
+  const clarificationsSectionHtml = `
+    <section class="clinical-group-card" id="docSection-clarifications" role="region" aria-label="${isEn ? 'Structured Clinical Clarification Thread' : 'مسار الاستفسارات والتدقيق السريري'}">
+      <div class="clinical-group-header">
+        <div class="group-title-row">
+          <span class="group-icon">💬</span>
+          <h4>${isEn ? 'Structured Clinical Clarification Thread' : 'مسار الاستفسارات والتدقيق السريري'}</h4>
+        </div>
+        ${c.patientResponse ? `<span class="pill ok" style="font-size: 11px;">${isEn ? 'Response Received' : 'تم استلام الرد'}</span>` : (isMoreInfo ? `<span class="pill pending" style="font-size: 11px;">${isEn ? 'Awaiting Reply' : 'بانتظار الرد'}</span>` : `<span class="pill info" style="font-size: 11px;">${isEn ? 'No Pending Inquiry' : 'لا استفسار معلق'}</span>`)}
+      </div>
+      ${clarificationThreadContent}
+    </section>
+  `;
+
+  // 3. Grouped Doctor Notes, Prescriptions & Report Builder
+  const notesSectionHtml = `
+    <section class="clinical-group-card" id="docSection-notes" role="region" aria-label="${isEn ? 'Physician Diagnosis & Report Builder' : 'التشخيص الطبي السريري ومحرر التقرير'}">
+      <div class="clinical-group-header">
+        <div class="group-title-row">
+          <span class="group-icon">🩺</span>
+          <h4>${isEn ? 'Physician Diagnosis & Report Builder' : 'التشخيص الطبي السريري ومحرر التقرير'}</h4>
+        </div>
+        <span class="pill ok" style="font-size: 11px;">${isEn ? 'Physician Review' : 'اعتماد الطبيب'}</span>
+      </div>
+
+      <h5 style="margin: 0 0 8px; font-size: 13px; font-weight: 700; color: var(--muted);">${isEn ? 'Previously Recorded Clinical Record' : 'الملاحظات السريرية المسجلة سابقاً'}</h5>
+      ${doctorNotesHtml}
+
+      <!-- DYNAMIC CLINICAL REPORT BUILDER STATION -->
+      <div class="doctor-report-builder-card" style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin: 16px 0;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+          <h5 style="margin: 0; font-size: 14px; font-weight: 800; display: flex; align-items: center; gap: 8px; color: var(--teal);">
+            <span>🩺</span> ${isEn ? 'Dynamic Medical Report Builder' : 'محرر وتوليد التقرير الطبي السريري'}
+          </h5>
+          <span class="pill ok" style="font-size: 11px;">${isEn ? 'Official Physician Signature' : 'الاعتماد السريري والتوقيع'}</span>
+        </div>
+
+        <!-- Quick Diagnostic Presets -->
+        <div style="margin-bottom: 12px;">
+          <label style="font-size: 12px; font-weight: 700; color: var(--muted); display: block; margin-bottom: 6px;">
+            ${isEn ? 'Manual diagnosis shortcuts:' : 'اختصارات إدخال التشخيص اليدوي:'}
+          </label>
+          <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+            <button type="button" class="soft-button" style="font-size: 11.5px; padding: 4px 10px;" onclick="applyDiagPreset('asthma')">🫁 ${isEn ? 'Asthma Flare' : 'حساسية صدرية وربو'}</button>
+            <button type="button" class="soft-button" style="font-size: 11.5px; padding: 4px 10px;" onclick="applyDiagPreset('bronchitis')">🌡️ ${isEn ? 'Acute Bronchitis' : 'التهاب شعبي حاد'}</button>
+            <button type="button" class="soft-button" style="font-size: 11.5px; padding: 4px 10px;" onclick="applyDiagPreset('uri')">🤧 ${isEn ? 'Upper Respiratory' : 'عدوى تنفسية علوية'}</button>
+            <button type="button" class="soft-button" style="font-size: 11.5px; padding: 4px 10px;" onclick="applyDiagPreset('stable')">✔️ ${isEn ? 'Stable Assessment' : 'أعراض مستقرة للمتابعة'}</button>
+          </div>
+        </div>
+
+        <!-- Diagnosis Input -->
+        <div style="margin-bottom: 12px;">
+          <label for="doctorDiagnosisInput" style="font-weight: 800; font-size: 13px; display: block; margin-bottom: 4px;">
+            ${isEn ? '1. Physician Clinical Diagnosis & Assessment *' : '1. التشخيص الطبي السريري المعتمد *'}
+          </label>
+          <textarea id="doctorDiagnosisInput" ${isClosed ? 'disabled' : ''} placeholder="${isEn ? 'Manually enter the physician diagnosis and clinical notes. Do not rely on rule suggestions as a diagnosis.' : 'أدخل التشخيص والملاحظات السريرية يدوياً. لا تعتمد اقتراحات القواعد كتشخيص.'}" style="width: 100%; min-height: 75px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 10px; font-family: inherit; font-size: 13px;">${escapeHtml(existingDoctorNote)}</textarea>
+          <input type="hidden" id="doctorNoteInput" value="${escapeHtml(existingDoctorNote)}" />
+        </div>
+
+        <!-- Prescriptions & Medications -->
+        <div style="margin-bottom: 12px;">
+          <label for="doctorMedicationsInput" style="font-weight: 800; font-size: 13px; display: block; margin-bottom: 4px;">
+            ${isEn ? '2. Prescription & Treatment Regimen (Rx)' : '2. الخطة العلاجية والروشتة الدوائية (Rx)'}
+          </label>
+          <textarea id="doctorMedicationsInput" ${isClosed ? 'disabled' : ''} placeholder="${isEn ? 'List prescribed medications, dosage and instructions...' : 'أدخل أسماء الأدوية، الجرعات، وطريقة الاستخدام...'}" style="width: 100%; min-height: 80px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 10px; font-family: inherit; font-size: 13px;">${escapeHtml(existingMedications)}</textarea>
+        </div>
+
+        <!-- Care Plan & Recommendations -->
+        <div style="margin-bottom: 14px;">
+          <label for="doctorRecommendationsInput" style="font-weight: 800; font-size: 13px; display: block; margin-bottom: 4px;">
+            ${isEn ? '3. Clinical Recommendations & Care Plan' : '3. التوصيات الطبية وخطة المتابعة'}
+          </label>
+          <textarea id="doctorRecommendationsInput" ${isClosed ? 'disabled' : ''} placeholder="${isEn ? 'Add one recommendation per line.' : 'أضف كل توصية في سطر منفصل.'}" style="width: 100%; min-height: 85px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 10px; font-family: inherit; font-size: 13px;">${escapeHtml(existingRecommendations)}</textarea>
+        </div>
+
+        <!-- Doctor Identity & Credentials Box -->
+        <div style="background: rgba(var(--teal-rgb, 14, 165, 233), 0.05); border: 1px dashed var(--line); border-radius: 10px; padding: 12px;">
+          <span style="font-size: 12px; font-weight: 800; color: var(--teal); display: block; margin-bottom: 8px;">
+            🪪 ${isEn ? 'Doctor Credentials & Seal (Printed on report):' : 'بيانات الطبيب المعتمد والختم الرسمي (تظهر بالتقرير):'}
+          </span>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px;">
+            <div>
+              <label style="font-size: 11px; color: var(--muted);">${isEn ? 'Doctor Name' : 'اسم الطبيب'}</label>
+              <input type="text" id="doctorNameInput" readonly value="${escapeHtml(currentDocName)}" style="width: 100%; padding: 6px 10px; font-size: 12.5px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);" />
+            </div>
+            <div>
+              <label style="font-size: 11px; color: var(--muted);">${isEn ? 'Specialty' : 'التخصص'}</label>
+              <input type="text" id="doctorSpecialtyInput" readonly value="${escapeHtml(currentDocSpec)}" style="width: 100%; padding: 6px 10px; font-size: 12.5px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);" />
+            </div>
+            <div>
+              <label style="font-size: 11px; color: var(--muted);">${isEn ? 'Syndicate License #' : 'ترخيص النقابة'}</label>
+              <input type="text" id="doctorLicenseInput" readonly value="${escapeHtml(currentDocLic)}" style="width: 100%; padding: 6px 10px; font-size: 12.5px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);" />
+            </div>
+            <div>
+              <label style="font-size: 11px; color: var(--muted);">${isEn ? 'Clinic / Hospital' : 'العيادة / المستشفى'}</label>
+              <input type="text" id="doctorClinicInput" readonly value="${escapeHtml(currentDocClinic)}" style="width: 100%; padding: 6px 10px; font-size: 12.5px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  `;
+
+  // 4. Grouped Timeline & Status Lifecycle
+  const timelineSectionHtml = `
+    <section class="clinical-group-card" id="docSection-timeline" role="region" aria-label="${isEn ? 'Status Lifecycle & Audit Trail' : 'المسار الزمني وسجل التدقيق'}">
+      ${timelineHtml}
+    </section>
+  `;
+
+  // 5. Docked Actions Toolbar
+  const dockedActionsToolbarHtml = `
+    <div class="doctor-docked-actions">
+      ${actionToolbarHtml}
+    </div>
+  `;
+
   reviewPanel.innerHTML = `
+    ${mobileNavBarHtml}
     ${persistentHeaderHtml}
     ${staleRevisionBannerHtml}
+    ${topActionsToolbarHtml}
+    ${reviewTabsHtml}
     <div id="doctorReviewAriaLive" aria-live="polite" class="sr-only" style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0;"></div>
-    ${demoCaseBanner}
-    ${emergencyDoctorBanner}
-    <div class="summary-list">
-      <div><span>${isEn ? 'Rules-based suggestion' : 'اقتراح مبني على قواعد'}</span><strong>${(isEn ? c.aiScoreEn : c.aiScore) || (isEn ? 'Not clinically validated' : 'غير مدقق سريرياً')}${isDemoCase ? ' (Demo Data)' : ''}</strong></div>
-      <div><span>${isEn ? 'Rule score' : 'مؤشر القواعد'}</span><strong>${(isEn ? c.ruleScoreLabelEn : c.ruleScoreLabelAr) || c.ruleScore || (isEn ? 'No validated confidence value' : 'لا توجد قيمة ثقة معتمدة')}</strong></div>
-      <div><span>${isEn ? 'Oxygen Level' : 'نسبة الأكسجين'}</span><strong style="${o2Value < 90 ? 'color: #ef4444;' : ''}">${o2Value || '--'}%${isDemoCase ? ' (Demo Data)' : ''}</strong></div>
-      <div><span>${isEn ? 'Duration' : 'مدة الأعراض'}</span><strong>${isEn ? c.durationEn : c.duration}${isDemoCase ? ' (Demo Data)' : ''}</strong></div>
-    </div>
-    <h4 style="margin: 16px 0 6px; font-size: 14px;">${isEn ? 'Patient History & Answers' : 'تاريخ المريض وإجاباته'}</h4>
-    ${patientDataHtml}
-    <h4 style="margin: 16px 0 6px; font-size: 14px;">${isEn ? 'Doctor Notes & Follow-up' : 'ملاحظات الطبيب والمتابعة'}</h4>
-    ${doctorNotesHtml}
-    ${triggeredRulesHtml}
-
-    <!-- DYNAMIC CLINICAL REPORT BUILDER STATION -->
-    <div class="doctor-report-builder-card" style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin: 16px 0;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
-        <h4 style="margin: 0; font-size: 14.5px; font-weight: 800; display: flex; align-items: center; gap: 8px; color: var(--teal);">
-          <span>🩺</span> ${isEn ? 'Dynamic Medical Report Builder' : 'محرر وتوليد التقرير الطبي السريري'}
-        </h4>
-        <span class="pill ok" style="font-size: 11px;">${isEn ? 'Official Physician Signature' : 'الاعتماد السريري والتوقيع'}</span>
-      </div>
-
-      <!-- Quick Diagnostic Presets -->
-      <div style="margin-bottom: 12px;">
-        <label style="font-size: 12px; font-weight: 700; color: var(--muted); display: block; margin-bottom: 6px;">
-          ${isEn ? 'Manual diagnosis shortcuts:' : 'اختصارات إدخال التشخيص اليدوي:'}
-        </label>
-        <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-          <button type="button" class="soft-button" style="font-size: 11.5px; padding: 4px 10px;" onclick="applyDiagPreset('asthma')">🫁 ${isEn ? 'Asthma Flare' : 'حساسية صدرية وربو'}</button>
-          <button type="button" class="soft-button" style="font-size: 11.5px; padding: 4px 10px;" onclick="applyDiagPreset('bronchitis')">🌡️ ${isEn ? 'Acute Bronchitis' : 'التهاب شعبي حاد'}</button>
-          <button type="button" class="soft-button" style="font-size: 11.5px; padding: 4px 10px;" onclick="applyDiagPreset('uri')">🤧 ${isEn ? 'Upper Respiratory' : 'عدوى تنفسية علوية'}</button>
-          <button type="button" class="soft-button" style="font-size: 11.5px; padding: 4px 10px;" onclick="applyDiagPreset('stable')">✔️ ${isEn ? 'Stable Assessment' : 'أعراض مستقرة للمتابعة'}</button>
-        </div>
-      </div>
-
-      <!-- Diagnosis Input -->
-      <div style="margin-bottom: 12px;">
-        <label for="doctorDiagnosisInput" style="font-weight: 800; font-size: 13px; display: block; margin-bottom: 4px;">
-          ${isEn ? '1. Physician Clinical Diagnosis & Assessment *' : '1. التشخيص الطبي السريري المعتمد *'}
-        </label>
-        <textarea id="doctorDiagnosisInput" ${isClosed ? 'disabled' : ''} placeholder="${isEn ? 'Manually enter the physician diagnosis and clinical notes. Do not rely on rule suggestions as a diagnosis.' : 'أدخل التشخيص والملاحظات السريرية يدوياً. لا تعتمد اقتراحات القواعد كتشخيص.'}" style="width: 100%; min-height: 75px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 10px; font-family: inherit; font-size: 13px;">${escapeHtml(existingDoctorNote)}</textarea>
-        <input type="hidden" id="doctorNoteInput" value="${escapeHtml(existingDoctorNote)}" />
-      </div>
-
-      <!-- Prescriptions & Medications -->
-      <div style="margin-bottom: 12px;">
-        <label for="doctorMedicationsInput" style="font-weight: 800; font-size: 13px; display: block; margin-bottom: 4px;">
-          ${isEn ? '2. Prescription & Treatment Regimen (Rx)' : '2. الخطة العلاجية والروشتة الدوائية (Rx)'}
-        </label>
-        <textarea id="doctorMedicationsInput" ${isClosed ? 'disabled' : ''} placeholder="${isEn ? 'List prescribed medications, dosage and instructions...' : 'أدخل أسماء الأدوية، الجرعات، وطريقة الاستخدام...'}" style="width: 100%; min-height: 80px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 10px; font-family: inherit; font-size: 13px;">${escapeHtml(existingMedications)}</textarea>
-      </div>
-
-      <!-- Care Plan & Recommendations -->
-      <div style="margin-bottom: 14px;">
-        <label for="doctorRecommendationsInput" style="font-weight: 800; font-size: 13px; display: block; margin-bottom: 4px;">
-          ${isEn ? '3. Clinical Recommendations & Care Plan' : '3. التوصيات الطبية وخطة المتابعة'}
-        </label>
-        <textarea id="doctorRecommendationsInput" ${isClosed ? 'disabled' : ''} placeholder="${isEn ? 'Add one recommendation per line.' : 'أضف كل توصية في سطر منفصل.'}" style="width: 100%; min-height: 85px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 10px; font-family: inherit; font-size: 13px;">${escapeHtml(existingRecommendations)}</textarea>
-      </div>
-
-      <!-- Doctor Identity & Credentials Box -->
-      <div style="background: rgba(var(--teal-rgb, 14, 165, 233), 0.05); border: 1px dashed var(--line); border-radius: 10px; padding: 12px;">
-        <span style="font-size: 12px; font-weight: 800; color: var(--teal); display: block; margin-bottom: 8px;">
-          🪪 ${isEn ? 'Doctor Credentials & Seal (Printed on report):' : 'بيانات الطبيب المعتمد والختم الرسمي (تظهر بالتقرير):'}
-        </span>
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px;">
-          <div>
-            <label style="font-size: 11px; color: var(--muted);">${isEn ? 'Doctor Name' : 'اسم الطبيب'}</label>
-            <input type="text" id="doctorNameInput" readonly value="${escapeHtml(currentDocName)}" style="width: 100%; padding: 6px 10px; font-size: 12.5px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);" />
-          </div>
-          <div>
-            <label style="font-size: 11px; color: var(--muted);">${isEn ? 'Specialty' : 'التخصص'}</label>
-            <input type="text" id="doctorSpecialtyInput" readonly value="${escapeHtml(currentDocSpec)}" style="width: 100%; padding: 6px 10px; font-size: 12.5px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);" />
-          </div>
-          <div>
-            <label style="font-size: 11px; color: var(--muted);">${isEn ? 'Syndicate License #' : 'ترخيص النقابة'}</label>
-            <input type="text" id="doctorLicenseInput" readonly value="${escapeHtml(currentDocLic)}" style="width: 100%; padding: 6px 10px; font-size: 12.5px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);" />
-          </div>
-          <div>
-            <label style="font-size: 11px; color: var(--muted);">${isEn ? 'Clinic / Hospital' : 'العيادة / المستشفى'}</label>
-            <input type="text" id="doctorClinicInput" readonly value="${escapeHtml(currentDocClinic)}" style="width: 100%; padding: 6px 10px; font-size: 12.5px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);" />
-          </div>
-        </div>
-      </div>
-    </div>
-
-    ${actionToolbarHtml}
-    ${timelineHtml}
+    ${inputsSectionHtml}
+    ${clarificationsSectionHtml}
+    ${notesSectionHtml}
+    ${timelineSectionHtml}
+    ${dockedActionsToolbarHtml}
   `;
 
   // Highlight active button in queue
@@ -4769,6 +5139,12 @@ async function selectDoctorCase(id) {
     Array.from(queueList.children).forEach(btn => btn.style.border = "none");
     const activeBtn = Array.from(queueList.children).find(btn => btn.dataset && btn.dataset.caseId === id);
     if (activeBtn) activeBtn.style.border = "2px solid var(--teal)";
+  }
+
+  // Sync active review tab visibility
+  if (window.HealthVibes?.DoctorUI?.switchReviewTab) {
+    const curTab = window.HealthVibes.DoctorUI.getActiveReviewTab ? window.HealthVibes.DoctorUI.getActiveReviewTab() : "inputs";
+    window.HealthVibes.DoctorUI.switchReviewTab(curTab);
   }
 
   // Attach auto-save listeners to draft textareas to preserve doctor notes
@@ -4948,6 +5324,45 @@ function toFriendlyAppError(err, context = "") {
         : "يوجد حساب مسجل مسبقاً بهذا البريد الإلكتروني في النظام.",
       action: isEn ? "Please switch to 'Sign In' or recover your password if you forgot it." : "يرجى التبديل إلى 'تسجيل الدخول' أو استعادة كلمة المرور إذا كنت قد نسيتها.",
       ref: code || "auth/email-already-in-use"
+    };
+  }
+
+  if (code.includes("credential-already-in-use")) {
+    return {
+      icon: "⚠️",
+      category: isEn ? "Account Conflict" : "تعارض في الحساب",
+      title: isEn ? "Sign-In Method Already Linked" : "وسيلة الدخول مرتبطة بحساب آخر",
+      message: isEn
+        ? "This credential is already connected to another Health Vibes profile. Medical records cannot be merged automatically."
+        : "وسيلة تسجيل الدخول هذه مرتبطة بالفعل بملف مستخدم آخر. لحماية خصوصية وسجلات المرضى، لا يمكن دمج الحسابات تلقائياً.",
+      action: isEn ? "Sign in using that method directly, or verify ownership of both accounts." : "يرجى تسجيل الدخول بتلك الوسيلة مباشرة، أو إثبات ملكية الحسابين للتنسيق.",
+      ref: code || "auth/credential-already-in-use"
+    };
+  }
+
+  if (code.includes("account-exists-with-different-credential")) {
+    return {
+      icon: "⚠️",
+      category: isEn ? "Account Conflict" : "تعارض في الحساب",
+      title: isEn ? "Account Exists with Password" : "الحساب مسجل مسبقاً بكلمة مرور",
+      message: isEn
+        ? "An account with this email address already exists using a password. Please sign in with your email and password first, then link Google from your Profile settings."
+        : "يوجد حساب مسجل بهذا البريد مسبقاً بكلمة المرور. يرجى تسجيل الدخول بالبريد وكلمة المرور أولاً، ثم ربط حساب Google من إعدادات الملف الشخصي.",
+      action: isEn ? "Enter your password to sign in and prove account ownership." : "أدخل كلمة المرور لتسجيل الدخول وإثبات ملكية الحساب.",
+      ref: code || "auth/account-exists-with-different-credential"
+    };
+  }
+
+  if (code.includes("popup-closed-by-user") || code.includes("cancelled-popup-request")) {
+    return {
+      icon: "ℹ️",
+      category: isEn ? "Authentication" : "المصادقة",
+      title: isEn ? "Sign-In Canceled" : "تم إلغاء تسجيل الدخول",
+      message: isEn
+        ? "The authentication popup was closed before completing the process."
+        : "تم إغلاق نافذة المصادقة قبل اكتمال العملية.",
+      action: isEn ? "You can try again whenever you are ready." : "يمكنك المحاولة مجدداً في أي وقت.",
+      ref: code || "auth/popup-closed-by-user"
     };
   }
 
@@ -5476,6 +5891,20 @@ async function enterApp(source = "google") {
       showToast(currentLanguage === "en" ? "Signed in with Google" : "تم تسجيل الدخول بحساب جوجل");
     } catch (error) {
       console.error("Google Auth Error:", error);
+      const code = String(error.code || "").toLowerCase();
+      if (code === "auth/account-exists-with-different-credential") {
+        const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+        const conflict = window.HealthVibes?.AuthLinking?.handleAccountExistsConflict
+          ? window.HealthVibes.AuthLinking.handleAccountExistsConflict(error, isEn)
+          : null;
+        if (conflict) {
+          if (typeof authEmail !== "undefined" && authEmail && conflict.email) authEmail.value = conflict.email;
+          if (typeof setAuthMode === "function") setAuthMode("signin");
+          if (typeof authPassword !== "undefined" && authPassword) authPassword.focus();
+          showAuthError(conflict.message);
+          return;
+        }
+      }
       showAuthError(getAuthErrorMessage(error));
     }
   }
@@ -6265,7 +6694,43 @@ function updateNavVisibility() {
   bindScreenNavigation();
 }
 
+function toggleDiseaseCategory(forceExpand) {
+  const diseaseHeader = document.getElementById("navCategoryDisease");
+  const diseaseSubmenu = document.getElementById("diseaseSubmenu");
+  if (!diseaseHeader || !diseaseSubmenu) return;
+  const isExpanded = diseaseHeader.getAttribute("aria-expanded") === "true";
+  const nextState = typeof forceExpand === "boolean" ? forceExpand : !isExpanded;
+  diseaseHeader.setAttribute("aria-expanded", String(nextState));
+  if (nextState) {
+    diseaseSubmenu.removeAttribute("hidden");
+  } else {
+    diseaseSubmenu.setAttribute("hidden", "");
+  }
+}
+window.toggleDiseaseCategory = toggleDiseaseCategory;
+
+function initCategoryToggles() {
+  const diseaseHeader = document.getElementById("navCategoryDisease");
+  if (!diseaseHeader || diseaseHeader.dataset.categoryBound === "true") return;
+  diseaseHeader.dataset.categoryBound = "true";
+
+  diseaseHeader.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    toggleDiseaseCategory();
+  });
+
+  diseaseHeader.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      toggleDiseaseCategory();
+    }
+  });
+}
+window.initCategoryToggles = initCategoryToggles;
+
 function bindScreenNavigation() {
+  initCategoryToggles();
   document.querySelectorAll("[data-screen]").forEach((button) => {
     if (button.dataset.navBound === "true") return;
     button.dataset.navBound = "true";
@@ -6783,6 +7248,10 @@ async function loadUserProfileData() {
 
   handleSexOrDobChange();
   updateProfileBmi();
+
+  if (window.HealthVibes?.AuthLinkingUI?.renderProvidersInProfile) {
+    window.HealthVibes.AuthLinkingUI.renderProvidersInProfile(user);
+  }
 }
 
 async function saveUserProfileData() {
@@ -6921,6 +7390,13 @@ function showScreen(name) {
     button.classList.toggle("active", button.dataset.screen === name);
   });
 
+  const DISEASE_SCREENS = ["disease-dashboard", "diabetes", "hypertension", "blood-disorders", "obesity"];
+  if (DISEASE_SCREENS.includes(name)) {
+    if (typeof toggleDiseaseCategory === "function") {
+      toggleDiseaseCategory(true);
+    }
+  }
+
   // Update mobile bottom nav active item
   document.querySelectorAll(".mobile-nav-btn").forEach((button) => {
     button.classList.toggle("active", button.dataset.mobileScreen === name);
@@ -6959,6 +7435,18 @@ function showScreen(name) {
     const verifyContainer = document.getElementById("verifyReportContainer") || document.getElementById("reportContainer");
     if (window.HealthVibes?.ReportsUI?.renderVerificationView) {
       window.HealthVibes.ReportsUI.renderVerificationView(verifyContainer, ref);
+    }
+  }
+  if (name === "diabetes") {
+    const diabetesContainer = document.getElementById("screen-diabetes");
+    if (window.HealthVibes?.DiabetesUI?.renderScreen && diabetesContainer) {
+      window.HealthVibes.DiabetesUI.renderScreen(diabetesContainer);
+    }
+  }
+  if (name === "disease-dashboard") {
+    const dashboardContainer = document.getElementById("diseaseDashboardContainer");
+    if (window.HealthVibes?.DiseaseDashboardUI?.renderScreen && dashboardContainer) {
+      window.HealthVibes.DiseaseDashboardUI.renderScreen(dashboardContainer);
     }
   }
   if (name === "report") {
@@ -7601,7 +8089,16 @@ async function renderReportScreen(targetCaseId = null) {
         </div>
       ` : '';
 
-      const moreInfoAlertHtml = caseData.status === CASE_STATUS.MORE_INFO_REQUESTED ? `
+      // Structured Clinical Clarification Thread (Patient Role)
+      const hasClarificationInfo = caseData.status === CASE_STATUS.MORE_INFO_REQUESTED
+        || (Array.isArray(caseData.clarificationCycles) && caseData.clarificationCycles.length > 0)
+        || (Array.isArray(caseData.requestHistory) && caseData.requestHistory.length > 0)
+        || Boolean(caseData.patientResponse)
+        || Boolean(caseData.moreInfoNote);
+
+      const moreInfoAlertHtml = (hasClarificationInfo && window.HealthVibes?.DoctorUI?.renderClarificationThreadHtml)
+        ? window.HealthVibes.DoctorUI.renderClarificationThreadHtml(caseData, isEn, "patient")
+        : (caseData.status === CASE_STATUS.MORE_INFO_REQUESTED ? `
         <div style="background: rgba(234, 88, 12, 0.08); border: 1.5px solid #ea580c; border-radius: 14px; padding: 18px; margin-bottom: 24px; text-align: ${isEn ? 'left' : 'right'};">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
             <strong style="color: #c2410c; display: flex; align-items: center; gap: 8px; font-size: 15px;">
@@ -7638,7 +8135,7 @@ async function renderReportScreen(targetCaseId = null) {
             </div>
           </div>
         </div>
-      ` : '';
+      ` : '');
 
       const rejectionAlertHtml = caseData.status === CASE_STATUS.REJECTED ? `
         <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; border-radius: 12px; padding: 14px; margin-bottom: 20px; text-align: ${isEn ? 'left' : 'right'};">
@@ -13401,6 +13898,7 @@ function buildAssessmentModel({
   return {
     // ── Document Metadata & Complete Patient Linkage ──
     schemaVersion: ASSESSMENT_SCHEMA_VERSION,
+    clinicalRevision: 1,
     isDemo: false,
     isTest: false,
     environment: "production",
@@ -15442,7 +15940,8 @@ checkUrlAuthAction();
     const allScreenNames = [
       "patient","consent","profile","assessment","pending","result",
       "history","appointments","feedback","assistant","report",
-      "verification","doctor","kpi","admin","audit","verify-report","verify"
+      "verification","doctor","kpi","admin","audit","verify-report","verify",
+      "diabetes","hypertension","blood-disorders","obesity"
     ];
     if (allScreenNames.includes(screenFromHash)) {
       console.info(`[HashRouter] Hash navigation to '${screenFromHash}'.`);
@@ -16094,8 +16593,8 @@ window.submitPatientMoreInfo = async function(caseId) {
     return;
   }
 
-  const responseEl = document.getElementById("patientResponseInput");
-  const newO2El = document.getElementById("patientNewO2Input");
+  const responseEl = document.getElementById("patientResponseInput") || document.getElementById(`threadReplyText_${caseId}`);
+  const newO2El = document.getElementById("patientNewO2Input") || document.getElementById(`threadReplyO2_${caseId}`);
   const responseText = responseEl ? responseEl.value.trim() : "";
   const parsedO2 = newO2El && newO2El.value.trim() ? parseStrictOxygenInput(newO2El.value) : { ok: false, value: null, reason: "empty" };
 
@@ -16115,31 +16614,55 @@ window.submitPatientMoreInfo = async function(caseId) {
   }
 
   try {
-    const finalResponseText = responseText || (isEn ? `Updated vitals submitted: SpO2 ${parsedO2.value}%` : `تم تسجيل نسبة أكسجين محدثة: ${parsedO2.value}%`);
-    const historyItem = {
-      status: CASE_STATUS.UNDER_REVIEW,
-      changedAt: new Date().toISOString(),
-      changedBy: user.uid,
-      changedByName: user.displayName || (user.email ? user.email.split('@')[0] : "Patient"),
-      changedByEmail: user.email || "",
-      changedByRole: "patient",
-      note: isEn ? `Patient submitted requested info: ${finalResponseText.slice(0, 120)}` : `أرسل المريض البيانات المطلوبة: ${finalResponseText.slice(0, 120)}`
-    };
+    const o2Val = parsedO2?.ok ? parsedO2.value : (!isNaN(rawO2) && rawO2 >= 50 && rawO2 <= 100 ? rawO2 : null);
+    const finalResponseText = responseText || (isEn ? `Updated vitals submitted: SpO2 ${o2Val !== null ? o2Val : rawO2}%` : `تم تسجيل نسبة أكسجين محدثة: ${o2Val !== null ? o2Val : rawO2}%`);
 
-    const updatePayload = {
-      status: CASE_STATUS.UNDER_REVIEW,
-      patientResponse: finalResponseText,
-      patientRespondedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      statusHistory: firebase.firestore.FieldValue.arrayUnion(historyItem)
-    };
-
-    if (parsedO2.ok) {
-      updatePayload.oxygenLevel = parsedO2.value;
-      updatePayload.o2 = parsedO2.value;
+    let backendSuccess = false;
+    try {
+      const payload = {
+        caseId,
+        patientResponse: finalResponseText
+      };
+      if (o2Val !== null) {
+        payload.oxygenLevel = o2Val;
+        payload.o2 = o2Val;
+      }
+      await callBackend("/api/patient/submit-more-info", {
+        method: "POST",
+        body: JSON.stringify(payload)
+      });
+      backendSuccess = true;
+    } catch (backendErr) {
+      console.warn("Backend submit-more-info call failed, falling back to direct Firestore update:", backendErr);
     }
 
-    await db.collection("cases").doc(caseId).update(updatePayload);
+    if (!backendSuccess) {
+      const historyItem = {
+        status: CASE_STATUS.UNDER_REVIEW,
+        changedAt: new Date().toISOString(),
+        changedBy: user.uid,
+        changedByName: user.displayName || (user.email ? user.email.split('@')[0] : "Patient"),
+        changedByEmail: user.email || "",
+        changedByRole: "patient",
+        note: isEn ? `Patient submitted requested info: ${finalResponseText.slice(0, 120)}` : `أرسل المريض البيانات المطلوبة: ${finalResponseText.slice(0, 120)}`
+      };
+
+      const updatePayload = {
+        status: CASE_STATUS.UNDER_REVIEW,
+        patientResponse: finalResponseText,
+        patientRespondedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        clinicalRevision: firebase.firestore.FieldValue.increment(1),
+        statusHistory: firebase.firestore.FieldValue.arrayUnion(historyItem)
+      };
+
+      if (!isNaN(rawO2) && rawO2 >= 50 && rawO2 <= 100) {
+        updatePayload.oxygenLevel = rawO2;
+        updatePayload.o2 = rawO2;
+      }
+
+      await db.collection("cases").doc(caseId).update(updatePayload);
+    }
     console.info(`✅ Patient successfully provided more info for case ${caseId}`);
 
     showToast(isEn ? "Information sent to physician! Case is back under clinical review." : "تم إرسال البيانات للطبيب بنجاح! الحالة الآن قيد الفحص السريري.");
