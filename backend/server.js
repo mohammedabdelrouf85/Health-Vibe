@@ -69,6 +69,7 @@ const medicalOcrService = require('./medical-ocr-service');
 const unusualAccessService = require('./unusual-access-service');
 const prescriptionService = require('./prescription-service');
 const chronicHypertensionService = require('./chronic-hypertension-service');
+const hypertensionService = require('./hypertension-service');
 const diabetesService = require('./diabetes-service');
 const wearableIntegrationService = require('./wearable-integration-service');
 const caseFollowupService = require('./case-followup-service');
@@ -14867,6 +14868,184 @@ app.post('/api/cases/:caseId/claim', requireAuth, requireVerifiedEmail, requireD
     res.json(result);
   } catch (err) {
     res.status(err.statusCode || 400).json({ error: err.code || 'CLAIM_FAILED', message: err.message });
+  }
+});
+
+// =============================================================================
+// 🫀 HYPERTENSION CLINICAL MODULE API ENDPOINTS
+// =============================================================================
+
+/**
+ * GET /api/hypertension/patient/:patientId
+ * Retrieves complete hypertension clinical bundle for a patient.
+ * Automatically sanitizes internal doctor notes and unapproved interpretations if requester is a patient.
+ */
+app.get('/api/hypertension/patient/:patientId', requireAuth, (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const actor = {
+      uid: req.user.uid,
+      role: req.user.role || 'patient',
+      displayName: req.user.displayName,
+      assignedPatientIds: req.user.assignedPatientIds || []
+    };
+
+    const bundle = hypertensionService.getPatientHypertensionBundle(patientId, actor);
+    res.json({ success: true, bundle });
+  } catch (err) {
+    const status = err.code === 'FORBIDDEN' ? 403 : 400;
+    res.status(status).json({ error: err.code || 'HYPERTENSION_FETCH_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/hypertension/reading
+ * Records a blood pressure measurement.
+ */
+app.post('/api/hypertension/reading', requireAuth, (req, res) => {
+  try {
+    const readingData = req.body || {};
+    const reading = hypertensionService.recordBloodPressureReading({
+      ...readingData,
+      recordedByUid: req.user.uid
+    });
+
+    res.status(201).json({ success: true, reading });
+  } catch (err) {
+    res.status(400).json({ error: 'READING_RECORD_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/hypertension/assessment
+ * Creates or updates a versioned structured hypertension assessment document.
+ */
+app.post('/api/hypertension/assessment', requireAuth, (req, res) => {
+  try {
+    const { assessmentId, updates, triggerReason, ...assessmentData } = req.body || {};
+    const actor = {
+      uid: req.user.uid,
+      name: req.user.displayName || req.user.email,
+      role: req.user.role || 'patient'
+    };
+
+    let result;
+    if (assessmentId) {
+      result = hypertensionService.reviseHypertensionAssessment(assessmentId, updates || assessmentData, actor, triggerReason);
+    } else {
+      result = hypertensionService.createHypertensionAssessment(assessmentData, actor);
+    }
+
+    res.status(201).json({ success: true, assessment: result });
+  } catch (err) {
+    const status = err.code === 'VALIDATION_FAILED' ? 422 : 400;
+    res.status(status).json({ error: err.code || 'ASSESSMENT_SAVE_FAILED', message: err.message, errors: err.errors });
+  }
+});
+
+/**
+ * POST /api/hypertension/review
+ * Records a formal doctor review for hypertension patient status.
+ */
+app.post('/api/hypertension/review', requireAuth, requireDoctor, (req, res) => {
+  try {
+    const reviewData = req.body || {};
+    const review = hypertensionService.recordDoctorReview({
+      ...reviewData,
+      doctorUid: req.user.uid,
+      doctorName: req.user.displayName || req.user.email,
+      doctorLicense: req.user.licenseNumber || 'HV-LIC-DOC'
+    });
+
+    res.status(201).json({ success: true, review });
+  } catch (err) {
+    res.status(400).json({ error: 'REVIEW_RECORD_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/hypertension/note
+ * Adds a doctor clinical note for a patient.
+ */
+app.post('/api/hypertension/note', requireAuth, requireDoctor, (req, res) => {
+  try {
+    const noteData = req.body || {};
+    const note = hypertensionService.addClinicalNote({
+      ...noteData,
+      doctorUid: req.user.uid,
+      doctorName: req.user.displayName || req.user.email,
+      doctorLicense: req.user.licenseNumber || 'HV-LIC-DOC'
+    });
+
+    res.status(201).json({ success: true, note });
+  } catch (err) {
+    res.status(400).json({ error: 'NOTE_RECORD_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/hypertension/followup
+ * Sets or updates hypertension follow-up protocol.
+ */
+app.post('/api/hypertension/followup', requireAuth, requireDoctor, (req, res) => {
+  try {
+    const planData = req.body || {};
+    const plan = hypertensionService.recordFollowupPlan({
+      ...planData,
+      doctorUid: req.user.uid,
+      doctorName: req.user.displayName || req.user.email
+    });
+
+    res.json({ success: true, plan });
+  } catch (err) {
+    res.status(400).json({ error: 'FOLLOWUP_RECORD_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/hypertension/report/certify
+ * Certifies chronic hypertension report with physician provenance and digital signature.
+ */
+app.post('/api/hypertension/report/certify', requireAuth, requireDoctor, async (req, res) => {
+  try {
+    const { patientId, clinicalDiagnosis, managementPlan, riskStratification } = req.body || {};
+    const doctorIdentity = {
+      uid: req.user.uid,
+      name: req.user.displayName || req.user.email,
+      licenseNumber: req.user.licenseNumber || 'HV-LIC-CARDIO-101',
+      specialty: req.user.specialty || 'Cardiology & Vascular Medicine',
+      clinic: req.user.clinicName || 'Health Vibe Clinic',
+      status: 'approved',
+      licenseStatus: 'active'
+    };
+
+    const report = await hypertensionService.certifyChronicHypertensionReport(
+      patientId,
+      doctorIdentity,
+      clinicalDiagnosis,
+      managementPlan,
+      riskStratification
+    );
+
+    res.status(201).json({ success: true, report });
+  } catch (err) {
+    res.status(400).json({ error: 'CERTIFICATION_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/hypertension/clarification/reply
+ * Patient replies to a doctor inquiry.
+ */
+app.post('/api/hypertension/clarification/reply', requireAuth, (req, res) => {
+  try {
+    const { patientId, cycleId, replyText } = req.body || {};
+    const actor = { uid: req.user.uid };
+    const cycle = hypertensionService.replyToClarification(patientId, cycleId, replyText, actor);
+
+    res.json({ success: true, cycle });
+  } catch (err) {
+    res.status(400).json({ error: 'CLARIFICATION_REPLY_FAILED', message: err.message });
   }
 });
 
