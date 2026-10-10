@@ -25,9 +25,17 @@
 
 const crypto = require('crypto');
 
+let clinicalInfoExchangeService = null;
+try {
+  clinicalInfoExchangeService = require('./clinical-info-exchange-service');
+} catch (e) {
+  // Graceful fallback if unavailable in isolated unit environments
+}
+
 // In-Memory Storage for High-Speed & Unit Test Execution
 const readingsStore = new Map(); // readingId -> reading object
 const patientReadingsIndex = new Map(); // patientId -> array of readingIds
+const caseReadingsIndex = new Map(); // caseId -> array of readingIds
 const followupPlansStore = new Map(); // patientId -> followup plan
 const certifiedReportsStore = new Map(); // reportId -> report object
 
@@ -45,7 +53,9 @@ const MEASUREMENT_SOURCES = {
   BLUETOOTH_DEVICE: 'bluetooth_device',
   MANUAL_PATIENT_LOG: 'manual_patient_log',
   CLINIC_READING: 'clinic_reading',
-  MEDICAL_OCR: 'medical_ocr'
+  MEDICAL_OCR: 'medical_ocr',
+  PATIENT_SELF_REPORT: 'patient_self_report',
+  AUTOMATED_MONITOR: 'automated_monitor'
 };
 
 const ALERT_SEVERITIES = {
@@ -121,25 +131,157 @@ const SPECIALTY_READINESS = {
 // 1. PHYSIOLOGICAL VALIDATION & CLASSIFICATION
 // =============================================================================
 
-function validateBpInputs({ systolic, diastolic, pulse }) {
-  const sys = Number(systolic);
-  const dia = Number(diastolic);
-  const pul = Number(pulse);
+/**
+ * Normalizes Arabic-Indic (٠-٩) and Eastern-Arabic-Indic (۰-۹) digits to standard digits (0-9).
+ * Also normalizes Arabic decimal separator (٫) and comma (,) to standard dot (.).
+ */
+function normalizeArabicIndicDigits(value) {
+  if (value === null || value === undefined) return '';
+  return String(value)
+    .replace(/[\u0660-\u0669]/g, digit => String(digit.charCodeAt(0) - 0x0660))
+    .replace(/[\u06F0-\u06F9]/g, digit => String(digit.charCodeAt(0) - 0x06F0))
+    .replace(/[\u066B,]/g, '.');
+}
 
-  if (isNaN(sys) || sys < 60 || sys > 260) {
-    throw new Error(`Invalid systolic blood pressure: ${systolic}. Valid physiological range is 60 - 260 mmHg.`);
+/**
+ * Strict parser for blood pressure components (systolic, diastolic, pulse).
+ * Does NOT silently convert invalid input into a valid number.
+ * Handles: empty, invalid text, negative values, unsupported values, Arabic numerals,
+ * decimal input where applicable, and unknown measurements.
+ * Never invents a blood-pressure measurement.
+ */
+function parseStrictBpComponent(value, fieldName = 'Blood pressure', { allowDecimals = true, isOptional = false } = {}) {
+  // 1. Check for boolean or non-primitive types
+  if (typeof value === 'boolean') {
+    const err = new Error(`Unsupported value for ${fieldName}: boolean (${value}) is not allowed.`);
+    err.code = 'UNSUPPORTED_MEASUREMENT_VALUE';
+    throw err;
   }
-  if (isNaN(dia) || dia < 40 || dia > 160) {
-    throw new Error(`Invalid diastolic blood pressure: ${diastolic}. Valid physiological range is 40 - 160 mmHg.`);
+  if (typeof value === 'object' && value !== null) {
+    if (value.isUnknown || value.unknown) {
+      const err = new Error(`Unknown measurement for ${fieldName}: measurement is unknown. Never invent a blood-pressure measurement.`);
+      err.code = 'UNKNOWN_MEASUREMENT';
+      throw err;
+    }
+    const err = new Error(`Unsupported value for ${fieldName}: object type is not allowed.`);
+    err.code = 'UNSUPPORTED_MEASUREMENT_VALUE';
+    throw err;
+  }
+
+  // 2. Check for empty or missing values
+  if (value === null || value === undefined) {
+    if (isOptional) return null;
+    const err = new Error(`Empty value for ${fieldName}: value is required and cannot be empty.`);
+    err.code = 'EMPTY_MEASUREMENT_VALUE';
+    throw err;
+  }
+
+  const rawStr = String(value).trim();
+  if (rawStr === '') {
+    if (isOptional) return null;
+    const err = new Error(`Empty value for ${fieldName}: empty input is not permitted.`);
+    err.code = 'EMPTY_MEASUREMENT_VALUE';
+    throw err;
+  }
+
+  // 3. Check for unknown measurements
+  const lowerStr = rawStr.toLowerCase();
+  if (/^(unknown|غير معروف|غير معلوم|لا أعرف|لا اعلم|not-provided|unspecified|none)$/i.test(lowerStr)) {
+    const err = new Error(`Unknown measurement: ${fieldName} is recorded as unknown. Never invent a blood-pressure measurement.`);
+    err.code = 'UNKNOWN_MEASUREMENT';
+    throw err;
+  }
+
+  // 4. Normalize Arabic numerals & Arabic decimal separators
+  const normalized = normalizeArabicIndicDigits(rawStr).trim();
+
+  // 5. Check for negative values
+  if (normalized.startsWith('-') || /-\d/.test(normalized)) {
+    const err = new Error(`Negative value: ${fieldName} cannot be negative (${rawStr}). Negative blood pressure values are physiologically impossible.`);
+    err.code = 'NEGATIVE_MEASUREMENT_VALUE';
+    throw err;
+  }
+
+  // 6. Strict regex check to prevent silent conversion of invalid text like "120abc", "120/80", "120 mmHg", "high"
+  const pattern = allowDecimals ? /^\d+(?:\.\d+)?$/ : /^\d+$/;
+  if (!pattern.test(normalized)) {
+    const err = new Error(`Invalid text: ${fieldName} input '${rawStr}' contains non-numeric text or unsupported formatting. Do not silently convert invalid input into a valid number.`);
+    err.code = 'INVALID_MEASUREMENT_TEXT';
+    throw err;
+  }
+
+  // 7. Parse number and check finite
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed) || isNaN(parsed)) {
+    const err = new Error(`Unsupported value: ${fieldName} input '${rawStr}' cannot be evaluated to a finite number.`);
+    err.code = 'UNSUPPORTED_MEASUREMENT_VALUE';
+    throw err;
+  }
+
+  return allowDecimals ? Math.round(parsed * 10) / 10 : Math.round(parsed);
+}
+
+const ALLOWED_BP_UNITS = ['mmhg', 'mm hg'];
+
+function validateBpUnit(unit) {
+  if (unit === null || unit === undefined || String(unit).trim() === '') {
+    // Missing unit is safely normalized to canonical 'mmHg'
+    return 'mmHg';
+  }
+  const clean = String(unit).trim();
+  if (!ALLOWED_BP_UNITS.includes(clean.toLowerCase())) {
+    const err = new Error(`Invalid unit '${clean}' for blood pressure. Allowed unit is 'mmHg'.`);
+    err.code = 'INVALID_MEASUREMENT_UNIT';
+    throw err;
+  }
+  return 'mmHg';
+}
+
+function validateBpMeasurementTime(dateTime) {
+  if (!dateTime) {
+    return new Date().toISOString();
+  }
+  const d = new Date(dateTime);
+  const timeMs = d.getTime();
+  if (isNaN(timeMs)) {
+    const err = new Error(`Malformed measurement timestamp: '${dateTime}'.`);
+    err.code = 'INVALID_MEASUREMENT_TIME';
+    throw err;
+  }
+  // Tolerate up to 60 seconds of clock skew
+  if (timeMs > Date.now() + 60000) {
+    const err = new Error(`Measurement date/time cannot be in the future (${dateTime}).`);
+    err.code = 'FUTURE_MEASUREMENT_TIMESTAMP';
+    throw err;
+  }
+  return d.toISOString();
+}
+
+function validateBpInputs({ systolic, diastolic, pulse, unit }) {
+  const sys = parseStrictBpComponent(systolic, 'Systolic blood pressure', { allowDecimals: true, isOptional: false });
+  const dia = parseStrictBpComponent(diastolic, 'Diastolic blood pressure', { allowDecimals: true, isOptional: false });
+
+  if (sys < 60 || sys > 260) {
+    throw new Error(`Invalid systolic blood pressure: ${sys}. Valid physiological range is 60 - 260 mmHg.`);
+  }
+  if (dia < 40 || dia > 160) {
+    throw new Error(`Invalid diastolic blood pressure: ${dia}. Valid physiological range is 40 - 160 mmHg.`);
   }
   if (sys <= dia) {
     throw new Error(`Physiological error: Systolic BP (${sys}) must be greater than Diastolic BP (${dia}).`);
   }
-  if (isNaN(pul) || pul < 30 || pul > 220) {
-    throw new Error(`Invalid resting pulse: ${pulse}. Valid physiological range is 30 - 220 bpm.`);
+
+  let pul = null;
+  if (pulse !== undefined && pulse !== null && String(pulse).trim() !== '') {
+    pul = parseStrictBpComponent(pulse, 'Resting pulse', { allowDecimals: false, isOptional: false });
+    if (pul < 30 || pul > 220) {
+      throw new Error(`Invalid resting pulse: ${pul}. Valid physiological range is 30 - 220 bpm.`);
+    }
   }
 
-  return { sys, dia, pul };
+  const validUnit = validateBpUnit(unit);
+
+  return { sys, dia, pul, unit: validUnit };
 }
 
 /**
@@ -338,35 +480,82 @@ function evaluateHypertensionAlerts({
 
 async function recordBloodPressureReading({
   patientId,
+  caseId = null,
   patientName,
   clinicId,
   systolic,
   diastolic,
   pulse,
+  unit = 'mmHg',
+  measuredAt,
+  measurementTime,
+  dateTime,
   measurementSource = MEASUREMENT_SOURCES.MANUAL_PATIENT_LOG,
   arm = 'left',
   posture = 'seated_rested',
   cuffSize = 'standard',
   timing = 'morning',
+  activity = 'resting',
+  location,
+  bodyPosition,
+  mealTiming,
+  context = {},
   symptoms = [],
   medicationTaken = true,
   patientNotes = '',
   recordedByUid,
+  author = null,
+  provenance = null,
   pregnancyStage = PREGNANCY_STAGES.NONE,
   ageGroup = AGE_GROUPS.ADULT,
   specialtyConsent = null,
   attachedFiles = [],
-  linkedAppointmentId = null
+  linkedAppointmentId = null,
+  authorizedUser = null
 }) {
-  if (!patientId) throw new Error('patientId is required.');
+  if (!patientId) {
+    const err = new Error('patientId is required.');
+    err.code = 'MISSING_PATIENT_ID';
+    throw err;
+  }
 
-  const { sys, dia, pul } = validateBpInputs({ systolic, diastolic, pulse });
+  // 1. Trusted Server-Side Authorization Check
+  if (authorizedUser) {
+    const isDoctor = authorizedUser.role === 'doctor';
+    const isAdmin = authorizedUser.role === 'clinic_admin' || authorizedUser.role === 'super_admin' || authorizedUser.role === 'owner';
+    const isSelf = authorizedUser.uid === patientId;
+
+    if (!isSelf && !isDoctor && !isAdmin) {
+      const err = new Error('Access denied: You are not authorized to record measurements for this patient.');
+      err.code = 'ACCESS_DENIED';
+      err.statusCode = 403;
+      throw err;
+    }
+
+    if (isDoctor) {
+      if (authorizedUser.status && authorizedUser.status !== 'approved') {
+        const err = new Error('Doctor credentials unapproved.');
+        err.code = 'UNAPPROVED_DOCTOR';
+        err.statusCode = 403;
+        throw err;
+      }
+      if (authorizedUser.isLicenseExpired || authorizedUser.licenseStatus === 'revoked') {
+        const err = new Error('Doctor license is expired or revoked.');
+        err.code = 'INVALID_DOCTOR_LICENSE';
+        err.statusCode = 403;
+        throw err;
+      }
+    }
+  }
+
+  // 2. Strict Input Validation (Never silently coerce, handle Arabic, empty, invalid text, negative, decimal, unit, unknown)
+  const { sys, dia, pul, unit: validatedUnit } = validateBpInputs({ systolic, diastolic, pulse, unit });
   const classification = classifyBloodPressure(sys, dia);
   const hemodynamic = calculateHemodynamicMetrics(sys, dia);
   const alerts = evaluateHypertensionAlerts({
     sys,
     dia,
-    pul,
+    pul: pul !== null ? pul : 75,
     symptoms,
     classification,
     pregnancyStage,
@@ -374,9 +563,41 @@ async function recordBloodPressureReading({
   });
 
   const nowIso = new Date().toISOString();
+  const finalMeasuredAt = validateBpMeasurementTime(measuredAt || measurementTime || dateTime || nowIso);
   const readingId = `bp_${patientId}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
-  // Specialty Consent verification
+  // 3. Author & Provenance Preservation
+  const authorUid = author?.uid || authorizedUser?.uid || recordedByUid || patientId;
+  const authorRole = author?.role || authorizedUser?.role || (authorUid === patientId ? 'patient' : 'clinician');
+  const authorName = author?.name || authorizedUser?.name || authorizedUser?.displayName || (authorRole === 'doctor' ? 'Physician' : patientName || 'Patient');
+
+  const finalAuthor = {
+    uid: authorUid,
+    name: authorName,
+    role: authorRole
+  };
+
+  const finalProvenance = {
+    source: provenance?.source || measurementSource,
+    deviceDetails: provenance?.deviceDetails || null,
+    verified: Boolean(provenance?.verified || authorRole === 'doctor' || authorRole === 'clinician')
+  };
+
+  // 4. Collection Context Preservation
+  const finalContext = {
+    arm: context?.arm || arm,
+    posture: context?.posture || posture,
+    cuffSize: context?.cuffSize || cuffSize,
+    timing: context?.timing || timing,
+    medicationTaken: Boolean(context?.medicationTaken !== undefined ? context.medicationTaken : medicationTaken),
+    activity: context?.activity || activity || 'resting',
+    location: context?.location || location || (measurementSource === MEASUREMENT_SOURCES.CLINIC_READING ? 'clinic' : 'home'),
+    bodyPosition: context?.bodyPosition || bodyPosition || posture,
+    mealTiming: context?.mealTiming || mealTiming || null,
+    ...context
+  };
+
+  // 5. Specialty Consent verification
   const normalizedConsent = specialtyConsent ? {
     consented: Boolean(specialtyConsent.consented),
     consentTimestamp: specialtyConsent.consentTimestamp || nowIso,
@@ -384,7 +605,7 @@ async function recordBloodPressureReading({
     version: specialtyConsent.version || 'v1.0'
   } : null;
 
-  // Attached files validation (e.g., ECG, echo report, BP machine display photo)
+  // 6. Attached files validation
   const normalizedFiles = Array.isArray(attachedFiles) ? attachedFiles.map((file, idx) => ({
     fileId: file.fileId || `file_bp_${idx}_${Date.now()}`,
     fileUrl: file.fileUrl || file.url || '',
@@ -393,28 +614,120 @@ async function recordBloodPressureReading({
     uploadedAt: file.uploadedAt || nowIso
   })) : [];
 
+  // 7. Case Linkage & Clinical Revision Mechanism
+  let caseClinicalRevision = null;
+  if (caseId && clinicalInfoExchangeService) {
+    let clinicalCase = clinicalInfoExchangeService.getCase(caseId);
+    if (!clinicalCase) {
+      // Register minimal case if not present in memory
+      clinicalCase = clinicalInfoExchangeService.registerCase({
+        id: caseId,
+        patientId,
+        patientName: patientName || 'Patient',
+        status: 'under_review'
+      });
+    }
+
+    // Verify Case Ownership: Patient must match
+    if (clinicalCase.patientId && clinicalCase.patientId !== patientId) {
+      const err = new Error(`Case ownership mismatch: Case ${caseId} belongs to patient ${clinicalCase.patientId}, not ${patientId}.`);
+      err.code = 'FORBIDDEN_CASE_OWNERSHIP_MISMATCH';
+      err.statusCode = 403;
+      throw err;
+    }
+
+    // If authorizedUser is a patient, must own the case
+    if (authorizedUser && authorizedUser.role === 'patient' && authorizedUser.uid !== clinicalCase.patientId) {
+      const err = new Error('Access denied: You cannot link measurements to another patient\'s case.');
+      err.code = 'FORBIDDEN_CASE_OWNERSHIP_MISMATCH';
+      err.statusCode = 403;
+      throw err;
+    }
+
+    // Update case current assessment
+    const previousAssessmentSnapshot = JSON.parse(JSON.stringify(clinicalCase.currentAssessment || {}));
+    const oldSys = previousAssessmentSnapshot.systolicBp ?? null;
+    const oldDia = previousAssessmentSnapshot.diastolicBp ?? null;
+
+    clinicalCase.currentAssessment = clinicalCase.currentAssessment || {};
+    clinicalCase.currentAssessment.systolicBp = sys;
+    clinicalCase.currentAssessment.diastolicBp = dia;
+    clinicalCase.currentAssessment.bp = `${sys}/${dia} mmHg`;
+    if (pul !== null) clinicalCase.currentAssessment.heartRate = pul;
+
+    clinicalCase.systolicBp = sys;
+    clinicalCase.diastolicBp = dia;
+    clinicalCase.bp = `${sys}/${dia} mmHg`;
+    if (pul !== null) clinicalCase.heartRate = pul;
+
+    // Increment clinical revision
+    clinicalCase.clinicalRevision = (clinicalCase.clinicalRevision || 1) + 1;
+    clinicalCase.lastRevisionAt = nowIso;
+    clinicalCase.updatedAt = nowIso;
+    caseClinicalRevision = clinicalCase.clinicalRevision;
+
+    // Append observation without overwriting past observations
+    clinicalInfoExchangeService._recordObservation(caseId, {
+      id: `obs_bp_${readingId}`,
+      caseId,
+      readingId,
+      type: 'bloodPressure',
+      name: 'Blood Pressure (Systolic/Diastolic)',
+      systolic: sys,
+      diastolic: dia,
+      value: `${sys}/${dia}`,
+      unit: validatedUnit,
+      pulse: pul,
+      measuredAt: finalMeasuredAt,
+      recordedAt: nowIso,
+      measurementSource,
+      author: finalAuthor,
+      provenance: finalProvenance,
+      context: finalContext,
+      classification,
+      alerts
+    });
+
+    // Record revision entry
+    const revisionsList = clinicalInfoExchangeService.revisions.get(caseId) || [];
+    revisionsList.push({
+      revision: clinicalCase.clinicalRevision,
+      createdAt: nowIso,
+      trigger: 'hypertension_bp_measurement',
+      authorUid,
+      readingId,
+      changes: {
+        systolicBp: { previous: oldSys, current: sys, unit: validatedUnit },
+        diastolicBp: { previous: oldDia, current: dia, unit: validatedUnit }
+      }
+    });
+    clinicalInfoExchangeService.revisions.set(caseId, revisionsList);
+  }
+
+  // 8. Assemble Reading Record
   const reading = {
     id: readingId,
     readingId,
     patientId,
+    caseId: caseId || null,
     patientName: patientName || 'Patient',
     clinicId: clinicId || null,
     systolic: sys,
     diastolic: dia,
+    unit: validatedUnit,
     pulse: pul,
+    measuredAt: finalMeasuredAt,
+    createdAt: nowIso,
     map: hemodynamic.map,
     pulsePressure: hemodynamic.pulsePressure,
     classification,
     alerts,
     hasEmergencyAlert: alerts.some(a => a.severity === ALERT_SEVERITIES.EMERGENCY),
     measurementSource,
-    context: {
-      arm,
-      posture,
-      cuffSize,
-      timing,
-      medicationTaken: Boolean(medicationTaken)
-    },
+    author: finalAuthor,
+    provenance: finalProvenance,
+    context: finalContext,
+    clinicalRevision: caseClinicalRevision,
     pregnancyStage,
     ageGroup,
     specialtyConsent: normalizedConsent,
@@ -422,17 +735,24 @@ async function recordBloodPressureReading({
     linkedAppointmentId: linkedAppointmentId || null,
     symptoms: Array.isArray(symptoms) ? symptoms : [],
     patientNotes: String(patientNotes || '').trim(),
-    recordedByUid: recordedByUid || patientId,
+    recordedByUid: authorUid,
     doctorCertified: false,
-    certificationDetails: null,
-    createdAt: nowIso
+    certificationDetails: null
   };
 
   readingsStore.set(readingId, reading);
 
-  const existing = patientReadingsIndex.get(patientId) || [];
-  existing.unshift(readingId);
-  patientReadingsIndex.set(patientId, existing);
+  // Update patient readings index (never overwrite historical readings!)
+  const patientExisting = patientReadingsIndex.get(patientId) || [];
+  patientExisting.unshift(readingId);
+  patientReadingsIndex.set(patientId, patientExisting);
+
+  // Update case readings index if caseId provided
+  if (caseId) {
+    const caseExisting = caseReadingsIndex.get(caseId) || [];
+    caseExisting.unshift(readingId);
+    caseReadingsIndex.set(caseId, caseExisting);
+  }
 
   return reading;
 }
@@ -443,6 +763,18 @@ function getPatientReadings(patientId, limit = 50) {
     .slice(0, limit)
     .map(id => readingsStore.get(id))
     .filter(Boolean);
+}
+
+function getCaseReadings(caseId, limit = 50) {
+  const ids = caseReadingsIndex.get(caseId) || [];
+  return ids
+    .slice(0, limit)
+    .map(id => readingsStore.get(id))
+    .filter(Boolean);
+}
+
+function getReadingById(readingId) {
+  return readingsStore.get(readingId) || null;
 }
 
 // =============================================================================
@@ -618,17 +950,56 @@ function getFollowupPlan(patientId) {
 
 async function certifyChronicHypertensionReport({
   patientId,
+  caseId,
   doctorIdentity,
   clinicalDiagnosis,
   managementPlan,
   riskStratification = 'Moderate Cardiovascular Risk',
-  selectedReadingIds = []
+  selectedReadingIds = [],
+  expectedRevision,
+  reviewedRevision,
+  clinicalCase
 }) {
   if (!doctorIdentity || doctorIdentity.status !== 'approved' || doctorIdentity.isLicenseExpired || doctorIdentity.licenseStatus === 'revoked') {
     const error = new Error('Only an approved and actively licensed physician can certify chronic disease reports.');
     error.code = 'DOCTOR_CREDENTIALS_REQUIRED';
     error.statusCode = 403;
     throw error;
+  }
+
+  // Doctor assignment check & Stale Revision Verification if case linked
+  const targetCase = clinicalCase || (caseId && clinicalInfoExchangeService?.cases?.get(caseId)) || null;
+  if (targetCase) {
+    const assigned = targetCase.assignedDoctorId || targetCase.doctorId || targetCase.doctorUid;
+    if (assigned && assigned !== doctorIdentity.uid) {
+      const error = new Error('Zero-Trust enforcement: This clinical case is assigned to another physician.');
+      error.code = 'ACCESS_DENIED';
+      error.statusCode = 403;
+      throw error;
+    }
+
+    const currentRev = Number(targetCase.clinicalRevision || 1);
+    const effectiveReviewedRev = reviewedRevision !== undefined && reviewedRevision !== null
+      ? Number(reviewedRevision)
+      : (expectedRevision !== undefined && expectedRevision !== null ? Number(expectedRevision) : null);
+
+    if (effectiveReviewedRev !== null && effectiveReviewedRev < currentRev) {
+      const error = new Error(`The clinical case data has changed to revision ${currentRev}. Please review the latest revision before approval.`);
+      error.code = 'STALE_CLINICAL_REVISION';
+      error.statusCode = 409;
+      error.currentRevision = currentRev;
+      error.reviewedRevision = effectiveReviewedRev;
+      throw error;
+    }
+
+    if ((targetCase.isRevisionStale || targetCase.hasNewInfo) && (effectiveReviewedRev === null || effectiveReviewedRev < currentRev)) {
+      const error = new Error('New clinical information has been received. Please review and acknowledge the latest revision before approval.');
+      error.code = 'STALE_CLINICAL_REVISION';
+      error.statusCode = 409;
+      error.currentRevision = currentRev;
+      error.reviewedRevision = effectiveReviewedRev;
+      throw error;
+    }
   }
 
   const dashboard = calculateHypertensionDashboard(patientId);
@@ -711,6 +1082,7 @@ function getLatestCertifiedReport(patientId) {
 function resetHypertensionStoreForTesting() {
   readingsStore.clear();
   patientReadingsIndex.clear();
+  caseReadingsIndex.clear();
   followupPlansStore.clear();
   certifiedReportsStore.clear();
 }
@@ -722,12 +1094,18 @@ module.exports = {
   PREGNANCY_STAGES,
   AGE_GROUPS,
   SPECIALTY_READINESS,
+  normalizeArabicIndicDigits,
+  parseStrictBpComponent,
+  validateBpUnit,
+  validateBpMeasurementTime,
   validateBpInputs,
   classifyBloodPressure,
   calculateHemodynamicMetrics,
   evaluateHypertensionAlerts,
   recordBloodPressureReading,
   getPatientReadings,
+  getCaseReadings,
+  getReadingById,
   calculateHypertensionDashboard,
   createOrUpdateFollowupPlan,
   getFollowupPlan,
