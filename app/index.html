@@ -384,6 +384,10 @@
             <span class="nav-group-chevron" aria-hidden="true">▾</span>
           </button>
           <div class="nav-group-children" id="diseaseSubmenu" role="group" aria-label="Disease" hidden>
+            <button class="nav-item nav-sub-item" data-screen="disease-dashboard" data-i18n-title="nav.diseaseDashboard">
+              <span class="nav-icon">📊</span>
+              <span class="nav-label" data-i18n="diseaseDashboard.title">Disease Dashboard</span>
+            </button>
             <button class="nav-item nav-sub-item" data-screen="diabetes" data-i18n-title="nav.diabetes">
               <span class="nav-icon">🩸</span>
               <span class="nav-label" data-i18n="nav.diabetes">Diabetes</span>
@@ -2372,6 +2376,10 @@
       </section>
 
       <!-- Disease Module Screens -->
+      <section id="screen-disease-dashboard" class="screen">
+        <div id="diseaseDashboardContainer"></div>
+      </section>
+
       <section id="screen-diabetes" class="screen" aria-labelledby="diabetesModuleTitle">
         <div class="panel">
           <div class="panel-head">
@@ -3140,6 +3148,8 @@
   <script defer src="./modules/diabetes/diabetes-ui.js?v=1.0"></script>
   <script defer src="./modules/hypertension/hypertension-service.js?v=1.0"></script>
   <script defer src="./modules/hypertension/hypertension-ui.js?v=1.0"></script>
+  <script defer src="./modules/disease/disease-dashboard-service.js?v=1.0"></script>
+  <script defer src="./modules/disease/disease-dashboard-ui.js?v=1.0"></script>
   <script defer src="./config.js?v=5.0"></script>
   <script defer src="./app.js?v=5.0"></script>
 </body>

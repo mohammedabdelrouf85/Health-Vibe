@@ -144,6 +144,7 @@ const titles = {
   feedback: "التقييم والملاحظات",
   kpi: "مؤشرات الأداء السريري (KPIs)",
   disease: "الأمراض",
+  "disease-dashboard": "لوحة الأمراض المزمنة",
   diabetes: "داء السكري",
   hypertension: "ارتفاع ضغط الدم",
   "blood-disorders": "تجلط الدم / اضطرابات الدم",
@@ -744,6 +745,7 @@ const englishTitles = {
   feedback: "Feedback & Rating",
   kpi: "KPI Dashboard",
   disease: "Disease",
+  "disease-dashboard": "Disease Dashboard",
   diabetes: "Diabetes",
   hypertension: "Hypertension",
   "blood-disorders": "Blood Clotting / Blood Disorders",
@@ -7388,7 +7390,7 @@ function showScreen(name) {
     button.classList.toggle("active", button.dataset.screen === name);
   });
 
-  const DISEASE_SCREENS = ["diabetes", "hypertension", "blood-disorders", "obesity"];
+  const DISEASE_SCREENS = ["disease-dashboard", "diabetes", "hypertension", "blood-disorders", "obesity"];
   if (DISEASE_SCREENS.includes(name)) {
     if (typeof toggleDiseaseCategory === "function") {
       toggleDiseaseCategory(true);
@@ -7439,6 +7441,12 @@ function showScreen(name) {
     const diabetesContainer = document.getElementById("screen-diabetes");
     if (window.HealthVibes?.DiabetesUI?.renderScreen && diabetesContainer) {
       window.HealthVibes.DiabetesUI.renderScreen(diabetesContainer);
+    }
+  }
+  if (name === "disease-dashboard") {
+    const dashboardContainer = document.getElementById("diseaseDashboardContainer");
+    if (window.HealthVibes?.DiseaseDashboardUI?.renderScreen && dashboardContainer) {
+      window.HealthVibes.DiseaseDashboardUI.renderScreen(dashboardContainer);
     }
   }
   if (name === "report") {

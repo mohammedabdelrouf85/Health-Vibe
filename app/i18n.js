@@ -86,6 +86,7 @@
       nav: {
         home: "الرئيسية",
         patient: "الرئيسية",
+        diseaseDashboard: "لوحة الأمراض",
         consent: "الموافقة والخصوصية",
         profile: "الملف الطبي",
         assessment: "تقييم التنفس",
@@ -756,6 +757,28 @@
         instructions: "تعليمات الطبيب المعالج",
         certified: "تقرير معتمد رسمياً",
         diagnosis: "التشخيص السريري المعتمد"
+      },
+      diseaseDashboard: {
+        title: "لوحة الأمراض والتقييم السريري الموحد",
+        subtitle: "متابعة شاملة عبر أربعة مسارات سريرية للأمراض استناداً لسجلاتك الموثقة.",
+        nextRequiredActionHeader: "الإجراء التالي المطلوب",
+        modulesOverview: "نظرة عامة على مسارات الأمراض الأربعة",
+        stateNotStarted: "لم يبدأ",
+        stateInfoRequested: "مطلوب معلومات",
+        stateAwaitingReview: "قيد الانتظار",
+        stateUnderReview: "قيد المراجعة",
+        stateApproved: "معتمد",
+        stateNoData: "لا توجد بيانات متاحة",
+        actionStartAssessment: "بدء التقييم السريري الأولي",
+        actionRespondInquiry: "الرد على استفسار الطبيب",
+        actionAwaitingDoctor: "بانتظار مراجعة واعتماد الطبيب",
+        actionViewReport: "عرض التقرير السريري المعتمد",
+        actionNoActionNeeded: "لا يوجد إجراء مطلوب منك حالياً",
+        diabetesTitle: "داء السكري",
+        hypertensionTitle: "ارتفاع ضغط الدم",
+        bloodDisordersTitle: "تجلط الدم / اضطرابات الدم",
+        obesityTitle: "السمنة",
+        moduleDataNotice: "البيانات مسحوبة مباشرة من سجلك السريري الموثق. غير مسموح بعرض أي بيانات افتراضية أو غير معتمدة."
       }
     },
 
@@ -825,6 +848,7 @@
       nav: {
         home: "Home",
         patient: "Home",
+        diseaseDashboard: "Disease Dashboard",
         consent: "Consent & Privacy",
         profile: "Medical Profile",
         assessment: "Breathing Assessment",
@@ -1495,6 +1519,36 @@
         instructions: "Physician Instructions",
         certified: "Officially Certified Report",
         diagnosis: "Certified Clinical Diagnosis"
+      },
+      diseaseDashboard: {
+        title: "Unified Disease & Clinical Assessment Dashboard",
+        subtitle: "Comprehensive monitoring across four disease modules based strictly on your real documented records.",
+        nextRequiredActionHeader: "Next Required Action",
+        modulesOverview: "Four Clinical Disease Modules Overview",
+        stateNotStarted: "Not started",
+        stateInfoRequested: "Information requested",
+        stateAwaitingReview: "Awaiting review",
+        stateUnderReview: "Under review",
+        stateApproved: "Approved",
+        stateNoData: "No available data",
+        actionStartAssessment: "Start Initial Clinical Assessment",
+        actionRespondInquiry: "Respond to Doctor Inquiry",
+        actionAwaitingDoctor: "Awaiting Doctor Verification & Sign-off",
+        actionViewReport: "View Certified Clinical Report & Care Plan",
+        actionNoActionNeeded: "No action required at this time",
+        diabetesTitle: "Diabetes & Endocrinology",
+        diabetesDesc: "Blood glucose tracking, HbA1c monitoring, and endocrinology care plans.",
+        hypertensionTitle: "Hypertension & Vascular Health",
+        hypertensionDesc: "Blood pressure logs, hemodynamic indicators, and cardiovascular follow-up.",
+        bloodDisordersTitle: "Blood Clotting & Blood Disorders",
+        bloodDisordersDesc: "Coagulation profile, INR tracking, platelet levels, and hematology review.",
+        obesityTitle: "Obesity & Metabolic Health",
+        obesityDesc: "Body Mass Index (BMI), weight tracking, and metabolic nutrition plans.",
+        openModule: "Open Module",
+        viewDetails: "View Details",
+        lastUpdated: "Last Documented Update",
+        noAccountDataMessage: "No documented account data available for this module yet.",
+        realDataOnlyNotice: "Clinical Notice: This dashboard displays exclusively real persisted account data without synthetic estimates or fabricated results."
       }
     }
   };
