@@ -7282,6 +7282,9 @@ function showScreen(name) {
   if (name === "hypertension") {
     renderPatientBpDashboard();
   }
+  if (name === "blood-disorders") {
+    renderBloodDisordersModule();
+  }
   if (name === "admin") {
     renderAdminMetrics();
     renderAdminApplications();
@@ -9253,10 +9256,89 @@ async function submitPatientBpMeasurement() {
 
 // Global window registration
 window.renderPatientBpDashboard = renderPatientBpDashboard;
-window.loadPatientBpDashboard = renderPatientBpDashboard;
 window.openLogBpModal = openLogBpModal;
 window.closeLogBpModal = closeLogBpModal;
 window.submitPatientBpMeasurement = submitPatientBpMeasurement;
+
+// ============================================================================
+// 🩸 BLOOD CLOTTING & BLOOD DISORDERS CONTROLLER
+// ============================================================================
+
+async function renderBloodDisordersModule() {
+  const container = document.getElementById("bloodDisordersViewContainer");
+  if (!container) return;
+
+  const isEn = (currentLanguage || "ar") === "en";
+  const user = (typeof auth !== "undefined" && auth) ? auth.currentUser : null;
+
+  container.innerHTML = `
+    <div style="text-align: center; padding: 36px 16px; color: var(--muted);">
+      <div class="spinner" style="margin: 0 auto 12px; width: 24px; height: 24px;"></div>
+      <p style="font-size: 13.5px; margin: 0;">${isEn ? "Loading Blood Disorders Module..." : "جاري استرجاع منظومة اضطرابات واعتلالات الدم..."}</p>
+    </div>
+  `;
+
+  let conditions = [];
+  let cases = [];
+
+  // 1. Direct service fallback if in Node or shared instance
+  const bdSvc = (typeof window !== "undefined" && window.bloodDisordersService) || (typeof global !== "undefined" && global.bloodDisordersService);
+  if (bdSvc) {
+    conditions = bdSvc.getRegisteredConditions();
+    if (user?.uid) {
+      cases = bdSvc.getPatientCases(user.uid);
+    }
+  }
+
+  // 2. Authoritative REST API query
+  if (conditions.length === 0 && typeof fetch === "function") {
+    try {
+      const token = await (user?.getIdToken ? user.getIdToken() : Promise.resolve(null));
+      const headers = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const res = await fetch("/api/blood-disorders/conditions", { headers });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.conditions)) {
+          conditions = data.conditions;
+        }
+      }
+
+      if (user?.uid) {
+        const casesRes = await fetch(`/api/blood-disorders/patient/${user.uid}/cases`, { headers });
+        if (casesRes.ok) {
+          const casesData = await casesRes.json();
+          if (Array.isArray(casesData.cases)) {
+            cases = casesData.cases;
+          }
+        }
+      }
+    } catch (e) {
+      // Backend error - graceful fallback
+    }
+  }
+
+  // 3. Render UI with BloodDisordersUI module
+  if (window.HealthVibes?.BloodDisordersUI?.renderBloodDisordersScreen) {
+    window.HealthVibes.BloodDisordersUI.renderBloodDisordersScreen(container, {
+      conditions,
+      cases,
+      isEn,
+      currentUser: user || { role: "patient" },
+      activeTab: "conditions"
+    });
+  } else {
+    container.innerHTML = `
+      <div style="padding: 24px; text-align: center; color: var(--amber);">
+        <span>⚠️</span> ${isEn ? "Blood Disorders UI module not loaded." : "تعذر تحميل واجهة اضطرابات الدم."}
+      </div>
+    `;
+  }
+}
+
+window.renderBloodDisordersModule = renderBloodDisordersModule;
+window.loadBloodDisordersModule = renderBloodDisordersModule;
 
 // ============================================================================
 // 📅 CLINICAL APPOINTMENTS BOOKING & MANAGEMENT ENGINE

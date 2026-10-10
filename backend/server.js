@@ -74,6 +74,7 @@ const diagnosticIntegrationService = require('./diagnostic-integration-service')
 const clinicalInfoExchangeService = require('./clinical-info-exchange-service');
 const operationalSwitchesService = require('./operational-switches-service');
 const caseHandoverService = require('./case-handover-service');
+const bloodDisordersService = require('./blood-disorders-service');
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -11071,7 +11072,252 @@ app.get('/api/chronic/hypertension/patient/:patientId/report', requireAuth, (req
   }
 });
 
+// =============================================================================
+// 🩸 BLOOD CLOTTING & BLOOD DISORDERS CLINICAL MODULE ROUTES
+// Multi-Condition Registry, Medical Reviewer Specs, Cases, Labs & Approvals
+// =============================================================================
+app.bloodDisordersService = bloodDisordersService;
+
+/**
+ * GET /api/blood-disorders/conditions
+ * Retrieves supported condition specifications and review status.
+ */
+app.get('/api/blood-disorders/conditions', requireAuth, (req, res) => {
+  try {
+    const conditions = bloodDisordersService.getRegisteredConditions();
+    res.json({ success: true, count: conditions.length, conditions });
+  } catch (err) {
+    res.status(500).json({ error: 'FETCH_CONDITIONS_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/blood-disorders/conditions
+ * Medical Reviewer defines or updates supported condition specification.
+ */
+app.post('/api/blood-disorders/conditions', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
+  try {
+    const doctorIdentity = await getVerifiedDoctorIdentity(req.user.uid);
+    if (!doctorIdentity || doctorIdentity.status !== 'approved' || doctorIdentity.isLicenseExpired || doctorIdentity.licenseStatus === 'revoked') {
+      return res.status(403).json({ error: 'UNAPPROVED_DOCTOR', message: 'Doctor credentials unverified or license inactive.' });
+    }
+
+    const {
+      conditionId, nameEn, nameAr, category, descriptionEn, descriptionAr,
+      clinicalGuidelinesRef, requiredClinicalFields, requiredLabPanels,
+      optionalLabPanels, status, reviewerNotes
+    } = req.body || {};
+
+    const updated = bloodDisordersService.defineOrUpdateConditionSpecification({
+      conditionId,
+      nameEn,
+      nameAr,
+      category,
+      descriptionEn,
+      descriptionAr,
+      clinicalGuidelinesRef,
+      requiredClinicalFields,
+      requiredLabPanels,
+      optionalLabPanels,
+      status,
+      reviewerNotes,
+      reviewingDoctor: {
+        uid: req.user.uid,
+        name: doctorIdentity.name || req.user.displayName,
+        role: 'doctor',
+        status: doctorIdentity.status,
+        licenseNumber: doctorIdentity.licenseNumber,
+        specialty: doctorIdentity.specialty || 'Hematologist'
+      }
+    });
+
+    res.status(200).json({ success: true, condition: updated });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'CONDITION_UPDATE_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/blood-disorders/lab-catalog
+ * Retrieves standardized laboratory catalog for hematology.
+ */
+app.get('/api/blood-disorders/lab-catalog', requireAuth, (req, res) => {
+  try {
+    const catalog = bloodDisordersService.getStandardLabCatalog();
+    res.json({ success: true, count: catalog.length, catalog });
+  } catch (err) {
+    res.status(500).json({ error: 'FETCH_CATALOG_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/blood-disorders/cases
+ * Ingests structured blood disorder intake case with real lab measurements.
+ */
+app.post('/api/blood-disorders/cases', requireAuth, async (req, res) => {
+  try {
+    const {
+      patientId, conditionId, patientInfo, clinicalIntake,
+      labResults, attachedFiles, clinicId, assignedDoctorId
+    } = req.body || {};
+
+    const targetPatientId = patientId || req.user.uid;
+    const isDoctor = req.user.role === 'doctor';
+    const isAdmin = req.user.role === 'clinic_admin' || req.user.role === 'super_admin' || req.user.role === 'owner';
+
+    if (req.user.uid !== targetPatientId && !isDoctor && !isAdmin) {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Unauthorized to create case for target patient.' });
+    }
+
+    const bloodDisorderCase = await bloodDisordersService.recordPatientBloodDisorderCase({
+      patientId: targetPatientId,
+      conditionId,
+      patientInfo: {
+        name: req.user.displayName || req.user.name,
+        ...patientInfo
+      },
+      clinicalIntake,
+      labResults,
+      attachedFiles,
+      clinicId: clinicId || req.user.clinicId || null,
+      assignedDoctorId: assignedDoctorId || null,
+      authorizedUser: req.user
+    });
+
+    res.status(201).json({ success: true, case: bloodDisorderCase });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'CASE_CREATION_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/blood-disorders/patient/:patientId/cases
+ * Retrieves blood disorder cases for a patient.
+ */
+app.get('/api/blood-disorders/patient/:patientId/cases', requireAuth, (req, res) => {
+  try {
+    const { patientId } = req.params;
+    if (req.user.uid !== patientId && req.user.role !== 'doctor' && req.user.role !== 'clinic_admin' && req.user.role !== 'super_admin') {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Unauthorized to view patient cases.' });
+    }
+
+    const cases = bloodDisordersService.getPatientCases(patientId);
+    res.json({ success: true, count: cases.length, cases });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * GET /api/blood-disorders/case/:caseId
+ * Retrieves details of a specific blood disorder case.
+ */
+app.get('/api/blood-disorders/case/:caseId', requireAuth, (req, res) => {
+  try {
+    const { caseId } = req.params;
+    const c = bloodDisordersService.getCaseById(caseId);
+    if (!c) {
+      return res.status(404).json({ error: 'CASE_NOT_FOUND', message: `Case ${caseId} not found.` });
+    }
+
+    if (req.user.uid !== c.patientId && req.user.role !== 'doctor' && req.user.role !== 'clinic_admin' && req.user.role !== 'super_admin') {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Unauthorized to view this case.' });
+    }
+
+    const isPatient = req.user.role === 'patient' || req.user.uid === c.patientId;
+    const safeCase = isPatient && req.user.role !== 'doctor' ? {
+      ...c,
+      internalDoctorNotes: undefined
+    } : c;
+
+    res.json({ success: true, case: safeCase });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/blood-disorders/case/:caseId/labs
+ * Appends real validated laboratory results to a case.
+ */
+app.post('/api/blood-disorders/case/:caseId/labs', requireAuth, (req, res) => {
+  try {
+    const { caseId } = req.params;
+    const { labMeasurements } = req.body || {};
+    const result = bloodDisordersService.recordCaseLabResults({
+      caseId,
+      labMeasurements
+    });
+    res.json({ success: true, result });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'LABS_UPDATE_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/blood-disorders/case/:caseId/approve
+ * Human physician review and approval of case (generates signed report).
+ */
+app.post('/api/blood-disorders/case/:caseId/approve', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
+  try {
+    const { caseId } = req.params;
+    const {
+      clinicalDiagnosis, clinicalNotes, internalNotes,
+      treatmentPlan, recommendations, followUpSchedule
+    } = req.body || {};
+
+    const doctorIdentity = await getVerifiedDoctorIdentity(req.user.uid);
+    if (!doctorIdentity || doctorIdentity.status !== 'approved' || doctorIdentity.isLicenseExpired || doctorIdentity.licenseStatus === 'revoked') {
+      return res.status(403).json({ error: 'UNAPPROVED_DOCTOR', message: 'Doctor credentials unverified or license inactive.' });
+    }
+
+    const result = await bloodDisordersService.reviewAndApproveBloodDisorderCase({
+      caseId,
+      reviewingDoctor: {
+        uid: req.user.uid,
+        name: doctorIdentity.name || req.user.displayName,
+        role: 'doctor',
+        status: doctorIdentity.status,
+        licenseNumber: doctorIdentity.licenseNumber,
+        specialty: doctorIdentity.specialty || 'Hematologist',
+        isOwner: Boolean(req.user.isOwner)
+      },
+      clinicalDiagnosis,
+      clinicalNotes,
+      internalNotes,
+      treatmentPlan,
+      recommendations,
+      followUpSchedule
+    });
+
+    res.json(result);
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'APPROVAL_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/blood-disorders/patient/:patientId/report
+ * Retrieves latest approved hematology report for patient.
+ */
+app.get('/api/blood-disorders/patient/:patientId/report', requireAuth, (req, res) => {
+  try {
+    const { patientId } = req.params;
+    if (req.user.uid !== patientId && req.user.role !== 'doctor' && req.user.role !== 'clinic_admin' && req.user.role !== 'super_admin') {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Unauthorized to view report.' });
+    }
+    const report = bloodDisordersService.getApprovedReport(patientId);
+    if (!report) {
+      return res.status(404).json({ error: 'REPORT_NOT_FOUND', message: 'No approved report found for this patient.' });
+    }
+    res.json({ success: true, report });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
 app.wearableIntegrationService = wearableIntegrationService;
+
 
 // =============================================================================
 // ⌚ WEARABLE & HEALTH TELEMETRY INTEGRATION ROUTES
