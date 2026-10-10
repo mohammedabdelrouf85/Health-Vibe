@@ -20,6 +20,7 @@
  */
 
 const crypto = require('crypto');
+const observationService = require('./blood-disorders-observation-service');
 
 let clinicalInfoExchangeService = null;
 try {
@@ -691,6 +692,10 @@ function recordCaseLabResults({ caseId, labMeasurements = [], recordedByDoctor =
 
   c.laboratoryResults.push(...validated);
   c.clinicalRevision = (c.clinicalRevision || 1) + 1;
+  if (c.status === 'under_review' || c.status === 'approved') {
+    c.isRevisionStale = true;
+    c.hasNewInfo = true;
+  }
   c.updatedAt = new Date().toISOString();
 
   return {
@@ -701,6 +706,35 @@ function recordCaseLabResults({ caseId, labMeasurements = [], recordedByDoctor =
   };
 }
 
+/**
+ * Records a patient clarification or response to a clinical query.
+ * Increments clinical revision and marks case as having new unreviewed info.
+ */
+function recordCaseClarification({ caseId, patientResponse = '', clarificationText = '' }) {
+  const c = bloodDisordersCasesStore.get(caseId);
+  if (!c) {
+    const err = new Error(`Case '${caseId}' not found.`);
+    err.code = 'CASE_NOT_FOUND';
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const text = (patientResponse || clarificationText || '').trim();
+  c.patientResponse = text;
+  c.clarifications = Array.isArray(c.clarifications) ? c.clarifications : [];
+  c.clarifications.push({
+    text,
+    submittedAt: new Date().toISOString(),
+    source: 'patient_entered'
+  });
+  c.clinicalRevision = (c.clinicalRevision || 1) + 1;
+  c.isRevisionStale = true;
+  c.hasNewInfo = true;
+  c.updatedAt = new Date().toISOString();
+
+  return c;
+}
+
 // =============================================================================
 // 4. DOCTOR REVIEW, CERTIFIED REPORT & FOLLOW-UP
 // =============================================================================
@@ -709,6 +743,7 @@ function recordCaseLabResults({ caseId, labMeasurements = [], recordedByDoctor =
  * Authoritative Physician Review & Approval of a Blood Disorder Case.
  * Physician explicitly defines the diagnosis, management plan, and follow-up.
  * Strictly blocks automated diagnosis generation.
+ * Enforces review of the latest clinical revision before approval.
  */
 async function reviewAndApproveBloodDisorderCase({
   caseId,
@@ -718,7 +753,9 @@ async function reviewAndApproveBloodDisorderCase({
   internalNotes = '',
   treatmentPlan = '',
   recommendations = '',
-  followUpSchedule = {}
+  followUpSchedule = {},
+  reviewedRevision = null,
+  expectedRevision = null
 }) {
   const c = bloodDisordersCasesStore.get(caseId);
   if (!c) {
@@ -758,12 +795,36 @@ async function reviewAndApproveBloodDisorderCase({
     throw err;
   }
 
-  // HUMAN-IN-THE-LOOP RULE: Do not create automatic diagnoses!
+  // HUMAN-IN-THE-LOOP RULE: Do not create automatic diagnoses or unsupported treatment!
   // Physician MUST explicitly provide the diagnosis.
   if (!clinicalDiagnosis || typeof clinicalDiagnosis !== 'string' || clinicalDiagnosis.trim().length === 0) {
     const err = new Error('Medical review required: Physician must explicitly enter a clinical diagnosis. Automatic diagnoses are strictly prohibited.');
     err.code = 'PHYSICIAN_DIAGNOSIS_REQUIRED';
     err.statusCode = 400;
+    throw err;
+  }
+
+  // STALE REVISION GATING: Require doctor to review current clinical revision before approval!
+  const currentCaseRevision = Number(c.clinicalRevision || 1);
+  const effectiveReviewedRevision = reviewedRevision !== undefined && reviewedRevision !== null
+    ? Number(reviewedRevision)
+    : (expectedRevision !== undefined && expectedRevision !== null ? Number(expectedRevision) : null);
+
+  if (effectiveReviewedRevision !== null && effectiveReviewedRevision < currentCaseRevision) {
+    const err = new Error(`The clinical case data has changed to revision ${currentCaseRevision} (reviewed: ${effectiveReviewedRevision}). Please review the latest revision before approval.`);
+    err.code = 'STALE_CLINICAL_REVISION';
+    err.statusCode = 409;
+    err.currentRevision = currentCaseRevision;
+    err.reviewedRevision = effectiveReviewedRevision;
+    throw err;
+  }
+
+  if ((c.isRevisionStale || c.hasNewInfo) && (effectiveReviewedRevision === null || effectiveReviewedRevision < currentCaseRevision)) {
+    const err = new Error('New clinical data has been received. Please review and acknowledge the latest revision before approval.');
+    err.code = 'STALE_CLINICAL_REVISION';
+    err.statusCode = 409;
+    err.currentRevision = currentCaseRevision;
+    err.reviewedRevision = effectiveReviewedRevision;
     throw err;
   }
 
@@ -785,13 +846,16 @@ async function reviewAndApproveBloodDisorderCase({
   c.doctorApproved = true;
   c.approvedAt = nowIso;
   c.reportRef = reportRef;
+  c.isRevisionStale = false;
+  c.hasNewInfo = false;
+  c.reviewedRevision = effectiveReviewedRevision || currentCaseRevision;
   c.approvingDoctor = {
     uid: reviewingDoctor.uid,
     name: reviewingDoctor.name || reviewingDoctor.displayName || 'Physician',
     licenseNumber: reviewingDoctor.licenseNumber || 'HEM-LIC-VERIFIED',
     specialty: reviewingDoctor.specialty || 'Hematologist / Internist'
   };
-  c.clinicalRevision = (c.clinicalRevision || 1) + 1;
+  c.clinicalRevision = currentCaseRevision + 1;
   c.updatedAt = nowIso;
 
   // Generate Approved Certified Report Snapshot
@@ -924,6 +988,9 @@ function resetBloodDisordersStoreForTesting() {
   followupProtocolsStore.clear();
   approvedReportsStore.clear();
 
+  // Reset observations store
+  observationService.resetObservationStoreForTesting();
+
   // Reset conditions to default seed
   conditionsRegistry.clear();
   INITIAL_CONDITION_REGISTRY.forEach(cond => {
@@ -950,11 +1017,26 @@ module.exports = {
   validateLabMeasurement,
   recordPatientBloodDisorderCase,
   recordCaseLabResults,
+  recordCaseClarification,
   reviewAndApproveBloodDisorderCase,
   prescribeFollowUpProtocol,
   getFollowupProtocol,
   getPatientCases,
   getCaseById,
   getApprovedReport,
-  resetBloodDisordersStoreForTesting
+  resetBloodDisordersStoreForTesting,
+
+  // Re-exported structured observation service
+  observationService,
+  OBSERVATION_SOURCES: observationService.OBSERVATION_SOURCES,
+  REVIEW_STATUS: observationService.REVIEW_STATUS,
+  VALUE_TYPES: observationService.VALUE_TYPES,
+  validateObservationPayload: observationService.validateObservationPayload,
+  createClinicalObservation: observationService.createClinicalObservation,
+  getClinicalObservationById: observationService.getClinicalObservationById,
+  getPatientClinicalObservations: observationService.getPatientClinicalObservations,
+  getCaseClinicalObservations: observationService.getCaseClinicalObservations,
+  reviewClinicalObservation: observationService.reviewClinicalObservation,
+  correctClinicalObservation: observationService.correctClinicalObservation,
+  resetObservationStoreForTesting: observationService.resetObservationStoreForTesting
 };

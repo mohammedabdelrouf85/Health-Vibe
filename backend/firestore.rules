@@ -562,6 +562,91 @@ service cloud.firestore {
     }
 
     // =========================================================================
+    // 💉 UNIFIED DISEASE RECORD AUTHORIZATION (Diabetes, Hypertension, Blood Disorders, Obesity)
+    // - Suspended accounts rejected automatically via isAuthenticated()
+    // - Patients may access only their own records
+    // - Doctors may access only records they are authorized and assigned to review
+    // - Administrators may access only according to configured clinic / platform permissions
+    // - Support role denied access to clinical records
+    // =========================================================================
+    function isDiseaseRecordAccessible(data) {
+      return isAuthenticated() &&
+        !('role' in request.auth.token && request.auth.token.role == 'support') &&
+        (
+          isOwner() ||
+          isPlatformAdmin() ||
+          (('patientId' in data && data.patientId == request.auth.uid) ||
+           ('userId' in data && data.userId == request.auth.uid)) ||
+          isDoctorLinkedRecord(data) ||
+          tokenClinicAdminFor(data)
+        );
+    }
+
+    function isDiseaseRecordWritable(data) {
+      return isAuthenticated() &&
+        !('role' in request.auth.token && request.auth.token.role == 'support') &&
+        (
+          isOwner() ||
+          isPlatformAdmin() ||
+          (('role' in request.auth.token && request.auth.token.role == 'patient') &&
+           (('patientId' in data && data.patientId == request.auth.uid) ||
+            ('userId' in data && data.userId == request.auth.uid))) ||
+          isDoctorLinkedRecord(data)
+        );
+    }
+
+    match /disease_records/{recordId} {
+      allow read: if isDiseaseRecordAccessible(resource.data);
+      allow create: if isDiseaseRecordWritable(request.resource.data);
+      allow update, delete: if isOwner() || isPlatformAdmin() || tokenClinicAdminFor(resource.data);
+    }
+
+    match /diabetes_records/{recordId} {
+      allow read: if isDiseaseRecordAccessible(resource.data);
+      allow create: if isDiseaseRecordWritable(request.resource.data);
+      allow update, delete: if isOwner() || isPlatformAdmin() || tokenClinicAdminFor(resource.data);
+    }
+
+    match /diabetes_cases/{caseId} {
+      allow read: if isDiseaseRecordAccessible(resource.data);
+      allow create: if isDiseaseRecordWritable(request.resource.data);
+      allow update: if isOwner() || isPlatformAdmin() || isDoctorLinkedRecord(resource.data);
+      allow delete: if isOwner() || isPlatformAdmin();
+    }
+
+    match /hypertension_records/{recordId} {
+      allow read: if isDiseaseRecordAccessible(resource.data);
+      allow create: if isDiseaseRecordWritable(request.resource.data);
+      allow update, delete: if isOwner() || isPlatformAdmin() || tokenClinicAdminFor(resource.data);
+    }
+
+    match /blood_disorders_cases/{caseId} {
+      allow read: if isDiseaseRecordAccessible(resource.data);
+      allow create: if isDiseaseRecordWritable(request.resource.data);
+      allow update: if isOwner() || isPlatformAdmin() || isDoctorLinkedRecord(resource.data);
+      allow delete: if isOwner() || isPlatformAdmin();
+    }
+
+    match /blood_disorders_observations/{obsId} {
+      allow read: if isDiseaseRecordAccessible(resource.data);
+      allow create: if isDiseaseRecordWritable(request.resource.data);
+      allow update, delete: if isOwner() || isPlatformAdmin() || tokenClinicAdminFor(resource.data);
+    }
+
+    match /obesity_measurements/{measurementId} {
+      allow read: if isDiseaseRecordAccessible(resource.data);
+      allow create: if isDiseaseRecordWritable(request.resource.data);
+      allow update, delete: if isOwner() || isPlatformAdmin() || tokenClinicAdminFor(resource.data);
+    }
+
+    match /obesity_cases/{caseId} {
+      allow read: if isDiseaseRecordAccessible(resource.data);
+      allow create: if isDiseaseRecordWritable(request.resource.data);
+      allow update: if isOwner() || isPlatformAdmin() || isDoctorLinkedRecord(resource.data);
+      allow delete: if isOwner() || isPlatformAdmin();
+    }
+
+    // =========================================================================
     // 11. 👑 MASTER CATCH-ALL OVERRIDE
     // =========================================================================
     match /{document=**} {

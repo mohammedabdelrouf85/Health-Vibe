@@ -2462,18 +2462,18 @@
                 <p style="font-size: 13px; color: var(--muted); margin: 2px 0 0;" data-i18n="nav.disease">Disease</p>
               </div>
             </div>
-            <span class="pill pending" data-i18n="common.diseaseUnderPrep">Under Clinical Preparation</span>
-          </div>
-          <div style="padding: 24px 16px; text-align: center; max-width: 600px; margin: 0 auto;">
-            <p style="font-size: 15px; color: var(--ink); line-height: 1.6; margin-bottom: 16px;" data-i18n="common.obesityDesc">
-              Specialized clinical module for weight management, BMI assessment, and clinical nutrition plans.
-            </p>
-            <div class="notice-card" style="margin-bottom: 24px; text-align: start;">
-              <p style="font-size: 13px; color: var(--muted); margin: 0; line-height: 1.5;" data-i18n="common.diseaseClinicalNotice">
-                This specialized module is under certified clinical preparation adhering to medical care standards. No unverified data or clinical results are displayed.
-              </p>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="pill info" id="obesityStatusBadge" style="font-size: 11px;">Anthropometric & Medically Reviewable</span>
+              <button type="button" class="soft-button" data-screen="patient" data-i18n="common.backToHome">Return to Home</button>
             </div>
-            <button type="button" class="soft-button" data-screen="patient" data-i18n="common.backToHome">Return to Home</button>
+          </div>
+          <div style="padding: 16px;">
+            <div id="obesityViewContainer">
+              <div style="text-align: center; padding: 32px 16px; color: var(--muted);">
+                <div class="spinner" style="margin: 0 auto 12px;"></div>
+                <p>Loading Obesity & Metabolic Health Module...</p>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -3204,6 +3204,7 @@
   <script defer src="./modules/patient/patient-service.js?v=1.0"></script>
   <script defer src="./modules/patient/patient-ui.js?v=1.0"></script>
   <script defer src="./modules/patient/blood-disorders-ui.js?v=1.0"></script>
+  <script defer src="./modules/patient/obesity-ui.js?v=1.0"></script>
   <script defer src="./modules/assessment/assessment-validation.js?v=1.0"></script>
   <script defer src="./modules/assessment/assessment-service.js?v=1.0"></script>
   <script defer src="./modules/assessment/assessment-ui.js?v=1.0"></script>

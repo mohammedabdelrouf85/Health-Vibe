@@ -1296,6 +1296,719 @@
     `;
   }
 
+  // ===========================================================================
+  // BLOOD CLOTTING / BLOOD DISORDERS DOCTOR REVIEW WORKFLOW
+  // ===========================================================================
+
+  function formatDateTime(isoString, isEn = false) {
+    if (!isoString) return isEn ? "Date unknown" : "تاريخ غير معروف";
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return String(isoString);
+    try {
+      return d.toLocaleDateString(isEn ? "en-US" : "ar-EG", {
+        year: "numeric",
+        month: "short",
+        day: "numeric"
+      });
+    } catch (e) {
+      return String(isoString).substring(0, 10);
+    }
+  }
+
+  const PROVENANCE_CATEGORIES = {
+    PATIENT_ENTERED: "patient_entered",
+    IMPORTED: "imported",
+    OCR_DRAFT: "ocr_draft",
+    DOCTOR_VERIFIED: "doctor_verified",
+    APPROVED: "approved"
+  };
+
+  /**
+   * Categorizes any clinical data element into one of the 5 distinct provenance tiers:
+   * 1. patient-entered information
+   * 2. imported information (external EHR / LIS)
+   * 3. OCR-derived draft information (unverified scan)
+   * 4. doctor-verified information (clinician verified)
+   * 5. approved information (certified final report)
+   */
+  function getBloodDisorderProvenanceCategory(item) {
+    if (!item) return PROVENANCE_CATEGORIES.PATIENT_ENTERED;
+    if (typeof item === "string") {
+      const lower = item.toLowerCase();
+      if (lower.includes("approved") || lower.includes("certified")) return PROVENANCE_CATEGORIES.APPROVED;
+      if (lower.includes("verified") || lower.includes("doctor")) return PROVENANCE_CATEGORIES.DOCTOR_VERIFIED;
+      if (lower.includes("ocr") || lower.includes("scan")) return PROVENANCE_CATEGORIES.OCR_DRAFT;
+      if (lower.includes("import") || lower.includes("ehr") || lower.includes("lis") || lower.includes("external")) return PROVENANCE_CATEGORIES.IMPORTED;
+      return PROVENANCE_CATEGORIES.PATIENT_ENTERED;
+    }
+
+    if (item.isApproved || item.reviewStatus === "APPROVED" || item.reviewDecision === "APPROVED") {
+      return PROVENANCE_CATEGORIES.APPROVED;
+    }
+    if (item.reviewStatus === "VERIFIED" || item.isDoctorVerified || item.reviewDecision === "VERIFIED" || item.verifiedByDoctor) {
+      return PROVENANCE_CATEGORIES.DOCTOR_VERIFIED;
+    }
+    const src = String(item.source || item.measurementSource || item.provenance || item.sourceType || "").toLowerCase();
+    if (src.includes("ocr") || item.isOcrDraft || item.extractionMethod === "ocr") {
+      return PROVENANCE_CATEGORIES.OCR_DRAFT;
+    }
+    if (src.includes("ehr") || src.includes("lis") || src.includes("import") || src.includes("external")) {
+      return PROVENANCE_CATEGORIES.IMPORTED;
+    }
+    return PROVENANCE_CATEGORIES.PATIENT_ENTERED;
+  }
+
+  /**
+   * Renders a visually distinct badge for each of the 5 provenance categories.
+   * Clearly highlights OCR draft and patient-entered data as UNVERIFIED.
+   */
+  function getBloodDisorderProvenanceBadge(item, isEn = false) {
+    const cat = getBloodDisorderProvenanceCategory(item);
+    switch (cat) {
+      case PROVENANCE_CATEGORIES.APPROVED:
+        return `<span class="pill ok bd-prov-badge bd-prov-approved" data-provenance="approved" style="background: rgba(9, 184, 182, 0.16); color: #0f766e; border: 1px solid #0d9488; font-size: 11px; padding: 2px 8px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">🏆 ${isEn ? "Approved Medical Fact" : "حقيقة طبية معتمدة"}</span>`;
+      case PROVENANCE_CATEGORIES.DOCTOR_VERIFIED:
+        return `<span class="pill ok bd-prov-badge bd-prov-verified" data-provenance="doctor_verified" style="background: rgba(16, 185, 129, 0.15); color: #059669; border: 1px solid #10b981; font-size: 11px; padding: 2px 8px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">🟢 ${isEn ? "Doctor-Verified" : "موثق من الطبيب"}</span>`;
+      case PROVENANCE_CATEGORIES.OCR_DRAFT:
+        return `<span class="pill warning bd-prov-badge bd-prov-ocr" data-provenance="ocr_draft" style="background: rgba(245, 158, 11, 0.16); color: #b45309; border: 1.5px dashed #d97706; font-size: 11px; padding: 2px 8px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;" title="${isEn ? 'Auxiliary OCR scan draft — NOT an approved medical fact' : 'مسودة استخراج ضوئي أولية — ليست حقيقة طبية معتمدة'}">📄 ${isEn ? "OCR Draft (Unverified Scan — Not Medical Fact)" : "مسودة استخراج ضوئي OCR (غير معتمدة)"}</span>`;
+      case PROVENANCE_CATEGORIES.IMPORTED:
+        return `<span class="pill info bd-prov-badge bd-prov-imported" data-provenance="imported" style="background: rgba(59, 130, 246, 0.14); color: #1d4ed8; border: 1px solid #3b82f6; font-size: 11px; padding: 2px 8px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">🏥 ${isEn ? "External EHR / LIS Import (Unverified)" : "مستورد من السجل / المختبر (غير موثق)"}</span>`;
+      case PROVENANCE_CATEGORIES.PATIENT_ENTERED:
+      default:
+        return `<span class="pill pending bd-prov-badge bd-prov-patient" data-provenance="patient_entered" style="background: rgba(245, 158, 11, 0.12); color: #d97706; border: 1px solid #f59e0b; font-size: 11px; padding: 2px 8px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;" title="${isEn ? 'Patient-reported information — unverified until clinician review' : 'معلومات مدخلة من المريض — غير موثقة حتى مراجعة الطبيب'}">👤 ${isEn ? "Patient-Entered (Unverified Draft)" : "مدخل من المريض (مسودة غير موثقة)"}</span>`;
+    }
+  }
+
+  /**
+   * Renders the complete Blood Clotting / Blood Disorders Doctor Review Section.
+   * Enables attending physicians to thoroughly review:
+   * - Patient-provided clinical information (history, medications, symptoms, risks)
+   * - Laboratory measurements with units, reference ranges, and source provenance
+   * - Source documents / attachments (PDF lab slips, scans)
+   * - Historical observations (prior readings & longitudinal trends)
+   * - Patient clarifications
+   * - Doctor clinical notes (with strict quarantine of internal notes)
+   * 
+   * Enforces:
+   * - Clear visual and programmatic distinction between the 5 provenance categories
+   * - Non-diagnostic and non-automated treatment boundary
+   * - Revision gating (must review current clinical revision before approval)
+   */
+  function renderBloodDisordersReviewSection(c, isEn = false, options = {}) {
+    if (!c) return "";
+
+    const isBloodDisordersCase = Boolean(
+      options.forceRender ||
+      c.condition === "blood_disorders" ||
+      c.specialty === "blood_disorders" ||
+      c.caseType === "blood_disorders" ||
+      c.conditionId ||
+      (Array.isArray(c.laboratoryResults) && c.laboratoryResults.length > 0) ||
+      (Array.isArray(c.observations) && c.observations.length > 0)
+    );
+
+    if (!isBloodDisordersCase) return "";
+
+    const intake = c.clinicalIntake || c.patientHistory || c.intake || {};
+    const labs = Array.isArray(options.labResults)
+      ? options.labResults
+      : (Array.isArray(c.laboratoryResults) ? c.laboratoryResults : (Array.isArray(c.observations) ? c.observations : []));
+
+    const historicalLabs = Array.isArray(options.historicalObservations)
+      ? options.historicalObservations
+      : (Array.isArray(c.historicalObservations) ? c.historicalObservations : (Array.isArray(c.priorObservations) ? c.priorObservations : []));
+
+    const sourceDocs = Array.isArray(options.sourceDocuments)
+      ? options.sourceDocuments
+      : (Array.isArray(c.files) ? c.files : (Array.isArray(c.attachments) ? c.attachments : []));
+
+    const clarifications = Array.isArray(c.clarifications)
+      ? c.clarifications
+      : (c.patientResponse ? [{ text: c.patientResponse, submittedAt: c.patientResponseAt || c.updatedAt, source: "patient_entered" }] : []);
+
+    const curRevision = Number(c.clinicalRevision || 1);
+    const isStale = Boolean(c.isRevisionStale || c.hasNewInfo || isRevisionStale(c));
+
+    // 1. Clinical Oversight & Guardrail Banner
+    const guardrailBannerHtml = `
+      <div class="bd-review-guardrail-banner" role="note" style="background: rgba(9, 184, 182, 0.08); border: 1.5px solid var(--teal); border-radius: 12px; padding: 12px 14px; margin-bottom: 14px; display: flex; gap: 10px; align-items: flex-start;">
+        <span style="font-size: 20px; line-height: 1;" aria-hidden="true">🛡️</span>
+        <div style="font-size: 12.5px; line-height: 1.5; color: var(--ink);">
+          <strong style="color: var(--teal); display: block; margin-bottom: 2px;">
+            ${isEn ? "Clinical Governance & Non-Diagnostic Oversight Guardrail:" : "إطار الحوكمة السريرية وعدم إنشاء تشخيصات تلقائية:"}
+          </strong>
+          <span>
+            ${isEn
+              ? "OCR-derived text and patient-entered records are unverified auxiliary draft inputs and must NEVER be treated as approved medical facts until reviewed and approved by the attending physician. System does NOT generate automated diagnoses or treatment recommendations. The doctor must review the current clinical revision before approval."
+              : "نصوص المسح الضوئي (OCR) وإفادات المريض هي مدخلات مسودة أولية ولا يجوز اعتبارها حقائق طبية معتمدة حتى يتم تدقيقها واعتمادها من الطبيب المعالج. لا يُنشئ النظام أي تشخيصات أو توصيات علاجية آلية. يلزم الطبيب بمراجعة النسخة السريرية الحالية قبل الاعتماد."}
+          </span>
+        </div>
+      </div>
+    `;
+
+    // 2. Provenance Classification Key / Legend
+    const provenanceLegendHtml = `
+      <div class="bd-provenance-legend" style="background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 14px; font-size: 12px;">
+        <strong style="display: block; margin-bottom: 6px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">
+          🏷️ ${isEn ? "Clinical Provenance Classification Key:" : "دليل تصنيف مصدر وموثوقية البيانات:"}
+        </strong>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
+          ${getBloodDisorderProvenanceBadge("patient_entered", isEn)}
+          ${getBloodDisorderProvenanceBadge("imported", isEn)}
+          ${getBloodDisorderProvenanceBadge("ocr_draft", isEn)}
+          ${getBloodDisorderProvenanceBadge("doctor_verified", isEn)}
+          ${getBloodDisorderProvenanceBadge("approved", isEn)}
+        </div>
+      </div>
+    `;
+
+    // 3. Stale Revision Warning Banner
+    let staleBannerHtml = "";
+    if (isStale) {
+      staleBannerHtml = `
+        <div class="bd-stale-revision-card" style="background: rgba(245, 158, 11, 0.12); border: 1.5px solid #f59e0b; border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 20px;">⚠️</span>
+            <div>
+              <strong style="color: #b45309; font-size: 13px;">${isEn ? `New Clinical Information Received (Revision ${curRevision})` : `تم استلام معلومات سريرية جديدة (النسخة ${curRevision})`}</strong>
+              <div style="font-size: 12px; color: var(--ink); margin-top: 2px;">
+                ${isEn ? "The clinical case data has changed. Please review the updated revision before approval." : "تم تحديث بيانات الحالة. يرجى مراجعة وتأكيد النسخة الحالية قبل اعتماد التقرير."}
+              </div>
+            </div>
+          </div>
+          <button type="button" class="btn btn-sm" onclick="HealthVibes?.DoctorUI?.acknowledgeNewRevision('${escapeHtml(c.id)}')" style="padding: 6px 12px; font-size: 12px; border-radius: 6px; background: #f59e0b; color: #07191b; font-weight: 700; border: none; cursor: pointer;">
+            ✓ ${isEn ? "Acknowledge & Mark Reviewed" : "تأكيد مراجعة النسخة الحالية"}
+          </button>
+        </div>
+      `;
+    }
+
+    // 4. Patient-Provided Information Card
+    const indication = escapeHtml(intake.indication || c.chiefComplaint || c.symptoms || (isEn ? "Not specified" : "غير محدد"));
+    const bleedingHistory = escapeHtml(intake.bleedingHistory || c.bleedingHistory || (isEn ? "No spontaneous bleeding episodes reported" : "لم يتم الإبلاغ عن نزف تلقائي"));
+    const clottingHistory = escapeHtml(intake.thromboembolismHistory || c.thromboembolismHistory || (isEn ? "No prior thromboembolic events documented" : "لا يوجد تاريخ سابق لانصمام خثاري"));
+    const anticoagTherapy = escapeHtml(intake.anticoagulantTherapy || c.currentMedications || (isEn ? "None reported" : "لا يوجد علاج مسجل"));
+    const familyHistory = escapeHtml(intake.familyHistory || c.familyHistory || (isEn ? "Negative family history" : "تاريخ عائلي سلبي"));
+    const riskFactors = escapeHtml(intake.riskFactors || c.riskFactors || c.lifestyleFactors || (isEn ? "None documented" : "لا توجد عوامل خطورة مسجلة"));
+
+    const patientInfoHtml = `
+      <div class="bd-patient-info-card" style="background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 14px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 6px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 16px;">👤</span>
+            <strong style="font-size: 13.5px; color: var(--ink);">${isEn ? "Patient-Provided Clinical Information" : "المعلومات السريرية المقدمة من المريض"}</strong>
+          </div>
+          ${getBloodDisorderProvenanceBadge("patient_entered", isEn)}
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; font-size: 12px;">
+          <div style="background: var(--surface-2); padding: 8px 10px; border-radius: 8px;">
+            <span style="color: var(--muted); display: block; font-size: 11px;">${isEn ? "Indication / Chief Complaint" : "دواعي الاستشارة / الشكوى الرئيسية"}</span>
+            <strong style="color: var(--ink);">${indication}</strong>
+          </div>
+          <div style="background: var(--surface-2); padding: 8px 10px; border-radius: 8px;">
+            <span style="color: var(--muted); display: block; font-size: 11px;">${isEn ? "Thrombosis & Clot History" : "تاريخ الجلطات والتخثر السابق"}</span>
+            <strong style="color: var(--ink);">${clottingHistory}</strong>
+          </div>
+          <div style="background: var(--surface-2); padding: 8px 10px; border-radius: 8px;">
+            <span style="color: var(--muted); display: block; font-size: 11px;">${isEn ? "Bleeding Diathesis History" : "تاريخ النزف والاعتلال التخثري"}</span>
+            <strong style="color: var(--ink);">${bleedingHistory}</strong>
+          </div>
+          <div style="background: var(--surface-2); padding: 8px 10px; border-radius: 8px;">
+            <span style="color: var(--muted); display: block; font-size: 11px;">${isEn ? "Current Anticoagulants / Antiplatelets" : "أدوية السيولة ومضادات التخثر الحالية"}</span>
+            <strong style="color: var(--ink);">${anticoagTherapy}</strong>
+          </div>
+          <div style="background: var(--surface-2); padding: 8px 10px; border-radius: 8px;">
+            <span style="color: var(--muted); display: block; font-size: 11px;">${isEn ? "Family Hematology History" : "التاريخ العائلي لأمراض الدم"}</span>
+            <strong style="color: var(--ink);">${familyHistory}</strong>
+          </div>
+          <div style="background: var(--surface-2); padding: 8px 10px; border-radius: 8px;">
+            <span style="color: var(--muted); display: block; font-size: 11px;">${isEn ? "Clinical & Acquired Risk Factors" : "عوامل الخطورة والمحفزات"}</span>
+            <strong style="color: var(--ink);">${riskFactors}</strong>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // 5. Laboratory Results Table with Units, Reference Ranges & Provenance
+    let labsTableHtml = "";
+    if (labs.length === 0) {
+      labsTableHtml = `
+        <div style="padding: 16px; text-align: center; background: var(--surface); border: 1px dashed var(--line); border-radius: 10px; color: var(--muted); font-size: 12.5px;">
+          <span>🧪</span> ${isEn ? "No laboratory measurements recorded for this case yet." : "لا توجد نتائج تحاليل مخبرية مسجلة لهذه الحالة بعد."}
+        </div>
+      `;
+    } else {
+      const rows = labs.map(lab => {
+        const code = escapeHtml(lab.testCode || lab.code || "--");
+        const name = escapeHtml(lab.testName || (isEn ? lab.nameEn : lab.nameAr) || code);
+        const val = escapeHtml(lab.value !== undefined ? lab.value : (lab.resultValue !== undefined ? lab.resultValue : "--"));
+        // Unit: strictly preserved without guessing
+        const unitDisplay = (lab.unit && String(lab.unit).trim() !== "")
+          ? escapeHtml(lab.unit)
+          : `<span style="color: var(--muted); font-style: italic;">${isEn ? "— (Not specified)" : "— (غير محدد)"}</span>`;
+
+        // Reference range: strictly preserved without assuming standard defaults
+        let refDisplay = `<span style="color: var(--muted); font-style: italic;">${isEn ? "— (Not provided by source)" : "— (غير محدد من المصدر)"}</span>`;
+        if (lab.referenceRange) {
+          if (typeof lab.referenceRange === "object") {
+            if (lab.referenceRange.low !== undefined && lab.referenceRange.low !== null && lab.referenceRange.high !== undefined && lab.referenceRange.high !== null) {
+              refDisplay = `${lab.referenceRange.low} – ${lab.referenceRange.high} ${escapeHtml(lab.referenceRange.unit || lab.unit || "")}`;
+            } else if (lab.referenceRange.text) {
+              refDisplay = escapeHtml(lab.referenceRange.text);
+            }
+          } else if (typeof lab.referenceRange === "string" && lab.referenceRange.trim() !== "") {
+            refDisplay = escapeHtml(lab.referenceRange);
+          }
+        }
+
+        const dateStr = lab.collectedAt || lab.collectionDateTime || lab.measuredAt;
+        const dtDisplay = dateStr
+          ? formatDateTime(dateStr, isEn)
+          : `<span style="color: var(--muted); font-style: italic;">${isEn ? "— (Not recorded)" : "— (غير مسجل)"}</span>`;
+
+        const docRef = lab.reportingLab || lab.sourceDocument || lab.attachmentRef?.fileName || lab.attachmentRef?.fileId || (isEn ? "Lab slip" : "تقرير المختبر");
+        const badge = getBloodDisorderProvenanceBadge(lab, isEn);
+
+        return `
+          <tr style="border-bottom: 1px solid var(--line); font-size: 12px;">
+            <td style="padding: 8px 10px; font-weight: 700; color: var(--teal); font-family: monospace;">${code}</td>
+            <td style="padding: 8px 10px; color: var(--ink); font-weight: 600;">${name}</td>
+            <td style="padding: 8px 10px; font-weight: 700; color: var(--ink); font-size: 13px;">${val}</td>
+            <td style="padding: 8px 10px;">${unitDisplay}</td>
+            <td style="padding: 8px 10px;">${refDisplay}</td>
+            <td style="padding: 8px 10px; color: var(--muted);">${dtDisplay}</td>
+            <td style="padding: 8px 10px; color: var(--muted); font-size: 11px;">${escapeHtml(docRef)}</td>
+            <td style="padding: 8px 10px;">${badge}</td>
+          </tr>
+        `;
+      }).join("");
+
+      labsTableHtml = `
+        <div style="overflow-x: auto; -webkit-overflow-scrolling: touch;">
+          <table style="width: 100%; border-collapse: collapse; text-align: start; background: var(--surface); border: 1px solid var(--line); border-radius: 10px;">
+            <thead>
+              <tr style="background: var(--surface-2); border-bottom: 1.5px solid var(--line); color: var(--muted); font-size: 11.5px;">
+                <th style="padding: 8px 10px;">${isEn ? "Code" : "الرمز"}</th>
+                <th style="padding: 8px 10px;">${isEn ? "Test Name" : "اسم الفحص"}</th>
+                <th style="padding: 8px 10px;">${isEn ? "Result" : "النتيجة"}</th>
+                <th style="padding: 8px 10px;">${isEn ? "Unit" : "الوحدة"}</th>
+                <th style="padding: 8px 10px;">${isEn ? "Reference Range" : "النطاق المرجعي"}</th>
+                <th style="padding: 8px 10px;">${isEn ? "Collected" : "تاريخ السحب"}</th>
+                <th style="padding: 8px 10px;">${isEn ? "Document / Lab" : "المصدر / المستند"}</th>
+                <th style="padding: 8px 10px;">${isEn ? "Provenance Tier" : "مستوى الموثوقية والمصدر"}</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    // 6. Source Documents & Attachments Card
+    let sourceDocsHtml = "";
+    if (sourceDocs.length === 0) {
+      sourceDocsHtml = `
+        <div style="padding: 12px; background: var(--surface); border-radius: 8px; border: 1px dashed var(--line); color: var(--muted); text-align: center; font-size: 12px;">
+          <span>📄</span> ${isEn ? "No source lab PDF documents or raw scans attached." : "لا توجد تقارير مخبرية أو مسوحات ضوئية مرفقة."}
+        </div>
+      `;
+    } else {
+      const docItems = sourceDocs.map(doc => {
+        const docName = escapeHtml(doc.name || doc.fileName || (isEn ? "Lab Report Document" : "مستند التقرير المخبري"));
+        const sizeStr = doc.size ? formatBytes(doc.size) : "--";
+        const docDt = doc.uploadedAt || doc.createdAt ? formatDateTime(doc.uploadedAt || doc.createdAt, isEn) : "--";
+        const isPdf = String(docName).toLowerCase().endsWith(".pdf") || doc.type === "application/pdf";
+        const docBadge = getBloodDisorderProvenanceBadge(doc, isEn);
+
+        return `
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; font-size: 12px; flex-wrap: wrap; gap: 6px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 16px;">${isPdf ? "📄" : "🖼️"}</span>
+              <div>
+                <strong style="color: var(--ink);">${docName}</strong>
+                <span style="display: block; font-size: 11px; color: var(--muted);">${sizeStr} • ${docDt}</span>
+              </div>
+            </div>
+            <div>${docBadge}</div>
+          </div>
+        `;
+      }).join("");
+
+      sourceDocsHtml = `<div style="display: flex; flex-direction: column; gap: 6px;">${docItems}</div>`;
+    }
+
+    // 7. Historical Observations & Longitudinal Trends
+    let historicalHtml = "";
+    if (historicalLabs.length === 0) {
+      historicalHtml = `
+        <div style="padding: 12px; background: var(--surface); border-radius: 8px; border: 1px dashed var(--line); color: var(--muted); text-align: center; font-size: 12px;">
+          <span>ℹ️</span> ${isEn ? "Initial hematology assessment — no prior historical observations recorded for this patient." : "تقييم أولي — لا توجد ملاحظات أو تحاليل تاريخية سابقة مسجلة لهذا المريض."}
+        </div>
+      `;
+    } else {
+      const histRows = historicalLabs.map(h => {
+        const hCode = escapeHtml(h.testCode || h.code || "--");
+        const hName = escapeHtml(h.testName || (isEn ? h.nameEn : h.nameAr) || hCode);
+        const hVal = escapeHtml(h.value !== undefined ? h.value : (h.resultValue !== undefined ? h.resultValue : "--"));
+        const hUnit = escapeHtml(h.unit || "--");
+        const hDate = formatDateTime(h.collectedAt || h.collectionDateTime || h.createdAt, isEn);
+        const hBadge = getBloodDisorderProvenanceBadge(h, isEn);
+
+        return `
+          <tr style="border-bottom: 1px solid var(--line); font-size: 11.5px;">
+            <td style="padding: 6px 8px; font-family: monospace; color: var(--teal);">${hCode}</td>
+            <td style="padding: 6px 8px;">${hName}</td>
+            <td style="padding: 6px 8px; font-weight: 700;">${hVal} ${hUnit}</td>
+            <td style="padding: 6px 8px; color: var(--muted);">${hDate}</td>
+            <td style="padding: 6px 8px;">${hBadge}</td>
+          </tr>
+        `;
+      }).join("");
+
+      historicalHtml = `
+        <div style="overflow-x: auto;">
+          <table style="width: 100%; border-collapse: collapse; text-align: start; background: var(--surface); border: 1px solid var(--line); border-radius: 8px;">
+            <thead>
+              <tr style="background: var(--surface-2); border-bottom: 1px solid var(--line); color: var(--muted); font-size: 11px;">
+                <th style="padding: 6px 8px;">${isEn ? "Code" : "الرمز"}</th>
+                <th style="padding: 6px 8px;">${isEn ? "Test" : "الفحص"}</th>
+                <th style="padding: 6px 8px;">${isEn ? "Past Result" : "النتيجة السابقة"}</th>
+                <th style="padding: 6px 8px;">${isEn ? "Date" : "التاريخ"}</th>
+                <th style="padding: 6px 8px;">${isEn ? "Provenance" : "المصدر"}</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${histRows}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    // 8. Patient Clarifications
+    let clarificationsHtml = "";
+    if (clarifications.length === 0) {
+      clarificationsHtml = `
+        <div style="padding: 12px; background: var(--surface); border-radius: 8px; border: 1px dashed var(--line); color: var(--muted); text-align: center; font-size: 12px;">
+          <span>💬</span> ${isEn ? "No pending or historical patient clarifications recorded." : "لا توجد استفسارات أو توضيحات مسجلة من المريض."}
+        </div>
+      `;
+    } else {
+      const items = clarifications.map((clr, idx) => {
+        const text = escapeHtml(clr.text || clr.patientResponse || clr.clarificationText || "--");
+        const dt = formatDateTime(clr.submittedAt || clr.createdAt, isEn);
+        return `
+          <div style="padding: 8px 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; margin-bottom: 6px; font-size: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <strong style="color: var(--teal); font-size: 11px;">${isEn ? `Clarification #${idx + 1}` : `توضيح رقم #${idx + 1}`}</strong>
+              <small style="color: var(--muted);">${dt}</small>
+            </div>
+            <p style="margin: 0; color: var(--ink); line-height: 1.4;">${text}</p>
+          </div>
+        `;
+      }).join("");
+
+      clarificationsHtml = `<div>${items}</div>`;
+    }
+
+    // 9. Quarantined Internal Clinician Notes
+    const internalNotesText = c.internalDoctorNotes || c.internalNotes || "";
+    const internalNotesHtml = `
+      <div class="bd-internal-notes-card" style="background: rgba(245, 158, 11, 0.08); border: 1px dashed #f59e0b; border-radius: 10px; padding: 12px; margin-top: 12px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <strong style="color: #b45309; font-size: 12.5px; display: flex; align-items: center; gap: 6px;">
+            <span>🔒</span> ${isEn ? "Internal Clinician Notes (Strictly Quarantined from Patient)" : "ملاحظات الطبيب الداخلية (محجوبة تماماً عن المريض)"}
+          </strong>
+          <span class="pill warning" style="font-size: 10px; padding: 1px 6px;">Quarantined</span>
+        </div>
+        <p style="margin: 0; font-size: 12px; color: var(--ink); line-height: 1.4; font-family: monospace;">
+          ${internalNotesText ? escapeHtml(internalNotesText) : `<span style="color: var(--muted); font-style: italic;">${isEn ? "No internal notes recorded." : "لا توجد ملاحظات داخلية."}</span>`}
+        </p>
+      </div>
+    `;
+
+    return `
+      <div class="blood-disorders-doctor-review-container" style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin: 14px 0;">
+        
+        <!-- Section Header -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 22px;">🩸</span>
+            <div>
+              <h4 style="margin: 0; font-size: 15px; color: var(--ink); font-weight: 700;">
+                ${isEn ? "Blood Clotting / Hematology Clinical Case Review" : "مراجعة وتدقيق حالة اضطراب تجلط الدم والاعتلالات الدموية"}
+              </h4>
+              <small style="color: var(--muted); font-size: 11px;">
+                ${isEn ? `Current Clinical Revision: Rev #${curRevision}` : `النسخة السريرية الحالية: رقم #${curRevision}`}
+              </small>
+            </div>
+          </div>
+          <div>
+            ${c.status === "approved"
+              ? `<span class="pill ok" style="font-size: 11.5px; padding: 3px 10px;">🏆 ${isEn ? "Case Approved & Certified" : "الحالة معتمدة بتقرير طبي"}</span>`
+              : `<span class="pill pending" style="font-size: 11.5px; padding: 3px 10px;">⏳ ${isEn ? "Under Attending Physician Review" : "قيد تدقيق ومراجعة الطبيب"}</span>`}
+          </div>
+        </div>
+
+        ${guardrailBannerHtml}
+        ${staleBannerHtml}
+        ${provenanceLegendHtml}
+
+        <!-- 1. Patient Provided Information -->
+        ${patientInfoHtml}
+
+        <!-- 2. Laboratory Results Table -->
+        <div style="margin-bottom: 14px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <strong style="font-size: 13px; color: var(--ink); display: flex; align-items: center; gap: 6px;">
+              <span>🧪</span> ${isEn ? "Laboratory Results (Units & Reference Ranges)" : "نتائج التحاليل المخبرية (الوحدات والنطاقات المرجعية)"}
+            </strong>
+            <small style="color: var(--muted); font-size: 11px;">${labs.length} ${isEn ? "parameters" : "فحوصات"}</small>
+          </div>
+          ${labsTableHtml}
+        </div>
+
+        <!-- 3. Source Documents & Attachments -->
+        <div style="margin-bottom: 14px;">
+          <strong style="font-size: 13px; color: var(--ink); display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
+            <span>📎</span> ${isEn ? "Source Documents & Uploaded Lab Reports" : "مستندات المصدر والتقارير المرفوعة"}
+          </strong>
+          ${sourceDocsHtml}
+        </div>
+
+        <!-- 4. Historical Observations (Longitudinal Trend) -->
+        <div style="margin-bottom: 14px;">
+          <strong style="font-size: 13px; color: var(--ink); display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
+            <span>📈</span> ${isEn ? "Historical Observations & Longitudinal Trends" : "الملاحظات والنتائج التاريخية السابقة للمريض"}
+          </strong>
+          ${historicalHtml}
+        </div>
+
+        <!-- 5. Patient Clarifications -->
+        <div style="margin-bottom: 14px;">
+          <strong style="font-size: 13px; color: var(--ink); display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
+            <span>💬</span> ${isEn ? "Patient Clarifications & Answers" : "إيضاحات وإجابات المريض"}
+          </strong>
+          ${clarificationsHtml}
+        </div>
+
+        <!-- 6. Internal Doctor Notes -->
+        ${internalNotesHtml}
+      </div>
+    `;
+  }
+
+  /**
+   * Renders the Obesity & Metabolic Health Doctor Review Section.
+   * Enables attending physicians to thoroughly review:
+   * - Patient-provided anthropometrics (height, weight, date/time, source)
+   * - Dynamically calculated BMI (strictly when valid height and weight exist)
+   * - Historical measurements preserved longitudinally
+   * - Documented lifestyle factors (physical activity, dietary habits, sleep)
+   * - Source documents & attachments
+   * - Doctor clinical notes (with strict quarantine of internal notes)
+   * 
+   * Enforces:
+   * - Non-diagnostic boundary: Weight & BMI alone DO NOT represent a medical diagnosis
+   * - Prohibition of automated diagnoses
+   * - Human physician diagnosis required for approval
+   * - Current clinical revision gating
+   */
+  function renderObesityReviewSection(c, isEn = false, options = {}) {
+    if (!c) return "";
+
+    const isObesityCase = Boolean(
+      options.forceRender ||
+      c.condition === "obesity" ||
+      c.specialty === "obesity" ||
+      c.caseType === "obesity" ||
+      c.latestMeasurement ||
+      (Array.isArray(c.historicalMeasurements) && c.historicalMeasurements.length > 0)
+    );
+
+    if (!isObesityCase) return "";
+
+    const latest = c.latestMeasurement || (Array.isArray(c.historicalMeasurements) && c.historicalMeasurements.length > 0 ? c.historicalMeasurements[c.historicalMeasurements.length - 1] : null);
+    const history = Array.isArray(c.historicalMeasurements) ? c.historicalMeasurements : (latest ? [latest] : []);
+    const lifestyle = c.lifestyle || (latest && latest.lifestyle) || null;
+    const curRevision = Number(c.clinicalRevision || 1);
+    const isStale = Boolean(c.isRevisionStale || c.hasNewInfo || isRevisionStale(c));
+
+    // Dynamic BMI calculation
+    let calculatedBmiStr = "--";
+    if (latest && latest.heightCm && latest.weightKg) {
+      const hM = Number(latest.heightCm) > 3 ? Number(latest.heightCm) / 100 : Number(latest.heightCm);
+      const bmi = Math.round((Number(latest.weightKg) / (hM * hM)) * 10) / 10;
+      calculatedBmiStr = `${bmi} kg/m²`;
+    } else if (latest && latest.bmi) {
+      calculatedBmiStr = `${latest.bmi} kg/m²`;
+    }
+
+    // Historical measurements table rows
+    let historyRowsHtml = "";
+    if (history.length === 0) {
+      historyRowsHtml = `
+        <tr>
+          <td colspan="5" style="padding: 12px; text-align: center; color: var(--muted); font-size: 12px;">
+            ${isEn ? "No historical measurements recorded." : "لا توجد قياسات سابقة مسجلة."}
+          </td>
+        </tr>
+      `;
+    } else {
+      historyRowsHtml = history.map(h => {
+        const hBmi = (h.bmi !== undefined && h.bmi !== null) ? `${h.bmi} kg/m²` : "--";
+        const dateStr = formatDateTime(h.measuredAt, isEn);
+        const src = h.measurementSource || "patient_self_report";
+        return `
+          <tr style="border-bottom: 1px solid var(--line);">
+            <td style="padding: 8px 10px; font-weight: 600;">${escapeSafe(dateStr)}</td>
+            <td style="padding: 8px 10px; font-family: monospace;">${h.heightCm ? h.heightCm + " cm" : "--"}</td>
+            <td style="padding: 8px 10px; font-family: monospace; font-weight: 700; color: var(--teal);">${h.weightKg ? h.weightKg + " kg" : "--"}</td>
+            <td style="padding: 8px 10px; font-family: monospace; font-weight: 700;">${escapeSafe(hBmi)}</td>
+            <td style="padding: 8px 10px; font-size: 11px; color: var(--muted);">${escapeSafe(src)}</td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    // Lifestyle summary
+    let lifestyleHtml = "";
+    if (lifestyle) {
+      const act = lifestyle.physicalActivity;
+      const diet = lifestyle.dietaryHabits;
+      const sleep = lifestyle.sleep;
+      lifestyleHtml = `
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; background: var(--surface-2); padding: 12px; border-radius: 10px; margin-bottom: 14px; font-size: 12px;">
+          <div>
+            <strong style="color: var(--teal); display: block; margin-bottom: 4px;">🏃 ${isEn ? "Physical Activity" : "النشاط البدني"}</strong>
+            <span>${act && act.activityLevel ? escapeSafe(act.activityLevel) : (isEn ? "Not specified" : "غير محدد")} ${act && act.minutesPerWeek ? `(${act.minutesPerWeek} min/wk)` : ""}</span>
+          </div>
+          <div>
+            <strong style="color: var(--teal); display: block; margin-bottom: 4px;">🥗 ${isEn ? "Dietary Habits" : "النمط الغذائي"}</strong>
+            <span>${diet && diet.nutritionalPattern ? escapeSafe(diet.nutritionalPattern) : (isEn ? "Documented" : "موثق")} ${diet && diet.mealsPerDay ? `• ${diet.mealsPerDay} meals/day` : ""}</span>
+          </div>
+          <div>
+            <strong style="color: var(--teal); display: block; margin-bottom: 4px;">🌙 ${isEn ? "Sleep & Apnea Screening" : "النوم وفحص انقطاع النفس"}</strong>
+            <span>${sleep && sleep.hoursPerNight ? `${sleep.hoursPerNight} hrs/night` : (isEn ? "Not specified" : "غير محدد")} ${sleep && sleep.sleepApneaScreening ? `• ${sleep.sleepApneaScreening}` : ""}</span>
+          </div>
+        </div>
+      `;
+    }
+
+    // Internal notes
+    let internalNotesHtml = "";
+    if (c.internalDoctorNotes) {
+      internalNotesHtml = `
+        <div class="quarantined-notes-container" style="background: rgba(245, 158, 11, 0.08); border: 1.5px dashed #d97706; border-radius: 10px; padding: 12px; margin-top: 12px;">
+          <strong style="color: #b45309; font-size: 12px; display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+            <span>🔒</span> ${isEn ? "Internal Doctor Notes (Strict Quarantine from Patient)" : "ملاحظات الطبيب الداخلية (محجوبة عن المريض)"}
+          </strong>
+          <p style="margin: 0; font-size: 12.5px; color: var(--ink);">${escapeSafe(c.internalDoctorNotes)}</p>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="obesity-review-card" style="background: var(--surface); border: 1.5px solid var(--line); border-radius: 14px; padding: 18px; margin: 14px 0; box-shadow: 0 4px 14px rgba(0,0,0,0.06);">
+        <!-- Header -->
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px; border-bottom: 1px solid var(--line); padding-bottom: 12px; margin-bottom: 14px;">
+          <div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 22px;">⚖️</span>
+              <h4 style="margin: 0; font-size: 16px; color: var(--ink); font-weight: 700;">
+                ${isEn ? "Obesity & Metabolic Health Clinical Review" : "مراجعة سريرية لحالة السمنة والصحة الأيضية"}
+              </h4>
+            </div>
+            <span style="font-size: 11.5px; color: var(--muted); margin-top: 2px; display: inline-block;">
+              ${isEn ? "Clinical Revision" : "المراجعة السريرية"}: <strong style="font-family: monospace;">#${curRevision}</strong>
+            </span>
+          </div>
+          <div>
+            ${isStale ? `
+              <span class="pill warning" style="font-size: 11px; padding: 3px 8px; font-weight: 700;">
+                ⚠️ ${isEn ? "New Anthropometrics / Stale Revision" : "قياسات جديدة / مراجعة غير مدققة"}
+              </span>
+            ` : `
+              <span class="pill ok" style="font-size: 11px; padding: 3px 8px;">
+                🟢 ${isEn ? "Current Revision" : "المراجعة الحالية"}
+              </span>
+            `}
+          </div>
+        </div>
+
+        <!-- Mandatory Guardrail Banner -->
+        <div style="background: rgba(9, 184, 182, 0.08); border: 1px solid var(--teal); border-radius: 10px; padding: 12px; margin-bottom: 14px;">
+          <strong style="color: var(--teal); font-size: 12.5px; display: block; margin-bottom: 2px;">
+            🛡️ ${isEn ? "Anthropometric Clinical Standard & Non-Diagnostic Guardrail" : "المعيار السريري وحدود القياسات الأنثروبومترية غير التشخيصية"}
+          </strong>
+          <p style="margin: 0; font-size: 12px; color: var(--ink); line-height: 1.4;">
+            ${isEn
+              ? "Weight and BMI are anthropometric measurements, NOT a medical diagnosis. Weight alone does not represent a diagnosis. An explicit clinical diagnosis from the attending physician is required before approval."
+              : "الوزن ومؤشر كتلة الجسم (BMI) قياسات أنثروبومترية وليسا تشخيصاً طبياً. الوزن بمفرده لا يمثل تشخيصاً. يلزم تشخيص سريري صريح من الطبيب المعالج قبل الاعتماد."}
+          </p>
+        </div>
+
+        <!-- Current Biometrics Summary -->
+        <div style="background: var(--surface-2); padding: 14px; border-radius: 10px; margin-bottom: 14px; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
+          <div>
+            <span style="font-size: 11px; color: var(--muted); display: block;">${isEn ? "Measured Height" : "الطول المقاس"}</span>
+            <strong style="font-size: 15px; color: var(--ink); font-family: monospace;">
+              ${latest && (latest.height || latest.heightCm) ? `${latest.height || latest.heightCm} ${latest.heightUnit || "cm"}` : "--"}
+            </strong>
+            ${latest?.measuredValues?.height?.isReusedFromHistory ? `<small class="pill info" style="display: block; font-size: 9.5px; margin-top: 2px;">${isEn ? "Reused from patient record" : "مسترجع من سجل المريض"}</small>` : ""}
+          </div>
+          <div>
+            <span style="font-size: 11px; color: var(--muted); display: block;">${isEn ? "Measured Weight" : "الوزن المقاس"}</span>
+            <strong style="font-size: 15px; color: var(--teal); font-family: monospace;">
+              ${latest && (latest.weight || latest.weightKg) ? `${latest.weight || latest.weightKg} ${latest.weightUnit || "kg"}` : "--"}
+            </strong>
+          </div>
+          <div>
+            <span style="font-size: 11px; color: var(--muted); display: block;">${isEn ? "Calculated BMI (weight/height²)" : "مؤشر الكتلة المحسوب (BMI)"}</span>
+            <strong style="font-size: 15px; color: var(--ink); font-family: monospace;">${calculatedBmiStr}</strong>
+            ${latest?.bmi ? `<small class="pill ok" style="display: block; font-size: 9.5px; margin-top: 2px;">📐 ${isEn ? "Calculated" : "محسوب"}</small>` : `<small style="color: var(--muted); font-size: 9.5px; display: block;">${isEn ? "Not fabricated" : "غير مصطنع"}</small>`}
+          </div>
+          <div>
+            <span style="font-size: 11px; color: var(--muted); display: block;">${isEn ? "Source & Timestamp" : "المصدر والتوقيت"}</span>
+            <span style="font-size: 12px; color: var(--ink); display: block;">${latest && latest.measurementSource ? escapeSafe(latest.measurementSource) : "--"}</span>
+            <small style="font-size: 10.5px; color: var(--muted);">${formatDateTime(latest?.measurementTimestamp || latest?.measuredAt, isEn)}</small>
+          </div>
+        </div>
+
+        <!-- Lifestyle Summary -->
+        ${lifestyleHtml}
+
+        <!-- Historical Measurements Table -->
+        <div style="margin-bottom: 14px;">
+          <strong style="font-size: 13px; color: var(--ink); display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
+            <span>📈</span> ${isEn ? "Longitudinal Measurement History (Preserved Observations)" : "سجل القياسات السريرية التاريخي (ملاحظات محفوظة)"} (${history.length})
+          </strong>
+          <div style="overflow-x: auto; border: 1px solid var(--line); border-radius: 8px;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: start;">
+              <thead>
+                <tr style="background: var(--surface-2); border-bottom: 1px solid var(--line); color: var(--ink);">
+                  <th style="padding: 8px 10px;">${isEn ? "Timestamp" : "التوقيت"}</th>
+                  <th style="padding: 8px 10px;">${isEn ? "Height" : "الطول"}</th>
+                  <th style="padding: 8px 10px;">${isEn ? "Weight" : "الوزن"}</th>
+                  <th style="padding: 8px 10px;">${isEn ? "Calculated BMI" : "مؤشر الكتلة المحسوب"}</th>
+                  <th style="padding: 8px 10px;">${isEn ? "Source" : "المصدر"}</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${historyRowsHtml}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Quarantined Internal Notes -->
+        ${internalNotesHtml}
+      </div>
+    `;
+  }
+
   function renderAttachmentsSection(c, isEn = false) {
     if (!c) return "";
     const files = Array.isArray(c.attachments)
@@ -2399,7 +3112,14 @@
     renderAttachmentsSection,
     renderPreviousApprovedReportsSection,
     renderInternalDoctorNotesSection,
-    scrubInternalNotesForPatient
+    scrubInternalNotesForPatient,
+    // Blood Clotting / Blood Disorders Doctor Review Workflow
+    PROVENANCE_CATEGORIES,
+    getBloodDisorderProvenanceCategory,
+    getBloodDisorderProvenanceBadge,
+    renderBloodDisordersReviewSection,
+    // Obesity & Metabolic Health Doctor Review Workflow
+    renderObesityReviewSection
   };
 
   global.HealthVibes = global.HealthVibes || {};

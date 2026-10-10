@@ -204,6 +204,123 @@
   }
 
   /**
+   * Renders Structured Medically Reviewed Laboratory and Clinical Observations.
+   * Handles:
+   * - Unverified vs Medically Verified status badges
+   * - Never assuming missing units, reference ranges, or collection dates
+   * - Displaying original source provenance and correction history
+   */
+  function renderClinicalObservationsTable(observations = [], isEn = false, isDoctor = false) {
+    if (!Array.isArray(observations) || observations.length === 0) {
+      return `
+        <div class="empty-observations-notice" style="padding: 28px 16px; text-align: center; background: var(--surface); border: 1px dashed var(--line); border-radius: 12px; color: var(--muted);">
+          <div style="font-size: 24px; margin-bottom: 6px;">🧪</div>
+          <h4 style="margin: 0 0 4px; font-size: 14px; color: var(--ink);">
+            ${isEn ? "No Structured Observations Recorded" : "لا توجد ملاحظات أو تحاليل سريرية مسجلة"}
+          </h4>
+          <p style="margin: 0; font-size: 12.5px; line-height: 1.5;">
+            ${isEn
+              ? "All imported or patient-provided laboratory entries are stored and treated as unverified until reviewed by an authorized physician. Missing values are never assumed."
+              : "تُحفظ كافة البيانات المدخلة من المريض أو المستوردة وتُعامل كغير موثقة حتى مراجعتها واعتمادها من الطبيب المرخص. لا يتم افتراض أي قيم أو نطاقات مفقودة."}
+          </p>
+        </div>
+      `;
+    }
+
+    const rowsHtml = observations.map(obs => {
+      const testDisplay = escapeHtml(obs.testName || obs.testCode || "Unknown Test");
+      const codePill = obs.testCode ? `<span style="font-family: monospace; font-size: 11px; background: var(--surface-2); border: 1px solid var(--line); padding: 1px 5px; border-radius: 4px; margin-inline-start: 4px;">${escapeHtml(obs.testCode)}</span>` : "";
+      const val = escapeHtml(obs.resultValue);
+      // Unit: Never assumed!
+      const unitDisplay = obs.unit ? escapeHtml(obs.unit) : `<span style="color: var(--muted); font-style: italic;">${isEn ? "— (Not specified)" : "— (غير محدد)"}</span>`;
+
+      // Reference range: Never assumed if not provided by source!
+      let refDisplay = `<span style="color: var(--muted); font-style: italic;">${isEn ? "— (Not provided by source)" : "— (غير محدد من المصدر)"}</span>`;
+      if (obs.referenceRange) {
+        if (obs.referenceRange.low !== null && obs.referenceRange.high !== null) {
+          refDisplay = `${obs.referenceRange.low} – ${obs.referenceRange.high} ${obs.referenceRange.unit || obs.unit || ''}`;
+        } else if (obs.referenceRange.text) {
+          refDisplay = escapeHtml(obs.referenceRange.text);
+        }
+      }
+
+      // Collection date: Never substituted with assumption!
+      const dtDisplay = obs.collectionDateTime
+        ? formatDateTime(obs.collectionDateTime, isEn)
+        : `<span style="color: var(--muted); font-style: italic;">${isEn ? "— (Not recorded)" : "— (غير مسجل)"}</span>`;
+
+      // Source badge
+      let sourceLabel = isEn ? "Patient Entered" : "إدخال المريض";
+      if (obs.source === "external_ehr_import") sourceLabel = isEn ? "EHR Import" : "مستورد من السجل الطبي";
+      else if (obs.source === "lab_interface_import") sourceLabel = isEn ? "Lab LIS Interface" : "واجهة المختبر الإلكترونية";
+      else if (obs.source === "medical_ocr_import") sourceLabel = isEn ? "Medical OCR" : "مسح ضوئي للتقرير";
+      else if (obs.source === "clinician_entered") sourceLabel = isEn ? "Clinician Entered" : "إدخال الطبيب السريري";
+
+      // Review status badge
+      let statusBadge = "";
+      if (obs.reviewStatus === "VERIFIED") {
+        statusBadge = `<span class="pill ok" style="font-size: 11px; background: rgba(16, 185, 129, 0.15); color: #059669; border: 1px solid #10b981;">🟢 ${isEn ? "Medically Verified" : "موثق طبياً"}</span>`;
+      } else if (obs.reviewStatus === "REJECTED") {
+        statusBadge = `<span class="pill rejected" style="font-size: 11px; background: rgba(239, 68, 68, 0.15); color: #dc2626; border: 1px solid #ef4444;">❌ ${isEn ? "Rejected" : "مرفوض"}</span>`;
+      } else if (obs.reviewStatus === "SUPERSEDED") {
+        statusBadge = `<span class="pill superseded" style="font-size: 11px; background: rgba(100, 116, 139, 0.15); color: #475569; border: 1px solid #64748b;">⚪ ${isEn ? "Superseded" : "مستبدل"}</span>`;
+      } else {
+        // UNVERIFIED
+        statusBadge = `<span class="pill pending" style="font-size: 11px; background: rgba(245, 158, 11, 0.15); color: #d97706; border: 1px solid #f59e0b;">⏳ ${isEn ? "Unverified" : "غير موثق (بانتظار المراجعة)"}</span>`;
+      }
+
+      // Revision & auditable history tag
+      const revisionTag = (obs.revisionNumber > 1)
+        ? `<div style="font-size: 10.5px; color: var(--teal); font-family: monospace; margin-top: 2px;">v${obs.revisionNumber} (${isEn ? "Audited correction" : "تصحيح موثق"})</div>`
+        : "";
+
+      // Reviewer details summary
+      const reviewerNote = obs.reviewDetails?.reviewedBy
+        ? `<div style="font-size: 11px; color: var(--muted); margin-top: 3px;">👨‍⚕️ ${escapeHtml(obs.reviewDetails.reviewedBy.name)} • ${escapeHtml(obs.reviewDetails.reviewedBy.licenseNumber || '')}</div>`
+        : "";
+
+      return `
+        <tr style="border-bottom: 1px solid var(--line);">
+          <td style="padding: 10px 12px; font-weight: 600; color: var(--ink);">
+            ${testDisplay} ${codePill}
+            ${revisionTag}
+          </td>
+          <td style="padding: 10px 12px; font-weight: 700; color: var(--ink); font-size: 14px;">${val}</td>
+          <td style="padding: 10px 12px; font-size: 12px;">${unitDisplay}</td>
+          <td style="padding: 10px 12px; font-size: 12px;">${refDisplay}</td>
+          <td style="padding: 10px 12px; font-size: 11.5px;">${dtDisplay}</td>
+          <td style="padding: 10px 12px; font-size: 11.5px; color: var(--muted);">${escapeHtml(sourceLabel)}</td>
+          <td style="padding: 10px 12px;">
+            ${statusBadge}
+            ${reviewerNote}
+          </td>
+        </tr>
+      `;
+    }).join("");
+
+    return `
+      <div class="observations-table-wrap" style="overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 10px;">
+        <table class="observations-table" style="width: 100%; border-collapse: collapse; text-align: start; font-size: 13px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px;">
+          <thead>
+            <tr style="background: var(--surface-2); border-bottom: 1.5px solid var(--line); color: var(--muted); font-size: 12px;">
+              <th style="padding: 10px 12px;">${isEn ? "Test Name" : "اسم الفحص السريري"}</th>
+              <th style="padding: 10px 12px;">${isEn ? "Result" : "النتيجة"}</th>
+              <th style="padding: 10px 12px;">${isEn ? "Unit" : "الوحدة"}</th>
+              <th style="padding: 10px 12px;">${isEn ? "Reference Range" : "النطاق المرجعي"}</th>
+              <th style="padding: 10px 12px;">${isEn ? "Collection Date" : "تاريخ السحب"}</th>
+              <th style="padding: 10px 12px;">${isEn ? "Source" : "المصدر"}</th>
+              <th style="padding: 10px 12px;">${isEn ? "Review Status" : "حالة التوثيق والمراجعة"}</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  /**
    * Renders the complete Blood Disorders Module view.
    */
   function renderBloodDisordersScreen(target, options = {}) {
@@ -218,9 +335,10 @@
     }
 
     const isEn = Boolean(opts.isEn !== undefined ? opts.isEn : (global.currentLanguage === "en"));
-    const activeTab = opts.activeTab || "conditions"; // 'conditions' | 'cases' | 'new_case'
+    const activeTab = opts.activeTab || "conditions"; // 'conditions' | 'observations' | 'cases'
     const conditions = Array.isArray(opts.conditions) ? opts.conditions : [];
     const cases = Array.isArray(opts.cases) ? opts.cases : [];
+    const observations = Array.isArray(opts.observations) ? opts.observations : [];
     const currentUser = opts.currentUser || {};
     const isDoctor = currentUser.role === "doctor";
 
@@ -268,16 +386,20 @@
         <!-- Navigation Tabs -->
         <div class="bd-tabs" style="display: flex; gap: 8px; border-bottom: 1.5px solid var(--line); margin-bottom: 18px; padding-bottom: 6px; overflow-x: auto;">
           <button type="button" class="bd-tab-btn ${activeTab === 'conditions' ? 'active' : ''}" data-bd-tab="conditions" style="padding: 8px 14px; font-size: 13px; font-weight: 600; border-radius: 8px; border: none; background: ${activeTab === 'conditions' ? 'var(--teal)' : 'transparent'}; color: ${activeTab === 'conditions' ? '#07191b' : 'var(--muted)'}; cursor: pointer;">
-            📑 ${isEn ? "Supported Conditions & Reviewer Registry" : "المكتبة السريرية لحالات واعتلالات الدم"}
+            📑 ${isEn ? "Supported Conditions Registry" : "المكتبة السريرية لحالات الدم"}
+          </button>
+          <button type="button" class="bd-tab-btn ${activeTab === 'observations' ? 'active' : ''}" data-bd-tab="observations" style="padding: 8px 14px; font-size: 13px; font-weight: 600; border-radius: 8px; border: none; background: ${activeTab === 'observations' ? 'var(--teal)' : 'transparent'}; color: ${activeTab === 'observations' ? '#07191b' : 'var(--muted)'}; cursor: pointer;">
+            🧪 ${isEn ? "Clinical Observations & Lab Data" : "الملاحظات والتحاليل السريرية"}
           </button>
           <button type="button" class="bd-tab-btn ${activeTab === 'cases' ? 'active' : ''}" data-bd-tab="cases" style="padding: 8px 14px; font-size: 13px; font-weight: 600; border-radius: 8px; border: none; background: ${activeTab === 'cases' ? 'var(--teal)' : 'transparent'}; color: ${activeTab === 'cases' ? '#07191b' : 'var(--muted)'}; cursor: pointer;">
-            📋 ${isEn ? "Clinical Cases & Intake Records" : "سجلات الحالات والتحاليل"}
+            📋 ${isEn ? "Clinical Cases & Intake Records" : "سجلات الحالات والتقارير"}
           </button>
         </div>
 
         <!-- Tab Content Body -->
         <div class="bd-tab-body">
           ${activeTab === 'conditions' ? renderConditionsRegistry(conditions, isEn, isDoctor) : ''}
+          ${activeTab === 'observations' ? renderClinicalObservationsTable(observations, isEn, isDoctor) : ''}
           ${activeTab === 'cases' ? renderCasesList(cases, isEn) : ''}
         </div>
       </div>
@@ -383,6 +505,7 @@
     formatDateTime,
     renderConditionsRegistry,
     renderLaboratoryResultsTable,
+    renderClinicalObservationsTable,
     renderBloodDisordersScreen
   };
 
