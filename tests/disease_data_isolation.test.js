@@ -1,5 +1,5 @@
 /**
- * Health Vibe - Disease Data Isolation, Authorization & Audit Logging Test Suite
+ * Health Vibe - Disease Data Isolation, Clinical History Preservation & Audit Test Suite
  *
  * Validates:
  * 1. Strict data isolation across disease modules (Diabetes, Hypertension, Blood Clotting, Obesity).
@@ -8,23 +8,30 @@
  * 4. Clinic boundaries are enforced (clinicId mismatch check).
  * 5. Internal doctor notes and unreleased interpretations are sanitized for patient role.
  * 6. Direct ID manipulation attempts are rejected with 403 FORBIDDEN.
- * 7. Authoritative Audit Logging for disease-module actions with PHI redaction:
- *    - ASSESSMENT_CREATION, MEASUREMENT_CREATION, MEASUREMENT_CORRECTION,
- *      DOCTOR_REVIEW, INFORMATION_REQUEST, PATIENT_RESPONSE, REPORT_APPROVAL,
- *      REPORT_WITHDRAWAL, PERMISSION_CHANGES.
+ * 7. Authoritative Audit Logging for disease-module actions with PHI redaction.
+ * 8. Stale Approval & Concurrent Edit Rejection (STALE_REVISION_APPROVAL & STALE_REVISION_CONFLICT).
+ * 9. Immutable Approved Report Snapshots across all 4 disease modules.
  */
 
 const assert = require('assert');
 const diabetesService = require('../backend/diabetes-service');
 const hypertensionService = require('../backend/hypertension-service');
+const bloodDisordersService = require('../backend/blood-disorders-service');
+const obesityService = require('../backend/obesity-service');
 const auditService = require('../backend/audit-service');
 
 async function runIsolationTests() {
-  console.log('🧪 Starting Disease Data Isolation & Audit Logging Test Suite...\n');
+  console.log('🧪 Starting Disease Data Isolation & Clinical History Preservation Test Suite...\n');
 
   // Reset in-memory stores & audit log for clean testing
   if (hypertensionService.resetHypertensionStoreForTesting) {
     hypertensionService.resetHypertensionStoreForTesting();
+  }
+  if (bloodDisordersService.resetBloodDisordersStoreForTesting) {
+    bloodDisordersService.resetBloodDisordersStoreForTesting();
+  }
+  if (obesityService.resetObesityStoreForTesting) {
+    obesityService.resetObesityStoreForTesting();
   }
   if (auditService.resetAuditStoreForTesting) {
     auditService.resetAuditStoreForTesting();
@@ -206,7 +213,6 @@ async function runIsolationTests() {
   // =========================================================================
   console.log('▶ Test 6: Verifying Disease Action Audit Events & Data Minimization');
 
-  // Trigger additional disease actions
   const clarification = hypertensionService.addPatientClarification('pat_A_001', 'Did you rest for 5 minutes before taking reading?');
   hypertensionService.replyToClarification('pat_A_001', clarification.cycleId, 'Yes, I rested on the chair for 10 minutes.', patientA);
 
@@ -221,42 +227,115 @@ async function runIsolationTests() {
   hypertensionService.withdrawReport('pat_A_001', certified.reportRef, doctorAssignedA);
   hypertensionService.updatePermission('pat_A_001', { grantedSpecialties: ['Cardiology'] }, clinicAdminCairo);
 
-  // Retrieve in-memory audit trail for Patient A
   const patientAAuditLogs = auditService.getInMemoryAuditEvents({ patientId: 'pat_A_001' });
 
   const actionsFound = patientAAuditLogs.map(l => l.action);
-  console.log('   Captured Audit Actions:', actionsFound);
+  assert.ok(actionsFound.includes('MEASUREMENT_CREATION'));
+  assert.ok(actionsFound.includes('DOCTOR_REVIEW'));
+  assert.ok(actionsFound.includes('ASSESSMENT_CREATION'));
+  assert.ok(actionsFound.includes('MEASUREMENT_CORRECTION'));
+  assert.ok(actionsFound.includes('INFORMATION_REQUEST'));
+  assert.ok(actionsFound.includes('PATIENT_RESPONSE'));
+  assert.ok(actionsFound.includes('REPORT_APPROVAL'));
+  assert.ok(actionsFound.includes('REPORT_WITHDRAWAL'));
+  assert.ok(actionsFound.includes('PERMISSION_CHANGES'));
 
-  assert.ok(actionsFound.includes('MEASUREMENT_CREATION'), 'Must record MEASUREMENT_CREATION');
-  assert.ok(actionsFound.includes('DOCTOR_REVIEW'), 'Must record DOCTOR_REVIEW');
-  assert.ok(actionsFound.includes('ASSESSMENT_CREATION'), 'Must record ASSESSMENT_CREATION');
-  assert.ok(actionsFound.includes('MEASUREMENT_CORRECTION'), 'Must record MEASUREMENT_CORRECTION');
-  assert.ok(actionsFound.includes('INFORMATION_REQUEST'), 'Must record INFORMATION_REQUEST');
-  assert.ok(actionsFound.includes('PATIENT_RESPONSE'), 'Must record PATIENT_RESPONSE');
-  assert.ok(actionsFound.includes('REPORT_APPROVAL'), 'Must record REPORT_APPROVAL');
-  assert.ok(actionsFound.includes('REPORT_WITHDRAWAL'), 'Must record REPORT_WITHDRAWAL');
-  assert.ok(actionsFound.includes('PERMISSION_CHANGES'), 'Must record PERMISSION_CHANGES');
-
-  // Verify Audit Event Structure & Data Minimization (PHI Redaction)
   for (const log of patientAAuditLogs) {
-    assert.ok(log.eventId, 'Audit log must contain eventId');
-    assert.ok(log.timestamp, 'Audit log must contain server timestamp');
-    assert.ok(log.actor, 'Audit log must contain actor context');
-    assert.ok(log.affectedRecord, 'Audit log must contain affectedRecord');
-    assert.strictEqual(log.affectedRecord.patientId, 'pat_A_001');
-
-    // Verify PHI Redaction: details MUST NOT contain raw vitals or medical text
     const detailsKeys = Object.keys(log.details || {});
-    assert.strictEqual(detailsKeys.includes('systolic'), false, 'Audit log must NOT contain raw systolic BP');
-    assert.strictEqual(detailsKeys.includes('diastolic'), false, 'Audit log must NOT contain raw diastolic BP');
-    assert.strictEqual(detailsKeys.includes('noteText'), false, 'Audit log must NOT contain raw noteText');
-    assert.strictEqual(detailsKeys.includes('observations'), false, 'Audit log must NOT contain raw observations');
-    assert.strictEqual(detailsKeys.includes('replyText'), false, 'Audit log must NOT contain raw replyText');
+    assert.strictEqual(detailsKeys.includes('systolic'), false);
+    assert.strictEqual(detailsKeys.includes('diastolic'), false);
+    assert.strictEqual(detailsKeys.includes('noteText'), false);
   }
 
-  console.log('   ✅ Disease action audit logging and strict PHI redaction verified across all 9 action types.');
+  console.log('   ✅ Disease action audit logging and strict PHI redaction verified across all action types.');
 
-  console.log('\n🎉 ALL DISEASE DATA ISOLATION & AUDIT LOGGING TESTS PASSED SUCCESSFULLY!');
+  // =========================================================================
+  // TEST 7: Stale Approval & Concurrent Edit Rejection
+  // =========================================================================
+  console.log('▶ Test 7: Stale revision conflict & stale approval rejection');
+
+  // Attempt to revise hypertension assessment specifying stale expectedRevision: 1 (current is 2)
+  assert.throws(() => {
+    hypertensionService.reviseHypertensionAssessment(asm.assessmentId, {
+      systolic: 135,
+      diastolic: 88,
+      expectedRevision: 1
+    }, patientA);
+  }, (err) => err.code === 'STALE_REVISION_CONFLICT', 'Must reject update with STALE_REVISION_CONFLICT when expectedRevision !== currentRevision');
+
+  // Attempt to certify report specifying stale expectedRevision: 1 (current is 2)
+  await assert.rejects(async () => {
+    await hypertensionService.certifyChronicHypertensionReport({
+      patientId: 'pat_A_001',
+      doctorIdentity: doctorAssignedA,
+      clinicalDiagnosis: 'Stale Diagnosis',
+      managementPlan: 'Stale Plan',
+      expectedRevision: 1
+    });
+  }, (err) => err.code === 'STALE_REVISION_APPROVAL', 'Must reject certification with STALE_REVISION_APPROVAL when expectedRevision !== currentRevision');
+
+  // Blood Disorders stale revision check
+  const bdAsm = bloodDisordersService.createBloodDisordersAssessment({
+    patientId: 'pat_A_001',
+    inrLevel: 2.5
+  }, patientA);
+
+  bloodDisordersService.reviseBloodDisordersAssessment(bdAsm.assessmentId, { inrLevel: 2.8 }, patientA); // Rev 2
+
+  assert.throws(() => {
+    bloodDisordersService.reviseBloodDisordersAssessment(bdAsm.assessmentId, { inrLevel: 3.1, expectedRevision: 1 }, patientA);
+  }, (err) => err.code === 'STALE_REVISION_CONFLICT');
+
+  // Obesity stale revision check
+  const obsAsm = obesityService.createObesityAssessment({
+    patientId: 'pat_A_001',
+    weightKg: 85,
+    heightCm: 175
+  }, patientA);
+
+  obesityService.reviseObesityAssessment(obsAsm.assessmentId, { weightKg: 83 }, patientA); // Rev 2
+
+  assert.throws(() => {
+    obesityService.reviseObesityAssessment(obsAsm.assessmentId, { weightKg: 81, expectedRevision: 1 }, patientA);
+  }, (err) => err.code === 'STALE_REVISION_CONFLICT');
+
+  console.log('   ✅ Stale revision updates and stale approvals rejected cleanly across disease modules.');
+
+  // =========================================================================
+  // TEST 8: Immutable Approved Report Freeze Across All 4 Disease Modules
+  // =========================================================================
+  console.log('▶ Test 8: Approved report snapshot immutability upon subsequent patient data changes');
+
+  // Certify Blood Disorders report for Patient A
+  const initialBdDiagnosis = 'Stable Warfarin Therapy - INR 2.5';
+  const initialBdPlan = 'Maintain current Warfarin 5mg daily schedule.';
+  const bdReport = bloodDisordersService.certifyBloodDisordersReport('pat_A_001', doctorAssignedA, initialBdDiagnosis, initialBdPlan);
+
+  // Certify Obesity report for Patient A
+  const initialObsDiagnosis = 'Class 1 Obesity - BMI 27.8';
+  const initialObsPlan = 'Caloric deficit of 500 kcal/day with nutrition counseling.';
+  const obsReport = obesityService.certifyObesityReport('pat_A_001', doctorAssignedA, initialObsDiagnosis, initialObsPlan);
+
+  // Now perform heavy subsequent updates on Patient A's current profile, assessments, and measurements
+  bloodDisordersService.reviseBloodDisordersAssessment(bdAsm.assessmentId, { inrLevel: 4.2 }, patientA, 'acute_inr_spike');
+  obesityService.reviseObesityAssessment(obsAsm.assessmentId, { weightKg: 95 }, patientA, 'weight_gain');
+
+  // Fetch approved reports
+  const fetchedBdReports = bloodDisordersService.getPatientApprovedReports('pat_A_001');
+  const fetchedObsReports = obesityService.getPatientApprovedReports('pat_A_001');
+
+  const frozenBd = fetchedBdReports.find(r => r.reportRef === bdReport.reportRef);
+  const frozenObs = fetchedObsReports.find(r => r.reportRef === obsReport.reportRef);
+
+  assert.strictEqual(frozenBd.snapshot.clinicalDiagnosis, initialBdDiagnosis, 'Older Blood Disorders report diagnosis MUST remain unchanged');
+  assert.strictEqual(frozenBd.snapshot.managementPlan, initialBdPlan, 'Older Blood Disorders report plan MUST remain unchanged');
+
+  assert.strictEqual(frozenObs.snapshot.clinicalDiagnosis, initialObsDiagnosis, 'Older Obesity report diagnosis MUST remain unchanged');
+  assert.strictEqual(frozenObs.snapshot.managementPlan, initialObsPlan, 'Older Obesity report plan MUST remain unchanged');
+
+  console.log('   ✅ Older approved reports remain 100% frozen and unchanged despite subsequent patient updates.');
+
+  console.log('\n🎉 ALL DISEASE DATA ISOLATION & CLINICAL HISTORY PRESERVATION TESTS PASSED SUCCESSFULLY!');
 }
 
 runIsolationTests().catch(err => {

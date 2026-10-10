@@ -711,6 +711,22 @@ async function certifyChronicHypertensionReport(arg1, arg2, arg3, arg4, arg5) {
     riskStratification = arg5;
   }
 
+  const expectedRevision = (typeof arg1 === 'object' && arg1 !== null) ? arg1.expectedRevision : (typeof arg5 === 'object' && arg5 !== null ? arg5.expectedRevision : undefined);
+
+  if (expectedRevision !== undefined) {
+    const patientAssessments = getPatientAssessments(patientId);
+    if (patientAssessments.length > 0) {
+      const currentRev = patientAssessments[0].clinicalRevision;
+      if (Number(expectedRevision) !== Number(currentRev)) {
+        const err = new Error(`Stale approval attempt: expected revision ${expectedRevision}, but current assessment revision is ${currentRev}.`);
+        err.code = 'STALE_REVISION_APPROVAL';
+        err.currentRevision = currentRev;
+        err.expectedRevision = expectedRevision;
+        throw err;
+      }
+    }
+  }
+
   const doc = {
     uid: doctorIdentity?.uid || doctorIdentity?.id || 'doc_cardio',
     name: doctorIdentity?.name || 'Physician',
@@ -1048,7 +1064,17 @@ function reviseHypertensionAssessment(assessmentId, updates = {}, actor = {}, tr
     throw err;
   }
 
-  const newRevisionNumber = (existing.clinicalRevision || 1) + 1;
+  // Stale Revision & Concurrent Edit Check
+  if (updates.expectedRevision !== undefined && Number(updates.expectedRevision) !== Number(existing.clinicalRevision)) {
+    const err = new Error(`Stale revision conflict: attempted to revise revision ${updates.expectedRevision}, but current revision is ${existing.clinicalRevision}.`);
+    err.code = 'STALE_REVISION_CONFLICT';
+    err.currentRevision = existing.clinicalRevision;
+    err.expectedRevision = updates.expectedRevision;
+    throw err;
+  }
+
+  const previousRevision = existing.clinicalRevision || 1;
+  const newRevisionNumber = previousRevision + 1;
   const now = new Date().toISOString();
 
   const authorInfo = {
@@ -1105,10 +1131,13 @@ function reviseHypertensionAssessment(assessmentId, updates = {}, actor = {}, tr
   // Append Revision Audit Record
   const existingRevisions = assessmentRevisionsStore.get(assessmentId) || [];
   existingRevisions.push({
+    previousRevision,
+    newRevision: newRevisionNumber,
     revision: newRevisionNumber,
     assessmentId,
-    createdAt: now,
-    author: authorInfo,
+    timestamp: now,
+    actor: authorInfo,
+    reason: triggerReason,
     trigger: triggerReason,
     changes: {
       action: 'revised',
