@@ -58,9 +58,20 @@
     `;
   }
 
+  /**
+   * Renders patient diabetes summary card using standard patient clinical tokens.
+   */
+  function renderDiabetesSummaryCard(bundle = {}, isEn = false) {
+    if (global.HealthVibes?.DiabetesUI?.renderPatientDashboardTab) {
+      return global.HealthVibes.DiabetesUI.renderPatientDashboardTab();
+    }
+    return "";
+  }
+
   const PatientUI = {
     renderPatientHero,
-    renderTimelineCard
+    renderTimelineCard,
+    renderDiabetesSummaryCard
   };
 
   global.HealthVibes = global.HealthVibes || {};

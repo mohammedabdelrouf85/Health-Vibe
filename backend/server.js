@@ -13382,7 +13382,18 @@ app.get('/api/diabetes/patient/:patientId', requireAuth, (req, res) => {
       });
     }
 
-    res.json({ success: true, bundle });
+    // Strictly sanitize internal doctor notes for patient callers
+    let outgoingBundle = bundle;
+    const isDoctorOrAdmin = ['doctor', 'clinic_admin', 'super_admin'].includes(req.user.role) && req.user.uid !== patientId;
+    if (!isDoctorOrAdmin) {
+      outgoingBundle = {
+        ...bundle,
+        clinicalNotes: [],
+        notesCount: 0
+      };
+    }
+
+    res.json({ success: true, bundle: outgoingBundle });
   } catch (err) {
     res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
   }

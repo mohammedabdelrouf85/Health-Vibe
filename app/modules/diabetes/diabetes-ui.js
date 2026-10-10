@@ -34,15 +34,21 @@
   let errorMessage = null;
 
   function t(key, params = {}) {
-    if (global.HealthVibes?.i18n?.t) {
+    if (typeof global.HealthVibes?.i18n?.t === "function") {
       return global.HealthVibes.i18n.t(key, params);
+    }
+    if (typeof global.HealthVibes?.i18n?.defaultI18n?.t === "function") {
+      return global.HealthVibes.i18n.defaultI18n.t(key, params);
+    }
+    if (typeof global.t === "function") {
+      return global.t(key, params);
     }
     // Simple fallback
     return key;
   }
 
   function isRtl() {
-    return document.documentElement.dir === "rtl" || (global.currentLanguage === "ar");
+    return (typeof document !== "undefined" && document.documentElement?.dir === "rtl") || (global.currentLanguage === "ar");
   }
 
   function escapeHtml(str) {
@@ -88,6 +94,37 @@
   }
 
   /**
+   * Renders standardized 4-state badges: documented, missing, awaiting_review, approved.
+   */
+  function renderStatusPill(statusType) {
+    switch (statusType) {
+      case "documented":
+        return `<span class="pill ok" style="font-weight:600; font-size:11px;"><span aria-hidden="true">✔</span> ${escapeHtml(t("diabetes.statusDocumented") || "Documented")}</span>`;
+      case "missing":
+        return `<span class="pill info" style="opacity:0.85; border:1px dashed var(--line); font-size:11px;"><span aria-hidden="true">📋</span> ${escapeHtml(t("diabetes.statusMissing") || "Missing")}</span>`;
+      case "awaiting_review":
+        return `<span class="pill pending" style="font-weight:600; font-size:11px;"><span aria-hidden="true">⏳</span> ${escapeHtml(t("diabetes.statusAwaitingReview") || "Awaiting Review")}</span>`;
+      case "approved":
+        return `<span class="pill" style="background:#e0f2fe; color:#0369a1; border:1px solid #7dd3fc; font-weight:700; font-size:11px;"><span aria-hidden="true">🛡️</span> ${escapeHtml(t("diabetes.statusDoctorApproved") || "Doctor Approved")}</span>`;
+      default:
+        return `<span class="pill info" style="font-size:11px;">${escapeHtml(t("diabetes.statusDocumented") || "Documented")}</span>`;
+    }
+  }
+
+  function formatDiabetesType(type) {
+    const map = {
+      type_1: isRtl() ? "النوع الأول (Type 1)" : "Type 1 Diabetes",
+      type_2: isRtl() ? "النوع الثاني (Type 2)" : "Type 2 Diabetes",
+      gestational: isRtl() ? "سكري الحمل (Gestational)" : "Gestational Diabetes",
+      prediabetes: isRtl() ? "مقدمات السكري (Pre-diabetes)" : "Prediabetes",
+      secondary: isRtl() ? "سكري ثانوي (Secondary)" : "Secondary Diabetes",
+      other: isRtl() ? "أنواع أخرى (Other)" : "Other Specified Diabetes",
+      unknown: isRtl() ? "غير محدد" : "Unspecified"
+    };
+    return map[type] || type || (isRtl() ? "غير مسجل" : "Not specified");
+  }
+
+  /**
    * Resolves the patient context for the current user and active role.
    */
   function resolveTargetPatientId() {
@@ -122,6 +159,11 @@
     const role = global.selectedRole || "patient";
     const patientId = resolveTargetPatientId();
     activePatientId = patientId;
+
+    const isPatient = (role === "patient");
+    if (isPatient && (activeTab === "overview" || activeTab === "doctor-review" || activeTab === "assessments" || activeTab === "patient-info")) {
+      activeTab = "patient-dashboard";
+    }
 
     // Log Client Audit Event
     if (typeof global.writeClientAuditLog === "function" && user) {
@@ -166,13 +208,22 @@
 
         <!-- Sub-navigation Tabs -->
         <div class="tabs" role="tablist" style="display: flex; overflow-x: auto; gap: 6px; padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--surface-2);">
-          ${renderTabButton("overview", "📊", "diabetes.tabOverview", "Overview")}
-          ${renderTabButton("patient-info", "👤", "diabetes.tabPatientInfo", "Patient Information")}
-          ${renderTabButton("measurements", "📈", "diabetes.tabMeasurements", "Measurements")}
-          ${renderTabButton("assessments", "🩺", "diabetes.tabAssessments", "Assessments")}
-          ${renderTabButton("doctor-review", "👨‍⚕️", "diabetes.tabDoctorReview", "Doctor Review & Notes")}
-          ${renderTabButton("followup", "📅", "diabetes.tabFollowup", "Follow-up")}
-          ${renderTabButton("reports", "📑", "diabetes.tabReports", "Approved Reports")}
+          ${isPatient ? `
+            ${renderTabButton("patient-dashboard", "📊", "diabetes.patientDashboardTitle", "Dashboard")}
+            ${renderTabButton("measurements", "📈", "diabetes.tabMeasurements", "Measurements")}
+            ${renderTabButton("clarifications", "💬", "diabetes.outstandingInquiriesHeading", "Doctor Inquiries")}
+            ${renderTabButton("followup", "📅", "diabetes.tabFollowup", "Follow-up")}
+            ${renderTabButton("reports", "📑", "diabetes.tabReports", "Approved Reports")}
+          ` : `
+            ${renderTabButton("overview", "📊", "diabetes.tabOverview", "Overview")}
+            ${renderTabButton("patient-dashboard", "👤", "diabetes.patientDashboardTitle", "Patient View")}
+            ${renderTabButton("patient-info", "📋", "diabetes.tabPatientInfo", "Patient Information")}
+            ${renderTabButton("measurements", "📈", "diabetes.tabMeasurements", "Measurements")}
+            ${renderTabButton("assessments", "🩺", "diabetes.tabAssessments", "Assessments")}
+            ${renderTabButton("doctor-review", "👨‍⚕️", "diabetes.tabDoctorReview", "Doctor Review & Notes")}
+            ${renderTabButton("followup", "📅", "diabetes.tabFollowup", "Follow-up")}
+            ${renderTabButton("reports", "📑", "diabetes.tabReports", "Approved Reports")}
+          `}
         </div>
 
         <!-- Content Area -->
@@ -271,9 +322,18 @@
     const contentEl = document.getElementById("diabetesTabContent");
     if (!contentEl) return;
 
+    const role = global.selectedRole || "patient";
+    const isPatient = (role === "patient");
+
     switch (activeTab) {
+      case "patient-dashboard":
+        contentEl.innerHTML = renderPatientDashboardTab();
+        break;
+      case "clarifications":
+        contentEl.innerHTML = renderPatientClarificationsTab();
+        break;
       case "overview":
-        contentEl.innerHTML = renderOverviewTab();
+        contentEl.innerHTML = isPatient ? renderPatientDashboardTab() : renderOverviewTab();
         break;
       case "patient-info":
         contentEl.innerHTML = renderPatientInfoTab();
@@ -282,10 +342,10 @@
         contentEl.innerHTML = renderMeasurementsTab();
         break;
       case "assessments":
-        contentEl.innerHTML = renderAssessmentsTab();
+        contentEl.innerHTML = isPatient ? renderPatientDashboardTab() : renderAssessmentsTab();
         break;
       case "doctor-review":
-        contentEl.innerHTML = renderDoctorReviewTab();
+        contentEl.innerHTML = isPatient ? renderPatientDashboardTab() : renderDoctorReviewTab();
         break;
       case "followup":
         contentEl.innerHTML = renderFollowupTab();
@@ -294,8 +354,590 @@
         contentEl.innerHTML = renderApprovedReportsTab();
         break;
       default:
-        contentEl.innerHTML = renderOverviewTab();
+        contentEl.innerHTML = isPatient ? renderPatientDashboardTab() : renderOverviewTab();
     }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // 0. PATIENT-FACING DIABETES DASHBOARD
+  // ─────────────────────────────────────────────────────────────────────────────
+  function renderPatientDashboardTab() {
+    const bundle = activeBundle || {};
+    const info = bundle.info || {};
+    const measurements = Array.isArray(bundle.measurements) ? [...bundle.measurements] : [];
+    measurements.sort((a, b) => new Date(b.measuredAt || b.createdAt || 0) - new Date(a.measuredAt || a.createdAt || 0));
+
+    const clarifications = Array.isArray(bundle.clarifications) ? bundle.clarifications : [];
+    const pendingClarifications = clarifications.filter(c => c.status === "unanswered" || c.status === "pending_patient" || !c.response);
+    const followup = bundle.followupPlan;
+    const reports = Array.isArray(bundle.approvedReports) ? bundle.approvedReports : [];
+    const assessments = Array.isArray(bundle.assessments) ? bundle.assessments : [];
+
+    // Resolve patient identity
+    const user = global.auth?.currentUser;
+    const cachedDoc = global._cachedUserDoc || {};
+    const rawName = info.patientName?.value || cachedDoc.name || cachedDoc.displayName || user?.displayName || user?.name || (user?.email ? user.email.split("@")[0] : (isRtl() ? "مريض" : "Patient"));
+    const firstName = String(rawName).split(" ")[0];
+
+    // Assigned doctor attribution
+    const assignedDocName = info.assignedDoctorName?.value || null;
+
+    // Evaluate Next Required Patient Action
+    let nextActionTitle = "";
+    let nextActionBody = "";
+    let nextActionButtonHtml = "";
+    let nextActionType = "info"; // info, alert, success, pending
+
+    if (pendingClarifications.length > 0) {
+      const pendingInquiry = pendingClarifications[0];
+      const inquiryDoctor = pendingInquiry.request?.doctorName || pendingInquiry.doctorName || (isRtl() ? "طبيبك المعالج" : "Attending Doctor");
+      const inquiryNote = pendingInquiry.request?.note || pendingInquiry.note || pendingInquiry.message || "";
+      nextActionType = "alert";
+      nextActionTitle = t("diabetes.actionReplyClarification") || "Reply to pending doctor clarification";
+      nextActionBody = `${isRtl() ? "طلب د." : "Dr."} ${escapeHtml(inquiryDoctor)} ${isRtl() ? "توضيحًا:" : "requested:"} "${escapeHtml(inquiryNote)}"`;
+      nextActionButtonHtml = `
+        <button type="button" class="solid-button" onclick="HealthVibes.DiabetesUI.openReplyClarificationModal('${escapeHtml(pendingInquiry.requestId || '')}', ${pendingInquiry.cycle || 'null'})" style="font-size:13px; padding:8px 16px;">
+          💬 ${escapeHtml(t("diabetes.btnReplyToDoctor") || "Reply to Doctor")}
+        </button>
+      `;
+    } else if (measurements.length === 0) {
+      nextActionType = "alert";
+      nextActionTitle = t("diabetes.actionLogFirstMeasurement") || "Log your first blood glucose reading to initiate care";
+      nextActionBody = t("diabetes.emptyMeasurementsPatientMessage") || "Welcome! Please log your first blood glucose reading to initiate medical care.";
+      nextActionButtonHtml = `
+        <button type="button" class="solid-button" onclick="HealthVibes.DiabetesUI.openLogMeasurementModal()" style="font-size:13px; padding:8px 16px;">
+          🩸 ${escapeHtml(t("diabetes.actionLogMeasurement") || "Log Blood Glucose Reading")}
+        </button>
+      `;
+    } else if (assessments.some(a => a.status === "under_review" || a.status === "pending")) {
+      nextActionType = "pending";
+      nextActionTitle = t("diabetes.statusAwaitingReview") || "Awaiting Doctor Review";
+      nextActionBody = t("diabetes.actionAwaitingDoctorReview") || "Your records are under doctor review — no action needed from you at this time.";
+      nextActionButtonHtml = `
+        <span class="pill pending" style="font-weight:600; font-size:12px;">⏳ ${escapeHtml(t("diabetes.statusAwaitingReview") || "Awaiting Doctor Review")}</span>
+      `;
+    } else if (reports.length > 0) {
+      nextActionType = "success";
+      nextActionTitle = t("diabetes.actionReviewApprovedReport") || "Review your certified medical report and approved follow-up plan";
+      nextActionBody = isRtl() ? "تم اعتماد تقريرك وخطة المتابعة من طبيبك المعالج. يرجى الاطلاع على التوصيات الطبية وموعد المتابعة القادم." : "Your medical report and care plan have been approved. Review clinical recommendations and scheduled follow-up.";
+      nextActionButtonHtml = `
+        <button type="button" class="soft-button" onclick="HealthVibes.DiabetesUI.switchTab('reports')" style="font-size:13px; padding:8px 16px;">
+          📑 ${escapeHtml(t("diabetes.btnViewReport") || "View Certified Report")}
+        </button>
+      `;
+    } else {
+      nextActionType = "info";
+      nextActionTitle = t("diabetes.actionAllUpToDate") || "All records are up to date";
+      nextActionBody = isRtl() ? "سجلاتك محدثة ومطابقة للخطة الطبية. تابع تسجيل قراءاتك الدورية بانتظام." : "All records are up to date. Continue logging periodic measurements as instructed.";
+      nextActionButtonHtml = `
+        <button type="button" class="soft-button" onclick="HealthVibes.DiabetesUI.openLogMeasurementModal()" style="font-size:13px; padding:8px 16px;">
+          ➕ ${escapeHtml(t("diabetes.btnLogMeasurement") || "Log Reading")}
+        </button>
+      `;
+    }
+
+    // Determine current documented diabetes status
+    const typeValue = info.type?.value || info.diabetesType?.value || (typeof info.type === "string" ? info.type : null);
+    const formattedType = typeValue ? formatDiabetesType(typeValue) : (t("diabetes.stateNotProvided") || "Not provided");
+    const diagDateValue = info.diagnosisDate?.value || (typeof info.diagnosisDate === "string" ? info.diagnosisDate : null);
+    const regimenValue = info.activeInsulinRegimen?.value || null;
+
+    // Target ranges
+    const fastingTarget = info.fastingTarget?.value ? `${info.fastingTarget.value} ${info.fastingTarget.unit || "mg/dL"}` : null;
+    const postprandialTarget = info.postprandialTarget?.value ? `${info.postprandialTarget.value} ${info.postprandialTarget.unit || "mg/dL"}` : null;
+    const hba1cTarget = info.hba1cTarget?.value ? `${info.hba1cTarget.value} ${info.hba1cTarget.unit || "%"}` : null;
+
+    return `
+      <div style="display: flex; flex-direction: column; gap: 20px;">
+
+        <!-- 1. Patient Welcome & Identity Hero Panel -->
+        <div class="hero-panel" style="background: linear-gradient(135deg, rgba(239,68,68,0.08) 0%, rgba(13,148,136,0.08) 100%); border: 1px solid var(--line); border-radius: 16px; padding: 22px;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 14px;">
+            <div>
+              <span class="eyebrow" style="color: var(--teal); font-weight: 700;">
+                ${isRtl() ? `مرحبًا، ${escapeHtml(firstName)}` : `Welcome, ${escapeHtml(firstName)}`}
+              </span>
+              <h2 style="margin: 4px 0 6px; font-size: 20px; font-weight: 800; color: var(--ink);" data-i18n="diabetes.patientDashboardTitle">
+                ${escapeHtml(t("diabetes.patientDashboardTitle") || "Diabetes Care Dashboard")}
+              </h2>
+              <p style="margin: 0; font-size: 13.5px; color: var(--muted);" data-i18n="diabetes.patientDashboardSubtitle">
+                ${escapeHtml(t("diabetes.patientDashboardSubtitle") || "Track measurements, approved reports, and clinical inquiries")}
+              </p>
+              <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px;">
+                <span class="pill info" style="font-size: 11.5px;">
+                  👤 ${isRtl() ? "رقم المريض:" : "Patient ID:"} ${escapeHtml(bundle.patientId || "P-ID")}
+                </span>
+                ${assignedDocName ? `
+                  <span class="pill ok" style="font-size: 11.5px;">
+                    👨‍⚕️ ${isRtl() ? "الطبيب المعالج: د." : "Attending Doctor: Dr."} ${escapeHtml(assignedDocName)}
+                  </span>
+                ` : `
+                  <span class="pill pending" style="font-size: 11.5px;">
+                    👨‍⚕️ ${escapeHtml(t("diabetes.noDoctorAssigned") || "Awaiting doctor assignment")}
+                  </span>
+                `}
+                <span class="pill ok" style="font-size: 11.5px;">
+                  🛡️ ${escapeHtml(t("diabetes.governanceBadge") || "Verified Data Only")}
+                </span>
+              </div>
+            </div>
+            <div>
+              <button type="button" class="solid-button" onclick="HealthVibes.DiabetesUI.openLogMeasurementModal()" style="padding: 10px 18px; font-size: 13.5px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                <span>🩸</span>
+                <span data-i18n="diabetes.btnLogMeasurement">${escapeHtml(t("diabetes.btnLogMeasurement") || "Log Measurement")}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. Next Required Patient Action Card -->
+        <div class="notice-card" style="border-inline-start: 5px solid ${nextActionType === 'alert' ? '#ef4444' : (nextActionType === 'pending' ? '#f59e0b' : (nextActionType === 'success' ? '#10b981' : 'var(--teal)'))}; background: var(--surface); border-radius: 12px; padding: 18px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); border-inline-end: 1px solid var(--line);">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
+            <div style="display: flex; align-items: flex-start; gap: 12px; max-width: 720px;">
+              <span style="font-size: 26px;">${nextActionType === 'alert' ? '⚠️' : (nextActionType === 'pending' ? '⏳' : (nextActionType === 'success' ? '✅' : 'ℹ️'))}</span>
+              <div>
+                <span style="font-size: 11px; text-transform: uppercase; font-weight: 700; color: var(--muted); letter-spacing: 0.5px;" data-i18n="diabetes.nextActionHeading">
+                  ${escapeHtml(t("diabetes.nextActionHeading") || "Next Required Patient Action")}
+                </span>
+                <h4 style="margin: 2px 0 4px; font-size: 16px; font-weight: 800; color: var(--ink);">
+                  ${escapeHtml(nextActionTitle)}
+                </h4>
+                <p style="margin: 0; font-size: 13.5px; color: var(--ink); line-height: 1.5;">
+                  ${nextActionBody}
+                </p>
+              </div>
+            </div>
+            <div>
+              ${nextActionButtonHtml}
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. Clinical Data Status Legend (Clearly Distinguish 4 Clinical Statuses) -->
+        <div style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px;">
+          <div style="font-size: 11.5px; font-weight: 700; color: var(--muted); margin-bottom: 8px; text-transform: uppercase;" data-i18n="diabetes.statusLegendTitle">
+            ${escapeHtml(t("diabetes.statusLegendTitle") || "Clinical Data Status Legend")}
+          </div>
+          <div style="display: flex; flex-wrap: wrap; gap: 14px; font-size: 12.5px;">
+            <div style="display: flex; align-items: center; gap: 6px;">
+              ${renderStatusPill("documented")}
+              <span style="color: var(--muted); font-size: 12px;">${isRtl() ? "بيانات مسجلة ومؤكدة بالملف" : "Persisted and confirmed on file"}</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              ${renderStatusPill("missing")}
+              <span style="color: var(--muted); font-size: 12px;">${isRtl() ? "بيانات سريرية غير متوفرة بعد" : "Not yet provided in records"}</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              ${renderStatusPill("awaiting_review")}
+              <span style="color: var(--muted); font-size: 12px;">${isRtl() ? "قيد تدقيق ومراجعة الطبيب" : "Queued for physician review"}</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              ${renderStatusPill("approved")}
+              <span style="color: var(--muted); font-size: 12px;">${isRtl() ? "معتمد وموقع طبيًا" : "Officially approved by doctor"}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. Current Documented Diabetes Status -->
+        <div class="panel" style="background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+            <h4 style="margin: 0; font-size: 16px; font-weight: 800; color: var(--ink);" data-i18n="diabetes.currentDocumentedStatus">
+              ${escapeHtml(t("diabetes.currentDocumentedStatus") || "Current Documented Diabetes Status")}
+            </h4>
+            <span class="pill ${reports.length > 0 ? "ok" : (typeValue ? "ok" : "info")}" style="font-size: 11.5px;">
+              ${reports.length > 0 ? escapeHtml(t("diabetes.statusDoctorApproved") || "Doctor Approved") : (typeValue ? escapeHtml(t("diabetes.statusDocumented") || "Documented") : escapeHtml(t("diabetes.statusMissing") || "Missing"))}
+            </span>
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px;">
+            <!-- Diabetes Type -->
+            <div style="background: var(--surface-2); padding: 14px; border-radius: 10px; border: 1px solid var(--line);">
+              <span style="font-size: 11.5px; color: var(--muted); text-transform: uppercase;" data-i18n="diabetes.paramType">
+                ${escapeHtml(t("diabetes.paramType") || "Diabetes Type")}
+              </span>
+              <div style="margin-top: 6px; font-size: 15px; font-weight: 700; color: var(--ink);">
+                ${escapeHtml(formattedType)}
+              </div>
+              <div style="margin-top: 6px;">
+                ${typeValue ? renderStatusPill("documented") : renderStatusPill("missing")}
+              </div>
+            </div>
+
+            <!-- Diagnosis Date -->
+            <div style="background: var(--surface-2); padding: 14px; border-radius: 10px; border: 1px solid var(--line);">
+              <span style="font-size: 11.5px; color: var(--muted); text-transform: uppercase;" data-i18n="diabetes.paramDiagnosisDate">
+                ${escapeHtml(t("diabetes.paramDiagnosisDate") || "Diagnosis Date")}
+              </span>
+              <div style="margin-top: 6px; font-size: 15px; font-weight: 700; color: var(--ink);">
+                ${diagDateValue ? escapeHtml(diagDateValue) : (isRtl() ? "غير مسجل" : "Not recorded")}
+              </div>
+              <div style="margin-top: 6px;">
+                ${diagDateValue ? renderStatusPill("documented") : renderStatusPill("missing")}
+              </div>
+            </div>
+
+            <!-- Treatment Regimen -->
+            <div style="background: var(--surface-2); padding: 14px; border-radius: 10px; border: 1px solid var(--line);">
+              <span style="font-size: 11.5px; color: var(--muted); text-transform: uppercase;" data-i18n="diabetes.treatmentRegimenHeading">
+                ${escapeHtml(t("diabetes.treatmentRegimenHeading") || "Documented Treatment Regimen")}
+              </span>
+              <div style="margin-top: 6px; font-size: 14px; font-weight: 600; color: var(--ink);">
+                ${regimenValue ? escapeHtml(regimenValue) : (isRtl() ? "لم تسجل أدوية بعد" : "No medications recorded")}
+              </div>
+              <div style="margin-top: 6px;">
+                ${regimenValue ? renderStatusPill("documented") : renderStatusPill("missing")}
+              </div>
+            </div>
+
+            <!-- Target Ranges -->
+            <div style="background: var(--surface-2); padding: 14px; border-radius: 10px; border: 1px solid var(--line);">
+              <span style="font-size: 11.5px; color: var(--muted); text-transform: uppercase;" data-i18n="diabetes.targetRangesHeading">
+                ${escapeHtml(t("diabetes.targetRangesHeading") || "Doctor-Approved Target Ranges")}
+              </span>
+              <div style="margin-top: 6px; font-size: 12.5px; color: var(--ink); line-height: 1.6;">
+                <div><b>FBG:</b> ${fastingTarget ? escapeHtml(fastingTarget) : (isRtl() ? "غير محدد" : "Not set")}</div>
+                <div><b>PPG:</b> ${postprandialTarget ? escapeHtml(postprandialTarget) : (isRtl() ? "غير محدد" : "Not set")}</div>
+                <div><b>HbA1c:</b> ${hba1cTarget ? escapeHtml(hba1cTarget) : (isRtl() ? "غير محدد" : "Not set")}</div>
+              </div>
+              <div style="margin-top: 6px;">
+                ${(fastingTarget || postprandialTarget || hba1cTarget) ? renderStatusPill("approved") : renderStatusPill("missing")}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5. Recent Measurements -->
+        <div class="panel" style="background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
+            <div>
+              <h4 style="margin: 0; font-size: 16px; font-weight: 800; color: var(--ink);" data-i18n="diabetes.recentMeasurementsHeading">
+                ${escapeHtml(t("diabetes.recentMeasurementsHeading") || "Recent Recorded Measurements")}
+              </h4>
+              <p style="margin: 3px 0 0; font-size: 12.5px; color: var(--muted);">
+                ${isRtl() ? "قراءات حقيقية مسجلة بالقيم، التواريخ، والوحدات الدقيقة." : "Real recorded readings with values, timestamps, and precise units."}
+              </p>
+            </div>
+            <button type="button" class="solid-button" onclick="HealthVibes.DiabetesUI.openLogMeasurementModal()" style="font-size: 12.5px; padding: 6px 14px;">
+              ➕ ${escapeHtml(t("diabetes.btnLogMeasurement") || "Log Measurement")}
+            </button>
+          </div>
+
+          ${measurements.length === 0 ? `
+            <div class="hv-state-card" data-state="empty" style="text-align: center; padding: 36px 16px; background: var(--surface-2); border: 1px dashed var(--line); border-radius: 12px;">
+              <span class="state-icon" style="font-size: 32px; display: block; margin-bottom: 8px;">🩸</span>
+              <h4 style="margin: 0 0 4px; font-size: 15px; font-weight: 700; color: var(--ink);" data-i18n="diabetes.noMeasurementsHeading">
+                ${escapeHtml(t("diabetes.noMeasurementsHeading") || "No Persisted Measurements Recorded")}
+              </h4>
+              <p style="margin: 0 0 16px; font-size: 13px; color: var(--muted); max-width: 480px; margin-inline: auto;" data-i18n="diabetes.emptyMeasurementsPatientMessage">
+                ${escapeHtml(t("diabetes.emptyMeasurementsPatientMessage") || "No glucose or HbA1c readings have been recorded in your profile yet.")}
+              </p>
+              <button type="button" class="solid-button" onclick="HealthVibes.DiabetesUI.openLogMeasurementModal()" style="font-size: 13px; padding: 8px 18px;">
+                ${escapeHtml(t("diabetes.btnLogMeasurement") || "Log Measurement")}
+              </button>
+            </div>
+          ` : `
+            <div style="overflow-x: auto;">
+              <table style="width: 100%; border-collapse: collapse; font-size: 13px; min-width: 600px;">
+                <thead>
+                  <tr style="background: var(--surface-2); text-align: start; border-bottom: 1px solid var(--line);">
+                    <th style="padding: 10px 12px; font-weight: 600; color: var(--muted);" data-i18n="diabetes.measurementDateLabel">
+                      ${escapeHtml(t("diabetes.measurementDateLabel") || "Measurement Date & Time")}
+                    </th>
+                    <th style="padding: 10px 12px; font-weight: 600; color: var(--muted);" data-i18n="diabetes.measType">
+                      ${escapeHtml(t("diabetes.measType") || "Type / Context")}
+                    </th>
+                    <th style="padding: 10px 12px; font-weight: 600; color: var(--muted);" data-i18n="diabetes.measValue">
+                      ${escapeHtml(t("diabetes.measValue") || "Value")}
+                    </th>
+                    <th style="padding: 10px 12px; font-weight: 600; color: var(--muted);" data-i18n="diabetes.measurementUnitLabel">
+                      ${escapeHtml(t("diabetes.measurementUnitLabel") || "Unit")}
+                    </th>
+                    <th style="padding: 10px 12px; font-weight: 600; color: var(--muted);" data-i18n="diabetes.measSource">
+                      ${escapeHtml(t("diabetes.measSource") || "Source")}
+                    </th>
+                    <th style="padding: 10px 12px; font-weight: 600; color: var(--muted);">
+                      ${isRtl() ? "الحالة السريرية" : "Clinical Status"}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${measurements.slice(0, 10).map(m => `
+                    <tr style="border-bottom: 1px solid var(--line);">
+                      <td style="padding: 10px 12px; color: var(--muted); white-space: nowrap;">
+                        📅 ${escapeHtml(new Date(m.measuredAt || m.createdAt || Date.now()).toLocaleString())}
+                      </td>
+                      <td style="padding: 10px 12px; font-weight: 600; color: var(--ink);">
+                        ${escapeHtml(formatMeasurementType(m.type, m.mealContext))}
+                      </td>
+                      <td style="padding: 10px 12px;">
+                        <span class="pill ok" style="font-weight: 700; font-size: 13.5px;">
+                          ${escapeHtml(m.value)}
+                        </span>
+                      </td>
+                      <td style="padding: 10px 12px; color: var(--muted); font-weight: 600;">
+                        ${escapeHtml(m.unit || (m.type === "hba1c" ? "%" : "mg/dL"))}
+                      </td>
+                      <td style="padding: 10px 12px; color: var(--muted); font-size: 12px;">
+                        ${escapeHtml(formatMeasurementSource(m.source))}
+                      </td>
+                      <td style="padding: 10px 12px;">
+                        ${reports.length > 0 ? renderStatusPill("approved") : renderStatusPill("documented")}
+                      </td>
+                    </tr>
+                  `).join("")}
+                </tbody>
+              </table>
+            </div>
+          `}
+        </div>
+
+        <!-- 6. Outstanding Information Requests (Patient Clarifications) -->
+        <div class="panel" style="background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+            <h4 style="margin: 0; font-size: 16px; font-weight: 800; color: var(--ink);" data-i18n="diabetes.outstandingInquiriesHeading">
+              ${escapeHtml(t("diabetes.outstandingInquiriesHeading") || "Outstanding Doctor Inquiries")}
+            </h4>
+            <span class="pill ${pendingClarifications.length > 0 ? "pending" : "ok"}" style="font-size: 11.5px;">
+              ${pendingClarifications.length > 0 ? `${pendingClarifications.length} ${isRtl() ? "استفسار معلق" : "pending inquiry"}` : (isRtl() ? "لا توجد استفسارات معلقة" : "Up to date")}
+            </span>
+          </div>
+
+          ${clarifications.length === 0 ? `
+            <div style="text-align: center; padding: 24px 16px; background: var(--surface-2); border-radius: 10px; color: var(--muted); font-size: 13.5px;">
+              <span style="font-size: 24px; display: block; margin-bottom: 6px;">💬</span>
+              ${escapeHtml(t("diabetes.noInquiriesNotice") || "No pending clarification requests from your doctor.")}
+            </div>
+          ` : `
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+              ${clarifications.map(c => {
+                const isPending = c.status === "unanswered" || c.status === "pending_patient" || !c.response;
+                const docName = c.request?.doctorName || c.doctorName || (isRtl() ? "الطبيب المعالج" : "Attending Doctor");
+                const docNote = c.request?.note || c.note || c.message || "";
+                const reqDate = c.request?.timestamp || c.eventTimestamp || "";
+                const responseText = c.response?.text || (typeof c.response === "string" ? c.response : null);
+
+                return `
+                  <div style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 14px; border-inline-start: 4px solid ${isPending ? '#f59e0b' : '#10b981'};">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 8px;">
+                      <div>
+                        <div style="font-size: 12px; font-weight: 700; color: var(--muted);">
+                          👨‍⚕️ ${escapeHtml(docName)} • ${reqDate ? escapeHtml(new Date(reqDate).toLocaleString()) : ""}
+                        </div>
+                        <div style="font-size: 13.5px; color: var(--ink); margin: 6px 0; font-weight: 600;">
+                          "${escapeHtml(docNote)}"
+                        </div>
+                      </div>
+                      <div>
+                        ${isPending ? `
+                          <button type="button" class="solid-button" onclick="HealthVibes.DiabetesUI.openReplyClarificationModal('${escapeHtml(c.requestId || '')}', ${c.cycle || 'null'})" style="font-size: 12px; padding: 6px 12px;">
+                            💬 ${escapeHtml(t("diabetes.btnReplyToDoctor") || "Reply to Doctor")}
+                          </button>
+                        ` : `
+                          <span class="pill ok" style="font-size: 11px;">
+                            ✔ ${isRtl() ? "تم إرسال ردك" : "Replied"}
+                          </span>
+                        `}
+                      </div>
+                    </div>
+
+                    ${responseText ? `
+                      <div style="margin-top: 10px; padding: 10px 12px; background: var(--surface); border-radius: 8px; border: 1px solid var(--line); font-size: 13px;">
+                        <span style="font-weight: 700; color: var(--teal); font-size: 11.5px;">${isRtl() ? "إجابتك المسجلة:" : "Your Response:"}</span>
+                        <div style="color: var(--ink); margin-top: 3px;">${escapeHtml(responseText)}</div>
+                      </div>
+                    ` : ""}
+                  </div>
+                `;
+              }).join("")}
+            </div>
+          `}
+        </div>
+
+        <!-- 7. Doctor-Approved Follow-up Plan -->
+        <div class="panel" style="background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+            <h4 style="margin: 0; font-size: 16px; font-weight: 800; color: var(--ink);" data-i18n="diabetes.doctorApprovedFollowupHeading">
+              ${escapeHtml(t("diabetes.doctorApprovedFollowupHeading") || "Doctor-Approved Follow-up Plan")}
+            </h4>
+            <span class="pill ${followup ? "ok" : "info"}" style="font-size: 11.5px;">
+              ${followup ? escapeHtml(t("diabetes.statusDoctorApproved") || "Doctor Approved") : escapeHtml(t("diabetes.statusMissing") || "Pending Doctor Approval")}
+            </span>
+          </div>
+
+          ${!followup ? `
+            <div style="text-align: center; padding: 24px 16px; background: var(--surface-2); border-radius: 10px; color: var(--muted); font-size: 13.5px;" data-i18n="diabetes.noApprovedFollowupNotice">
+              <span style="font-size: 24px; display: block; margin-bottom: 6px;">📅</span>
+              ${escapeHtml(t("diabetes.noApprovedFollowupNotice") || "Your follow-up plan will appear here once officially approved by your physician.")}
+            </div>
+          ` : `
+            <div style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 16px;">
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 12px;">
+                <div>
+                  <span style="font-size: 11.5px; color: var(--muted); text-transform: uppercase;" data-i18n="diabetes.scheduledDate">
+                    ${escapeHtml(t("diabetes.scheduledDate") || "Scheduled Review Date")}
+                  </span>
+                  <div style="font-size: 14.5px; font-weight: 700; color: var(--ink); margin-top: 4px;">
+                    📅 ${escapeHtml(followup.scheduledDate || followup.scheduledDateField?.value || (isRtl() ? "غير محدد" : "Not set"))}
+                  </div>
+                </div>
+                <div>
+                  <span style="font-size: 11.5px; color: var(--muted); text-transform: uppercase;" data-i18n="diabetes.intervalDays">
+                    ${escapeHtml(t("diabetes.intervalDays") || "Monitoring Interval")}
+                  </span>
+                  <div style="font-size: 14.5px; font-weight: 700; color: var(--ink); margin-top: 4px;">
+                    🔄 ${escapeHtml(followup.intervalDays || followup.intervalDaysField?.value || "30")} ${isRtl() ? "يوم" : "days"}
+                  </div>
+                </div>
+              </div>
+
+              ${followup.instructions ? `
+                <div style="margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px;">
+                  <span style="font-size: 11.5px; color: var(--muted); text-transform: uppercase;" data-i18n="diabetes.instructions">
+                    ${escapeHtml(t("diabetes.instructions") || "Specialist Instructions")}
+                  </span>
+                  <p style="margin: 4px 0 0; font-size: 13.5px; color: var(--ink); line-height: 1.6;">
+                    ${escapeHtml(followup.instructions)}
+                  </p>
+                </div>
+              ` : ""}
+            </div>
+          `}
+        </div>
+
+        <!-- 8. Doctor-Approved Reports -->
+        <div class="panel" style="background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+            <h4 style="margin: 0; font-size: 16px; font-weight: 800; color: var(--ink);" data-i18n="diabetes.approvedReportsHeading">
+              ${escapeHtml(t("diabetes.approvedReportsHeading") || "Doctor-Approved Reports")}
+            </h4>
+            <span class="pill ${reports.length > 0 ? "ok" : "info"}" style="font-size: 11.5px;">
+              ${reports.length > 0 ? `${reports.length} ${isRtl() ? "تقرير معتمد" : "Approved"}` : (isRtl() ? "لا توجد تقارير معتمدة بعد" : "None certified")}
+            </span>
+          </div>
+
+          ${reports.length === 0 ? `
+            <div style="text-align: center; padding: 24px 16px; background: var(--surface-2); border-radius: 10px; color: var(--muted); font-size: 13.5px;" data-i18n="diabetes.noApprovedReportsPatientNotice">
+              <span style="font-size: 24px; display: block; margin-bottom: 6px;">📑</span>
+              ${escapeHtml(t("diabetes.noApprovedReportsPatientNotice") || "No approved reports yet — certified reports are released exclusively after specialist review.")}
+            </div>
+          ` : `
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+              ${reports.map(rep => `
+                <div style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                  <div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <span style="font-weight: 800; font-size: 15px; color: var(--ink);">${escapeHtml(rep.reportRef || "HV-REP")}</span>
+                      ${renderStatusPill("approved")}
+                    </div>
+                    <div style="font-size: 12.5px; color: var(--muted); margin-top: 4px;">
+                      👨‍⚕️ ${escapeHtml(t("diabetes.approvingDoctor") || "Doctor")}: ${escapeHtml(rep.doctorIdentity?.name || "Licensed Physician")}
+                      • 📅 ${escapeHtml(new Date(rep.approvedAt || Date.now()).toLocaleDateString())}
+                    </div>
+                    ${rep.clinicalDiagnosis ? `
+                      <div style="font-size: 13px; color: var(--ink); margin-top: 6px;">
+                        <b>${isRtl() ? "التشخيص المعتمد:" : "Approved Diagnosis:"}</b> ${escapeHtml(rep.clinicalDiagnosis)}
+                      </div>
+                    ` : ""}
+                  </div>
+                  <button type="button" class="soft-button" onclick="showScreen('report')" style="font-size: 13px; padding: 8px 16px;" data-i18n="diabetes.btnViewReport">
+                    ${escapeHtml(t("diabetes.btnViewReport") || "View Certified Report")}
+                  </button>
+                </div>
+              `).join("")}
+            </div>
+          `}
+        </div>
+
+        <!-- 9. Clinical Governance & Safety Boundaries Notice -->
+        <div style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; font-size: 12.5px; color: var(--muted); line-height: 1.6;">
+          <div style="display: flex; align-items: flex-start; gap: 10px;">
+            <span style="font-size: 18px;">🛡️</span>
+            <div>
+              <strong style="color: var(--ink);">${isRtl() ? "حوكمة البيانات السريرية والخصوصية:" : "Clinical Data Governance & Privacy:"}</strong>
+              <div data-i18n="diabetes.clinicalGovernancePatientNotice" style="margin-top: 2px;">
+                ${escapeHtml(t("diabetes.clinicalGovernancePatientNotice") || "All displayed information is sourced strictly from your authentic medical records. Internal doctor notes and unapproved clinical interpretations are not displayed.")}
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    `;
+  }
+
+  function renderPatientClarificationsTab() {
+    const bundle = activeBundle || {};
+    const clarifications = Array.isArray(bundle.clarifications) ? bundle.clarifications : [];
+
+    return `
+      <div style="display: flex; flex-direction: column; gap: 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+          <div>
+            <h4 style="margin: 0; font-size: 16px; font-weight: 700; color: var(--ink);" data-i18n="diabetes.outstandingInquiriesHeading">
+              ${escapeHtml(t("diabetes.outstandingInquiriesHeading") || "Outstanding Doctor Inquiries")}
+            </h4>
+            <p style="margin: 3px 0 0; font-size: 12.5px; color: var(--muted);">
+              ${isRtl() ? "استفسارات وتوضيحات مطلوبة من طبيبك المعالج لتحديث خطة الرعاية." : "Inquiries and clarifications requested by your physician to update your care plan."}
+            </p>
+          </div>
+        </div>
+
+        ${clarifications.length === 0 ? `
+          <div class="hv-state-card" data-state="empty" style="text-align: center; padding: 36px 16px; background: var(--surface); border: 1px dashed var(--line); border-radius: 12px;">
+            <span class="state-icon" style="font-size: 32px; display: block; margin-bottom: 8px;">💬</span>
+            <h4 style="margin: 0 0 4px; font-size: 15px; font-weight: 700; color: var(--ink);">
+              ${escapeHtml(t("diabetes.noInquiriesNotice") || "No pending clarification requests from your doctor.")}
+            </h4>
+            <p style="margin: 0; font-size: 13px; color: var(--muted); max-width: 480px; margin-inline: auto;">
+              ${isRtl() ? "عندما يحتاج طبيبك المعالج إلى معلومات إضافية حول قياساتك، ستظهر طلبات التوضيح هنا." : "When your doctor requires additional information regarding your measurements, clarification requests will appear here."}
+            </p>
+          </div>
+        ` : `
+          <div style="display: flex; flex-direction: column; gap: 14px;">
+            ${clarifications.map(c => {
+              const isPending = c.status === "unanswered" || c.status === "pending_patient" || !c.response;
+              const docName = c.request?.doctorName || c.doctorName || (isRtl() ? "الطبيب المعالج" : "Attending Doctor");
+              const docNote = c.request?.note || c.note || c.message || "";
+              const reqDate = c.request?.timestamp || c.eventTimestamp || "";
+              const responseText = c.response?.text || (typeof c.response === "string" ? c.response : null);
+
+              return `
+                <div style="background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px; border-inline-start: 4px solid ${isPending ? '#f59e0b' : '#10b981'};">
+                  <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px;">
+                    <div>
+                      <div style="font-size: 12.5px; font-weight: 700; color: var(--muted);">
+                        👨‍⚕️ ${escapeHtml(docName)} • ${reqDate ? escapeHtml(new Date(reqDate).toLocaleString()) : ""}
+                      </div>
+                      <div style="font-size: 14.5px; color: var(--ink); margin: 8px 0; font-weight: 600;">
+                        "${escapeHtml(docNote)}"
+                      </div>
+                    </div>
+                    <div>
+                      ${isPending ? `
+                        <button type="button" class="solid-button" onclick="HealthVibes.DiabetesUI.openReplyClarificationModal('${escapeHtml(c.requestId || '')}', ${c.cycle || 'null'})" style="font-size: 13px; padding: 8px 16px;">
+                          💬 ${escapeHtml(t("diabetes.btnReplyToDoctor") || "Reply to Doctor")}
+                        </button>
+                      ` : `
+                        <span class="pill ok" style="font-size: 11.5px;">
+                          ✔ ${isRtl() ? "تم إرسال ردك بنجاح" : "Replied"}
+                        </span>
+                      `}
+                    </div>
+                  </div>
+
+                  ${responseText ? `
+                    <div style="margin-top: 12px; padding: 12px 14px; background: var(--surface-2); border-radius: 8px; border: 1px solid var(--line); font-size: 13.5px;">
+                      <span style="font-weight: 700; color: var(--teal); font-size: 12px;">${isRtl() ? "إجابتك المسجلة:" : "Your Response:"}</span>
+                      <div style="color: var(--ink); margin-top: 4px;">${escapeHtml(responseText)}</div>
+                    </div>
+                  ` : ""}
+                </div>
+              `;
+            }).join("")}
+          </div>
+        `}
+      </div>
+    `;
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -1859,6 +2501,95 @@
     }
   }
 
+  function openReplyClarificationModal(requestId, cycle = null) {
+    let modal = document.getElementById("diabetesReplyClarificationModal");
+    if (!modal) {
+      modal = document.createElement("div");
+      modal.id = "diabetesReplyClarificationModal";
+      modal.className = "modal-overlay";
+      modal.style.cssText = "position:fixed; inset:0; background:rgba(0,0,0,0.65); display:flex; align-items:center; justify-content:center; z-index:99999; padding:16px;";
+      document.body.appendChild(modal);
+    }
+
+    const bundle = activeBundle || {};
+    const clarifications = bundle.clarifications || [];
+    const targetCycle = clarifications.find(c => (requestId && c.requestId === requestId) || (cycle && c.cycle === cycle)) || {};
+    const doctorPrompt = targetCycle.request?.note || targetCycle.note || targetCycle.message || "";
+    const doctorName = targetCycle.request?.doctorName || targetCycle.doctorName || (isRtl() ? "طبيبك المعالج" : "Attending Doctor");
+
+    modal.innerHTML = `
+      <div style="background:var(--surface); border:1px solid var(--line); border-radius:16px; max-width:500px; width:100%; padding:24px; box-shadow:0 20px 25px -5px rgba(0,0,0,0.3);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+          <h3 style="margin:0; font-size:17px; font-weight:700; color:var(--ink);" data-i18n="diabetes.replyModalTitle">
+            ${escapeHtml(t("diabetes.replyModalTitle") || "الرد على استفسار الطبيب المعالج")}
+          </h3>
+          <button type="button" onclick="document.getElementById('diabetesReplyClarificationModal').style.display='none'" style="background:none; border:none; font-size:22px; cursor:pointer; color:var(--muted);">×</button>
+        </div>
+
+        ${doctorPrompt ? `
+          <div style="background:var(--surface-2); border-inline-start:4px solid var(--teal); border-radius:8px; padding:12px; margin-bottom:14px;">
+            <div style="font-size:12px; font-weight:700; color:var(--muted); margin-bottom:4px;">
+              👨‍⚕️ ${escapeHtml(doctorName)}
+            </div>
+            <div style="font-size:13.5px; color:var(--ink); line-height:1.5;">
+              "${escapeHtml(doctorPrompt)}"
+            </div>
+          </div>
+        ` : ""}
+
+        <form onsubmit="HealthVibes.DiabetesUI.handleSaveClarificationReply(event, '${escapeHtml(requestId || '')}', ${cycle || 'null'})">
+          <div>
+            <label style="display:block; font-size:12.5px; font-weight:600; color:var(--ink); margin-bottom:6px;" data-i18n="diabetes.replyInputLabel">
+              ${escapeHtml(t("diabetes.replyInputLabel") || "توضيحك / إجابتك")}
+            </label>
+            <textarea id="patientClarificationReplyInput" required rows="4" style="width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:8px; background:var(--surface-2); color:var(--ink); font-size:13.5px; resize:vertical;" placeholder="${isRtl() ? "اكتب توضيحك لطبيبك هنا..." : "Type your response here..."}"></textarea>
+          </div>
+
+          <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:20px;">
+            <button type="button" class="outline-button" onclick="document.getElementById('diabetesReplyClarificationModal').style.display='none'" style="font-size:13px; padding:8px 16px;" data-i18n="common.cancel">
+              ${escapeHtml(t("common.cancel") || "إلغاء")}
+            </button>
+            <button type="submit" class="solid-button" style="font-size:13px; padding:8px 18px;" data-i18n="diabetes.btnSubmitReply">
+              ${escapeHtml(t("diabetes.btnSubmitReply") || "إرسال التوضيح")}
+            </button>
+          </div>
+        </form>
+      </div>
+    `;
+
+    modal.style.display = "flex";
+  }
+
+  async function handleSaveClarificationReply(e, requestId, cycle) {
+    e.preventDefault();
+    const replyText = document.getElementById("patientClarificationReplyInput")?.value;
+    if (!replyText) return;
+
+    try {
+      const DiabetesService = global.HealthVibes?.DiabetesService;
+      const user = global.auth?.currentUser;
+      if (DiabetesService) {
+        await DiabetesService.addClarification(activePatientId, {
+          requestId: requestId || undefined,
+          cycle: cycle || undefined,
+          response: {
+            timestamp: new Date().toISOString(),
+            text: replyText,
+            patientName: user?.displayName || user?.name || "Patient"
+          },
+          status: "responded"
+        });
+      }
+
+      const modal = document.getElementById("diabetesReplyClarificationModal");
+      if (modal) modal.style.display = "none";
+
+      await loadAndDisplayContent();
+    } catch (err) {
+      alert(err.message || "Failed to submit clarification reply.");
+    }
+  }
+
   // ─────────────────────────────────────────────────────────────────────────────
   // STRUCTURED DIABETES ASSESSMENT MODAL & HANDLERS
   // ─────────────────────────────────────────────────────────────────────────────
@@ -2338,7 +3069,12 @@
     openAddClarificationModal,
     handleSaveClarification,
     renderDoctorReviewTab,
-    renderFieldStateBadge
+    renderFieldStateBadge,
+    renderStatusPill,
+    renderPatientDashboardTab,
+    renderPatientClarificationsTab,
+    openReplyClarificationModal,
+    handleSaveClarificationReply
   };
 
   global.HealthVibes = global.HealthVibes || {};

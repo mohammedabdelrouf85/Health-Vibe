@@ -1335,17 +1335,44 @@ function getPatientAttachments(patientId) {
 function addPatientClarification(patientId, cycleData) {
   if (!patientId || !cycleData) return null;
   const list = diabetesClarificationsStore.get(patientId) || [];
+
+  const existingIdx = list.findIndex(item => 
+    (cycleData.requestId && item.requestId === cycleData.requestId) ||
+    (cycleData.cycle && item.cycle === cycleData.cycle)
+  );
+
+  if (existingIdx !== -1) {
+    const existing = list[existingIdx];
+    if (cycleData.response) {
+      existing.response = typeof cycleData.response === 'string' ? {
+        timestamp: new Date().toISOString(),
+        text: cycleData.response,
+        patientName: cycleData.patientName || 'Patient'
+      } : cycleData.response;
+      existing.status = 'responded';
+    } else {
+      list[existingIdx] = { ...existing, ...cycleData };
+    }
+    existing.eventTimestamp = new Date().toISOString();
+    diabetesClarificationsStore.set(patientId, list);
+    return list[existingIdx];
+  }
+
   const cycleNumber = cycleData.cycle || list.length + 1;
   const record = {
     cycle: cycleNumber,
     requestId: cycleData.requestId || `dm_req_cycle_${cycleNumber}_${Date.now()}`,
     request: cycleData.request || {
       timestamp: new Date().toISOString(),
-      note: cycleData.note || '',
+      note: cycleData.note || cycleData.requestNote || '',
       doctorName: cycleData.doctorName || 'Attending Physician'
     },
-    response: cycleData.response || null,
-    status: cycleData.status || (cycleData.response ? 'reviewed' : 'unanswered'),
+    response: cycleData.response ? (typeof cycleData.response === 'string' ? {
+      timestamp: new Date().toISOString(),
+      text: cycleData.response,
+      patientName: cycleData.patientName || 'Patient'
+    } : cycleData.response) : null,
+    status: cycleData.status || (cycleData.response ? 'responded' : 'unanswered'),
     eventTimestamp: cycleData.eventTimestamp || new Date().toISOString()
   };
   list.push(record);
