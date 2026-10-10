@@ -1,25 +1,33 @@
 /**
- * Health Vibe - Disease Data Isolation & Authorization Test Suite
+ * Health Vibe - Disease Data Isolation, Authorization & Audit Logging Test Suite
  *
- * Validates strict data isolation across disease modules (Diabetes, Hypertension, Blood Clotting, Obesity).
- * Verifies:
- * 1. Patient cannot receive another patient's records across all modules.
- * 2. Doctor cannot access records outside assigned patients.
- * 3. Clinic boundaries are enforced (clinicId mismatch check).
- * 4. Internal doctor notes and unreleased interpretations are sanitized for patient role.
- * 5. Direct ID manipulation attempts are rejected with 403 FORBIDDEN.
+ * Validates:
+ * 1. Strict data isolation across disease modules (Diabetes, Hypertension, Blood Clotting, Obesity).
+ * 2. Patient cannot receive another patient's records.
+ * 3. Doctor cannot access records outside assigned patients.
+ * 4. Clinic boundaries are enforced (clinicId mismatch check).
+ * 5. Internal doctor notes and unreleased interpretations are sanitized for patient role.
+ * 6. Direct ID manipulation attempts are rejected with 403 FORBIDDEN.
+ * 7. Authoritative Audit Logging for disease-module actions with PHI redaction:
+ *    - ASSESSMENT_CREATION, MEASUREMENT_CREATION, MEASUREMENT_CORRECTION,
+ *      DOCTOR_REVIEW, INFORMATION_REQUEST, PATIENT_RESPONSE, REPORT_APPROVAL,
+ *      REPORT_WITHDRAWAL, PERMISSION_CHANGES.
  */
 
 const assert = require('assert');
 const diabetesService = require('../backend/diabetes-service');
 const hypertensionService = require('../backend/hypertension-service');
+const auditService = require('../backend/audit-service');
 
 async function runIsolationTests() {
-  console.log('🧪 Starting Disease Data Isolation Test Suite...\n');
+  console.log('🧪 Starting Disease Data Isolation & Audit Logging Test Suite...\n');
 
-  // Reset in-memory stores for clean testing
+  // Reset in-memory stores & audit log for clean testing
   if (hypertensionService.resetHypertensionStoreForTesting) {
     hypertensionService.resetHypertensionStoreForTesting();
+  }
+  if (auditService.resetAuditStoreForTesting) {
+    auditService.resetAuditStoreForTesting();
   }
 
   // Define actors
@@ -68,6 +76,7 @@ async function runIsolationTests() {
     patientId: 'pat_A_001',
     systolic: 125,
     diastolic: 82,
+    pulse: 72,
     recordedByUid: 'pat_A_001'
   });
 
@@ -75,6 +84,7 @@ async function runIsolationTests() {
     patientId: 'pat_B_002',
     systolic: 145,
     diastolic: 95,
+    pulse: 78,
     recordedByUid: 'pat_B_002'
   });
 
@@ -90,7 +100,6 @@ async function runIsolationTests() {
   // =========================================================================
   console.log('▶ Test 1: Direct ID manipulation - Patient A requesting Patient B records');
   
-  // Diabetes Bundle check
   let diaAuthAtoB = diabetesService.verifyAccessPermission(patientA, 'pat_B_002', { clinicId: 'clinic_alex' });
   assert.strictEqual(diaAuthAtoB.authorized, false, 'Patient A should NOT be authorized for Patient B Diabetes records');
   assert.strictEqual(diaAuthAtoB.reason, 'PATIENT_CAN_ONLY_ACCESS_OWN_DATA');
@@ -99,7 +108,6 @@ async function runIsolationTests() {
     diabetesService.getPatientDiabetesBundle('pat_B_002', patientA);
   }, (err) => err.code === 'FORBIDDEN' || err.message.includes('Access denied'), 'getPatientDiabetesBundle must throw FORBIDDEN when Patient A accesses Patient B');
 
-  // Hypertension Bundle check
   let htnAuthAtoB = hypertensionService.verifyAccessPermission(patientA, 'pat_B_002', { clinicId: 'clinic_alex' });
   assert.strictEqual(htnAuthAtoB.authorized, false, 'Patient A should NOT be authorized for Patient B Hypertension records');
   assert.strictEqual(htnAuthAtoB.reason, 'PATIENT_DATA_ISOLATION_VIOLATION');
@@ -133,7 +141,6 @@ async function runIsolationTests() {
   // =========================================================================
   console.log('▶ Test 3: Clinic boundary enforcement - Doctor/Admin with mismatched clinicId');
 
-  // Doctor assigned to Patient A, but requesting from a different clinic context
   let docWrongClinicCheck = hypertensionService.verifyAccessPermission(doctorWrongClinic, 'pat_A_001', {
     clinicId: 'clinic_cairo',
     assignedDoctorId: 'doc_cardio_101'
@@ -141,14 +148,12 @@ async function runIsolationTests() {
   assert.strictEqual(docWrongClinicCheck.authorized, false);
   assert.strictEqual(docWrongClinicCheck.reason, 'CLINIC_MISMATCH');
 
-  // Clinic Admin Alex attempting to access Clinic Cairo patient
   let adminAlexCheck = hypertensionService.verifyAccessPermission(clinicAdminAlex, 'pat_A_001', {
     clinicId: 'clinic_cairo'
   });
   assert.strictEqual(adminAlexCheck.authorized, false);
   assert.strictEqual(adminAlexCheck.reason, 'CLINIC_MISMATCH');
 
-  // Clinic Admin Cairo accessing Clinic Cairo patient -> Authorized
   let adminCairoCheck = hypertensionService.verifyAccessPermission(clinicAdminCairo, 'pat_A_001', {
     clinicId: 'clinic_cairo'
   });
@@ -161,11 +166,9 @@ async function runIsolationTests() {
   // =========================================================================
   console.log('▶ Test 4: Internal clinical notes sanitization for Patient role');
 
-  // Patient A fetching their own bundle
   const patientABundle = hypertensionService.getPatientHypertensionBundle('pat_A_001', patientA);
   assert.strictEqual(patientABundle.clinicalNotes.length, 0, 'Patients must receive empty clinicalNotes array');
 
-  // Assigned Doctor fetching Patient A bundle
   const doctorABundle = hypertensionService.getPatientHypertensionBundle('pat_A_001', doctorAssignedA);
   assert.strictEqual(doctorABundle.clinicalNotes.length, 1, 'Assigned doctors must be able to view clinical notes');
   assert.strictEqual(doctorABundle.clinicalNotes[0].noteText.includes('Internal doctor note'), true);
@@ -181,23 +184,79 @@ async function runIsolationTests() {
     patientId: 'pat_A_001',
     systolic: 130,
     diastolic: 85,
+    pulse: 72,
     symptoms: ['headache']
   }, patientA);
 
   assert.strictEqual(asm.clinicalRevision, 1);
   assert.strictEqual(asm.patientId, 'pat_A_001');
 
-  // Patient attempting to revise assessment with forbidden internal doctor fields
   const revised = hypertensionService.reviseHypertensionAssessment(asm.assessmentId, {
     systolic: 128,
-    diastolic: 84
+    diastolic: 84,
+    pulse: 70
   }, patientA, 'patient_log_update');
 
   assert.strictEqual(revised.clinicalRevision, 2);
 
   console.log('   ✅ Assessment revisions incremented cleanly with immutable provenance.');
 
-  console.log('\n🎉 ALL DISEASE DATA ISOLATION TESTS PASSED SUCCESSFULLY!');
+  // =========================================================================
+  // TEST 6: Disease Module Action Audit Event Trail & PHI Redaction
+  // =========================================================================
+  console.log('▶ Test 6: Verifying Disease Action Audit Events & Data Minimization');
+
+  // Trigger additional disease actions
+  const clarification = hypertensionService.addPatientClarification('pat_A_001', 'Did you rest for 5 minutes before taking reading?');
+  hypertensionService.replyToClarification('pat_A_001', clarification.cycleId, 'Yes, I rested on the chair for 10 minutes.', patientA);
+
+  const certified = await hypertensionService.certifyChronicHypertensionReport('pat_A_001', {
+    uid: 'doc_cardio_101',
+    name: 'Dr. Cardio',
+    licenseNumber: 'HV-CARDIO-99',
+    specialty: 'Cardiology',
+    clinic: 'Cairo Heart Center'
+  }, 'Stage 1 Hypertension', 'Continue Mediterranean diet and 30 min daily walking.', 'Moderate Risk');
+
+  hypertensionService.withdrawReport('pat_A_001', certified.reportRef, doctorAssignedA);
+  hypertensionService.updatePermission('pat_A_001', { grantedSpecialties: ['Cardiology'] }, clinicAdminCairo);
+
+  // Retrieve in-memory audit trail for Patient A
+  const patientAAuditLogs = auditService.getInMemoryAuditEvents({ patientId: 'pat_A_001' });
+
+  const actionsFound = patientAAuditLogs.map(l => l.action);
+  console.log('   Captured Audit Actions:', actionsFound);
+
+  assert.ok(actionsFound.includes('MEASUREMENT_CREATION'), 'Must record MEASUREMENT_CREATION');
+  assert.ok(actionsFound.includes('DOCTOR_REVIEW'), 'Must record DOCTOR_REVIEW');
+  assert.ok(actionsFound.includes('ASSESSMENT_CREATION'), 'Must record ASSESSMENT_CREATION');
+  assert.ok(actionsFound.includes('MEASUREMENT_CORRECTION'), 'Must record MEASUREMENT_CORRECTION');
+  assert.ok(actionsFound.includes('INFORMATION_REQUEST'), 'Must record INFORMATION_REQUEST');
+  assert.ok(actionsFound.includes('PATIENT_RESPONSE'), 'Must record PATIENT_RESPONSE');
+  assert.ok(actionsFound.includes('REPORT_APPROVAL'), 'Must record REPORT_APPROVAL');
+  assert.ok(actionsFound.includes('REPORT_WITHDRAWAL'), 'Must record REPORT_WITHDRAWAL');
+  assert.ok(actionsFound.includes('PERMISSION_CHANGES'), 'Must record PERMISSION_CHANGES');
+
+  // Verify Audit Event Structure & Data Minimization (PHI Redaction)
+  for (const log of patientAAuditLogs) {
+    assert.ok(log.eventId, 'Audit log must contain eventId');
+    assert.ok(log.timestamp, 'Audit log must contain server timestamp');
+    assert.ok(log.actor, 'Audit log must contain actor context');
+    assert.ok(log.affectedRecord, 'Audit log must contain affectedRecord');
+    assert.strictEqual(log.affectedRecord.patientId, 'pat_A_001');
+
+    // Verify PHI Redaction: details MUST NOT contain raw vitals or medical text
+    const detailsKeys = Object.keys(log.details || {});
+    assert.strictEqual(detailsKeys.includes('systolic'), false, 'Audit log must NOT contain raw systolic BP');
+    assert.strictEqual(detailsKeys.includes('diastolic'), false, 'Audit log must NOT contain raw diastolic BP');
+    assert.strictEqual(detailsKeys.includes('noteText'), false, 'Audit log must NOT contain raw noteText');
+    assert.strictEqual(detailsKeys.includes('observations'), false, 'Audit log must NOT contain raw observations');
+    assert.strictEqual(detailsKeys.includes('replyText'), false, 'Audit log must NOT contain raw replyText');
+  }
+
+  console.log('   ✅ Disease action audit logging and strict PHI redaction verified across all 9 action types.');
+
+  console.log('\n🎉 ALL DISEASE DATA ISOLATION & AUDIT LOGGING TESTS PASSED SUCCESSFULLY!');
 }
 
 runIsolationTests().catch(err => {

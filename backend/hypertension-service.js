@@ -28,6 +28,8 @@
 
 const crypto = require('crypto');
 const chronicHypertensionService = require('./chronic-hypertension-service');
+const auditService = require('./audit-service');
+const { AUDIT_EVENT_TYPES } = auditService;
 
 // Field State Classification Enumeration
 const CLINICAL_FIELD_STATE = {
@@ -334,6 +336,14 @@ function recordBloodPressureReading(readingData = {}) {
     // Continue cleanly if already synced
   }
 
+  auditService.recordDiseaseAuditEvent(null, {
+    action: AUDIT_EVENT_TYPES.MEASUREMENT_CREATION,
+    actor: { uid: recordedByUid || patientId, role: recordedByUid === patientId ? 'patient' : 'doctor' },
+    patientId,
+    recordId: readingId,
+    recordType: 'hypertension_reading'
+  });
+
   return record;
 }
 
@@ -451,6 +461,14 @@ function addClinicalNote(noteData = {}) {
   }
   patientNotesIndex.get(patientId).push(noteId);
 
+  auditService.recordDiseaseAuditEvent(null, {
+    action: AUDIT_EVENT_TYPES.DOCTOR_REVIEW,
+    actor: { uid: doctorUid, role: 'doctor', name: doctorName },
+    patientId,
+    recordId: noteId,
+    recordType: 'hypertension_clinical_note'
+  });
+
   return record;
 }
 
@@ -522,6 +540,14 @@ function recordDoctorReview(reviewData = {}) {
     lastReviewedAt: record.reviewedAt,
     lastReviewStatus: status,
     updatedAt: new Date().toISOString()
+  });
+
+  auditService.recordDiseaseAuditEvent(null, {
+    action: AUDIT_EVENT_TYPES.DOCTOR_REVIEW,
+    actor: { uid: doctorUid, role: 'doctor', name: doctorName },
+    patientId,
+    recordId: reviewId,
+    recordType: 'hypertension_doctor_review'
   });
 
   return record;
@@ -713,6 +739,15 @@ async function certifyChronicHypertensionReport(arg1, arg2, arg3, arg4, arg5) {
       clinicalDiagnosis: certified.clinicalDiagnosis,
       managementPlan: certified.managementPlan,
       approvedAt: certified.certifiedAt
+    });
+
+    auditService.recordDiseaseAuditEvent(null, {
+      action: AUDIT_EVENT_TYPES.REPORT_APPROVAL,
+      actor: doc,
+      patientId,
+      recordId: certified.reportRef,
+      recordType: 'hypertension_report',
+      revisionId: certified.digitalSignature?.signatureHash
     });
   }
 
@@ -979,6 +1014,15 @@ function createHypertensionAssessment(assessmentData = {}, actor = {}) {
   };
   assessmentRevisionsStore.set(assessmentId, [revisionRecord]);
 
+  auditService.recordDiseaseAuditEvent(null, {
+    action: AUDIT_EVENT_TYPES.ASSESSMENT_CREATION,
+    actor,
+    patientId: assessmentRecord.patientId,
+    recordId: assessmentRecord.assessmentId,
+    recordType: 'hypertension_assessment',
+    clinicalRevision: 1
+  });
+
   return assessmentRecord;
 }
 
@@ -1073,6 +1117,15 @@ function reviseHypertensionAssessment(assessmentId, updates = {}, actor = {}, tr
   });
   assessmentRevisionsStore.set(assessmentId, existingRevisions);
 
+  auditService.recordDiseaseAuditEvent(null, {
+    action: AUDIT_EVENT_TYPES.MEASUREMENT_CORRECTION,
+    actor,
+    patientId: revisedAssessment.patientId,
+    recordId: assessmentId,
+    recordType: 'hypertension_assessment',
+    clinicalRevision: newRevisionNumber
+  });
+
   return revisedAssessment;
 }
 
@@ -1132,6 +1185,15 @@ function addPatientClarification(patientId, questionText, category = 'blood_pres
   };
 
   hypertensionClarificationsStore.get(patientId).push(cycle);
+
+  auditService.recordDiseaseAuditEvent(null, {
+    action: AUDIT_EVENT_TYPES.INFORMATION_REQUEST,
+    actor: { uid: 'system', role: 'doctor' },
+    patientId,
+    recordId: cycleId,
+    recordType: 'hypertension_clarification'
+  });
+
   return cycle;
 }
 
@@ -1152,7 +1214,68 @@ function replyToClarification(patientId, cycleId, replyText, actor = {}) {
   cycle.status = 'responded';
   cycle.repliedByUid = actor.uid || patientId;
 
+  auditService.recordDiseaseAuditEvent(null, {
+    action: AUDIT_EVENT_TYPES.PATIENT_RESPONSE,
+    actor,
+    patientId,
+    recordId: cycleId,
+    recordType: 'hypertension_clarification'
+  });
+
   return cycle;
+}
+
+/**
+ * Withdraws or revokes a certified report with authoritative audit logging.
+ */
+function withdrawReport(patientId, reportRef, actor = {}) {
+  const perm = verifyAccessPermission(actor, patientId);
+  if (!perm.authorized || !['doctor', 'clinic_admin', 'super_admin'].includes(actor.role)) {
+    const err = new Error('Unauthorized to withdraw report');
+    err.code = 'FORBIDDEN';
+    throw err;
+  }
+
+  const reports = getPatientApprovedReports(patientId);
+  const targetReport = reports.find(r => r.reportRef === reportRef || r.id === reportRef);
+  if (targetReport) {
+    targetReport.status = 'withdrawn';
+    targetReport.withdrawnAt = new Date().toISOString();
+    targetReport.withdrawnBy = actor.uid;
+  }
+
+  auditService.recordDiseaseAuditEvent(null, {
+    action: AUDIT_EVENT_TYPES.REPORT_WITHDRAWAL,
+    actor,
+    patientId,
+    recordId: reportRef,
+    recordType: 'hypertension_report'
+  });
+
+  return { success: true, reportRef, status: 'withdrawn' };
+}
+
+/**
+ * Updates permission or doctor assignment with authoritative audit logging.
+ */
+function updatePermission(patientId, permissionChanges = {}, actor = {}) {
+  const perm = verifyAccessPermission(actor, patientId);
+  if (!perm.authorized || !['clinic_admin', 'super_admin'].includes(actor.role)) {
+    const err = new Error('Unauthorized to update permissions');
+    err.code = 'FORBIDDEN';
+    throw err;
+  }
+
+  auditService.recordDiseaseAuditEvent(null, {
+    action: AUDIT_EVENT_TYPES.PERMISSION_CHANGES,
+    actor,
+    patientId,
+    recordId: patientId,
+    recordType: 'patient_permissions',
+    details: permissionChanges
+  });
+
+  return { success: true, patientId, permissionChanges };
 }
 
 /**
@@ -1250,5 +1373,7 @@ module.exports = {
   addPatientClarification,
   replyToClarification,
   getPatientClarifications,
-  getPatientHypertensionBundle
+  getPatientHypertensionBundle,
+  withdrawReport,
+  updatePermission
 };

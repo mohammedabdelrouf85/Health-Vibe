@@ -24,6 +24,8 @@
  */
 
 const crypto = require('crypto');
+const auditService = require('./audit-service');
+const { AUDIT_EVENT_TYPES } = auditService;
 
 // Field State Classification Enumeration
 const CLINICAL_FIELD_STATE = {
@@ -416,6 +418,14 @@ function recordDiabetesMeasurement(measurement = {}) {
   }
   patientReadingsIndex.get(patientId).push(readingId);
 
+  auditService.recordDiseaseAuditEvent(null, {
+    action: AUDIT_EVENT_TYPES.MEASUREMENT_CREATION,
+    actor: { uid: recordedByUid || patientId, role: recordedByUid === patientId ? 'patient' : 'doctor' },
+    patientId,
+    recordId: readingId,
+    recordType: 'diabetes_reading'
+  });
+
   return record;
 }
 
@@ -476,6 +486,14 @@ function addClinicalNote(noteData = {}) {
     patientNotesIndex.set(patientId, []);
   }
   patientNotesIndex.get(patientId).push(noteId);
+
+  auditService.recordDiseaseAuditEvent(null, {
+    action: AUDIT_EVENT_TYPES.DOCTOR_REVIEW,
+    actor: { uid: doctorUid, role: 'doctor', name: doctorName },
+    patientId,
+    recordId: noteId,
+    recordType: 'diabetes_clinical_note'
+  });
 
   return record;
 }
@@ -549,6 +567,14 @@ function recordDoctorReview(reviewData = {}) {
     lastReviewedAt: record.reviewedAt,
     lastReviewStatus: status,
     updatedAt: new Date().toISOString()
+  });
+
+  auditService.recordDiseaseAuditEvent(null, {
+    action: AUDIT_EVENT_TYPES.DOCTOR_REVIEW,
+    actor: { uid: doctorUid, role: 'doctor', name: doctorName },
+    patientId,
+    recordId: reviewId,
+    recordType: 'diabetes_doctor_review'
   });
 
   return record;
@@ -1091,6 +1117,15 @@ function createDiabetesAssessment(assessmentData = {}, actor = {}) {
     }
   };
   assessmentRevisionsStore.set(assessmentId, [revisionRecord]);
+
+  auditService.recordDiseaseAuditEvent(null, {
+    action: AUDIT_EVENT_TYPES.ASSESSMENT_CREATION,
+    actor,
+    patientId: assessmentRecord.patientId,
+    recordId: assessmentRecord.assessmentId,
+    recordType: 'diabetes_assessment',
+    clinicalRevision: 1
+  });
 
   return assessmentRecord;
 }

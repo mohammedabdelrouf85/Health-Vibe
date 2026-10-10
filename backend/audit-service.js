@@ -70,7 +70,17 @@ const AUDIT_EVENT_TYPES = {
   APPOINTMENT_RESCHEDULED: 'APPOINTMENT_RESCHEDULED',
   APPOINTMENT_CANCELLED: 'APPOINTMENT_CANCELLED',
   APPOINTMENT_STATUS_CHANGED: 'APPOINTMENT_STATUS_CHANGED',
-  OPERATIONAL_SWITCH_CHANGED: 'OPERATIONAL_SWITCH_CHANGED'
+  OPERATIONAL_SWITCH_CHANGED: 'OPERATIONAL_SWITCH_CHANGED',
+  // Disease Module Auditable Events
+  ASSESSMENT_CREATION: 'ASSESSMENT_CREATION',
+  MEASUREMENT_CREATION: 'MEASUREMENT_CREATION',
+  MEASUREMENT_CORRECTION: 'MEASUREMENT_CORRECTION',
+  DOCTOR_REVIEW: 'DOCTOR_REVIEW',
+  INFORMATION_REQUEST: 'INFORMATION_REQUEST',
+  PATIENT_RESPONSE: 'PATIENT_RESPONSE',
+  REPORT_APPROVAL: 'REPORT_APPROVAL',
+  REPORT_WITHDRAWAL: 'REPORT_WITHDRAWAL',
+  PERMISSION_CHANGES: 'PERMISSION_CHANGES'
 };
 
 /**
@@ -171,7 +181,10 @@ function sanitizeDetails(details) {
     'password', 'token', 'refreshToken', 'secret', 'authorization', 'apiKey',
     'vitals', 'symptoms', 'rawSymptoms', 'clinicalDiagnosis', 'clinicalNotes',
     'medications', 'doctorNote', 'diagnosisDetails', 'audio', 'coughAudio',
-    'idToken', 'code', 'pin', 'ssn', 'nationalId'
+    'idToken', 'code', 'pin', 'ssn', 'nationalId',
+    'systolic', 'diastolic', 'pulse', 'bloodGlucose', 'fastingGlucose', 'hba1c',
+    'observations', 'recommendations', 'managementPlan', 'riskStratification',
+    'replyText', 'questionText', 'noteText', 'rawMedicalText'
   ]);
 
   const sanitized = {};
@@ -190,6 +203,116 @@ function sanitizeDetails(details) {
   }
 
   return sanitized;
+}
+
+let inMemoryAuditEvents = [];
+
+function resetAuditStoreForTesting() {
+  inMemoryAuditEvents = [];
+}
+
+function getInMemoryAuditEvents(filter = {}) {
+  let events = [...inMemoryAuditEvents];
+  if (filter.patientId) {
+    events = events.filter(e => e.affectedRecord?.patientId === filter.patientId || e.targetUserId === filter.patientId);
+  }
+  if (filter.action) {
+    events = events.filter(e => e.action === filter.action || e.type === filter.action);
+  }
+  return events;
+}
+
+/**
+ * Authoritatively record a disease-module audit event.
+ * Records actor, timestamp, action, affected record, and relevant revision identifiers from trusted server context.
+ * Strictly redacts unnecessary medical content.
+ */
+async function recordDiseaseAuditEvent(db, {
+  action,
+  actor = null,
+  req = null,
+  patientId,
+  clinicId = null,
+  recordId,
+  recordType = 'disease_record',
+  clinicalRevision = null,
+  revisionId = null,
+  details = {},
+  outcome = 'SUCCESS'
+}) {
+  if (!action) throw new Error('Disease audit action is required.');
+
+  const trustedActor = req ? extractTrustedActor(req) : (actor ? {
+    uid: actor.uid || actor.id || 'system',
+    role: actor.role || 'user',
+    emailMasked: maskEmail(actor.email),
+    clinicId: actor.clinicId || clinicId || null,
+    isOwner: Boolean(actor.isOwner)
+  } : {
+    uid: 'system',
+    role: 'backend_system',
+    emailMasked: '',
+    clinicId: null,
+    isOwner: false
+  });
+
+  const nowIso = new Date().toISOString();
+  const sanitized = sanitizeDetails(details);
+
+  const affectedRecord = {
+    recordId: String(recordId || 'unknown'),
+    recordType: String(recordType || 'disease_record'),
+    patientId: String(patientId || 'unknown'),
+    clinicId: clinicId || trustedActor.clinicId || null
+  };
+
+  const auditRecord = {
+    eventId: `audit_disease_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`,
+    type: action,
+    action,
+    actor: {
+      uid: trustedActor.uid,
+      role: trustedActor.role,
+      emailMasked: trustedActor.emailMasked,
+      clinicId: trustedActor.clinicId || null,
+      isOwner: Boolean(trustedActor.isOwner)
+    },
+    affectedRecord,
+    revisionIdentifier: clinicalRevision ?? revisionId ?? null,
+    clinicalRevision: clinicalRevision ?? null,
+    revisionId: revisionId ?? null,
+    timestamp: nowIso,
+    outcome: outcome || 'SUCCESS',
+    details: sanitized
+  };
+
+  console.info('[DISEASE AUDIT EVENT]', JSON.stringify({
+    action: auditRecord.action,
+    actorUid: auditRecord.actor.uid,
+    recordId: affectedRecord.recordId,
+    recordType: affectedRecord.recordType,
+    patientId: affectedRecord.patientId,
+    revision: auditRecord.revisionIdentifier,
+    timestamp: auditRecord.timestamp
+  }));
+
+  inMemoryAuditEvents.push(auditRecord);
+  if (inMemoryAuditEvents.length > 5000) {
+    inMemoryAuditEvents.shift();
+  }
+
+  if (db && typeof db.collection === 'function') {
+    try {
+      await db.collection('audit_events').add({
+        ...auditRecord,
+        createdAt: nowIso
+      });
+    } catch (err) {
+      console.warn('[AUDIT PERSISTENCE WARNING]: Failed to persist disease audit event to Firestore:', err.message);
+    }
+  }
+
+  return auditRecord;
 }
 
 /**
@@ -529,6 +652,9 @@ module.exports = {
   sanitizeDetails,
   extractTrustedActor,
   recordAuditEvent,
+  recordDiseaseAuditEvent,
+  getInMemoryAuditEvents,
+  resetAuditStoreForTesting,
   queryAuditEvents,
   exportAuditEvents
 };
