@@ -3510,7 +3510,7 @@ async function updateCaseStatus(id, newStatus, note, extraFields = {}) {
     }
     if (handleServerPermissionDenied(err, "Update Case Status")) return false;
     if (err && (err.status === 409 || err.code === 'STALE_CLINICAL_REVISION' || String(err.message || '').includes('STALE_CLINICAL_REVISION'))) {
-      const targetCase = (typeof cases !== "undefined" && Array.isArray(cases) ? cases : (state?.doctorQueue || [])).find(item => item.id === id);
+      const targetCase = (typeof cases !== "undefined" && Array.isArray(cases) ? cases : (typeof state !== "undefined" && state?.doctorQueue ? state.doctorQueue : [])).find(item => item.id === id);
       if (targetCase) {
         targetCase.hasNewInfo = true;
         targetCase.isRevisionStale = true;
@@ -4014,7 +4014,10 @@ window.generateAndApproveReport = async function(id) {
   if (!enforcePermission(PERMISSIONS.APPROVE_CASE, "Approve Clinical Result")) return;
   const isEn = currentLanguage === "en";
 
-  const targetCase = (typeof cases !== "undefined" && Array.isArray(cases) ? cases : (state?.doctorQueue || [])).find(item => item.id === id);
+  const doctorQueue = (typeof cases !== "undefined" && Array.isArray(cases))
+    ? cases
+    : (typeof state !== "undefined" && state?.doctorQueue ? state.doctorQueue : []);
+  const targetCase = doctorQueue.find(item => item.id === id);
   if (window.HealthVibes?.DoctorUI?.isRevisionStale && window.HealthVibes.DoctorUI.isRevisionStale(targetCase)) {
     showToast(isEn ? "Approval locked: Please review and acknowledge new patient information first." : "الاعتماد مقفل: يرجى مراجعة وتأكيد البيانات الجديدة أولاً.");
     return;

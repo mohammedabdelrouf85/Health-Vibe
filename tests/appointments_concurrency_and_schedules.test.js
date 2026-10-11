@@ -456,7 +456,7 @@ async function testConfirmationAndCancellation() {
   );
 
   // Now cancel the appointment
-  const cancelResult = await schedulingService.cancelAppointmentTransaction(db, confirmedAppt.id, patient);
+  const cancelResult = await schedulingService.cancelAppointmentTransaction(db, confirmedAppt.id, patient, { now: new Date('2026-10-04T08:00:00Z') });
   assert.strictEqual(cancelResult.status, 'cancelled');
 
   // After cancellation, patient 2 books the exact same slot -> Must succeed now!

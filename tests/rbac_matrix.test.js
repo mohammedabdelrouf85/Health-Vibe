@@ -29,6 +29,7 @@ data.set('users/unverified', { role: 'patient', clinicId: 'a' });
 tokens.logged_in_then_suspended = { uid: 'logged_in_then_suspended', role: 'patient', email: 'suspended@test.invalid', email_verified: true };
 accounts.set('logged_in_then_suspended', { uid: 'logged_in_then_suspended', email: 'suspended@test.invalid', customClaims: { role: 'patient' } });
 data.set('users/logged_in_then_suspended', { role: 'patient', clinicId: 'a' });
+data.set('system_settings/operational_switches', { assessmentIntake: true, assistant: true, integrations: true });
 function snapshot(key) { return { id: key.split('/')[1], exists: data.has(key), data: () => data.get(key) }; }
 function collection(name, filters = []) {
   return {

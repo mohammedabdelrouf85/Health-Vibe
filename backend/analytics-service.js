@@ -178,8 +178,9 @@ function recordEvent(eventData = {}) {
 
   // Debounce rapid identical events within 3000ms (e.g. double clicks)
   const targetEntity = cleanPayload.assessmentId || cleanPayload.caseId || cleanPayload.appointmentId || '';
-  const compositeKey = `${eventType}:${userId || 'anon'}:${targetEntity}:${Math.floor(ts / 3000)}`;
-  if (recentDebounceMap.has(compositeKey)) {
+  const compositeKey = `${eventType}:${userId || 'anon'}:${targetEntity}`;
+  const lastEventTs = recentDebounceMap.get(compositeKey);
+  if (typeof lastEventTs === 'number' && Math.abs(ts - lastEventTs) < 3000) {
     return {
       success: true,
       duplicate: true,

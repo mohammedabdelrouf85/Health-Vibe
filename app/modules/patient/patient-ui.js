@@ -87,7 +87,9 @@
     if (!isoString) return TIME_PERIODS.morning;
     const d = new Date(isoString);
     if (isNaN(d.getTime())) return TIME_PERIODS.morning;
-    const hours = d.getHours();
+    const hours = (typeof isoString === 'string' && (isoString.endsWith('Z') || isoString.includes('+')))
+      ? d.getUTCHours()
+      : d.getHours();
     if (hours >= 5 && hours < 12) return TIME_PERIODS.morning;
     if (hours >= 12 && hours < 17) return TIME_PERIODS.afternoon;
     if (hours >= 17 && hours < 22) return TIME_PERIODS.evening;

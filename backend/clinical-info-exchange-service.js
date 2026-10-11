@@ -234,8 +234,9 @@ class ClinicalInfoExchangeService {
 
     // 2. State Transition Check: Case must be under_review
     if (clinicalCase.status !== 'under_review') {
-      const err = new Error(`Cannot request more information when case is in status '${clinicalCase.status}'. Valid source status is 'under_review'.`);
-      err.code = 'INVALID_CASE_STATUS_TRANSITION';
+      const isClosed = clinicalCase.status === 'closed';
+      const err = new Error(isClosed ? 'Case is closed and cannot receive more information requests.' : `Cannot request more information when case is in status '${clinicalCase.status}'. Valid source status is 'under_review'.`);
+      err.code = isClosed ? 'CASE_CLOSED' : 'INVALID_CASE_STATUS_TRANSITION';
       err.statusCode = 400;
       throw err;
     }
