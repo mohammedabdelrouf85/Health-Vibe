@@ -14454,9 +14454,18 @@ if (checkVerificationBtn) {
   checkVerificationBtn.addEventListener("click", checkEmailVerification);
 }
 
-// ── Choice Buttons — Toggle Active State ──────────────────────────────
-// Single-select: ضيق التنفس + درجة الكحة
-["breathingChoices", "coughChoices"].forEach((groupId) => {
+// ── Choice Buttons — Toggle Active State & Reactive Questionnaire Logic ────
+// Single-select: ضيق التنفس + درجة الكحة + ألم الصدر + تطور الأعراض + عدوى حديثة + ربو/COPD
+const SINGLE_SELECT_CHOICE_GROUPS = [
+  "breathingChoices",
+  "coughChoices",
+  "chestPainChoices",
+  "symptomProgressionChoices",
+  "recentInfectionChoices",
+  "asthmaCopdChoices"
+];
+
+SINGLE_SELECT_CHOICE_GROUPS.forEach((groupId) => {
   const group = document.getElementById(groupId);
   if (!group) return;
   group.addEventListener("click", (e) => {
@@ -14464,6 +14473,24 @@ if (checkVerificationBtn) {
     if (!btn) return;
     group.querySelectorAll(".choice").forEach((b) => b.classList.remove("active"));
     btn.classList.add("active");
+
+    // Conditional Branching & Reactive State Updates:
+    // 1. If Chest Pain is 'نعم' / 'Yes', trigger urgent clinical guidance warning
+    if (groupId === "chestPainChoices") {
+      const choiceVal = btn.textContent.trim().toLowerCase();
+      const isChestPainYes = choiceVal === "نعم" || choiceVal === "yes";
+      const o2Warning = document.getElementById("oxygenWarning");
+      if (isChestPainYes && o2Warning) {
+        o2Warning.hidden = false;
+        o2Warning.innerHTML = currentLanguage === "en"
+          ? "🚨 <strong>Urgent Note:</strong> Severe or acute chest pain requires emergency medical assessment (Call 123)."
+          : "🚨 <strong>تنبيه عاجل:</strong> ألم الصدر الحاد يستوجب رعاية طبية طارئة فورية (اتصل بـ 123).";
+      }
+    }
+
+    // 2. Update reactive progress & draft
+    if (typeof updateAssessmentProgress === "function") updateAssessmentProgress();
+    if (typeof scheduleAssessmentDraftSave === "function") scheduleAssessmentDraftSave();
   });
 });
 
@@ -14474,16 +14501,18 @@ if (riskGroup) {
     const btn = e.target.closest(".choice");
     if (!btn) return;
     // إذا اختار "لا يوجد" يُلغي باقي الخيارات
-    if (btn.textContent.trim() === "لا يوجد") {
+    if (btn.textContent.trim() === "لا يوجد" || btn.textContent.trim().toLowerCase() === "none") {
       riskGroup.querySelectorAll(".choice").forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
     } else {
       // إلغاء تنشيط "لا يوجد" عند اختيار عامل خطر
       riskGroup.querySelectorAll(".choice").forEach((b) => {
-        if (b.textContent.trim() === "لا يوجد") b.classList.remove("active");
+        if (b.textContent.trim() === "لا يوجد" || b.textContent.trim().toLowerCase() === "none") b.classList.remove("active");
       });
       btn.classList.toggle("active");
     }
+    if (typeof updateAssessmentProgress === "function") updateAssessmentProgress();
+    if (typeof scheduleAssessmentDraftSave === "function") scheduleAssessmentDraftSave();
   });
 }
 
@@ -15118,11 +15147,19 @@ function initAssessmentDraftAutosave() {
   });
   document.getElementById("btnAssessmentPrev")?.addEventListener("click", () => {
     saveAssessmentDraftNow();
-    showScreen("profile");
+    if (typeof showScreen === "function") {
+      showScreen("patient");
+    }
   });
   document.getElementById("btnAssessmentNext")?.addEventListener("click", () => {
     saveAssessmentDraftNow();
-    document.getElementById("submitAssessment")?.focus();
+    const submitBtn = document.getElementById("submitAssessment");
+    if (submitBtn) {
+      submitBtn.scrollIntoView({ behavior: "smooth", block: "center" });
+      submitBtn.focus();
+    }
+    const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+    showToast(isEn ? "All steps reviewed. Ready to submit to doctor." : "تم مراجعة كافة الخطوات. جاهز للإرسال إلى الطبيب.");
   });
 }
 
