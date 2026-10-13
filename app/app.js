@@ -497,21 +497,45 @@ function hasPermission(permission) {
   return perms.includes(permission);
 }
 
-function canAccessScreen(screenName) {
+function canAccessScreen(screenName, targetRole) {
   const user = (typeof getActiveUser === "function") ? getActiveUser() : ((typeof auth !== "undefined" && auth) ? auth.currentUser : null);
   const isOwner = Boolean(user && isOwnerUser(user));
-  // Resolve the active role: respect selectedRole (owner may be testing as patient/doctor).
-  const role = normalizeRole((typeof selectedRole !== "undefined" && selectedRole) ? selectedRole : (user?.role || ROLES.PATIENT), isOwner);
+  // Resolve the active role: respect targetRole, selectedRole, or user.role
+  const effectiveRole = targetRole || ((typeof selectedRole !== "undefined" && selectedRole) ? selectedRole : (user?.role || ROLES.PATIENT));
+  const role = normalizeRole(effectiveRole, isOwner && !targetRole);
   if (screenName === "verification" && tempAllowDoctorApplication && role === ROLES.PATIENT) {
     return true;
   }
   const allowed = ROLE_ALLOWED_SCREENS[role] || ROLE_ALLOWED_SCREENS[ROLES.PATIENT];
-  if (role === ROLES.SUPER_ADMIN) {
-    return allowed.includes(screenName);
-  }
-  return allowed.includes(screenName);
+  return Boolean(allowed && allowed.includes(screenName));
 }
-window.setSelectedRole = function(r) { selectedRole = r; };
+window.setSelectedRole = function(r) {
+  selectedRole = r;
+  const displayRole = normalizeRole(r);
+  if (typeof accountLabel !== "undefined" && accountLabel) {
+    accountLabel.textContent = currentLanguage === "en"
+      ? (englishRoleLabels[displayRole] || englishRoleLabels.patient)
+      : (roleLabels[displayRole] || roleLabels.patient);
+  }
+  if (typeof updateEmailVerificationUI === "function") {
+    try {
+      updateEmailVerificationUI((typeof auth !== "undefined" && auth) ? auth.currentUser : null);
+    } catch(e) {}
+  }
+  if (typeof updateNavVisibility === "function") {
+    updateNavVisibility();
+  }
+  if (typeof updateMobileBottomNav === "function") {
+    updateMobileBottomNav();
+  }
+  const curScreen = window.activeScreen || (typeof activeScreen !== "undefined" ? activeScreen : null);
+  if (curScreen && typeof canAccessScreen === "function" && !canAccessScreen(curScreen, r)) {
+    const fallback = typeof getRoleDefaultScreen === "function" ? getRoleDefaultScreen(r) : "patient";
+    if (typeof showScreen === "function") {
+      showScreen(fallback);
+    }
+  }
+};
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -1814,6 +1838,7 @@ function clearActiveSession() {
   try {
     purgeSensitiveLegacyStorage();
     localStorage.removeItem("hv_active_screen");
+    sessionStorage.removeItem("hv_active_screen");
     document.documentElement.classList.remove("hv-has-session");
   } catch(e) {}
 }
@@ -5658,9 +5683,18 @@ function transitionToApp(user, options = {}) {
   }
   if (navigate && typeof showScreen === "function") {
     let savedScreen = "";
-    try { savedScreen = ""; } catch(e) {}
+    try {
+      savedScreen = sessionStorage.getItem("hv_active_screen") || "";
+    } catch(e) {}
+    const initialParams = new URLSearchParams(window.location.search);
+    const urlScreen = initialParams.get("screen");
     const defaultScreen = getRoleDefaultScreen(selectedRole);
-    const targetScreen = (savedScreen && canAccessScreen(savedScreen)) ? savedScreen : defaultScreen;
+    let targetScreen = defaultScreen;
+    if (urlScreen && canAccessScreen(urlScreen, selectedRole)) {
+      targetScreen = urlScreen;
+    } else if (savedScreen && canAccessScreen(savedScreen, selectedRole)) {
+      targetScreen = savedScreen;
+    }
     showScreen(targetScreen);
   }
   applyLanguage(currentLanguage);
@@ -6548,6 +6582,14 @@ function updateNavVisibility() {
     btn.style.display = canAccessScreen(screen) ? "flex" : "none";
   });
 
+  // Manage visibility of the expandable Disease Category container
+  const navGroupDisease = document.getElementById("navGroupDisease");
+  if (navGroupDisease) {
+    const diseaseScreens = ["diabetes", "hypertension", "blood-disorders", "obesity"];
+    const hasAnyDisease = diseaseScreens.some((s) => canAccessScreen(s));
+    navGroupDisease.style.display = hasAnyDisease ? "block" : "none";
+  }
+
   // Update profile doctor onboarding card visibility
   // Only patients see the apply-to-be-doctor card; doctors & admins do not.
   const docApplyCard = document.getElementById("doctorApplyCard");
@@ -7250,6 +7292,11 @@ function showScreen(name) {
   purgeSensitiveLegacyStorage();
   } catch(e) {}
 
+  window.activeScreen = name;
+  try {
+    sessionStorage.setItem("hv_active_screen", name);
+  } catch(e) {}
+
   updateNavVisibility();
 
   document.querySelectorAll(".screen").forEach((screen) => {
@@ -7257,11 +7304,22 @@ function showScreen(name) {
   });
 
   document.querySelectorAll(".nav-item").forEach((button) => {
-    button.classList.toggle("active", button.dataset.screen === name);
+    const isActive = button.dataset.screen === name;
+    button.classList.toggle("active", isActive);
+    if (isActive) {
+      button.setAttribute("aria-current", "page");
+    } else {
+      button.removeAttribute("aria-current");
+    }
   });
 
   const DISEASE_SCREENS = ["diabetes", "hypertension", "blood-disorders", "obesity"];
-  if (DISEASE_SCREENS.includes(name)) {
+  const isDiseaseChild = DISEASE_SCREENS.includes(name);
+  const navCategoryDisease = document.getElementById("navCategoryDisease");
+  if (navCategoryDisease) {
+    navCategoryDisease.classList.toggle("has-active-child", isDiseaseChild);
+  }
+  if (isDiseaseChild) {
     if (typeof toggleDiseaseCategory === "function") {
       toggleDiseaseCategory(true);
     }
@@ -7269,7 +7327,13 @@ function showScreen(name) {
 
   // Update mobile bottom nav active item
   document.querySelectorAll(".mobile-nav-btn").forEach((button) => {
-    button.classList.toggle("active", button.dataset.mobileScreen === name);
+    const isActive = button.dataset.mobileScreen === name;
+    button.classList.toggle("active", isActive);
+    if (isActive) {
+      button.setAttribute("aria-current", "page");
+    } else {
+      button.removeAttribute("aria-current");
+    }
   });
 
   if (window.operationalSwitchesClient && typeof window.operationalSwitchesClient.renderAvailabilityBanners === "function") {
@@ -7324,6 +7388,9 @@ function showScreen(name) {
   }
   if (name === "obesity") {
     renderObesityModule();
+  }
+  if (name === "diabetes") {
+    renderDiabetesModule();
   }
   if (name === "admin") {
     renderAdminMetrics();
@@ -9483,6 +9550,96 @@ async function renderObesityModule() {
 
 window.renderObesityModule = renderObesityModule;
 window.loadObesityModule = renderObesityModule;
+
+async function renderDiabetesModule() {
+  const container = document.getElementById("diabetesViewContainer");
+  if (!container) return;
+
+  const isEn = (currentLanguage || "ar") === "en";
+  const user = (typeof auth !== "undefined" && auth) ? auth.currentUser : null;
+
+  container.innerHTML = `
+    <div style="text-align: center; padding: 36px 16px; color: var(--muted);">
+      <div class="spinner" style="margin: 0 auto 12px; width: 24px; height: 24px;"></div>
+      <p style="font-size: 13.5px; margin: 0;">${isEn ? "Loading Diabetes & Glycemic Management Module..." : "جاري استرجاع منظومة السكري وإدارة نسبة السكر..."}</p>
+    </div>
+  `;
+
+  let readings = [];
+  let cases = [];
+
+  // 1. Direct service fallback if in Node or shared instance
+  const diaSvc = (typeof window !== "undefined" && window.diabetesService) || (typeof global !== "undefined" && global.diabetesService);
+  if (diaSvc && user?.uid) {
+    readings = diaSvc.getPatientReadings(user.uid);
+    cases = diaSvc.getPatientCases(user.uid);
+  }
+
+  // 2. Authoritative REST API query
+  if (readings.length === 0 && user?.uid && typeof fetch === "function") {
+    try {
+      const token = await (user?.getIdToken ? user.getIdToken() : Promise.resolve(null));
+      const headers = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const res = await fetch(`/api/diabetes/patient/${user.uid}/measurements`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.measurements)) {
+          readings = data.measurements;
+        }
+      }
+
+      const casesRes = await fetch(`/api/diabetes/patient/${user.uid}/cases`, { headers });
+      if (casesRes.ok) {
+        const casesData = await casesRes.json();
+        if (Array.isArray(casesData.cases)) {
+          cases = casesData.cases;
+        }
+      }
+    } catch (e) {
+      // Backend error - graceful fallback
+    }
+  }
+
+  // 3. Render UI with DiabetesUI module
+  if (window.HealthVibes?.DiabetesUI?.renderDiabetesScreen) {
+    window.HealthVibes.DiabetesUI.renderDiabetesScreen(container, {
+      readings,
+      cases,
+      currentCase: cases.length > 0 ? cases[0] : null,
+      isEn,
+      currentUser: user || { role: "patient" },
+      onRecordReading: async (newReading) => {
+        if (diaSvc && user?.uid) {
+          diaSvc.recordGlucoseReading({ ...newReading, patientId: user.uid });
+          renderDiabetesModule();
+        } else if (typeof fetch === "function" && user?.uid) {
+          try {
+            const token = await (user?.getIdToken ? user.getIdToken() : Promise.resolve(null));
+            const headers = { "Content-Type": "application/json" };
+            if (token) headers["Authorization"] = `Bearer ${token}`;
+            await fetch("/api/diabetes/measurements", {
+              method: "POST",
+              headers,
+              body: JSON.stringify({ ...newReading, patientId: user.uid })
+            });
+            renderDiabetesModule();
+          } catch (e) {}
+        }
+      }
+    });
+  } else {
+    container.innerHTML = `
+      <div style="padding: 24px; text-align: center; color: var(--amber);">
+        <span>⚠️</span> ${isEn ? "Diabetes UI module not loaded." : "تعذر تحميل واجهة السكري وإدارة الجلوكوز."}
+      </div>
+    `;
+  }
+}
+
+window.renderDiabetesModule = renderDiabetesModule;
+window.loadDiabetesModule = renderDiabetesModule;
 
 // ============================================================================
 // 📅 CLINICAL APPOINTMENTS BOOKING & MANAGEMENT ENGINE
@@ -16196,10 +16353,18 @@ function checkUrlAuthAction() {
 
 const initialParams = new URLSearchParams(window.location.search);
 const initialScreen = initialParams.get("screen");
-if (initialScreen === "verify-report" || initialScreen === "verify") {
-  showScreen("verify-report");
+let bootSavedScreen = "";
+try {
+  bootSavedScreen = sessionStorage.getItem("hv_active_screen") || "";
+} catch(e) {}
+
+if (initialScreen && typeof canAccessScreen === "function" && canAccessScreen(initialScreen, selectedRole)) {
+  showScreen(initialScreen);
+} else if (bootSavedScreen && typeof canAccessScreen === "function" && canAccessScreen(bootSavedScreen, selectedRole)) {
+  showScreen(bootSavedScreen);
 } else {
-  showScreen("patient");
+  const defaultScreen = typeof getRoleDefaultScreen === "function" ? getRoleDefaultScreen(selectedRole) : "patient";
+  showScreen(defaultScreen);
 }
 bindScreenNavigation();
 applyLanguage(currentLanguage);
@@ -17737,8 +17902,17 @@ function updateMobileBottomNav() {
       { screen: "profile", icon: "👤", label: isEn ? "Profile" : "الملف" },
       { isMenu: true, icon: "☰", label: isEn ? "Menu" : "المزيد" }
     ];
+  } else if (currentRole === ROLES.CLINIC_ADMIN) {
+    // Clinic Admin: dashboard, doctor queue, appointments, kpis, menu
+    items = [
+      { screen: "admin", icon: "⚙️", label: isEn ? "Admin" : "الإدارة" },
+      { screen: "doctor", icon: "🩺", label: isEn ? "Cases" : "الحالات" },
+      { screen: "appointments", icon: "📅", label: isEn ? "Appts" : "المواعيد" },
+      { screen: "kpi", icon: "📊", label: isEn ? "KPIs" : "المؤشرات" },
+      { isMenu: true, icon: "☰", label: isEn ? "Menu" : "المزيد" }
+    ];
   } else if (isAdminRole(currentRole)) {
-    // Admin / Owner
+    // Super Admin / Owner
     items = [
       { screen: "admin", icon: "⚙️", label: isEn ? "Admin" : "الإدارة" },
       { screen: "kpi", icon: "📊", label: isEn ? "KPIs" : "المؤشرات" },
@@ -17757,9 +17931,7 @@ function updateMobileBottomNav() {
     ];
   }
 
-  const activeScreenName = (typeof activeScreen !== "undefined" && activeScreen)
-    ? activeScreen
-    : getRoleDefaultScreen(currentRole);
+  const activeScreenName = window.activeScreen || (typeof activeScreen !== "undefined" && activeScreen ? activeScreen : getRoleDefaultScreen(currentRole));
 
   navContainer.innerHTML = items.map(item => {
     if (item.isMenu) {
@@ -17772,7 +17944,7 @@ function updateMobileBottomNav() {
     }
     const isActive = activeScreenName === item.screen;
     return `
-      <button type="button" class="mobile-nav-btn ${isActive ? 'active' : ''}" data-mobile-screen="${item.screen}" onclick="showScreen('${item.screen}')" aria-label="${item.label}">
+      <button type="button" class="mobile-nav-btn ${isActive ? 'active' : ''}" data-mobile-screen="${item.screen}" onclick="showScreen('${item.screen}')" aria-label="${item.label}" ${isActive ? 'aria-current="page"' : ''}>
         <span class="mobile-nav-icon">${item.icon}</span>
         <span class="mobile-nav-label">${item.label}</span>
       </button>
