@@ -8,7 +8,14 @@
   const STAGING_PROJECT_ID = "health-vibes-staging";
   const DEV_PROJECT_ID = "health-vibes-dev";
   const LOCAL_HOSTS = ["localhost", "127.0.0.1", "0.0.0.0", ""];
-  const PRODUCTION_HOSTS = ["healthvibe.ai", "app.healthvibe.ai", "health-vibes-a4b3b.web.app", "health-vibes-a4b3b.firebaseapp.com"];
+  const PRODUCTION_HOSTS = [
+    "healthvibes.app",
+    "www.healthvibes.app",
+    "healthvibe.ai",
+    "app.healthvibe.ai",
+    "health-vibes-a4b3b.web.app",
+    "health-vibes-a4b3b.firebaseapp.com"
+  ];
   const STAGING_HOSTS = ["staging.healthvibe.ai", "health-vibes-staging.web.app", "health-vibes-staging.firebaseapp.com"];
 
   // Live Production Firebase Project Configuration
