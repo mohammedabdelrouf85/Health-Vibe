@@ -78,16 +78,240 @@
     const submitBtn = document.getElementById("authSubmitBtn");
     const submitText = document.getElementById("authSubmitText");
     const isEn = typeof global.currentLanguage !== "undefined" && global.currentLanguage === "en";
+    const isSignUp = currentAuthMode === "signup";
+    const isLoading = Boolean(loading);
 
-    if (submitBtn) submitBtn.disabled = Boolean(loading);
+    if (submitBtn) {
+      submitBtn.disabled = isLoading;
+      if (isLoading) {
+        submitBtn.setAttribute("aria-busy", "true");
+      } else {
+        submitBtn.removeAttribute("aria-busy");
+      }
+    }
+
     if (submitText) {
-      if (loading) {
+      if (isLoading) {
         submitText.textContent = isEn ? "Please wait..." : "يرجى الانتظار...";
       } else {
-        submitText.textContent = currentAuthMode === "signup"
+        submitText.textContent = isSignUp
           ? (isEn ? "Create Account" : "إنشاء حساب")
           : (isEn ? "Sign In" : "تسجيل الدخول");
       }
+    }
+
+    // Disable / re-enable all input controls and action buttons
+    const inputIds = [
+      "authEmail",
+      "authPassword",
+      "authName",
+      "rememberMe",
+      "googleLogin",
+      "authTabSignIn",
+      "authTabSignUp",
+      "forgotPasswordBtn"
+    ];
+    inputIds.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.disabled = isLoading;
+    });
+
+    const form = document.getElementById("authEmailForm");
+    if (form) {
+      form.querySelectorAll("input, button, select, textarea").forEach((ctrl) => {
+        ctrl.disabled = isLoading;
+      });
+    }
+  }
+
+  function clearAuthError() {
+    const banner = document.getElementById("authErrorBanner");
+    if (banner) {
+      banner.innerHTML = "";
+      banner.style.display = "none";
+      banner.removeAttribute("aria-live");
+    }
+  }
+
+  function showAuthError(messageOrErr) {
+    const banner = document.getElementById("authErrorBanner");
+    const isEn = typeof global.currentLanguage !== "undefined" && global.currentLanguage === "en";
+
+    let friendly = null;
+    const errorHandler = global.HealthVibes?.ErrorHandler;
+    if (errorHandler && typeof errorHandler.toFriendlyAppError === "function") {
+      friendly = errorHandler.toFriendlyAppError(messageOrErr);
+    } else if (typeof global.toFriendlyAppError === "function") {
+      friendly = global.toFriendlyAppError(messageOrErr);
+    } else {
+      const rawMsg = typeof messageOrErr === "string" ? messageOrErr : (messageOrErr?.message || (isEn ? "Authentication failed." : "تعذر استكمال المصادقة."));
+      friendly = {
+        icon: "⚠️",
+        title: isEn ? "Authentication Error" : "خطأ في المصادقة",
+        message: rawMsg,
+        action: isEn ? "Please verify your input and try again." : "يرجى مراجعة البيانات المدخلة والمحاولة مجدداً."
+      };
+    }
+
+    if (banner && friendly) {
+      banner.setAttribute("role", "alert");
+      banner.setAttribute("aria-live", "assertive");
+      banner.innerHTML = `
+        <div style="display: flex; align-items: flex-start; gap: 10px; text-align: start;">
+          <span style="font-size: 20px; line-height: 1;">${friendly.icon}</span>
+          <div>
+            <strong style="display: block; font-size: 13.5px; margin-bottom: 2px;">${friendly.title}</strong>
+            <span style="display: block; font-size: 12px; opacity: 0.95; line-height: 1.4;">${friendly.message}</span>
+            <small style="display: block; font-size: 11px; margin-top: 4px; opacity: 0.85;">💡 ${friendly.action}</small>
+          </div>
+        </div>
+      `;
+      banner.style.display = "block";
+      try {
+        banner.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      } catch (_) {}
+    }
+
+    if (typeof global.showToast === "function" && friendly) {
+      global.showToast(`${friendly.icon} ${friendly.title}`);
+    }
+
+    return friendly;
+  }
+
+  async function handleAuthSubmit(event) {
+    if (event && event.preventDefault) event.preventDefault();
+    clearAuthError();
+
+    const isEn = typeof global.currentLanguage !== "undefined" && global.currentLanguage === "en";
+    const emailInput = document.getElementById("authEmail");
+    const passwordInput = document.getElementById("authPassword");
+    const nameInput = document.getElementById("authName");
+    const rememberCheckbox = document.getElementById("rememberMe");
+
+    const email = emailInput ? emailInput.value.trim() : "";
+    const password = passwordInput ? passwordInput.value : "";
+    const name = nameInput ? nameInput.value.trim() : "";
+    const remember = rememberCheckbox ? rememberCheckbox.checked : true;
+
+    if (!email || !password) {
+      showAuthError({
+        code: "auth/missing-fields",
+        title: isEn ? "Required Information Missing" : "بيانات مطلوبة مفقودة",
+        message: isEn
+          ? (currentAuthMode === "signup" ? "Please fill in all required fields (Name, Email, and Password)." : "Please enter both your email address and password.")
+          : (currentAuthMode === "signup" ? "يرجى كتابة الاسم والبريد الإلكتروني وكلمة المرور للمتابعة." : "يرجى كتابة البريد الإلكتروني وكلمة المرور للمتابعة."),
+        action: isEn ? "Review the highlighted input fields above and try again." : "تحقق من حقول الإدخال أعلاه ثم حاول ثانية.",
+        icon: "⚠️"
+      });
+      return;
+    }
+
+    if (currentAuthMode === "signup" && !name) {
+      showAuthError({
+        code: "auth/missing-name",
+        title: isEn ? "Full Name Required" : "الاسم الكامل مطلوب",
+        message: isEn ? "Please enter your full name to create an account." : "يرجى إدخال اسمك بالكامل لإنشاء الحساب الطبي.",
+        action: isEn ? "Enter your real name so doctors can identify your consultations." : "أدخل اسمك الحقيقي لتسهيل التعرف على استشاراتك وسجلاتك الطبية.",
+        icon: "👤"
+      });
+      return;
+    }
+
+    if (password.length < 6) {
+      showAuthError({
+        code: "auth/weak-password",
+        title: isEn ? "Password Too Short" : "كلمة المرور قصيرة",
+        message: isEn ? "Password must contain at least 6 characters." : "يجب ألا تقل كلمة المرور عن 6 خانات للأمان الطبي.",
+        action: isEn ? "Choose a stronger password with letters, numbers, and symbols." : "اختر كلمة مرور أقوى تحتوي على حروف وأرقام ورموز.",
+        icon: "🔑"
+      });
+      return;
+    }
+
+    setAuthLoading(true);
+
+    try {
+      const authService = global.HealthVibes?.AuthService;
+      let user = null;
+
+      if (currentAuthMode === "signup") {
+        if (authService && typeof authService.registerWithCredentials === "function") {
+          user = await authService.registerWithCredentials(email, password, name);
+        } else if (global.auth) {
+          if (typeof global.applyAuthPersistence === "function") {
+            try { await global.applyAuthPersistence(remember); } catch (_) {}
+          }
+          const cred = await global.auth.createUserWithEmailAndPassword(email, password);
+          user = cred.user;
+          const displayName = name || email.split("@")[0];
+          try { await user.updateProfile({ displayName }); } catch (_) {}
+          if (global.db) {
+            try {
+              const writePromise = global.db.collection("users").doc(user.uid).set({
+                name: displayName,
+                email: user.email,
+                role: "patient",
+                status: "active",
+                createdAt: global.firebase?.firestore?.FieldValue?.serverTimestamp() || new Date()
+              }, { merge: true });
+              await Promise.race([writePromise, new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 7000))]);
+            } catch (dbErr) {
+              console.warn("[AuthUI] Firestore init warning:", dbErr);
+            }
+          }
+          try { await user.sendEmailVerification(); } catch (_) {}
+        }
+
+        if (typeof global.saveActiveSession === "function") {
+          global.saveActiveSession(user, "patient");
+        } else if (authService?.saveActiveSession) {
+          authService.saveActiveSession(user, "patient");
+        }
+
+        if (typeof global.showToast === "function") {
+          global.showToast(isEn ? "Account created successfully!" : "تم إنشاء الحساب بنجاح!");
+        }
+
+        if (typeof global.transitionToApp === "function") {
+          global.transitionToApp(user);
+        } else {
+          closeAuthModal();
+        }
+      } else {
+        if (authService && typeof authService.signInWithCredentials === "function") {
+          const cred = await authService.signInWithCredentials(email, password, remember);
+          user = cred.user;
+        } else if (global.auth) {
+          if (typeof global.applyAuthPersistence === "function") {
+            try { await global.applyAuthPersistence(remember); } catch (_) {}
+          }
+          const cred = await global.auth.signInWithEmailAndPassword(email, password);
+          user = cred.user || global.auth.currentUser;
+        }
+
+        const role = global.selectedRole || "patient";
+        if (typeof global.saveActiveSession === "function") {
+          global.saveActiveSession(user, role);
+        } else if (authService?.saveActiveSession) {
+          authService.saveActiveSession(user, role);
+        }
+
+        if (typeof global.showToast === "function") {
+          global.showToast(isEn ? "Signed in successfully!" : "تم تسجيل الدخول بنجاح!");
+        }
+
+        if (typeof global.transitionToApp === "function") {
+          global.transitionToApp(user);
+        } else {
+          closeAuthModal();
+        }
+      }
+    } catch (err) {
+      console.error("[AuthUI] Auth submission failed:", err);
+      showAuthError(err);
+    } finally {
+      setAuthLoading(false);
     }
   }
 
@@ -430,7 +654,10 @@
     setAuthMode,
     showAuthModal,
     closeAuthModal,
-    setAuthLoading
+    setAuthLoading,
+    clearAuthError,
+    showAuthError,
+    handleAuthSubmit
   };
 
   const AuthLinkingUI = {

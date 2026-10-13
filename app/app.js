@@ -5660,19 +5660,53 @@ function clearAuthError() {
   if (authErrorBanner) {
     authErrorBanner.innerHTML = "";
     authErrorBanner.style.display = "none";
+    authErrorBanner.removeAttribute("aria-live");
   }
 }
 
 function setAuthLoading(loading) {
-  if (!authSubmitBtn) return;
-  authSubmitBtn.disabled = loading;
-  if (authSubmitText) {
-    if (loading) {
-      authSubmitText.textContent = currentLanguage === "en" ? "Please wait..." : "يرجى الانتظار...";
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  const isSignUp = authMode === "signup";
+  const isLoading = Boolean(loading);
+
+  if (authSubmitBtn) {
+    authSubmitBtn.disabled = isLoading;
+    if (isLoading) {
+      authSubmitBtn.setAttribute("aria-busy", "true");
     } else {
-      const isEn = currentLanguage === "en";
-      authSubmitText.textContent = authMode === "signup" ? (isEn ? "Create Account" : "إنشاء حساب") : (isEn ? "Sign In" : "تسجيل الدخول");
+      authSubmitBtn.removeAttribute("aria-busy");
     }
+  }
+
+  if (authSubmitText) {
+    if (isLoading) {
+      authSubmitText.textContent = isEn ? "Please wait..." : "يرجى الانتظار...";
+    } else {
+      authSubmitText.textContent = isSignUp
+        ? (isEn ? "Create Account" : "إنشاء حساب")
+        : (isEn ? "Sign In" : "تسجيل الدخول");
+    }
+  }
+
+  // Re-enable or disable all inputs and buttons on the auth screen/form
+  [authEmail, authPassword, authName].forEach((input) => {
+    if (input) input.disabled = isLoading;
+  });
+
+  const rememberMeEl = document.getElementById("rememberMe");
+  if (rememberMeEl) rememberMeEl.disabled = isLoading;
+
+  const googleBtn = document.getElementById("googleLogin");
+  if (googleBtn) googleBtn.disabled = isLoading;
+
+  if (authTabSignIn) authTabSignIn.disabled = isLoading;
+  if (authTabSignUp) authTabSignUp.disabled = isLoading;
+  if (forgotPasswordBtn) forgotPasswordBtn.disabled = isLoading;
+
+  if (authEmailForm) {
+    authEmailForm.querySelectorAll("input, button, select, textarea").forEach((ctrl) => {
+      ctrl.disabled = isLoading;
+    });
   }
 }
 
@@ -5685,20 +5719,58 @@ async function handleEmailAuth(e) {
   if (e) e.preventDefault();
   clearAuthError();
 
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
   const email = authEmail ? authEmail.value.trim() : "";
   const password = authPassword ? authPassword.value : "";
   const name = authName ? authName.value.trim() : "";
   const remember = shouldRememberSession();
 
   if (!email || !password) {
-    showAuthError(currentLanguage === "en" ? "Please enter email and password." : "يرجى كتابة البريد الإلكتروني وكلمة المرور.");
+    showAuthError({
+      code: "auth/missing-fields",
+      title: isEn ? "Required Information Missing" : "بيانات مطلوبة مفقودة",
+      message: isEn
+        ? (authMode === "signup" ? "Please fill in all required fields (Name, Email, and Password)." : "Please enter both your email address and password.")
+        : (authMode === "signup" ? "يرجى كتابة الاسم والبريد الإلكتروني وكلمة المرور للمتابعة." : "يرجى كتابة البريد الإلكتروني وكلمة المرور للمتابعة."),
+      action: isEn ? "Review the highlighted input fields above and try again." : "تحقق من حقول الإدخال أعلاه ثم حاول ثانية.",
+      icon: "⚠️"
+    });
+    return;
+  }
+
+  if (authMode === "signup" && !name) {
+    showAuthError({
+      code: "auth/missing-name",
+      title: isEn ? "Full Name Required" : "الاسم الكامل مطلوب",
+      message: isEn ? "Please enter your full name to create an account." : "يرجى إدخال اسمك بالكامل لإنشاء الحساب الطبي.",
+      action: isEn ? "Enter your real name so doctors can identify your consultations." : "أدخل اسمك الحقيقي لتسهيل التعرف على استشاراتك وسجلاتك الطبية.",
+      icon: "👤"
+    });
+    return;
+  }
+
+  if (password.length < 6) {
+    showAuthError({
+      code: "auth/weak-password",
+      title: isEn ? "Password Too Short" : "كلمة المرور قصيرة",
+      message: isEn ? "Password must contain at least 6 characters." : "يجب ألا تقل كلمة المرور عن 6 خانات للأمان الطبي.",
+      action: isEn ? "Choose a stronger password with letters, numbers, and symbols." : "اختر كلمة مرور أقوى تحتوي على حروف وأرقام ورموز.",
+      icon: "🔑"
+    });
     return;
   }
 
   setAuthLoading(true);
 
   try {
-    await applyAuthPersistence(remember);
+    try {
+      await Promise.race([
+        applyAuthPersistence(remember),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("persistence_timeout")), 4000))
+      ]);
+    } catch (persErr) {
+      console.warn("Auth persistence warning:", persErr);
+    }
 
     if (authMode === "signup") {
       const cred = await auth.createUserWithEmailAndPassword(email, password);
@@ -5713,31 +5785,37 @@ async function handleEmailAuth(e) {
       const safeRole = normalizeRole(ROLES.PATIENT, isOwner);
       selectedRole = safeRole;
 
-      await db.collection("users").doc(user.uid).set({
-        name: displayName,
-        email: user.email,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-      }, { merge: true });
+      try {
+        const firestoreWritePromise = db.collection("users").doc(user.uid).set({
+          name: displayName,
+          email: user.email,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        await Promise.race([firestoreWritePromise, new Promise((_, rej) => setTimeout(() => rej(new Error("firestore_timeout")), 7000))]);
+      } catch (docErr) {
+        console.warn("Firestore user document init warning:", docErr);
+      }
 
       try {
         await user.sendEmailVerification();
-        showToast(currentLanguage === "en" ? `Verification link sent! Check Inbox or Spam folder.` : `تم إرسال رابط التأكيد! يرجى فحص البريد الوارد أو مجلد Spam.`);
+        showToast(isEn ? `Verification link sent! Check Inbox or Spam folder.` : `تم إرسال رابط التأكيد! يرجى فحص البريد الوارد أو مجلد Spam.`);
       } catch (verErr) {
         console.error("sendEmailVerification error:", verErr);
         showToast(getAuthErrorMessage(verErr));
       }
       saveActiveSession(user, selectedRole);
+      showToast(isEn ? "Account created successfully!" : "تم إنشاء الحساب بنجاح!");
       transitionToApp(user);
     } else {
       const cred = await auth.signInWithEmailAndPassword(email, password);
       const user = cred.user || auth.currentUser;
       saveActiveSession(user, selectedRole);
-      showToast(currentLanguage === "en" ? "Signed in successfully!" : "تم تسجيل الدخول بنجاح!");
+      showToast(isEn ? "Signed in successfully!" : "تم تسجيل الدخول بنجاح!");
       transitionToApp(user);
     }
   } catch (error) {
     console.error("Firebase Auth Error:", error);
-    showAuthError(getAuthErrorMessage(error));
+    showAuthError(error);
   } finally {
     setAuthLoading(false);
   }

@@ -80,7 +80,6 @@ const operationalSwitchesService = require('./operational-switches-service');
 const caseHandoverService = require('./case-handover-service');
 const bloodDisordersService = require('./blood-disorders-service');
 const obesityService = require('./obesity-service');
-const diabetesService = require('./diabetes-service');
 const diseaseAuthorizationService = require('./disease-authorization-service');
 
 // =============================================================================
