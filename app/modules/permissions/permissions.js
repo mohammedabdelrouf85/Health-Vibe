@@ -107,8 +107,7 @@
       "diabetes", "hypertension", "blood-disorders", "obesity"
     ],
     [ROLES.SUPPORT]: [
-      "profile", "kpi", "verify-report",
-      "diabetes", "hypertension", "blood-disorders", "obesity"
+      "profile", "kpi", "verify-report"
     ],
     [ROLES.SUPER_ADMIN]: [
       "patient", "consent", "profile", "assessment", "pending", "result",

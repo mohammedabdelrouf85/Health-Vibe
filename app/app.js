@@ -297,8 +297,7 @@ const ROLE_ALLOWED_SCREENS = {
     "diabetes", "hypertension", "blood-disorders", "obesity"
   ],
   [ROLES.SUPPORT]: [
-    "profile", "kpi", "verify-report", "verify",
-    "diabetes", "hypertension", "blood-disorders", "obesity"
+    "profile", "kpi", "verify-report", "verify"
   ],
   [ROLES.SUPER_ADMIN]: [
     "patient", "consent", "profile", "assessment", "pending", "result",
@@ -361,7 +360,7 @@ const CONSENT_REQUIRED_SCREENS = ["assessment"];
 function applyRouteGuards(targetScreen) {
   const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
 
-  // ── GUARD 1: Authentication ────────────────────────────────────────────────
+  // ── GUARD 1: Authentication & Account Standing ───────────────────────────
   const user = (typeof getActiveUser === "function") ? getActiveUser() : (auth && auth.currentUser);
   if (!user && AUTH_REQUIRED_SCREENS.includes(targetScreen)) {
     console.warn(`[RouteGuard] 🔒 Auth required for '${targetScreen}'. Redirecting to login.`);
@@ -375,6 +374,34 @@ function applyRouteGuards(targetScreen) {
     if (typeof setAuthMode === "function") setAuthMode("signin");
     if (typeof showAuthModal === "function") showAuthModal();
     return getRoleDefaultScreen(selectedRole); // stay on safest screen
+  }
+
+  // 🛑 Immediate Suspension Enforcement
+  const isSuspendedAccount = Boolean(
+    user && (
+      user.suspended === true ||
+      user.isSuspended === true ||
+      user.status === "suspended" ||
+      user.accountStatus === "suspended" ||
+      user.disabled === true ||
+      (typeof window !== "undefined" && window._cachedUserDoc && (
+        window._cachedUserDoc.suspended === true ||
+        window._cachedUserDoc.isSuspended === true ||
+        window._cachedUserDoc.status === "suspended" ||
+        window._cachedUserDoc.accountStatus === "suspended" ||
+        window._cachedUserDoc.disabled === true
+      ))
+    )
+  );
+  if (isSuspendedAccount) {
+    console.warn(`[RouteGuard] 🛑 Suspended account blocked from '${targetScreen}'.`);
+    if (typeof showToast === "function") {
+      showToast(isEn
+        ? "🛑 This account is suspended by platform administration."
+        : "🛑 هذا الحساب موقوف بواسطة إدارة المنصة لمراجعة أمنية."
+      );
+    }
+    return getRoleDefaultScreen(selectedRole);
   }
 
   // ── GUARD 2: Role-Based Access Control ────────────────────────────────────
@@ -5005,6 +5032,14 @@ async function selectDoctorCase(id) {
     ? window.HealthVibes.DoctorUI.renderHypertensionBpHistorySection(c, isEn)
     : '';
 
+  const bloodDisordersReviewHtml = (window.HealthVibes?.DoctorUI?.renderBloodDisordersReviewSection)
+    ? window.HealthVibes.DoctorUI.renderBloodDisordersReviewSection(c, isEn)
+    : '';
+
+  const obesityReviewHtml = (window.HealthVibes?.DoctorUI?.renderObesityReviewSection)
+    ? window.HealthVibes.DoctorUI.renderObesityReviewSection(c, isEn)
+    : '';
+
   const attachmentsHtml = (window.HealthVibes?.DoctorUI?.renderAttachmentsSection)
     ? window.HealthVibes.DoctorUI.renderAttachmentsSection(c, isEn)
     : '';
@@ -5036,6 +5071,8 @@ async function selectDoctorCase(id) {
         <div><span>${isEn ? 'Duration' : 'مدة الأعراض'}</span><strong>${isEn ? c.durationEn : c.duration}${isDemoCase ? ' (Demo Data)' : ''}</strong></div>
       </div>
       ${bpHistoryHtml}
+      ${bloodDisordersReviewHtml}
+      ${obesityReviewHtml}
       <h5 style="margin: 16px 0 6px; font-size: 13.5px; font-weight: 700; color: var(--ink);">${isEn ? 'Patient History & Answers' : 'تاريخ المريض وإجاباته'}</h5>
       ${patientDataHtml}
       ${attachmentsHtml}
@@ -7515,6 +7552,9 @@ function showScreen(name) {
   if (name === "blood-disorders") {
     renderBloodDisordersModule();
   }
+  if (name === "obesity") {
+    renderObesityModule();
+  }
   if (name === "admin") {
     renderAdminMetrics();
     renderAdminApplications();
@@ -9510,6 +9550,7 @@ async function renderBloodDisordersModule() {
 
   let conditions = [];
   let cases = [];
+  let observations = [];
 
   // 1. Direct service fallback if in Node or shared instance
   const bdSvc = (typeof window !== "undefined" && window.bloodDisordersService) || (typeof global !== "undefined" && global.bloodDisordersService);
@@ -9517,6 +9558,9 @@ async function renderBloodDisordersModule() {
     conditions = bdSvc.getRegisteredConditions();
     if (user?.uid) {
       cases = bdSvc.getPatientCases(user.uid);
+      if (typeof bdSvc.getPatientClinicalObservations === "function") {
+        observations = bdSvc.getPatientClinicalObservations(user.uid);
+      }
     }
   }
 
@@ -9543,6 +9587,14 @@ async function renderBloodDisordersModule() {
             cases = casesData.cases;
           }
         }
+
+        const obsRes = await fetch(`/api/blood-disorders/patient/${user.uid}/observations`, { headers });
+        if (obsRes.ok) {
+          const obsData = await obsRes.json();
+          if (Array.isArray(obsData.observations)) {
+            observations = obsData.observations;
+          }
+        }
       }
     } catch (e) {
       // Backend error - graceful fallback
@@ -9554,6 +9606,7 @@ async function renderBloodDisordersModule() {
     window.HealthVibes.BloodDisordersUI.renderBloodDisordersScreen(container, {
       conditions,
       cases,
+      observations,
       isEn,
       currentUser: user || { role: "patient" },
       activeTab: "conditions"
@@ -9569,6 +9622,97 @@ async function renderBloodDisordersModule() {
 
 window.renderBloodDisordersModule = renderBloodDisordersModule;
 window.loadBloodDisordersModule = renderBloodDisordersModule;
+
+async function renderObesityModule() {
+  const container = document.getElementById("obesityViewContainer");
+  if (!container) return;
+
+  const isEn = (currentLanguage || "ar") === "en";
+  const user = (typeof auth !== "undefined" && auth) ? auth.currentUser : null;
+
+  container.innerHTML = `
+    <div style="text-align: center; padding: 36px 16px; color: var(--muted);">
+      <div class="spinner" style="margin: 0 auto 12px; width: 24px; height: 24px;"></div>
+      <p style="font-size: 13.5px; margin: 0;">${isEn ? "Loading Obesity & Metabolic Health Module..." : "جاري استرجاع منظومة السمنة والصحة الأيضية..."}</p>
+    </div>
+  `;
+
+  let measurements = [];
+  let cases = [];
+
+  // 1. Direct service fallback if in Node or shared instance
+  const obSvc = (typeof window !== "undefined" && window.obesityService) || (typeof global !== "undefined" && global.obesityService);
+  if (obSvc && user?.uid) {
+    measurements = obSvc.getPatientMeasurementHistory(user.uid);
+    cases = obSvc.getPatientObesityCases(user.uid);
+  }
+
+  // 2. Authoritative REST API query
+  if (measurements.length === 0 && user?.uid && typeof fetch === "function") {
+    try {
+      const token = await (user?.getIdToken ? user.getIdToken() : Promise.resolve(null));
+      const headers = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const res = await fetch(`/api/obesity/patient/${user.uid}/measurements`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.measurements)) {
+          measurements = data.measurements;
+        }
+      }
+
+      const casesRes = await fetch(`/api/obesity/patient/${user.uid}/cases`, { headers });
+      if (casesRes.ok) {
+        const casesData = await casesRes.json();
+        if (Array.isArray(casesData.cases)) {
+          cases = casesData.cases;
+        }
+      }
+    } catch (e) {
+      // Backend error - graceful fallback
+    }
+  }
+
+  // 3. Render UI with ObesityUI module
+  if (window.HealthVibes?.ObesityUI?.renderObesityScreen) {
+    window.HealthVibes.ObesityUI.renderObesityScreen(container, {
+      measurements,
+      cases,
+      currentCase: cases.length > 0 ? cases[0] : null,
+      isEn,
+      currentUser: user || { role: "patient" },
+      activeTab: "measurements",
+      onRecordMeasurement: async (newMeas) => {
+        if (obSvc && user?.uid) {
+          obSvc.recordObesityMeasurement({ ...newMeas, patientId: user.uid });
+          renderObesityModule();
+        } else if (typeof fetch === "function" && user?.uid) {
+          try {
+            const token = await (user?.getIdToken ? user.getIdToken() : Promise.resolve(null));
+            const headers = { "Content-Type": "application/json" };
+            if (token) headers["Authorization"] = `Bearer ${token}`;
+            await fetch("/api/obesity/measurements", {
+              method: "POST",
+              headers,
+              body: JSON.stringify({ ...newMeas, patientId: user.uid })
+            });
+            renderObesityModule();
+          } catch (e) {}
+        }
+      }
+    });
+  } else {
+    container.innerHTML = `
+      <div style="padding: 24px; text-align: center; color: var(--amber);">
+        <span>⚠️</span> ${isEn ? "Obesity UI module not loaded." : "تعذر تحميل واجهة السمنة والصحة الأيضية."}
+      </div>
+    `;
+  }
+}
+
+window.renderObesityModule = renderObesityModule;
+window.loadObesityModule = renderObesityModule;
 
 // ============================================================================
 // 📅 CLINICAL APPOINTMENTS BOOKING & MANAGEMENT ENGINE
