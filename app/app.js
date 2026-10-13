@@ -1812,6 +1812,37 @@ function getActiveUser() {
   if (window._activeUser) {
     return window._activeUser;
   }
+  // Check if session is active via DOM indicator or authenticated dashboard state
+  try {
+    const isExplicitlyLoggedOut = localStorage.getItem("hv_explicit_logout") === "true" ||
+                                 sessionStorage.getItem("hv_explicit_logout") === "true";
+    if (!isExplicitlyLoggedOut) {
+      const emailElem = document.getElementById("userEmail");
+      const currentEmail = (emailElem && emailElem.textContent ? emailElem.textContent.trim() : "");
+      const hasSessionClass = document.documentElement && document.documentElement.classList.contains("hv-has-session");
+      const isAppActive = Boolean(
+        hasSessionClass ||
+        (typeof app !== "undefined" && app && !app.hidden && app.style.display !== "none") ||
+        (currentEmail && currentEmail !== "patient@example.com" && currentEmail.includes("@"))
+      );
+
+      if (isAppActive && currentEmail && currentEmail.includes("@")) {
+        const nameElem = document.getElementById("userName");
+        const displayName = (nameElem && nameElem.textContent ? nameElem.textContent.trim() : currentEmail.split("@")[0]);
+        const mockActiveUser = {
+          uid: "demo_patient_active",
+          email: currentEmail,
+          displayName: displayName,
+          emailVerified: true,
+          isDemo: true,
+          role: (typeof selectedRole !== "undefined" && selectedRole) ? selectedRole : "patient"
+        };
+        window._activeUser = mockActiveUser;
+        return mockActiveUser;
+      }
+    }
+  } catch (e) {}
+
   return null;
 }
 window.getActiveUser = getActiveUser;
@@ -5944,6 +5975,8 @@ async function handleNewPasswordSubmit(e) {
 
 function transitionToApp(user, options = {}) {
   if (!user) return;
+  window._activeUser = user;
+  window._restoredSessionUser = user;
   try {
     saveActiveSession(user, selectedRole);
   } catch(e) {}
@@ -6004,6 +6037,10 @@ window.showPublicLandingPage = showPublicLandingPage;
 
 function showAppView(event) {
   if (event && event.preventDefault) event.preventDefault();
+  if (!window._activeUser && !auth.currentUser) {
+    const user = getActiveUser();
+    if (user) window._activeUser = user;
+  }
   if (publicSite) {
     publicSite.hidden = true;
     publicSite.setAttribute("hidden", "true");
