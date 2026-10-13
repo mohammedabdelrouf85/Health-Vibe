@@ -93,13 +93,20 @@ assert(clinicsHtmlContent.includes('function handleClinicLeadSubmit('), 'Form su
 console.log('  ✓ Lead capture form, validation inputs, and async submission logic verified.\n');
 
 // -----------------------------------------------------------------------------
-// TEST 6: Bilingual Arabic & English Support
+// TEST 6: Bilingual Arabic & English Support & LocalStorage Persistence
 // -----------------------------------------------------------------------------
-console.log('▶ TEST 6: Bilingual Arabic & English Support');
+console.log('▶ TEST 6: Bilingual Arabic & English Support & LocalStorage Persistence');
 assert(clinicsHtmlContent.includes('clinicTranslations'), 'Translation dictionary declared');
 assert(clinicsHtmlContent.includes('function toggleClinicLang()'), 'Language toggle handler defined');
+assert(clinicsHtmlContent.includes('function applyClinicLang('), 'applyClinicLang function defined');
+assert(clinicsHtmlContent.includes('function initClinicLanguage()'), 'initClinicLanguage function defined');
 assert(clinicsHtmlContent.includes('id="clinicLangToggle"'), 'Language switcher button exists');
-console.log('  ✓ In-place bilingual translation engine and RTL/LTR switching verified.\n');
+assert(clinicsHtmlContent.includes('localStorage.setItem("hv_lang", lang)'), 'Persists language choice to localStorage');
+assert(clinicsHtmlContent.includes('localStorage.getItem("hv_clinic_lang")'), 'Loads language choice from localStorage');
+assert(clinicsHtmlContent.includes('compEyebrow:'), 'Contains comparison section translations');
+assert(clinicsHtmlContent.includes('pillarsEyebrow:'), 'Contains pillars section translations');
+assert(clinicsHtmlContent.includes('faq1Q:'), 'Contains FAQ section translations');
+console.log('  ✓ In-place bilingual translation engine, localStorage persistence and RTL/LTR switching verified.\n');
 
 // -----------------------------------------------------------------------------
 // TEST 7: Cross-linking & Entry Points from app/index.html
