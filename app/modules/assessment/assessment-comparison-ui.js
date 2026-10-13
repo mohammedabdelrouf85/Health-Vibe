@@ -507,7 +507,7 @@
             </div>
             <div style="font-size: 11.5px; color: var(--muted);">
               ${isEn ? "Attending Physician: " : "الطبيب المعالج: "}
-              <strong>${latest?.assignedDoctorName || latest?.reviewedBy || (isEn ? "Dr. Attending" : "طبيب الرعاية")}</strong>
+              <strong>${latest?.assignedDoctorName || latest?.reviewedBy || (isEn ? "Not provided" : "غير محدد")}</strong>
             </div>
           </div>
 
@@ -600,7 +600,7 @@
                     • ${isEn ? "Interval: " : "التكرار: "}${p.interval || "24h"}
                   </div>
                   <div style="font-size: 11.5px; color: var(--teal); margin-top: 2px;">
-                    👨‍⚕️ ${isEn ? "Approving Doctor: " : "الطبيب المعتمد: "}${p.doctorName || "Dr. Attending"}
+                    👨‍⚕️ ${isEn ? "Approving Doctor: " : "الطبيب المعتمد: "}${p.doctorName || (isEn ? "Not provided" : "غير محدد")}
                   </div>
                 </div>
                 <div>
@@ -770,7 +770,7 @@
           interval,
           priority,
           instructions,
-          doctorName: user?.displayName || user?.email || "Attending Physician"
+          doctorName: user?.displayName || user?.email || null
         })
       });
 

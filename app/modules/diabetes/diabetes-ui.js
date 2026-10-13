@@ -785,7 +785,7 @@
                     ${escapeHtml(t("diabetes.intervalDays") || "Monitoring Interval")}
                   </span>
                   <div style="font-size: 14.5px; font-weight: 700; color: var(--ink); margin-top: 4px;">
-                    🔄 ${escapeHtml(followup.intervalDays || followup.intervalDaysField?.value || "30")} ${isRtl() ? "يوم" : "days"}
+                    🔄 ${escapeHtml(followup.intervalDays || followup.intervalDaysField?.value || t("diabetes.stateNotProvided"))} ${isRtl() ? "يوم" : "days"}
                   </div>
                 </div>
               </div>
@@ -1247,7 +1247,7 @@
 
   function renderSingleAssessmentCard(asm) {
     const rev = asm.clinicalRevision || 1;
-    const authorName = asm.author?.name || asm.author?.displayName || "Author";
+    const authorName = asm.author?.name || asm.author?.displayName || t("diabetes.stateNotProvided");
     const dateFormatted = asm.lastRevisionAt ? new Date(asm.lastRevisionAt).toLocaleDateString() : "";
 
     return `
@@ -1338,8 +1338,8 @@
               ${escapeHtml(t("diabetes.sectionDoctorNotes") || "Doctor Notes")} & ${escapeHtml(t("diabetes.sectionFollowup") || "Follow-up")}
             </div>
             <div style="color: var(--muted); line-height: 1.5;">
-              <div><strong>Notes:</strong> ${escapeHtml(asm.doctorNotes?.text || "None")}</div>
-              <div><strong>Follow-up:</strong> ${escapeHtml(asm.followup?.scheduledDate || "None")} ${asm.followup?.instructions ? `(${escapeHtml(asm.followup.instructions)})` : ""}</div>
+              <div><strong>Notes:</strong> ${escapeHtml(asm.doctorNotes?.text || t("diabetes.stateNotProvided"))}</div>
+              <div><strong>Follow-up:</strong> ${escapeHtml(asm.followup?.scheduledDate || t("diabetes.stateNotProvided"))} ${asm.followup?.instructions ? `(${escapeHtml(asm.followup.instructions)})` : ""}</div>
             </div>
           </div>
         </div>
