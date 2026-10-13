@@ -86,7 +86,7 @@
       nav: {
         home: "الرئيسية",
         patient: "الرئيسية",
-        diseaseDashboard: "لوحة الأمراض",
+        diseaseDashboard: "الفرز السريري والتقييم التفريقي",
         consent: "الموافقة والخصوصية",
         profile: "الملف الطبي",
         assessment: "تقييم التنفس",
@@ -108,7 +108,7 @@
         switchAccount: "تبديل الحساب",
         deleteAccount: "حذف الحساب",
         menu: "المزيد",
-        disease: "الأمراض",
+        disease: "الفرز السريري والتقييم التفريقي",
         diabetes: "داء السكري",
         hypertension: "ارتفاع ضغط الدم",
         bloodDisorders: "تجلط الدم / اضطرابات الدم",
@@ -759,10 +759,10 @@
         diagnosis: "التشخيص السريري المعتمد"
       },
       diseaseDashboard: {
-        title: "لوحة الأمراض والتقييم السريري الموحد",
-        subtitle: "متابعة شاملة عبر أربعة مسارات سريرية للأمراض استناداً لسجلاتك الموثقة.",
+        title: "الفرز السريري والتقييم التفريقي",
+        subtitle: "محرك فرز متعدد المسارات وتقييم سريري شامل عبر مسارات الأمراض استناداً لسجلاتك الموثقة.",
         nextRequiredActionHeader: "الإجراء التالي المطلوب",
-        modulesOverview: "نظرة عامة على مسارات الأمراض الأربعة",
+        modulesOverview: "نظرة عامة على مسارات التقييم السريري الأربعة",
         stateNotStarted: "لم يبدأ",
         stateInfoRequested: "مطلوب معلومات",
         stateAwaitingReview: "قيد الانتظار",
@@ -848,7 +848,7 @@
       nav: {
         home: "Home",
         patient: "Home",
-        diseaseDashboard: "Disease Dashboard",
+        diseaseDashboard: "Clinical Triage & Differential Assessment",
         consent: "Consent & Privacy",
         profile: "Medical Profile",
         assessment: "Breathing Assessment",
@@ -870,7 +870,7 @@
         switchAccount: "Switch account",
         deleteAccount: "Delete account",
         menu: "Menu",
-        disease: "Disease",
+        disease: "Clinical Triage & Differential Assessment",
         diabetes: "Diabetes",
         hypertension: "Hypertension",
         bloodDisorders: "Blood Clotting / Blood Disorders",
@@ -1521,10 +1521,10 @@
         diagnosis: "Certified Clinical Diagnosis"
       },
       diseaseDashboard: {
-        title: "Unified Disease & Clinical Assessment Dashboard",
-        subtitle: "Comprehensive monitoring across four disease modules based strictly on your real documented records.",
+        title: "Clinical Triage & Differential Assessment",
+        subtitle: "Multi-domain triage engine and unified clinical differential assessment based strictly on your documented records.",
         nextRequiredActionHeader: "Next Required Action",
-        modulesOverview: "Four Clinical Disease Modules Overview",
+        modulesOverview: "Four Clinical Evaluation Pathways Overview",
         stateNotStarted: "Not started",
         stateInfoRequested: "Information requested",
         stateAwaitingReview: "Awaiting review",

@@ -79,14 +79,14 @@ console.log('▶ TEST 3: Internationalization (i18n) Parity & Bilingual Complete
 // ---------------------------------------------------------------------------
 {
   // AR Nav keys
-  assert.equal(translations.ar.nav.disease, 'الأمراض');
+  assert.equal(translations.ar.nav.disease, 'الفرز السريري والتقييم التفريقي');
   assert.equal(translations.ar.nav.diabetes, 'داء السكري');
   assert.equal(translations.ar.nav.hypertension, 'ارتفاع ضغط الدم');
   assert.equal(translations.ar.nav.bloodDisorders, 'تجلط الدم / اضطرابات الدم');
   assert.equal(translations.ar.nav.obesity, 'السمنة');
 
   // EN Nav keys
-  assert.equal(translations.en.nav.disease, 'Disease');
+  assert.equal(translations.en.nav.disease, 'Clinical Triage & Differential Assessment');
   assert.equal(translations.en.nav.diabetes, 'Diabetes');
   assert.equal(translations.en.nav.hypertension, 'Hypertension');
   assert.equal(translations.en.nav.bloodDisorders, 'Blood Clotting / Blood Disorders');
