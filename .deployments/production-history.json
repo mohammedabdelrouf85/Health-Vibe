@@ -295,5 +295,49 @@
     "version": "1.0.0",
     "status": "deployed",
     "deployedAt": "2026-10-13T22:53:58.509Z"
+  },
+  {
+    "releaseId": "rel_production_1791932675976",
+    "timestamp": "2026-10-13T23:04:35.976Z",
+    "environment": "production",
+    "projectId": "health-vibes-a4b3b",
+    "gitCommit": "6b01bf986fd0d8524e94d19044a34b074a731c5b",
+    "gitBranch": "main",
+    "version": "1.0.0",
+    "status": "deployed",
+    "deployedAt": "2026-10-13T23:05:07.368Z"
+  },
+  {
+    "releaseId": "rel_production_1791933659431",
+    "timestamp": "2026-10-13T23:20:59.432Z",
+    "environment": "production",
+    "projectId": "health-vibes-a4b3b",
+    "gitCommit": "0959a4753c709c939d32e8f0eb55387fe9c02f3d",
+    "gitBranch": "main",
+    "version": "1.0.0",
+    "status": "deployed",
+    "deployedAt": "2026-10-13T23:22:07.159Z"
+  },
+  {
+    "releaseId": "rel_production_1791933936631",
+    "timestamp": "2026-10-13T23:25:36.631Z",
+    "environment": "production",
+    "projectId": "health-vibes-a4b3b",
+    "gitCommit": "8209ba215192ecb816d12214c6b0f4f8a480bd39",
+    "gitBranch": "main",
+    "version": "1.0.0",
+    "status": "deployed",
+    "deployedAt": "2026-10-13T23:26:04.607Z"
+  },
+  {
+    "releaseId": "rel_production_1791934606163",
+    "timestamp": "2026-10-13T23:36:46.163Z",
+    "environment": "production",
+    "projectId": "health-vibes-a4b3b",
+    "gitCommit": "34eba10cf260eced1b6ff474c3b6549f07ad6986",
+    "gitBranch": "main",
+    "version": "1.0.0",
+    "status": "deployed",
+    "deployedAt": "2026-10-13T23:37:23.215Z"
   }
 ]

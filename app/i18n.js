@@ -234,6 +234,20 @@
         termsBtn: "📜 شروط الاستخدام",
         disclaimerBtn: "🚨 إخلاء المسؤولية"
       },
+      legal: {
+        modalTitle: "المعايير القانونية والطبية",
+        closeBtn: "فهمت ذلك وإغلاق",
+        tabPrivacy: "🔒 سياسة الخصوصية",
+        tabTerms: "📜 شروط الاستخدام",
+        tabDisclaimer: "🚨 إخلاء المسؤولية الطبي",
+        privacyTitle: "سياسة الخصوصية وحماية البيانات السريرية",
+        termsTitle: "شروط الاستخدام والخدمة",
+        disclaimerTitle: "إخلاء المسؤولية الطبي وتنبيهات الطوارئ",
+        emergencyBadge: "🚨 تنبيه طوارئ حرج",
+        emergencyWarning: "لا تستخدم هذا التطبيق في حالات الطوارئ الطبية المهددة للحياة",
+        emergencyText: "إذا كنت تعاني من نسبة أكسجين أقل من 90%، أو ألم حاد ومفاجئ في الصدر، أو صعوبة بالغة في التنفس، أو زرقة بالوجه، اتصل فوراً بالإسعاف (123 في مصر) أو توجه لأقرب قسم طوارئ في مستشفى ولا تنتظر الرد الإلكتروني.",
+        emergencyCallBtn: "📞 طلب الإسعاف فوراً (123)"
+      },
       profile: {
         title: "الملف الطبي والتاريخ الصحي",
         personalInfo: "البيانات الأساسية",
@@ -995,6 +1009,20 @@
         privacyPolicyBtn: "🔒 Privacy Policy",
         termsBtn: "📜 Terms of Use",
         disclaimerBtn: "🚨 Clinical Disclaimer"
+      },
+      legal: {
+        modalTitle: "Legal & Clinical Standards",
+        closeBtn: "Understood & Close",
+        tabPrivacy: "🔒 Privacy Policy",
+        tabTerms: "📜 Terms of Use",
+        tabDisclaimer: "🚨 Medical Disclaimer",
+        privacyTitle: "Privacy Policy & Clinical Data Protection",
+        termsTitle: "Terms of Service",
+        disclaimerTitle: "Clinical & Medical Disclaimer",
+        emergencyBadge: "🚨 Critical Emergency Alert",
+        emergencyWarning: "Do not use this app for life-threatening medical emergencies",
+        emergencyText: "If your oxygen saturation is below 90%, or you experience acute chest pain, severe shortness of breath, or facial cyanosis, call emergency services immediately (123 in Egypt) or visit the nearest emergency department. Do not wait for digital triage.",
+        emergencyCallBtn: "📞 Call Emergency Services Immediately (123)"
       },
       profile: {
         title: "Medical Profile & Clinical Baseline",

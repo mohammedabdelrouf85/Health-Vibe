@@ -2829,20 +2829,20 @@
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
         <div style="display: flex; align-items: center; gap: 8px;">
           <span style="font-size: 20px;">⚖️</span>
-          <h3 id="legalModalTitle" style="margin: 0; font-size: 17px; color: var(--teal-2);">المعايير القانونية والطبية</h3>
+          <h3 id="legalModalTitle" style="margin: 0; font-size: 17px; color: var(--teal-2);" data-i18n="legal.modalTitle">المعايير القانونية والطبية</h3>
         </div>
         <button type="button" class="close-button" onclick="closeLegalModal()" aria-label="Close">×</button>
       </div>
 
       <!-- Legal Tabs -->
       <div class="legal-tabs" role="tablist">
-        <button type="button" class="legal-tab-btn active" data-legal-tab="privacy" onclick="switchLegalTab('privacy')">
+        <button type="button" class="legal-tab-btn active" data-legal-tab="privacy" data-i18n="legal.tabPrivacy" onclick="switchLegalTab('privacy')">
           🔒 سياسة الخصوصية
         </button>
-        <button type="button" class="legal-tab-btn" data-legal-tab="terms" onclick="switchLegalTab('terms')">
+        <button type="button" class="legal-tab-btn" data-legal-tab="terms" data-i18n="legal.tabTerms" onclick="switchLegalTab('terms')">
           📜 شروط الاستخدام
         </button>
-        <button type="button" class="legal-tab-btn danger-tab" data-legal-tab="disclaimer" onclick="switchLegalTab('disclaimer')">
+        <button type="button" class="legal-tab-btn danger-tab" data-legal-tab="disclaimer" data-i18n="legal.tabDisclaimer" onclick="switchLegalTab('disclaimer')">
           🚨 إخلاء المسؤولية الطبي
         </button>
       </div>
@@ -2917,7 +2917,7 @@
       </div>
 
       <div style="margin-top: 16px; display: flex; justify-content: flex-end;">
-        <button type="button" class="solid-button" onclick="closeLegalModal()" style="padding: 8px 22px;">
+        <button type="button" id="legalModalCloseBtn" class="solid-button" onclick="closeLegalModal()" style="padding: 8px 22px;" data-i18n="legal.closeBtn">
           فهمت ذلك وإغلاق
         </button>
       </div>

@@ -4097,6 +4097,18 @@ body.dark .rules-spec-table th {
   display: flex;
   flex-direction: column;
   padding: 24px;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+[dir="rtl"] .legal-modal-card {
+  text-align: right;
+  direction: rtl;
+}
+
+[dir="ltr"] .legal-modal-card {
+  text-align: left;
+  direction: ltr;
 }
 
 .legal-tabs {
@@ -4119,6 +4131,7 @@ body.dark .rules-spec-table th {
   cursor: pointer;
   transition: all 0.2s;
   white-space: nowrap;
+  font-family: inherit;
 }
 
 .legal-tab-btn:hover {
@@ -4145,12 +4158,27 @@ body.dark .rules-spec-table th {
   font-size: 13.5px;
   line-height: 1.75;
   color: var(--ink);
+  font-family: inherit;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+[dir="rtl"] .legal-content-body {
+  text-align: right;
+  direction: rtl;
+}
+
+[dir="ltr"] .legal-content-body {
+  text-align: left;
+  direction: ltr;
 }
 
 .legal-content-body h4 {
   color: var(--teal-2);
   margin: 16px 0 8px;
   font-size: 15px;
+  font-weight: 700;
+  line-height: 1.5;
 }
 
 body.dark .legal-content-body h4 {

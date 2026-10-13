@@ -1545,6 +1545,21 @@ function applyLanguage(language) {
   } else if (activeScreenName === "assistant" && typeof renderAssistantScreen === "function") {
     renderAssistantScreen();
   }
+
+  // 11. Refresh legal modal content if open or loaded
+  const legalModal = document.getElementById("legalModal");
+  if (legalModal && typeof renderLegalModalContent === "function") {
+    renderLegalModalContent();
+    const activeTabBtn = legalModal.querySelector(".legal-tab-btn.active");
+    const activeTab = activeTabBtn ? activeTabBtn.dataset.legalTab : "privacy";
+    const title = document.getElementById("legalModalTitle");
+    if (title) {
+      const isEn = language === "en";
+      if (activeTab === "privacy") title.textContent = isEn ? "Privacy Policy & Clinical Data Protection" : "سياسة الخصوصية وحماية البيانات السريرية";
+      else if (activeTab === "terms") title.textContent = isEn ? "Terms of Service" : "شروط الاستخدام والخدمة";
+      else if (activeTab === "disclaimer") title.textContent = isEn ? "Clinical & Medical Disclaimer" : "إخلاء المسؤولية الطبي وتنبيهات الطوارئ";
+    }
+  }
 }
 
 function showToast(message) {
@@ -16858,7 +16873,162 @@ function updateAvatar(user) {
 updateOxygenWarning();
 
 
-// ── Global Legal Modal & Tab Navigation ──
+// ── Global Legal Modal & Tab Navigation with Bilingual Support ──
+const LEGAL_MODAL_DATA = {
+  ar: {
+    privacy: `
+      <h4>1. الالتزام بحماية البيانات الصحية والسريرية</h4>
+      <p>تلتزم منصة Health Vibe AI بأعلى معايير حماية الخصوصية للمرضى وممارسي الرعاية الصحية وفق مبادئ HIPAA و GDPR وتشريعات حماية السجلات الطبية الإلكترونية.</p>
+      
+      <h4>2. البيانات التي يتم جمعها ومعالجتها</h4>
+      <ul>
+        <li><strong>البيانات الشخصية والحساب:</strong> الاسم، البريد الإلكتروني، معرف الحساب الرقمي، والدور المصرح.</li>
+        <li><strong>المؤشرات الحيوية والأعراض:</strong> نسبة تشبع الأكسجين في الدم (SpO2)، صعوبة التنفس، شدة الكحة، مدة الأعراض، وعوامل الخطورة كالحمل والتدخين وأمراض الصدر المزمنة.</li>
+        <li><strong>بيانات التشغيل:</strong> المواعيد، طلبات توثيق الطبيب، المرفقات المهنية، تنبيهات البريد، ومحادثات المساعد الإرشادي المرتبطة بالتقرير المعتمد.</li>
+        <li><strong>سجلات الموافقة والتدقيق:</strong> إصدار الموافقة، وقتها، الغرض منها، تاريخ السحب عند حدوثه، دورة حياة الحالة، وسجل قرارات واعتماد الطبيب المعتمد.</li>
+      </ul>
+
+      <h4>3. التشفير وحماية البيانات</h4>
+      <p>تُنقل جميع البيانات مشفرة بالكامل عبر بروتوكول <code>HTTPS / TLS 1.3</code> وتُخزن في خوادم Google Cloud بمعيار تشفير <code>AES-256</code> المعتمد، مع تطبيق مبدأ انعدام الثقة (Zero-Trust) لعزل بيانات كل مريض عن الآخرين.</p>
+
+      <h4>4. الوصول والاحتفاظ وسحب الموافقة</h4>
+      <p>يقتصر الوصول على المريض، الطبيب أو العيادة المرتبطة بالحالة، وأدوار الإدارة والدعم وفق صلاحيات مقيدة وسجلات تدقيق. يمكن سحب الموافقة من شاشة الموافقة، وبعد السحب تتوقف التقييمات الجديدة إلى أن يتم قبول نسخة الموافقة الحالية مرة أخرى، مع استمرار الاحتفاظ بالسجلات المعتمدة عند وجود متطلبات قانونية أو سريرية.</p>
+
+      <h4>5. ملفات الارتباط والتخزين المحلي</h4>
+      <p>قد يستخدم التطبيق ملفات تعريف ارتباط تقنية أو تخزيناً محلياً لحفظ الجلسة، تفضيل اللغة، تذكر الحساب على الجهاز، وحالة الواجهة. لا تستخدم Health Vibe هذه البيانات للإعلانات أو البيع التجاري.</p>
+
+      <h4>6. عدم المشاركة الإعلانية أو التجارية</h4>
+      <p><strong>لا يتم بيع أو مشاركة بياناتك مع أي طرف ثالث لأغراض تجارية أو إعلانية نهائياً.</strong> يتم مشاركة بيانات الحالة حصراً مع الطبيب المعالج المعتمد لإتمام المراجعة السريرية وإصدار التقرير الطبي.</p>
+    `,
+    terms: `
+      <h4>1. شروط الأهلية والحساب</h4>
+      <p>يجب تقديم معلومات دقيقة وصحيحة عند التسجيل، والاحتفاظ بسرية بيانات الدخول، مع الالتزام بتأكيد البريد الإلكتروني لتفعيل الاتصال السريري.</p>
+
+      <h4>2. الاستخدام المسموح للمنصة</h4>
+      <p>تُستخدم المنصة كأداة متابعة رقمية وتنسيق سريري بين المريض وطبيبه، ولا يجوز إدخال بيانات كاذبة أو مضللة، أو محاولة تجاوز قواعد الأمان والصلاحيات.</p>
+
+      <h4>3. اعتماد الأطباء ومقدمي الرعاية</h4>
+      <p>يخضع حساب الطبيب للتدقيق والتحقق الإداري من التراخيص المهنية الصادرة عن الجهات الصحية الرسمية قبل منحه صلاحية مراجعة الحالات واعتماد التقارير السريرية.</p>
+
+      <h4>4. حدود المسؤولية</h4>
+      <p>الخدمة تقدم كما هي للمساعدة في تنظيم مسار الرعاية. المنصة لا تقدم تشخيصاً آلياً مستقلاً وليست بديلاً عن التوجه لأقسام الطوارئ أو الفحص السريري المباشر.</p>
+    `,
+    disclaimer: `
+      <div class="emergency-alert-card critical-oxygen" style="margin-bottom: 16px; padding: 14px;">
+        <div class="emergency-header" style="margin-bottom: 6px;">
+          <span class="emergency-pulsing-badge">🚨 تنبيه طوارئ حرج</span>
+          <strong style="color: #dc2626; font-size: 14px;">لا تستخدم هذا التطبيق في حالات الطوارئ الطبية المهددة للحياة</strong>
+        </div>
+        <p style="font-size: 13px; margin: 0 0 10px; color: var(--ink); line-height: 1.6;">
+          إذا كنت تعاني من نسبة أكسجين أقل من 90%، أو ألم حاد ومفاجئ في الصدر، أو صعوبة بالغة في التنفس، أو زرقة بالوجه، اتصل فوراً بالإسعاف (123 في مصر) أو توجه لأقرب قسم طوارئ في مستشفى ولا تنتظر الرد الإلكتروني.
+        </p>
+        <a href="tel:123" class="emergency-call-btn" style="padding: 8px 16px; text-decoration: none; display: inline-flex;">
+          📞 طلب الإسعاف فوراً (123)
+        </a>
+      </div>
+
+      <h4>1. الطبيعة الاسترشادية للذكاء الاصطناعي</h4>
+      <p>محرك القواعد والذكاء الاصطناعي أداة فرز استرشادية لمساعدة الطبيب في ترتيب الأولويات (Clinical Decision Support)، ولا تُعد تشخيصاً طبياً مستقلاً أو بديلاً عن الفحص السريري للطبيب.</p>
+
+      <h4>2. شرط الاعتماد البشري الإلزامي</h4>
+      <p>لا تظهر أي نتيجة نهائية أو تقرير معتمد للمريض إلا بعد قيام طبيب بشري مرخص ومسجل بمراجعة تفاصيل الحالة واعتمادها يدوياً.</p>
+
+      <h4>3. قياسات الأكسجين المنزلية</h4>
+      <p>أجهزة قياس الأكسجين المنزلية قد تتأثر ببرودة الأطراف أو الحركة. في حال الشك بأي قراءة أو ظهور أعراض غير معتادة، يجب استشارة طبيب أو التوجه لمركز طبي فوراً.</p>
+    `
+  },
+  en: {
+    privacy: `
+      <h4>1. Commitment to Health and Clinical Data Protection</h4>
+      <p>Health Vibe AI is dedicated to the highest standards of privacy protection for patients and healthcare providers in accordance with HIPAA, GDPR, and electronic health record security regulations.</p>
+      
+      <h4>2. Collected and Processed Data</h4>
+      <ul>
+        <li><strong>Personal & Account Data:</strong> Full name, email address, digital user identifier (UID), and authorized clinical role.</li>
+        <li><strong>Vitals & Symptoms:</strong> Blood oxygen saturation (SpO2), respiratory difficulty, cough severity, symptom duration, and clinical risk factors such as pregnancy, smoking, and chronic lung conditions.</li>
+        <li><strong>Operational Records:</strong> Scheduled appointments, clinician verification requests, verified attachments, follow-up notifications, and certified medical assistant discussions linked to the report.</li>
+        <li><strong>Consent & Audit Logs:</strong> Consent version, timestamp, stated purposes, withdrawal timestamps (if applicable), case lifecycle, and attending physician sign-off history.</li>
+      </ul>
+
+      <h4>3. Encryption and Security Architecture</h4>
+      <p>All data in transit is encrypted using <code>HTTPS / TLS 1.3</code>. Data at rest is stored in secure Google Cloud servers with <code>AES-256</code> encryption, strictly applying the Zero-Trust model to isolate patient records.</p>
+
+      <h4>4. Access, Retention, and Consent Withdrawal</h4>
+      <p>Access is restricted strictly to the patient, their assigned clinician/clinic, and authorized administrative support with role-based access controls and tamper-evident audit logs. You may withdraw consent at any time from the Consent & Privacy view. Following withdrawal, new assessments are suspended until the updated terms are re-accepted, while certified clinical records are retained as required by healthcare laws.</p>
+
+      <h4>5. Cookies and Local Storage</h4>
+      <p>The application uses essential technical cookies and secure local storage for session authentication, language preference, device authorization, and UI state management. Health Vibe never uses this data for advertising or commercial marketing.</p>
+
+      <h4>6. No Commercial or Advertising Sharing</h4>
+      <p><strong>Your health and personal data is never sold, rented, or shared with any third party for marketing or advertising purposes.</strong> Clinical case records are exclusively shared with the authorized attending physician to conduct professional clinical review and issue certified care plans.</p>
+    `,
+    terms: `
+      <h4>1. Eligibility and Account Responsibilities</h4>
+      <p>Users must provide accurate, complete information during registration, maintain account credential confidentiality, and verify their email address to activate clinical communications.</p>
+
+      <h4>2. Permitted Platform Use</h4>
+      <p>Health Vibe is intended as a digital health tracking and coordination tool between patients and their physicians. Submitting fraudulent data, misleading symptoms, or attempting to breach platform security and access boundaries is strictly prohibited.</p>
+
+      <h4>3. Physician and Provider Credentialing</h4>
+      <p>All physician accounts undergo administrative verification and license auditing with official regulatory bodies before receiving privileges to review patient cases and sign certified medical reports.</p>
+
+      <h4>4. Limitation of Liability</h4>
+      <p>The platform is provided to assist in clinical workflow coordination. It does not provide autonomous clinical diagnoses and is never a substitute for in-person medical examination or urgent emergency care.</p>
+    `,
+    disclaimer: `
+      <div class="emergency-alert-card critical-oxygen" style="margin-bottom: 16px; padding: 14px;">
+        <div class="emergency-header" style="margin-bottom: 6px;">
+          <span class="emergency-pulsing-badge">🚨 Critical Emergency Alert</span>
+          <strong style="color: #dc2626; font-size: 14px;">Do not use this app for life-threatening medical emergencies</strong>
+        </div>
+        <p style="font-size: 13px; margin: 0 0 10px; color: var(--ink); line-height: 1.6;">
+          If your oxygen saturation is below 90%, or you experience acute chest pain, severe shortness of breath, or facial cyanosis, immediately contact emergency services (123 in Egypt) or visit the nearest emergency room. Do not wait for digital triage.
+        </p>
+        <a href="tel:123" class="emergency-call-btn" style="padding: 8px 16px; text-decoration: none; display: inline-flex;">
+          📞 Call Emergency Services Immediately (123)
+        </a>
+      </div>
+
+      <h4>1. Advisory Nature of Decision Support & AI</h4>
+      <p>The algorithmic rules and clinical intelligence are strictly designed as an indicative triage guide to help physicians prioritize cases (Clinical Decision Support). They do not constitute an independent medical diagnosis and never replace clinical judgment.</p>
+
+      <h4>2. Mandatory Human Clinician Sign-Off</h4>
+      <p>No final medical assessment or certified diagnostic report is released to the patient until a licensed, registered human physician conducts an independent review and signs off manually.</p>
+
+      <h4>3. Home Pulse Oximeter Variability</h4>
+      <p>Home pulse oximeters can be affected by cold extremities, motion artifacts, or skin temperature. If you doubt any reading or experience unusual symptoms, consult a doctor or visit a medical facility immediately.</p>
+    `
+  }
+};
+
+window.renderLegalModalContent = function() {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  const langKey = isEn ? "en" : "ar";
+  const contentMap = LEGAL_MODAL_DATA[langKey] || LEGAL_MODAL_DATA.ar;
+
+  ["privacy", "terms", "disclaimer"].forEach(tab => {
+    const section = document.getElementById(`legal-section-${tab}`);
+    if (section && contentMap[tab]) {
+      section.innerHTML = contentMap[tab].trim();
+    }
+  });
+
+  const card = document.querySelector(".legal-modal-card");
+  if (card) {
+    card.setAttribute("dir", isEn ? "ltr" : "rtl");
+  }
+
+  const tabPrivacy = document.querySelector('.legal-tab-btn[data-legal-tab="privacy"]');
+  const tabTerms = document.querySelector('.legal-tab-btn[data-legal-tab="terms"]');
+  const tabDisclaimer = document.querySelector('.legal-tab-btn[data-legal-tab="disclaimer"]');
+  const closeBtn = document.getElementById("legalModalCloseBtn");
+
+  if (tabPrivacy) tabPrivacy.textContent = isEn ? "🔒 Privacy Policy" : "🔒 سياسة الخصوصية";
+  if (tabTerms) tabTerms.textContent = isEn ? "📜 Terms of Service" : "📜 شروط الاستخدام";
+  if (tabDisclaimer) tabDisclaimer.textContent = isEn ? "🚨 Medical Disclaimer" : "🚨 إخلاء المسؤولية الطبي";
+  if (closeBtn) closeBtn.textContent = isEn ? "Understood & Close" : "فهمت ذلك وإغلاق";
+};
+
 window.openLegalModal = function(tab = "privacy") {
   const modal = document.getElementById("legalModal");
   if (!modal) return;
@@ -16878,6 +17048,12 @@ window.closeLegalModal = function() {
 
 window.switchLegalTab = function(tab = "privacy") {
   const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  
+  // Refresh content in the active language
+  if (typeof window.renderLegalModalContent === "function") {
+    window.renderLegalModalContent();
+  }
+
   const tabs = document.querySelectorAll(".legal-tab-btn");
   tabs.forEach(btn => {
     btn.classList.toggle("active", btn.dataset.legalTab === tab);
