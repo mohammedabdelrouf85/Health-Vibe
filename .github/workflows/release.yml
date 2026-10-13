@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 concurrency:
   group: release-main
@@ -64,4 +65,16 @@ jobs:
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+
+      - name: Deploy to Firebase Hosting (healthvibes.app)
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+        run: |
+          if [ -n "$FIREBASE_TOKEN" ]; then
+            npm ci
+            node ./node_modules/firebase-tools/lib/bin/firebase.js deploy --project health-vibes-a4b3b --only hosting,firestore:rules --token "$FIREBASE_TOKEN"
+          else
+            echo "FIREBASE_TOKEN secret is not set; skipping automated CI deploy to healthvibes.app. Deploy manually via 'npm run deploy:live'"
+          fi
         continue-on-error: true

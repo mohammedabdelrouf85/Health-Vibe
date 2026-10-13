@@ -93,7 +93,8 @@
     "build:staging": "node scripts/build.js --env=staging",
     "build:prod": "node scripts/build.js --env=production",
     "deploy:staging": "node scripts/deploy.js --env=staging",
-    "deploy:prod": "node scripts/deploy.js --env=production",
+    "deploy:prod": "node scripts/deploy.js --env=production --force",
+    "deploy:live": "node scripts/deploy.js --env=production --force",
     "rollback:staging": "node scripts/rollback.js --env=staging",
     "rollback:prod": "node scripts/rollback.js --env=production",
     "grant:owners": "node backend/scripts/grant-owners.js"
