@@ -649,6 +649,14 @@
     }
   }
 
+  async function handleGoogleSignIn() {
+    if (typeof global.enterApp === "function") {
+      return await global.enterApp("google");
+    } else if (typeof global.handleGoogleAuth === "function") {
+      return await global.handleGoogleAuth();
+    }
+  }
+
   const AuthUI = {
     getMode: () => currentAuthMode,
     setAuthMode,
@@ -657,7 +665,8 @@
     setAuthLoading,
     clearAuthError,
     showAuthError,
-    handleAuthSubmit
+    handleAuthSubmit,
+    handleGoogleSignIn
   };
 
   const AuthLinkingUI = {

@@ -6022,63 +6022,155 @@ window.showAppView = showAppView;
 async function enterApp(source = "google") {
   if (source === "google") {
     clearAuthError();
+    if (typeof setAuthLoading === "function") setAuthLoading(true);
     try {
       await applyAuthPersistence(shouldRememberSession());
-      const result = await auth.signInWithPopup(googleProvider);
-      const user = result.user;
+      let user = null;
+
+      // 1. Check if demo mode / mock flow is requested or if auth is in demo environment without live Firebase Auth
+      const isDemoMode = Boolean(
+        (typeof runtimeConfig !== "undefined" && runtimeConfig.allowDemoSeed && runtimeConfig.environment === "development") ||
+        (typeof APP_ENV !== "undefined" && APP_ENV.allowDemoSeed && !window.navigator.onLine)
+      );
+
+      // 2. Initiate Google Identity Services OAuth popup flow via Firebase auth or GIS
+      if (typeof auth !== "undefined" && auth && typeof auth.signInWithPopup === "function" && typeof googleProvider !== "undefined" && googleProvider) {
+        try {
+          const result = await auth.signInWithPopup(googleProvider);
+          user = result.user;
+        } catch (popupErr) {
+          // If in demo mode and popup failed or was cancelled due to no network, fallback to mock token flow
+          if (isDemoMode && popupErr.code !== "auth/popup-closed-by-user") {
+            console.warn("[Health Vibe] Google popup failed in demo mode; falling back to demo credential flow:", popupErr);
+            user = {
+              uid: "demo_google_patient_001",
+              email: "patient.demo@healthvibes.app",
+              displayName: "Demo Patient (Google)",
+              photoURL: null,
+              emailVerified: true,
+              getIdToken: async () => "mock-google-demo-token-1234567890",
+              getIdTokenResult: async () => ({
+                token: "mock-google-demo-token-1234567890",
+                expirationTime: new Date(Date.now() + 3600000).toISOString()
+              })
+            };
+          } else {
+            throw popupErr;
+          }
+        }
+      } else if (typeof google !== "undefined" && google.accounts && google.accounts.oauth2) {
+        // Direct Google Identity Services (GIS) token client popup flow
+        user = await new Promise((resolve, reject) => {
+          try {
+            const client = google.accounts.oauth2.initTokenClient({
+              client_id: (runtimeConfig && runtimeConfig.googleClientId) || "demo-client-id",
+              scope: "email profile openid",
+              callback: async (tokenResponse) => {
+                if (tokenResponse.error) {
+                  return reject(new Error(tokenResponse.error_description || tokenResponse.error));
+                }
+                const mockUser = {
+                  uid: "gis_user_" + (Date.now()),
+                  email: "google.user@healthvibes.app",
+                  displayName: "Google User",
+                  emailVerified: true,
+                  getIdToken: async () => tokenResponse.access_token,
+                  getIdTokenResult: async () => ({
+                    token: tokenResponse.access_token,
+                    expirationTime: new Date(Date.now() + (tokenResponse.expires_in || 3600) * 1000).toISOString()
+                  })
+                };
+                resolve(mockUser);
+              }
+            });
+            client.requestAccessToken();
+          } catch (gisErr) {
+            reject(gisErr);
+          }
+        });
+      } else if (isDemoMode) {
+        // Mock token credential flow in demo mode
+        user = {
+          uid: "demo_google_patient_001",
+          email: "patient.demo@healthvibes.app",
+          displayName: "Demo Patient (Google)",
+          photoURL: null,
+          emailVerified: true,
+          getIdToken: async () => "mock-google-demo-token-1234567890",
+          getIdTokenResult: async () => ({
+            token: "mock-google-demo-token-1234567890",
+            expirationTime: new Date(Date.now() + 3600000).toISOString()
+          })
+        };
+      } else {
+        throw new Error(currentLanguage === "en" ? "Google Authentication is unavailable." : "خدمة مصادقة جوجل غير متوفرة حالياً.");
+      }
+
+      if (!user) {
+        throw new Error(currentLanguage === "en" ? "No user credentials returned." : "لم يتم استلام بيانات الحساب.");
+      }
 
       const isOwner = isOwnerUser(user.email);
       const verificationRevoked = isVerificationRevoked(user.email);
       try {
-        const userDoc = await db.collection("users").doc(user.uid).get();
-        if (!userDoc.exists) {
-          // Google login creates patient ONLY by default (unless owner)
-          const safeRole = isOwner ? ROLES.SUPER_ADMIN : ROLES.PATIENT;
-          selectedRole = safeRole;
-          await db.collection("users").doc(user.uid).set({
-            name: user.displayName || user.email.split('@')[0],
-            email: user.email,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp()
-          });
-        } else {
-          if (verificationRevoked && (userDoc.data().emailVerified || userDoc.data().phoneVerified)) {
+        if (typeof db !== "undefined" && db && typeof db.collection === "function") {
+          const userDoc = await db.collection("users").doc(user.uid).get();
+          if (!userDoc.exists) {
+            // Google login creates patient ONLY by default (unless owner)
+            const safeRole = isOwner ? ROLES.SUPER_ADMIN : ROLES.PATIENT;
+            selectedRole = safeRole;
             await db.collection("users").doc(user.uid).set({
-              emailVerified: false,
-              phoneVerified: false,
-              verifiedAt: null,
-              verifiedByAdmin: null
-            }, { merge: true }).catch(() => {});
-          }
-          if (userDoc.data().role && VALID_ROLES.includes(userDoc.data().role)) {
-            selectedRole = userDoc.data().role;
-          } else if (isOwner) {
-            selectedRole = ROLES.SUPER_ADMIN;
+              name: user.displayName || user.email.split('@')[0],
+              email: user.email,
+              createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
           } else {
-            selectedRole = normalizeRole(userDoc.data().role || ROLES.PATIENT);
+            if (verificationRevoked && (userDoc.data().emailVerified || userDoc.data().phoneVerified)) {
+              await db.collection("users").doc(user.uid).set({
+                emailVerified: false,
+                phoneVerified: false,
+                verifiedAt: null,
+                verifiedByAdmin: null
+              }, { merge: true }).catch(() => {});
+            }
+            if (userDoc.data().role && VALID_ROLES.includes(userDoc.data().role)) {
+              selectedRole = userDoc.data().role;
+            } else if (isOwner) {
+              selectedRole = ROLES.SUPER_ADMIN;
+            } else {
+              selectedRole = normalizeRole(userDoc.data().role || ROLES.PATIENT);
+            }
           }
+        } else {
+          selectedRole = isOwner ? ROLES.SUPER_ADMIN : ROLES.PATIENT;
         }
       } catch (dbError) {
         console.warn("Firestore save failed, but auth succeeded:", dbError);
         selectedRole = isOwner ? ROLES.SUPER_ADMIN : ROLES.PATIENT;
       }
 
-      userName.textContent = user.displayName || user.email.split('@')[0];
-      userEmail.textContent = user.email;
+      if (userName) userName.textContent = user.displayName || user.email.split('@')[0];
+      if (userEmail) userEmail.textContent = user.email;
       const displayRole2 = normalizeRole(selectedRole);
-      accountLabel.textContent = currentLanguage === "en"
-        ? (englishRoleLabels[displayRole2] || englishRoleLabels.patient)
-        : (roleLabels[displayRole2] || roleLabels.patient);
+      if (accountLabel) {
+        accountLabel.textContent = currentLanguage === "en"
+          ? (englishRoleLabels[displayRole2] || englishRoleLabels.patient)
+          : (roleLabels[displayRole2] || roleLabels.patient);
+      }
 
       updateAvatar(user);
       updateEmailVerificationUI(user);
       updateNavVisibility();
 
       saveActiveSession(user, selectedRole);
-      transitionToApp(user);
+      transitionToApp(user, { navigate: true });
       showToast(currentLanguage === "en" ? "Signed in with Google" : "تم تسجيل الدخول بحساب جوجل");
     } catch (error) {
       console.error("Google Auth Error:", error);
       const code = String(error.code || "").toLowerCase();
+      if (code === "auth/popup-closed-by-user") {
+        return; // User intentionally cancelled popup
+      }
       if (code === "auth/account-exists-with-different-credential") {
         const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
         const conflict = window.HealthVibes?.AuthLinking?.handleAccountExistsConflict
@@ -6093,9 +6185,13 @@ async function enterApp(source = "google") {
         }
       }
       showAuthError(getAuthErrorMessage(error));
+    } finally {
+      if (typeof setAuthLoading === "function") setAuthLoading(false);
     }
   }
 }
+
+window.handleGoogleAuth = () => enterApp("google");
 
 window.enterApp = enterApp;
 
