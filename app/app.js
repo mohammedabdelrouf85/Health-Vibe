@@ -1753,7 +1753,17 @@ const SENSITIVE_LEGACY_STORAGE_KEYS = [
   "hv_local_feedbacks",
   "health_vibe_phone_verified",
   "hv_known_accounts_registry",
-  "HV_LAST_ERRORS"
+  "HV_LAST_ERRORS",
+  "hv_selected_role",
+  "hv_active_user",
+  "hv_auth_token",
+  "hv_token",
+  "hv_id_token",
+  "hv_access_token",
+  "hv_refresh_token",
+  "hv_user",
+  "hv_credentials",
+  "health_vibe_active_session"
 ];
 const SENSITIVE_LEGACY_STORAGE_PREFIXES = [
   "hv_appointments",
@@ -1762,12 +1772,14 @@ const SENSITIVE_LEGACY_STORAGE_PREFIXES = [
   "hv_uploaded_files",
   "hv_patient_files",
   "hv_feedback",
-  "hv_privacy_consent"
+  "hv_privacy_consent",
+  "firebase:authUser:",
+  "firebase:persistence:"
 ];
 
 function isSensitiveLegacyStorageKey(key) {
   return SENSITIVE_LEGACY_STORAGE_KEYS.includes(key) ||
-    SENSITIVE_LEGACY_STORAGE_PREFIXES.some(prefix => key === prefix || key.startsWith(`${prefix}_`));
+    SENSITIVE_LEGACY_STORAGE_PREFIXES.some(prefix => key === prefix || key.startsWith(`${prefix}_`) || key.startsWith(prefix));
 }
 
 function purgeSensitiveLegacyStorage() {
@@ -1808,6 +1820,8 @@ function saveActiveSession(user, role) {
   if (!user) return;
   try {
     purgeSensitiveLegacyStorage();
+    localStorage.removeItem("hv_explicit_logout");
+    sessionStorage.removeItem("hv_explicit_logout");
     document.documentElement.classList.add("hv-has-session");
   } catch(e) {}
 }
@@ -1816,7 +1830,11 @@ function clearActiveSession() {
   try {
     purgeSensitiveLegacyStorage();
     localStorage.removeItem("hv_active_screen");
+    localStorage.removeItem("hv_remember_me");
     document.documentElement.classList.remove("hv-has-session");
+    if (window.HealthVibes && window.HealthVibes.AuthService && typeof window.HealthVibes.AuthService.clearActiveSession === "function") {
+      window.HealthVibes.AuthService.clearActiveSession();
+    }
   } catch(e) {}
 }
 
@@ -1847,6 +1865,9 @@ try {
 
 function hasSavedAuthSession() {
   try {
+    if (localStorage.getItem("hv_explicit_logout") === "true") {
+      return false;
+    }
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
       if (k && (k.startsWith("firebase:authUser:") || k.startsWith("firebase:persistence:"))) {
@@ -6121,18 +6142,26 @@ function showSignedOutUI() {
 async function clearFirebaseAuthStorage() {
   try {
     Object.keys(localStorage).forEach((key) => {
-      if (key.startsWith("firebase:authUser:") || key.startsWith("firebase:persistence:")) {
-        localStorage.removeItem(key);
+      if (key.startsWith("firebase:authUser:") || key.startsWith("firebase:persistence:") || key.startsWith("firebase:") || key.startsWith("hv_")) {
+        if (key !== "hv_lang" && key !== "hv_theme" && key !== "hv_theme_default_version" && key !== "hv_lang_default_version" && key !== "hv_explicit_logout") {
+          localStorage.removeItem(key);
+        }
       }
     });
   } catch(e) {}
   try {
     Object.keys(sessionStorage).forEach((key) => {
-      if (key.startsWith("firebase:authUser:") || key.startsWith("firebase:persistence:")) {
+      if (key !== "hv_explicit_logout") {
         sessionStorage.removeItem(key);
       }
     });
   } catch(e) {}
+  // Purge IndexedDB Firebase Auth Cache if supported
+  try {
+    if (typeof indexedDB !== "undefined" && indexedDB && typeof indexedDB.deleteDatabase === "function") {
+      indexedDB.deleteDatabase("firebaseLocalStorageDb");
+    }
+  } catch (e) {}
 }
 
 async function leaveApp(event) {
@@ -6146,7 +6175,18 @@ async function leaveApp(event) {
   window._isIdleLocked = false;
   const lockScreen = document.getElementById("idleLockScreen");
   if (lockScreen) lockScreen.style.display = "none";
+
+  // Mark explicit logout so reload never resurrects session from stale cache
+  try {
+    localStorage.setItem("hv_explicit_logout", "true");
+    sessionStorage.setItem("hv_explicit_logout", "true");
+  } catch (e) {}
+
   clearActiveSession();
+  if (window.HealthVibes && window.HealthVibes.AuthService && typeof window.HealthVibes.AuthService.signOut === "function") {
+    try { await window.HealthVibes.AuthService.signOut(auth); } catch (e) {}
+  }
+
   if (window.asyncContextManager) {
     window.asyncContextManager.handleAuthChange("LOGOUT");
   }
@@ -6195,13 +6235,23 @@ async function switchAccount(event) {
   const lockScreen = document.getElementById("idleLockScreen");
   if (lockScreen) lockScreen.style.display = "none";
   window._isIdleLocked = false;
+
+  try {
+    localStorage.setItem("hv_explicit_logout", "true");
+    sessionStorage.setItem("hv_explicit_logout", "true");
+  } catch (e) {}
+
   clearActiveSession();
+  if (window.HealthVibes && window.HealthVibes.AuthService && typeof window.HealthVibes.AuthService.signOut === "function") {
+    try { await window.HealthVibes.AuthService.signOut(auth); } catch (e) {}
+  }
+
   if (window.asyncContextManager) {
     window.asyncContextManager.handleAuthChange("SWITCH_ACCOUNT");
   }
 
   if (window._patientCasesUnsub) {
-    window._patientCasesUnsub();
+    try { window._patientCasesUnsub(); } catch(e) {}
     window._patientCasesUnsub = null;
   }
   if (window._doctorQueueUnsub) {
@@ -16362,7 +16412,66 @@ function initHVAuthListener() {
       }
       return;
     }
+
+    // Check if user has explicitly logged out
+    const isExplicitlyLoggedOut = (function() {
+      try {
+        return localStorage.getItem("hv_explicit_logout") === "true" ||
+               sessionStorage.getItem("hv_explicit_logout") === "true";
+      } catch (e) {
+        return false;
+      }
+    })();
+
+    if (user && isExplicitlyLoggedOut) {
+      console.warn("[Health Vibe] Explicit logout detected. Clearing lingering auth session.");
+      window._isSigningOut = true;
+      try { if (auth) await auth.signOut(); } catch (e) {}
+      await clearFirebaseAuthStorage();
+      clearActiveSession();
+      window._isSigningOut = false;
+      showSignedOutUI();
+      dismissLoader(true);
+      return;
+    }
+
     if (user) {
+      // Validate that the auth token is valid and non-expired before restoring session
+      let isValidToken = false;
+      try {
+        if (typeof user.getIdTokenResult === "function") {
+          const tokenResult = await user.getIdTokenResult(false);
+          const expTime = tokenResult && tokenResult.expirationTime ? Date.parse(tokenResult.expirationTime) : 0;
+          if (expTime > Date.now()) {
+            isValidToken = true;
+          } else {
+            console.warn("[Health Vibe] Cached token expired at", tokenResult ? tokenResult.expirationTime : "unknown");
+          }
+        } else if (typeof user.getIdToken === "function") {
+          const token = await user.getIdToken(false);
+          if (token && typeof token === "string" && token.length > 10) {
+            isValidToken = true;
+          }
+        } else {
+          isValidToken = true;
+        }
+      } catch (tokenErr) {
+        console.warn("[Health Vibe] Token validation failed during session restore:", tokenErr.message);
+        isValidToken = false;
+      }
+
+      if (!isValidToken) {
+        console.warn("[Health Vibe] Expired or invalid token encountered during startup. Signing out cleanly.");
+        window._isSigningOut = true;
+        try { if (auth) await auth.signOut(); } catch (e) {}
+        await clearFirebaseAuthStorage();
+        clearActiveSession();
+        window._isSigningOut = false;
+        showSignedOutUI();
+        dismissLoader(true);
+        return;
+      }
+
       if (window.asyncContextManager) {
         window.asyncContextManager.handleAuthChange("LOGIN", {
           uid: user.uid,

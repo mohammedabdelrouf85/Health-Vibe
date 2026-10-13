@@ -131,6 +131,14 @@
       await auth.signOut();
     }
     clearActiveSession();
+    try {
+      if (global.localStorage) {
+        global.localStorage.setItem("hv_explicit_logout", "true");
+      }
+      if (global.sessionStorage) {
+        global.sessionStorage.setItem("hv_explicit_logout", "true");
+      }
+    } catch (e) {}
   }
 
   /**
@@ -149,15 +157,32 @@
         savedAt: Date.now()
       };
       sessionStorage.setItem(STORAGE_KEYS.SESSION, JSON.stringify(payload));
+      if (global.localStorage) global.localStorage.removeItem("hv_explicit_logout");
+      if (global.sessionStorage) global.sessionStorage.removeItem("hv_explicit_logout");
     } catch (e) {}
   }
 
   /**
-   * Clears active session record.
+   * Clears active session record and cached credentials.
    */
   function clearActiveSession() {
     try {
-      sessionStorage.removeItem(STORAGE_KEYS.SESSION);
+      if (global.sessionStorage) {
+        sessionStorage.removeItem(STORAGE_KEYS.SESSION);
+        sessionStorage.removeItem(STORAGE_KEYS.ROLE);
+        sessionStorage.removeItem(STORAGE_KEYS.REMEMBER);
+        sessionStorage.removeItem("hv_active_user");
+        sessionStorage.removeItem("hv_auth_token");
+        sessionStorage.removeItem("hv_token");
+      }
+      if (global.localStorage) {
+        localStorage.removeItem(STORAGE_KEYS.SESSION);
+        localStorage.removeItem(STORAGE_KEYS.ROLE);
+        localStorage.removeItem(STORAGE_KEYS.REMEMBER);
+        localStorage.removeItem("hv_active_user");
+        localStorage.removeItem("hv_auth_token");
+        localStorage.removeItem("hv_token");
+      }
     } catch (e) {}
   }
 
@@ -167,6 +192,9 @@
    */
   function getActiveSession() {
     try {
+      if (global.localStorage && global.localStorage.getItem("hv_explicit_logout") === "true") {
+        return null;
+      }
       const raw = sessionStorage.getItem(STORAGE_KEYS.SESSION);
       return raw ? JSON.parse(raw) : null;
     } catch (e) {
