@@ -5508,6 +5508,45 @@ function toFriendlyAppError(err, context = "") {
     };
   }
 
+  if (code.includes("popup-blocked")) {
+    return {
+      icon: "🪟",
+      category: isEn ? "Authentication" : "المصادقة",
+      title: isEn ? "Pop-up Blocked" : "تم حظر النافذة المنبثقة",
+      message: isEn
+        ? "Your browser prevented the Google login window from opening."
+        : "قام المتصفح بحظر نافذة تسجيل الدخول الخاصة بـ Google.",
+      action: isEn ? "Please allow pop-ups for this site in your browser settings or try again." : "يرجى السماح بالنوافذ المنبثقة (Pop-ups) لهذا الموقع من إعدادات المتصفح أو إعادة المحاولة.",
+      ref: code || "auth/popup-blocked"
+    };
+  }
+
+  if (code.includes("unauthorized-domain")) {
+    return {
+      icon: "🌐",
+      category: isEn ? "Security Domain" : "النطاق المصرح به",
+      title: isEn ? "Domain Not Authorized" : "النطاق غير مصرح به",
+      message: isEn
+        ? "This website domain is not authorized for OAuth operations in Firebase Console."
+        : "هذا النطاق غير مصرح له بعمليات تسجيل الدخول في إعدادات Firebase.",
+      action: isEn ? "Add this domain to the Authorized Domains list in the Firebase Authentication console." : "يرجى إضافة هذا النطاق لقائمة Authorized Domains في لوحة تحكم Firebase Authentication.",
+      ref: code || "auth/unauthorized-domain"
+    };
+  }
+
+  if (code.includes("operation-not-allowed")) {
+    return {
+      icon: "⚙️",
+      category: isEn ? "Provider Configuration" : "إعدادات الخدمة",
+      title: isEn ? "Sign-In Method Disabled" : "وسيلة الدخول غير مفعلة",
+      message: isEn
+        ? "Google sign-in is not enabled for this project in Firebase Console."
+        : "تسجيل الدخول عبر Google غير مفعّل في لوحة تحكم Firebase الخاصة بالمشروع.",
+      action: isEn ? "Enable Google provider in Firebase Authentication under Sign-in method." : "يرجى تفعيل موفّر Google في قسم Sign-in method داخل لوحة Firebase.",
+      ref: code || "auth/operation-not-allowed"
+    };
+  }
+
   if (code.includes("popup-closed-by-user") || code.includes("cancelled-popup-request")) {
     return {
       icon: "ℹ️",
@@ -6074,6 +6113,12 @@ window.showAppView = showAppView;
 async function enterApp(source = "google") {
   if (source === "google") {
     clearAuthError();
+    // Clear lingering logout state immediately so onAuthStateChanged does not instantly sign out the user
+    try {
+      localStorage.removeItem("hv_explicit_logout");
+      sessionStorage.removeItem("hv_explicit_logout");
+    } catch (e) {}
+
     if (typeof setAuthLoading === "function") setAuthLoading(true);
     try {
       await applyAuthPersistence(shouldRememberSession());
@@ -6085,27 +6130,48 @@ async function enterApp(source = "google") {
         (typeof APP_ENV !== "undefined" && APP_ENV.allowDemoSeed && !window.navigator.onLine)
       );
 
+      // Helper function to build fallback demo user credentials
+      const createFallbackDemoUser = () => ({
+        uid: "demo_google_patient_001",
+        email: "patient.demo@healthvibes.app",
+        displayName: "Demo Patient (Google)",
+        photoURL: null,
+        emailVerified: true,
+        getIdToken: async () => "mock-google-demo-token-1234567890",
+        getIdTokenResult: async () => ({
+          token: "mock-google-demo-token-1234567890",
+          expirationTime: new Date(Date.now() + 3600000).toISOString()
+        })
+      });
+
       // 2. Initiate Google Identity Services OAuth popup flow via Firebase auth or GIS
-      if (typeof auth !== "undefined" && auth && typeof auth.signInWithPopup === "function" && typeof googleProvider !== "undefined" && googleProvider) {
+      if (typeof auth !== "undefined" && auth && typeof googleProvider !== "undefined" && googleProvider) {
         try {
-          const result = await auth.signInWithPopup(googleProvider);
-          user = result.user;
+          if (typeof auth.signInWithPopup === "function") {
+            const result = await auth.signInWithPopup(googleProvider);
+            user = result ? result.user : null;
+          } else if (typeof auth.signInWithRedirect === "function") {
+            await auth.signInWithRedirect(googleProvider);
+            return;
+          }
         } catch (popupErr) {
-          // If in demo mode and popup failed or was cancelled due to no network, fallback to mock token flow
-          if (isDemoMode && popupErr.code !== "auth/popup-closed-by-user") {
+          const errCode = String(popupErr.code || "").toLowerCase();
+
+          // If popup was blocked by browser, attempt seamless redirect flow
+          if (errCode === "auth/popup-blocked" && typeof auth.signInWithRedirect === "function") {
+            console.warn("[Health Vibe] Google popup was blocked by browser. Attempting redirect sign-in flow...");
+            try {
+              await auth.signInWithRedirect(googleProvider);
+              return;
+            } catch (redirectErr) {
+              console.warn("[Health Vibe] Google redirect sign-in failed:", redirectErr);
+            }
+          }
+
+          // If in demo mode or offline, fallback to mock token flow for testing
+          if (isDemoMode && errCode !== "auth/popup-closed-by-user") {
             console.warn("[Health Vibe] Google popup failed in demo mode; falling back to demo credential flow:", popupErr);
-            user = {
-              uid: "demo_google_patient_001",
-              email: "patient.demo@healthvibes.app",
-              displayName: "Demo Patient (Google)",
-              photoURL: null,
-              emailVerified: true,
-              getIdToken: async () => "mock-google-demo-token-1234567890",
-              getIdTokenResult: async () => ({
-                token: "mock-google-demo-token-1234567890",
-                expirationTime: new Date(Date.now() + 3600000).toISOString()
-              })
-            };
+            user = createFallbackDemoUser();
           } else {
             throw popupErr;
           }
@@ -6142,18 +6208,7 @@ async function enterApp(source = "google") {
         });
       } else if (isDemoMode) {
         // Mock token credential flow in demo mode
-        user = {
-          uid: "demo_google_patient_001",
-          email: "patient.demo@healthvibes.app",
-          displayName: "Demo Patient (Google)",
-          photoURL: null,
-          emailVerified: true,
-          getIdToken: async () => "mock-google-demo-token-1234567890",
-          getIdTokenResult: async () => ({
-            token: "mock-google-demo-token-1234567890",
-            expirationTime: new Date(Date.now() + 3600000).toISOString()
-          })
-        };
+        user = createFallbackDemoUser();
       } else {
         throw new Error(currentLanguage === "en" ? "Google Authentication is unavailable." : "خدمة مصادقة جوجل غير متوفرة حالياً.");
       }
@@ -16587,6 +16642,26 @@ initializeAuthPersistence();
 function initHVAuthListener() {
   if (window._hvAuthListenerStarted) return;
   window._hvAuthListenerStarted = true;
+
+  // Process redirect result if browser redirected after Google sign-in
+  if (typeof auth !== "undefined" && auth && typeof auth.getRedirectResult === "function") {
+    auth.getRedirectResult().then((result) => {
+      if (result && result.user) {
+        try {
+          localStorage.removeItem("hv_explicit_logout");
+          sessionStorage.removeItem("hv_explicit_logout");
+        } catch (e) {}
+      }
+    }).catch((redirectErr) => {
+      console.warn("[Health Vibe] Redirect result error:", redirectErr);
+      if (redirectErr && redirectErr.code !== "auth/popup-closed-by-user") {
+        if (typeof showAuthError === "function") {
+          showAuthError(getAuthErrorMessage(redirectErr));
+        }
+      }
+    });
+  }
+
   auth.onAuthStateChanged(async (user) => {
     window.clearTimeout(loaderSafetyTimer);
     if (window._isSigningOut) {
