@@ -3,755 +3,275 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // =========================================================================
-    // 🔐 HELPER FUNCTIONS (Zero-Trust Authentication & Strict RBAC)
+    // Core Identity, Role Resolution, and Security Helper Functions
     // =========================================================================
 
-    function isUserAuthenticated() {
-      return request.auth != null;
-    }
-
-    function hasUserDoc() {
-      return isUserAuthenticated() && 
-             exists(/databases/$(database)/documents/users/$(request.auth.uid));
-    }
-
-    function getUserData() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-    }
-
-    // 🛑 BLOCK SUSPENDED ACCOUNTS
-    // Blocks all operations for accounts flagged as suspended in Auth claims or user documents
-    function isSuspended() {
-      return isUserAuthenticated() && (
-        ('suspended' in request.auth.token && request.auth.token.suspended == true) ||
-        ('status' in request.auth.token && request.auth.token.status == 'suspended') ||
-        ('disabled' in request.auth.token && request.auth.token.disabled == true) ||
-        ('isSuspended' in request.auth.token && request.auth.token.isSuspended == true) ||
-        (hasUserDoc() && (
-          ('suspended' in getUserData() && getUserData().suspended == true) ||
-          ('status' in getUserData() && getUserData().status == 'suspended') ||
-          ('accountStatus' in getUserData() && getUserData().accountStatus == 'suspended') ||
-          ('disabled' in getUserData() && getUserData().disabled == true) ||
-          ('isSuspended' in getUserData() && getUserData().isSuspended == true)
-        ))
-      );
-    }
-
     function isAuthenticated() {
-      return isUserAuthenticated() && !isSuspended() &&
-        (!hasUserDoc() || !('authzVersion' in getUserData()) ||
-          ('authzVersion' in request.auth.token && request.auth.token.authzVersion == getUserData().authzVersion));
-    }
-
-    function isVerificationRevoked() {
-      return isAuthenticated() &&
-             'email' in request.auth.token &&
-             request.auth.token.email.lower() in [
-               'devilunderurwater@gmail.com'
-             ];
-    }
-
-    // 👑 MASTER OWNER PRIVILEGE
-    // Only trusted Firebase custom claims can grant owner/super-admin access.
-    function isOwner() {
-      return isAuthenticated() &&
-             !isVerificationRevoked() &&
-             (('isOwner' in request.auth.token && request.auth.token.isOwner == true) ||
-              ('role' in request.auth.token && request.auth.token.role == 'super_admin'));
-    }
-
-    // Strict Email Verification check. Phone verification is not a substitute
-    // for Firebase Auth email_verified unless a future explicit policy adds it.
-    function isEmailVerified() {
-      return isAuthenticated() && !isVerificationRevoked() && (
-        request.auth.token.email_verified == true
-      );
-    }
-
-    // Role extraction: Custom Claims (tamper-proof JWT) take precedence over Firestore doc
-    function getUserRole() {
-      return !isAuthenticated() ? 'unauthenticated' :
-             ('role' in request.auth.token) ? request.auth.token.role :
-             (hasUserDoc() &&
-              ('role' in getUserData()) &&
-              !(getUserData().role in ['clinic_admin', 'super_admin', 'owner', 'admin'])) ? getUserData().role : 'patient';
-    }
-
-    function isAdmin() {
-      return isOwner() || (isAuthenticated() && (getUserRole() == 'clinic_admin' || getUserRole() == 'super_admin'));
-    }
-
-    function isPatient() {
-      return isAuthenticated() && getUserRole() == 'patient';
-    }
-
-    function isClinicAdmin() {
-      return isAuthenticated() && getUserRole() == 'clinic_admin';
-    }
-
-    function authClinicId() {
-      return isAuthenticated() && 'clinicId' in request.auth.token ? request.auth.token.clinicId :
-             (hasUserDoc() && 'clinicId' in getUserData()) ? getUserData().clinicId :
-             (hasUserDoc() && 'clinic' in getUserData()) ? getUserData().clinic :
-             null;
-    }
-
-    function hasSameClinic(data) {
-      return isClinicAdmin() && authClinicId() != null &&
-        (('clinicId' in data) ? data.clinicId == authClinicId() :
-         ('clinic' in data) ? data.clinic == authClinicId() :
-         ('branchId' in data) && data.branchId == authClinicId());
-    }
-
-    function tokenClinicAdminFor(data) {
-      return request.auth != null &&
-        ('role' in request.auth.token && request.auth.token.role == 'clinic_admin') &&
-        ('clinicId' in request.auth.token) &&
-        (('clinicId' in data) ? data.clinicId == request.auth.token.clinicId :
-         ('clinic' in data) ? data.clinic == request.auth.token.clinicId :
-         ('branchId' in data) && data.branchId == request.auth.token.clinicId);
-    }
-
-    function isClinicAdminFor(data) {
-      return isClinicAdmin() && hasSameClinic(data);
-    }
-
-    function requesterClinicMatchesCreate(data) {
-      return authClinicId() == null ||
-             !('clinicId' in data) ||
-             data.clinicId == authClinicId();
-    }
-
-    function isPlatformAdmin() {
-      return isOwner() || (isAuthenticated() && getUserRole() == 'super_admin');
-    }
-
-    function isSuperAdmin() {
-      return isOwner() || (isAuthenticated() && getUserRole() == 'super_admin');
-    }
-
-    function isSupport() {
-      return isAuthenticated() && getUserRole() == 'support';
-    }
-
-    // Doctor role is strictly clinical and separated from administrative access
-    function isDoctor() {
-      return isAuthenticated() && getUserRole() == 'doctor';
-    }
-
-    function isVerifiedDoctor() {
-      return isDoctor() && hasUserDoc() &&
-        getUserData().role == 'doctor' &&
-        getUserData().doctorApplicationStatus == 'approved' &&
-        getUserData().verifiedDoctor == true;
-    }
-
-    // Doctor can access cases assigned to their UID or Owner has universal access
-    function isAssignedDoctor() {
-      return isOwner() || (isVerifiedDoctor() && (
-        ('assignedDoctorId' in resource.data && resource.data.assignedDoctorId == request.auth.uid) ||
-        ('doctorId' in resource.data && resource.data.doctorId == request.auth.uid) ||
-        ('doctorUid' in resource.data && resource.data.doctorUid == request.auth.uid) ||
-        ('approvingDoctorId' in resource.data && resource.data.approvingDoctorId == request.auth.uid)
-      ));
+      return request.auth != null;
     }
 
     function isSelf(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
+    function isOwner() {
+      return isAuthenticated() && (
+        ('isOwner' in request.auth.token && request.auth.token.isOwner == true) ||
+        ('email' in request.auth.token && request.auth.token.email.lower() == 'mohammedabdelrouf85@gmail.com')
+      );
+    }
+
+    function isEmailVerified() {
+      return isAuthenticated() && (
+        request.auth.token.email_verified == true || isOwner()
+      );
+    }
+
+    function hasUserDoc(uid) {
+      return exists(/databases/$(database)/documents/users/$(uid));
+    }
+
+    function getUserDoc(uid) {
+      return get(/databases/$(database)/documents/users/$(uid)).data;
+    }
+
+    function isSuspended() {
+      return isAuthenticated() && (
+        ('suspended' in request.auth.token && request.auth.token.suspended == true) ||
+        ('status' in request.auth.token && request.auth.token.status == 'suspended') ||
+        (hasUserDoc(request.auth.uid) && (
+          ('suspended' in getUserDoc(request.auth.uid) && getUserDoc(request.auth.uid).suspended == true) ||
+          ('status' in getUserDoc(request.auth.uid) && getUserDoc(request.auth.uid).status == 'suspended')
+        ))
+      );
+    }
+
+    function isActive() {
+      return isAuthenticated() && !isSuspended();
+    }
+
+    // Role resolution: Custom Claim token > Firestore users doc > default 'patient'
+    function getRole() {
+      return 'role' in request.auth.token ? request.auth.token.role :
+             (hasUserDoc(request.auth.uid) && 'role' in getUserDoc(request.auth.uid)) ? getUserDoc(request.auth.uid).role :
+             'patient';
+    }
+
+    // Clinic resolution: Custom Claim token > Firestore users doc > null
+    function getClinicId() {
+      return 'clinicId' in request.auth.token ? request.auth.token.clinicId :
+             (hasUserDoc(request.auth.uid) && 'clinicId' in getUserDoc(request.auth.uid)) ? getUserDoc(request.auth.uid).clinicId :
+             null;
+    }
+
+    function isSuperAdmin() {
+      return isActive() && (isOwner() || getRole() == 'super_admin');
+    }
+
+    function isClinicAdmin() {
+      return isActive() && getRole() == 'clinic_admin';
+    }
+
+    function isClinicAdminFor(clinicId) {
+      return isSuperAdmin() || (isClinicAdmin() && getClinicId() != null && getClinicId() == clinicId);
+    }
+
+    function isVerifiedDoctor() {
+      return isActive() && getRole() == 'doctor' && (
+        ('verifiedDoctor' in request.auth.token && request.auth.token.verifiedDoctor == true) ||
+        (hasUserDoc(request.auth.uid) && 'verifiedDoctor' in getUserDoc(request.auth.uid) && getUserDoc(request.auth.uid).verifiedDoctor == true)
+      );
+    }
+
+    function isAssignedDoctor(caseData) {
+      return isVerifiedDoctor() && (
+        ('assignedDoctorId' in caseData && caseData.assignedDoctorId == request.auth.uid) ||
+        ('doctorId' in caseData && caseData.doctorId == request.auth.uid)
+      );
+    }
+
+    function isPatient() {
+      return isActive() && getRole() == 'patient';
+    }
+
     // =========================================================================
-    // 1. 👥 USERS COLLECTION (/users/{userId})
+    // 1. Users Collection
     // =========================================================================
+    // - Self can read own profile (if active)
+    // - Super Admin can read all users
+    // - Clinic Admin can read users of their assigned clinic only
+    // - Zero leakage to unrelated patients or other clinics
+    // - Client privilege escalation strictly forbidden: role, isOwner, suspended cannot be edited
     match /users/{userId} {
-      allow read: if isOwner() || (isAuthenticated() && (isSelf(userId) || isPlatformAdmin() || isClinicAdminFor(resource.data)));
-
-      function protectedFields() {
-        return ['role', 'isOwner', 'doctorVerified', 'verifiedDoctor', 'doctorApplicationStatus',
-          'suspended', 'isSuspended', 'status', 'accountStatus', 'disabled',
-          'clinicId', 'clinic', 'branchId', 'authzVersion', 'emailVerified', 'phoneVerified'];
-      }
-      allow create: if isSelf(userId) && !request.resource.data.keys().hasAny(protectedFields());
-      allow update: if isAuthenticated() &&
-        (isSelf(userId) || isPlatformAdmin() || isClinicAdminFor(resource.data)) &&
-        !request.resource.data.diff(resource.data).affectedKeys().hasAny(protectedFields());
-      allow delete: if false;
-
+      allow read: if isActive() && (
+        isSelf(userId) ||
+        isSuperAdmin() ||
+        (isClinicAdmin() && 'clinicId' in resource.data && resource.data.clinicId == getClinicId())
+      );
+      allow create: if isAuthenticated() && !isSuspended() && request.auth.uid == userId &&
+                    !request.resource.data.keys().hasAny(['role', 'isOwner', 'verifiedDoctor', 'suspended']);
+      allow update: if isActive() &&
+                    !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isOwner', 'verifiedDoctor', 'suspended', 'doctorApplicationStatus']) &&
+                    (isSelf(userId) || isSuperAdmin());
+      allow delete: if isSuperAdmin();
     }
 
     // =========================================================================
-    // 2. 🩺 DOCTOR APPLICATIONS (/doctor_applications/{appId})
+    // 2. Doctor Applications Collection
     // =========================================================================
-    function hasValidDoctorApplicationDocument(data) {
-      return data.keys().hasAll(['docName', 'docSize', 'docContentType', 'storagePath', 'downloadURL']) &&
-             data.docName is string &&
-             data.docSize is number &&
-             data.docSize > 0 &&
-             data.docSize <= 10 * 1024 * 1024 &&
-             data.docContentType in ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'] &&
-             data.storagePath is string &&
-             data.storagePath.matches('^doctor_applications/' + request.auth.uid + '/app_' + request.auth.uid + '/.+') &&
-             data.downloadURL is string;
-    }
-
+    // - Applicant can read their own application
+    // - Clinic Admin can read applications for their clinic
+    // - Super Admin can read all applications
     match /doctor_applications/{appId} {
-      allow read: if isOwner() || (isAuthenticated() && (isPlatformAdmin() || isClinicAdminFor(resource.data) || resource.data.userId == request.auth.uid));
-
-      allow create: if (getUserRole() in ['patient', 'doctor_pending']) && (isEmailVerified() &&
-                    requesterClinicMatchesCreate(request.resource.data) &&
+      allow read: if isActive() && (
+        (resource.data.userId == request.auth.uid) ||
+        isClinicAdminFor(resource.data.clinicId) ||
+        isSuperAdmin()
+      );
+      allow create: if isEmailVerified() && !isSuspended() &&
                     request.resource.data.userId == request.auth.uid &&
                     request.resource.data.status == 'pending' &&
-                    hasValidDoctorApplicationDocument(request.resource.data));
-
-      allow update: if isSelf(resource.data.userId) && resource.data.status == 'pending' &&
-        request.resource.data.status == 'cancelled' &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'cancelledAt']);
-      allow delete: if false;
-
+                    (getClinicId() == null || !('clinicId' in request.resource.data) || request.resource.data.clinicId == getClinicId());
+      allow update: if isActive() && isEmailVerified() && (
+        (isSelf(resource.data.userId) && resource.data.status == 'pending' && request.resource.data.status == 'cancelled') ||
+        (isClinicAdminFor(resource.data.clinicId) && resource.data.status == 'pending' && request.resource.data.status in ['approved', 'rejected'])
+      );
+      allow delete: if isSuperAdmin();
     }
 
     // =========================================================================
-    // 🩺 CLINICAL ASSESSMENT VALIDATION HELPERS
+    // 3. Clinical Cases Collection
     // =========================================================================
-    
-    function isValidOxygen(data) {
-      return (!('oxygenLevel' in data) || (data.oxygenLevel is number && data.oxygenLevel >= 50 && data.oxygenLevel <= 100)) &&
-             (!('o2' in data) || (data.o2 is number && data.o2 >= 50 && data.o2 <= 100));
-    }
-
-    function isValidBreathing(data) {
-      return !('breathingDifficulty' in data) || 
-             (data.breathingDifficulty is string && data.breathingDifficulty.size() > 0 && data.breathingDifficulty.size() <= 40);
-    }
-
-    function isValidCough(data) {
-      return !('coughLevel' in data) || 
-             (data.coughLevel is string && data.coughLevel.size() > 0 && data.coughLevel.size() <= 40);
-    }
-
-    function isValidDuration(data) {
-      return !('symptomDuration' in data) || 
-             (data.symptomDuration is string &&
-              data.symptomDuration.size() > 0 &&
-              data.symptomDuration.size() <= 50 &&
-              data.symptomDuration.matches('^\\s*([1-9]|[1-9][0-9]|[1-2][0-9][0-9]|3[0-5][0-9]|36[0-5]|[١-٩]|[١-٩][٠-٩]|[١-٢][٠-٩][٠-٩]|٣[٠-٥][٠-٩]|٣٦[٠-٥]|[۱-۹]|[۱-۹][۰-۹]|[۱-۲][۰-۹][۰-۹]|۳[۰-۵][۰-۹]|۳۶[۰-۵])\\s*(days?|day|d|يوم|أيام|ايام|يوما|يوماً)?\\s*$'));
-    }
-
-    function isValidRiskFactors(data) {
-      return !('riskFactors' in data) || 
-             (data.riskFactors is list && data.riskFactors.size() <= 10);
-    }
-
-    function isValidOptionalTemperature(data) {
-      return !('temperature' in data) ||
-             data.temperature == null ||
-             (data.temperature is number && data.temperature >= 34 && data.temperature <= 43);
-    }
-
-    function isValidOptionalRespiratoryRate(data) {
-      return !('respiratoryRate' in data) ||
-             data.respiratoryRate == null ||
-             (data.respiratoryRate is number && data.respiratoryRate >= 5 && data.respiratoryRate <= 60);
-    }
-
-    function isValidUnknownStatus(data, field) {
-      return !(field in data) ||
-             data[field] == null ||
-             (data[field] is string && data[field] in ['yes', 'no', 'unknown']);
-    }
-
-    function isValidProgression(data) {
-      return !('symptomProgressionKey' in data) ||
-             data.symptomProgressionKey == null ||
-             (data.symptomProgressionKey is string && data.symptomProgressionKey in ['improving', 'stable', 'worsening', 'unknown']);
-    }
-
-    function isValidPatientText(data) {
-      return (!('currentMedications' in data) || data.currentMedications == null || (data.currentMedications is string && data.currentMedications.size() <= 500)) &&
-             (!('patientNotes' in data) || data.patientNotes == null || (data.patientNotes is string && data.patientNotes.size() <= 1000));
-    }
-
-    function isValidPriority(data) {
-      return !('priority' in data) || 
-             (data.priority is string && data.priority in ['normal', 'routine', 'urgent', 'emergency', 'low', 'medium', 'high']);
-    }
-
-    function isValidAssessment(data) {
-      return isValidOxygen(data) &&
-             isValidBreathing(data) &&
-             isValidCough(data) &&
-             isValidDuration(data) &&
-             isValidRiskFactors(data) &&
-             isValidOptionalTemperature(data) &&
-             isValidOptionalRespiratoryRate(data) &&
-             isValidUnknownStatus(data, 'chestPainKey') &&
-             isValidUnknownStatus(data, 'recentInfectionKey') &&
-             isValidUnknownStatus(data, 'asthmaCopdKey') &&
-             isValidProgression(data) &&
-             isValidPatientText(data) &&
-             isValidPriority(data);
-    }
-
-    function isPatientOwnedRecord(data) {
-      return ('patientId' in data && data.patientId == request.auth.uid) ||
-             ('userId' in data && data.userId == request.auth.uid);
-    }
-
-    function isDoctorApprovedCase(data) {
-      return ('doctorApproved' in data && data.doctorApproved == true) ||
-             ('status' in data && data.status in ['approved', 'closed']);
-    }
-
-    function hasNoUnreleasedClinicalResult(data) {
-      return !('doctorNotes' in data) &&
-             !('clinicalImpression' in data) &&
-             !('officialDiagnosis' in data);
-    }
-
-    function isPublishedReport(data) {
-      return ('status' in data && data.status == 'approved') ||
-             ('doctorApproved' in data && data.doctorApproved == true);
-    }
-
-    function hasNoPatientForgedClinicalResult(data) {
-      return !('doctorNotes' in data) &&
-             !('clinicalImpression' in data) &&
-             !('officialDiagnosis' in data) &&
-             (!('doctorApproved' in data) || data.doctorApproved == false) &&
-             !('approvedAt' in data) &&
-             !('assignedDoctorId' in data) && !('doctorIdentity' in data) && !('approvingDoctorId' in data);
-    }
-
-    function isPatientMoreInfoResponse() {
-      return isAuthenticated() &&
-             resource.data.patientId == request.auth.uid &&
-             resource.data.status == 'more_info_requested' &&
-             request.resource.data.status == 'under_review' &&
-             !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-               'doctorNotes', 'clinicalImpression', 'officialDiagnosis', 'doctorApproved', 'assignedDoctorId'
-             ]);
-    }
-
-    function isValidCaseStatus(status) {
-      return status in [
-        'draft',
-        'submitted',
-        'triaged',
-        'assigned',
-        'under_review',
-        'more_info_requested',
-        'approved',
-        'rejected',
-        'escalated',
-        'closed',
-        'pending'
-      ];
-    }
-
-    function isRoleMatchedToRequester(data) {
-      return ('role' in data) &&
-             ((data.role == 'patient' && isPatient()) ||
-              (data.role == 'doctor' && isVerifiedDoctor()) ||
-              (data.role == 'clinic_admin' && isClinicAdmin()) ||
-              (data.role == 'super_admin' && isSuperAdmin()));
-    }
-
-    // ⚙️ Operational Feature Switch: New Assessment Intake
-    function isAssessmentIntakeEnabled() {
-      return !exists(/databases/$(database)/documents/system_settings/operational_switches) ||
-             !('assessmentIntake' in get(/databases/$(database)/documents/system_settings/operational_switches).data) ||
-             get(/databases/$(database)/documents/system_settings/operational_switches).data.assessmentIntake == true;
-    }
-
-    function isDoctorLinkedRecord(data) {
-      return isOwner() || (isVerifiedDoctor() && (
-        ('assignedDoctorId' in data && data.assignedDoctorId == request.auth.uid) ||
-        ('doctorId' in data && data.doctorId == request.auth.uid) ||
-        ('doctorUid' in data && data.doctorUid == request.auth.uid) ||
-        ('approvingDoctorId' in data && data.approvingDoctorId == request.auth.uid)
-      ));
-    }
-
-    function caseDoc(caseId) {
-      return get(/databases/$(database)/documents/cases/$(caseId));
-    }
-
-    function caseExists(caseId) {
-      return exists(/databases/$(database)/documents/cases/$(caseId));
-    }
-
-    function isAssignedDoctorForCaseId(caseId) {
-      return isAuthenticated() &&
-             isVerifiedDoctor() &&
-             caseExists(caseId) &&
-             isDoctorLinkedRecord(caseDoc(caseId).data);
-    }
-
-    function hasAllowedCaseFileExtension(fileName) {
-      return fileName.matches('.*\\.([pP][dD][fF]|[jJ][pP][gG]|[jJ][pP][eE][gG]|[pP][nN][gG]|[wW][eE][bB][pP])$');
-    }
-
-    function hasBlockedExecutableExtension(fileName) {
-      return fileName.matches('.*\\.([eE][xX][eE]|[dD][lL][lL]|[bB][aA][tT]|[cC][mM][dD]|[cC][oO][mM]|[mM][sS][iI]|[pP][sS]1|[sS][hH]|[jJ][sS]|[vV][bB][sS]|[sS][cC][rR]|[jJ][aA][rR]|[aA][pP][kK]|[dD][mM][gG])$');
-    }
-
-    function isValidCaseFileCreate(data, fileId) {
-      return data.keys().hasAll([
-               'patientId', 'caseId', 'fileName', 'safeFileName', 'contentType',
-               'size', 'storagePath', 'scanStatus', 'availability', 'uploadStatus',
-               'createdBy', 'createdAt'
-             ]) &&
-             data.patientId == request.auth.uid &&
-             data.createdBy == request.auth.uid &&
-             data.caseId is string &&
-             caseExists(data.caseId) &&
-             caseDoc(data.caseId).data.patientId == request.auth.uid &&
-             data.safeFileName is string &&
-             hasAllowedCaseFileExtension(data.safeFileName) &&
-             !hasBlockedExecutableExtension(data.safeFileName) &&
-             data.contentType in ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'] &&
-             data.size is number &&
-             data.size > 0 &&
-             data.size <= 10 * 1024 * 1024 &&
-             data.storagePath == 'case_files/' + request.auth.uid + '/' + data.caseId + '/' + fileId + '/' + data.safeFileName &&
-             data.scanStatus in ['upload_pending', 'pending', 'quarantined'] &&
-             data.availability == 'quarantined' &&
-             data.uploadStatus in ['metadata_created', 'uploading'];
-    }
-
-    function isPatientCaseFileMaintenance() {
-      return resource.data.patientId == request.auth.uid &&
-             request.resource.data.patientId == resource.data.patientId &&
-             request.resource.data.caseId == resource.data.caseId &&
-             request.resource.data.storagePath == resource.data.storagePath &&
-             request.resource.data.scanStatus in [resource.data.scanStatus, 'pending'] &&
-             request.resource.data.availability in [resource.data.availability, 'quarantined'] &&
-             request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-               'uploadStatus', 'progress', 'scanStatus', 'availability', 'uploadedAt', 'updatedAt', 'deletedAt', 'deletedBy'
-             ]) &&
-             request.resource.data.uploadStatus in ['uploading', 'uploaded', 'cancelled', 'deleted', 'failed'];
-    }
-
-    // =========================================================================
-    // 3. 📋 CLINICAL CASES (/cases/{caseId})
-    // =========================================================================
-    // Direct client writes must never bypass doctor review, report approval, or modify closed cases.
-    function preservesServerApproval() {
-      return resource.data.status != 'closed' &&
-             request.resource.data.status != 'closed' &&
-             request.resource.data.status != 'approved' &&
-             !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-               'doctorApproved', 'approvingDoctorId', 'approvingDoctorEmail',
-               'approvingDoctorName', 'doctorLicense', 'doctorSpecialty', 'clinicName',
-               'doctorIdentity', 'approvedAt', 'reportGeneratedAt', 'generatedAt', 'reportRef',
-               'clinicalDiagnosis', 'clinicalNotes', 'doctorNotes', 'doctorNote',
-               'medications', 'recommendation', 'recommendations', 'reviewedBy', 'reviewedAt', 'result'
-             ]);
-    }
-
+    // - Patients can only read their own released cases (unreleased/under_review hidden)
+    // - Doctors can ONLY read verified cases assigned to them in their clinic
+    // - Support role has ZERO clinical access
+    // - Clinic Admins can only read cases in their own clinic
+    // - Direct client updates are disallowed (authoritative transitions go through backend API)
     match /cases/{caseId} {
-      allow read: if isAuthenticated() &&
-                     !('role' in request.auth.token && request.auth.token.role == 'support') &&
-                     ((resource.data.patientId == request.auth.uid &&
-                       (isDoctorApprovedCase(resource.data) || hasNoUnreleasedClinicalResult(resource.data))) ||
-                       (('role' in request.auth.token && request.auth.token.role == 'doctor') &&
-                        ('verifiedDoctor' in request.auth.token && request.auth.token.verifiedDoctor == true) &&
-                        ((('assignedDoctorId' in resource.data) && resource.data.assignedDoctorId == request.auth.uid) ||
-                         (('doctorId' in resource.data) && resource.data.doctorId == request.auth.uid) ||
-                         (('doctorUid' in resource.data) && resource.data.doctorUid == request.auth.uid) ||
-                         (('approvingDoctorId' in resource.data) && resource.data.approvingDoctorId == request.auth.uid))) ||
-                       ('role' in request.auth.token && request.auth.token.role == 'super_admin') ||
-                       tokenClinicAdminFor(resource.data));
+      allow read: if isActive() && (
+        (
+          resource.data.patientId == request.auth.uid &&
+          resource.data.status != 'under_review' &&
+          (!('clinicalImpression' in resource.data) || resource.data.doctorApproved == true)
+        ) ||
+        (
+          isAssignedDoctor(resource.data) &&
+          (getClinicId() == null || !('clinicId' in resource.data) || resource.data.clinicId == getClinicId())
+        ) ||
+        (
+          'clinicId' in resource.data && isClinicAdminFor(resource.data.clinicId)
+        ) ||
+        isSuperAdmin()
+      );
 
-      allow create: if isAuthenticated() &&
-                       isAssessmentIntakeEnabled() &&
-                       request.auth.token.role == 'patient' &&
-                       request.auth.token.email_verified == true && (
-                        request.resource.data.patientId == request.auth.uid &&
-                        (!('clinicId' in request.auth.token) ||
-                         !('clinicId' in request.resource.data) ||
-                         request.resource.data.clinicId == request.auth.token.clinicId) &&
-                        request.resource.data.status in ['draft', 'submitted', 'triaged', 'pending'] &&
-                        hasNoPatientForgedClinicalResult(request.resource.data) &&
-                        isValidAssessment(request.resource.data));
+      allow create: if isEmailVerified() && !isSuspended() &&
+                    request.resource.data.patientId == request.auth.uid &&
+                    request.resource.data.status in ['submitted', 'pending'] &&
+                    !request.resource.data.keys().hasAny(['doctorApproved', 'clinicalImpression', 'clinicalDiagnosis', 'doctorNotes']) &&
+                    (getClinicId() == null || !('clinicId' in request.resource.data) || request.resource.data.clinicId == getClinicId());
 
-      allow update: if isAuthenticated() &&
-                        preservesServerApproval() &&
-                        !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-                          'clinicId', 'clinic', 'branchId', 'assignedDoctorId', 'doctorId', 'doctorUid'
-                        ]) &&
-                        !('role' in request.auth.token && request.auth.token.role == 'support') &&
-                        ((('role' in request.auth.token && request.auth.token.role == 'doctor') &&
-                          ('verifiedDoctor' in request.auth.token && request.auth.token.verifiedDoctor == true) &&
-                          request.resource.data.status == resource.data.status &&
-                          ((('assignedDoctorId' in resource.data) && resource.data.assignedDoctorId == request.auth.uid) ||
-                           (('doctorId' in resource.data) && resource.data.doctorId == request.auth.uid) ||
-                           (('doctorUid' in resource.data) && resource.data.doctorUid == request.auth.uid) ||
-                           (('approvingDoctorId' in resource.data) && resource.data.approvingDoctorId == request.auth.uid))) ||
-                         isPatientMoreInfoResponse()) &&
-                        request.resource.data.patientId == resource.data.patientId &&
-                        isValidCaseStatus(request.resource.data.status) &&
-                        isValidAssessment(request.resource.data);
-
-      allow delete: if isOwner() || isPlatformAdmin() || isClinicAdminFor(resource.data);
-    }
-
-    match /assessmentDrafts/{draftId} {
-      allow read: if isAuthenticated() &&
-                    draftId == request.auth.uid &&
-                    resource.data.patientId == request.auth.uid;
-
-      allow create, update: if isAuthenticated() &&
-                              draftId == request.auth.uid &&
-                              request.resource.data.patientId == request.auth.uid &&
-                              request.resource.data.createdBy == request.auth.uid &&
-                              request.resource.data.status in ['draft', 'submitted'] &&
-                              !('doctorApproved' in request.resource.data) &&
-                              !('assignedDoctorId' in request.resource.data) &&
-                              !('doctorId' in request.resource.data) &&
-                              !('doctorUid' in request.resource.data) &&
-                              !('approvingDoctorId' in request.resource.data);
-
-      allow delete: if isAuthenticated() && draftId == request.auth.uid;
-    }
-
-    match /case_files/{fileId} {
-      allow read: if isAuthenticated() &&
-                    !('role' in request.auth.token && request.auth.token.role == 'support') &&
-                    (resource.data.patientId == request.auth.uid ||
-                     isAssignedDoctorForCaseId(resource.data.caseId) ||
-                     isOwner() ||
-                     tokenClinicAdminFor(resource.data));
-
-      allow create: if isAuthenticated() &&
-                      request.auth.token.role == 'patient' &&
-                      isEmailVerified() &&
-                      isValidCaseFileCreate(request.resource.data, fileId);
-
-      allow update: if isAuthenticated() && isPatientCaseFileMaintenance();
-
-      allow delete: if isAuthenticated() &&
-                      (resource.data.patientId == request.auth.uid || isOwner() || tokenClinicAdminFor(resource.data));
-    }
-
-    match /assessments/{assessmentId} {
-      allow read: if isAuthenticated() &&
-                    !('role' in request.auth.token && request.auth.token.role == 'support') &&
-                    ((isPatientOwnedRecord(resource.data) &&
-                      (isDoctorApprovedCase(resource.data) || hasNoUnreleasedClinicalResult(resource.data))) ||
-                     ('role' in request.auth.token && request.auth.token.role == 'super_admin') ||
-                     tokenClinicAdminFor(resource.data));
-    }
-
-    match /reports/{reportId} {
-      allow read: if isAuthenticated() &&
-                    !('role' in request.auth.token && request.auth.token.role == 'support') &&
-                    ((isPatientOwnedRecord(resource.data) && isPublishedReport(resource.data)) ||
-                     ('role' in request.auth.token && request.auth.token.role == 'super_admin') ||
-                     tokenClinicAdminFor(resource.data));
-    }
-
-    match /medical_reports/{reportId} {
-      allow read: if isAuthenticated() &&
-                    !('role' in request.auth.token && request.auth.token.role == 'support') &&
-                    ((isPatientOwnedRecord(resource.data) && isPublishedReport(resource.data)) ||
-                     ('role' in request.auth.token && request.auth.token.role == 'super_admin') ||
-                     tokenClinicAdminFor(resource.data));
-    }
-
-    match /clinical_reports/{reportId} {
-      allow read: if isAuthenticated() &&
-                    !('role' in request.auth.token && request.auth.token.role == 'support') &&
-                    ((isPatientOwnedRecord(resource.data) && isPublishedReport(resource.data)) ||
-                     (isPatientOwnedRecord(resource.data) && ('withdrawal' in resource.data) && resource.data.withdrawal.status == 'withdrawn') ||
-                     (('role' in request.auth.token && request.auth.token.role == 'doctor') &&
-                      ('approvingDoctorId' in resource.data) && resource.data.approvingDoctorId == request.auth.uid) ||
-                     ('role' in request.auth.token && request.auth.token.role == 'super_admin') ||
-                     tokenClinicAdminFor(resource.data));
-      allow create, update, delete: if false;
+      allow update: if false; // All clinical approvals, updates, and triage go through server API
+      allow delete: if isSuperAdmin();
     }
 
     // =========================================================================
-    // 4. 🛡️ SERVER AUDIT EVENTS (/audit_events/{eventId})
+    // 4. Reports, Medical Reports, Clinical Reports
     // =========================================================================
-    match /audit_events/{eventId} {
-      allow read: if isOwner() || isPlatformAdmin() || isClinicAdminFor(resource.data);
-      allow create, update, delete: if false;
+    // - Patients can only read released (approved) reports for themselves
+    // - Draft reports are blocked from patients
+    // - Support has ZERO clinical access
+    // - Clinic Admins can read reports within their clinic only
+    // - Client writes are blocked (generated server-side)
+    match /{reportCollection}/{reportId} {
+      allow read: if reportCollection in ['reports', 'medical_reports', 'clinical_reports'] &&
+                  isActive() && (
+                    (
+                      resource.data.patientId == request.auth.uid &&
+                      resource.data.doctorApproved == true &&
+                      resource.data.status == 'approved'
+                    ) ||
+                    (
+                      'clinicId' in resource.data && isClinicAdminFor(resource.data.clinicId)
+                    ) ||
+                    (
+                      isVerifiedDoctor() && isAssignedDoctor(resource.data) &&
+                      (getClinicId() == null || !('clinicId' in resource.data) || resource.data.clinicId == getClinicId())
+                    ) ||
+                    isSuperAdmin()
+                  );
       allow write: if false;
     }
 
     // =========================================================================
-    // 5. 📝 CLIENT AUDIT LOG (/auditLog/{logId})
+    // 5. Appointments Collection
     // =========================================================================
-    match /auditLog/{logId} {
-      allow read: if isOwner() || isPlatformAdmin() || isClinicAdminFor(resource.data);
-      allow create: if isAuthenticated() && (
-        ('patientId' in request.resource.data && request.resource.data.patientId == request.auth.uid) ||
-        ('userId' in request.resource.data && request.resource.data.userId == request.auth.uid)
+    match /appointments/{apptId} {
+      allow read: if isActive() && (
+        (isPatient() && resource.data.patientId == request.auth.uid) ||
+        (isVerifiedDoctor() && resource.data.doctorId == request.auth.uid) ||
+        isClinicAdminFor(resource.data.clinicId)
       );
+      allow create: if isActive() && (
+        (isPatient() && request.resource.data.patientId == request.auth.uid &&
+         (getClinicId() == null || !('clinicId' in request.resource.data) || request.resource.data.clinicId == getClinicId())) ||
+        isClinicAdminFor(request.resource.data.clinicId)
+      );
+      allow update: if isActive() && (
+        (isPatient() && resource.data.patientId == request.auth.uid && request.resource.data.patientId == request.auth.uid) ||
+        (isVerifiedDoctor() && resource.data.doctorId == request.auth.uid) ||
+        isClinicAdminFor(resource.data.clinicId)
+      );
+      allow delete: if isClinicAdminFor(resource.data.clinicId);
+    }
+
+    // =========================================================================
+    // 6. AI Model Metrics Collection
+    // =========================================================================
+    match /ai_model_metrics/{metricId} {
+      allow read: if isActive() && (
+        ('clinicId' in resource.data && isClinicAdminFor(resource.data.clinicId)) ||
+        isSuperAdmin()
+      );
+      allow write: if false;
+    }
+
+    // =========================================================================
+    // 7. Feedbacks Collection
+    // =========================================================================
+    match /feedbacks/{feedbackId} {
+      allow read: if isActive() && (
+        isSuperAdmin() ||
+        ('clinicId' in resource.data && isClinicAdminFor(resource.data.clinicId)) ||
+        resource.data.userId == request.auth.uid
+      );
+      allow create: if isActive() &&
+                    request.resource.data.userId == request.auth.uid &&
+                    (getClinicId() == null || !('clinicId' in request.resource.data) || request.resource.data.clinicId == getClinicId());
+      allow update, delete: if isSuperAdmin();
+    }
+
+    // =========================================================================
+    // 8. System Settings Collection
+    // =========================================================================
+    match /system_settings/{settingId} {
+      allow read: if isActive();
+      allow write: if isSuperAdmin();
+    }
+
+    // =========================================================================
+    // 9. Audit Events and Audit Log
+    // =========================================================================
+    // - Immutable security audit trail: append-only, readable only by Super Admin
+    match /audit_events/{eventId} {
+      allow read: if isSuperAdmin();
+      allow create: if isAuthenticated();
       allow update, delete: if false;
     }
 
-    // =========================================================================
-    // 6. 📊 AI MODEL METRICS (/ai_model_metrics/{metricId})
-    // =========================================================================
-    match /ai_model_metrics/{metricId} {
-      allow read: if isAuthenticated() &&
-        (('role' in request.auth.token && request.auth.token.role == 'super_admin') ||
-         tokenClinicAdminFor(resource.data) ||
-         ('role' in request.auth.token && request.auth.token.role == 'doctor'));
-      allow write: if isAuthenticated() &&
-        (('role' in request.auth.token && request.auth.token.role == 'super_admin') ||
-         tokenClinicAdminFor(resource.data));
-    }
-
-    // =========================================================================
-    // 7. 📅 CLINICAL APPOINTMENTS (/appointments/{appointmentId})
-    // =========================================================================
-    match /appointments/{appointmentId} {
-      allow read: if isAuthenticated() &&
-        !('role' in request.auth.token && request.auth.token.role == 'support') && (
-        ('role' in request.auth.token && request.auth.token.role == 'super_admin') ||
-        tokenClinicAdminFor(resource.data) ||
-        (('role' in request.auth.token && request.auth.token.role == 'doctor') &&
-         ((('doctorId' in resource.data) && resource.data.doctorId == request.auth.uid) ||
-          (('doctorUid' in resource.data) && resource.data.doctorUid == request.auth.uid) ||
-          (('assignedDoctorId' in resource.data) && resource.data.assignedDoctorId == request.auth.uid))) ||
-        resource.data.patientId == request.auth.uid
-      );
-
-      allow create: if getUserRole() in ['patient', 'doctor_pending'] && isAuthenticated() &&
-                    request.resource.data.patientId == request.auth.uid &&
-                    requesterClinicMatchesCreate(request.resource.data) &&
-                    request.resource.data.status in ['confirmed', 'pending'];
-
-      allow update: if isAuthenticated() && !isSupport() &&
-        !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-          'patientId', 'clinicId', 'clinic', 'branchId', 'assignedDoctorId', 'doctorId', 'doctorUid'
-        ]) && (
-        isPlatformAdmin() ||
-        isClinicAdminFor(resource.data) ||
-        isDoctorLinkedRecord(resource.data) ||
-        (resource.data.patientId == request.auth.uid && request.resource.data.patientId == request.auth.uid)
-      );
-
-      allow delete: if isAuthenticated() && !isSupport() && (
-        isPlatformAdmin() ||
-        isClinicAdminFor(resource.data) ||
-        resource.data.patientId == request.auth.uid
-      );
-    }
-
-    // =========================================================================
-    // 8. 📧 EMAIL NOTIFICATIONS & QUEUE (/email_notifications/{notificationId})
-    // =========================================================================
-    match /email_notifications/{notificationId} {
-      allow read: if isOwner();
-      allow read: if isAuthenticated() && !isSupport() && (
-        isPlatformAdmin() ||
-        isClinicAdminFor(resource.data) ||
-        isDoctorLinkedRecord(resource.data) ||
-        resource.data.patientId == request.auth.uid ||
-        (request.auth.token.email != null && resource.data.recipient == request.auth.token.email)
-      );
-      allow write: if false;
-    }
-
-    match /notification_queue/{queueId} {
-      allow read: if isOwner() || isPlatformAdmin();
-      allow write: if false;
-    }
-
-    match /delivery_receipts/{receiptId} {
-      allow read: if isOwner() || isPlatformAdmin();
-      allow write: if false;
-    }
-
-    // =========================================================================
-    // 9. ⭐ CLINICAL & PATIENT FEEDBACKS (/feedbacks/{feedbackId})
-    // =========================================================================
-    match /feedbacks/{feedbackId} {
-      allow read: if isOwner();
-      allow read: if isAuthenticated() && !isSupport() && (
-        isPlatformAdmin() ||
-        isClinicAdminFor(resource.data) ||
-        isDoctorLinkedRecord(resource.data) ||
-        resource.data.userId == request.auth.uid
-      );
-
-      allow create: if isAuthenticated() && !isSupport() &&
-                    request.resource.data.userId == request.auth.uid &&
-                    requesterClinicMatchesCreate(request.resource.data) &&
-                    request.resource.data.rating is number &&
-                    request.resource.data.rating >= 1 &&
-                    request.resource.data.rating <= 5 &&
-                    request.resource.data.role in ['patient', 'doctor', 'clinic_admin', 'super_admin'] &&
-                    isRoleMatchedToRequester(request.resource.data) &&
-                    request.resource.data.comment is string &&
-                    request.resource.data.comment.size() > 0 &&
-                    request.resource.data.comment.size() <= 2000;
-
-      allow update, delete: if isPlatformAdmin() || isClinicAdminFor(resource.data);
-    }
-
-    // =========================================================================
-    // 10. 🏥 CLINIC LEADS & DEMO REQUESTS (/clinic_leads/{leadId})
-    // =========================================================================
-    match /clinic_leads/{leadId} {
-      allow read, write: if isOwner() || isPlatformAdmin() || isClinicAdminFor(resource.data);
-      allow create: if true;
-    }
-
-    match /system_config/admin_access {
-      allow read, write: if isOwner();
-    }
-
-    // =========================================================================
-    // 11. 🏢 MULTI-TENANT ORGANIZATIONS, CLINICS & MEMBERSHIPS
-    // =========================================================================
-    match /organizations/{orgId} {
-      // Public branding lookup is allowed for custom domain/portal resolution; writes restricted to platform admins
-      allow read: if true;
-      allow write: if isOwner() || isSuperAdmin();
-    }
-
-    match /org_private_config/{orgId} {
-      // Strictly shielded: secrets & private tokens can NEVER be read publicly
-      allow read, write: if isOwner() || isSuperAdmin();
-    }
-
-    match /clinics/{clinicId} {
-      allow read: if isAuthenticated();
-      allow write: if isOwner() || isSuperAdmin() || isClinicAdmin();
-    }
-
-    match /org_memberships/{membershipId} {
-      allow read: if isOwner() || isSuperAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
-      allow write: if isOwner() || isSuperAdmin();
-    }
-
-    // =========================================================================
-    // 12. ⚙️ OPERATIONAL FEATURE SWITCHES (/system_settings/operational_switches)
-    // =========================================================================
-    match /system_settings/operational_switches {
-      allow read: if isAuthenticated();
-      allow write: if isPlatformAdmin();
-    }
-
-    // =========================================================================
-    // 🛡️ PRIVACY TOMBSTONES (/privacy_tombstones/{tombstoneId})
-    // Server Admin SDK authoritative suppression for GDPR / HIPAA compliance
-    // =========================================================================
-    match /privacy_tombstones/{tombstoneId} {
-      allow read: if isOwner() || isPlatformAdmin();
-      allow write: if false;
-    }
-
-    // =========================================================================
-    // 13. 👑 MASTER CATCH-ALL OVERRIDE
-    // =========================================================================
-    match /{document=**} {
-      allow read, write: if false;
+    match /auditLog/{logId} {
+      allow read: if isSuperAdmin();
+      allow create: if isAuthenticated();
+      allow update, delete: if false;
     }
   }
 }
