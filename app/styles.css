@@ -19,7 +19,7 @@
   --hero-grad-1: #072628;
   --hero-grad-2: #051618;
   color-scheme: dark;
-  font-family: "Cairo", "IBM Plex Sans Arabic", "Segoe UI", Tahoma, sans-serif;
+  font-family: "Cairo", "Tajawal", "IBM Plex Sans Arabic", "Segoe UI", Tahoma, sans-serif;
 }
 
 html.hv-theme-dark body,
@@ -5228,7 +5228,7 @@ body.dark .mobile-bottom-nav {
    25. UI SYSTEM COMPLETION: TOKENS, STATES, ROLES & RESPONSIVE QA
    ========================================================================== */
 :root {
-  --font-sans: "Cairo", "IBM Plex Sans Arabic", "Segoe UI", Tahoma, sans-serif;
+  --font-sans: "Cairo", "Tajawal", "IBM Plex Sans Arabic", "Segoe UI", Tahoma, sans-serif;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
