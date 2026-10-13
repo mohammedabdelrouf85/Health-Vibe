@@ -6016,8 +6016,28 @@ function showSignedOutUI() {
     publicSite.style.display = "block";
     publicSite.classList.remove("is-hidden");
   }
+  const siteBackBtn = document.getElementById("siteBackToAppBtn");
+  if (siteBackBtn) {
+    siteBackBtn.style.display = "none";
+  }
+  const lockScreen = document.getElementById("idleLockScreen");
+  if (lockScreen) {
+    lockScreen.style.display = "none";
+  }
+  window._isIdleLocked = false;
+  window._restoredSessionUser = null;
+  window._activeUser = null;
   document.body.classList.remove("sidebar-open");
   updateEmailVerificationUI(null);
+
+  // Clear inputs and auth errors so sign in / register works immediately without refresh
+  const pwdInput = document.getElementById("authPassword");
+  if (pwdInput) pwdInput.value = "";
+  if (typeof clearAuthError === "function") clearAuthError();
+  if (typeof setAuthLoading === "function") setAuthLoading(false);
+  if (typeof setAuthMode === "function") setAuthMode("signin");
+  if (typeof showSignInView === "function") showSignInView();
+  if (typeof dismissLoader === "function") dismissLoader(true);
 }
 
 async function clearFirebaseAuthStorage() {
@@ -6035,11 +6055,6 @@ async function clearFirebaseAuthStorage() {
       }
     });
   } catch(e) {}
-  try {
-    if (window.indexedDB && indexedDB.deleteDatabase) {
-      indexedDB.deleteDatabase("firebaseLocalStorageDb");
-    }
-  } catch(e) {}
 }
 
 async function leaveApp(event) {
@@ -6049,9 +6064,10 @@ async function leaveApp(event) {
   }
   window._isSigningOut = true;
   window._restoredSessionUser = null;
+  window._activeUser = null;
+  window._isIdleLocked = false;
   const lockScreen = document.getElementById("idleLockScreen");
   if (lockScreen) lockScreen.style.display = "none";
-  window._isIdleLocked = false;
   clearActiveSession();
   if (window.asyncContextManager) {
     window.asyncContextManager.handleAuthChange("LOGOUT");
@@ -6075,16 +6091,15 @@ async function leaveApp(event) {
 
   try {
     if (typeof auditSessionLogout === "function") await auditSessionLogout().catch(() => {});
-    await auth.signOut();
+    if (auth) await auth.signOut();
   } catch(e) {
     console.error("Sign out error:", e);
   }
   await clearFirebaseAuthStorage();
+  window._isSigningOut = false;
   showSignedOutUI();
   showToast(currentLanguage === "en" ? "Signed out" : "تم تسجيل الخروج");
-  window.setTimeout(() => {
-    window._isSigningOut = false;
-  }, 500);
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 window.leaveApp = leaveApp;
@@ -16262,7 +16277,11 @@ function initHVAuthListener() {
   auth.onAuthStateChanged(async (user) => {
     window.clearTimeout(loaderSafetyTimer);
     if (window._isSigningOut) {
-      if (!user) window._isSigningOut = false;
+      if (!user) {
+        window._isSigningOut = false;
+        showSignedOutUI();
+        dismissLoader(true);
+      }
       return;
     }
     if (user) {
@@ -16360,31 +16379,26 @@ function initHVAuthListener() {
       // Update with enriched details
       transitionToApp(user);
     } else {
-      // Truly signed out
+      // Truly signed out: Stay on the landing page, NEVER open the inner app
       if (window.asyncContextManager) {
         window.asyncContextManager.handleAuthChange("LOGOUT");
       }
       clearActiveSession();
+      window._restoredSessionUser = null;
+      window._activeUser = null;
       window._isUserVerified = false;
       window._verifiedPhone = "";
       window._cachedUserDoc = null;
       updateEmailVerificationUI(null);
       selectedRole = ROLES.PATIENT;
-      if (publicSite) {
-        publicSite.hidden = true;
-        publicSite.setAttribute("hidden", "true");
-        publicSite.style.display = "none";
-      }
-      if (app) {
-        app.hidden = false;
-        app.removeAttribute("hidden");
-        app.style.display = "grid";
-      }
+
+      showSignedOutUI();
+
       const elapsed = Date.now() - loaderStartTime;
-      const delay = Math.max(340, LOADER_MIN_DISPLAY_MS - elapsed);
+      const delay = Math.max(150, LOADER_MIN_DISPLAY_MS - elapsed);
       window.setTimeout(() => {
         dismissLoader(true);
-        showScreen("patient");
+        showSignedOutUI();
       }, delay);
     }
   });
