@@ -2422,6 +2422,45 @@ async function requireDoctor(req, res, next) {
   });
 }
 
+/**
+ * Middleware: Enforce Server-Verified Patient Role
+ * Strictly blocks doctors and admins from spoofing or submitting patient triage records
+ * under administrative or clinical sessions.
+ */
+async function requirePatient(req, res, next) {
+  const role = getTrustedClaimRole(req.user);
+  if (role === ROLES.PATIENT || role === 'patient') {
+    return next();
+  }
+  return res.status(403).json({
+    error: 'ACCESS_DENIED',
+    message: 'Server verification failed: Patient role required for this endpoint.'
+  });
+}
+
+/**
+ * Middleware Factory: Enforce Strict Role-Based Access Control
+ * Ensures the authenticated user belongs strictly to one of the authorized roles.
+ */
+function requireStrictRole(allowedRoles = []) {
+  return (req, res, next) => {
+    const role = getTrustedClaimRole(req.user);
+    if (allowedRoles.includes(role) || (allowedRoles.includes('super_admin') && hasTrustedOwnerClaim(req.user))) {
+      return next();
+    }
+    return res.status(403).json({
+      error: 'ROLE_FORBIDDEN',
+      message: `Access denied: Role '${role}' is not authorized for this route. Permitted roles: ${allowedRoles.join(', ')}.`
+    });
+  };
+}
+
+// Attach RBAC middlewares to app for testing and sub-routing
+app.requirePatient = requirePatient;
+app.requireDoctor = requireDoctor;
+app.requireAdmin = requireAdmin;
+app.requireStrictRole = requireStrictRole;
+
 // ==========================================
 // API ENDPOINTS
 // ==========================================
