@@ -647,6 +647,75 @@ service cloud.firestore {
     }
 
     // =========================================================================
+    // 10. REFERENCE CATALOGS & OPERATIONAL LAYER (PRD Architecture)
+    // =========================================================================
+    match /diseases_catalog/{diseaseId} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner() || isPlatformAdmin();
+    }
+
+    match /symptoms_catalog/{symptomId} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner() || isPlatformAdmin();
+    }
+
+    match /clinical_rules/{ruleId} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner() || isPlatformAdmin();
+    }
+
+    match /patients/{patientId} {
+      allow read: if isAuthenticated() &&
+                    (request.auth.uid == patientId ||
+                     isOwner() ||
+                     isPlatformAdmin() ||
+                     (request.auth.token.role == 'doctor' && request.auth.token.verifiedDoctor == true));
+      allow create, update: if isAuthenticated() &&
+                              (request.auth.uid == patientId || isOwner() || isPlatformAdmin());
+      allow delete: if isOwner() || isPlatformAdmin();
+    }
+
+    match /doctors/{doctorId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() &&
+                              (request.auth.uid == doctorId || isOwner() || isPlatformAdmin());
+      allow delete: if isOwner() || isPlatformAdmin();
+    }
+
+    match /clinics/{clinicId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isOwner() || isPlatformAdmin() || tokenClinicAdminFor(resource.data);
+    }
+
+    match /case_status_history/{historyId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if false; // Append-only immutable history
+    }
+
+    match /medical_uploads/{uploadId} {
+      allow read: if isAuthenticated() &&
+                    (resource.data.patientId == request.auth.uid ||
+                     isOwner() ||
+                     isPlatformAdmin() ||
+                     (request.auth.token.role == 'doctor' && request.auth.token.verifiedDoctor == true));
+      allow create: if isAuthenticated() && request.resource.data.patientId == request.auth.uid;
+      allow update, delete: if isAuthenticated() &&
+                              (resource.data.patientId == request.auth.uid || isOwner() || isPlatformAdmin());
+    }
+
+    match /email_queue/{emailId} {
+      allow read, write: if isOwner() || isPlatformAdmin();
+    }
+
+    match /audit_logs/{auditId} {
+      allow read: if isOwner() || isPlatformAdmin();
+      allow create: if isAuthenticated();
+      allow update, delete: if false; // Immutable audit trail
+    }
+
+    // =========================================================================
     // 11. 👑 MASTER CATCH-ALL OVERRIDE
     // =========================================================================
     match /{document=**} {

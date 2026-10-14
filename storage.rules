@@ -199,6 +199,17 @@ service firebase.storage {
                     (isOwner(patientId) || isPlatformAdmin());
     }
 
+    match /medical_uploads/{patientId}/{caseId}/{uploadId}/{fileName} {
+      allow read: if !isSuspended() && (isOwner(patientId) || isAssignedDoctorForCase(caseId) || isPlatformAdmin());
+      allow create, update: if isOwner(patientId) && !isSuspended() && isAllowedCaseFile(fileName);
+      allow delete: if isOwner(patientId) || isPlatformAdmin();
+    }
+
+    match /reports/{reportId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isPlatformAdmin();
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }

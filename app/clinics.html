@@ -2024,9 +2024,28 @@
         console.warn("[LOCALSTORAGE LEAD PERSISTENCE WARNING]:", lsErr);
       }
 
-      // 3. Dispatch to backend API for instant email notification & server-side persistence
+      // 3. Dispatch to backend API for instant onboarding into clinics collection & email notification
       let serverLeadId = refId;
       try {
+        const onboardPayload = {
+          nameAr: clinicName,
+          nameEn: clinicName,
+          phone: phone,
+          email: email,
+          address: city,
+          governorate: city,
+          specialty: specialty,
+          doctorCount: doctorCount,
+          packageType: packageType
+        };
+
+        // Dual dispatch: onboard endpoint and demo-request notification
+        fetch("/api/clinics/onboard", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(onboardPayload)
+        }).catch(e => console.warn("[API CLINIC ONBOARDING CALL]:", e.message));
+
         const response = await fetch("/api/clinics/demo-request", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -2035,8 +2054,8 @@
 
         if (response.ok) {
           const data = await response.json();
-          if (data && data.leadId) {
-            serverLeadId = data.leadId;
+          if (data && (data.leadId || data.clinicId)) {
+            serverLeadId = data.leadId || data.clinicId;
           }
         }
       } catch (apiErr) {

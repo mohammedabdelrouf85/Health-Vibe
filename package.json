@@ -7,6 +7,7 @@
     "test:auth-loading": "node tests/auth_loading_and_forms.test.js",
     "test:auth-validation": "node tests/auth_strict_validation.test.js",
     "test:auth-root-cause": "node tests/strict_auth_google_and_email_root_cause.test.js",
+    "test:db-architecture": "node tests/strict_full_database_architecture_and_integration.test.js",
     "test:strict-rbac": "node tests/strict_rbac_three_tier_separation.test.js",
     "test:admin-subroles": "node tests/strict_admin_subroles_least_privilege.test.js",
     "test:password-security": "node tests/strict_password_hashing_and_zero_plaintext.test.js",

@@ -85,6 +85,8 @@ const diseaseAuthorizationService = require('./disease-authorization-service');
 const { relationalDbService } = require('./relational-db-service');
 const { kaggleTrainingService } = require('./kaggle-training-service');
 const { passwordSecurityService } = require('./password-security-service');
+const { medicalCatalogService } = require('./medical-catalog-service');
+const { caseWorkflowService } = require('./case-workflow-service');
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -15909,19 +15911,136 @@ app.post('/api/admin/operational-switches', requireAuth, auditOperationalAccess(
 /**
  * POST /api/cases/intake
  * Trusted server write path for new clinical assessments.
- * Strictly blocked when assessmentIntake switch is disabled; existing records remain accessible.
+ * Persists inputSnapshot, evaluates aiEvaluation linked to diseases_catalog, and records status history.
  */
 app.post('/api/cases/intake', operationalSwitchesService.requireFeatureEnabled('assessmentIntake'), requireAuth, async (req, res) => {
   try {
-    const payload = req.body || {};
-    res.status(201).json({
-      success: true,
-      message: 'Assessment intake received and processed.',
-      patientId: req.user.uid,
-      intakeTimestamp: new Date().toISOString()
+    const result = await caseWorkflowService.createCaseIntake({
+      user: req.user,
+      body: req.body || {},
+      db
     });
+    res.status(201).json(result);
   } catch (err) {
-    res.status(500).json({ error: 'INTAKE_ERROR', message: err.message });
+    res.status(400).json({ error: 'INTAKE_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/cases/:caseId/review
+ * Unified Doctor Review & Status Machine Endpoint
+ * Validates transitions (approved, rejected, needs_more_info, escalated),
+ * atomically records case_status_history, generates immutable reports on approval,
+ * and isolates private doctor notes from patient responses.
+ */
+app.post('/api/cases/:caseId/review', requireAuth, requireDoctor, async (req, res) => {
+  try {
+    const { caseId } = req.params;
+    const result = await caseWorkflowService.reviewCase({
+      doctorUser: req.user,
+      caseId,
+      reviewData: req.body || {},
+      db
+    });
+    res.status(200).json(result);
+  } catch (err) {
+    res.status(400).json({ error: 'CASE_REVIEW_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/medical-catalog/diseases
+ * Returns normalized reference diseases catalog from the reference layer.
+ */
+app.get('/api/medical-catalog/diseases', (req, res) => {
+  const moduleParam = req.query.module || null;
+  const diseases = medicalCatalogService.getDiseases(moduleParam);
+  res.status(200).json({ success: true, count: diseases.length, diseases });
+});
+
+/**
+ * GET /api/medical-catalog/symptoms
+ * Returns normalized reference symptoms catalog with validRanges and units.
+ */
+app.get('/api/medical-catalog/symptoms', (req, res) => {
+  const categoryParam = req.query.category || null;
+  const symptoms = medicalCatalogService.getSymptoms(categoryParam);
+  res.status(200).json({ success: true, count: symptoms.length, symptoms });
+});
+
+/**
+ * GET /api/medical-catalog/rules
+ * Returns reference clinical triage rules.
+ */
+app.get('/api/medical-catalog/rules', (req, res) => {
+  const rules = medicalCatalogService.getClinicalRules();
+  res.status(200).json({ success: true, count: rules.length, rules });
+});
+
+/**
+ * POST /api/appointments/book
+ * Books an appointment using atomic transaction semantics on doctor slotId.
+ */
+app.post('/api/appointments/book', requireAuth, async (req, res) => {
+  try {
+    const result = await caseWorkflowService.bookAppointment({
+      user: req.user,
+      body: req.body || {},
+      db
+    });
+    res.status(201).json(result);
+  } catch (err) {
+    res.status(400).json({ error: 'APPOINTMENT_BOOKING_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/appointments/:appointmentId/cancel
+ * Cancels appointment and releases slot.
+ */
+app.post('/api/appointments/:appointmentId/cancel', requireAuth, async (req, res) => {
+  try {
+    const { appointmentId } = req.params;
+    const result = await caseWorkflowService.cancelAppointment({
+      user: req.user,
+      appointmentId,
+      reason: req.body?.reason,
+      db
+    });
+    res.status(200).json(result);
+  } catch (err) {
+    res.status(400).json({ error: 'APPOINTMENT_CANCELLATION_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/clinics/onboard
+ * Saves real clinic onboarding request to clinics collection and notifies admins.
+ */
+app.post('/api/clinics/onboard', async (req, res) => {
+  try {
+    const result = await caseWorkflowService.onboardClinic({
+      user: req.user || null,
+      body: req.body || {},
+      db
+    });
+    res.status(201).json(result);
+  } catch (err) {
+    res.status(400).json({ error: 'CLINIC_ONBOARDING_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/admin/email-queue/process
+ * Triggers batch processing of pending transactional emails.
+ */
+app.post('/api/admin/email-queue/process', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const limit = Number(req.query.limit || 10);
+    const result = await caseWorkflowService.processEmailQueue(db, limit);
+    res.status(200).json({ success: true, ...result });
+  } catch (err) {
+    res.status(500).json({ error: 'EMAIL_QUEUE_PROCESS_FAILED', message: err.message });
   }
 });
 
