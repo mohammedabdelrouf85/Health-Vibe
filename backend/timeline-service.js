@@ -82,6 +82,17 @@ async function verifyTimelineAccess(requestingUser = {}, targetPatientId, db = n
     return { authorized: true, isClinician: false, isPatient: true };
   }
 
+  // 1.1 Strict Least-Privilege Guard (PRD Page 13):
+  // Administrative sub-roles (Ops, Support, Clinical QA) have zero access to raw individual patient timelines.
+  if (['ops', 'support', 'clinical_qa'].includes(role)) {
+    return {
+      authorized: false,
+      isClinician: false,
+      isPatient: false,
+      reason: 'LEAST_PRIVILEGE_RESTRICTION: Administrative sub-roles (Ops, Support, Clinical QA) have zero access to raw patient clinical timelines under PRD Page 13 policy.'
+    };
+  }
+
   // 2. Super Administrator or Platform Owner
   if (isOwner || role === 'super_admin') {
     return { authorized: true, isClinician: true, isPatient: false };

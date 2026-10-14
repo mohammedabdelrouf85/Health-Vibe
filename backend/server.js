@@ -1364,10 +1364,14 @@ const ROLES = {
   CLINIC_ADMIN: 'clinic_admin',
   ORG_ADMIN: 'org_admin',
   SUPPORT: 'support',
+  OPS: 'ops',
+  CLINICAL_QA: 'clinical_qa',
   SUPER_ADMIN: 'super_admin'
 };
 const VALID_ROLES = Object.values(ROLES);
 const ADMIN_ROLES = [ROLES.CLINIC_ADMIN, ROLES.ORG_ADMIN, ROLES.SUPER_ADMIN];
+const ADMIN_SUB_ROLES = [ROLES.SUPER_ADMIN, ROLES.OPS, ROLES.CLINICAL_QA, ROLES.SUPPORT];
+const NON_CLINICAL_ADMIN_ROLES = [ROLES.OPS, ROLES.CLINICAL_QA, ROLES.SUPPORT];
 
 // =============================================================================
 // 🏢 B2B & ENTERPRISE PLAN TIERS & CONTRACT CONFIGURATION
@@ -2511,6 +2515,15 @@ app.get('/api/patient/medical-profile', requireAuth, patientProfileLimiter, asyn
 
     if (requestedUid && requestedUid !== req.user.uid) {
       const userRole = getTrustedClaimRole(req.user);
+
+      // PRD Page 13: Revoke default universal access to sensitive medical data for administrative sub-roles
+      if (NON_CLINICAL_ADMIN_ROLES.includes(userRole)) {
+        return res.status(403).json({
+          error: 'LEAST_PRIVILEGE_RESTRICTION',
+          message: 'Zero-Trust: Administrative sub-roles (Ops, Support, Clinical QA) are restricted from accessing unmasked patient medical profiles under PRD Page 13 Least-Privilege policy.'
+        });
+      }
+
       const isClinicianOrAdmin = ADMIN_ROLES.includes(userRole) || userRole === ROLES.DOCTOR_VERIFIED || userRole === ROLES.DOCTOR || hasTrustedOwnerClaim(req.user);
       if (!isClinicianOrAdmin) {
         return res.status(403).json({
@@ -2683,6 +2696,15 @@ app.post('/api/patient/medical-profile', requireAuth, patientProfileLimiter, asy
 
     if (requestedUid && requestedUid !== req.user.uid) {
       const userRole = getTrustedClaimRole(req.user);
+
+      // PRD Page 13: Revoke default universal access to sensitive medical data for administrative sub-roles
+      if (NON_CLINICAL_ADMIN_ROLES.includes(userRole)) {
+        return res.status(403).json({
+          error: 'LEAST_PRIVILEGE_RESTRICTION',
+          message: 'Zero-Trust: Administrative sub-roles (Ops, Support, Clinical QA) cannot modify patient medical profiles.'
+        });
+      }
+
       const isClinicianOrAdmin = ADMIN_ROLES.includes(userRole) || userRole === ROLES.DOCTOR_VERIFIED || hasTrustedOwnerClaim(req.user);
       if (!isClinicianOrAdmin) {
         return res.status(403).json({
@@ -2812,6 +2834,15 @@ app.post('/api/patient/medical-profile/correct', requireAuth, patientProfileLimi
 
     if (requestedUid && requestedUid !== req.user.uid) {
       const userRole = getTrustedClaimRole(req.user);
+
+      // PRD Page 13: Revoke default universal access to sensitive medical data for administrative sub-roles
+      if (NON_CLINICAL_ADMIN_ROLES.includes(userRole)) {
+        return res.status(403).json({
+          error: 'LEAST_PRIVILEGE_RESTRICTION',
+          message: 'Zero-Trust: Administrative sub-roles (Ops, Support, Clinical QA) cannot correct patient medical profiles.'
+        });
+      }
+
       const isClinicianOrAdmin = ADMIN_ROLES.includes(userRole) || userRole === ROLES.DOCTOR_VERIFIED || hasTrustedOwnerClaim(req.user);
       if (!isClinicianOrAdmin) {
         return res.status(403).json({
@@ -4785,6 +4816,64 @@ app.post('/api/user/mfa/disenroll', requireAuth, requireRecentAuth(900), require
   res.json({
     success: true,
     message: 'Multi-factor authentication has been disabled.'
+  });
+});
+
+/**
+ * GET /api/admin/sub-roles
+ * Returns definitions and least-privilege security policies for the 4 administrative sub-roles
+ * (Super Admin, Ops, Clinical QA, Support) as specified in PRD Page 13.
+ */
+app.get('/api/admin/sub-roles', requireAuth, (req, res) => {
+  return res.json({
+    success: true,
+    policy: 'PRD_PAGE_13_LEAST_PRIVILEGE_ADMIN_SUB_ROLES',
+    subRoles: {
+      super_admin: {
+        id: 'super_admin',
+        nameAr: 'المدير العام (Super Admin)',
+        nameEn: 'Super Administrator',
+        descriptionAr: 'الحوكمة الشاملة، إدارة المستخدمين والرتب، ومراجعة سجلات التدقيق الأمني. إلغاء الوصول الشامل الافتراضي للبيانات الطبية (خاضع للتدقيق والتبرير الطارئ فقط).',
+        descriptionEn: 'Master platform governance, credentialing, audit trail oversight. Routine medical browsing revoked.',
+        hasMedicalDataAccess: false,
+        clinicalAccessPolicy: 'audited_emergency_only',
+        allowedScreens: ['admin', 'audit', 'kpi'],
+        permissions: ['manage:user_roles', 'manage:users', 'view:admin_dashboard', 'view:audit_log', 'approve:doctor_application', 'reject:doctor_application', 'manage:ai_models', 'view:system_metrics']
+      },
+      ops: {
+        id: 'ops',
+        nameAr: 'مدير العمليات والبنية التحتية (Ops)',
+        nameEn: 'Operations & Infrastructure Admin',
+        descriptionAr: 'إدارة البنية التحتية، قواطع الميزات التشغيلية، ومراقبة خوادم النظام وأداء الشبكة. حظر قطعي وتام لأي وصول للبيانات السريرية للمرضى.',
+        descriptionEn: 'Infrastructure management, operational feature switches, telemetry, server uptime. Zero medical data access.',
+        hasMedicalDataAccess: false,
+        clinicalAccessPolicy: 'zero_access',
+        allowedScreens: ['profile', 'admin', 'audit', 'kpi', 'verify-report', 'verify'],
+        permissions: ['view:admin_dashboard', 'view:system_metrics', 'manage:system_settings', 'view:audit_log']
+      },
+      clinical_qa: {
+        id: 'clinical_qa',
+        nameAr: 'مسؤول ضمان الجودة السريرية (Clinical QA)',
+        nameEn: 'Clinical QA & AI Safety Auditor',
+        descriptionAr: 'تقييم نماذج الذكاء الاصطناعي، مصفوفة الدقة والالتباس، سجل السلامة وسجلات CAPA. وصول حصري لمؤشرات إحصائية مجمعة مجهولة الهوية فقط دون أي استعراض لملفات المرضى الفردية.',
+        descriptionEn: 'AI triage safety register, accuracy metrics, confusion matrices, CAPA audits. De-identified aggregate access only.',
+        hasMedicalDataAccess: false,
+        clinicalAccessPolicy: 'aggregate_only',
+        allowedScreens: ['profile', 'admin', 'audit', 'kpi', 'verify-report', 'verify'],
+        permissions: ['view:admin_dashboard', 'view:system_metrics', 'manage:ai_models', 'view:clinical_metrics_aggregate', 'view:audit_log']
+      },
+      support: {
+        id: 'support',
+        nameAr: 'مسؤول الدعم الفني (Support)',
+        nameEn: 'Technical & Customer Support',
+        descriptionAr: 'مساعدة المستخدمين وحل مشكلات تسجيل الدخول والتذاكر. حجب وتعتيم تلقائي لكافة البيانات الطبية الحساسة (SpO2، العلامات الحيوية، التشخيص، الملاحظات الداخلية).',
+        descriptionEn: 'User assistance, login troubleshooting, ticket escalation. Clinical data masked and redacted.',
+        hasMedicalDataAccess: false,
+        clinicalAccessPolicy: 'masked_redacted_only',
+        allowedScreens: ['profile', 'kpi', 'verify-report', 'verify'],
+        permissions: ['view:system_metrics', 'view:support_queue']
+      }
+    }
   });
 });
 

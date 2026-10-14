@@ -134,6 +134,20 @@ service cloud.firestore {
       return isAuthenticated() && getUserRole() == 'support';
     }
 
+    function isOps() {
+      return isAuthenticated() && getUserRole() == 'ops';
+    }
+
+    function isClinicalQa() {
+      return isAuthenticated() && getUserRole() == 'clinical_qa';
+    }
+
+    // PRD Page 13: Administrative sub-roles (Ops, Support, Clinical QA) have zero access to raw clinical data
+    function isNonClinicalAdminSubRole() {
+      return 'role' in request.auth.token &&
+             request.auth.token.role in ['support', 'ops', 'clinical_qa'];
+    }
+
     // Doctor role is strictly clinical and separated from administrative access
     function isDoctor() {
       return isAuthenticated() && getUserRole() == 'doctor';
@@ -451,7 +465,7 @@ service cloud.firestore {
 
     match /cases/{caseId} {
       allow read: if isAuthenticated() &&
-                     !('role' in request.auth.token && request.auth.token.role == 'support') &&
+                     !isNonClinicalAdminSubRole() &&
                      ((resource.data.patientId == request.auth.uid &&
                        (isDoctorApprovedCase(resource.data) || hasNoUnreleasedClinicalResult(resource.data))) ||
                        (('role' in request.auth.token && request.auth.token.role == 'doctor') &&
@@ -480,7 +494,7 @@ service cloud.firestore {
                         !request.resource.data.diff(resource.data).affectedKeys().hasAny([
                           'clinicId', 'clinic', 'branchId', 'assignedDoctorId', 'doctorId', 'doctorUid'
                         ]) &&
-                        !('role' in request.auth.token && request.auth.token.role == 'support') &&
+                        !isNonClinicalAdminSubRole() &&
                         ((('role' in request.auth.token && request.auth.token.role == 'doctor') &&
                           ('verifiedDoctor' in request.auth.token && request.auth.token.verifiedDoctor == true) &&
                           request.resource.data.status == resource.data.status &&
@@ -517,7 +531,7 @@ service cloud.firestore {
 
     match /case_files/{fileId} {
       allow read: if isAuthenticated() &&
-                    !('role' in request.auth.token && request.auth.token.role == 'support') &&
+                    !isNonClinicalAdminSubRole() &&
                     (resource.data.patientId == request.auth.uid ||
                      isAssignedDoctorForCaseId(resource.data.caseId) ||
                      isOwner() ||
@@ -536,7 +550,7 @@ service cloud.firestore {
 
     match /assessments/{assessmentId} {
       allow read: if isAuthenticated() &&
-                    !('role' in request.auth.token && request.auth.token.role == 'support') &&
+                    !isNonClinicalAdminSubRole() &&
                     ((isPatientOwnedRecord(resource.data) &&
                       (isDoctorApprovedCase(resource.data) || hasNoUnreleasedClinicalResult(resource.data))) ||
                      ('role' in request.auth.token && request.auth.token.role == 'super_admin') ||
@@ -545,7 +559,7 @@ service cloud.firestore {
 
     match /reports/{reportId} {
       allow read: if isAuthenticated() &&
-                    !('role' in request.auth.token && request.auth.token.role == 'support') &&
+                    !isNonClinicalAdminSubRole() &&
                     ((isPatientOwnedRecord(resource.data) && isPublishedReport(resource.data)) ||
                      ('role' in request.auth.token && request.auth.token.role == 'super_admin') ||
                      tokenClinicAdminFor(resource.data));
@@ -553,7 +567,7 @@ service cloud.firestore {
 
     match /medical_reports/{reportId} {
       allow read: if isAuthenticated() &&
-                    !('role' in request.auth.token && request.auth.token.role == 'support') &&
+                    !isNonClinicalAdminSubRole() &&
                     ((isPatientOwnedRecord(resource.data) && isPublishedReport(resource.data)) ||
                      ('role' in request.auth.token && request.auth.token.role == 'super_admin') ||
                      tokenClinicAdminFor(resource.data));
@@ -561,7 +575,7 @@ service cloud.firestore {
 
     match /clinical_reports/{reportId} {
       allow read: if isAuthenticated() &&
-                    !('role' in request.auth.token && request.auth.token.role == 'support') &&
+                    !isNonClinicalAdminSubRole() &&
                     ((isPatientOwnedRecord(resource.data) && isPublishedReport(resource.data)) ||
                      (isPatientOwnedRecord(resource.data) && ('withdrawal' in resource.data) && resource.data.withdrawal.status == 'withdrawn') ||
                      (('role' in request.auth.token && request.auth.token.role == 'doctor') &&
@@ -610,7 +624,7 @@ service cloud.firestore {
     // =========================================================================
     match /appointments/{appointmentId} {
       allow read: if isAuthenticated() &&
-        !('role' in request.auth.token && request.auth.token.role == 'support') && (
+        !isNonClinicalAdminSubRole() && (
         ('role' in request.auth.token && request.auth.token.role == 'super_admin') ||
         tokenClinicAdminFor(resource.data) ||
         (('role' in request.auth.token && request.auth.token.role == 'doctor') &&
@@ -733,7 +747,7 @@ service cloud.firestore {
     // =========================================================================
     function isDiseaseRecordAccessible(data) {
       return isAuthenticated() &&
-        !('role' in request.auth.token && request.auth.token.role == 'support') &&
+        !isNonClinicalAdminSubRole() &&
         (
           isOwner() ||
           isPlatformAdmin() ||
@@ -746,7 +760,7 @@ service cloud.firestore {
 
     function isDiseaseRecordWritable(data) {
       return isAuthenticated() &&
-        !('role' in request.auth.token && request.auth.token.role == 'support') &&
+        !isNonClinicalAdminSubRole() &&
         (
           isOwner() ||
           isPlatformAdmin() ||

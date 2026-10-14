@@ -88,7 +88,7 @@ class RelationalDatabaseService {
 
     const id = data.id || crypto.randomUUID();
     const role = data.role || "patient";
-    const validRoles = ["patient", "doctor", "clinic_admin", "support", "super_admin"];
+    const validRoles = ["patient", "doctor", "clinic_admin", "support", "ops", "clinical_qa", "super_admin"];
     if (!validRoles.includes(role)) {
       throw new Error(`Invalid role '${role}'. Must be one of: ${validRoles.join(", ")}`);
     }
@@ -624,6 +624,61 @@ class RelationalDatabaseService {
       return logs.slice(0, options.limit);
     }
     return logs;
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // 6.1 ADMINISTRATIVE SUB-ROLES & LEAST-PRIVILEGE (PRD Page 13)
+  // ───────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Returns metadata and policies for the 4 administrative sub-roles defined in PRD Page 13.
+   */
+  getAdminSubRoles() {
+    return {
+      SUPER_ADMIN: {
+        role: "super_admin",
+        scope: "platform_governance",
+        canAccessUnredactedClinical: false, // Default universal access revoked
+        requiresClinicalAuditReason: true
+      },
+      OPS: {
+        role: "ops",
+        scope: "infrastructure_and_telemetry",
+        canAccessUnredactedClinical: false,
+        requiresClinicalAuditReason: false
+      },
+      CLINICAL_QA: {
+        role: "clinical_qa",
+        scope: "ai_model_metrics_and_safety_register",
+        canAccessUnredactedClinical: false,
+        requiresClinicalAuditReason: false
+      },
+      SUPPORT: {
+        role: "support",
+        scope: "user_account_and_ticket_assistance",
+        canAccessUnredactedClinical: false,
+        requiresClinicalAuditReason: false
+      }
+    };
+  }
+
+  /**
+   * Evaluates if a role is permitted to view sensitive unmasked clinical data.
+   * Under PRD Page 13, non-clinical admin sub-roles (ops, clinical_qa, support)
+   * are strictly forbidden from viewing unmasked clinical records.
+   */
+  canAccessSensitiveClinicalData(role, isOwner = false) {
+    if (isOwner) return true;
+    if (role === "doctor") return true; // subject to patient care assignment
+    // Non-clinical administrative sub-roles have zero access
+    if (["ops", "clinical_qa", "support"].includes(role)) {
+      return false;
+    }
+    // Super admin default universal access is revoked; allowed only in audited emergency mode
+    if (role === "super_admin") {
+      return false;
+    }
+    return false;
   }
 
   // ───────────────────────────────────────────────────────────────────────────
