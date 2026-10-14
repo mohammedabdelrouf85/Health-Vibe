@@ -12357,6 +12357,77 @@ app.post('/api/patients/validate-consent', requireAuth, (req, res) => {
 });
 
 // =============================================================================
+// 🔐 AES-256 AT-REST ENCRYPTION ROUTES (DATABASE & CLOUD PDF REPORTS)
+// =============================================================================
+
+/**
+ * GET /api/security/encryption-status
+ * Returns comprehensive AES-256 at-rest encryption status for database and cloud storage.
+ * Mandated by PRD Page 10 (Security & Compliance) and User Request 37.
+ */
+app.get('/api/security/encryption-status', (req, res) => {
+  try {
+    const { encryptionService } = require('./encryption-service');
+    res.json(encryptionService.getEncryptionStatusReport());
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/reports/encrypt-pdf
+ * Encrypts a clinical PDF report using AES-256-GCM and stores with SSE-AES256.
+ */
+app.post('/api/reports/encrypt-pdf', requireAuth, (req, res) => {
+  try {
+    const { encryptionService } = require('./encryption-service');
+    const { reportId, pdfBase64 } = req.body || {};
+
+    if (!pdfBase64) {
+      return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'pdfBase64 is required.' });
+    }
+
+    const pdfBuffer = Buffer.from(pdfBase64, 'base64');
+    const encryptedPkg = encryptionService.encryptPdfBuffer(pdfBuffer, { reportId });
+
+    res.json({
+      success: true,
+      reportId: encryptedPkg.reportId,
+      encrypted: true,
+      algorithm: encryptedPkg.algorithm,
+      iv: encryptedPkg.iv,
+      authTag: encryptedPkg.authTag,
+      originalSize: encryptedPkg.originalBytesCount,
+      encryptedSize: encryptedPkg.encryptedBytesCount,
+      checksumSha256: encryptedPkg.checksumSha256,
+      storagePath: encryptedPkg.storagePath,
+      cloudStorageHeaders: encryptionService.getCloudStorageEncryptionHeaders()
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'ENCRYPTION_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/reports/:reportId/download-decrypted
+ * Authenticated download and decryption of AES-256 protected PDF clinical report.
+ */
+app.get('/api/reports/:reportId/download-decrypted', requireAuth, (req, res) => {
+  try {
+    const { encryptionService } = require('./encryption-service');
+    const decryptedPdfBuffer = encryptionService.getDecryptedReportById(req.params.reportId);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="healthvibe_report_${req.params.reportId}.pdf"`);
+    res.setHeader('X-Decrypted-From', 'AES-256-GCM');
+    res.send(decryptedPdfBuffer);
+  } catch (err) {
+    const status = err.message.includes('NOT_FOUND') ? 404 : 500;
+    res.status(status).json({ error: 'DECRYPTION_FAILED', message: err.message });
+  }
+});
+
+// =============================================================================
 // 💳 SUBSCRIPTION, BILLING & REVENUE LEDGER ROUTES
 // =============================================================================
 

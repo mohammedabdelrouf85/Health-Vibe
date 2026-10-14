@@ -105,6 +105,10 @@ CREATE TABLE IF NOT EXISTS clinical_cases (
     doctor_signature JSONB,
     certified_at TIMESTAMP WITH TIME ZONE,
     sla_deadline TIMESTAMP WITH TIME ZONE,
+    encrypted_phi_payload TEXT,
+    encryption_iv VARCHAR(32),
+    encryption_auth_tag VARCHAR(32),
+    encryption_algorithm VARCHAR(32) DEFAULT 'AES-256-GCM',
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT chk_case_approved_requires_verified_doctor_signature CHECK (
@@ -188,7 +192,31 @@ BEFORE UPDATE OR DELETE ON audit_logs
 FOR EACH ROW EXECUTE FUNCTION prevent_audit_logs_tampering();
 
 -- -----------------------------------------------------------------------------
--- 7. KAGGLE TRAINING EXPERIMENTS METADATA (STRICTLY ISOLATED FROM OPERATIONAL DATA)
+-- 7. ENCRYPTED CLOUD REPORTS (AES-256-GCM AT-REST CLOUD STORAGE) - PRD Page 10
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS encrypted_cloud_reports (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    report_id VARCHAR(128) UNIQUE NOT NULL,
+    patient_id UUID REFERENCES patients(id) ON DELETE CASCADE,
+    case_id UUID REFERENCES clinical_cases(id) ON DELETE CASCADE,
+    storage_path VARCHAR(512) NOT NULL,
+    cloud_bucket VARCHAR(128) NOT NULL DEFAULT 'health-vibes-a4b3b.firebasestorage.app',
+    encryption_algorithm VARCHAR(32) NOT NULL DEFAULT 'AES-256-GCM',
+    key_id VARCHAR(64) NOT NULL DEFAULT 'hv-aes256-key-v1',
+    encryption_iv VARCHAR(32) NOT NULL,
+    encryption_auth_tag VARCHAR(32) NOT NULL,
+    original_size_bytes INT NOT NULL,
+    encrypted_size_bytes INT NOT NULL,
+    sha256_checksum VARCHAR(64) NOT NULL,
+    server_side_encryption VARCHAR(32) NOT NULL DEFAULT 'AES256',
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_encrypted_reports_patient ON encrypted_cloud_reports(patient_id);
+CREATE INDEX IF NOT EXISTS idx_encrypted_reports_case ON encrypted_cloud_reports(case_id);
+
+-- -----------------------------------------------------------------------------
+-- 8. KAGGLE TRAINING EXPERIMENTS METADATA (STRICTLY ISOLATED FROM OPERATIONAL DATA)
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS ml_training_registry (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
