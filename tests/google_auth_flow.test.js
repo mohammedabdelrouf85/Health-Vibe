@@ -80,8 +80,24 @@ assert.ok(
 );
 console.log("  ✓ getGoogleAuthProvider() handles deferred loading and sets select_account.");
 
-// TEST 7: Simulation of enterApp execution logic
-console.log("\n▶ TEST 7: Execution Simulation of enterApp('google')");
+// TEST 7: Demo Mode Google Auth Guard & Alert Notice
+console.log("\n▶ TEST 7: Demo Mode Google Auth Guard & Alert Notice");
+assert.ok(
+  appJsContent.includes("isExplicitDemo"),
+  "enterApp must detect explicit demo environment"
+);
+assert.ok(
+  appJsContent.includes("Notice: Live Google OAuth is reserved for production"),
+  "enterApp must display informative notice when Google login is clicked in demo mode"
+);
+assert.ok(
+  appJsContent.includes("enterDemoMode()"),
+  "enterApp must route seamlessly into interactive sandbox when in demo mode"
+);
+console.log("  ✓ enterApp() guards Demo mode with clear bilingual alert notice and sandbox fallback.");
+
+// TEST 8: Simulation of enterApp execution logic
+console.log("\n▶ TEST 8: Execution Simulation of enterApp('google')");
 
 let mockLocalStorage = { "hv_explicit_logout": "true" };
 let mockSessionStorage = { "hv_explicit_logout": "true" };
