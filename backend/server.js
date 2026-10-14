@@ -12301,6 +12301,58 @@ app.get('/api/respiratory/clinical-spec', (req, res) => {
 });
 
 // =============================================================================
+// 👥 SYNTHETIC PATIENTS (DEMO/PRESENTATION) & CONSENT GOVERNANCE ROUTES
+// =============================================================================
+
+/**
+ * GET /api/demo/synthetic-patients
+ * Returns certified synthetic patient cohort (N=20) for presentations, UI demos, and testing.
+ * Enforces zero real PHI (PRD Page 18).
+ */
+app.get('/api/demo/synthetic-patients', (req, res) => {
+  try {
+    const { syntheticPatientsService } = require('./synthetic-patients-service');
+    const { urgency, conditionLabel, gender } = req.query || {};
+    const patients = syntheticPatientsService.getSyntheticPatients({ urgency, conditionLabel, gender });
+    res.json({
+      success: true,
+      count: patients.length,
+      isDemoSafe: true,
+      containsRealPhi: false,
+      governanceNotice: 'All patient profiles in this feed are certified synthetic personas for presentation and testing without real PHI (PRD Page 18).',
+      patients
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/patients/validate-consent
+ * Enforces documented consent verification before processing any real patient record.
+ * Blocks unconsented real data with HTTP 403 (PRD Page 18 Critical Risk Mitigation).
+ */
+app.post('/api/patients/validate-consent', requireAuth, (req, res) => {
+  try {
+    const { syntheticPatientsService } = require('./synthetic-patients-service');
+    const evaluation = syntheticPatientsService.validateConsentRequirement(req.body || {});
+    if (!evaluation.permitted) {
+      return res.status(403).json({
+        error: evaluation.error || 'REAL_PATIENT_DATA_WITHOUT_CONSENT_PROHIBITED',
+        message: evaluation.message,
+        permitted: false
+      });
+    }
+    return res.json({
+      success: true,
+      ...evaluation
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+// =============================================================================
 // 💳 SUBSCRIPTION, BILLING & REVENUE LEDGER ROUTES
 // =============================================================================
 

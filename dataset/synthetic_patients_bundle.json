@@ -1,0 +1,1222 @@
+[
+  {
+    "patientId": "HV-SYNTH-001",
+    "id": "HV-SYNTH-001",
+    "isSynthetic": true,
+    "isDeidentified": true,
+    "demoSafe": true,
+    "consentStatus": "SYNTHETIC_GENERATED_NO_PHI",
+    "containsRealPhi": false,
+    "generationMethod": "DETERMINISTIC_SYNTHETIC_GENERATOR",
+    "demographics": {
+      "syntheticNameAr": "مريض افتراضي 1 - عادل تجريبي",
+      "syntheticNameEn": "Synthetic Patient 1 - Adel Test",
+      "displayName": "مريض افتراضي 1 - عادل تجريبي",
+      "age": 58,
+      "gender": "male",
+      "governorate": "Cairo (Synthetic/Demo)",
+      "avatarUrl": "https://api.dicebear.com/7.x/bottts/svg?seed=HV-SYNTH-001"
+    },
+    "archetype": "COPD_EXACERBATION_SEVERE",
+    "vitals": {
+      "spo2": 88,
+      "heartRate": 104,
+      "respiratoryRate": 26,
+      "systolicBp": 135,
+      "diastolicBp": 85,
+      "temperature": 37.2
+    },
+    "symptoms": {
+      "dyspnea": "rest",
+      "cough": "severe",
+      "coughNature": "productive_purulent_yellow",
+      "durationDays": 6,
+      "chestTightness": true,
+      "hemoptysis": false
+    },
+    "comorbidities": {
+      "smoking": true,
+      "packYears": 25,
+      "copd": true,
+      "asthma": false,
+      "diabetes": false,
+      "hypertension": true,
+      "pregnancy": false
+    },
+    "triage": {
+      "category": "urgent",
+      "score": 8,
+      "assignedConditionLabel": "LABEL_COPD_EXACERBATION",
+      "icd10": "J44.1",
+      "requiresEmergencyAmbulance": true
+    },
+    "clinicalNarrative": {
+      "ar": "مدخن شره منذ 25 سنة، يعاني من ضيق تنفس حاد حتى أثناء الجلوس مع زيادة في كمية وصديدية البلغم ونقص تشبع الأكسجين (88%). يتطلب تدخلاً إسعافياً فورياً (123).",
+      "en": "Heavy smoker for 25 pack-years with severe acute resting dyspnea, increased purulent sputum, and profound hypoxemia (SpO2 88%). Requires urgent ambulance transfer."
+    },
+    "audit": {
+      "generatedAt": "2026-09-28T00:00:00.000Z",
+      "validationStatus": "HIPAA_SAFE_HARBOR_VERIFIED",
+      "sha256": "218aca63b919de34001c5ab8227af676b5c79db00c004f080709541c1b0ac1ab"
+    }
+  },
+  {
+    "patientId": "HV-SYNTH-002",
+    "id": "HV-SYNTH-002",
+    "isSynthetic": true,
+    "isDeidentified": true,
+    "demoSafe": true,
+    "consentStatus": "SYNTHETIC_GENERATED_NO_PHI",
+    "containsRealPhi": false,
+    "generationMethod": "DETERMINISTIC_SYNTHETIC_GENERATOR",
+    "demographics": {
+      "syntheticNameAr": "مريضة افتراضية 2 - منى تجريبية",
+      "syntheticNameEn": "Synthetic Patient 2 - Mona Test",
+      "displayName": "مريضة افتراضية 2 - منى تجريبية",
+      "age": 26,
+      "gender": "female",
+      "governorate": "Cairo (Synthetic/Demo)",
+      "avatarUrl": "https://api.dicebear.com/7.x/bottts/svg?seed=HV-SYNTH-002"
+    },
+    "archetype": "BRONCHIAL_ASTHMA_EXACERBATION_MODERATE",
+    "vitals": {
+      "spo2": 94,
+      "heartRate": 92,
+      "respiratoryRate": 20,
+      "systolicBp": 110,
+      "diastolicBp": 70,
+      "temperature": 36.8
+    },
+    "symptoms": {
+      "dyspnea": "exertional",
+      "cough": "severe",
+      "coughNature": "dry_nocturnal_paroxysmal",
+      "durationDays": 3,
+      "chestTightness": true,
+      "hemoptysis": false
+    },
+    "comorbidities": {
+      "smoking": false,
+      "packYears": 0,
+      "copd": false,
+      "asthma": true,
+      "diabetes": false,
+      "hypertension": false,
+      "pregnancy": false
+    },
+    "triage": {
+      "category": "high",
+      "score": 4,
+      "assignedConditionLabel": "LABEL_ASTHMA_EXACERBATION",
+      "icd10": "J45.901",
+      "requiresEmergencyAmbulance": false
+    },
+    "clinicalNarrative": {
+      "ar": "شابة تعاني من نوبات ربو متكررة مع ضيق تنفس عند بذل مجهود وسعال جاف ليلي بعد التعرض لأتربة. SpO2 94%، تتطلب استشارة صدرية خلال ساعتين وضبط بخاخات الاستنشاق.",
+      "en": "Young adult with known bronchial asthma presenting with exertional wheeze, chest tightness, and nocturnal cough following dust exposure. SpO2 94%."
+    },
+    "audit": {
+      "generatedAt": "2026-09-28T00:00:00.000Z",
+      "validationStatus": "HIPAA_SAFE_HARBOR_VERIFIED",
+      "sha256": "8455373704c1b2c13a14ecc01834f892a8baad95b459b9a92a2c8d11e43c9556"
+    }
+  },
+  {
+    "patientId": "HV-SYNTH-003",
+    "id": "HV-SYNTH-003",
+    "isSynthetic": true,
+    "isDeidentified": true,
+    "demoSafe": true,
+    "consentStatus": "SYNTHETIC_GENERATED_NO_PHI",
+    "containsRealPhi": false,
+    "generationMethod": "DETERMINISTIC_SYNTHETIC_GENERATOR",
+    "demographics": {
+      "syntheticNameAr": "مريض افتراضي 3 - كمال تجريبي",
+      "syntheticNameEn": "Synthetic Patient 3 - Kamal Test",
+      "displayName": "مريض افتراضي 3 - كمال تجريبي",
+      "age": 64,
+      "gender": "male",
+      "governorate": "Cairo (Synthetic/Demo)",
+      "avatarUrl": "https://api.dicebear.com/7.x/bottts/svg?seed=HV-SYNTH-003"
+    },
+    "archetype": "COMMUNITY_ACQUIRED_PNEUMONIA_URGENT",
+    "vitals": {
+      "spo2": 89,
+      "heartRate": 112,
+      "respiratoryRate": 28,
+      "systolicBp": 140,
+      "diastolicBp": 90,
+      "temperature": 39.1
+    },
+    "symptoms": {
+      "dyspnea": "rest",
+      "cough": "severe",
+      "coughNature": "productive_rusty_sputum",
+      "durationDays": 4,
+      "chestTightness": true,
+      "hemoptysis": false
+    },
+    "comorbidities": {
+      "smoking": true,
+      "packYears": 15,
+      "copd": false,
+      "asthma": false,
+      "diabetes": true,
+      "hypertension": true,
+      "pregnancy": false
+    },
+    "triage": {
+      "category": "urgent",
+      "score": 9,
+      "assignedConditionLabel": "LABEL_ACUTE_RESPIRATORY_INFECTION",
+      "icd10": "J18.9",
+      "requiresEmergencyAmbulance": true
+    },
+    "clinicalNarrative": {
+      "ar": "مريض سكري يعاني من حمى شديدة (39.1°C) وسعال مصحوب ببلغم صدئي ونقص أكسجين حاد (89%). اشتباه التهاب رئوي حاد يتطلب تحويلاً إسعافياً عاجلاً للمستشفى.",
+      "en": "Diabetic senior presenting with high-grade pyrexia (39.1°C), rusty productive cough, tachypnea, and critical hypoxemia (SpO2 89%). Suspected severe CAP requiring urgent admission."
+    },
+    "audit": {
+      "generatedAt": "2026-09-28T00:00:00.000Z",
+      "validationStatus": "HIPAA_SAFE_HARBOR_VERIFIED",
+      "sha256": "4f5f015a1b9c4057995d5271b6b434a73db4df27cf0f7698ac5880685db0a5e2"
+    }
+  },
+  {
+    "patientId": "HV-SYNTH-004",
+    "id": "HV-SYNTH-004",
+    "isSynthetic": true,
+    "isDeidentified": true,
+    "demoSafe": true,
+    "consentStatus": "SYNTHETIC_GENERATED_NO_PHI",
+    "containsRealPhi": false,
+    "generationMethod": "DETERMINISTIC_SYNTHETIC_GENERATOR",
+    "demographics": {
+      "syntheticNameAr": "مريض افتراضي 4 - طارق تجريبي",
+      "syntheticNameEn": "Synthetic Patient 4 - Tarek Test",
+      "displayName": "مريض افتراضي 4 - طارق تجريبي",
+      "age": 34,
+      "gender": "male",
+      "governorate": "Cairo (Synthetic/Demo)",
+      "avatarUrl": "https://api.dicebear.com/7.x/bottts/svg?seed=HV-SYNTH-004"
+    },
+    "archetype": "ACUTE_BRONCHITIS_MILD",
+    "vitals": {
+      "spo2": 97,
+      "heartRate": 78,
+      "respiratoryRate": 16,
+      "systolicBp": 120,
+      "diastolicBp": 80,
+      "temperature": 37.8
+    },
+    "symptoms": {
+      "dyspnea": "none",
+      "cough": "moderate",
+      "coughNature": "productive_mucoid",
+      "durationDays": 5,
+      "chestTightness": false,
+      "hemoptysis": false
+    },
+    "comorbidities": {
+      "smoking": false,
+      "packYears": 0,
+      "copd": false,
+      "asthma": false,
+      "diabetes": false,
+      "hypertension": false,
+      "pregnancy": false
+    },
+    "triage": {
+      "category": "normal",
+      "score": 1,
+      "assignedConditionLabel": "LABEL_ACUTE_RESPIRATORY_INFECTION",
+      "icd10": "J20.9",
+      "requiresEmergencyAmbulance": false
+    },
+    "clinicalNarrative": {
+      "ar": "شاب غير مدخن يعاني من التهاب شعبي حاد خفيف، كحة متوسطة وحرارة طفيفة دون ضيق تنفس أو نقص أكسجين (SpO2 97%). متابعة منزلية مع سوائل دافئة وراحة.",
+      "en": "Young adult presenting with mild acute bronchitis, productive mucoid cough, normal SpO2 (97%), and no respiratory distress. Managed with outpatient care."
+    },
+    "audit": {
+      "generatedAt": "2026-09-28T00:00:00.000Z",
+      "validationStatus": "HIPAA_SAFE_HARBOR_VERIFIED",
+      "sha256": "afd9768c721d336e1ed50852ea256900b827fc14c79b1d12df1e3fdc4c1cba5e"
+    }
+  },
+  {
+    "patientId": "HV-SYNTH-005",
+    "id": "HV-SYNTH-005",
+    "isSynthetic": true,
+    "isDeidentified": true,
+    "demoSafe": true,
+    "consentStatus": "SYNTHETIC_GENERATED_NO_PHI",
+    "containsRealPhi": false,
+    "generationMethod": "DETERMINISTIC_SYNTHETIC_GENERATOR",
+    "demographics": {
+      "syntheticNameAr": "مريضة افتراضية 5 - نادية تجريبية",
+      "syntheticNameEn": "Synthetic Patient 5 - Nadia Test",
+      "displayName": "مريضة افتراضية 5 - نادية تجريبية",
+      "age": 29,
+      "gender": "female",
+      "governorate": "Cairo (Synthetic/Demo)",
+      "avatarUrl": "https://api.dicebear.com/7.x/bottts/svg?seed=HV-SYNTH-005"
+    },
+    "archetype": "PREGNANCY_ASTHMA_HIGH_PRIORITY",
+    "vitals": {
+      "spo2": 92,
+      "heartRate": 98,
+      "respiratoryRate": 22,
+      "systolicBp": 115,
+      "diastolicBp": 75,
+      "temperature": 37
+    },
+    "symptoms": {
+      "dyspnea": "exertional",
+      "cough": "severe",
+      "coughNature": "dry_wheezing",
+      "durationDays": 2,
+      "chestTightness": true,
+      "hemoptysis": false
+    },
+    "comorbidities": {
+      "smoking": false,
+      "packYears": 0,
+      "copd": false,
+      "asthma": true,
+      "diabetes": false,
+      "hypertension": false,
+      "pregnancy": true
+    },
+    "triage": {
+      "category": "high",
+      "score": 6,
+      "assignedConditionLabel": "LABEL_ASTHMA_EXACERBATION",
+      "icd10": "J45.901",
+      "requiresEmergencyAmbulance": false
+    },
+    "clinicalNarrative": {
+      "ar": "سيدة حامل في الثلث الثاني تعاني من تفاقم نوبة الربو الشعبي مع هبوط SpO2 إلى 92%، تتطلب تقييماً فورياً من استشاري الصدرية وأمراض النساء لضبط الأكسجة الجنينية.",
+      "en": "Pregnant female in 2nd trimester with acute asthma exacerbation, SpO2 92%, and exertional dyspnea. Prioritized for urgent pulmonology evaluation to ensure fetal oxygenation."
+    },
+    "audit": {
+      "generatedAt": "2026-09-28T00:00:00.000Z",
+      "validationStatus": "HIPAA_SAFE_HARBOR_VERIFIED",
+      "sha256": "81cc6b6f9ddd7b141ec0b0308ee188d051e0dcd6b3131ea7a7bbcb7827d1dd88"
+    }
+  },
+  {
+    "patientId": "HV-SYNTH-006",
+    "id": "HV-SYNTH-006",
+    "isSynthetic": true,
+    "isDeidentified": true,
+    "demoSafe": true,
+    "consentStatus": "SYNTHETIC_GENERATED_NO_PHI",
+    "containsRealPhi": false,
+    "generationMethod": "DETERMINISTIC_SYNTHETIC_GENERATOR",
+    "demographics": {
+      "syntheticNameAr": "مريض افتراضي 6 - يوسف تجريبي",
+      "syntheticNameEn": "Synthetic Patient 6 - Youssef Test",
+      "displayName": "مريض افتراضي 6 - يوسف تجريبي",
+      "age": 48,
+      "gender": "male",
+      "governorate": "Cairo (Synthetic/Demo)",
+      "avatarUrl": "https://api.dicebear.com/7.x/bottts/svg?seed=HV-SYNTH-006"
+    },
+    "archetype": "COPD_EARLY_MODERATE",
+    "vitals": {
+      "spo2": 91,
+      "heartRate": 88,
+      "respiratoryRate": 21,
+      "systolicBp": 130,
+      "diastolicBp": 85,
+      "temperature": 37.1
+    },
+    "symptoms": {
+      "dyspnea": "exertional",
+      "cough": "moderate",
+      "coughNature": "chronic_morning_expectoration",
+      "durationDays": 14,
+      "chestTightness": false,
+      "hemoptysis": false
+    },
+    "comorbidities": {
+      "smoking": true,
+      "packYears": 20,
+      "copd": true,
+      "asthma": false,
+      "diabetes": false,
+      "hypertension": false,
+      "pregnancy": false
+    },
+    "triage": {
+      "category": "high",
+      "score": 5,
+      "assignedConditionLabel": "LABEL_COPD_EXACERBATION",
+      "icd10": "J44.1",
+      "requiresEmergencyAmbulance": false
+    },
+    "clinicalNarrative": {
+      "ar": "مدخن لـ 20 سنة يعاني من ضيق تنفس متصاعد مع المجهود وسعال صباحي مزمن مع بلغم منذ أسبوعين، SpO2 91%. يتطلب مراجعة العيادة الصدرية وعمل اختبار وظائف الرئة (Spirometry).",
+      "en": "Moderate smoker presenting with subacute exertional breathlessness, chronic morning cough, and borderline hypoxemia (91%). Indicated for formal spirometry."
+    },
+    "audit": {
+      "generatedAt": "2026-09-28T00:00:00.000Z",
+      "validationStatus": "HIPAA_SAFE_HARBOR_VERIFIED",
+      "sha256": "87cfe666190ae64217cb0541bf7177309e566c91d07bb3fed32516ec66dd68d4"
+    }
+  },
+  {
+    "patientId": "HV-SYNTH-007",
+    "id": "HV-SYNTH-007",
+    "isSynthetic": true,
+    "isDeidentified": true,
+    "demoSafe": true,
+    "consentStatus": "SYNTHETIC_GENERATED_NO_PHI",
+    "containsRealPhi": false,
+    "generationMethod": "DETERMINISTIC_SYNTHETIC_GENERATOR",
+    "demographics": {
+      "syntheticNameAr": "مريض افتراضي 7 - سامي تجريبي",
+      "syntheticNameEn": "Synthetic Patient 7 - Sami Test",
+      "displayName": "مريض افتراضي 7 - سامي تجريبي",
+      "age": 22,
+      "gender": "male",
+      "governorate": "Cairo (Synthetic/Demo)",
+      "avatarUrl": "https://api.dicebear.com/7.x/bottts/svg?seed=HV-SYNTH-007"
+    },
+    "archetype": "COMMON_COLD_MILD_URI",
+    "vitals": {
+      "spo2": 99,
+      "heartRate": 72,
+      "respiratoryRate": 14,
+      "systolicBp": 118,
+      "diastolicBp": 76,
+      "temperature": 36.9
+    },
+    "symptoms": {
+      "dyspnea": "none",
+      "cough": "mild",
+      "coughNature": "dry_scratchy",
+      "durationDays": 2,
+      "chestTightness": false,
+      "hemoptysis": false
+    },
+    "comorbidities": {
+      "smoking": false,
+      "packYears": 0,
+      "copd": false,
+      "asthma": false,
+      "diabetes": false,
+      "hypertension": false,
+      "pregnancy": false
+    },
+    "triage": {
+      "category": "normal",
+      "score": 0,
+      "assignedConditionLabel": "LABEL_MILD_URI_OR_NORMAL",
+      "icd10": "J00",
+      "requiresEmergencyAmbulance": false
+    },
+    "clinicalNarrative": {
+      "ar": "شاب سليم يعاني من نزلة برد شائعة خفيفة، حكة بالحلق وسعال طفيف مع تشبع أكسجين مثالي (99%). لا توجد علامات التهاب رئوي أو خطورة، علاج عرضي وراحة.",
+      "en": "Healthy young adult presenting with common cold symptoms, scratchy throat, normal SpO2 (99%), and clear lungs. Suitable for supportive home care."
+    },
+    "audit": {
+      "generatedAt": "2026-09-28T00:00:00.000Z",
+      "validationStatus": "HIPAA_SAFE_HARBOR_VERIFIED",
+      "sha256": "0b98389bf1e24552dab1d779e0ef5244fc6ae1deb9241917f8cf635a980b1f62"
+    }
+  },
+  {
+    "patientId": "HV-SYNTH-008",
+    "id": "HV-SYNTH-008",
+    "isSynthetic": true,
+    "isDeidentified": true,
+    "demoSafe": true,
+    "consentStatus": "SYNTHETIC_GENERATED_NO_PHI",
+    "containsRealPhi": false,
+    "generationMethod": "DETERMINISTIC_SYNTHETIC_GENERATOR",
+    "demographics": {
+      "syntheticNameAr": "مريضة افتراضية 8 - فاطمة تجريبية",
+      "syntheticNameEn": "Synthetic Patient 8 - Fatima Test",
+      "displayName": "مريضة افتراضية 8 - فاطمة تجريبية",
+      "age": 72,
+      "gender": "female",
+      "governorate": "Cairo (Synthetic/Demo)",
+      "avatarUrl": "https://api.dicebear.com/7.x/bottts/svg?seed=HV-SYNTH-008"
+    },
+    "archetype": "GERIATRIC_PNEUMONIA_CRITICAL",
+    "vitals": {
+      "spo2": 86,
+      "heartRate": 118,
+      "respiratoryRate": 30,
+      "systolicBp": 105,
+      "diastolicBp": 65,
+      "temperature": 38.6
+    },
+    "symptoms": {
+      "dyspnea": "rest",
+      "cough": "severe",
+      "coughNature": "weak_productive_mucopurulent",
+      "durationDays": 3,
+      "chestTightness": true,
+      "hemoptysis": false
+    },
+    "comorbidities": {
+      "smoking": false,
+      "packYears": 0,
+      "copd": false,
+      "asthma": false,
+      "diabetes": true,
+      "hypertension": true,
+      "pregnancy": false
+    },
+    "triage": {
+      "category": "urgent",
+      "score": 10,
+      "assignedConditionLabel": "LABEL_ACUTE_RESPIRATORY_INFECTION",
+      "icd10": "J18.9",
+      "requiresEmergencyAmbulance": true
+    },
+    "clinicalNarrative": {
+      "ar": "مسنة تعاني من التهاب رئوي حاد وهبوط شديد في الأكسجين (86%) مع تسرع التنفس وهبوط الضغط. حالة طارئة حرجة تستوجب الاتصال بالإسعاف (123) ودخول العناية المركزة.",
+      "en": "Geriatric diabetic female with acute severe pneumonia, profound hypoxemia (86%), tachypnea, and hemodynamic vulnerability. Emergency ICU escalation triggered."
+    },
+    "audit": {
+      "generatedAt": "2026-09-28T00:00:00.000Z",
+      "validationStatus": "HIPAA_SAFE_HARBOR_VERIFIED",
+      "sha256": "739dcb188f7222b61601d1b42a665389807ca4eb1ed9ab0cbfdd1210cdf61465"
+    }
+  },
+  {
+    "patientId": "HV-SYNTH-009",
+    "id": "HV-SYNTH-009",
+    "isSynthetic": true,
+    "isDeidentified": true,
+    "demoSafe": true,
+    "consentStatus": "SYNTHETIC_GENERATED_NO_PHI",
+    "containsRealPhi": false,
+    "generationMethod": "DETERMINISTIC_SYNTHETIC_GENERATOR",
+    "demographics": {
+      "syntheticNameAr": "مريض افتراضي 9 - حازم تجريبي",
+      "syntheticNameEn": "Synthetic Patient 9 - Hazem Test",
+      "displayName": "مريض افتراضي 9 - حازم تجريبي",
+      "age": 41,
+      "gender": "male",
+      "governorate": "Cairo (Synthetic/Demo)",
+      "avatarUrl": "https://api.dicebear.com/7.x/bottts/svg?seed=HV-SYNTH-009"
+    },
+    "archetype": "SEVERE_ACUTE_ASTHMA_ATTACK",
+    "vitals": {
+      "spo2": 89,
+      "heartRate": 122,
+      "respiratoryRate": 28,
+      "systolicBp": 145,
+      "diastolicBp": 95,
+      "temperature": 37.1
+    },
+    "symptoms": {
+      "dyspnea": "rest",
+      "cough": "severe",
+      "coughNature": "tight_spasmodic",
+      "durationDays": 1,
+      "chestTightness": true,
+      "hemoptysis": false
+    },
+    "comorbidities": {
+      "smoking": false,
+      "packYears": 0,
+      "copd": false,
+      "asthma": true,
+      "diabetes": false,
+      "hypertension": false,
+      "pregnancy": false
+    },
+    "triage": {
+      "category": "urgent",
+      "score": 9,
+      "assignedConditionLabel": "LABEL_ASTHMA_EXACERBATION",
+      "icd10": "J45.901",
+      "requiresEmergencyAmbulance": true
+    },
+    "clinicalNarrative": {
+      "ar": "نوبة ربو حادة شديدة مصحوبة بعجز عن إكمال جملة واحدة وضيق تنفس أثناء الراحة مع SpO2 89%. حالة إسعافية تستدعي إعطاء أكسجين وجلسات موسعات شعب فورية.",
+      "en": "Acute severe asthma attack presenting with speech limitation, dyspnea at rest, tachycardia, and SpO2 89%. Immediate emergency department transfer required."
+    },
+    "audit": {
+      "generatedAt": "2026-09-28T00:00:00.000Z",
+      "validationStatus": "HIPAA_SAFE_HARBOR_VERIFIED",
+      "sha256": "0894d1551f5a912025a7a867bde8149858c0cef09368a477f971bea3bf62b5a4"
+    }
+  },
+  {
+    "patientId": "HV-SYNTH-010",
+    "id": "HV-SYNTH-010",
+    "isSynthetic": true,
+    "isDeidentified": true,
+    "demoSafe": true,
+    "consentStatus": "SYNTHETIC_GENERATED_NO_PHI",
+    "containsRealPhi": false,
+    "generationMethod": "DETERMINISTIC_SYNTHETIC_GENERATOR",
+    "demographics": {
+      "syntheticNameAr": "مريضة افتراضية 10 - سارة تجريبية",
+      "syntheticNameEn": "Synthetic Patient 10 - Sarah Test",
+      "displayName": "مريضة افتراضية 10 - سارة تجريبية",
+      "age": 38,
+      "gender": "female",
+      "governorate": "Cairo (Synthetic/Demo)",
+      "avatarUrl": "https://api.dicebear.com/7.x/bottts/svg?seed=HV-SYNTH-010"
+    },
+    "archetype": "COVID_POST_VIRAL_COUGH_SUBACUTE",
+    "vitals": {
+      "spo2": 96,
+      "heartRate": 80,
+      "respiratoryRate": 17,
+      "systolicBp": 115,
+      "diastolicBp": 75,
+      "temperature": 36.9
+    },
+    "symptoms": {
+      "dyspnea": "none",
+      "cough": "moderate",
+      "coughNature": "dry_post_infectious",
+      "durationDays": 18,
+      "chestTightness": false,
+      "hemoptysis": false
+    },
+    "comorbidities": {
+      "smoking": false,
+      "packYears": 0,
+      "copd": false,
+      "asthma": false,
+      "diabetes": false,
+      "hypertension": false,
+      "pregnancy": false
+    },
+    "triage": {
+      "category": "normal",
+      "score": 2,
+      "assignedConditionLabel": "LABEL_ACUTE_RESPIRATORY_INFECTION",
+      "icd10": "J22",
+      "requiresEmergencyAmbulance": false
+    },
+    "clinicalNarrative": {
+      "ar": "سعال جاف متبقٍ بعد نزلة فيروسية سابقة منذ 18 يوماً، دون ضيق تنفس أو نقص أكسجين (SpO2 96%). حالة مستقرة للمتابعة في العيادة الصدرية لاستبعاد حساسية الشعب الهوائية.",
+      "en": "Subacute post-viral dry cough persisting for 18 days without hypoxemia or dyspnea. Routine outpatient assessment recommended."
+    },
+    "audit": {
+      "generatedAt": "2026-09-28T00:00:00.000Z",
+      "validationStatus": "HIPAA_SAFE_HARBOR_VERIFIED",
+      "sha256": "aa43b896db8d29a2855d9cd468f37a080882fc1a0ba10c7e1b9a1c2e25d7c827"
+    }
+  },
+  {
+    "patientId": "HV-SYNTH-011",
+    "id": "HV-SYNTH-011",
+    "isSynthetic": true,
+    "isDeidentified": true,
+    "demoSafe": true,
+    "consentStatus": "SYNTHETIC_GENERATED_NO_PHI",
+    "containsRealPhi": false,
+    "generationMethod": "DETERMINISTIC_SYNTHETIC_GENERATOR",
+    "demographics": {
+      "syntheticNameAr": "مريض افتراضي 11 - محمود تجريبي",
+      "syntheticNameEn": "Synthetic Patient 11 - Mahmoud Test",
+      "displayName": "مريض افتراضي 11 - محمود تجريبي",
+      "age": 50,
+      "gender": "male",
+      "governorate": "Cairo (Synthetic/Demo)",
+      "avatarUrl": "https://api.dicebear.com/7.x/bottts/svg?seed=HV-SYNTH-011"
+    },
+    "archetype": "INTERSTITIAL_LUNG_DISEASE_SUSPECTED",
+    "vitals": {
+      "spo2": 90,
+      "heartRate": 94,
+      "respiratoryRate": 23,
+      "systolicBp": 125,
+      "diastolicBp": 80,
+      "temperature": 36.8
+    },
+    "symptoms": {
+      "dyspnea": "exertional",
+      "cough": "severe",
+      "coughNature": "dry_persistent_velcro_crackles",
+      "durationDays": 30,
+      "chestTightness": true,
+      "hemoptysis": false
+    },
+    "comorbidities": {
+      "smoking": true,
+      "packYears": 10,
+      "copd": false,
+      "asthma": false,
+      "diabetes": false,
+      "hypertension": false,
+      "pregnancy": false
+    },
+    "triage": {
+      "category": "high",
+      "score": 6,
+      "assignedConditionLabel": "LABEL_ACUTE_RESPIRATORY_INFECTION",
+      "icd10": "J22",
+      "requiresEmergencyAmbulance": false
+    },
+    "clinicalNarrative": {
+      "ar": "سعال جاف مستمر منذ شهر مع ضيق تنفس عند صعود الدرج وهبوط SpO2 إلى 90% مع المجهود. أولوية فحص عالية تتطلب أشعة مقطعية عالية الدقة (HRCT).",
+      "en": "Subacute progressive exertional dyspnea and dry cough with exertional desaturation to 90%. High priority for high-resolution chest CT."
+    },
+    "audit": {
+      "generatedAt": "2026-09-28T00:00:00.000Z",
+      "validationStatus": "HIPAA_SAFE_HARBOR_VERIFIED",
+      "sha256": "c4eefb4a7c87bca61b608fab263449a8b43cf53dab82061ffc17777c8497cb3b"
+    }
+  },
+  {
+    "patientId": "HV-SYNTH-012",
+    "id": "HV-SYNTH-012",
+    "isSynthetic": true,
+    "isDeidentified": true,
+    "demoSafe": true,
+    "consentStatus": "SYNTHETIC_GENERATED_NO_PHI",
+    "containsRealPhi": false,
+    "generationMethod": "DETERMINISTIC_SYNTHETIC_GENERATOR",
+    "demographics": {
+      "syntheticNameAr": "مريض افتراضي 12 - مصطفى تجريبي",
+      "syntheticNameEn": "Synthetic Patient 12 - Mostafa Test",
+      "displayName": "مريض افتراضي 12 - مصطفى تجريبي",
+      "age": 68,
+      "gender": "male",
+      "governorate": "Cairo (Synthetic/Demo)",
+      "avatarUrl": "https://api.dicebear.com/7.x/bottts/svg?seed=HV-SYNTH-012"
+    },
+    "archetype": "COPD_INFECTIVE_EXACERBATION_ANTHONISEN_1",
+    "vitals": {
+      "spo2": 88,
+      "heartRate": 108,
+      "respiratoryRate": 25,
+      "systolicBp": 145,
+      "diastolicBp": 88,
+      "temperature": 38.2
+    },
+    "symptoms": {
+      "dyspnea": "rest",
+      "cough": "severe",
+      "coughNature": "copious_green_purulent_sputum",
+      "durationDays": 5,
+      "chestTightness": true,
+      "hemoptysis": false
+    },
+    "comorbidities": {
+      "smoking": true,
+      "packYears": 35,
+      "copd": true,
+      "asthma": false,
+      "diabetes": true,
+      "hypertension": true,
+      "pregnancy": false
+    },
+    "triage": {
+      "category": "urgent",
+      "score": 9,
+      "assignedConditionLabel": "LABEL_COPD_EXACERBATION",
+      "icd10": "J44.1",
+      "requiresEmergencyAmbulance": true
+    },
+    "clinicalNarrative": {
+      "ar": "تفاقم سدة رئوية من النوع الأول (Anthonisen Type 1) بوجود الأعراض الكلاسيكية الثلاثة: زيادة ضيق التنفس، زيادة حجم البلغم، وتغير لونه للأخضر مع نقص أكسجين حاد (88%).",
+      "en": "Severe Anthonisen Type 1 COPD exacerbation with all three cardinal signs and severe hypoxemia (SpO2 88%). Requires urgent hospital admission."
+    },
+    "audit": {
+      "generatedAt": "2026-09-28T00:00:00.000Z",
+      "validationStatus": "HIPAA_SAFE_HARBOR_VERIFIED",
+      "sha256": "95f07dc3defc63a7aebb2c1295331e7b7ad2978d3c6b103e09c3c150bb4ef9ba"
+    }
+  },
+  {
+    "patientId": "HV-SYNTH-013",
+    "id": "HV-SYNTH-013",
+    "isSynthetic": true,
+    "isDeidentified": true,
+    "demoSafe": true,
+    "consentStatus": "SYNTHETIC_GENERATED_NO_PHI",
+    "containsRealPhi": false,
+    "generationMethod": "DETERMINISTIC_SYNTHETIC_GENERATOR",
+    "demographics": {
+      "syntheticNameAr": "مريضة افتراضية 13 - ريم تجريبية",
+      "syntheticNameEn": "Synthetic Patient 13 - Reem Test",
+      "displayName": "مريضة افتراضية 13 - ريم تجريبية",
+      "age": 19,
+      "gender": "female",
+      "governorate": "Cairo (Synthetic/Demo)",
+      "avatarUrl": "https://api.dicebear.com/7.x/bottts/svg?seed=HV-SYNTH-013"
+    },
+    "archetype": "COUGH_VARIANT_ASTHMA",
+    "vitals": {
+      "spo2": 98,
+      "heartRate": 74,
+      "respiratoryRate": 15,
+      "systolicBp": 108,
+      "diastolicBp": 68,
+      "temperature": 36.7
+    },
+    "symptoms": {
+      "dyspnea": "none",
+      "cough": "moderate",
+      "coughNature": "dry_irritative_nocturnal",
+      "durationDays": 10,
+      "chestTightness": false,
+      "hemoptysis": false
+    },
+    "comorbidities": {
+      "smoking": false,
+      "packYears": 0,
+      "copd": false,
+      "asthma": true,
+      "diabetes": false,
+      "hypertension": false,
+      "pregnancy": false
+    },
+    "triage": {
+      "category": "normal",
+      "score": 2,
+      "assignedConditionLabel": "LABEL_ASTHMA_EXACERBATION",
+      "icd10": "J45.901",
+      "requiresEmergencyAmbulance": false
+    },
+    "clinicalNarrative": {
+      "ar": "فتاة شابة تعاني من نوع الربو المتظاهر بالسعال فقط (Cough-Variant Asthma)، SpO2 طبيعي (98%) دون ضيق تنفس. استشارة عيادة خارجية لضبط العلاج الوقائي.",
+      "en": "Adolescent presenting with cough-variant asthma symptoms, excellent oxygen saturation (98%), and normal lung mechanics."
+    },
+    "audit": {
+      "generatedAt": "2026-09-28T00:00:00.000Z",
+      "validationStatus": "HIPAA_SAFE_HARBOR_VERIFIED",
+      "sha256": "3087ad7cdb2dc9104931c3493846974906b99a85c0512123e08847ee386aa46a"
+    }
+  },
+  {
+    "patientId": "HV-SYNTH-014",
+    "id": "HV-SYNTH-014",
+    "isSynthetic": true,
+    "isDeidentified": true,
+    "demoSafe": true,
+    "consentStatus": "SYNTHETIC_GENERATED_NO_PHI",
+    "containsRealPhi": false,
+    "generationMethod": "DETERMINISTIC_SYNTHETIC_GENERATOR",
+    "demographics": {
+      "syntheticNameAr": "مريض افتراضي 14 - أشرف تجريبي",
+      "syntheticNameEn": "Synthetic Patient 14 - Ashraf Test",
+      "displayName": "مريض افتراضي 14 - أشرف تجريبي",
+      "age": 44,
+      "gender": "male",
+      "governorate": "Cairo (Synthetic/Demo)",
+      "avatarUrl": "https://api.dicebear.com/7.x/bottts/svg?seed=HV-SYNTH-014"
+    },
+    "archetype": "PULMONARY_EMBOLISM_SUSPICION_RED_FLAG",
+    "vitals": {
+      "spo2": 89,
+      "heartRate": 128,
+      "respiratoryRate": 32,
+      "systolicBp": 100,
+      "diastolicBp": 60,
+      "temperature": 37
+    },
+    "symptoms": {
+      "dyspnea": "rest",
+      "cough": "mild",
+      "coughNature": "dry_acute_onset",
+      "durationDays": 1,
+      "chestTightness": true,
+      "hemoptysis": true
+    },
+    "comorbidities": {
+      "smoking": true,
+      "packYears": 15,
+      "copd": false,
+      "asthma": false,
+      "diabetes": false,
+      "hypertension": false,
+      "pregnancy": false
+    },
+    "triage": {
+      "category": "urgent",
+      "score": 10,
+      "assignedConditionLabel": "LABEL_ACUTE_RESPIRATORY_INFECTION",
+      "icd10": "J22",
+      "requiresEmergencyAmbulance": true
+    },
+    "clinicalNarrative": {
+      "ar": "علم أحمر طارئ (Red Flag): ضيق تنفس مفاجئ حاد مع تسرع نبض (128) وبصاق مدمم وهبوط أكسجين (89%). اشتباه جلطة رئوية يستوجب الاتصال بالإسعاف (123) فوراً.",
+      "en": "Critical Red Flag presentation: sudden dyspnea at rest, tachycardia (128 bpm), hemoptysis, and SpO2 89%. Immediate emergency ambulance transfer mandated."
+    },
+    "audit": {
+      "generatedAt": "2026-09-28T00:00:00.000Z",
+      "validationStatus": "HIPAA_SAFE_HARBOR_VERIFIED",
+      "sha256": "ce0d6fa510f810be15b6073fcf492bee0d776e5cea907fc2a882a06993eda915"
+    }
+  },
+  {
+    "patientId": "HV-SYNTH-015",
+    "id": "HV-SYNTH-015",
+    "isSynthetic": true,
+    "isDeidentified": true,
+    "demoSafe": true,
+    "consentStatus": "SYNTHETIC_GENERATED_NO_PHI",
+    "containsRealPhi": false,
+    "generationMethod": "DETERMINISTIC_SYNTHETIC_GENERATOR",
+    "demographics": {
+      "syntheticNameAr": "مريضة افتراضية 15 - هدى تجريبية",
+      "syntheticNameEn": "Synthetic Patient 15 - Hoda Test",
+      "displayName": "مريضة افتراضية 15 - هدى تجريبية",
+      "age": 55,
+      "gender": "female",
+      "governorate": "Cairo (Synthetic/Demo)",
+      "avatarUrl": "https://api.dicebear.com/7.x/bottts/svg?seed=HV-SYNTH-015"
+    },
+    "archetype": "DIABETIC_BRONCHITIS_MODERATE",
+    "vitals": {
+      "spo2": 93,
+      "heartRate": 86,
+      "respiratoryRate": 19,
+      "systolicBp": 135,
+      "diastolicBp": 82,
+      "temperature": 38
+    },
+    "symptoms": {
+      "dyspnea": "exertional",
+      "cough": "moderate",
+      "coughNature": "productive_yellow",
+      "durationDays": 5,
+      "chestTightness": false,
+      "hemoptysis": false
+    },
+    "comorbidities": {
+      "smoking": false,
+      "packYears": 0,
+      "copd": false,
+      "asthma": false,
+      "diabetes": true,
+      "hypertension": true,
+      "pregnancy": false
+    },
+    "triage": {
+      "category": "high",
+      "score": 4,
+      "assignedConditionLabel": "LABEL_ACUTE_RESPIRATORY_INFECTION",
+      "icd10": "J20.9",
+      "requiresEmergencyAmbulance": false
+    },
+    "clinicalNarrative": {
+      "ar": "مريضة سكري وضغط تعاني من نزلة شعبية بكتيرية مع حرارة 38°C وتشبع أكسجين 93%. أولوية مراجعة عالية لتفادي تفاقم العدوى الرئوية.",
+      "en": "Diabetic female presenting with acute bacterial bronchitis, low-grade fever, and borderline saturation (93%). Prioritized for clinician assessment."
+    },
+    "audit": {
+      "generatedAt": "2026-09-28T00:00:00.000Z",
+      "validationStatus": "HIPAA_SAFE_HARBOR_VERIFIED",
+      "sha256": "234b74dbd85da5b12c1955d18d4e060d10e124389e4e1100689cabfb25da5d3b"
+    }
+  },
+  {
+    "patientId": "HV-SYNTH-016",
+    "id": "HV-SYNTH-016",
+    "isSynthetic": true,
+    "isDeidentified": true,
+    "demoSafe": true,
+    "consentStatus": "SYNTHETIC_GENERATED_NO_PHI",
+    "containsRealPhi": false,
+    "generationMethod": "DETERMINISTIC_SYNTHETIC_GENERATOR",
+    "demographics": {
+      "syntheticNameAr": "مريض افتراضي 16 - وليد تجريبي",
+      "syntheticNameEn": "Synthetic Patient 16 - Walid Test",
+      "displayName": "مريض افتراضي 16 - وليد تجريبي",
+      "age": 32,
+      "gender": "male",
+      "governorate": "Cairo (Synthetic/Demo)",
+      "avatarUrl": "https://api.dicebear.com/7.x/bottts/svg?seed=HV-SYNTH-016"
+    },
+    "archetype": "ALLERGIC_RHINITIS_WITH_TRACHEITIS",
+    "vitals": {
+      "spo2": 98,
+      "heartRate": 76,
+      "respiratoryRate": 15,
+      "systolicBp": 122,
+      "diastolicBp": 78,
+      "temperature": 36.8
+    },
+    "symptoms": {
+      "dyspnea": "none",
+      "cough": "mild",
+      "coughNature": "tickling_throat_cough",
+      "durationDays": 4,
+      "chestTightness": false,
+      "hemoptysis": false
+    },
+    "comorbidities": {
+      "smoking": false,
+      "packYears": 0,
+      "copd": false,
+      "asthma": false,
+      "diabetes": false,
+      "hypertension": false,
+      "pregnancy": false
+    },
+    "triage": {
+      "category": "normal",
+      "score": 0,
+      "assignedConditionLabel": "LABEL_MILD_URI_OR_NORMAL",
+      "icd10": "J00",
+      "requiresEmergencyAmbulance": false
+    },
+    "clinicalNarrative": {
+      "ar": "التهاب تحسسي بالحلق ومجرى التنفس العلوي مع عطاس وكحة خفيفة، الأكسجين سليم (98%). متابعة منزلية وعلاجات حساسية بسيطة.",
+      "en": "Allergic upper airway inflammation with mild throat clearing and normal lung mechanics. Suitable for routine self-care."
+    },
+    "audit": {
+      "generatedAt": "2026-09-28T00:00:00.000Z",
+      "validationStatus": "HIPAA_SAFE_HARBOR_VERIFIED",
+      "sha256": "19ade5c8f1bba34afc67ad6bc81ef0e0d949ac674b31208ab6b79b7c1b372903"
+    }
+  },
+  {
+    "patientId": "HV-SYNTH-017",
+    "id": "HV-SYNTH-017",
+    "isSynthetic": true,
+    "isDeidentified": true,
+    "demoSafe": true,
+    "consentStatus": "SYNTHETIC_GENERATED_NO_PHI",
+    "containsRealPhi": false,
+    "generationMethod": "DETERMINISTIC_SYNTHETIC_GENERATOR",
+    "demographics": {
+      "syntheticNameAr": "مريضة افتراضية 17 - زينب تجريبية",
+      "syntheticNameEn": "Synthetic Patient 17 - Zeinab Test",
+      "displayName": "مريضة افتراضية 17 - زينب تجريبية",
+      "age": 62,
+      "gender": "female",
+      "governorate": "Cairo (Synthetic/Demo)",
+      "avatarUrl": "https://api.dicebear.com/7.x/bottts/svg?seed=HV-SYNTH-017"
+    },
+    "archetype": "POST_COVID_FIBROSIS_MONITORING",
+    "vitals": {
+      "spo2": 92,
+      "heartRate": 90,
+      "respiratoryRate": 21,
+      "systolicBp": 128,
+      "diastolicBp": 78,
+      "temperature": 36.9
+    },
+    "symptoms": {
+      "dyspnea": "exertional",
+      "cough": "moderate",
+      "coughNature": "dry_hacking",
+      "durationDays": 25,
+      "chestTightness": true,
+      "hemoptysis": false
+    },
+    "comorbidities": {
+      "smoking": false,
+      "packYears": 0,
+      "copd": false,
+      "asthma": false,
+      "diabetes": true,
+      "hypertension": false,
+      "pregnancy": false
+    },
+    "triage": {
+      "category": "high",
+      "score": 5,
+      "assignedConditionLabel": "LABEL_ACUTE_RESPIRATORY_INFECTION",
+      "icd10": "J22",
+      "requiresEmergencyAmbulance": false
+    },
+    "clinicalNarrative": {
+      "ar": "متابعة ما بعد متلازمة كورونا التنفسية مع ضيق تنفس مجهودي وسعال جاف، SpO2 92%. فحص عيادة صدرية واستكمال التأهيل الرئوي.",
+      "en": "Post-acute sequelae of respiratory viral syndrome with exertional dyspnea and borderline SpO2 (92%). Indicated for structured pulmonary rehabilitation."
+    },
+    "audit": {
+      "generatedAt": "2026-09-28T00:00:00.000Z",
+      "validationStatus": "HIPAA_SAFE_HARBOR_VERIFIED",
+      "sha256": "2c6afa62de37348bd25ec4a93f62a11bd5a17cda9890523ce242b9b792984721"
+    }
+  },
+  {
+    "patientId": "HV-SYNTH-018",
+    "id": "HV-SYNTH-018",
+    "isSynthetic": true,
+    "isDeidentified": true,
+    "demoSafe": true,
+    "consentStatus": "SYNTHETIC_GENERATED_NO_PHI",
+    "containsRealPhi": false,
+    "generationMethod": "DETERMINISTIC_SYNTHETIC_GENERATOR",
+    "demographics": {
+      "syntheticNameAr": "مريض افتراضي 18 - إبراهيم تجريبي",
+      "syntheticNameEn": "Synthetic Patient 18 - Ibrahim Test",
+      "displayName": "مريض افتراضي 18 - إبراهيم تجريبي",
+      "age": 53,
+      "gender": "male",
+      "governorate": "Cairo (Synthetic/Demo)",
+      "avatarUrl": "https://api.dicebear.com/7.x/bottts/svg?seed=HV-SYNTH-018"
+    },
+    "archetype": "OCCUPATIONAL_DUST_EXPOSURE_BRONCHITIS",
+    "vitals": {
+      "spo2": 93,
+      "heartRate": 84,
+      "respiratoryRate": 18,
+      "systolicBp": 132,
+      "diastolicBp": 84,
+      "temperature": 37.2
+    },
+    "symptoms": {
+      "dyspnea": "exertional",
+      "cough": "moderate",
+      "coughNature": "dusty_sputum_cough",
+      "durationDays": 12,
+      "chestTightness": true,
+      "hemoptysis": false
+    },
+    "comorbidities": {
+      "smoking": true,
+      "packYears": 12,
+      "copd": false,
+      "asthma": false,
+      "diabetes": false,
+      "hypertension": false,
+      "pregnancy": false
+    },
+    "triage": {
+      "category": "high",
+      "score": 4,
+      "assignedConditionLabel": "LABEL_ACUTE_RESPIRATORY_INFECTION",
+      "icd10": "J20.9",
+      "requiresEmergencyAmbulance": false
+    },
+    "clinicalNarrative": {
+      "ar": "عامل بناء يعاني من تعرض مهني للأتربة وسعال مع إفرازات وضيق تنفس، SpO2 93%. فحص سريري واستخدام كمامات وقائية.",
+      "en": "Occupational particulate dust exposure causing subacute bronchitis with exertional breathlessness and 93% SpO2."
+    },
+    "audit": {
+      "generatedAt": "2026-09-28T00:00:00.000Z",
+      "validationStatus": "HIPAA_SAFE_HARBOR_VERIFIED",
+      "sha256": "932d4fce6d8a7a0de2deeb39e232a7566bf58d99fe9184d4b0129bcfea034adf"
+    }
+  },
+  {
+    "patientId": "HV-SYNTH-019",
+    "id": "HV-SYNTH-019",
+    "isSynthetic": true,
+    "isDeidentified": true,
+    "demoSafe": true,
+    "consentStatus": "SYNTHETIC_GENERATED_NO_PHI",
+    "containsRealPhi": false,
+    "generationMethod": "DETERMINISTIC_SYNTHETIC_GENERATOR",
+    "demographics": {
+      "syntheticNameAr": "مريض افتراضي 19 - عمرو تجريبي",
+      "syntheticNameEn": "Synthetic Patient 19 - Amr Test",
+      "displayName": "مريض افتراضي 19 - عمرو تجريبي",
+      "age": 16,
+      "gender": "male",
+      "governorate": "Cairo (Synthetic/Demo)",
+      "avatarUrl": "https://api.dicebear.com/7.x/bottts/svg?seed=HV-SYNTH-019"
+    },
+    "archetype": "EXERCISE_INDUCED_BRONCHOSPASM",
+    "vitals": {
+      "spo2": 96,
+      "heartRate": 88,
+      "respiratoryRate": 18,
+      "systolicBp": 112,
+      "diastolicBp": 70,
+      "temperature": 36.8
+    },
+    "symptoms": {
+      "dyspnea": "exertional",
+      "cough": "mild",
+      "coughNature": "post_exercise_wheeze",
+      "durationDays": 2,
+      "chestTightness": true,
+      "hemoptysis": false
+    },
+    "comorbidities": {
+      "smoking": false,
+      "packYears": 0,
+      "copd": false,
+      "asthma": true,
+      "diabetes": false,
+      "hypertension": false,
+      "pregnancy": false
+    },
+    "triage": {
+      "category": "normal",
+      "score": 2,
+      "assignedConditionLabel": "LABEL_ASTHMA_EXACERBATION",
+      "icd10": "J45.901",
+      "requiresEmergencyAmbulance": false
+    },
+    "clinicalNarrative": {
+      "ar": "مراهق يعاني من انقباض شعبي ناتج عن الرياضة والمجهود البدني مع أزيز خفيف، SpO2 96%. استشارة لضبط بخاخ موسع الشعب قبل ممارسة الرياضة.",
+      "en": "Adolescent athlete presenting with exercise-induced bronchospasm, normal resting saturation (96%), and good recovery."
+    },
+    "audit": {
+      "generatedAt": "2026-09-28T00:00:00.000Z",
+      "validationStatus": "HIPAA_SAFE_HARBOR_VERIFIED",
+      "sha256": "c26e3eae2e7d4025438d0b20e67eda00fccbd78e07405b08a3b523e3960a5fe9"
+    }
+  },
+  {
+    "patientId": "HV-SYNTH-020",
+    "id": "HV-SYNTH-020",
+    "isSynthetic": true,
+    "isDeidentified": true,
+    "demoSafe": true,
+    "consentStatus": "SYNTHETIC_GENERATED_NO_PHI",
+    "containsRealPhi": false,
+    "generationMethod": "DETERMINISTIC_SYNTHETIC_GENERATOR",
+    "demographics": {
+      "syntheticNameAr": "مريضة افتراضية 20 - نجلاء تجريبية",
+      "syntheticNameEn": "Synthetic Patient 20 - Naglaa Test",
+      "displayName": "مريضة افتراضية 20 - نجلاء تجريبية",
+      "age": 46,
+      "gender": "female",
+      "governorate": "Cairo (Synthetic/Demo)",
+      "avatarUrl": "https://api.dicebear.com/7.x/bottts/svg?seed=HV-SYNTH-020"
+    },
+    "archetype": "CHRONIC_BRONCHITIS_OVERLAP",
+    "vitals": {
+      "spo2": 91,
+      "heartRate": 92,
+      "respiratoryRate": 22,
+      "systolicBp": 126,
+      "diastolicBp": 80,
+      "temperature": 37.4
+    },
+    "symptoms": {
+      "dyspnea": "exertional",
+      "cough": "severe",
+      "coughNature": "recurrent_mucopurulent",
+      "durationDays": 21,
+      "chestTightness": true,
+      "hemoptysis": false
+    },
+    "comorbidities": {
+      "smoking": true,
+      "packYears": 18,
+      "copd": true,
+      "asthma": false,
+      "diabetes": false,
+      "hypertension": true,
+      "pregnancy": false
+    },
+    "triage": {
+      "category": "high",
+      "score": 6,
+      "assignedConditionLabel": "LABEL_COPD_EXACERBATION",
+      "icd10": "J44.1",
+      "requiresEmergencyAmbulance": false
+    },
+    "clinicalNarrative": {
+      "ar": "مدخنة سابقة تعاني من التهاب شعبي مزمن متكرر مع بلغم مخاطي صديدي وضيق تنفس، SpO2 91%. أولوية استشارة عالية مع أشعة سينية ومضاد حيوي مناسب.",
+      "en": "Middle-aged female smoker with chronic bronchitis exacerbation, mucopurulent expectoration, and 91% SpO2."
+    },
+    "audit": {
+      "generatedAt": "2026-09-28T00:00:00.000Z",
+      "validationStatus": "HIPAA_SAFE_HARBOR_VERIFIED",
+      "sha256": "e5cddf5bb2f8019209c50107ca6e7fb03bd253f27f54d043cdcdcecbcb5bf953"
+    }
+  }
+]
