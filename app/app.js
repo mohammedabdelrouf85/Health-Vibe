@@ -6368,6 +6368,116 @@ window.handleGoogleAuth = () => enterApp("google");
 
 window.enterApp = enterApp;
 
+/**
+ * 🧪 PRD Interactive Demo Mode: Launches interactive preview with de-identified patient data
+ */
+function enterDemoMode() {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  try {
+    localStorage.removeItem("hv_explicit_logout");
+    sessionStorage.removeItem("hv_explicit_logout");
+  } catch (e) {}
+
+  const demoUser = {
+    uid: "demo_patient_sandbox_001",
+    email: "demo.patient@healthvibes.app",
+    displayName: isEn ? "Demo Patient (Interactive)" : "مريض تجريبي (معاينة)",
+    isDemo: true,
+    emailVerified: true,
+    getIdToken: async () => "mock-demo-token-sandbox-123456789",
+    getIdTokenResult: async () => ({
+      token: "mock-demo-token-sandbox-123456789",
+      expirationTime: new Date(Date.now() + 86400000).toISOString()
+    })
+  };
+
+  selectedRole = "patient";
+  window._activeUser = demoUser;
+  window._isUserVerified = true;
+  window._isDemoSession = true;
+
+  // Render or update sticky demo notification banner
+  let demoBanner = document.getElementById("hvDemoModeBanner");
+  if (!demoBanner) {
+    demoBanner = document.createElement("div");
+    demoBanner.id = "hvDemoModeBanner";
+    demoBanner.style.cssText = "position:sticky;top:0;z-index:9999;background:linear-gradient(90deg, #09b8b6 0%, #0284c7 100%);color:#061515;font-weight:700;font-size:12.5px;padding:8px 16px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 10px rgba(0,0,0,0.25);";
+    demoBanner.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:16px;">🧪</span>
+        <span id="hvDemoBannerText">${isEn ? "Interactive Demo Sandbox (De-identified Patient Data)" : "وضع المعاينة التفاعلية (بيانات مرضى افتراضية منزوعة الهوية)"}</span>
+      </div>
+      <button type="button" onclick="leaveApp(event)" style="background:rgba(6,21,21,0.2);border:1px solid rgba(6,21,21,0.4);color:#061515;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:800;cursor:pointer;">
+        ${isEn ? "Exit Demo" : "إنهاء المعاينة"}
+      </button>
+    `;
+    if (app) app.insertBefore(demoBanner, app.firstChild);
+  } else {
+    demoBanner.style.display = "flex";
+  }
+
+  // Seed rich de-identified clinical records for the demo session if not already populated
+  try {
+    const demoCasesKey = "hv_cases_demo_patient_sandbox_001";
+    if (!localStorage.getItem(demoCasesKey)) {
+      const deidentifiedDemoRecords = [
+        {
+          id: "DEMO-CASE-101",
+          patientName: isEn ? "Anonymous Subject #412" : "حالة مجهولة الهوية رقم 412",
+          age: 48,
+          gender: "male",
+          chiefComplaint: isEn ? "Chronic productive cough and exertional dyspnea" : "سعال مزمن مع بلغم وضيق تنفس عند المجهود",
+          duration: "3 weeks",
+          smokingHistory: "Former smoker (15 pack-years)",
+          oxygenLevel: "94",
+          o2: "94",
+          respiratoryRate: "22",
+          temperature: "37.2",
+          heartRate: "88",
+          bloodPressure: "128/82",
+          riskScore: "moderate",
+          priority: "high",
+          status: "completed",
+          submittedAt: new Date(Date.now() - 86400000 * 2).toISOString(),
+          assignedDoctorName: isEn ? "Dr. Tarek Mansour (Pulmonologist)" : "د. طارق منصور (استشاري صدر)",
+          diagnosis: isEn ? "Moderate Chronic Obstructive Pulmonary Disease (COPD) Exacerbation" : "تفاقم متوسط لمرض السدة الرئوية المزمنة (COPD)",
+          medications: isEn ? "Tiotropium 18mcg Inhalation Once Daily\nSalbutamol MDI 100mcg as needed" : "تيوتروبيوم 18 مكجم استنشاق مرة يومياً\nسالبوتامول بخاخ 100 مكجم عند اللزوم",
+          recommendations: isEn ? "Avoid cold air exposure\nDaily peak-flow monitoring\nFollow-up in 2 weeks" : "تجنب الهواء البارد\nقياس وظائف التنفس يومياً\nمراجعة بعد أسبوعين"
+        },
+        {
+          id: "DEMO-CASE-102",
+          patientName: isEn ? "Anonymous Subject #588" : "حالة مجهولة الهوية رقم 588",
+          age: 34,
+          gender: "female",
+          chiefComplaint: isEn ? "Nocturnal wheezing and post-viral dry cough" : "أزيز صدري ليلي وسعال جاف بعد نزلة برد",
+          duration: "10 days",
+          smokingHistory: "Non-smoker",
+          oxygenLevel: "97",
+          o2: "97",
+          respiratoryRate: "18",
+          temperature: "36.8",
+          heartRate: "76",
+          bloodPressure: "116/74",
+          riskScore: "low",
+          priority: "normal",
+          status: "completed",
+          submittedAt: new Date(Date.now() - 86400000 * 5).toISOString(),
+          assignedDoctorName: isEn ? "Dr. Sarah Kamel (Internal Medicine)" : "د. سارة كامل (استشاري باطنة)",
+          diagnosis: isEn ? "Cough-Variant Bronchial Asthma (Post-Infectious)" : "ربو شعبي تحسسي مصحوب بسعال (بعد عدوى فيروسية)",
+          medications: isEn ? "Budesonide/Formoterol 160/4.5mcg Inhaler 1 puff twice daily" : "بوديزونيد/فورموتيرول 160/4.5 مكجم بخة مرتين يومياً",
+          recommendations: isEn ? "Keep bedroom dust-free\nStay well hydrated\nReview inhaler technique" : "الابتعاد عن الأتربة والغبار\nالإكثار من السوائل الدافئة\nالتأكد من طريقة الاستنشاق الصحيحة"
+        }
+      ];
+      localStorage.setItem(demoCasesKey, JSON.stringify(deidentifiedDemoRecords));
+    }
+  } catch (e) {}
+
+  saveActiveSession(demoUser, "patient");
+  transitionToApp(demoUser, { navigate: true });
+  showToast(isEn ? "Welcome to the Interactive Demo Sandbox!" : "مرحباً بك في وضع المعاينة التفاعلية للمنظومة!");
+}
+window.enterDemoMode = enterDemoMode;
+
 function showSignedOutUI() {
   try {
     purgeSensitiveLegacyStorage();
@@ -6392,6 +6502,11 @@ function showSignedOutUI() {
   if (lockScreen) {
     lockScreen.style.display = "none";
   }
+  const demoBanner = document.getElementById("hvDemoModeBanner");
+  if (demoBanner) {
+    demoBanner.style.display = "none";
+  }
+  window._isDemoSession = false;
   window._isIdleLocked = false;
   window._restoredSessionUser = null;
   window._activeUser = null;
@@ -14529,10 +14644,13 @@ document.addEventListener("click", (event) => {
 
   const preview = event.target.closest("[data-preview-app]");
   if (preview) {
-    showAuth();
-    showToast(currentLanguage === "en"
-      ? "Preview mode is disabled for production data. Please sign in to continue."
-      : "تم إيقاف المعاينة بدون حساب لحماية بيانات الإنتاج. يرجى تسجيل الدخول للمتابعة.");
+    event.preventDefault();
+    event.stopPropagation();
+    if (typeof enterDemoMode === "function") {
+      enterDemoMode();
+    } else {
+      showAppView();
+    }
     return;
   }
 

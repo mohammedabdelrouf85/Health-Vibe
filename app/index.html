@@ -120,7 +120,7 @@
         <p>Health Vibe AI unites clinical evaluation, physician review, verified reports, scheduling, and medical records into one seamless platform built for individuals and clinics.</p>
         <div class="hero-actions">
           <button type="button" class="solid-button large" data-auth-open onclick="if(typeof setAuthMode==='function') setAuthMode('signin'); showAuth();">Get Started</button>
-          <button type="button" class="soft-button large" data-preview-app onclick="if(typeof setAuthMode==='function') setAuthMode('signin'); showAuth();">Preview Experience</button>
+          <button type="button" class="soft-button large" data-preview-app onclick="if(typeof enterDemoMode==='function') enterDemoMode(); else showAppView();">Preview Experience</button>
         </div>
         <div class="trust-row">
           <span>AI does not make independent diagnoses</span>
