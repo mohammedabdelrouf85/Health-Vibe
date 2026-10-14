@@ -1383,10 +1383,11 @@
       <div>
         <strong>Health Vibe AI for Clinics</strong> &copy; 2026. حلول الذكاء الاصطناعي للرعاية السريرية والمراكز الطبية.
       </div>
-      <div style="display: flex; gap: 16px;">
+      <div style="display: flex; gap: 16px; flex-wrap: wrap; align-items: center;">
         <a href="./index.html">بوابة المريض</a>
         <a href="#features">المميزات</a>
         <a href="#pricing">الباقات</a>
+        <a href="./index.html#safety" style="color: #92b1af;">الأمان والامتثال (HIPAA)</a>
         <a href="./pitch.html" target="_blank" rel="noopener" style="color: #38bdf8; font-weight: 700;">📽️ Pitch Deck</a>
         <a href="#demoForm" style="color: var(--clinic-primary); font-weight: 700;">طلب ديمو تجريبي</a>
       </div>
@@ -2066,6 +2067,28 @@
       submitBtn.disabled = false;
       submitText.textContent = prevText;
     }
+
+    // Universal anchor handler: Prevents any href="#" from jumping to page top, and ensures smooth scroll to valid sections
+    document.addEventListener("click", function (e) {
+      const anchor = e.target.closest("a");
+      if (!anchor) return;
+      const href = anchor.getAttribute("href");
+      if (!href || href === "#" || href.trim() === "") {
+        e.preventDefault();
+        console.warn("[CLINICS NAV] Intercepted empty href='#' link to prevent scrolling to top:", anchor);
+        return;
+      }
+      if (href.startsWith("#")) {
+        const targetEl = document.getElementById(href.substring(1));
+        if (targetEl) {
+          e.preventDefault();
+          targetEl.scrollIntoView({ behavior: "smooth", block: "start" });
+          if (history.pushState) {
+            history.pushState(null, null, href);
+          }
+        }
+      }
+    }, true);
 
     // Initialize language from preferences and update calculator
     initClinicLanguage();

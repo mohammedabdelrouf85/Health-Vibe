@@ -182,13 +182,16 @@
         </div>
       </div>
 
-      <div class="hero-product-card" aria-label="Product Preview (Demo Data)">
+      <div class="hero-product-card" id="heroRespiratoryCard" role="button" tabindex="0" aria-haspopup="dialog" aria-label="Respiratory Assessment (SpO2 = 95%) - Click to open interactive doctor review walkthrough" onclick="openDoctorReviewTour()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault(); openDoctorReviewTour();}">
         <div class="phone-frame" style="position: relative;">
           <span class="pill demo-preview-badge" style="position: absolute; top: 12px; left: 16px; z-index: 10; font-size: 10px; background: rgba(245, 158, 11, 0.2); color: #d97706; border: 1px solid rgba(245, 158, 11, 0.4); padding: 2px 8px; border-radius: 99px; font-weight: bold;">🧪 Demo Data / معاينة تجريبية</span>
           <div class="phone-screen" style="padding-top: 36px;">
             <div class="mini-top">
               <span>New patient account</span>
-              <b>In Review</b>
+              <b style="display: inline-flex; align-items: center; gap: 4px;">
+                <span class="status-dot-pulse" style="width: 7px; height: 7px; border-radius: 50%; background: #f59e0b; display: inline-block;"></span>
+                <span>In Review</span>
+              </b>
             </div>
             <div class="breath-orb"><span></span></div>
             <h3>Respiratory Assessment</h3>
@@ -198,10 +201,15 @@
               <div><span>Doctor Review</span><strong>Pending</strong></div>
               <div><span>Report</span><strong>Locked until approval</strong></div>
             </div>
+            <!-- Clickable Interactive Prompt -->
+            <div class="hero-tour-prompt">
+              <span style="font-size: 15px;">🩺</span>
+              <span style="font-size: 11.5px; font-weight: 800; color: var(--teal-2);" data-i18n="hero.tourPrompt">كيف يراجع الطبيب هذه الحالة؟ (اضغط للجولة)</span>
+            </div>
           </div>
         </div>
-        <div class="floating-card card-a"><b>Rule</b><span>Non-validated rule indicator</span></div>
-        <div class="floating-card card-b"><b>Verified</b><span>Physician Approval</span></div>
+        <div class="floating-card card-a" onclick="event.stopPropagation(); openDoctorReviewTour();" style="cursor: pointer;" title="Non-validated rule indicator"><b>Rule</b><span>Non-validated rule indicator</span></div>
+        <div class="floating-card card-b" onclick="event.stopPropagation(); openDoctorReviewTour();" style="cursor: pointer;" title="Physician Approval"><b>Verified</b><span>Physician Approval</span></div>
       </div>
     </section>
 
@@ -3349,10 +3357,202 @@
         </div>
       </form>
     </div>
+  <!-- =========================================================================
+       🩺 DOCTOR REVIEW WALKTHROUGH TOUR MODAL (Request 22)
+       Interactive walkthrough showing how a doctor reviews Respiratory Assessment (SpO2=95%) before unlocking
+       ========================================================================= -->
+  <div id="doctorTourModal" class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="doctorTourTitle" aria-describedby="doctorTourSubtitle" aria-hidden="true" style="display: none; position: fixed; inset: 0; z-index: 100000; background: rgba(3, 18, 20, 0.85); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); align-items: center; justify-content: center; padding: 16px;">
+    <div class="confirm-card doctor-tour-card" style="background: var(--surface); border: 1.5px solid var(--line); border-radius: 24px; width: 100%; max-width: 720px; max-height: 90vh; overflow-y: auto; padding: 0; box-shadow: 0 25px 80px rgba(0, 0, 0, 0.55); position: relative; display: flex; flex-direction: column;">
+      
+      <!-- Modal Header -->
+      <div style="padding: 20px 24px 16px; border-bottom: 1px solid var(--line); background: var(--surface-2); display: flex; align-items: flex-start; justify-content: space-between; gap: 14px;">
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          <div style="display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 800; color: var(--teal-2); text-transform: uppercase; letter-spacing: 0.5px;">
+            <span>🩺</span>
+            <span data-i18n="doctorTour.badge">جولة المراجعة السريرية • Clinical Walkthrough</span>
+          </div>
+          <h3 id="doctorTourTitle" style="margin: 0; font-size: 18px; color: var(--ink); line-height: 1.3;" data-i18n="doctorTour.title">
+            كيف يراجع الطبيب حالة التقييم التنفسي (SpO2 = 95%) قبل فك القفل؟
+          </h3>
+          <p id="doctorTourSubtitle" style="margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.45;" data-i18n="doctorTour.subtitle">
+            جولة تفاعلية من 4 خطوات توضح معايير الأمان والفرز الطبي لحماية المريض قبل إصدار التقرير النهائي.
+          </p>
+        </div>
+        <button id="doctorTourCloseBtn" type="button" onclick="closeDoctorReviewTour()" aria-label="Close Tour" style="width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); font-size: 18px; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: all 0.2s;">&times;</button>
+      </div>
+
+      <!-- Stepper Header Navigation -->
+      <div style="padding: 12px 24px 0; background: var(--surface);">
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 10px;" role="tablist">
+          <button type="button" id="tourStepTab-1" class="tour-step-tab active" onclick="goToDoctorTourStep(1)" role="tab" aria-selected="true" style="padding: 8px 6px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 11.5px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;">
+            <span>1️⃣</span> <span data-i18n="doctorTour.tab1">الفرز</span>
+          </button>
+          <button type="button" id="tourStepTab-2" class="tour-step-tab" onclick="goToDoctorTourStep(2)" role="tab" aria-selected="false" style="padding: 8px 6px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 11.5px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;">
+            <span>2️⃣</span> <span data-i18n="doctorTour.tab2">فحص الـ AI</span>
+          </button>
+          <button type="button" id="tourStepTab-3" class="tour-step-tab" onclick="goToDoctorTourStep(3)" role="tab" aria-selected="false" style="padding: 8px 6px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 11.5px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;">
+            <span>3️⃣</span> <span data-i18n="doctorTour.tab3">القرار</span>
+          </button>
+          <button type="button" id="tourStepTab-4" class="tour-step-tab" onclick="goToDoctorTourStep(4)" role="tab" aria-selected="false" style="padding: 8px 6px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 11.5px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;">
+            <span>4️⃣</span> <span data-i18n="doctorTour.tab4">فك القفل</span>
+          </button>
+        </div>
+        <div style="width: 100%; height: 4px; background: var(--line); border-radius: 99px; overflow: hidden;">
+          <div id="tourProgressBar" style="width: 25%; height: 100%; background: linear-gradient(90deg, var(--teal), var(--teal-2)); transition: width 0.3s ease;"></div>
+        </div>
+      </div>
+
+      <!-- Modal Body Content -->
+      <div style="padding: 20px 24px; flex: 1;">
+        
+        <!-- STEP 1: Case Intake & Clinical Triage -->
+        <div id="tourStepContent-1" class="tour-step-content" style="display: block;">
+          <div style="display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 16px;">
+            <div style="flex: 1; min-width: 240px; padding: 14px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px;">
+              <div style="font-size: 11px; font-weight: 700; color: var(--muted); margin-bottom: 6px;" data-i18n="doctorTour.patientVitals">بيانات الحالة المُسجلة:</div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12.5px;">
+                <div><span style="color: var(--muted);">نسبة الأكسجين:</span> <strong style="color: #f59e0b;">95% (SpO2)</strong></div>
+                <div><span style="color: var(--muted);">درجة الكحة:</span> <strong style="color: var(--ink);">معتدلة</strong></div>
+                <div><span style="color: var(--muted);">مدة الأعراض:</span> <strong style="color: var(--ink);">3 أيام</strong></div>
+                <div><span style="color: var(--muted);">معدل التنفس:</span> <strong style="color: var(--ink);">18 نَفَس/د</strong></div>
+              </div>
+            </div>
+            <div style="flex: 1; min-width: 240px; padding: 14px; background: rgba(245, 158, 11, 0.08); border: 1px dashed rgba(245, 158, 11, 0.4); border-radius: 14px;">
+              <div style="font-size: 11px; font-weight: 700; color: #f59e0b; margin-bottom: 6px;" data-i18n="doctorTour.triagePriority">تصنيف الفرز في طابور الطبيب:</div>
+              <div style="font-size: 14px; font-weight: 800; color: var(--ink); margin-bottom: 4px;">
+                ⚡ أولوية متوسطة (Moderate Priority)
+              </div>
+              <p style="margin: 0; font-size: 11.5px; color: var(--muted); line-height: 1.4;" data-i18n="doctorTour.slaNotice">
+                الهدف الزمني للاستجابة السريرية (SLA): مراجعة خلال 15 دقيقة لمنع تفاقم نقص الأكسجين.
+              </p>
+            </div>
+          </div>
+          <div style="padding: 12px 16px; background: rgba(9, 184, 182, 0.08); border: 1px solid var(--teal); border-radius: 12px; font-size: 12.5px; color: var(--ink); line-height: 1.55;">
+            <strong style="color: var(--teal-2); display: block; margin-bottom: 4px;">🔒 لماذا التقرير مقفل للمريض الآن؟</strong>
+            <span data-i18n="doctorTour.whyLockedDesc">
+              وفقاً لقواعد السلامة السريرية الصارمة (PRD Section 7.1)، لا يجوز عرض أي نتائج أو احتمالات للمريض دون تدقيق الطبيب البشري، منعاً لإثارة الهلع أو أخذ أدوية غير مناسبة.
+            </span>
+          </div>
+        </div>
+
+        <!-- STEP 2: AI Differential Analysis & Safety Checks -->
+        <div id="tourStepContent-2" class="tour-step-content" style="display: none;">
+          <div style="padding: 14px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px; margin-bottom: 14px;">
+            <div style="font-size: 12px; font-weight: 700; color: var(--teal-2); margin-bottom: 8px;" data-i18n="doctorTour.aiDifferentialTitle">
+              🤖 مصفوفة التحليل الاحتمالي للذكاء الاصطناعي (AI Differential Classifier):
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <div>
+                <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 3px;">
+                  <span>التهاب شعبي حاد خفيف (Acute Bronchitis)</span>
+                  <strong style="color: var(--teal-2);">72%</strong>
+                </div>
+                <div style="height: 6px; background: var(--line); border-radius: 99px; overflow: hidden;">
+                  <div style="width: 72%; height: 100%; background: var(--teal);"></div>
+                </div>
+              </div>
+              <div>
+                <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 3px;">
+                  <span>نزلة برد فيروسية تنفسية (Viral URI)</span>
+                  <strong style="color: var(--ink);">18%</strong>
+                </div>
+                <div style="height: 6px; background: var(--line); border-radius: 99px; overflow: hidden;">
+                  <div style="width: 18%; height: 100%; background: #38bdf8;"></div>
+                </div>
+              </div>
+              <div>
+                <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 3px;">
+                  <span>تحسس قصبي موسمي (Bronchial Hyperresponsiveness)</span>
+                  <strong style="color: var(--muted);">10%</strong>
+                </div>
+                <div style="height: 6px; background: var(--line); border-radius: 99px; overflow: hidden;">
+                  <div style="width: 10%; height: 100%; background: #94a3b8;"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div style="padding: 12px 14px; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 12px; font-size: 12px; color: var(--ink); line-height: 1.5;">
+            <strong style="color: #10b981;">🛡️ التحقق من خلو علامات الطوارئ الحمراء (Red-Flag Exclusion):</strong><br>
+            لا يوجد ألم بالصدر • لا زرقة بالأطراف • نسبة الأكسجين 95% مستقرة ولا تمثل فشلاً تنفسياً حاداً.
+          </div>
+        </div>
+
+        <!-- STEP 3: Physician Clinical Decision & Digital Sign-off -->
+        <div id="tourStepContent-3" class="tour-step-content" style="display: none;">
+          <div style="padding: 14px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px; margin-bottom: 14px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 20px;">🩺</span>
+                <div>
+                  <strong style="font-size: 13.5px; color: var(--ink);">د. أحمد ممدوح</strong>
+                  <div style="font-size: 11px; color: var(--muted);">استشاري الأمراض الصدرية • ترخيص نقابة #14892</div>
+                </div>
+              </div>
+              <span style="padding: 3px 8px; border-radius: 6px; background: rgba(9, 184, 182, 0.15); color: var(--teal-2); font-size: 11px; font-weight: 700;">معتمد سريرياً</span>
+            </div>
+            <div style="font-size: 12.5px; color: var(--ink); line-height: 1.5; background: var(--surface); padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); margin-bottom: 10px;">
+              <strong style="color: var(--teal-2); display: block; margin-bottom: 4px;">التشخيص والتوصيات المعتمدة:</strong>
+              1. راحة منزلية 48 ساعة مع تناول السوائل الدافئة.<br>
+              2. موسع شعب هوائي خفيف عند الحاجة واستنشاق البخار الطبيعي.<br>
+              3. إعادة قياس الأكسجين مرتين يومياً، والتوجه للطوارئ فوراً إذا انخفض عن 93%.
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--muted);">
+              <span>🔐 التوقيع الرقمي: SHA256:7c8b9...f2</span>
+              <span>📅 ختم الاعتماد: 2026-10-14 07:38</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- STEP 4: Unlocking & Certified Report Delivery (Interactive Simulation) -->
+        <div id="tourStepContent-4" class="tour-step-content" style="display: none;">
+          <div id="tourUnlockCardPreview" style="padding: 16px; background: var(--surface-2); border: 1.5px solid var(--line); border-radius: 16px; text-align: center; margin-bottom: 16px; transition: all 0.3s ease;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+              <span style="font-size: 12px; font-weight: 700; color: var(--ink);">تقرير التقييم التنفسي (Patient Report)</span>
+              <span id="tourUnlockStatusBadge" style="padding: 4px 10px; border-radius: 99px; border: 1px solid rgba(245, 158, 11, 0.35); background: rgba(245, 158, 11, 0.15); color: #f59e0b; font-size: 11.5px; font-weight: 700; display: inline-flex; align-items: center;">
+                <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#f59e0b; margin-inline-end:6px;"></span>
+                <span data-i18n="doctorTour.lockedStatus">🔒 قيد المراجعة الطبية (Locked)</span>
+              </span>
+            </div>
+            <div id="tourCertifiedDetails" style="display: none; padding: 12px; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 12px; margin-bottom: 12px; text-align: start;">
+              <div style="font-size: 12px; color: var(--ink); line-height: 1.5;">
+                <strong style="color: #10b981;">📜 تم إصدار التقرير الطبي المعتمد:</strong><br>
+                • باركود التوثيق (QR Code): صالح للتحقق الرسمي.<br>
+                • تم إرسال تنبيه بالنتيجة المعتمدة للمريض على الواتساب وتطبيق الويب.<br>
+                • إمكانية تصدير التقرير PDF بختم الطبيب وترخيص النقابة.
+              </div>
+            </div>
+            <button type="button" id="btnSimulateUnlock" onclick="simulateReportUnlock()" class="solid-button large" style="width: 100%; justify-content: center; font-size: 14px; gap: 8px;">
+              <span>🔓</span>
+              <span data-i18n="doctorTour.btnUnlock">محاكاة اعتماد الطبيب وفك القفل الآن</span>
+            </button>
+          </div>
+          <div id="tourUnlockSuccessNotice" style="display: none; align-items: center; gap: 8px; font-size: 12px; color: #10b981; justify-content: center; font-weight: 700;">
+            <span>🎉</span>
+            <span data-i18n="doctorTour.unlockSuccess">تم فك القفل بنجاح! يمكن للمريض الآن قراءة التوصيات وتنزيل التقرير الرسمي.</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Modal Footer Controls -->
+      <div style="padding: 14px 24px 20px; border-top: 1px solid var(--line); background: var(--surface-2); display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+        <button type="button" id="tourPrevBtn" onclick="prevDoctorTourStep()" class="outline-button" style="padding: 8px 16px; font-size: 13px; visibility: hidden;">
+          <span data-i18n="doctorTour.btnPrev">السابق</span>
+        </button>
+        <span id="tourStepIndicator" style="font-size: 12.5px; font-weight: 700; color: var(--muted);" data-i18n="doctorTour.stepIndicator">
+          خطوة 1 من 4
+        </span>
+        <button type="button" id="tourNextBtn" onclick="nextDoctorTourStep()" class="solid-button" style="padding: 8px 20px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px;">
+          <span data-i18n="doctorTour.btnNext">الخطوة التالية</span> <span>←</span>
+        </button>
+      </div>
+
+    </div>
   </div>
 
   <script src="./i18n.js?v=4.6"></script>
   <!-- Modular Architecture: Core, Auth, Permissions, Patient, Assessment, Doctor, Reports, Appointments, Admin, Notifications -->
+  <script defer src="./modules/doctor/doctor-tour.js?v=1.0"></script>
   <script defer src="./modules/core/async-context-manager.js?v=1.0"></script>
   <script defer src="./modules/core/operational-switches-client.js?v=1.0"></script>
   <script defer src="./modules/core/validation.js?v=1.0"></script>

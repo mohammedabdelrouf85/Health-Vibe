@@ -119,6 +119,29 @@
         accounts: "الحسابات",
         safety: "الأمان"
       },
+      hero: {
+        tourPrompt: "كيف يراجع الطبيب هذه الحالة؟ (اضغط للجولة)"
+      },
+      doctorTour: {
+        badge: "جولة المراجعة السريرية • Clinical Walkthrough",
+        title: "كيف يراجع الطبيب حالة التقييم التنفسي (SpO2 = 95%) قبل فك القفل؟",
+        subtitle: "جولة تفاعلية من 4 خطوات توضح معايير الأمان والفرز الطبي لحماية المريض قبل إصدار التقرير النهائي.",
+        tab1: "الفرز",
+        tab2: "فحص الـ AI",
+        tab3: "القرار",
+        tab4: "فك القفل",
+        patientVitals: "بيانات الحالة المُسجلة:",
+        triagePriority: "تصنيف الفرز في طابور الطبيب:",
+        slaNotice: "الهدف الزمني للاستجابة السريرية (SLA): مراجعة خلال 15 دقيقة لمنع تفاقم نقص الأكسجين.",
+        whyLockedDesc: "وفقاً لقواعد السلامة السريرية الصارمة (PRD Section 7.1)، لا يجوز عرض أي نتائج أو احتمالات للمريض دون تدقيق الطبيب البشري، منعاً لإثارة الهلع أو أخذ أدوية غير مناسبة.",
+        aiDifferentialTitle: "🤖 مصفوفة التحليل الاحتمالي للذكاء الاصطناعي (AI Differential Classifier):",
+        lockedStatus: "🔒 قيد المراجعة الطبية (Locked)",
+        btnUnlock: "محاكاة اعتماد الطبيب وفك القفل الآن",
+        unlockSuccess: "تم فك القفل بنجاح! يمكن للمريض الآن قراءة التوصيات وتنزيل التقرير الرسمي.",
+        btnPrev: "السابق",
+        btnNext: "الخطوة التالية",
+        stepIndicator: "خطوة 1 من 4"
+      },
       roles: {
         patient: "حساب مريض",
         doctor: "حساب طبيب موثق",
@@ -932,6 +955,29 @@
         workflow: "Workflow",
         accounts: "Accounts",
         safety: "Safety"
+      },
+      hero: {
+        tourPrompt: "How does the doctor review this case? (Click for tour)"
+      },
+      doctorTour: {
+        badge: "Clinical Walkthrough • Safety Triage",
+        title: "How does the doctor review Respiratory Assessment (SpO2 = 95%) before unlock?",
+        subtitle: "An interactive 4-step walkthrough demonstrating clinical safety guardrails and triage before report release.",
+        tab1: "Triage",
+        tab2: "AI Review",
+        tab3: "Decision",
+        tab4: "Unlock",
+        patientVitals: "Recorded Case Vitals:",
+        triagePriority: "Triage Priority in Doctor Queue:",
+        slaNotice: "Clinical Response SLA: Review within 15 minutes to prevent hypoxia escalation.",
+        whyLockedDesc: "Under strict clinical safety rules (PRD Section 7.1), probabilistic AI results cannot be shown to patients without human physician verification to prevent panic and improper medication.",
+        aiDifferentialTitle: "🤖 AI Differential Classifier Probability Matrix:",
+        lockedStatus: "🔒 Under Clinical Review (Locked)",
+        btnUnlock: "Simulate Doctor Approval & Unlock Now",
+        unlockSuccess: "Unlocked successfully! The patient can now view clinical recommendations and download the certified report.",
+        btnPrev: "Previous",
+        btnNext: "Next Step",
+        stepIndicator: "Step 1 of 4"
       },
       roles: {
         patient: "Patient account",
