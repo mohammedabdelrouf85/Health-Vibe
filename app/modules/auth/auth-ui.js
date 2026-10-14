@@ -17,6 +17,7 @@
     const isEn = typeof global.currentLanguage !== "undefined" && global.currentLanguage === "en";
 
     const nameGroup = document.getElementById("authNameGroup");
+    const roleGroup = document.getElementById("authRoleGroup");
     const title = document.getElementById("authModalTitle");
     const sub = document.getElementById("authModalSub");
     const submitBtn = document.getElementById("authSubmitText");
@@ -25,17 +26,18 @@
     const forgotContainer = document.getElementById("authForgotPasswordContainer");
 
     if (nameGroup) nameGroup.style.display = isSignUp ? "block" : "none";
+    if (roleGroup) roleGroup.style.display = isSignUp ? "block" : "none";
     if (forgotContainer) forgotContainer.style.display = isSignUp ? "none" : "block";
 
     if (title) {
       title.textContent = isSignUp
-        ? (isEn ? "Create Patient Account" : "إنشاء حساب مريض جديد")
+        ? (isEn ? "Create Your Account" : "إنشاء حساب جديد")
         : (isEn ? "Sign in to Health Vibe AI" : "تسجيل الدخول إلى المنصة");
     }
 
     if (sub) {
       sub.textContent = isSignUp
-        ? (isEn ? "Register to track your respiratory health and consult certified doctors." : "سجّل بياناتك لمتابعة صحتك التنفسية واستشارة الأطباء المعتمدين.")
+        ? (isEn ? "Register as a patient, doctor, or medical clinic to access your clinical portal." : "سجّل كـ مريض، طبيب، أو عيادة طبية للوصول إلى بوابتك السريرية المخصصة.")
         : (isEn ? "Enter your email and password to access your medical records." : "أدخل بريدك الإلكتروني وكلمة المرور للوصول إلى ملفك وسجلاتك.");
     }
 
@@ -105,6 +107,7 @@
       "authEmail",
       "authPassword",
       "authName",
+      "authRole",
       "rememberMe",
       "googleLogin",
       "authTabSignIn",

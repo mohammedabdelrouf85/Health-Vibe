@@ -272,6 +272,18 @@
             <input type="text" id="authName" placeholder="e.g. Full Name" data-i18n-placeholder="auth.fullNamePlaceholder" autocomplete="name" />
           </div>
 
+          <div id="authRoleGroup" class="form-group" style="display:none;">
+            <label for="authRole" data-i18n="auth.accountType">Account Type</label>
+            <select id="authRole" style="width: 100%; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 14px; outline: none; cursor: pointer;">
+              <option value="patient" selected data-i18n="auth.rolePatient">👤 Patient (مريض)</option>
+              <option value="doctor_pending" data-i18n="auth.roleDoctor">🩺 Doctor (طبيب ممارس)</option>
+              <option value="clinic_admin" data-i18n="auth.roleClinic">🏥 Clinic / Medical Center (عيادة / مركز طبي)</option>
+            </select>
+            <div id="authRoleHint" style="font-size: 11.5px; color: var(--muted); margin-top: 5px; line-height: 1.4;">
+              <span data-i18n="auth.roleHintPatient">Access medical evaluations, verified reports, and appointments.</span>
+            </div>
+          </div>
+
           <div class="form-group">
             <label for="authEmail" data-i18n="auth.email">Email Address</label>
             <input type="email" id="authEmail" placeholder="name@example.com" data-i18n-placeholder="auth.emailPlaceholder" required autocomplete="email" />

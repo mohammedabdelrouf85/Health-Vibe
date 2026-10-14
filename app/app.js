@@ -36,6 +36,9 @@ const authTabSignIn = document.getElementById("authTabSignIn");
 const authTabSignUp = document.getElementById("authTabSignUp");
 const authNameGroup = document.getElementById("authNameGroup");
 const authName = document.getElementById("authName");
+const authRoleGroup = document.getElementById("authRoleGroup");
+const authRole = document.getElementById("authRole");
+const authRoleHint = document.getElementById("authRoleHint");
 const authEmail = document.getElementById("authEmail");
 const authPassword = document.getElementById("authPassword");
 const authSubmitBtn = document.getElementById("authSubmitBtn");
@@ -5428,6 +5431,9 @@ function setAuthMode(mode) {
   if (authNameGroup) {
     authNameGroup.style.display = mode === "signup" ? "block" : "none";
   }
+  if (authRoleGroup) {
+    authRoleGroup.style.display = mode === "signup" ? "block" : "none";
+  }
   if (authName) {
     if (mode === "signup") {
       authName.setAttribute("required", "true");
@@ -5926,13 +5932,18 @@ async function handleEmailAuth(e) {
         console.warn("Could not update profile displayName:", profileErr);
       }
       const isOwner = isOwnerUser(user.email);
-      const safeRole = normalizeRole(ROLES.PATIENT, isOwner);
+      const chosenRoleRaw = authRole ? authRole.value : "patient";
+      const allowedSignupRoles = [ROLES.PATIENT, ROLES.DOCTOR_PENDING, ROLES.CLINIC_ADMIN];
+      const targetRole = allowedSignupRoles.includes(chosenRoleRaw) ? chosenRoleRaw : ROLES.PATIENT;
+      const safeRole = normalizeRole(targetRole, isOwner);
       selectedRole = safeRole;
 
       try {
         const firestoreWritePromise = db.collection("users").doc(user.uid).set({
           name: displayName,
           email: user.email,
+          role: safeRole,
+          status: safeRole === ROLES.DOCTOR_PENDING ? "pending_verification" : "active",
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
         await Promise.race([firestoreWritePromise, new Promise((_, rej) => setTimeout(() => rej(new Error("firestore_timeout")), 7000))]);
@@ -14684,6 +14695,27 @@ if (authTabSignIn) {
 }
 if (authTabSignUp) {
   authTabSignUp.addEventListener("click", () => setAuthMode("signup"));
+}
+if (authRole) {
+  authRole.addEventListener("change", () => {
+    const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+    const val = authRole.value;
+    if (authRoleHint) {
+      if (val === "doctor_pending") {
+        authRoleHint.textContent = isEn
+          ? "Review clinical queue, triage priority, and approve medical reports."
+          : "مراجعة الحالات وفرز الأولويات واعتماد التقارير الطبية.";
+      } else if (val === "clinic_admin") {
+        authRoleHint.textContent = isEn
+          ? "Manage clinic practitioners, appointments, and center KPI dashboard."
+          : "إدارة الأطباء، المواعيد، ولوحة التحكم السريرية للمركز.";
+      } else {
+        authRoleHint.textContent = isEn
+          ? "Access medical evaluations, verified reports, and appointments."
+          : "الوصول للتقييم السريري، التقارير المعتمدة، وحجز المواعيد.";
+      }
+    }
+  });
 }
 if (authEmailForm) {
   authEmailForm.addEventListener("submit", handleEmailAuth);

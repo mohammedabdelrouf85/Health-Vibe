@@ -74,11 +74,13 @@
 
     if (db) {
       try {
+        const assignedRole = options.role || "patient";
+        const assignedStatus = assignedRole === "doctor_pending" ? "pending_verification" : "active";
         await db.collection("users").doc(user.uid).set({
           name: name,
           email: user.email,
-          role: "patient",
-          status: "active",
+          role: assignedRole,
+          status: assignedStatus,
           createdAt: global.firebase?.firestore?.FieldValue?.serverTimestamp() || new Date()
         }, { merge: true });
       } catch (err) {
