@@ -50,7 +50,7 @@ assert(appJsContent.includes("async function handleEmailAuth(e)"), "app.js must 
 // Check try/catch/finally in handleEmailAuth
 const handleEmailAuthStart = appJsContent.indexOf("async function handleEmailAuth(e)");
 assert(handleEmailAuthStart !== -1, "handleEmailAuth must exist");
-const handleEmailAuthBlock = appJsContent.slice(handleEmailAuthStart, handleEmailAuthStart + 4500);
+const handleEmailAuthBlock = appJsContent.slice(handleEmailAuthStart, handleEmailAuthStart + 7500);
 
 assert(handleEmailAuthBlock.includes("setAuthLoading(true);"), "handleEmailAuth must start with setAuthLoading(true)");
 assert(handleEmailAuthBlock.includes("try {"), "handleEmailAuth must have try block");

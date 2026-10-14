@@ -6024,29 +6024,59 @@ let resetTimer = null;
 async function handleForgotPasswordSubmit(e) {
   if (e) e.preventDefault();
   clearAuthError();
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
   const email = resetEmailInput ? resetEmailInput.value.trim() : "";
 
   if (!email) {
-    showAuthError(currentLanguage === "en" ? "Please enter your account email address." : "يرجى كتابة البريد الإلكتروني الخاص بحسابك.");
+    showAuthError(isEn ? "Please enter your account email address." : "يرجى كتابة البريد الإلكتروني الخاص بحسابك.");
+    if (resetEmailInput) resetEmailInput.focus();
+    return;
+  }
+
+  // Clinical email format validation regex
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    showAuthError(isEn ? "Please enter a valid email address (e.g. user@example.com)." : "يرجى إدخال عنوان بريد إلكتروني صحيح ومكتمل (مثال: user@example.com).");
+    if (resetEmailInput) resetEmailInput.focus();
     return;
   }
 
   if (resetCooldown) {
-    showToast(currentLanguage === "en" ? "Please wait before requesting another reset link." : "يرجى الانتظار قليلاً قبل طلب رابط جديد.");
+    showToast(isEn ? "Please wait before requesting another reset link." : "يرجى الانتظار قليلاً قبل طلب رابط جديد.");
     return;
   }
 
   try {
     if (sendResetLinkBtn) sendResetLinkBtn.disabled = true;
-    if (sendResetLinkText) sendResetLinkText.textContent = currentLanguage === "en" ? "Sending link..." : "جاري الإرسال...";
+    if (sendResetLinkText) sendResetLinkText.textContent = isEn ? "Sending link..." : "جاري الإرسال...";
 
-    await auth.sendPasswordResetEmail(email);
+    // Check if in demo sandbox or without live backend
+    const isDemoEnvironment = Boolean(
+      window._isDemoSession ||
+      (typeof runtimeConfig !== "undefined" && runtimeConfig.allowDemoSeed && runtimeConfig.environment === "development" && (!auth || !auth.sendPasswordResetEmail))
+    );
+
+    if (isDemoEnvironment) {
+      // Interactive Demo Sandbox simulation
+      await new Promise(r => setTimeout(r, 600));
+      console.log(`[Health Vibe Demo] Password reset email simulated for: ${email}`);
+    } else {
+      const activeAuth = (typeof auth !== "undefined" && auth && typeof auth.sendPasswordResetEmail === "function") 
+        ? auth 
+        : (typeof firebase !== "undefined" && firebase.auth && firebase.auth());
+
+      if (!activeAuth || typeof activeAuth.sendPasswordResetEmail !== "function") {
+        throw new Error(isEn ? "Authentication service is currently unavailable." : "خدمة المصادقة غير متوفرة حالياً.");
+      }
+
+      await activeAuth.sendPasswordResetEmail(email);
+    }
 
     if (resetSuccessMessage) {
       resetSuccessMessage.style.display = "block";
     }
 
-    showToast(currentLanguage === "en" ? `Reset link sent to ${email}! (Check Spam folder)` : `تم إرسال رابط الاستعادة إلى ${email}! (افحص مجلد Spam)`);
+    showToast(isEn ? `Reset link sent to ${email}! (Check Spam folder)` : `تم إرسال رابط الاستعادة إلى ${email}! (افحص مجلد Spam)`);
 
     resetCooldown = true;
     let seconds = 60;
@@ -6060,7 +6090,7 @@ async function handleForgotPasswordSubmit(e) {
         resetCooldown = false;
         if (sendResetLinkBtn) sendResetLinkBtn.disabled = false;
         if (sendResetLinkText) {
-          sendResetLinkText.textContent = currentLanguage === "en" ? "Send Reset Link" : "إرسال رابط الاستعادة";
+          sendResetLinkText.textContent = isEn ? "Send Reset Link" : "إرسال رابط الاستعادة";
         }
       } else {
         if (sendResetLinkText) sendResetLinkText.textContent = `${seconds}s`;
@@ -6071,7 +6101,7 @@ async function handleForgotPasswordSubmit(e) {
     showAuthError(getAuthErrorMessage(error));
     if (sendResetLinkBtn) sendResetLinkBtn.disabled = false;
     if (sendResetLinkText) {
-      sendResetLinkText.textContent = currentLanguage === "en" ? "Send Reset Link" : "إرسال رابط الاستعادة";
+      sendResetLinkText.textContent = isEn ? "Send Reset Link" : "إرسال رابط الاستعادة";
     }
   }
 }
@@ -6083,28 +6113,38 @@ async function handleNewPasswordSubmit(e) {
   const newPassword = newPasswordInput ? newPasswordInput.value : "";
   const confirmPassword = confirmNewPasswordInput ? confirmNewPasswordInput.value : "";
 
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+
   if (!newPassword || newPassword.length < 6) {
-    showAuthError(currentLanguage === "en" ? "Password must be at least 6 characters." : "كلمة المرور يجب ألا تقل عن 6 أحرف.");
+    showAuthError(isEn ? "Password must be at least 6 characters." : "كلمة المرور يجب ألا تقل عن 6 أحرف.");
     return;
   }
 
   if (newPassword !== confirmPassword) {
-    showAuthError(currentLanguage === "en" ? "Passwords do not match." : "كلمتا المرور غير متطابقتين.");
+    showAuthError(isEn ? "Passwords do not match." : "كلمتا المرور غير متطابقتين.");
     return;
   }
 
   if (!activeResetCode) {
-    showAuthError(currentLanguage === "en" ? "Invalid or expired password reset link." : "رابط استعادة كلمة المرور غير صالح أو منتهي الصلاحية.");
+    showAuthError(isEn ? "Invalid or expired password reset link." : "رابط استعادة كلمة المرور غير صالح أو منتهي الصلاحية.");
     return;
   }
 
   try {
     if (confirmPasswordResetBtn) confirmPasswordResetBtn.disabled = true;
-    if (confirmPasswordResetText) confirmPasswordResetText.textContent = currentLanguage === "en" ? "Updating..." : "جاري التحديث...";
+    if (confirmPasswordResetText) confirmPasswordResetText.textContent = isEn ? "Updating..." : "جاري التحديث...";
 
-    await auth.confirmPasswordReset(activeResetCode, newPassword);
+    const activeAuth = (typeof auth !== "undefined" && auth && typeof auth.confirmPasswordReset === "function") 
+      ? auth 
+      : (typeof firebase !== "undefined" && firebase.auth && firebase.auth());
 
-    showToast(currentLanguage === "en" ? "🎉 Password updated successfully! Please sign in." : "🎉 تم تغيير كلمة المرور بنجاح! يمكنك الآن تسجيل الدخول.");
+    if (!activeAuth || typeof activeAuth.confirmPasswordReset !== "function") {
+      throw new Error(isEn ? "Authentication service is currently unavailable." : "خدمة المصادقة غير متوفرة حالياً.");
+    }
+
+    await activeAuth.confirmPasswordReset(activeResetCode, newPassword);
+
+    showToast(isEn ? "🎉 Password updated successfully! Please sign in." : "🎉 تم تغيير كلمة المرور بنجاح! يمكنك الآن تسجيل الدخول.");
     showSignInView();
     if (authPassword) authPassword.value = "";
   } catch (error) {
@@ -6112,7 +6152,7 @@ async function handleNewPasswordSubmit(e) {
     showAuthError(getAuthErrorMessage(error));
   } finally {
     if (confirmPasswordResetBtn) confirmPasswordResetBtn.disabled = false;
-    if (confirmPasswordResetText) confirmPasswordResetText.textContent = currentLanguage === "en" ? "Save New Password" : "حفظ كلمة المرور";
+    if (confirmPasswordResetText) confirmPasswordResetText.textContent = isEn ? "Save New Password" : "حفظ كلمة المرور";
   }
 }
 
@@ -6217,6 +6257,24 @@ async function enterApp(source = "google") {
 
     if (typeof setAuthLoading === "function") setAuthLoading(true);
     try {
+      const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+
+      // 1. Check if user is in pure client-side Demo mode or if live Google OAuth should display a clear notice
+      const isExplicitDemo = Boolean(
+        window._isDemoSession ||
+        (typeof runtimeConfig !== "undefined" && runtimeConfig.environment === "demo")
+      );
+
+      if (isExplicitDemo) {
+        showToast(isEn
+          ? "Notice: Live Google OAuth is reserved for production with a verified domain. Switching to Interactive Sandbox..."
+          : "تنبيه: تسجيل الدخول بـ Google مخصص للنسخة الحية. جاري نقلك إلى المعاينة التفاعلية...");
+        if (typeof enterDemoMode === "function") {
+          enterDemoMode();
+        }
+        return;
+      }
+
       // Helper: Wait for Firebase / Auth readiness if scripts are deferred or still loading
       const ensureFirebaseAuthReady = async (maxWaitMs = 3000) => {
         const start = Date.now();
@@ -6233,7 +6291,7 @@ async function enterApp(source = "google") {
       await applyAuthPersistence(shouldRememberSession());
       let user = null;
 
-      // 1. Check if demo mode / mock flow is requested or if auth is in demo environment without live Firebase Auth
+      // 2. Check if demo mode / mock flow is requested or if auth is in demo environment without live Firebase Auth
       const isDemoMode = Boolean(
         (typeof runtimeConfig !== "undefined" && runtimeConfig.allowDemoSeed && runtimeConfig.environment === "development") ||
         (typeof APP_ENV !== "undefined" && APP_ENV.allowDemoSeed && !window.navigator.onLine)
