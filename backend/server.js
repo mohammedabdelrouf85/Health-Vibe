@@ -12229,6 +12229,77 @@ app.post('/api/clinics/pilot/circuit-breaker/evaluate', requireAuth, requireDoct
   }
 });
 
+/**
+ * GET /api/pilot/clinical-reviewer/certification
+ * Returns designated Pulmonology / Internal Medicine Clinical Reviewer profile,
+ * tripartite certification (questions, thresholds, recommendations), and cryptographic seals.
+ * Directly addresses PRD Page 18 Critical Risk mitigation.
+ */
+app.get('/api/pilot/clinical-reviewer/certification', (req, res) => {
+  try {
+    const seal = pilotReadinessService.clinicalReviewerService.getCertificationSeal();
+    const verification = pilotReadinessService.clinicalReviewerService.verifyAllComponentsApproved();
+    const questionnaire = pilotReadinessService.clinicalReviewerService.getIntakeQuestionnaire();
+    const thresholds = pilotReadinessService.clinicalReviewerService.getRiskThresholds();
+    const recommendations = pilotReadinessService.clinicalReviewerService.getRecommendationsAndDisclaimers();
+
+    res.json({
+      success: true,
+      certified: verification.certified,
+      reviewer: seal.certifiedReviewer,
+      certifications: seal.certifications,
+      masterFingerprint: seal.masterFingerprintSha256,
+      signedAt: seal.signedAt,
+      validThrough: seal.validThrough,
+      prdCompliance: seal.prdCompliance,
+      specifications: {
+        intakeQuestionnaire: questionnaire,
+        riskThresholds: thresholds,
+        recommendationsAndDisclaimers: recommendations
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/pilot/clinical-reviewer/re-certify
+ * Allows authorized clinical reviewer / lead to record periodic re-certification audit
+ */
+app.post('/api/pilot/clinical-reviewer/re-certify', requireAuth, requireDoctor, async (req, res) => {
+  try {
+    const { notes, component } = req.body || {};
+    const auditEntry = await pilotReadinessService.clinicalReviewerService.recordReviewAudit({
+      reviewerId: req.user.uid,
+      action: 'PERIODIC_CLINICAL_RECERTIFICATION',
+      notes,
+      component
+    });
+    res.json({ success: true, auditEntry });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * GET /api/respiratory/clinical-spec
+ * Returns settled Primary Clinical Question, Target Diagnostic Labels (ARI, Asthma, COPD, Mild URI),
+ * and Triage Urgency Tiers as mandated by PRD Page 22 (Section 19).
+ */
+app.get('/api/respiratory/clinical-spec', (req, res) => {
+  try {
+    const { respiratoryClinicalSpecService } = require('./respiratory-clinical-spec-service');
+    const spec = respiratoryClinicalSpecService.getSpecificationSummary();
+    res.json({
+      success: true,
+      specification: spec
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
 // =============================================================================
 // 💳 SUBSCRIPTION, BILLING & REVENUE LEDGER ROUTES
 // =============================================================================
