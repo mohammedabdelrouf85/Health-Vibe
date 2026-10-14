@@ -1617,18 +1617,44 @@
       this.catalog = translations;
       this.listeners = [];
 
-      // Determine initial language
-      let initialLang = this.defaultLanguage;
+      // Determine initial language: URL query (?lang=) -> stored preference -> device language (navigator.language) -> default
+      let initialLang = null;
       try {
-        if (typeof localStorage !== "undefined") {
-          const stored = localStorage.getItem(STORAGE_KEY);
-          if (stored && this.supportedLanguages.includes(stored)) {
-            initialLang = stored;
+        if (typeof window !== "undefined" && window.location && window.location.search) {
+          const urlParams = new URLSearchParams(window.location.search);
+          const qLang = (urlParams.get("lang") || "").toLowerCase().trim();
+          if (this.supportedLanguages.includes(qLang)) {
+            initialLang = qLang;
           }
         }
       } catch (e) {}
 
-      this.currentLanguage = initialLang;
+      if (!initialLang) {
+        try {
+          if (typeof localStorage !== "undefined") {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            if (stored && this.supportedLanguages.includes(stored)) {
+              initialLang = stored;
+            }
+          }
+        } catch (e) {}
+      }
+
+      // Auto-detect from user device language (navigator.language / navigator.languages) if first visit
+      if (!initialLang) {
+        try {
+          const navLang = (typeof navigator !== "undefined" && (navigator.language || (navigator.languages && navigator.languages[0])) || "").toLowerCase().trim();
+          if (navLang.startsWith("ar")) {
+            initialLang = "ar";
+          } else {
+            initialLang = "en";
+          }
+        } catch (e) {
+          initialLang = this.defaultLanguage;
+        }
+      }
+
+      this.currentLanguage = initialLang || this.defaultLanguage;
     }
 
     getLanguage() {

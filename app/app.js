@@ -1378,12 +1378,30 @@ const DEFAULT_LANGUAGE = "en";
 const LANGUAGE_DEFAULT_VERSION = "2026-09-23-en-default";
 let currentLanguage = (function() {
   try {
-    if (localStorage.getItem("hv_lang_default_version") !== LANGUAGE_DEFAULT_VERSION) {
-      localStorage.setItem("hv_lang_default_version", LANGUAGE_DEFAULT_VERSION);
-      localStorage.setItem("hv_lang", DEFAULT_LANGUAGE);
-      return DEFAULT_LANGUAGE;
+    // 1. If i18n engine is initialized, sync with its resolved language
+    if (typeof window !== "undefined" && window.i18n && typeof window.i18n.getLanguage === "function") {
+      const i18nLang = window.i18n.getLanguage();
+      if (i18nLang === "ar" || i18nLang === "en") return i18nLang;
     }
-    return localStorage.getItem("hv_lang") || DEFAULT_LANGUAGE;
+
+    // 2. Check URL parameter ?lang=
+    if (typeof window !== "undefined" && window.location && window.location.search) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlLang = (urlParams.get("lang") || "").toLowerCase().trim();
+      if (urlLang === "ar" || urlLang === "en") return urlLang;
+    }
+
+    // 3. Check explicitly saved user preference in localStorage
+    const saved = localStorage.getItem("hv_lang");
+    if (saved === "ar" || saved === "en") {
+      return saved;
+    }
+
+    // 4. PRD 5.1: First visit auto-detection based on device language (navigator.language)
+    // If the device language is Arabic, default to Arabic; otherwise English.
+    const navLang = (typeof navigator !== "undefined" && (navigator.language || (navigator.languages && navigator.languages[0])) || "").toLowerCase().trim();
+    const detectedLang = navLang.startsWith("ar") ? "ar" : "en";
+    return detectedLang;
   } catch(e) {
     return DEFAULT_LANGUAGE;
   }

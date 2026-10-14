@@ -1657,18 +1657,22 @@
       updateClinicCalculator();
     }
 
-    // Determine initial language from URL (?lang=), localStorage, or default to Arabic
+    // Determine initial language from URL (?lang=), localStorage, or device language (navigator.language) per PRD 5.1
     function initClinicLanguage() {
       let initialLang = "ar";
       try {
         const urlParams = new URLSearchParams(window.location.search);
-        const urlLang = urlParams.get("lang");
+        const urlLang = (urlParams.get("lang") || "").toLowerCase().trim();
         if (urlLang === "en" || urlLang === "ar") {
           initialLang = urlLang;
         } else {
           const storedLang = localStorage.getItem("hv_clinic_lang") || localStorage.getItem("hv_lang");
           if (storedLang === "en" || storedLang === "ar") {
             initialLang = storedLang;
+          } else {
+            // First visit device auto-detection
+            const navLang = (typeof navigator !== "undefined" && (navigator.language || (navigator.languages && navigator.languages[0])) || "").toLowerCase().trim();
+            initialLang = navLang.startsWith("ar") ? "ar" : "en";
           }
         }
       } catch (e) {

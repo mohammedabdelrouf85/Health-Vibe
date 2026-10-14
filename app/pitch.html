@@ -294,14 +294,14 @@
       <img src="./logo-dark-mark.webp" alt="Health Vibe AI" />
       <div>
         <strong style="font-size: 16px; font-weight: 800;">Health Vibe AI</strong>
-        <span style="display: block; font-size: 11px; color: var(--primary-light);">Pitch Deck • العرض التقديمي</span>
+        <span id="headerDeckSubtitle" style="display: block; font-size: 11px; color: var(--primary-light);">Pitch Deck • العرض التقديمي</span>
       </div>
     </a>
 
     <div class="deck-actions">
-      <button class="action-btn" onclick="toggleDeckLang()" id="btnLangToggle">English</button>
+      <button class="action-btn" onclick="toggleDeckLang()" id="btnLangToggle" title="Switch language">English</button>
       <button class="action-btn" onclick="toggleFullscreen()" title="ملء الشاشة">⛶ Fullscreen</button>
-      <a href="./clinics.html" class="action-btn" style="background: var(--primary); color: #061515;">🏥 بوابة العيادات</a>
+      <a href="./clinics.html" class="action-btn" id="headerClinicPortal" style="background: var(--primary); color: #061515;">🏥 بوابة العيادات</a>
     </div>
   </header>
 
@@ -608,6 +608,495 @@
     const totalSlides = 11;
     let isEnglish = false;
 
+    // Comprehensive Bilingual Deck Content for all 11 Slides
+    const deckTranslations = {
+      ar: {
+        deckSubtitle: "Pitch Deck • العرض التقديمي",
+        langToggleBtn: "English",
+        fullscreenBtn: "⛶ ملء الشاشة",
+        clinicPortalBtn: "🏥 بوابة العيادات",
+        slideLabel: "الشريحة",
+        ofLabel: "من",
+        slides: {
+          1: {
+            badge: "01 • THE VISION & HOOK",
+            title: "Health Vibe AI",
+            subtitle: "نظام الفرز والتشغيل السريري الذكي لعيادات ومراكز الصدر والباطنة",
+            highlightBox: "<strong>رسالة القيمة:</strong> نضاعف القدرة الاستيعابية للعيادات الطبية ونختصر وقت التوثيق السريري بنسبة 70% عبر الفرز الاستباقي قبل الزيارة، واعتماد الطبيب بنقرة واحدة (Doctor-in-the-Loop)، وإصدار تقارير طبية مشفرة برمز QR.",
+            cards: [
+              { title: "🎯 التخصص المستهدف", desc: "عيادات الصدر والحساسية، الباطنة العامة، ومجمعات المراكز الطبية." },
+              { title: "⚡ القيمة الفورية", desc: "توفير 100+ ساعة توثيق شهرياً وخفض التخلف عن المواعيد لأقل من 4%." },
+              { title: "🚀 النموذج", desc: "اشتراك شهري B2B SaaS مع باقة تجريبية مجانية لمدة 30 يوماً." }
+            ]
+          },
+          2: {
+            badge: "02 • THE CLINICAL PROBLEM",
+            title: "4 اختناقات قاتلة في عيادات الصدر والباطنة اليوم",
+            subtitle: "إهدار وقت الأطباء في الورقيات يضر بجودة الرعاية وأرباح العيادة",
+            cards: [
+              { title: "⏱️ 40% من وقت الكشف يضيع في التوثيق", desc: "الطبيب الاستشاري يقضي نصف وقته يسأل: 'بتكح من كام يوم؟' ويدون قياسات الأكسجين والأعراض يدوياً بدلاً من فحص المريض والتفاعل معه." },
+              { title: "⏳ 45+ دقيقة انتظار للمريض", desc: "تكدس مرهق في صالة الانتظار وغياب أي فرز للأولويات والخطورة قبل دخول المريض إلى غرفة الكشف." },
+              { title: "📉 18% نسبة تخلف عن المواعيد (No-Show)", desc: "غياب التذكير والمتابعة الاستباقية عبر الواتساب يهدر فترات كشف ثمينة ويكلف العيادة آلاف الجنيهات شهرياً." },
+              { title: "📄 تقارير ورقية مفقودة وقابلة للتزوير", desc: "تقارير روشتات ورقية تتلف وتضيع بعد أسبوع، ولا توجد طريقة رقمية للتحقق الفوري من صحة ومصداقية التقرير." }
+            ]
+          },
+          3: {
+            badge: "03 • THE SOLUTION",
+            title: "منظومة Health Vibe AI المتكاملة",
+            subtitle: "دائرة رقمية مغلقة تجمع المريض، الطبيب، وإدارة المركز في منصة واحدة",
+            cards: [
+              { title: "🫁 1. الفرز الذكي قبل الزيارة (Pre-Visit Triage)", desc: "رابط فوري عبر الواتساب أو كود QR بالاستقبال يملأ فيه المريض أعراضه وقياس الأكسجين SpO2 في 60 ثانية قبل دخول الطبيب." },
+              { title: "🩺 2. استقلالية تامة (Doctor-in-the-Loop)", desc: "شاشة مراجعة سريرية تقدم للطبيب اقتراحاً تشخيصياً استرشادياً، مع حرية التعديل والاعتماد الرسمي بنقرة واحدة (Approve & Certify)." },
+              { title: "🔒 3. تقارير طبية مشفرة بـ QR Code", desc: "تقرير إلكتروني فوري معتمد برمز تحقق مشفر ضد التزوير يحمل شعار العيادة وتوقيع الطبيب المعتمد." },
+              { title: "🤖 4. مساعد واتساب ولوحة مؤشرات (KPIs)", desc: "تأكيد وتعديل المواعيد آلياً + لوحة تحكم حية لقياس سرعة إنجاز الحالات ومعدلات التشغيل ونمو دخل المركز." }
+            ]
+          },
+          4: {
+            badge: "04 • PRODUCT & ZERO-TRUST SECURITY",
+            title: "بنية برمجية وسريرية بمعايير عالمية",
+            subtitle: "حماية صارمة لبيانات المرضى وامتثال كامل لقواعد HIPAA و GDPR",
+            cards: [
+              { title: "🛡️ عزل تام للبيانات", desc: "فصل صارم بين حسابات المرضى والأطباء والإدارة، وعزل بيانات الاختبار في Sandbox مستقل لمنع أي اختلاط." },
+              { title: "⚡ تحقق فسيولوجي صارم", desc: "محرك تحقق سريري يمنع تسجيل أي قراءات أكسجين SpO2 أو أعراض شاذة خارج الحدود الحيوية البشرية (50%-100%)." },
+              { title: "💾 استعادة الكوارث (DR)", desc: "نسخ احتياطي دوري بشهادات تجزئة SHA-256 وزمن استعادة RPO < 15 دقيقة مع تشفير متكامل في الإرسال والتخزين." }
+            ],
+            bottomNote: "🧪 <strong>جودة الكود المثبتة:</strong> 16 جناح اختبار آلي يغطي مسارات العمل السريري، أمان الحسابات، الدفع، ودقة الترجمة بنسبة نجاح 100%."
+          },
+          5: {
+            badge: "05 • CLINICAL IMPACT & NUMBERS",
+            title: "أثر سريري وتشغيلي ملموس بالأرقام",
+            subtitle: "نتائج مثبتة ميدانياً في تشغيل عيادات ومراكز الرعاية التنفسية",
+            metrics: [
+              { val: "70%", title: "تسريع الفرز السريري", desc: "اختصار وقت أخذ التاريخ المرضي من 15 إلى 4 دقائق." },
+              { val: "< 4%", title: "تخلف المرضى (No-Show)", desc: "انخفاض حاد مقارنة بمتوسط السوق (18%) عبر تنبيهات الواتساب." },
+              { val: "12 min", title: "سرعة اعتماد التقرير", desc: "متوسط وقت إنجاز وفحص المريض وتسليمه تقرير الـ QR." },
+              { val: "100+", title: "ساعة موفرة شهرياً", desc: "ساعات توثيق يدوي يستعيدها طاقم العيادة شهرياً." }
+            ]
+          },
+          6: {
+            badge: "06 • MARKET OPPORTUNITY",
+            title: "سوق إقليمي ضخم ومتنامٍ بسرعة",
+            subtitle: "التحول الرقمي للعيادات التخصصية في مصر والشرق الأوسط",
+            cards: [
+              { val: "$4.2B", title: "TAM (السوق الكلي المتاح)", desc: "حجم سوق برمجيات الرعاية الصحية والعيادات الخارجية في منطقة الشرق الأوسط وشمال أفريقيا بحلول 2028." },
+              { val: "25,000+", title: "SAM (السوق القابل للخدمة)", desc: "عيادة ومراكز أمراض صدرية وباطنة وطوارئ خاصة في مصر والمملكة العربية السعودية والإمارات." },
+              { val: "1,500", title: "SOM (المستهدف 3 سنوات)", desc: "عيادة ومركز طبي نشط بعائد سنوي متكرر مستهدف يتجاوز <strong>18 مليون جنيه مصري (ARR)</strong>." }
+            ]
+          },
+          7: {
+            badge: "07 • BUSINESS MODEL & PRICING",
+            title: "نموذج اشتراكات SaaS وباقة الـ Pilot",
+            subtitle: "حواجز دخول صفرية تضمن التحويل السريع إلى الاشتراكات السنوية المتكررة",
+            plans: [
+              { badge: "🎯 الخطاف المجاني (HOOK)", title: "باقة الـ Pilot التجريبية", val: "0 ج.م", desc: "<strong>عيادة واحدة • 3 أطباء • 30 يوماً</strong><br />تجربة كاملة مجاناً بدون بطاقة بنكية، مع نسبة تحويل مستهدفة 45%+." },
+              { title: "العيادة الفردية (Solo)", val: "1,250", period: "ج.م/شهر", desc: "طبيب استشاري واحد + مساعد، حتى 200 تقرير شهرياً، تقارير QR." },
+              { badge: "⭐ الأكثر طلباً", title: "المركز الطبي (Center)", val: "2,950", period: "ج.م/شهر", desc: "حتى 5 أطباء، واتساب بوت، تقييمات غير محدودة، لوحة تحليلات KPIs كاملة." }
+            ]
+          },
+          8: {
+            badge: "08 • COMPETITIVE ADVANTAGE",
+            title: "لماذا نفوز؟ (Our Competitive Moat)",
+            subtitle: "تصميم سريري يحل مشاكل الواقع الطبي العربي بدون تعقيد",
+            cards: [
+              { title: "🤝 Doctor-in-the-Loop وليس استبدال الطبيب", desc: "البرامج العامة تحاول تشخيص المريض آلياً فتفشل طبياً وقانونياً. نحن نساعد الطبيب ونترك له السيادة والاعتماد السريري الكامل." },
+              { title: "📲 بدون تحميل تطبيقات للمريض", desc: "المرضى يرفضون تحميل تطبيقات جديدة. نظامنا يعمل عبر متصفح الهاتف الخفيف ومحادثات الواتساب التي يستخدمها 100% من الناس." },
+              { title: "🔒 تشفير QR يحمي العيادة من التزوير", desc: "كل تقرير يحمل كود تحقق رقمي مشفر يمنح الثقة الكاملة لجهات التأمين والمستشفيات مع شعار العيادة الرسمي." },
+              { title: "⚡ سرعة وسهولة تشغيل خلال 24 ساعة", desc: "العيادة تبدأ العمل فورياً دون الحاجة لسيرفرات معقدة أو تدريب لأسابيع." }
+            ]
+          },
+          9: {
+            badge: "09 • GO-TO-MARKET STRATEGY",
+            title: "استراتيجية الانتشار واكتساب العيادات",
+            subtitle: "نمو يعتمد على التجربة المباشرة وأثر الشبكة الطبية",
+            cards: [
+              { title: "1. انتشار قائم على المنتج (PLG)", desc: "باقة الـ Pilot المجانية (عيادة، 3 أطباء، 30 يوم) تكسر حاجز التردد وتجعل الطبيب يعتمد على النظام يومياً." },
+              { title: "2. شراكات الجمعيات الطبية", desc: "التعاون مع جمعيات أمراض الصدر ومؤتمرات الحساسية لتقديم ورش عمل واعتماد المنظومة في بروتوكولات العيادات." },
+              { title: "3. أثر الشبكة (Network Effects)", desc: "كل تقرير طبي يستلمه المريض يحمل شعار Health Vibe AI، مما يولد وعياً وانتشاراً عضوياً بين المرضى والأطباء الآخرين." }
+            ]
+          },
+          10: {
+            badge: "10 • TRACTION & LIVE DEMO",
+            title: "المنظومة حية وتعمل بكفاءة الآن",
+            subtitle: "ليست مجرد فكرة على ورق — منتج مكتمل ومثبت برمجياً وسريرياً",
+            cards: [
+              { title: "💻 المنظومة حية على السحابة", desc: "بوابة المرضى، لوحة الطبيب، لوحة الإدارة العامة، حاسبة الـ ROI، وصفحة المبيعات تعمل بالكامل على Firebase و Node.js." },
+              { title: "🧪 16 جناح اختبار آلي بنسبة 100%", desc: "تغطية كاملة لاختبارات الأمان الصارم، العزل البيئي، حجز المواعيد، استعادة الكوارث، وقواعد Firestore Rules." },
+              { title: "🌐 دعم ثنائي اللغة متكامل", desc: "نظام ترجمة منظّم i18n باللغتين العربية (RTL) والإنجليزية (LTR) متوافق مع كافة الأجهزة والهواتف الذكية." },
+              { title: "📱 تجربة حية جاهزة للعرض", desc: "يمكن اختبار مسار المريض، كشف الطبيب، وتوليد التقرير برمز QR في أقل من دقيقتين أمام أي لجنة تحكيم أو مستثمر." }
+            ]
+          },
+          11: {
+            badge: "11 • THE ASK & CONTACT",
+            title: "الرؤية والطلب الاستثماري (The Ask)",
+            subtitle: "نبني البنية التحتية الذكية لعيادات المستقبل في الشرق الأوسط",
+            boxes: [
+              { title: "🎯 الهدف التشغيلي لـ 12 شهراً", desc: "الوصول إلى <strong>250 عيادة ومركز طبي نشط</strong> في مصر والخليج، وتأمين إيراد سنوي متكرر يتجاوز 4.5 مليون ج.م." },
+              { title: "💼 الشراكات والاستثمار المستهدف", desc: "شراكات توزيع مع سلاسل المراكز الطبية الكبرى + جولة تمويل أولي لتوسيع التكامل مع أنظمة المستشفيات (EMR/FHIR) وتحليل السعال الصوتي بالذكاء الاصطناعي." }
+            ],
+            contact: {
+              title: "تواصل معنا لتجربة المنظومة أو مناقشة الشراكة",
+              emailText: "📧 mohammedabdelrouf85@gmail.com • 🌐 <a href=\"./clinics.html\" style=\"color: inherit; text-decoration: underline;\">healthvibe.ai/clinics</a>"
+            }
+          }
+        }
+      },
+      en: {
+        deckSubtitle: "Pitch Deck • Executive Presentation",
+        langToggleBtn: "العربية",
+        fullscreenBtn: "⛶ Fullscreen",
+        clinicPortalBtn: "🏥 Clinic Portal",
+        slideLabel: "Slide",
+        ofLabel: "of",
+        slides: {
+          1: {
+            badge: "01 • THE VISION & HOOK",
+            title: "Health Vibe AI",
+            subtitle: "Smart Clinical Pre-Triage & Workflow Operating System for Respiratory Clinics",
+            highlightBox: "<strong>Value Proposition:</strong> We double outpatient clinic capacity and slash clinical paperwork time by 70% through pre-visit AI triage, single-click Doctor-in-the-Loop certification, and tamper-evident QR clinical reports.",
+            cards: [
+              { title: "🎯 Target Specialty", desc: "Pulmonary, Allergy, Internal Medicine, and Ambulatory Polyclinic Centers." },
+              { title: "⚡ Immediate Value", desc: "Saves 100+ documentation hours/month and drops no-show rate below 4%." },
+              { title: "🚀 Business Model", desc: "B2B SaaS subscription with an unrestricted 30-day clinical pilot package." }
+            ]
+          },
+          2: {
+            badge: "02 • THE CLINICAL PROBLEM",
+            title: "4 Critical Bottlenecks in Outpatient Respiratory Care Today",
+            subtitle: "Wasting physician time on paperwork harms clinical care quality and clinic profitability",
+            cards: [
+              { title: "⏱️ 40% of Consultation Time Lost to Paperwork", desc: "Consultants spend half their time asking basic history questions and logging vitals manually instead of examining and interacting with the patient." },
+              { title: "⏳ 45+ Minute Waiting Room Gridlock", desc: "Crowded waiting areas with zero clinical acuity stratification before patients step into the exam room." },
+              { title: "📉 18% Average No-Show Rate", desc: "Lack of automated WhatsApp reminders leaves expensive consultation slots vacant, costing clinics thousands every month." },
+              { title: "📄 Paper Records Lost and Vulnerable to Fraud", desc: "Prescription papers tear and vanish within a week with no cryptographic mechanism to verify authenticity." }
+            ]
+          },
+          3: {
+            badge: "03 • THE SOLUTION",
+            title: "The Complete Health Vibe AI Clinical Ecosystem",
+            subtitle: "A unified closed-loop digital ecosystem connecting patients, doctors, and clinic management",
+            cards: [
+              { title: "🫁 1. Pre-Visit Smart Triage", desc: "Instant mobile link via WhatsApp or reception QR code where patients log symptoms and SpO2 in 60 seconds before seeing the doctor." },
+              { title: "🩺 2. Doctor-in-the-Loop Autonomy", desc: "Clinical review cockpit offering suggestive decision support, with full physician autonomy to edit and certify with one click." },
+              { title: "🔒 3. Tamper-Evident QR Reports", desc: "Instant certified digital medical reports secured with encrypted verification codes, clinic seal, and physician signature." },
+              { title: "🤖 4. WhatsApp Bot & KPI Dashboard", desc: "Automated booking confirmations and follow-ups + live executive dashboard tracking turnaround time and clinic revenue growth." }
+            ]
+          },
+          4: {
+            badge: "04 • PRODUCT & ZERO-TRUST SECURITY",
+            title: "World-Class Clinical & Software Architecture",
+            subtitle: "Strict patient data isolation and full compliance with HIPAA and GDPR guidelines",
+            cards: [
+              { title: "🛡️ Zero-Trust Data Isolation", desc: "Strict cryptographic separation between patient, physician, and admin roles, with isolated testing sandboxes." },
+              { title: "⚡ Strict Physiological Validation", desc: "Clinical engine preventing invalid entries outside human physiological bounds (SpO2 50%-100%)." },
+              { title: "💾 Disaster Recovery (DR)", desc: "Automated SHA-256 state backups with RPO < 15 minutes and end-to-end TLS 1.3 / AES-256 encryption." }
+            ],
+            bottomNote: "🧪 <strong>Proven Code Hygiene:</strong> 16 automated test suites covering clinical workflows, RBAC security, and i18n parity with 100% pass rate."
+          },
+          5: {
+            badge: "05 • CLINICAL IMPACT & NUMBERS",
+            title: "Measurable Clinical and Operational Impact in Numbers",
+            subtitle: "Field-tested metrics in busy outpatient pulmonary care centers",
+            metrics: [
+              { val: "70%", title: "Faster Clinical Triage", desc: "Intake and history-taking compressed from 15 to 4 minutes." },
+              { val: "< 4%", title: "Patient No-Show Rate", desc: "Sharp decrease vs. 18% industry baseline via automated WhatsApp alerts." },
+              { val: "12 min", title: "Report Turnaround Time", desc: "Average time from exam to certified QR report delivery." },
+              { val: "100+", title: "Hours Saved Monthly", desc: "Manual paperwork hours recovered by clinic staff each month." }
+            ]
+          },
+          6: {
+            badge: "06 • MARKET OPPORTUNITY",
+            title: "A Massive and Rapidly Growing Regional Market",
+            subtitle: "Digital transformation of specialized clinics across Egypt and the MENA region",
+            cards: [
+              { val: "$4.2B", title: "TAM (Total Addressable Market)", desc: "Projected MENA healthcare software and outpatient management market size by 2028." },
+              { val: "25,000+", title: "SAM (Serviceable Addressable Market)", desc: "Private pulmonary, internal medicine, and urgent care clinics across Egypt, KSA, and UAE." },
+              { val: "1,500", title: "SOM (3-Year Serviceable Target)", desc: "Active clinics and medical centers yielding a projected annual recurring revenue over <strong>18M EGP (ARR)</strong>." }
+            ]
+          },
+          7: {
+            badge: "07 • BUSINESS MODEL & PRICING",
+            title: "SaaS Subscription Model & The Free Clinical Pilot",
+            subtitle: "Zero friction entry ensuring high conversion into recurring annual contracts",
+            plans: [
+              { badge: "🎯 FREE ADOPTION HOOK", title: "Clinical Pilot Package", val: "0 EGP", desc: "<strong>1 Clinic • 3 Doctors • 30 Days Free</strong><br />Full clinical capability with zero credit card commitment and 45%+ target conversion." },
+              { title: "Solo Practice", val: "1,250", period: "EGP/Mo", desc: "1 Consultant + assistant, up to 200 reports/month, certified QR reports." },
+              { badge: "⭐ MOST POPULAR", title: "Medical Center", val: "2,950", period: "EGP/Mo", desc: "Up to 5 Doctors, WhatsApp Bot, unlimited triages, full KPI dashboard." }
+            ]
+          },
+          8: {
+            badge: "08 • COMPETITIVE ADVANTAGE",
+            title: "Why We Win (Our Competitive Moat)",
+            subtitle: "A clinical design crafted to solve Arab healthcare realities without friction",
+            cards: [
+              { title: "🤝 Doctor-in-the-Loop, Not Doctor Replacement", desc: "Generic AI tools attempt autonomous diagnosis and fail legally and clinically. We empower the physician with definitive sign-off authority." },
+              { title: "📲 Zero App Downloads for Patients", desc: "Patients resist downloading new apps. Our platform works seamlessly on mobile web and WhatsApp used by 100% of patients." },
+              { title: "🔒 QR Cryptographic Verification", desc: "Every report carries a secure digital verification hash, establishing trust with insurers, hospitals, and employers." },
+              { title: "⚡ Live in 24 Hours with Zero Friction", desc: "Clinics onboard instantly without complex server infrastructure or weeks of disruptive training." }
+            ]
+          },
+          9: {
+            badge: "09 • GO-TO-MARKET STRATEGY",
+            title: "Go-to-Market & Clinic Acquisition Engine",
+            subtitle: "Growth fueled by product adoption and medical network effects",
+            cards: [
+              { title: "1. Product-Led Growth (PLG)", desc: "Our 30-day free pilot package (1 Clinic, 3 Doctors) breaks hesitation and integrates the platform into daily workflows." },
+              { title: "2. Medical Society Partnerships", desc: "Collaborations with pulmonary associations and allergy conferences for clinical workshops and protocol adoption." },
+              { title: "3. Viral Network Effects", desc: "Every patient report branded with Health Vibe AI generates organic referral loops across patients and referring clinicians." }
+            ]
+          },
+          10: {
+            badge: "10 • TRACTION & LIVE DEMO",
+            title: "The Platform is Live and Fully Operational Today",
+            subtitle: "Not just slides on paper — a battle-tested clinical SaaS platform",
+            cards: [
+              { title: "💻 Production-Ready on the Cloud", desc: "Patient portal, Doctor queue, Admin console, ROI calculator, and Sales landing live on Firebase & Node.js." },
+              { title: "🧪 16 Automated Test Suites (100% Pass)", desc: "Comprehensive testing covering clinical workflows, zero-trust RBAC, disaster recovery, and Firestore Rules." },
+              { title: "🌐 Complete Bilingual Architecture", desc: "Structured i18n supporting Arabic (RTL) and English (LTR) seamlessly across all responsive devices." },
+              { title: "📱 Live Demo Ready in Under 2 Minutes", desc: "Patient intake, physician review, and QR report generation can be demonstrated live before any investor panel." }
+            ]
+          },
+          11: {
+            badge: "11 • THE ASK & CONTACT",
+            title: "Vision & Strategic Investment (The Ask)",
+            subtitle: "Building the intelligent infrastructure for modern clinics across MENA",
+            boxes: [
+              { title: "🎯 12-Month Operational Milestone", desc: "Reach <strong>250 active clinics and medical centers</strong> across Egypt and the GCC, securing > 4.5M EGP in annual recurring revenue." },
+              { title: "💼 Strategic Partnerships & Funding", desc: "Distribution partnerships with medical chains + seed funding to accelerate hospital EMR/FHIR integrations and AI acoustic cough analysis." }
+            ],
+            contact: {
+              title: "Contact us to schedule a live pilot or discuss partnerships",
+              emailText: "📧 mohammedabdelrouf85@gmail.com • 🌐 <a href=\"./clinics.html\" style=\"color: inherit; text-decoration: underline;\">healthvibe.ai/clinics</a>"
+            }
+          }
+        }
+      }
+    };
+
+    function renderSlideContent(slideNum, lang) {
+      const slideEl = document.querySelector(`.slide[data-slide="${slideNum}"]`);
+      if (!slideEl) return;
+
+      const data = deckTranslations[lang].slides[slideNum];
+      if (!data) return;
+
+      // Slide 1
+      if (slideNum === 1) {
+        slideEl.innerHTML = `
+          <div class="slide-badge">${data.badge}</div>
+          <h1 class="slide-title">${data.title}</h1>
+          <p class="slide-subtitle" style="font-size: 18px; color: var(--primary-light); font-weight: 700;">${data.subtitle}</p>
+          <div class="info-card" style="margin-bottom: 24px; border-color: rgba(9, 184, 182, 0.4); background: rgba(9, 184, 182, 0.08);">
+            <p style="font-size: 15px; color: #e2e8f0; line-height: 1.7;">${data.highlightBox}</p>
+          </div>
+          <div class="grid-3">
+            ${data.cards.map(c => `
+              <div class="info-card">
+                <h4>${c.title}</h4>
+                <p>${c.desc}</p>
+              </div>
+            `).join("")}
+          </div>
+        `;
+      }
+      // Slides 2, 3, 8, 9, 10 (Grid of 2 or 3)
+      else if ([2, 3, 8, 9, 10].includes(slideNum)) {
+        const gridClass = [2, 3, 8, 10].includes(slideNum) ? "grid-2" : "grid-3";
+        slideEl.innerHTML = `
+          <div class="slide-badge">${data.badge}</div>
+          <h2 class="slide-title">${data.title}</h2>
+          <p class="slide-subtitle">${data.subtitle}</p>
+          <div class="${gridClass}">
+            ${data.cards.map(c => `
+              <div class="info-card">
+                <h4>${c.title}</h4>
+                <p>${c.desc}</p>
+              </div>
+            `).join("")}
+          </div>
+        `;
+      }
+      // Slide 4
+      else if (slideNum === 4) {
+        slideEl.innerHTML = `
+          <div class="slide-badge">${data.badge}</div>
+          <h2 class="slide-title">${data.title}</h2>
+          <p class="slide-subtitle">${data.subtitle}</p>
+          <div class="grid-3">
+            ${data.cards.map(c => `
+              <div class="info-card">
+                <h4>${c.title}</h4>
+                <p>${c.desc}</p>
+              </div>
+            `).join("")}
+          </div>
+          <div class="info-card" style="margin-top: 16px; background: rgba(9, 184, 182, 0.08); border-color: rgba(9, 184, 182, 0.4);">
+            <p style="font-size: 14px; color: #e2e8f0;">${data.bottomNote}</p>
+          </div>
+        `;
+      }
+      // Slide 5
+      else if (slideNum === 5) {
+        slideEl.innerHTML = `
+          <div class="slide-badge">${data.badge}</div>
+          <h2 class="slide-title">${data.title}</h2>
+          <p class="slide-subtitle">${data.subtitle}</p>
+          <div class="grid-4">
+            ${data.metrics.map(m => `
+              <div class="info-card" style="text-align: center;">
+                <div class="stat-number">${m.val}</div>
+                <h4 style="justify-content: center;">${m.title}</h4>
+                <p>${m.desc}</p>
+              </div>
+            `).join("")}
+          </div>
+        `;
+      }
+      // Slide 6
+      else if (slideNum === 6) {
+        slideEl.innerHTML = `
+          <div class="slide-badge">${data.badge}</div>
+          <h2 class="slide-title">${data.title}</h2>
+          <p class="slide-subtitle">${data.subtitle}</p>
+          <div class="grid-3">
+            <div class="info-card" style="border-color: rgba(9, 184, 182, 0.4);">
+              <div class="stat-number" style="font-size: 30px;">${data.cards[0].val}</div>
+              <h4>${data.cards[0].title}</h4>
+              <p>${data.cards[0].desc}</p>
+            </div>
+            <div class="info-card" style="border-color: rgba(56, 189, 248, 0.4);">
+              <div class="stat-number" style="font-size: 30px;">${data.cards[1].val}</div>
+              <h4>${data.cards[1].title}</h4>
+              <p>${data.cards[1].desc}</p>
+            </div>
+            <div class="info-card" style="border-color: rgba(45, 212, 191, 0.6);">
+              <div class="stat-number" style="font-size: 30px;">${data.cards[2].val}</div>
+              <h4>${data.cards[2].title}</h4>
+              <p>${data.cards[2].desc}</p>
+            </div>
+          </div>
+        `;
+      }
+      // Slide 7
+      else if (slideNum === 7) {
+        slideEl.innerHTML = `
+          <div class="slide-badge">${data.badge}</div>
+          <h2 class="slide-title">${data.title}</h2>
+          <p class="slide-subtitle">${data.subtitle}</p>
+          <div class="grid-3">
+            <div class="info-card" style="border: 1.5px solid var(--primary); background: rgba(9, 184, 182, 0.1);">
+              <span style="font-size: 11px; font-weight: 800; color: var(--primary-light); background: rgba(9, 184, 182, 0.2); padding: 2px 8px; border-radius: 4px;">${data.plans[0].badge}</span>
+              <h4 style="margin-top: 8px;">${data.plans[0].title}</h4>
+              <div class="stat-number" style="font-size: 26px;">${data.plans[0].val}</div>
+              <p>${data.plans[0].desc}</p>
+            </div>
+            <div class="info-card">
+              <h4>${data.plans[1].title}</h4>
+              <div class="stat-number" style="font-size: 26px;">${data.plans[1].val} <span style="font-size: 13px; color: #94a3b8;">${data.plans[1].period}</span></div>
+              <p>${data.plans[1].desc}</p>
+            </div>
+            <div class="info-card" style="border-color: rgba(56, 189, 248, 0.5);">
+              <span style="font-size: 11px; font-weight: 800; color: #38bdf8;">${data.plans[2].badge}</span>
+              <h4 style="margin-top: 8px;">${data.plans[2].title}</h4>
+              <div class="stat-number" style="font-size: 26px;">${data.plans[2].val} <span style="font-size: 13px; color: #94a3b8;">${data.plans[2].period}</span></div>
+              <p>${data.plans[2].desc}</p>
+            </div>
+          </div>
+        `;
+      }
+      // Slide 11
+      else if (slideNum === 11) {
+        slideEl.innerHTML = `
+          <div class="slide-badge">${data.badge}</div>
+          <h2 class="slide-title">${data.title}</h2>
+          <p class="slide-subtitle">${data.subtitle}</p>
+          <div class="grid-2" style="margin-bottom: 24px;">
+            <div class="info-card" style="border-color: var(--primary); background: rgba(9, 184, 182, 0.08);">
+              <h4>${data.boxes[0].title}</h4>
+              <p style="font-size: 15px; color: #ffffff;">${data.boxes[0].desc}</p>
+            </div>
+            <div class="info-card" style="border-color: var(--accent); background: rgba(56, 189, 248, 0.08);">
+              <h4>${data.boxes[1].title}</h4>
+              <p style="font-size: 15px; color: #ffffff;">${data.boxes[1].desc}</p>
+            </div>
+          </div>
+          <div class="info-card" style="text-align: center; border-color: rgba(9, 184, 182, 0.5);">
+            <h4 style="justify-content: center; font-size: 18px;">${data.contact.title}</h4>
+            <p style="font-size: 15px; color: var(--primary-light); margin-top: 6px;">${data.contact.emailText}</p>
+          </div>
+        `;
+      }
+    }
+
+    function renderAllSlides(lang) {
+      for (let i = 1; i <= totalSlides; i++) {
+        renderSlideContent(i, lang);
+      }
+      const t = deckTranslations[lang];
+      const headerSubtitle = document.getElementById("headerDeckSubtitle");
+      if (headerSubtitle) headerSubtitle.textContent = t.deckSubtitle;
+
+      const langBtn = document.getElementById("btnLangToggle");
+      if (langBtn) {
+        langBtn.textContent = t.langToggleBtn;
+        langBtn.title = lang === "ar" ? "Switch to English presentation" : "التبديل إلى العرض باللغة العربية";
+      }
+
+      const portalBtn = document.getElementById("headerClinicPortal");
+      if (portalBtn) portalBtn.textContent = t.clinicPortalBtn;
+
+      const indicator = document.querySelector(".slide-indicator");
+      if (indicator) {
+        indicator.innerHTML = `${t.slideLabel} <span id="currentSlideNum">${currentSlide}</span> ${t.ofLabel} <span id="totalSlidesNum">${totalSlides}</span>`;
+      }
+
+      const prevBtn = document.getElementById("btnPrevSlide");
+      const nextBtn = document.getElementById("btnNextSlide");
+      if (prevBtn) document.getElementById("btnPrevSlide").textContent = lang === "en" ? "←" : "→";
+      if (nextBtn) document.getElementById("btnNextSlide").textContent = lang === "en" ? "→" : "←";
+    }
+
+    function applyDeckLang(lang) {
+      isEnglish = lang === "en";
+      document.documentElement.lang = lang;
+      document.documentElement.dir = isEnglish ? "ltr" : "rtl";
+
+      try {
+        localStorage.setItem("hv_lang", lang);
+        localStorage.setItem("hv_deck_lang", lang);
+      } catch (e) {}
+
+      renderAllSlides(lang);
+      showSlide(currentSlide);
+    }
+
+    function toggleDeckLang() {
+      const nextLang = isEnglish ? "ar" : "en";
+      applyDeckLang(nextLang);
+    }
+
+    function initDeckLanguage() {
+      let lang = "ar";
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlLang = (urlParams.get("lang") || "").toLowerCase().trim();
+        if (urlLang === "en" || urlLang === "ar") {
+          lang = urlLang;
+        } else {
+          const stored = localStorage.getItem("hv_deck_lang") || localStorage.getItem("hv_lang");
+          if (stored === "en" || stored === "ar") {
+            lang = stored;
+          } else {
+            // First visit device auto-detection per PRD 5.1
+            const navLang = (typeof navigator !== "undefined" && (navigator.language || (navigator.languages && navigator.languages[0])) || "").toLowerCase().trim();
+            lang = navLang.startsWith("ar") ? "ar" : "en";
+          }
+        }
+      } catch (e) {
+        lang = "ar";
+      }
+      applyDeckLang(lang);
+    }
+
     function showSlide(n) {
       if (n < 1) n = 1;
       if (n > totalSlides) n = totalSlides;
@@ -617,12 +1106,17 @@
       const activeEl = document.querySelector(`.slide[data-slide="${currentSlide}"]`);
       if (activeEl) activeEl.classList.add("active");
 
-      document.getElementById("currentSlideNum").textContent = currentSlide;
-      document.getElementById("btnPrevSlide").disabled = currentSlide === 1;
-      document.getElementById("btnNextSlide").disabled = currentSlide === totalSlides;
+      const currentNumEl = document.getElementById("currentSlideNum");
+      if (currentNumEl) currentNumEl.textContent = currentSlide;
+
+      const prevBtn = document.getElementById("btnPrevSlide");
+      const nextBtn = document.getElementById("btnNextSlide");
+      if (prevBtn) prevBtn.disabled = currentSlide === 1;
+      if (nextBtn) nextBtn.disabled = currentSlide === totalSlides;
 
       const pct = (currentSlide / totalSlides) * 100;
-      document.getElementById("deckProgressBar").style.width = `${pct}%`;
+      const progressEl = document.getElementById("deckProgressBar");
+      if (progressEl) progressEl.style.width = `${pct}%`;
     }
 
     function nextSlide() {
@@ -654,17 +1148,8 @@
       }
     }
 
-    function toggleDeckLang() {
-      isEnglish = !isEnglish;
-      document.documentElement.lang = isEnglish ? "en" : "ar";
-      document.documentElement.dir = isEnglish ? "ltr" : "rtl";
-      document.getElementById("btnLangToggle").textContent = isEnglish ? "العربية" : "English";
-      document.getElementById("btnPrevSlide").textContent = isEnglish ? "←" : "→";
-      document.getElementById("btnNextSlide").textContent = isEnglish ? "→" : "←";
-    }
-
-    // Initialize
-    showSlide(1);
+    // Initialize Deck with language and initial slide
+    initDeckLanguage();
   </script>
 </body>
 </html>
