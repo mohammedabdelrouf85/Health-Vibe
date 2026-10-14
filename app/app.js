@@ -1471,6 +1471,12 @@ function applyLanguage(language) {
     }
   });
 
+  // Direct update for landing header clinics link
+  const siteHeaderClinicsLink = document.getElementById("siteHeaderClinicsLink");
+  if (siteHeaderClinicsLink) {
+    siteHeaderClinicsLink.textContent = language === "ar" ? "للعيادات" : "For Clinics";
+  }
+
   // 3. Direct update for logout button
   if (logoutButton) {
     logoutButton.textContent = (window.i18n && window.i18n.t("nav.signOut")) || (language === "ar" ? "تسجيل الخروج" : "Sign out");
