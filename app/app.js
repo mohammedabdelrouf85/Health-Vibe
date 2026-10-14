@@ -43,6 +43,7 @@ const authConsentGroup = document.getElementById("authConsentGroup");
 const authMedicalConsentChk = document.getElementById("authMedicalConsentChk");
 const authEmail = document.getElementById("authEmail");
 const authPassword = document.getElementById("authPassword");
+const authPasswordRules = document.getElementById("authPasswordRules");
 const authSubmitBtn = document.getElementById("authSubmitBtn");
 const authSubmitText = document.getElementById("authSubmitText");
 const authErrorBanner = document.getElementById("authErrorBanner");
@@ -5455,6 +5456,13 @@ function setAuthMode(mode) {
   if (authConsentGroup) {
     authConsentGroup.style.display = mode === "signup" ? "block" : "none";
   }
+  const rulesContainer = authPasswordRules || document.getElementById("authPasswordRules");
+  if (rulesContainer) {
+    rulesContainer.style.display = mode === "signup" ? "block" : "none";
+    if (mode === "signup" && typeof updatePasswordStrengthUI === "function") {
+      updatePasswordStrengthUI();
+    }
+  }
   if (authName) {
     if (mode === "signup") {
       authName.setAttribute("required", "true");
@@ -5471,6 +5479,53 @@ function setAuthMode(mode) {
   }
 }
 
+function updatePasswordStrengthUI(val) {
+  const pwdInput = authPassword || document.getElementById("authPassword");
+  const password = typeof val === "string" ? val : (pwdInput ? pwdInput.value : "");
+  const rules = {
+    length: password.length >= 8,
+    upper: /[A-Z]/.test(password),
+    number: /[0-9]/.test(password),
+    symbol: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~`]/.test(password)
+  };
+
+  const updateItem = (elemId, ok) => {
+    const el = document.getElementById(elemId);
+    if (!el) return;
+    const icon = el.querySelector(".rule-icon");
+    if (ok) {
+      el.style.color = "#059669";
+      el.classList.add("valid");
+      if (icon) {
+        icon.textContent = "✓";
+        icon.style.color = "#059669";
+      }
+    } else {
+      el.style.color = "var(--muted)";
+      el.classList.remove("valid");
+      if (icon) {
+        icon.textContent = "○";
+        icon.style.color = "var(--muted)";
+      }
+    }
+  };
+
+  updateItem("ruleLength", rules.length);
+  updateItem("ruleUpper", rules.upper);
+  updateItem("ruleNumber", rules.number);
+  updateItem("ruleSymbol", rules.symbol);
+  return rules;
+}
+
+if (authPassword) {
+  authPassword.addEventListener("input", () => {
+    if (authMode === "signup") {
+      updatePasswordStrengthUI(authPassword.value);
+    }
+  });
+}
+
+window.updatePasswordStrengthUI = updatePasswordStrengthUI;
 window.setAuthMode = setAuthMode;
 window.showSignInView = showSignInView;
 window.showForgotView = showForgotView;
@@ -5629,11 +5684,11 @@ function toFriendlyAppError(err, context = "") {
     return {
       icon: "🛡️",
       category: isEn ? "Security" : "أمان الحساب",
-      title: isEn ? "Password Too Weak" : "كلمة المرور قصيرة جداً",
+      title: isEn ? "Password Does Not Meet Requirements" : "كلمة المرور لا تستوفي الشروط",
       message: isEn
-        ? "For patient clinical data privacy, passwords must contain at least 6 characters."
-        : "لحماية خصوصية وسجلاتك الطبية، يجب أن تتكون كلمة المرور من 6 خانات على الأقل.",
-      action: isEn ? "Please enter a stronger password combining letters and numbers." : "يرجى اختيار كلمة مرور أطول تحتوي على أحرف وأرقام.",
+        ? "For patient clinical data privacy, passwords must contain at least 8 characters, an uppercase letter (A-Z), a number (0-9), and a special symbol (!@#$)."
+        : "لحماية خصوصية وسجلاتك الطبية، يجب ألا تقل كلمة المرور عن 8 أحرف، وأن تحتوي على حرف كبير (A-Z)، ورقم (0-9)، ورمز خاص (!@#$).",
+      action: isEn ? "Please enter a stronger password satisfying all 4 security criteria." : "يرجى اختيار كلمة مرور أقوى تستوفي كافة معايير الأمان الأربعة.",
       ref: code || "auth/weak-password"
     };
   }
@@ -5909,6 +5964,22 @@ async function handleEmailAuth(e) {
     return;
   }
 
+  // Strict email format validation
+  const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
+  if (!emailRegex.test(email)) {
+    showAuthError({
+      code: "auth/invalid-email",
+      title: isEn ? "Invalid Email Format" : "صيغة البريد غير صحيحة",
+      message: isEn
+        ? "Please enter a valid email address (e.g. name@example.com)."
+        : "يرجى كتابة عنوان بريد إلكتروني صحيح ومكتمل (مثال: name@example.com).",
+      action: isEn ? "Check for missing '@', invalid characters, or incomplete domain." : "تأكد من عدم وجود مسافات وكتابة الرمز @ واسم النطاق بشكل صحيح.",
+      icon: "📧"
+    });
+    if (authEmail && typeof authEmail.focus === "function") authEmail.focus();
+    return;
+  }
+
   if (authMode === "signup" && !name) {
     showAuthError({
       code: "auth/missing-name",
@@ -5920,15 +5991,59 @@ async function handleEmailAuth(e) {
     return;
   }
 
-  if (password.length < 6) {
-    showAuthError({
-      code: "auth/weak-password",
-      title: isEn ? "Password Too Short" : "كلمة المرور قصيرة",
-      message: isEn ? "Password must contain at least 6 characters." : "يجب ألا تقل كلمة المرور عن 6 خانات للأمان الطبي.",
-      action: isEn ? "Choose a stronger password with letters, numbers, and symbols." : "اختر كلمة مرور أقوى تحتوي على حروف وأرقام ورموز.",
-      icon: "🔑"
-    });
-    return;
+  // Strict password validation (8+ chars, upper, number, symbol for signup; 6+ for signin)
+  if (authMode === "signup") {
+    const hasMinLength = password.length >= 8;
+    const hasUpper = /[A-Z]/.test(password);
+    const hasNumber = /[0-9]/.test(password);
+    const hasSymbol = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~`]/.test(password);
+
+    if (!hasMinLength || !hasUpper || !hasNumber || !hasSymbol) {
+      const missingAr = [];
+      const missingEn = [];
+      if (!hasMinLength) {
+        missingAr.push("8 أحرف على الأقل");
+        missingEn.push("8+ characters");
+      }
+      if (!hasUpper) {
+        missingAr.push("حرف كبير (A-Z)");
+        missingEn.push("uppercase letter (A-Z)");
+      }
+      if (!hasNumber) {
+        missingAr.push("رقم (0-9)");
+        missingEn.push("number (0-9)");
+      }
+      if (!hasSymbol) {
+        missingAr.push("رمز خاص (!@#$)");
+        missingEn.push("special symbol (!@#$)");
+      }
+
+      showAuthError({
+        code: "auth/weak-password",
+        title: isEn ? "Password Does Not Meet Requirements" : "كلمة المرور لا تستوفي الشروط",
+        message: isEn
+          ? `Password must meet all security requirements: missing ${missingEn.join(", ")}.`
+          : `يجب استيفاء شروط الأمان لكلمة المرور: ينقصها ${missingAr.join("، ")}.`,
+        action: isEn
+          ? "Ensure your password is 8+ characters and contains an uppercase letter, number, and special symbol."
+          : "تأكد من أن كلمة المرور لا تقل عن 8 خانات وتحتوي على حرف كبير، ورقم، ورمز خاص.",
+        icon: "🛡️"
+      });
+      if (authPassword && typeof authPassword.focus === "function") authPassword.focus();
+      return;
+    }
+  } else {
+    if (password.length < 6) {
+      showAuthError({
+        code: "auth/weak-password",
+        title: isEn ? "Password Too Short" : "كلمة المرور قصيرة",
+        message: isEn ? "Password must contain at least 6 characters." : "يجب ألا تقل كلمة المرور عن 6 خانات للأمان الطبي.",
+        action: isEn ? "Choose a stronger password with letters, numbers, and symbols." : "اختر كلمة مرور أقوى تحتوي على حروف وأرقام ورموز.",
+        icon: "🔑"
+      });
+      if (authPassword && typeof authPassword.focus === "function") authPassword.focus();
+      return;
+    }
   }
 
   // PRD Section 10: Mandatory Explicit Medical Consent before Account Creation

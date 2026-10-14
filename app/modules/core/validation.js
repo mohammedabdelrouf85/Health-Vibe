@@ -233,12 +233,53 @@
   }
 
   /**
-   * Validates password strength (min 8 characters, letters & digits).
+   * Evaluates password strength according to strict clinical rules:
+   * 1. At least 8 characters
+   * 2. At least one uppercase letter (A-Z)
+   * 3. At least one number (0-9)
+   * 4. At least one special symbol
    * @param {string} password
-   * @returns {{ isValid: boolean, message: string }}
+   * @returns {{ isValid: boolean, rules: { minLength: boolean, hasUpper: boolean, hasNumber: boolean, hasSymbol: boolean }, message: string }}
    */
-  function validatePassword(password) {
+  function validatePasswordStrength(password) {
     const str = String(password || "");
+    const minLength = str.length >= 8;
+    const hasUpper = /[A-Z]/.test(str);
+    const hasNumber = /[0-9]/.test(str);
+    const hasSymbol = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~`]/.test(str);
+    const isValid = minLength && hasUpper && hasNumber && hasSymbol;
+    let message = "";
+    if (!isValid) {
+      const missing = [];
+      if (!minLength) missing.push("at least 8 characters");
+      if (!hasUpper) missing.push("uppercase letter (A-Z)");
+      if (!hasNumber) missing.push("number (0-9)");
+      if (!hasSymbol) missing.push("special symbol (!@#$)");
+      message = "Password must include: " + missing.join(", ");
+    }
+    return {
+      isValid,
+      rules: {
+        minLength,
+        hasUpper,
+        hasNumber,
+        hasSymbol
+      },
+      message
+    };
+  }
+
+  /**
+   * Validates password strength (min 8 characters, letters & digits, optional strict).
+   * @param {string} password
+   * @param {{ strict?: boolean }} [options]
+   * @returns {{ isValid: boolean, message: string, rules?: object }}
+   */
+  function validatePassword(password, options = {}) {
+    const str = String(password || "");
+    if (options && options.strict) {
+      return validatePasswordStrength(str);
+    }
     if (str.length < 8) {
       return { isValid: false, message: "Password must be at least 8 characters long." };
     }
@@ -288,6 +329,7 @@
     validatePhone,
     validateNationalId,
     validatePassword,
+    validatePasswordStrength,
     escapeHtml,
     textToHtml
   };

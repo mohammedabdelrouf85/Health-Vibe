@@ -25,10 +25,12 @@
     const togglePrompt = document.getElementById("authTogglePrompt");
     const toggleBtn = document.getElementById("authToggleBtn");
     const forgotContainer = document.getElementById("authForgotPasswordContainer");
+    const passwordRules = document.getElementById("authPasswordRules");
 
     if (nameGroup) nameGroup.style.display = isSignUp ? "block" : "none";
     if (roleGroup) roleGroup.style.display = isSignUp ? "block" : "none";
     if (consentGroup) consentGroup.style.display = isSignUp ? "block" : "none";
+    if (passwordRules) passwordRules.style.display = isSignUp ? "block" : "none";
     if (forgotContainer) forgotContainer.style.display = isSignUp ? "none" : "block";
 
     if (title) {
@@ -213,6 +215,22 @@
       return;
     }
 
+    // Strict email format validation
+    const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
+    if (!emailRegex.test(email)) {
+      showAuthError({
+        code: "auth/invalid-email",
+        title: isEn ? "Invalid Email Format" : "صيغة البريد غير صحيحة",
+        message: isEn
+          ? "Please enter a valid email address (e.g. name@example.com)."
+          : "يرجى كتابة عنوان بريد إلكتروني صحيح ومكتمل (مثال: name@example.com).",
+        action: isEn ? "Check for missing '@', invalid characters, or incomplete domain." : "تأكد من عدم وجود مسافات وكتابة الرمز @ واسم النطاق بشكل صحيح.",
+        icon: "📧"
+      });
+      if (emailInput && typeof emailInput.focus === "function") emailInput.focus();
+      return;
+    }
+
     if (currentAuthMode === "signup" && !name) {
       showAuthError({
         code: "auth/missing-name",
@@ -224,15 +242,59 @@
       return;
     }
 
-    if (password.length < 6) {
-      showAuthError({
-        code: "auth/weak-password",
-        title: isEn ? "Password Too Short" : "كلمة المرور قصيرة",
-        message: isEn ? "Password must contain at least 6 characters." : "يجب ألا تقل كلمة المرور عن 6 خانات للأمان الطبي.",
-        action: isEn ? "Choose a stronger password with letters, numbers, and symbols." : "اختر كلمة مرور أقوى تحتوي على حروف وأرقام ورموز.",
-        icon: "🔑"
-      });
-      return;
+    // Strict password validation (8+ chars, upper, number, symbol for signup; 6+ for signin)
+    if (currentAuthMode === "signup") {
+      const hasMinLength = password.length >= 8;
+      const hasUpper = /[A-Z]/.test(password);
+      const hasNumber = /[0-9]/.test(password);
+      const hasSymbol = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~`]/.test(password);
+
+      if (!hasMinLength || !hasUpper || !hasNumber || !hasSymbol) {
+        const missingAr = [];
+        const missingEn = [];
+        if (!hasMinLength) {
+          missingAr.push("8 أحرف على الأقل");
+          missingEn.push("8+ characters");
+        }
+        if (!hasUpper) {
+          missingAr.push("حرف كبير (A-Z)");
+          missingEn.push("uppercase letter (A-Z)");
+        }
+        if (!hasNumber) {
+          missingAr.push("رقم (0-9)");
+          missingEn.push("number (0-9)");
+        }
+        if (!hasSymbol) {
+          missingAr.push("رمز خاص (!@#$)");
+          missingEn.push("special symbol (!@#$)");
+        }
+
+        showAuthError({
+          code: "auth/weak-password",
+          title: isEn ? "Password Does Not Meet Requirements" : "كلمة المرور لا تستوفي الشروط",
+          message: isEn
+            ? `Password must meet all security requirements: missing ${missingEn.join(", ")}.`
+            : `يجب استيفاء شروط الأمان لكلمة المرور: ينقصها ${missingAr.join("، ")}.`,
+          action: isEn
+            ? "Ensure your password is 8+ characters and contains an uppercase letter, number, and special symbol."
+            : "تأكد من أن كلمة المرور لا تقل عن 8 خانات وتحتوي على حرف كبير، ورقم، ورمز خاص.",
+          icon: "🛡️"
+        });
+        if (passwordInput && typeof passwordInput.focus === "function") passwordInput.focus();
+        return;
+      }
+    } else {
+      if (password.length < 6) {
+        showAuthError({
+          code: "auth/weak-password",
+          title: isEn ? "Password Too Short" : "كلمة المرور قصيرة",
+          message: isEn ? "Password must contain at least 6 characters." : "يجب ألا تقل كلمة المرور عن 6 خانات للأمان الطبي.",
+          action: isEn ? "Choose a stronger password with letters, numbers, and symbols." : "اختر كلمة مرور أقوى تحتوي على حروف وأرقام ورموز.",
+          icon: "🔑"
+        });
+        if (passwordInput && typeof passwordInput.focus === "function") passwordInput.focus();
+        return;
+      }
     }
 
     setAuthLoading(true);
