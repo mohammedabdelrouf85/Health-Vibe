@@ -137,6 +137,30 @@ assert.strictEqual(currentSlide, 1, "ArrowLeft in LTR must return to Slide 1");
 
 console.log("  ✓ RTL and LTR physical keyboard controls properly mapped.");
 
+// TEST 5: Visual Progress Indicator & Slide Dots Direct Jump (1..11)
+console.log("\n▶ TEST 5: Visual Progress Bar & Slide Dots (1..11) Direct Jump");
+assert.ok(pitchContent.includes('id="slideDotsContainer"'), "pitch.html must contain slideDotsContainer");
+assert.ok(pitchContent.includes('class="slide-dots"'), "pitch.html must include .slide-dots container class");
+assert.ok(pitchContent.includes('data-goto="1"'), "Must contain dot button for slide 1");
+assert.ok(pitchContent.includes('data-goto="11"'), "Must contain dot button for slide 11");
+
+for (let i = 1; i <= 11; i++) {
+  assert.ok(
+    pitchContent.includes(`data-goto="${i}"`),
+    `Slide dot button for slide ${i} must exist in DOM`
+  );
+}
+
+assert.ok(
+  pitchContent.includes('dot.classList.add("active")'),
+  "showSlide must activate current slide dot with .active"
+);
+assert.ok(
+  pitchContent.includes('showSlide(target)'),
+  "Slide dot click handler must invoke showSlide(target) for instant jump"
+);
+console.log("  ✓ All 11 slide dot buttons configured with direct jump and visual progress tracking.");
+
 console.log("\n==================================================================");
 console.log("🎉 ALL PITCH DECK NAVIGATION TESTS PASSED WITH 100% SUCCESS!");
 console.log("==================================================================\n");

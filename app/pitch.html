@@ -278,11 +278,73 @@
       transition: width 0.3s ease;
     }
 
+    .slide-dots {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: center;
+      max-width: 420px;
+    }
+
+    .slide-dot {
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      color: #94a3b8;
+      min-width: 28px;
+      height: 28px;
+      padding: 0 4px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      user-select: none;
+    }
+
+    .slide-dot:hover {
+      background: rgba(9, 184, 182, 0.25);
+      border-color: var(--primary);
+      color: #ffffff;
+      transform: translateY(-2px);
+    }
+
+    .slide-dot.active {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+      border-color: var(--primary-light);
+      color: #061515;
+      font-weight: 900;
+      box-shadow: 0 0 12px rgba(9, 184, 182, 0.5);
+      transform: scale(1.08);
+    }
+
+    @media (max-width: 900px) {
+      .deck-controls {
+        flex-direction: column;
+        gap: 16px;
+        padding: 16px 20px;
+      }
+      .slide-dots {
+        order: 2;
+      }
+      .progress-bar-wrap {
+        order: 1;
+        width: 100%;
+        max-width: 320px;
+      }
+      .nav-arrows {
+        order: 3;
+      }
+    }
+
     @media (max-width: 768px) {
       .slide { padding: 24px 20px; }
       .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
       .slide-title { font-size: 24px; }
-      .progress-bar-wrap { display: none; }
+      .slide-dot { min-width: 24px; height: 24px; font-size: 11px; }
     }
   </style>
 </head>
@@ -591,6 +653,21 @@
   <footer class="deck-controls">
     <div class="slide-indicator">
       الشريحة <span id="currentSlideNum">1</span> من <span id="totalSlidesNum">11</span>
+    </div>
+
+    <!-- VISUAL PROGRESS & DIRECT JUMP DOTS (1..11) -->
+    <div class="slide-dots" id="slideDotsContainer" role="navigation" aria-label="شرائح العرض التقديمي">
+      <button type="button" class="slide-dot active" data-goto="1" title="الشريحة 1: الرؤية والرسالة">1</button>
+      <button type="button" class="slide-dot" data-goto="2" title="الشريحة 2: المشكلة السريرية">2</button>
+      <button type="button" class="slide-dot" data-goto="3" title="الشريحة 3: الحل المتكامل">3</button>
+      <button type="button" class="slide-dot" data-goto="4" title="الشريحة 4: كيف تعمل المنظومة">4</button>
+      <button type="button" class="slide-dot" data-goto="5" title="الشريحة 5: نموذج الذكاء السريري">5</button>
+      <button type="button" class="slide-dot" data-goto="6" title="الشريحة 6: حجم السوق">6</button>
+      <button type="button" class="slide-dot" data-goto="7" title="الشريحة 7: نموذج العمل والتسعير">7</button>
+      <button type="button" class="slide-dot" data-goto="8" title="الشريحة 8: الميزة التنافسية">8</button>
+      <button type="button" class="slide-dot" data-goto="9" title="الشريحة 9: فريق العمل">9</button>
+      <button type="button" class="slide-dot" data-goto="10" title="الشريحة 10: الجاهزية والاختبارات">10</button>
+      <button type="button" class="slide-dot" data-goto="11" title="الشريحة 11: الرؤية والطلب الاستثماري">11</button>
     </div>
 
     <div class="progress-bar-wrap">
@@ -1053,6 +1130,15 @@
       const nextBtn = document.getElementById("btnNextSlide");
       if (prevBtn) document.getElementById("btnPrevSlide").textContent = lang === "en" ? "←" : "→";
       if (nextBtn) document.getElementById("btnNextSlide").textContent = lang === "en" ? "→" : "←";
+
+      const slideDotsNav = document.getElementById("slideDotsContainer");
+      if (slideDotsNav) {
+        slideDotsNav.setAttribute("aria-label", lang === "en" ? "Presentation slides" : "شرائح العرض التقديمي");
+        document.querySelectorAll(".slide-dot").forEach((dot) => {
+          const num = dot.getAttribute("data-goto");
+          dot.title = lang === "en" ? `Slide ${num}` : `الشريحة ${num}`;
+        });
+      }
     }
 
     function applyDeckLang(lang) {
@@ -1120,6 +1206,18 @@
       const pct = (currentSlide / totalSlides) * 100;
       const progressEl = document.getElementById("deckProgressBar");
       if (progressEl) progressEl.style.width = `${pct}%`;
+
+      // Update slide dots active state
+      document.querySelectorAll(".slide-dot").forEach((dot) => {
+        const target = parseInt(dot.getAttribute("data-goto"), 10);
+        if (target === currentSlide) {
+          dot.classList.add("active");
+          dot.setAttribute("aria-current", "step");
+        } else {
+          dot.classList.remove("active");
+          dot.removeAttribute("aria-current");
+        }
+      });
     }
 
     function nextSlide() {
@@ -1139,6 +1237,17 @@
     window.prevSlide = prevSlide;
     window.showSlide = showSlide;
     window.toggleDeckLang = toggleDeckLang;
+
+    // Attach click listeners to all slide dots for direct jump (1..11)
+    document.querySelectorAll(".slide-dot").forEach((dot) => {
+      dot.addEventListener("click", (e) => {
+        e.preventDefault();
+        const target = parseInt(dot.getAttribute("data-goto"), 10);
+        if (!isNaN(target)) {
+          showSlide(target);
+        }
+      });
+    });
 
     // Attach direct DOM event listeners to guarantee execution regardless of inline handlers
     const prevBtnEl = document.getElementById("btnPrevSlide");
