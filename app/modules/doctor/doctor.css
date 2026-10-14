@@ -1,0 +1,67 @@
+/**
+ * Health Vibe AI - Doctor Module Styles
+ * Scoped styles for doctor queue, patient case cards, clinical triage indicators, and diagnostic actions.
+ */
+
+#screen-doctor .doctor-layout {
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 992px) {
+  #screen-doctor .doctor-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.doctor-queue-panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg, 16px);
+  padding: 16px;
+}
+
+.status-filter-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.status-filter-tab {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 20px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.status-filter-tab.active {
+  background: var(--teal, #0d9488);
+  color: #fff;
+  border-color: var(--teal, #0d9488);
+}
+
+.queue {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 650px;
+  overflow-y: auto;
+}
+
+.doctor-review-panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg, 16px);
+  padding: 24px;
+}

@@ -1,0 +1,105 @@
+<section id="screen-assessment" class="screen">
+        <div class="form-layout">
+          <article class="panel form-panel">
+            <div class="panel-head"><h3 data-i18n="assessment.title">تقييم التنفس</h3><span id="assessmentProgressLabel" class="pill info">الخطوة 2 من 4</span></div>
+            <div class="progress" aria-label="Assessment completion progress"><span id="assessmentProgressBar" style="width:0%"></span></div>
+            <div id="intakeOperationalBanner" style="display: none;"></div>
+            <div id="assessmentDraftStatus" class="field-hint" style="margin: 8px 0 12px;" data-i18n="assessment.draftStatusEmpty">لم يتم حفظ مسودة بعد</div>
+            <div id="assessmentRecoveryBanner" class="clinical-note" hidden style="margin-bottom: 14px;">
+              <span data-i18n="assessment.draftBannerText">توجد مسودة محفوظة لهذا الحساب. يمكنك المتابعة أو البدء من جديد.</span>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+                <button type="button" id="btnResumeAssessmentDraft" class="solid-button" style="padding:7px 12px;font-size:12px;" data-i18n="assessment.resumeDraft">متابعة المسودة</button>
+                <button type="button" id="btnDiscardAssessmentDraft" class="outline-button" style="padding:7px 12px;font-size:12px;" data-i18n="assessment.discardDraft">بدء جديد</button>
+              </div>
+            </div>
+            <label data-i18n="assessment.shortnessOfBreath">هل يوجد ضيق تنفس؟</label>
+            <div id="breathingChoices" class="choice-row">
+              <button class="choice active">نعم</button>
+              <button class="choice">لا</button>
+            </div>
+            <label data-i18n="assessment.coughLabel">درجة الكحة</label>
+            <div id="coughChoices" class="choice-row four">
+              <button class="choice">خفيفة</button>
+              <button class="choice active">متوسطة</button>
+              <button class="choice">شديدة</button>
+              <button class="choice">لا توجد</button>
+            </div>
+            <label data-i18n="assessment.o2Label">نسبة الأكسجين (50% - 100%)</label>
+            <input id="oxygenInput" type="number" min="50" max="100" value="95" aria-label="نسبة الأكسجين" placeholder="95">
+            <div id="oxygenWarning" class="field-warning" hidden></div>
+            <label data-i18n="assessment.tempLabel">درجة الحرارة (اختياري)</label>
+            <input id="temperatureInput" inputmode="decimal" aria-label="درجة الحرارة" placeholder="37.0 °C أو unknown">
+            <label data-i18n="assessment.respiratoryRateLabel">معدل التنفس (اختياري)</label>
+            <input id="respiratoryRateInput" type="number" min="5" max="60" aria-label="معدل التنفس في الدقيقة" placeholder="مثال: 18">
+            <label data-i18n="assessment.chestPainLabel">ألم بالصدر</label>
+            <div id="chestPainChoices" class="choice-row three">
+              <button class="choice">نعم</button>
+              <button class="choice active">لا</button>
+              <button class="choice">غير معروف</button>
+            </div>
+            <label data-i18n="assessment.symptomDurationLabel">مدة الأعراض</label>
+            <input id="symptomDuration" value="3 أيام" aria-label="مدة الأعراض">
+            <label data-i18n="assessment.symptomProgressionLabel">تطور الأعراض</label>
+            <div id="symptomProgressionChoices" class="choice-row three">
+              <button class="choice">تتحسن</button>
+              <button class="choice active">ثابتة</button>
+              <button class="choice">تسوء</button>
+              <button class="choice">غير معروف</button>
+            </div>
+            <label data-i18n="assessment.recentInfectionLabel">عدوى حديثة</label>
+            <div id="recentInfectionChoices" class="choice-row three">
+              <button class="choice">نعم</button>
+              <button class="choice active">لا</button>
+              <button class="choice">غير معروف</button>
+            </div>
+            <label data-i18n="assessment.asthmaCopdLabel">ربو أو COPD</label>
+            <div id="asthmaCopdChoices" class="choice-row three">
+              <button class="choice">نعم</button>
+              <button class="choice active">لا</button>
+              <button class="choice">غير معروف</button>
+            </div>
+            <label data-i18n="assessment.riskFactorsLabel">عوامل خطورة</label>
+            <div id="riskChoices" class="choice-row four">
+              <button class="choice">ربو</button>
+              <button class="choice">تدخين</button>
+              <button class="choice">حمل</button>
+              <button class="choice active">لا يوجد</button>
+            </div>
+            <label>الأدوية الحالية (اختياري)</label>
+            <textarea id="currentMedicationsInput" rows="2" maxlength="500" aria-label="الأدوية الحالية" placeholder="اكتب الأدوية أو اتركها فارغة إذا لم يتم تقديمها"></textarea>
+            <label>ملاحظات إضافية (اختياري)</label>
+            <textarea id="assessmentNotesInput" rows="2" maxlength="1000" aria-label="ملاحظات إضافية" placeholder="أي تفاصيل يريد المريض إضافتها"></textarea>
+            <div class="safety-note">لن تظهر نتيجة نهائية للمريض قبل مراجعة الطبيب للحالة.</div>
+            
+            <!-- Privacy Consent Gate Box (Before Assessment Submission) -->
+            <div id="assessmentConsentStatusBox" style="margin: 14px 0 10px; padding: 12px 14px; background: rgba(22, 163, 74, 0.08); border: 1px solid rgba(22, 163, 74, 0.25); border-radius: 10px; font-size: 12.5px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px;">
+                <span id="assessmentConsentStatusText" style="color: #15803d; display: flex; align-items: center; gap: 6px; font-weight: 700;">
+                  <span>🔒</span> تم توثيق الموافقة الطبية وسياسة الخصوصية
+                </span>
+                <button type="button" class="soft-button" style="padding: 2px 8px; font-size: 11px;" onclick="showScreen('consent')">مراجعة البنود الكاملة</button>
+              </div>
+              <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer; color: var(--ink); font-size: 12px; margin-top: 4px;">
+                <input type="checkbox" id="assessmentInlineConsent" checked style="margin-top: 2px;">
+                <span>أوافق على ميثاق الخصوصية الطبية ومعالجة البيانات السريرية وإرسالها للطبيب المعتمد.</span>
+              </label>
+            </div>
+
+            <div class="doctor-actions" style="display:flex;gap:10px;flex-wrap:wrap;">
+              <button type="button" id="btnAssessmentPrev" class="outline-button" style="flex:1;">السابق</button>
+              <button type="button" id="btnAssessmentNext" class="outline-button" style="flex:1;">التالي</button>
+            </div>
+            <button id="submitAssessment" class="solid-button full">إرسال للطبيب</button>
+          </article>
+          <article class="panel insight-panel">
+            <div class="panel-head"><h3>ملخص قبل الإرسال</h3><span class="pill pending">مراجعة</span></div>
+            <div class="summary-list">
+              <div><span>تقدير الخطورة</span><strong>متوسط</strong></div>
+              <div><span>مؤشر قواعد</span><strong>غير مُتحقق سريرياً</strong></div>
+              <div><span>النموذج</span><strong>الإصدار الأول</strong></div>
+              <div><span>الحالة</span><strong>بانتظار مراجعة الطبيب</strong></div>
+            </div>
+            <div class="clinical-note">هذه البيانات لا تتحول إلى تقرير للمريض إلا بعد اعتماد الطبيب.</div>
+          </article>
+        </div>
+      </section>

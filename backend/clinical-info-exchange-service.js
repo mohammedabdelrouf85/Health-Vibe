@@ -129,9 +129,9 @@ class ClinicalInfoExchangeService {
       ...existing,
       ...caseData,
       clinicalRevision,
-      status: caseData.status || existing.status || 'under_review',
-      patientId: caseData.patientId || existing.patientId,
-      assignedDoctorId: caseData.assignedDoctorId || existing.assignedDoctorId,
+      status: caseData.status || 'under_review',
+      patientId: caseData.patientId || existing.patientId || null,
+      assignedDoctorId: caseData.assignedDoctorId || null,
       currentAssessment: {
         ...(existing.currentAssessment || {}),
         ...(caseData.currentAssessment || {}),
@@ -202,9 +202,16 @@ class ClinicalInfoExchangeService {
       throw err;
     }
 
-    if (doctor.status && doctor.status !== 'approved') {
+    if (doctor.status && doctor.status !== 'approved' && doctor.status !== 'active') {
       const err = new Error('Only approved medical practitioners can issue information requests.');
       err.code = 'UNAPPROVED_DOCTOR';
+      err.statusCode = 403;
+      throw err;
+    }
+
+    if (doctor.suspended || doctor.status === 'suspended') {
+      const err = new Error('Suspended doctor cannot request information.');
+      err.code = 'DOCTOR_SUSPENDED';
       err.statusCode = 403;
       throw err;
     }
@@ -216,10 +223,10 @@ class ClinicalInfoExchangeService {
       throw err;
     }
 
-    // If case has assignedDoctorId, verify assignment unless doctor is admin/owner
-    if (clinicalCase.assignedDoctorId && clinicalCase.assignedDoctorId !== doctor.uid && doctor.role !== 'owner' && doctor.role !== 'admin') {
-      const err = new Error('Only the assigned physician can issue information requests for this case.');
-      err.code = 'FORBIDDEN_UNASSIGNED_DOCTOR';
+    // Require assigned physician on the case
+    if (!clinicalCase.assignedDoctorId || (clinicalCase.assignedDoctorId !== doctor.uid && doctor.role !== 'owner' && doctor.role !== 'admin')) {
+      const err = new Error('Assigned physician claim is required on the case before processing information requests.');
+      err.code = !clinicalCase.assignedDoctorId ? 'MISSING_ASSIGNED_DOCTOR' : 'FORBIDDEN_UNASSIGNED_DOCTOR';
       err.statusCode = 403;
       throw err;
     }
@@ -227,7 +234,7 @@ class ClinicalInfoExchangeService {
     // 2. State Transition Check: Case must be under_review
     if (clinicalCase.status !== 'under_review') {
       const err = new Error(`Cannot request more information when case is in status '${clinicalCase.status}'. Valid source status is 'under_review'.`);
-      err.code = 'INVALID_CASE_STATUS_TRANSITION';
+      err.code = clinicalCase.status === 'closed' ? 'CASE_CLOSED' : 'INVALID_CASE_STATUS_TRANSITION';
       err.statusCode = 400;
       throw err;
     }

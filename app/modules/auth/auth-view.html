@@ -1,0 +1,142 @@
+<section id="authScreen" class="auth-screen" role="dialog" aria-modal="true" aria-labelledby="authDialogTitle" aria-describedby="authDialogDescription" aria-hidden="true" aria-label="Sign in">
+    <div class="auth-card">
+      <button id="authClose" class="close-button" aria-label="Close" onclick="hideAuth()">×</button>
+      <div class="brand auth-brand">
+        <img src="./logo-dark-mark.webp" alt="Health Vibe AI" class="brand-logo" data-logo-mark loading="lazy" decoding="async" />
+        <div>
+          <strong>Health Vibe AI</strong>
+          <span>Secure account login</span>
+        </div>
+      </div>
+      <div id="authErrorBanner" class="auth-error-banner" role="alert"></div>
+
+      <!-- MAIN SIGN IN / SIGN UP VIEW -->
+      <div id="authMainView">
+        <h2 id="authDialogTitle" data-i18n="auth.signIn">Access your account</h2>
+        <p id="authDialogDescription" data-i18n="auth.accountRole">Sign in with email or Google to proceed securely.</p>
+
+        <div class="doctor-auth-note">
+          <span style="font-size:16px;">🩺</span>
+          <span>Healthcare provider? Doctor access is activated after credential verification.</span>
+        </div>
+
+        <div class="auth-mode-switch" role="tablist" aria-label="Authentication mode">
+          <button type="button" id="authTabSignIn" class="auth-tab active" onclick="setAuthMode('signin')" data-i18n="auth.signIn">Sign In</button>
+          <button type="button" id="authTabSignUp" class="auth-tab" onclick="setAuthMode('signup')" data-i18n="auth.createAccount">Create Account</button>
+        </div>
+
+        <!-- Saved Accounts Quick Switcher -->
+        <div id="savedAccountsSwitcher" class="saved-accounts-switcher" style="display: none; margin-bottom: 14px;">
+          <div style="font-size: 12px; font-weight: 700; color: var(--muted); margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between;">
+            <span style="display: flex; align-items: center; gap: 6px;">
+              <span>🔄</span>
+              <span data-i18n="auth.switchAccount">تبديل الحساب</span>
+            </span>
+            <span style="font-size: 11px; opacity: 0.8;" data-i18n="auth.switchAccountDesc">يرجى تسجيل الدخول بالحساب الآخر</span>
+          </div>
+          <div id="savedAccountsList" style="display: flex; flex-direction: column; gap: 6px;"></div>
+        </div>
+
+        <form id="authEmailForm" autocomplete="on" onsubmit="event.preventDefault(); handleEmailAuth(event);">
+          <div id="authNameGroup" class="form-group" style="display:none;">
+            <label for="authName" data-i18n="auth.fullName">Full Name</label>
+            <input type="text" id="authName" placeholder="e.g. Full Name" data-i18n-placeholder="auth.fullNamePlaceholder" autocomplete="name" />
+          </div>
+
+          <div class="form-group">
+            <label for="authEmail" data-i18n="auth.email">Email Address</label>
+            <input type="email" id="authEmail" placeholder="name@example.com" data-i18n-placeholder="auth.emailPlaceholder" required autocomplete="email" />
+          </div>
+
+          <div class="form-group">
+            <label for="authPassword" data-i18n="auth.password">Password</label>
+            <input type="password" id="authPassword" placeholder="••••••••" data-i18n-placeholder="auth.passwordPlaceholder" required autocomplete="current-password" minlength="6" />
+          </div>
+
+          <div class="auth-options" style="flex-direction: column; align-items: stretch; gap: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+              <label style="display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
+                <input type="checkbox" id="rememberMe" checked style="accent-color: var(--teal); cursor: pointer;" />
+                <span data-i18n="auth.rememberMe" style="font-weight: 500;">Remember me</span>
+              </label>
+              <button type="button" id="forgotPasswordBtn" onclick="showForgotView()" data-i18n="auth.forgotPassword">Forgot password?</button>
+            </div>
+            <div class="remember-security-tip" style="font-size: 11.5px; color: var(--muted); display: flex; align-items: flex-start; gap: 6px; line-height: 1.45; background: rgba(13, 148, 136, 0.06); border: 1px dashed rgba(13, 148, 136, 0.25); padding: 6px 10px; border-radius: 8px;">
+              <span style="font-size: 12px; line-height: 1;">🛡️</span>
+              <span data-i18n="auth.rememberMeTip">تنبيه أمني: ألغِ التحديد إذا كنت تستخدم حاسوباً مشتركاً في العيادة أو المستشفى.</span>
+            </div>
+          </div>
+
+          <div style="margin: 12px 0 16px; text-align: center; font-size: 11.5px; color: var(--muted); line-height: 1.6;">
+            By continuing, you acknowledge and agree to our 
+            <button type="button" style="background:none;border:none;color:var(--teal);text-decoration:underline;cursor:pointer;padding:0;font-size:inherit;" onclick="openLegalModal('terms')">Terms of Use</button>, 
+            <button type="button" style="background:none;border:none;color:var(--teal);text-decoration:underline;cursor:pointer;padding:0;font-size:inherit;" onclick="openLegalModal('privacy')">Privacy Policy</button>, and 
+            <button type="button" style="background:none;border:none;color:#ef4444;text-decoration:underline;cursor:pointer;padding:0;font-size:inherit;" onclick="openLegalModal('disclaimer')">Medical Disclaimer</button>.
+          </div>
+
+          <button id="authSubmitBtn" type="submit" class="solid-button large auth-submit-btn">
+            <span id="authSubmitText" data-i18n="auth.signIn">Sign In</span>
+          </button>
+        </form>
+
+        <div class="divider"><span>or</span></div>
+
+        <button id="googleLogin" class="google-button" type="button" onclick="enterApp('google')">
+          <span class="google-g">G</span>
+          <span data-i18n="auth.continueWithGoogle">Continue with Google</span>
+        </button>
+      </div>
+
+      <!-- DEDICATED FORGOT PASSWORD VIEW -->
+      <div id="authResetView" style="display:none;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+          <button id="backToSignInBtn" type="button" class="back-link-btn" title="Back to sign in">←</button>
+          <h2 style="margin:0;font-size:24px;" data-i18n="auth.resetPassword">Reset Password</h2>
+        </div>
+        <p style="margin-bottom:16px;color:var(--muted);font-size:13.5px;line-height:1.5;">
+          Enter your account email and we will send you an official password reset link.
+        </p>
+
+        <div id="resetSuccessMessage" class="reset-success-box" style="display:none;">
+          <strong>Reset link sent!</strong>
+          <p style="margin:4px 0 0;color:var(--ink);font-size:12.5px;">Please check your Inbox and Spam/Junk folder for the password reset email from Health Vibe AI.</p>
+        </div>
+
+        <form id="forgotPasswordForm">
+          <div class="form-group" style="margin-bottom:14px;">
+            <label for="resetEmailInput" data-i18n="auth.email">Account Email</label>
+            <input type="email" id="resetEmailInput" placeholder="name@example.com" data-i18n-placeholder="auth.emailPlaceholder" required autocomplete="email" />
+          </div>
+
+          <button id="sendResetLinkBtn" type="submit" class="solid-button large auth-submit-btn" style="margin-bottom:12px;">
+            <span id="sendResetLinkText" data-i18n="auth.sendResetLink">Send Reset Link</span>
+          </button>
+
+          <button id="cancelResetBtn" type="button" class="soft-button large" style="width:100%;justify-content:center;" data-i18n="auth.backToSignIn">
+            Back to Sign In
+          </button>
+        </form>
+      </div>
+
+      <!-- NEW PASSWORD VIEW (FOR EMAIL ACTION LINKS) -->
+      <div id="authNewPasswordView" style="display:none;">
+        <h2 style="margin:0 0 8px;font-size:24px;">Set New Password</h2>
+        <p style="margin-bottom:16px;color:var(--muted);font-size:13.5px;line-height:1.5;">
+          Enter your new password below.
+        </p>
+        <form id="newPasswordForm">
+          <div class="form-group" style="margin-bottom:12px;">
+            <label for="newPasswordInput">New Password</label>
+            <input type="password" id="newPasswordInput" placeholder="••••••••" required minlength="6" autocomplete="new-password" />
+          </div>
+          <div class="form-group" style="margin-bottom:16px;">
+            <label for="confirmNewPasswordInput">Confirm New Password</label>
+            <input type="password" id="confirmNewPasswordInput" placeholder="••••••••" required minlength="6" autocomplete="new-password" />
+          </div>
+          <button id="confirmPasswordResetBtn" type="submit" class="solid-button large auth-submit-btn">
+            <span id="confirmPasswordResetText">Save New Password</span>
+          </button>
+        </form>
+      </div>
+    </div>
+  </section>

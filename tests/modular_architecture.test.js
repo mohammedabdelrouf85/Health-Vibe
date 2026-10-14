@@ -349,6 +349,47 @@ const indexHtml = fs.readFileSync(path.resolve(__dirname, "../app/index.html"), 
 });
 console.log("  ✓ All 20 modular scripts properly declared in index.html before app.js.");
 
+// -----------------------------------------------------------------------------
+// TEST 12: Modular Component View Templates & Scoped Stylesheets
+// -----------------------------------------------------------------------------
+console.log("\n▶ TEST 12: Modular Component View Templates & Scoped Stylesheets");
+const templateLoaderMod = loadModule("modules/core/template-loader.js");
+const TL = templateLoaderMod.exports;
+assert.ok(TL, "TemplateLoader must be exported");
+assert.equal(typeof TL.register, "function");
+assert.equal(typeof TL.loadTemplate, "function");
+assert.equal(typeof TL.mount, "function");
+assert.equal(typeof TL.getRegisteredModules, "function");
+
+const registeredMods = TL.getRegisteredModules();
+assert.ok(registeredMods.includes("auth"));
+assert.ok(registeredMods.includes("patient"));
+assert.ok(registeredMods.includes("doctor"));
+assert.ok(registeredMods.includes("admin"));
+assert.ok(registeredMods.includes("appointments"));
+assert.ok(registeredMods.includes("assessment"));
+assert.ok(registeredMods.includes("reports"));
+
+[
+  { name: "auth", view: "modules/auth/auth-view.html", css: "modules/auth/auth.css" },
+  { name: "patient", view: "modules/patient/patient-view.html", css: "modules/patient/patient.css" },
+  { name: "doctor", view: "modules/doctor/doctor-view.html", css: "modules/doctor/doctor.css" },
+  { name: "admin", view: "modules/admin/admin-view.html", css: "modules/admin/admin.css" },
+  { name: "appointments", view: "modules/appointments/appointments-view.html", css: "modules/appointments/appointments.css" },
+  { name: "assessment", view: "modules/assessment/assessment-view.html", css: "modules/assessment/assessment.css" },
+  { name: "reports", view: "modules/reports/reports-view.html", css: "modules/reports/reports.css" }
+].forEach(mod => {
+  const viewPath = path.resolve(__dirname, "../app", mod.view);
+  const cssPath = path.resolve(__dirname, "../app", mod.css);
+  assert.ok(fs.existsSync(viewPath), `Module view template must exist: ${mod.view}`);
+  assert.ok(fs.existsSync(cssPath), `Module stylesheet must exist: ${mod.css}`);
+  assert.ok(fs.statSync(viewPath).size > 50, `Module view template ${mod.view} must not be empty`);
+  assert.ok(fs.statSync(cssPath).size > 50, `Module stylesheet ${mod.css} must not be empty`);
+  assert.ok(indexHtml.includes(mod.css), `index.html must link modular stylesheet for ${mod.css}`);
+});
+assert.ok(indexHtml.includes("modules/core/template-loader.js"), "index.html must include template-loader.js");
+console.log("  ✓ All modular feature folders contain cohesive view templates and scoped stylesheets linked to index.html.");
+
 console.log("\n==================================================================");
-console.log("🎉 ALL 11 MODULAR ARCHITECTURE ACCEPTANCE TESTS PASSED (100%)");
+console.log("🎉 ALL 12 MODULAR ARCHITECTURE ACCEPTANCE TESTS PASSED (100%)");
 console.log("==================================================================\n");

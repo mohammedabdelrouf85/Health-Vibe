@@ -1,0 +1,315 @@
+<section id="screen-admin" class="screen">
+        <!-- Live Admin Header with Realtime status & Refresh Button -->
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 20px;">
+          <div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <h2 style="margin: 0; font-size: 22px;">لوحة الإدارة والمؤشرات السريرية الحقيقية</h2>
+              <span class="pill ok" style="font-size: 11px;">مباشر من Firestore 🟢</span>
+            </div>
+            <p style="margin: 4px 0 0; font-size: 13px; color: var(--muted);">
+              قراءات حقيقية من قاعدة البيانات: المستخدمون، الفحوصات، الأطباء، ومؤشرات السلامة
+            </p>
+          </div>
+          <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <span id="adminLastRefreshedAt" style="font-size: 12px; color: var(--muted);">آخر تحديث: الآن</span>
+            <button type="button" class="soft-button" onclick="refreshAdminDashboardLive()" id="btnRefreshAdminMetrics" style="padding: 8px 16px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px;">
+              <span id="adminRefreshSpinnerIcon">🔄</span> تحديث الأرقام المباشرة
+            </button>
+            <button type="button" class="solid-button" onclick="showScreen('kpi')" style="padding: 8px 16px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px;">
+              <span>📊</span> لوحة مؤشرات الأداء (KPIs)
+            </button>
+          </div>
+        </div>
+
+        <!-- Realtime KPI Grid (9 metrics including Core KPIs) -->
+        <div class="metric-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
+          <article>
+            <span>إجمالي المستخدمين</span>
+            <strong id="adminUsersTotalCount">--</strong>
+            <small id="adminUsersTodayCount">--</small>
+          </article>
+          <article>
+            <span>الأطباء المعتمدون</span>
+            <strong id="adminTotalDoctorsCount">--</strong>
+            <small id="adminPendingDocsBadge">--</small>
+          </article>
+          <article>
+            <span>الفروع والعيادات</span>
+            <strong id="adminBranchesCount">--</strong>
+            <small id="adminBranchesNote">--</small>
+          </article>
+          <article>
+            <span>إجمالي الفحوصات</span>
+            <strong id="adminTotalCasesCount">--</strong>
+            <small id="adminCasesTodayBadge">--</small>
+          </article>
+          <article>
+            <span>مراجعات قيد الانتظار</span>
+            <strong id="adminPendingReviewsCount">--</strong>
+            <small id="adminUrgentReviewsCount" style="color: #ef4444;">--</small>
+          </article>
+          <article>
+            <span>متوسط الأكسجين العام</span>
+            <strong id="adminAvgSpO2Count">--%</strong>
+            <small id="adminAvgSpO2Status">مؤشر طبي حقيقي</small>
+          </article>
+          <article style="border: 1px solid rgba(16, 185, 129, 0.3); background: rgba(16, 185, 129, 0.04);">
+            <span>معدل إكمال الحالات (KPI)</span>
+            <strong id="adminKpiCompletionRate" style="color: #10b981;">--%</strong>
+            <small id="adminKpiCompletionSub" style="color: #10b981;">الهدف: ≥ 90%</small>
+          </article>
+          <article style="border: 1px solid rgba(59, 130, 246, 0.3); background: rgba(59, 130, 246, 0.04);">
+            <span>سرعة الاستجابة (KPI)</span>
+            <strong id="adminKpiResponseTime" style="color: #3b82f6;">-- دقيقة</strong>
+            <small id="adminKpiResponseSub" style="color: #3b82f6;">SLA: &lt; 30 دقيقة</small>
+          </article>
+          <article style="border: 1px solid rgba(9, 184, 182, 0.3); background: rgba(9, 184, 182, 0.04);">
+            <span>زمن استخراج التقرير (TAT)</span>
+            <strong id="adminKpiTurnaroundTime" style="color: var(--teal);">-- دقيقة</strong>
+            <small id="adminKpiTurnaroundSub" style="color: var(--teal);">الهدف: &lt; 2 ساعة</small>
+          </article>
+        </div>
+
+        <!-- Real Clinical Triage & Risk Breakdown Card -->
+        <article class="panel" style="margin-bottom: 24px;">
+          <div class="panel-head">
+            <div>
+              <h3 style="margin: 0; font-size: 18px;">التوزيع السريري للحالات ومستويات الخطورة (Live Clinical Triage Distribution)</h3>
+              <p style="margin: 4px 0 0; font-size: 12.5px; color: var(--muted);">نسب الحالات الفعلية المسجلة في النظام مقسمة حسب فرز الأكسجين والأعراض الحقيقية</p>
+            </div>
+            <span class="pill info" id="adminTotalCasesBadge">جاري الحساب...</span>
+          </div>
+          
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-top: 16px;">
+            <div style="padding: 14px; background: rgba(239, 68, 68, 0.06); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 12px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <span style="font-size: 13px; font-weight: 700; color: #ef4444;">🚨 حالات عاجلة (SpO2 &lt; 90%)</span>
+                <strong id="adminDistUrgentCount" style="font-size: 16px; color: #ef4444;">0</strong>
+              </div>
+              <div style="background: rgba(0,0,0,0.2); border-radius: 999px; height: 6px; overflow: hidden;">
+                <div id="adminDistUrgentBar" style="background: #ef4444; height: 100%; width: 0%; transition: width 0.4s;"></div>
+              </div>
+              <small id="adminDistUrgentPct" style="font-size: 11.5px; color: var(--muted); margin-top: 4px; display: block;">0% من الحالات</small>
+            </div>
+
+            <div style="padding: 14px; background: rgba(245, 158, 11, 0.06); border: 1px solid rgba(245, 158, 11, 0.2); border-radius: 12px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <span style="font-size: 13px; font-weight: 700; color: #f59e0b;">⚠️ أولوية عالية (90-92%)</span>
+                <strong id="adminDistHighCount" style="font-size: 16px; color: #f59e0b;">0</strong>
+              </div>
+              <div style="background: rgba(0,0,0,0.2); border-radius: 999px; height: 6px; overflow: hidden;">
+                <div id="adminDistHighBar" style="background: #f59e0b; height: 100%; width: 0%; transition: width 0.4s;"></div>
+              </div>
+              <small id="adminDistHighPct" style="font-size: 11.5px; color: var(--muted); margin-top: 4px; display: block;">0% من الحالات</small>
+            </div>
+
+            <div style="padding: 14px; background: rgba(16, 185, 129, 0.06); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 12px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <span style="font-size: 13px; font-weight: 700; color: #10b981;">✔️ أولوية عادية (93%+)</span>
+                <strong id="adminDistNormalCount" style="font-size: 16px; color: #10b981;">0</strong>
+              </div>
+              <div style="background: rgba(0,0,0,0.2); border-radius: 999px; height: 6px; overflow: hidden;">
+                <div id="adminDistNormalBar" style="background: #10b981; height: 100%; width: 0%; transition: width 0.4s;"></div>
+              </div>
+              <small id="adminDistNormalPct" style="font-size: 11.5px; color: var(--muted); margin-top: 4px; display: block;">0% من الحالات</small>
+            </div>
+
+            <div style="padding: 14px; background: rgba(9, 184, 182, 0.06); border: 1px solid rgba(9, 184, 182, 0.2); border-radius: 12px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <span style="font-size: 13px; font-weight: 700; color: var(--teal);">👨‍⚕️ تقارير معتمدة ومكتملة</span>
+                <strong id="adminDistApprovedCount" style="font-size: 16px; color: var(--teal);">0</strong>
+              </div>
+              <div style="background: rgba(0,0,0,0.2); border-radius: 999px; height: 6px; overflow: hidden;">
+                <div id="adminDistApprovedBar" style="background: var(--teal); height: 100%; width: 0%; transition: width 0.4s;"></div>
+              </div>
+              <small id="adminDistApprovedPct" style="font-size: 11.5px; color: var(--muted); margin-top: 4px; display: block;">0% من الحالات</small>
+            </div>
+          </div>
+        </article>
+
+        <!-- REAL DOCTOR APPLICATIONS APPROVAL BOARD -->
+        <article class="panel" style="margin-bottom: 24px;">
+          <div class="panel-head" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <div>
+              <h3 style="margin: 0; font-size: 19px;">قائمة انتظار توثيق واعتماد الأطباء (Admin Verification Queue)</h3>
+              <p style="margin: 4px 0 0; font-size: 13px; color: var(--muted);">مراجعة التراخيص الطبية واعتماد الأطباء رسمياً لتفعيل صلاحية فحص الحالات السريرية</p>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <span id="adminPendingAppsBadge" class="pill pending">قيد المراجعة</span>
+              <button type="button" class="soft-button" onclick="promptAddDoctorVerificationToQueue()" style="padding: 6px 14px; font-size: 12.5px; display: inline-flex; align-items: center; gap: 5px;">
+                <span>➕</span> تسجيل طلب طبيب في القائمة
+              </button>
+            </div>
+          </div>
+          <div id="adminDoctorAppsList" style="margin-top: 18px;">
+            <!-- Rendered via JS from Firestore doctor_applications -->
+          </div>
+        </article>
+
+        <div class="content-grid">
+          <article class="panel">
+            <div class="panel-head"><h3>مؤشرات نموذج الذكاء الاصطناعي</h3><span id="adminAiMetricsBadge" class="pill warning">🧪 Demo Data / محاكاة تجريبية</span></div>
+            <div class="summary-list">
+              <div><span>الحساسية</span><strong id="adminAiSensitivity">--</strong></div>
+              <div><span>النوعية</span><strong id="adminAiSpecificity">--</strong></div>
+              <div><span>الدقة</span><strong id="adminAiPrecision">--</strong></div>
+              <div><span>المساحة تحت المنحنى</span><strong id="adminAiAuc">--</strong></div>
+            </div>
+          </article>
+          <article class="panel">
+            <div class="panel-head"><h3>العمليات</h3><span class="pill pending">تحتاج مراجعة جودة</span></div>
+            <div class="activity">
+              <div><strong>توثيق الأطباء</strong><span id="adminOpsDocAppsCount">طلبات معلقة بانتظار الاعتماد</span></div>
+              <div><strong>تحديث النموذج</strong><span>مسودة الإصدار الثاني بانتظار مراجعة الجودة الطبية</span></div>
+            </div>
+          </article>
+          <article class="panel">
+            <div class="panel-head"><h3>ضوابط صلاحيات الأدوار</h3><span class="pill danger">أقل صلاحية ممكنة</span></div>
+            <div class="summary-list">
+              <div><span>دعم الإدارة</span><strong>بدون ملاحظات طبية</strong></div>
+              <div><span>مراجعة الجودة الطبية</span><strong>وصول بدون هوية المريض</strong></div>
+              <div><span>الإدارة العليا</span><strong>للطوارئ فقط</strong></div>
+              <div><span>أحداث التدقيق</span><strong>مفعلة</strong></div>
+            </div>
+          </article>
+        </div>
+
+        <!-- USER & ROLE GOVERNANCE -->
+        <article class="panel" style="margin-top: 24px;">
+          <div class="panel-head" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <div>
+              <h3 style="margin: 0; font-size: 19px;">إدارة المستخدمين والصلاحيات (All Verified & Regular Users)</h3>
+              <p style="margin: 4px 0 0; font-size: 13px; color: var(--muted);">عرض كافة الحسابات المسجلة (المؤكدة والعادية) وتعديل الصلاحيات وتوثيق الحسابات على السيستم</p>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <span class="pill info" id="adminUsersCountBadge">جاري التحميل...</span>
+              <button type="button" class="soft-button" onclick="syncAllAccountsToFirestore()" style="padding: 6px 12px; font-size: 12.5px; display: inline-flex; align-items: center; gap: 5px;" title="تسجيل ومزامنة كافة الحسابات في قاعدة بيانات Firestore">
+                <span>💾</span> تسجيل الحسابات على السيستم
+              </button>
+              <button type="button" class="soft-button" onclick="verifyAllUnverifiedAccounts()" style="padding: 6px 12px; font-size: 12.5px; display: inline-flex; align-items: center; gap: 5px; color: #10b981; border-color: rgba(16, 185, 129, 0.4);" title="اعتماد وتوثيق الحسابات غير المؤكدة">
+                <span>⚡</span> توثيق غير المؤكدة
+              </button>
+              <button type="button" class="soft-button" onclick="promptAddAccount()" style="padding: 6px 14px; font-size: 12.5px; display: inline-flex; align-items: center; gap: 5px;">
+                <span>➕</span> إضافة حساب
+              </button>
+            </div>
+          </div>
+          <div id="adminUsersTableContainer" style="margin-top: 18px; overflow-x: auto;">
+            <!-- Rendered via renderAdminUsers() -->
+          </div>
+        </article>
+
+        <!-- 28. REAL-TIME SYSTEM ERROR MONITORING & OBSERVABILITY -->
+        <article class="panel" id="adminErrorMonitoringPanel" style="margin-top: 24px;">
+          <div class="panel-head" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <h3 style="margin: 0; font-size: 19px;">مراقبة الأخطاء وحالة النظام (Error Monitoring & Telemetry)</h3>
+                <span class="pill ok" id="monitoringSystemHealthBadge" style="font-size: 11px;">مستقر 🟢</span>
+              </div>
+              <p style="margin: 4px 0 0; font-size: 13px; color: var(--muted);">رصد حي واستباقي للأخطاء البرمجية، الانهيارات (Crashes)، واستثناءات الـ API والـ Promises</p>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <button type="button" class="soft-button" onclick="updateAdminErrorMonitoringUI()" style="padding: 6px 12px; font-size: 12.5px; display: inline-flex; align-items: center; gap: 5px;">
+                <span>🔄</span> تحديث السجل
+              </button>
+              <button type="button" class="outline-button" onclick="clearErrorLogs(); updateAdminErrorMonitoringUI();" style="padding: 6px 12px; font-size: 12.5px; display: inline-flex; align-items: center; gap: 5px;">
+                <span>🧹</span> تفريغ السجل
+              </button>
+            </div>
+          </div>
+
+          <!-- Active Monitoring Alerts Banner -->
+          <div id="monitoringActiveAlertsBanner" style="display: none; margin-top: 14px; padding: 10px 14px; border-radius: 8px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: #fca5a5; font-size: 13px; font-weight: 600;"></div>
+
+          <!-- Monitoring Hero Metrics Cards -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-top: 18px;">
+            <div class="kpi-mini-card" style="padding: 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color, rgba(255,255,255,0.06)); border-radius: 12px;">
+              <div style="font-size: 12px; color: var(--muted);">إجمالي الأخطاء المسجلة</div>
+              <div id="monitoringTotalErrorsCount" style="font-size: 24px; font-weight: 800; margin-top: 4px;">0</div>
+            </div>
+            <div class="kpi-mini-card" style="padding: 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color, rgba(255,255,255,0.06)); border-radius: 12px;">
+              <div style="font-size: 12px; color: var(--muted);">معدل الجلسات الخالية من الأخطاء</div>
+              <div id="monitoringCrashFreeRate" style="font-size: 24px; font-weight: 800; color: #10b981; margin-top: 4px;">Unavailable</div>
+            </div>
+          </div>
+
+          <!-- Error Stream Table -->
+          <div id="adminErrorMonitoringContainer" style="margin-top: 18px; overflow-x: auto;">
+            <table class="data-table" style="width: 100%; border-collapse: collapse; text-align: right;">
+              <thead>
+                <tr style="border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.1)); color: var(--muted); font-size: 12px;">
+                  <th style="padding: 10px;">الوقت</th>
+                  <th style="padding: 10px;">الخطورة</th>
+                  <th style="padding: 10px;">معرّف التتبع (Trace ID)</th>
+                  <th style="padding: 10px;">رسالة الخطأ</th>
+                  <th style="padding: 10px;">التصنيف والنوع</th>
+                  <th style="padding: 10px;">المستخدم</th>
+                </tr>
+              </thead>
+              <tbody id="monitoringErrorsTableBody">
+                <tr><td colspan="6" style="text-align: center; color: var(--muted); padding: 18px;">✅ لا توجد أخطاء مسجلة حالياً - النظام يعمل بكفاءة تامة</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+
+        <!-- 29. CLINICAL BACKUP & DISASTER RECOVERY (DR) -->
+        <article class="panel" id="adminBackupDRPanel" style="margin-top: 24px;">
+          <div class="panel-head" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <h3 style="margin: 0; font-size: 19px;">النسخ الاحتياطي والتعافي من الكوارث (Backup & Disaster Recovery)</h3>
+                <span class="pill ok" id="adminBackupRpoBadge" style="font-size: 11px;">RPO &lt; 15m (PITR)</span>
+              </div>
+              <p style="margin: 4px 0 0; font-size: 13px; color: var(--muted);">تصدير فوري مشفر لقاعدة البيانات السريرية مع فحص سلامة التجزئة الرقمية SHA-256 ومحاكاة الاستعادة الآمنة</p>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <span class="pill info" id="adminBackupCountBadge">جاري فحص النسخ...</span>
+              <button type="button" class="soft-button" id="btnTriggerBackupSnapshot" onclick="triggerBackupSnapshot()" style="padding: 6px 14px; font-size: 12.5px; display: inline-flex; align-items: center; gap: 5px;">
+                <span>💾</span> إنشاء نسخة احتياطية فورية
+              </button>
+              <button type="button" class="outline-button" onclick="renderAdminBackupUI()" style="padding: 6px 12px; font-size: 12.5px; display: inline-flex; align-items: center; gap: 5px;">
+                <span>🔄</span> تحديث
+              </button>
+            </div>
+          </div>
+
+          <!-- Backup DR Hero Metrics Cards -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-top: 18px;">
+            <div class="kpi-mini-card" style="padding: 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color, rgba(255,255,255,0.06)); border-radius: 12px;">
+              <div style="font-size: 12px; color: var(--muted);">هدف نقطة الاستعادة (RPO)</div>
+              <div style="font-size: 20px; font-weight: 800; color: #10b981; margin-top: 4px;">&lt; 15 دقيقة</div>
+              <div style="font-size: 11px; color: var(--muted); margin-top: 2px;">PITR 7 أيام نشط</div>
+            </div>
+            <div class="kpi-mini-card" style="padding: 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color, rgba(255,255,255,0.06)); border-radius: 12px;">
+              <div style="font-size: 12px; color: var(--muted);">هدف زمن الاستعادة (RTO)</div>
+              <div style="font-size: 20px; font-weight: 800; color: #38bdf8; margin-top: 4px;">&lt; 30 دقيقة</div>
+              <div style="font-size: 11px; color: var(--muted); margin-top: 2px;">تخزين متعدد المناطق</div>
+            </div>
+            <div class="kpi-mini-card" style="padding: 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color, rgba(255,255,255,0.06)); border-radius: 12px;">
+              <div style="font-size: 12px; color: var(--muted);">تشفير النسخ المخزنة</div>
+              <div style="font-size: 20px; font-weight: 800; color: #fbbf24; margin-top: 4px;">AES-256 / SHA-256</div>
+              <div style="font-size: 11px; color: var(--muted); margin-top: 2px;">FIPS 140-2 Validated</div>
+            </div>
+          </div>
+
+          <!-- Snapshots Table -->
+          <div style="margin-top: 18px; overflow-x: auto;">
+            <table class="data-table" style="width: 100%; border-collapse: collapse; text-align: right;">
+              <thead>
+                <tr style="border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.1)); color: var(--muted); font-size: 12px;">
+                  <th style="padding: 10px;">معرف النسخة (Snapshot ID)</th>
+                  <th style="padding: 10px;">التوقيت</th>
+                  <th style="padding: 10px;">إجمالي السجلات</th>
+                  <th style="padding: 10px;">الحالة</th>
+                  <th style="padding: 10px;">إجراءات الأمان والتحقق</th>
+                </tr>
+              </thead>
+              <tbody id="adminBackupSnapshotsTableBody">
+                <tr><td colspan="5" style="text-align: center; color: var(--muted); padding: 18px;">جاري تحميل سجل النسخ الاحتياطية...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </section>

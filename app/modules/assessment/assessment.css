@@ -1,0 +1,27 @@
+/**
+ * Health Vibe AI - Assessment Module Styles
+ * Scoped styles for clinical symptom questionnaire, oxygen input slider, and triage preview.
+ */
+
+#screen-assessment .form-layout {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 20px;
+}
+
+@media (max-width: 900px) {
+  #screen-assessment .form-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.form-panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg, 16px);
+  padding: 24px;
+}
+
+.assessment-progress-wrapper {
+  margin-bottom: 16px;
+}

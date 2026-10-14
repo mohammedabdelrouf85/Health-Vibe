@@ -1,0 +1,36 @@
+<section id="screen-doctor" class="screen">
+        <!-- Doctor Clinical Performance & TAT Header Bar -->
+        <div class="kpi-banner-cta" style="margin-bottom: 16px;">
+          <div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 18px;">⚡</span>
+              <strong style="font-size: 14.5px; color: var(--ink);">مؤشرات أدائك السريري (Doctor Clinical KPIs)</strong>
+            </div>
+            <div style="display: flex; gap: 16px; margin-top: 6px; flex-wrap: wrap; font-size: 12.5px;">
+              <span>معدل إنجاز الحالات: <strong id="docKpiCompletionRate" style="color: #10b981;">--%</strong></span>
+              <span style="color: var(--muted);">•</span>
+              <span>متوسط سرعة استجابتك: <strong id="docKpiResponseTime" style="color: #3b82f6;">-- دقيقة</strong></span>
+              <span style="color: var(--muted);">•</span>
+              <span>متوسط استخراج التقارير: <strong id="docKpiTurnaroundTime" style="color: var(--teal);">-- دقيقة</strong></span>
+            </div>
+          </div>
+          <button type="button" class="soft-button" onclick="showScreen('kpi')" style="padding: 7px 14px; font-size: 12.5px; display: inline-flex; align-items: center; gap: 6px;">
+            <span>📊</span> عرض لوحة المؤشرات الكاملة (KPIs)
+          </button>
+        </div>
+
+        <div class="doctor-layout" id="doctorWorkspaceLayout">
+          <article class="panel doctor-queue-panel" id="doctorQueuePanel">
+            <div class="panel-head"><h3>قائمة المرضى</h3><span class="pill ok">طبيب موثق</span></div>
+            <div id="doctorQueueFilterTabs" class="status-filter-tabs">
+              <!-- Rendered via JS -->
+            </div>
+            <div class="queue" id="doctorQueueList">
+              <!-- Rendered via JS -->
+            </div>
+          </article>
+          <article class="panel doctor-review-panel" id="doctorReviewPanel" style="display: none;">
+            <!-- Rendered via JS -->
+          </article>
+        </div>
+      </section>

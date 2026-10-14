@@ -1,0 +1,52 @@
+<section id="screen-patient" class="screen active">
+        <div class="hero-panel app-hero">
+          <div>
+            <span class="eyebrow" id="patientHeroTitle" data-i18n="patient.welcome">Welcome</span>
+            <h1 data-i18n="patient.heroTitle">Track breathing with your doctor in one clear path</h1>
+            <p data-i18n="patient.heroSubtitle">Enter symptoms and measurements. The doctor receives a rule-based risk preview before approving any report shown to you.</p>
+            <div class="hero-actions">
+              <button class="solid-button large" data-screen="assessment" data-i18n="patient.startBreathingAssessment">Start breathing assessment</button>
+              <button class="soft-button large" type="button" onclick="if(window.auth && auth.currentUser) openAssessmentComparisonModal(auth.currentUser.uid); else showAuth();">📊 <span data-i18n="patient.compareAssessments">Compare Assessments</span></button>
+              <button class="soft-button large" data-screen="history" data-i18n="patient.viewHistory">View history</button>
+            </div>
+          </div>
+          <div class="clinical-card">
+            <div class="clinical-top">
+              <span data-i18n="patient.latestStatus">Latest status</span>
+              <b id="patientClinicalStatus" data-i18n="patient.noRecentAssessment">No recent assessment</b>
+            </div>
+            <div class="breath-orb app-orb"><span></span></div>
+            <div class="clinical-row"><span data-i18n="patient.oxygenLevel">Oxygen level</span><strong id="patientClinicalO2">--%</strong></div>
+            <div class="clinical-row"><span data-i18n="patient.ruleScore">Rule score (not clinically validated)</span><strong id="patientClinicalConfidence">--</strong></div>
+            <div class="clinical-row"><span data-i18n="patient.doctor">Doctor</span><strong id="patientClinicalDoctor">--</strong></div>
+          </div>
+        </div>
+
+        <article class="hv-onboarding-strip" aria-label="Product onboarding">
+          <div>
+            <span class="eyebrow">How Health Vibe AI Works</span>
+            <h2>From breathing data to doctor-approved guidance</h2>
+            <p>Submit symptoms and vitals, let the system prioritize the case, then wait for a licensed physician to review and release the final report.</p>
+          </div>
+          <ol>
+            <li><strong>1. Share</strong><span>Enter oxygen, symptoms, history, and consent.</span></li>
+            <li><strong>2. Triage</strong><span>Rule-based risk helps prioritize review.</span></li>
+            <li><strong>3. Review</strong><span>A doctor approves, asks follow-up, or escalates.</span></li>
+            <li><strong>4. Receive</strong><span>Your certified report appears only after approval.</span></li>
+          </ol>
+        </article>
+
+        <div class="metric-grid">
+          <article><span data-i18n="patient.nextAppointment">Next appointment</span><strong id="patientNextAppt">--</strong><small data-i18n="patient.followUpConsultation">Follow-up consultation</small></article>
+          <article><span data-i18n="patient.latestReport">Latest report</span><strong id="patientLatestReport">--</strong><small data-i18n="nav.assessment">Breathing Assessment</small></article>
+          <article><span data-i18n="patient.resultStatus">Result status</span><strong id="patientResultStatus">--</strong><small data-i18n="patient.waitingForDoctor">Waiting for doctor</small></article>
+          <article><span data-i18n="patient.medicalProfile">Medical Profile</span><strong id="patientProfileCompletion">100%</strong><small data-i18n="common.complete">Complete</small></article>
+        </div>
+
+        <article class="panel" style="margin-top: 18px;">
+          <div class="panel-head"><h3>Alerts</h3><span class="pill pending" id="patientAlertsCount">0 new</span></div>
+          <div class="activity" id="patientAlertsList">
+            <div><strong>No new alerts</strong><span>--</span></div>
+          </div>
+        </article>
+      </section>

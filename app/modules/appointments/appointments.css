@@ -1,0 +1,53 @@
+/**
+ * Health Vibe AI - Appointments Module Styles
+ * Scoped styles for appointment booking, doctor schedules, slot selection, and waiting list UI.
+ */
+
+#screen-appointments .content-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+@media (max-width: 900px) {
+  #screen-appointments .content-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.appt-slots-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.appt-slot-chip {
+  padding: 8px 10px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.appt-slot-chip:hover:not(.disabled) {
+  border-color: var(--teal, #0d9488);
+  background: rgba(13, 148, 136, 0.08);
+}
+
+.appt-slot-chip.selected {
+  background: var(--teal, #0d9488);
+  color: #fff;
+  border-color: var(--teal, #0d9488);
+}
+
+.appt-slot-chip.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  text-decoration: line-through;
+}

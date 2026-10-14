@@ -3990,7 +3990,8 @@ window.generateAndApproveReport = async function(id) {
   if (!enforcePermission(PERMISSIONS.APPROVE_CASE, "Approve Clinical Result")) return;
   const isEn = currentLanguage === "en";
 
-  const targetCase = (typeof cases !== "undefined" && Array.isArray(cases) ? cases : (state?.doctorQueue || [])).find(item => item.id === id);
+  const queue = typeof cases !== "undefined" && Array.isArray(cases) ? cases : (typeof state !== "undefined" && state?.doctorQueue ? state.doctorQueue : []);
+  const targetCase = queue.find(item => item.id === id);
   if (window.HealthVibes?.DoctorUI?.isRevisionStale && window.HealthVibes.DoctorUI.isRevisionStale(targetCase)) {
     showToast(isEn ? "Approval locked: Please review and acknowledge new patient information first." : "الاعتماد مقفل: يرجى مراجعة وتأكيد البيانات الجديدة أولاً.");
     return;
