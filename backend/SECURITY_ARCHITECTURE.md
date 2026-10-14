@@ -75,4 +75,28 @@
 | **حراس المسارات (Route Guards)** | دالة `applyRouteGuards` تحظر محاولات التسلل عبر الـ Hash (`#doctor`, `#admin`) وتعيد التوجيه فوراً | اعتراض وتدقيق الخادم الإلزامي `requireDoctor` | اعتراض وتدقيق الخادم الإلزامي `requireAdmin` و `requireSuperAdmin` |
 | **التحكم بالواجهة (Navigation)** | دالة `updateNavVisibility` تخفي أزرار وروابط الأدوار الأخرى كلياً من القائمة والشريط السفلي | إخفاء روابط الإدارة نهائياً | إخفاء مسار التقييم الاسترشادي للمرضى |
 
+---
+
+### 6. حصر استعلامات الطبيب على المرضى المعينين له فقط (Assigned Patients Only Doctor Queries):
+
+1. **على مستوى قواعد أمان فايربيس (Firestore Security Rules):**
+   - في وثائق الحالات السريرية `/cases/{caseId}`: يسمح للطبيب بالقراءة فقط إذا كان هو الطبيب المسند للحالة (`resource.data.assignedDoctorId == request.auth.uid` أو `doctorId` أو `approvingDoctorId`).
+   - في وثائق المرفقات الطبية `/case_files/{fileId}`: دالة `isAssignedDoctorForCaseId` تمنع الطبيب من تحميل أي تحاليل أو صور أشعة لحالات غير مسندة إليه.
+   - في التقارير السريرية `/clinical_reports/{reportId}`: قراءة التقارير محصورة بالطبيب المعتمد والموقع للحالة.
+
+2. **على مستوى استعلامات الواجهة والعميل (Client Firestore Queries):**
+   - مستمع طابور الحالات المباشر `renderDoctorQueue` يطبق قسراً عامل تصفية `.where("assignedDoctorId", "==", user.uid)`.
+   - دالة `getCases` تطبق استعلام `.where("assignedDoctorId", "==", user.uid)`.
+   - دالة `renderDoctorQueueItems` و `selectDoctorCase` تعزل الذاكرة الحية عبر `isCaseAssignedToCurrentDoctor(c)` بحيث لا يتم رسم أي حالة لمريض تابع لطبيب آخر.
+
+3. **على مستوى خادم الـ Backend والـ APIs:**
+   - مسار الملف الطبي السريري `GET /api/patient/medical-profile`: يرفض طلب الطبيب استعراض بيانات أي مريض غير مسند إليه برمز خطأ `403 PATIENT_NOT_ASSIGNED_TO_DOCTOR`.
+   - مسار الخط الزمني الموحد `GET /api/patient/timeline`: دالة `verifyTimelineAccess` في `timeline-service.js` تفحص ارتباط الطبيب بالمريض وترفض الاستعلام برمز `403 PATIENT_NOT_ASSIGNED_TO_DOCTOR` إذا لم يكن الطبيب مسنداً لأي فحص أو موعد مع المريض.
+
+4. **على مستوى قاعدة البيانات العلائقية (PostgreSQL / Supabase RLS):**
+   - سياسة RLS `doctor_assigned_patients_only` على جدول `patients`: تحصر استعلام `SELECT` بالمرضى المسندين للطبيب فقط.
+   - سياسة RLS `doctor_assigned_cases_only` على جدول `clinical_cases`: تمنع استعراض أو تعديل الحالات التابعة لأطباء آخرين.
+   - سياسة RLS `doctor_patient_history_access` على جدول `patient_history`: تمنع الطبيب من استعراض التاريخ الطبي لمرضى خارج عيادته واختصاصه.
+
+
 

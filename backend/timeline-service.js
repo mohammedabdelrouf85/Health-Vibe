@@ -145,15 +145,19 @@ async function verifyTimelineAccess(requestingUser = {}, targetPatientId, db = n
         }
       }
 
-      // If doctor is verified and belongs to the same clinic or is in practice, allow clinical access
+      // Zero-Trust: Doctor can only access clinical timeline of assigned patients
       if (isAssigned || isOwner) {
         return { authorized: true, isClinician: true, isPatient: false };
       }
       
-      // Default to allowed for verified doctors treating clinical patients
-      return { authorized: true, isClinician: true, isPatient: false };
+      return {
+        authorized: false,
+        isClinician: true,
+        isPatient: false,
+        reason: 'PATIENT_NOT_ASSIGNED_TO_DOCTOR: Zero-Trust enforcement requires that physicians may only access timelines for patients assigned to their clinical care.'
+      };
     } catch (e) {
-      return { authorized: true, isClinician: true, isPatient: false };
+      return { authorized: false, isClinician: true, isPatient: false, reason: 'TIMELINE_ACCESS_VERIFICATION_FAILED' };
     }
   }
 

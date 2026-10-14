@@ -2511,13 +2511,44 @@ app.get('/api/patient/medical-profile', requireAuth, patientProfileLimiter, asyn
 
     if (requestedUid && requestedUid !== req.user.uid) {
       const userRole = getTrustedClaimRole(req.user);
-      const isClinicianOrAdmin = ADMIN_ROLES.includes(userRole) || userRole === ROLES.DOCTOR_VERIFIED || hasTrustedOwnerClaim(req.user);
+      const isClinicianOrAdmin = ADMIN_ROLES.includes(userRole) || userRole === ROLES.DOCTOR_VERIFIED || userRole === ROLES.DOCTOR || hasTrustedOwnerClaim(req.user);
       if (!isClinicianOrAdmin) {
         return res.status(403).json({
           error: 'FORBIDDEN',
           message: 'Accessing other patient profiles requires verified clinician or administrator credentials.'
         });
       }
+
+      // If requester is a physician, strictly verify that the patient is assigned to their clinical care
+      if (!ADMIN_ROLES.includes(userRole) && !hasTrustedOwnerClaim(req.user)) {
+        let isDoctorAssigned = false;
+        if (db) {
+          const casesSnap = await db.collection('cases').where('patientId', '==', requestedUid).get();
+          casesSnap.forEach(doc => {
+            const d = doc.data() || {};
+            if ([d.assignedDoctorId, d.doctorId, d.doctorUid, d.approvingDoctorId].includes(req.user.uid)) {
+              isDoctorAssigned = true;
+            }
+          });
+          if (!isDoctorAssigned) {
+            const apptSnap = await db.collection('appointments').where('patientId', '==', requestedUid).where('doctorId', '==', req.user.uid).get();
+            if (!apptSnap.empty) isDoctorAssigned = true;
+          }
+          if (!isDoctorAssigned) {
+            const pDoc = await db.collection('users').doc(requestedUid).get();
+            if (pDoc.exists && pDoc.data()?.medicalProfile?.clinicLinkage?.linkedDoctorId === req.user.uid) {
+              isDoctorAssigned = true;
+            }
+          }
+        }
+        if (!isDoctorAssigned) {
+          return res.status(403).json({
+            error: 'PATIENT_NOT_ASSIGNED_TO_DOCTOR',
+            message: 'Zero-Trust enforcement: Physicians can only access medical profiles for patients assigned to their clinical care.'
+          });
+        }
+      }
+
       targetUid = requestedUid;
     }
 

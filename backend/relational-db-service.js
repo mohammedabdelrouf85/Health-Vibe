@@ -367,6 +367,104 @@ class RelationalDatabaseService {
     return { ...clinicalCase };
   }
 
+  /**
+   * Retrieves patients assigned to a specific doctor.
+   * Enforces zero-trust: doctors can only query and view their assigned patients.
+   */
+  async getAssignedPatientsForDoctor(doctorIdOrAccountId) {
+    let doctorProfileId = doctorIdOrAccountId;
+    for (const dp of this.tables.doctor_profiles.values()) {
+      if (dp.account_id === doctorIdOrAccountId || dp.id === doctorIdOrAccountId) {
+        doctorProfileId = dp.id;
+        break;
+      }
+    }
+
+    const assignedPatients = [];
+    const assignedPatientIds = new Set();
+
+    // 1. Direct assignment in patients table
+    for (const patient of this.tables.patients.values()) {
+      if (patient.assigned_doctor_id === doctorProfileId) {
+        assignedPatients.push({ ...patient });
+        assignedPatientIds.add(patient.id);
+      }
+    }
+
+    // 2. Assignment through clinical cases
+    for (const c of this.tables.clinical_cases.values()) {
+      if (c.assigned_doctor_id === doctorProfileId && !assignedPatientIds.has(c.patient_id)) {
+        const patient = this.tables.patients.get(c.patient_id);
+        if (patient) {
+          assignedPatients.push({ ...patient });
+          assignedPatientIds.add(patient.id);
+        }
+      }
+    }
+
+    return assignedPatients;
+  }
+
+  /**
+   * Retrieves clinical cases assigned to a specific doctor.
+   * Strictly filters out cases assigned to other physicians.
+   */
+  async getAssignedCasesForDoctor(doctorIdOrAccountId) {
+    let doctorProfileId = doctorIdOrAccountId;
+    for (const dp of this.tables.doctor_profiles.values()) {
+      if (dp.account_id === doctorIdOrAccountId || dp.id === doctorIdOrAccountId) {
+        doctorProfileId = dp.id;
+        break;
+      }
+    }
+
+    const cases = [];
+    for (const c of this.tables.clinical_cases.values()) {
+      if (c.assigned_doctor_id === doctorProfileId) {
+        cases.push({ ...c });
+      }
+    }
+
+    return cases;
+  }
+
+  /**
+   * Doctor accesses patient longitudinal history.
+   * Rejects with 403_DOCTOR_NOT_ASSIGNED if patient is not assigned to this doctor.
+   */
+  async getPatientHistoryForDoctor(doctorIdOrAccountId, patientId) {
+    let doctorProfileId = doctorIdOrAccountId;
+    for (const dp of this.tables.doctor_profiles.values()) {
+      if (dp.account_id === doctorIdOrAccountId || dp.id === doctorIdOrAccountId) {
+        doctorProfileId = dp.id;
+        break;
+      }
+    }
+
+    const patient = this.tables.patients.get(patientId);
+    if (!patient) {
+      throw new Error(`Patient '${patientId}' not found.`);
+    }
+
+    let isAssigned = (patient.assigned_doctor_id === doctorProfileId);
+    if (!isAssigned) {
+      for (const c of this.tables.clinical_cases.values()) {
+        if (c.patient_id === patientId && c.assigned_doctor_id === doctorProfileId) {
+          isAssigned = true;
+          break;
+        }
+      }
+    }
+
+    if (!isAssigned) {
+      const err = new Error("UNAUTHORIZED_PATIENT_ACCESS: Doctor can only access history for patients assigned to their clinical care.");
+      err.code = "403_DOCTOR_NOT_ASSIGNED";
+      throw err;
+    }
+
+    return this.getPatientHistory(patientId);
+  }
+
   // ───────────────────────────────────────────────────────────────────────────
   // 5. PATIENT HISTORY (PRD Page 16 - Relational Patient History Store)
   // ───────────────────────────────────────────────────────────────────────────

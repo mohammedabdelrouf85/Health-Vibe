@@ -219,6 +219,21 @@ CREATE POLICY doctor_patient_history_access ON patient_history
         OR patient_id IN (SELECT id FROM patients WHERE assigned_doctor_id IN (SELECT id FROM doctor_profiles WHERE account_id = auth.uid()))
     );
 
+-- Doctors can ONLY view patients assigned to them
+CREATE POLICY doctor_assigned_patients_only ON patients
+    FOR SELECT
+    USING (
+        assigned_doctor_id IN (SELECT id FROM doctor_profiles WHERE account_id = auth.uid())
+        OR id IN (SELECT patient_id FROM clinical_cases WHERE assigned_doctor_id IN (SELECT id FROM doctor_profiles WHERE account_id = auth.uid()))
+    );
+
+-- Doctors can ONLY view and manage clinical cases assigned to them
+CREATE POLICY doctor_assigned_cases_only ON clinical_cases
+    FOR ALL
+    USING (
+        assigned_doctor_id IN (SELECT id FROM doctor_profiles WHERE account_id = auth.uid())
+    );
+
 -- Audit logs are strictly INSERT/SELECT only (No updates or deletes)
 CREATE POLICY audit_logs_immutable ON audit_logs
     FOR INSERT

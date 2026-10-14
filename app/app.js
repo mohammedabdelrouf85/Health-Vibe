@@ -4670,9 +4670,14 @@ async function renderDoctorQueue() {
   }
   if (typeof db !== "undefined" && db) {
     try {
-      const queueQuery = typeof db.collection("cases").limit === "function"
-        ? db.collection("cases").limit(50)
-        : db.collection("cases");
+      const user = typeof auth !== "undefined" && auth ? auth.currentUser : null;
+      let queueQuery = db.collection("cases");
+      if (user && (selectedRole === ROLES.DOCTOR || (typeof userProfile !== "undefined" && userProfile?.role === "doctor"))) {
+        queueQuery = queueQuery.where("assignedDoctorId", "==", user.uid);
+      }
+      if (typeof queueQuery.limit === "function") {
+        queueQuery = queueQuery.limit(50);
+      }
       window._doctorQueueUnsub = queueQuery.onSnapshot(
         (snapshot) => {
           if (window.asyncContextManager) {
@@ -4682,7 +4687,10 @@ async function renderDoctorQueue() {
             if (!check.valid) return;
           }
           if (!snapshot.empty) {
-            const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            let docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            if (user && (selectedRole === ROLES.DOCTOR || (typeof userProfile !== "undefined" && userProfile?.role === "doctor"))) {
+              docs = docs.filter(c => isCaseAssignedToCurrentDoctor(c));
+            }
             docs.sort((a, b) => {
               const tA = toMillis(a.submittedAt || a.createdAt || a.updatedAt) || 0;
               const tB = toMillis(b.submittedAt || b.createdAt || b.updatedAt) || 0;
