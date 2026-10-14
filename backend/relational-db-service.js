@@ -661,35 +661,157 @@ class RelationalDatabaseService {
   }
 
   // ───────────────────────────────────────────────────────────────────────────
-  // 6. AUDIT LOGS (Immutable HIPAA Trail)
+  // 6. AUDIT LOGS (Immutable HIPAA & Clinical Audit Trail - Request 32)
   // ───────────────────────────────────────────────────────────────────────────
 
-  async logAudit(auditData) {
-    const id = crypto.randomUUID();
-    const entry = {
+  /**
+   * Logs an immutable clinical audit record for any VIEW, MODIFY, or APPROVE action
+   * on patient medical data.
+   * Required fields: actor_id, role, action, target_record, timestamp, ip_address.
+   */
+  async logClinicalAudit(auditData) {
+    if (!auditData.actor_id && !auditData.actorId && !auditData.accountId) {
+      throw new Error("VALIDATION_ERROR: actor_id is strictly required for clinical audit logging.");
+    }
+    if (!auditData.role && !auditData.actorRole) {
+      throw new Error("VALIDATION_ERROR: role is strictly required for clinical audit logging.");
+    }
+    if (!auditData.action) {
+      throw new Error("VALIDATION_ERROR: action is strictly required for clinical audit logging.");
+    }
+    if (!auditData.target_record && !auditData.targetRecord && !auditData.resourceId) {
+      throw new Error("VALIDATION_ERROR: target_record is strictly required for clinical audit logging.");
+    }
+
+    const id = auditData.id || crypto.randomUUID();
+    const actor_id = String(auditData.actor_id || auditData.actorId || auditData.accountId);
+    const role = String(auditData.role || auditData.actorRole);
+    let action = String(auditData.action).trim().toUpperCase();
+
+    // Map common aliases to standard VIEW, MODIFY, APPROVE
+    if (['CLINICAL_VIEW', 'RECORD_VIEWED', 'CASE_VIEWED'].includes(action)) action = 'VIEW';
+    if (['CLINICAL_MODIFY', 'RECORD_UPDATED', 'CASE_UPDATED', 'PATIENT_PROFILE_UPDATED', 'PATIENT_PROFILE_CORRECTED'].includes(action)) action = 'MODIFY';
+    if (['CLINICAL_APPROVE', 'CASE_APPROVED', 'CLINICAL_CASE_APPROVED', 'CLINICAL_CASE_APPROVED_AND_CERTIFIED'].includes(action)) action = 'APPROVE';
+
+    if (!action || typeof action !== 'string') {
+      throw new Error(`VALIDATION_ERROR: Invalid action. Action must be a non-empty string.`);
+    }
+
+    const target_record = String(auditData.target_record || auditData.targetRecord || `${auditData.resourceType || 'record'}:${auditData.resourceId || '0'}`);
+    const timestamp = auditData.timestamp || new Date().toISOString();
+    const ip_address = String(auditData.ip_address || auditData.ipAddress || "127.0.0.1");
+
+    // Strictly immutable frozen record
+    const entry = Object.freeze({
       id,
-      account_id: auditData.accountId || null,
-      actor_role: auditData.actorRole || "system",
-      action: auditData.action || "UNKNOWN_ACTION",
-      resource_type: auditData.resourceType || "system",
-      resource_id: String(auditData.resourceId || ""),
-      ip_address: auditData.ipAddress || "127.0.0.1",
+      actor_id,
+      role,
+      action,
+      target_record,
+      timestamp,
+      ip_address,
+      // Backwards-compatible aliases
+      account_id: auditData.accountId || auditData.account_id || null,
+      actor_role: role,
+      resource_type: auditData.resourceType || target_record.split(':')[0] || 'clinical',
+      resource_id: auditData.resourceId || target_record.split(':')[1] || target_record,
       user_agent: auditData.userAgent || "HealthVibe-Client/1.0",
-      metadata: auditData.metadata || {},
-      timestamp: new Date().toISOString()
-    };
+      metadata: Object.freeze(auditData.metadata || {})
+    });
+
+    if (this.tables.audit_logs.has(id)) {
+      const err = new Error("IMMUTABLE_AUDIT_LOG_ERROR: audit_logs records are strictly immutable and cannot be overwritten.");
+      err.code = "IMMUTABLE_AUDIT_LOG_ERROR";
+      throw err;
+    }
 
     this.tables.audit_logs.set(id, entry);
     return entry;
   }
 
-  async getAuditLogs(options = {}) {
-    const logs = Array.from(this.tables.audit_logs.values());
+  /**
+   * General audit logger (backwards-compatible). Maps into standardized audit structure.
+   */
+  async logAudit(auditData) {
+    const actor_id = String(auditData.actor_id || auditData.actorId || auditData.accountId || "system");
+    const role = String(auditData.role || auditData.actorRole || "system");
+    const action = String(auditData.action || "UNKNOWN_ACTION");
+    const target_record = String(auditData.target_record || auditData.targetRecord || `${auditData.resourceType || 'system'}:${auditData.resourceId || '0'}`);
+    const ip_address = String(auditData.ip_address || auditData.ipAddress || "127.0.0.1");
+
+    return this.logClinicalAudit({
+      actor_id,
+      role,
+      action,
+      target_record,
+      ip_address,
+      timestamp: auditData.timestamp || new Date().toISOString(),
+      accountId: auditData.accountId || null,
+      resourceType: auditData.resourceType || "system",
+      resourceId: auditData.resourceId || "",
+      userAgent: auditData.userAgent || "HealthVibe-Client/1.0",
+      metadata: auditData.metadata || {}
+    });
+  }
+
+  /**
+   * Runtime Immutability Guard: Strictly prevents updating audit logs.
+   */
+  async modifyAuditLog(id, updateData) {
+    const err = new Error("IMMUTABLE_AUDIT_LOG_ERROR: audit_logs records are strictly immutable and cannot be modified.");
+    err.code = "IMMUTABLE_AUDIT_LOG_ERROR";
+    throw err;
+  }
+
+  /**
+   * Runtime Immutability Guard: Strictly prevents deleting audit logs.
+   */
+  async deleteAuditLog(id) {
+    const err = new Error("IMMUTABLE_AUDIT_LOG_ERROR: audit_logs records are strictly immutable and cannot be deleted.");
+    err.code = "IMMUTABLE_AUDIT_LOG_ERROR";
+    throw err;
+  }
+
+  /**
+   * Queries audit logs with filtering by action, actor, target_record, and date range.
+   */
+  async getClinicalAuditLogs(options = {}) {
+    let logs = Array.from(this.tables.audit_logs.values());
+
+    if (options.action) {
+      const targetAction = options.action.toUpperCase();
+      logs = logs.filter(l => l.action === targetAction);
+    }
+    if (options.actor_id || options.actorId) {
+      const targetActor = String(options.actor_id || options.actorId);
+      logs = logs.filter(l => l.actor_id === targetActor || l.account_id === targetActor);
+    }
+    if (options.target_record || options.targetRecord) {
+      const targetRec = String(options.target_record || options.targetRecord);
+      logs = logs.filter(l => l.target_record === targetRec || l.target_record.includes(targetRec));
+    }
+    if (options.role) {
+      logs = logs.filter(l => l.role === options.role || l.actor_role === options.role);
+    }
+    if (options.startDate) {
+      const start = new Date(options.startDate).getTime();
+      logs = logs.filter(l => new Date(l.timestamp).getTime() >= start);
+    }
+    if (options.endDate) {
+      const end = new Date(options.endDate).getTime();
+      logs = logs.filter(l => new Date(l.timestamp).getTime() <= end);
+    }
+
     logs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-    if (options.limit) {
+
+    if (options.limit && typeof options.limit === "number") {
       return logs.slice(0, options.limit);
     }
     return logs;
+  }
+
+  async getAuditLogs(options = {}) {
+    return this.getClinicalAuditLogs(options);
   }
 
   // ───────────────────────────────────────────────────────────────────────────

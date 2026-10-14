@@ -150,24 +150,42 @@ CREATE INDEX IF NOT EXISTS idx_patient_history_recorded_at ON patient_history(re
 CREATE INDEX IF NOT EXISTS idx_patient_history_module ON patient_history(disease_module);
 
 -- -----------------------------------------------------------------------------
--- 6. IMMUTABLE SECURITY & AUDIT TRAIL (HIPAA & GDPR Art. 30)
+-- 6. IMMUTABLE SECURITY & AUDIT TRAIL (HIPAA, GDPR Art. 30, PRD Medical Audit)
+-- Records every VIEW, MODIFY, and APPROVE operation on clinical/medical records
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS audit_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    account_id UUID REFERENCES accounts(id) ON DELETE SET NULL,
-    actor_role VARCHAR(32) NOT NULL,
+    actor_id VARCHAR(128) NOT NULL,
+    role VARCHAR(32) NOT NULL,
     action VARCHAR(64) NOT NULL,
-    resource_type VARCHAR(64) NOT NULL,
-    resource_id VARCHAR(128) NOT NULL,
-    ip_address VARCHAR(45),
+    target_record VARCHAR(255) NOT NULL,
+    timestamp TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ip_address VARCHAR(45) NOT NULL DEFAULT '127.0.0.1',
+    account_id UUID REFERENCES accounts(id) ON DELETE SET NULL,
+    actor_role VARCHAR(32), -- backwards-compatible alias for role
+    resource_type VARCHAR(64),
+    resource_id VARCHAR(128),
     user_agent TEXT,
-    metadata JSONB DEFAULT '{}'::jsonb,
-    timestamp TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+    metadata JSONB DEFAULT '{}'::jsonb
 );
 
-CREATE INDEX IF NOT EXISTS idx_audit_logs_account ON audit_logs(account_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_actor ON audit_logs(actor_id);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_target ON audit_logs(target_record);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp DESC);
+
+-- STRICT IMMUTABILITY TRIGGER: Prevents any UPDATE or DELETE operations on audit_logs
+CREATE OR REPLACE FUNCTION prevent_audit_logs_tampering()
+RETURNS TRIGGER AS $$
+BEGIN
+    RAISE EXCEPTION 'IMMUTABLE_AUDIT_LOG_VIOLATION: audit_logs records are strictly immutable and cannot be updated or deleted.';
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_prevent_audit_logs_tampering ON audit_logs;
+CREATE TRIGGER trg_prevent_audit_logs_tampering
+BEFORE UPDATE OR DELETE ON audit_logs
+FOR EACH ROW EXECUTE FUNCTION prevent_audit_logs_tampering();
 
 -- -----------------------------------------------------------------------------
 -- 7. KAGGLE TRAINING EXPERIMENTS METADATA (STRICTLY ISOLATED FROM OPERATIONAL DATA)
@@ -234,7 +252,12 @@ CREATE POLICY doctor_assigned_cases_only ON clinical_cases
         assigned_doctor_id IN (SELECT id FROM doctor_profiles WHERE account_id = auth.uid())
     );
 
--- Audit logs are strictly INSERT/SELECT only (No updates or deletes)
-CREATE POLICY audit_logs_immutable ON audit_logs
+-- Audit logs are strictly INSERT and SELECT only (No UPDATE or DELETE allowed under any circumstance)
+CREATE POLICY audit_logs_immutable_insert ON audit_logs
     FOR INSERT
     WITH CHECK (TRUE);
+
+CREATE POLICY audit_logs_immutable_select ON audit_logs
+    FOR SELECT
+    USING (TRUE);
+

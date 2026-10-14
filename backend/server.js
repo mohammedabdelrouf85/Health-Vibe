@@ -2647,6 +2647,17 @@ app.get('/api/patient/medical-profile', requireAuth, patientProfileLimiter, asyn
       correctionHistory: storedProfile.correctionHistory || userDoc.correctionHistory || []
     };
 
+    // Request 32: Log immutable clinical audit for VIEW action
+    relationalDbService.logClinicalAudit({
+      actor_id: req.user.uid,
+      role: getTrustedClaimRole(req.user),
+      action: 'VIEW',
+      target_record: `medical_profile:${targetUid}`,
+      ip_address: getClientIp(req) || '127.0.0.1',
+      userAgent: req.headers['user-agent'] || 'HealthVibe-Client/1.0',
+      metadata: { targetPatientUid: targetUid }
+    }).catch(() => {});
+
     res.json({ ok: true, profile: fullProfile });
   } catch (err) {
     console.error('[PATIENT PROFILE GET ERROR]:', err);
@@ -2803,6 +2814,17 @@ app.post('/api/patient/medical-profile', requireAuth, patientProfileLimiter, asy
         linkedDoctorId: cleanData.clinicLinkage.linkedDoctorId
       }
     });
+
+    // Request 32: Log immutable clinical audit for MODIFY action
+    relationalDbService.logClinicalAudit({
+      actor_id: req.user.uid,
+      role: getTrustedClaimRole(req.user),
+      action: 'MODIFY',
+      target_record: `medical_profile:${targetUid}`,
+      ip_address: getClientIp(req) || '127.0.0.1',
+      userAgent: req.headers['user-agent'] || 'HealthVibe-Client/1.0',
+      metadata: { version: provenance.version, updatedBy: provenance.updatedBy }
+    }).catch(() => {});
 
     res.json({
       ok: true,
@@ -5579,6 +5601,34 @@ app.get('/api/admin/audit/events', requireAuth, requireAdmin, async (req, res) =
 });
 
 /**
+ * GET /api/audit/clinical-logs
+ * Exposes immutable clinical audit trail (actor_id, role, action, target_record, timestamp, ip_address)
+ * tracking all VIEW, MODIFY, and APPROVE operations on medical data (Request 32).
+ */
+app.get('/api/audit/clinical-logs', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { action, actor_id, target_record, role, startDate, endDate, limit } = req.query || {};
+    const logs = await relationalDbService.getClinicalAuditLogs({
+      action,
+      actor_id,
+      target_record,
+      role,
+      startDate,
+      endDate,
+      limit: limit ? parseInt(limit, 10) : 100
+    });
+    return res.json({
+      success: true,
+      count: logs.length,
+      immutable: true,
+      logs
+    });
+  } catch (err) {
+    return res.status(500).json({ error: 'AUDIT_QUERY_FAILED', message: err.message });
+  }
+});
+
+/**
  * GET & POST /api/admin/audit/export
  * Export audit events (JSON / CSV) with data minimization and export trail logging
  */
@@ -6728,6 +6778,21 @@ async function executeDoctorTransition({
               clinicId: recordClinicId(caseData),
               timestamp: admin.firestore.FieldValue.serverTimestamp()
             });
+
+            // Request 32: Log immutable clinical audit for APPROVE action
+            relationalDbService.logClinicalAudit({
+              actor_id: req.user.uid,
+              role: 'doctor',
+              action: 'APPROVE',
+              target_record: `case:${caseId}`,
+              ip_address: getClientIp(req) || '127.0.0.1',
+              userAgent: req.headers['user-agent'] || 'HealthVibe-Client/1.0',
+              metadata: {
+                caseId,
+                revisionNumber: updateData.reportSnapshot.revisionNumber,
+                clinicId: recordClinicId(caseData)
+              }
+            }).catch(() => {});
           } else if (targetStatus === 'rejected') {
             const rejectRef = db.collection('audit_events').doc();
             transaction.set(rejectRef, {
