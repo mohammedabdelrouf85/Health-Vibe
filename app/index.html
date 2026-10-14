@@ -103,6 +103,10 @@
           <span>📱</span>
           <span>لوحة التحكم (App)</span>
         </button>
+        <button id="siteLanguageToggle" type="button" class="lang-toggle" onclick="if(typeof toggleAppLanguage==='function'){toggleAppLanguage();}else{applyLanguage(currentLanguage==='ar'?'en':'ar');}" aria-label="Switch language" title="Switch language">
+          <span class="lang-globe">🌐</span>
+          <span class="lang-label">العربية</span>
+        </button>
         <button type="button" class="outline-button" data-auth-open onclick="if(typeof setAuthMode==='function') setAuthMode('signin'); showAuth();">Sign in</button>
         <button type="button" class="solid-button" data-auth-open onclick="if(typeof setAuthMode==='function') setAuthMode('signup'); showAuth();">Get started</button>
       </div>
@@ -220,12 +224,18 @@
   <section id="authScreen" class="auth-screen" role="dialog" aria-modal="true" aria-labelledby="authDialogTitle" aria-describedby="authDialogDescription" aria-hidden="true" aria-label="Sign in">
     <div class="auth-card">
       <button id="authClose" class="close-button" aria-label="Close" onclick="hideAuth()">×</button>
-      <div class="brand auth-brand">
-        <img src="./logo-dark-mark.webp" alt="Health Vibe AI" class="brand-logo" data-logo-mark loading="lazy" decoding="async" />
-        <div>
-          <strong>Health Vibe AI</strong>
-          <span>Secure account login</span>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <div class="brand auth-brand" style="margin-bottom:0;">
+          <img src="./logo-dark-mark.webp" alt="Health Vibe AI" class="brand-logo" data-logo-mark loading="lazy" decoding="async" />
+          <div>
+            <strong>Health Vibe AI</strong>
+            <span>Secure account login</span>
+          </div>
         </div>
+        <button id="authLanguageToggle" type="button" class="lang-toggle" onclick="if(typeof toggleAppLanguage==='function'){toggleAppLanguage();}else{applyLanguage(currentLanguage==='ar'?'en':'ar');}" aria-label="Switch language" title="Switch language" style="margin-inline-start:auto; margin-inline-end:36px;">
+          <span class="lang-globe">🌐</span>
+          <span class="lang-label">العربية</span>
+        </button>
       </div>
       <div id="authErrorBanner" class="auth-error-banner" role="alert"></div>
 

@@ -1496,16 +1496,18 @@ function applyLanguage(language) {
     if (element._rawLabel) element.setAttribute("aria-label", localized(element._rawLabel));
   });
 
-  // 7. Language Toggle button label
-  if (languageToggle) {
-    const langLabel = languageToggle.querySelector(".lang-label");
+  // 7. Update all Language Toggle buttons (topbar, landing header, auth modal)
+  const allLangButtons = document.querySelectorAll("#languageToggle, #siteLanguageToggle, #authLanguageToggle, .lang-toggle");
+  allLangButtons.forEach((btn) => {
+    const langLabel = btn.querySelector(".lang-label");
     if (langLabel) {
-      langLabel.textContent = language === "ar" ? "EN" : "AR";
-      languageToggle.title = language === "ar" ? "Switch to English" : "Switch to Arabic";
+      langLabel.textContent = language === "ar" ? "English" : "العربية";
     } else {
-      languageToggle.textContent = language === "ar" ? "EN" : "AR";
+      btn.textContent = language === "ar" ? "English" : "العربية";
     }
-  }
+    btn.title = language === "ar" ? "Switch to English" : "التبديل إلى اللغة العربية";
+    btn.setAttribute("aria-label", language === "ar" ? "Switch interface to English" : "تبديل الواجهة إلى العربية");
+  });
 
   // 8. Refresh theme UI labels with localized text
   applyTheme(document.body.classList.contains("dark") ? "dark" : "light");
@@ -16643,10 +16645,21 @@ if (chatInputField) {
   });
 }
 
-languageToggle.addEventListener("click", () => {
+function toggleAppLanguage() {
   const nextLanguage = currentLanguage === "ar" ? "en" : "ar";
   applyLanguage(nextLanguage);
-  showToast(nextLanguage === "ar" ? "الواجهة مضبوطة على العربية" : "Interface set to English");
+  if (typeof showToast === "function") {
+    showToast(nextLanguage === "ar" ? "الواجهة مضبوطة على العربية" : "Interface set to English");
+  }
+}
+window.toggleAppLanguage = toggleAppLanguage;
+
+// Attach click listener to all language switcher buttons
+document.querySelectorAll("#languageToggle, #siteLanguageToggle, #authLanguageToggle, .lang-toggle").forEach((btn) => {
+  btn.addEventListener("click", (e) => {
+    e.preventDefault();
+    toggleAppLanguage();
+  });
 });
 
 menuToggle.addEventListener("click", () => {
