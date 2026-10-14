@@ -7020,3 +7020,22 @@ body.dark .thread-direct-action-card {
   }
 }
 
+/* =============================================================================
+ * 🚨 PRD Section 18: Prominent & Permanent Clinical Medical Disclaimer
+ * ============================================================================= */
+.prd-medical-disclaimer-box {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 4px 18px rgba(239, 68, 68, 0.08);
+}
+
+.prd-medical-disclaimer-box:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 24px rgba(239, 68, 68, 0.14);
+}
+
+@media (max-width: 640px) {
+  .prd-medical-disclaimer-box {
+    padding: 14px 14px !important;
+    gap: 10px !important;
+  }
+}

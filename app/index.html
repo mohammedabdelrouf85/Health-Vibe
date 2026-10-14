@@ -1128,6 +1128,24 @@
             <div class="clinical-note">هذه البيانات لا تتحول إلى تقرير للمريض إلا بعد اعتماد الطبيب.</div>
           </article>
         </div>
+
+        <!-- PRD Page 21: Prominent & Permanent Clinical Medical Disclaimer (Assessment Screen) -->
+        <aside class="prd-medical-disclaimer-box" role="note" aria-label="Medical Disclaimer" style="margin-top: 20px; padding: 16px 20px; background: rgba(239, 68, 68, 0.05); border: 1.5px solid rgba(239, 68, 68, 0.28); border-radius: 14px; display: flex; gap: 14px; align-items: flex-start; line-height: 1.6;">
+          <span style="font-size: 24px; flex-shrink: 0; line-height: 1;">🚨</span>
+          <div style="flex: 1;">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 6px;">
+              <strong style="color: #dc2626; font-size: 13.5px; font-weight: 800;" data-i18n="legal.prdDisclaimerTitle">
+                تنبيه وإخلاء مسؤولية طبي معتمد (PRD)
+              </strong>
+              <button type="button" onclick="openLegalModal('disclaimer')" style="background: none; border: none; color: var(--teal); font-size: 12px; font-weight: 700; text-decoration: underline; cursor: pointer; padding: 0;">
+                <span data-i18n="legal.tabDisclaimer">🚨 إخلاء المسؤولية الطبي الكامل</span> ↗
+              </button>
+            </div>
+            <p style="margin: 0; font-size: 12.5px; color: var(--ink); opacity: 0.92;" data-i18n="legal.prdDisclaimerBody">
+              المعلومات والنتائج المقدمة عبر HealthVibe AI هي لأغراض التوعية ودعم القرار الطبي فقط، ولا تُعد تشخيصاً طبياً مستقلاً أو بديلاً عن تقييم طبيب مؤهل. يجب مراجعة النتائج مع طبيب قبل اتخاذ أي قرار علاجي. في حالات الطوارئ أو الأعراض الشديدة، يجب طلب الرعاية الطبية العاجلة من الجهات المختصة فوراً.
+            </p>
+          </div>
+        </aside>
       </section>
 
       <section id="screen-pending" class="screen">
@@ -1167,6 +1185,24 @@
         <div id="resultContainer">
           <!-- Dynamically rendered via renderResultScreen() -->
         </div>
+
+        <!-- PRD Page 21: Permanent Static Disclaimer Anchor on Result View -->
+        <aside id="resultStaticPrdDisclaimer" class="prd-medical-disclaimer-box" role="note" aria-label="Medical Disclaimer" style="margin-top: 20px; padding: 16px 20px; background: rgba(239, 68, 68, 0.05); border: 1.5px solid rgba(239, 68, 68, 0.28); border-radius: 14px; display: flex; gap: 14px; align-items: flex-start; line-height: 1.6;">
+          <span style="font-size: 24px; flex-shrink: 0; line-height: 1;">🚨</span>
+          <div style="flex: 1;">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 6px;">
+              <strong style="color: #dc2626; font-size: 13.5px; font-weight: 800;" data-i18n="legal.prdDisclaimerTitle">
+                تنبيه وإخلاء مسؤولية طبي معتمد (PRD)
+              </strong>
+              <button type="button" onclick="openLegalModal('disclaimer')" style="background: none; border: none; color: var(--teal); font-size: 12px; font-weight: 700; text-decoration: underline; cursor: pointer; padding: 0;">
+                <span data-i18n="legal.tabDisclaimer">🚨 إخلاء المسؤولية الطبي الكامل</span> ↗
+              </button>
+            </div>
+            <p style="margin: 0; font-size: 12.5px; color: var(--ink); opacity: 0.92;" data-i18n="legal.prdDisclaimerBody">
+              المعلومات والنتائج المقدمة عبر HealthVibe AI هي لأغراض التوعية ودعم القرار الطبي فقط، ولا تُعد تشخيصاً طبياً مستقلاً أو بديلاً عن تقييم طبيب مؤهل. يجب مراجعة النتائج مع طبيب قبل اتخاذ أي قرار علاجي. في حالات الطوارئ أو الأعراض الشديدة، يجب طلب الرعاية الطبية العاجلة من الجهات المختصة فوراً.
+            </p>
+          </div>
+        </aside>
       </section>
 
       <section id="screen-history" class="screen">

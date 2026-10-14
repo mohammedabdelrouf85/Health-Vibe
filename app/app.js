@@ -9594,6 +9594,26 @@ async function renderResultScreen() {
             </div>
           </article>
         </div>
+
+        <!-- PRD Page 21: Prominent & Permanent Clinical Medical Disclaimer (Result Screen - Locked State) -->
+        <aside class="prd-medical-disclaimer-box" role="note" aria-label="Medical Disclaimer" style="margin-top: 20px; padding: 16px 20px; background: rgba(239, 68, 68, 0.05); border: 1.5px solid rgba(239, 68, 68, 0.28); border-radius: 14px; display: flex; gap: 14px; align-items: flex-start; line-height: 1.6;">
+          <span style="font-size: 24px; flex-shrink: 0; line-height: 1;">🚨</span>
+          <div style="flex: 1;">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 6px;">
+              <strong style="color: #dc2626; font-size: 13.5px; font-weight: 800;" data-i18n="legal.prdDisclaimerTitle">
+                ${isEn ? "Approved Medical Disclaimer (PRD)" : "تنبيه وإخلاء مسؤولية طبي معتمد (PRD)"}
+              </strong>
+              <button type="button" onclick="openLegalModal('disclaimer')" style="background: none; border: none; color: var(--teal); font-size: 12px; font-weight: 700; text-decoration: underline; cursor: pointer; padding: 0;">
+                <span data-i18n="legal.tabDisclaimer">${isEn ? "🚨 Full Medical Disclaimer" : "🚨 إخلاء المسؤولية الطبي الكامل"}</span> ↗
+              </button>
+            </div>
+            <p style="margin: 0; font-size: 12.5px; color: var(--ink); opacity: 0.92;" data-i18n="legal.prdDisclaimerBody">
+              ${isEn
+                ? "HealthVibe AI provides informational and clinical decision-support outputs only. It does not provide an independent medical diagnosis and is not a substitute for evaluation by a qualified healthcare professional. Results should be reviewed by a clinician before treatment decisions are made. In an emergency or with severe symptoms, seek urgent medical care immediately."
+                : "المعلومات والنتائج المقدمة عبر HealthVibe AI هي لأغراض التوعية ودعم القرار الطبي فقط، ولا تُعد تشخيصاً طبياً مستقلاً أو بديلاً عن تقييم طبيب مؤهل. يجب مراجعة النتائج مع طبيب قبل اتخاذ أي قرار علاجي. في حالات الطوارئ أو الأعراض الشديدة، يجب طلب الرعاية الطبية العاجلة من الجهات المختصة فوراً."}
+            </p>
+          </div>
+        </aside>
       `;
       return;
     }
@@ -9629,6 +9649,26 @@ async function renderResultScreen() {
           </button>
         </article>
       </div>
+
+      <!-- PRD Page 21: Prominent & Permanent Clinical Medical Disclaimer (Result Screen - Approved State) -->
+      <aside class="prd-medical-disclaimer-box" role="note" aria-label="Medical Disclaimer" style="margin-top: 20px; padding: 16px 20px; background: rgba(239, 68, 68, 0.05); border: 1.5px solid rgba(239, 68, 68, 0.28); border-radius: 14px; display: flex; gap: 14px; align-items: flex-start; line-height: 1.6;">
+        <span style="font-size: 24px; flex-shrink: 0; line-height: 1;">🚨</span>
+        <div style="flex: 1;">
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 6px;">
+            <strong style="color: #dc2626; font-size: 13.5px; font-weight: 800;" data-i18n="legal.prdDisclaimerTitle">
+              ${isEn ? "Approved Medical Disclaimer (PRD)" : "تنبيه وإخلاء مسؤولية طبي معتمد (PRD)"}
+            </strong>
+            <button type="button" onclick="openLegalModal('disclaimer')" style="background: none; border: none; color: var(--teal); font-size: 12px; font-weight: 700; text-decoration: underline; cursor: pointer; padding: 0;">
+              <span data-i18n="legal.tabDisclaimer">${isEn ? "🚨 Full Medical Disclaimer" : "🚨 إخلاء المسؤولية الطبي الكامل"}</span> ↗
+            </button>
+          </div>
+          <p style="margin: 0; font-size: 12.5px; color: var(--ink); opacity: 0.92;" data-i18n="legal.prdDisclaimerBody">
+            ${isEn
+              ? "HealthVibe AI provides informational and clinical decision-support outputs only. It does not provide an independent medical diagnosis and is not a substitute for evaluation by a qualified healthcare professional. Results should be reviewed by a clinician before treatment decisions are made. In an emergency or with severe symptoms, seek urgent medical care immediately."
+              : "المعلومات والنتائج المقدمة عبر HealthVibe AI هي لأغراض التوعية ودعم القرار الطبي فقط، ولا تُعد تشخيصاً طبياً مستقلاً أو بديلاً عن تقييم طبيب مؤهل. يجب مراجعة النتائج مع طبيب قبل اتخاذ أي قرار علاجي. في حالات الطوارئ أو الأعراض الشديدة، يجب طلب الرعاية الطبية العاجلة من الجهات المختصة فوراً."}
+          </p>
+        </div>
+      </aside>
     `;
   } catch (err) {
     console.error("renderResultScreen error:", err);
