@@ -1430,6 +1430,13 @@ function preserveSpacing(original, value) {
 function applyLanguage(language) {
   currentLanguage = language;
 
+  const targetDir = language === "ar" ? "rtl" : "ltr";
+  document.documentElement.lang = language;
+  document.documentElement.dir = targetDir;
+  if (document.body) {
+    document.body.dir = targetDir;
+  }
+
   // 1. Sync with structured i18n engine
   if (typeof window !== "undefined" && window.i18n && typeof window.i18n.setLanguage === "function") {
     window.i18n.setLanguage(language, true);
@@ -1437,8 +1444,6 @@ function applyLanguage(language) {
     try {
       localStorage.setItem("hv_lang", language);
     } catch(e) {}
-    document.documentElement.lang = language;
-    document.documentElement.dir = language === "ar" ? "rtl" : "ltr";
   }
   document.title = (window.i18n && window.i18n.t("common.appName")) || localized("Health Vibe AI");
 

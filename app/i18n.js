@@ -1787,10 +1787,16 @@
         }
       } catch (e) {}
 
-      // Update HTML root attributes
-      if (typeof document !== "undefined" && document.documentElement) {
-        document.documentElement.lang = lang;
-        document.documentElement.dir = this.getDirection(lang);
+      // Update HTML root and body attributes explicitly to prevent layout inversion and icon overlapping
+      const targetDir = this.getDirection(lang);
+      if (typeof document !== "undefined") {
+        if (document.documentElement) {
+          document.documentElement.lang = lang;
+          document.documentElement.dir = targetDir;
+        }
+        if (document.body) {
+          document.body.dir = targetDir;
+        }
       }
 
       // Translate DOM declaratively if requested

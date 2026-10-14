@@ -1617,8 +1617,12 @@
         console.warn("Could not save language to localStorage:", e);
       }
 
+      const targetDir = lang === "ar" ? "rtl" : "ltr";
       document.documentElement.lang = lang;
-      document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
+      document.documentElement.dir = targetDir;
+      if (document.body) {
+        document.body.dir = targetDir;
+      }
       
       const toggleBtn = document.getElementById("clinicLangToggle");
       if (toggleBtn) {

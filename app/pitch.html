@@ -1059,6 +1059,9 @@
       isEnglish = lang === "en";
       document.documentElement.lang = lang;
       document.documentElement.dir = isEnglish ? "ltr" : "rtl";
+      if (document.body) {
+        document.body.dir = isEnglish ? "ltr" : "rtl";
+      }
 
       try {
         localStorage.setItem("hv_lang", lang);
