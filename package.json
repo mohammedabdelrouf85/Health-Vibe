@@ -48,6 +48,7 @@
     "test:doctor-queue": "node tests/doctor_queue_filters.test.js",
     "test:env": "node tests/environment_config.test.js",
     "test:appointments": "node tests/appointments_booking.test.js",
+    "test:appointments-audit": "node tests/appointments_full_audit_matrix.test.js",
     "test:concurrency": "node tests/appointments_concurrency_and_schedules.test.js",
     "test:appointments-lifecycle": "node tests/appointments_lifecycle_and_rbac.test.js",
     "test:notifications": "node tests/email_notifications.test.js",

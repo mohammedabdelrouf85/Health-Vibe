@@ -1986,6 +1986,92 @@ function clearPreferencesLog() {
   inMemoryUserPreferences.clear();
 }
 
+/**
+ * Emits reliable appointment notification events and logs security audit trail.
+ */
+async function emitAppointmentNotificationEvent(db, { type, appointment, actorUser, details = {} }) {
+  if (!db || typeof db.collection !== 'function') return;
+
+  const nowIso = new Date().toISOString();
+  const recipientEmail = appointment.patientEmail || details.recipientEmail;
+
+  let subject = '';
+  if (type === 'APPOINTMENT_BOOKED') {
+    subject = `✅ تأكيد حجز موعدك الطبي - Health Vibe AI (${appointment.date} ${appointment.timeSlot || ''})`;
+  } else if (type === 'APPOINTMENT_RESCHEDULED') {
+    subject = `🔄 تم تعديل موعدك الطبي بنجاح - Health Vibe AI (${appointment.date} ${appointment.timeSlot || ''})`;
+  } else if (type === 'APPOINTMENT_CANCELLED') {
+    subject = `❌ إشعار بإلغاء موعدك الطبي - Health Vibe AI (${appointment.date})`;
+  } else if (type === 'APPOINTMENT_STATUS_CHANGED') {
+    subject = `📋 تحديث حالة موعدك الطبي: ${appointment.status} - Health Vibe AI`;
+  } else if (type === 'APPOINTMENT_WAITING_LIST_SLOT_OFFERED') {
+    subject = `⚡ عرض موعد شاغر متاح لك - Health Vibe AI (${appointment.date} ${appointment.timeSlot || ''})`;
+  }
+
+  // 1. Record email notification record
+  if (recipientEmail) {
+    try {
+      const notifData = {
+        appointmentId: appointment.id,
+        type: type.toLowerCase(),
+        recipient: recipientEmail,
+        patientName: appointment.patientName || null,
+        doctorName: appointment.doctorName || null,
+        clinicId: appointment.clinicId || null,
+        clinicName: appointment.clinicName || null,
+        date: appointment.date,
+        timeSlot: appointment.timeSlot,
+        subject,
+        status: 'sent',
+        sentAt: nowIso,
+        details: {
+          actorUid: actorUser?.uid || 'system',
+          actorRole: actorUser?.role || 'patient',
+          reason: details.reason || null,
+          previousDate: details.previousDate || null,
+          previousSlotId: details.previousSlotId || null,
+          ...details
+        }
+      };
+
+      const colRef = db.collection('email_notifications');
+      if (typeof colRef.add === 'function') {
+        await colRef.add(notifData);
+      } else if (typeof colRef.doc === 'function') {
+        const notifId = `notif_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+        await colRef.doc(notifId).set(notifData);
+      }
+    } catch (err) {
+      console.warn('[NOTIFICATION WARNING] Failed to persist email_notification:', err.message);
+    }
+  }
+
+  // 2. Record audit event
+  try {
+    const auditService = require('./audit-service');
+    if (typeof auditService?.recordAuditEvent === 'function') {
+      await auditService.recordAuditEvent(db, {
+        type: type,
+        actorUid: actorUser?.uid || 'system',
+        actorRole: actorUser?.role || 'patient',
+        targetUserId: appointment.patientId,
+        clinicId: appointment.clinicId || null,
+        details: {
+          appointmentId: appointment.id,
+          doctorId: appointment.doctorId,
+          date: appointment.date,
+          slotId: appointment.slotId,
+          status: appointment.status,
+          reason: details.reason || null,
+          ...details
+        }
+      });
+    }
+  } catch (err) {
+    console.warn('[AUDIT WARNING] Failed to record appointment audit event:', err.message);
+  }
+}
+
 module.exports = {
   NOTIFICATION_STATUS,
   NOTIFICATION_TYPES,
@@ -2005,6 +2091,7 @@ module.exports = {
   scheduleAppointmentReminder,
   cancelAppointmentReminders,
   rescheduleAppointmentReminders,
+  emitAppointmentNotificationEvent,
   startReminderScheduler,
   stopReminderScheduler,
   getSentEmailsLog,

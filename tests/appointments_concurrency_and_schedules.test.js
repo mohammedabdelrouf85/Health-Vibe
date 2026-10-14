@@ -425,9 +425,18 @@ console.log("\n▶ TEST 6: Confirmation Guard and Cancellation Slot Release");
 async function testConfirmationAndCancellation() {
   const db = createMockFirestore();
   const patient = { uid: 'patient_cand_1', email: 'cand1@example.com' };
+
+  // Resolve a future working date for Dr. Mona (Sun-Thu)
+  const d = new Date();
+  d.setDate(d.getDate() + 3);
+  while (d.getDay() === 5 || d.getDay() === 6) {
+    d.setDate(d.getDate() + 1);
+  }
+  const testFutureDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
   const bookingPayload = {
     doctorId: 'dr_mona',
-    date: '2026-10-04',
+    date: testFutureDate,
     slotId: 'slot_1600',
     patientId: 'patient_cand_1',
     // Client sent pending_confirmation
@@ -440,11 +449,11 @@ async function testConfirmationAndCancellation() {
   assert(confirmedAppt.confirmedAt, "confirmedAt timestamp must be stamped");
 
   // Verify doctor slot is now locked
-  const lockKey = schedulingService.getDoctorSlotKey('dr_mona', '2026-10-04', 'slot_1600');
+  const lockKey = schedulingService.getDoctorSlotKey('dr_mona', testFutureDate, 'slot_1600');
   const patient2 = { uid: 'patient_cand_2', email: 'cand2@example.com' };
   const secondAttempt = {
     doctorId: 'dr_mona',
-    date: '2026-10-04',
+    date: testFutureDate,
     slotId: 'slot_1600',
     patientId: 'patient_cand_2'
   };
