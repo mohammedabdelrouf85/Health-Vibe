@@ -1134,12 +1134,54 @@
       }
     }
 
-    // Keyboard navigation
+    // Export navigation functions to window for onclick and external controllers
+    window.nextSlide = nextSlide;
+    window.prevSlide = prevSlide;
+    window.showSlide = showSlide;
+    window.toggleDeckLang = toggleDeckLang;
+
+    // Attach direct DOM event listeners to guarantee execution regardless of inline handlers
+    const prevBtnEl = document.getElementById("btnPrevSlide");
+    if (prevBtnEl) {
+      prevBtnEl.addEventListener("click", (e) => {
+        e.preventDefault();
+        prevSlide();
+      });
+    }
+
+    const nextBtnEl = document.getElementById("btnNextSlide");
+    if (nextBtnEl) {
+      nextBtnEl.addEventListener("click", (e) => {
+        e.preventDefault();
+        nextSlide();
+      });
+    }
+
+    // Keyboard navigation (Arrow keys, Space, PageUp, PageDown)
     document.addEventListener("keydown", (e) => {
-      if (e.key === "ArrowRight") {
-        document.documentElement.dir === "rtl" ? prevSlide() : nextSlide();
-      } else if (e.key === "ArrowLeft" || e.key === " ") {
-        document.documentElement.dir === "rtl" ? nextSlide() : prevSlide();
+      // Ignore if user is inside an input or textarea
+      if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
+
+      const isRtl = document.documentElement.dir === "rtl" || (document.body && document.body.dir === "rtl");
+
+      if (e.key === "ArrowRight" || e.keyCode === 39) {
+        e.preventDefault();
+        isRtl ? prevSlide() : nextSlide();
+      } else if (e.key === "ArrowLeft" || e.keyCode === 37) {
+        e.preventDefault();
+        isRtl ? nextSlide() : prevSlide();
+      } else if (e.key === " " || e.key === "PageDown" || e.keyCode === 32 || e.keyCode === 34) {
+        e.preventDefault();
+        nextSlide();
+      } else if (e.key === "PageUp" || e.keyCode === 33) {
+        e.preventDefault();
+        prevSlide();
+      } else if (e.key === "Home" || e.keyCode === 36) {
+        e.preventDefault();
+        showSlide(1);
+      } else if (e.key === "End" || e.keyCode === 35) {
+        e.preventDefault();
+        showSlide(totalSlides);
       }
     });
 
@@ -1150,6 +1192,7 @@
         if (document.exitFullscreen) document.exitFullscreen();
       }
     }
+    window.toggleFullscreen = toggleFullscreen;
 
     // Initialize Deck with language and initial slide
     initDeckLanguage();
