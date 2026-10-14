@@ -82,36 +82,86 @@
   <div id="srStatus" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
 
   <main id="publicSite" class="site-shell is-hidden">
-    <header class="site-nav">
-      <div class="brand">
-        <img src="./logo-dark-mark.webp" alt="Health Vibe AI logo" class="brand-logo" data-logo-mark decoding="async" />
-        <div>
-          <strong>Health Vibe AI</strong>
-          <span>AI-supported healthcare reviewed by doctors</span>
+    <header class="site-nav" id="siteNav">
+      <div class="site-nav-bar">
+        <div class="brand">
+          <img src="./logo-dark-mark.webp" alt="Health Vibe AI logo" class="brand-logo" data-logo-mark decoding="async" />
+          <div>
+            <strong>Health Vibe AI</strong>
+            <span class="brand-subtitle">AI-supported healthcare reviewed by doctors</span>
+          </div>
         </div>
+        <nav class="site-links" aria-label="Site navigation">
+          <a href="#workflow" data-i18n="nav.workflow">Workflow</a>
+          <a href="#roles" data-i18n="nav.accounts">Accounts</a>
+          <a href="#safety" data-i18n="nav.safety">Safety</a>
+          <a href="./clinics.html" style="color: var(--teal); font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
+            <span>🏥</span>
+            <span id="siteHeaderClinicsLink" data-i18n="nav.forClinics">For Clinics</span>
+          </a>
+          <a href="./pitch.html" target="_blank" rel="noopener" style="color: #38bdf8; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">📽️ Pitch Deck</a>
+        </nav>
+        <div class="nav-actions">
+          <button id="siteThemeToggle" type="button" style="display:none !important;" aria-hidden="true"></button>
+          <button id="siteBackToAppBtn" type="button" class="solid-button" onclick="showAppView(event)" style="display:none; align-items:center; gap:6px; background:linear-gradient(135deg, var(--teal), #00796b); font-weight:700;">
+            <span>📱</span>
+            <span>لوحة التحكم (App)</span>
+          </button>
+          <button id="siteLanguageToggle" type="button" class="lang-toggle" onclick="if(typeof toggleAppLanguage==='function'){toggleAppLanguage();}else{applyLanguage(currentLanguage==='ar'?'en':'ar');}" aria-label="Switch language" title="Switch language">
+            <span class="lang-globe">🌐</span>
+            <span class="lang-label">العربية</span>
+          </button>
+          <button type="button" class="outline-button" data-auth-open onclick="if(typeof setAuthMode==='function') setAuthMode('signin'); showAuth();">Sign in</button>
+          <button type="button" class="solid-button" data-auth-open onclick="if(typeof setAuthMode==='function') setAuthMode('signup'); showAuth();">Get started</button>
+        </div>
+
+        <!-- Mobile Hamburger Button (< 768px, < 375px) -->
+        <button type="button" class="site-hamburger-btn" id="siteNavHamburger" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="siteNavDrawer" onclick="toggleSiteNavMenu()">
+          <span class="hamburger-bar"></span>
+          <span class="hamburger-bar"></span>
+          <span class="hamburger-bar"></span>
+        </button>
       </div>
-      <nav class="site-links" aria-label="Site navigation">
-        <a href="#workflow">Workflow</a>
-        <a href="#roles">Accounts</a>
-        <a href="#safety">Safety</a>
-        <a href="./clinics.html" style="color: var(--teal); font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
-          <span>🏥</span>
-          <span id="siteHeaderClinicsLink" data-i18n="nav.forClinics">For Clinics</span>
-        </a>
-        <a href="./pitch.html" target="_blank" rel="noopener" style="color: #38bdf8; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">📽️ Pitch Deck</a>
-      </nav>
-      <div class="nav-actions">
-        <button id="siteThemeToggle" type="button" style="display:none !important;" aria-hidden="true"></button>
-        <button id="siteBackToAppBtn" type="button" class="solid-button" onclick="showAppView(event)" style="display:none; align-items:center; gap:6px; background:linear-gradient(135deg, var(--teal), #00796b); font-weight:700;">
-          <span>📱</span>
-          <span>لوحة التحكم (App)</span>
-        </button>
-        <button id="siteLanguageToggle" type="button" class="lang-toggle" onclick="if(typeof toggleAppLanguage==='function'){toggleAppLanguage();}else{applyLanguage(currentLanguage==='ar'?'en':'ar');}" aria-label="Switch language" title="Switch language">
-          <span class="lang-globe">🌐</span>
-          <span class="lang-label">العربية</span>
-        </button>
-        <button type="button" class="outline-button" data-auth-open onclick="if(typeof setAuthMode==='function') setAuthMode('signin'); showAuth();">Sign in</button>
-        <button type="button" class="solid-button" data-auth-open onclick="if(typeof setAuthMode==='function') setAuthMode('signup'); showAuth();">Get started</button>
+
+      <!-- Responsive Mobile Navigation Drawer -->
+      <div class="site-nav-drawer" id="siteNavDrawer" aria-hidden="true">
+        <nav class="drawer-links" aria-label="Mobile Navigation Links">
+          <a href="#workflow" onclick="closeSiteNavMenu()">
+            <span class="drawer-icon">🧭</span>
+            <span data-i18n="nav.workflow">Workflow</span>
+          </a>
+          <a href="#roles" onclick="closeSiteNavMenu()">
+            <span class="drawer-icon">👥</span>
+            <span data-i18n="nav.accounts">Accounts</span>
+          </a>
+          <a href="#safety" onclick="closeSiteNavMenu()">
+            <span class="drawer-icon">🛡️</span>
+            <span data-i18n="nav.safety">Safety</span>
+          </a>
+          <a href="./clinics.html" onclick="closeSiteNavMenu()" style="color: var(--teal); font-weight: 700;">
+            <span class="drawer-icon">🏥</span>
+            <span id="siteDrawerClinicsLink" data-i18n="nav.forClinics">For Clinics</span>
+          </a>
+          <a href="./pitch.html" target="_blank" rel="noopener" onclick="closeSiteNavMenu()" style="color: #38bdf8; font-weight: 700;">
+            <span class="drawer-icon">📽️</span>
+            <span>Pitch Deck</span>
+          </a>
+        </nav>
+
+        <div class="drawer-divider"></div>
+
+        <div class="drawer-actions">
+          <button id="siteDrawerLanguageToggle" type="button" class="lang-toggle drawer-lang-btn" onclick="if(typeof toggleAppLanguage==='function'){toggleAppLanguage();}else{applyLanguage(currentLanguage==='ar'?'en':'ar');}" aria-label="Switch language" title="Switch language">
+            <span class="lang-globe">🌐</span>
+            <span class="lang-label">العربية</span>
+          </button>
+          <button id="siteDrawerBackToAppBtn" type="button" class="solid-button drawer-app-btn" onclick="closeSiteNavMenu(); showAppView(event);" style="display:none;">
+            <span>📱</span>
+            <span>لوحة التحكم (App)</span>
+          </button>
+          <button type="button" class="outline-button drawer-action-btn" data-auth-open onclick="closeSiteNavMenu(); if(typeof setAuthMode==='function') setAuthMode('signin'); showAuth();">Sign in</button>
+          <button type="button" class="solid-button drawer-action-btn" data-auth-open onclick="closeSiteNavMenu(); if(typeof setAuthMode==='function') setAuthMode('signup'); showAuth();">Get started</button>
+        </div>
       </div>
     </header>
 

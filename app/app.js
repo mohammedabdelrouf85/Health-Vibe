@@ -1472,10 +1472,19 @@ function applyLanguage(language) {
     }
   });
 
-  // Direct update for landing header clinics link
+  // Direct update for landing header clinics link (desktop + mobile drawer)
   const siteHeaderClinicsLink = document.getElementById("siteHeaderClinicsLink");
   if (siteHeaderClinicsLink) {
     siteHeaderClinicsLink.textContent = language === "ar" ? "للعيادات" : "For Clinics";
+  }
+  const siteDrawerClinicsLink = document.getElementById("siteDrawerClinicsLink");
+  if (siteDrawerClinicsLink) {
+    siteDrawerClinicsLink.textContent = language === "ar" ? "للعيادات" : "For Clinics";
+  }
+  const siteNavHamburger = document.getElementById("siteNavHamburger");
+  if (siteNavHamburger) {
+    const isOpen = siteNavHamburger.classList.contains("is-active");
+    siteNavHamburger.setAttribute("aria-label", isOpen ? (language === "ar" ? "إغلاق القائمة" : "Close menu") : (language === "ar" ? "فتح القائمة" : "Open menu"));
   }
 
   // 3. Direct update for logout button
@@ -6206,14 +6215,74 @@ function transitionToApp(user, options = {}) {
 
 window.transitionToApp = transitionToApp;
 
+function updateSiteBackToAppButtons(visible) {
+  const isVis = (typeof visible === "boolean") ? visible : !!(auth && auth.currentUser);
+  const displayVal = isVis ? "inline-flex" : "none";
+  const siteBackBtn = document.getElementById("siteBackToAppBtn");
+  const drawerBackBtn = document.getElementById("siteDrawerBackToAppBtn");
+  if (siteBackBtn) siteBackBtn.style.display = displayVal;
+  if (drawerBackBtn) drawerBackBtn.style.display = displayVal;
+}
+window.updateSiteBackToAppButtons = updateSiteBackToAppButtons;
+
+function toggleSiteNavMenu(forceState) {
+  const siteNav = document.getElementById("siteNav");
+  const toggleBtn = document.getElementById("siteNavHamburger");
+  const drawer = document.getElementById("siteNavDrawer");
+  if (!siteNav || !toggleBtn || !drawer) return;
+
+  const isOpen = typeof forceState === "boolean" ? forceState : !siteNav.classList.contains("is-open");
+  siteNav.classList.toggle("is-open", isOpen);
+  toggleBtn.classList.toggle("is-active", isOpen);
+  toggleBtn.setAttribute("aria-expanded", String(isOpen));
+  const isEn = (typeof currentLanguage !== "undefined" && currentLanguage === "en");
+  toggleBtn.setAttribute("aria-label", isOpen ? (isEn ? "Close menu" : "إغلاق القائمة") : (isEn ? "Open menu" : "فتح القائمة"));
+  drawer.setAttribute("aria-hidden", String(!isOpen));
+}
+
+function closeSiteNavMenu() {
+  toggleSiteNavMenu(false);
+}
+
+window.toggleSiteNavMenu = toggleSiteNavMenu;
+window.closeSiteNavMenu = closeSiteNavMenu;
+
+// Close mobile hamburger menu on outside clicks, Escape key, or desktop resize
+if (typeof document !== "undefined") {
+  document.addEventListener("click", (e) => {
+    const siteNav = document.getElementById("siteNav");
+    if (siteNav && siteNav.classList.contains("is-open")) {
+      if (!siteNav.contains(e.target)) {
+        closeSiteNavMenu();
+      }
+    }
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      const siteNav = document.getElementById("siteNav");
+      if (siteNav && siteNav.classList.contains("is-open")) {
+        closeSiteNavMenu();
+        const toggleBtn = document.getElementById("siteNavHamburger");
+        if (toggleBtn) toggleBtn.focus();
+      }
+    }
+  });
+
+  window.addEventListener("resize", () => {
+    if (window.innerWidth > 768) {
+      closeSiteNavMenu();
+    }
+  });
+}
+
 function showPublicLandingPage() {
   if (publicSite) {
     publicSite.hidden = false;
     publicSite.removeAttribute("hidden");
     publicSite.style.display = "block";
     publicSite.classList.remove("is-hidden");
-    const siteBackBtn = document.getElementById("siteBackToAppBtn");
-    if (siteBackBtn) siteBackBtn.style.display = "inline-flex";
+    updateSiteBackToAppButtons(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 }
@@ -6604,10 +6673,7 @@ function showSignedOutUI() {
     publicSite.style.display = "block";
     publicSite.classList.remove("is-hidden");
   }
-  const siteBackBtn = document.getElementById("siteBackToAppBtn");
-  if (siteBackBtn) {
-    siteBackBtn.style.display = "none";
-  }
+  updateSiteBackToAppButtons(false);
   const lockScreen = document.getElementById("idleLockScreen");
   if (lockScreen) {
     lockScreen.style.display = "none";
@@ -7409,10 +7475,7 @@ function updateNavVisibility() {
   if (docApplyCard) {
     docApplyCard.style.display = (selectedRole === ROLES.PATIENT) ? "block" : "none";
   }
-  const siteBackBtn = document.getElementById("siteBackToAppBtn");
-  if (siteBackBtn) {
-    siteBackBtn.style.display = (auth && auth.currentUser) ? "inline-flex" : "none";
-  }
+  updateSiteBackToAppButtons();
   if (typeof updateMobileBottomNav === "function") {
     updateMobileBottomNav();
   }

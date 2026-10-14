@@ -114,7 +114,10 @@
         diabetes: "داء السكري",
         hypertension: "ارتفاع ضغط الدم",
         bloodDisorders: "تجلط الدم / اضطرابات الدم",
-        obesity: "السمنة"
+        obesity: "السمنة",
+        workflow: "المسار",
+        accounts: "الحسابات",
+        safety: "الأمان"
       },
       roles: {
         patient: "حساب مريض",
@@ -920,7 +923,10 @@
         diabetes: "Diabetes",
         hypertension: "Hypertension",
         bloodDisorders: "Blood Clotting / Blood Disorders",
-        obesity: "Obesity"
+        obesity: "Obesity",
+        workflow: "Workflow",
+        accounts: "Accounts",
+        safety: "Safety"
       },
       roles: {
         patient: "Patient account",
