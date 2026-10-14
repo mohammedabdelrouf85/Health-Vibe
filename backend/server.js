@@ -84,6 +84,7 @@ const obesityService = require('./obesity-service');
 const diseaseAuthorizationService = require('./disease-authorization-service');
 const { relationalDbService } = require('./relational-db-service');
 const { kaggleTrainingService } = require('./kaggle-training-service');
+const { passwordSecurityService } = require('./password-security-service');
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -4359,6 +4360,35 @@ app.post('/api/user/revoke-all-sessions', requireAuth, requireRecentAuth(900), r
 });
 
 /**
+ * GET /api/auth/password-security-policy
+ * Exposes cryptographic password hashing specifications and zero-plaintext guarantees (Request 31).
+ */
+app.get('/api/auth/password-security-policy', (req, res) => {
+  res.json({
+    success: true,
+    policy: 'STRICT_ARGON2ID_AND_BCRYPT_ZERO_PLAINTEXT_POLICY',
+    supportedAlgorithms: ['bcrypt', 'argon2id'],
+    defaultAlgorithm: 'bcrypt',
+    bcryptCostFactor: passwordSecurityService.bcryptRounds,
+    argon2idParams: {
+      memoryCostKb: 16384,
+      timeCost: 2,
+      parallelism: 1,
+      version: 19
+    },
+    zeroPlaintextGuaranteed: true,
+    storageRule: 'Plaintext passwords strictly prohibited from storage in any environment (dev, staging, prod)',
+    requirements: {
+      minLength: 8,
+      maxLength: 128,
+      requireUppercase: true,
+      requireLowercase: true,
+      requireDigit: true
+    }
+  });
+});
+
+/**
  * POST /api/user/change-password
  * Secure password change requiring recent re-authentication and revoking other active sessions
  */
@@ -4395,6 +4425,18 @@ app.post('/api/user/change-password', requireAuth, requireRecentAuth(900), requi
       password: newPassword
     });
 
+    // Zero-Plaintext Security: Hash password using bcrypt for operational relational database
+    const hashed = await passwordSecurityService.hashPassword(newPassword);
+    const relationalAccId = relationalDbService.indexes.accounts_firebase_uid.get(userId);
+    if (relationalAccId) {
+      const relAcc = relationalDbService.tables.accounts.get(relationalAccId);
+      if (relAcc) {
+        relAcc.password_hash = hashed;
+        relAcc.updated_at = new Date().toISOString();
+        relAcc.password_last_changed_at = new Date().toISOString();
+      }
+    }
+
     // Revoke refresh tokens on other devices to force re-authentication with the new password
     await admin.auth().revokeRefreshTokens(userId).catch(() => {});
     const nowIso = new Date().toISOString();
@@ -4413,7 +4455,7 @@ app.post('/api/user/change-password', requireAuth, requireRecentAuth(900), requi
       auditService.recordAuditEvent(db, {
         type: auditService.AUDIT_EVENT_TYPES.PASSWORD_CHANGED,
         req,
-        details: { changedAt: nowIso }
+        details: { changedAt: nowIso, passwordHashed: true, algorithm: 'bcrypt' }
       }).catch(() => {});
     }
 

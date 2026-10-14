@@ -18,6 +18,7 @@
 
 const crypto = require("crypto");
 const { kaggleTrainingService } = require("./kaggle-training-service");
+const { passwordSecurityService } = require("./password-security-service");
 
 class RelationalDatabaseService {
   constructor(options = {}) {
@@ -93,11 +94,26 @@ class RelationalDatabaseService {
       throw new Error(`Invalid role '${role}'. Must be one of: ${validRoles.join(", ")}`);
     }
 
+    // Zero-Plaintext Security Enforcement (Request 31)
+    let passwordHash = null;
+    if (data.password) {
+      // Raw plaintext password passed -> hash using bcrypt or argon2id
+      passwordHash = await passwordSecurityService.hashPassword(data.password, data.passwordAlgorithm || 'bcrypt');
+    } else if (data.passwordHash || data.password_hash) {
+      const candidate = data.passwordHash || data.password_hash;
+      if (!passwordSecurityService.isHashed(candidate)) {
+        const err = new Error("PLAINTEXT_PASSWORD_FORBIDDEN: Attempted to store unhashed plaintext in password_hash. Passwords must be hashed using bcrypt or Argon2id.");
+        err.code = "PLAINTEXT_PASSWORD_FORBIDDEN";
+        throw err;
+      }
+      passwordHash = candidate;
+    }
+
     const account = {
       id,
       firebase_uid: data.firebaseUid || null,
       email,
-      password_hash: data.passwordHash || null,
+      password_hash: passwordHash,
       full_name: data.fullName || "User",
       role,
       phone: data.phone || null,
@@ -112,6 +128,9 @@ class RelationalDatabaseService {
       updated_at: new Date().toISOString()
     };
 
+    // Assert that the account record itself contains ZERO plaintext password
+    passwordSecurityService.assertNoPlaintextPassword(account, "Accounts Table");
+
     this.tables.accounts.set(id, account);
     this.indexes.accounts_email.set(email, id);
     if (account.firebase_uid) {
@@ -124,10 +143,57 @@ class RelationalDatabaseService {
       action: "ACCOUNT_CREATED",
       resourceType: "accounts",
       resourceId: id,
-      metadata: { email, role }
+      metadata: { email, role, passwordHashed: Boolean(passwordHash) }
     });
 
-    return { ...account };
+    return passwordSecurityService.sanitizeAccountObject({ ...account });
+  }
+
+  async authenticateAccount(email, candidatePassword) {
+    const account = await this.getAccountByEmail(email);
+    if (!account || !account.password_hash) {
+      return { authenticated: false, reason: "INVALID_CREDENTIALS" };
+    }
+    const match = await passwordSecurityService.verifyPassword(candidatePassword, account.password_hash);
+    if (!match) {
+      account.failed_login_attempts = (account.failed_login_attempts || 0) + 1;
+      return { authenticated: false, reason: "INVALID_CREDENTIALS" };
+    }
+    account.failed_login_attempts = 0;
+    account.last_login_at = new Date().toISOString();
+    return { authenticated: true, account: passwordSecurityService.sanitizeAccountObject({ ...account }) };
+  }
+
+  async changePassword(accountId, oldPassword, newPassword, algorithm = 'bcrypt') {
+    const account = this.tables.accounts.get(accountId);
+    if (!account) {
+      const err = new Error("ACCOUNT_NOT_FOUND");
+      err.code = "ACCOUNT_NOT_FOUND";
+      throw err;
+    }
+    if (account.password_hash) {
+      const match = await passwordSecurityService.verifyPassword(oldPassword, account.password_hash);
+      if (!match) {
+        const err = new Error("INCORRECT_OLD_PASSWORD: The current password provided is incorrect.");
+        err.code = "INCORRECT_OLD_PASSWORD";
+        throw err;
+      }
+    }
+    const newHash = await passwordSecurityService.hashPassword(newPassword, algorithm);
+    account.password_hash = newHash;
+    account.updated_at = new Date().toISOString();
+    account.password_last_changed_at = new Date().toISOString();
+
+    await this.logAudit({
+      accountId,
+      actorRole: account.role,
+      action: "PASSWORD_CHANGED",
+      resourceType: "accounts",
+      resourceId: accountId,
+      metadata: { algorithm, passwordHashed: true }
+    });
+
+    return { success: true };
   }
 
   async getAccountById(id) {

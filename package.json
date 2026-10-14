@@ -8,6 +8,7 @@
     "test:auth-validation": "node tests/auth_strict_validation.test.js",
     "test:strict-rbac": "node tests/strict_rbac_three_tier_separation.test.js",
     "test:admin-subroles": "node tests/strict_admin_subroles_least_privilege.test.js",
+    "test:password-security": "node tests/strict_password_hashing_and_zero_plaintext.test.js",
     "test:doctor-approval-guard": "node tests/strict_verified_doctor_approval_guard.test.js",
     "test:doctor-assigned-queries": "node tests/strict_doctor_assigned_queries.test.js",
     "test:doctor-walkthrough": "node tests/doctor_review_and_wcag_links.test.js",
@@ -124,5 +125,8 @@
     "firebase-functions": "^7.4.0",
     "firebase-tools": "^15.31.0",
     "puppeteer-core": "^25.12.0"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3"
   }
 }

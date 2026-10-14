@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS accounts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     firebase_uid VARCHAR(128) UNIQUE,
     email VARCHAR(255) NOT NULL UNIQUE,
-    password_hash VARCHAR(255),
+    password_hash VARCHAR(255) CHECK (password_hash IS NULL OR password_hash ~ '^\$(2[abxy]|argon2id)\$'),
     full_name VARCHAR(150) NOT NULL,
     role VARCHAR(32) NOT NULL DEFAULT 'patient' CHECK (role IN ('patient', 'doctor', 'clinic_admin', 'support', 'ops', 'clinical_qa', 'super_admin')),
     phone VARCHAR(32),
