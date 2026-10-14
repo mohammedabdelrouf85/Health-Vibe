@@ -6427,6 +6427,17 @@ async function executeDoctorTransition({
             updateData.doctorSpecialty = doctorIdentity.specialty;
             updateData.doctorLicense = doctorIdentity.licenseNumber;
             updateData.clinicName = doctorIdentity.clinic;
+            updateData.doctorSignature = {
+              workflow: 'doctor_electronic_approval_v1',
+              status: 'signed',
+              signedAt: nowIso,
+              signedByUid: req.user.uid,
+              doctorName: doctorIdentity.name,
+              doctorLicense: doctorIdentity.licenseNumber,
+              specialty: doctorIdentity.specialty,
+              clinic: doctorIdentity.clinic,
+              verified: true
+            };
             updateData.reportRef = reportRef || `HV-REP-${caseId.slice(-8).toUpperCase()}`;
             updateData.reportGeneratedAt = reportGeneratedAt || nowIso;
             updateData.approvedAt = admin.firestore.FieldValue.serverTimestamp();

@@ -3315,7 +3315,15 @@ const CASE_STATUS = Object.freeze({
 });
 
 function isCaseApprovedForPatient(c) {
-  return Boolean(c && c.status === CASE_STATUS.APPROVED && c.doctorApproved === true);
+  if (!c) return false;
+  const isApprovedStatus = Boolean(c.status === CASE_STATUS.APPROVED || c.status === 'approved');
+  const isDoctorApproved = c.doctorApproved === true;
+  // Strict clinical safety constraint: Must have a verified doctor identity or signature
+  const hasDoctorSignatureOrLicense = Boolean(
+    c.doctorSignature ||
+    (c.approvingDoctorId && (c.doctorLicense || (c.doctorIdentity && c.doctorIdentity.licenseNumber)))
+  );
+  return Boolean(isApprovedStatus && isDoctorApproved && hasDoctorSignatureOrLicense);
 }
 
 function maskUnapprovedPatientCase(c) {
@@ -3333,6 +3341,7 @@ function maskUnapprovedPatientCase(c) {
     "clinicalDiagnosis",
     "clinicalNotes",
     "doctorNotes",
+    "doctorSignature",
     "medications",
     "recommendation",
     "recommendations",
@@ -3602,9 +3611,15 @@ async function updateCaseStatus(id, newStatus, note, extraFields = {}) {
 
   try {
     transitionLocks.add(transitionKey);
-    if (newStatus === CASE_STATUS.APPROVED && (!(extraFields.clinicalNotes || note || "").trim() || !((extraFields.recommendations || []).length || (extraFields.recommendation || "").trim()))) {
-      showToast(isEn ? "Clinical notes and at least one recommendation are required before approval." : "يجب تسجيل الملاحظات السريرية وتوصية واحدة على الأقل قبل الاعتماد.");
-      return false;
+    if (newStatus === CASE_STATUS.APPROVED) {
+      if (typeof isDoctor === "function" && !isDoctor()) {
+        showToast(isEn ? "Only verified physicians with active credentials can certify and approve clinical reports." : "فقط الأطباء المعتمدون سريرياً يمكنهم توقيع واعتماد التقارير الطبية.");
+        return false;
+      }
+      if (!(extraFields.clinicalNotes || note || "").trim() || !((extraFields.recommendations || []).length || (extraFields.recommendation || "").trim())) {
+        showToast(isEn ? "Clinical notes and at least one recommendation are required before approval." : "يجب تسجيل الملاحظات السريرية وتوصية واحدة على الأقل قبل الاعتماد.");
+        return false;
+      }
     }
     if ([CASE_STATUS.REJECTED, CASE_STATUS.MORE_INFO_REQUESTED, CASE_STATUS.ESCALATED].includes(newStatus) && !String(note || "").trim()) {
       showToast(isEn ? "A note or reason is required before saving this action." : "يجب تسجيل ملاحظة أو سبب قبل حفظ هذا الإجراء.");
@@ -3633,6 +3648,14 @@ async function updateCaseStatus(id, newStatus, note, extraFields = {}) {
         doctorSpecialty: extraFields.doctorSpecialty || "",
         doctorLicense: extraFields.doctorLicense || "",
         clinicName: extraFields.clinicName || "",
+        doctorSignature: extraFields.doctorSignature || (extraFields.doctorLicense ? {
+          doctorName: extraFields.approvingDoctorName || (auth?.currentUser?.displayName) || "Attending Physician",
+          doctorLicense: extraFields.doctorLicense,
+          specialty: extraFields.doctorSpecialty || "Pulmonology",
+          clinic: extraFields.clinicName || "",
+          signedAt: new Date().toISOString(),
+          verified: true
+        } : null),
         reportRef: extraFields.reportRef || "",
         reviewedRevision: extraFields.reviewedRevision !== undefined ? extraFields.reviewedRevision : null,
         expectedRevision: extraFields.expectedRevision !== undefined ? extraFields.expectedRevision : null

@@ -102,10 +102,19 @@ CREATE TABLE IF NOT EXISTS clinical_cases (
     approval_status VARCHAR(32) NOT NULL DEFAULT 'pending_doctor_review' CHECK (approval_status IN ('pending_doctor_review', 'approved_certified', 'rejected', 'escalated')),
     doctor_notes TEXT,
     doctor_diagnosis TEXT,
+    doctor_signature JSONB,
     certified_at TIMESTAMP WITH TIME ZONE,
     sla_deadline TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_case_approved_requires_verified_doctor_signature CHECK (
+        approval_status != 'approved_certified' OR (
+            assigned_doctor_id IS NOT NULL 
+            AND certified_at IS NOT NULL 
+            AND doctor_notes IS NOT NULL 
+            AND doctor_signature IS NOT NULL
+        )
+    )
 );
 
 CREATE INDEX IF NOT EXISTS idx_cases_patient_id ON clinical_cases(patient_id);

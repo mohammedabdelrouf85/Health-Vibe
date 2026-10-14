@@ -319,7 +319,8 @@ service cloud.firestore {
              !('officialDiagnosis' in data) &&
              (!('doctorApproved' in data) || data.doctorApproved == false) &&
              !('approvedAt' in data) &&
-             !('assignedDoctorId' in data) && !('doctorIdentity' in data) && !('approvingDoctorId' in data);
+             !('assignedDoctorId' in data) && !('doctorIdentity' in data) && !('approvingDoctorId' in data) &&
+             !('doctorSignature' in data);
     }
 
     function isPatientMoreInfoResponse() {
@@ -440,7 +441,7 @@ service cloud.firestore {
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
         'doctorApproved', 'approvingDoctorId', 'approvingDoctorEmail',
         'approvingDoctorName', 'doctorLicense', 'doctorSpecialty', 'clinicName',
-        'doctorIdentity', 'approvedAt', 'reportGeneratedAt', 'generatedAt'
+        'doctorIdentity', 'approvedAt', 'reportGeneratedAt', 'generatedAt', 'doctorSignature'
       ]) && (!(request.resource.data.status in ['approved', 'closed']) || request.resource.data.status == resource.data.status) &&
       (!('doctorApproved' in resource.data) || resource.data.doctorApproved != true ||
        !request.resource.data.diff(resource.data).affectedKeys().hasAny([

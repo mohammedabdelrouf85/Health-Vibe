@@ -262,6 +262,7 @@ class RelationalDatabaseService {
       approval_status: "pending_doctor_review",
       doctor_notes: null,
       doctor_diagnosis: null,
+      doctor_signature: null,
       certified_at: null,
       sla_deadline: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
       created_at: new Date().toISOString(),
@@ -273,6 +274,95 @@ class RelationalDatabaseService {
       this.indexes.cases_patient_id.set(patientId, new Set());
     }
     this.indexes.cases_patient_id.get(patientId).add(id);
+
+    return { ...clinicalCase };
+  }
+
+  /**
+   * Approves and certifies a clinical case with a verified doctor's signature.
+   * Strictly enforces that:
+   * 1. The case exists.
+   * 2. The transitioning user has an account with role 'doctor'.
+   * 3. The doctor profile exists and has verification_status 'verified'.
+   * 4. Doctor clinical notes and an electronic signature are provided.
+   * Rejects any attempt by unverified doctors, patients, or admins to approve.
+   */
+  async approveClinicalCase({ caseId, doctorAccountId, doctorNotes, doctorDiagnosis, recommendations, doctorSignature }) {
+    const clinicalCase = this.tables.clinical_cases.get(caseId);
+    if (!clinicalCase) {
+      throw new Error(`Clinical case '${caseId}' not found.`);
+    }
+
+    // Verify doctor account
+    const doctorAccount = this.tables.accounts.get(doctorAccountId);
+    if (!doctorAccount || doctorAccount.role !== "doctor") {
+      const err = new Error("UNAUTHORIZED_APPROVAL: Only accounts with role 'doctor' can certify and approve clinical cases.");
+      err.code = "403_FORBIDDEN";
+      throw err;
+    }
+
+    // Verify doctor profile status
+    let doctorProfile = null;
+    for (const dp of this.tables.doctor_profiles.values()) {
+      if (dp.account_id === doctorAccountId) {
+        doctorProfile = dp;
+        break;
+      }
+    }
+
+    if (!doctorProfile || doctorProfile.verification_status !== "verified") {
+      const err = new Error("UNVERIFIED_DOCTOR: Approval requires an active, verified doctor profile with validated syndicate credentials.");
+      err.code = "403_DOCTOR_NOT_VERIFIED";
+      throw err;
+    }
+
+    if (!doctorNotes || !String(doctorNotes).trim()) {
+      const err = new Error("MISSING_CLINICAL_NOTES: Doctor clinical notes are strictly mandatory before case certification.");
+      err.code = "400_BAD_REQUEST";
+      throw err;
+    }
+
+    if (!doctorSignature || (typeof doctorSignature !== "object" && typeof doctorSignature !== "string")) {
+      const err = new Error("DOCTOR_SIGNATURE_REQUIRED: An electronic signature from the verified doctor is required for case certification.");
+      err.code = "400_SIGNATURE_REQUIRED";
+      throw err;
+    }
+
+    const nowIso = new Date().toISOString();
+    const normalizedSignature = typeof doctorSignature === "string" ? {
+      doctorName: doctorAccount.full_name,
+      syndicateId: doctorProfile.syndicate_id,
+      signedAt: nowIso,
+      signatureText: doctorSignature,
+      verified: true
+    } : {
+      doctorName: doctorAccount.full_name,
+      syndicateId: doctorProfile.syndicate_id,
+      signedAt: nowIso,
+      verified: true,
+      ...doctorSignature
+    };
+
+    clinicalCase.approval_status = "approved_certified";
+    clinicalCase.assigned_doctor_id = doctorProfile.id;
+    clinicalCase.doctor_notes = String(doctorNotes).trim();
+    clinicalCase.doctor_diagnosis = doctorDiagnosis ? String(doctorDiagnosis).trim() : clinicalCase.doctor_notes;
+    clinicalCase.doctor_signature = normalizedSignature;
+    clinicalCase.certified_at = nowIso;
+    clinicalCase.updated_at = nowIso;
+
+    await this.logAudit({
+      accountId: doctorAccountId,
+      actorRole: "doctor",
+      action: "CLINICAL_CASE_APPROVED_AND_CERTIFIED",
+      resourceType: "clinical_cases",
+      resourceId: caseId,
+      metadata: {
+        syndicateId: doctorProfile.syndicate_id,
+        certifiedAt: nowIso,
+        status: "approved_certified"
+      }
+    });
 
     return { ...clinicalCase };
   }
