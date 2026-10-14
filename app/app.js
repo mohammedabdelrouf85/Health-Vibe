@@ -1969,8 +1969,21 @@ if (!firebase.apps || !firebase.apps.length) {
 }
 const db = firebase.firestore();
 const auth = firebase.auth();
-const storage = firebase.storage();
-const googleProvider = new firebase.auth.GoogleAuthProvider();
+let googleProvider = null;
+function getGoogleAuthProvider() {
+  try {
+    if (!googleProvider && typeof firebase !== "undefined" && firebase.auth && firebase.auth.GoogleAuthProvider) {
+      googleProvider = new firebase.auth.GoogleAuthProvider();
+      if (typeof googleProvider.setCustomParameters === "function") {
+        googleProvider.setCustomParameters({ prompt: "select_account" });
+      }
+    }
+  } catch (e) {
+    console.warn("[Health Vibe] Could not initialize GoogleAuthProvider:", e);
+  }
+  return googleProvider;
+}
+getGoogleAuthProvider();
 
 if (runtimeConfig.emulators && runtimeConfig.emulators.enabled) {
   const emu = runtimeConfig.emulators;
@@ -6137,6 +6150,13 @@ window.showAppView = showAppView;
 
 async function enterApp(source = "google") {
   if (source === "google") {
+    // Prevent overlapping concurrent Google sign-in attempts
+    if (window._isGoogleAuthInFlight) {
+      console.warn("[Health Vibe] Google sign-in is already in progress.");
+      return;
+    }
+    window._isGoogleAuthInFlight = true;
+
     clearAuthError();
     // Clear lingering logout state immediately so onAuthStateChanged does not instantly sign out the user
     try {
@@ -6146,6 +6166,19 @@ async function enterApp(source = "google") {
 
     if (typeof setAuthLoading === "function") setAuthLoading(true);
     try {
+      // Helper: Wait for Firebase / Auth readiness if scripts are deferred or still loading
+      const ensureFirebaseAuthReady = async (maxWaitMs = 3000) => {
+        const start = Date.now();
+        while (Date.now() - start < maxWaitMs) {
+          const hasAuth = (typeof auth !== "undefined" && auth) || (typeof firebase !== "undefined" && firebase.auth);
+          if (hasAuth) return true;
+          await new Promise((r) => setTimeout(r, 100));
+        }
+        return false;
+      };
+
+      await ensureFirebaseAuthReady();
+
       await applyAuthPersistence(shouldRememberSession());
       let user = null;
 
@@ -6169,24 +6202,31 @@ async function enterApp(source = "google") {
         })
       });
 
-      // 2. Initiate Google Identity Services OAuth popup flow via Firebase auth or GIS
-      if (typeof auth !== "undefined" && auth && typeof googleProvider !== "undefined" && googleProvider) {
+      // 2. Resolve or initialize Google provider
+      const activeProvider = (typeof getGoogleAuthProvider === "function" ? getGoogleAuthProvider() : null) ||
+                             (typeof googleProvider !== "undefined" ? googleProvider : null) ||
+                             (typeof firebase !== "undefined" && firebase.auth && firebase.auth.GoogleAuthProvider ? new firebase.auth.GoogleAuthProvider() : null);
+
+      const activeAuth = (typeof auth !== "undefined" && auth) || (typeof firebase !== "undefined" && firebase.auth ? firebase.auth() : null);
+
+      // 3. Initiate Google Identity Services OAuth popup flow via Firebase auth or GIS
+      if (activeAuth && activeProvider) {
         try {
-          if (typeof auth.signInWithPopup === "function") {
-            const result = await auth.signInWithPopup(googleProvider);
+          if (typeof activeAuth.signInWithPopup === "function") {
+            const result = await activeAuth.signInWithPopup(activeProvider);
             user = result ? result.user : null;
-          } else if (typeof auth.signInWithRedirect === "function") {
-            await auth.signInWithRedirect(googleProvider);
+          } else if (typeof activeAuth.signInWithRedirect === "function") {
+            await activeAuth.signInWithRedirect(activeProvider);
             return;
           }
         } catch (popupErr) {
           const errCode = String(popupErr.code || "").toLowerCase();
 
           // If popup was blocked by browser, attempt seamless redirect flow
-          if (errCode === "auth/popup-blocked" && typeof auth.signInWithRedirect === "function") {
+          if (errCode === "auth/popup-blocked" && typeof activeAuth.signInWithRedirect === "function") {
             console.warn("[Health Vibe] Google popup was blocked by browser. Attempting redirect sign-in flow...");
             try {
-              await auth.signInWithRedirect(googleProvider);
+              await activeAuth.signInWithRedirect(activeProvider);
               return;
             } catch (redirectErr) {
               console.warn("[Health Vibe] Google redirect sign-in failed:", redirectErr);
@@ -6318,6 +6358,7 @@ async function enterApp(source = "google") {
       }
       showAuthError(getAuthErrorMessage(error));
     } finally {
+      window._isGoogleAuthInFlight = false;
       if (typeof setAuthLoading === "function") setAuthLoading(false);
     }
   }
@@ -14511,8 +14552,14 @@ document.addEventListener("click", (event) => {
   }
 });
 
-document.getElementById("authClose").addEventListener("click", hideAuth);
-document.getElementById("googleLogin").addEventListener("click", () => enterApp("google"));
+const authCloseBtn = document.getElementById("authClose");
+if (authCloseBtn) authCloseBtn.addEventListener("click", hideAuth);
+
+const googleLoginBtn = document.getElementById("googleLogin");
+if (googleLoginBtn && !googleLoginBtn._hasGoogleClickListener) {
+  googleLoginBtn._hasGoogleClickListener = true;
+  googleLoginBtn.addEventListener("click", () => enterApp("google"));
+}
 
 if (authTabSignIn) {
   authTabSignIn.addEventListener("click", () => setAuthMode("signin"));

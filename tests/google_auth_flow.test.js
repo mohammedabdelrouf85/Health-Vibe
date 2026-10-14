@@ -33,8 +33,8 @@ assert.ok(
   "enterApp must detect auth/popup-blocked"
 );
 assert.ok(
-  appJsContent.includes("auth.signInWithRedirect(googleProvider)"),
-  "enterApp must trigger signInWithRedirect when popup is blocked"
+  appJsContent.includes("activeAuth.signInWithRedirect(activeProvider)"),
+  "enterApp must trigger signInWithRedirect with activeProvider when popup is blocked"
 );
 console.log("  ✓ enterApp() redirects when popup is blocked by browser.");
 
@@ -60,10 +60,28 @@ assert.ok(
   appJsContent.includes('"auth/operation-not-allowed"'),
   "toFriendlyAppError must handle auth/operation-not-allowed"
 );
-console.log("  ✓ toFriendlyAppError maps popup-blocked, unauthorized-domain, and operation-not-allowed to bilingual guidance.");
+// TEST 5: Guard against duplicate concurrent sign-in attempts
+console.log("\n▶ TEST 5: Duplicate In-Flight Sign-In Guard");
+assert.ok(
+  appJsContent.includes("window._isGoogleAuthInFlight"),
+  "enterApp must have in-flight mutex check _isGoogleAuthInFlight"
+);
+console.log("  ✓ enterApp() guards against concurrent/double-click sign-in attempts.");
 
-// TEST 5: Simulation of enterApp execution logic
-console.log("\n▶ TEST 5: Execution Simulation of enterApp('google')");
+// TEST 6: Resilient GoogleAuthProvider initialization
+console.log("\n▶ TEST 6: Resilient GoogleAuthProvider Initialization");
+assert.ok(
+  appJsContent.includes("function getGoogleAuthProvider()"),
+  "app.js must define resilient getGoogleAuthProvider() helper"
+);
+assert.ok(
+  appJsContent.includes('prompt: "select_account"') || appJsContent.includes("prompt: 'select_account'"),
+  "Google provider must configure prompt: select_account for clean account switching"
+);
+console.log("  ✓ getGoogleAuthProvider() handles deferred loading and sets select_account.");
+
+// TEST 7: Simulation of enterApp execution logic
+console.log("\n▶ TEST 7: Execution Simulation of enterApp('google')");
 
 let mockLocalStorage = { "hv_explicit_logout": "true" };
 let mockSessionStorage = { "hv_explicit_logout": "true" };
