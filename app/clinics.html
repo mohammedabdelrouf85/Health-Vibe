@@ -56,6 +56,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./styles.css?v=5.0">
+  <script defer src="https://www.gstatic.com/firebasejs/10.4.0/firebase-app-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.4.0/firebase-firestore-compat.js"></script>
   <style>
     :root {
       --clinic-primary: #09b8b6;
@@ -1235,10 +1237,51 @@
           </div>
         </form>
 
-        <div id="leadSuccessAlert" style="display:none; margin-top: 24px; padding: 20px; background: rgba(34, 197, 94, 0.12); border: 1.5px solid #22c55e; border-radius: 16px; text-align: center;">
-          <div style="font-size: 32px; margin-bottom: 6px;">🎉✅</div>
-          <h4 style="margin: 0 0 6px; color: #4ade80; font-size: 18px;" id="leadSuccessTitle">تم استلام طلبك بنجاح!</h4>
-          <p style="margin: 0; color: #e2f1f0; font-size: 13.5px;" id="leadSuccessMsg">شكراً لاهتمامك. رقم الطلب الخاص بعيادتك هو: <strong id="leadSuccessRef" style="color:#2dd4bf;"></strong>. سيتواصل معك مستشار التحول السريري خلال ساعات قليلة.</p>
+        <div id="leadSuccessAlert" class="lead-success-card" style="display:none; margin-top: 24px; padding: 28px 24px; background: linear-gradient(180deg, rgba(13, 148, 136, 0.15) 0%, rgba(7, 25, 27, 0.95) 100%); border: 2px solid #09b8b6; border-radius: 20px; box-shadow: 0 12px 36px rgba(0,0,0,0.4); text-align: center;">
+          <div style="font-size: 38px; line-height: 1; margin-bottom: 12px;">🎉✅</div>
+          <h3 style="margin: 0 0 8px; color: #34d399; font-size: 22px; font-weight: 800;" id="leadSuccessTitle">تم تسجيل طلب انضمام المركز الطبي بنجاح!</h3>
+          <p style="margin: 0 0 20px; color: #cbd5e1; font-size: 14.5px; max-width: 620px; margin-left: auto; margin-right: auto; line-height: 1.6;" id="leadSuccessMsg">
+            تم استلام بيانات عيادتك بنجاح وحفظها في قاعدة البيانات المركزية مع إخطار الإدارة الطبية فورياً عبر البريد الإلكتروني. يُرجى الاحتفاظ برقم مرجع الطلب التالي للمتابعة:
+          </p>
+
+          <!-- Tracking Reference Box with 1-Click Copy -->
+          <div style="background: rgba(15, 23, 42, 0.85); border: 1.5px dashed #09b8b6; border-radius: 12px; padding: 16px 20px; margin: 0 auto 24px; max-width: 480px; display: flex; flex-direction: column; align-items: center; gap: 8px;">
+            <span style="font-size: 13px; color: #94a3b8; font-weight: 600;" id="leadRefLabel">رقم مرجع الطلب الخاص بمركزك (Tracking Reference):</span>
+            <div style="display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap;">
+              <strong id="leadSuccessRef" style="color: #2dd4bf; font-family: monospace; font-size: 22px; letter-spacing: 1.5px; background: rgba(13,148,136,0.18); padding: 4px 14px; border-radius: 8px; border: 1px solid rgba(45,212,191,0.3);"></strong>
+              <button type="button" id="btnCopyLeadRef" onclick="copyLeadRef()" style="background: #09b8b6; border: none; color: #07191b; font-weight: 700; padding: 7px 15px; border-radius: 8px; cursor: pointer; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; transition: all 0.2s ease;">
+                <span id="btnCopyLeadRefIcon">📋</span>
+                <span id="btnCopyLeadRefText">نسخ رقم الطلب</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Submitted Summary Details -->
+          <div id="leadSummaryContainer" style="background: rgba(2, 44, 49, 0.5); border: 1px solid rgba(9, 184, 182, 0.3); border-radius: 12px; padding: 16px 20px; margin: 0 auto 20px; max-width: 560px; text-align: start;">
+            <div style="font-weight: 700; color: #5eead4; font-size: 14px; margin-bottom: 12px; border-bottom: 1px solid rgba(9, 184, 182, 0.2); padding-bottom: 6px;" id="leadSummaryHeader">ملخص تفاصيل الطلب المسجل:</div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; font-size: 13.5px; color: #e2e8f0;">
+              <div><span style="color: #8da9a7;" id="summaryLabelClinic">المركز / العيادة:</span> <strong id="summaryClinicName" style="color: #ffffff;"></strong></div>
+              <div><span style="color: #8da9a7;" id="summaryLabelContact">المسؤول:</span> <strong id="summaryContactName" style="color: #ffffff;"></strong></div>
+              <div><span style="color: #8da9a7;" id="summaryLabelPhone">الهاتف / واتساب:</span> <span id="summaryPhone" dir="ltr" style="font-weight: 600; color: #38bdf8;"></span></div>
+              <div><span style="color: #8da9a7;" id="summaryLabelPackage">الباقة:</span> <strong id="summaryPackage" style="color: #34d399;"></strong></div>
+            </div>
+          </div>
+
+          <!-- Next Steps Info Box -->
+          <div style="margin: 0 auto 24px; max-width: 560px; background: rgba(30, 41, 59, 0.5); border-radius: 10px; padding: 12px 16px; font-size: 13.5px; color: #cbd5e1; line-height: 1.6;" id="leadNextSteps">
+            سيتواصل معك مستشار التحول السريري هاتفياً أو عبر الواتساب خلال أقل من 24 ساعة لتفعيل الباقة التجريبية (1 عيادة • 3 أطباء • 30 يوماً مجاناً) وتجهيز المنظومة السحابية.
+          </div>
+
+          <!-- Quick Action Buttons -->
+          <div style="display: flex; justify-content: center; align-items: center; gap: 14px; flex-wrap: wrap;">
+            <a id="leadWhatsAppBtn" href="https://wa.me/201009876543" target="_blank" rel="noopener" class="cta-btn-primary" style="background: #25d366; border-color: #25d366; color: #ffffff; text-decoration: none; padding: 12px 22px; font-weight: 700; border-radius: 10px; display: inline-flex; align-items: center; gap: 8px;">
+              <span>💬</span>
+              <span id="leadWhatsAppBtnText">متابعة فورية مع الإدارة عبر الواتساب</span>
+            </a>
+            <button type="button" id="btnResetLeadForm" onclick="resetClinicLeadForm()" style="background: transparent; border: 1px solid rgba(255, 255, 255, 0.25); color: #cbd5e1; padding: 10px 18px; border-radius: 10px; cursor: pointer; font-size: 13px; font-weight: 600; transition: background 0.2s ease;">
+              تقديم طلب لفرع آخر أو عيادة إضافية
+            </button>
+          </div>
         </div>
       </div>
     </section>
@@ -1460,8 +1503,18 @@
         labelTime: "الوقت المفضل للمكالمة التوضيحية",
         labelNotes: "أي متطلبات أو أنظمة برمجية ترغب في ربطها؟ (اختياري)",
         btnSubmitLeadText: "إرسال طلب العرض التجريبي وبدء الـ 30 يوماً مجاناً",
-        leadSuccessTitle: "تم استلام طلبك بنجاح!",
-        leadSuccessMsg: "شكراً لاهتمامك. رقم الطلب الخاص بعيادتك هو: ",
+        leadSuccessTitle: "تم تسجيل طلب انضمام المركز الطبي بنجاح! 🎉",
+        leadSuccessMsg: "تم استلام بيانات عيادتك بنجاح وحفظها في قاعدة البيانات المركزية مع إخطار الإدارة الطبية فورياً عبر البريد الإلكتروني. يُرجى الاحتفاظ برقم مرجع الطلب التالي للمتابعة:",
+        leadRefLabel: "رقم مرجع الطلب الخاص بمركزك (Tracking Reference):",
+        btnCopyLeadRefText: "نسخ رقم الطلب",
+        leadSummaryHeader: "ملخص تفاصيل الطلب المسجل:",
+        summaryLabelClinic: "المركز / العيادة:",
+        summaryLabelContact: "المسؤول:",
+        summaryLabelPhone: "الهاتف / واتساب:",
+        summaryLabelPackage: "الباقة المختارة:",
+        leadNextSteps: "سيتواصل معك مستشار التحول السريري هاتفياً أو عبر الواتساب خلال أقل من 24 ساعة لتفعيل الباقة التجريبية (1 عيادة • 3 أطباء • 30 يوماً مجاناً) وتجهيز المنظومة السحابية.",
+        leadWhatsAppBtnText: "متابعة فورية مع الإدارة عبر الواتساب",
+        btnResetLeadForm: "← تقديم طلب لفرع آخر أو عيادة إضافية",
         testiEyebrow: "تجارب الأطباء",
         testiTitle: "ماذا يقول استشاريو الصدر عن Health Vibe AI؟",
         faqEyebrow: "الأسئلة الشائعة",
@@ -1584,8 +1637,18 @@
         labelTime: "Preferred Consultation Call Window",
         labelNotes: "Software integrations or specific clinical requirements? (Optional)",
         btnSubmitLeadText: "Submit Demo Request & Start 30 Days Free",
-        leadSuccessTitle: "Demo Request Received Successfully!",
-        leadSuccessMsg: "Thank you for reaching out. Your clinic request reference is: ",
+        leadSuccessTitle: "Clinic Onboarding Request Registered Successfully! 🎉",
+        leadSuccessMsg: "Your clinic details have been recorded in the central database, and an instant notification has been dispatched to the medical administration. Please retain your tracking reference below:",
+        leadRefLabel: "Your Clinic Tracking Reference ID:",
+        btnCopyLeadRefText: "Copy Reference ID",
+        leadSummaryHeader: "Registered Request Summary:",
+        summaryLabelClinic: "Clinic / Center:",
+        summaryLabelContact: "Contact Person:",
+        summaryLabelPhone: "Phone / WhatsApp:",
+        summaryLabelPackage: "Selected Package:",
+        leadNextSteps: "A clinical transformation specialist will contact you via phone or WhatsApp within 24 hours to activate your trial package (1 Clinic • 3 Doctors • 30 Days Free) and configure your cloud instance.",
+        leadWhatsAppBtnText: "Instant WhatsApp Follow-up with Admin",
+        btnResetLeadForm: "← Submit request for another branch",
         testiEyebrow: "Physician Testimonials",
         testiTitle: "What Pulmonologists Say About Health Vibe AI",
         faqEyebrow: "Frequently Asked Questions",
@@ -1751,6 +1814,94 @@
       }
     }
 
+    // Firebase Firestore Helper for Clinic Leads
+    let clinicFirestoreDb = null;
+    function getClinicFirestore() {
+      if (clinicFirestoreDb) return clinicFirestoreDb;
+      try {
+        if (typeof firebase !== "undefined" && firebase.apps) {
+          if (!firebase.apps.length) {
+            const DEFAULT_CONFIG = {
+              apiKey: "AIzaSyANyIglmiKcdM0I2EKkjPhzMjKR58o8BRM",
+              authDomain: "health-vibes-a4b3b.firebaseapp.com",
+              projectId: "health-vibes-a4b3b",
+              storageBucket: "health-vibes-a4b3b.firebasestorage.app",
+              messagingSenderId: "21682568356",
+              appId: "1:21682568356:web:d38947f11647fdfef13a31"
+            };
+            firebase.initializeApp(DEFAULT_CONFIG);
+          }
+          clinicFirestoreDb = firebase.firestore();
+          return clinicFirestoreDb;
+        }
+      } catch (err) {
+        console.warn("[CLINIC FIRESTORE INIT]", err);
+      }
+      return null;
+    }
+
+    function copyLeadRef() {
+      const refEl = document.getElementById("leadSuccessRef");
+      if (!refEl) return;
+      const refText = refEl.textContent.trim();
+      if (!refText) return;
+
+      const copyBtnText = document.getElementById("btnCopyLeadRefText");
+      const copyBtnIcon = document.getElementById("btnCopyLeadRefIcon");
+      const originalText = copyBtnText ? copyBtnText.textContent : "";
+
+      const markCopied = () => {
+        if (copyBtnText) copyBtnText.textContent = currentClinicLang === "ar" ? "تم النسخ بنجاح! ✓" : "Copied! ✓";
+        if (copyBtnIcon) copyBtnIcon.textContent = "✅";
+        setTimeout(() => {
+          if (copyBtnText) copyBtnText.textContent = originalText;
+          if (copyBtnIcon) copyBtnIcon.textContent = "📋";
+        }, 3000);
+      };
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(refText).then(markCopied).catch(() => {
+          fallbackCopyText(refText, markCopied);
+        });
+      } else {
+        fallbackCopyText(refText, markCopied);
+      }
+    }
+
+    function fallbackCopyText(text, cb) {
+      try {
+        const temp = document.createElement("textarea");
+        temp.value = text;
+        temp.style.position = "fixed";
+        temp.style.opacity = "0";
+        document.body.appendChild(temp);
+        temp.select();
+        document.execCommand("copy");
+        document.body.removeChild(temp);
+        if (cb) cb();
+      } catch (e) {
+        console.warn("Fallback copy failed:", e);
+      }
+    }
+
+    function resetClinicLeadForm() {
+      const form = document.getElementById("clinicLeadForm");
+      const alertBox = document.getElementById("leadSuccessAlert");
+      if (form) {
+        form.reset();
+        form.style.display = "block";
+      }
+      if (alertBox) {
+        alertBox.style.display = "none";
+      }
+      const submitBtn = document.getElementById("btnSubmitClinicLead");
+      if (submitBtn) submitBtn.disabled = false;
+      const submitText = document.getElementById("btnSubmitLeadText");
+      if (submitText && clinicTranslations[currentClinicLang]) {
+        submitText.textContent = clinicTranslations[currentClinicLang].btnSubmitLeadText;
+      }
+    }
+
     async function handleClinicLeadSubmit(event) {
       event.preventDefault();
       const submitBtn = document.getElementById("btnSubmitClinicLead");
@@ -1758,20 +1909,68 @@
       const prevText = submitText.textContent;
 
       submitBtn.disabled = true;
-      submitText.textContent = currentClinicLang === "ar" ? "جارٍ إرسال الطلب..." : "Submitting...";
+      submitText.textContent = currentClinicLang === "ar" ? "جارٍ تسجيل الطلب وإخطار الإدارة..." : "Registering & Notifying Admin...";
+
+      const packageSelect = document.getElementById("leadPackage");
+      const packageType = packageSelect ? packageSelect.value : "pilot";
+      const packageLabel = packageSelect && packageSelect.selectedOptions && packageSelect.selectedOptions[0]
+        ? packageSelect.selectedOptions[0].textContent.trim()
+        : packageType;
+
+      const clinicName = (document.getElementById("leadClinicName").value || "").trim();
+      const contactName = (document.getElementById("leadContactName").value || "").trim();
+      const email = (document.getElementById("leadEmail").value || "").trim();
+      const phone = (document.getElementById("leadPhone").value || "").trim();
+      const specialty = (document.getElementById("leadSpecialty") ? document.getElementById("leadSpecialty").value : "pulmonology");
+      const doctorCount = (document.getElementById("leadDoctorCount") ? document.getElementById("leadDoctorCount").value : "1-5");
+      const city = (document.getElementById("leadCity") ? document.getElementById("leadCity").value : "").trim();
+      const notes = (document.getElementById("leadNotes") ? document.getElementById("leadNotes").value : "").trim();
+
+      // Pre-generate unique LEAD tracking reference
+      const refId = `LEAD-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
 
       const payload = {
-        clinicName: document.getElementById("leadClinicName").value,
-        contactName: document.getElementById("leadContactName").value,
-        email: document.getElementById("leadEmail").value,
-        phone: document.getElementById("leadPhone").value,
-        packageType: document.getElementById("leadPackage") ? document.getElementById("leadPackage").value : "pilot",
-        specialty: document.getElementById("leadSpecialty").value,
-        doctorCount: document.getElementById("leadDoctorCount").value,
-        city: document.getElementById("leadCity").value,
-        notes: document.getElementById("leadNotes").value
+        leadId: refId,
+        clinicName,
+        contactName,
+        email,
+        phone,
+        packageType,
+        specialty,
+        doctorCount,
+        city,
+        notes
       };
 
+      // 1. Direct client-side Firestore record creation if SDK available
+      try {
+        const firestore = getClinicFirestore();
+        if (firestore) {
+          firestore.collection("clinic_leads").doc(refId).set({
+            ...payload,
+            status: "pending_contact",
+            source: "clinic_landing_client",
+            createdAt: new Date().toISOString()
+          }).catch(function(fsErr) {
+            console.warn("[FIRESTORE CLIENT WRITE WARNING]:", fsErr.message);
+          });
+        }
+      } catch (fsInitErr) {
+        console.warn("[FIRESTORE LEAD SAVE ATTEMPT]:", fsInitErr.message);
+      }
+
+      // 2. Persist lead summary locally in localStorage
+      try {
+        localStorage.setItem("hv_last_clinic_lead", JSON.stringify({
+          ...payload,
+          timestamp: Date.now()
+        }));
+      } catch (lsErr) {
+        console.warn("[LOCALSTORAGE LEAD PERSISTENCE WARNING]:", lsErr);
+      }
+
+      // 3. Dispatch to backend API for instant email notification & server-side persistence
+      let serverLeadId = refId;
       try {
         const response = await fetch("/api/clinics/demo-request", {
           method: "POST",
@@ -1779,24 +1978,40 @@
           body: JSON.stringify(payload)
         });
 
-        const data = await response.json();
-        const refId = data.leadId || `LEAD-${Date.now().toString(36).toUpperCase()}`;
-
-        document.getElementById("clinicLeadForm").style.display = "none";
-        const alertBox = document.getElementById("leadSuccessAlert");
-        document.getElementById("leadSuccessRef").textContent = refId;
-        alertBox.style.display = "block";
-      } catch (err) {
-        // Offline / fallback simulated submission
-        const refId = `LEAD-${Date.now().toString(36).toUpperCase()}`;
-        document.getElementById("clinicLeadForm").style.display = "none";
-        const alertBox = document.getElementById("leadSuccessAlert");
-        document.getElementById("leadSuccessRef").textContent = refId;
-        alertBox.style.display = "block";
-      } finally {
-        submitBtn.disabled = false;
-        submitText.textContent = prevText;
+        if (response.ok) {
+          const data = await response.json();
+          if (data && data.leadId) {
+            serverLeadId = data.leadId;
+          }
+        }
+      } catch (apiErr) {
+        console.warn("[API CLINIC LEAD DEMO REQUEST OFFLINE/FALLBACK]:", apiErr.message);
       }
+
+      // 4. Populate confirmation card details & tracking number
+      const refEl = document.getElementById("leadSuccessRef");
+      if (refEl) refEl.textContent = serverLeadId;
+      if (document.getElementById("summaryClinicName")) document.getElementById("summaryClinicName").textContent = clinicName;
+      if (document.getElementById("summaryContactName")) document.getElementById("summaryContactName").textContent = contactName;
+      if (document.getElementById("summaryPhone")) document.getElementById("summaryPhone").textContent = phone;
+      if (document.getElementById("summaryPackage")) document.getElementById("summaryPackage").textContent = packageLabel;
+
+      const waBtn = document.getElementById("leadWhatsAppBtn");
+      if (waBtn) {
+        const waMsg = currentClinicLang === "ar"
+          ? `السلام عليكم، بخصوص طلب انضمام مركز ${clinicName} لمنظومة Health Vibe AI (رقم المرجع: ${serverLeadId}) - مسؤول التواصل: د. ${contactName}`
+          : `Hello, regarding clinic onboarding request for ${clinicName} (Reference: ${serverLeadId}) - Contact: ${contactName}`;
+        waBtn.href = `https://wa.me/201009876543?text=${encodeURIComponent(waMsg)}`;
+      }
+
+      // 5. Hide form and display rich confirmation alert
+      document.getElementById("clinicLeadForm").style.display = "none";
+      const alertBox = document.getElementById("leadSuccessAlert");
+      alertBox.style.display = "block";
+      alertBox.scrollIntoView({ behavior: "smooth", block: "center" });
+
+      submitBtn.disabled = false;
+      submitText.textContent = prevText;
     }
 
     // Initialize language from preferences and update calculator

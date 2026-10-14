@@ -72,6 +72,7 @@
     "test:audit": "node tests/audit_trail_system.test.js",
     "test:i18n": "node tests/i18n_system.test.js",
     "test:clinics": "node tests/clinic_sales_landing.test.js",
+    "test:clinic-lead-email": "node tests/clinic_lead_db_and_email.test.js",
     "test:remember": "node tests/remember_me_security.test.js",
     "test:lifecycle": "node tests/account_lifecycle.test.js",
     "test:guards": "node tests/route_guards.test.js",

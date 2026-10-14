@@ -16,6 +16,7 @@ const admin = require('firebase-admin');
 const dotenv = require('dotenv');
 const whatsappBot = require('./whatsapp-bot');
 const {
+  createTransporter,
   sendClinicalNotificationEmail,
   enqueueNotification,
   processNotificationQueue,
@@ -9011,7 +9012,10 @@ app.post('/api/clinics/demo-request', (req, res) => {
     }
 
     const isPilot = packageType === 'pilot' || String(packageType).toLowerCase().includes('pilot');
-    const leadId = `LEAD-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+    const leadId = req.body.leadId && /^LEAD-[A-Z0-9-]+$/i.test(req.body.leadId)
+      ? String(req.body.leadId).toUpperCase().trim()
+      : `LEAD-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+
     const leadData = {
       leadId,
       clinicName: String(clinicName).trim().substring(0, 100),
@@ -9039,10 +9043,129 @@ app.post('/api/clinics/demo-request', (req, res) => {
     inMemoryClinicLeads.push(leadData);
     if (inMemoryClinicLeads.length > 500) inMemoryClinicLeads.shift();
 
+    const adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL || process.env.ADMIN_EMAIL || 'mohammedabdelrouf85@gmail.com';
+
+    // 1. Dual-persist to Firestore: clinic_leads & email_notifications
     if (db) {
       db.collection('clinic_leads').doc(leadId).set(leadData).catch((err) => {
         console.warn('[FIRESTORE CLINIC LEAD WARNING]:', err.message);
       });
+
+      db.collection('email_notifications').add({
+        type: 'CLINIC_LEAD_ADMIN_ALERT',
+        leadId,
+        recipient: adminEmail,
+        subject: `🏥 طلب انضمام عيادة جديد [${leadId}] - ${leadData.clinicName}`,
+        leadData,
+        status: 'queued',
+        createdAt: new Date().toISOString()
+      }).catch((err) => {
+        console.warn('[FIRESTORE EMAIL QUEUE WARNING]:', err.message);
+      });
+    }
+
+    // 2. Dispatch instant email notification to Admin
+    let emailDispatched = false;
+    try {
+      const transporter = createTransporter();
+      const mailSubject = `🏥 طلب انضمام عيادة جديد [${leadId}] - ${leadData.clinicName}`;
+      const mailText = [
+        `طلب انضمام عيادة جديد - منصة Health Vibe AI`,
+        `===========================================`,
+        `رقم مرجع الطلب (Tracking Reference): ${leadId}`,
+        `اسم العيادة / المركز: ${leadData.clinicName}`,
+        `الطبيب أو المدير المسؤول: ${leadData.contactName}`,
+        `البريد الإلكتروني: ${leadData.email}`,
+        `الهاتف / واتساب: ${leadData.phone}`,
+        `الباقة المطلوبة: ${leadData.packageType} ${isPilot ? '(30 يوماً تجربة مجانية: 1 عيادة • 3 أطباء)' : ''}`,
+        `التخصص الطبي: ${leadData.specialty}`,
+        `عدد الأطباء: ${leadData.doctorCount}`,
+        `المدينة / المحافظة: ${leadData.city}`,
+        leadData.notes ? `ملاحظات: ${leadData.notes}` : '',
+        `تاريخ التقديم: ${leadData.createdAt}`
+      ].filter(Boolean).join('\n');
+
+      const mailHtml = `
+        <div style="font-family: Arial, 'Segoe UI', Tahoma, sans-serif; max-width: 620px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 14px; background: #ffffff; color: #1e293b;" dir="rtl">
+          <div style="background: linear-gradient(135deg, #0d9488 0%, #0284c7 100%); padding: 20px; border-radius: 10px; color: #ffffff; text-align: center;">
+            <h2 style="margin: 0; font-size: 22px;">🏥 إشعار طلب انضمام عيادة / مركز طبي جديد</h2>
+            <p style="margin: 6px 0 0; font-size: 14px; opacity: 0.95;">منظومة Health Vibe AI للتشغيل والفرز السريري الذكي</p>
+          </div>
+          <div style="padding: 20px 8px;">
+            <div style="background: #f0fdfa; border: 1.5px solid #0d9488; border-radius: 8px; padding: 14px 18px; margin-bottom: 20px; text-align: center;">
+              <span style="font-size: 13px; color: #0f766e; font-weight: bold; display: block;">رقم مرجع الطلب (Tracking Reference ID)</span>
+              <strong style="font-size: 22px; color: #134e4a; font-family: monospace; letter-spacing: 1px;">${leadId}</strong>
+            </div>
+            <table style="width: 100%; border-collapse: collapse; font-size: 14px; line-height: 1.6;">
+              <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="padding: 10px 8px; color: #64748b; width: 35%;">اسم العيادة / المركز:</td>
+                <td style="padding: 10px 8px; font-weight: bold; color: #0f172a;">${leadData.clinicName}</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="padding: 10px 8px; color: #64748b;">المسؤول للتواصل:</td>
+                <td style="padding: 10px 8px; font-weight: 600; color: #0f172a;">${leadData.contactName}</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="padding: 10px 8px; color: #64748b;">البريد الإلكتروني:</td>
+                <td style="padding: 10px 8px; color: #0284c7;"><a href="mailto:${leadData.email}" style="color: #0284c7; text-decoration: none;">${leadData.email}</a></td>
+              </tr>
+              <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="padding: 10px 8px; color: #64748b;">الهاتف / الواتساب:</td>
+                <td style="padding: 10px 8px; font-weight: 600; color: #0f172a;" dir="ltr"><a href="https://wa.me/${leadData.phone.replace(/[^0-9]/g, '')}" target="_blank" style="color: #0d9488; text-decoration: none;">${leadData.phone}</a></td>
+              </tr>
+              <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="padding: 10px 8px; color: #64748b;">الباقة المختارة:</td>
+                <td style="padding: 10px 8px; font-weight: bold; color: #0d9488;">${leadData.packageType} ${isPilot ? '⭐ (باقة الإطلاق التجريبية: 30 يوماً مجاناً)' : ''}</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="padding: 10px 8px; color: #64748b;">التخصص السريري:</td>
+                <td style="padding: 10px 8px; color: #0f172a;">${leadData.specialty}</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="padding: 10px 8px; color: #64748b;">عدد الأطباء:</td>
+                <td style="padding: 10px 8px; color: #0f172a;">${leadData.doctorCount}</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="padding: 10px 8px; color: #64748b;">المدينة / المحافظة:</td>
+                <td style="padding: 10px 8px; color: #0f172a;">${leadData.city}</td>
+              </tr>
+              ${leadData.notes ? `
+              <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="padding: 10px 8px; color: #64748b;">المتطلبات أو الأنظمة:</td>
+                <td style="padding: 10px 8px; color: #334155;">${leadData.notes}</td>
+              </tr>` : ''}
+              <tr>
+                <td style="padding: 10px 8px; color: #64748b;">توقيت الإرسال:</td>
+                <td style="padding: 10px 8px; color: #64748b;" dir="ltr">${leadData.createdAt}</td>
+              </tr>
+            </table>
+            <div style="margin-top: 24px; text-align: center;">
+              <a href="https://wa.me/${leadData.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent('أهلاً د. ' + leadData.contactName + '، بخصوص طلب انضمام ' + leadData.clinicName + ' لمنظومة Health Vibe AI (رقم الطلب: ' + leadId + ')')}" 
+                 style="display: inline-block; background: #25d366; color: #ffffff; padding: 12px 24px; border-radius: 8px; font-weight: bold; text-decoration: none;">
+                 💬 التواصل المباشر عبر الواتساب فوراً
+              </a>
+            </div>
+          </div>
+          <div style="border-top: 1px solid #e2e8f0; padding-top: 14px; text-align: center; font-size: 12px; color: #94a3b8;">
+            تم إرسال هذا الإشعار تلقائياً إلى إدارة Health Vibe AI فور تسجيل طلب جديد عبر بوابة العيادات.
+          </div>
+        </div>
+      `;
+
+      transporter.sendMail({
+        to: adminEmail,
+        from: process.env.SMTP_FROM || 'noreply@healthvibe.ai',
+        subject: mailSubject,
+        text: mailText,
+        html: mailHtml
+      }).then(() => {
+        console.log(`[CLINIC DEMO EMAIL SENT]: Instant email delivered to Admin (${adminEmail}) for lead ${leadId}`);
+      }).catch((mailErr) => {
+        console.warn('[CLINIC LEAD ADMIN EMAIL WARNING]:', mailErr.message);
+      });
+      emailDispatched = true;
+    } catch (transporterErr) {
+      console.warn('[CLINIC LEAD EMAIL DISPATCH WARNING]:', transporterErr.message);
     }
 
     console.log(`[CLINIC DEMO REQUEST RECEIVED]: Lead ${leadId} for '${leadData.clinicName}' (${leadData.contactName} - ${leadData.phone}) - Package: ${leadData.packageType} [isPilot: ${isPilot}]`);
@@ -9052,6 +9175,15 @@ app.post('/api/clinics/demo-request', (req, res) => {
       leadId,
       packageType: leadData.packageType,
       isPilot,
+      emailDispatched,
+      leadSummary: {
+        clinicName: leadData.clinicName,
+        contactName: leadData.contactName,
+        email: leadData.email,
+        phone: leadData.phone,
+        packageType: leadData.packageType,
+        createdAt: leadData.createdAt
+      },
       message: isPilot
         ? 'Pilot package onboarding request registered (1 Clinic, 3 Doctors, 30 Days).'
         : 'Demo request received successfully. Our clinical onboarding specialist will contact you within 24 hours.'
