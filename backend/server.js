@@ -82,6 +82,8 @@ const caseHandoverService = require('./case-handover-service');
 const bloodDisordersService = require('./blood-disorders-service');
 const obesityService = require('./obesity-service');
 const diseaseAuthorizationService = require('./disease-authorization-service');
+const { relationalDbService } = require('./relational-db-service');
+const { kaggleTrainingService } = require('./kaggle-training-service');
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -17070,5 +17072,19 @@ app.bloodDisordersService = bloodDisordersService;
 app.obesityService = obesityService;
 app.diabetesService = diabetesService;
 app.diseaseAuthorizationService = diseaseAuthorizationService;
+app.relationalDbService = relationalDbService;
+app.kaggleTrainingService = kaggleTrainingService;
+
+/**
+ * GET /api/config/relational-db-status
+ * Exposes health, schema version, and PRD Page 16 Kaggle separation metrics.
+ */
+app.get('/api/config/relational-db-status', (req, res) => {
+  res.json({
+    success: true,
+    relationalDb: relationalDbService.getHealthStatus(),
+    kaggleIsolation: kaggleTrainingService.getArchitecturalSeparationReport()
+  });
+});
 
 module.exports = app;

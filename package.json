@@ -7,6 +7,7 @@
     "test:auth-loading": "node tests/auth_loading_and_forms.test.js",
     "test:auth-validation": "node tests/auth_strict_validation.test.js",
     "test:doctor-walkthrough": "node tests/doctor_review_and_wcag_links.test.js",
+    "test:relational-db": "node tests/kaggle_separation_and_relational_db.test.js",
     "test:blood-disorders": "node tests/blood_disorders_module.test.js",
     "test:blood-disorders-observations": "node tests/blood_disorders_observation_schema.test.js",
     "test:blood-disorders-doctor-review": "node tests/blood_disorders_doctor_review_workflow.test.js",
