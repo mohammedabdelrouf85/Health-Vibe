@@ -185,7 +185,9 @@ const allowedOrigins = isDevelopment
   ? Array.from(new Set([...devDefaultOrigins, ...configuredOrigins]))
   : (configuredOrigins.length > 0
     ? configuredOrigins
-    : (isStaging ? ['https://staging.healthvibe.ai'] : ['https://healthvibe.ai', 'https://app.healthvibe.ai']));
+    : (isStaging
+        ? ['https://staging.healthvibe.ai', 'https://health-vibes-staging.web.app', 'https://health-vibes-staging.firebaseapp.com']
+        : ['https://healthvibes.app', 'https://www.healthvibes.app', 'https://healthvibe.ai', 'https://app.healthvibe.ai', 'https://health-vibes-a4b3b.web.app', 'https://health-vibes-a4b3b.firebaseapp.com']));
 
 // =============================================================================
 // 🛡️ SECURITY HARDENING & OWASP COMPLIANCE
@@ -200,10 +202,10 @@ app.use((req, res, next) => {
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
-  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com https://www.google.com https://www.recaptcha.net; script-src-attr 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://www.gstatic.com https://*.googleusercontent.com https://firebasestorage.googleapis.com; connect-src 'self' http://localhost:4000 http://127.0.0.1:4000 https://healthvibe.ai https://*.firebaseio.com https://*.googleapis.com https://*.google.com https://www.recaptcha.net; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self';");
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com https://www.google.com https://www.recaptcha.net; script-src-attr 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://www.gstatic.com https://*.googleusercontent.com https://firebasestorage.googleapis.com; connect-src 'self' http://localhost:4000 http://127.0.0.1:4000 https://healthvibes.app https://*.healthvibes.app https://healthvibe.ai https://*.healthvibe.ai https://*.firebaseio.com https://*.googleapis.com https://*.google.com https://www.recaptcha.net; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self';");
   res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-  if (isProduction) {
+  if (isProduction || isStaging || (req.headers.host && req.headers.host.includes('healthvibes.app')) || req.secure || req.headers['x-forwarded-proto'] === 'https') {
     res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
   }
 

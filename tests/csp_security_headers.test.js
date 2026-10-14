@@ -147,6 +147,75 @@ assert.ok(
 );
 console.log("  ✓ Backend server responses enforced with CSP and Cross-Origin isolation headers.");
 
+// -----------------------------------------------------------------------------
+// TEST 10: Custom Domain healthvibes.app Security Headers & Origin Enforcement
+// -----------------------------------------------------------------------------
+console.log("\n▶ TEST 10: Custom Domain healthvibes.app Security Headers & Origin Enforcement");
+
+// 1. firebase.json covers healthvibes.app in CSP connect-src, frame-src, and frame-ancestors
+assert.ok(
+  csp.includes("https://healthvibes.app"),
+  "firebase.json CSP must include https://healthvibes.app"
+);
+assert.ok(
+  csp.includes("https://*.healthvibes.app"),
+  "firebase.json CSP must include https://*.healthvibes.app"
+);
+assert.ok(
+  csp.includes("frame-ancestors 'none'"),
+  "firebase.json CSP must include frame-ancestors 'none' for robust clickjacking defense."
+);
+assert.strictEqual(
+  headerMap['x-frame-options'],
+  'DENY',
+  "firebase.json must enforce X-Frame-Options: DENY for healthvibes.app"
+);
+assert.ok(
+  headerMap['strict-transport-security'].includes('max-age=31536000') &&
+  headerMap['strict-transport-security'].includes('includeSubDomains') &&
+  headerMap['strict-transport-security'].includes('preload'),
+  "firebase.json must enforce Strict-Transport-Security with preload for healthvibes.app"
+);
+
+// 2. backend/server.js includes healthvibes.app in CORS allowedOrigins and CSP connect-src
+assert.ok(
+  serverJs.includes("https://healthvibes.app"),
+  "backend/server.js must whitelist https://healthvibes.app in allowedOrigins."
+);
+assert.ok(
+  serverJs.includes("healthvibes.app"),
+  "backend/server.js must enforce HSTS and CSP for healthvibes.app."
+);
+
+// 3. Static HTML pages defense-in-depth meta CSP verification
+const clinicsHtmlPath = path.join(ROOT_DIR, 'app', 'clinics.html');
+const pitchHtmlPath = path.join(ROOT_DIR, 'app', 'pitch.html');
+const clinicsHtml = fs.readFileSync(clinicsHtmlPath, 'utf-8');
+const pitchHtml = fs.readFileSync(pitchHtmlPath, 'utf-8');
+
+assert.ok(
+  indexHtml.includes("https://healthvibes.app"),
+  "app/index.html meta CSP must include https://healthvibes.app"
+);
+assert.ok(
+  clinicsHtml.includes('<meta http-equiv="Content-Security-Policy"'),
+  "app/clinics.html must include meta Content-Security-Policy tag."
+);
+assert.ok(
+  clinicsHtml.includes("https://healthvibes.app"),
+  "app/clinics.html meta CSP must include https://healthvibes.app"
+);
+assert.ok(
+  pitchHtml.includes('<meta http-equiv="Content-Security-Policy"'),
+  "app/pitch.html must include meta Content-Security-Policy tag."
+);
+assert.ok(
+  pitchHtml.includes("https://healthvibes.app"),
+  "app/pitch.html meta CSP must include https://healthvibes.app"
+);
+
+console.log("  ✓ healthvibes.app verified across Hosting headers, backend CORS/HSTS, and HTML defense-in-depth tags.");
+
 console.log("\n==================================================================");
-console.log("🎉 ALL 9 CSP & DEPLOYMENT SECURITY HEADERS TESTS PASSED WITH 100% SUCCESS!");
+console.log("🎉 ALL 10 CSP & DEPLOYMENT SECURITY HEADERS TESTS PASSED WITH 100% SUCCESS!");
 console.log("==================================================================");
