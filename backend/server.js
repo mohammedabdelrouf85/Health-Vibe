@@ -9178,6 +9178,21 @@ app.get('/api/user/privacy/status', requireAuth, async (req, res) => {
 });
 
 /**
+ * GET /api/user/privacy/retention-policy
+ * Legal retention policy disclosure (GDPR Art. 17(3)(b), HIPAA Security Rule § 164.316, Egyptian Medical Regulations)
+ * Returns the statutory retention durations, data categorization, and patient rights.
+ */
+app.get('/api/user/privacy/retention-policy', (req, res) => {
+  try {
+    const policy = privacyService.getLegalRetentionPolicy();
+    return res.json({ success: true, policy });
+  } catch (err) {
+    console.error("[RETENTION POLICY ERROR]:", err);
+    return res.status(500).json({ error: 'RETENTION_POLICY_ERROR', message: err.message });
+  }
+});
+
+/**
  * GET /api/user/privacy/inventory
  * Comprehensive data inventory across Auth, Firestore, Storage, Messages, and Backups
  */

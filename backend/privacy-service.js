@@ -25,6 +25,107 @@ const RETENTION_POLICY = Object.freeze({
   accessRequestResponseHours: 72
 });
 
+/**
+ * Returns the legally compliant Retention Policy conforming to:
+ * - Clinical Record Retention: 5 years minimum (Egyptian Medical Ethics Law / Clinical Audit / Malpractice Defense)
+ * - HIPAA Security Rule: 6 years audit log retention (45 CFR § 164.316(b)(2)(i))
+ * - GDPR Art. 17(3)(b) Right to Erasure exemptions for public health & legal compliance
+ * - Backup Retention: 30 days rolling cryptographic purge with tombstone suppression
+ */
+function getLegalRetentionPolicy() {
+  return {
+    version: '1.0.0',
+    effectiveDate: '2026-09-01',
+    organization: 'Health Vibe AI - Clinical Digital Health Platform',
+    retentionParameters: {
+      clinicalRecordsYears: RETENTION_POLICY.clinicalRecordsYears,
+      hipaaAuditLogsYears: RETENTION_POLICY.hipaaAuditLogsYears,
+      backupRetentionDays: RETENTION_POLICY.backupRetentionDays,
+      temporaryOtpMinutes: RETENTION_POLICY.temporaryOtpMinutes,
+      accessRequestResponseHours: RETENTION_POLICY.accessRequestResponseHours
+    },
+    statutoryFramework: [
+      {
+        regulation: 'GDPR Article 17(3)(b)',
+        title: 'Right to erasure exemptions for public health & legal compliance',
+        scope: 'Clinical records certified by licensed physicians are retained in an anonymized, de-identified format for clinical audit, traceability, and public health compliance.'
+      },
+      {
+        regulation: 'HIPAA Security Rule 45 CFR § 164.316(b)(2)(i)',
+        title: 'Documentation retention standard (6 years)',
+        scope: 'System security audit logs, access logs, and authorization records must be maintained for 6 years from creation date.'
+      },
+      {
+        regulation: 'Egyptian Medical Ethics & Health Records Regulations',
+        title: 'قانون تنظيم مهنة الطب ولائحة آداب المهنة (5 سنوات)',
+        scope: 'إلزامية الاحتفاظ بسجلات الفحص الطبي والقرارات السريرية لمدة 5 سنوات كحد أدنى لأغراض المراجعة السريرية والمسؤولية الطبية مع فك الارتباط الكامل بالهوية الشخصية للمريض.'
+      }
+    ],
+    categories: [
+      {
+        category: 'direct_pii',
+        nameAr: 'بيانات الهوية الشخصية المباشرة (PII)',
+        nameEn: 'Direct Personally Identifiable Information',
+        action: 'immediate_deletion',
+        actionAr: 'حذف فوري ونهائي من قاعدة البيانات والمصادقة',
+        actionEn: 'Immediate and permanent deletion from Auth and database',
+        retentionPeriod: '0 days (Immediate purge)',
+        targetSystems: ['Firebase Auth', 'users/{uid}', 'Local Storage', 'Active Sessions']
+      },
+      {
+        category: 'pending_cases',
+        nameAr: 'التقييمات والمسودات غير المعتمدة',
+        nameEn: 'Pending / Draft Clinical Cases',
+        action: 'immediate_deletion',
+        actionAr: 'حذف فوري كامل',
+        actionEn: 'Immediate complete purge',
+        retentionPeriod: '0 days (Immediate purge)',
+        targetSystems: ['cases/{caseId} (pending/draft)']
+      },
+      {
+        category: 'certified_cases',
+        nameAr: 'السجلات والتقارير الطبية المعتمدة سريرياً',
+        nameEn: 'Certified Clinical Medical Records & Reports',
+        action: 'de_identification_anonymization',
+        actionAr: 'حجب وتجريد الهوية بالكامل مع حفظ البيانات الحيوية للمسؤولية السريرية (5 سنوات)',
+        actionEn: 'Complete de-identification & anonymization; clinical parameters retained for 5 years',
+        retentionPeriod: '5 years (Clinical Audit & Malpractice Defense)',
+        legalBasis: 'Clinical Liability, Medical Code of Ethics & GDPR Art. 17(3)(b)',
+        targetSystems: ['cases/{caseId} (approved/reviewed)']
+      },
+      {
+        category: 'audit_logs',
+        nameAr: 'سجلات التدقيق الأمني والنظام',
+        nameEn: 'Security & Access Audit Logs',
+        action: 'encrypted_immutable_archive',
+        actionAr: 'أرشفة مشفرة غير قابلة للتعديل بدون معرّفات شخصية (6 سنوات)',
+        actionEn: 'Encrypted immutable archive without PII for 6 years',
+        retentionPeriod: '6 years (HIPAA Security Rule § 164.316)',
+        legalBasis: 'HIPAA Compliance & Regulatory Security Audit',
+        targetSystems: ['audit_events', 'audit_logs']
+      },
+      {
+        category: 'backups',
+        nameAr: 'النسخ الاحتياطية المشفرة',
+        nameEn: 'Encrypted System Backups',
+        action: 'rolling_purge_with_tombstone',
+        actionAr: 'تدوير وتطهير تلقائي كل 30 يوماً مع منع الاسترجاع بواسطة شواهد الحذف',
+        actionEn: 'Rolling cryptographic purge within 30 days with tombstone suppression',
+        retentionPeriod: '30 days rolling window',
+        legalBasis: 'Disaster Recovery & Data Protection by Design',
+        targetSystems: ['Cloud Storage Backups', 'Tombstone Registry']
+      }
+    ],
+    patientRights: {
+      preDeletionDataExport: true,
+      exportFormat: 'JSON (GDPR Art. 20 Data Portability)',
+      reAuthenticationRequired: true,
+      gracePeriodMinutes: 15,
+      tombstoneSuppressionActive: true
+    }
+  };
+}
+
 // In-memory registry of active / recent privacy jobs (userId -> jobState)
 const privacyJobRegistry = new Map();
 
@@ -897,6 +998,7 @@ function getJobStatus(userId) {
 module.exports = {
   RECENT_AUTH_MAX_AGE_SECONDS,
   RETENTION_POLICY,
+  getLegalRetentionPolicy,
   verifyRecentAuthentication,
   inventoryUserData,
   generateAccessRequestReport,

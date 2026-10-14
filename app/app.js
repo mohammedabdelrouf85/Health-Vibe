@@ -17979,6 +17979,175 @@ window.closePrivacyDataModal = function() {
   modal.setAttribute("aria-hidden", "true");
 };
 
+// ── Legal Retention Policy (Retention Policy) Modal Controller ──
+window.openRetentionPolicyModal = async function() {
+  const modal = document.getElementById("retentionPolicyModal");
+  const modalBody = document.getElementById("retentionPolicyModalBody");
+  if (!modal || !modalBody) return;
+
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+
+  modalBody.innerHTML = `
+    <div style="text-align: center; padding: 24px; color: var(--muted);">
+      <div class="spinner" style="margin: 0 auto 12px; width: 28px; height: 28px; border: 3px solid var(--line); border-top-color: var(--teal); border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+      ${isEn ? "Loading statutory retention policy..." : "جاري تحميل سياسة الاحتفاظ القانونية بالسجلات الطبية..."}
+    </div>
+  `;
+  modal.style.display = "flex";
+  modal.classList.add("open");
+  modal.setAttribute("aria-hidden", "false");
+
+  let policyData = null;
+  try {
+    if (typeof callBackend === "function") {
+      const resp = await callBackend("/api/user/privacy/retention-policy", { method: "GET" });
+      if (resp && resp.policy) policyData = resp.policy;
+    }
+  } catch (err) {
+    console.warn("Backend retention policy fetch fallback:", err.message);
+  }
+
+  if (!policyData) {
+    policyData = {
+      version: "1.0.0",
+      effectiveDate: "2026-09-01",
+      organization: "Health Vibe AI - Clinical Digital Health Platform",
+      retentionParameters: {
+        clinicalRecordsYears: 5,
+        hipaaAuditLogsYears: 6,
+        backupRetentionDays: 30,
+        temporaryOtpMinutes: 5,
+        accessRequestResponseHours: 72
+      },
+      statutoryFramework: [
+        {
+          regulation: "GDPR Article 17(3)(b)",
+          title: isEn ? "Right to erasure exemptions for public health & legal compliance" : "استثناءات محو السجلات للصحة العامة والمطابقة القانونية",
+          scope: isEn ? "Certified clinical records retained in an anonymized, de-identified format for clinical audit." : "الاحتفاظ بالسجلات الطبية المعتمدة بصيغة محجوبة الهوية بالكامل لأغراض التدقيق السريري."
+        },
+        {
+          regulation: "HIPAA Security Rule 45 CFR § 164.316(b)(2)(i)",
+          title: isEn ? "Documentation retention standard (6 years)" : "معيار حفظ سجلات وتدقيق النظام (6 سنوات)",
+          scope: isEn ? "Security audit logs and access events are preserved for 6 years." : "حفظ سجلات التدقيق الأمني والأحداث الحساسة مشفرة لمدة 6 سنوات."
+        },
+        {
+          regulation: isEn ? "Medical Ethics & Clinical Malpractice Code" : "قانون تنظيم مهنة الطب ولائحة آداب المهنة (5 سنوات)",
+          title: isEn ? "Mandatory Clinical Record Retention (5 years)" : "إلزامية الاحتفاظ بالسجلات السريرية الطبية",
+          scope: isEn ? "Retention of clinical decisions and triage parameters for 5 years with total patient de-identification." : "حفظ القرارات السريرية والقياسات الحيوية لمدة 5 سنوات مع حجب وتجريد الهوية الشخصية للمريض بالكامل."
+        }
+      ],
+      categories: [
+        {
+          nameAr: "بيانات الهوية الشخصية المباشرة (PII)",
+          nameEn: "Direct Personally Identifiable Information",
+          retentionPeriod: isEn ? "0 days (Immediate purge)" : "0 أيام (حذف فوري ونهائي)",
+          actionAr: "حذف فوري من المصادقة، قاعدة البيانات، وسجلات الجلسة",
+          actionEn: "Immediate purge from Auth, database, and local sessions"
+        },
+        {
+          nameAr: "التقييمات والمسودات غير المعتمدة",
+          nameEn: "Pending / Draft Clinical Cases",
+          retentionPeriod: isEn ? "0 days (Immediate purge)" : "0 أيام (حذف فوري كامل)",
+          actionAr: "حذف فوري من الحالات",
+          actionEn: "Immediate complete deletion"
+        },
+        {
+          nameAr: "السجلات والتقارير الطبية المعتمدة سريرياً",
+          nameEn: "Certified Clinical Records & Reports",
+          retentionPeriod: isEn ? "5 years (De-identified & Anonymized)" : "5 سنوات (تجريد وحجب هوية كامل)",
+          actionAr: "تجريد الاسم والبريد واستبداله بـ Deleted Patient مع حفظ القياسات السريرية لأغراض المسؤولية الطبية",
+          actionEn: "Complete de-identification; vital parameters preserved for clinical audit"
+        },
+        {
+          nameAr: "سجلات التدقيق الأمني والنظام",
+          nameEn: "Security & Access Audit Logs",
+          retentionPeriod: isEn ? "6 years (Encrypted Archive)" : "6 سنوات (أرشفة مشفرة)",
+          actionAr: "أرشفة غير قابلة للتعديل وبدون بيانات شخصية",
+          actionEn: "Immutable encrypted archive without PII"
+        },
+        {
+          nameAr: "النسخ الاحتياطية المشفرة",
+          nameEn: "Encrypted Cloud Backups",
+          retentionPeriod: isEn ? "30 days (Rolling purge)" : "30 يوماً (تدوير وتطهير آلي)",
+          actionAr: "تطهير تلقائي دوري مع تفعيل شواهد حظر الاسترجاع (Tombstones)",
+          actionEn: "Rolling purge with cryptographic tombstone suppression"
+        }
+      ]
+    };
+  }
+
+  const p = policyData;
+  const cats = p.categories || [];
+  const stats = p.statutoryFramework || [];
+
+  let html = `
+    <div style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+        <span style="font-weight: 700; color: var(--teal);">🏛️ ${p.organization || "Health Vibe AI"}</span>
+        <span class="pill" style="font-size: 11px;">v${p.version || "1.0.0"} | ${isEn ? "Effective" : "ساري من"}: ${p.effectiveDate || "2026-09-01"}</span>
+      </div>
+      <p style="margin: 6px 0 0; font-size: 12px; color: var(--muted); line-height: 1.5;">
+        ${isEn
+          ? "This document details how medical and personal data are treated when an account deletion request is executed, specifying statutory retention obligations versus immediate right-to-erasure."
+          : "توضح هذه الوثيقة المحددة قانونياً كيفية التعامل مع البيانات الطبية والشخصية عند طلب حذف الحساب، وتحدد بدقة فترات الاحتفاظ القانونية الإلزامية مقابل محو الهوية الشخصية الفوري."}
+      </p>
+    </div>
+
+    <h4 style="margin: 12px 0 6px; font-size: 14px; color: var(--ink);">
+      ${isEn ? "1. Statutory & Regulatory Foundations" : "١. المرجعيات والتشريعات القانونية الحاكمة"}
+    </h4>
+    <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px;">
+      ${stats.map(s => `
+        <div style="background: var(--surface-2); border-left: 3px solid var(--teal); border-radius: 6px; padding: 8px 12px; font-size: 12px;">
+          <strong style="color: var(--ink);">${s.regulation || ""} - ${s.title || ""}</strong>
+          <p style="margin: 3px 0 0; color: var(--muted); line-height: 1.5;">${s.scope || ""}</p>
+        </div>
+      `).join("")}
+    </div>
+
+    <h4 style="margin: 12px 0 6px; font-size: 14px; color: var(--ink);">
+      ${isEn ? "2. Data Retention Schedules by Category" : "٢. جداول ومدد الاحتفاظ التفصيلية حسب فئة البيانات"}
+    </h4>
+    <div style="overflow-x: auto; margin-bottom: 14px;">
+      <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: ${isEn ? 'left' : 'right'};">
+        <thead>
+          <tr style="background: var(--surface-2); border-bottom: 1px solid var(--line);">
+            <th style="padding: 8px 10px; color: var(--ink);">${isEn ? "Data Category" : "فئة البيانات"}</th>
+            <th style="padding: 8px 10px; color: var(--ink);">${isEn ? "Retention Period" : "مدة الاحتفاظ"}</th>
+            <th style="padding: 8px 10px; color: var(--ink);">${isEn ? "Action / Measure" : "إجراء الحذف والتعقيم"}</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${cats.map(c => `
+            <tr style="border-bottom: 1px solid var(--line);">
+              <td style="padding: 8px 10px; font-weight: 600; color: var(--ink);">${isEn ? (c.nameEn || c.nameAr) : (c.nameAr || c.nameEn)}</td>
+              <td style="padding: 8px 10px; color: var(--teal); font-weight: 700;">${c.retentionPeriod || ""}</td>
+              <td style="padding: 8px 10px; color: var(--muted); line-height: 1.4;">${isEn ? (c.actionEn || c.actionAr || "") : (c.actionAr || c.actionEn || "")}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+
+    <div style="background: rgba(14, 165, 164, 0.08); border: 1px solid var(--teal); border-radius: 8px; padding: 10px 12px; font-size: 12px; color: var(--ink); line-height: 1.6;">
+      <strong>🛡️ ${isEn ? "Patient Rights & Safeguards" : "ضمانات وحقوق المريض"}:</strong>
+      ${isEn
+        ? " You can export your full medical records in JSON format at any time before deletion. Certified clinical records are de-identified so no personal identity remains associated with your medical triage metrics."
+        : " يحق لك تصدير نسختك الطبية الكاملة بصيغة JSON قبل حذف الحساب في أي وقت. السجلات الطبية السابقة يتم حجب هويتك عنها بالكامل بحيث لا يمكن بأي شكل ربط القيم الطبية بهويتك الشخصية."}
+    </div>
+  `;
+
+  modalBody.innerHTML = html;
+};
+
+window.closeRetentionPolicyModal = function() {
+  const modal = document.getElementById("retentionPolicyModal");
+  if (!modal) return;
+  modal.style.display = "none";
+  modal.classList.remove("open");
+  modal.setAttribute("aria-hidden", "true");
+};
+
 window.openDeleteAccountModal = function() {
   const modal = document.getElementById("deleteAccountModal");
   if (!modal) return;

@@ -26,4 +26,10 @@ class ApiEndpoints {
   static String get pushSubscription => '$baseUrl/api/notifications/push-subscription';
   static String get notificationPreferences => '$baseUrl/api/notifications/preferences';
   static String get notificationHistory => '$baseUrl/api/notifications/history';
+
+  // Privacy, Account Deletion & Legal Retention Policy
+  static String get deleteAccount => '$baseUrl/api/user/delete-account';
+  static String get retentionPolicy => '$baseUrl/api/user/privacy/retention-policy';
+  static String get dataExport => '$baseUrl/api/user/data-export';
+  static String get accessRequest => '$baseUrl/api/user/access-request';
 }

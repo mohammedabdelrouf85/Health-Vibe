@@ -15,6 +15,7 @@
     "test:synthetic-patients": "node tests/strict_synthetic_patients_and_consent_guard.test.js",
     "test:https-tls13": "node tests/strict_https_tls13_enforcement.test.js",
     "test:aes256-encryption": "node tests/strict_aes256_at_rest_encryption.test.js",
+    "test:account-deletion": "node tests/strict_patient_account_deletion_and_retention.test.js",
     "test:doctor-approval-guard": "node tests/strict_verified_doctor_approval_guard.test.js",
     "test:doctor-assigned-queries": "node tests/strict_doctor_assigned_queries.test.js",
     "test:doctor-walkthrough": "node tests/doctor_review_and_wcag_links.test.js",

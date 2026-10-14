@@ -1048,29 +1048,43 @@
           <!-- Authentication Providers & Security Panel -->
           <div id="authProvidersContainer" style="grid-column: 1 / -1;"></div>
 
-          <!-- Account & Data Deletion Card (GDPR / HIPAA Right to Erasure) -->
-          <article class="panel" id="accountDeletionCard" style="grid-column: 1 / -1; margin-top: 14px; border: 1px solid rgba(239, 68, 68, 0.25); background: rgba(239, 68, 68, 0.03);">
-            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
-              <div>
-                <strong style="color: #ef4444; font-size: 15px; display: flex; align-items: center; gap: 6px;">
-                  <span>🗑️</span> إدارة وتصدير البيانات وحذف الحساب (Privacy & Data Rights)
+          <!-- Account & Medical Data Deletion Card (GDPR / HIPAA Right to Erasure & Legal Retention) -->
+          <article class="panel" id="accountDeletionCard" style="grid-column: 1 / -1; margin-top: 14px; border: 1px solid rgba(239, 68, 68, 0.3); background: rgba(239, 68, 68, 0.025); border-radius: 12px; padding: 16px 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px;">
+              <div style="max-width: 680px;">
+                <strong style="color: #ef4444; font-size: 16px; display: flex; align-items: center; gap: 8px;">
+                  <span>🗑️</span> مسار طلب حذف الحساب والبيانات الطبية وسجل الخصوصية (Account & Data Deletion)
                 </strong>
-                <p style="margin: 4px 0 0; font-size: 13px; color: var(--muted); line-height: 1.5;">
-                  بموجب معايير حماية الخصوصية وميثاق الحق في محو البيانات، يمكنك تنزيل نسخة من سجلاتك أو حذف حسابك نهائياً.
+                <p style="margin: 6px 0 10px; font-size: 13px; color: var(--muted); line-height: 1.6;">
+                  بموجب معايير حماية البيانات والحق في محو السجلات (Right to Erasure / GDPR Art. 17)، تتيح لك المنصة طلب حذف حسابك وبياناتك الطبية بالكامل أو تنزيل نسخة موثقة منها قبل الحذف، مع الالتزام بـ <strong>سياسة الاحتفاظ القانونية (Retention Policy)</strong> للسجلات السريرية المعتمدة.
                 </p>
+
+                <!-- Retention Policy Highlights Box -->
+                <div style="background: var(--surface-2, rgba(0,0,0,0.03)); border: 1px solid var(--line, rgba(0,0,0,0.08)); border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; font-size: 12.5px; line-height: 1.65; color: var(--ink);">
+                  <div style="font-weight: 700; color: var(--teal, #0ea5a4); margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                    <span>⚖️</span> سياسة الاحتفاظ القانونية بالسجلات الطبية (Legal Retention Policy):
+                  </div>
+                  <ul style="margin: 0; padding-inline-start: 18px; color: var(--muted);">
+                    <li><strong>حذف فوري (0 أيام):</strong> البيانات الشخصية المباشرة (PII)، بيانات الاعتماد، المسودات غير المعتمدة، وسجلات الجلسة المحلية.</li>
+                    <li><strong>حفظ مشروط مع حجب الهوية (5 سنوات):</strong> السجلات والتقارير الطبية المعتمدة سريرياً تُجرّد من الهوية بالكامل (Anonymization) وتُحفظ لمدة 5 سنوات لأغراض المسؤولية والتدقيق السريري الطبي (GDPR Art. 17(3)(b) وقوانين آداب المهنة الطبية).</li>
+                    <li><strong>سجلات التدقيق الأمني (6 سنوات):</strong> أرشفة غير قابلة للتعديل وبدون PII امتثالاً لمعيار HIPAA § 164.316.</li>
+                    <li><strong>النسخ الاحتياطية (30 يوماً):</strong> تدوير وتطهير سحابي آلي مع شواهد حظر الاسترجاع (Tombstones).</li>
+                  </ul>
+                </div>
               </div>
-              <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                <button type="button" class="soft-button" onclick="switchAccount(event)" style="font-size: 13px; padding: 8px 14px; display: inline-flex; align-items: center; gap: 6px;" data-i18n-title="nav.switchAccount">
-                  <span>🔄</span> <span data-i18n="nav.switchAccount">تبديل الحساب</span>
+
+              <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                <button type="button" class="soft-button" onclick="exportUserData()" style="font-size: 13px; padding: 9px 14px; font-weight: 600;">
+                  📥 تصدير بياناتي الطبية (JSON)
                 </button>
-                <button type="button" class="soft-button" onclick="exportUserData()" style="font-size: 13px; padding: 8px 14px;">
-                  📥 تصدير بياناتي (JSON)
+                <button type="button" class="soft-button" onclick="openRetentionPolicyModal()" style="font-size: 13px; padding: 9px 14px;">
+                  📜 سياسة الاحتفاظ القانونية
                 </button>
-                <button type="button" class="soft-button" onclick="requestAccessReport()" style="font-size: 13px; padding: 8px 14px;">
+                <button type="button" class="soft-button" onclick="requestAccessReport()" style="font-size: 13px; padding: 9px 14px;">
                   📋 تقرير الوصول (Art. 15)
                 </button>
-                <button type="button" class="outline-button" onclick="openDeleteAccountModal()" style="border-color: rgba(239, 68, 68, 0.5); color: #ef4444; font-size: 13px; padding: 8px 14px;">
-                  ⚠️ حذف الحساب والبيانات
+                <button type="button" class="solid-button" onclick="openDeleteAccountModal()" style="background: #dc2626; border-color: #dc2626; color: #fff; font-size: 13px; padding: 9px 16px; font-weight: 600;">
+                  ⚠️ طلب حذف الحساب والبيانات
                 </button>
               </div>
             </div>
@@ -3083,51 +3097,72 @@
 
   <!-- Delete Account Confirmation Modal -->
   <div id="deleteAccountModal" class="confirm-modal" role="alertdialog" aria-modal="true" aria-labelledby="deleteAccountTitle" aria-describedby="deleteAccountWarning" aria-hidden="true">
-    <div class="confirm-card" style="width: min(520px, 100%); text-align: right; max-height: 90vh; overflow-y: auto;">
+    <div class="confirm-card" style="width: min(560px, 100%); text-align: right; max-height: 90vh; overflow-y: auto;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
         <div style="display: flex; align-items: center; gap: 8px;">
           <span style="font-size: 22px;">⚠️</span>
-          <h3 id="deleteAccountTitle" style="margin: 0; font-size: 18px; color: #ef4444;" data-i18n="auth.deleteAccountTitle">حذف الحساب والبيانات السريرية</h3>
+          <h3 id="deleteAccountTitle" style="margin: 0; font-size: 18px; color: #ef4444;" data-i18n="auth.deleteAccountTitle">حذف الحساب والبيانات الطبية (Right to Erasure)</h3>
         </div>
         <button type="button" class="close-button" onclick="closeDeleteAccountModal()" aria-label="Close">×</button>
       </div>
 
-      <div id="deleteAccountWarning" class="emergency-alert-card critical-oxygen" style="margin-bottom: 16px; padding: 12px 14px;">
+      <div id="deleteAccountWarning" class="emergency-alert-card critical-oxygen" style="margin-bottom: 14px; padding: 12px 14px;">
         <strong style="color: #dc2626; font-size: 13px;">تنبيه هام: هذا الإجراء نهائي ولا يمكن التراجع عنه!</strong>
         <p style="font-size: 12.5px; margin: 4px 0 0; color: var(--ink); line-height: 1.5;">
-          عند إتمام الحذف، ستفقد إمكانية الوصول إلى المنصة وسيتم حذف أو إخفاء هوية كافة بياناتك المسجلة.
+          عند إتمام الحذف، سيتم إنهاء حسابك وحذف كافة بياناتك الشخصية المباشرة فوراً وتطبيق سياسة الاحتفاظ القانونية على السجلات السريرية المعتمدة.
         </p>
       </div>
 
-      <ul style="font-size: 13px; color: var(--muted); line-height: 1.8; margin-bottom: 16px; padding-inline-start: 20px;">
-        <li>سيتم حذف حسابك من نظام المصادقة (Firebase Auth) فوراً.</li>
-        <li>سيتم حذف ملفك الطبي ومعلومات الاتصال بالكامل من قاعدة البيانات.</li>
-        <li>سيتم حذف أي طلبات توثيق طبية أو مستندات مرفوعة.</li>
-        <li>الحالات والتقارير المعتمدة سابقاً سيتم حجب هويتك عنها بالكامل (Anonymization) امتثالاً لسجلات التدقيق السريري.</li>
-        <li>سيتم تطهير وتصفير كافة سجلات الموافقة والجلسة المخزنة على هذا الجهاز.</li>
-      </ul>
+      <!-- Pre-deletion Data Portability / Export Banner -->
+      <div style="background: rgba(14, 165, 164, 0.08); border: 1px dashed var(--teal, #0ea5a4); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+        <div style="font-size: 12.5px; color: var(--ink);">
+          💡 <strong>هل ترغب في حفظ نسخة من ملفك؟</strong> يمكنك تنزيل بياناتك الطبية قبل الحذف:
+        </div>
+        <button type="button" class="soft-button" onclick="exportUserData()" style="font-size: 12px; padding: 6px 12px; font-weight: 600;">
+          📥 تصدير بياناتي (JSON)
+        </button>
+      </div>
 
-      <div style="margin-bottom: 16px;">
+      <!-- Legal Retention Policy Breakdown -->
+      <div style="background: var(--surface-2, rgba(0,0,0,0.03)); border: 1px solid var(--line, rgba(0,0,0,0.08)); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+          <strong style="font-size: 13px; color: var(--teal, #0ea5a4); display: flex; align-items: center; gap: 6px;">
+            <span>⚖️</span> سياسة الاحتفاظ القانونية بالبيانات (Retention Policy)
+          </strong>
+          <button type="button" class="link-button" onclick="openRetentionPolicyModal()" style="font-size: 12px; text-decoration: underline; color: var(--teal, #0ea5a4); background: transparent; border: none; cursor: pointer; padding: 0;">
+            عرض السياسة الكاملة
+          </button>
+        </div>
+        <ul style="font-size: 12.5px; color: var(--muted); line-height: 1.7; margin: 0; padding-inline-start: 18px;">
+          <li><strong>البيانات الشخصية (PII):</strong> حذف فوري ونهائي من Firebase Auth وقاعدة البيانات ومن الجلسات النشطة.</li>
+          <li><strong>المسودات والتقييمات غير المعتمدة:</strong> حذف كامل وفوري.</li>
+          <li><strong>السجلات الطبية المعتمدة سريرياً:</strong> فك الارتباط وحجب الهوية بالكامل (Anonymization) مع الاحتفاظ بالقيم السريرية لمدة <strong>5 سنوات</strong> التزاماً بالقوانين الطبية والمسؤولية والتدقيق السريري (GDPR Art. 17(3)(b)).</li>
+          <li><strong>سجلات التدقيق الأمني:</strong> أرشفة مشفرة لمدة <strong>6 سنوات</strong> امتثالاً للائحة HIPAA § 164.316.</li>
+          <li><strong>النسخ الاحتياطية:</strong> تدوير وتطهير سحابي آلي كل <strong>30 يوماً</strong> مع حظر الاسترجاع (Tombstone).</li>
+        </ul>
+      </div>
+
+      <div style="margin-bottom: 14px;">
         <label for="deleteConfirmationInput" style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--ink);">
           لتأكيد الحذف، اكتب كلمة <strong style="color: #ef4444;">DELETE</strong> أو <strong style="color: #ef4444;">حذف</strong> أدناه:
         </label>
         <input type="text" id="deleteConfirmationInput" placeholder="اكتب DELETE أو حذف هنا" autocomplete="off" style="width: 100%; padding: 10px 14px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; background: var(--surface-2); color: var(--ink);">
       </div>
 
-      <div id="deleteReauthGroup" style="display: none; margin-bottom: 16px;">
+      <div id="deleteReauthGroup" style="display: none; margin-bottom: 14px;">
         <label for="deletePasswordInput" style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--ink);">
           يرجى إدخال كلمة المرور الحالية لتأكيد الهوية:
         </label>
         <input type="password" id="deletePasswordInput" placeholder="كلمة المرور الحالية" autocomplete="current-password" style="width: 100%; padding: 10px 14px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; background: var(--surface-2); color: var(--ink);">
       </div>
 
-      <div id="deleteProgressContainer" style="display: none; margin-bottom: 16px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px;">
+      <div id="deleteProgressContainer" style="display: none; margin-bottom: 14px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px;">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
           <span style="font-size: 13px; font-weight: 700; color: var(--ink);" id="deleteProgressTitle">جاري تنفيذ مراحل الحذف والتعقيم...</span>
           <span class="pill" id="deleteProgressBadge" style="font-size: 10.5px; padding: 2px 8px; background: rgba(14, 165, 164, 0.15); color: var(--teal);">قيد المعالجة</span>
         </div>
         <div style="font-size: 12px; color: var(--muted); line-height: 1.6;" id="deleteProgressStatus">
-          فحص الملفات والسجلات والنسخ الاحتياطية...
+          فحص الملفات والسجلات والنسخ الاحتياطية وتطبيق شواهد الحذف...
         </div>
         <div id="deleteStepsList" style="margin-top: 8px; font-size: 11.5px; color: var(--muted); display: flex; flex-direction: column; gap: 4px;"></div>
       </div>
@@ -3141,6 +3176,32 @@
         </button>
         <button type="button" class="outline-button" onclick="closeDeleteAccountModal()" style="width: 100%; justify-content: center; padding: 10px; font-size: 13.5px;">
           إلغاء والاحتفاظ بحسابي
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Legal Retention Policy Full Details Modal -->
+  <div id="retentionPolicyModal" class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="retentionPolicyModalTitle" aria-describedby="retentionPolicyModalBody" aria-hidden="true" style="display: none;">
+    <div class="confirm-card" style="width: min(680px, 100%); text-align: start; max-height: 90vh; overflow-y: auto;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 22px;">📜</span>
+          <h3 id="retentionPolicyModalTitle" style="margin: 0; font-size: 18px; color: var(--ink);">سياسة الاحتفاظ القانونية بالسجلات الطبية (Legal Retention Policy)</h3>
+        </div>
+        <button type="button" class="close-button" onclick="closeRetentionPolicyModal()" aria-label="Close">×</button>
+      </div>
+
+      <div id="retentionPolicyModalBody" style="font-size: 13px; color: var(--ink); line-height: 1.7; margin-bottom: 18px;">
+        <!-- Dynamically populated or static fallback -->
+      </div>
+
+      <div style="display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap;">
+        <button type="button" class="soft-button" onclick="exportUserData()" style="padding: 8px 18px; font-size: 13px;">
+          📥 تصدير بياناتي الطبية (JSON)
+        </button>
+        <button type="button" class="solid-button" onclick="closeRetentionPolicyModal()" style="padding: 8px 22px; font-size: 13px;">
+          فهمت سياسة الاحتفاظ
         </button>
       </div>
     </div>
