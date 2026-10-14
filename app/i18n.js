@@ -811,6 +811,18 @@
         bloodDisordersTitle: "تجلط الدم / اضطرابات الدم",
         obesityTitle: "السمنة",
         moduleDataNotice: "البيانات مسحوبة مباشرة من سجلك السريري الموثق. غير مسموح بعرض أي بيانات افتراضية أو غير معتمدة."
+      },
+      workflow: {
+        eyebrow: "المسار",
+        title: "مسار واضح من البيانات إلى التقرير الطبي المعتمد",
+        step1Title: "بيانات المريض",
+        step1Desc: "أعراض، قياسات حيوية، سجل طبي، وموافقة خصوصية واضحة ومستنيرة.",
+        step2Title: "تحليل الذكاء الاصطناعي",
+        step2Desc: "نموذج يدمج Validated Machine Learning Model + Clinical Rules (تعلم آلي مدقق ومختبر مدمج مع قواعد الفرز السريري) لتصنيف موضوعي للمخاطر وتحديد أولوية الفرز السريري وفق متطلبات PRD (القسم 7.1).",
+        step3Title: "مراجعة الطبيب",
+        step3Desc: "طبيب مرخص يعتمد الحالة، يرفضها، أو يطلب متابعة سريرية إضافية.",
+        step4Title: "تقرير معتمد",
+        step4Desc: "نتائج مدققة وتوصيات طبية وتنبيهات أمان مسجلة وموثقة بأمان."
       }
     },
 
@@ -938,6 +950,8 @@
         workstationShared: "Shared Station (Session-only)",
         forgotPassword: "Forgot password?",
         continueWithGoogle: "Continue with Google",
+        googleDemoNotice: "Google Sign-In is configured for live environments linked to authorized domains. In this Demo environment, please use interactive preview or demo credentials.",
+        googleDemoBadge: "Demo Mode",
         accountRole: "Account role",
         accountType: "Account Type",
         rolePatient: "👤 Patient",
@@ -1611,6 +1625,18 @@
         lastUpdated: "Last Documented Update",
         noAccountDataMessage: "No documented account data available for this module yet.",
         realDataOnlyNotice: "Clinical Notice: This dashboard displays exclusively real persisted account data without synthetic estimates or fabricated results."
+      },
+      workflow: {
+        eyebrow: "Workflow",
+        title: "A Clear Pathway From Data to Certified Report",
+        step1Title: "Patient Data",
+        step1Desc: "Symptoms, vitals, medical history, and transparent privacy consent.",
+        step2Title: "AI Analysis",
+        step2Desc: "Validated Machine Learning Model + Clinical Rules for objective risk classification and triage prioritization (PRD 7.1).",
+        step3Title: "Doctor Review",
+        step3Desc: "Licensed physician approves, rejects, or requests supplementary follow-up.",
+        step4Title: "Certified Report",
+        step4Desc: "Validated results, medical recommendations, and safety alerts recorded securely."
       }
     }
   };
