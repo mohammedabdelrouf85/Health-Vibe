@@ -329,7 +329,7 @@ const ROLE_PERMISSIONS_MAP = {
 
 const ROLE_ALLOWED_SCREENS = {
   [ROLES.PATIENT]: [
-    "patient", "consent", "profile", "assessment", "pending", "result",
+    "patient", "consent", "profile", "complete-medical-profile", "assessment", "pending", "result",
     "history", "appointments", "feedback", "assistant", "report", "verify-report", "verify",
     "diabetes", "hypertension", "blood-disorders", "obesity"
   ],
@@ -355,7 +355,7 @@ const ROLE_ALLOWED_SCREENS = {
     "profile", "kpi", "verify-report", "verify"
   ],
   [ROLES.SUPER_ADMIN]: [
-    "patient", "consent", "profile", "assessment", "pending", "result",
+    "patient", "consent", "profile", "complete-medical-profile", "assessment", "pending", "result",
     "history", "appointments", "feedback", "assistant", "verification",
     "doctor", "kpi", "report", "admin", "audit", "verify-report", "verify",
     "diabetes", "hypertension", "blood-disorders", "obesity"
@@ -381,7 +381,7 @@ window.handleOpenDoctorApply = handleOpenDoctorApply;
  * All screens except these are considered public (e.g. initial patient splash).
  */
 const AUTH_REQUIRED_SCREENS = [
-  "consent", "profile", "assessment", "pending", "result",
+  "consent", "profile", "complete-medical-profile", "assessment", "pending", "result",
   "history", "appointments", "feedback", "assistant", "report",
   "verification", "doctor", "kpi", "admin", "audit",
   "diabetes", "hypertension", "blood-disorders", "obesity"
@@ -6157,10 +6157,11 @@ async function handleEmailAuth(e) {
       console.warn("Auth persistence warning:", persErr);
     }
 
+    const cleanEmail = email.toLowerCase().trim();
     if (authMode === "signup") {
-      const cred = await auth.createUserWithEmailAndPassword(email, password);
+      const cred = await auth.createUserWithEmailAndPassword(cleanEmail, password);
       const user = cred.user;
-      const displayName = name || email.split("@")[0];
+      const displayName = name || cleanEmail.split("@")[0];
       try {
         await user.updateProfile({ displayName });
       } catch (profileErr) {
@@ -6180,17 +6181,31 @@ async function handleEmailAuth(e) {
           acceptedAt: new Date().toISOString(),
           purpose: "PRD Section 10: Explicit consent for clinical data processing, physician review, and verified reports."
         };
-        const firestoreWritePromise = db.collection("users").doc(user.uid).set({
+        const initialUserData = {
           name: displayName,
           email: user.email,
-          role: safeRole,
-          status: safeRole === ROLES.DOCTOR_PENDING ? "pending_verification" : "active",
           privacyConsent: consentData,
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        }, { merge: true });
+        };
+        const firestoreWritePromise = db.collection("users").doc(user.uid).set(initialUserData, { merge: true });
         await Promise.race([firestoreWritePromise, new Promise((_, rej) => setTimeout(() => rej(new Error("firestore_timeout")), 7000))]);
         if (typeof savePrivacyConsent === "function") {
           savePrivacyConsent(true).catch(e => console.warn("savePrivacyConsent error:", e));
+        }
+
+        // Authoritatively sync user role and custom claims via Backend Admin SDK
+        if (typeof callBackend === "function") {
+          try {
+            const syncRes = await callBackend("/api/user/sync-role", {
+              method: "POST",
+              body: JSON.stringify({ requestedRole: safeRole })
+            });
+            if (syncRes && syncRes.role) {
+              selectedRole = syncRes.role;
+            }
+          } catch (syncErr) {
+            console.warn("Backend sync-role error:", syncErr);
+          }
         }
       } catch (docErr) {
         console.warn("Firestore user document init warning:", docErr);
@@ -6205,10 +6220,29 @@ async function handleEmailAuth(e) {
       }
       saveActiveSession(user, selectedRole);
       showToast(isEn ? "Account created successfully!" : "تم إنشاء الحساب بنجاح!");
-      transitionToApp(user);
+      const targetScreen = (selectedRole === ROLES.PATIENT || selectedRole === "patient") ? "complete-medical-profile" : undefined;
+      transitionToApp(user, { targetScreen, isNewSignup: true });
     } else {
-      const cred = await auth.signInWithEmailAndPassword(email, password);
+      const cred = await auth.signInWithEmailAndPassword(cleanEmail, password);
       const user = cred.user || auth.currentUser;
+
+      // Authoritatively resolve user role and cached profile from Firestore before UI transition
+      try {
+        const userDoc = await db.collection("users").doc(user.uid).get();
+        if (userDoc.exists) {
+          const udata = userDoc.data();
+          window._cachedUserDoc = udata;
+          const isOwner = isOwnerUser(user.email);
+          if (udata.role && VALID_ROLES.includes(udata.role)) {
+            selectedRole = udata.role;
+          } else if (isOwner) {
+            selectedRole = ROLES.SUPER_ADMIN;
+          }
+        }
+      } catch (docErr) {
+        console.warn("Could not fetch user document during sign-in:", docErr);
+      }
+
       saveActiveSession(user, selectedRole);
       showToast(isEn ? "Signed in successfully!" : "تم تسجيل الدخول بنجاح!");
       transitionToApp(user);
@@ -6398,7 +6432,11 @@ function transitionToApp(user, options = {}) {
     let savedScreen = "";
     try { savedScreen = ""; } catch(e) {}
     const defaultScreen = getRoleDefaultScreen(selectedRole);
-    const targetScreen = (savedScreen && canAccessScreen(savedScreen)) ? savedScreen : defaultScreen;
+    let targetScreen = options.targetScreen || ((savedScreen && canAccessScreen(savedScreen)) ? savedScreen : defaultScreen);
+    if ((selectedRole === ROLES.PATIENT || selectedRole === "patient") &&
+        (options.isNewSignup || options.targetScreen === "complete-medical-profile" || (typeof isPatientMedicalProfileIncomplete === "function" && isPatientMedicalProfileIncomplete()))) {
+      targetScreen = "complete-medical-profile";
+    }
     showScreen(targetScreen);
   }
   applyLanguage(currentLanguage);
@@ -6583,10 +6621,15 @@ async function enterApp(source = "google") {
 
       const activeAuth = (typeof auth !== "undefined" && auth) || (typeof firebase !== "undefined" && firebase.auth ? firebase.auth() : null);
 
-      // 3. Initiate Google Identity Services OAuth popup flow via Firebase auth or GIS
+      // 3. Initiate Google OAuth flow with mobile-friendly redirect & popup fail-safes
       if (activeAuth && activeProvider) {
+        const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent || "") || window.innerWidth < 768;
         try {
-          if (typeof activeAuth.signInWithPopup === "function") {
+          if (isMobileDevice && typeof activeAuth.signInWithRedirect === "function") {
+            console.log("[Health Vibe] Mobile device detected, initiating redirect sign-in flow...");
+            await activeAuth.signInWithRedirect(activeProvider);
+            return;
+          } else if (typeof activeAuth.signInWithPopup === "function") {
             const result = await activeAuth.signInWithPopup(activeProvider);
             user = result ? result.user : null;
           } else if (typeof activeAuth.signInWithRedirect === "function") {
@@ -6596,14 +6639,33 @@ async function enterApp(source = "google") {
         } catch (popupErr) {
           const errCode = String(popupErr.code || "").toLowerCase();
 
-          // If popup was blocked by browser, attempt seamless redirect flow
-          if (errCode === "auth/popup-blocked" && typeof activeAuth.signInWithRedirect === "function") {
-            console.warn("[Health Vibe] Google popup was blocked by browser. Attempting redirect sign-in flow...");
+          // If popup was blocked or closed prematurely by mobile browser, fallback to seamless redirect
+          if ((errCode === "auth/popup-blocked" || errCode === "auth/cancelled-popup-request" || errCode === "auth/popup-closed-by-user" && isMobileDevice) && typeof activeAuth.signInWithRedirect === "function") {
+            console.warn("[Health Vibe] Google popup interrupted. Falling back to redirect sign-in flow...");
             try {
               await activeAuth.signInWithRedirect(activeProvider);
               return;
             } catch (redirectErr) {
               console.warn("[Health Vibe] Google redirect sign-in failed:", redirectErr);
+            }
+          }
+
+          // Handle unauthorized custom domain gracefully
+          if (errCode.includes("unauthorized-domain")) {
+            console.error("[Health Vibe] Domain not yet authorized in Firebase Console:", window.location.hostname);
+            const currentHost = window.location.hostname;
+            const primaryDomain = "https://health-vibes-a4b3b.web.app";
+            if (typeof showCentralErrorModal === "function") {
+              showCentralErrorModal({
+                category: isEn ? "Domain Security" : "أمان النطاق والتسجيل",
+                title: isEn ? "Domain Awaiting Firebase Authorization" : "النطاق بانتظار الاعتماد في Firebase",
+                message: isEn
+                  ? `The domain "${currentHost}" is not yet registered in Firebase Console (Authentication > Settings > Authorized Domains).`
+                  : `النطاق "${currentHost}" يحتاج إلى إضافته في قائمة النطاقات المعتمدة (Authorized Domains) في إعدادات Firebase Authentication.`,
+                action: isEn
+                  ? `You can sign in right now using Email & Password, or sign in with Google directly through: ${primaryDomain}`
+                  : `يمكنك تسجيل الدخول الآن باستخدام البريد الإلكتروني وكلمة المرور أدناه، أو تسجيل الدخول عبر جوجل من الرابط المعتمد: ${primaryDomain}`
+              });
             }
           }
 
@@ -8346,6 +8408,369 @@ window.handleCorrectProfileClick = handleCorrectProfileClick;
 window.loadUserProfileData = loadUserProfileData;
 window.saveUserProfileData = saveUserProfileData;
 
+// =========================================================================
+// 🩺 MEDICAL PROFILE ONBOARDING & SETUP CONTROLLER (PRD Page 8 Req 39)
+// Immediately upon registration or first login, ensures all 8 clinical
+// baseline indicators are completed:
+// 1. السن (Age / DOB)
+// 2. النوع (Biological Sex)
+// 3. الوزن (Weight)
+// 4. الطول (Height & BMI)
+// 5. التدخين (Smoking History & Details)
+// 6. الأمراض المزمنة (Chronic Conditions)
+// 7. الحساسية الدوائية (Drug Allergies)
+// 8. الطبيب المعالج والعيادة (Attending Physician & Clinic)
+// =========================================================================
+
+function isPatientMedicalProfileIncomplete(doc) {
+  const d = doc || window._cachedUserDoc || {};
+  const hasAge = Boolean(d.dateOfBirth || d.dob || d.age);
+  const hasSex = Boolean((d.biologicalSex && d.biologicalSex !== "not_specified") || (d.sex && d.sex !== "not_specified"));
+  const hasWeight = Boolean(d.weight || d.weightKg || d.biometrics?.weightKg);
+  const hasHeight = Boolean(d.height || d.heightCm || d.biometrics?.heightCm);
+  const hasSmoking = Boolean(d.smokingStatus || d.smoking?.status);
+  const hasChronic = Boolean(d.chronicConditions || d.medicalHistory?.chronicConditions);
+  const hasAllergies = Boolean(d.allergies || d.drugAllergies || d.medicalHistory?.allergies);
+  const hasDoctor = Boolean(d.linkedDoctor || d.attendingPhysician || d.clinicLinkage?.linkedDoctorName);
+
+  return !(hasAge && hasSex && hasWeight && hasHeight && hasSmoking && hasChronic && hasAllergies && hasDoctor);
+}
+window.isPatientMedicalProfileIncomplete = isPatientMedicalProfileIncomplete;
+
+function handleCmpDobChange() {
+  const dobEl = document.getElementById("cmpDob");
+  const badge = document.getElementById("cmpCalculatedAgeBadge");
+  const fallbackInput = document.getElementById("cmpAgeFallback");
+  if (!dobEl || !dobEl.value) {
+    if (badge) badge.textContent = (typeof currentLanguage !== "undefined" && currentLanguage === "en") ? "Age: --" : "العمر: --";
+    return;
+  }
+  const age = calculateAge(dobEl.value);
+  if (age !== null) {
+    if (badge) badge.textContent = (typeof currentLanguage !== "undefined" && currentLanguage === "en") ? `Age: ${age} yrs` : `العمر: ${age} سنة`;
+    if (fallbackInput) fallbackInput.value = String(age);
+  }
+  updateCmpProgress();
+}
+window.handleCmpDobChange = handleCmpDobChange;
+
+function handleCmpAgeFallbackChange() {
+  const fallbackInput = document.getElementById("cmpAgeFallback");
+  const badge = document.getElementById("cmpCalculatedAgeBadge");
+  if (!fallbackInput || !fallbackInput.value) return;
+  const age = parseInt(fallbackInput.value, 10);
+  if (!isNaN(age) && age > 0) {
+    if (badge) badge.textContent = (typeof currentLanguage !== "undefined" && currentLanguage === "en") ? `Age: ${age} yrs` : `العمر: ${age} سنة`;
+  }
+  updateCmpProgress();
+}
+window.handleCmpAgeFallbackChange = handleCmpAgeFallbackChange;
+
+function updateCmpBmi() {
+  const heightEl = document.getElementById("cmpHeight");
+  const weightEl = document.getElementById("cmpWeight");
+  const bmiBadge = document.getElementById("cmpBmiBadge");
+  if (!heightEl || !weightEl || !bmiBadge) return;
+
+  const h = parseFloat(heightEl.value);
+  const w = parseFloat(weightEl.value);
+  const bmi = calculateBmi(h, w);
+  const isEn = (typeof currentLanguage !== "undefined" && currentLanguage === "en");
+  if (bmi !== null && !isNaN(bmi)) {
+    let category = "";
+    if (bmi < 18.5) category = isEn ? "Underweight" : "نقص وزن";
+    else if (bmi < 25) category = isEn ? "Normal" : "وزن طبيعي";
+    else if (bmi < 30) category = isEn ? "Overweight" : "زيادة وزن";
+    else category = isEn ? "Obese" : "سمنة";
+
+    bmiBadge.textContent = isEn ? `BMI: ${bmi} (${category})` : `مؤشر الكتلة: ${bmi} (${category})`;
+  } else {
+    bmiBadge.textContent = isEn ? "BMI: --" : "مؤشر الكتلة (BMI): --";
+  }
+  updateCmpProgress();
+}
+window.updateCmpBmi = updateCmpBmi;
+
+function addCmpTag(inputId, text, isExclusive = false) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  if (isExclusive) {
+    input.value = text;
+  } else {
+    const existing = input.value.trim();
+    if (!existing || existing.includes("لا توجد")) {
+      input.value = text;
+    } else if (!existing.includes(text)) {
+      input.value = existing + "، " + text;
+    }
+  }
+  updateCmpProgress();
+}
+window.addCmpTag = addCmpTag;
+
+function handleCmpDoctorSelectChange() {
+  const select = document.getElementById("cmpDoctorSelect");
+  const customInput = document.getElementById("cmpDoctorCustomName");
+  if (!select || !customInput) return;
+  if (select.value === "external") {
+    customInput.style.display = "block";
+    customInput.focus();
+  } else {
+    customInput.style.display = "none";
+  }
+  updateCmpProgress();
+}
+window.handleCmpDoctorSelectChange = handleCmpDoctorSelectChange;
+
+function updateCmpProgress() {
+  const dobEl = document.getElementById("cmpDob");
+  const fallbackAge = document.getElementById("cmpAgeFallback");
+  const sexChecked = document.querySelector('input[name="cmpSex"]:checked');
+  const weightEl = document.getElementById("cmpWeight");
+  const heightEl = document.getElementById("cmpHeight");
+  const smokingEl = document.getElementById("cmpSmokingStatus");
+  const chronicEl = document.getElementById("cmpChronicConditions");
+  const allergiesEl = document.getElementById("cmpDrugAllergies");
+  const doctorEl = document.getElementById("cmpDoctorSelect");
+
+  const fields = [
+    Boolean((dobEl && dobEl.value) || (fallbackAge && fallbackAge.value)),
+    Boolean(sexChecked && sexChecked.value),
+    Boolean(weightEl && parseFloat(weightEl.value) > 0),
+    Boolean(heightEl && parseFloat(heightEl.value) > 0),
+    Boolean(smokingEl && smokingEl.value),
+    Boolean(chronicEl && chronicEl.value.trim()),
+    Boolean(allergiesEl && allergiesEl.value.trim()),
+    Boolean(doctorEl && doctorEl.value)
+  ];
+
+  const filled = fields.filter(Boolean).length;
+  const pct = Math.round((filled / 8) * 100);
+  const progressBar = document.getElementById("cmpProgressBar");
+  const progressPill = document.getElementById("cmpProgressPill");
+  const isEn = (typeof currentLanguage !== "undefined" && currentLanguage === "en");
+
+  if (progressBar) progressBar.style.width = `${pct}%`;
+  if (progressPill) {
+    progressPill.textContent = isEn ? `${filled} of 8 Completed (${pct}%)` : `${filled} من 8 عناصر مكتملة (${pct}%)`;
+    if (filled === 8) {
+      progressPill.className = "pill ok";
+    } else {
+      progressPill.className = "pill info";
+    }
+  }
+}
+window.updateCmpProgress = updateCmpProgress;
+
+async function handleSaveCompleteMedicalProfile() {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  const user = (typeof getActiveUser === "function") ? getActiveUser() : (auth && auth.currentUser);
+
+  const dobEl = document.getElementById("cmpDob");
+  const ageFallback = document.getElementById("cmpAgeFallback");
+  const sexChecked = document.querySelector('input[name="cmpSex"]:checked');
+  const weightEl = document.getElementById("cmpWeight");
+  const heightEl = document.getElementById("cmpHeight");
+  const smokingEl = document.getElementById("cmpSmokingStatus");
+  const smokingDetailsEl = document.getElementById("cmpSmokingDetails");
+  const chronicEl = document.getElementById("cmpChronicConditions");
+  const allergiesEl = document.getElementById("cmpDrugAllergies");
+  const doctorSelect = document.getElementById("cmpDoctorSelect");
+  const customDoctor = document.getElementById("cmpDoctorCustomName");
+  const clinicSelect = document.getElementById("cmpClinicSelect");
+
+  // Validate 8 Required Fields
+  const dob = dobEl ? dobEl.value : "";
+  const age = (ageFallback && ageFallback.value) ? Number(ageFallback.value) : (dob ? calculateAge(dob) : null);
+  if (!dob && !age) {
+    showToast(isEn ? "Please enter your date of birth or age." : "يرجى إدخال تاريخ الميلاد أو السن.");
+    if (dobEl) dobEl.focus();
+    return;
+  }
+
+  const sex = sexChecked ? sexChecked.value : "male";
+  const weight = weightEl ? parseFloat(weightEl.value) : 0;
+  if (!weight || weight < 2 || weight > 350) {
+    showToast(isEn ? "Please enter a valid weight in kg (2-350)." : "يرجى إدخال وزن صحيح بالكيلوجرام (بين 2 و 350 كجم).");
+    if (weightEl) weightEl.focus();
+    return;
+  }
+
+  const height = heightEl ? parseFloat(heightEl.value) : 0;
+  if (!height || height < 30 || height > 260) {
+    showToast(isEn ? "Please enter a valid height in cm (30-260)." : "يرجى إدخال طول صحيح بالسنتيمتر (بين 30 و 260 سم).");
+    if (heightEl) heightEl.focus();
+    return;
+  }
+
+  const smokingStatus = smokingEl ? smokingEl.value : "never";
+  const smokingDetails = smokingDetailsEl ? smokingDetailsEl.value.trim() : "";
+
+  const chronic = chronicEl ? chronicEl.value.trim() : "";
+  if (!chronic) {
+    showToast(isEn ? "Please specify your chronic conditions or choose 'None'." : "يرجى تحديد الأمراض المزمنة أو اختيار 'لا توجد أمراض مزمنة'.");
+    if (chronicEl) chronicEl.focus();
+    return;
+  }
+
+  const allergies = allergiesEl ? allergiesEl.value.trim() : "";
+  if (!allergies) {
+    showToast(isEn ? "Please specify drug allergies or choose 'NKDA'." : "يرجى تحديد الحساسية الدوائية أو اختيار 'لا توجد حساسية دوائية معروفة'.");
+    if (allergiesEl) allergiesEl.focus();
+    return;
+  }
+
+  let doctorName = "د. طارق محمود (استشاري الأمراض الصدرية والباطنة)";
+  if (doctorSelect && doctorSelect.value === "external") {
+    doctorName = (customDoctor && customDoctor.value.trim()) ? customDoctor.value.trim() : "طبيب خاص";
+  } else if (doctorSelect && doctorSelect.value === "clinic-assigned") {
+    doctorName = "طبيب معتمد من العيادة";
+  }
+
+  const clinicId = clinicSelect ? clinicSelect.value : "clinic-pulmo-care";
+  const clinicName = clinicSelect && clinicSelect.selectedOptions && clinicSelect.selectedOptions[0]
+    ? clinicSelect.selectedOptions[0].text
+    : "مركز رعاية الجهاز التنفسي التخصصي (معتمد)";
+
+  const splitList = (val) => String(val || "").split(/[\n,;،]+/).map(s => s.trim()).filter(Boolean);
+
+  const payload = {
+    fullName: user ? (user.displayName || user.email.split("@")[0]) : "مريض",
+    dateOfBirth: dob || null,
+    phone: user?.phoneNumber || "",
+    bloodType: "unknown",
+    heightCm: height,
+    weightKg: weight,
+    biologicalSex: sex,
+    smoking: {
+      status: smokingStatus,
+      details: smokingDetails
+    },
+    chronicConditions: splitList(chronic),
+    allergies: splitList(allergies),
+    medications: [],
+    surgeries: [],
+    familyHistory: [],
+    hospitalAdmissions: [],
+    clinicLinkage: {
+      clinicId: clinicId,
+      clinicName: clinicName,
+      linkedDoctorId: doctorSelect?.value === "dr-tarek-mahmoud" ? "tarek_mahmoud_md" : "clinic_assigned_doctor",
+      linkedDoctorName: doctorName
+    },
+    source: "onboarding_profile_screen"
+  };
+
+  // Cache locally
+  if (!window._cachedUserDoc) window._cachedUserDoc = {};
+  window._cachedUserDoc.dateOfBirth = dob || null;
+  window._cachedUserDoc.dob = dob || null;
+  window._cachedUserDoc.age = age ? String(age) : null;
+  window._cachedUserDoc.weight = weight;
+  window._cachedUserDoc.weightKg = weight;
+  window._cachedUserDoc.height = height;
+  window._cachedUserDoc.heightCm = height;
+  window._cachedUserDoc.sex = sex;
+  window._cachedUserDoc.biologicalSex = sex;
+  window._cachedUserDoc.smokingStatus = smokingStatus;
+  window._cachedUserDoc.smokingDetails = smokingDetails;
+  window._cachedUserDoc.chronicConditions = chronic;
+  window._cachedUserDoc.allergies = allergies;
+  window._cachedUserDoc.drugAllergies = allergies;
+  window._cachedUserDoc.linkedDoctor = doctorName;
+  window._cachedUserDoc.clinicId = clinicId;
+  window._cachedUserDoc.clinicName = clinicName;
+  window._cachedUserDoc.medicalProfileCompleted = true;
+  window._cachedUserDoc.medicalProfileCompletedAt = new Date().toISOString();
+
+  // Synchronize with inputs in full #screen-profile
+  const pDob = document.getElementById("profileDob");
+  if (pDob && dob) pDob.value = dob;
+  const pHeight = document.getElementById("profileHeight");
+  if (pHeight) pHeight.value = height;
+  const pWeight = document.getElementById("profileWeight");
+  if (pWeight) pWeight.value = weight;
+  const pSex = document.getElementById("profileSex");
+  if (pSex) pSex.value = sex;
+  const pSmoking = document.getElementById("profileSmokingStatus");
+  if (pSmoking) pSmoking.value = smokingStatus;
+  const pSmokingDet = document.getElementById("profileSmokingDetails");
+  if (pSmokingDet) pSmokingDet.value = smokingDetails;
+  const pChronic = document.getElementById("profileChronicConditions");
+  if (pChronic) pChronic.value = chronic;
+  const pAllergies = document.getElementById("profileAllergies");
+  if (pAllergies) pAllergies.value = allergies;
+  const pDoctor = document.getElementById("profileLinkedDoctor");
+  if (pDoctor) pDoctor.value = doctorName;
+  const pClinic = document.getElementById("profileClinicSelect");
+  if (pClinic) pClinic.value = clinicId;
+
+  // Submit to Backend API
+  let savedOnBackend = false;
+  try {
+    const res = await authenticatedFetch('/api/patient/medical-profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (res.ok) savedOnBackend = true;
+  } catch (err) {
+    console.warn("Backend save error during onboarding:", err);
+  }
+
+  // Direct Firestore write fallback
+  if (user && user.uid && typeof db !== "undefined" && db) {
+    try {
+      await db.collection("users").doc(user.uid).set({
+        dateOfBirth: dob || null,
+        dob: dob || null,
+        age: age ? String(age) : null,
+        weight: weight,
+        weightKg: weight,
+        height: height,
+        heightCm: height,
+        sex: sex,
+        biologicalSex: sex,
+        smokingStatus: smokingStatus,
+        smokingDetails: smokingDetails,
+        chronicConditions: chronic,
+        allergies: allergies,
+        drugAllergies: allergies,
+        linkedDoctor: doctorName,
+        clinicId: clinicId,
+        clinicName: clinicName,
+        medicalProfileCompleted: true,
+        medicalProfileCompletedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+    } catch(err) {
+      console.warn("Firestore direct write error during onboarding:", err);
+    }
+  }
+
+  // Hide banner & update completion badge
+  const banner = document.getElementById("patientIncompleteProfileBanner");
+  if (banner) banner.style.display = "none";
+  const profileCompletionEl = document.getElementById("patientProfileCompletion");
+  if (profileCompletionEl) profileCompletionEl.textContent = "100%";
+
+  showToast(isEn ? "🎉 Medical Profile completed successfully!" : "🎉 تم استكمال وتفعيل ملفك الطبي بنجاح!");
+
+  // Proceed to patient dashboard
+  showScreen("patient");
+}
+window.handleSaveCompleteMedicalProfile = handleSaveCompleteMedicalProfile;
+
+function handleSkipCompleteMedicalProfile() {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  showToast(isEn
+    ? "You can complete your medical profile anytime from your dashboard."
+    : "يمكنك استكمال بيانات ملفك الطبي في أي وقت من لوحة التحكم أو صفحة الملف الشخصي.");
+  const banner = document.getElementById("patientIncompleteProfileBanner");
+  if (banner) banner.style.display = "flex";
+  showScreen("patient");
+}
+window.handleSkipCompleteMedicalProfile = handleSkipCompleteMedicalProfile;
+
 function showScreen(name) {
   // Reset tempAllowDoctorApplication unless we're going to verification
   if (name !== "verification") {
@@ -8502,18 +8927,32 @@ async function renderPatientDashboard() {
   document.getElementById("patientLatestReport").textContent = "--";
   document.getElementById("patientResultStatus").textContent = "--";
 
-  // Calculate real profile completion based on authentic patient fields
-  const profileFields = [
-    Boolean(fullPatientName && fullPatientName !== "مريض" && fullPatientName !== "Patient"),
-    Boolean(user?.email || cachedDoc.email),
-    Boolean(cachedDoc.phoneNumber || user?.phoneNumber || window._verifiedPhone),
-    Boolean(cachedDoc.age || cachedDoc.medicalHistory)
+  // Calculate real medical profile completion based on 8 core clinical baseline indicators (PRD Page 8 Req 39)
+  const medProfileFields = [
+    Boolean(cachedDoc.dateOfBirth || cachedDoc.dob || cachedDoc.age),
+    Boolean((cachedDoc.biologicalSex && cachedDoc.biologicalSex !== "not_specified") || (cachedDoc.sex && cachedDoc.sex !== "not_specified")),
+    Boolean(cachedDoc.weight || cachedDoc.weightKg || cachedDoc.biometrics?.weightKg),
+    Boolean(cachedDoc.height || cachedDoc.heightCm || cachedDoc.biometrics?.heightCm),
+    Boolean(cachedDoc.smokingStatus || cachedDoc.smoking?.status),
+    Boolean(cachedDoc.chronicConditions || cachedDoc.medicalHistory?.chronicConditions),
+    Boolean(cachedDoc.allergies || cachedDoc.drugAllergies || cachedDoc.medicalHistory?.allergies),
+    Boolean(cachedDoc.linkedDoctor || cachedDoc.attendingPhysician || cachedDoc.clinicLinkage?.linkedDoctorName)
   ];
-  const filledCount = profileFields.filter(Boolean).length;
-  const completionPct = Math.round((filledCount / profileFields.length) * 100);
+  const filledMedCount = medProfileFields.filter(Boolean).length;
+  const completionPct = Math.round((filledMedCount / medProfileFields.length) * 100);
   const profileCompletionEl = document.getElementById("patientProfileCompletion");
   if (profileCompletionEl) {
     profileCompletionEl.textContent = `${completionPct}%`;
+  }
+
+  // Toggle patientIncompleteProfileBanner
+  const incompleteBanner = document.getElementById("patientIncompleteProfileBanner");
+  if (incompleteBanner) {
+    if (filledMedCount < 8) {
+      incompleteBanner.style.display = "flex";
+    } else {
+      incompleteBanner.style.display = "none";
+    }
   }
   document.getElementById("patientAlertsCount").textContent = isEn ? "No live alerts yet" : "لا توجد تنبيهات حية بعد";
   document.getElementById("patientAlertsList").innerHTML = hvStateCard({
@@ -17330,15 +17769,20 @@ function initHVAuthListener() {
       let isValidToken = false;
       try {
         if (typeof user.getIdTokenResult === "function") {
-          const tokenResult = await user.getIdTokenResult(false);
-          const expTime = tokenResult && tokenResult.expirationTime ? Date.parse(tokenResult.expirationTime) : 0;
+          let tokenResult = await user.getIdTokenResult(false);
+          let expTime = tokenResult && tokenResult.expirationTime ? Date.parse(tokenResult.expirationTime) : 0;
           if (expTime > Date.now()) {
             isValidToken = true;
           } else {
-            console.warn("[Health Vibe] Cached token expired at", tokenResult ? tokenResult.expirationTime : "unknown");
+            console.log("[Health Vibe] Cached token expired; refreshing token via Firebase Auth...");
+            tokenResult = await user.getIdTokenResult(true);
+            expTime = tokenResult && tokenResult.expirationTime ? Date.parse(tokenResult.expirationTime) : 0;
+            if (expTime > Date.now()) {
+              isValidToken = true;
+            }
           }
         } else if (typeof user.getIdToken === "function") {
-          const token = await user.getIdToken(false);
+          const token = await user.getIdToken(true);
           if (token && typeof token === "string" && token.length > 10) {
             isValidToken = true;
           }
@@ -17346,12 +17790,18 @@ function initHVAuthListener() {
           isValidToken = true;
         }
       } catch (tokenErr) {
-        console.warn("[Health Vibe] Token validation failed during session restore:", tokenErr.message);
-        isValidToken = false;
+        console.warn("[Health Vibe] Token validation warning:", tokenErr.message);
+        const errCode = String(tokenErr.code || "");
+        if (errCode === "auth/user-disabled" || errCode === "auth/user-not-found" || errCode === "auth/user-token-expired") {
+          isValidToken = false;
+        } else {
+          // Offline or transient network issue: do NOT kick the user out
+          isValidToken = true;
+        }
       }
 
       if (!isValidToken) {
-        console.warn("[Health Vibe] Expired or invalid token encountered during startup. Signing out cleanly.");
+        console.warn("[Health Vibe] Token definitively invalidated. Signing out cleanly.");
         window._isSigningOut = true;
         try { if (auth) await auth.signOut(); } catch (e) {}
         await clearFirebaseAuthStorage();
@@ -17543,7 +17993,7 @@ checkUrlAuthAction();
     );
     // Only navigate if it looks like a known screen name (not an anchor ID)
     const allScreenNames = [
-      "patient","consent","profile","assessment","pending","result",
+      "patient","consent","profile","complete-medical-profile","assessment","pending","result",
       "history","appointments","feedback","assistant","report",
       "verification","doctor","kpi","admin","audit","verify-report","verify",
       "diabetes","hypertension","blood-disorders","obesity"

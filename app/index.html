@@ -623,6 +623,22 @@
       </div>
 
       <section id="screen-patient" class="screen active">
+        <!-- Incomplete Medical Profile Reminder Banner -->
+        <div id="patientIncompleteProfileBanner" style="display: none; background: rgba(245, 158, 11, 0.08); border: 1px solid #f59e0b; border-radius: 12px; padding: 12px 18px; margin-bottom: 16px; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+          <div style="display: flex; align-items: center; gap: 12px; max-width: 680px;">
+            <span style="font-size: 26px;">⚠️</span>
+            <div>
+              <strong style="color: #d97706; font-size: 14px;">استكمال الملف الطبي السريري مطلوب (السن، النوع، الوزن، الطول، التدخين، الأمراض المزمنة، الحساسية، الطبيب):</strong>
+              <p style="margin: 2px 0 0; font-size: 12.5px; color: var(--ink); line-height: 1.45;">
+                تعتمد دقة فرز أعراضك التنفسية واستشارات الذكاء الاصطناعي ومراجعة الطبيب الاستشاري على اكتمال مؤشراتك الحيوية.
+              </p>
+            </div>
+          </div>
+          <button type="button" class="solid-button" onclick="showScreen('complete-medical-profile')" style="padding: 8px 18px; font-size: 13px; font-weight: 700; background: #d97706; border-color: #d97706; color: #fff; white-space: nowrap;">
+            استكمال الملف الطبي الآن ➔
+          </button>
+        </div>
+
         <div class="hero-panel app-hero">
           <div>
             <span class="eyebrow" id="patientHeroTitle" data-i18n="patient.welcome">Welcome</span>
@@ -730,6 +746,200 @@
                 <button type="button" class="soft-button" style="font-size: 12px; padding: 6px 10px; color: #f87171;" onclick="openLegalModal('disclaimer')" data-i18n="consent.disclaimerBtn">🚨 إخلاء المسؤولية</button>
               </div>
             </div>
+          </article>
+        </div>
+      </section>
+
+      <!-- SCREEN: Complete Medical Profile Setup Immediately After Registration (PRD Page 8 Req 39) -->
+      <section id="screen-complete-medical-profile" class="screen" data-screen="complete-medical-profile" aria-labelledby="cmpTitle">
+        <div class="form-layout" style="max-width: 900px; margin: 0 auto;">
+          <article class="panel form-panel" style="grid-column: 1 / -1; border-top: 4px solid var(--teal, #0ea5a4); border-radius: 14px; box-shadow: 0 4px 20px rgba(0,0,0,0.06); padding: 20px;">
+            <div class="panel-head" style="border-bottom: 1px solid var(--line); padding-bottom: 14px; margin-bottom: 16px;">
+              <div>
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                  <span style="font-size: 26px;">🩺</span>
+                  <h3 id="cmpTitle" style="margin: 0; font-size: 20px; color: var(--teal, #0ea5a4);" data-i18n="onboarding.title">
+                    استكمال الملف الطبي للمريض (Medical Profile Setup)
+                  </h3>
+                </div>
+                <p style="margin: 0; font-size: 13px; color: var(--muted); line-height: 1.5;" data-i18n="onboarding.subtitle">
+                  مرحباً بك في <strong>Health Vibe AI</strong>! لإجراء فرز سريري دقيق لحالتك وتزويد الطبيب المعالج بالبيانات الحيوية اللازمة لاعتماد تقييماتك، يرجى استكمال مؤشرات ملفك الطبي الأساسية:
+                </p>
+              </div>
+              <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                <span class="pill info" style="font-size: 11px;">مطلوب فور التسجيل</span>
+                <span class="pill ok" id="cmpProgressPill" style="font-size: 11px;">8 عناصر سريرية أساسية</span>
+              </div>
+            </div>
+
+            <!-- Quick Progress Bar -->
+            <div style="background: var(--surface-2, rgba(0,0,0,0.04)); border-radius: 8px; height: 8px; overflow: hidden; margin-bottom: 20px;">
+              <div id="cmpProgressBar" style="background: var(--teal, #0ea5a4); width: 25%; height: 100%; transition: width 0.3s ease;"></div>
+            </div>
+
+            <form id="cmpForm" onsubmit="event.preventDefault(); handleSaveCompleteMedicalProfile();">
+              <div style="display: flex; flex-direction: column; gap: 16px;">
+                
+                <!-- ROW 1: العمر / تاريخ الميلاد + النوع البيولوجي -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px;">
+                  <!-- 1. السن وتاريخ الميلاد -->
+                  <div class="profile-section-card" style="background: var(--surface-2, rgba(0,0,0,0.02)); border: 1px solid var(--line); border-radius: 10px; padding: 14px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                      <label for="cmpDob" style="font-size: 13px; font-weight: 700; color: var(--ink); margin: 0;">
+                        1. تاريخ الميلاد والسن (Age & DOB) <span style="color: #ef4444;">*</span>
+                      </label>
+                      <span class="pill ok" id="cmpCalculatedAgeBadge" style="font-size: 11px; padding: 2px 8px;">العمر: --</span>
+                    </div>
+                    <input type="date" id="cmpDob" required style="width: 100%; box-sizing: border-box; height: 40px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);" onchange="handleCmpDobChange()">
+                    <div style="display: flex; align-items: center; gap: 6px; margin-top: 6px;">
+                      <small style="font-size: 11px; color: var(--muted);">أو العمر بالسنوات:</small>
+                      <input type="number" id="cmpAgeFallback" min="1" max="120" placeholder="مثال: 35" style="width: 80px; height: 28px; font-size: 12px; padding: 2px 8px; border-radius: 6px; border: 1px solid var(--line);" oninput="handleCmpAgeFallbackChange()">
+                    </div>
+                  </div>
+
+                  <!-- 2. النوع البيولوجي -->
+                  <div class="profile-section-card" style="background: var(--surface-2, rgba(0,0,0,0.02)); border: 1px solid var(--line); border-radius: 10px; padding: 14px;">
+                    <label style="font-size: 13px; font-weight: 700; color: var(--ink); display: block; margin-bottom: 8px;">
+                      2. النوع السريري (Biological Sex) <span style="color: #ef4444;">*</span>
+                    </label>
+                    <div style="display: flex; gap: 12px;">
+                      <label style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); cursor: pointer;">
+                        <input type="radio" name="cmpSex" value="male" id="cmpSexMale" checked onchange="updateCmpProgress()">
+                        <span style="font-size: 13px; font-weight: 600;">👨 ذكر (Male)</span>
+                      </label>
+                      <label style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); cursor: pointer;">
+                        <input type="radio" name="cmpSex" value="female" id="cmpSexFemale" onchange="updateCmpProgress()">
+                        <span style="font-size: 13px; font-weight: 600;">👩 أنثى (Female)</span>
+                      </label>
+                    </div>
+                    <small style="display: block; margin-top: 6px; font-size: 11px; color: var(--muted); line-height: 1.4;">
+                      مطلوب لمعادلات قياس السعة الرئوية المرجعية وحساب الجرعات الدوائية.
+                    </small>
+                  </div>
+                </div>
+
+                <!-- ROW 2: الوزن + الطول ومؤشر كتلة الجسم -->
+                <div class="profile-section-card" style="background: var(--surface-2, rgba(0,0,0,0.02)); border: 1px solid var(--line); border-radius: 10px; padding: 14px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+                    <strong style="font-size: 13px; color: var(--teal, #0ea5a4);">
+                      3 & 4. القياسات البدنية وكتلة الجسم (Biometrics & BMI) <span style="color: #ef4444;">*</span>
+                    </strong>
+                    <span class="pill info" id="cmpBmiBadge" style="font-size: 11px; padding: 3px 10px; font-weight: 700;">مؤشر الكتلة (BMI): --</span>
+                  </div>
+                  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px;">
+                    <div>
+                      <label for="cmpWeight" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;">
+                        الوزن (كجم) <span style="color: #ef4444;">*</span>
+                      </label>
+                      <input type="number" id="cmpWeight" min="2" max="300" step="0.5" placeholder="مثال: 75" required style="width: 100%; box-sizing: border-box; height: 38px; border-radius: 8px; border: 1px solid var(--line); padding: 6px 12px; background: var(--surface); color: var(--ink);" oninput="updateCmpBmi()">
+                    </div>
+                    <div>
+                      <label for="cmpHeight" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;">
+                        الطول (سم) <span style="color: #ef4444;">*</span>
+                      </label>
+                      <input type="number" id="cmpHeight" min="30" max="250" step="1" placeholder="مثال: 172" required style="width: 100%; box-sizing: border-box; height: 38px; border-radius: 8px; border: 1px solid var(--line); padding: 6px 12px; background: var(--surface); color: var(--ink);" oninput="updateCmpBmi()">
+                    </div>
+                  </div>
+                </div>
+
+                <!-- ROW 3: التدخين والتفاصيل -->
+                <div class="profile-section-card" style="background: var(--surface-2, rgba(0,0,0,0.02)); border: 1px solid var(--line); border-radius: 10px; padding: 14px;">
+                  <label for="cmpSmokingStatus" style="font-size: 13px; font-weight: 700; color: var(--ink); display: block; margin-bottom: 6px;">
+                    5. حالة التدخين وتفاصيله (Smoking History) <span style="color: #ef4444;">*</span>
+                  </label>
+                  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+                    <div>
+                      <select id="cmpSmokingStatus" style="width: 100%; box-sizing: border-box; height: 40px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 6px 10px;" onchange="updateCmpProgress()">
+                        <option value="never">🚭 غير مدخن تماماً (Never smoked)</option>
+                        <option value="former">⏱️ مدخن سابق وأقلع (Former smoker)</option>
+                        <option value="current">🚬 مدخن حالي (Current active smoker)</option>
+                        <option value="passive">💨 تدخين سلبي / مخالط (Passive smoking)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <input type="text" id="cmpSmokingDetails" placeholder="تفاصيل التدخين (النوع، المدة، الكمية اليومية إن وجد)" style="width: 100%; box-sizing: border-box; height: 40px; border-radius: 8px; border: 1px solid var(--line); padding: 6px 12px; background: var(--surface); color: var(--ink);" oninput="updateCmpProgress()">
+                    </div>
+                  </div>
+                </div>
+
+                <!-- ROW 4: الأمراض المزمنة -->
+                <div class="profile-section-card" style="background: var(--surface-2, rgba(0,0,0,0.02)); border: 1px solid var(--line); border-radius: 10px; padding: 14px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <label for="cmpChronicConditions" style="font-size: 13px; font-weight: 700; color: var(--ink); margin: 0;">
+                      6. الأمراض المزمنة (Chronic Conditions) <span style="color: #ef4444;">*</span>
+                    </label>
+                    <small style="font-size: 11px; color: var(--muted);">انقر على الحالات المطابقة للإضافة السريعة:</small>
+                  </div>
+                  <!-- Quick chips -->
+                  <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px;">
+                    <button type="button" class="soft-button" onclick="addCmpTag('cmpChronicConditions', 'لا توجد أمراض مزمنة', true)" style="font-size: 11.5px; padding: 4px 10px; background: rgba(16, 185, 129, 0.1); border-color: #10b981; color: #047857;">🟢 لا توجد أمراض مزمنة</button>
+                    <button type="button" class="soft-button" onclick="addCmpTag('cmpChronicConditions', 'ربو شعبي (Asthma)')" style="font-size: 11.5px; padding: 4px 10px;">ربو شعبي (Asthma)</button>
+                    <button type="button" class="soft-button" onclick="addCmpTag('cmpChronicConditions', 'حساسية صدرية')" style="font-size: 11.5px; padding: 4px 10px;">حساسية صدرية</button>
+                    <button type="button" class="soft-button" onclick="addCmpTag('cmpChronicConditions', 'ارتفاع ضغط الدم')" style="font-size: 11.5px; padding: 4px 10px;">ارتفاع ضغط الدم</button>
+                    <button type="button" class="soft-button" onclick="addCmpTag('cmpChronicConditions', 'السكري')" style="font-size: 11.5px; padding: 4px 10px;">السكري</button>
+                    <button type="button" class="soft-button" onclick="addCmpTag('cmpChronicConditions', 'انسداد رئوي مزمن (COPD)')" style="font-size: 11.5px; padding: 4px 10px;">انسداد رئوي مزمن (COPD)</button>
+                    <button type="button" class="soft-button" onclick="addCmpTag('cmpChronicConditions', 'أمراض قلب')" style="font-size: 11.5px; padding: 4px 10px;">أمراض قلب</button>
+                  </div>
+                  <input type="text" id="cmpChronicConditions" placeholder="اكتب الأمراض المزمنة هنا أو اختر من الأعلى..." required style="width: 100%; box-sizing: border-box; height: 40px; border-radius: 8px; border: 1px solid var(--line); padding: 6px 12px; background: var(--surface); color: var(--ink);" oninput="updateCmpProgress()">
+                </div>
+
+                <!-- ROW 5: الحساسية الدوائية -->
+                <div class="profile-section-card" style="background: var(--surface-2, rgba(0,0,0,0.02)); border: 1px solid var(--line); border-radius: 10px; padding: 14px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <label for="cmpDrugAllergies" style="font-size: 13px; font-weight: 700; color: var(--ink); margin: 0;">
+                      7. الحساسية الدوائية (Drug Allergies) <span style="color: #ef4444;">*</span>
+                    </label>
+                    <small style="font-size: 11px; color: var(--muted);">ضروري لسلامة الوصفات وتوصيات العلاج:</small>
+                  </div>
+                  <!-- Quick chips -->
+                  <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px;">
+                    <button type="button" class="soft-button" onclick="addCmpTag('cmpDrugAllergies', 'لا توجد حساسية دوائية معروفة (NKDA)', true)" style="font-size: 11.5px; padding: 4px 10px; background: rgba(16, 185, 129, 0.1); border-color: #10b981; color: #047857;">🟢 لا توجد حساسية دوائية (NKDA)</button>
+                    <button type="button" class="soft-button" onclick="addCmpTag('cmpDrugAllergies', 'حساسية بنسلين (Penicillin)')" style="font-size: 11.5px; padding: 4px 10px;">حساسية بنسلين</button>
+                    <button type="button" class="soft-button" onclick="addCmpTag('cmpDrugAllergies', 'أسبرين / بروفين (NSAIDs)')" style="font-size: 11.5px; padding: 4px 10px;">أسبرين / مضادات التهاب</button>
+                    <button type="button" class="soft-button" onclick="addCmpTag('cmpDrugAllergies', 'سلفا (Sulfa Drugs)')" style="font-size: 11.5px; padding: 4px 10px;">سلفا (Sulfa)</button>
+                    <button type="button" class="soft-button" onclick="addCmpTag('cmpDrugAllergies', 'مضادات حيوية معينة')" style="font-size: 11.5px; padding: 4px 10px;">مضادات حيوية</button>
+                  </div>
+                  <input type="text" id="cmpDrugAllergies" placeholder="اكتب الحساسية الدوائية (أو اختر لا توجد حساسية)..." required style="width: 100%; box-sizing: border-box; height: 40px; border-radius: 8px; border: 1px solid var(--line); padding: 6px 12px; background: var(--surface); color: var(--ink);" oninput="updateCmpProgress()">
+                </div>
+
+                <!-- ROW 6: الطبيب المعالج والعيادة -->
+                <div class="profile-section-card" style="background: var(--surface-2, rgba(0,0,0,0.02)); border: 1px solid var(--line); border-radius: 10px; padding: 14px;">
+                  <label style="font-size: 13px; font-weight: 700; color: var(--ink); display: block; margin-bottom: 6px;">
+                    8. الطبيب المعالج والعيادة المعتمدة (Attending Physician & Clinic) <span style="color: #ef4444;">*</span>
+                  </label>
+                  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px;">
+                    <div>
+                      <label for="cmpDoctorSelect" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;">الطبيب المشرف / المعتمد</label>
+                      <select id="cmpDoctorSelect" style="width: 100%; box-sizing: border-box; height: 40px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 6px 10px;" onchange="handleCmpDoctorSelectChange()">
+                        <option value="dr-tarek-mahmoud">🩺 د. طارق محمود (استشاري الأمراض الصدرية والباطنة - نقابة #44821)</option>
+                        <option value="clinic-assigned">🏥 تعيين تلقائي لطبيب معتمد حسب التخصص</option>
+                        <option value="external">✍️ إدخال اسم طبيبي الخاص</option>
+                      </select>
+                      <input type="text" id="cmpDoctorCustomName" placeholder="اكتب اسم طبيبك المعالج" style="display: none; width: 100%; box-sizing: border-box; height: 38px; border-radius: 8px; border: 1px solid var(--line); padding: 6px 12px; margin-top: 6px;">
+                    </div>
+                    <div>
+                      <label for="cmpClinicSelect" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;">العيادة / المركز الطبي</label>
+                      <select id="cmpClinicSelect" style="width: 100%; box-sizing: border-box; height: 40px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 6px 10px;" onchange="updateCmpProgress()">
+                        <option value="clinic-pulmo-care">مركز رعاية الجهاز التنفسي التخصصي (معتمد)</option>
+                        <option value="clinic-central-01">مركز الحياة الطبي العام (معتمد)</option>
+                        <option value="clinic-wellness-hub">عيادات ويلنس الصحية الشاملة (معتمد)</option>
+                        <option value="independent">مستقل / متابعة منزلية</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div style="display: flex; gap: 12px; margin-top: 10px; flex-wrap: wrap;">
+                  <button type="submit" id="btnSaveCompleteMedicalProfile" class="solid-button" style="flex: 2; min-width: 220px; padding: 14px; font-size: 15px; font-weight: 700; background: var(--teal, #0ea5a4); border-color: var(--teal, #0ea5a4); color: #fff; justify-content: center;">
+                    💾 حفظ وتفعيل الملف الطبي وبدء الاستخدام
+                  </button>
+                  <button type="button" id="btnSkipMedicalProfile" class="outline-button" onclick="handleSkipCompleteMedicalProfile()" style="flex: 1; min-width: 180px; padding: 12px; font-size: 13.5px; justify-content: center;">
+                    استكمال لاحقاً والذهاب للوحة التحكم
+                  </button>
+                </div>
+              </div>
+            </form>
           </article>
         </div>
       </section>

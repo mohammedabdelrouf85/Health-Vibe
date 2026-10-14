@@ -209,8 +209,8 @@ app.use((req, res, next) => {
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
-  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com https://www.google.com https://www.recaptcha.net; script-src-attr 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://www.gstatic.com https://*.googleusercontent.com https://firebasestorage.googleapis.com; connect-src 'self' http://localhost:4000 http://127.0.0.1:4000 https://healthvibes.app https://*.healthvibes.app https://healthvibe.ai https://*.healthvibe.ai https://*.firebaseio.com https://*.googleapis.com https://*.google.com https://www.recaptcha.net; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self';");
-  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com https://accounts.google.com https://www.google.com https://www.recaptcha.net; script-src-attr 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://www.gstatic.com https://*.googleusercontent.com https://firebasestorage.googleapis.com; connect-src 'self' http://localhost:4000 http://127.0.0.1:4000 https://healthvibes.app https://*.healthvibes.app https://healthvibe.ai https://*.healthvibe.ai https://*.firebaseio.com https://*.googleapis.com https://accounts.google.com https://*.google.com https://www.recaptcha.net; frame-src 'self' https://healthvibes.app https://*.healthvibes.app https://health-vibes-a4b3b.web.app https://health-vibes-a4b3b.firebaseapp.com https://accounts.google.com https://www.google.com https://recaptcha.google.com https://www.recaptcha.net; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self';");
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
   if (isProduction || isStaging || (req.headers.host && req.headers.host.includes('healthvibes.app')) || req.secure || req.headers['x-forwarded-proto'] === 'https') {
     res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
@@ -4156,13 +4156,18 @@ app.post('/api/user/sync-role', requireAuth, async (req, res) => {
         } else if (data.role && VALID_ROLES.includes(data.role)) {
           role = data.role;
         } else {
-          role = ROLES.PATIENT;
+          const requestedRole = req.body && req.body.requestedRole ? String(req.body.requestedRole).toLowerCase() : null;
+          const allowedSignupRoles = [ROLES.PATIENT, ROLES.DOCTOR_PENDING, ROLES.CLINIC_ADMIN];
+          role = (requestedRole && allowedSignupRoles.includes(requestedRole)) ? requestedRole : ROLES.PATIENT;
           await userRef.set({ role, isOwner: false }, { merge: true });
         }
         verifiedDoctor = isOwner || Boolean(data.verifiedDoctor || role === ROLES.DOCTOR);
       } else {
         // Initialize new user on the backend
-        role = isOwner ? ROLES.SUPER_ADMIN : (hasTrustedAdminClaim(req.user) ? getTrustedClaimRole(req.user) : ROLES.PATIENT);
+        const requestedRole = req.body && req.body.requestedRole ? String(req.body.requestedRole).toLowerCase() : null;
+        const allowedSignupRoles = [ROLES.PATIENT, ROLES.DOCTOR_PENDING, ROLES.CLINIC_ADMIN];
+        const defaultRole = (requestedRole && allowedSignupRoles.includes(requestedRole)) ? requestedRole : ROLES.PATIENT;
+        role = isOwner ? ROLES.SUPER_ADMIN : (hasTrustedAdminClaim(req.user) ? getTrustedClaimRole(req.user) : defaultRole);
         verifiedDoctor = isOwner || role === ROLES.DOCTOR;
         await userRef.set({
           name: req.user.name || email.split('@')[0],
@@ -4181,7 +4186,10 @@ app.post('/api/user/sync-role', requireAuth, async (req, res) => {
         }, { merge: true });
       }
     } else {
-      role = isOwner ? ROLES.SUPER_ADMIN : (hasTrustedAdminClaim(req.user) ? getTrustedClaimRole(req.user) : ROLES.PATIENT);
+      const requestedRole = req.body && req.body.requestedRole ? String(req.body.requestedRole).toLowerCase() : null;
+      const allowedSignupRoles = [ROLES.PATIENT, ROLES.DOCTOR_PENDING, ROLES.CLINIC_ADMIN];
+      const defaultRole = (requestedRole && allowedSignupRoles.includes(requestedRole)) ? requestedRole : ROLES.PATIENT;
+      role = isOwner ? ROLES.SUPER_ADMIN : (hasTrustedAdminClaim(req.user) ? getTrustedClaimRole(req.user) : defaultRole);
       verifiedDoctor = isOwner || role === ROLES.DOCTOR;
     }
 
