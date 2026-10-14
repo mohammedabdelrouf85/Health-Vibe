@@ -18,6 +18,15 @@
   ];
   const STAGING_HOSTS = ["staging.healthvibe.ai", "health-vibes-staging.web.app", "health-vibes-staging.firebaseapp.com"];
 
+  // Enforce HTTPS upgrade immediately for any non-localhost connection (PRD Page 10 / Request 36)
+  if (typeof window !== "undefined" && window.location && window.location.protocol === "http:") {
+    const host = (window.location.hostname || "").toLowerCase();
+    const isLocal = LOCAL_HOSTS.includes(host) || host.endsWith(".local");
+    if (!isLocal) {
+      window.location.replace(window.location.href.replace(/^http:/, "https:"));
+    }
+  }
+
   // Live Production Firebase Project Configuration
   const PROD_FIREBASE = {
     apiKey: "AIzaSyANyIglmiKcdM0I2EKkjPhzMjKR58o8BRM",

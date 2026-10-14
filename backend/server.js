@@ -198,6 +198,10 @@ const allowedOrigins = isDevelopment
 // Suppress server fingerprinting
 app.disable('x-powered-by');
 
+// Enforce HTTPS & TLS 1.3 on all healthvibes.app domains and APIs (Request 36)
+const { httpsAndTls13EnforcementMiddleware } = require('./tls-security-service');
+app.use(httpsAndTls13EnforcementMiddleware);
+
 // Defense-in-depth OWASP Security Response Headers
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
