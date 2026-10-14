@@ -308,6 +308,18 @@
             </div>
           </div>
 
+          <!-- PRD Section 10: Explicit Medical Consent Checkbox -->
+          <div id="authConsentGroup" class="form-group" style="display:none; margin: 12px 0 14px; padding: 12px 14px; background: rgba(9, 184, 182, 0.06); border: 1px solid rgba(9, 184, 182, 0.25); border-radius: 12px;">
+            <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; user-select: none;">
+              <input type="checkbox" id="authMedicalConsentChk" style="accent-color: var(--teal); width: 18px; height: 18px; margin-top: 2px; cursor: pointer;" />
+              <span style="font-size: 12px; line-height: 1.55; color: var(--ink);">
+                <span data-i18n="auth.medicalConsentText">أوافق صراحة على معالجة بياناتي الطبية السريرية وقياسات الأكسجين والأعراض، ومراجعتها من قبل الطبيب البشري المختص وفقاً لـ</span>
+                <button type="button" style="background:none;border:none;color:var(--teal);text-decoration:underline;cursor:pointer;padding:0;font-size:inherit;font-weight:700;" onclick="openLegalModal('privacy')">سياسة الخصوصية</button> و
+                <button type="button" style="background:none;border:none;color:#ef4444;text-decoration:underline;cursor:pointer;padding:0;font-size:inherit;font-weight:700;" onclick="openLegalModal('disclaimer')">إخلاء المسؤولية الطبية</button>.
+              </span>
+            </label>
+          </div>
+
           <div style="margin: 12px 0 16px; text-align: center; font-size: 11.5px; color: var(--muted); line-height: 1.6;">
             By continuing, you acknowledge and agree to our 
             <button type="button" style="background:none;border:none;color:var(--teal);text-decoration:underline;cursor:pointer;padding:0;font-size:inherit;" onclick="openLegalModal('terms')">Terms of Use</button>, 

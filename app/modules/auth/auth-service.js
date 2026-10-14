@@ -81,6 +81,12 @@
           email: user.email,
           role: assignedRole,
           status: assignedStatus,
+          privacyConsent: {
+            accepted: true,
+            version: "2.0.0",
+            acceptedAt: new Date().toISOString(),
+            purpose: "PRD Section 10: Explicit consent for clinical data processing, physician review, and verified reports."
+          },
           createdAt: global.firebase?.firestore?.FieldValue?.serverTimestamp() || new Date()
         }, { merge: true });
       } catch (err) {

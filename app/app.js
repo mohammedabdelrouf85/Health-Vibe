@@ -39,6 +39,8 @@ const authName = document.getElementById("authName");
 const authRoleGroup = document.getElementById("authRoleGroup");
 const authRole = document.getElementById("authRole");
 const authRoleHint = document.getElementById("authRoleHint");
+const authConsentGroup = document.getElementById("authConsentGroup");
+const authMedicalConsentChk = document.getElementById("authMedicalConsentChk");
 const authEmail = document.getElementById("authEmail");
 const authPassword = document.getElementById("authPassword");
 const authSubmitBtn = document.getElementById("authSubmitBtn");
@@ -5434,6 +5436,9 @@ function setAuthMode(mode) {
   if (authRoleGroup) {
     authRoleGroup.style.display = mode === "signup" ? "block" : "none";
   }
+  if (authConsentGroup) {
+    authConsentGroup.style.display = mode === "signup" ? "block" : "none";
+  }
   if (authName) {
     if (mode === "signup") {
       authName.setAttribute("required", "true");
@@ -5910,6 +5915,25 @@ async function handleEmailAuth(e) {
     return;
   }
 
+  // PRD Section 10: Mandatory Explicit Medical Consent before Account Creation
+  if (authMode === "signup") {
+    if (authMedicalConsentChk && !authMedicalConsentChk.checked) {
+      showAuthError({
+        code: "auth/medical-consent-required",
+        title: isEn ? "Medical Privacy Consent Required" : "الموافقة الطبية الصريحة مطلوبة",
+        message: isEn
+          ? "You must explicitly consent to clinical data processing and physician review before creating an account (PRD Section 10)."
+          : "يجب الموافقة الصريحة على معالجة البيانات الطبية السريرية ومراجعتها من قبل الطبيب المختص قبل إنشاء الحساب (القسم 10 من PRD).",
+        action: isEn
+          ? "Check the explicit medical consent box above to proceed safely."
+          : "يرجى تحديد مربع الموافقة الطبية الصريحة أعلاه للمتابعة بأمان.",
+        icon: "📋"
+      });
+      authMedicalConsentChk.focus();
+      return;
+    }
+  }
+
   setAuthLoading(true);
 
   try {
@@ -5939,14 +5963,24 @@ async function handleEmailAuth(e) {
       selectedRole = safeRole;
 
       try {
+        const consentData = {
+          accepted: true,
+          version: typeof PRIVACY_CONSENT_VERSION !== "undefined" ? PRIVACY_CONSENT_VERSION : "2.0.0",
+          acceptedAt: new Date().toISOString(),
+          purpose: "PRD Section 10: Explicit consent for clinical data processing, physician review, and verified reports."
+        };
         const firestoreWritePromise = db.collection("users").doc(user.uid).set({
           name: displayName,
           email: user.email,
           role: safeRole,
           status: safeRole === ROLES.DOCTOR_PENDING ? "pending_verification" : "active",
+          privacyConsent: consentData,
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
         await Promise.race([firestoreWritePromise, new Promise((_, rej) => setTimeout(() => rej(new Error("firestore_timeout")), 7000))]);
+        if (typeof savePrivacyConsent === "function") {
+          savePrivacyConsent(true).catch(e => console.warn("savePrivacyConsent error:", e));
+        }
       } catch (docErr) {
         console.warn("Firestore user document init warning:", docErr);
       }

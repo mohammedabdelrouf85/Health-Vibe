@@ -18,6 +18,7 @@
 
     const nameGroup = document.getElementById("authNameGroup");
     const roleGroup = document.getElementById("authRoleGroup");
+    const consentGroup = document.getElementById("authConsentGroup");
     const title = document.getElementById("authModalTitle");
     const sub = document.getElementById("authModalSub");
     const submitBtn = document.getElementById("authSubmitText");
@@ -27,6 +28,7 @@
 
     if (nameGroup) nameGroup.style.display = isSignUp ? "block" : "none";
     if (roleGroup) roleGroup.style.display = isSignUp ? "block" : "none";
+    if (consentGroup) consentGroup.style.display = isSignUp ? "block" : "none";
     if (forgotContainer) forgotContainer.style.display = isSignUp ? "none" : "block";
 
     if (title) {
@@ -108,6 +110,7 @@
       "authPassword",
       "authName",
       "authRole",
+      "authMedicalConsentChk",
       "rememberMe",
       "googleLogin",
       "authTabSignIn",
