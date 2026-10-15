@@ -95,6 +95,7 @@
     "test:clinic-lead-email": "node tests/clinic_lead_db_and_email.test.js",
     "test:clinic-calculator": "node tests/clinic_calculator.test.js",
     "test:remember": "node tests/remember_me_security.test.js",
+    "test:theme": "node tests/theme_system.test.js",
     "test:lifecycle": "node tests/account_lifecycle.test.js",
     "test:guards": "node tests/route_guards.test.js",
     "audit:a11y": "node scripts/a11y-audit.js",

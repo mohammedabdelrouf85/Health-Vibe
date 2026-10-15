@@ -95,25 +95,66 @@ for (const { file, expectedMime } of logoFiles) {
 console.log('');
 
 // -----------------------------------------------------------------------------
-// TEST 4: Logo Aspect-Ratio Constraints in CSS and HTML
 // -----------------------------------------------------------------------------
-console.log('▶ TEST 4: Aspect-Ratio Constraints across Stylesheets and HTML');
+// TEST 4: Logo Brand Assets, Paths, Alt Text & Aspect-Ratio Constraints
+// -----------------------------------------------------------------------------
+console.log('▶ TEST 4: Brand Logo Assets across Landing, Clinics, Pitch Deck & App Header');
 const indexHtml = fs.readFileSync(path.join(APP_DIR, 'index.html'), 'utf-8');
 const clinicsHtml = fs.readFileSync(path.join(APP_DIR, 'clinics.html'), 'utf-8');
 const pitchHtml = fs.readFileSync(path.join(APP_DIR, 'pitch.html'), 'utf-8');
+const rootIndexHtml = fs.readFileSync(path.join(ROOT_DIR, 'index.html'), 'utf-8');
 
-// CSS aspect-ratio assertions
+// 1. CSS aspect-ratio assertions
 assert.ok(stylesCss.includes('.loader-logo {') && stylesCss.includes('aspect-ratio: 1 / 1;'), '.loader-logo must have aspect-ratio: 1 / 1 in styles.css');
 assert.ok(stylesCss.includes('.hero-brand-logo {') && stylesCss.includes('aspect-ratio: 1 / 1;'), '.hero-brand-logo must have aspect-ratio: 1 / 1 in styles.css');
 assert.ok(stylesCss.includes('.brand-logo {') && stylesCss.includes('aspect-ratio: 58 / 42;'), '.brand-logo must have aspect-ratio constraint in styles.css');
+assert.ok(stylesCss.includes('.topbar-brand-logo {') && stylesCss.includes('aspect-ratio: 40 / 29;'), '.topbar-brand-logo must have aspect-ratio constraint in styles.css');
 
-// HTML aspect-ratio and dimension assertions
-assert.ok(indexHtml.includes('class="loader-logo"') && indexHtml.includes('aspect-ratio: 1 / 1;'), 'index.html loader-logo must declare aspect-ratio: 1 / 1');
-assert.ok(indexHtml.includes('class="hero-brand-logo"') && indexHtml.includes('aspect-ratio: 1 / 1;'), 'index.html hero-brand-logo must declare aspect-ratio: 1 / 1');
-assert.ok(clinicsHtml.includes('.brand-group img') && clinicsHtml.includes('aspect-ratio: 1 / 1;'), 'clinics.html brand logo must declare aspect-ratio: 1 / 1');
-assert.ok(pitchHtml.includes('.brand-group img') && pitchHtml.includes('aspect-ratio: 1 / 1;'), 'pitch.html brand logo must declare aspect-ratio: 1 / 1');
+// 2. Public Landing Page (app/index.html & index.html)
+assert.ok(indexHtml.includes('class="loader-logo"') && indexHtml.includes('width="180"') && indexHtml.includes('height="180"'), 'Landing loader logo must have width/height dimensions');
+assert.ok(indexHtml.includes('class="hero-brand-logo"') && indexHtml.includes('width="132"') && indexHtml.includes('height="132"'), 'Landing hero logo must have width/height dimensions');
+assert.ok(rootIndexHtml.includes('class="launcher-logo"') && rootIndexHtml.includes('src="./app/logo-dark-mark.webp"'), 'Root index.html launcher card must include brand logo');
+assert.ok(rootIndexHtml.includes('width="64"') && rootIndexHtml.includes('height="46"'), 'Root index.html logo must specify width and height');
 
-console.log('  ✓ All logo elements constrained with explicit aspect ratios preventing distortion or shifts.\n');
+// 3. Application Header (TopBar in app/index.html)
+assert.ok(indexHtml.includes('class="brand-logo topbar-brand-logo"'), 'Application topbar header must include brand logo');
+assert.ok(indexHtml.includes('topbar-brand-logo') && indexHtml.includes('width="40"') && indexHtml.includes('height="29"'), 'Topbar logo must have explicit width/height to prevent CLS');
+assert.ok(indexHtml.includes('topbar-brand-logo') && indexHtml.includes('alt="Health Vibe AI logo"'), 'Topbar logo must provide valid alt text');
+
+// 4. Clinics Portal (app/clinics.html)
+assert.ok(clinicsHtml.includes('src="./logo-dark-mark.webp"'), 'Clinics portal header must reference new .webp brand logo');
+assert.ok(!clinicsHtml.includes('src="./logo-dark-mark.png"'), 'Clinics portal header must not reference outdated .png asset');
+assert.ok(clinicsHtml.includes('alt="Health Vibe AI logo"'), 'Clinics portal brand logo must provide valid alt text');
+assert.ok(clinicsHtml.includes('.brand-group img') && clinicsHtml.includes('aspect-ratio: 1 / 1;'), 'Clinics portal brand logo must declare aspect-ratio: 1 / 1');
+
+// 5. Pitch Deck (app/pitch.html)
+assert.ok(pitchHtml.includes('src="./logo-dark-mark.webp"'), 'Pitch deck header must reference .webp brand logo');
+assert.ok(pitchHtml.includes('alt="Health Vibe AI logo"'), 'Pitch deck logo must provide valid alt text');
+assert.ok(pitchHtml.includes('.brand-group img') && pitchHtml.includes('aspect-ratio: 1 / 1;'), 'Pitch deck brand logo must declare aspect-ratio: 1 / 1');
+
+// 6. Relative Path Resolution (Zero 404s)
+const allHtmlFiles = [
+  { file: 'index.html', dir: ROOT_DIR, content: rootIndexHtml },
+  { file: 'app/index.html', dir: APP_DIR, content: indexHtml },
+  { file: 'app/clinics.html', dir: APP_DIR, content: clinicsHtml },
+  { file: 'app/pitch.html', dir: APP_DIR, content: pitchHtml }
+];
+
+for (const { file, dir, content } of allHtmlFiles) {
+  const imgMatches = content.match(/<img[^>]+src=["'](\.[^"']+)["'][^>]*>/g) || [];
+  for (const tag of imgMatches) {
+    const srcMatch = tag.match(/src=["'](\.[^"']+)["']/);
+    if (srcMatch && srcMatch[1]) {
+      const relPath = srcMatch[1];
+      const resolved = path.resolve(dir, relPath);
+      assert.ok(fs.existsSync(resolved), `Image ${relPath} in ${file} must resolve to an existing file: ${resolved}`);
+    }
+  }
+}
+
+console.log('  ✓ All logo references verified across Landing, Clinics, Pitch Deck, and App Header.');
+console.log('  ✓ All relative asset paths resolve to active disk files with zero 404s.');
+console.log('  ✓ Proper alt text and explicit width/height dimensions enforced preventing layout shifts (CLS).\n');
 
 // -----------------------------------------------------------------------------
 // TEST 5: Simulated DOM Unmounting Lifecycle Validation

@@ -290,7 +290,7 @@
       <button id="authClose" class="close-button" aria-label="Close" onclick="hideAuth()">×</button>
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
         <div class="brand auth-brand" style="margin-bottom:0;">
-          <img src="./logo-dark-mark.webp" alt="Health Vibe AI" class="brand-logo" data-logo-mark loading="lazy" decoding="async" width="58" height="42" style="aspect-ratio: 58 / 42;" />
+          <img src="./logo-dark-mark.webp" alt="Health Vibe AI logo" class="brand-logo" data-logo-mark loading="lazy" decoding="async" width="58" height="42" style="aspect-ratio: 58 / 42;" />
           <div>
             <strong>Health Vibe AI</strong>
             <span>Secure account login</span>
@@ -487,7 +487,7 @@
 
     <aside class="sidebar" aria-label="التنقل داخل التطبيق">
       <div class="brand">
-        <img src="./logo-dark-mark.webp" alt="Health Vibe AI" class="brand-logo" data-logo-mark loading="lazy" decoding="async" width="58" height="42" style="aspect-ratio: 58 / 42;" />
+        <img src="./logo-dark-mark.webp" alt="Health Vibe AI logo" class="brand-logo" data-logo-mark loading="lazy" decoding="async" width="58" height="42" style="aspect-ratio: 58 / 42;" />
         <div>
           <strong>Health Vibe AI</strong>
           <span id="accountLabel">Patient account</span>
@@ -581,10 +581,13 @@
 
     <section class="workspace" aria-labelledby="screenTitle">
       <header class="topbar">
-        <button id="menuToggle" class="icon-button" aria-label="Toggle menu">☰</button>
-        <div>
-          <p>Health Vibe AI</p>
-          <h2 id="screenTitle">Home</h2>
+        <div class="topbar-brand-group">
+          <button id="menuToggle" class="icon-button" aria-label="Toggle menu">☰</button>
+          <img src="./logo-dark-mark.webp" alt="Health Vibe AI logo" class="brand-logo topbar-brand-logo" data-logo-mark decoding="async" width="40" height="29" style="aspect-ratio: 40 / 29; object-fit: contain;" />
+          <div>
+            <p style="margin: 0; font-size: 11.5px; color: var(--muted); line-height: 1.2;">Health Vibe AI</p>
+            <h2 id="screenTitle" style="margin: 0; font-size: 20px; color: var(--teal-2); line-height: 1.2;">Home</h2>
+          </div>
         </div>
         <div class="top-actions">
           <button id="topbarThemeToggle" type="button" style="display:none !important;" aria-hidden="true"></button>
