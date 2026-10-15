@@ -8070,8 +8070,57 @@ function initCategoryToggles() {
 }
 window.initCategoryToggles = initCategoryToggles;
 
+function initSidebarKeyboardNav() {
+  const navList = document.querySelector(".sidebar .nav-list");
+  if (!navList || navList.dataset.keyboardBound === "true") return;
+  navList.dataset.keyboardBound = "true";
+
+  navList.addEventListener("keydown", (event) => {
+    const activeEl = document.activeElement;
+    if (!activeEl || !activeEl.closest(".nav-item")) return;
+
+    // Get all currently visible, focusable navigation items in DOM order
+    const visibleNavItems = Array.from(navList.querySelectorAll(".nav-item")).filter((item) => {
+      if (item.offsetParent === null && item.style.display === "none") return false;
+      const parentSubmenu = item.closest("#diseaseSubmenu");
+      if (parentSubmenu && parentSubmenu.hasAttribute("hidden")) return false;
+      return true;
+    });
+
+    const currentIndex = visibleNavItems.indexOf(activeEl);
+    if (currentIndex === -1) return;
+
+    let targetIndex = -1;
+
+    switch (event.key) {
+      case "ArrowDown":
+        event.preventDefault();
+        targetIndex = (currentIndex + 1) % visibleNavItems.length;
+        break;
+      case "ArrowUp":
+        event.preventDefault();
+        targetIndex = (currentIndex - 1 + visibleNavItems.length) % visibleNavItems.length;
+        break;
+      case "Home":
+        event.preventDefault();
+        targetIndex = 0;
+        break;
+      case "End":
+        event.preventDefault();
+        targetIndex = visibleNavItems.length - 1;
+        break;
+    }
+
+    if (targetIndex >= 0 && targetIndex < visibleNavItems.length) {
+      visibleNavItems[targetIndex].focus();
+    }
+  });
+}
+window.initSidebarKeyboardNav = initSidebarKeyboardNav;
+
 function bindScreenNavigation() {
   initCategoryToggles();
+  initSidebarKeyboardNav();
   document.querySelectorAll("[data-screen]").forEach((button) => {
     if (button.dataset.navBound === "true") return;
     button.dataset.navBound = "true";
