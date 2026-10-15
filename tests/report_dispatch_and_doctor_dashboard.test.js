@@ -12,6 +12,35 @@
 const assert = require('assert');
 const ReportsService = require('../app/modules/reports/reports-service');
 
+const queue = [];
+const describe = global.describe || ((name, fn) => {
+  console.log(`\n=== ${name} ===`);
+  fn();
+  (async () => {
+    for (const test of queue) {
+      try {
+        await test.fn();
+        console.log(`  ✓ ${test.name}`);
+      } catch (err) {
+        console.error(`  ✗ ${test.name}`, err);
+        process.exit(1);
+      }
+    }
+  })();
+});
+const it = global.it || ((name, fn) => {
+  if (fn.length > 0) {
+    queue.push({
+      name,
+      fn: () => new Promise((resolve, reject) => {
+        fn((err) => { if (err) reject(err); else resolve(); });
+      })
+    });
+  } else {
+    queue.push({ name, fn: async () => { await fn(); } });
+  }
+});
+
 describe('Medical Report Dispatch & Doctor Dashboard Lifecycle', () => {
 
   const sampleCaseData = {
