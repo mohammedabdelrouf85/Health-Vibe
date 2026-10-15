@@ -6826,3 +6826,62 @@ body.dark .thread-direct-action-card {
   font-family: monospace;
 }
 
+/* ==========================================================================
+   BIDIRECTIONAL TEXT & NUMERIC ISOLATION (BiDi PRESERVATION)
+   Ensures numbers, percentages, mathematical operators (<, >, ≤, ≥, ±, +),
+   ratios, ranges, units, and stats maintain natural reading order in RTL mode.
+   Prevents reversing (e.g. "< 4%" displaying as "4% >").
+   ========================================================================== */
+bdi,
+.bidi-isolate,
+.ltr-num,
+.stat-number,
+.stat-val,
+.metric-val,
+.metric-number,
+.kpi-hero-number,
+.kpi-card-value,
+.kpi-badge-sla,
+.kpi-stage-time,
+.kpi-submetric-value,
+.trust-metric-item strong,
+.calc-metric strong,
+.metric-grid strong,
+.diff-val-cell .val-text,
+.diff-delta-cell,
+.diff-delta-cell .pill,
+.badge-numeric,
+.stat-numeric,
+.numeric-badge,
+[data-bidi="isolate"] {
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: start;
+}
+
+/* Inline BiDi wrapper elements */
+span.bidi-isolate,
+small.bidi-isolate,
+strong.bidi-isolate,
+bdi.bidi-isolate {
+  display: inline-block;
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: start;
+}
+
+/* Explicit RTL document overrides */
+[dir="rtl"] bdi,
+[dir="rtl"] .bidi-isolate,
+[dir="rtl"] .ltr-num,
+[dir="rtl"] .stat-number,
+[dir="rtl"] .kpi-hero-number,
+[dir="rtl"] .trust-metric-item strong,
+[dir="rtl"] .calc-metric strong,
+[dir="rtl"] .metric-grid strong,
+[dir="rtl"] .diff-delta-cell .pill {
+  direction: ltr !important;
+  unicode-bidi: isolate !important;
+}
+
+

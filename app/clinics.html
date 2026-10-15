@@ -310,11 +310,31 @@
       font-size: 22px;
       font-weight: 800;
       color: #ffffff;
+      direction: ltr;
+      unicode-bidi: isolate;
+      text-align: start;
     }
 
     .trust-metric-item span {
       font-size: 12px;
       color: #8da9a7;
+    }
+
+    bdi,
+    .bidi-isolate,
+    .ltr-num {
+      direction: ltr;
+      unicode-bidi: isolate;
+      display: inline-block;
+      text-align: start;
+    }
+
+    [dir="rtl"] bdi,
+    [dir="rtl"] .bidi-isolate,
+    [dir="rtl"] .trust-metric-item strong,
+    [dir="rtl"] .calc-metric strong {
+      direction: ltr !important;
+      unicode-bidi: isolate !important;
     }
 
     /* Hero Simulated Dashboard Card */
@@ -539,6 +559,9 @@
       font-weight: 800;
       color: #2dd4bf;
       line-height: 1.1;
+      direction: ltr;
+      unicode-bidi: isolate;
+      text-align: start;
     }
 
     .calc-metric span {
@@ -783,19 +806,19 @@
 
         <div class="trust-metrics-grid">
           <div class="trust-metric-item">
-            <strong id="metric1Val">70%</strong>
+            <strong id="metric1Val"><bdi>70%</bdi></strong>
             <span id="metric1Label">تسريع الفرز السريري</span>
           </div>
           <div class="trust-metric-item">
-            <strong id="metric2Val">&lt; 4%</strong>
+            <strong id="metric2Val"><bdi>&lt; 4%</bdi></strong>
             <span id="metric2Label">تخلف المرضى (No-Show)</span>
           </div>
           <div class="trust-metric-item">
-            <strong id="metric3Val">100%</strong>
+            <strong id="metric3Val"><bdi>100%</bdi></strong>
             <span id="metric3Label">امتثال لمعايير HIPAA</span>
           </div>
           <div class="trust-metric-item">
-            <strong id="metric4Val">12 min</strong>
+            <strong id="metric4Val"><bdi>12 min</bdi></strong>
             <span id="metric4Label">متوسط اعتماد التقرير</span>
           </div>
         </div>
@@ -1029,17 +1052,17 @@
 
         <div class="calc-results-box">
           <div class="calc-metric">
-            <strong id="calcHoursSaved">140 ساعة</strong>
+            <strong id="calcHoursSaved"><bdi>140 ساعة</bdi></strong>
             <span id="calcHoursSavedLabel">ساعات توثيق وفرز يتم توفيرها شهرياً للعيادة</span>
           </div>
 
           <div class="calc-metric">
-            <strong id="calcRevenueGain">+52,500 جنيه</strong>
+            <strong id="calcRevenueGain"><bdi>+52,500 جنيه</bdi></strong>
             <span id="calcRevenueGainLabel">عائد شهري إضافي متوقع من استرداد المواعيد المهدرة</span>
           </div>
 
           <div class="calc-metric">
-            <strong id="calcTriageSpeed">3x أسرع</strong>
+            <strong id="calcTriageSpeed"><bdi>3x أسرع</bdi></strong>
             <span id="calcTriageSpeedLabel">سرعة إصدار وتوثيق التقارير الطبية المعتمدة</span>
           </div>
 
@@ -1375,6 +1398,7 @@
         simLiveQueueTitle: "قائمة الفرز والمراجعة السريرية المباشرة",
         calcHoursSavedLabel: "ساعات توثيق وفرز يتم توفيرها شهرياً للعيادة",
         calcRevenueGainLabel: "عائد شهري إضافي متوقع من استرداد المواعيد المهدرة",
+        calcTriageSpeed: "3x أسرع",
         calcTriageSpeedLabel: "سرعة إصدار وتوثيق التقارير الطبية المعتمدة",
         calcCtaBtn: "ابدأ بتطبيق المنظومة في عيادتك الآن",
         pilotBadge: "باقة التشغيل التجريبي المعتمدة (Pilot Package)",
@@ -1416,6 +1440,7 @@
         simLiveQueueTitle: "Live Clinical Triage & Review Queue",
         calcHoursSavedLabel: "Documentation hours saved per month",
         calcRevenueGainLabel: "Projected monthly revenue boost from recovered no-shows",
+        calcTriageSpeed: "3x Faster",
         calcTriageSpeedLabel: "Faster certified report generation",
         calcCtaBtn: "Deploy Health Vibe AI in Your Clinic Today",
         pilotBadge: "Official Clinical Pilot Package",
@@ -1451,7 +1476,13 @@
       Object.entries(dict).forEach(([id, text]) => {
         const el = document.getElementById(id);
         if (el) {
-          if (text.includes("<")) {
+          if (id === "metric2Val") {
+            el.innerHTML = `<bdi>${text.replace(/</g, "&lt;")}</bdi>`;
+          } else if (id === "calcTriageSpeed") {
+            el.innerHTML = `<bdi>${text}</bdi>`;
+          } else if (id.startsWith("metric") && id.endsWith("Val")) {
+            el.innerHTML = `<bdi>${text}</bdi>`;
+          } else if (text.includes("</") || text.includes("<span")) {
             el.innerHTML = text;
           } else {
             el.textContent = text;
@@ -1481,8 +1512,8 @@
       const recoveredVisitsPerMonth = Math.round(monthlyPatients * 0.05);
       const extraRevenue = recoveredVisitsPerMonth * fee;
 
-      document.getElementById("calcHoursSaved").textContent = isAr ? `${hoursSavedPerMonth.toLocaleString()} ساعة` : `${hoursSavedPerMonth.toLocaleString()} hrs`;
-      document.getElementById("calcRevenueGain").textContent = isAr ? `+${extraRevenue.toLocaleString()} جنيه` : `+${extraRevenue.toLocaleString()} EGP`;
+      document.getElementById("calcHoursSaved").innerHTML = `<bdi>${isAr ? `${hoursSavedPerMonth.toLocaleString()} ساعة` : `${hoursSavedPerMonth.toLocaleString()} hrs`}</bdi>`;
+      document.getElementById("calcRevenueGain").innerHTML = `<bdi>${isAr ? `+${extraRevenue.toLocaleString()} جنيه` : `+${extraRevenue.toLocaleString()} EGP`}</bdi>`;
     }
 
     function selectPilotPackage() {

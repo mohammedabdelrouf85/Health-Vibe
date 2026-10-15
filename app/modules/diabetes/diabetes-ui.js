@@ -598,9 +598,9 @@
                 ${escapeHtml(t("diabetes.targetRangesHeading") || "Doctor-Approved Target Ranges")}
               </span>
               <div style="margin-top: 6px; font-size: 12.5px; color: var(--ink); line-height: 1.6;">
-                <div><b>FBG:</b> ${fastingTarget ? escapeHtml(fastingTarget) : (isRtl() ? "غير محدد" : "Not set")}</div>
-                <div><b>PPG:</b> ${postprandialTarget ? escapeHtml(postprandialTarget) : (isRtl() ? "غير محدد" : "Not set")}</div>
-                <div><b>HbA1c:</b> ${hba1cTarget ? escapeHtml(hba1cTarget) : (isRtl() ? "غير محدد" : "Not set")}</div>
+                <div><b>FBG:</b> <bdi class="bidi-isolate">${fastingTarget ? escapeHtml(fastingTarget) : (isRtl() ? "غير محدد" : "Not set")}</bdi></div>
+                <div><b>PPG:</b> <bdi class="bidi-isolate">${postprandialTarget ? escapeHtml(postprandialTarget) : (isRtl() ? "غير محدد" : "Not set")}</bdi></div>
+                <div><b>HbA1c:</b> <bdi class="bidi-isolate">${hba1cTarget ? escapeHtml(hba1cTarget) : (isRtl() ? "غير محدد" : "Not set")}</bdi></div>
               </div>
               <div style="margin-top: 6px;">
                 ${(fastingTarget || postprandialTarget || hba1cTarget) ? renderStatusPill("approved") : renderStatusPill("missing")}

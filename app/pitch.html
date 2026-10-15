@@ -216,6 +216,26 @@
       font-weight: 900;
       color: var(--primary-light);
       margin-bottom: 4px;
+      direction: ltr;
+      unicode-bidi: isolate;
+      display: inline-block;
+      text-align: start;
+    }
+
+    bdi,
+    .bidi-isolate,
+    .stat-val {
+      direction: ltr;
+      unicode-bidi: isolate;
+      display: inline-block;
+      text-align: start;
+    }
+
+    [dir="rtl"] .stat-number,
+    [dir="rtl"] bdi,
+    [dir="rtl"] .bidi-isolate {
+      direction: ltr !important;
+      unicode-bidi: isolate !important;
     }
 
     /* FOOTER CONTROLS */
@@ -467,7 +487,7 @@
         </div>
         <div class="info-card">
           <h4>💾 استعادة الكوارث (DR)</h4>
-          <p>نسخ احتياطي دوري بشهادات تجزئة SHA-256 وزمن استعادة RPO &lt; 15 دقيقة مع تشفير متكامل في الإرسال والتخزين.</p>
+          <p>نسخ احتياطي دوري بشهادات تجزئة SHA-256 وزمن استعادة <bdi class="bidi-isolate">RPO &lt; 15</bdi> دقيقة مع تشفير متكامل في الإرسال والتخزين.</p>
         </div>
       </div>
       <div class="info-card" style="margin-top: 16px; background: rgba(9, 184, 182, 0.08); border-color: rgba(9, 184, 182, 0.4);">
@@ -484,22 +504,22 @@
       <p class="slide-subtitle">نتائج مثبتة ميدانياً في تشغيل عيادات ومراكز الرعاية التنفسية</p>
       <div class="grid-4">
         <div class="info-card" style="text-align: center;">
-          <div class="stat-number">70%</div>
+          <div class="stat-number"><bdi>70%</bdi></div>
           <h4 style="justify-content: center;">تسريع الفرز السريري</h4>
           <p>اختصار وقت أخذ التاريخ المرضي من 15 إلى 4 دقائق.</p>
         </div>
         <div class="info-card" style="text-align: center;">
-          <div class="stat-number">&lt; 4%</div>
+          <div class="stat-number"><bdi>&lt; 4%</bdi></div>
           <h4 style="justify-content: center;">تخلف المرضى (No-Show)</h4>
           <p>انخفاض حاد مقارنة بمتوسط السوق (18%) عبر تنبيهات الواتساب.</p>
         </div>
         <div class="info-card" style="text-align: center;">
-          <div class="stat-number">12 min</div>
+          <div class="stat-number"><bdi>12 min</bdi></div>
           <h4 style="justify-content: center;">سرعة اعتماد التقرير</h4>
           <p>متوسط وقت إنجاز وفحص المريض وتسليمه تقرير الـ QR.</p>
         </div>
         <div class="info-card" style="text-align: center;">
-          <div class="stat-number">100+</div>
+          <div class="stat-number"><bdi>100+</bdi></div>
           <h4 style="justify-content: center;">ساعة موفرة شهرياً</h4>
           <p>ساعات توثيق يدوي يستعيدها طاقم العيادة شهرياً.</p>
         </div>
@@ -513,17 +533,17 @@
       <p class="slide-subtitle">التحول الرقمي للعيادات التخصصية في مصر والشرق الأوسط</p>
       <div class="grid-3">
         <div class="info-card" style="border-color: rgba(9, 184, 182, 0.4);">
-          <div class="stat-number" style="font-size: 30px;">$4.2B</div>
+          <div class="stat-number" style="font-size: 30px;"><bdi>$4.2B</bdi></div>
           <h4>TAM (السوق الكلي المتاح)</h4>
           <p>حجم سوق برمجيات الرعاية الصحية والعيادات الخارجية في منطقة الشرق الأوسط وشمال أفريقيا بحلول 2028.</p>
         </div>
         <div class="info-card" style="border-color: rgba(56, 189, 248, 0.4);">
-          <div class="stat-number" style="font-size: 30px;">25,000+</div>
+          <div class="stat-number" style="font-size: 30px;"><bdi>25,000+</bdi></div>
           <h4>SAM (السوق القابل للخدمة)</h4>
           <p>عيادة ومراكز أمراض صدرية وباطنة وطوارئ خاصة في مصر والمملكة العربية السعودية والإمارات.</p>
         </div>
         <div class="info-card" style="border-color: rgba(45, 212, 191, 0.6);">
-          <div class="stat-number" style="font-size: 30px;">1,500</div>
+          <div class="stat-number" style="font-size: 30px;"><bdi>1,500</bdi></div>
           <h4>SOM (المستهدف 3 سنوات)</h4>
           <p>عيادة ومركز طبي نشط بعائد سنوي متكرر مستهدف يتجاوز <strong>18 مليون جنيه مصري (ARR)</strong>.</p>
         </div>
@@ -539,18 +559,18 @@
         <div class="info-card" style="border: 1.5px solid var(--primary); background: rgba(9, 184, 182, 0.1);">
           <span style="font-size: 11px; font-weight: 800; color: var(--primary-light); background: rgba(9, 184, 182, 0.2); padding: 2px 8px; border-radius: 4px;">🎯 الخطاف المجاني (HOOK)</span>
           <h4 style="margin-top: 8px;">باقة الـ Pilot التجريبية</h4>
-          <div class="stat-number" style="font-size: 26px;">0 ج.م</div>
+          <div class="stat-number" style="font-size: 26px;"><bdi>0 ج.م</bdi></div>
           <p><strong>عيادة واحدة • 3 أطباء • 30 يوماً</strong><br />تجربة كاملة مجاناً بدون بطاقة بنكية، مع نسبة تحويل مستهدفة 45%+.</p>
         </div>
         <div class="info-card">
           <h4>العيادة الفردية (Solo)</h4>
-          <div class="stat-number" style="font-size: 26px;">1,250 <span style="font-size: 13px; color: #94a3b8;">ج.م/شهر</span></div>
+          <div class="stat-number" style="font-size: 26px;"><bdi>1,250</bdi> <span style="font-size: 13px; color: #94a3b8;">ج.م/شهر</span></div>
           <p>طبيب استشاري واحد + مساعد، حتى 200 تقرير شهرياً، تقارير QR.</p>
         </div>
         <div class="info-card" style="border-color: rgba(56, 189, 248, 0.5);">
           <span style="font-size: 11px; font-weight: 800; color: #38bdf8;">⭐ الأكثر طلباً</span>
           <h4 style="margin-top: 8px;">المركز الطبي (Center)</h4>
-          <div class="stat-number" style="font-size: 26px;">2,950 <span style="font-size: 13px; color: #94a3b8;">ج.م/شهر</span></div>
+          <div class="stat-number" style="font-size: 26px;"><bdi>2,950</bdi> <span style="font-size: 13px; color: #94a3b8;">ج.م/شهر</span></div>
           <p>حتى 5 أطباء، واتساب بوت، تقييمات غير محدودة، لوحة تحليلات KPIs كاملة.</p>
         </div>
       </div>
@@ -1023,7 +1043,7 @@
           <div class="grid-4">
             ${data.metrics.map(m => `
               <div class="info-card" style="text-align: center;">
-                <div class="stat-number">${m.val}</div>
+                <div class="stat-number"><bdi>${m.val}</bdi></div>
                 <h4 style="justify-content: center;">${m.title}</h4>
                 <p>${m.desc}</p>
               </div>
@@ -1039,17 +1059,17 @@
           <p class="slide-subtitle">${data.subtitle}</p>
           <div class="grid-3">
             <div class="info-card" style="border-color: rgba(9, 184, 182, 0.4);">
-              <div class="stat-number" style="font-size: 30px;">${data.cards[0].val}</div>
+              <div class="stat-number" style="font-size: 30px;"><bdi>${data.cards[0].val}</bdi></div>
               <h4>${data.cards[0].title}</h4>
               <p>${data.cards[0].desc}</p>
             </div>
             <div class="info-card" style="border-color: rgba(56, 189, 248, 0.4);">
-              <div class="stat-number" style="font-size: 30px;">${data.cards[1].val}</div>
+              <div class="stat-number" style="font-size: 30px;"><bdi>${data.cards[1].val}</bdi></div>
               <h4>${data.cards[1].title}</h4>
               <p>${data.cards[1].desc}</p>
             </div>
             <div class="info-card" style="border-color: rgba(45, 212, 191, 0.6);">
-              <div class="stat-number" style="font-size: 30px;">${data.cards[2].val}</div>
+              <div class="stat-number" style="font-size: 30px;"><bdi>${data.cards[2].val}</bdi></div>
               <h4>${data.cards[2].title}</h4>
               <p>${data.cards[2].desc}</p>
             </div>
@@ -1066,18 +1086,18 @@
             <div class="info-card" style="border: 1.5px solid var(--primary); background: rgba(9, 184, 182, 0.1);">
               <span style="font-size: 11px; font-weight: 800; color: var(--primary-light); background: rgba(9, 184, 182, 0.2); padding: 2px 8px; border-radius: 4px;">${data.plans[0].badge}</span>
               <h4 style="margin-top: 8px;">${data.plans[0].title}</h4>
-              <div class="stat-number" style="font-size: 26px;">${data.plans[0].val}</div>
+              <div class="stat-number" style="font-size: 26px;"><bdi>${data.plans[0].val}</bdi></div>
               <p>${data.plans[0].desc}</p>
             </div>
             <div class="info-card">
               <h4>${data.plans[1].title}</h4>
-              <div class="stat-number" style="font-size: 26px;">${data.plans[1].val} <span style="font-size: 13px; color: #94a3b8;">${data.plans[1].period}</span></div>
+              <div class="stat-number" style="font-size: 26px;"><bdi>${data.plans[1].val}</bdi> <span style="font-size: 13px; color: #94a3b8;">${data.plans[1].period}</span></div>
               <p>${data.plans[1].desc}</p>
             </div>
             <div class="info-card" style="border-color: rgba(56, 189, 248, 0.5);">
               <span style="font-size: 11px; font-weight: 800; color: #38bdf8;">${data.plans[2].badge}</span>
               <h4 style="margin-top: 8px;">${data.plans[2].title}</h4>
-              <div class="stat-number" style="font-size: 26px;">${data.plans[2].val} <span style="font-size: 13px; color: #94a3b8;">${data.plans[2].period}</span></div>
+              <div class="stat-number" style="font-size: 26px;"><bdi>${data.plans[2].val}</bdi> <span style="font-size: 13px; color: #94a3b8;">${data.plans[2].period}</span></div>
               <p>${data.plans[2].desc}</p>
             </div>
           </div>

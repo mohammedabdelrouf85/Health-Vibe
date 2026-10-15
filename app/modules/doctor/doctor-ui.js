@@ -781,14 +781,14 @@
           </div>
         </td>
         <td class="diff-val-cell prev">
-          <div class="val-text">${d.prevVal}</div>
+          <div class="val-text"><bdi class="bidi-isolate">${d.prevVal}</bdi></div>
           <div class="meta-sub">
             <span>🕒 ${d.prevTime}</span>
             <span>📍 ${d.prevSource}</span>
           </div>
         </td>
         <td class="diff-val-cell curr">
-          <div class="val-text ${d.isChanged ? 'highlight-change' : ''}">${d.newVal}</div>
+          <div class="val-text ${d.isChanged ? 'highlight-change' : ''}"><bdi class="bidi-isolate">${d.newVal}</bdi></div>
           <div class="meta-sub">
             <span>🕒 ${d.newTime}</span>
             <span>📍 ${d.newSource}</span>
@@ -796,7 +796,7 @@
         </td>
         <td class="diff-delta-cell">
           <span class="pill ${d.deltaText.includes('Improved') || d.deltaText.includes('تحسن') ? 'ok' : (d.deltaText.includes('Decreased') || d.deltaText.includes('Elevated') || d.deltaText.includes('انخفاض') || d.deltaText.includes('ارتفاع') ? 'danger' : 'info')}" style="font-size: 11px; padding: 3px 8px; font-weight: 700;">
-            ${d.deltaText}
+            <bdi class="bidi-isolate">${d.deltaText}</bdi>
           </span>
         </td>
       </tr>
@@ -810,12 +810,12 @@
             <span style="font-size: 18px;">${d.icon}</span>
             <strong style="font-size: 13.5px;">${d.label}</strong>
           </div>
-          <span class="pill info" style="font-size: 10.5px; padding: 2px 7px;">${d.deltaText}</span>
+          <span class="pill info" style="font-size: 10.5px; padding: 2px 7px;"><bdi class="bidi-isolate">${d.deltaText}</bdi></span>
         </div>
         <div class="diff-card-grid">
           <div class="diff-card-col prev">
             <span class="diff-col-label">${isEn ? "Baseline (Rev " + (rev - 1) + "):" : "السابقة (المراجعة " + (rev - 1) + "):"}</span>
-            <div class="val-text">${d.prevVal}</div>
+            <div class="val-text"><bdi class="bidi-isolate">${d.prevVal}</bdi></div>
             <div class="meta-sub">
               <span>🕒 ${d.prevTime}</span>
               <span>📍 ${d.prevSource}</span>
@@ -823,7 +823,7 @@
           </div>
           <div class="diff-card-col curr">
             <span class="diff-col-label">${isEn ? "Latest (Rev " + rev + "):" : "المحدثة (المراجعة " + rev + "):"}</span>
-            <div class="val-text ${d.isChanged ? 'highlight-change' : ''}">${d.newVal}</div>
+            <div class="val-text ${d.isChanged ? 'highlight-change' : ''}"><bdi class="bidi-isolate">${d.newVal}</bdi></div>
             <div class="meta-sub">
               <span>🕒 ${d.newTime}</span>
               <span>📍 ${d.newSource}</span>

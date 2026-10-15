@@ -1734,17 +1734,17 @@
           <article style="border: 1px solid rgba(16, 185, 129, 0.3); background: rgba(16, 185, 129, 0.04);">
             <span>معدل إكمال الحالات (KPI)</span>
             <strong id="adminKpiCompletionRate" style="color: #10b981;">--%</strong>
-            <small id="adminKpiCompletionSub" style="color: #10b981;">الهدف: ≥ 90%</small>
+            <small id="adminKpiCompletionSub" style="color: #10b981;">الهدف: <bdi class="bidi-isolate">≥ 90%</bdi></small>
           </article>
           <article style="border: 1px solid rgba(59, 130, 246, 0.3); background: rgba(59, 130, 246, 0.04);">
             <span>سرعة الاستجابة (KPI)</span>
             <strong id="adminKpiResponseTime" style="color: #3b82f6;">-- دقيقة</strong>
-            <small id="adminKpiResponseSub" style="color: #3b82f6;">SLA: &lt; 30 دقيقة</small>
+            <small id="adminKpiResponseSub" style="color: #3b82f6;">SLA: <bdi class="bidi-isolate">&lt; 30 دقيقة</bdi></small>
           </article>
           <article style="border: 1px solid rgba(9, 184, 182, 0.3); background: rgba(9, 184, 182, 0.04);">
             <span>زمن استخراج التقرير (TAT)</span>
             <strong id="adminKpiTurnaroundTime" style="color: var(--teal);">-- دقيقة</strong>
-            <small id="adminKpiTurnaroundSub" style="color: var(--teal);">الهدف: &lt; 2 ساعة</small>
+            <small id="adminKpiTurnaroundSub" style="color: var(--teal);">الهدف: <bdi class="bidi-isolate">&lt; 2 ساعة</bdi></small>
           </article>
         </div>
 
@@ -1761,7 +1761,7 @@
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-top: 16px;">
             <div style="padding: 14px; background: rgba(239, 68, 68, 0.06); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 12px;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                <span style="font-size: 13px; font-weight: 700; color: #ef4444;">🚨 حالات عاجلة (SpO2 &lt; 90%)</span>
+                <span style="font-size: 13px; font-weight: 700; color: #ef4444;">🚨 حالات عاجلة (<bdi class="bidi-isolate">SpO2 &lt; 90%</bdi>)</span>
                 <strong id="adminDistUrgentCount" style="font-size: 16px; color: #ef4444;">0</strong>
               </div>
               <div style="background: rgba(0,0,0,0.2); border-radius: 999px; height: 6px; overflow: hidden;">
@@ -1772,7 +1772,7 @@
 
             <div style="padding: 14px; background: rgba(245, 158, 11, 0.06); border: 1px solid rgba(245, 158, 11, 0.2); border-radius: 12px;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                <span style="font-size: 13px; font-weight: 700; color: #f59e0b;">⚠️ أولوية عالية (90-92%)</span>
+                <span style="font-size: 13px; font-weight: 700; color: #f59e0b;">⚠️ أولوية عالية (<bdi class="bidi-isolate">90-92%</bdi>)</span>
                 <strong id="adminDistHighCount" style="font-size: 16px; color: #f59e0b;">0</strong>
               </div>
               <div style="background: rgba(0,0,0,0.2); border-radius: 999px; height: 6px; overflow: hidden;">
@@ -1783,7 +1783,7 @@
 
             <div style="padding: 14px; background: rgba(16, 185, 129, 0.06); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 12px;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                <span style="font-size: 13px; font-weight: 700; color: #10b981;">✔️ أولوية عادية (93%+)</span>
+                <span style="font-size: 13px; font-weight: 700; color: #10b981;">✔️ أولوية عادية (<bdi class="bidi-isolate">93%+</bdi>)</span>
                 <strong id="adminDistNormalCount" style="font-size: 16px; color: #10b981;">0</strong>
               </div>
               <div style="background: rgba(0,0,0,0.2); border-radius: 999px; height: 6px; overflow: hidden;">
@@ -1938,7 +1938,7 @@
             <div>
               <div style="display: flex; align-items: center; gap: 8px;">
                 <h3 style="margin: 0; font-size: 19px;">النسخ الاحتياطي والتعافي من الكوارث (Backup & Disaster Recovery)</h3>
-                <span class="pill ok" id="adminBackupRpoBadge" style="font-size: 11px;">RPO &lt; 15m (PITR)</span>
+                <span class="pill ok" id="adminBackupRpoBadge" style="font-size: 11px;"><bdi class="bidi-isolate">RPO &lt; 15m (PITR)</bdi></span>
               </div>
               <p style="margin: 4px 0 0; font-size: 13px; color: var(--muted);">تصدير فوري مشفر لقاعدة البيانات السريرية مع فحص سلامة التجزئة الرقمية SHA-256 ومحاكاة الاستعادة الآمنة</p>
             </div>
@@ -1957,12 +1957,12 @@
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-top: 18px;">
             <div class="kpi-mini-card" style="padding: 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color, rgba(255,255,255,0.06)); border-radius: 12px;">
               <div style="font-size: 12px; color: var(--muted);">هدف نقطة الاستعادة (RPO)</div>
-              <div style="font-size: 20px; font-weight: 800; color: #10b981; margin-top: 4px;">&lt; 15 دقيقة</div>
+              <div style="font-size: 20px; font-weight: 800; color: #10b981; margin-top: 4px;"><bdi class="bidi-isolate">&lt; 15 دقيقة</bdi></div>
               <div style="font-size: 11px; color: var(--muted); margin-top: 2px;">PITR 7 أيام نشط</div>
             </div>
             <div class="kpi-mini-card" style="padding: 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color, rgba(255,255,255,0.06)); border-radius: 12px;">
               <div style="font-size: 12px; color: var(--muted);">هدف زمن الاستعادة (RTO)</div>
-              <div style="font-size: 20px; font-weight: 800; color: #38bdf8; margin-top: 4px;">&lt; 30 دقيقة</div>
+              <div style="font-size: 20px; font-weight: 800; color: #38bdf8; margin-top: 4px;"><bdi class="bidi-isolate">&lt; 30 دقيقة</bdi></div>
               <div style="font-size: 11px; color: var(--muted); margin-top: 2px;">تخزين متعدد المناطق</div>
             </div>
             <div class="kpi-mini-card" style="padding: 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color, rgba(255,255,255,0.06)); border-radius: 12px;">
@@ -2056,7 +2056,7 @@
                       <h3 style="margin: 2px 0 0; font-size: 16px;">Case Completion Rate</h3>
                     </div>
                   </div>
-                  <span id="kpiCompletionSlaBadge" class="kpi-badge-sla optimal">الهدف: ≥ 90%</span>
+                  <span id="kpiCompletionSlaBadge" class="kpi-badge-sla optimal">الهدف: <bdi class="bidi-isolate">≥ 90%</bdi></span>
                 </div>
 
                 <div class="kpi-hero-number-wrap">
@@ -2101,7 +2101,7 @@
                       <h3 style="margin: 2px 0 0; font-size: 16px;">Physician Response Time</h3>
                     </div>
                   </div>
-                  <span id="kpiResponseSlaBadge" class="kpi-badge-sla optimal">SLA: &lt; 30 دقيقة</span>
+                  <span id="kpiResponseSlaBadge" class="kpi-badge-sla optimal">SLA: <bdi class="bidi-isolate">&lt; 30 دقيقة</bdi></span>
                 </div>
 
                 <div class="kpi-hero-number-wrap">
@@ -2146,7 +2146,7 @@
                       <h3 style="margin: 2px 0 0; font-size: 16px;">Report Turnaround (TAT)</h3>
                     </div>
                   </div>
-                  <span id="kpiTurnaroundSlaBadge" class="kpi-badge-sla optimal">الهدف: &lt; 2 ساعة</span>
+                  <span id="kpiTurnaroundSlaBadge" class="kpi-badge-sla optimal">الهدف: <bdi class="bidi-isolate">&lt; 2 ساعة</bdi></span>
                 </div>
 
                 <div class="kpi-hero-number-wrap">

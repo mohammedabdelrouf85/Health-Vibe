@@ -2196,6 +2196,34 @@
         }
       }
     }
+
+    /**
+     * Wrap numeric/stat figures in <bdi> to preserve natural LTR reading order in RTL mode
+     */
+    isolateBidi(text) {
+      return isolateBidi(text);
+    }
+
+    /**
+     * Format percentage with LTR bidi isolation
+     */
+    formatBidiPercent(num) {
+      return formatBidiPercent(num);
+    }
+  }
+
+  /**
+   * Helper to wrap bidirectional text, stats, percentages, and comparison operators in <bdi>
+   * with CSS isolation so they read naturally without reverse inversion in Arabic RTL mode.
+   */
+  function isolateBidi(text) {
+    if (text === null || text === undefined || text === "") return "";
+    return `<bdi class="bidi-isolate">${text}</bdi>`;
+  }
+
+  function formatBidiPercent(num) {
+    if (num === null || num === undefined || num === "") return "";
+    return `<bdi class="bidi-isolate">${num}%</bdi>`;
   }
 
   // Singleton instance
@@ -2206,6 +2234,8 @@
     window.I18nEngine = I18nEngine;
     window.i18n = defaultI18n;
     window.getFallbackText = getFallbackText;
+    window.isolateBidi = isolateBidi;
+    window.formatBidiPercent = formatBidiPercent;
     window.t = function (key, params, fallback) {
       return defaultI18n.t(key, params, fallback);
     };
@@ -2217,8 +2247,11 @@
       I18nEngine,
       translations,
       defaultI18n,
-      getFallbackText
+      getFallbackText,
+      isolateBidi,
+      formatBidiPercent
     };
   }
 
 })(typeof window !== "undefined" ? window : globalThis);
+

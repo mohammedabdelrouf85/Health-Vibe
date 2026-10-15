@@ -402,7 +402,7 @@
           const color = isFavorable ? "#16a34a" : "#dc2626";
           const bg = isFavorable ? "rgba(22, 163, 74, 0.1)" : "rgba(239, 68, 68, 0.1)";
           deltaBadge = `<span class="pill" style="background: ${bg}; color: ${color}; font-weight: 700; font-size: 11px; padding: 3px 8px; border-radius: 6px;">
-            ${sign}${deltaObj.delta} ${unit} (${isEn ? deltaObj.direction : (isFavorable ? 'تحسن' : 'تراجع')})
+            <bdi class="bidi-isolate">${sign}${deltaObj.delta} ${unit}</bdi> (${isEn ? deltaObj.direction : (isFavorable ? 'تحسن' : 'تراجع')})
           </span>`;
         }
 
@@ -416,10 +416,10 @@
               <small style="color: var(--muted); font-size: 11px;">${isEn ? 'Unit: ' : 'الوحدة: '}<strong>${unit}</strong></small>
             </td>
             <td style="padding: 12px 14px; font-weight: 700; color: var(--teal, #0d9488);">
-              ${curVal}
+              <bdi class="bidi-isolate">${curVal}</bdi>
             </td>
             <td style="padding: 12px 14px; color: var(--muted);">
-              ${prevVal}
+              <bdi class="bidi-isolate">${prevVal}</bdi>
             </td>
             <td style="padding: 12px 14px;">
               ${deltaBadge}
