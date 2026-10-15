@@ -1520,16 +1520,34 @@ function applyLanguage(language) {
   }
 }
 
-function showToast(message) {
+function showToast(message, type = "info", duration = 3500) {
   if (!message || String(message).trim() === "" || String(message).includes("undefined")) {
     return;
   }
+  if (!toast) return;
   const text = localized(message);
   toast.textContent = text;
   if (srStatus) srStatus.textContent = text;
+
+  toast.classList.remove("toast-success", "toast-error", "toast-info");
+  if (type === "success") {
+    toast.classList.add("toast-success");
+  } else if (type === "error") {
+    toast.classList.add("toast-error");
+  } else if (type === "info") {
+    toast.classList.add("toast-info");
+  }
+
   toast.classList.add("show");
   window.clearTimeout(showToast.timer);
-  showToast.timer = window.setTimeout(() => toast.classList.remove("show"), 2600);
+  const timeoutMs = typeof duration === "number" && duration > 0 ? duration : 3500;
+  showToast.timer = window.setTimeout(() => {
+    toast.classList.remove("show", "toast-success", "toast-error", "toast-info");
+  }, timeoutMs);
+}
+
+if (typeof window !== "undefined") {
+  window.showToast = showToast;
 }
 
 const focusableSelector = [
@@ -5660,6 +5678,7 @@ window.handleEmailAuth = handleEmailAuth;
 
 let resetCooldown = false;
 let resetTimer = null;
+let resetCooldownRemaining = 0;
 
 async function handleForgotPasswordSubmit(e) {
   if (e) e.preventDefault();
@@ -5667,12 +5686,20 @@ async function handleForgotPasswordSubmit(e) {
   const email = resetEmailInput ? resetEmailInput.value.trim() : "";
 
   if (!email) {
-    showAuthError(currentLanguage === "en" ? "Please enter your account email address." : "يرجى كتابة البريد الإلكتروني الخاص بحسابك.");
+    const errorMsg = currentLanguage === "en" ? "Please enter your account email address." : "يرجى كتابة البريد الإلكتروني الخاص بحسابك.";
+    showAuthError(errorMsg);
+    showToast(errorMsg, "error", 4000);
     return;
   }
 
   if (resetCooldown) {
-    showToast(currentLanguage === "en" ? "Please wait before requesting another reset link." : "يرجى الانتظار قليلاً قبل طلب رابط جديد.");
+    const remaining = resetCooldownRemaining || 60;
+    const waitMsg = typeof i18n !== "undefined" && typeof i18n.t === "function"
+      ? i18n.t("auth.resetWaitCooldown", { seconds: remaining })
+      : (currentLanguage === "en"
+          ? `Please wait ${remaining}s before requesting another reset link.`
+          : `يرجى الانتظار ${remaining} ثانية قبل طلب رابط استعادة جديد.`);
+    showToast(waitMsg, "info", 3000);
     return;
   }
 
@@ -5680,24 +5707,42 @@ async function handleForgotPasswordSubmit(e) {
     if (sendResetLinkBtn) sendResetLinkBtn.disabled = true;
     if (sendResetLinkText) sendResetLinkText.textContent = currentLanguage === "en" ? "Sending link..." : "جاري الإرسال...";
 
-    await auth.sendPasswordResetEmail(email);
+    if (typeof HealthVibes !== "undefined" && HealthVibes.AuthService && typeof HealthVibes.AuthService.requestPasswordReset === "function") {
+      await HealthVibes.AuthService.requestPasswordReset(email, auth);
+    } else if (typeof auth !== "undefined" && auth && typeof auth.sendPasswordResetEmail === "function") {
+      await auth.sendPasswordResetEmail(email);
+    }
+
+    const isEn = currentLanguage === "en";
+    const toastMsg = typeof i18n !== "undefined" && typeof i18n.t === "function"
+      ? i18n.t("auth.resetLinkSent", { email })
+      : (isEn
+          ? `Password reset link sent to ${email}! Please check your Inbox and Spam folder.`
+          : `تم إرسال رابط استعادة كلمة المرور إلى ${email}! يرجى فحص صندوق الوارد ومجلد Spam.`);
+    
+    showToast(toastMsg, "success", 6000);
 
     if (resetSuccessMessage) {
       resetSuccessMessage.style.display = "block";
+      const escapedEmail = escapeHtml(email);
+      resetSuccessMessage.innerHTML = isEn
+        ? `<strong>✓ Reset Link Sent:</strong> An email has been sent to <strong>${escapedEmail}</strong> with instructions to reset your password. Please check your Inbox and Spam folder.`
+        : `<strong>✓ تم إرسال الرابط:</strong> تم إرسال رسالة بريد إلكتروني إلى <strong>${escapedEmail}</strong> تتضمن تعليمات استعادة كلمة المرور. يرجى فحص صندوق الوارد ومجلد الرسائل غير المرغوب فيها (Spam).`;
     }
-
-    showToast(currentLanguage === "en" ? `Reset link sent to ${email}! (Check Spam folder)` : `تم إرسال رابط الاستعادة إلى ${email}! (افحص مجلد Spam)`);
 
     resetCooldown = true;
     let seconds = 60;
+    resetCooldownRemaining = seconds;
     if (sendResetLinkText) sendResetLinkText.textContent = `${seconds}s`;
 
     if (resetTimer) clearInterval(resetTimer);
     resetTimer = setInterval(() => {
       seconds--;
+      resetCooldownRemaining = seconds;
       if (seconds <= 0) {
         clearInterval(resetTimer);
         resetCooldown = false;
+        resetCooldownRemaining = 0;
         if (sendResetLinkBtn) sendResetLinkBtn.disabled = false;
         if (sendResetLinkText) {
           sendResetLinkText.textContent = currentLanguage === "en" ? "Send Reset Link" : "إرسال رابط الاستعادة";
@@ -5708,7 +5753,9 @@ async function handleForgotPasswordSubmit(e) {
     }, 1000);
   } catch (error) {
     console.error("Password reset error:", error);
-    showAuthError(getAuthErrorMessage(error));
+    const errMessage = getAuthErrorMessage(error);
+    showAuthError(errMessage);
+    showToast(errMessage, "error", 5000);
     if (sendResetLinkBtn) sendResetLinkBtn.disabled = false;
     if (sendResetLinkText) {
       sendResetLinkText.textContent = currentLanguage === "en" ? "Send Reset Link" : "إرسال رابط الاستعادة";
