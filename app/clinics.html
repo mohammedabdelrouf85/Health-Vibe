@@ -478,6 +478,30 @@
       gap: 24px;
     }
 
+    /* RTL Comparison Layout: Position Pros (Modern) on Right, Cons (Legacy) on Left */
+    html[dir="rtl"] .comparison-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
+    html[dir="rtl"] .comparison-grid .comp-card.modern {
+      order: 1;
+    }
+    html[dir="rtl"] .comparison-grid .comp-card.legacy {
+      order: 2;
+    }
+
+    /* LTR Comparison Layout: Logical reading flow (Cons on Left, Pros on Right) */
+    html[dir="ltr"] .comparison-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
+    html[dir="ltr"] .comparison-grid .comp-card.legacy {
+      order: 1;
+    }
+    html[dir="ltr"] .comparison-grid .comp-card.modern {
+      order: 2;
+    }
+
     .comp-card {
       border-radius: 20px;
       padding: 32px;
@@ -814,7 +838,11 @@
       .clinic-hero { grid-template-columns: 1fr; overflow: hidden; padding: 48px 16px 40px; }
       .hero-glow-1 { display: none !important; }
       .section-wrap { padding: 48px 16px; overflow: hidden; }
-      .comparison-grid { grid-template-columns: 1fr; }
+      .comparison-grid {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 20px;
+      }
       .pillars-grid { grid-template-columns: 1fr; }
       .calculator-panel { grid-template-columns: 1fr; padding: 24px 16px; }
       .pricing-grid { grid-template-columns: 1fr; gap: 20px; }

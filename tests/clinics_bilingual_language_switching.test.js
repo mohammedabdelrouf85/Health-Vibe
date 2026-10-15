@@ -69,7 +69,11 @@ assert.ok(htmlContent.includes('html[lang="en"] body'), 'Defines font-family for
 assert.ok(htmlContent.includes('html[dir="rtl"] .triage-queue-item.critical'), 'Defines RTL directional border');
 assert.ok(htmlContent.includes('html[dir="ltr"] .triage-queue-item.critical'), 'Defines LTR directional border');
 assert.ok(htmlContent.includes('html[dir="ltr"] .hero-glow-1'), 'Defines LTR hero background glow positioning');
-console.log('  ✓ CSS rules enforce proper typography and RTL/LTR layout mirroring.\n');
+assert.ok(htmlContent.includes('html[dir="rtl"] .comparison-grid .comp-card.modern'), 'Defines RTL comparison grid pros positioning');
+assert.ok(htmlContent.includes('html[dir="rtl"] .comparison-grid .comp-card.legacy'), 'Defines RTL comparison grid cons positioning');
+assert.ok(htmlContent.includes('html[dir="ltr"] .comparison-grid .comp-card.legacy'), 'Defines LTR comparison grid cons positioning');
+assert.ok(htmlContent.includes('html[dir="ltr"] .comparison-grid .comp-card.modern'), 'Defines LTR comparison grid pros positioning');
+console.log('  ✓ CSS rules enforce proper typography, RTL/LTR layout mirroring, and inverted comparison grid placement.\n');
 
 // -----------------------------------------------------------------------------
 // TEST 4: Live Headless Chromium Functional Language Switch & Mirroring Test
@@ -123,6 +127,18 @@ async function runBrowserTests() {
     assert.ok(initialHeroHeadline.includes('رعاية تنفسية'), 'Initial headline should be Arabic');
     console.log('  ✓ Initial page loaded in Arabic (lang="ar", dir="rtl", button="EN").');
 
+    // Step 4a.1: Verify Inverted Comparison Layout in Arabic RTL
+    const rtlCompPositions = await page.evaluate(() => {
+      const legacy = document.querySelector('.comp-card.legacy').getBoundingClientRect();
+      const modern = document.querySelector('.comp-card.modern').getBoundingClientRect();
+      return { legacyLeft: legacy.left, modernLeft: modern.left };
+    });
+    assert.ok(
+      rtlCompPositions.modernLeft > rtlCompPositions.legacyLeft,
+      'Advantages (Pros) must be positioned on the right side and Traditional flaws (Cons) on the left side in RTL'
+    );
+    console.log('  ✓ Inverted comparison layout verified in RTL: Pros on right, Cons on left.');
+
     // Step 4b: Click Language Toggle -> Switch to English
     await page.click('#clinicLangToggle');
     await new Promise(r => setTimeout(r, 200));
@@ -160,6 +176,18 @@ async function runBrowserTests() {
     });
     assert.strictEqual(enOverflow, 0, 'Must have zero layout overflow in English LTR mode');
     console.log('  ✓ Verified 0px layout overflow in English LTR mode.');
+
+    // Step 4c.1: Verify Comparison Layout in English LTR (Cons on Left, Pros on Right)
+    const ltrCompPositions = await page.evaluate(() => {
+      const legacy = document.querySelector('.comp-card.legacy').getBoundingClientRect();
+      const modern = document.querySelector('.comp-card.modern').getBoundingClientRect();
+      return { legacyLeft: legacy.left, modernLeft: modern.left };
+    });
+    assert.ok(
+      ltrCompPositions.legacyLeft < ltrCompPositions.modernLeft,
+      'Traditional flaws (Cons) must be positioned on the left side and Advantages (Pros) on the right side in LTR'
+    );
+    console.log('  ✓ Logical comparison layout verified in LTR: Cons on left, Pros on right.');
 
     // Step 4d: Click Language Toggle -> Switch back to Arabic
     await page.click('#clinicLangToggle');
