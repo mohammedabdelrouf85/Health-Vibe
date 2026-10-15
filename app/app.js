@@ -3773,7 +3773,7 @@ window.acknowledgeConflictAndReview = function(caseId, newRevision, newSnapshot)
             </span>
           </div>
         </div>
-        <button type="button" class="soft-button" style="font-size: 11px; padding: 2px 6px;" onclick="clearDoctorConflictBanner()">✕</button>
+        <button type="button" class="soft-button" style="font-size: 11px; padding: 2px 6px;" onclick="clearDoctorConflictBanner()" aria-label="${isEn ? 'Dismiss notification' : 'إغلاق التنبيه'}">✕</button>
       </div>
     `;
   }
@@ -11457,7 +11457,7 @@ function renderOcrModalContent(draft, fileData) {
         </div>
         <div style="display:flex;align-items:center;gap:10px;">
           ${confidenceBadge}
-          <button type="button" class="soft-button" onclick="closeMedicalOcrModal()" style="padding:6px 12px;font-size:13px;">✕</button>
+          <button type="button" class="soft-button" onclick="closeMedicalOcrModal()" style="padding:6px 12px;font-size:13px;" aria-label="${isEn ? 'Close modal' : 'إغلاق النافذة'}">✕</button>
         </div>
       </div>
 

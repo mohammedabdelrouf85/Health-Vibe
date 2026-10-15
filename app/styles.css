@@ -121,10 +121,43 @@ a { color: inherit; text-decoration: none; }
   outline-offset: 3px;
 }
 
-:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
-  outline: 3px solid #ffffff;
-  outline-offset: 3px;
-  box-shadow: 0 0 0 6px rgba(9, 184, 182, .46);
+:focus-visible {
+  outline: 2px solid #0284c7 !important;
+  outline-offset: 2px !important;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible,
+[tabindex]:focus-visible,
+.solid-button:focus-visible,
+.outline-button:focus-visible,
+.soft-button:focus-visible,
+.choice:focus-visible,
+.nav-item:focus-visible,
+.back-link-btn:focus-visible,
+.btn-close:focus-visible,
+.lang-btn:focus-visible,
+.theme-fab:focus-visible {
+  outline: 2px solid #0284c7 !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 4px rgba(2, 132, 199, 0.3) !important;
+}
+
+[data-theme="dark"] :focus-visible,
+.dark :focus-visible,
+[data-theme="dark"] button:focus-visible,
+[data-theme="dark"] a:focus-visible,
+[data-theme="dark"] input:focus-visible,
+[data-theme="dark"] select:focus-visible,
+[data-theme="dark"] textarea:focus-visible,
+[data-theme="dark"] [tabindex]:focus-visible {
+  outline: 2px solid #38bdf8 !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.35) !important;
 }
 
 :where(button, .solid-button, .outline-button, .soft-button, .google-button, .nav-item, .icon-button, .lang-toggle, .theme-fab, .banner-btn, .filter-tab, .kpi-pill-btn, .legal-tab-btn, .verify-tab, .emergency-call-btn, a.nav-item) {

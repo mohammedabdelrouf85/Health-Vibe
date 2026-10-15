@@ -1941,7 +1941,7 @@
           <h3 style="margin:0; font-size:17px; font-weight:700; color:var(--ink);" data-i18n="diabetes.modalLogTitle">
             ${escapeHtml(t("diabetes.modalLogTitle") || "Log Real Measurement")}
           </h3>
-          <button type="button" onclick="document.getElementById('logDiabetesMeasurementModal').style.display='none'" style="background:none; border:none; font-size:22px; cursor:pointer; color:var(--muted);">×</button>
+          <button type="button" onclick="document.getElementById('logDiabetesMeasurementModal').style.display='none'" aria-label="إغلاق النافذة / Close modal" style="background:none; border:none; font-size:22px; cursor:pointer; color:var(--muted);">×</button>
         </div>
 
         <form id="diabetesMeasurementForm" onsubmit="HealthVibes.DiabetesUI.handleSaveMeasurement(event)">
@@ -2050,7 +2050,7 @@
           <h3 style="margin:0; font-size:17px; font-weight:700; color:var(--ink);" data-i18n="diabetes.modalNoteTitle">
             ${escapeHtml(t("diabetes.modalNoteTitle") || "Add Clinical Consultation Note")}
           </h3>
-          <button type="button" onclick="document.getElementById('addDiabetesNoteModal').style.display='none'" style="background:none; border:none; font-size:22px; cursor:pointer; color:var(--muted);">×</button>
+          <button type="button" onclick="document.getElementById('addDiabetesNoteModal').style.display='none'" aria-label="إغلاق النافذة / Close modal" style="background:none; border:none; font-size:22px; cursor:pointer; color:var(--muted);">×</button>
         </div>
 
         <form onsubmit="HealthVibes.DiabetesUI.handleSaveNote(event)">
@@ -2119,7 +2119,7 @@
           <h3 style="margin:0; font-size:17px; font-weight:700; color:var(--ink);" data-i18n="diabetes.modalReviewTitle">
             ${escapeHtml(t("diabetes.modalReviewTitle") || "Record Attending Doctor Review")}
           </h3>
-          <button type="button" onclick="document.getElementById('recordDiabetesReviewModal').style.display='none'" style="background:none; border:none; font-size:22px; cursor:pointer; color:var(--muted);">×</button>
+          <button type="button" onclick="document.getElementById('recordDiabetesReviewModal').style.display='none'" aria-label="إغلاق النافذة / Close modal" style="background:none; border:none; font-size:22px; cursor:pointer; color:var(--muted);">×</button>
         </div>
 
         <form onsubmit="HealthVibes.DiabetesUI.handleSaveReview(event)">
@@ -2223,7 +2223,7 @@
           <h3 style="margin:0; font-size:17px; font-weight:700; color:var(--ink);" data-i18n="diabetes.reviewModalTitle">
             ${escapeHtml(t("diabetes.reviewModalTitle") || "Mandatory Clinical Revision Review")}
           </h3>
-          <button type="button" onclick="document.getElementById('diabetesRevisionReviewModal').style.display='none'" style="background:none; border:none; font-size:22px; cursor:pointer; color:var(--muted);">×</button>
+          <button type="button" onclick="document.getElementById('diabetesRevisionReviewModal').style.display='none'" aria-label="إغلاق النافذة / Close modal" style="background:none; border:none; font-size:22px; cursor:pointer; color:var(--muted);">×</button>
         </div>
 
         <p style="margin:0 0 14px; font-size:13px; color:var(--muted); line-height:1.5;">
@@ -2381,7 +2381,7 @@
       <div style="background:var(--surface); border:1px solid var(--line); border-radius:16px; max-width:480px; width:100%; padding:24px; box-shadow:0 20px 25px -5px rgba(0,0,0,0.3);">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
           <h3 style="margin:0; font-size:17px; font-weight:700; color:var(--ink);">Attach Clinical Document / Report</h3>
-          <button type="button" onclick="document.getElementById('diabetesAttachmentModal').style.display='none'" style="background:none; border:none; font-size:22px; cursor:pointer; color:var(--muted);">×</button>
+          <button type="button" onclick="document.getElementById('diabetesAttachmentModal').style.display='none'" aria-label="إغلاق النافذة / Close modal" style="background:none; border:none; font-size:22px; cursor:pointer; color:var(--muted);">×</button>
         </div>
 
         <form onsubmit="HealthVibes.DiabetesUI.handleSaveAttachment(event)">
@@ -2459,7 +2459,7 @@
       <div style="background:var(--surface); border:1px solid var(--line); border-radius:16px; max-width:480px; width:100%; padding:24px; box-shadow:0 20px 25px -5px rgba(0,0,0,0.3);">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
           <h3 style="margin:0; font-size:17px; font-weight:700; color:var(--ink);">Request Patient Clarification</h3>
-          <button type="button" onclick="document.getElementById('diabetesClarificationModal').style.display='none'" style="background:none; border:none; font-size:22px; cursor:pointer; color:var(--muted);">×</button>
+          <button type="button" onclick="document.getElementById('diabetesClarificationModal').style.display='none'" aria-label="إغلاق النافذة / Close modal" style="background:none; border:none; font-size:22px; cursor:pointer; color:var(--muted);">×</button>
         </div>
 
         <form onsubmit="HealthVibes.DiabetesUI.handleSaveClarification(event)">
@@ -2526,7 +2526,7 @@
           <h3 style="margin:0; font-size:17px; font-weight:700; color:var(--ink);" data-i18n="diabetes.replyModalTitle">
             ${escapeHtml(t("diabetes.replyModalTitle") || "الرد على استفسار الطبيب المعالج")}
           </h3>
-          <button type="button" onclick="document.getElementById('diabetesReplyClarificationModal').style.display='none'" style="background:none; border:none; font-size:22px; cursor:pointer; color:var(--muted);">×</button>
+          <button type="button" onclick="document.getElementById('diabetesReplyClarificationModal').style.display='none'" aria-label="إغلاق النافذة / Close modal" style="background:none; border:none; font-size:22px; cursor:pointer; color:var(--muted);">×</button>
         </div>
 
         ${doctorPrompt ? `
@@ -2646,7 +2646,7 @@
               </p>
             ` : ""}
           </div>
-          <button type="button" onclick="document.getElementById('structuredDiabetesAssessmentModal').style.display='none'" style="background:none; border:none; font-size:24px; cursor:pointer; color:var(--muted);">×</button>
+          <button type="button" onclick="document.getElementById('structuredDiabetesAssessmentModal').style.display='none'" aria-label="إغلاق النافذة / Close modal" style="background:none; border:none; font-size:24px; cursor:pointer; color:var(--muted);">×</button>
         </div>
 
         <div id="asmModalErrors" style="display:none; margin-bottom:14px; padding:10px 14px; border-radius:8px; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.25); color:#ef4444; font-size:13px;"></div>

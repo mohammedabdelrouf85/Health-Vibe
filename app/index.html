@@ -58,6 +58,7 @@
   <link rel="stylesheet" href="./modules/assessment/assessment.css">
   <link rel="stylesheet" href="./modules/reports/reports.css">
   <script src="./bootstrap.js?v=5.0"></script>
+  <script src="./network-resilience.js?v=1.0"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.4.0/firebase-app-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.4.0/firebase-firestore-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.4.0/firebase-auth-compat.js"></script>
@@ -103,7 +104,7 @@
         <a href="./pitch.html" target="_blank" rel="noopener" style="color: #38bdf8; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">📽️ Pitch Deck</a>
       </nav>
       <div class="nav-actions">
-        <button id="siteThemeToggle" type="button" style="display:none !important;" aria-hidden="true"></button>
+        <button id="siteThemeToggle" type="button" style="display:none !important;" aria-hidden="true" aria-label="تبديل المظهر / Toggle theme"></button>
         <button id="siteBackToAppBtn" type="button" class="solid-button" onclick="showAppView(event)" style="display:none; align-items:center; gap:6px; background:linear-gradient(135deg, var(--teal), #00796b); font-weight:700;">
           <span>📱</span>
           <span>لوحة التحكم (App)</span>
@@ -279,7 +280,7 @@
 
           <div class="auth-options" style="flex-direction: column; align-items: stretch; gap: 8px;">
             <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
-              <label style="display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
+              <label for="rememberMe" style="display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
                 <input type="checkbox" id="rememberMe" checked style="accent-color: var(--teal); cursor: pointer;" />
                 <span data-i18n="auth.rememberMe" style="font-weight: 500;">Remember me</span>
               </label>
@@ -314,7 +315,7 @@
       <!-- DEDICATED FORGOT PASSWORD VIEW -->
       <div id="authResetView" style="display:none;">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
-          <button id="backToSignInBtn" type="button" class="back-link-btn" title="Back to sign in">←</button>
+          <button id="backToSignInBtn" type="button" class="back-link-btn" title="Back to sign in" aria-label="العودة لتسجيل الدخول / Back to sign in">←</button>
           <h2 style="margin:0;font-size:24px;" data-i18n="auth.resetPassword">Reset Password</h2>
         </div>
         <p style="margin-bottom:16px;color:var(--muted);font-size:13.5px;line-height:1.5;">
@@ -471,7 +472,7 @@
           <h2 id="screenTitle">Home</h2>
         </div>
         <div class="top-actions">
-          <button id="topbarThemeToggle" type="button" style="display:none !important;" aria-hidden="true"></button>
+          <button id="topbarThemeToggle" type="button" style="display:none !important;" aria-hidden="true" aria-label="تبديل المظهر / Toggle theme"></button>
           <a href="./clinics.html" target="_blank" rel="noopener" class="soft-button" style="text-decoration:none; padding:6px 12px; font-size:12px; font-weight:700; display:inline-flex; align-items:center; gap:6px; border-radius:8px; border:1px solid rgba(9, 184, 182, 0.4); color:var(--teal); background:rgba(9, 184, 182, 0.08);" data-i18n-title="nav.clinicsSales">
             <span>🏥</span>
             <span data-i18n="nav.clinicsSales">حلول العيادات (Sales) ↗</span>
@@ -568,15 +569,15 @@
             </div>
             <p class="muted-copy" data-i18n="consent.desc">Health Vibe AI يجمع بياناتك الصحية لتقييم خطورة إرشادي ثم يرسلها لطبيب معتمد قبل ظهور أي نتيجة نهائية. لحماية بياناتك والامتثال للمعايير الطبية، نرجو مراجعة وتأكيد بنود الموافقة أدناه:</p>
             <div class="check-list" style="margin: 16px 0; display: flex; flex-direction: column; gap: 12px;">
-              <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer;">
+              <label for="consentDataProcessing" style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer;">
                 <input type="checkbox" id="consentDataProcessing" checked style="margin-top: 3px;">
                 <span data-i18n="consent.dataProcessing"><strong>معالجة البيانات السريرية (إلزامي):</strong> أوافق على استخدام بيانات الأعراض والقياسات الحيوية داخل مسار التقييم ومشاركتها مع الطبيب المعالج المعتمد.</span>
               </label>
-              <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer;">
+              <label for="consentAiAdvisory" style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer;">
                 <input type="checkbox" id="consentAiAdvisory" checked style="margin-top: 3px;">
                 <span data-i18n="consent.aiAdvisory"><strong>الطبيعة الإرشادية للذكاء الاصطناعي (إلزامي):</strong> أفهم أن مؤشر الذكاء الاصطناعي أداة فرز إرشادية غير مدققة سريرياً ولا تُعد تشخيصاً طبياً مستقلاً ولا تغني عن فحص الطبيب.</span>
               </label>
-              <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer;">
+              <label for="consentNotifications" style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer;">
                 <input type="checkbox" id="consentNotifications" checked style="margin-top: 3px;">
                 <span data-i18n="consent.notifications"><strong>تنبيهات المتابعة والتقارير (اختياري):</strong> أوافق على استقبال إشعارات تحديث الحالة وتقارير الفحص الصادرة من الطبيب.</span>
               </label>
@@ -813,6 +814,7 @@
                 </div>
               </div>
               <!-- Hidden compatibility textarea -->
+              <label for="profileMedicalHistory" class="sr-only" style="display:none;">سجل التاريخ الطبي</label>
               <textarea id="profileMedicalHistory" style="display: none;"></textarea>
             </div>
 
@@ -905,8 +907,10 @@
           <article class="panel">
             <div class="panel-head"><h3>ملفات طبية</h3><span class="pill info">اختياري</span></div>
             <div class="upload-zone" id="uploadZone">
-              <strong>رفع تحليل أو أشعة أو صورة دواء</strong>
-              <span>يتم رفع الملفات بأمان وربطها بالحالة، وتبقى في الحجر حتى اكتمال الفحص الأمني.</span>
+              <label for="fileUpload" style="cursor: pointer; display: block;">
+                <strong>رفع تحليل أو أشعة أو صورة دواء</strong>
+                <span>يتم رفع الملفات بأمان وربطها بالحالة، وتبقى في الحجر حتى اكتمال الفحص الأمني.</span>
+              </label>
               <input id="fileUpload" type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp">
             </div>
             <div id="fileList" class="file-list">
@@ -1014,12 +1018,12 @@
               <button class="choice">شديدة</button>
               <button class="choice">لا توجد</button>
             </div>
-            <label data-i18n="assessment.o2Label">نسبة الأكسجين (50% - 100%)</label>
+            <label for="oxygenInput" data-i18n="assessment.o2Label">نسبة الأكسجين (50% - 100%)</label>
             <input id="oxygenInput" type="number" min="50" max="100" value="95" aria-label="نسبة الأكسجين" placeholder="95">
             <div id="oxygenWarning" class="field-warning" hidden></div>
-            <label data-i18n="assessment.tempLabel">درجة الحرارة (اختياري)</label>
+            <label for="temperatureInput" data-i18n="assessment.tempLabel">درجة الحرارة (اختياري)</label>
             <input id="temperatureInput" inputmode="decimal" aria-label="درجة الحرارة" placeholder="37.0 °C أو unknown">
-            <label data-i18n="assessment.respiratoryRateLabel">معدل التنفس (اختياري)</label>
+            <label for="respiratoryRateInput" data-i18n="assessment.respiratoryRateLabel">معدل التنفس (اختياري)</label>
             <input id="respiratoryRateInput" type="number" min="5" max="60" aria-label="معدل التنفس في الدقيقة" placeholder="مثال: 18">
             <label data-i18n="assessment.chestPainLabel">ألم بالصدر</label>
             <div id="chestPainChoices" class="choice-row three">
@@ -1027,7 +1031,7 @@
               <button class="choice active">لا</button>
               <button class="choice">غير معروف</button>
             </div>
-            <label data-i18n="assessment.symptomDurationLabel">مدة الأعراض</label>
+            <label for="symptomDuration" data-i18n="assessment.symptomDurationLabel">مدة الأعراض</label>
             <input id="symptomDuration" value="3 أيام" aria-label="مدة الأعراض">
             <label data-i18n="assessment.symptomProgressionLabel">تطور الأعراض</label>
             <div id="symptomProgressionChoices" class="choice-row three">
@@ -1055,9 +1059,9 @@
               <button class="choice">حمل</button>
               <button class="choice active">لا يوجد</button>
             </div>
-            <label>الأدوية الحالية (اختياري)</label>
+            <label for="currentMedicationsInput">الأدوية الحالية (اختياري)</label>
             <textarea id="currentMedicationsInput" rows="2" maxlength="500" aria-label="الأدوية الحالية" placeholder="اكتب الأدوية أو اتركها فارغة إذا لم يتم تقديمها"></textarea>
-            <label>ملاحظات إضافية (اختياري)</label>
+            <label for="assessmentNotesInput">ملاحظات إضافية (اختياري)</label>
             <textarea id="assessmentNotesInput" rows="2" maxlength="1000" aria-label="ملاحظات إضافية" placeholder="أي تفاصيل يريد المريض إضافتها"></textarea>
             <div class="safety-note">لن تظهر نتيجة نهائية للمريض قبل مراجعة الطبيب للحالة.</div>
             
@@ -1069,7 +1073,7 @@
                 </span>
                 <button type="button" class="soft-button" style="padding: 2px 8px; font-size: 11px;" onclick="showScreen('consent')">مراجعة البنود الكاملة</button>
               </div>
-              <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer; color: var(--ink); font-size: 12px; margin-top: 4px;">
+              <label for="assessmentInlineConsent" style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer; color: var(--ink); font-size: 12px; margin-top: 4px;">
                 <input type="checkbox" id="assessmentInlineConsent" checked style="margin-top: 2px;">
                 <span>أوافق على ميثاق الخصوصية الطبية ومعالجة البيانات السريرية وإرسالها للطبيب المعتمد.</span>
               </label>
@@ -1154,23 +1158,24 @@
             <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center; justify-content: space-between; margin-bottom: 12px;">
               <!-- Search Input -->
               <div style="flex: 1; min-width: 240px; position: relative;">
+                <label for="timelineSearchInput" class="sr-only">بحث في السجل الطبي / Search timeline</label>
                 <span style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: 14px; color: var(--muted); pointer-events: none;">🔍</span>
                 <input type="text" id="timelineSearchInput" class="form-control" placeholder="بحث في السجل (أعراض، أدوية، تشخيص، طبيب)..." style="width: 100%; padding: 9px 36px 9px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-1); color: var(--ink); font-size: 13px;" oninput="onTimelineFilterChange()">
               </div>
 
               <!-- Date Range Controls -->
               <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-                <label style="font-size: 12px; font-weight: 600; color: var(--muted); display: flex; align-items: center;">
+                <label for="timelineStartDate" style="font-size: 12px; font-weight: 600; color: var(--muted); display: flex; align-items: center;">
                   <span class="lang-ar">من:</span>
                   <span class="lang-en">From:</span>
                   <input type="date" id="timelineStartDate" class="form-control" style="padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-1); color: var(--ink); font-size: 12px; margin: 0 4px;" onchange="onTimelineFilterChange()">
                 </label>
-                <label style="font-size: 12px; font-weight: 600; color: var(--muted); display: flex; align-items: center;">
+                <label for="timelineEndDate" style="font-size: 12px; font-weight: 600; color: var(--muted); display: flex; align-items: center;">
                   <span class="lang-ar">إلى:</span>
                   <span class="lang-en">To:</span>
                   <input type="date" id="timelineEndDate" class="form-control" style="padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-1); color: var(--ink); font-size: 12px; margin: 0 4px;" onchange="onTimelineFilterChange()">
                 </label>
-                <button type="button" class="soft-button" onclick="clearTimelineFilters()" style="padding: 7px 12px; font-size: 12px; border-radius: 8px;">
+                <button type="button" class="soft-button" onclick="clearTimelineFilters()" aria-label="إعادة ضبط / Reset" style="padding: 7px 12px; font-size: 12px; border-radius: 8px;">
                   <span>✕</span>
                   <span class="lang-ar">إعادة ضبط</span>
                   <span class="lang-en">Reset</span>
@@ -1502,6 +1507,7 @@
               <span class="pill info">معتمد طبياً</span>
             </div>
             <div style="margin-bottom: 12px;">
+              <label for="faqSearchInput" class="sr-only">ابحث في الأسئلة الشائعة / Search FAQs</label>
               <input type="text" id="faqSearchInput" placeholder="ابحث في الأسئلة الشائعة أو اكتب كلمة دلالية (مثل: أكسجين، موعد، تقرير)..." oninput="renderFaqHelpCenter('all', this.value)" style="width: 100%; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 13px;">
             </div>
             <div style="display: flex; gap: 6px; margin-bottom: 14px; overflow-x: auto; padding-bottom: 4px;">
@@ -1615,6 +1621,7 @@
             </div>
             <div id="chatQuickChips" style="display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap;"></div>
             <div class="chat-compose">
+              <label for="chatInput" class="sr-only">اكتب استفسارك هنا حول تقريرك المعتمد / Ask assistant</label>
               <input id="chatInput" placeholder="اكتب استفسارك هنا حول تقريرك المعتمد..." autocomplete="off">
               <button id="sendChat" class="solid-button">إرسال</button>
             </div>
@@ -2032,7 +2039,7 @@
               </div>
             </div>
             <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-              <span style="font-size: 13px; font-weight: 700; color: var(--muted);">أولوية الحالات:</span>
+              <label for="kpiPrioritySelect" style="font-size: 13px; font-weight: 700; color: var(--muted);">أولوية الحالات:</label>
               <select id="kpiPrioritySelect" onchange="setKpiPriorityFilter(this.value)" style="padding: 6px 12px; font-size: 12.5px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);">
                 <option value="all">كافة الأولويات (All Priorities)</option>
                 <option value="urgent">🚨 عاجلة (SpO2 &lt; 90%)</option>
@@ -2537,7 +2544,10 @@
         </select>
       </div>
 
-      <textarea id="modalFeedbackComment" class="form-control" rows="3" placeholder="اكتب ملاحظاتك وتجربتك هنا..." style="width: 100%; padding: 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); margin-bottom: 14px; font-family: inherit; font-size: 13px;"></textarea>
+      <div style="margin-bottom: 12px;">
+        <label for="modalFeedbackComment" style="display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 6px;">ملاحظاتك وتجربتك (اختياري):</label>
+        <textarea id="modalFeedbackComment" class="form-control" rows="3" placeholder="اكتب ملاحظاتك وتجربتك هنا..." style="width: 100%; padding: 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); margin-bottom: 14px; font-family: inherit; font-size: 13px;"></textarea>
+      </div>
 
       <div class="doctor-actions">
         <button id="modalBtnSubmitFeedback" class="solid-button" onclick="submitModalFeedback()">إرسال التقييم</button>
@@ -2609,7 +2619,7 @@
 
         <!-- OTP Code Input Box -->
         <div id="otpInputContainer" style="margin-top: 10px; padding: 16px; border-radius: 14px; background: var(--surface-2); border: 1px dashed var(--teal);">
-          <label style="display: block; font-size: 12.5px; font-weight: 700; margin-bottom: 8px; color: var(--ink);" id="otpDigitsLabel">
+          <label for="verifyOtpCodeInput" style="display: block; font-size: 12.5px; font-weight: 700; margin-bottom: 8px; color: var(--ink);" id="otpDigitsLabel">
             أدخل كود التحقق المكون من 6 أرقام المستلم عبر البوت:
           </label>
           <input type="text" id="verifyOtpCodeInput" maxlength="6" dir="ltr" placeholder="• • • • • •" autocomplete="one-time-code" style="width: 100%; letter-spacing: 8px; font-size: 24px; font-weight: 900; text-align: center; padding: 12px; border-radius: 10px; border: 2px solid var(--teal); background: var(--surface); color: var(--teal-2); font-family: monospace; box-sizing: border-box;" />
@@ -2824,7 +2834,7 @@
 
 
 
-  <button id="themeToggle" class="theme-fab" type="button" style="display:none !important;" aria-hidden="true"></button>
+  <button id="themeToggle" class="theme-fab" type="button" style="display:none !important;" aria-hidden="true" aria-label="تبديل المظهر / Toggle theme"></button>
 
   <!-- Legal & Compliance Modal (Privacy Policy + Terms + Medical Disclaimer) -->
   <div id="legalModal" class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="legalModalTitle" aria-describedby="legalModalBody" aria-hidden="true">

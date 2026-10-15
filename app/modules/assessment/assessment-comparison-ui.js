@@ -183,7 +183,7 @@
               </p>
             </div>
           </div>
-          <button type="button" class="soft-button" style="border-radius: 50%; width: 34px; height: 34px; padding: 0; font-size: 16px; cursor: pointer;" onclick="HealthVibes.AssessmentComparisonUI.closeComparisonModal()">✕</button>
+          <button type="button" class="soft-button" style="border-radius: 50%; width: 34px; height: 34px; padding: 0; font-size: 16px; cursor: pointer;" onclick="HealthVibes.AssessmentComparisonUI.closeComparisonModal()" aria-label="${isEn ? 'Close comparison modal' : 'إغلاق نافذة المقارنة'}">✕</button>
         </div>
 
         <div id="comparisonLoadingState" style="text-align: center; padding: 50px 20px;">

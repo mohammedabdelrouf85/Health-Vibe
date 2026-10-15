@@ -732,8 +732,23 @@
       .calculator-panel { grid-template-columns: 1fr; }
       .pricing-grid { grid-template-columns: 1fr; }
       .form-grid { grid-template-columns: 1fr; }
-      .form-grid .full-span { grid-column: span 1; }
-      .nav-links { display: none; }
+    /* HIGH-CONTRAST KEYBOARD ACCESSIBILITY */
+    :focus-visible {
+      outline: 2px solid #2dd4bf !important;
+      outline-offset: 2px !important;
+    }
+    button:focus-visible,
+    a:focus-visible,
+    input:focus-visible,
+    select:focus-visible,
+    textarea:focus-visible,
+    .lang-btn:focus-visible,
+    .cta-btn-primary:focus-visible,
+    .btn-submit-lead:focus-visible,
+    .btn-select-tier:focus-visible {
+      outline: 2px solid #2dd4bf !important;
+      outline-offset: 2px !important;
+      box-shadow: 0 0 0 4px rgba(45, 212, 191, 0.35) !important;
     }
   </style>
 </head>
@@ -766,7 +781,7 @@
     </nav>
 
     <div class="nav-actions-group">
-      <button type="button" class="lang-btn" id="clinicLangToggle" onclick="toggleClinicLang()">EN</button>
+      <button type="button" class="lang-btn" id="clinicLangToggle" onclick="toggleClinicLang()" aria-label="تبديل اللغة / Toggle Language">EN</button>
       <a href="#demoForm" class="cta-btn-primary" id="navBookDemo">
         <span>🩺</span>
         <span id="navBookDemoText">طلب ديمو تجريبي</span>
@@ -1022,7 +1037,7 @@
       <div class="calculator-panel">
         <div class="calc-inputs">
           <div class="calc-slider-group">
-            <label>
+            <label for="inputDoctors">
               <span id="sliderDoctorsLabel">عدد الأطباء والاستشاريين في العيادة</span>
               <span class="slider-val" id="valDoctors">3 أطباء</span>
             </label>
@@ -1030,7 +1045,7 @@
           </div>
 
           <div class="calc-slider-group">
-            <label>
+            <label for="inputPatients">
               <span id="sliderPatientsLabel">متوسط حالات الفحص اليومية للعيادة</span>
               <span class="slider-val" id="valPatients">35 مريض/يوم</span>
             </label>
@@ -1038,7 +1053,7 @@
           </div>
 
           <div class="calc-slider-group">
-            <label>
+            <label for="inputFee">
               <span id="sliderFeeLabel">متوسط سعر الكشف أو الاستشارة (EGP)</span>
               <span class="slider-val" id="valFee">400 جنيه</span>
             </label>
@@ -1366,6 +1381,7 @@
     </div>
   </footer>
 
+  <script src="./network-resilience.js?v=1.0"></script>
   <script>
     // Current clinic page language state (ar / en)
     let currentClinicLang = "ar";

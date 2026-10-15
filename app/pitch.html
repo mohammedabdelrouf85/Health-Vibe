@@ -238,6 +238,22 @@
       unicode-bidi: isolate !important;
     }
 
+    /* HIGH-CONTRAST KEYBOARD ACCESSIBILITY */
+    :focus-visible {
+      outline: 2px solid #38bdf8 !important;
+      outline-offset: 2px !important;
+    }
+    button:focus-visible,
+    a:focus-visible,
+    .slide-dot:focus-visible,
+    .nav-arrow-btn:focus-visible,
+    .btn-header-outline:focus-visible,
+    .btn-header-solid:focus-visible {
+      outline: 2px solid #38bdf8 !important;
+      outline-offset: 2px !important;
+      box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.4) !important;
+    }
+
     /* FOOTER CONTROLS */
     .deck-controls {
       display: flex;
@@ -384,9 +400,9 @@
     </a>
 
     <div class="deck-actions">
-      <button class="action-btn" onclick="toggleDeckLang()" id="btnLangToggle" title="Switch language">English</button>
-      <button class="action-btn" onclick="toggleFullscreen()" title="ملء الشاشة">⛶ Fullscreen</button>
-      <a href="./clinics.html" class="action-btn" id="headerClinicPortal" style="background: var(--primary); color: #061515;">🏥 بوابة العيادات</a>
+      <button class="action-btn" onclick="toggleDeckLang()" id="btnLangToggle" title="Switch language" aria-label="تبديل اللغة / Switch language">English</button>
+      <button class="action-btn" onclick="toggleFullscreen()" title="ملء الشاشة" aria-label="ملء الشاشة / Toggle fullscreen">⛶ Fullscreen</button>
+      <a href="./clinics.html" class="action-btn" id="headerClinicPortal" style="background: var(--primary); color: #061515;" aria-label="بوابة العيادات / Clinic Portal">🏥 بوابة العيادات</a>
     </div>
   </header>
 
@@ -680,17 +696,17 @@
 
     <!-- VISUAL PROGRESS & DIRECT JUMP DOTS (1..11) -->
     <div class="slide-dots" id="slideDotsContainer" role="navigation" aria-label="شرائح العرض التقديمي">
-      <button type="button" class="slide-dot active" data-goto="1" title="الشريحة 1: الرؤية والرسالة">1</button>
-      <button type="button" class="slide-dot" data-goto="2" title="الشريحة 2: المشكلة السريرية">2</button>
-      <button type="button" class="slide-dot" data-goto="3" title="الشريحة 3: الحل المتكامل">3</button>
-      <button type="button" class="slide-dot" data-goto="4" title="الشريحة 4: كيف تعمل المنظومة">4</button>
-      <button type="button" class="slide-dot" data-goto="5" title="الشريحة 5: نموذج الذكاء السريري">5</button>
-      <button type="button" class="slide-dot" data-goto="6" title="الشريحة 6: حجم السوق">6</button>
-      <button type="button" class="slide-dot" data-goto="7" title="الشريحة 7: نموذج العمل والتسعير">7</button>
-      <button type="button" class="slide-dot" data-goto="8" title="الشريحة 8: الميزة التنافسية">8</button>
-      <button type="button" class="slide-dot" data-goto="9" title="الشريحة 9: فريق العمل">9</button>
-      <button type="button" class="slide-dot" data-goto="10" title="الشريحة 10: الجاهزية والاختبارات">10</button>
-      <button type="button" class="slide-dot" data-goto="11" title="الشريحة 11: الرؤية والطلب الاستثماري">11</button>
+      <button type="button" class="slide-dot active" data-goto="1" title="الشريحة 1: الرؤية والرسالة" aria-label="الشريحة 1: الرؤية والرسالة / Slide 1">1</button>
+      <button type="button" class="slide-dot" data-goto="2" title="الشريحة 2: المشكلة السريرية" aria-label="الشريحة 2: المشكلة السريرية / Slide 2">2</button>
+      <button type="button" class="slide-dot" data-goto="3" title="الشريحة 3: الحل المتكامل" aria-label="الشريحة 3: الحل المتكامل / Slide 3">3</button>
+      <button type="button" class="slide-dot" data-goto="4" title="الشريحة 4: كيف تعمل المنظومة" aria-label="الشريحة 4: كيف تعمل المنظومة / Slide 4">4</button>
+      <button type="button" class="slide-dot" data-goto="5" title="الشريحة 5: نموذج الذكاء السريري" aria-label="الشريحة 5: نموذج الذكاء السريري / Slide 5">5</button>
+      <button type="button" class="slide-dot" data-goto="6" title="الشريحة 6: حجم السوق" aria-label="الشريحة 6: حجم السوق / Slide 6">6</button>
+      <button type="button" class="slide-dot" data-goto="7" title="الشريحة 7: نموذج العمل والتسعير" aria-label="الشريحة 7: نموذج العمل والتسعير / Slide 7">7</button>
+      <button type="button" class="slide-dot" data-goto="8" title="الشريحة 8: الميزة التنافسية" aria-label="الشريحة 8: الميزة التنافسية / Slide 8">8</button>
+      <button type="button" class="slide-dot" data-goto="9" title="الشريحة 9: فريق العمل" aria-label="الشريحة 9: فريق العمل / Slide 9">9</button>
+      <button type="button" class="slide-dot" data-goto="10" title="الشريحة 10: الجاهزية والاختبارات" aria-label="الشريحة 10: الجاهزية والاختبارات / Slide 10">10</button>
+      <button type="button" class="slide-dot" data-goto="11" title="الشريحة 11: الرؤية والطلب الاستثماري" aria-label="الشريحة 11: الرؤية والطلب الاستثماري / Slide 11">11</button>
     </div>
 
     <div class="progress-bar-wrap">
@@ -698,11 +714,12 @@
     </div>
 
     <div class="nav-arrows">
-      <button class="nav-arrow-btn" id="btnPrevSlide" onclick="prevSlide()" title="الشريحة السابقة (السهم الأيمن)">→</button>
-      <button class="nav-arrow-btn" id="btnNextSlide" onclick="nextSlide()" title="الشريحة التالية (السهم الأيسر)">←</button>
+      <button class="nav-arrow-btn" id="btnPrevSlide" onclick="prevSlide()" title="الشريحة السابقة (السهم الأيمن)" aria-label="الشريحة السابقة / Previous slide">→</button>
+      <button class="nav-arrow-btn" id="btnNextSlide" onclick="nextSlide()" title="الشريحة التالية (السهم الأيسر)" aria-label="الشريحة التالية / Next slide">←</button>
     </div>
   </footer>
 
+  <script src="./network-resilience.js?v=1.0"></script>
   <script>
     let currentSlide = 1;
     const totalSlides = 11;
@@ -1139,6 +1156,7 @@
       if (langBtn) {
         langBtn.textContent = t.langToggleBtn;
         langBtn.title = lang === "ar" ? "Switch to English presentation" : "التبديل إلى العرض باللغة العربية";
+        langBtn.setAttribute("aria-label", lang === "ar" ? "Switch to English presentation" : "التبديل إلى العرض باللغة العربية");
       }
 
       const portalBtn = document.getElementById("headerClinicPortal");

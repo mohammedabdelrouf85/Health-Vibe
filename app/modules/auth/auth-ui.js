@@ -204,7 +204,7 @@
           <h4 id="linkingModalTitle" style="margin: 0; font-size: 16px; font-weight: 800; color: var(--ink); display: flex; align-items: center; gap: 8px;">
             <span>🔐</span> <span>${isReauth ? (isEn ? "Security Re-Authentication" : "تأكيد الهوية وإعادة المصادقة") : (isEn ? "Set Account Password" : "تعيين كلمة مرور للحساب")}</span>
           </h4>
-          <button type="button" class="btn-modal-close" onclick="HealthVibes.AuthLinkingUI.closeLinkingModal()" style="background: none; border: none; font-size: 18px; cursor: pointer; color: var(--muted);">✕</button>
+          <button type="button" class="btn-modal-close" onclick="HealthVibes.AuthLinkingUI.closeLinkingModal()" aria-label="${isEn ? 'Close modal' : 'إغلاق النافذة'}" style="background: none; border: none; font-size: 18px; cursor: pointer; color: var(--muted);">✕</button>
         </div>
 
         <p style="margin: 0 0 14px; font-size: 12.5px; color: var(--muted); line-height: 1.5;">
@@ -384,7 +384,7 @@
           <h4 style="margin: 0; font-size: 16px; font-weight: 800; color: #c2410c; display: flex; align-items: center; gap: 8px;">
             <span>⚠️</span> <span>${instr.title || (isEn ? "Account Conflict Detected" : "تعارض في وسيلة تسجيل الدخول")}</span>
           </h4>
-          <button type="button" class="btn-modal-close" onclick="HealthVibes.AuthLinkingUI.closeLinkingModal()" style="background: none; border: none; font-size: 18px; cursor: pointer; color: var(--muted);">✕</button>
+          <button type="button" class="btn-modal-close" onclick="HealthVibes.AuthLinkingUI.closeLinkingModal()" aria-label="${isEn ? 'Close modal' : 'إغلاق النافذة'}" style="background: none; border: none; font-size: 18px; cursor: pointer; color: var(--muted);">✕</button>
         </div>
 
         <div style="background: rgba(234, 88, 12, 0.08); border: 1.5px solid #ea580c; border-radius: 10px; padding: 12px; margin-bottom: 14px; font-size: 13px; color: var(--ink); line-height: 1.5;">

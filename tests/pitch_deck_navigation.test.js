@@ -195,6 +195,14 @@ for (const phrase of expectedEnglishKeywords) {
 }
 console.log("  ✓ All 11 slides verified with authentic English translations and strict index preservation.");
 
+// TEST 7: Spelling & Typographical Accuracy in pitch.html
+console.log("\n▶ TEST 7: Spelling & Typographical Accuracy in pitch.html");
+assert.strictEqual(pitchContent.includes("Engllsh"), false, "pitch.html must not contain typo 'Engllsh'");
+assert.ok(pitchContent.includes("English"), "pitch.html language toggle must correctly say 'English'");
+assert.strictEqual(pitchContent.includes("والتشيغل"), false, "pitch.html must not contain typo 'والتشيغل'");
+assert.ok(pitchContent.includes("والتشغيل"), "pitch.html slide 1 must correctly say 'والتشغيل'");
+console.log("  ✓ Language toggle label is 'English' and slide 1 Arabic spelling is 'والتشغيل'.");
+
 console.log("\n==================================================================");
 console.log("🎉 ALL PITCH DECK NAVIGATION & BILINGUAL TESTS PASSED WITH 100% SUCCESS!");
 console.log("==================================================================\n");
