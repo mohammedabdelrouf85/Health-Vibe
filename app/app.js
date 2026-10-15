@@ -1370,10 +1370,16 @@ function localized(text) {
   }
   const trimmed = text.trim();
   if (currentLanguage === "en") {
-    return uiText[trimmed] ? text.replace(trimmed, uiText[trimmed]) : text;
+    if (uiText[trimmed]) return text.replace(trimmed, uiText[trimmed]);
   } else {
-    return enToAr[trimmed] ? text.replace(trimmed, enToAr[trimmed]) : text;
+    if (enToAr[trimmed]) return text.replace(trimmed, enToAr[trimmed]);
   }
+  if (/^[a-zA-Z0-9_-]+(\.[a-zA-Z0-9_-]+)+$/.test(trimmed)) {
+    if (typeof window !== "undefined" && typeof window.getFallbackText === "function") {
+      return window.getFallbackText(trimmed);
+    }
+  }
+  return text;
 }
 
 function preserveSpacing(original, value) {

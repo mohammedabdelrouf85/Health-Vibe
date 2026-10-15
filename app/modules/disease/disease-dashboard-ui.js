@@ -8,11 +8,21 @@
 (function (global) {
   "use strict";
 
-  const t = (key) => {
+  const t = (key, fallback = "") => {
+    let res = "";
     if (global.app && global.app.i18n && global.app.i18n.t) {
-      return global.app.i18n.t(key);
+      res = global.app.i18n.t(key);
+    } else if (global.HealthVibes && global.HealthVibes.i18n && global.HealthVibes.i18n.t) {
+      res = global.HealthVibes.i18n.t(key);
+    } else if (typeof global.t === "function") {
+      res = global.t(key);
     }
-    return key;
+    if (res && res !== key) return res;
+    if (fallback) return fallback;
+    if (typeof global.getFallbackText === "function") {
+      return global.getFallbackText(key);
+    }
+    return "";
   };
 
   /**

@@ -33,18 +33,21 @@
   let isLoading = false;
   let errorMessage = null;
 
-  function t(key, params = {}) {
+  function t(key, params = {}, fallback = "") {
+    let res = "";
     if (typeof global.HealthVibes?.i18n?.t === "function") {
-      return global.HealthVibes.i18n.t(key, params);
+      res = global.HealthVibes.i18n.t(key, params, fallback);
+    } else if (typeof global.HealthVibes?.i18n?.defaultI18n?.t === "function") {
+      res = global.HealthVibes.i18n.defaultI18n.t(key, params, fallback);
+    } else if (typeof global.t === "function") {
+      res = global.t(key, params, fallback);
     }
-    if (typeof global.HealthVibes?.i18n?.defaultI18n?.t === "function") {
-      return global.HealthVibes.i18n.defaultI18n.t(key, params);
+    if (res && res !== key) return res;
+    if (fallback) return fallback;
+    if (typeof global.getFallbackText === "function") {
+      return global.getFallbackText(key);
     }
-    if (typeof global.t === "function") {
-      return global.t(key, params);
-    }
-    // Simple fallback
-    return key;
+    return "";
   }
 
   function isRtl() {

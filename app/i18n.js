@@ -81,6 +81,8 @@
         obesityTitle: "وحدة علاج السمنة والتمثيل الغذائي",
         obesityDesc: "قسم سريري متخصص في إدارة الوزن، ومؤشر كتلة الجسم، وخطط التغذية العلاجية تحت إشراف طبي.",
         diseaseClinicalNotice: "الوحدة التخصصية تخضع للتجهيز السريري المعتمد وفق معايير الرعاية الطبية. لا يتم عرض أي بيانات أو نتائج غير موثقة سريرياً.",
+        name: "الاسم",
+        refresh: "تحديث",
         backToHome: "العودة للرئيسية"
       },
       nav: {
@@ -207,7 +209,8 @@
         medicalProfile: "الملف الطبي",
         welcomePersonalized: "أهلاً بك يا {name}، صحتك وسلامتك أولويتنا",
         safeNotice: "لا تقلق، طبيبك المعتمد سيراجع فحصك السريري ويصدر التقرير المناسب لحالتك.",
-        recentAlerts: "تنبيهات المتابعة الطبية"
+        recentAlerts: "تنبيهات المتابعة الطبية",
+        compareAssessments: "مقارنة التقييمات السريرية"
       },
       consent: {
         title: "الموافقة الطبية وسياسة الخصوصية",
@@ -251,7 +254,39 @@
         nationalId: "الرقم القومي (14 رقماً)",
         nationalIdPlaceholder: "أدخل الرقم القومي المكون من 14 رقماً",
         saveProfileBtn: "حفظ وتحديث الملف الطبي",
-        saveSuccess: "تم تحديث الملف الطبي بنجاح"
+        saveSuccess: "تم تحديث الملف الطبي بنجاح",
+        subtitle: "السجل الطبي المعتمد مع حساب العمر وتوثيق المنشأ والتصحيحات المعتمدة",
+        fullName: "الاسم بالكامل",
+        dob: "تاريخ الميلاد (Date of Birth)",
+        phone: "رقم الهاتف للتواصل",
+        emergencyName: "اسم جهة الطوارئ",
+        emergencyRelation: "صلة القرابة",
+        emergencyPhone: "هاتف الطوارئ",
+        biometrics: "القياسات الحيوية والبدنية",
+        height: "الطول (سم)",
+        weight: "الوزن (كجم)",
+        clinicalSexTitle: "البيانات السريرية للجنس والوظائف الحيوية",
+        clinicalSexNote: "تُجمع هذه البيانات حصرياً لأغراض الفرز السريري، ومعادلات وظائف الرئة المرجعية (FEV1/FVC)، وحسابات الجرعات الدوائية.",
+        biologicalSex: "الجنس البيولوجي السريري",
+        medicalHistoryTitle: "التاريخ الطبي المنظم والأدوية والحساسية",
+        chronic: "الأمراض المزمنة",
+        medications: "الأدوية المستخدمة حالياً والجرعات",
+        surgeries: "العمليات الجراحية السابقة وسنواتها",
+        familyHistory: "التاريخ العائلي للأمراض",
+        hospitalAdmissions: "حالات التنويم ودخول المستشفى السابقة",
+        smokingStatus: "حالة التدخين",
+        smokingDetails: "تفاصيل التدخين (النوع، المدة، عدد السجائر)",
+        insuranceTitle: "التأمين الصحي",
+        insuranceOptional: "اختياري تماماً (Optional)",
+        insuranceNote: "لا يشترط وجود تأمين صحي للاستفادة من تقييم الحالة أو المراجعة الطبية.",
+        insuranceProvider: "شركة التأمين",
+        insurancePolicy: "رقم البوليصة / العضوية",
+        insuranceGroup: "رقم المجموعة",
+        insuranceExpiry: "تاريخ انتهاء الوثيقة",
+        trustedLinkageTitle: "الربط المعتمد بالعيادة والطبيب المعالج",
+        trustedLinkageNote: "يتم ربط الحالة بالعيادة والطبيب من خلال معرفات موثوقة ومثبتة خادمياً لمنع انتحال الهويات.",
+        clinicLabel: "العيادة المعتمدة",
+        doctorLabel: "الطبيب المعتمد"
       },
       assessment: {
         title: "تقييم التنفس",
@@ -780,7 +815,77 @@
         hypertensionTitle: "ارتفاع ضغط الدم",
         bloodDisordersTitle: "تجلط الدم / اضطرابات الدم",
         obesityTitle: "السمنة",
-        moduleDataNotice: "البيانات مسحوبة مباشرة من سجلك السريري الموثق. غير مسموح بعرض أي بيانات افتراضية أو غير معتمدة."
+        moduleDataNotice: "البيانات مسحوبة مباشرة من سجلك السريري الموثق. غير مسموح بعرض أي بيانات افتراضية أو غير معتمدة.",
+        diabetesDesc: "متابعة مستوى السكر في الدم، وفحص الهيموجلوبين التراكمي (HbA1c)، وخطط رعاية الغدد الصماء.",
+        hypertensionDesc: "سجلات ضغط الدم، ومؤشرات الدورة الدموية، ومتابعة صحة القلب والأوعية الدموية.",
+        bloodDisordersDesc: "ملف التخثر، ومتابعة قياسات السيولة (INR)، ومستويات الصفائح، والمراجعة التخصصية.",
+        obesityDesc: "مؤشر كتلة الجسم (BMI)، ومتابعة الوزن، والخطط التغذوية العلاجية للتمثيل الغذائي.",
+        openModule: "فتح الوحدة التخصصية",
+        viewDetails: "عرض التفاصيل",
+        lastUpdated: "آخر تحديث موثق",
+        noAccountDataMessage: "لا توجد بيانات موثقة في حسابك لهذه الوحدة حتى الآن.",
+        realDataOnlyNotice: "إشعار سريري: تعرض هذه اللوحة حصرياً البيانات الحقيقية المحفوظة في حسابك دون أي تقديرات اصطناعية أو نتائج مولدة."
+      },
+      diabetes: {
+        type: "تصنيف السكري",
+        activeInsulin: "نظام الأنسولين الفعّال",
+        fastingTarget: "المستوى المستهدف لسكر الصائم",
+        postprandialTarget: "المستوى المستهدف لسكر ما بعد الأكل",
+        readingsCount: "قراءة مسجلة",
+        clinicalDisclaimerEn: "أي محتوى سريري نهائي يجب أن يصدر من مسار الطبيب المعتمد. يُحظر تماماً التشخيص الذاتي أو تعديل جرعات الأدوية تلقائياً.",
+        stateNotProvided: "غير مسجل",
+        stateUnknown: "غير معروف",
+        stateUnknownDesc: "تم الفحص سريرياً ولكن الحالة غير محددة",
+        stateNotApplicable: "لا ينطبق",
+        stateNotApplicableDesc: "لا ينطبق على هذا السياق السريري",
+        stateNotProvidedDesc: "لم يتم تزويده من المريض أو الطبيب",
+        statusDocumented: "موثق",
+        statusMissing: "مفقود",
+        statusAwaitingReview: "بانتظار مراجعة الطبيب",
+        statusDoctorApproved: "معتمد من الطبيب",
+        moduleTitle: "داء السكري وضبط مستوى الجلوكوز",
+        specialtyScope: "المسار التخصصي لأمراض الغدد الصماء والسكري",
+        statusReview: "قيد المراجعة التخصصية",
+        governanceBadge: "بيانات موثقة فقط",
+        patientDashboardTitle: "لوحة متابعة السكري",
+        patientDashboardSubtitle: "سجل متابعة مؤشرات الجلوكوز والتاريخ العلاجي المعتمد",
+        btnLogMeasurement: "تسجيل قياس جديد",
+        nextActionHeading: "الإجراء السريري التالي",
+        statusLegendTitle: "دليل الحالات السريرية",
+        currentDocumentedStatus: "الحالة السريرية الموثقة حالياً",
+        paramType: "نوع السكري",
+        paramDiagnosisDate: "تاريخ التشخيص",
+        treatmentRegimenHeading: "الخطة العلاجية الموثقة",
+        targetRangesHeading: "المستويات المستهدفة المعتمدة من الطبيب",
+        recentMeasurementsHeading: "القياسات الحديثة لمستوى السكر",
+        noMeasurementsHeading: "لا توجد قياسات مسجلة بعد",
+        emptyMeasurementsPatientMessage: "أهلاً بك! يرجى تسجيل أول قراءة لمستوى السكر لبدء المتابعة الطبية.",
+        measurementDateLabel: "تاريخ ووقت القياس",
+        measType: "نوع القياس / السياق",
+        measValue: "القيمة",
+        measurementUnitLabel: "الوحدة",
+        measSource: "المصدر",
+        tabMeasurements: "القياسات",
+        outstandingInquiriesHeading: "استفسارات الطبيب",
+        tabFollowup: "المتابعة",
+        tabReports: "التقارير المعتمدة",
+        tabOverview: "نظرة عامة",
+        tabPatientInfo: "بيانات المريض",
+        tabAssessments: "التقييمات السريرية",
+        tabDoctorReview: "مراجعة وملاحظات الطبيب",
+        submittedInfoHeading: "بيانات السكري السريرية المقدمة",
+        historicalMeasurementsHeading: "سجل القياسات السابقة للجلوكوز",
+        actionReplyClarification: "الرد على استفسار الطبيب المعلق",
+        btnReplyToDoctor: "الرد على الطبيب",
+        actionLogFirstMeasurement: "سجل أول قراءة لجلوكوز الدم لبدء الرعاية",
+        actionLogMeasurement: "تسجيل قراءة سكر الدم",
+        actionAwaitingDoctorReview: "سجلاتك قيد مراجعة الطبيب — لا يتطلب منك أي إجراء حالياً.",
+        actionReviewApprovedReport: "مراجعة تقريرك الطبي المعتمد وخطة المتابعة",
+        btnViewReport: "عرض التقرير المعتمد",
+        actionAllUpToDate: "جميع السجلات السريرية محدثة بالكامل",
+        sectionSymptoms: "الأعراض المسجلة",
+        sectionMedications: "الأدوية الحالية",
+        sectionComplications: "المضاعفات السريرية"
       }
     },
 
@@ -845,6 +950,8 @@
         obesityTitle: "Obesity & Metabolic Health Module",
         obesityDesc: "Specialized clinical module for weight management, BMI assessment, and clinical nutrition plans.",
         diseaseClinicalNotice: "This specialized module is under certified clinical preparation adhering to medical care standards. No unverified data or clinical results are displayed.",
+        name: "Name",
+        refresh: "Refresh",
         backToHome: "Return to Home"
       },
       nav: {
@@ -971,7 +1078,8 @@
         medicalProfile: "Medical Profile",
         welcomePersonalized: "Welcome, {name}! Your health and safety are our priority.",
         safeNotice: "Rest assured, your certified physician will review your clinical assessment and issue the appropriate care plan.",
-        recentAlerts: "Clinical Follow-up Alerts"
+        recentAlerts: "Clinical Follow-up Alerts",
+        compareAssessments: "Compare Assessments"
       },
       consent: {
         title: "Medical Consent & Privacy Policy",
@@ -1015,7 +1123,39 @@
         nationalId: "National ID (14 digits)",
         nationalIdPlaceholder: "Enter 14-digit National ID",
         saveProfileBtn: "Save & Update Profile",
-        saveSuccess: "Medical profile updated successfully"
+        saveSuccess: "Medical profile updated successfully",
+        subtitle: "Certified clinical record with automated age calculation, provenance tracking, and verified revisions",
+        fullName: "Full Name",
+        dob: "Date of Birth",
+        phone: "Contact Phone Number",
+        emergencyName: "Emergency Contact Name",
+        emergencyRelation: "Relationship",
+        emergencyPhone: "Emergency Phone",
+        biometrics: "Biometrics & Physical Measurements",
+        height: "Height (cm)",
+        weight: "Weight (kg)",
+        clinicalSexTitle: "Clinical Biological Sex & Vitals",
+        clinicalSexNote: "Collected strictly for clinical triage, lung reference equations (FEV1/FVC), and pharmacokinetic dosing.",
+        biologicalSex: "Clinical Biological Sex",
+        medicalHistoryTitle: "Structured Medical History, Medications & Allergies",
+        chronic: "Chronic Conditions",
+        medications: "Current Medications & Dosages",
+        surgeries: "Past Surgeries & Procedures",
+        familyHistory: "Family Medical History",
+        hospitalAdmissions: "Past Hospital Admissions",
+        smokingStatus: "Smoking Status",
+        smokingDetails: "Smoking Details (Type, Duration, Quantity)",
+        insuranceTitle: "Health Insurance",
+        insuranceOptional: "Strictly Optional",
+        insuranceNote: "Health insurance is not required for assessment or clinical review.",
+        insuranceProvider: "Insurance Provider",
+        insurancePolicy: "Policy / Member ID",
+        insuranceGroup: "Group Number",
+        insuranceExpiry: "Policy Expiry Date",
+        trustedLinkageTitle: "Verified Clinic & Attending Physician Linkage",
+        trustedLinkageNote: "Cases are bound to clinics and physicians through verified server-side identifiers.",
+        clinicLabel: "Verified Clinic",
+        doctorLabel: "Attending Physician"
       },
       assessment: {
         title: "Breathing Assessment",
@@ -1552,7 +1692,69 @@
         viewDetails: "View Details",
         lastUpdated: "Last Documented Update",
         noAccountDataMessage: "No documented account data available for this module yet.",
-        realDataOnlyNotice: "Clinical Notice: This dashboard displays exclusively real persisted account data without synthetic estimates or fabricated results."
+        realDataOnlyNotice: "Clinical Notice: This dashboard displays exclusively real persisted account data without synthetic estimates or fabricated results.",
+        moduleDataNotice: "Data is loaded strictly from your verified clinical records. No synthetic or unauthorized data is permitted."
+      },
+      diabetes: {
+        type: "Diabetes Classification",
+        activeInsulin: "Active Insulin Regimen",
+        fastingTarget: "Target Fasting Glucose",
+        postprandialTarget: "Target Postprandial Glucose",
+        readingsCount: "readings",
+        clinicalDisclaimerEn: "Any final clinical content must come from the approved doctor workflow. Autonomous diagnosis or medication titration is strictly prohibited.",
+        stateNotProvided: "Not provided",
+        stateUnknown: "Unknown",
+        stateUnknownDesc: "Clinically investigated but status is unknown",
+        stateNotApplicable: "Not applicable",
+        stateNotApplicableDesc: "Does not apply to this clinical context",
+        stateNotProvidedDesc: "Unsupplied by patient or clinician",
+        statusDocumented: "Documented",
+        statusMissing: "Missing",
+        statusAwaitingReview: "Awaiting Review",
+        statusDoctorApproved: "Doctor Approved",
+        moduleTitle: "Diabetes Mellitus & Glycemic Control",
+        specialtyScope: "Endocrinology & Diabetology Specialized Track",
+        statusReview: "Under Specialist Review",
+        governanceBadge: "Verified Data Only",
+        patientDashboardTitle: "Diabetes Care Dashboard",
+        patientDashboardSubtitle: "Certified glycemic monitoring and treatment history",
+        btnLogMeasurement: "Log Measurement",
+        nextActionHeading: "Next Clinical Action",
+        statusLegendTitle: "Clinical Status Legend",
+        currentDocumentedStatus: "Current Documented Clinical Status",
+        paramType: "Diabetes Type",
+        paramDiagnosisDate: "Diagnosis Date",
+        treatmentRegimenHeading: "Documented Treatment Regimen",
+        targetRangesHeading: "Doctor-Approved Target Ranges",
+        recentMeasurementsHeading: "Recent Glycemic Measurements",
+        noMeasurementsHeading: "No Persisted Measurements Recorded",
+        emptyMeasurementsPatientMessage: "Welcome! Please log your first blood glucose reading to initiate medical care.",
+        measurementDateLabel: "Date & Time",
+        measType: "Type / Context",
+        measValue: "Value",
+        measurementUnitLabel: "Unit",
+        measSource: "Source",
+        tabMeasurements: "Measurements",
+        outstandingInquiriesHeading: "Doctor Inquiries",
+        tabFollowup: "Follow-up",
+        tabReports: "Approved Reports",
+        tabOverview: "Overview",
+        tabPatientInfo: "Patient Information",
+        tabAssessments: "Assessments",
+        tabDoctorReview: "Doctor Review & Notes",
+        submittedInfoHeading: "Submitted Diabetes Clinical Information",
+        historicalMeasurementsHeading: "Historical Glycemic Measurements",
+        actionReplyClarification: "Reply to pending doctor clarification",
+        btnReplyToDoctor: "Reply to Doctor",
+        actionLogFirstMeasurement: "Log your first blood glucose reading to initiate care",
+        actionLogMeasurement: "Log Blood Glucose Reading",
+        actionAwaitingDoctorReview: "Your records are under doctor review — no action needed from you at this time.",
+        actionReviewApprovedReport: "Review your certified medical report and approved follow-up plan",
+        btnViewReport: "View Certified Report",
+        actionAllUpToDate: "All clinical records are fully up to date",
+        sectionSymptoms: "Reported Symptoms",
+        sectionMedications: "Current Medications",
+        sectionComplications: "Complications"
       }
     }
   };
@@ -1581,6 +1783,80 @@
     return text.replace(/\{(\w+)\}/g, (match, key) => {
       return Object.prototype.hasOwnProperty.call(params, key) ? params[key] : match;
     });
+  }
+
+  /**
+   * Medical/Clinical acronym dictionary for fallback labels.
+   */
+  const KNOWN_ACRONYMS = {
+    dob: "Date of Birth",
+    bmi: "BMI",
+    fev1: "FEV1",
+    fvc: "FVC",
+    inr: "INR",
+    spo2: "SpO2",
+    hba1c: "HbA1c",
+    edd: "EDD",
+    id: "ID",
+    ai: "AI",
+    kpi: "KPI",
+    copd: "COPD"
+  };
+
+  /**
+   * Helper function that returns human-readable default text if a translation key is missing.
+   * Converts raw dot-notation keys (e.g., "patient.compareAssessments") into clean, capitalized copy
+   * ("Compare Assessments") so that raw keys are never displayed across the dashboard.
+   *
+   * @param {string} key - The dot-notated translation key.
+   * @param {string} [fallback] - Optional custom fallback string.
+   * @returns {string} Human-readable default text.
+   */
+  function getFallbackText(key, fallback = "") {
+    if (fallback && typeof fallback === "string" && fallback.trim() !== "" && fallback.trim() !== key) {
+      return fallback.trim();
+    }
+    if (!key || typeof key !== "string") return "";
+
+    const trimmed = key.trim();
+    if (!trimmed.includes(".")) {
+      const lower = trimmed.toLowerCase();
+      if (KNOWN_ACRONYMS[lower]) return KNOWN_ACRONYMS[lower];
+      const cleaned = trimmed.replace(/[-_]+/g, " ").trim();
+      return cleaned ? cleaned.charAt(0).toUpperCase() + cleaned.slice(1) : "";
+    }
+
+    const segments = trimmed.split(".");
+    const leaf = segments[segments.length - 1] || trimmed;
+    const lowerLeaf = leaf.toLowerCase();
+
+    if (KNOWN_ACRONYMS[lowerLeaf]) {
+      return KNOWN_ACRONYMS[lowerLeaf];
+    }
+
+    let candidate = leaf;
+    const genericLeaves = ["title", "subtitle", "desc", "label", "btn", "text", "heading", "name", "badge", "note", "type"];
+    if (genericLeaves.includes(lowerLeaf) && segments.length > 1) {
+      const parent = segments[segments.length - 2];
+      candidate = `${parent} ${leaf}`;
+    }
+
+    const words = candidate
+      .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+      .replace(/[-_]+/g, " ")
+      .trim()
+      .split(/\s+/);
+
+    return words
+      .map((w) => {
+        const lw = w.toLowerCase();
+        if (KNOWN_ACRONYMS[lw]) return KNOWN_ACRONYMS[lw];
+        if (["of", "and", "in", "to", "for", "with", "or", "on", "at"].includes(lw) && words[0] !== w) {
+          return lw;
+        }
+        return w.charAt(0).toUpperCase() + w.slice(1);
+      })
+      .join(" ");
   }
 
   /**
@@ -1613,6 +1889,13 @@
 
     getDirection(lang = this.currentLanguage) {
       return lang === "ar" ? "rtl" : "ltr";
+    }
+
+    /**
+     * Fallback helper function that returns human-readable default text if a key is missing.
+     */
+    getFallbackText(key, fallback = "") {
+      return getFallbackText(key, fallback);
     }
 
     /**
@@ -1824,6 +2107,11 @@
         }
       };
 
+      const isRawKey = (str) => {
+        if (!str || typeof str !== "string") return false;
+        return /^[a-zA-Z0-9_-]+(\.[a-zA-Z0-9_-]+)+$/.test(str.trim());
+      };
+
       // 1. Text content
       const textEls = root.querySelectorAll("[data-i18n]");
       for (let i = 0; i < textEls.length; i++) {
@@ -1831,7 +2119,10 @@
         const key = el.getAttribute("data-i18n");
         if (key) {
           const params = parseParams(el);
-          el.textContent = this.t(key, params);
+          const currentText = el.textContent ? el.textContent.trim() : "";
+          const hasHumanText = Boolean(currentText && currentText !== key && !isRawKey(currentText));
+          const fallback = hasHumanText ? currentText : this.getFallbackText(key);
+          el.textContent = this.t(key, params, fallback);
         }
       }
 
@@ -1842,7 +2133,10 @@
         const key = el.getAttribute("data-i18n-html");
         if (key) {
           const params = parseParams(el);
-          el.innerHTML = this.t(key, params);
+          const currentHtml = el.innerHTML ? el.innerHTML.trim() : "";
+          const hasHumanHtml = Boolean(currentHtml && currentHtml !== key && !isRawKey(currentHtml));
+          const fallback = hasHumanHtml ? currentHtml : this.getFallbackText(key);
+          el.innerHTML = this.t(key, params, fallback);
         }
       }
 
@@ -1853,7 +2147,10 @@
         const key = el.getAttribute("data-i18n-placeholder");
         if (key) {
           const params = parseParams(el);
-          el.placeholder = this.t(key, params);
+          const currentPlaceholder = el.placeholder ? el.placeholder.trim() : "";
+          const hasHumanPlaceholder = Boolean(currentPlaceholder && currentPlaceholder !== key && !isRawKey(currentPlaceholder));
+          const fallback = hasHumanPlaceholder ? currentPlaceholder : this.getFallbackText(key);
+          el.placeholder = this.t(key, params, fallback);
         }
       }
 
@@ -1864,7 +2161,10 @@
         const key = el.getAttribute("data-i18n-title");
         if (key) {
           const params = parseParams(el);
-          el.title = this.t(key, params);
+          const currentTitle = el.title ? el.title.trim() : "";
+          const hasHumanTitle = Boolean(currentTitle && currentTitle !== key && !isRawKey(currentTitle));
+          const fallback = hasHumanTitle ? currentTitle : this.getFallbackText(key);
+          el.title = this.t(key, params, fallback);
         }
       }
 
@@ -1875,7 +2175,10 @@
         const key = el.getAttribute("data-i18n-aria");
         if (key) {
           const params = parseParams(el);
-          el.setAttribute("aria-label", this.t(key, params));
+          const currentAria = el.getAttribute("aria-label") ? el.getAttribute("aria-label").trim() : "";
+          const hasHumanAria = Boolean(currentAria && currentAria !== key && !isRawKey(currentAria));
+          const fallback = hasHumanAria ? currentAria : this.getFallbackText(key);
+          el.setAttribute("aria-label", this.t(key, params, fallback));
         }
       }
 
@@ -1886,7 +2189,10 @@
         const key = el.getAttribute("data-i18n-value");
         if (key) {
           const params = parseParams(el);
-          el.value = this.t(key, params);
+          const currentValue = el.value ? el.value.trim() : "";
+          const hasHumanValue = Boolean(currentValue && currentValue !== key && !isRawKey(currentValue));
+          const fallback = hasHumanValue ? currentValue : this.getFallbackText(key);
+          el.value = this.t(key, params, fallback);
         }
       }
     }
@@ -1899,6 +2205,7 @@
   if (typeof window !== "undefined") {
     window.I18nEngine = I18nEngine;
     window.i18n = defaultI18n;
+    window.getFallbackText = getFallbackText;
     window.t = function (key, params, fallback) {
       return defaultI18n.t(key, params, fallback);
     };
@@ -1909,7 +2216,8 @@
     module.exports = {
       I18nEngine,
       translations,
-      defaultI18n
+      defaultI18n,
+      getFallbackText
     };
   }
 
