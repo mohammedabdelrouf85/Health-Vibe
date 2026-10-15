@@ -331,19 +331,19 @@ const ROLE_ALLOWED_SCREENS = {
   [ROLES.PATIENT]: [
     "patient", "consent", "profile", "complete-medical-profile", "assessment", "pending", "result",
     "history", "appointments", "feedback", "assistant", "report", "verify-report", "verify",
-    "diabetes", "hypertension", "blood-disorders", "obesity"
+    "disease-dashboard", "disease", "diabetes", "hypertension", "blood-disorders", "obesity"
   ],
   [ROLES.DOCTOR_PENDING]: [
     "patient", "verification", "history", "appointments", "feedback", "report", "profile", "verify-report", "verify",
-    "diabetes", "hypertension", "blood-disorders", "obesity"
+    "disease-dashboard", "disease", "diabetes", "hypertension", "blood-disorders", "obesity"
   ],
   [ROLES.DOCTOR]: [
     "doctor", "verification", "history", "appointments", "feedback", "report", "profile", "kpi", "patient", "verify-report", "verify",
-    "diabetes", "hypertension", "blood-disorders", "obesity"
+    "disease-dashboard", "disease", "diabetes", "hypertension", "blood-disorders", "obesity"
   ],
   [ROLES.CLINIC_ADMIN]: [
     "profile", "history", "appointments", "feedback", "doctor", "report", "admin", "audit", "kpi", "verify-report", "verify",
-    "diabetes", "hypertension", "blood-disorders", "obesity"
+    "disease-dashboard", "disease", "diabetes", "hypertension", "blood-disorders", "obesity"
   ],
   [ROLES.OPS]: [
     "profile", "admin", "audit", "kpi", "verify-report", "verify"
@@ -358,7 +358,7 @@ const ROLE_ALLOWED_SCREENS = {
     "patient", "consent", "profile", "complete-medical-profile", "assessment", "pending", "result",
     "history", "appointments", "feedback", "assistant", "verification",
     "doctor", "kpi", "report", "admin", "audit", "verify-report", "verify",
-    "diabetes", "hypertension", "blood-disorders", "obesity"
+    "disease-dashboard", "disease", "diabetes", "hypertension", "blood-disorders", "obesity"
   ]
 };
 
@@ -384,7 +384,7 @@ const AUTH_REQUIRED_SCREENS = [
   "consent", "profile", "complete-medical-profile", "assessment", "pending", "result",
   "history", "appointments", "feedback", "assistant", "report",
   "verification", "doctor", "kpi", "admin", "audit",
-  "diabetes", "hypertension", "blood-disorders", "obesity"
+  "disease-dashboard", "disease", "diabetes", "hypertension", "blood-disorders", "obesity"
 ];
 
 /**
@@ -414,6 +414,14 @@ const CONSENT_REQUIRED_SCREENS = ["assessment"];
  */
 function applyRouteGuards(targetScreen) {
   const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+
+  // Route alias normalization
+  if (targetScreen === "disease") {
+    targetScreen = "disease-dashboard";
+  }
+  if (targetScreen === "bloodDisorders") {
+    targetScreen = "blood-disorders";
+  }
 
   // ── GUARD 1: Authentication & Account Standing ───────────────────────────
   const user = (typeof getActiveUser === "function") ? getActiveUser() : (auth && auth.currentUser);
@@ -639,7 +647,7 @@ function hvSkeletonRows(count = 3, height = 72) {
 
 function setScreenBreadcrumb(name) {
   const screen = document.getElementById(`screen-${name}`);
-  if (!screen || !["admin", "doctor", "kpi", "audit", "verification", "report", "diabetes", "hypertension", "blood-disorders", "obesity"].includes(name)) return;
+  if (!screen || !["admin", "doctor", "kpi", "audit", "verification", "report", "disease-dashboard", "disease", "diabetes", "hypertension", "blood-disorders", "obesity"].includes(name)) return;
   let crumb = screen.querySelector(":scope > .hv-breadcrumb");
   if (!crumb) {
     crumb = document.createElement("nav");
@@ -1640,6 +1648,9 @@ function applyLanguage(language) {
     renderResultScreen();
   } else if (activeScreenName === "assistant" && typeof renderAssistantScreen === "function") {
     renderAssistantScreen();
+  } else if ((activeScreenName === "disease-dashboard" || activeScreenName === "disease") && window.HealthVibes?.DiseaseDashboardUI?.renderScreen) {
+    const dashboardContainer = document.getElementById("diseaseDashboardContainer");
+    if (dashboardContainer) window.HealthVibes.DiseaseDashboardUI.renderScreen(dashboardContainer);
   }
 
   // 11. Refresh legal modal content if open or loaded
@@ -8798,7 +8809,7 @@ function showScreen(name) {
     button.classList.toggle("active", button.dataset.screen === name);
   });
 
-  const DISEASE_SCREENS = ["disease-dashboard", "diabetes", "hypertension", "blood-disorders", "obesity"];
+  const DISEASE_SCREENS = ["disease-dashboard", "disease", "diabetes", "hypertension", "blood-disorders", "obesity"];
   if (DISEASE_SCREENS.includes(name)) {
     if (typeof toggleDiseaseCategory === "function") {
       toggleDiseaseCategory(true);
@@ -8851,7 +8862,7 @@ function showScreen(name) {
       window.HealthVibes.DiabetesUI.renderScreen(diabetesContainer);
     }
   }
-  if (name === "disease-dashboard") {
+  if (name === "disease-dashboard" || name === "disease") {
     const dashboardContainer = document.getElementById("diseaseDashboardContainer");
     if (window.HealthVibes?.DiseaseDashboardUI?.renderScreen && dashboardContainer) {
       window.HealthVibes.DiseaseDashboardUI.renderScreen(dashboardContainer);
@@ -17996,7 +18007,7 @@ checkUrlAuthAction();
       "patient","consent","profile","complete-medical-profile","assessment","pending","result",
       "history","appointments","feedback","assistant","report",
       "verification","doctor","kpi","admin","audit","verify-report","verify",
-      "diabetes","hypertension","blood-disorders","obesity"
+      "disease-dashboard","disease","diabetes","hypertension","blood-disorders","obesity"
     ];
     if (allScreenNames.includes(screenFromHash)) {
       console.info(`[HashRouter] Hash navigation to '${screenFromHash}'.`);

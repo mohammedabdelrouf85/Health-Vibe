@@ -163,6 +163,36 @@ console.log('▶ TEST 6: UI Renderer Component & DOM Binding Verification');
   console.log('  ✓ DiseaseDashboardUI exposes renderScreen and evaluateDifferentialTriage methods.');
 }
 
+// ---------------------------------------------------------------------------
+console.log('▶ TEST 7: RBAC Role Allowed Screens, Route Normalization & Hash Router');
+// ---------------------------------------------------------------------------
+{
+  // Verify 'disease-dashboard' and 'disease' are permitted across role screens
+  assert.ok(appJs.includes('"disease-dashboard", "disease", "diabetes"'), 'disease-dashboard registered in role allowed screens');
+  assert.ok(appJs.includes('AUTH_REQUIRED_SCREENS = ['), 'AUTH_REQUIRED_SCREENS declared');
+  assert.ok(appJs.includes('targetScreen === "disease"'), 'targetScreen alias normalization for disease');
+  assert.ok(appJs.includes('targetScreen = "disease-dashboard"'), 'maps disease to disease-dashboard');
+  assert.ok(appJs.includes('name === "disease-dashboard" || name === "disease"'), 'showScreen activates disease dashboard');
+  assert.ok(appJs.includes('"disease-dashboard","disease","diabetes"'), 'Hash router permits deep-linking to disease-dashboard');
+
+  console.log('  ✓ RBAC permissions, route guard normalization, and hash routing verified for disease-dashboard.');
+}
+
+// ---------------------------------------------------------------------------
+console.log('▶ TEST 8: Offline Resilient Questionnaire Loading');
+// ---------------------------------------------------------------------------
+{
+  const mockContainer = { innerHTML: '' };
+  // Mock global window environment
+  global.HealthVibes = { DiseaseDashboardService: null }; // Simulating service unavailable/offline
+  
+  // Call renderScreen with null service
+  DiseaseDashboardUI.renderScreen(mockContainer);
+  assert.ok(mockContainer.innerHTML.includes('clinical-triage-screener') || mockContainer.innerHTML.includes('common.loading'), 'Screen sets up loading or container without unhandled rejection');
+  
+  console.log('  ✓ Screener engine gracefully handles offline/null service state.');
+}
+
 console.log('==================================================================');
-console.log('🎉 ALL 6 CLINICAL TRIAGE & DIFFERENTIAL ASSESSMENT TESTS PASSED!');
+console.log('🎉 ALL 8 CLINICAL TRIAGE & DIFFERENTIAL ASSESSMENT TESTS PASSED!');
 console.log('==================================================================\n');

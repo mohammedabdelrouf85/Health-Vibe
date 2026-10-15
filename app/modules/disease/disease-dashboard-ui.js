@@ -274,7 +274,7 @@
    * Renders the interactive Clinical Triage questionnaire & evaluation engine component.
    */
   function renderTriageQuestionnaireEngine() {
-    const isEn = (global.currentLanguage === "en") || (document.documentElement.lang === "en");
+    const isEn = (global.currentLanguage === "en") || (typeof document !== "undefined" && document.documentElement?.lang === "en");
 
     const questions = [
       {
@@ -391,11 +391,11 @@
         </div>
 
         <div class="mt-4 flex items-center justify-between flex-wrap gap-3 pt-3 border-t border-border">
-          <button type="button" id="btnEvaluateTriage" class="action-button primary flex items-center gap-2 px-6 py-2 rounded-lg font-bold">
+          <button type="button" id="btnEvaluateTriage" class="solid-button action-button primary flex items-center gap-2 px-6 py-2 rounded-lg font-bold">
             <span>⚡</span>
             <span>${isEn ? "Run Differential Triage Evaluation" : "تشغيل التقييم والفرز السريري"}</span>
           </button>
-          <button type="button" id="btnResetTriage" class="action-button outline small px-4 py-2 text-muted">
+          <button type="button" id="btnResetTriage" class="soft-button outline small px-4 py-2 text-muted">
             <span>${isEn ? "Reset Answers" : "إعادة التعيين"}</span>
           </button>
         </div>
@@ -426,14 +426,29 @@
     `;
 
     try {
-      const data = await global.HealthVibes.DiseaseDashboardService.fetchDashboardData(uid);
+      let data = null;
+      if (global.HealthVibes?.DiseaseDashboardService?.fetchDashboardData) {
+        try {
+          data = await global.HealthVibes.DiseaseDashboardService.fetchDashboardData(uid);
+        } catch (fetchErr) {
+          console.warn("[DiseaseDashboardUI] fetchDashboardData failed, falling back to default status:", fetchErr);
+        }
+      }
+      if (!data) {
+        data = {
+          diabetes: { id: 'diabetes', titleKey: 'diabetesTitle', state: 'not_started', nextAction: 'actionStartAssessment' },
+          hypertension: { id: 'hypertension', titleKey: 'hypertensionTitle', state: 'not_started', nextAction: 'actionStartAssessment' },
+          bloodDisorders: { id: 'bloodDisorders', titleKey: 'bloodDisordersTitle', state: 'not_started', nextAction: 'actionStartAssessment' },
+          obesity: { id: 'obesity', titleKey: 'obesityTitle', state: 'not_started', nextAction: 'actionStartAssessment' }
+        };
+      }
       
       const bannerHtml = renderNextActionBanner(data);
       const gridHtml = `
         <div class="card-grid mt-4">
           ${renderModuleCard(data.diabetes)}
           ${renderModuleCard(data.hypertension)}
-          ${renderModuleCard(data.bloodDisorders)}
+          ${renderModuleCard(data.bloodDisorders || data['blood-disorders'])}
           ${renderModuleCard(data.obesity)}
         </div>
       `;
@@ -463,26 +478,34 @@
 
       // Helper to dispatch screen navigation seamlessly
       const navigateTo = (target) => {
+        const normalizedTarget = (target === "bloodDisorders" || target === "disease-bloodDisorders") ? "blood-disorders" : target;
         if (typeof global.showScreen === "function") {
-          global.showScreen(target);
+          global.showScreen(normalizedTarget);
         } else if (global.app && typeof global.app.navigate === "function") {
-          global.app.navigate(target);
+          global.app.navigate(normalizedTarget);
         }
       };
 
       // Module Cards & Action Banner Click Handlers
-      const routeButtons = containerEl.querySelectorAll('[data-route]');
+      const routeButtons = containerEl.querySelectorAll ? containerEl.querySelectorAll('[data-route]') : [];
       routeButtons.forEach(btn => {
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
           const route = btn.getAttribute('data-route');
-          const cleanScreen = route ? route.replace(/^disease-/, '') : '';
+          const routeMap = {
+            'disease-diabetes': 'diabetes',
+            'disease-hypertension': 'hypertension',
+            'disease-bloodDisorders': 'blood-disorders',
+            'disease-blood-disorders': 'blood-disorders',
+            'disease-obesity': 'obesity'
+          };
+          const cleanScreen = routeMap[route] || (route ? route.replace(/^disease-/, '') : '');
           navigateTo(cleanScreen || route);
         });
       });
 
       // Interactive Screener Choice Listeners
-      const choiceButtons = containerEl.querySelectorAll('.choice[data-qid]');
+      const choiceButtons = containerEl.querySelectorAll ? containerEl.querySelectorAll('.choice[data-qid]') : [];
       choiceButtons.forEach(btn => {
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -500,7 +523,7 @@
       });
 
       // Reset Button Listener
-      const btnReset = containerEl.querySelector('#btnResetTriage');
+      const btnReset = containerEl.querySelector ? containerEl.querySelector('#btnResetTriage') : null;
       if (btnReset) {
         btnReset.addEventListener('click', () => {
           Object.keys(currentAnswers).forEach(k => currentAnswers[k] = null);
@@ -514,11 +537,11 @@
       }
 
       // Evaluation Engine Button Listener
-      const btnEvaluate = containerEl.querySelector('#btnEvaluateTriage');
+      const btnEvaluate = containerEl.querySelector ? containerEl.querySelector('#btnEvaluateTriage') : null;
       if (btnEvaluate) {
         btnEvaluate.addEventListener('click', () => {
           const evalResult = evaluateDifferentialTriage(currentAnswers);
-          const isEn = (global.currentLanguage === "en") || (document.documentElement.lang === "en");
+          const isEn = (global.currentLanguage === "en") || (typeof document !== "undefined" && document.documentElement?.lang === "en");
           const resBox = containerEl.querySelector('#triageResultsContainer');
           if (!resBox) return;
 
