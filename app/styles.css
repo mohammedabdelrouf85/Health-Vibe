@@ -31,8 +31,11 @@ body.dark {
   --bg: #07191b;
   --surface: #0d2427;
   --surface-2: #112d30;
+  --surface-3: #16363a;
   --line: #1e3f42;
+  --line-strong: #2c595d;
   --ink: #e2f0ee;
+  --ink-secondary: #c4e3e0;
   /* WCAG AA High Contrast: #b0d8d6 (11.7:1 on #07191b, 10.5:1 on #0d2427, 9.5:1 on #112d30) */
   --muted: #b0d8d6;
   --cyan: #0e2e31;
@@ -45,28 +48,44 @@ body.dark {
   --red: #f06060;
   --hero-grad-1: #072628;
   --hero-grad-2: #051618;
+  --card-bg: #0d2427;
+  --input-bg: #0a1f22;
+  --input-border: #1e3f42;
+  --input-color: #e2f0ee;
+  --focus-ring: 0 0 0 3px rgba(9, 184, 182, 0.35);
   color-scheme: dark;
 }
 
 /* WCAG AA Light Theme Tokens: High contrast (>= 8.2:1) for elderly & respiratory patients */
+html.hv-theme-light body,
 html:not(.hv-theme-dark) body:not(.dark),
 body.light {
-  --bg: #f8ffff;
+  --bg: #f8fafc;
+  --bg-secondary: #f1f5f9;
   --surface: #ffffff;
-  --surface-2: #eef8f7;
+  --surface-2: #f8fafc;
+  --surface-3: #f1f5f9;
+  --surface-elevated: #ffffff;
   --line: #cbd5e1;
-  --ink: #0a2528;
-  --muted: #2e4d50;
+  --line-strong: #94a3b8;
+  --ink: #0f172a;
+  --ink-secondary: #1e293b;
+  --muted: #334155;
   --cyan: #e6f6f5;
-  --shadow: 0 16px 40px rgba(3, 72, 74, .08);
-  --teal: #0d9488;
-  --teal-2: #0f766e;
-  --teal-3: #0d9488;
+  --shadow: 0 16px 40px rgba(15, 23, 42, .08);
+  --teal: #0f766e;
+  --teal-2: #0d6e67;
+  --teal-3: #0f766e;
   --green: #15803d;
   --amber: #b45309;
   --red: #dc2626;
   --hero-grad-1: #f0fdfa;
-  --hero-grad-2: #e6fffa;
+  --hero-grad-2: #e0f2fe;
+  --card-bg: #ffffff;
+  --input-bg: #ffffff;
+  --input-border: #cbd5e1;
+  --input-color: #0f172a;
+  --focus-ring: 0 0 0 3px rgba(15, 118, 110, 0.25);
   color-scheme: light;
 }
 
@@ -109,6 +128,16 @@ body.dark {
     radial-gradient(circle at 88% 9%, rgba(9, 184, 182, .18), transparent 28%),
     radial-gradient(circle at 8% 26%, rgba(24, 160, 88, .10), transparent 24%),
     linear-gradient(180deg, #061517 0%, var(--bg) 100%) !important;
+}
+
+html.hv-theme-light body,
+html:not(.hv-theme-dark) body:not(.dark),
+body.light {
+  background:
+    radial-gradient(circle at 88% 9%, rgba(15, 118, 110, .08), transparent 28%),
+    radial-gradient(circle at 8% 26%, rgba(21, 128, 61, .06), transparent 24%),
+    linear-gradient(180deg, #f0fdfa 0%, var(--bg) 100%) !important;
+  color: var(--ink) !important;
 }
 button, input, textarea { font: inherit; }
 button { cursor: pointer; }
@@ -802,8 +831,19 @@ body.dark .site-nav-drawer .drawer-divider {
   font-size: 13px;
 }
 
-#patientHeroTitle,
+#patientHeroTitle {
+  color: var(--teal-2);
+  font-weight: 800;
+}
+body.dark #patientHeroTitle {
+  color: #ffffff;
+}
+
 .hv-onboarding-strip .eyebrow {
+  color: var(--teal-2);
+  font-weight: 800;
+}
+body.dark .hv-onboarding-strip .eyebrow {
   color: #ffffff;
 }
 
@@ -897,7 +937,14 @@ body:not(.dark) .result-main p {
   z-index: 1;
   padding: 12px;
   border-radius: 36px;
+  background: var(--surface-3);
+  border: 1px solid var(--line);
+  box-shadow: 0 28px 78px rgba(3, 72, 74, .14);
+}
+
+body.dark .phone-frame {
   background: #10272a;
+  border: 1px solid var(--line);
   box-shadow: 0 28px 78px rgba(3, 72, 74, .20);
 }
 
@@ -1163,8 +1210,14 @@ body.dark .role-stack strong { color: var(--ink); }
 
 .safety-band h2,
 .safety-band p,
-.safety-band .eyebrow {
-  color: white;
+.safety-band .eyebrow,
+body:not(.dark) .safety-band h2,
+body:not(.dark) .safety-band p,
+body:not(.dark) .safety-band .eyebrow,
+body.light .safety-band h2,
+body.light .safety-band p,
+body.light .safety-band .eyebrow {
+  color: #ffffff !important;
 }
 
 .safety-band .eyebrow {
@@ -2135,7 +2188,7 @@ body.dark .topbar h2 { color: var(--ink); }
 .hero-panel {
   border-radius: 30px;
   padding: 30px;
-  color: white;
+  color: var(--ink);
   display: grid;
   grid-template-columns: 1.35fr minmax(260px, .65fr);
   gap: 26px;
@@ -2143,18 +2196,30 @@ body.dark .topbar h2 { color: var(--ink); }
   overflow: hidden;
 }
 
+body.dark .hero-panel {
+  color: white;
+}
+
 .app-hero {
   background: linear-gradient(135deg, var(--hero-grad-1), var(--hero-grad-2));
 }
 
 .app-hero h1 {
-  color: white;
+  color: var(--ink);
   font-size: clamp(30px, 5vw, 58px);
 }
 
+body.dark .app-hero h1 {
+  color: white;
+}
+
 .app-hero p {
-  color: rgba(255,255,255,.84);
+  color: var(--muted);
   max-width: 680px;
+}
+
+body.dark .app-hero p {
+  color: rgba(255,255,255,.84);
 }
 
 .clinical-card {
@@ -3157,6 +3222,61 @@ body.sidebar-open .sidebar { transform: translateX(0); }
   font-size: 12px;
   font-weight: 900;
   letter-spacing: .06em;
+}
+
+/* ── Theme toggle buttons (site nav, topbar) ── */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 999px;
+  border: 1.5px solid var(--line);
+  background: var(--surface);
+  color: var(--teal);
+  font-size: 18px;
+  cursor: pointer;
+  transition: background .18s ease, border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+  box-shadow: 0 2px 8px rgba(0, 109, 111, .08);
+}
+
+.theme-toggle:hover {
+  background: var(--cyan);
+  border-color: var(--teal-2);
+  transform: scale(1.05);
+  box-shadow: 0 4px 14px rgba(0, 109, 111, .14);
+}
+
+.theme-toggle:active {
+  transform: scale(0.95);
+}
+
+.theme-icon,
+.theme-fab-icon {
+  line-height: 1;
+  display: inline-block;
+  user-select: none;
+}
+
+/* ── Pitch deck nav link ── */
+.pitch-link {
+  color: #0369a1;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: color 0.18s ease;
+}
+.pitch-link:hover {
+  color: var(--teal);
+  text-decoration: underline;
+}
+body.dark .pitch-link,
+html.hv-theme-dark .pitch-link {
+  color: #38bdf8;
 }
 
 /* ── Floating dark mode FAB ── */

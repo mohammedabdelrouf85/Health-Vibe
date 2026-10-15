@@ -70,7 +70,95 @@
       --clinic-dark-card: #0c2326;
       --clinic-line: rgba(9, 184, 182, 0.22);
       --clinic-glow: rgba(9, 184, 182, 0.18);
+      --clinic-bg: #07191b;
+      --clinic-surface: #0c2326;
+      --clinic-surface-2: #112d30;
+      --clinic-text: #e2f1f0;
+      --clinic-text-muted: #b0d8d6;
       color-scheme: dark;
+    }
+
+    html.hv-theme-light body,
+    html:not(.hv-theme-dark) body:not(.dark),
+    body.light {
+      --clinic-primary: #0f766e;
+      --clinic-primary-dark: #0d6e67;
+      --clinic-secondary: #0369a1;
+      --clinic-accent: #15803d;
+      --clinic-dark: #f8fafc;
+      --clinic-dark-card: #ffffff;
+      --clinic-line: #cbd5e1;
+      --clinic-glow: rgba(15, 118, 110, 0.12);
+      --clinic-bg: #f8fafc;
+      --clinic-surface: #ffffff;
+      --clinic-surface-2: #f1f5f9;
+      --clinic-text: #0f172a;
+      --clinic-text-muted: #334155;
+      color-scheme: light;
+      background: #f8fafc !important;
+      color: #0f172a !important;
+    }
+
+    body.light h1,
+    body.light h2,
+    body.light h3,
+    body.light h4,
+    body.light strong,
+    body.light .clinic-header strong,
+    body.light .stat-val,
+    body.light .tier-price,
+    body.light .partner-badge strong {
+      color: #0f172a !important;
+    }
+
+    body.light p,
+    body.light .stat-lbl,
+    body.light .section-desc,
+    body.light .nav-links a,
+    body.light .feature-card p,
+    body.light .partner-badge span,
+    body.light .comp-item-desc {
+      color: #334155 !important;
+    }
+
+    body.light .clinic-header {
+      background: rgba(255, 255, 255, 0.94) !important;
+      border-bottom-color: #cbd5e1 !important;
+    }
+
+    body.light .lang-btn {
+      background: #f1f5f9 !important;
+      border-color: #cbd5e1 !important;
+      color: #0f172a !important;
+    }
+
+    body.light .partner-trust-strip,
+    body.light .feature-card,
+    body.light .metric-box,
+    body.light .comparison-col,
+    body.light .roi-calc-card,
+    body.light .pricing-card,
+    body.light .clinic-form-card,
+    body.light .faq-item {
+      background: #ffffff !important;
+      border-color: #cbd5e1 !important;
+      box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06) !important;
+    }
+
+    body.light .faq-question {
+      color: #0f172a !important;
+    }
+
+    body.light .faq-answer {
+      color: #334155 !important;
+    }
+
+    body.light input,
+    body.light select,
+    body.light textarea {
+      background: #ffffff !important;
+      border-color: #cbd5e1 !important;
+      color: #0f172a !important;
     }
 
     html, body {
@@ -79,8 +167,8 @@
     }
 
     body {
-      background: #07191b !important;
-      color: #e2f1f0 !important;
+      background: var(--clinic-bg, #07191b) !important;
+      color: var(--clinic-text, #e2f1f0) !important;
       font-family: "Cairo", "Tajawal", "IBM Plex Sans Arabic", system-ui, sans-serif;
       line-height: 1.6;
     }
@@ -885,6 +973,7 @@
     </nav>
 
     <div class="nav-actions-group">
+      <button type="button" class="lang-btn" id="clinicThemeToggle" onclick="toggleClinicTheme()" aria-label="Toggle theme" title="Toggle theme">🌙</button>
       <button type="button" class="lang-btn" id="clinicLangToggle" onclick="toggleClinicLang()">EN</button>
       <a href="#demoForm" class="cta-btn-primary" id="navBookDemo">
         <span>🩺</span>
@@ -2488,7 +2577,46 @@
       }
     }, true);
 
-    // Initialize language from preferences and update calculator
+    // Theme Engine for Clinics Portal
+    function applyClinicTheme(theme) {
+      const isLight = theme === "light";
+      const targetTheme = isLight ? "light" : "dark";
+      if (isLight) {
+        document.body.classList.remove("dark");
+        document.body.classList.add("light");
+        document.documentElement.classList.remove("hv-theme-dark");
+        document.documentElement.classList.add("hv-theme-light");
+        document.documentElement.setAttribute("data-theme", "light");
+      } else {
+        document.body.classList.remove("light");
+        document.body.classList.add("dark");
+        document.documentElement.classList.remove("hv-theme-light");
+        document.documentElement.classList.add("hv-theme-dark");
+        document.documentElement.setAttribute("data-theme", "dark");
+      }
+      try {
+        localStorage.setItem("hv_theme", targetTheme);
+      } catch(e) {}
+      const themeToggle = document.getElementById("clinicThemeToggle");
+      if (themeToggle) {
+        themeToggle.textContent = isLight ? "🌙" : "☀️";
+        themeToggle.setAttribute("aria-label", isLight ? "Switch to dark mode" : "Switch to light mode");
+        themeToggle.setAttribute("title", isLight ? "Switch to dark mode" : "Switch to light mode");
+      }
+    }
+
+    function toggleClinicTheme() {
+      const isLight = document.body.classList.contains("light") || document.documentElement.classList.contains("hv-theme-light");
+      applyClinicTheme(isLight ? "dark" : "light");
+    }
+
+    function initClinicTheme() {
+      const saved = localStorage.getItem("hv_theme") || "dark";
+      applyClinicTheme(saved);
+    }
+
+    // Initialize theme and language from preferences and update calculator
+    initClinicTheme();
     initClinicLanguage();
   </script>
 </body>
