@@ -29,6 +29,7 @@ data.set('users/unverified', { role: 'patient', clinicId: 'a' });
 tokens.logged_in_then_suspended = { uid: 'logged_in_then_suspended', role: 'patient', email: 'suspended@test.invalid', email_verified: true };
 accounts.set('logged_in_then_suspended', { uid: 'logged_in_then_suspended', email: 'suspended@test.invalid', customClaims: { role: 'patient' } });
 data.set('users/logged_in_then_suspended', { role: 'patient', clinicId: 'a' });
+data.set('system_settings/operational_switches', { initialized: true });
 function snapshot(key) { return { id: key.split('/')[1], exists: data.has(key), data: () => data.get(key) }; }
 function collection(name, filters = []) {
   return {
@@ -67,6 +68,7 @@ vm.runInNewContext(fs.readFileSync(serverPath,'utf8'),context,{filename:serverPa
   for(const role of roles.filter(r=>r!=='super_admin')) {
    const before=effects.length;
    assert.equal((await request(role,'/api/admin/set-user-role',{targetUserId:'patient',newRole:'super_admin',isOwner:true,role:'super_admin'})).status,403,role);
+   if (effects.length !== before) console.error("DEBUG ROLE 1:", role, "EFFECTS:", JSON.stringify(effects.slice(before)));
    assert.equal(effects.length,before);
   }
   for(const role of ['patient','doctor_pending','support','doctor']) {

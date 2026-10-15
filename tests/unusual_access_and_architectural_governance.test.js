@@ -244,7 +244,9 @@ async function runTests() {
   // ==========================================================================
   console.log('▶ TEST 7: Architectural Evaluation Documentation Verification');
 
-  const roadmapPath = path.join(root, 'ARCHITECTURAL_EVALUATION_AND_ROADMAP.md');
+  const roadmapPath = fs.existsSync(path.join(root, 'docs', 'ARCHITECTURAL_EVALUATION_AND_ROADMAP.md'))
+    ? path.join(root, 'docs', 'ARCHITECTURAL_EVALUATION_AND_ROADMAP.md')
+    : path.join(root, 'ARCHITECTURAL_EVALUATION_AND_ROADMAP.md');
   assert(fs.existsSync(roadmapPath), 'ARCHITECTURAL_EVALUATION_AND_ROADMAP.md must exist');
 
   const roadmapContent = fs.readFileSync(roadmapPath, 'utf8');

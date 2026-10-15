@@ -154,7 +154,9 @@ async function runTests() {
   // ─────────────────────────────────────────────────────────────────
   console.log('▶ TEST 5: Arabic Health Content Plan & Specialist Review Protocol');
 
-  const contentPlanPath = path.join(rootDir, 'ARABIC_HEALTH_CONTENT_PLAN.md');
+  const contentPlanPath = fs.existsSync(path.join(rootDir, 'docs', 'ARABIC_HEALTH_CONTENT_PLAN.md'))
+    ? path.join(rootDir, 'docs', 'ARABIC_HEALTH_CONTENT_PLAN.md')
+    : path.join(rootDir, 'ARABIC_HEALTH_CONTENT_PLAN.md');
   assert.ok(fs.existsSync(contentPlanPath), 'ARABIC_HEALTH_CONTENT_PLAN.md must exist');
   const planContent = fs.readFileSync(contentPlanPath, 'utf8');
 
@@ -200,7 +202,7 @@ async function runTests() {
     'index.html',
     'app/index.html',
     'app/clinics.html',
-    'ARABIC_HEALTH_CONTENT_PLAN.md'
+    fs.existsSync(path.join(rootDir, 'docs', 'ARABIC_HEALTH_CONTENT_PLAN.md')) ? 'docs/ARABIC_HEALTH_CONTENT_PLAN.md' : 'ARABIC_HEALTH_CONTENT_PLAN.md'
   ];
 
   for (const f of filesToScan) {

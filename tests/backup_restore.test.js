@@ -23,7 +23,9 @@ console.log("   RPO/RTO Metrics, SHA-256 Integrity, Dry-Runs & Guarded Restore")
 console.log("==================================================================\n");
 
 const ROOT_DIR = path.resolve(__dirname, '..');
-const PLAN_PATH = path.join(ROOT_DIR, 'BACKUP_AND_RESTORE_PLAN.md');
+const PLAN_PATH = fs.existsSync(path.join(ROOT_DIR, 'docs', 'BACKUP_AND_RESTORE_PLAN.md'))
+  ? path.join(ROOT_DIR, 'docs', 'BACKUP_AND_RESTORE_PLAN.md')
+  : path.join(ROOT_DIR, 'BACKUP_AND_RESTORE_PLAN.md');
 const BACKUP_SERVICE_PATH = path.join(ROOT_DIR, 'backend', 'backup-service.js');
 const SERVER_JS_PATH = path.join(ROOT_DIR, 'backend', 'server.js');
 const APP_JS_PATH = path.join(ROOT_DIR, 'app', 'app.js');
@@ -39,7 +41,7 @@ const indexHtml = fs.readFileSync(INDEX_HTML_PATH, 'utf-8');
   // TEST 1: Policy & Documentation Compliance (BACKUP_AND_RESTORE_PLAN.md)
   // -----------------------------------------------------------------------------
   console.log("▶ TEST 1: Policy Compliance in BACKUP_AND_RESTORE_PLAN.md");
-  assert.ok(fs.existsSync(PLAN_PATH), "BACKUP_AND_RESTORE_PLAN.md must exist in root directory.");
+  assert.ok(fs.existsSync(PLAN_PATH), "BACKUP_AND_RESTORE_PLAN.md must exist.");
   const planDoc = fs.readFileSync(PLAN_PATH, 'utf-8');
 
   assert.ok(planDoc.includes("RPO (Recovery Point Objective)"), "Plan must document RPO target.");

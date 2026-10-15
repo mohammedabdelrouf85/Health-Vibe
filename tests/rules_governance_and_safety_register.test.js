@@ -316,7 +316,9 @@ assert.ok(newCapa.capaId.startsWith('CAPA-2026-'), 'CAPA ID must follow standard
 assert.strictEqual(newCapa.responsiblePerson, 'Dr. Mona El-Sayed, MD');
 
 // 7C. Verify RISK_QUALITY_AND_SAFETY_REGISTER.md Markdown Document
-const mdPath = path.join(__dirname, '../RISK_QUALITY_AND_SAFETY_REGISTER.md');
+const mdPath = fs.existsSync(path.join(__dirname, '../docs/RISK_QUALITY_AND_SAFETY_REGISTER.md'))
+  ? path.join(__dirname, '../docs/RISK_QUALITY_AND_SAFETY_REGISTER.md')
+  : path.join(__dirname, '../RISK_QUALITY_AND_SAFETY_REGISTER.md');
 assert.ok(fs.existsSync(mdPath), 'RISK_QUALITY_AND_SAFETY_REGISTER.md must exist');
 const mdText = fs.readFileSync(mdPath, 'utf8');
 assert.ok(mdText.includes('Prof. Ahmed Hegazy, MD'), 'Chief Safety Officer must be identified in register');

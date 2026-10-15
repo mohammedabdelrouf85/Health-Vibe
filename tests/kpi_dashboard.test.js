@@ -18,7 +18,11 @@ const indexHtmlPath = path.resolve(__dirname, '../app/index.html');
 const serverJsPath = path.resolve(__dirname, '../backend/server.js');
 
 const appJsContent = fs.readFileSync(appJsPath, 'utf8');
-const indexHtmlContent = fs.readFileSync(indexHtmlPath, 'utf8');
+let indexHtmlContent = fs.readFileSync(indexHtmlPath, 'utf8');
+['admin/admin-view.html', 'doctor/doctor-view.html'].forEach(f => {
+  const fp = path.resolve(__dirname, '../app/modules', f);
+  if (fs.existsSync(fp)) indexHtmlContent += fs.readFileSync(fp, 'utf8');
+});
 const serverJsContent = fs.readFileSync(serverJsPath, 'utf8');
 
 // Mock window and document context to test calculateKpiMetrics directly

@@ -28,13 +28,18 @@ console.log('==================================================================\
 const i18nJsPath = path.resolve(__dirname, '../app/i18n.js');
 const appJsPath = path.resolve(__dirname, '../app/app.js');
 const indexHtmlPath = path.resolve(__dirname, '../app/index.html');
+let indexHtmlContent = fs.readFileSync(indexHtmlPath, 'utf8');
+const modulesDir = path.resolve(__dirname, '../app/modules');
+['auth/auth-view.html', 'patient/patient-view.html'].forEach(f => {
+  const fp = path.join(modulesDir, f);
+  if (fs.existsSync(fp)) indexHtmlContent += fs.readFileSync(fp, 'utf8');
+});
 
 assert(fs.existsSync(i18nJsPath), 'app/i18n.js must exist');
 const i18nModule = require(i18nJsPath);
 const { I18nEngine, translations, defaultI18n } = i18nModule;
 
 const appJsContent = fs.readFileSync(appJsPath, 'utf8');
-const indexHtmlContent = fs.readFileSync(indexHtmlPath, 'utf8');
 
 // -----------------------------------------------------------------------------
 // TEST 1: Catalog Integrity & Namespace Parity Across All 18 Namespaces

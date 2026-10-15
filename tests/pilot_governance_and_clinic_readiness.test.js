@@ -155,7 +155,9 @@ async function runTests() {
   // ─────────────────────────────────────────────────────────────────
   console.log('▶ TEST 4: Non-Fabrication & Document Placeholder Integrity');
 
-  const pilotPlanPath = path.resolve(__dirname, '../PILOT_PLAN_AND_CLINICAL_ONBOARDING.md');
+  const pilotPlanPath = fs.existsSync(path.resolve(__dirname, '../docs/PILOT_PLAN_AND_CLINICAL_ONBOARDING.md'))
+    ? path.resolve(__dirname, '../docs/PILOT_PLAN_AND_CLINICAL_ONBOARDING.md')
+    : path.resolve(__dirname, '../PILOT_PLAN_AND_CLINICAL_ONBOARDING.md');
   const loiTemplatePath = path.resolve(__dirname, '../templates/LETTER_OF_INTENT_PILOT_TEMPLATE.md');
   const feedbackRegisterPath = path.resolve(__dirname, '../records/PILOT_FEEDBACK_AND_RESULTS_REGISTER.md');
 

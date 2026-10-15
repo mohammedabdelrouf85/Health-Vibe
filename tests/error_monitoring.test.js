@@ -28,7 +28,8 @@ const INDEX_HTML_PATH = path.join(ROOT_DIR, 'app', 'index.html');
 const SERVER_JS_PATH = path.join(ROOT_DIR, 'backend', 'server.js');
 
 const appJs = fs.readFileSync(APP_JS_PATH, 'utf-8');
-const indexHtml = fs.readFileSync(INDEX_HTML_PATH, 'utf-8');
+const adminViewPath = path.join(ROOT_DIR, 'app', 'modules', 'admin', 'admin-view.html');
+const indexHtml = fs.readFileSync(INDEX_HTML_PATH, 'utf-8') + (fs.existsSync(adminViewPath) ? fs.readFileSync(adminViewPath, 'utf-8') : '');
 const serverJs = fs.readFileSync(SERVER_JS_PATH, 'utf-8');
 
 // -----------------------------------------------------------------------------

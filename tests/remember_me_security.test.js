@@ -26,7 +26,8 @@ const indexHtmlPath = path.join(APP_DIR, 'index.html');
 const i18nJsPath = path.join(APP_DIR, 'i18n.js');
 
 const appJs = fs.readFileSync(appJsPath, 'utf8');
-const indexHtml = fs.readFileSync(indexHtmlPath, 'utf8');
+const authViewPath = path.join(APP_DIR, 'modules', 'auth', 'auth-view.html');
+const indexHtml = fs.readFileSync(indexHtmlPath, 'utf8') + (fs.existsSync(authViewPath) ? fs.readFileSync(authViewPath, 'utf8') : '');
 const { translations } = require(i18nJsPath);
 
 // -----------------------------------------------------------------------------
