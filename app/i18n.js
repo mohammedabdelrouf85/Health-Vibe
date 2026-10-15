@@ -412,7 +412,12 @@
         lockedTitle: "التقرير الطبي قيد المراجعة والاعتماد السريري",
         lockedDesc: "حفاظاً على سلامتك، لن يظهر التشخيص النهائي إلا بعد مراجعة واعتماد الطبيب المعالج.",
         emptyReportTitle: "لا يوجد تقرير طبي متاح حتى الآن",
-        emptyReportDesc: "للحصول على تقرير طبي معتمد، يرجى إتمام تقييم التنفس أولاً ليتم إرساله ومراجعته واعتماده من قبل الطبيب المعالج."
+        emptyReportDesc: "للحصول على تقرير طبي معتمد، يرجى إتمام تقييم التنفس أولاً ليتم إرساله ومراجعته واعتماده من قبل الطبيب المعالج.",
+        dispatchToDoctor: "إرسال التقرير للطبيب (صندوق الوارد)",
+        dispatchedBadge: "تم التسليم إلى صندوق وارد الطبيب المعالج",
+        dispatchSuccessTitle: "تم تسليم التقرير الطبي لصندوق وارد الطبيب بنجاح",
+        trackingRefLabel: "الرقم المرجعي للتسليم",
+        doctorInboxStatus: "حالة صندوق الوارد"
       },
       doctor: {
         dashboardTitle: "مراجعة الحالات والفرز السريري",
@@ -1249,7 +1254,12 @@
         lockedTitle: "Clinical Report Awaiting Doctor Approval",
         lockedDesc: "For your safety, the final diagnosis will not be displayed until reviewed and approved by your attending physician.",
         emptyReportTitle: "No Clinical Reports Available",
-        emptyReportDesc: "To generate a certified medical report, please complete a breathing assessment first. Your evaluation will be reviewed and approved by a physician."
+        emptyReportDesc: "To generate a certified medical report, please complete a breathing assessment first. Your evaluation will be reviewed and approved by a physician.",
+        dispatchToDoctor: "Send Report to Doctor Inbox",
+        dispatchedBadge: "Delivered to Doctor Inbox",
+        dispatchSuccessTitle: "Medical Report Delivered to Doctor",
+        trackingRefLabel: "Dispatch Tracking Reference",
+        doctorInboxStatus: "Doctor Inbox Status"
       },
       doctor: {
         dashboardTitle: "Doctor Review & Clinical Triage",
