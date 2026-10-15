@@ -32,6 +32,16 @@
       font-family: 'Cairo', 'Tajawal', 'Plus Jakarta Sans', system-ui, sans-serif;
     }
 
+    html[lang="en"] body,
+    html[lang="en"] * {
+      font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    html[lang="ar"] body,
+    html[lang="ar"] * {
+      font-family: 'Cairo', 'Tajawal', 'Plus Jakarta Sans', system-ui, sans-serif;
+    }
+
     body {
       background: radial-gradient(circle at top right, #0d3837 0%, #061515 50%, #020b0b 100%);
       color: var(--text-main);
@@ -365,7 +375,7 @@
 
     <div class="deck-actions">
       <button class="action-btn" onclick="toggleDeckLang()" id="btnLangToggle" title="Switch language">English</button>
-      <button class="action-btn" onclick="toggleFullscreen()" title="ملء الشاشة">⛶ Fullscreen</button>
+      <button class="action-btn" onclick="toggleFullscreen()" id="headerFullscreenBtn" title="ملء الشاشة">⛶ Fullscreen</button>
       <a href="./clinics.html" class="action-btn" id="headerClinicPortal" style="background: var(--primary); color: #061515;">🏥 بوابة العيادات</a>
     </div>
   </header>
@@ -678,8 +688,8 @@
     </div>
 
     <div class="nav-arrows">
-      <button class="nav-arrow-btn" id="btnPrevSlide" onclick="prevSlide()" title="الشريحة السابقة (السهم الأيمن)">→</button>
-      <button class="nav-arrow-btn" id="btnNextSlide" onclick="nextSlide()" title="الشريحة التالية (السهم الأيسر)">←</button>
+      <button class="nav-arrow-btn" id="btnPrevSlide" title="الشريحة السابقة (السهم الأيمن)">→</button>
+      <button class="nav-arrow-btn" id="btnNextSlide" title="الشريحة التالية (السهم الأيسر)">←</button>
     </div>
   </footer>
 
@@ -1112,6 +1122,17 @@
         renderSlideContent(i, lang);
       }
       const t = deckTranslations[lang];
+
+      document.title = lang === "en"
+        ? "Health Vibe AI — Pitch Deck (Executive Presentation)"
+        : "Health Vibe AI — Pitch Deck (العرض التقديمي)";
+      const metaDesc = document.querySelector('meta[name="description"]');
+      if (metaDesc) {
+        metaDesc.setAttribute("content", lang === "en"
+          ? "Executive clinical pitch deck for Health Vibe AI smart triage and respiratory clinical operating system."
+          : "العرض التقديمي التنفيذي لمنظومة هيلث فايب للذكاء الاصطناعي السريري لعيادات الصدر والباطنة");
+      }
+
       const headerSubtitle = document.getElementById("headerDeckSubtitle");
       if (headerSubtitle) headerSubtitle.textContent = t.deckSubtitle;
 
@@ -1119,10 +1140,20 @@
       if (langBtn) {
         langBtn.textContent = t.langToggleBtn;
         langBtn.title = lang === "ar" ? "Switch to English presentation" : "التبديل إلى العرض باللغة العربية";
+        langBtn.setAttribute("aria-label", lang === "ar" ? "Switch to English presentation" : "التبديل إلى العرض باللغة العربية");
       }
 
       const portalBtn = document.getElementById("headerClinicPortal");
-      if (portalBtn) portalBtn.textContent = t.clinicPortalBtn;
+      if (portalBtn) {
+        portalBtn.textContent = t.clinicPortalBtn;
+        portalBtn.title = lang === "en" ? "Go to B2B Clinic Portal" : "الانتقال إلى بوابة العيادات";
+      }
+
+      const fsBtn = document.getElementById("headerFullscreenBtn");
+      if (fsBtn) {
+        fsBtn.textContent = t.fullscreenBtn;
+        fsBtn.title = lang === "en" ? "Toggle fullscreen" : "ملء الشاشة";
+      }
 
       const indicator = document.querySelector(".slide-indicator");
       if (indicator) {
@@ -1131,15 +1162,25 @@
 
       const prevBtn = document.getElementById("btnPrevSlide");
       const nextBtn = document.getElementById("btnNextSlide");
-      if (prevBtn) document.getElementById("btnPrevSlide").textContent = lang === "en" ? "←" : "→";
-      if (nextBtn) document.getElementById("btnNextSlide").textContent = lang === "en" ? "→" : "←";
+      if (prevBtn) {
+        document.getElementById("btnPrevSlide").textContent = lang === "en" ? "←" : "→";
+        prevBtn.title = lang === "en" ? "Previous slide (Left Arrow)" : "الشريحة السابقة (السهم الأيمن)";
+        prevBtn.setAttribute("aria-label", lang === "en" ? "Previous slide" : "الشريحة السابقة");
+      }
+      if (nextBtn) {
+        document.getElementById("btnNextSlide").textContent = lang === "en" ? "→" : "←";
+        nextBtn.title = lang === "en" ? "Next slide (Right Arrow)" : "الشريحة التالية (السهم الأيسر)";
+        nextBtn.setAttribute("aria-label", lang === "en" ? "Next slide" : "الشريحة التالية");
+      }
 
       const slideDotsNav = document.getElementById("slideDotsContainer");
       if (slideDotsNav) {
-        slideDotsNav.setAttribute("aria-label", lang === "en" ? "Presentation slides" : "شرائح العرض التقديمي");
+        slideDotsNav.setAttribute("aria-label", lang === "en" ? "Presentation slides navigation" : "شرائح العرض التقديمي");
         document.querySelectorAll(".slide-dot").forEach((dot) => {
-          const num = dot.getAttribute("data-goto");
-          dot.title = lang === "en" ? `Slide ${num}` : `الشريحة ${num}`;
+          const num = parseInt(dot.getAttribute("data-goto"), 10);
+          const sTitle = (deckTranslations[lang] && deckTranslations[lang].slides[num]) ? deckTranslations[lang].slides[num].title : "";
+          dot.title = lang === "en" ? `Slide ${num}: ${sTitle}` : `الشريحة ${num}: ${sTitle}`;
+          dot.setAttribute("aria-label", lang === "en" ? `Slide ${num}` : `الشريحة ${num}`);
         });
       }
     }
@@ -1157,8 +1198,10 @@
         localStorage.setItem("hv_deck_lang", lang);
       } catch (e) {}
 
+      // Preserve active slide index consistently
+      const preservedSlide = (currentSlide >= 1 && currentSlide <= totalSlides) ? currentSlide : 1;
       renderAllSlides(lang);
-      showSlide(currentSlide);
+      showSlide(preservedSlide);
     }
 
     function toggleDeckLang() {
@@ -1182,6 +1225,12 @@
             const navLang = (typeof navigator !== "undefined" && (navigator.language || (navigator.languages && navigator.languages[0])) || "").toLowerCase().trim();
             lang = navLang.startsWith("ar") ? "ar" : "en";
           }
+        }
+
+        // Support direct slide deep link e.g. ?slide=4 or #4
+        const urlSlide = parseInt(urlParams.get("slide") || window.location.hash.replace("#", "").replace("slide-", ""), 10);
+        if (!isNaN(urlSlide) && urlSlide >= 1 && urlSlide <= totalSlides) {
+          currentSlide = urlSlide;
         }
       } catch (e) {
         lang = "ar";
