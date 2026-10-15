@@ -259,9 +259,18 @@
     }
 
     .clinic-hero h1 .highlight-text {
+      color: #2dd4bf;
       background: linear-gradient(135deg, #2dd4bf 0%, #38bdf8 100%);
       -webkit-background-clip: text;
+      background-clip: text;
       -webkit-text-fill-color: transparent;
+    }
+
+    @supports not ((-webkit-background-clip: text) or (background-clip: text)) {
+      .clinic-hero h1 .highlight-text {
+        -webkit-text-fill-color: #2dd4bf;
+        color: #2dd4bf;
+      }
     }
 
     .clinic-hero p {
@@ -406,7 +415,7 @@
 
     .section-head p {
       font-size: 15.5px;
-      color: #92b1af;
+      color: #b0d8d6;
     }
 
     .comparison-grid {
@@ -641,9 +650,26 @@
     }
 
     .form-field label {
-      font-size: 13px;
+      font-size: 13.5px;
       font-weight: 700;
-      color: #e2f1f0;
+      color: #f1f8f7;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      line-height: 1.4;
+    }
+
+    .form-field label .label-text {
+      color: #f1f8f7;
+    }
+
+    .form-field label .req-star {
+      color: #f87171;
+      font-weight: 800;
+      font-size: 14px;
+      display: inline-block;
+      line-height: 1;
+      margin-inline-start: 4px;
     }
 
     .form-field input, .form-field select, .form-field textarea {
@@ -651,12 +677,24 @@
       padding: 12px 14px;
       border-radius: 12px;
       border: 1px solid rgba(9, 184, 182, 0.3);
-      background: rgba(7, 25, 27, 0.8);
+      background: rgba(7, 25, 27, 0.85);
       color: #ffffff;
       font-family: inherit;
       font-size: 14px;
       outline: none;
-      transition: border-color 0.2s;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .form-field input::placeholder,
+    .form-field textarea::placeholder {
+      color: #7fa8a6;
+      opacity: 0.9;
+    }
+
+    .form-field select option {
+      background-color: #0c2326;
+      color: #ffffff;
+      padding: 8px 12px;
     }
 
     .form-field input:focus, .form-field select:focus, .form-field textarea:focus {
@@ -1005,7 +1043,7 @@
       <div class="calculator-panel">
         <div class="calc-inputs">
           <div class="calc-slider-group">
-            <label>
+            <label for="inputDoctors">
               <span id="sliderDoctorsLabel">عدد الأطباء والاستشاريين في العيادة</span>
               <span class="slider-val" id="valDoctors">3 أطباء</span>
             </label>
@@ -1013,7 +1051,7 @@
           </div>
 
           <div class="calc-slider-group">
-            <label>
+            <label for="inputPatients">
               <span id="sliderPatientsLabel">متوسط حالات الفحص اليومية لكل طبيب</span>
               <span class="slider-val" id="valPatients">35 كشف/طبيب يومياً (105 إجمالي المركز)</span>
             </label>
@@ -1021,7 +1059,7 @@
           </div>
 
           <div class="calc-slider-group">
-            <label>
+            <label for="inputFee">
               <span id="sliderFeeLabel">متوسط سعر الكشف أو الاستشارة (جنيه مصري - EGP)</span>
               <span class="slider-val" id="valFee">400 ج.م</span>
             </label>
@@ -1164,7 +1202,10 @@
         <form id="clinicLeadForm" onsubmit="handleClinicLeadSubmit(event)">
           <div class="form-grid">
             <div class="form-field full-span">
-              <label for="leadPackage" id="labelPackage">الباقة المرغوبة لتشغيل العيادة *</label>
+              <label for="leadPackage" id="labelPackage">
+                <span class="label-text">الباقة المرغوبة لتشغيل العيادة</span>
+                <span class="req-star" aria-label="مطلوب" title="حقل إلزامي">*</span>
+              </label>
               <select id="leadPackage" onchange="handlePackageSelectChange(this.value)" style="border: 1.5px solid rgba(9, 184, 182, 0.6); background: rgba(9, 184, 182, 0.08);">
                 <option value="pilot" selected>🎯 باقة الإطلاق التجريبية المعتمدة (1 عيادة • 3 أطباء • 30 يوماً مجاناً)</option>
                 <option value="solo">العيادة الفردية (طبيب واحد - 1,250 ج.م/شهرياً)</option>
@@ -1174,27 +1215,41 @@
             </div>
 
             <div class="form-field">
-              <label for="leadClinicName" id="labelClinicName">اسم العيادة أو المركز الطبي *</label>
+              <label for="leadClinicName" id="labelClinicName">
+                <span class="label-text">اسم العيادة أو المركز الطبي</span>
+                <span class="req-star" aria-label="مطلوب" title="حقل إلزامي">*</span>
+              </label>
               <input type="text" id="leadClinicName" placeholder="مثال: عيادات النيل لأمراض الصدر والحساسية" required />
             </div>
 
             <div class="form-field">
-              <label for="leadContactName" id="labelContactName">اسم الطبيب أو المدير المسؤول *</label>
+              <label for="leadContactName" id="labelContactName">
+                <span class="label-text">اسم الطبيب أو المدير المسؤول</span>
+                <span class="req-star" aria-label="مطلوب" title="حقل إلزامي">*</span>
+              </label>
               <input type="text" id="leadContactName" placeholder="مثال: د. أحمد رفعت" required />
             </div>
 
             <div class="form-field">
-              <label for="leadEmail" id="labelEmail">البريد الإلكتروني المهني *</label>
+              <label for="leadEmail" id="labelEmail">
+                <span class="label-text">البريد الإلكتروني المهني</span>
+                <span class="req-star" aria-label="مطلوب" title="حقل إلزامي">*</span>
+              </label>
               <input type="email" id="leadEmail" placeholder="doctor@clinic.com" required />
             </div>
 
             <div class="form-field">
-              <label for="leadPhone" id="labelPhone">رقم الهاتف / الواتساب للتواصل *</label>
+              <label for="leadPhone" id="labelPhone">
+                <span class="label-text">رقم الهاتف / الواتساب للتواصل</span>
+                <span class="req-star" aria-label="مطلوب" title="حقل إلزامي">*</span>
+              </label>
               <input type="tel" id="leadPhone" placeholder="+201001234567" required dir="ltr" />
             </div>
 
             <div class="form-field">
-              <label for="leadSpecialty" id="labelSpecialty">التخصص الطبي الرئيسي</label>
+              <label for="leadSpecialty" id="labelSpecialty">
+                <span class="label-text">التخصص الطبي الرئيسي</span>
+              </label>
               <select id="leadSpecialty">
                 <option value="pulmonology">أمراض الصدر والحساسية (Pulmonology)</option>
                 <option value="internal_medicine">الباطنة العامة والرعاية الحرجة (Internal Medicine)</option>
@@ -1205,7 +1260,9 @@
             </div>
 
             <div class="form-field">
-              <label for="leadDoctorCount" id="labelDoctorCount">عدد الأطباء في العيادة / المركز</label>
+              <label for="leadDoctorCount" id="labelDoctorCount">
+                <span class="label-text">عدد الأطباء في العيادة / المركز</span>
+              </label>
               <select id="leadDoctorCount">
                 <option value="1">طبيب واحد (Solo Practice)</option>
                 <option value="2-5">2 إلى 5 أطباء</option>
@@ -1215,12 +1272,16 @@
             </div>
 
             <div class="form-field">
-              <label for="leadCity" id="labelCity">المدينة / المحافظة</label>
+              <label for="leadCity" id="labelCity">
+                <span class="label-text">المدينة / المحافظة</span>
+              </label>
               <input type="text" id="leadCity" placeholder="مثال: القاهرة (التجمع الخامس)" />
             </div>
 
             <div class="form-field">
-              <label for="leadPreferredTime" id="labelTime">الوقت المفضل للمكالمة التوضيحية</label>
+              <label for="leadPreferredTime" id="labelTime">
+                <span class="label-text">الوقت المفضل للمكالمة التوضيحية</span>
+              </label>
               <select id="leadPreferredTime">
                 <option value="morning">صباحاً (10 ص - 2 ظ)</option>
                 <option value="evening">مساءً (4 م - 8 م)</option>
@@ -1229,7 +1290,9 @@
             </div>
 
             <div class="form-field full-span">
-              <label for="leadNotes" id="labelNotes">أي متطلبات أو أنظمة برمجية ترغب في ربطها؟ (اختياري)</label>
+              <label for="leadNotes" id="labelNotes">
+                <span class="label-text">أي متطلبات أو أنظمة برمجية ترغب في ربطها؟ (اختياري)</span>
+              </label>
               <textarea id="leadNotes" rows="3" placeholder="أخبرنا عن أي برنامج حالي تستخدمه أو تفاصيل إضافية عن عيادتك..."></textarea>
             </div>
 
@@ -1253,7 +1316,7 @@
           <div style="background: rgba(15, 23, 42, 0.85); border: 1.5px dashed #09b8b6; border-radius: 12px; padding: 16px 20px; margin: 0 auto 24px; max-width: 480px; display: flex; flex-direction: column; align-items: center; gap: 8px;">
             <span style="font-size: 13px; color: #94a3b8; font-weight: 600;" id="leadRefLabel">رقم مرجع الطلب الخاص بمركزك (Tracking Reference):</span>
             <div style="display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap;">
-              <strong id="leadSuccessRef" style="color: #2dd4bf; font-family: monospace; font-size: 22px; letter-spacing: 1.5px; background: rgba(13,148,136,0.18); padding: 4px 14px; border-radius: 8px; border: 1px solid rgba(45,212,191,0.3);"></strong>
+              <strong id="leadSuccessRef" style="color: #2dd4bf; font-family: monospace; font-size: 22px; letter-spacing: 1.5px; background: rgba(13,148,136,0.18); padding: 4px 14px; border-radius: 8px; border: 1px solid rgba(45,212,191,0.3);">LEAD-HV-2026</strong>
               <button type="button" id="btnCopyLeadRef" onclick="copyLeadRef()" style="background: #09b8b6; border: none; color: #07191b; font-weight: 700; padding: 7px 15px; border-radius: 8px; cursor: pointer; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; transition: all 0.2s ease;">
                 <span id="btnCopyLeadRefIcon">📋</span>
                 <span id="btnCopyLeadRefText">نسخ رقم الطلب</span>
@@ -1265,10 +1328,10 @@
           <div id="leadSummaryContainer" style="background: rgba(2, 44, 49, 0.5); border: 1px solid rgba(9, 184, 182, 0.3); border-radius: 12px; padding: 16px 20px; margin: 0 auto 20px; max-width: 560px; text-align: start;">
             <div style="font-weight: 700; color: #5eead4; font-size: 14px; margin-bottom: 12px; border-bottom: 1px solid rgba(9, 184, 182, 0.2); padding-bottom: 6px;" id="leadSummaryHeader">ملخص تفاصيل الطلب المسجل:</div>
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; font-size: 13.5px; color: #e2e8f0;">
-              <div><span style="color: #8da9a7;" id="summaryLabelClinic">المركز / العيادة:</span> <strong id="summaryClinicName" style="color: #ffffff;"></strong></div>
-              <div><span style="color: #8da9a7;" id="summaryLabelContact">المسؤول:</span> <strong id="summaryContactName" style="color: #ffffff;"></strong></div>
-              <div><span style="color: #8da9a7;" id="summaryLabelPhone">الهاتف / واتساب:</span> <span id="summaryPhone" dir="ltr" style="font-weight: 600; color: #38bdf8;"></span></div>
-              <div><span style="color: #8da9a7;" id="summaryLabelPackage">الباقة:</span> <strong id="summaryPackage" style="color: #34d399;"></strong></div>
+              <div><span style="color: #8da9a7;" id="summaryLabelClinic">المركز / العيادة:</span> <strong id="summaryClinicName" style="color: #ffffff;">عيادة تجريبية (Demo Clinic)</strong></div>
+              <div><span style="color: #8da9a7;" id="summaryLabelContact">المسؤول:</span> <strong id="summaryContactName" style="color: #ffffff;">د. مسؤول المركز (Attending Physician)</strong></div>
+              <div><span style="color: #8da9a7;" id="summaryLabelPhone">الهاتف / واتساب:</span> <span id="summaryPhone" dir="ltr" style="font-weight: 600; color: #38bdf8;">+20 100 000 0000</span></div>
+              <div><span style="color: #8da9a7;" id="summaryLabelPackage">الباقة:</span> <strong id="summaryPackage" style="color: #34d399;">باقة التشغيل التجريبي (Pilot Package)</strong></div>
             </div>
           </div>
 
@@ -1382,15 +1445,15 @@
   <footer class="clinic-footer">
     <div style="max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
       <div>
-        <strong>Health Vibe AI for Clinics</strong> &copy; 2026. حلول الذكاء الاصطناعي للرعاية السريرية والمراكز الطبية.
+        <strong id="footerBrand">Health Vibe AI for Clinics</strong> &copy; 2026. <span id="footerDesc">حلول الذكاء الاصطناعي للرعاية السريرية والمراكز الطبية.</span>
       </div>
       <div style="display: flex; gap: 16px; flex-wrap: wrap; align-items: center;">
-        <a href="./index.html">بوابة المريض</a>
-        <a href="#features">المميزات</a>
-        <a href="#pricing">الباقات</a>
-        <a href="./index.html#safety" style="color: #92b1af;">الأمان والامتثال (HIPAA)</a>
+        <a href="./index.html" id="footerPatientPortal">بوابة المريض</a>
+        <a href="#features" id="footerFeatures">المميزات</a>
+        <a href="#pricing" id="footerPricing">الباقات</a>
+        <a href="./index.html#safety" style="color: #92b1af;" id="footerSafety">الأمان والامتثال (HIPAA)</a>
         <a href="./pitch.html" target="_blank" rel="noopener" style="color: #38bdf8; font-weight: 700;">📽️ Pitch Deck</a>
-        <a href="#demoForm" style="color: var(--clinic-primary); font-weight: 700;">طلب ديمو تجريبي</a>
+        <a href="#demoForm" style="color: var(--clinic-primary); font-weight: 700;" id="footerBookDemo">طلب ديمو تجريبي</a>
       </div>
     </div>
   </footer>
@@ -1495,14 +1558,18 @@
         tier3F3: "نشر سحابي خاص أو محلي (Private Cloud / On-Premise)",
         tier3F4: "مدير حساب سريري ودعم فني على مدار الساعة SLA 99.9%",
         tier3Btn: "تواصل مع قسم المبيعات السريرية",
+        calcNote: "💡 الحسابات مبنية على متوسط توفير 10 دقائق لكل حالة في التوثيق والفرز الأولي، وخفض معدل التخلف عن المواعيد بنسبة 18%.",
+        calcHoursSaved: "455 ساعة",
+        calcRevenueGain: "+54,800 ج.م",
+        calcBreakdownDetails: "مبني على 2,730 كشف شهرياً واسترداد ~137 موعد كان سيتخلف عنه المريض بقيمة 54,800 ج.م شهرياً.",
         formEyebrow: "ابدأ التحول الرقمي",
         formTitle: "اطلب عرضاً تقديمياً وتجربة مجانية لعيادتك",
         formDesc: "املأ البيانات وسيقوم أخصائي التحول السريري بالتواصل معك هاتفياً أو عبر الواتساب لتجهيز حساب تجريبي كامل لعيادتك.",
-        labelPackage: "الباقة المرغوبة لتشغيل العيادة *",
-        labelClinicName: "اسم العيادة أو المركز الطبي *",
-        labelContactName: "اسم الطبيب أو المدير المسؤول *",
-        labelEmail: "البريد الإلكتروني المهني *",
-        labelPhone: "رقم الهاتف / الواتساب للتواصل *",
+        labelPackage: 'الباقة المرغوبة لتشغيل العيادة <span class="req-star" aria-label="مطلوب" title="حقل إلزامي">*</span>',
+        labelClinicName: 'اسم العيادة أو المركز الطبي <span class="req-star" aria-label="مطلوب" title="حقل إلزامي">*</span>',
+        labelContactName: 'اسم الطبيب أو المدير المسؤول <span class="req-star" aria-label="مطلوب" title="حقل إلزامي">*</span>',
+        labelEmail: 'البريد الإلكتروني المهني <span class="req-star" aria-label="مطلوب" title="حقل إلزامي">*</span>',
+        labelPhone: 'رقم الهاتف / الواتساب للتواصل <span class="req-star" aria-label="مطلوب" title="حقل إلزامي">*</span>',
         labelSpecialty: "التخصص الطبي الرئيسي",
         labelDoctorCount: "عدد الأطباء في العيادة / المركز",
         labelCity: "المدينة / المحافظة",
@@ -1532,7 +1599,13 @@
         faq3Q: "هل يمكن ربط النظام مع برنامج إدارة العيادة (HIS / EMR) الحالي؟",
         faq3A: "نعم، توفر المنظومة واجهات برمجية قياسية (REST APIs / Webhooks) تتيح المزامنة اللحظية لبيانات المرضى والمواعيد وتقارير الفحص مع أي نظام إداري أو مالي تعتمد عليه عيادتك.",
         faq4Q: "ما مدى أمان وسرية بيانات وملفات مرضى العيادة؟",
-        faq4A: "نطبق أعلى معايير الأمان العالمية بمبدأ انعدام الثقة (Zero-Trust Architecture) مع تشفير كامل للبيانات بتشفير AES-256 و TLS 1.3، وعزل تام لقواعد بيانات كل عيادة وامتثال صارم لمتطلبات HIPAA و GDPR."
+        faq4A: "نطبق أعلى معايير الأمان العالمية بمبدأ انعدام الثقة (Zero-Trust Architecture) مع تشفير كامل للبيانات بتشفير AES-256 و TLS 1.3، وعزل تام لقواعد بيانات كل عيادة وامتثال صارم لمتطلبات HIPAA و GDPR.",
+        footerDesc: "حلول الذكاء الاصطناعي للرعاية السريرية والمراكز الطبية.",
+        footerPatientPortal: "بوابة المريض",
+        footerFeatures: "المميزات",
+        footerPricing: "الباقات",
+        footerSafety: "الأمان والامتثال (HIPAA)",
+        footerBookDemo: "طلب ديمو تجريبي"
       },
       en: {
         announcementBadge: "✨ 2026 Exclusive Release",
@@ -1590,6 +1663,10 @@
         calcTriageSpeed: "3x Faster",
         calcTriageSpeedLabel: "Faster certified report generation",
         calcCtaBtn: "Deploy Health Vibe AI in Your Clinic Today",
+        calcNote: "💡 Calculations are based on saving ~10 minutes per case in triage and digital documentation, plus an 18% reduction in appointment no-shows.",
+        calcHoursSaved: "455 hrs",
+        calcRevenueGain: "+54,800 EGP",
+        calcBreakdownDetails: "Based on 2,730 monthly visits and ~137 recovered slots worth 54,800 EGP/mo.",
         pricingEyebrow: "Clinic Packages",
         pricingTitle: "Flexible Subscription Plans for Solo Practices and Large Medical Centers",
         pricingDesc: "All packages include a 30-day complimentary pilot evaluation with zero financial commitment.",
@@ -1632,11 +1709,11 @@
         formEyebrow: "Begin Digital Transformation",
         formTitle: "Request a Custom Live Demo & Free Trial",
         formDesc: "Submit your details and a clinical transformation specialist will reach out by phone or WhatsApp to configure your customized pilot.",
-        labelPackage: "Desired Clinic Package *",
-        labelClinicName: "Clinic or Medical Center Name *",
-        labelContactName: "Attending Doctor / Director Name *",
-        labelEmail: "Professional Email *",
-        labelPhone: "Phone / WhatsApp Contact *",
+        labelPackage: 'Desired Clinic Package <span class="req-star" aria-label="Required" title="Required Field">*</span>',
+        labelClinicName: 'Clinic or Medical Center Name <span class="req-star" aria-label="Required" title="Required Field">*</span>',
+        labelContactName: 'Attending Doctor / Director Name <span class="req-star" aria-label="Required" title="Required Field">*</span>',
+        labelEmail: 'Professional Email <span class="req-star" aria-label="Required" title="Required Field">*</span>',
+        labelPhone: 'Phone / WhatsApp Contact <span class="req-star" aria-label="Required" title="Required Field">*</span>',
         labelSpecialty: "Primary Clinical Specialty",
         labelDoctorCount: "Number of Physicians in Clinic",
         labelCity: "City / Governorate",
@@ -1666,7 +1743,13 @@
         faq3Q: "Can the system integrate with our existing clinic management (HIS / EMR) software?",
         faq3A: "Yes, the platform offers standard REST APIs and Webhooks to synchronize patient demographics, queue entries, and verified clinical reports with any existing administrative or billing system.",
         faq4Q: "How secure is patient clinical data?",
-        faq4A: "We implement rigorous Zero-Trust architecture with end-to-end TLS 1.3 and AES-256 encryption, isolated multi-tenant databases per clinic, and strict HIPAA and GDPR compliance."
+        faq4A: "We implement rigorous Zero-Trust architecture with end-to-end TLS 1.3 and AES-256 encryption, isolated multi-tenant databases per clinic, and strict HIPAA and GDPR compliance.",
+        footerDesc: "Clinical AI solutions for modern outpatient practices and healthcare centers.",
+        footerPatientPortal: "Patient App",
+        footerFeatures: "Features",
+        footerPricing: "Plans",
+        footerSafety: "Security & HIPAA Compliance",
+        footerBookDemo: "Book Live Demo"
       }
     };
 
@@ -1721,11 +1804,56 @@
       const contactNameInput = document.getElementById("leadContactName");
       if (contactNameInput) contactNameInput.placeholder = isAr ? "مثال: د. أحمد رفعت" : "e.g. Dr. Ahmed Refaat";
 
+      const emailInput = document.getElementById("leadEmail");
+      if (emailInput) emailInput.placeholder = isAr ? "doctor@clinic.com" : "doctor@clinic.com";
+
+      const phoneInput = document.getElementById("leadPhone");
+      if (phoneInput) phoneInput.placeholder = isAr ? "+201001234567" : "+201001234567";
+
       const cityInput = document.getElementById("leadCity");
       if (cityInput) cityInput.placeholder = isAr ? "مثال: القاهرة (التجمع الخامس)" : "e.g. Cairo (New Cairo)";
 
       const notesInput = document.getElementById("leadNotes");
       if (notesInput) notesInput.placeholder = isAr ? "أخبرنا عن أي برنامج حالي تستخدمه أو تفاصيل إضافية عن عيادتك..." : "Tell us about any current software you use or additional clinic details...";
+
+      // Update select option labels
+      const selectOptionsData = {
+        leadPackage: {
+          pilot: isAr ? "🎯 باقة الإطلاق التجريبية المعتمدة (1 عيادة • 3 أطباء • 30 يوماً مجاناً)" : "🎯 Clinical Pilot Package (1 Clinic • 3 Doctors • 30 Days Free)",
+          solo: isAr ? "العيادة الفردية (طبيب واحد - 1,250 ج.م/شهرياً)" : "Solo Practice (1 Doctor - 1,250 EGP/mo)",
+          center: isAr ? "المركز الطبي التخصصي (حتى 5 أطباء - 2,950 ج.م/شهرياً)" : "Specialized Medical Center (Up to 5 Doctors - 2,950 EGP/mo)",
+          enterprise: isAr ? "مجمع عيادات ومستشفيات (باقة مخصصة)" : "Enterprise / Hospital Network (Custom Quote)"
+        },
+        leadSpecialty: {
+          pulmonology: isAr ? "أمراض الصدر والحساسية (Pulmonology)" : "Pulmonology & Respiratory Medicine",
+          internal_medicine: isAr ? "الباطنة العامة والرعاية الحرجة (Internal Medicine)" : "Internal Medicine & Critical Care",
+          pediatric_chest: isAr ? "صدر وأطفال (Pediatric Chest)" : "Pediatric Pulmonology",
+          ent: isAr ? "أنف وأذن وحنجرة (ENT)" : "Ear, Nose & Throat (ENT)",
+          polyclinic: isAr ? "مجمع عيادات متعدد التخصصات (Polyclinic)" : "Multi-Specialty Medical Center (Polyclinic)"
+        },
+        leadDoctorCount: {
+          "1": isAr ? "طبيب واحد (Solo Practice)" : "1 Doctor (Solo Practice)",
+          "2-5": isAr ? "2 إلى 5 أطباء" : "2 to 5 Doctors",
+          "6-15": isAr ? "6 إلى 15 طبيباً" : "6 to 15 Doctors",
+          "15+": isAr ? "أكثر من 15 طبيباً (مستشفى / شبكة فروع)" : "15+ Doctors (Hospital / Chain)"
+        },
+        leadPreferredTime: {
+          morning: isAr ? "صباحاً (10 ص - 2 ظ)" : "Morning (10 AM - 2 PM)",
+          evening: isAr ? "مساءً (4 م - 8 م)" : "Evening (4 PM - 8 PM)",
+          whatsapp_anytime: isAr ? "مراسلة واتساب في أي وقت" : "WhatsApp message anytime"
+        }
+      };
+
+      Object.entries(selectOptionsData).forEach(([selectId, optionsMap]) => {
+        const selectEl = document.getElementById(selectId);
+        if (selectEl && selectEl.options) {
+          Array.from(selectEl.options).forEach(opt => {
+            if (optionsMap[opt.value]) {
+              opt.textContent = optionsMap[opt.value];
+            }
+          });
+        }
+      });
 
       updateClinicCalculator();
     }
