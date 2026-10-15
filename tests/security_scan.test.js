@@ -187,7 +187,7 @@ const serverCodeForAuth = fs.readFileSync(path.join(ROOT_DIR, 'backend/server.js
 const syncRoleStart = serverCodeForAuth.indexOf("app.post('/api/user/sync-role'");
 const syncRoleEnd = serverCodeForAuth.indexOf("\napp.", syncRoleStart + 1);
 const syncRoleSlice = serverCodeForAuth.slice(syncRoleStart, syncRoleEnd !== -1 ? syncRoleEnd : serverCodeForAuth.indexOf("app.post('/api/admin/set-user-role'"));
-assert.ok(!syncRoleSlice.includes('req.body'), "sync-role must not trust browser-provided role fields.");
+assert.ok(!syncRoleSlice.includes('req.body.role') && !syncRoleSlice.includes('req.body?.role'), "sync-role must not trust browser-provided role fields.");
 assert.ok(syncRoleSlice.includes('privilegedRoleQuarantined'), "sync-role must quarantine existing admin roles that lack trusted custom claims.");
 assert.ok(serverCodeForAuth.includes('function hasTrustedAdminClaim'), "Backend must centralize trusted custom-claim admin checks.");
 

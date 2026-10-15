@@ -59,6 +59,28 @@
     }
   }
 
+  function dismissLoader(immediate) {
+    if (typeof window.dismissLoader === "function" && window.dismissLoader !== dismissLoader) {
+      return window.dismissLoader(immediate);
+    }
+    var loader = document.getElementById("loader");
+    if (!loader) return;
+    loader.classList.add("is-done");
+    loader.style.setProperty("display", "none", "important");
+    loader.style.setProperty("pointer-events", "none", "important");
+    loader.style.setProperty("opacity", "0", "important");
+    loader.style.setProperty("visibility", "hidden", "important");
+    loader.setAttribute("aria-hidden", "true");
+    if (typeof loader.remove === "function" && loader.parentNode) {
+      loader.remove();
+    }
+  }
+
   window.showAuth = showAuth;
   window.hideAuth = hideAuth;
+  window.dismissLoader = dismissLoader;
+
+  window.addEventListener("load", function() {
+    window.dismissLoader();
+  }, { once: true });
 })();

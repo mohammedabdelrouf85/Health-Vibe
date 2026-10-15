@@ -191,7 +191,7 @@ html.hv-has-session #publicSite {
   background:
     radial-gradient(circle at 50% 35%, rgba(9, 184, 182, .18), transparent 45%),
     linear-gradient(135deg, #061517, #0b2226);
-  transition: opacity .74s ease, visibility .74s ease;
+  transition: opacity .35s ease, visibility .35s ease;
 }
 
 body:not(.dark) .loader {
@@ -201,8 +201,10 @@ body:not(.dark) .loader {
 }
 
 .loader.is-done {
-  opacity: 0;
-  visibility: hidden;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  display: none !important;
 }
 
 .loader-card {
@@ -238,6 +240,7 @@ body:not(.dark) .loader-card {
 .loader-media {
   width: 220px;
   height: 220px;
+  aspect-ratio: 1 / 1;
   margin: 0 auto;
   position: relative;
   display: grid;
@@ -253,6 +256,9 @@ body:not(.dark) .loader-card {
 .loader-logo {
   width: 180px;
   height: 180px;
+  aspect-ratio: 1 / 1;
+  max-width: 100%;
+  max-height: 100%;
   object-fit: contain;
   position: relative;
   z-index: 2;
@@ -425,6 +431,7 @@ body.dark .brand strong { color: var(--ink); }
 .brand-logo {
   width: 58px;
   height: 42px;
+  aspect-ratio: 58 / 42;
   object-fit: contain;
   border-radius: 0;
   flex-shrink: 0;
@@ -434,12 +441,14 @@ body.dark .brand strong { color: var(--ink); }
 .sidebar .brand-logo {
   width: 58px;
   height: 42px;
+  aspect-ratio: 58 / 42;
   border-radius: 0;
 }
 
 .report-logo {
   width: 74px;
   height: 54px;
+  aspect-ratio: 74 / 54;
   object-fit: contain;
   border-radius: 0;
   background: transparent;
@@ -451,6 +460,7 @@ body.dark .brand strong { color: var(--ink); }
   display: block;
   width: min(260px, 72vw);
   height: auto;
+  aspect-ratio: 1 / 1;
   max-height: 132px;
   object-fit: contain;
   object-position: left center;

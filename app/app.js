@@ -1,22 +1,48 @@
 const loader = document.getElementById("loader");
 const loaderStartTime = Date.now();
-const LOADER_MIN_DISPLAY_MS = 2700; // +35% longer display time to showcase the brand intro animation
+const LOADER_MIN_DISPLAY_MS = 0; // Dismiss cleanly once assets load without lingering over hero
 
 function dismissLoader(immediate = false) {
-  if (!loader || loader.classList.contains("is-done")) return;
+  const loaderEl = document.getElementById("loader") || loader;
+  if (!loaderEl) return;
+  if (loaderEl.dataset.unmounted === "true") return;
+
+  const unmount = () => {
+    try {
+      if (!loaderEl) return;
+      loaderEl.dataset.unmounted = "true";
+      loaderEl.classList.add("is-done");
+      loaderEl.style.setProperty("display", "none", "important");
+      loaderEl.style.setProperty("pointer-events", "none", "important");
+      loaderEl.style.setProperty("opacity", "0", "important");
+      loaderEl.style.setProperty("visibility", "hidden", "important");
+      loaderEl.setAttribute("aria-hidden", "true");
+      if (typeof loaderEl.remove === "function" && loaderEl.parentNode) {
+        loaderEl.remove();
+      }
+    } catch (e) {}
+  };
+
   if (immediate) {
-    loader.classList.add("is-done");
+    unmount();
     return;
   }
-  const elapsed = Date.now() - loaderStartTime;
-  const remaining = Math.max(0, LOADER_MIN_DISPLAY_MS - elapsed);
-  if (remaining > 0) {
-    window.setTimeout(() => {
-      if (loader) loader.classList.add("is-done");
-    }, remaining);
-  } else {
-    loader.classList.add("is-done");
-  }
+
+  // Gracefully transition out while freeing clicks for the hero section immediately
+  loaderEl.classList.add("is-done");
+  loaderEl.style.setProperty("pointer-events", "none", "important");
+  loaderEl.setAttribute("aria-hidden", "true");
+
+  let unmounted = false;
+  const onDone = () => {
+    if (unmounted) return;
+    unmounted = true;
+    loaderEl.removeEventListener("transitionend", onDone);
+    unmount();
+  };
+
+  loaderEl.addEventListener("transitionend", onDone, { once: true });
+  window.setTimeout(onDone, 350);
 }
 window.dismissLoader = dismissLoader;
 const publicSite = document.getElementById("publicSite");
@@ -15924,12 +15950,17 @@ document.addEventListener("click", (event) => {
 window.addEventListener("load", () => {
   initTheme();
   setupLoaderVideo();
+  dismissLoader();
 });
 
 document.addEventListener("DOMContentLoaded", () => {
   initTheme();
   setupLoaderVideo();
 });
+
+if (document.readyState === "complete") {
+  dismissLoader();
+}
 
 document.addEventListener("click", (event) => {
   const authOpen = event.target.closest("[data-auth-open]");
@@ -18369,13 +18400,7 @@ function initHVAuthListener() {
       selectedRole = ROLES.PATIENT;
 
       showSignedOutUI();
-
-      const elapsed = Date.now() - loaderStartTime;
-      const delay = Math.max(150, LOADER_MIN_DISPLAY_MS - elapsed);
-      window.setTimeout(() => {
-        dismissLoader(true);
-        showSignedOutUI();
-      }, delay);
+      dismissLoader(true);
     }
   });
 }
