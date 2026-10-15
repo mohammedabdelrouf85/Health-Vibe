@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Health Vibe AI - Route Guard Test Suite
  * Tests for the centralized route guard engine in app/app.js.
  */
