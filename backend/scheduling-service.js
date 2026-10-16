@@ -844,7 +844,7 @@ async function bookAppointmentTransaction(db, payload, authUser) {
   appointmentSafetyService.enforcePhysicianRoleBoundaries(payload, effectiveAuthUser);
 
   // 2. Emergency Red-Flag Triage Screening
-  const triage = appointmentSafetyService.evaluateAppointmentEmergencyRisk(payload);
+  let triage = appointmentSafetyService.evaluateAppointmentEmergencyRisk(payload);
   if (triage.isEmergency && !triage.isDisclaimerAcknowledged) {
     try {
       analyticsService.recordEvent({
@@ -928,19 +928,66 @@ async function bookAppointmentTransaction(db, payload, authUser) {
           status: cData.status || 'approved',
           submittedAt: cData.submittedAt || cData.createdAt || new Date().toISOString(),
           approvedAt: cData.approvedAt || cData.certifiedAt || null,
-          approvedByDoctorName: cData.approvedByDoctorName || cData.doctorName || null
+          approvedByDoctorName: cData.approvedByDoctorName || cData.doctorName || null,
+          physicianPrimacyGuaranteed: true,
+          clinicalEvaluationRequired: true,
+          humanPhysicianReviewStatus: 'PENDING_CLINICAL_EVALUATION'
         };
+
+        // Safety & Emergency Triage Evaluation on Case Vitals
+        const dossierSafety = appointmentSafetyService.validatePrevisitDossierSafety({
+          payload,
+          caseRecord: cData,
+          actorUser: effectiveAuthUser
+        });
+        if (dossierSafety.isEmergency) {
+          triage = dossierSafety.triage;
+        }
+        if (dossierSafety.isEmergency && !payload.emergencyDisclaimerAcknowledged && !triage.isDisclaimerAcknowledged) {
+          const emErr = new Error(
+            `حالة طوارئ طبية محتملة: ${dossierSafety.triage.emergencyActionAr} | ${dossierSafety.triage.emergencyActionEn}`
+          );
+          emErr.code = 'EMERGENCY_TRIAGE_ESCALATION_REQUIRED';
+          emErr.statusCode = 422;
+          emErr.details = dossierSafety.triage;
+          throw emErr;
+        }
       }
     } catch (csErr) {
-      if (csErr.statusCode === 403) throw csErr;
+      if (csErr.statusCode === 403 || csErr.statusCode === 422) throw csErr;
       console.warn('Could not read linked case from Firestore:', csErr.message);
     }
 
     if (!verifiedLinkedCase && payload.attachedAssessment) {
+      // Validate physician primacy on attached assessment
+      const dossierSafety = appointmentSafetyService.validatePrevisitDossierSafety({
+        payload,
+        caseRecord: null,
+        actorUser: effectiveAuthUser
+      });
+      if (dossierSafety.isEmergency) {
+        triage = dossierSafety.triage;
+      }
+      if (dossierSafety.isEmergency && !payload.emergencyDisclaimerAcknowledged && !triage.isDisclaimerAcknowledged) {
+        const emErr = new Error(
+          `حالة طوارئ طبية محتملة: ${dossierSafety.triage.emergencyActionAr} | ${dossierSafety.triage.emergencyActionEn}`
+        );
+        emErr.code = 'EMERGENCY_TRIAGE_ESCALATION_REQUIRED';
+        emErr.statusCode = 422;
+        emErr.details = dossierSafety.triage;
+        throw emErr;
+      }
+
       verifiedLinkedCase = {
         caseId: payload.linkedCaseId,
         assessmentId: payload.linkedAssessmentId || payload.linkedCaseId,
-        ...payload.attachedAssessment
+        oxygenLevel: payload.attachedAssessment.oxygenLevel != null ? Number(payload.attachedAssessment.oxygenLevel) : null,
+        diagnosis: payload.attachedAssessment.diagnosis || 'Certified Respiratory Assessment',
+        status: payload.attachedAssessment.status || 'pending_review',
+        submittedAt: payload.attachedAssessment.submittedAt || new Date().toISOString(),
+        physicianPrimacyGuaranteed: true,
+        clinicalEvaluationRequired: true,
+        humanPhysicianReviewStatus: 'PENDING_CLINICAL_EVALUATION'
       };
     }
   }
@@ -1088,6 +1135,8 @@ async function bookAppointmentTransaction(db, payload, authUser) {
           statutoryMedicalDisclaimer: appointmentSafetyService.STATUTORY_MEDICAL_DISCLAIMER.ar,
           statutoryMedicalDisclaimerEn: appointmentSafetyService.STATUTORY_MEDICAL_DISCLAIMER.en,
           physicianPrimacyGuaranteed: true,
+          clinicalEvaluationRequired: true,
+          humanPhysicianReviewStatus: 'PENDING_CLINICAL_EVALUATION',
           linkedCaseId: (verifiedLinkedCase ? verifiedLinkedCase.caseId : payload.linkedCaseId) || null,
           linkedAssessmentId: (verifiedLinkedCase ? verifiedLinkedCase.assessmentId : payload.linkedAssessmentId) || null,
           hasAttachedReport: Boolean(verifiedLinkedCase || payload.linkedCaseId || payload.hasAttachedReport),
@@ -2564,13 +2613,15 @@ async function getAppointmentPrevisitDossier(db, appointmentId, actorUser) {
     };
   }
 
-  // Clinical Safety Gate: If requester is patient and case is unapproved, mask clinical outcomes
+  // Clinical Safety Gate: If requester is patient and case is unapproved, mask clinical outcomes to preserve physician primacy
   if (isPatient && caseData && caseData.status !== 'approved' && caseData.status !== 'certified') {
     caseData = {
       id: caseData.id,
       patientId: caseData.patientId,
       status: 'pending_review',
       submittedAt: caseData.submittedAt,
+      humanPhysicianReviewRequired: true,
+      physicianPrimacyNotice: 'التقرير قيد المراجعة والاعتماد السريري من قِبل الطبيب المعالج.',
       notice: 'التقرير قيد المراجعة السريرية من قِبل الطبيب المعالج.'
     };
   }
@@ -2598,6 +2649,9 @@ async function getAppointmentPrevisitDossier(db, appointmentId, actorUser) {
     appointmentId,
     hasAttachedReport: true,
     linkedCaseId,
+    physicianPrimacyGuaranteed: true,
+    humanPhysicianReviewStatus: appt.humanPhysicianReviewStatus || 'PENDING_CLINICAL_EVALUATION',
+    statutoryDisclaimer: appointmentSafetyService.STATUTORY_MEDICAL_DISCLAIMER,
     patient: {
       id: appt.patientId,
       name: appt.patientName,
@@ -2626,7 +2680,8 @@ async function getAppointmentPrevisitDossier(db, appointmentId, actorUser) {
 /**
  * Atomically link a certified clinical case/assessment report to an appointment.
  */
-async function linkAppointmentCaseDossier(db, { appointmentId, caseId }, actorUser) {
+async function linkAppointmentCaseDossier(db, payload = {}, actorUser) {
+  const { appointmentId, caseId } = payload;
   if (!appointmentId || !caseId) {
     const err = new Error('Both appointmentId and caseId are required.');
     err.code = 'MISSING_PARAMETERS';
@@ -2675,14 +2730,35 @@ async function linkAppointmentCaseDossier(db, { appointmentId, caseId }, actorUs
   }
   const caseData = caseSnap.data() || {};
 
-  // Ownership check
+  // Ownership and family proxy check
   const belongsToPatient = [caseData.patientId, caseData.patientUid, caseData.userId, caseData.uid].includes(appt.patientId) ||
-    (caseData.email && caseData.email === appt.patientEmail);
+    (caseData.email && caseData.email === appt.patientEmail) ||
+    (appt.beneficiaryId && appt.beneficiaryId !== 'self' && caseData.beneficiaryId === appt.beneficiaryId);
   if (!belongsToPatient && !isSuperAdmin) {
     const err = new Error('Access denied: Case does not belong to the patient of this appointment.');
     err.code = 'UNAUTHORIZED_CASE_ATTACHMENT';
     err.statusCode = 403;
     throw err;
+  }
+
+  // Pre-visit dossier safety, physician primacy & emergency triage validation
+  const dossierSafety = appointmentSafetyService.validatePrevisitDossierSafety({
+    payload: {
+      emergencyDisclaimerAcknowledged: payload?.emergencyDisclaimerAcknowledged || false,
+      symptoms: appt.symptoms || appt.notes
+    },
+    caseRecord: caseData,
+    actorUser
+  });
+
+  if (dossierSafety.isEmergency && !payload?.emergencyDisclaimerAcknowledged) {
+    const emErr = new Error(
+      `حالة طوارئ طبية محتملة: ${dossierSafety.triage.emergencyActionAr} | ${dossierSafety.triage.emergencyActionEn}`
+    );
+    emErr.code = 'EMERGENCY_TRIAGE_ESCALATION_REQUIRED';
+    emErr.statusCode = 422;
+    emErr.details = dossierSafety.triage;
+    throw emErr;
   }
 
   const nowIso = new Date().toISOString();
@@ -2696,7 +2772,10 @@ async function linkAppointmentCaseDossier(db, { appointmentId, caseId }, actorUs
     status: caseData.status || 'approved',
     submittedAt: caseData.submittedAt || caseData.createdAt || nowIso,
     approvedAt: caseData.approvedAt || null,
-    approvedByDoctorName: caseData.approvedByDoctorName || caseData.doctorName || null
+    approvedByDoctorName: caseData.approvedByDoctorName || caseData.doctorName || null,
+    physicianPrimacyGuaranteed: true,
+    clinicalEvaluationRequired: true,
+    humanPhysicianReviewStatus: 'PENDING_CLINICAL_EVALUATION'
   };
 
   const historyEntry = {
@@ -2708,13 +2787,19 @@ async function linkAppointmentCaseDossier(db, { appointmentId, caseId }, actorUs
   };
   const history = Array.isArray(appt.history) ? [...appt.history, historyEntry] : [historyEntry];
 
-  // Update appointment
+  // Update appointment with physician primacy and emergency flags
   await apptRef.update({
     linkedCaseId: caseId,
     linkedAssessmentId: attachedSnapshot.assessmentId,
     hasAttachedReport: true,
     attachedAssessment: attachedSnapshot,
     reportAccessGranted: true,
+    physicianPrimacyGuaranteed: true,
+    clinicalEvaluationRequired: true,
+    humanPhysicianReviewStatus: 'PENDING_CLINICAL_EVALUATION',
+    emergencyRiskFlag: dossierSafety.isEmergency,
+    triageUrgency: dossierSafety.triage.urgencyLevel,
+    detectedRedFlags: dossierSafety.triage.detectedRedFlags,
     history
   });
 

@@ -108,6 +108,7 @@ const EMERGENCY_RED_FLAGS = [
  * Returns triage decision, red flags list, action plan, and statutory disclaimers.
  */
 function evaluateAppointmentEmergencyRisk(payload = {}) {
+  const attachedAssessment = payload.attachedAssessment || payload.dossier || {};
   const textCorpus = [
     payload.symptoms,
     payload.patientNotes,
@@ -115,17 +116,35 @@ function evaluateAppointmentEmergencyRisk(payload = {}) {
     payload.reasonForVisit,
     payload.chiefComplaint,
     payload.intakeText,
-    payload.complaint
+    payload.complaint,
+    attachedAssessment.symptoms,
+    attachedAssessment.notes,
+    attachedAssessment.chiefComplaint,
+    attachedAssessment.diagnosisSummary
   ]
     .filter(Boolean)
     .join(' ')
     .toLowerCase();
 
+  const rawSpo2 = payload.spo2 != null
+    ? payload.spo2
+    : (payload.vitals?.spo2 ?? (attachedAssessment.oxygenLevel != null
+        ? attachedAssessment.oxygenLevel
+        : (attachedAssessment.spo2 != null
+          ? attachedAssessment.spo2
+          : (payload.oxygenLevel != null ? payload.oxygenLevel : null))));
+
   const vitals = {
-    spo2: typeof payload.spo2 === 'number' ? payload.spo2 : (payload.vitals?.spo2 || null),
-    heartRate: typeof payload.heartRate === 'number' ? payload.heartRate : (payload.vitals?.heartRate || null),
-    respiratoryRate: typeof payload.respiratoryRate === 'number' ? payload.respiratoryRate : (payload.vitals?.respiratoryRate || null),
-    systolicBP: typeof payload.systolicBP === 'number' ? payload.systolicBP : (payload.vitals?.systolicBP || null)
+    spo2: (rawSpo2 != null && !isNaN(Number(rawSpo2))) ? Number(rawSpo2) : null,
+    heartRate: typeof payload.heartRate === 'number'
+      ? payload.heartRate
+      : (payload.vitals?.heartRate ?? attachedAssessment.heartRate ?? null),
+    respiratoryRate: typeof payload.respiratoryRate === 'number'
+      ? payload.respiratoryRate
+      : (payload.vitals?.respiratoryRate ?? attachedAssessment.respiratoryRate ?? null),
+    systolicBP: typeof payload.systolicBP === 'number'
+      ? payload.systolicBP
+      : (payload.vitals?.systolicBP ?? attachedAssessment.systolicBP ?? null)
   };
 
   const detectedRedFlags = [];
@@ -243,6 +262,44 @@ function enforcePhysicianRoleBoundaries(payload = {}, actorUser = null) {
           disclaimer: STATUTORY_MEDICAL_DISCLAIMER.en
         };
         throw err;
+      }
+    }
+
+    // Protect attached assessment or dossier snapshots from non-clinician prescription or treatment plan injection
+    const attached = payload.attachedAssessment || payload.dossier;
+    if (attached && typeof attached === 'object') {
+      const restrictedDossierFields = [
+        'prescriptions',
+        'prescriptionList',
+        'treatmentPlan',
+        'icd10Code',
+        'icd10',
+        'clinicalNotes',
+        'physicianNotes',
+        'dischargeSummary',
+        'clinicalSignoff'
+      ];
+      for (const field of restrictedDossierFields) {
+        const val = attached[field];
+        const hasContent = val !== undefined && val !== null && (
+          (typeof val === 'string' && val.trim().length > 0) ||
+          (Array.isArray(val) && val.length > 0) ||
+          (typeof val === 'object' && Object.keys(val).length > 0)
+        );
+        if (hasContent) {
+          const err = new Error(
+            `Access denied: Field '${field}' in attached medical dossier is strictly reserved for licensed human physicians. ` +
+            `Patients and automated assistants are not permitted to inject prescriptions or treatment plans into pre-visit records.`
+          );
+          err.code = 'CLINICIAN_ROLE_PROTECTED';
+          err.statusCode = 403;
+          err.details = {
+            attemptedField: field,
+            actorRole: role,
+            disclaimer: STATUTORY_MEDICAL_DISCLAIMER.en
+          };
+          throw err;
+        }
       }
     }
   }
@@ -363,6 +420,8 @@ async function recordDoctorClinicalEvaluation(db, evaluationInput = {}, actorDoc
     prescriptions: clinicalEvaluationRecord.prescriptions,
     evaluatedByDoctorId: actorDoctor.uid,
     evaluatedAt: nowIso,
+    humanPhysicianReviewStatus: 'EVALUATED_BY_PHYSICIAN',
+    clinicalEvaluationRequired: false,
     history
   };
 
@@ -408,6 +467,85 @@ async function recordDoctorClinicalEvaluation(db, evaluationInput = {}, actorDoc
 // ============================================================================
 
 /**
+ * Authoritative Pre-Visit Medical Dossier Safety & Physician Primacy Validator.
+ *
+ * Guarantees:
+ * 1. Human Physician Primacy: Blocks any patient or bot attempt to author or inject prescriptions,
+ *    treatment plans, or clinical sign-offs into the pre-visit dossier snapshot.
+ * 2. Emergency Red-Flag Triage: Checks SpO2, respiratory distress, and critical vitals
+ *    recorded in the dossier. Triggers emergency triage escalation if critical (e.g. SpO2 < 90%).
+ * 3. Privacy & Access Minimization: Ensures sanitized snapshot contains only permitted pre-visit
+ *    coordination data, with clinical outcomes marked as requiring direct physician evaluation.
+ */
+function validatePrevisitDossierSafety({ payload = {}, caseRecord = null, actorUser = null } = {}) {
+  const role = actorUser?.role || 'patient';
+  const isPhysician = role === 'doctor' || role === 'super_admin' || Boolean(actorUser?.isSuperAdmin);
+
+  // 1. Physician Primacy: Protect clinical fields from unverified injection
+  if (!isPhysician) {
+    const candidateDossier = payload.attachedAssessment || payload.dossier;
+    if (candidateDossier && typeof candidateDossier === 'object') {
+      const restrictedFields = [
+        'prescriptions',
+        'prescriptionList',
+        'treatmentPlan',
+        'icd10Code',
+        'clinicalNotes',
+        'clinicalSignoff'
+      ];
+      for (const field of restrictedFields) {
+        if (candidateDossier[field] && (!caseRecord || !caseRecord[field])) {
+          const err = new Error(
+            `Access denied: Field '${field}' in attached medical dossier is strictly reserved for licensed human physicians. ` +
+            `Patients and automated bots cannot inject prescriptions or clinical diagnoses.`
+          );
+          err.code = 'CLINICIAN_ROLE_PROTECTED';
+          err.statusCode = 403;
+          throw err;
+        }
+      }
+    }
+  }
+
+  // 2. Emergency Red-Flag Screening on dossier vitals & symptoms
+  const rawSpo2 = caseRecord?.oxygenLevel != null
+    ? caseRecord.oxygenLevel
+    : (caseRecord?.spo2 != null
+      ? caseRecord.spo2
+      : (payload.attachedAssessment?.oxygenLevel != null
+        ? payload.attachedAssessment.oxygenLevel
+        : (payload.attachedAssessment?.spo2 != null
+          ? payload.attachedAssessment.spo2
+          : (payload.spo2 != null ? payload.spo2 : (payload.oxygenLevel != null ? payload.oxygenLevel : null)))));
+
+  const combinedPayload = {
+    ...payload,
+    spo2: rawSpo2 != null && !isNaN(Number(rawSpo2)) ? Number(rawSpo2) : null,
+    symptoms: [
+      payload.symptoms,
+      caseRecord?.symptoms,
+      payload.attachedAssessment?.symptoms,
+      caseRecord?.chiefComplaint,
+      payload.attachedAssessment?.chiefComplaint
+    ].filter(Boolean).join(' ')
+  };
+
+  const triage = evaluateAppointmentEmergencyRisk(combinedPayload);
+
+  return {
+    valid: true,
+    physicianPrimacyGuaranteed: true,
+    clinicalEvaluationRequired: true,
+    humanPhysicianReviewStatus: 'PENDING_CLINICAL_EVALUATION',
+    triage,
+    isEmergency: triage.isEmergency,
+    statutoryDisclaimer: STATUTORY_MEDICAL_DISCLAIMER
+  };
+}
+
+
+
+/**
  * Anonymize calendar slot representations for patients and unauthenticated visitors.
  * Prevents any PII leakage across patients browsing the interactive calendar strip.
  */
@@ -449,6 +587,18 @@ function sanitizeCalendarSlotForPrivacy(slot = {}, actorUser = null, assignedDoc
   sanitized.clinicalNotes = null;
   sanitized.diagnosis = null;
   sanitized.appointmentId = null;
+
+  // Pre-visit dossier & clinical evaluation privacy isolation (Zero PII/Clinical Leakage)
+  sanitized.linkedCaseId = null;
+  sanitized.linkedAssessmentId = null;
+  sanitized.hasAttachedReport = false;
+  sanitized.attachedAssessment = null;
+  sanitized.reportAccessGranted = false;
+  sanitized.emergencyRiskFlag = null;
+  sanitized.triageUrgency = null;
+  sanitized.detectedRedFlags = null;
+  sanitized.oxygenLevel = null;
+  sanitized.spo2 = null;
 
   return sanitized;
 }
@@ -539,5 +689,6 @@ module.exports = {
   recordDoctorClinicalEvaluation,
   sanitizeCalendarSlotForPrivacy,
   validateFamilyBeneficiaryAccess,
+  validatePrevisitDossierSafety,
   PROTECTED_CLINICIAN_FIELDS
 };
