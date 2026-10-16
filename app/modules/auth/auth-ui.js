@@ -347,15 +347,16 @@
           closeAuthModal();
         }
       } else {
+        const activeAuth = (global.auth) || (global.firebase && typeof global.firebase.auth === "function" ? global.firebase.auth() : null);
         if (authService && typeof authService.signInWithCredentials === "function") {
           const cred = await authService.signInWithCredentials(email, password, remember);
           user = cred.user;
-        } else if (global.auth) {
+        } else if (activeAuth) {
           if (typeof global.applyAuthPersistence === "function") {
             try { await global.applyAuthPersistence(remember); } catch (_) {}
           }
-          const cred = await global.auth.signInWithEmailAndPassword(email, password);
-          user = cred.user || global.auth.currentUser;
+          const cred = await activeAuth.signInWithEmailAndPassword(email, password);
+          user = cred.user || activeAuth.currentUser;
         }
 
         const role = global.selectedRole || "patient";

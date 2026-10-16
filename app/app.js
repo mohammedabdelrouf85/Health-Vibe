@@ -2076,8 +2076,9 @@ function getActiveSession() {
 }
 
 function getActiveUser() {
-  if (typeof auth !== "undefined" && auth && auth.currentUser) {
-    return auth.currentUser;
+  const currentAuth = (typeof auth !== "undefined" && auth) || (typeof window !== "undefined" && window.auth) || (typeof firebase !== "undefined" && firebase.auth ? firebase.auth() : null);
+  if (currentAuth && currentAuth.currentUser) {
+    return currentAuth.currentUser;
   }
   if (window._restoredSessionUser) {
     return window._restoredSessionUser;
@@ -2188,7 +2189,8 @@ const loaderSafetyTimer = window.setTimeout(() => {
   if (loader && !loader.classList.contains("is-done")) {
     console.warn("Loader safety timeout: dismissing loader.");
     dismissLoader(true);
-    if (!auth.currentUser && !hasSavedAuthSession()) {
+    const currentUser = (typeof auth !== "undefined" && auth && auth.currentUser) || (typeof window !== "undefined" && window.auth && window.auth.currentUser) || null;
+    if (!currentUser && !hasSavedAuthSession()) {
       if (publicSite && publicSite.classList.contains("is-hidden")) {
         publicSite.classList.remove("is-hidden");
       }
@@ -2206,6 +2208,10 @@ try {
     }
     db = typeof firebase.firestore === "function" ? firebase.firestore() : null;
     auth = typeof firebase.auth === "function" ? firebase.auth() : null;
+    if (typeof window !== "undefined") {
+      window.db = db;
+      window.auth = auth;
+    }
   }
 } catch (fbInitErr) {
   console.warn("[Health Vibe] Firebase early initialization deferred:", fbInitErr);
@@ -2219,11 +2225,15 @@ if ((!db || !auth) && typeof window !== "undefined") {
         if (!firebase.apps || !firebase.apps.length) {
           firebase.initializeApp(firebaseConfig);
         }
-        if (!db && typeof firebase.firestore === "function") db = firebase.firestore();
+        if (!db && typeof firebase.firestore === "function") {
+          db = firebase.firestore();
+          window.db = db;
+        }
         if (!auth && typeof firebase.auth === "function") {
           auth = firebase.auth();
+          window.auth = auth;
           if (auth && typeof auth.onAuthStateChanged === "function") {
-            try { setupAuthStateListener(); } catch(e) {}
+            try { initHVAuthListener(); } catch(e) {}
           }
         }
         if (db && auth) clearInterval(fbPoller);
@@ -2248,21 +2258,21 @@ function getGoogleAuthProvider() {
 }
 getGoogleAuthProvider();
 
-if (runtimeConfig.emulators && runtimeConfig.emulators.enabled) {
+if (runtimeConfig.emulators && runtimeConfig.emulators.enabled && runtimeConfig.environment === "development") {
   const emu = runtimeConfig.emulators;
   if (emu.firestore && db && typeof db.useEmulator === "function") {
     try {
-      db.useEmulator(emu.firestore.host || "localhost", emu.firestore.port || 8080);
+      db.useEmulator(emu.firestore.host || emu.firestoreHost || "localhost", emu.firestore.port || emu.firestorePort || 8080);
     } catch (e) {}
   }
-  if (emu.auth && auth && typeof auth.useEmulator === "function") {
+  if (auth && typeof auth.useEmulator === "function") {
     try {
-      const authHost = emu.auth.host || "localhost";
-      const authPort = emu.auth.port || 9099;
-      auth.useEmulator(`http://${authHost}:${authPort}`, { disableWarnings: true });
+      const authUrl = emu.authUrl || `http://${(emu.auth && emu.auth.host) || "localhost"}:${(emu.auth && emu.auth.port) || 9099}`;
+      auth.useEmulator(authUrl, { disableWarnings: true });
     } catch (e) {}
   }
 }
+
 
 // =============================================================================
 // 🛡️ FIREBASE APP CHECK INITIALIZATION (Zero-Trust App Attestation)
@@ -6657,7 +6667,10 @@ if (APP_ENV.isLocalhost && APP_ENV.allowDemoSeed) {
 }
 
 
-function showAuth() {
+function showAuth(mode) {
+  if (mode && typeof setAuthMode === "function") {
+    setAuthMode(mode);
+  }
   if (authScreen) {
     authScreen.classList.add("open");
     authScreen.style.display = "grid";
@@ -20219,12 +20232,16 @@ initIdleSessionLockMonitor();
 initializeAuthPersistence();
 
 function initHVAuthListener() {
+  const activeAuth = (typeof auth !== "undefined" && auth) || (typeof window !== "undefined" && window.auth) || (typeof firebase !== "undefined" && firebase.auth ? firebase.auth() : null);
+  if (!activeAuth || typeof activeAuth.onAuthStateChanged !== "function") return;
   if (window._hvAuthListenerStarted) return;
   window._hvAuthListenerStarted = true;
+  if (typeof auth === "undefined" || !auth) auth = activeAuth;
+  if (typeof window !== "undefined") window.auth = activeAuth;
 
   // Process redirect result if browser redirected after Google sign-in
-  if (typeof auth !== "undefined" && auth && typeof auth.getRedirectResult === "function") {
-    auth.getRedirectResult().then(async (result) => {
+  if (typeof activeAuth.getRedirectResult === "function") {
+    activeAuth.getRedirectResult().then(async (result) => {
       if (result && result.user) {
         try {
           localStorage.removeItem("hv_explicit_logout");
@@ -20280,7 +20297,7 @@ function initHVAuthListener() {
     }
   } catch (e) {}
 
-  auth.onAuthStateChanged(async (user) => {
+  activeAuth.onAuthStateChanged(async (user) => {
     window.clearTimeout(loaderSafetyTimer);
     if (window._isSigningOut) {
       if (!user) {
@@ -20304,7 +20321,7 @@ function initHVAuthListener() {
     if (user && isExplicitlyLoggedOut) {
       console.warn("[Health Vibe] Explicit logout detected. Clearing lingering auth session.");
       window._isSigningOut = true;
-      try { if (auth) await auth.signOut(); } catch (e) {}
+      try { if (activeAuth) await activeAuth.signOut(); } catch (e) {}
       await clearFirebaseAuthStorage();
       clearActiveSession();
       window._isSigningOut = false;
@@ -20352,7 +20369,7 @@ function initHVAuthListener() {
       if (!isValidToken) {
         console.warn("[Health Vibe] Token definitively invalidated. Signing out cleanly.");
         window._isSigningOut = true;
-        try { if (auth) await auth.signOut(); } catch (e) {}
+        try { if (activeAuth) await activeAuth.signOut(); } catch (e) {}
         await clearFirebaseAuthStorage();
         clearActiveSession();
         window._isSigningOut = false;
