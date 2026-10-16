@@ -1,0 +1,316 @@
+/**
+ * Health Vibe AI - Condition-Tailored Dashboard Stylesheet (مرجع: Propeller Health)
+ * Elevated clinical telemetry bar, vital metric cards, and responsive vital highlights.
+ */
+
+:root {
+  --tailor-teal: #0d9488;
+  --tailor-teal-dark: #0f766e;
+  --tailor-teal-light: #ccfbf1;
+  --tailor-bg-card: #ffffff;
+  --tailor-border: #e2e8f0;
+  --tailor-text-main: #0f172a;
+  --tailor-text-muted: #64748b;
+  --vital-ok: #10b981;
+  --vital-warn: #f59e0b;
+  --vital-crit: #ef4444;
+}
+
+body.dark-mode, [data-theme="dark"], body.dark {
+  --tailor-teal: #14b8a6;
+  --tailor-teal-dark: #2dd4bf;
+  --tailor-teal-light: rgba(20, 184, 166, 0.15);
+  --tailor-bg-card: #1e293b;
+  --tailor-border: #334155;
+  --tailor-text-main: #f8fafc;
+  --tailor-text-muted: #94a3b8;
+}
+
+/* Elevated Hero Container */
+.condition-tailored-hero {
+  background: var(--tailor-bg-card);
+  border: 1.5px solid var(--tailor-teal);
+  border-radius: 18px;
+  padding: 18px 22px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 18px rgba(13, 148, 136, 0.08);
+  contain: content;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.condition-tailored-hero.respiratory-elevated {
+  border-color: #06b6d4;
+  box-shadow: 0 4px 22px rgba(6, 182, 212, 0.14);
+}
+
+.condition-tailored-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-bottom: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--tailor-border);
+}
+
+.condition-badge-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.condition-badge-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--tailor-teal-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.condition-title-wrap h3,
+.condition-title-wrap .condition-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--tailor-text-main);
+  line-height: 1.3;
+}
+
+.condition-title-wrap p,
+.condition-title-wrap .condition-subtitle {
+  margin: 3px 0 0 0;
+  font-size: 0.85rem;
+  color: var(--tailor-text-muted);
+}
+
+/* Condition Selector Pills */
+.condition-selector-pills {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.condition-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  min-height: 44px; /* WCAG 2.5.5 touch target */
+  border-radius: 22px;
+  border: 1px solid var(--tailor-border);
+  background: transparent;
+  color: var(--tailor-text-muted);
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.condition-pill-btn:hover {
+  border-color: var(--tailor-teal);
+  color: var(--tailor-text-main);
+  background: rgba(13, 148, 136, 0.05);
+}
+
+.condition-pill-btn.active {
+  background: var(--tailor-teal);
+  color: #ffffff;
+  border-color: var(--tailor-teal);
+  box-shadow: 0 2px 8px rgba(13, 148, 136, 0.25);
+}
+
+.condition-pill-btn:focus-visible {
+  outline: 2px solid var(--tailor-teal);
+  outline-offset: 2px;
+}
+
+/* Vitals Metric Cards Grid */
+.tailored-vitals-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.tailored-vital-card {
+  background: rgba(13, 148, 136, 0.03);
+  border: 1px solid var(--tailor-border);
+  border-radius: 14px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.tailored-vital-card:hover {
+  border-color: var(--tailor-teal);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.tailored-vital-card.elevated-spo2-card {
+  border-color: #06b6d4;
+  background: rgba(6, 182, 212, 0.05);
+}
+
+.tailored-vital-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tailored-vital-label {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--tailor-text-muted);
+}
+
+.tailored-vital-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  text-transform: uppercase;
+}
+
+.tailored-vital-badge.status-normal {
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--vital-ok);
+}
+
+.tailored-vital-badge.status-warning {
+  background: rgba(245, 158, 11, 0.12);
+  color: var(--vital-warn);
+}
+
+.tailored-vital-badge.status-critical {
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--vital-crit);
+}
+
+.tailored-vital-metric {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.tailored-vital-val {
+  font-size: 1.85rem;
+  font-weight: 800;
+  color: var(--tailor-text-main);
+  line-height: 1;
+}
+
+.tailored-vital-unit {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--tailor-text-muted);
+}
+
+.tailored-vital-target {
+  font-size: 0.78rem;
+  color: var(--tailor-text-muted);
+}
+
+/* Footer & Quick Action */
+.condition-tailored-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--tailor-border);
+}
+
+.condition-status-live {
+  font-size: 0.85rem;
+  color: var(--tailor-text-muted);
+}
+
+.btn-tailored-action {
+  min-height: 44px; /* Touch target */
+  padding: 8px 18px;
+  border-radius: 12px;
+  background: var(--tailor-teal);
+  color: #ffffff;
+  border: none;
+  font-family: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.15s ease;
+}
+
+.btn-tailored-action:hover {
+  background: var(--tailor-teal-dark);
+  transform: translateY(-1px);
+}
+
+.btn-tailored-action:focus-visible {
+  outline: 2px solid var(--tailor-teal);
+  outline-offset: 2px;
+}
+
+/* RTL / LTR Mirroring */
+html[dir="rtl"] .condition-badge-group,
+html[dir="rtl"] .condition-selector-pills,
+html[dir="rtl"] .tailored-actions-row {
+  direction: rtl;
+}
+
+/* Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  .condition-tailored-hero, 
+  .tailored-vital-card,
+  .condition-pill-btn,
+  .btn-tailored-action {
+    transition: none !important;
+    transform: none !important;
+  }
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 640px) {
+  .condition-tailored-hero {
+    padding: 14px 16px;
+  }
+
+  .condition-tailored-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .condition-selector-pills {
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .tailored-vitals-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .condition-tailored-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .btn-tailored-action {
+    width: 100%;
+    justify-content: center;
+  }
+}

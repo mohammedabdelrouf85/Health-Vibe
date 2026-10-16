@@ -85,6 +85,7 @@ const faqService = require('../app/modules/help/faq-service');
 const _inMemoryFaqFeedbackStore = new Map();
 const _inMemoryFaqInquiryStore = [];
 const _inMemoryOnboardingStore = new Map();
+const _inMemoryConditionStore = new Map();
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -3307,6 +3308,61 @@ app.post('/api/patient/preferences/onboarding/reset', requireAuth, (req, res) =>
     });
   } catch (err) {
     res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to reset onboarding preference.' });
+  }
+});
+
+/**
+ * GET /api/patient/primary-condition
+ * Retrieves primary condition for patient dashboard (مرجع: Propeller Health)
+ */
+app.get('/api/patient/primary-condition', (req, res) => {
+  try {
+    const uid = (req.user && req.user.uid) || req.query.userId || 'guest';
+    const conditionId = _inMemoryConditionStore.get(uid) || 'respiratory';
+    res.json({
+      success: true,
+      userId: uid,
+      conditionId
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to retrieve condition preference.' });
+  }
+});
+
+/**
+ * PUT /api/patient/primary-condition
+ * Sets primary condition preference and logs audit event
+ */
+app.put('/api/patient/primary-condition', (req, res) => {
+  try {
+    const uid = (req.user && req.user.uid) || req.body.userId || 'guest';
+    const conditionId = req.body.conditionId;
+    const allowed = ['respiratory', 'hypertension', 'diabetes', 'general'];
+    if (!conditionId || !allowed.includes(conditionId)) {
+      return res.status(400).json({ error: 'INVALID_CONDITION', message: `conditionId must be one of: ${allowed.join(', ')}` });
+    }
+
+    _inMemoryConditionStore.set(uid, conditionId);
+
+    if (auditService && typeof auditService.logSecurityEvent === 'function') {
+      auditService.logSecurityEvent({
+        type: 'PATIENT_PRIMARY_CONDITION_UPDATED',
+        actorUid: uid,
+        actorRole: (req.user && req.user.role) || 'patient',
+        targetUserId: uid,
+        outcome: 'SUCCESS',
+        metadata: { conditionId, updatedAt: new Date().toISOString() }
+      });
+    }
+
+    res.json({
+      success: true,
+      userId: uid,
+      conditionId,
+      updatedAt: new Date().toISOString()
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to update condition preference.' });
   }
 });
 
