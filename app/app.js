@@ -7648,6 +7648,9 @@ function showScreen(name) {
   }
   if (name === "patient") {
     renderPatientDashboard();
+    if (window.HealthVibes?.FamilyProfilesUI?.renderAll) {
+      window.HealthVibes.FamilyProfilesUI.renderAll();
+    }
   } else if (window._patientCasesUnsub) {
     try { window._patientCasesUnsub(); } catch(e) {}
     window._patientCasesUnsub = null;
@@ -7699,6 +7702,9 @@ function showScreen(name) {
   }
   if (name === "profile") {
     loadUserProfileData();
+    if (window.HealthVibes?.FamilyProfilesUI?.renderAll) {
+      window.HealthVibes.FamilyProfilesUI.renderAll();
+    }
   }
   if (name === "assistant") {
     renderAssistantScreen();
@@ -14109,17 +14115,36 @@ function buildAssessmentModel({
   const profilePhoneInput = document.getElementById("profilePhone");
   const profileHistoryInput = document.getElementById("profileMedicalHistory");
 
-  const patientName = (profileNameInput && profileNameInput.value.trim() && profileNameInput.value.trim() !== "اسم المريض")
-    ? profileNameInput.value.trim()
-    : (cachedDoc.name || cachedDoc.displayName || user?.displayName || user?.name || (user?.email ? user.email.split('@')[0] : ""));
+  // Resolve authentic patient identity (checking active family member context)
+  const activeFamilyContext = (window.HealthVibes?.FamilyProfilesService?.getActiveProfile && user?.uid)
+    ? window.HealthVibes.FamilyProfilesService.getActiveProfile(user.uid, { displayName: user.displayName, name: user.displayName })
+    : { isPrimary: true, profile: {} };
+
+  const isFamilyMemberActive = !activeFamilyContext.isPrimary && Boolean(activeFamilyContext.profile && activeFamilyContext.profile.id);
+  const famProfile = isFamilyMemberActive ? activeFamilyContext.profile : null;
+
+  const patientName = isFamilyMemberActive
+    ? famProfile.name
+    : ((profileNameInput && profileNameInput.value.trim() && profileNameInput.value.trim() !== "اسم المريض")
+      ? profileNameInput.value.trim()
+      : (cachedDoc.name || cachedDoc.displayName || user?.displayName || user?.name || (user?.email ? user.email.split('@')[0] : "")));
 
   const patientEmail = (user && user.email) || cachedDoc.email || "";
   const patientUid = (user && user.uid) || "";
-  const patientPhone = (profilePhoneInput && profilePhoneInput.value.trim()) || window._verifiedPhone || cachedDoc.phoneNumber || user?.phoneNumber || "";
-  const patientDob = (profileDobInput && profileDobInput.value) || cachedDoc.dateOfBirth || cachedDoc.dob || "";
+  const patientPhone = isFamilyMemberActive
+    ? (famProfile.emergencyContact?.phone || (profilePhoneInput && profilePhoneInput.value.trim()) || "")
+    : ((profilePhoneInput && profilePhoneInput.value.trim()) || window._verifiedPhone || cachedDoc.phoneNumber || user?.phoneNumber || "");
+  const patientDob = isFamilyMemberActive
+    ? (famProfile.dateOfBirth || "")
+    : ((profileDobInput && profileDobInput.value) || cachedDoc.dateOfBirth || cachedDoc.dob || "");
   const calculatedAge = patientDob ? calculateAge(patientDob) : null;
-  const patientAge = calculatedAge !== null ? String(calculatedAge) : ((profileAgeInput && profileAgeInput.value.trim()) || cachedDoc.age || "");
-  const patientHistory = (profileHistoryInput && profileHistoryInput.value.trim()) || cachedDoc.medicalHistory || "";
+  const patientAge = isFamilyMemberActive
+    ? (famProfile.calculatedAge !== null ? String(famProfile.calculatedAge) : "")
+    : (calculatedAge !== null ? String(calculatedAge) : ((profileAgeInput && profileAgeInput.value.trim()) || cachedDoc.age || ""));
+  const patientHistory = isFamilyMemberActive
+    ? (famProfile.chronicConditions?.join(", ") || "")
+    : ((profileHistoryInput && profileHistoryInput.value.trim()) || cachedDoc.medicalHistory || "");
+  const patientSex = isFamilyMemberActive ? (famProfile.biologicalSex || "not_specified") : (cachedDoc.biologicalSex || "not_specified");
 
   return {
     // ── Document Metadata & Complete Patient Linkage ──
@@ -14147,7 +14172,14 @@ function buildAssessmentModel({
     dob: patientDob || null,
     patientAge: patientAge,
     age: patientAge,
+    patientSex: patientSex,
     patientMedicalHistory: patientHistory,
+
+    // ── Family Profile & Dependent Record Segregation ──
+    isFamilyMember: isFamilyMemberActive,
+    familyMemberId: isFamilyMemberActive ? famProfile.id : null,
+    familyRelationship: isFamilyMemberActive ? famProfile.relationship : null,
+    familyDemographicCategory: isFamilyMemberActive ? famProfile.category : null,
 
     // ── Clinical Tenant & Doctor Assignment ──
     assignedDoctorId: assignedDoctorId || null,

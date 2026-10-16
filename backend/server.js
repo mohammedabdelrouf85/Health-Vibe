@@ -79,6 +79,8 @@ const clinicalInfoExchangeService = require('./clinical-info-exchange-service');
 const operationalSwitchesService = require('./operational-switches-service');
 const caseHandoverService = require('./case-handover-service');
 const userDisplayPreferencesService = require('./user-display-preferences-service');
+const familyProfilesService = require('../app/modules/patient/family-service');
+const _inMemoryFamilyStore = new Map();
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -2838,6 +2840,267 @@ app.post('/api/patient/medical-profile/correct', requireAuth, patientProfileLimi
   } catch (err) {
     console.error('[PATIENT PROFILE CORRECTION ERROR]:', err);
     res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to correct patient medical profile.' });
+  }
+});
+
+/**
+ * GET /api/patient/family-members
+ * Retrieve list of family members (dependents) registered under primary account
+ */
+app.get('/api/patient/family-members', requireAuth, patientProfileLimiter, async (req, res) => {
+  try {
+    let targetUid = req.user.uid;
+    const requestedUid = req.query.patientId || req.query.uid;
+
+    if (requestedUid && requestedUid !== req.user.uid) {
+      const userRole = getTrustedClaimRole(req.user);
+      const isClinicianOrAdmin = ADMIN_ROLES.includes(userRole) || userRole === ROLES.DOCTOR_VERIFIED || hasTrustedOwnerClaim(req.user);
+      if (!isClinicianOrAdmin) {
+        return res.status(403).json({
+          error: 'FORBIDDEN',
+          message: 'Accessing other patient family profiles requires verified clinician or administrator credentials.'
+        });
+      }
+      targetUid = requestedUid;
+    }
+
+    let familyMembers = [];
+    if (db) {
+      const snap = await db.collection('users').doc(targetUid).get();
+      if (snap.exists) {
+        familyMembers = snap.data()?.familyMembers || [];
+      }
+    } else {
+      familyMembers = _inMemoryFamilyStore.get(targetUid) || [];
+    }
+
+    res.json({
+      success: true,
+      familyMembers,
+      count: familyMembers.length
+    });
+  } catch (err) {
+    console.error('[GET FAMILY MEMBERS ERROR]:', err);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to retrieve family members.' });
+  }
+});
+
+/**
+ * POST /api/patient/family-members
+ * Add a new family member (elderly parent, child, spouse, dependent) under account
+ */
+app.post('/api/patient/family-members', requireAuth, patientProfileLimiter, async (req, res) => {
+  try {
+    const targetUid = req.user.uid;
+    const validation = familyProfilesService.validateFamilyMember(req.body);
+    if (!validation.isValid) {
+      return res.status(400).json({
+        error: 'VALIDATION_FAILED',
+        message: 'Family member profile validation failed.',
+        errors: validation.errors
+      });
+    }
+
+    let currentList = [];
+    if (db) {
+      const snap = await db.collection('users').doc(targetUid).get();
+      if (snap.exists) {
+        currentList = snap.data()?.familyMembers || [];
+      }
+    } else {
+      currentList = _inMemoryFamilyStore.get(targetUid) || [];
+    }
+
+    if (currentList.length >= 15) {
+      return res.status(400).json({
+        error: 'LIMIT_EXCEEDED',
+        message: 'Maximum number of family members (15) reached.'
+      });
+    }
+
+    const rand = Math.random().toString(36).substring(2, 8);
+    const now = new Date().toISOString();
+    const newMember = {
+      id: `fam_${Date.now()}_${rand}`,
+      primaryUid: targetUid,
+      ...validation.data,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    currentList.push(newMember);
+
+    if (db) {
+      await db.collection('users').doc(targetUid).set({
+        familyMembers: currentList
+      }, { merge: true });
+    }
+    _inMemoryFamilyStore.set(targetUid, currentList);
+
+    auditService.recordAuditEvent({
+      eventType: auditService.EVENT_TYPES.FAMILY_MEMBER_ADDED,
+      userId: req.user.uid,
+      targetUserId: targetUid,
+      ip: getClientIp(req),
+      req,
+      details: {
+        memberId: newMember.id,
+        relationship: newMember.relationship,
+        category: newMember.category,
+        calculatedAge: newMember.calculatedAge
+      }
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Family member profile added successfully.',
+      member: newMember
+    });
+  } catch (err) {
+    console.error('[POST FAMILY MEMBER ERROR]:', err);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to add family member.' });
+  }
+});
+
+/**
+ * PUT /api/patient/family-members/:id
+ * Update an existing family member profile
+ */
+app.put('/api/patient/family-members/:id', requireAuth, patientProfileLimiter, async (req, res) => {
+  try {
+    const targetUid = req.user.uid;
+    const memberId = req.params.id;
+
+    let currentList = [];
+    if (db) {
+      const snap = await db.collection('users').doc(targetUid).get();
+      if (snap.exists) {
+        currentList = snap.data()?.familyMembers || [];
+      }
+    } else {
+      currentList = _inMemoryFamilyStore.get(targetUid) || [];
+    }
+
+    const idx = currentList.findIndex(m => m.id === memberId);
+    if (idx === -1) {
+      return res.status(404).json({
+        error: 'NOT_FOUND',
+        message: 'Family member profile not found.'
+      });
+    }
+
+    const merged = { ...currentList[idx], ...req.body };
+    if (req.body.chronicDiseases !== undefined) {
+      merged.chronicConditions = req.body.chronicDiseases;
+    }
+    if (req.body.chronicConditions !== undefined) {
+      merged.chronicDiseases = req.body.chronicConditions;
+    }
+    if (req.body.medications !== undefined) {
+      merged.currentMedications = req.body.medications;
+    }
+    const validation = familyProfilesService.validateFamilyMember(merged);
+    if (!validation.isValid) {
+      return res.status(400).json({
+        error: 'VALIDATION_FAILED',
+        message: 'Family member profile validation failed.',
+        errors: validation.errors
+      });
+    }
+
+    const updatedMember = {
+      ...currentList[idx],
+      ...validation.data,
+      id: memberId,
+      primaryUid: targetUid,
+      updatedAt: new Date().toISOString()
+    };
+
+    currentList[idx] = updatedMember;
+
+    if (db) {
+      await db.collection('users').doc(targetUid).set({
+        familyMembers: currentList
+      }, { merge: true });
+    }
+    _inMemoryFamilyStore.set(targetUid, currentList);
+
+    auditService.recordAuditEvent({
+      eventType: auditService.EVENT_TYPES.FAMILY_MEMBER_UPDATED,
+      userId: req.user.uid,
+      targetUserId: targetUid,
+      ip: getClientIp(req),
+      req,
+      details: {
+        memberId,
+        relationship: updatedMember.relationship,
+        calculatedAge: updatedMember.calculatedAge
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'Family member profile updated successfully.',
+      member: updatedMember
+    });
+  } catch (err) {
+    console.error('[PUT FAMILY MEMBER ERROR]:', err);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to update family member.' });
+  }
+});
+
+/**
+ * DELETE /api/patient/family-members/:id
+ * Remove a family member from primary account
+ */
+app.delete('/api/patient/family-members/:id', requireAuth, patientProfileLimiter, async (req, res) => {
+  try {
+    const targetUid = req.user.uid;
+    const memberId = req.params.id;
+
+    let currentList = [];
+    if (db) {
+      const snap = await db.collection('users').doc(targetUid).get();
+      if (snap.exists) {
+        currentList = snap.data()?.familyMembers || [];
+      }
+    } else {
+      currentList = _inMemoryFamilyStore.get(targetUid) || [];
+    }
+
+    const exists = currentList.some(m => m.id === memberId);
+    if (!exists) {
+      return res.status(404).json({
+        error: 'NOT_FOUND',
+        message: 'Family member profile not found.'
+      });
+    }
+
+    const filtered = currentList.filter(m => m.id !== memberId);
+
+    if (db) {
+      await db.collection('users').doc(targetUid).set({
+        familyMembers: filtered
+      }, { merge: true });
+    }
+    _inMemoryFamilyStore.set(targetUid, filtered);
+
+    auditService.recordAuditEvent({
+      eventType: auditService.EVENT_TYPES.FAMILY_MEMBER_REMOVED,
+      userId: req.user.uid,
+      targetUserId: targetUid,
+      ip: getClientIp(req),
+      req,
+      details: { memberId }
+    });
+
+    res.json({
+      success: true,
+      message: 'Family member removed successfully.'
+    });
+  } catch (err) {
+    console.error('[DELETE FAMILY MEMBER ERROR]:', err);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to remove family member.' });
   }
 });
 
@@ -15208,5 +15471,7 @@ app.post('/api/hypertension/clarification/reply', requireAuth, (req, res) => {
 });
 
 app.userDisplayPreferencesService = userDisplayPreferencesService;
+app.familyProfilesService = familyProfilesService;
+app._inMemoryFamilyStore = _inMemoryFamilyStore;
 module.exports = app;
 

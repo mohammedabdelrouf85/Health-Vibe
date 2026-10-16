@@ -58,6 +58,7 @@
   <!-- Modular Feature Stylesheets -->
   <link rel="stylesheet" href="./modules/auth/auth.css">
   <link rel="stylesheet" href="./modules/patient/patient.css">
+  <link rel="stylesheet" href="./modules/patient/family-profiles.css">
   <link rel="stylesheet" href="./modules/doctor/doctor.css">
   <link rel="stylesheet" href="./modules/admin/admin.css">
   <link rel="stylesheet" href="./modules/appointments/appointments.css">
@@ -516,6 +517,10 @@
       </div>
 
       <section id="screen-patient" class="screen active">
+        <!-- Family Profiles & Dependents Switcher Bar -->
+        <div id="patientFamilySwitcher" class="family-switcher-mount"></div>
+        <div id="patientFamilyActiveBanner" class="family-active-banner-mount" style="display: none;"></div>
+
         <div class="hero-panel app-hero">
           <div>
             <span class="eyebrow" id="patientHeroTitle" data-i18n="patient.welcome">Welcome</span>
@@ -641,6 +646,9 @@
                 <span class="pill ok" id="profileCompletionBadge">92% مكتمل</span>
               </div>
             </div>
+
+            <!-- FAMILY PROFILES & DEPENDENTS MANAGEMENT SECTION -->
+            <div id="profileFamilyManagementContainer" class="family-mgmt-mount"></div>
 
             <!-- SECTION 1: Personal Details & Date of Birth -->
             <div class="profile-section-card" style="background: var(--surface-2, rgba(0,0,0,0.02)); border: 1px solid var(--line, rgba(0,0,0,0.08)); border-radius: 12px; padding: 14px; margin-top: 12px;">
@@ -3157,6 +3165,8 @@
   <script defer src="./modules/auth/auth-ui.js?v=1.0"></script>
   <script defer src="./modules/patient/patient-service.js?v=1.0"></script>
   <script defer src="./modules/patient/patient-ui.js?v=1.0"></script>
+  <script defer src="./modules/patient/family-service.js?v=1.0"></script>
+  <script defer src="./modules/patient/family-ui.js?v=1.0"></script>
   <script defer src="./modules/assessment/assessment-validation.js?v=1.0"></script>
   <script defer src="./modules/assessment/assessment-service.js?v=1.0"></script>
   <script defer src="./modules/assessment/assessment-ui.js?v=1.0"></script>

@@ -77,9 +77,20 @@ async function verifyTimelineAccess(requestingUser = {}, targetPatientId, db = n
     ['badr46694@gmail.com', 'mohammedabdelrouf85@gmail.com', 'mennamahmoudtawfik281@gmail.com', 'sondoselbehery287@gmail.com'].includes(String(requestingUser.email).toLowerCase())
   );
 
-  // 1. Patient accessing their own clinical timeline
+  // 1. Patient accessing their own clinical timeline or managing a dependent family member
   if (requesterUid === targetPatientId) {
     return { authorized: true, isClinician: false, isPatient: true };
+  }
+  if (db) {
+    try {
+      const requesterDoc = await db.collection('users').doc(requesterUid).get();
+      if (requesterDoc.exists) {
+        const family = requesterDoc.data()?.familyMembers || [];
+        if (family.some(m => m.id === targetPatientId)) {
+          return { authorized: true, isClinician: false, isPatient: true, isFamilyGuardian: true };
+        }
+      }
+    } catch (_) {}
   }
 
   // 2. Super Administrator or Platform Owner

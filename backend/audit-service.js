@@ -66,6 +66,9 @@ const AUDIT_EVENT_TYPES = {
   NATIONAL_ID_LEGAL_REVIEW_UPDATED: 'NATIONAL_ID_LEGAL_REVIEW_UPDATED',
   PATIENT_PROFILE_UPDATED: 'PATIENT_PROFILE_UPDATED',
   PATIENT_PROFILE_CORRECTED: 'PATIENT_PROFILE_CORRECTED',
+  FAMILY_MEMBER_ADDED: 'FAMILY_MEMBER_ADDED',
+  FAMILY_MEMBER_UPDATED: 'FAMILY_MEMBER_UPDATED',
+  FAMILY_MEMBER_REMOVED: 'FAMILY_MEMBER_REMOVED',
   APPOINTMENT_BOOKED: 'APPOINTMENT_BOOKED',
   APPOINTMENT_RESCHEDULED: 'APPOINTMENT_RESCHEDULED',
   APPOINTMENT_CANCELLED: 'APPOINTMENT_CANCELLED',
@@ -347,16 +350,23 @@ function extractTrustedActor(req) {
 /**
  * Authoritatively record an audit event to Firestore /audit_events collection.
  */
-async function recordAuditEvent(db, {
-  type,
-  actor,
-  targetUserId = null,
-  clinicId = null,
-  details = {},
-  req = null,
-  outcome = 'SUCCESS'
-}) {
+async function recordAuditEvent(dbOrParams, maybeParams = {}) {
+  let db = dbOrParams;
+  let params = maybeParams;
+  if (dbOrParams && (dbOrParams.type || dbOrParams.eventType || (typeof dbOrParams.collection !== 'function' && !maybeParams.type && !maybeParams.eventType))) {
+    params = dbOrParams;
+    db = null;
+  }
+
+  const type = params.type || params.eventType;
   if (!type) throw new Error('Audit event type is required.');
+
+  const actor = params.actor;
+  const targetUserId = params.targetUserId || null;
+  const clinicId = params.clinicId || null;
+  const details = params.details || {};
+  const req = params.req || null;
+  const outcome = params.outcome || 'SUCCESS';
 
   // Authoritative actor: req takes absolute priority
   const trustedActor = req ? extractTrustedActor(req) : (actor || {
@@ -422,6 +432,7 @@ async function recordAuditEvent(db, {
     }
   }
 
+  inMemoryAuditEvents.push(auditRecord);
   return { id: docId, ...auditRecord };
 }
 
@@ -646,6 +657,7 @@ async function exportAuditEvents(db, { requesterUser, filters = {}, format = 'js
 
 module.exports = {
   AUDIT_EVENT_TYPES,
+  EVENT_TYPES: AUDIT_EVENT_TYPES,
   maskEmail,
   sanitizeIp,
   extractDeviceMetadata,
