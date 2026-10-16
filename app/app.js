@@ -2841,11 +2841,7 @@ async function callBackend(path, options = {}) {
     throw new Error(currentLanguage === "en" ? "Authentication required." : "يجب تسجيل الدخول أولاً.");
   }
 
-  if (!API_BASE_URL && !APP_ENV.isLocalhost) {
-    throw new Error(currentLanguage === "en"
-      ? "Backend API is not configured for this published site."
-      : "خادم الباك إند غير مهيأ لهذا الموقع المنشور.");
-  }
+  const baseUrl = (typeof API_BASE_URL === "string") ? API_BASE_URL : "";
 
   const capturedContext = window.asyncContextManager ? window.asyncContextManager.captureContext() : null;
   const token = await auth.currentUser.getIdToken();
@@ -7208,10 +7204,18 @@ async function handleEmailAuth(e) {
     }
   }
 
+  // Prevent duplicate concurrent email auth requests
+  if (window._isEmailAuthInFlight) {
+    console.warn("[Health Vibe] Email authentication is already in progress.");
+    return;
+  }
+  window._isEmailAuthInFlight = true;
+
   setAuthLoading(true);
   try {
     localStorage.removeItem("hv_explicit_logout");
     sessionStorage.removeItem("hv_explicit_logout");
+    window._isSigningOut = false;
   } catch (e) {}
 
   try {
@@ -7329,6 +7333,7 @@ async function handleEmailAuth(e) {
     console.error("Firebase Auth Error:", error);
     showAuthError(error);
   } finally {
+    window._isEmailAuthInFlight = false;
     setAuthLoading(false);
   }
 }
@@ -7821,17 +7826,24 @@ async function enterApp(source = "google") {
       let isNewGoogleSignup = false;
       try {
         if (typeof db !== "undefined" && db && typeof db.collection === "function") {
-          const userDoc = await db.collection("users").doc(user.uid).get();
-          if (!userDoc.exists) {
+          const userDocPromise = db.collection("users").doc(user.uid).get();
+          const userDoc = await Promise.race([
+            userDocPromise,
+            new Promise((_, rej) => setTimeout(() => rej(new Error("firestore_timeout")), 4000))
+          ]);
+          if (!userDoc || !userDoc.exists) {
             isNewGoogleSignup = true;
             // Google login creates patient ONLY by default (unless owner)
             const safeRole = isOwner ? ROLES.SUPER_ADMIN : ROLES.PATIENT;
             selectedRole = safeRole;
-            await db.collection("users").doc(user.uid).set({
-              name: user.displayName || user.email.split('@')[0],
-              email: user.email,
-              createdAt: firebase.firestore.FieldValue.serverTimestamp()
-            });
+            await Promise.race([
+              db.collection("users").doc(user.uid).set({
+                name: user.displayName || user.email.split('@')[0],
+                email: user.email,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+              }),
+              new Promise((_, rej) => setTimeout(() => rej(new Error("firestore_timeout")), 4000))
+            ]).catch(e => console.warn("Google signup userDoc note:", e));
           } else {
             if (verificationRevoked && (userDoc.data().emailVerified || userDoc.data().phoneVerified)) {
               await db.collection("users").doc(user.uid).set({
@@ -19805,8 +19817,14 @@ function initHVAuthListener() {
       const verificationRevoked = isVerificationRevoked(user.email);
       let displayName = user.displayName;
       try {
-        const userDoc = await db.collection("users").doc(user.uid).get();
-        if (userDoc.exists) {
+        const userDocPromise = (typeof db !== "undefined" && db && typeof db.collection === "function")
+          ? db.collection("users").doc(user.uid).get()
+          : Promise.resolve(null);
+        const userDoc = await Promise.race([
+          userDocPromise,
+          new Promise((_, rej) => setTimeout(() => rej(new Error("firestore_timeout")), 4000))
+        ]);
+        if (userDoc && userDoc.exists) {
           const udata = userDoc.data();
           window._cachedUserDoc = udata;
 
@@ -19855,11 +19873,14 @@ function initHVAuthListener() {
         } else {
           const safeRole = isOwner ? ROLES.SUPER_ADMIN : ROLES.PATIENT;
           selectedRole = safeRole;
-          await db.collection("users").doc(user.uid).set({
-            name: displayName || user.email.split('@')[0],
-            email: user.email,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp()
-          }, { merge: true });
+          await Promise.race([
+            db.collection("users").doc(user.uid).set({
+              name: displayName || user.email.split('@')[0],
+              email: user.email,
+              createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true }),
+            new Promise((_, rej) => setTimeout(() => rej(new Error("firestore_timeout")), 4000))
+          ]).catch(e => console.warn("Firestore user create note:", e));
         }
 
         // Asynchronously sync authoritative role and custom claims from Backend
