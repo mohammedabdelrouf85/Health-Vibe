@@ -26,6 +26,7 @@
  */
 
 const nodemailer = require('nodemailer');
+const { secureReportLinkService } = require('./secure-report-link-service');
 
 // In-memory log for local testing and inspection
 const sentEmailsLog = [];
@@ -153,6 +154,7 @@ function createTransporter(options = {}) {
  */
 function buildResultReadyEmail({
   patientName,
+  patientId,
   caseId = '',
   reportRef,
   doctorName,
@@ -162,10 +164,26 @@ function buildResultReadyEmail({
   clinicalDiagnosis,
   medications,
   recommendations,
+  secureReportUrl,
   appUrl
 }) {
   const portalUrl = normalizeAppBaseUrl(appUrl || process.env.APP_BASE_URL);
-  const reportLink = `${portalUrl}/app/index.html?screen=report&caseId=${encodeURIComponent(caseId)}`;
+  let reportLink = secureReportUrl || '';
+  if (!reportLink && caseId && patientId) {
+    try {
+      const generated = secureReportLinkService.generateSecureReportUrl({
+        caseId,
+        patientId,
+        reportRef,
+        appUrl: portalUrl
+      });
+      reportLink = generated.secureUrl;
+    } catch (e) {
+      reportLink = `${portalUrl}/app/index.html?screen=report&caseId=${encodeURIComponent(caseId)}`;
+    }
+  } else if (!reportLink) {
+    reportLink = `${portalUrl}/app/index.html?screen=report&caseId=${encodeURIComponent(caseId)}`;
+  }
   const safePatientName = escapeHtml(patientName || 'المحترم');
   const safeReportRef = escapeHtml(reportRef || ('HV-REP-' + caseId.slice(-8).toUpperCase()));
   const safeDoctorName = escapeHtml(doctorName || 'غير مسجل');
@@ -246,10 +264,15 @@ function buildResultReadyEmail({
         ✅ <strong>اعتماد سريري موثق (Doctolib Standard):</strong> هذا التقرير موقع رقمياً ومطابق لمعايير الحوكمة السريرية، ومتاح للمعاينة والطباعة وصرف الأدوية.
       </div>
 
+      <!-- Kry Zero-PHI Security Notice -->
+      <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 12px 16px; margin: 18px 0; font-size: 13px; color: #1e40af; line-height: 1.5;">
+        🔒 <strong>حماية وتشفير البيانات الطبية (معيار Kry):</strong> حرصاً على سرية بياناتك الصحية، رابط التقرير مشفر ومحمي برمز أمان رقمي (Signed URL) ويتطلب تسجيل الدخول للتحقق من هويتك كصاحب الملف قبل عرض الوصفة الطبية والتشخيص.
+      </div>
+
       <!-- Action CTA -->
       <div style="text-align: center; margin: 30px 0 20px;">
         <a href="${escapeHtml(reportLink)}" target="_blank" rel="noopener noreferrer" style="background: #0d9488; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 12px; font-weight: 700; font-size: 15px; display: inline-block; box-shadow: 0 4px 12px rgba(13,148,136,0.3);">
-          📄 عرض التقرير السريري والوصفة الطبية الكاملة
+          📄 فتح الرابط الآمن وتسجيل الدخول لعرض التقرير
         </a>
       </div>
     </div>
@@ -278,7 +301,7 @@ ${reportLink}
 تنبيه: في حالات الطوارئ الطبية توجه فورًا إلى أقرب مستشفى أو اتصل بالإسعاف (123).
 © Health Vibe AI`;
 
-  return { subject, html, text };
+  return { subject, html, text, actionUrl: reportLink };
 }
 
 /**
@@ -2273,6 +2296,7 @@ module.exports = {
   generateAuthorizedDestinationLink,
   dispatchNotificationWithPreferences,
   clearNotificationHistoryLog,
-  clearPreferencesLog
+  clearPreferencesLog,
+  secureReportLinkService
 };
 

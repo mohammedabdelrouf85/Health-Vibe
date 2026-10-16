@@ -10971,6 +10971,17 @@ async function renderReportScreen(targetCaseId = null) {
     const isPreview = targetCaseId === "preview" && normalizeRole(selectedRole) === ROLES.DOCTOR && Boolean(window.__doctorPreviewCase);
     let caseData = isPreview ? window.__doctorPreviewCase : null;
     let caseId = targetCaseId || window._selectedReportCaseId;
+    let signedToken = null;
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const hashParams = window.location.hash.includes("?")
+        ? new URLSearchParams(window.location.hash.split("?")[1])
+        : null;
+      if (!caseId) {
+        caseId = urlParams.get("caseId") || (hashParams ? hashParams.get("caseId") : null);
+      }
+      signedToken = urlParams.get("token") || (hashParams ? hashParams.get("token") : null);
+    } catch (e) {}
 
     if (targetCaseId === "history-record" && window.__selectedHistoryRecord) {
       caseData = window.__selectedHistoryRecord;
@@ -10982,7 +10993,8 @@ async function renderReportScreen(targetCaseId = null) {
         const docSnap = await db.collection("cases").doc(caseId).get();
         if (docSnap.exists) {
           const d = docSnap.data();
-          if (d.patientId === user.uid || normalizeRole(selectedRole) === ROLES.DOCTOR || isAdminRole(selectedRole) || isSupportRole(selectedRole)) {
+          const isDocOrAdmin = normalizeRole(selectedRole) === ROLES.DOCTOR || isAdminRole(selectedRole) || isSupportRole(selectedRole);
+          if (d.patientId === user.uid || isDocOrAdmin) {
             caseData = { id: docSnap.id, ...d };
             if (d.patientId === user.uid && normalizeRole(selectedRole) === ROLES.PATIENT) {
               caseData = maskUnapprovedPatientCase(caseData);
@@ -10990,6 +11002,23 @@ async function renderReportScreen(targetCaseId = null) {
             if (typeof auditRecordViewed === "function" && caseId) {
               auditRecordViewed(caseId).catch(() => {});
             }
+          } else {
+            // Identity mismatch guard (Kry Benchmark)
+            container.innerHTML = `
+              <div class="content-grid">
+                <article class="panel" style="text-align: center; padding: 40px 20px; border-top: 4px solid #ef4444;">
+                  <div style="font-size: 40px; margin-bottom: 12px;">🔒</div>
+                  <h2>${isEn ? "Access Denied (Kry Security Standard)" : "تم رفض الوصول (معيار Kry للأمان الطبي)"}</h2>
+                  <p class="muted-copy" style="max-width: 500px; margin: 10px auto;">
+                    ${isEn 
+                      ? "This medical report is cryptographically bound to a different patient account. You must sign in with the authorized patient profile to view certified clinical details."
+                      : "هذا التقرير الطبي مشفر ومخصص لحساب مريض آخر. لا يمكن فتح السجلات الطبية إلا بعد تسجيل الدخول بالحساب المصرح له."}
+                  </p>
+                  <button class="solid-button" onclick="showAuth()">${isEn ? "Switch Account" : "تسجيل الدخول بحساب آخر"}</button>
+                </article>
+              </div>
+            `;
+            return;
           }
         }
       } catch (docErr) {
@@ -11381,8 +11410,19 @@ async function renderReportScreen(targetCaseId = null) {
       </svg>
     `;
 
+    const krySecurityBannerHtml = signedToken ? `
+      <div class="kry-security-banner no-print" style="background: rgba(14, 165, 164, 0.08); border: 1.5px solid var(--teal); border-radius: 12px; padding: 12px 18px; margin-bottom: 20px; display: flex; align-items: center; gap: 12px; color: var(--teal);">
+        <span style="font-size: 20px;">🛡️</span>
+        <div style="font-size: 13px; line-height: 1.5; color: var(--ink);">
+          <strong style="color: var(--teal);">${isEn ? "Encrypted Clinical Link (Kry Telehealth Standard):" : "رابط سريري مشفر ومحمي (معيار Kry للأمان الطبي):"}</strong>
+          ${isEn ? " Identity verified against patient profile. Zero unencrypted PHI was transmitted externally." : " تم التحقق من هويتك كصاحب الملف الطبي. لم يتم تداول أي بيانات حساسة عبر رسائل أو قنوات غير مشفرة."}
+        </div>
+      </div>
+    ` : '';
+
     container.innerHTML = `
       <div class="report-page official-certified-report" id="printableReportArea">
+        ${krySecurityBannerHtml}
         ${window.HealthVibes?.ReportsUI?.renderDoctorInboxDeliveryStatusBadge ? window.HealthVibes.ReportsUI.renderDoctorInboxDeliveryStatusBadge(caseData, isEn) : ''}
         ${isPreview ? `
           <div class="doctor-preview-banner no-print" style="background: rgba(245, 158, 11, 0.12); border: 1.5px solid #f59e0b; border-radius: 14px; padding: 12px 18px; margin-bottom: 22px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">

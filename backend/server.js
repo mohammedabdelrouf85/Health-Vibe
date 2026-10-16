@@ -44,6 +44,7 @@ const {
   NOTIFICATION_STATUS,
   NOTIFICATION_TYPES
 } = require('./notification-service');
+const { secureReportLinkService } = require('./secure-report-link-service');
 const backupService = require('./backup-service');
 const partnerService = require('./partner-service');
 const marketplaceService = require('./marketplace-service');
@@ -7904,6 +7905,146 @@ app.post('/api/notifications/notify-patient-report-approved', requireAuth, async
     });
   } catch (err) {
     console.error('[NOTIFY PATIENT APPROVED ERROR]:', err);
+    return res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+// =============================================================================
+// 🔒 KRY BENCHMARK: SECURE REPORT LINKS & ZERO-PHI MESSAGING (Req #63)
+// =============================================================================
+
+/**
+ * POST /api/reports/generate-secure-link
+ * Kry Benchmark: Generates a cryptographically signed, time-limited URL for report access
+ */
+app.post('/api/reports/generate-secure-link', requireAuth, async (req, res) => {
+  try {
+    const { caseId, expiresInHours = 48 } = req.body || {};
+    if (!caseId) {
+      return res.status(400).json({ error: 'CASE_ID_REQUIRED', message: 'caseId is required.' });
+    }
+
+    let caseData = null;
+    if (db) {
+      const caseDoc = await db.collection('cases').doc(caseId).get();
+      if (caseDoc.exists) caseData = caseDoc.data();
+    }
+    if (!caseData) {
+      return res.status(404).json({ error: 'CASE_NOT_FOUND', message: 'Case not found.' });
+    }
+
+    const patientId = caseData.patientId || caseData.patientUid;
+    const userRole = getTrustedClaimRole(req.user);
+    const isOwner = req.user.uid === patientId;
+    const isClinicianOrAdmin = ADMIN_ROLES.includes(userRole) || userRole === ROLES.DOCTOR_VERIFIED || hasTrustedOwnerClaim(req.user);
+
+    if (!isOwner && !isClinicianOrAdmin) {
+      return res.status(403).json({
+        error: 'FORBIDDEN',
+        message: 'Only the patient or attending clinician can generate secure report links.'
+      });
+    }
+
+    const secureLink = secureReportLinkService.generateSecureReportUrl({
+      caseId,
+      patientId,
+      reportRef: caseData.reportRef || ('HV-REP-' + caseId.slice(-8).toUpperCase()),
+      expiresInHours: Number(expiresInHours) || 48
+    });
+
+    return res.json({
+      success: true,
+      message: 'تم توليد الرابط المشفر بنجاح وفق معيار Kry لحماية البيانات الصحية.',
+      ...secureLink
+    });
+  } catch (err) {
+    console.error('[GENERATE SECURE LINK ERROR]:', err);
+    return res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * GET/POST /api/reports/verify-secure-link
+ * Kry Benchmark: Cryptographically verifies signed token and enforces mandatory patient login
+ */
+const handleVerifySecureReportLink = async (req, res) => {
+  try {
+    const token = req.query.token || req.body?.token;
+    if (!token) {
+      return res.status(400).json({ error: 'TOKEN_REQUIRED', message: 'Signed report token is required.' });
+    }
+
+    const userRole = getTrustedClaimRole(req.user);
+    const isClinicianOrAdmin = ADMIN_ROLES.includes(userRole) || userRole === ROLES.DOCTOR_VERIFIED || hasTrustedOwnerClaim(req.user);
+
+    const verification = secureReportLinkService.verifySecureReportToken(token, req.user.uid, {
+      isClinicianOrAdmin
+    });
+
+    if (!verification.valid) {
+      const statusCode = verification.error === 'LINK_EXPIRED' ? 401 : 403;
+      return res.status(statusCode).json({
+        success: false,
+        error: verification.error,
+        message: verification.message,
+        details: verification
+      });
+    }
+
+    return res.json({
+      success: true,
+      authorized: true,
+      message: 'تم التحقق من الرابط المشفر وهوية المريض بنجاح.',
+      caseId: verification.caseId,
+      patientId: verification.patientId,
+      reportRef: verification.reportRef,
+      expiresAt: verification.expiresAt
+    });
+  } catch (err) {
+    console.error('[VERIFY SECURE LINK ERROR]:', err);
+    return res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+};
+
+app.get('/api/reports/verify-secure-link', requireAuth, handleVerifySecureReportLink);
+app.post('/api/reports/verify-secure-link', requireAuth, handleVerifySecureReportLink);
+
+/**
+ * POST /api/reports/format-secure-sms
+ * Kry Benchmark: Formats a Zero-PHI SMS notification with signed URL
+ */
+app.post('/api/reports/format-secure-sms', requireAuth, async (req, res) => {
+  try {
+    const { caseId, phone, language = 'ar' } = req.body || {};
+    if (!caseId) {
+      return res.status(400).json({ error: 'CASE_ID_REQUIRED', message: 'caseId is required.' });
+    }
+
+    let caseData = null;
+    if (db) {
+      const caseDoc = await db.collection('cases').doc(caseId).get();
+      if (caseDoc.exists) caseData = caseDoc.data();
+    }
+    if (!caseData) {
+      return res.status(404).json({ error: 'CASE_NOT_FOUND', message: 'Case not found.' });
+    }
+
+    const patientId = caseData.patientId || caseData.patientUid;
+    const sms = secureReportLinkService.formatSecureReportSms({
+      patientName: caseData.patientName || caseData.name,
+      reportRef: caseData.reportRef,
+      caseId,
+      patientId,
+      language
+    });
+
+    return res.json({
+      success: true,
+      hasZeroPhi: true,
+      sms
+    });
+  } catch (err) {
+    console.error('[FORMAT SECURE SMS ERROR]:', err);
     return res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
   }
 });
