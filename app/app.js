@@ -1914,17 +1914,6 @@ function initializeDialogAccessibility() {
         }
       }
     });
-
-    // Global document-level click listener as an extra safeguard for dynamically created modals
-    document.addEventListener("click", (e) => {
-      const openModal = e.target.closest(".confirm-modal.open, .modal-overlay, .auth-screen.open, [role='dialog'][aria-hidden='false'], [role='alertdialog'][aria-hidden='false']");
-      if (openModal && openModal.id !== "idleLockScreen") {
-        const innerCard = e.target.closest(".confirm-card, .auth-card, .modal-card, .modal-content, .card, .dialog-box, [role='document']");
-        if (!innerCard || e.target === openModal) {
-          closeAnyOpenModal(openModal);
-        }
-      }
-    });
   }
 }
 
