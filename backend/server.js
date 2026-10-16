@@ -8522,7 +8522,7 @@ app.post('/api/appointments/cancel', requireAuth, requireVerifiedEmail, async (r
  * Enforces role permissions, notice policy, and retains change history.
  */
 app.post('/api/appointments/reschedule', requireAuth, requireVerifiedEmail, async (req, res) => {
-  const { appointmentId, newDate, newSlotId, reason } = req.body || {};
+  const { appointmentId, newDate, newSlotId, reason, consultationType, type } = req.body || {};
   if (!appointmentId || !newDate || !newSlotId) {
     return res.status(400).json({ error: 'MISSING_PARAMETERS', message: 'appointmentId, newDate, and newSlotId are required.' });
   }
@@ -8534,7 +8534,8 @@ app.post('/api/appointments/reschedule', requireAuth, requireVerifiedEmail, asyn
       appointmentId,
       newDate,
       newSlotId,
-      reason
+      reason,
+      consultationType: consultationType || type
     }, req.user);
     return res.json(result);
   } catch (err) {
@@ -8568,6 +8569,26 @@ app.post('/api/appointments/update-status', requireAuth, requireVerifiedEmail, a
     console.error('[APPOINTMENT STATUS UPDATE ERROR]:', err);
     const statusCode = err.statusCode || 500;
     return res.status(statusCode).json({ error: err.code || 'STATUS_UPDATE_FAILED', message: err.message });
+  }
+});
+
+
+/**
+ * GET /api/appointments/:id
+ * Retrieves appointment details by ID with consultation type, venue metadata, and RBAC isolation.
+ */
+app.get('/api/appointments/:id', requireAuth, async (req, res) => {
+  const appointmentId = req.params.id;
+  if (!db || typeof db.collection !== 'function') {
+    return res.status(503).json({ error: 'APPOINTMENT_STORAGE_UNAVAILABLE', message: 'Appointment storage is unavailable.' });
+  }
+  try {
+    const appointment = await schedulingService.getAppointmentById(db, appointmentId, req.user);
+    return res.json({ success: true, appointment });
+  } catch (err) {
+    console.error('[APPOINTMENT GET BY ID ERROR]:', err);
+    const statusCode = err.statusCode || (err.code === 'APPOINTMENT_NOT_FOUND' ? 404 : (err.code === 'ACCESS_DENIED' ? 403 : 500));
+    return res.status(statusCode).json({ error: err.code || 'APPOINTMENT_FETCH_FAILED', message: err.message });
   }
 });
 

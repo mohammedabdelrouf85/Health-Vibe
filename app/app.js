@@ -12720,6 +12720,7 @@ async function confirmAppointmentBooking(forceDirect = false) {
       doctorLicense: doctorLicense,
       clinicName: clinicName,
       type: apptSelectedType,
+      consultationType: apptSelectedType,
       typeLabel: typeLabel,
       date: apptSelectedDate.dateStr,
       dateLabel: dateLabel,

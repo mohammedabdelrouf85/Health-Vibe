@@ -86,6 +86,52 @@ const CANCELLATION_MIN_NOTICE_HOURS = 2;
 const RESCHEDULING_MIN_NOTICE_HOURS = 2;
 
 // ============================================================================
+// 🏥 CLINIDO CONSULTATION TYPES & VENUE SPECIFICATIONS
+// ============================================================================
+const CLINIDO_CONSULTATION_TYPES = {
+  VIDEO: 'video',
+  CLINIC: 'clinic',
+  FOLLOWUP: 'followup'
+};
+
+const VALID_CONSULTATION_TYPES = ['video', 'clinic', 'followup', 'telehealth'];
+
+const DOKKI_BRANCH_LOCATION = {
+  name: 'مركز القاهرة التخصصي لأمراض الصدر والحساسية',
+  nameEn: 'Cairo Specialized Chest & Allergy Center',
+  branchName: 'فرع الدقي المركزي',
+  branchNameEn: 'Dokki Central Branch',
+  address: 'فرع الدقي، شارع التحرير، الجيزة',
+  addressEn: 'Dokki Branch, Tahrir St, Giza',
+  landmark: 'بجوار محطة مترو الدقي - مخرج شارع التحرير',
+  landmarkEn: 'Next to Dokki Metro Station - Tahrir St Exit',
+  metroStation: 'Dokki Metro Station',
+  city: 'Giza',
+  country: 'Egypt'
+};
+
+const DOKKI_ARRIVAL_GUIDANCE = {
+  leadMinutes: 10,
+  checkinNotes: 'يرجى الحضور قبل الموعد بـ 10 دقائق لقياس العلامات الحيوية وتسجيل الوصول بالاستقبال',
+  checkinNotesEn: 'Please arrive 10 minutes prior for check-in and vitals measurement'
+};
+
+function normalizeConsultationType(typeInput) {
+  if (!typeInput) return CLINIDO_CONSULTATION_TYPES.CLINIC;
+  const raw = String(typeInput).trim().toLowerCase();
+  if (raw === 'telehealth' || raw === 'video' || raw === 'online') {
+    return CLINIDO_CONSULTATION_TYPES.VIDEO;
+  }
+  if (raw === 'clinic' || raw === 'in_person' || raw === 'in-clinic' || raw === 'physical') {
+    return CLINIDO_CONSULTATION_TYPES.CLINIC;
+  }
+  if (raw === 'followup' || raw === 'follow_up' || raw === 'follow-up') {
+    return CLINIDO_CONSULTATION_TYPES.FOLLOWUP;
+  }
+  return null;
+}
+
+// ============================================================================
 // 👨‍⚕️ DOCTORS WORK SCHEDULES & LEAVE REGISTRY
 // ============================================================================
 const DOCTOR_SCHEDULES = {
@@ -611,12 +657,28 @@ async function emitAppointmentNotificationEvent(db, { type, appointment, actorUs
 
   const nowIso = new Date().toISOString();
   const recipientEmail = appointment.patientEmail || details.recipientEmail;
+  const consultType = appointment.consultationType || appointment.type || (appointment.isOnlineConsultation ? 'video' : 'clinic');
+  const isVideo = consultType === 'video';
+  const isFollowup = consultType === 'followup';
+  const isClinic = consultType === 'clinic';
 
   let subject = '';
   if (type === 'APPOINTMENT_BOOKED') {
-    subject = `✅ تأكيد حجز موعدك الطبي - Health Vibe AI (${appointment.date} ${appointment.timeSlot || ''})`;
+    if (isVideo) {
+      subject = `✅ تأكيد حجز استشارة فيديو عن بُعد (توفير المشقة) - Health Vibe AI (${appointment.date} ${appointment.timeSlot || ''})`;
+    } else if (isFollowup) {
+      subject = `✅ تأكيد موعد متابعة التقارير والنتائج - Health Vibe AI (${appointment.date} ${appointment.timeSlot || ''})`;
+    } else {
+      subject = `✅ تأكيد حجز موعد عيادة الدقي - Health Vibe AI (${appointment.date} ${appointment.timeSlot || ''})`;
+    }
   } else if (type === 'APPOINTMENT_RESCHEDULED') {
-    subject = `🔄 تم تعديل موعدك الطبي بنجاح - Health Vibe AI (${appointment.date} ${appointment.timeSlot || ''})`;
+    if (isVideo) {
+      subject = `🔄 تم تعديل موعد استشارة الفيديو بنجاح - Health Vibe AI (${appointment.date} ${appointment.timeSlot || ''})`;
+    } else if (isFollowup) {
+      subject = `🔄 تم تعديل موعد متابعة النتائج بنجاح - Health Vibe AI (${appointment.date} ${appointment.timeSlot || ''})`;
+    } else {
+      subject = `🔄 تم تعديل موعد عيادة الدقي بنجاح - Health Vibe AI (${appointment.date} ${appointment.timeSlot || ''})`;
+    }
   } else if (type === 'APPOINTMENT_CANCELLED') {
     subject = `❌ إشعار بإلغاء موعدك الطبي - Health Vibe AI (${appointment.date})`;
   } else if (type === 'APPOINTMENT_STATUS_CHANGED') {
@@ -636,12 +698,25 @@ async function emitAppointmentNotificationEvent(db, { type, appointment, actorUs
         clinicName: appointment.clinicName || null,
         date: appointment.date,
         timeSlot: appointment.timeSlot,
+        consultationType: consultType,
+        isOnlineConsultation: Boolean(appointment.isOnlineConsultation),
+        commuteReliefActive: Boolean(appointment.commuteReliefActive),
+        branchLocation: appointment.branchLocation || null,
+        arrivalGuidance: appointment.arrivalGuidance || null,
+        followupScope: appointment.followupScope || null,
         subject,
         status: 'sent',
         sentAt: nowIso,
         details: {
-          actorUid: actorUser.uid,
-          actorRole: actorUser.role || 'patient',
+          actorUid: actorUser ? actorUser.uid : null,
+          actorRole: actorUser ? (actorUser.role || 'patient') : 'patient',
+          consultationType: consultType,
+          isOnlineConsultation: Boolean(appointment.isOnlineConsultation),
+          commuteReliefActive: Boolean(appointment.commuteReliefActive),
+          branchLocation: appointment.branchLocation || null,
+          arrivalGuidance: appointment.arrivalGuidance || null,
+          followupScope: appointment.followupScope || null,
+          telehealthUrl: appointment.telehealthUrl || appointment.meetingLink || null,
           reason: details.reason || null,
           previousDate: details.previousDate || null,
           previousSlotId: details.previousSlotId || null,
@@ -667,15 +742,58 @@ async function emitAppointmentNotificationEvent(db, { type, appointment, actorUs
       const isBooked = type === 'APPOINTMENT_BOOKED';
       const isResched = type === 'APPOINTMENT_RESCHEDULED';
       const isCancel = type === 'APPOINTMENT_CANCELLED';
-
-      const titleAr = isBooked ? 'تم تأكيد حجز موعدك الطبي' : (isResched ? 'تم تعديل موعدك الطبي بنجاح' : (isCancel ? 'تم إلغاء موعدك الطبي' : 'تحديث حالة الموعد'));
-      const titleEn = isBooked ? 'Appointment Confirmed' : (isResched ? 'Appointment Rescheduled' : (isCancel ? 'Appointment Cancelled' : 'Appointment Status Updated'));
-      
-      const consultTypeDesc = appointment.type === 'video' ? 'استشارة فيديو عن بُعد' : 'كشف بالعيادة';
       const beneficiaryPart = appointment.beneficiaryName && appointment.beneficiaryId !== 'self' ? ` (لصالح: ${appointment.beneficiaryName})` : '';
 
-      const bodyAr = `موعدك مع ${appointment.doctorName || 'الطبيب'} يوم ${appointment.date} الساعة ${appointment.timeSlot || ''} - ${consultTypeDesc}${beneficiaryPart}.`;
-      const bodyEn = `Your appointment with ${appointment.doctorName || 'Doctor'} on ${appointment.date} at ${appointment.timeSlot || ''} (${appointment.type === 'video' ? 'Video' : 'In-Clinic'}).`;
+      let titleAr = '';
+      let titleEn = '';
+      let bodyAr = '';
+      let bodyEn = '';
+
+      if (isBooked) {
+        if (isVideo) {
+          titleAr = 'تم تأكيد حجز استشارة فيديو عن بُعد (توفير المشقة)';
+          titleEn = 'Remote Video Consultation Confirmed (Commute Relief)';
+          bodyAr = `موعدك عن بُعد مع ${appointment.doctorName || 'الطبيب'} يوم ${appointment.date} الساعة ${appointment.timeSlot || ''}. تم تفعيل خدمة الاستشارة عن بُعد لتقليل عبء وتكلفة التنقل في زحام الطرق${beneficiaryPart}.`;
+          bodyEn = `Your remote video consultation with ${appointment.doctorName || 'Doctor'} on ${appointment.date} at ${appointment.timeSlot || ''} is confirmed. Commute relief active${beneficiaryPart}.`;
+        } else if (isFollowup) {
+          titleAr = 'تم تأكيد موعد متابعة التقارير والنتائج';
+          titleEn = 'Follow-up Consultation Confirmed';
+          bodyAr = `موعد متابعة عن بُعد مع ${appointment.doctorName || 'الطبيب'} يوم ${appointment.date} الساعة ${appointment.timeSlot || ''} لمراجعة نتائج الفحوصات والتحاليل التنفسية${beneficiaryPart}.`;
+          bodyEn = `Your follow-up consultation with ${appointment.doctorName || 'Doctor'} on ${appointment.date} at ${appointment.timeSlot || ''} for lab and test results review is confirmed${beneficiaryPart}.`;
+        } else {
+          titleAr = 'تم تأكيد حجز موعد العيادة (فرع الدقي المركزي)';
+          titleEn = 'In-Clinic Appointment Confirmed (Dokki Central Branch)';
+          bodyAr = `موعدك بالعيادة مع ${appointment.doctorName || 'الطبيب'} يوم ${appointment.date} الساعة ${appointment.timeSlot || ''} بفرع الدقي (بجوار محطة مترو الدقي). يرجى الحضور قبل الموعد بـ 10 دقائق لقياس المؤشرات الحيوية${beneficiaryPart}.`;
+          bodyEn = `Your in-clinic visit with ${appointment.doctorName || 'Doctor'} on ${appointment.date} at ${appointment.timeSlot || ''} at Dokki Central Branch (near Dokki Metro) is confirmed. Please arrive 10 minutes early for check-in${beneficiaryPart}.`;
+        }
+      } else if (isResched) {
+        if (isVideo) {
+          titleAr = 'تم تعديل موعد استشارة الفيديو بنجاح';
+          titleEn = 'Video Consultation Rescheduled Successfully';
+          bodyAr = `تم تعديل موعد استشارتك عن بُعد مع ${appointment.doctorName || 'الطبيب'} ليصبح يوم ${appointment.date} الساعة ${appointment.timeSlot || ''} (خدمة تقليل مشقة الانتقال مفعلة)${beneficiaryPart}.`;
+          bodyEn = `Your remote video consultation with ${appointment.doctorName || 'Doctor'} has been rescheduled to ${appointment.date} at ${appointment.timeSlot || ''}${beneficiaryPart}.`;
+        } else if (isFollowup) {
+          titleAr = 'تم تعديل موعد متابعة التقارير بنجاح';
+          titleEn = 'Follow-up Consultation Rescheduled Successfully';
+          bodyAr = `تم تعديل موعد متابعة النتائج مع ${appointment.doctorName || 'الطبيب'} ليصبح يوم ${appointment.date} الساعة ${appointment.timeSlot || ''}${beneficiaryPart}.`;
+          bodyEn = `Your follow-up consultation with ${appointment.doctorName || 'Doctor'} has been rescheduled to ${appointment.date} at ${appointment.timeSlot || ''}${beneficiaryPart}.`;
+        } else {
+          titleAr = 'تم تعديل موعد العيادة بنجاح (فرع الدقي)';
+          titleEn = 'In-Clinic Appointment Rescheduled Successfully';
+          bodyAr = `تم تعديل موعد كشف العيادة مع ${appointment.doctorName || 'الطبيب'} ليصبح يوم ${appointment.date} الساعة ${appointment.timeSlot || ''} بفرع الدقي (يرجى الحضور قبل الموعد بـ 10 دقائق)${beneficiaryPart}.`;
+          bodyEn = `Your in-clinic visit with ${appointment.doctorName || 'Doctor'} at Dokki Branch has been rescheduled to ${appointment.date} at ${appointment.timeSlot || ''}${beneficiaryPart}.`;
+        }
+      } else if (isCancel) {
+        titleAr = 'تم إلغاء موعدك الطبي';
+        titleEn = 'Appointment Cancelled';
+        bodyAr = `تم إلغاء موعدك مع ${appointment.doctorName || 'الطبيب'} يوم ${appointment.date} الساعة ${appointment.timeSlot || ''}.`;
+        bodyEn = `Your appointment with ${appointment.doctorName || 'Doctor'} on ${appointment.date} at ${appointment.timeSlot || ''} has been cancelled.`;
+      } else {
+        titleAr = 'تحديث حالة الموعد';
+        titleEn = 'Appointment Status Updated';
+        bodyAr = `تم تحديث حالة موعدك مع ${appointment.doctorName || 'الطبيب'} إلى: ${appointment.status}.`;
+        bodyEn = `Your appointment status with ${appointment.doctorName || 'Doctor'} was updated to: ${appointment.status}.`;
+      }
 
       const userNotif = {
         id: `unotif_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
@@ -691,7 +809,12 @@ async function emitAppointmentNotificationEvent(db, { type, appointment, actorUs
         doctorName: appointment.doctorName,
         date: appointment.date,
         timeSlot: appointment.timeSlot,
-        consultationType: appointment.type || 'clinic',
+        consultationType: consultType,
+        isOnlineConsultation: Boolean(appointment.isOnlineConsultation),
+        commuteReliefActive: Boolean(appointment.commuteReliefActive),
+        branchLocation: appointment.branchLocation || null,
+        arrivalGuidance: appointment.arrivalGuidance || null,
+        followupScope: appointment.followupScope || null,
         telehealthUrl: appointment.telehealthUrl || appointment.meetingLink || null,
         beneficiaryId: appointment.beneficiaryId || 'self',
         beneficiaryName: appointment.beneficiaryName || null,
@@ -710,78 +833,194 @@ async function emitAppointmentNotificationEvent(db, { type, appointment, actorUs
     }
   }
 
-  // 2b. Record in-app & email notification to Attending Doctor if Pre-Visit Dossier is attached
-  if (appointment.doctorId && (appointment.hasAttachedReport || appointment.linkedCaseId)) {
-    try {
-      const spo2 = appointment.attachedAssessment?.oxygenLevel != null ? `${appointment.attachedAssessment.oxygenLevel}%` : 'طبيعي';
-      const docNotif = {
-        id: `unotif_doc_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
-        userId: appointment.doctorId,
-        title: 'ملف حالة مسبق مرفق بالموعد (Pre-Visit Dossier)',
-        titleEn: 'Pre-Visit Medical Dossier Attached',
-        body: `قام المريض ${appointment.patientName || 'المريض'} بحجز موعد استشارة بتاريخ ${appointment.date} مع إرفاق تقرير التقييم التنفسي المعتمد (SpO2: ${spo2}). يرجى مراجعة ملف الحالة السريري قبل الزيارة.`,
-        bodyEn: `Patient ${appointment.patientName || 'Patient'} booked an appointment for ${appointment.date} with attached certified respiratory report (SpO2: ${spo2}). Please review clinical findings before visit.`,
-        category: 'clinical_dossier',
-        type: 'previsit_dossier_attached',
-        appointmentId: appointment.id,
-        linkedCaseId: appointment.linkedCaseId,
-        patientId: appointment.patientId,
-        patientName: appointment.patientName,
-        date: appointment.date,
-        timeSlot: appointment.timeSlot,
-        read: false,
-        createdAt: nowIso
-      };
-      const userColRef = db.collection('user_notifications');
-      if (typeof userColRef.add === 'function') {
-        await userColRef.add(docNotif);
-      } else if (typeof userColRef.doc === 'function') {
-        await userColRef.doc(docNotif.id).set(docNotif);
-      }
+  // 2a. Record in-app & email notification to Attending Doctor with Venue & Mode Awareness
+  if (appointment.doctorId && (type === 'APPOINTMENT_BOOKED' || type === 'APPOINTMENT_RESCHEDULED')) {
+    const hasDossier = Boolean(appointment.hasAttachedReport || appointment.linkedCaseId);
 
-      // Email notification record for doctor
-      const docEmail = DOCTOR_SCHEDULES[appointment.doctorId]?.email || `${appointment.doctorId}@healthvibes.org`;
-      const docEmailNotif = {
-        appointmentId: appointment.id,
-        linkedCaseId: appointment.linkedCaseId,
-        type: 'previsit_dossier_attached',
-        recipient: docEmail,
-        patientName: appointment.patientName || null,
-        doctorName: appointment.doctorName || null,
-        clinicId: appointment.clinicId || null,
-        date: appointment.date,
-        timeSlot: appointment.timeSlot,
-        subject: `📑 ملف تقييم تنفسي مسبق مرفق بموعد المريض: ${appointment.patientName} (${appointment.date})`,
-        status: 'sent',
-        sentAt: nowIso,
-        details: {
-          actorUid: actorUser.uid,
-          actorRole: actorUser.role || 'patient',
+    if (hasDossier) {
+      // Pre-Visit Medical Dossier attached: dispatch high-priority clinical dossier alert to doctor with venue context
+      try {
+        const spo2 = appointment.attachedAssessment?.oxygenLevel != null ? `${appointment.attachedAssessment.oxygenLevel}%` : 'طبيعي';
+        const venueNote = isVideo ? ' (استشارة فيديو عن بُعد)' : (isClinic ? ' (كشف بفرع الدقي المركزي)' : ' (متابعة تقارير)');
+
+        const docNotif = {
+          id: `unotif_doc_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+          userId: appointment.doctorId,
+          title: 'ملف حالة مسبق مرفق بالموعد (Pre-Visit Dossier)',
+          titleEn: 'Pre-Visit Medical Dossier Attached',
+          body: `قام المريض ${appointment.patientName || 'المريض'} بحجز موعد استشارة${venueNote} بتاريخ ${appointment.date} مع إرفاق تقرير التقييم التنفسي المعتمد (SpO2: ${spo2}). يرجى مراجعة ملف الحالة السريري قبل الزيارة.`,
+          bodyEn: `Patient ${appointment.patientName || 'Patient'} booked an appointment for ${appointment.date} with attached certified respiratory report (SpO2: ${spo2}). Please review clinical findings before visit.`,
+          category: 'clinical_dossier',
+          type: 'previsit_dossier_attached',
+          appointmentId: appointment.id,
           linkedCaseId: appointment.linkedCaseId,
-          attachedAssessment: appointment.attachedAssessment || null
+          patientId: appointment.patientId,
+          patientName: appointment.patientName,
+          date: appointment.date,
+          timeSlot: appointment.timeSlot,
+          consultationType: consultType,
+          isOnlineConsultation: Boolean(appointment.isOnlineConsultation),
+          commuteReliefActive: Boolean(appointment.commuteReliefActive),
+          branchLocation: appointment.branchLocation || null,
+          arrivalGuidance: appointment.arrivalGuidance || null,
+          telehealthUrl: appointment.telehealthUrl || appointment.meetingLink || null,
+          read: false,
+          createdAt: nowIso
+        };
+        const userColRef = db.collection('user_notifications');
+        if (typeof userColRef.add === 'function') {
+          await userColRef.add(docNotif);
+        } else if (typeof userColRef.doc === 'function') {
+          await userColRef.doc(docNotif.id).set(docNotif);
         }
-      };
-      const emailColRef = db.collection('email_notifications');
-      if (typeof emailColRef.add === 'function') {
-        await emailColRef.add(docEmailNotif);
-      } else if (typeof emailColRef.doc === 'function') {
-        const notifId = `notif_doc_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-        await emailColRef.doc(notifId).set(docEmailNotif);
+
+        // Email notification record for doctor
+        const docEmail = DOCTOR_SCHEDULES[appointment.doctorId]?.email || `${appointment.doctorId}@healthvibes.org`;
+        const docEmailNotif = {
+          appointmentId: appointment.id,
+          linkedCaseId: appointment.linkedCaseId,
+          type: 'previsit_dossier_attached',
+          recipient: docEmail,
+          patientName: appointment.patientName || null,
+          doctorName: appointment.doctorName || null,
+          clinicId: appointment.clinicId || null,
+          date: appointment.date,
+          timeSlot: appointment.timeSlot,
+          subject: `📑 ملف تقييم تنفسي مسبق مرفق بموعد المريض: ${appointment.patientName} (${appointment.date})`,
+          status: 'sent',
+          sentAt: nowIso,
+          details: {
+            actorUid: actorUser ? actorUser.uid : null,
+            actorRole: actorUser ? (actorUser.role || 'patient') : 'patient',
+            linkedCaseId: appointment.linkedCaseId,
+            attachedAssessment: appointment.attachedAssessment || null,
+            consultationType: consultType,
+            isOnlineConsultation: Boolean(appointment.isOnlineConsultation),
+            commuteReliefActive: Boolean(appointment.commuteReliefActive),
+            branchLocation: appointment.branchLocation || null,
+            arrivalGuidance: appointment.arrivalGuidance || null,
+            telehealthUrl: appointment.telehealthUrl || appointment.meetingLink || null
+          }
+        };
+        const emailColRef = db.collection('email_notifications');
+        if (typeof emailColRef.add === 'function') {
+          await emailColRef.add(docEmailNotif);
+        } else if (typeof emailColRef.doc === 'function') {
+          const notifId = `notif_doc_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+          await emailColRef.doc(notifId).set(docEmailNotif);
+        }
+      } catch (docNotifErr) {
+        console.warn('[DOCTOR NOTIFICATION WARNING] Failed to persist previsit_dossier notification:', docNotifErr.message);
       }
-    } catch (docNotifErr) {
-      console.warn('[DOCTOR NOTIFICATION WARNING] Failed to persist previsit_dossier notification:', docNotifErr.message);
+    } else {
+      // Standard consultation booking/reschedule notification to attending physician with venue awareness
+      try {
+        let docTitleAr = '';
+        let docTitleEn = '';
+        let docBodyAr = '';
+        let docBodyEn = '';
+
+        if (isVideo) {
+          docTitleAr = 'استشارة فيديو عن بُعد مجدولة (غرفة اتصال مرئي مشفرة)';
+          docTitleEn = 'Remote Video Consultation Scheduled';
+          docBodyAr = `قام المريض ${appointment.patientName || 'المريض'} بحجز استشارة فيديو عن بُعد ليوم ${appointment.date} الساعة ${appointment.timeSlot || ''}. يرجى التواجد بغرفة الاتصال المرئي في الموعد المحدد.`;
+          docBodyEn = `Patient ${appointment.patientName || 'Patient'} booked a remote video consultation for ${appointment.date} at ${appointment.timeSlot || ''}. Please join the secure video room at appointment time.`;
+        } else if (isFollowup) {
+          docTitleAr = 'موعد متابعة تقارير وتحاليل جديد';
+          docTitleEn = 'New Follow-up Review Scheduled';
+          docBodyAr = `قام المريض ${appointment.patientName || 'المريض'} بجدولة استشارة متابعة لنتائج الفحوصات والتحاليل التنفسية ليوم ${appointment.date} الساعة ${appointment.timeSlot || ''}.`;
+          docBodyEn = `Patient ${appointment.patientName || 'Patient'} scheduled a follow-up review for lab and spirometry tests on ${appointment.date} at ${appointment.timeSlot || ''}.`;
+        } else {
+          docTitleAr = 'موعد كشف سريري جديد بالعيادة (فرع الدقي المركزي)';
+          docTitleEn = 'New In-Clinic Consultation (Dokki Central Branch)';
+          docBodyAr = `قام المريض ${appointment.patientName || 'المريض'} بحجز كشف حضوري بفرع الدقي المركزي ليوم ${appointment.date} الساعة ${appointment.timeSlot || ''}. الحضور الموصى به للمريض قبل الموعد بـ 10 دقائق لقياس المؤشرات الحيوية.`;
+          docBodyEn = `Patient ${appointment.patientName || 'Patient'} booked an in-clinic visit at Dokki Central Branch for ${appointment.date} at ${appointment.timeSlot || ''}. Patient is advised to arrive 10 minutes early.`;
+        }
+
+        const docVenueNotif = {
+          id: `unotif_doc_venue_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+          userId: appointment.doctorId,
+          title: docTitleAr,
+          titleEn: docTitleEn,
+          body: docBodyAr,
+          bodyEn: docBodyEn,
+          category: 'appointments',
+          type: `doctor_${type.toLowerCase()}`,
+          appointmentId: appointment.id,
+          patientId: appointment.patientId,
+          patientName: appointment.patientName,
+          date: appointment.date,
+          timeSlot: appointment.timeSlot,
+          consultationType: consultType,
+          isOnlineConsultation: Boolean(appointment.isOnlineConsultation),
+          commuteReliefActive: Boolean(appointment.commuteReliefActive),
+          branchLocation: appointment.branchLocation || null,
+          arrivalGuidance: appointment.arrivalGuidance || null,
+          telehealthUrl: appointment.telehealthUrl || appointment.meetingLink || null,
+          read: false,
+          createdAt: nowIso
+        };
+
+        const userColRef = db.collection('user_notifications');
+        if (typeof userColRef.add === 'function') {
+          await userColRef.add(docVenueNotif);
+        } else if (typeof userColRef.doc === 'function') {
+          await userColRef.doc(docVenueNotif.id).set(docVenueNotif);
+        }
+
+        const docEmail = DOCTOR_SCHEDULES[appointment.doctorId]?.email || `${appointment.doctorId}@healthvibes.org`;
+        const docEmailVenueNotif = {
+          appointmentId: appointment.id,
+          type: `doctor_${type.toLowerCase()}`,
+          recipient: docEmail,
+          patientName: appointment.patientName || null,
+          doctorName: appointment.doctorName || null,
+          clinicId: appointment.clinicId || null,
+          date: appointment.date,
+          timeSlot: appointment.timeSlot,
+          subject: `📅 ${docTitleAr}: ${appointment.patientName || 'المريض'} (${appointment.date} ${appointment.timeSlot || ''})`,
+          status: 'sent',
+          sentAt: nowIso,
+          details: {
+            actorUid: actorUser ? actorUser.uid : null,
+            consultationType: consultType,
+            isOnlineConsultation: Boolean(appointment.isOnlineConsultation),
+            commuteReliefActive: Boolean(appointment.commuteReliefActive),
+            branchLocation: appointment.branchLocation || null,
+            arrivalGuidance: appointment.arrivalGuidance || null,
+            telehealthUrl: appointment.telehealthUrl || appointment.meetingLink || null
+          }
+        };
+        const emailColRef = db.collection('email_notifications');
+        if (typeof emailColRef.add === 'function') {
+          await emailColRef.add(docEmailVenueNotif);
+        } else if (typeof emailColRef.doc === 'function') {
+          const notifId = `notif_doc_venue_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+          await emailColRef.doc(notifId).set(docEmailVenueNotif);
+        }
+      } catch (docVenueErr) {
+        console.warn('[DOCTOR VENUE NOTIFICATION WARNING]:', docVenueErr.message);
+      }
     }
   }
 
   // 3. Record SMS simulation log
   const smsRecipientPhone = appointment.patientPhone || details.recipientPhone || details.phone || '+201000000000';
   try {
+    let smsMsg = `Health Vibe: تم تأكيد موعدك مع ${appointment.doctorName || 'طبيبك'} بتاريخ ${appointment.date} الساعة ${appointment.timeSlot || ''}.`;
+    if (isVideo) {
+      smsMsg = `Health Vibe: تم تأكيد استشارتك عن بُعد مع ${appointment.doctorName || 'طبيبك'} بتاريخ ${appointment.date} الساعة ${appointment.timeSlot || ''}. (خدمة تقليل مشقة الانتقال)`;
+    } else if (isClinic) {
+      smsMsg = `Health Vibe: تم تأكيد موعدك بفرع الدقي مع ${appointment.doctorName || 'طبيبك'} بتاريخ ${appointment.date} الساعة ${appointment.timeSlot || ''}. يرجى الحضور قبل الموعد بـ 10 دقائق.`;
+    } else if (isFollowup) {
+      smsMsg = `Health Vibe: تم تأكيد موعد متابعة النتائج مع ${appointment.doctorName || 'طبيبك'} بتاريخ ${appointment.date} الساعة ${appointment.timeSlot || ''}.`;
+    }
     const smsData = {
       id: `sms_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       appointmentId: appointment.id,
       patientId: appointment.patientId,
       phone: smsRecipientPhone,
-      message: `Health Vibe: تم تأكيد موعدك مع ${appointment.doctorName || 'طبيبك'} بتاريخ ${appointment.date} الساعة ${appointment.timeSlot || ''}.`,
+      message: smsMsg,
       status: 'sent',
       sentAt: nowIso
     };
@@ -823,6 +1062,50 @@ async function bookAppointmentTransaction(db, payload, authUser) {
   const { doctorId, date, slotId } = payload;
   const effectiveAuthUser = authUser || { uid: payload.patientId || 'anon_patient', role: 'patient' };
   const patientId = effectiveAuthUser.uid;
+
+  // Validate consultation type if provided
+  const rawConsultationType = payload.consultationType || payload.type;
+  if (rawConsultationType) {
+    const validatedType = normalizeConsultationType(rawConsultationType);
+    if (!validatedType) {
+      const err = new Error('نوع الموعد غير صالح. يرجى الاختيار بين: استشارة فيديو عن بُعد، زيارة العيادة، أو متابعة تقارير التحاليل. (Invalid consultation type)');
+      err.code = 'INVALID_CONSULTATION_TYPE';
+      err.statusCode = 400;
+      throw err;
+    }
+  }
+
+  const resolvedConsultationType = normalizeConsultationType(rawConsultationType) ||
+    (payload.isOnlineConsultation ? CLINIDO_CONSULTATION_TYPES.VIDEO : CLINIDO_CONSULTATION_TYPES.CLINIC);
+  const isOnline = resolvedConsultationType === CLINIDO_CONSULTATION_TYPES.VIDEO || resolvedConsultationType === CLINIDO_CONSULTATION_TYPES.FOLLOWUP;
+  const isCommuteRelief = resolvedConsultationType === CLINIDO_CONSULTATION_TYPES.VIDEO || resolvedConsultationType === CLINIDO_CONSULTATION_TYPES.FOLLOWUP;
+  const isClinic = resolvedConsultationType === CLINIDO_CONSULTATION_TYPES.CLINIC;
+
+  const typeLabelAr = resolvedConsultationType === CLINIDO_CONSULTATION_TYPES.VIDEO
+    ? 'استشارة فيديو عن بُعد (Telehealth Video)'
+    : (resolvedConsultationType === CLINIDO_CONSULTATION_TYPES.FOLLOWUP
+      ? 'متابعة تقارير وفحوصات (Follow-up Review)'
+      : 'كشف بالعيادة (In-Clinic Physical Visit)');
+  const typeLabelEn = resolvedConsultationType === CLINIDO_CONSULTATION_TYPES.VIDEO
+    ? 'Remote Video Consultation'
+    : (resolvedConsultationType === CLINIDO_CONSULTATION_TYPES.FOLLOWUP
+      ? 'Follow-up Lab & Results Review'
+      : 'In-Clinic Physical Visit');
+
+  const commuteReliefNote = isCommuteRelief
+    ? (resolvedConsultationType === CLINIDO_CONSULTATION_TYPES.FOLLOWUP
+      ? 'متابعة سريعة للنتائج والتحاليل بدون الحاجة للحضور للعيادة وتجنب زحمة الطرق'
+      : 'استشارة عن بُعد تقلل عبء وتكلفة ومخاطر التنقل في زحام شوارع مصر')
+    : null;
+  const commuteReliefNoteEn = isCommuteRelief
+    ? (resolvedConsultationType === CLINIDO_CONSULTATION_TYPES.FOLLOWUP
+      ? 'Quick results review without traveling to the clinic in traffic'
+      : 'Remote consultation reduces commute burden, cost, and exposure in Egypt traffic')
+    : null;
+
+  const branchLocation = isClinic ? { ...DOKKI_BRANCH_LOCATION } : null;
+  const arrivalGuidance = isClinic ? { ...DOKKI_ARRIVAL_GUIDANCE } : null;
+  const followupScope = resolvedConsultationType === CLINIDO_CONSULTATION_TYPES.FOLLOWUP ? 'LABS_AND_SPIROMETRY_REVIEW' : null;
 
   // Telemetry: Record booking attempt
   try {
@@ -1107,7 +1390,6 @@ async function bookAppointmentTransaction(db, payload, authUser) {
           details: { slotId, date, doctorId: doctor.doctorId }
         };
 
-        const isOnline = payload.consultationType === 'video' || payload.type === 'video';
         const appointmentDoc = {
           ...payload,
           id: appointmentId,
@@ -1117,10 +1399,17 @@ async function bookAppointmentTransaction(db, payload, authUser) {
           beneficiaryId: validatedBeneficiary.beneficiaryId || payload.beneficiaryId || 'self',
           beneficiaryName: validatedBeneficiary.beneficiaryName || payload.beneficiaryName || null,
           beneficiaryRelationship: validatedBeneficiary.relationship || 'self',
-          consultationType: payload.consultationType || (isOnline ? 'video' : 'clinic'),
-          type: payload.type || (isOnline ? 'video' : 'clinic'),
-          typeLabel: payload.typeLabel || (isOnline ? 'استشارة فيديو عن بُعد' : 'حضور العيادة'),
+          consultationType: resolvedConsultationType,
+          type: resolvedConsultationType,
+          typeLabel: payload.typeLabel || typeLabelAr,
+          typeLabelEn: payload.typeLabelEn || typeLabelEn,
           isOnlineConsultation: isOnline,
+          commuteReliefActive: isCommuteRelief,
+          commuteReliefNote: commuteReliefNote,
+          commuteReliefNoteEn: commuteReliefNoteEn,
+          branchLocation: branchLocation,
+          arrivalGuidance: arrivalGuidance,
+          followupScope: followupScope,
           doctorId: doctorId,
           doctorName: doctor.name,
           doctorNameEn: doctor.nameEn,
@@ -1200,7 +1489,9 @@ async function bookAppointmentTransaction(db, payload, authUser) {
                 date: date,
                 slotId: slotId,
                 timeSlot: payload.timeSlot || validSlot.timeAr,
-                consultationType: isOnline ? 'video' : 'clinic',
+                consultationType: resolvedConsultationType,
+                commuteReliefActive: isCommuteRelief,
+                branchLocation: branchLocation,
                 linkedAt: nowIso
               },
               hasLinkedAppointment: true
@@ -1212,7 +1503,6 @@ async function bookAppointmentTransaction(db, payload, authUser) {
       });
     } else {
       // Non-transactional database fallback
-      const isOnline = payload.consultationType === 'video' || payload.type === 'video';
       const nowIso = new Date().toISOString();
       const appointmentDoc = {
         ...payload,
@@ -1223,10 +1513,17 @@ async function bookAppointmentTransaction(db, payload, authUser) {
         beneficiaryId: validatedBeneficiary.beneficiaryId || payload.beneficiaryId || 'self',
         beneficiaryName: validatedBeneficiary.beneficiaryName || payload.beneficiaryName || null,
         beneficiaryRelationship: validatedBeneficiary.relationship || 'self',
-        consultationType: payload.consultationType || (isOnline ? 'video' : 'clinic'),
-        type: payload.type || (isOnline ? 'video' : 'clinic'),
-        typeLabel: payload.typeLabel || (isOnline ? 'استشارة فيديو عن بُعد' : 'حضور العيادة'),
+        consultationType: resolvedConsultationType,
+        type: resolvedConsultationType,
+        typeLabel: payload.typeLabel || typeLabelAr,
+        typeLabelEn: payload.typeLabelEn || typeLabelEn,
         isOnlineConsultation: isOnline,
+        commuteReliefActive: isCommuteRelief,
+        commuteReliefNote: commuteReliefNote,
+        commuteReliefNoteEn: commuteReliefNoteEn,
+        branchLocation: branchLocation,
+        arrivalGuidance: arrivalGuidance,
+        followupScope: followupScope,
         doctorId: doctorId,
         doctorName: doctor.name,
         clinicId: doctor.clinicId,
@@ -1416,6 +1713,50 @@ async function rescheduleAppointmentTransaction(db, payload, actorUser) {
   // 2. Validate Rescheduling Policy
   validateReschedulingPolicy(appointment, actorUser);
 
+  // Handle consultation type in rescheduling
+  let newConsultationType = appointment.consultationType || appointment.type || 'clinic';
+  if (payload.consultationType || payload.type) {
+    const rawType = payload.consultationType || payload.type;
+    const validatedType = normalizeConsultationType(rawType);
+    if (!validatedType) {
+      const err = new Error('نوع الموعد غير صالح. يرجى الاختيار بين: استشارة فيديو عن بُعد، زيارة العيادة، أو متابعة تقارير التحاليل. (Invalid consultation type)');
+      err.code = 'INVALID_CONSULTATION_TYPE';
+      err.statusCode = 400;
+      throw err;
+    }
+    newConsultationType = validatedType;
+  }
+
+  const isOnlineResched = newConsultationType === CLINIDO_CONSULTATION_TYPES.VIDEO || newConsultationType === CLINIDO_CONSULTATION_TYPES.FOLLOWUP;
+  const isCommuteReliefResched = newConsultationType === CLINIDO_CONSULTATION_TYPES.VIDEO || newConsultationType === CLINIDO_CONSULTATION_TYPES.FOLLOWUP;
+  const isClinicResched = newConsultationType === CLINIDO_CONSULTATION_TYPES.CLINIC;
+
+  const typeLabelArResched = newConsultationType === CLINIDO_CONSULTATION_TYPES.VIDEO
+    ? 'استشارة فيديو عن بُعد (Telehealth Video)'
+    : (newConsultationType === CLINIDO_CONSULTATION_TYPES.FOLLOWUP
+      ? 'متابعة تقارير وفحوصات (Follow-up Review)'
+      : 'كشف بالعيادة (In-Clinic Physical Visit)');
+  const typeLabelEnResched = newConsultationType === CLINIDO_CONSULTATION_TYPES.VIDEO
+    ? 'Remote Video Consultation'
+    : (newConsultationType === CLINIDO_CONSULTATION_TYPES.FOLLOWUP
+      ? 'Follow-up Lab & Results Review'
+      : 'In-Clinic Physical Visit');
+
+  const commuteReliefNoteResched = isCommuteReliefResched
+    ? (newConsultationType === CLINIDO_CONSULTATION_TYPES.FOLLOWUP
+      ? 'متابعة سريعة للنتائج والتحاليل بدون الحاجة للحضور للعيادة وتجنب زحمة الطرق'
+      : 'استشارة عن بُعد تقلل عبء وتكلفة ومخاطر التنقل في زحام شوارع مصر')
+    : null;
+  const commuteReliefNoteEnResched = isCommuteReliefResched
+    ? (newConsultationType === CLINIDO_CONSULTATION_TYPES.FOLLOWUP
+      ? 'Quick results review without traveling to the clinic in traffic'
+      : 'Remote consultation reduces commute burden, cost, and exposure in Egypt traffic')
+    : null;
+
+  const branchLocationResched = isClinicResched ? { ...DOKKI_BRANCH_LOCATION } : null;
+  const arrivalGuidanceResched = isClinicResched ? { ...DOKKI_ARRIVAL_GUIDANCE } : null;
+  const followupScopeResched = newConsultationType === CLINIDO_CONSULTATION_TYPES.FOLLOWUP ? 'LABS_AND_SPIROMETRY_REVIEW' : null;
+
   const doctorId = appointment.doctorId;
   const patientId = appointment.patientId;
 
@@ -1555,6 +1896,17 @@ async function rescheduleAppointmentTransaction(db, payload, actorUser) {
           slotKey: newDocSlotKey,
           patientSlotKey: newPatSlotKey,
           status: APPOINTMENT_STATUSES.RESCHEDULED,
+          consultationType: newConsultationType,
+          type: newConsultationType,
+          typeLabel: typeLabelArResched,
+          typeLabelEn: typeLabelEnResched,
+          isOnlineConsultation: isOnlineResched,
+          commuteReliefActive: isCommuteReliefResched,
+          commuteReliefNote: commuteReliefNoteResched,
+          commuteReliefNoteEn: commuteReliefNoteEnResched,
+          branchLocation: branchLocationResched,
+          arrivalGuidance: arrivalGuidanceResched,
+          followupScope: followupScopeResched,
           rescheduledAt: nowIso,
           rescheduledBy: actorUser.uid,
           rescheduleReason: reason || null,
@@ -1601,6 +1953,17 @@ async function rescheduleAppointmentTransaction(db, payload, actorUser) {
         slotKey: newDocSlotKey,
         patientSlotKey: newPatSlotKey,
         status: APPOINTMENT_STATUSES.RESCHEDULED,
+          consultationType: newConsultationType,
+          type: newConsultationType,
+          typeLabel: typeLabelArResched,
+          typeLabelEn: typeLabelEnResched,
+          isOnlineConsultation: isOnlineResched,
+          commuteReliefActive: isCommuteReliefResched,
+          commuteReliefNote: commuteReliefNoteResched,
+          commuteReliefNoteEn: commuteReliefNoteEnResched,
+          branchLocation: branchLocationResched,
+          arrivalGuidance: arrivalGuidanceResched,
+          followupScope: followupScopeResched,
         rescheduledAt: nowIso,
         rescheduledBy: actorUser.uid,
         rescheduleReason: reason || null,
@@ -2012,6 +2375,53 @@ async function updateAppointmentStatusTransaction(db, { appointmentId, status, n
  * Retrieve patient appointment history cleanly partitioned into 'upcoming' and 'past'.
  * Retains complete change history on each appointment record.
  */
+
+/**
+ * Retrieves a single appointment by ID with role-based authorization check.
+ */
+async function getAppointmentById(db, appointmentId, actorUser) {
+  if (!db || typeof db.collection !== 'function') {
+    const err = new Error('Database unavailable.');
+    err.code = 'STORAGE_UNAVAILABLE';
+    err.statusCode = 503;
+    throw err;
+  }
+  if (!appointmentId) {
+    const err = new Error('appointmentId is required.');
+    err.code = 'MISSING_APPOINTMENT_ID';
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const apptRef = db.collection('appointments').doc(appointmentId);
+  const snap = await apptRef.get();
+  if (!snap.exists) {
+    const err = new Error('Appointment not found.');
+    err.code = 'APPOINTMENT_NOT_FOUND';
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const data = snap.data();
+  const role = actorUser?.role || 'patient';
+  const uid = actorUser?.uid;
+  const isAuthorized = role === 'super_admin' ||
+    role === 'clinic_admin' ||
+    role === 'admin' ||
+    data.patientId === uid ||
+    data.doctorId === uid ||
+    data.createdBy === uid;
+
+  if (!isAuthorized) {
+    const err = new Error('Access denied: You are not authorized to view this appointment.');
+    err.code = 'ACCESS_DENIED';
+    err.statusCode = 403;
+    throw err;
+  }
+
+  return { id: snap.id, ...data };
+}
+
 async function getAppointmentsHistory(db, options = {}, actorUser) {
   if (!db || typeof db.collection !== 'function') {
     return { upcoming: [], past: [] };
@@ -2948,6 +3358,12 @@ module.exports = {
   verifyAppointmentActorPermission,
   validateCancellationPolicy,
   validateReschedulingPolicy,
+  CLINIDO_CONSULTATION_TYPES,
+  VALID_CONSULTATION_TYPES,
+  DOKKI_BRANCH_LOCATION,
+  DOKKI_ARRIVAL_GUIDANCE,
+  normalizeConsultationType,
+  getAppointmentById,
   bookAppointmentTransaction,
   rescheduleAppointmentTransaction,
   cancelAppointmentTransaction,
