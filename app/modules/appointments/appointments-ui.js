@@ -23,7 +23,8 @@
     selectedQuickReason: "",
     activeDoctor: null,
     isMonthPickerOpen: false,
-    activeLinkedCase: null // Doctolib Pre-Visit Medical Dossier attachment
+    activeLinkedCase: null, // Doctolib Pre-Visit Medical Dossier attachment
+    selectedConsultationType: "video" // CliniDo Consultation Type: "video" | "clinic" | "followup"
   };
 
   /**
@@ -393,6 +394,183 @@
   }
 
   /**
+   * Renders the CliniDo-Inspired Consultation Mode Selector (Video vs In-Clinic vs Follow-up)
+   * with Commute Relief for Egypt Traffic and Clinic Branch Details.
+   */
+  function renderConsultationModeSelector(containerId, activeType = "video", onTypeChange = null, isEn = false) {
+    const el = typeof containerId === "string" ? document.getElementById(containerId) : containerId;
+    if (!el) return;
+
+    state.selectedConsultationType = activeType || "video";
+
+    const modes = [
+      {
+        id: "video",
+        icon: "📹",
+        badgeAr: "الأكثر راحة ووفر زحام المواصلات",
+        badgeEn: "Recommended: Skip Traffic",
+        badgeClass: "clinido-badge-commute",
+        titleAr: "استشارة فيديو عن بُعد",
+        titleEn: "Remote Video Consultation",
+        subtitleAr: "من منزلك عبر الهاتف بدون سفر أو انتظار",
+        subtitleEn: "From home via mobile with zero commute"
+      },
+      {
+        id: "clinic",
+        icon: "🏥",
+        badgeAr: "فحص سريري كامل",
+        badgeEn: "Complete Physical Exam",
+        badgeClass: "clinido-badge-exam",
+        titleAr: "زيارة فرع العيادة",
+        titleEn: "In-Clinic Branch Visit",
+        subtitleAr: "كشف سريري مباشر وسماع أصوات الصدر",
+        subtitleEn: "Direct physical exam & chest auscultation"
+      },
+      {
+        id: "followup",
+        icon: "📋",
+        badgeAr: "مراجعة سريعة",
+        badgeEn: "Quick Review",
+        badgeClass: "clinido-badge-followup",
+        titleAr: "متابعة نتائج وتقارير",
+        titleEn: "Results & Reports Follow-up",
+        subtitleAr: "مراجعة التحاليل ووظائف الرئة",
+        subtitleEn: "Review lab tests & lung function"
+      }
+    ];
+
+    const detailsHtml = renderConsultationDetailsCard(state.selectedConsultationType, isEn);
+
+    el.innerHTML = `
+      <div class="clinido-mode-selector-wrap" role="region" aria-label="${isEn ? "Consultation Mode Selection" : "تحديد نوع ومقر الاستشارة"}">
+        <label style="display:block; margin-bottom:8px; font-weight:600; font-size:13px; color:var(--ink);">
+          ${isEn ? "Consultation Mode & Venue (Reduce Commute in Egypt):" : "نوع الاستشارة ومقر الكشف (لتخفيف عبء المواصلات والزحام):"}
+        </label>
+        <div class="appt-types-row vezeeta-modes-grid" role="radiogroup">
+          ${modes.map(m => {
+            const isSelected = m.id === state.selectedConsultationType;
+            return `
+              <button type="button" 
+                      role="radio"
+                      aria-checked="${isSelected ? "true" : "false"}"
+                      class="appt-type-btn vezeeta-mode-card clinido-mode-card ${isSelected ? "active" : ""}" 
+                      data-type="${m.id}"
+                      id="btnMode_${m.id}">
+                <span class="clinido-card-badge ${m.badgeClass}">${isEn ? m.badgeEn : m.badgeAr}</span>
+                <strong style="margin-top: 10px;">${m.icon} ${isEn ? m.titleEn : m.titleAr}</strong>
+                <span>${isEn ? m.subtitleEn : m.subtitleAr}</span>
+              </button>
+            `;
+          }).join("")}
+        </div>
+        <div id="clinidoModeDetailsMount">
+          ${detailsHtml}
+        </div>
+      </div>
+    `;
+
+    // Bind click events
+    if (typeof el.querySelectorAll === "function") {
+      el.querySelectorAll(".appt-type-btn").forEach(btn => {
+        btn.onclick = () => {
+          const newType = btn.dataset.type || "video";
+          state.selectedConsultationType = newType;
+          el.querySelectorAll(".appt-type-btn").forEach(b => {
+            const active = b.dataset.type === newType;
+            b.classList.toggle("active", active);
+            b.setAttribute("aria-checked", active ? "true" : "false");
+          });
+          const detailsMount = el.querySelector("#clinidoModeDetailsMount") || document.getElementById("clinidoModeDetailsMount");
+          if (detailsMount) {
+            detailsMount.innerHTML = renderConsultationDetailsCard(newType, isEn);
+          }
+          if (typeof onTypeChange === "function") onTypeChange(newType);
+        };
+      });
+    }
+  }
+
+  /**
+   * Generates the contextual information card explaining commute relief, branch location, or follow-up perks.
+   */
+  function renderConsultationDetailsCard(type = "video", isEn = false) {
+    if (type === "clinic") {
+      return `
+        <div class="clinido-mode-details-card" role="note">
+          <div class="clinido-details-header">
+            <span class="clinido-details-title">
+              <span>🏥</span> ${isEn ? "In-Clinic Branch Visit Details" : "تفاصيل زيارة فرع العيادة"}
+            </span>
+            <span class="pill ok" style="font-size:11px;">${isEn ? "Direct Attendance" : "حضور شخصي"}</span>
+          </div>
+          <div class="clinido-details-desc">
+            📍 <strong>${isEn ? "Venue:" : "المقر:"}</strong> ${isEn ? "Cairo Specialized Chest & Allergy Center — Dokki Branch, Giza (Near Dokki Metro Station, 3 mins walk)." : "مركز القاهرة التخصصي لأمراض الصدر والحساسية — فرع الدقي، الجيزة (بالقرب من محطة مترو الدقي، ٣ دقائق سيراً)."}<br>
+            ⏱️ ${isEn ? "Average clinic wait time is 10-15 minutes. Please arrive 10 minutes prior to scheduled slot for check-in and vitals check." : "متوسط وقت الانتظار بالعيادة ١٠-١٥ دقيقة فقط. يرجى الحضور قبل الموعد بـ ١٠ دقائق لتسجيل الوصول وقياس العلامات الحيوية."}
+          </div>
+          <div class="clinido-perks-row">
+            <span class="clinido-perk-pill location">🚇 ${isEn ? "Near Dokki Metro" : "بالقرب من محطة المترو"}</span>
+            <span class="clinido-perk-pill">🅿️ ${isEn ? "Parking Available" : "ساحة انتظار سيارات"}</span>
+            <span class="clinido-perk-pill">🫁 ${isEn ? "Spirometry & Nebulizer Ready" : "أجهزة فحص الرئة والنيبولايزر"}</span>
+            <span class="clinido-perk-pill">♿ ${isEn ? "Accessible Elevator" : "مصعد ومدخل مجهز"}</span>
+          </div>
+        </div>
+      `;
+    }
+
+    if (type === "followup") {
+      return `
+        <div class="clinido-mode-details-card" role="note">
+          <div class="clinido-details-header">
+            <span class="clinido-details-title">
+              <span>📋</span> ${isEn ? "Report & Results Follow-up Details" : "تفاصيل متابعة النتائج والتقارير"}
+            </span>
+            <span class="pill info" style="font-size:11px;">${isEn ? "Follow-up" : "متابعة نتائج"}</span>
+          </div>
+          <div class="clinido-details-desc">
+            ${isEn ? "Designed for reviewing previous lab work, spirometry findings, or medication adjustments without the need for a full re-examination." : "مخصصة لمراجعة نتائج الفحوصات والتحاليل الأخيرة، وتقييم وظائف الرئة أو تعديل جرعات البخاخات والعلاج دون الحاجة لكشف سريري كامل."}
+          </div>
+          <div class="clinido-perks-row">
+            <span class="clinido-perk-pill warn">📑 ${isEn ? "Bring / Attach Recent Reports" : "إحضار أو إرفاق أحدث تقارير الفحص"}</span>
+            <span class="clinido-perk-pill">⚡ ${isEn ? "Focused Medical Review" : "مراجعة طبية سريعة وموجهة"}</span>
+            <span class="clinido-perk-pill">💊 ${isEn ? "Treatment Plan Adjustment" : "تعديل الخطة العلاجية والجرعات"}</span>
+          </div>
+        </div>
+      `;
+    }
+
+    // Default: Video Consultation (Telehealth with Egypt Commute Relief)
+    return `
+      <div class="clinido-mode-details-card" role="note">
+        <div class="clinido-details-header">
+          <span class="clinido-details-title">
+            <span>🚗</span> ${isEn ? "Commute Relief: Remote Video Consultation" : "تخفيف عبء المواصلات: استشارة فيديو عن بُعد"}
+          </span>
+          <span class="pill ok" style="font-size:11px;">${isEn ? "Traffic-Free Care" : "بدون زحام"}</span>
+        </div>
+        <div class="clinido-details-desc">
+          ${isEn 
+            ? "Save commute time and avoid Cairo & Giza city traffic. Connect with your pulmonologist via a secure, encrypted HD video call directly from your smartphone or PC." 
+            : "وفر وقتك ومجهودك وتجنب مشقة الزحام والمواصلات في القاهرة والجيزة والمحافظات. تواصل مع استشاري الصدر مباشرة عبر مكالمة فيديو عالية الدقة ومشفرة من هاتفك أو حاسوبك."}
+        </div>
+        <div class="clinido-perks-row">
+          <span class="clinido-perk-pill">📶 ${isEn ? "Stable Internet Connection" : "اتصال إنترنت مستقر"}</span>
+          <span class="clinido-perk-pill">📱 ${isEn ? "Mobile & Desktop Ready" : "متوافق مع جميع الهواتف"}</span>
+          <span class="clinido-perk-pill">🔒 ${isEn ? "Encrypted Telehealth Room" : "غرفة فيديو مشفرة وآمنة"}</span>
+          <span class="clinido-perk-pill">📄 ${isEn ? "Instant E-Prescription" : "روشتة إلكترونية معتمدة"}</span>
+        </div>
+      </div>
+    `;
+  }
+
+  function getSelectedConsultationType() {
+    return state.selectedConsultationType || "video";
+  }
+
+  function setSelectedConsultationType(type) {
+    state.selectedConsultationType = type || "video";
+  }
+
+  /**
    * Opens Vezeeta Confirmation Bottom-Sheet on Mobile and Modal on Desktop
    */
   function openConfirmBookingModal(summary = {}, onConfirm = null) {
@@ -450,6 +628,15 @@
                 <span class="pill info" style="font-size:11px;">${escapeHtml(consultationType)}</span>
               </span>
             </div>
+            ${summary.type === "video" || consultationType.includes("فيديو") || consultationType.toLowerCase().includes("video") ? `
+              <div class="clinido-recap-commute-notice" style="margin-top: 6px; font-size: 11.5px; color: var(--teal, #0d9488); background: rgba(13,148,136,0.08); padding: 6px 10px; border-radius: 8px;">
+                🚗 ${isEn ? "Remote consultation: Avoid commute traffic, secure video link sent to your phone." : "استشارة عن بُعد: توفر مشقة المواصلات، ورابط غرفة الفيديو المشفرة سيصلك لهاتفك."}
+              </div>
+            ` : (summary.type === "clinic" || consultationType.includes("عيادة") || consultationType.toLowerCase().includes("clinic") ? `
+              <div class="clinido-recap-commute-notice" style="margin-top: 6px; font-size: 11.5px; color: #3b82f6; background: rgba(59,130,246,0.08); padding: 6px 10px; border-radius: 8px;">
+                🏥 ${isEn ? "Dokki Branch (Near Metro) — Please arrive 10 mins prior." : "فرع الدقي (بالقرب من المترو) — يرجى الحضور قبل الموعد بـ 10 دقائق."}
+              </div>
+            ` : "")}
             <div class="vezeeta-recap-row">
               <span class="vezeeta-recap-label">${isEn ? "Beneficiary Patient:" : "المريض المستفيد:"}</span>
               <span class="vezeeta-recap-value" id="confirmBookingPatient">${escapeHtml(patientName)}</span>
@@ -723,7 +910,11 @@
     setLinkedCase,
     getLinkedCase,
     clearLinkedCase,
-    renderAttachedAssessmentDossier
+    renderAttachedAssessmentDossier,
+    renderConsultationModeSelector,
+    renderConsultationDetailsCard,
+    getSelectedConsultationType,
+    setSelectedConsultationType
   };
 
   global.HealthVibes = global.HealthVibes || {};

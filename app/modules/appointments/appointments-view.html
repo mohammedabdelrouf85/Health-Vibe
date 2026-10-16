@@ -33,25 +33,31 @@
               </select>
             </div>
 
-            <!-- Consultation Type Selector (Vezeeta 3-Card Grid) -->
-            <div class="form-group" style="margin-bottom: 16px;">
-              <label style="display:block; margin-bottom:8px; font-weight:600; font-size:13px;">
-                <span class="lang-ar">نوع الاستشارة ومقر الكشف:</span>
-                <span class="lang-en">Consultation Mode &amp; Venue:</span>
-              </label>
-              <div class="appt-types-row vezeeta-modes-grid">
-                <button type="button" class="appt-type-btn vezeeta-mode-card active" data-type="video">
-                  <strong>📹 فيديو عن بُعد</strong>
-                  <span>كشف فوري عالي الدقة HD</span>
-                </button>
-                <button type="button" class="appt-type-btn vezeeta-mode-card" data-type="clinic">
-                  <strong>🏥 حضور العيادة</strong>
-                  <span>فحص سريري متكامل</span>
-                </button>
-                <button type="button" class="appt-type-btn vezeeta-mode-card" data-type="followup">
-                  <strong>📋 متابعة نتائج</strong>
-                  <span>مراجعة وظائف الرئة</span>
-                </button>
+            <!-- Consultation Type Selector (CliniDo / Vezeeta Model) -->
+            <div id="clinidoConsultationModeMount">
+              <div class="form-group clinido-mode-selector-wrap" style="margin-bottom: 16px;">
+                <label style="display:block; margin-bottom:8px; font-weight:600; font-size:13px;">
+                  <span class="lang-ar">نوع الاستشارة ومقر الكشف (تخفيف عبء المواصلات):</span>
+                  <span class="lang-en">Consultation Mode &amp; Venue (Reduce Commute):</span>
+                </label>
+                <div class="appt-types-row vezeeta-modes-grid" role="radiogroup">
+                  <button type="button" class="appt-type-btn vezeeta-mode-card clinido-mode-card active" data-type="video" id="btnMode_video" role="radio" aria-checked="true">
+                    <span class="clinido-card-badge clinido-badge-commute">وفر زحام المواصلات</span>
+                    <strong style="margin-top: 10px;">📹 فيديو عن بُعد</strong>
+                    <span>كشف فوري عالي الدقة HD</span>
+                  </button>
+                  <button type="button" class="appt-type-btn vezeeta-mode-card clinido-mode-card" data-type="clinic" id="btnMode_clinic" role="radio" aria-checked="false">
+                    <span class="clinido-card-badge clinido-badge-exam">فحص سريري كامل</span>
+                    <strong style="margin-top: 10px;">🏥 حضور العيادة</strong>
+                    <span>فحص سريري مباشر بالفرع</span>
+                  </button>
+                  <button type="button" class="appt-type-btn vezeeta-mode-card clinido-mode-card" data-type="followup" id="btnMode_followup" role="radio" aria-checked="false">
+                    <span class="clinido-card-badge clinido-badge-followup">مراجعة سريعة</span>
+                    <strong style="margin-top: 10px;">📋 متابعة نتائج</strong>
+                    <span>مراجعة وظائف الرئة والتحاليل</span>
+                  </button>
+                </div>
+                <div id="clinidoModeDetailsMount"></div>
               </div>
             </div>
 

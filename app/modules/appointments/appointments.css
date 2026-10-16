@@ -259,6 +259,121 @@
   color: var(--muted, #94a3b8);
 }
 
+/* CliniDo Enhanced Consultation Type & Commute Relief System */
+.clinido-mode-selector-wrap {
+  margin-bottom: 18px;
+}
+
+.clinido-mode-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.clinido-card-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+  line-height: 1.2;
+}
+
+[dir="ltr"] .clinido-card-badge {
+  right: auto;
+  left: 6px;
+}
+
+.clinido-badge-commute {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(13, 148, 136, 0.25));
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+.clinido-badge-exam {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(37, 99, 235, 0.25));
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.35);
+}
+
+.clinido-badge-followup {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(217, 119, 6, 0.25));
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.clinido-mode-details-card {
+  background: var(--surface-2, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.1));
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-top: 10px;
+  margin-bottom: 16px;
+  animation: clinidoFadeIn 0.25s ease-out;
+  transition: all 0.2s ease;
+}
+
+@keyframes clinidoFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.clinido-details-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  gap: 8px;
+}
+
+.clinido-details-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--ink, #f8fafc);
+}
+
+.clinido-details-desc {
+  font-size: 12.5px;
+  color: var(--muted, #94a3b8);
+  line-height: 1.5;
+  margin-bottom: 10px;
+}
+
+.clinido-perks-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.clinido-perk-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: rgba(13, 148, 136, 0.08);
+  border: 1px solid rgba(13, 148, 136, 0.2);
+  color: var(--teal, #0d9488);
+  font-weight: 600;
+}
+
+.clinido-perk-pill.location {
+  background: rgba(59, 130, 246, 0.08);
+  border-color: rgba(59, 130, 246, 0.2);
+  color: #3b82f6;
+}
+
+.clinido-perk-pill.warn {
+  background: rgba(245, 158, 11, 0.08);
+  border-color: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+}
+
 /* ==========================================================================
    4. INTERACTIVE CALENDAR STRIP & MONTH PICKER
    ========================================================================== */

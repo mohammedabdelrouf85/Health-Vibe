@@ -12270,6 +12270,11 @@ function updateAppointmentSummary() {
   if (dateBadgeEl && apptSelectedDate) {
     dateBadgeEl.textContent = isEn ? apptSelectedDate.fullLabelEn : apptSelectedDate.fullLabelAr;
   }
+
+  const modeDetailsMount = document.getElementById("clinidoModeDetailsMount");
+  if (modeDetailsMount && window.HealthVibes?.AppointmentsUI?.renderConsultationDetailsCard) {
+    modeDetailsMount.innerHTML = window.HealthVibes.AppointmentsUI.renderConsultationDetailsCard(apptSelectedType || "video", isEn);
+  }
 }
 
 async function getConfirmedAppointmentsForDoctorAndDate(doctorId, dateStr) {
@@ -12407,6 +12412,20 @@ async function renderAppointmentsScreen() {
   // 3. Render Beneficiary Selector (Family Profiles Integration)
   if (window.HealthVibes?.AppointmentsUI?.renderBeneficiarySelector) {
     window.HealthVibes.AppointmentsUI.renderBeneficiarySelector("vezeetaBeneficiaryMount", isEn);
+  }
+
+  // 3b. Render CliniDo Consultation Mode Selector (Video vs Clinic vs Follow-up) with Commute Relief
+  const clinidoMount = document.getElementById("clinidoConsultationModeMount");
+  if (clinidoMount && window.HealthVibes?.AppointmentsUI?.renderConsultationModeSelector) {
+    window.HealthVibes.AppointmentsUI.renderConsultationModeSelector(
+      "clinidoConsultationModeMount",
+      apptSelectedType || "video",
+      (newType) => {
+        apptSelectedType = newType;
+        updateAppointmentSummary();
+      },
+      isEn
+    );
   }
 
   // 4. Render Date Selector with Week Navigation (Vezeeta Interactive Calendar Strip)
