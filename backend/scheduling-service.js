@@ -17,7 +17,9 @@ const auditService = require('./audit-service');
 const analyticsService = require('./analytics-service');
 const {
   scheduleAppointmentReminder,
-  cancelAppointmentReminders
+  cancelAppointmentReminders,
+  sendRescheduleNotification,
+  sendCancelNotification
 } = require('./notification-service');
 const waitingListService = require('./waiting-list-service');
 const googleCalendarService = require('./google-calendar-service');
@@ -1001,6 +1003,66 @@ async function emitAppointmentNotificationEvent(db, { type, appointment, actorUs
       } catch (docVenueErr) {
         console.warn('[DOCTOR VENUE NOTIFICATION WARNING]:', docVenueErr.message);
       }
+    }
+  } else if (appointment.doctorId && type === 'APPOINTMENT_CANCELLED') {
+    // Immediate notification to Doctor when appointment is cancelled
+    try {
+      const cancelTitleAr = 'إلغاء موعد استشارة طبية';
+      const cancelTitleEn = 'Appointment Cancelled';
+      const cancelBodyAr = `تم إلغاء موعد المريض ${appointment.patientName || 'المريض'} المقرر ليوم ${appointment.date} الساعة ${appointment.timeSlot || ''}. السبب: ${details.reason || 'طلب المريض'}.`;
+      const cancelBodyEn = `Appointment for patient ${appointment.patientName || 'Patient'} on ${appointment.date} at ${appointment.timeSlot || ''} has been cancelled. Reason: ${details.reason || 'Patient request'}.`;
+
+      const docCancelNotif = {
+        id: `unotif_doc_cancel_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+        userId: appointment.doctorId,
+        title: cancelTitleAr,
+        titleEn: cancelTitleEn,
+        body: cancelBodyAr,
+        bodyEn: cancelBodyEn,
+        category: 'appointments',
+        type: 'doctor_appointment_cancelled',
+        appointmentId: appointment.id,
+        patientId: appointment.patientId,
+        patientName: appointment.patientName,
+        date: appointment.date,
+        timeSlot: appointment.timeSlot,
+        read: false,
+        createdAt: nowIso
+      };
+      const userColRef = db.collection('user_notifications');
+      if (typeof userColRef.add === 'function') {
+        await userColRef.add(docCancelNotif);
+      } else if (typeof userColRef.doc === 'function') {
+        await userColRef.doc(docCancelNotif.id).set(docCancelNotif);
+      }
+
+      const docEmail = DOCTOR_SCHEDULES[appointment.doctorId]?.email || `${appointment.doctorId}@healthvibes.org`;
+      const docEmailCancelNotif = {
+        appointmentId: appointment.id,
+        type: 'doctor_appointment_cancelled',
+        recipient: docEmail,
+        patientName: appointment.patientName || null,
+        doctorName: appointment.doctorName || null,
+        clinicId: appointment.clinicId || null,
+        date: appointment.date,
+        timeSlot: appointment.timeSlot,
+        subject: `❌ ${cancelTitleAr}: ${appointment.patientName || 'المريض'} (${appointment.date})`,
+        status: 'sent',
+        sentAt: nowIso,
+        details: {
+          actorUid: actorUser ? actorUser.uid : null,
+          reason: details.reason || null
+        }
+      };
+      const emailColRef = db.collection('email_notifications');
+      if (typeof emailColRef.add === 'function') {
+        await emailColRef.add(docEmailCancelNotif);
+      } else if (typeof emailColRef.doc === 'function') {
+        const notifId = `notif_doc_cancel_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+        await emailColRef.doc(notifId).set(docEmailCancelNotif);
+      }
+    } catch (docCancelErr) {
+      console.warn('[DOCTOR CANCEL NOTIFICATION WARNING]:', docCancelErr.message);
     }
   }
 
@@ -2130,7 +2192,23 @@ async function rescheduleAppointmentTransaction(db, payload, actorUser) {
       });
     } catch (resyncErr) {}
 
-    return { success: true, ...updatedAppointment, appointment: updatedAppointment };
+    // Dispatch reciprocal immediate multi-channel notification (SMS + Email)
+    let notificationResult = null;
+    try {
+      notificationResult = await sendRescheduleNotification(updatedAppointment, {
+        reason,
+        initiatorRole: actorUser?.role || 'patient'
+      });
+    } catch (notifErr) {
+      console.warn('[RESCHEDULE NOTIFICATION WARNING]:', notifErr.message);
+    }
+
+    return {
+      success: true,
+      ...updatedAppointment,
+      appointment: updatedAppointment,
+      notificationResult
+    };
   } finally {
     releaseLock();
   }
@@ -2309,8 +2387,24 @@ async function cancelAppointmentTransaction(db, targetAppt, actorUser, options =
     });
   } catch (cancErr) {}
 
+  // Dispatch reciprocal immediate multi-channel notification (SMS + Email)
+  let notificationResult = null;
+  try {
+    notificationResult = await sendCancelNotification(appt, {
+      reason: opts.reason,
+      initiatorRole: actorUser?.role || 'patient'
+    });
+  } catch (notifErr) {
+    console.warn('[CANCEL NOTIFICATION WARNING]:', notifErr.message);
+  }
+
   const finalCancelledAppt = { ...appt, ...updatePayload };
-  return { success: true, ...finalCancelledAppt, appointment: finalCancelledAppt };
+  return {
+    success: true,
+    ...finalCancelledAppt,
+    appointment: finalCancelledAppt,
+    notificationResult
+  };
 }
 
 // ============================================================================
@@ -3475,6 +3569,68 @@ async function linkAppointmentCaseDossier(db, payload = {}, actorUser) {
   };
 }
 
+/**
+ * Builds standard RFC 5545 iCalendar content for appointment calendar sync.
+ */
+function buildIcsContent(appt = {}) {
+  const rawDate = appt.date || appt.dateStr || new Date().toISOString().split('T')[0];
+  const docName = appt.doctorName || 'Treating Physician';
+  const clinicName = appt.branch || appt.clinicName || (appt.type === 'video' || appt.consultationType === 'video' ? 'Health Vibe Telehealth Room' : 'Specialized Chest Clinic');
+  const notes = appt.notes || 'Medical Appointment';
+  const apptType = appt.typeLabel || appt.type || (appt.isOnlineConsultation ? 'Video Consultation' : 'In-Clinic Visit');
+
+  let hour = 10;
+  let min = 0;
+  const t = String(appt.timeSlot || appt.slotId || '');
+  const match = t.match(/(\d{1,2}):(\d{2})/);
+  if (match) {
+    hour = parseInt(match[1], 10);
+    min = parseInt(match[2], 10);
+    if ((t.includes('مساء') || t.toLowerCase().includes('pm')) && hour < 12) hour += 12;
+    if ((t.includes('صباح') || t.toLowerCase().includes('am')) && hour === 12) hour = 0;
+  } else if (t.startsWith('slot_')) {
+    const numPart = t.replace('slot_', '');
+    if (numPart.length === 4) {
+      hour = parseInt(numPart.substring(0, 2), 10);
+      min = parseInt(numPart.substring(2, 4), 10);
+    }
+  }
+
+  const pad = n => String(n).padStart(2, '0');
+  const dateClean = String(rawDate).replace(/-/g, '');
+  const startIso = `${dateClean}T${pad(hour)}${pad(min)}00Z`;
+  const endHour = min >= 30 ? hour + 1 : hour;
+  const endMin = min >= 30 ? min - 30 : min + 30;
+  const endIso = `${dateClean}T${pad(endHour)}${pad(endMin)}00Z`;
+  const nowIso = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+  const uid = `${appt.id || Date.now()}@healthvibe.com`;
+  const safeLocation = String(clinicName).replace(/,/g, '\\,');
+
+  return [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Health-Vibe Clinic//Okadoc Scheduler//EN',
+    'CALSCALE:GREGORIAN',
+    'METHOD:REQUEST',
+    'BEGIN:VEVENT',
+    `UID:${uid}`,
+    `DTSTAMP:${nowIso}`,
+    `DTSTART:${startIso}`,
+    `DTEND:${endIso}`,
+    `SUMMARY:Medical Appointment with ${docName}`,
+    `DESCRIPTION:Appointment with ${docName}\\nType: ${apptType}\\nLocation: ${safeLocation}\\nNotes: ${notes}`,
+    `LOCATION:${safeLocation}`,
+    'STATUS:CONFIRMED',
+    'BEGIN:VALARM',
+    'TRIGGER:-PT2H',
+    'ACTION:DISPLAY',
+    'DESCRIPTION:Reminder: Medical Appointment with Doctor in 2 hours',
+    'END:VALARM',
+    'END:VEVENT',
+    'END:VCALENDAR'
+  ].join('\r\n');
+}
+
 module.exports = {
   CLINICS,
   DOCTOR_SCHEDULES,
@@ -3528,5 +3684,8 @@ module.exports = {
   enforcePhysicianRoleBoundaries: appointmentSafetyService.enforcePhysicianRoleBoundaries,
   validateFamilyBeneficiaryAccess: appointmentSafetyService.validateFamilyBeneficiaryAccess,
   sanitizeCalendarSlotForPrivacy: appointmentSafetyService.sanitizeCalendarSlotForPrivacy,
-  STATUTORY_MEDICAL_DISCLAIMER: appointmentSafetyService.STATUTORY_MEDICAL_DISCLAIMER
+  STATUTORY_MEDICAL_DISCLAIMER: appointmentSafetyService.STATUTORY_MEDICAL_DISCLAIMER,
+  buildIcsContent,
+  sendRescheduleNotification,
+  sendCancelNotification
 };

@@ -2078,8 +2078,9 @@ async function emitAppointmentNotificationEvent(db, { type, appointment, actorUs
  * 7. Okadoc Multi-Channel Notification Formatters & Dispatchers
  */
 function formatRescheduleMessage(appointment = {}, options = {}) {
-  const { channel = 'sms', recipientType = 'patient', lang = 'ar', reason = '' } = options;
+  const { channel = 'sms', recipientType = 'patient', lang = 'ar', reason = '', initiatorRole = 'patient' } = options;
   const isEn = lang === 'en';
+  const isClinicInitiated = initiatorRole === 'doctor' || initiatorRole === 'clinic_admin' || initiatorRole === 'clinic' || initiatorRole === 'super_admin';
   const docName = appointment.doctorName || (isEn ? 'Treating Doctor' : 'طبيبك المعالج');
   const patientName = appointment.patientName || (isEn ? 'Patient' : 'المريض');
   const date = appointment.date || '';
@@ -2094,25 +2095,42 @@ function formatRescheduleMessage(appointment = {}, options = {}) {
         ? `Health-Vibe Notice: Appointment for patient ${patientName} on ${date} (${slotId}) has been rescheduled. Reason: ${reason || 'Patient request'}.`
         : `إشعار تعديل موعد: تم إعادة جدولة موعد المريض ${patientName} إلى ${date} في تمام (${slotId}). السبب: ${reason || 'طلب المريض'}. Health-Vibe`;
     }
+    // Patient recipient
+    if (isClinicInitiated) {
+      return isEn
+        ? `Health-Vibe: Clinic Notice: Your appointment with Dr. ${docName} has been rescheduled to ${date} (${slotId}) due to: ${reason || 'clinic update'}. 1-click portal to manage.`
+        : `Health-Vibe: إشعار من العيادة: تم تعديل موعدك الطبي مع د. ${docName} إلى ${date} في تمام الساعة (${slotId}). السبب: ${reason || 'تحديث جدول العيادة'}. نوع الاستشارة: ${modalityAr}.`;
+    }
     return isEn
       ? `Health-Vibe: Your appointment has been successfully rescheduled with Dr. ${docName}. New date: ${date} (${slotId}). Modality: ${modalityEn}. 1-click portal to manage.`
       : `Health-Vibe: تم تعديل موعدك بنجاح مع د. ${docName}. الموعد الجديد: ${date} في تمام الساعة (${slotId}). نوع الاستشارة: ${modalityAr}.`;
   }
 
   // Email
-  const subject = isEn
+  let subject = isEn
     ? `Appointment Rescheduled: Dr. ${docName} on ${date} - Health-Vibe`
     : `تأكيد تعديل موعدك الطبي مع د. ${docName} - Health-Vibe`;
+  if (isClinicInitiated && recipientType === 'patient') {
+    subject = isEn
+      ? `Clinic Notice: Appointment Rescheduled - Dr. ${docName} on ${date} - Health-Vibe`
+      : `إشعار من العيادة: تعديل موعدك الطبي مع د. ${docName} ليوم ${date} - Health-Vibe`;
+  }
+
   const body = isEn
-    ? `Dear ${patientName},\nYour appointment has been successfully rescheduled with Dr. ${docName} for ${date} at ${slotId}.\nModality: ${modalityEn}.\n${reason ? 'Reason: ' + reason + '\n' : ''}\nThank you,\nHealth-Vibe Clinic`
-    : `عزيزي المريض ${patientName}،\nتم تحديث موعد استشارتك مع د. ${docName} بنجاح إلى يوم ${date} في تمام (${slotId}).\nنوع الاستشارة: ${modalityAr}.\n${reason ? 'السبب: ' + reason + '\n' : ''}\nمع تمنياتنا لك بالشفاء العاجل،\nمنصة Health-Vibe`;
+    ? (isClinicInitiated && recipientType === 'patient'
+      ? `Dear ${patientName},\nPlease note that your appointment with Dr. ${docName} has been rescheduled by the clinic to ${date} at ${slotId}.\n${reason ? 'Reason: ' + reason + '\n' : ''}Modality: ${modalityEn}.\nIf this time is not convenient, you can easily reschedule in 1-click via your portal.\nThank you,\nHealth-Vibe Clinic`
+      : `Dear ${patientName},\nYour appointment has been successfully rescheduled with Dr. ${docName} for ${date} at ${slotId}.\nModality: ${modalityEn}.\n${reason ? 'Reason: ' + reason + '\n' : ''}\nThank you,\nHealth-Vibe Clinic`)
+    : (isClinicInitiated && recipientType === 'patient'
+      ? `عزيزي المريض ${patientName}،\nنود إحاطتكم بأنه تم تعديل موعد استشارتكم الطبية مع د. ${docName} من قِبل العيادة ليصبح يوم ${date} في تمام (${slotId}).\n${reason ? 'السبب: ' + reason + '\n' : ''}نوع الاستشارة: ${modalityAr}.\nفي حال عدم ملاءمة هذا الموعد، يمكنكم اختيار موعد بديل بضغطة زر عبر المنصة.\nمع تحيات إدارة العيادة،\nمنصة Health-Vibe`
+      : `عزيزي المريض ${patientName}،\nتم تحديث موعد استشارتك مع د. ${docName} بنجاح إلى يوم ${date} في تمام (${slotId}).\nنوع الاستشارة: ${modalityAr}.\n${reason ? 'السبب: ' + reason + '\n' : ''}\nمع تمنياتنا لك بالشفاء العاجل،\nمنصة Health-Vibe`);
 
   return { subject, body, text: body, html: `<p>${body.replace(/\n/g, '<br>')}</p>` };
 }
 
 function formatCancelMessage(appointment = {}, options = {}) {
-  const { channel = 'sms', recipientType = 'patient', lang = 'ar', reason = '' } = options;
+  const { channel = 'sms', recipientType = 'patient', lang = 'ar', reason = '', initiatorRole = 'patient' } = options;
   const isEn = lang === 'en';
+  const isClinicInitiated = initiatorRole === 'doctor' || initiatorRole === 'clinic_admin' || initiatorRole === 'clinic' || initiatorRole === 'super_admin';
   const docName = appointment.doctorName || (isEn ? 'Treating Doctor' : 'طبيبك المعالج');
   const patientName = appointment.patientName || (isEn ? 'Patient' : 'المريض');
   const date = appointment.date || '';
@@ -2123,27 +2141,43 @@ function formatCancelMessage(appointment = {}, options = {}) {
         ? `Appointment Cancelled: The appointment for patient ${patientName} on ${date} has been cancelled. Reason: ${reason || 'Patient request'}. Health-Vibe`
         : `إشعار إلغاء موعد: تم إلغاء موعد المريض ${patientName} بتاريخ ${date}. السبب: ${reason || 'طلب المريض'}. Health-Vibe`;
     }
+    // Patient recipient
+    if (isClinicInitiated) {
+      return isEn
+        ? `Health-Vibe: Clinic Notice: We apologize, your appointment with Dr. ${docName} on ${date} was cancelled by the clinic (${reason || 'unforeseen emergency'}). Please visit the portal to choose another slot.`
+        : `Health-Vibe: نعتذر منكم، تم إلغاء موعدكم الطبي مع د. ${docName} بتاريخ ${date} من قِبل العيادة (${reason || 'ظروف طارئة'}). يرجى الدخول لحجز موعد بديل.`;
+    }
     return isEn
       ? `Health-Vibe: Your appointment with Dr. ${docName} on ${date} has been cancelled. Need care? You can book or reschedule anytime on the portal.`
       : `Health-Vibe: تم إلغاء موعدك الطبي بنجاح مع د. ${docName}. نأمل لك دوام الصحة والعافية ويمكنك إعادة الحجز في أي وقت.`;
   }
 
   // Email
-  const subject = isEn
+  let subject = isEn
     ? `Appointment Cancellation Confirmed: Dr. ${docName} - Health-Vibe`
     : `تأكيد إلغاء موعدك الطبي مع د. ${docName} - Health-Vibe`;
+  if (isClinicInitiated && recipientType === 'patient') {
+    subject = isEn
+      ? `Clinic Notice: Appointment Cancelled by Clinic - Dr. ${docName} - Health-Vibe`
+      : `إشعار من العيادة: إلغاء موعدك الطبي مع د. ${docName} - Health-Vibe`;
+  }
+
   const body = isEn
-    ? `Dear ${patientName},\nYour appointment scheduled with Dr. ${docName} on ${date} has been successfully cancelled.\n${reason ? 'Reason: ' + reason + '\n' : ''}\nYou can book a new slot anytime through Health-Vibe.`
-    : `عزيزي المريض ${patientName}،\nتم تأكيد إلغاء موعدك الطبي مع د. ${docName} بتاريخ ${date}.\n${reason ? 'السبب: ' + reason + '\n' : ''}\nيمكنك حجز موعد جديد في أي وقت عبر منصة Health-Vibe.`;
+    ? (isClinicInitiated && recipientType === 'patient'
+      ? `Dear ${patientName},\nWe regret to inform you that your appointment with Dr. ${docName} on ${date} has been cancelled by the clinic.\n${reason ? 'Reason: ' + reason + '\n' : ''}\nYou can immediately choose a replacement slot on the portal.\nWe apologize for any inconvenience.\nHealth-Vibe Clinic`
+      : `Dear ${patientName},\nYour appointment scheduled with Dr. ${docName} on ${date} has been successfully cancelled.\n${reason ? 'Reason: ' + reason + '\n' : ''}\nYou can book a new slot anytime through Health-Vibe.`)
+    : (isClinicInitiated && recipientType === 'patient'
+      ? `عزيزي المريض ${patientName}،\nنأسف لإبلاغكم بأنه تم إلغاء موعدكم الطبي مع د. ${docName} بتاريخ ${date} من قِبل العيادة.\n${reason ? 'السبب: ' + reason + '\n' : ''}\nيمكنكم حجز موعد بديل فوراً عبر المنصة مع احتفاظكم بالأولوية.\nمع اعتذارنا عن أي إزعاج،\nمنصة Health-Vibe`
+      : `عزيزي المريض ${patientName}،\nتم تأكيد إلغاء موعدك الطبي مع د. ${docName} بتاريخ ${date}.\n${reason ? 'السبب: ' + reason + '\n' : ''}\nيمكنك حجز موعد جديد في أي وقت عبر منصة Health-Vibe.`);
 
   return { subject, body, text: body, html: `<p>${body.replace(/\n/g, '<br>')}</p>` };
 }
 
 async function sendRescheduleNotification(appointment = {}, options = {}) {
-  const patientSms = formatRescheduleMessage(appointment, { channel: 'sms', recipientType: 'patient', lang: options.lang || 'ar', reason: options.reason });
-  const patientEmail = formatRescheduleMessage(appointment, { channel: 'email', recipientType: 'patient', lang: options.lang || 'ar', reason: options.reason });
-  const docSms = formatRescheduleMessage(appointment, { channel: 'sms', recipientType: 'doctor', lang: options.lang || 'ar', reason: options.reason });
-  const docEmail = formatRescheduleMessage(appointment, { channel: 'email', recipientType: 'doctor', lang: options.lang || 'ar', reason: options.reason });
+  const patientSms = formatRescheduleMessage(appointment, { channel: 'sms', recipientType: 'patient', lang: options.lang || 'ar', reason: options.reason, initiatorRole: options.initiatorRole });
+  const patientEmail = formatRescheduleMessage(appointment, { channel: 'email', recipientType: 'patient', lang: options.lang || 'ar', reason: options.reason, initiatorRole: options.initiatorRole });
+  const docSms = formatRescheduleMessage(appointment, { channel: 'sms', recipientType: 'doctor', lang: options.lang || 'ar', reason: options.reason, initiatorRole: options.initiatorRole });
+  const docEmail = formatRescheduleMessage(appointment, { channel: 'email', recipientType: 'doctor', lang: options.lang || 'ar', reason: options.reason, initiatorRole: options.initiatorRole });
 
   return {
     success: true,
@@ -2159,9 +2193,10 @@ async function sendRescheduleNotification(appointment = {}, options = {}) {
 }
 
 async function sendCancelNotification(appointment = {}, options = {}) {
-  const patientSms = formatCancelMessage(appointment, { channel: 'sms', recipientType: 'patient', lang: options.lang || 'ar', reason: options.reason });
-  const patientEmail = formatCancelMessage(appointment, { channel: 'email', recipientType: 'patient', lang: options.lang || 'ar', reason: options.reason });
-  const docSms = formatCancelMessage(appointment, { channel: 'sms', recipientType: 'doctor', lang: options.lang || 'en', reason: options.reason });
+  const patientSms = formatCancelMessage(appointment, { channel: 'sms', recipientType: 'patient', lang: options.lang || 'ar', reason: options.reason, initiatorRole: options.initiatorRole });
+  const patientEmail = formatCancelMessage(appointment, { channel: 'email', recipientType: 'patient', lang: options.lang || 'ar', reason: options.reason, initiatorRole: options.initiatorRole });
+  const docSms = formatCancelMessage(appointment, { channel: 'sms', recipientType: 'doctor', lang: options.lang || 'en', reason: options.reason, initiatorRole: options.initiatorRole });
+  const docEmail = formatCancelMessage(appointment, { channel: 'email', recipientType: 'doctor', lang: options.lang || 'en', reason: options.reason, initiatorRole: options.initiatorRole });
 
   return {
     success: true,
@@ -2170,7 +2205,8 @@ async function sendCancelNotification(appointment = {}, options = {}) {
       email: { delivered: true, subject: patientEmail.subject }
     },
     doctor: {
-      sms: { delivered: true, text: docSms }
+      sms: { delivered: true, text: docSms },
+      email: { delivered: true, subject: docEmail.subject }
     }
   };
 }

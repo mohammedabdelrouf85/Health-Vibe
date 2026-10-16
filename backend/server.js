@@ -516,7 +516,9 @@ app.use([
   '/api/appointments/book',
   '/api/appointments/link-case-dossier',
   '/api/appointments/reschedule',
+  '/api/appointments/:appointmentId/reschedule',
   '/api/appointments/cancel',
+  '/api/appointments/:appointmentId/cancel',
   '/api/appointments/update-status',
   '/api/user/privacy-consent',
   '/api/user/privacy-consent/withdraw',
@@ -8502,11 +8504,13 @@ app.post('/api/appointments/book', requireAuth, requireVerifiedEmail, async (req
 
 /**
  * POST /api/appointments/cancel
+ * POST /api/appointments/:appointmentId/cancel
  * Cancels only after the server has persisted the status transition,
- * releasing doctor and patient slot locks atomically.
+ * releasing doctor and patient slot locks atomically. Dispatches reciprocal alerts.
  */
-app.post('/api/appointments/cancel', requireAuth, requireVerifiedEmail, async (req, res) => {
-  const { appointmentId, reason } = req.body || {};
+app.post(['/api/appointments/cancel', '/api/appointments/:appointmentId/cancel', '/api/v1/appointments/:appointmentId/cancel'], requireAuth, requireVerifiedEmail, async (req, res) => {
+  const appointmentId = req.params.appointmentId || req.body?.appointmentId || req.params.id;
+  const reason = req.body?.reason || req.body?.cancelReason || req.body?.cancellationReason;
   if (!appointmentId) {
     return res.status(400).json({ error: 'MISSING_APPOINTMENT_ID', message: 'appointmentId is required.' });
   }
@@ -8522,7 +8526,7 @@ app.post('/api/appointments/cancel', requireAuth, requireVerifiedEmail, async (r
     }
     const appointment = snap.data() || {};
     const userRole = getTrustedClaimRole(req.user);
-    const canCancel = appointment.patientId === req.user.uid || appointment.doctorId === req.user.uid || hasTrustedAdminClaim(req.user);
+    const canCancel = appointment.patientId === req.user.uid || appointment.doctorId === req.user.uid || appointment.doctorUid === req.user.uid || hasTrustedAdminClaim(req.user);
     if (!canCancel || (userRole === ROLES.CLINIC_ADMIN && !(await isSameClinicResource(await resolveRequesterClinic(req), appointment)))) {
       return res.status(403).json({ error: 'ACCESS_DENIED', message: 'You cannot cancel this appointment.' });
     }
@@ -8531,7 +8535,7 @@ app.post('/api/appointments/cancel', requireAuth, requireVerifiedEmail, async (r
       isAdmin: hasTrustedAdminClaim(req.user),
       reason
     });
-    return res.json({ success: true, appointmentId, status: 'cancelled' });
+    return res.json({ success: true, appointmentId, status: 'cancelled', ...cancelResult });
   } catch (err) {
     console.error('[APPOINTMENT CANCEL ERROR]:', err);
     const statusCode = err.statusCode || 500;
@@ -8541,11 +8545,13 @@ app.post('/api/appointments/cancel', requireAuth, requireVerifiedEmail, async (r
 
 /**
  * POST /api/appointments/reschedule
+ * POST /api/appointments/:appointmentId/reschedule
  * Safely reserves the replacement slot and releases the old slot atomically.
- * Enforces role permissions, notice policy, and retains change history.
+ * Enforces role permissions, notice policy, dispatches reciprocal alerts, and retains change history.
  */
-app.post('/api/appointments/reschedule', requireAuth, requireVerifiedEmail, async (req, res) => {
-  const { appointmentId, newDate, newSlotId, reason, consultationType, type } = req.body || {};
+app.post(['/api/appointments/reschedule', '/api/appointments/:appointmentId/reschedule', '/api/v1/appointments/:appointmentId/reschedule'], requireAuth, requireVerifiedEmail, async (req, res) => {
+  const appointmentId = req.params.appointmentId || req.body?.appointmentId || req.params.id;
+  const { newDate, newSlotId, reason, consultationType, type } = req.body || {};
   if (!appointmentId || !newDate || !newSlotId) {
     return res.status(400).json({ error: 'MISSING_PARAMETERS', message: 'appointmentId, newDate, and newSlotId are required.' });
   }
@@ -8612,6 +8618,29 @@ app.get('/api/appointments/:id', requireAuth, async (req, res) => {
     console.error('[APPOINTMENT GET BY ID ERROR]:', err);
     const statusCode = err.statusCode || (err.code === 'APPOINTMENT_NOT_FOUND' ? 404 : (err.code === 'ACCESS_DENIED' ? 403 : 500));
     return res.status(statusCode).json({ error: err.code || 'APPOINTMENT_FETCH_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/appointments/:id/calendar.ics
+ * GET /api/appointments/:id/ics
+ * Serves standard RFC 5545 iCalendar stream with 2-hour pre-visit alert reminder for Apple/Google/Outlook calendar sync.
+ */
+app.get(['/api/appointments/:id/calendar.ics', '/api/appointments/:id/ics', '/api/appointments/:appointmentId/calendar.ics', '/api/appointments/:appointmentId/ics'], requireAuth, async (req, res) => {
+  const appointmentId = req.params.id || req.params.appointmentId;
+  if (!db || typeof db.collection !== 'function') {
+    return res.status(503).json({ error: 'APPOINTMENT_STORAGE_UNAVAILABLE', message: 'Appointment storage is unavailable.' });
+  }
+  try {
+    const appointment = await schedulingService.getAppointmentById(db, appointmentId, req.user);
+    const icsContent = schedulingService.buildIcsContent(appointment);
+    res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="appointment-${appointmentId}.ics"`);
+    return res.status(200).send(icsContent);
+  } catch (err) {
+    console.error('[APPOINTMENT ICS ERROR]:', err);
+    const statusCode = err.statusCode || (err.code === 'APPOINTMENT_NOT_FOUND' ? 404 : (err.code === 'ACCESS_DENIED' ? 403 : 500));
+    return res.status(statusCode).json({ error: err.code || 'ICS_GENERATION_FAILED', message: err.message });
   }
 });
 
