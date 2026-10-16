@@ -8745,11 +8745,13 @@ app.get('/api/doctor-schedules/branches', (req, res) => {
 /**
  * GET /api/doctor-schedules/:doctorId
  * Retrieves multi-branch working hours, slot durations, buffer times, and leave exceptions.
+ * Enforces privacy isolation: internal leave notes are redacted for non-privileged viewers.
  */
 app.get('/api/doctor-schedules/:doctorId', async (req, res) => {
   const { doctorId } = req.params;
   try {
-    const schedule = await doctorScheduleService.getDoctorSchedule(db, doctorId);
+    const rawSchedule = await doctorScheduleService.getDoctorSchedule(db, doctorId);
+    const schedule = appointmentSafetyService.sanitizeDoctorScheduleForPrivacy(rawSchedule, req.user, doctorId);
     return res.json({ success: true, schedule });
   } catch (err) {
     console.error('[DOCTOR SCHEDULE GET ERROR]:', err);
@@ -8760,22 +8762,19 @@ app.get('/api/doctor-schedules/:doctorId', async (req, res) => {
 /**
  * PUT /api/doctor-schedules/:doctorId/branches/:branchId
  * Updates working hours, days, duration, and buffer for a specific branch.
- * Enforces RBAC (Doctor themselves, Clinic Admin, or Super Admin).
+ * Enforces Physician Primacy (strictly rejects AI agents, bots, or unauthorized users) & clinical duration guardrails.
  */
 app.put('/api/doctor-schedules/:doctorId/branches/:branchId', requireAuth, requireVerifiedEmail, async (req, res) => {
   const { doctorId, branchId } = req.params;
   const userRole = getTrustedClaimRole(req.user);
-  const isSelf = req.user.uid === doctorId;
-  const isAdmin = userRole === ROLES.SUPER_ADMIN || userRole === ROLES.CLINIC_ADMIN || hasTrustedAdminClaim(req.user);
-
-  if (!isSelf && !isAdmin) {
-    return res.status(403).json({
-      error: 'ACCESS_DENIED',
-      message: 'Only the doctor or an authorized clinic administrator may configure branch working schedules.'
-    });
-  }
 
   try {
+    // 1. Enforce Physician Primacy (reject AI bots, patients, or other non-admin doctors)
+    appointmentSafetyService.enforceDoctorSchedulePhysicianPrimacy(req.user, doctorId, 'UPDATE_SCHEDULE');
+
+    // 2. Enforce Clinical Safety Guardrails (minimum 15 mins, max 120 mins, max shift hours)
+    appointmentSafetyService.validateDoctorScheduleClinicalGuardrails(req.body);
+
     const { workingDays, slotDurationMinutes, bufferBetweenSlotsMinutes } = req.body;
     const result = await doctorScheduleService.updateBranchSchedule(db, {
       doctorId,
@@ -8789,30 +8788,24 @@ app.put('/api/doctor-schedules/:doctorId/branches/:branchId', requireAuth, requi
     return res.json(result);
   } catch (err) {
     console.error('[DOCTOR SCHEDULE UPDATE ERROR]:', err);
-    const statusCode = err.message && err.message.startsWith('INVALID_') ? 400 : 500;
-    return res.status(statusCode).json({ error: 'SCHEDULE_UPDATE_FAILED', message: err.message });
+    const statusCode = err.statusCode || (err.message && err.message.startsWith('INVALID_') ? 400 : 500);
+    return res.status(statusCode).json({ error: err.code || 'SCHEDULE_UPDATE_FAILED', message: err.message });
   }
 });
 
 /**
  * POST /api/doctor-schedules/:doctorId/leaves
  * Records an emergency leave, annual vacation, or conference exception.
- * Enforces RBAC & alerts any affected patients.
+ * Enforces Physician Primacy, privacy isolation, & alerts any affected patients.
  */
 app.post('/api/doctor-schedules/:doctorId/leaves', requireAuth, requireVerifiedEmail, async (req, res) => {
   const { doctorId } = req.params;
   const userRole = getTrustedClaimRole(req.user);
-  const isSelf = req.user.uid === doctorId;
-  const isAdmin = userRole === ROLES.SUPER_ADMIN || userRole === ROLES.CLINIC_ADMIN || hasTrustedAdminClaim(req.user);
-
-  if (!isSelf && !isAdmin) {
-    return res.status(403).json({
-      error: 'ACCESS_DENIED',
-      message: 'Only the doctor or an authorized clinic administrator may record leaves and exceptions.'
-    });
-  }
 
   try {
+    // Enforce Physician Primacy
+    appointmentSafetyService.enforceDoctorSchedulePhysicianPrimacy(req.user, doctorId, 'ADD_LEAVE');
+
     const { branchId, startDate, endDate, reasonType, notes, emergencyOverride } = req.body;
     const result = await doctorScheduleService.addDoctorLeaveException(db, {
       doctorId,
@@ -8828,29 +8821,24 @@ app.post('/api/doctor-schedules/:doctorId/leaves', requireAuth, requireVerifiedE
     return res.json({ success: true, leave: result });
   } catch (err) {
     console.error('[DOCTOR LEAVE CREATE ERROR]:', err);
-    const statusCode = err.message && (err.message.includes('REQUIRED') || err.message.includes('BEFORE')) ? 400 : 500;
-    return res.status(statusCode).json({ error: 'LEAVE_CREATION_FAILED', message: err.message });
+    const statusCode = err.statusCode || (err.message && (err.message.includes('REQUIRED') || err.message.includes('BEFORE')) ? 400 : 500);
+    return res.status(statusCode).json({ error: err.code || 'LEAVE_CREATION_FAILED', message: err.message });
   }
 });
 
 /**
  * DELETE /api/doctor-schedules/:doctorId/leaves/:leaveId
  * Revokes an active leave exception and restores slot availability.
+ * Enforces Physician Primacy & RBAC.
  */
 app.delete('/api/doctor-schedules/:doctorId/leaves/:leaveId', requireAuth, requireVerifiedEmail, async (req, res) => {
   const { doctorId, leaveId } = req.params;
   const userRole = getTrustedClaimRole(req.user);
-  const isSelf = req.user.uid === doctorId;
-  const isAdmin = userRole === ROLES.SUPER_ADMIN || userRole === ROLES.CLINIC_ADMIN || hasTrustedAdminClaim(req.user);
-
-  if (!isSelf && !isAdmin) {
-    return res.status(403).json({
-      error: 'ACCESS_DENIED',
-      message: 'Only the doctor or an authorized clinic administrator may revoke leave exceptions.'
-    });
-  }
 
   try {
+    // Enforce Physician Primacy
+    appointmentSafetyService.enforceDoctorSchedulePhysicianPrimacy(req.user, doctorId, 'REVOKE_LEAVE');
+
     const result = await doctorScheduleService.revokeDoctorLeaveException(db, {
       doctorId,
       leaveId,
@@ -8860,13 +8848,15 @@ app.delete('/api/doctor-schedules/:doctorId/leaves/:leaveId', requireAuth, requi
     return res.json(result);
   } catch (err) {
     console.error('[DOCTOR LEAVE REVOKE ERROR]:', err);
-    return res.status(500).json({ error: 'LEAVE_REVOCATION_FAILED', message: err.message });
+    const statusCode = err.statusCode || 500;
+    return res.status(statusCode).json({ error: err.code || 'LEAVE_REVOCATION_FAILED', message: err.message });
   }
 });
 
 /**
  * GET /api/doctor-schedules/:doctorId/slots
  * Generates real-time available slots for a doctor on a specific date at a branch.
+ * Enforces statutory medical disclaimer.
  */
 app.get('/api/doctor-schedules/:doctorId/slots', async (req, res) => {
   const { doctorId } = req.params;
@@ -8882,7 +8872,12 @@ app.get('/api/doctor-schedules/:doctorId/slots', async (req, res) => {
       branchId: String(branchId),
       date: String(date)
     });
-    return res.json({ success: true, count: slots.length, slots });
+    return res.json({
+      success: true,
+      count: slots.length,
+      slots,
+      statutoryDisclaimer: appointmentSafetyService.STATUTORY_MEDICAL_DISCLAIMER
+    });
   } catch (err) {
     console.error('[DOCTOR SLOTS GET ERROR]:', err);
     return res.status(500).json({ error: 'SLOTS_FETCH_FAILED', message: err.message });

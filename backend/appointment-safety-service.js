@@ -872,6 +872,175 @@ async function validateFamilyBeneficiaryAccess(db, { patientId, beneficiaryId },
   };
 }
 
+// ============================================================================
+// 🗓️ DOCTOR SCHEDULE MANAGER: SAFETY, PRIVACY & PHYSICIAN PRIMACY (TabeebHub)
+// ============================================================================
+
+const MIN_CLINICAL_CONSULTATION_DURATION = 15;
+const MAX_CLINICAL_CONSULTATION_DURATION = 120;
+const MAX_SHIFT_HOURS_WITHOUT_BREAK = 12;
+
+/**
+ * Sanitizes doctor schedule details for public or non-privileged viewers.
+ * Ensures internal doctor notes on leaves or confidential personal details never leak to patients.
+ */
+function sanitizeDoctorScheduleForPrivacy(schedule = {}, actorUser = null, targetDoctorId = null) {
+  if (!schedule) return null;
+
+  const isPrivileged = actorUser && (
+    actorUser.role === 'super_admin' ||
+    actorUser.isSuperAdmin ||
+    (actorUser.role === 'doctor' && (actorUser.uid === targetDoctorId || !targetDoctorId)) ||
+    actorUser.role === 'clinic_admin'
+  );
+
+  if (isPrivileged) {
+    return {
+      ...schedule,
+      statutoryDisclaimer: STATUTORY_MEDICAL_DISCLAIMER
+    };
+  }
+
+  // Non-privileged viewer (patient, public, or unauthorized doctor)
+  const sanitizedLeaves = (schedule.leaves || []).map(leave => ({
+    id: leave.id,
+    branchId: leave.branchId,
+    startDate: leave.startDate,
+    endDate: leave.endDate,
+    status: leave.status,
+    reasonType: leave.status === 'approved' ? (leave.reasonType || 'leave') : 'cancelled',
+    publicNoticeAr: 'اعتذار الطبيب عن المواعيد في هذه الفترة لظرف معتمد',
+    publicNoticeEn: 'Doctor unavailable during this period due to an approved leave',
+    // Strictly redact internal personal notes
+    notes: null,
+    createdBy: null
+  }));
+
+  return {
+    doctorId: schedule.doctorId,
+    branches: schedule.branches || {},
+    leaves: sanitizedLeaves,
+    updatedAt: schedule.updatedAt,
+    statutoryDisclaimer: STATUTORY_MEDICAL_DISCLAIMER
+  };
+}
+
+/**
+ * Strictly prevents non-clinicians, AI bots, or unauthorized third parties
+ * from unilaterally modifying a doctor's clinical working hours or capacity.
+ */
+function enforceDoctorSchedulePhysicianPrimacy(actorUser, targetDoctorId, operation = 'UPDATE_SCHEDULE') {
+  if (!actorUser) {
+    const err = new Error('Authentication required to modify physician schedule.');
+    err.code = 'AUTHENTICATION_REQUIRED';
+    err.statusCode = 401;
+    throw err;
+  }
+
+  const role = actorUser.role || 'patient';
+
+  // AI Chatbots or automated bots are strictly prohibited from autonomous schedule alteration
+  if (role === 'ai_assistant' || role === 'system_bot' || actorUser.isAutonomousAi) {
+    const err = new Error('Physician Primacy Violation: AI agents are strictly prohibited from unilaterally modifying doctor schedules.');
+    err.code = 'PHYSICIAN_SCHEDULE_PROTECTED';
+    err.statusCode = 403;
+    throw err;
+  }
+
+  // Patients cannot alter doctor schedules
+  if (role === 'patient') {
+    const err = new Error('Access denied: Patients are strictly forbidden from modifying clinician schedules.');
+    err.code = 'PHYSICIAN_SCHEDULE_PROTECTED';
+    err.statusCode = 403;
+    throw err;
+  }
+
+  // Doctors can only alter their own schedule
+  if (role === 'doctor' && actorUser.uid !== targetDoctorId) {
+    const err = new Error(`Physician schedule isolation: Doctor '${actorUser.uid}' cannot modify the schedule of doctor '${targetDoctorId}'.`);
+    err.code = 'PHYSICIAN_SCHEDULE_PROTECTED';
+    err.statusCode = 403;
+    throw err;
+  }
+
+  // Clinic Admins and Super Admins are authorized
+  const isAuthorized = role === 'super_admin' || role === 'clinic_admin' || (role === 'doctor' && actorUser.uid === targetDoctorId);
+  if (!isAuthorized) {
+    const err = new Error('Access denied: Clinician or authorized clinic administrator required.');
+    err.code = 'ACCESS_DENIED';
+    err.statusCode = 403;
+    throw err;
+  }
+
+  return true;
+}
+
+/**
+ * Validates clinical safety guardrails for consultation slot duration and shift capacity.
+ */
+function validateDoctorScheduleClinicalGuardrails(params = {}) {
+  const { slotDurationMinutes, bufferBetweenSlotsMinutes = 0, workingDays } = params;
+
+  if (slotDurationMinutes !== undefined) {
+    const duration = Number(slotDurationMinutes);
+    if (isNaN(duration) || duration < MIN_CLINICAL_CONSULTATION_DURATION) {
+      const err = new Error(`Clinical Safety Violation: Consultation duration cannot be less than ${MIN_CLINICAL_CONSULTATION_DURATION} minutes. Superficial durations compromise diagnostic thoroughness.`);
+      err.code = 'UNSAFE_CONSULTATION_DURATION';
+      err.statusCode = 400;
+      throw err;
+    }
+    if (duration > MAX_CLINICAL_CONSULTATION_DURATION) {
+      const err = new Error(`Consultation duration cannot exceed ${MAX_CLINICAL_CONSULTATION_DURATION} minutes.`);
+      err.code = 'EXCESSIVE_SLOT_DURATION';
+      err.statusCode = 400;
+      throw err;
+    }
+  }
+
+  if (bufferBetweenSlotsMinutes !== undefined) {
+    const buffer = Number(bufferBetweenSlotsMinutes);
+    if (isNaN(buffer) || buffer < 0) {
+      const err = new Error('Buffer between slots must be a non-negative integer.');
+      err.code = 'INVALID_BUFFER_TIME';
+      err.statusCode = 400;
+      throw err;
+    }
+  }
+
+  if (workingDays && typeof workingDays === 'object') {
+    for (const [day, cfg] of Object.entries(workingDays)) {
+      if (cfg && cfg.active) {
+        if (!cfg.start || !cfg.end) {
+          const err = new Error(`Start and end hours required for active day '${day}'.`);
+          err.code = 'MISSING_SHIFT_HOURS';
+          err.statusCode = 400;
+          throw err;
+        }
+        const [sh, sm] = cfg.start.split(':').map(Number);
+        const [eh, em] = cfg.end.split(':').map(Number);
+        const totalMinutes = (eh * 60 + em) - (sh * 60 + sm);
+
+        if (totalMinutes <= 0) {
+          const err = new Error(`Shift end time must be after start time for '${day}'.`);
+          err.code = 'INVALID_SHIFT_HOURS';
+          err.statusCode = 400;
+          throw err;
+        }
+
+        // Shift duration cannot exceed 12 continuous hours without break periods
+        if (totalMinutes > MAX_SHIFT_HOURS_WITHOUT_BREAK * 60) {
+          const err = new Error(`Clinical Safety Guardrail: Continuous shift duration on '${day}' exceeds ${MAX_SHIFT_HOURS_WITHOUT_BREAK} hours, posing a risk of clinician cognitive fatigue.`);
+          err.code = 'EXCESSIVE_SHIFT_DURATION';
+          err.statusCode = 400;
+          throw err;
+        }
+      }
+    }
+  }
+
+  return true;
+}
+
 module.exports = {
   STATUTORY_MEDICAL_DISCLAIMER,
   EMERGENCY_CONTACTS,
@@ -886,5 +1055,11 @@ module.exports = {
   normalizeConsultationType,
   validateConsultationSafety,
   validatePrevisitDossierSafety,
-  PROTECTED_CLINICIAN_FIELDS
+  PROTECTED_CLINICIAN_FIELDS,
+  MIN_CLINICAL_CONSULTATION_DURATION,
+  MAX_CLINICAL_CONSULTATION_DURATION,
+  MAX_SHIFT_HOURS_WITHOUT_BREAK,
+  sanitizeDoctorScheduleForPrivacy,
+  enforceDoctorSchedulePhysicianPrimacy,
+  validateDoctorScheduleClinicalGuardrails
 };
