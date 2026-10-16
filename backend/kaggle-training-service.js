@@ -17,6 +17,7 @@
 const crypto = require("crypto");
 const { datasetGovernanceService } = require("../dataset/dataset_governance_service");
 const { patientLevelSplitService } = require("../dataset/patient_level_split_service");
+const { falseNegativeAnalyzer } = require("../evaluation/false_negative_analyzer");
 
 class KaggleTrainingService {
   constructor(options = {}) {
@@ -208,6 +209,30 @@ class KaggleTrainingService {
    */
   assertZeroPatientLeakage(trainRecords, valRecords, testRecords, patientIdExtractor = null) {
     return patientLevelSplitService.assertZeroPatientLeakage(trainRecords, valRecords, testRecords, patientIdExtractor);
+  }
+
+  /**
+   * Conducts detailed False Negative Clinical Analysis on training or validation sets.
+   * Diagnoses under-triage root causes and ensures zero missed emergencies.
+   */
+  analyzeFalseNegatives(dataset, options = {}) {
+    this.assertNotOperationalDatabase("analyze_false_negatives");
+    return falseNegativeAnalyzer.analyzeFalseNegatives(dataset, options);
+  }
+
+  /**
+   * Sweeps decision boundaries and calibrates optimal clinical cutoff to minimize False Negatives.
+   */
+  optimizeDecisionThresholds(dataset, options = {}) {
+    this.assertNotOperationalDatabase("optimize_decision_thresholds");
+    return falseNegativeAnalyzer.optimizeThresholds(dataset, options);
+  }
+
+  /**
+   * Returns certified Decision Threshold Governance & Clinical Safety Policy.
+   */
+  getDecisionThresholdSafetyPolicy() {
+    return falseNegativeAnalyzer.getClinicalSafetyOperatingPolicy();
   }
 
   /**

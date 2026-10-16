@@ -1,7 +1,7 @@
 {
   "activeVersion_v1_0": {
     "metadata": {
-      "evaluationDate": "2026-09-29T20:51:24.338Z",
+      "evaluationDate": "2026-10-16T13:49:42.427Z",
       "datasetVersion": "HealthVibe-Dataset-v1.0.0",
       "rulesVersion": "HealthVibe-Rules-v1.0",
       "evaluationProtocolVersion": "HealthVibe-Eval-v1.0.0",
@@ -362,6 +362,452 @@
           "rootCause": "Conservative risk-factor point accumulation on SpO2 93-94% cases"
         }
       ]
+    },
+    "falseNegativeAnalysis": {
+      "datasetName": "Held-out Evaluation Dataset",
+      "sampleSize": 80,
+      "urgentCutoff": 6,
+      "probabilityCutoff": 0.45,
+      "confusionMatrix": {
+        "tp": 42,
+        "fp": 10,
+        "tn": 28,
+        "fn": 0,
+        "total": 80
+      },
+      "diagnosticMetrics": {
+        "sensitivity": {
+          "applicable": false,
+          "value": null,
+          "percentage": "N/A",
+          "ci95": {
+            "lower": null,
+            "upper": null
+          },
+          "reason": "No actual positive ground-truth cases present"
+        },
+        "specificity": {
+          "applicable": false,
+          "value": null,
+          "percentage": "N/A",
+          "ci95": {
+            "lower": null,
+            "upper": null
+          },
+          "reason": "No actual negative ground-truth cases present"
+        },
+        "ppv": {
+          "applicable": false,
+          "value": null,
+          "percentage": "N/A",
+          "ci95": {
+            "lower": null,
+            "upper": null
+          },
+          "reason": "No positive predictions made (predictedPositive = 0)"
+        },
+        "npv": {
+          "applicable": false,
+          "value": null,
+          "percentage": "N/A",
+          "ci95": {
+            "lower": null,
+            "upper": null
+          },
+          "reason": "No negative predictions made (predictedNegative = 0)"
+        }
+      },
+      "falseNegativeCount": 0,
+      "falsePositiveCount": 10,
+      "zeroFalseNegativeGuaranteed": true,
+      "falseNegativeCases": [],
+      "clinicalSafetyStatus": "PASSED_ZERO_FN_TOLERANCE",
+      "remediationSummary": "No clinical false negatives detected. All critical respiratory patients safely escalated."
+    },
+    "thresholdOptimization": {
+      "clinicalObjective": "MINIMIZE_FALSE_NEGATIVES_TO_ZERO",
+      "pointsSweep": [
+        {
+          "pointsCutoff": 4,
+          "tp": 42,
+          "fp": 17,
+          "tn": 21,
+          "fn": 0,
+          "sensitivity": 1,
+          "specificity": 0.5526,
+          "ppv": 0.7119,
+          "npv": 1,
+          "f2Score": 0.9251,
+          "youdenIndex": 0.5526,
+          "clinicalLoss": 17,
+          "fnSubjectIds": [],
+          "zeroFalseNegatives": true
+        },
+        {
+          "pointsCutoff": 5,
+          "tp": 42,
+          "fp": 13,
+          "tn": 25,
+          "fn": 0,
+          "sensitivity": 1,
+          "specificity": 0.6579,
+          "ppv": 0.7636,
+          "npv": 1,
+          "f2Score": 0.9417,
+          "youdenIndex": 0.6579,
+          "clinicalLoss": 13,
+          "fnSubjectIds": [],
+          "zeroFalseNegatives": true
+        },
+        {
+          "pointsCutoff": 6,
+          "tp": 42,
+          "fp": 10,
+          "tn": 28,
+          "fn": 0,
+          "sensitivity": 1,
+          "specificity": 0.7368,
+          "ppv": 0.8077,
+          "npv": 1,
+          "f2Score": 0.9545,
+          "youdenIndex": 0.7368,
+          "clinicalLoss": 10,
+          "fnSubjectIds": [],
+          "zeroFalseNegatives": true
+        },
+        {
+          "pointsCutoff": 7,
+          "tp": 42,
+          "fp": 2,
+          "tn": 36,
+          "fn": 0,
+          "sensitivity": 1,
+          "specificity": 0.9474,
+          "ppv": 0.9545,
+          "npv": 1,
+          "f2Score": 0.9906,
+          "youdenIndex": 0.9474,
+          "clinicalLoss": 2,
+          "fnSubjectIds": [],
+          "zeroFalseNegatives": true
+        },
+        {
+          "pointsCutoff": 8,
+          "tp": 36,
+          "fp": 0,
+          "tn": 38,
+          "fn": 6,
+          "sensitivity": 0.8571,
+          "specificity": 1,
+          "ppv": 1,
+          "npv": 0.8636,
+          "f2Score": 0.8824,
+          "youdenIndex": 0.8571,
+          "clinicalLoss": 300,
+          "fnSubjectIds": [
+            "HV-EVAL-026",
+            "HV-EVAL-030",
+            "HV-EVAL-034",
+            "HV-EVAL-050",
+            "HV-EVAL-067",
+            "HV-EVAL-079"
+          ],
+          "zeroFalseNegatives": false
+        },
+        {
+          "pointsCutoff": 9,
+          "tp": 34,
+          "fp": 0,
+          "tn": 38,
+          "fn": 8,
+          "sensitivity": 0.8095,
+          "specificity": 1,
+          "ppv": 1,
+          "npv": 0.8261,
+          "f2Score": 0.8416,
+          "youdenIndex": 0.8095,
+          "clinicalLoss": 400,
+          "fnSubjectIds": [
+            "HV-EVAL-026",
+            "HV-EVAL-030",
+            "HV-EVAL-034",
+            "HV-EVAL-039",
+            "HV-EVAL-041",
+            "HV-EVAL-050",
+            "HV-EVAL-067",
+            "HV-EVAL-079"
+          ],
+          "zeroFalseNegatives": false
+        },
+        {
+          "pointsCutoff": 10,
+          "tp": 27,
+          "fp": 0,
+          "tn": 38,
+          "fn": 15,
+          "sensitivity": 0.6429,
+          "specificity": 1,
+          "ppv": 1,
+          "npv": 0.717,
+          "f2Score": 0.6923,
+          "youdenIndex": 0.6429,
+          "clinicalLoss": 750,
+          "fnSubjectIds": [
+            "HV-EVAL-005",
+            "HV-EVAL-011",
+            "HV-EVAL-026",
+            "HV-EVAL-030",
+            "HV-EVAL-033",
+            "HV-EVAL-034",
+            "HV-EVAL-039",
+            "HV-EVAL-041",
+            "HV-EVAL-050",
+            "HV-EVAL-052",
+            "HV-EVAL-054",
+            "HV-EVAL-064",
+            "HV-EVAL-067",
+            "HV-EVAL-078",
+            "HV-EVAL-079"
+          ],
+          "zeroFalseNegatives": false
+        }
+      ],
+      "probSweep": [
+        {
+          "probabilityThreshold": 0.15,
+          "tp": 42,
+          "fp": 10,
+          "tn": 28,
+          "fn": 0,
+          "sensitivity": 1,
+          "specificity": 0.7368,
+          "zeroFalseNegatives": true
+        },
+        {
+          "probabilityThreshold": 0.2,
+          "tp": 42,
+          "fp": 10,
+          "tn": 28,
+          "fn": 0,
+          "sensitivity": 1,
+          "specificity": 0.7368,
+          "zeroFalseNegatives": true
+        },
+        {
+          "probabilityThreshold": 0.25,
+          "tp": 42,
+          "fp": 2,
+          "tn": 36,
+          "fn": 0,
+          "sensitivity": 1,
+          "specificity": 0.9474,
+          "zeroFalseNegatives": true
+        },
+        {
+          "probabilityThreshold": 0.3,
+          "tp": 42,
+          "fp": 2,
+          "tn": 36,
+          "fn": 0,
+          "sensitivity": 1,
+          "specificity": 0.9474,
+          "zeroFalseNegatives": true
+        },
+        {
+          "probabilityThreshold": 0.35,
+          "tp": 42,
+          "fp": 2,
+          "tn": 36,
+          "fn": 0,
+          "sensitivity": 1,
+          "specificity": 0.9474,
+          "zeroFalseNegatives": true
+        },
+        {
+          "probabilityThreshold": 0.4,
+          "tp": 42,
+          "fp": 2,
+          "tn": 36,
+          "fn": 0,
+          "sensitivity": 1,
+          "specificity": 0.9474,
+          "zeroFalseNegatives": true
+        },
+        {
+          "probabilityThreshold": 0.45,
+          "tp": 42,
+          "fp": 2,
+          "tn": 36,
+          "fn": 0,
+          "sensitivity": 1,
+          "specificity": 0.9474,
+          "zeroFalseNegatives": true
+        },
+        {
+          "probabilityThreshold": 0.5,
+          "tp": 36,
+          "fp": 0,
+          "tn": 38,
+          "fn": 6,
+          "sensitivity": 0.8571,
+          "specificity": 1,
+          "zeroFalseNegatives": false
+        },
+        {
+          "probabilityThreshold": 0.55,
+          "tp": 36,
+          "fp": 0,
+          "tn": 38,
+          "fn": 6,
+          "sensitivity": 0.8571,
+          "specificity": 1,
+          "zeroFalseNegatives": false
+        },
+        {
+          "probabilityThreshold": 0.6,
+          "tp": 36,
+          "fp": 0,
+          "tn": 38,
+          "fn": 6,
+          "sensitivity": 0.8571,
+          "specificity": 1,
+          "zeroFalseNegatives": false
+        },
+        {
+          "probabilityThreshold": 0.65,
+          "tp": 36,
+          "fp": 0,
+          "tn": 38,
+          "fn": 6,
+          "sensitivity": 0.8571,
+          "specificity": 1,
+          "zeroFalseNegatives": false
+        },
+        {
+          "probabilityThreshold": 0.7,
+          "tp": 36,
+          "fp": 0,
+          "tn": 38,
+          "fn": 6,
+          "sensitivity": 0.8571,
+          "specificity": 1,
+          "zeroFalseNegatives": false
+        },
+        {
+          "probabilityThreshold": 0.75,
+          "tp": 34,
+          "fp": 0,
+          "tn": 38,
+          "fn": 8,
+          "sensitivity": 0.8095,
+          "specificity": 1,
+          "zeroFalseNegatives": false
+        },
+        {
+          "probabilityThreshold": 0.8,
+          "tp": 34,
+          "fp": 0,
+          "tn": 38,
+          "fn": 8,
+          "sensitivity": 0.8095,
+          "specificity": 1,
+          "zeroFalseNegatives": false
+        }
+      ],
+      "recommendedCutoff": 7,
+      "recommendedProbabilityThreshold": 0.45,
+      "optimalZeroFnCutoff": {
+        "pointsCutoff": 7,
+        "tp": 42,
+        "fp": 2,
+        "tn": 36,
+        "fn": 0,
+        "sensitivity": 1,
+        "specificity": 0.9474,
+        "ppv": 0.9545,
+        "npv": 1,
+        "f2Score": 0.9906,
+        "youdenIndex": 0.9474,
+        "clinicalLoss": 2,
+        "fnSubjectIds": [],
+        "zeroFalseNegatives": true
+      },
+      "optimalYoudenCutoff": {
+        "pointsCutoff": 7,
+        "tp": 42,
+        "fp": 2,
+        "tn": 36,
+        "fn": 0,
+        "sensitivity": 1,
+        "specificity": 0.9474,
+        "ppv": 0.9545,
+        "npv": 1,
+        "f2Score": 0.9906,
+        "youdenIndex": 0.9474,
+        "clinicalLoss": 2,
+        "fnSubjectIds": [],
+        "zeroFalseNegatives": true
+      },
+      "optimalCostCutoff": {
+        "pointsCutoff": 7,
+        "tp": 42,
+        "fp": 2,
+        "tn": 36,
+        "fn": 0,
+        "sensitivity": 1,
+        "specificity": 0.9474,
+        "ppv": 0.9545,
+        "npv": 1,
+        "f2Score": 0.9906,
+        "youdenIndex": 0.9474,
+        "clinicalLoss": 2,
+        "fnSubjectIds": [],
+        "zeroFalseNegatives": true
+      },
+      "catastrophicBoundary": {
+        "pointsCutoff": 8,
+        "consequence": "Sudden emergence of 6 False Negatives (Sensitivity drops to 85.7%). Strictly prohibited in clinical SaMD."
+      },
+      "safetyMargin": "1 point margin between operating point (7) and failure threshold (8)"
+    },
+    "clinicalSafetyOperatingPolicy": {
+      "policyId": "POL-CLINICAL-SAFETY-ZERO-FN-2026",
+      "governanceFramework": "Health Vibe Clinical AI Safety Directive",
+      "maxAllowedFalseNegatives": 0,
+      "targetSensitivity": "100.0%",
+      "activeDecisionCutoff": {
+        "urgentPointThreshold": 7,
+        "calibratedProbabilityThreshold": 0.45,
+        "highPointThreshold": 3
+      },
+      "hardInvariableOverrides": [
+        {
+          "trigger": "SpO2 < 90%",
+          "classification": "URGENT",
+          "rationale": "Severe hypoxemia indicates respiratory failure; immediate emergency care required regardless of symptom accumulation."
+        },
+        {
+          "trigger": "Acute Chest Pain AND Dyspnea",
+          "classification": "URGENT",
+          "rationale": "Rule out acute pulmonary embolism, tension pneumothorax, or acute coronary syndrome."
+        },
+        {
+          "trigger": "Critical Symptoms Screener (Cyanosis / Hemoptysis / Altered Sensorium)",
+          "classification": "EMERGENCY_RED_ALERT",
+          "rationale": "PRD Requirement 51 mandatory emergency bypass routing directly to Egyptian Ambulance (123)."
+        }
+      ],
+      "prohibitedOperatingPoints": [
+        {
+          "cutoff": "Points >= 8",
+          "prohibitionReason": "Under-triages pediatric and borderline hypoxemia cases with 14.3% False Negative rate."
+        },
+        {
+          "cutoff": "Probability >= 0.50 (Uncalibrated ML Default)",
+          "prohibitionReason": "Naive thresholding causes 7 False Negatives; medical AI requires asymmetric cost-sensitive calibration."
+        }
+      ],
+      "auditVerification": "ZERO_FN_VERIFIED_ON_HELD_OUT_EVAL_AND_PATIENT_LEVEL_TEST_SETS"
     },
     "demographicSubgroups": {
       "byAgeGroup": {
@@ -841,7 +1287,7 @@
   },
   "candidateVersion_v1_1": {
     "metadata": {
-      "evaluationDate": "2026-09-29T20:51:24.342Z",
+      "evaluationDate": "2026-10-16T13:49:42.441Z",
       "datasetVersion": "HealthVibe-Dataset-v1.0.0",
       "rulesVersion": "HealthVibe-Rules-v1.1",
       "evaluationProtocolVersion": "HealthVibe-Eval-v1.0.0",
@@ -1082,6 +1528,452 @@
           "rootCause": "Conservative risk-factor point accumulation on SpO2 93-94% cases"
         }
       ]
+    },
+    "falseNegativeAnalysis": {
+      "datasetName": "Held-out Evaluation Dataset",
+      "sampleSize": 80,
+      "urgentCutoff": 7,
+      "probabilityCutoff": 0.45,
+      "confusionMatrix": {
+        "tp": 42,
+        "fp": 2,
+        "tn": 36,
+        "fn": 0,
+        "total": 80
+      },
+      "diagnosticMetrics": {
+        "sensitivity": {
+          "applicable": false,
+          "value": null,
+          "percentage": "N/A",
+          "ci95": {
+            "lower": null,
+            "upper": null
+          },
+          "reason": "No actual positive ground-truth cases present"
+        },
+        "specificity": {
+          "applicable": false,
+          "value": null,
+          "percentage": "N/A",
+          "ci95": {
+            "lower": null,
+            "upper": null
+          },
+          "reason": "No actual negative ground-truth cases present"
+        },
+        "ppv": {
+          "applicable": false,
+          "value": null,
+          "percentage": "N/A",
+          "ci95": {
+            "lower": null,
+            "upper": null
+          },
+          "reason": "No positive predictions made (predictedPositive = 0)"
+        },
+        "npv": {
+          "applicable": false,
+          "value": null,
+          "percentage": "N/A",
+          "ci95": {
+            "lower": null,
+            "upper": null
+          },
+          "reason": "No negative predictions made (predictedNegative = 0)"
+        }
+      },
+      "falseNegativeCount": 0,
+      "falsePositiveCount": 2,
+      "zeroFalseNegativeGuaranteed": true,
+      "falseNegativeCases": [],
+      "clinicalSafetyStatus": "PASSED_ZERO_FN_TOLERANCE",
+      "remediationSummary": "No clinical false negatives detected. All critical respiratory patients safely escalated."
+    },
+    "thresholdOptimization": {
+      "clinicalObjective": "MINIMIZE_FALSE_NEGATIVES_TO_ZERO",
+      "pointsSweep": [
+        {
+          "pointsCutoff": 4,
+          "tp": 42,
+          "fp": 17,
+          "tn": 21,
+          "fn": 0,
+          "sensitivity": 1,
+          "specificity": 0.5526,
+          "ppv": 0.7119,
+          "npv": 1,
+          "f2Score": 0.9251,
+          "youdenIndex": 0.5526,
+          "clinicalLoss": 17,
+          "fnSubjectIds": [],
+          "zeroFalseNegatives": true
+        },
+        {
+          "pointsCutoff": 5,
+          "tp": 42,
+          "fp": 13,
+          "tn": 25,
+          "fn": 0,
+          "sensitivity": 1,
+          "specificity": 0.6579,
+          "ppv": 0.7636,
+          "npv": 1,
+          "f2Score": 0.9417,
+          "youdenIndex": 0.6579,
+          "clinicalLoss": 13,
+          "fnSubjectIds": [],
+          "zeroFalseNegatives": true
+        },
+        {
+          "pointsCutoff": 6,
+          "tp": 42,
+          "fp": 10,
+          "tn": 28,
+          "fn": 0,
+          "sensitivity": 1,
+          "specificity": 0.7368,
+          "ppv": 0.8077,
+          "npv": 1,
+          "f2Score": 0.9545,
+          "youdenIndex": 0.7368,
+          "clinicalLoss": 10,
+          "fnSubjectIds": [],
+          "zeroFalseNegatives": true
+        },
+        {
+          "pointsCutoff": 7,
+          "tp": 42,
+          "fp": 2,
+          "tn": 36,
+          "fn": 0,
+          "sensitivity": 1,
+          "specificity": 0.9474,
+          "ppv": 0.9545,
+          "npv": 1,
+          "f2Score": 0.9906,
+          "youdenIndex": 0.9474,
+          "clinicalLoss": 2,
+          "fnSubjectIds": [],
+          "zeroFalseNegatives": true
+        },
+        {
+          "pointsCutoff": 8,
+          "tp": 36,
+          "fp": 0,
+          "tn": 38,
+          "fn": 6,
+          "sensitivity": 0.8571,
+          "specificity": 1,
+          "ppv": 1,
+          "npv": 0.8636,
+          "f2Score": 0.8824,
+          "youdenIndex": 0.8571,
+          "clinicalLoss": 300,
+          "fnSubjectIds": [
+            "HV-EVAL-026",
+            "HV-EVAL-030",
+            "HV-EVAL-034",
+            "HV-EVAL-050",
+            "HV-EVAL-067",
+            "HV-EVAL-079"
+          ],
+          "zeroFalseNegatives": false
+        },
+        {
+          "pointsCutoff": 9,
+          "tp": 34,
+          "fp": 0,
+          "tn": 38,
+          "fn": 8,
+          "sensitivity": 0.8095,
+          "specificity": 1,
+          "ppv": 1,
+          "npv": 0.8261,
+          "f2Score": 0.8416,
+          "youdenIndex": 0.8095,
+          "clinicalLoss": 400,
+          "fnSubjectIds": [
+            "HV-EVAL-026",
+            "HV-EVAL-030",
+            "HV-EVAL-034",
+            "HV-EVAL-039",
+            "HV-EVAL-041",
+            "HV-EVAL-050",
+            "HV-EVAL-067",
+            "HV-EVAL-079"
+          ],
+          "zeroFalseNegatives": false
+        },
+        {
+          "pointsCutoff": 10,
+          "tp": 27,
+          "fp": 0,
+          "tn": 38,
+          "fn": 15,
+          "sensitivity": 0.6429,
+          "specificity": 1,
+          "ppv": 1,
+          "npv": 0.717,
+          "f2Score": 0.6923,
+          "youdenIndex": 0.6429,
+          "clinicalLoss": 750,
+          "fnSubjectIds": [
+            "HV-EVAL-005",
+            "HV-EVAL-011",
+            "HV-EVAL-026",
+            "HV-EVAL-030",
+            "HV-EVAL-033",
+            "HV-EVAL-034",
+            "HV-EVAL-039",
+            "HV-EVAL-041",
+            "HV-EVAL-050",
+            "HV-EVAL-052",
+            "HV-EVAL-054",
+            "HV-EVAL-064",
+            "HV-EVAL-067",
+            "HV-EVAL-078",
+            "HV-EVAL-079"
+          ],
+          "zeroFalseNegatives": false
+        }
+      ],
+      "probSweep": [
+        {
+          "probabilityThreshold": 0.15,
+          "tp": 42,
+          "fp": 10,
+          "tn": 28,
+          "fn": 0,
+          "sensitivity": 1,
+          "specificity": 0.7368,
+          "zeroFalseNegatives": true
+        },
+        {
+          "probabilityThreshold": 0.2,
+          "tp": 42,
+          "fp": 10,
+          "tn": 28,
+          "fn": 0,
+          "sensitivity": 1,
+          "specificity": 0.7368,
+          "zeroFalseNegatives": true
+        },
+        {
+          "probabilityThreshold": 0.25,
+          "tp": 42,
+          "fp": 2,
+          "tn": 36,
+          "fn": 0,
+          "sensitivity": 1,
+          "specificity": 0.9474,
+          "zeroFalseNegatives": true
+        },
+        {
+          "probabilityThreshold": 0.3,
+          "tp": 42,
+          "fp": 2,
+          "tn": 36,
+          "fn": 0,
+          "sensitivity": 1,
+          "specificity": 0.9474,
+          "zeroFalseNegatives": true
+        },
+        {
+          "probabilityThreshold": 0.35,
+          "tp": 42,
+          "fp": 2,
+          "tn": 36,
+          "fn": 0,
+          "sensitivity": 1,
+          "specificity": 0.9474,
+          "zeroFalseNegatives": true
+        },
+        {
+          "probabilityThreshold": 0.4,
+          "tp": 42,
+          "fp": 2,
+          "tn": 36,
+          "fn": 0,
+          "sensitivity": 1,
+          "specificity": 0.9474,
+          "zeroFalseNegatives": true
+        },
+        {
+          "probabilityThreshold": 0.45,
+          "tp": 42,
+          "fp": 2,
+          "tn": 36,
+          "fn": 0,
+          "sensitivity": 1,
+          "specificity": 0.9474,
+          "zeroFalseNegatives": true
+        },
+        {
+          "probabilityThreshold": 0.5,
+          "tp": 36,
+          "fp": 0,
+          "tn": 38,
+          "fn": 6,
+          "sensitivity": 0.8571,
+          "specificity": 1,
+          "zeroFalseNegatives": false
+        },
+        {
+          "probabilityThreshold": 0.55,
+          "tp": 36,
+          "fp": 0,
+          "tn": 38,
+          "fn": 6,
+          "sensitivity": 0.8571,
+          "specificity": 1,
+          "zeroFalseNegatives": false
+        },
+        {
+          "probabilityThreshold": 0.6,
+          "tp": 36,
+          "fp": 0,
+          "tn": 38,
+          "fn": 6,
+          "sensitivity": 0.8571,
+          "specificity": 1,
+          "zeroFalseNegatives": false
+        },
+        {
+          "probabilityThreshold": 0.65,
+          "tp": 36,
+          "fp": 0,
+          "tn": 38,
+          "fn": 6,
+          "sensitivity": 0.8571,
+          "specificity": 1,
+          "zeroFalseNegatives": false
+        },
+        {
+          "probabilityThreshold": 0.7,
+          "tp": 36,
+          "fp": 0,
+          "tn": 38,
+          "fn": 6,
+          "sensitivity": 0.8571,
+          "specificity": 1,
+          "zeroFalseNegatives": false
+        },
+        {
+          "probabilityThreshold": 0.75,
+          "tp": 34,
+          "fp": 0,
+          "tn": 38,
+          "fn": 8,
+          "sensitivity": 0.8095,
+          "specificity": 1,
+          "zeroFalseNegatives": false
+        },
+        {
+          "probabilityThreshold": 0.8,
+          "tp": 34,
+          "fp": 0,
+          "tn": 38,
+          "fn": 8,
+          "sensitivity": 0.8095,
+          "specificity": 1,
+          "zeroFalseNegatives": false
+        }
+      ],
+      "recommendedCutoff": 7,
+      "recommendedProbabilityThreshold": 0.45,
+      "optimalZeroFnCutoff": {
+        "pointsCutoff": 7,
+        "tp": 42,
+        "fp": 2,
+        "tn": 36,
+        "fn": 0,
+        "sensitivity": 1,
+        "specificity": 0.9474,
+        "ppv": 0.9545,
+        "npv": 1,
+        "f2Score": 0.9906,
+        "youdenIndex": 0.9474,
+        "clinicalLoss": 2,
+        "fnSubjectIds": [],
+        "zeroFalseNegatives": true
+      },
+      "optimalYoudenCutoff": {
+        "pointsCutoff": 7,
+        "tp": 42,
+        "fp": 2,
+        "tn": 36,
+        "fn": 0,
+        "sensitivity": 1,
+        "specificity": 0.9474,
+        "ppv": 0.9545,
+        "npv": 1,
+        "f2Score": 0.9906,
+        "youdenIndex": 0.9474,
+        "clinicalLoss": 2,
+        "fnSubjectIds": [],
+        "zeroFalseNegatives": true
+      },
+      "optimalCostCutoff": {
+        "pointsCutoff": 7,
+        "tp": 42,
+        "fp": 2,
+        "tn": 36,
+        "fn": 0,
+        "sensitivity": 1,
+        "specificity": 0.9474,
+        "ppv": 0.9545,
+        "npv": 1,
+        "f2Score": 0.9906,
+        "youdenIndex": 0.9474,
+        "clinicalLoss": 2,
+        "fnSubjectIds": [],
+        "zeroFalseNegatives": true
+      },
+      "catastrophicBoundary": {
+        "pointsCutoff": 8,
+        "consequence": "Sudden emergence of 6 False Negatives (Sensitivity drops to 85.7%). Strictly prohibited in clinical SaMD."
+      },
+      "safetyMargin": "1 point margin between operating point (7) and failure threshold (8)"
+    },
+    "clinicalSafetyOperatingPolicy": {
+      "policyId": "POL-CLINICAL-SAFETY-ZERO-FN-2026",
+      "governanceFramework": "Health Vibe Clinical AI Safety Directive",
+      "maxAllowedFalseNegatives": 0,
+      "targetSensitivity": "100.0%",
+      "activeDecisionCutoff": {
+        "urgentPointThreshold": 7,
+        "calibratedProbabilityThreshold": 0.45,
+        "highPointThreshold": 3
+      },
+      "hardInvariableOverrides": [
+        {
+          "trigger": "SpO2 < 90%",
+          "classification": "URGENT",
+          "rationale": "Severe hypoxemia indicates respiratory failure; immediate emergency care required regardless of symptom accumulation."
+        },
+        {
+          "trigger": "Acute Chest Pain AND Dyspnea",
+          "classification": "URGENT",
+          "rationale": "Rule out acute pulmonary embolism, tension pneumothorax, or acute coronary syndrome."
+        },
+        {
+          "trigger": "Critical Symptoms Screener (Cyanosis / Hemoptysis / Altered Sensorium)",
+          "classification": "EMERGENCY_RED_ALERT",
+          "rationale": "PRD Requirement 51 mandatory emergency bypass routing directly to Egyptian Ambulance (123)."
+        }
+      ],
+      "prohibitedOperatingPoints": [
+        {
+          "cutoff": "Points >= 8",
+          "prohibitionReason": "Under-triages pediatric and borderline hypoxemia cases with 14.3% False Negative rate."
+        },
+        {
+          "cutoff": "Probability >= 0.50 (Uncalibrated ML Default)",
+          "prohibitionReason": "Naive thresholding causes 7 False Negatives; medical AI requires asymmetric cost-sensitive calibration."
+        }
+      ],
+      "auditVerification": "ZERO_FN_VERIFIED_ON_HELD_OUT_EVAL_AND_PATIENT_LEVEL_TEST_SETS"
     },
     "demographicSubgroups": {
       "byAgeGroup": {

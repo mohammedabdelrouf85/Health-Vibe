@@ -84,6 +84,7 @@ const obesityService = require('./obesity-service');
 const diseaseAuthorizationService = require('./disease-authorization-service');
 const { relationalDbService } = require('./relational-db-service');
 const { kaggleTrainingService } = require('./kaggle-training-service');
+const { falseNegativeAnalyzer } = require('../evaluation/false_negative_analyzer');
 const { passwordSecurityService } = require('./password-security-service');
 const { medicalCatalogService } = require('./medical-catalog-service');
 const { caseWorkflowService } = require('./case-workflow-service');
@@ -18076,6 +18077,7 @@ app.diabetesService = diabetesService;
 app.diseaseAuthorizationService = diseaseAuthorizationService;
 app.relationalDbService = relationalDbService;
 app.kaggleTrainingService = kaggleTrainingService;
+app.falseNegativeAnalyzer = falseNegativeAnalyzer;
 
 /**
  * GET /api/config/relational-db-status
@@ -18086,6 +18088,48 @@ app.get('/api/config/relational-db-status', (req, res) => {
     success: true,
     relationalDb: relationalDbService.getHealthStatus(),
     kaggleIsolation: kaggleTrainingService.getArchitecturalSeparationReport()
+  });
+});
+
+/**
+ * GET /api/clinical-governance/fn-analysis
+ * Returns comprehensive False Negative Clinical Analysis on the evaluation dataset.
+ */
+app.get('/api/clinical-governance/fn-analysis', (req, res) => {
+  try {
+    const evalPath = path.join(__dirname, '../dataset/evaluation_dataset.json');
+    const evalData = JSON.parse(fs.readFileSync(evalPath, 'utf8'));
+    const urgentCutoff = req.query.cutoff ? parseInt(req.query.cutoff, 10) : 7;
+    const analysis = falseNegativeAnalyzer.analyzeFalseNegatives(evalData, { urgentCutoff });
+    res.json({ success: true, analysis });
+  } catch (err) {
+    res.status(500).json({ error: 'FN_ANALYSIS_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/clinical-governance/threshold-optimization
+ * Returns decision threshold sweep and optimal clinical operating point.
+ */
+app.get('/api/clinical-governance/threshold-optimization', (req, res) => {
+  try {
+    const evalPath = path.join(__dirname, '../dataset/evaluation_dataset.json');
+    const evalData = JSON.parse(fs.readFileSync(evalPath, 'utf8'));
+    const optimization = falseNegativeAnalyzer.optimizeThresholds(evalData);
+    res.json({ success: true, optimization });
+  } catch (err) {
+    res.status(500).json({ error: 'THRESHOLD_OPTIMIZATION_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/clinical-governance/safety-policy
+ * Returns authoritative Zero False Negative Clinical Safety Policy.
+ */
+app.get('/api/clinical-governance/safety-policy', (req, res) => {
+  res.json({
+    success: true,
+    policy: falseNegativeAnalyzer.getClinicalSafetyOperatingPolicy()
   });
 });
 

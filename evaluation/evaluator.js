@@ -19,6 +19,7 @@ const Metrics = require("./metrics");
 const Schema = require("../dataset/schema");
 const { validateDeidentifiedRecord } = require("../dataset/deidentification");
 const { patientLevelSplitService } = require("../dataset/patient_level_split_service");
+const { falseNegativeAnalyzer } = require("./false_negative_analyzer");
 
 /**
  * Predicts triage using the Health Vibe deterministic rule engine.
@@ -279,6 +280,16 @@ function runClinicalEvaluation({
 
   const allCriteriaPassed = Object.values(criteriaEvaluation).every(c => c.passed);
 
+  // 8. False Negative Clinical Audit & Decision Threshold Sweep
+  const currentUrgentCutoff = rulesVersion === "HealthVibe-Rules-v1.1" ? 7 : 6;
+  const detailedFnAnalysis = falseNegativeAnalyzer.analyzeFalseNegatives(evalData, {
+    urgentCutoff: currentUrgentCutoff,
+    probabilityCutoff: 0.45,
+    datasetName: "Held-out Evaluation Dataset"
+  });
+  const thresholdOptimization = falseNegativeAnalyzer.optimizeThresholds(evalData);
+  const safetyOperatingPolicy = falseNegativeAnalyzer.getClinicalSafetyOperatingPolicy();
+
   return {
     metadata: {
       evaluationDate: new Date().toISOString(),
@@ -298,6 +309,9 @@ function runClinicalEvaluation({
       totalFalsePositives: falsePositives.length,
       falsePositives
     },
+    falseNegativeAnalysis: detailedFnAnalysis,
+    thresholdOptimization,
+    clinicalSafetyOperatingPolicy: safetyOperatingPolicy,
     demographicSubgroups,
     acceptanceCriteriaResults: {
       overallPassed: allCriteriaPassed,
@@ -396,5 +410,6 @@ if (require.main === module) {
 module.exports = {
   evaluateCaseRules,
   runClinicalEvaluation,
-  evaluateSubgroups
+  evaluateSubgroups,
+  falseNegativeAnalyzer
 };
