@@ -15,6 +15,7 @@
   'use strict';
 
   const STORAGE_KEY = 'hv_display_prefs';
+  const DRAFT_PREFIX = 'hv_form_draft_';
 
   const DEFAULTS = Object.freeze({
     theme: 'dark',
@@ -27,6 +28,9 @@
     lastActiveModule: 'respiratory',
     lastActiveTab: null,
     deviceTier: 'desktop',
+    errorGuidanceLevel: 'detailed', // 'detailed' | 'standard' | 'compact' (Vezeeta standard)
+    autoDraftRecovery: true,       // boolean: auto-save/restore patient input on error
+    dismissedErrorTips: [],       // Array<string> of acknowledged error tips
     lastSessionAt: null,
     updatedAt: null
   });
@@ -47,6 +51,39 @@
     try {
       if (typeof localStorage !== 'undefined' && localStorage) {
         localStorage.setItem(key, value);
+      }
+    } catch (_) {}
+  }
+
+  function safeStorageRemove(key) {
+    try {
+      if (typeof localStorage !== 'undefined' && localStorage) {
+        localStorage.removeItem(key);
+      }
+    } catch (_) {}
+  }
+
+  function safeSessionGet(key) {
+    try {
+      if (typeof sessionStorage !== 'undefined' && sessionStorage) {
+        return sessionStorage.getItem(key);
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  function safeSessionSet(key, value) {
+    try {
+      if (typeof sessionStorage !== 'undefined' && sessionStorage) {
+        sessionStorage.setItem(key, value);
+      }
+    } catch (_) {}
+  }
+
+  function safeSessionRemove(key) {
+    try {
+      if (typeof sessionStorage !== 'undefined' && sessionStorage) {
+        sessionStorage.removeItem(key);
       }
     } catch (_) {}
   }
@@ -283,6 +320,111 @@
     }
   }
 
+  /**
+   * Persists form draft locally and remotely to prevent patient data loss on error.
+   */
+  async function saveFormDraft(formId, data, options = {}) {
+    if (!formId || !data) return null;
+    const safeFormId = String(formId).trim();
+    const payload = {
+      data,
+      savedAt: new Date().toISOString()
+    };
+    const serialized = JSON.stringify(payload);
+    safeSessionSet(`${DRAFT_PREFIX}${safeFormId}`, serialized);
+    safeStorageSet(`${DRAFT_PREFIX}${safeFormId}`, serialized);
+
+    if (options.syncServer !== false) {
+      try {
+        const token = options.token || (await getAuthToken());
+        if (token) {
+          fetch(`${getBaseApiUrl()}/api/user/form-draft/${encodeURIComponent(safeFormId)}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ data })
+          }).catch(() => {});
+        }
+      } catch (_) {}
+    }
+
+    return payload;
+  }
+
+  /**
+   * Restores form draft from sessionStorage or localStorage.
+   */
+  function restoreFormDraft(formId) {
+    if (!formId) return null;
+    const safeFormId = String(formId).trim();
+    const rawSession = safeSessionGet(`${DRAFT_PREFIX}${safeFormId}`);
+    if (rawSession) {
+      try { return JSON.parse(rawSession); } catch (_) {}
+    }
+    const rawLocal = safeStorageGet(`${DRAFT_PREFIX}${safeFormId}`);
+    if (rawLocal) {
+      try { return JSON.parse(rawLocal); } catch (_) {}
+    }
+    return null;
+  }
+
+  /**
+   * Clears form draft upon successful submission or user reset.
+   */
+  async function clearFormDraft(formId, options = {}) {
+    if (!formId) return;
+    const safeFormId = String(formId).trim();
+    safeSessionRemove(`${DRAFT_PREFIX}${safeFormId}`);
+    safeStorageRemove(`${DRAFT_PREFIX}${safeFormId}`);
+
+    if (options.syncServer !== false) {
+      try {
+        const token = options.token || (await getAuthToken());
+        if (token) {
+          fetch(`${getBaseApiUrl()}/api/user/form-draft/${encodeURIComponent(safeFormId)}`, {
+            method: 'DELETE',
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          }).catch(() => {});
+        }
+      } catch (_) {}
+    }
+  }
+
+  /**
+   * Checks if an error tip/hint was previously dismissed by the user.
+   */
+  function isTipDismissed(tipId) {
+    if (!tipId) return false;
+    const prefs = loadLocalPreferences();
+    return Array.isArray(prefs.dismissedErrorTips) && prefs.dismissedErrorTips.includes(String(tipId));
+  }
+
+  /**
+   * Records an error tip as dismissed to respect user preference across sessions.
+   */
+  async function dismissTip(tipId) {
+    if (!tipId) return;
+    const prefs = loadLocalPreferences();
+    const tips = Array.isArray(prefs.dismissedErrorTips) ? [...prefs.dismissedErrorTips] : [];
+    const strId = String(tipId).trim();
+    if (!tips.includes(strId)) {
+      tips.push(strId);
+      await savePreferences({ dismissedErrorTips: tips });
+    }
+  }
+
+  /**
+   * Updates error guidance verbosity level ('detailed' | 'standard' | 'compact').
+   */
+  async function setErrorGuidanceLevel(level) {
+    const safeLevel = ['detailed', 'standard', 'compact'].includes(level) ? level : 'detailed';
+    return savePreferences({ errorGuidanceLevel: safeLevel });
+  }
+
   // Initial immediate DOM boot
   if (typeof document !== 'undefined') {
     const initialPrefs = loadLocalPreferences();
@@ -296,7 +438,13 @@
     savePreferences,
     syncWithServer,
     checkpointSession,
-    updateDeviceTier
+    updateDeviceTier,
+    saveFormDraft,
+    restoreFormDraft,
+    clearFormDraft,
+    isTipDismissed,
+    dismissTip,
+    setErrorGuidanceLevel
   };
 
   // Expose globally

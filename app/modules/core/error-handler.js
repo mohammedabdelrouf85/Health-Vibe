@@ -84,6 +84,60 @@
   }
 
   /**
+   * Isolates BiDi directional content (numbers, ranges, phone numbers, percentages, REF IDs)
+   * in Arabic RTL text so numbers and punctuation never flip or scramble.
+   * @param {string} text
+   * @returns {string}
+   */
+  function isolateBidiNumbers(text) {
+    if (!text || typeof text !== "string") return text;
+    // Split HTML tags to avoid modifying attributes or tag names
+    return text.replace(/(<[^>]+>)|([^<]+)/g, (match, tag, textContent) => {
+      if (tag) return tag;
+      return textContent
+        // 1. Support REF identifiers
+        .replace(/\bREF:\s*[a-zA-Z0-9_\-/]+/g, '<bdi class="bidi-isolate">$&</bdi>')
+        // 2. 14-digit National IDs (must match before phone numbers to prevent prefix collision)
+        .replace(/\b[23]\d{13}\b/g, '<bdi class="bidi-isolate">$&</bdi>')
+        // 3. Egyptian mobile numbers (with strict word boundaries)
+        .replace(/\b(?:\+?20|0)?1[0125]\d{8}\b/g, '<bdi class="bidi-isolate">$&</bdi>')
+        // 4. Clinical temperatures (e.g. 34.0°C or 37.2° or 43.0°)
+        .replace(/\b\d+(?:\.\d+)?\s*°[Cc]?/g, '<bdi class="bidi-isolate">$&</bdi>')
+        // 5. Percentages (e.g. 50% or 100%)
+        .replace(/\b\d+(?:\.\d+)?%/g, '<bdi class="bidi-isolate">$&</bdi>')
+        // 6. Numbers with medical units (e.g. 10 MB, 250 bpm, 10 ميجابايت)
+        .replace(/\b\d+(?:\.\d+)?\s*(?:MB|bpm|ميجابايت)\b/gi, '<bdi class="bidi-isolate">$&</bdi>');
+    });
+  }
+
+  /**
+   * Helper to look up key in i18n catalog with language awareness and fallback.
+   * @param {string} key
+   * @param {string} fallback
+   * @param {boolean} isEn
+   * @returns {string}
+   */
+  function getI18nText(key, fallback, isEn) {
+    try {
+      const i18nInstance = (typeof window !== "undefined" && window.i18n) || (typeof global !== "undefined" && global.i18n);
+      if (i18nInstance && i18nInstance.translations) {
+        const lang = isEn ? "en" : "ar";
+        const catalog = i18nInstance.translations[lang];
+        if (catalog) {
+          const parts = key.split(".");
+          let cur = catalog;
+          for (const p of parts) {
+            if (cur && cur[p] !== undefined) cur = cur[p];
+            else { cur = null; break; }
+          }
+          if (cur && typeof cur === "string") return cur;
+        }
+      }
+    } catch (_) {}
+    return fallback;
+  }
+
+  /**
    * Transforms raw technical errors into patient-friendly bilingual messages (Vezeeta standard).
    * Prevents raw technical stack traces, cryptic error codes, and PII from leaking to users.
    * @param {Error|string|object} err
@@ -143,13 +197,13 @@
       return {
         icon: "🩺",
         category: isEn ? "Vital Signs" : "العلامات الحيوية",
-        title: isEn ? "Invalid Oxygen Saturation (SpO2)" : "نسبة الأكسجين غير صالحة",
-        message: isEn
+        title: getI18nText("errors.spo2Title", isEn ? "Invalid Oxygen Saturation (SpO2)" : "نسبة الأكسجين غير صالحة", isEn),
+        message: getI18nText("errors.spo2Msg", isEn
           ? "Blood oxygen saturation must be a valid integer percentage between 50% and 100%."
-          : "نسبة تشبع الأكسجين في الدم يجب أن تكون قيمة صحيحة بين 50% و 100%.",
-        action: isEn
+          : "نسبة تشبع الأكسجين في الدم يجب أن تكون قيمة صحيحة بين 50% و 100%.", isEn),
+        action: getI18nText("errors.spo2Action", isEn
           ? "Please re-check your pulse oximeter reading on your finger and enter a value between 50 and 100."
-          : "يرجى التحقق من القراءة عبر جهاز مقياس النبض (Pulse Oximeter) وإعادة كتابة رقم صحيح بين 50 و 100.",
+          : "يرجى التحقق من القراءة عبر جهاز مقياس النبض (Pulse Oximeter) وإعادة كتابة رقم صحيح بين 50 و 100.", isEn),
         field: "spo2",
         ref: "clinical/spo2-out-of-range",
         severity: "error"
@@ -160,13 +214,13 @@
       return {
         icon: "🌡️",
         category: isEn ? "Vital Signs" : "العلامات الحيوية",
-        title: isEn ? "Temperature Out of Clinical Range" : "درجة الحرارة خارج النطاق الطبي",
-        message: isEn
+        title: getI18nText("errors.tempTitle", isEn ? "Temperature Out of Clinical Range" : "درجة الحرارة خارج النطاق الطبي", isEn),
+        message: getI18nText("errors.tempMsg", isEn
           ? "Body temperature must be within a physiologically safe human range (34.0°C to 43.0°C)."
-          : "درجة حرارة الجسم المسجلة غير متوافقة مع القياس البشري المعتمد (المسموح بين 34.0° و 43.0° مئوية).",
-        action: isEn
+          : "درجة حرارة الجسم المسجلة غير متوافقة مع القياس البشري المعتمد (المسموح بين 34.0° و 43.0° مئوية).", isEn),
+        action: getI18nText("errors.tempAction", isEn
           ? "Check with a clinical thermometer and enter a reading with one decimal place (e.g. 37.2 or 38.5)."
-          : "أعد قياس الحرارة بالترمومتر واكتب الرقم بالفواصل العشرية المعتادة (مثال: 37.2 أو 38.5).",
+          : "أعد قياس الحرارة بالترمومتر واكتب الرقم بالفواصل العشرية المعتادة (مثال: 37.2 أو 38.5).", isEn),
         field: "temperature",
         ref: "clinical/temperature-out-of-range",
         severity: "error"
@@ -177,13 +231,13 @@
       return {
         icon: "💓",
         category: isEn ? "Vital Signs" : "العلامات الحيوية",
-        title: isEn ? "Invalid Heart Rate" : "معدل النبض غير منطقي",
-        message: isEn
+        title: getI18nText("errors.heartRateTitle", isEn ? "Invalid Heart Rate" : "معدل النبض غير منطقي", isEn),
+        message: getI18nText("errors.heartRateMsg", isEn
           ? "Resting heart rate must be within the physiological range of 30 to 250 beats per minute (bpm)."
-          : "معدل نبضات القلب يجب أن يتراوح بين 30 و 250 نبضة في الدقيقة.",
-        action: isEn
+          : "معدل نبضات القلب يجب أن يتراوح بين 30 و 250 نبضة في الدقيقة.", isEn),
+        action: getI18nText("errors.heartRateAction", isEn
           ? "Count your radial pulse for 60 seconds or use a digital monitor, then enter an integer."
-          : "يرجى إعادة قياس النبض يدوياً أو عبر الساعة الذكية وإدخال رقم صحيح بين 30 و 250.",
+          : "يرجى إعادة قياس النبض يدوياً أو عبر الساعة الذكية وإدخال رقم صحيح بين 30 و 250.", isEn),
         field: "heart_rate",
         ref: "clinical/heart-rate-out-of-range",
         severity: "error"
@@ -194,13 +248,13 @@
       return {
         icon: "🫁",
         category: isEn ? "Vital Signs" : "العلامات الحيوية",
-        title: isEn ? "Invalid Respiratory Rate" : "معدل التنفس غير منطقي",
-        message: isEn
+        title: getI18nText("errors.respiratoryTitle", isEn ? "Invalid Respiratory Rate" : "معدل التنفس غير منطقي", isEn),
+        message: getI18nText("errors.respiratoryMsg", isEn
           ? "Respiratory rate must be between 5 and 60 breaths per minute."
-          : "معدل التنفس يجب أن يتراوح بين 5 و 60 نَفَساً في الدقيقة.",
-        action: isEn
+          : "معدل التنفس يجب أن يتراوح بين 5 و 60 نَفَساً في الدقيقة.", isEn),
+        action: getI18nText("errors.respiratoryAction", isEn
           ? "Count the number of full breaths in 60 seconds while relaxed, and enter the count."
-          : "احسب عدد مرات التنفس (شهيق وزفير) خلال دقيقة واحدة واكتب القيمة الناتجة.",
+          : "احسب عدد مرات التنفس (شهيق وزفير) خلال دقيقة واحدة واكتب القيمة الناتجة.", isEn),
         field: "respiratory_rate",
         ref: "clinical/respiratory-rate-out-of-range",
         severity: "error"
@@ -211,13 +265,13 @@
       return {
         icon: "🩸",
         category: isEn ? "Vital Signs" : "العلامات الحيوية",
-        title: isEn ? "Invalid Blood Pressure Reading" : "قراءة ضغط الدم غير صحيحة",
-        message: isEn
+        title: getI18nText("errors.bloodPressureTitle", isEn ? "Invalid Blood Pressure Reading" : "قراءة ضغط الدم غير صحيحة", isEn),
+        message: getI18nText("errors.bloodPressureMsg", isEn
           ? "Systolic pressure (top number) must be higher than diastolic pressure (bottom number)."
-          : "ضغط الدم الانقباضي (الرقم الأعلى) يجب أن يكون أكبر من الضغط الانبساطي (الرقم الأدنى).",
-        action: isEn
+          : "ضغط الدم الانقباضي (الرقم الأعلى) يجب أن يكون أكبر من الضغط الانبساطي (الرقم الأدنى).", isEn),
+        action: getI18nText("errors.bloodPressureAction", isEn
           ? "Check your blood pressure monitor and ensure the top number (e.g. 120) is placed before the bottom number (e.g. 80)."
-          : "تأكد من كتابة الرقمين بالترتيب الصحيح (مثال: 120 انقباضي على 80 انبساطي).",
+          : "تأكد من كتابة الرقمين بالترتيب الصحيح (مثال: 120 انقباضي على 80 انبساطي).", isEn),
         field: "blood_pressure",
         ref: "clinical/blood-pressure-invalid",
         severity: "error"
@@ -228,13 +282,13 @@
       return {
         icon: "⏱️",
         category: isEn ? "Clinical Symptoms" : "الأعراض السريرية",
-        title: isEn ? "Invalid Symptom Duration" : "مدة استمرار الأعراض غير دقيقة",
-        message: isEn
+        title: getI18nText("errors.durationTitle", isEn ? "Invalid Symptom Duration" : "مدة استمرار الأعراض غير دقيقة", isEn),
+        message: getI18nText("errors.durationMsg", isEn
           ? "Symptom duration must be a realistic duration between 1 day and 365 days."
-          : "يرجى تحديد مدة ظهور الأعراض بين يوم واحد و 365 يوماً.",
-        action: isEn
+          : "يرجى تحديد مدة ظهور الأعراض بين يوم واحد و 365 يوماً.", isEn),
+        action: getI18nText("errors.durationAction", isEn
           ? "Enter the approximate number of days since you first noticed symptoms (e.g. 3 or 7)."
-          : "اكتب عدد الأيام بالتقريب منذ بدء ظهور الأعراض (مثال: 3 أيام أو أسبوع = 7 أيام).",
+          : "اكتب عدد الأيام بالتقريب منذ بدء ظهور الأعراض (مثال: 3 أيام أو أسبوع = 7 أيام).", isEn),
         field: "symptom_duration",
         ref: "clinical/duration-out-of-range",
         severity: "error"
@@ -248,13 +302,13 @@
       return {
         icon: "📱",
         category: isEn ? "Contact Information" : "بيانات التواصل",
-        title: isEn ? "Invalid Mobile Number" : "رقم الهاتف غير صحيح",
-        message: isEn
+        title: getI18nText("errors.phoneTitle", isEn ? "Invalid Mobile Number" : "رقم الهاتف غير صحيح", isEn),
+        message: getI18nText("errors.phoneMsg", isEn
           ? "Egyptian mobile numbers must consist of 11 digits starting with 010, 011, 012, or 015."
-          : "رقم المحمول المصري يتكون من 11 رقماً ويبدأ بأحد الشبكات: 010 أو 011 أو 012 أو 015.",
-        action: isEn
+          : "رقم المحمول المصري يتكون من 11 رقماً ويبدأ بأحد الشبكات: 010 أو 011 أو 012 أو 015.", isEn),
+        action: getI18nText("errors.phoneAction", isEn
           ? "Check for missing digits or accidental spaces and enter an 11-digit mobile number (e.g. 01012345678)."
-          : "تأكد من كتابة 11 رقماً بدون مسافات أو رموز خاصة (مثال: 01012345678).",
+          : "تأكد من كتابة 11 رقماً بدون مسافات أو رموز خاصة (مثال: 01012345678).", isEn),
         field: "phone",
         ref: "validation/phone-invalid",
         severity: "error"
@@ -265,13 +319,13 @@
       return {
         icon: "🪪",
         category: isEn ? "National Identity" : "الهوية الشخصية",
-        title: isEn ? "Invalid National ID" : "الرقم القومي غير مطابق",
-        message: isEn
+        title: getI18nText("errors.nationalIdTitle", isEn ? "Invalid National ID" : "الرقم القومي غير مطابق", isEn),
+        message: getI18nText("errors.nationalIdMsg", isEn
           ? "Egyptian National ID consists of exactly 14 digits starting with 2 or 3 matching official records."
-          : "الرقم القومي المصري يتكون من 14 رقماً ويبدأ بالرقم 2 أو 3 وفقاً لسجلات شهادة الميلاد وبطاقة الهوية.",
-        action: isEn
+          : "الرقم القومي المصري يتكون من 14 رقماً ويبدأ بالرقم 2 أو 3 وفقاً لسجلات شهادة الميلاد وبطاقة الهوية.", isEn),
+        action: getI18nText("errors.nationalIdAction", isEn
           ? "Check your national identity card and enter all 14 digits without spaces or dashes."
-          : "راجع بطاقة الرقم القومي وأدخل الـ 14 رقماً بالكامل دون فواصل أو مسافات.",
+          : "راجع بطاقة الرقم القومي وأدخل الـ 14 رقماً بالكامل دون فواصل أو مسافات.", isEn),
         field: "national_id",
         ref: "validation/national-id-invalid",
         severity: "error"
@@ -282,13 +336,13 @@
       return {
         icon: "✏️",
         category: isEn ? "Required Information" : "الحقول الإلزامية",
-        title: isEn ? "Required Field Missing" : "يرجى استكمال البيانات المطلوبة",
-        message: isEn
+        title: getI18nText("errors.requiredFieldTitle", isEn ? "Required Field Missing" : "يرجى استكمال البيانات المطلوبة", isEn),
+        message: getI18nText("errors.requiredFieldMsg", isEn
           ? "This field is required to ensure clinical safety and schedule your medical consultation."
-          : "هذا الحقل إلزامي لضمان دقة التقييم الطبي وحجز الاستشارة بنجاح.",
-        action: isEn
+          : "هذا الحقل إلزامي لضمان دقة التقييم الطبي وحجز الاستشارة بنجاح.", isEn),
+        action: getI18nText("errors.requiredFieldAction", isEn
           ? "Please fill in the highlighted field marked with an asterisk (*) to proceed."
-          : "يرجى ملء الحقل المحدد بعلامة النجمة (*) للمتابعة.",
+          : "يرجى ملء الحقل المحدد بعلامة النجمة (*) للمتابعة.", isEn),
         field: null,
         ref: "validation/required-field",
         severity: "error"
@@ -302,13 +356,13 @@
       return {
         icon: "📅",
         category: isEn ? "Appointments" : "حجز المواعيد",
-        title: isEn ? "Time Slot Already Booked" : "الموعد تم حجزه للتو",
-        message: isEn
+        title: getI18nText("errors.slotTakenTitle", isEn ? "Time Slot Already Booked" : "الموعد تم حجزه للتو", isEn),
+        message: getI18nText("errors.slotTakenMsg", isEn
           ? "Another patient just confirmed this specific appointment slot. Clinic schedules update in real time."
-          : "قام مريض آخر بحجز هذا الموعد قبل ثوانٍ قليلة. يتم تحديث جدول العيادة فورياً.",
-        action: isEn
+          : "قام مريض آخر بحجز هذا الموعد قبل ثوانٍ قليلة. يتم تحديث جدول العيادة فورياً.", isEn),
+        action: getI18nText("errors.slotTakenAction", isEn
           ? "Please select another convenient slot from the doctor's available calendar."
-          : "يرجى اختيار موعد بديل مناسب من جدول المواعيد المتاحة لدى الطبيب.",
+          : "يرجى اختيار موعد بديل مناسب من جدول المواعيد المتاحة لدى الطبيب.", isEn),
         field: "appointment_slot",
         ref: "appointment/slot-taken",
         severity: "warning"
@@ -319,13 +373,13 @@
       return {
         icon: "⏳",
         category: isEn ? "Appointments" : "حجز المواعيد",
-        title: isEn ? "Appointment In The Past" : "تاريخ الموعد غير متاح",
-        message: isEn
+        title: getI18nText("errors.pastDateTitle", isEn ? "Appointment In The Past" : "تاريخ الموعد غير متاح", isEn),
+        message: getI18nText("errors.pastDateMsg", isEn
           ? "Appointments cannot be booked for a date or time that has already passed."
-          : "لا يمكن حجز موعد في تاريخ أو توقيت مضى.",
-        action: isEn
+          : "لا يمكن حجز موعد في تاريخ أو توقيت مضى.", isEn),
+        action: getI18nText("errors.pastDateAction", isEn
           ? "Please pick an upcoming date and time from the clinic schedule."
-          : "يرجى اختيار تاريخ ووقت مستقبلي من جدول العيادة.",
+          : "يرجى اختيار تاريخ ووقت مستقبلي من جدول العيادة.", isEn),
         field: "appointment_date",
         ref: "appointment/past-date",
         severity: "error"
@@ -336,13 +390,13 @@
       return {
         icon: "👨‍⚕️",
         category: isEn ? "Appointments" : "حجز المواعيد",
-        title: isEn ? "Doctor Unavailable" : "الطبيب غير متاح في هذا التوقيت",
-        message: isEn
+        title: getI18nText("errors.doctorUnavailableTitle", isEn ? "Doctor Unavailable" : "الطبيب غير متاح في هذا التوقيت", isEn),
+        message: getI18nText("errors.doctorUnavailableMsg", isEn
           ? "The physician is off-duty, in surgery, or attending a medical conference during this window."
-          : "الطبيب في إجازة رسمية، في غرفة العمليات، أو مشارك في مؤتمر طبي في هذا التوقيت.",
-        action: isEn
+          : "الطبيب في إجازة رسمية، في غرفة العمليات، أو مشارك في مؤتمر طبي في هذا التوقيت.", isEn),
+        action: getI18nText("errors.doctorUnavailableAction", isEn
           ? "Please check alternative dates or book with another accredited specialist in the clinic."
-          : "يرجى اختيار يوم عمل بديل أو حجز استشارة مع طبيب معتمد آخر في نفس التخصص.",
+          : "يرجى اختيار يوم عمل بديل أو حجز استشارة مع طبيب معتمد آخر في نفس التخصص.", isEn),
         field: "doctor_id",
         ref: "appointment/doctor-unavailable",
         severity: "warning"
@@ -356,13 +410,13 @@
       return {
         icon: "📎",
         category: isEn ? "Medical Attachments" : "الملفات الطبية",
-        title: isEn ? "Attachment Exceeds 10 MB" : "حجم الملف يتجاوز الحد المسموح",
-        message: isEn
+        title: getI18nText("errors.fileTooLargeTitle", isEn ? "Attachment Exceeds 10 MB" : "حجم الملف يتجاوز الحد المسموح", isEn),
+        message: getI18nText("errors.fileTooLargeMsg", isEn
           ? "The selected medical report or scan exceeds the maximum allowed upload limit of 10 MB."
-          : "حجم التقرير أو الأشعة المرفقة يتجاوز الحد الأقصى المسموح به (10 ميجابايت).",
-        action: isEn
+          : "حجم التقرير أو الأشعة المرفقة يتجاوز الحد الأقصى المسموح به (10 ميجابايت).", isEn),
+        action: getI18nText("errors.fileTooLargeAction", isEn
           ? "Please compress your PDF or choose a medium-resolution photo of the document."
-          : "يرجى ضغط ملف الـ PDF أو تصوير التقرير بجودة مناسبة دون تجاوز 10 ميجابايت.",
+          : "يرجى ضغط ملف الـ PDF أو تصوير التقرير بجودة مناسبة دون تجاوز 10 ميجابايت.", isEn),
         field: "medical_file",
         ref: "file/too-large",
         severity: "error"
@@ -373,13 +427,13 @@
       return {
         icon: "📄",
         category: isEn ? "Medical Attachments" : "الملفات الطبية",
-        title: isEn ? "Unsupported File Format" : "صيغة الملف غير مدعومة",
-        message: isEn
+        title: getI18nText("errors.fileUnsupportedTitle", isEn ? "Unsupported File Format" : "صيغة الملف غير مدعومة", isEn),
+        message: getI18nText("errors.fileUnsupportedMsg", isEn
           ? "The selected file format is not supported for patient medical records."
-          : "صيغة الملف المحدد غير مقبولة في السجل الطبي الإلكتروني.",
-        action: isEn
+          : "صيغة الملف المحدد غير مقبولة في السجل الطبي الإلكتروني.", isEn),
+        action: getI18nText("errors.fileUnsupportedAction", isEn
           ? "Please upload documents in PDF format, or images in JPG, PNG, or WEBP format."
-          : "يرجى رفع الملفات بصيغة PDF أو صور بصيغة JPG أو PNG أو WEBP فقط.",
+          : "يرجى رفع الملفات بصيغة PDF أو صور بصيغة JPG أو PNG أو WEBP فقط.", isEn),
         field: "medical_file",
         ref: "file/unsupported-format",
         severity: "error"
@@ -566,13 +620,13 @@
       return {
         icon: "📡",
         category: isEn ? "Connectivity" : "الاتصال والشبكة",
-        title: isEn ? "Connection Unavailable" : "تعذر الاتصال بالخادم",
-        message: isEn
+        title: getI18nText("errors.connUnavailableTitle", isEn ? "Connection Unavailable" : "تعذر الاتصال بالخادم", isEn),
+        message: getI18nText("errors.connUnavailableMsg", isEn
           ? "Could not establish a stable connection with the medical cloud service. Your local records are secure."
-          : "تعذر الوصول إلى خوادم السحابة الطبية حالياً. بياناتك المسجلة بأمان.",
-        action: isEn
+          : "تعذر الوصول إلى خوادم السحابة الطبية حالياً. بياناتك المسجلة بأمان.", isEn),
+        action: getI18nText("errors.connUnavailableAction", isEn
           ? "Please check your internet or Wi-Fi connection and tap 'Retry'."
-          : "يرجى التأكد من اتصالك بالإنترنت (واي فاي أو باقة الهاتف) والضغط على 'إعادة المحاولة'.",
+          : "يرجى التأكد من اتصالك بالإنترنت (واي فاي أو باقة الهاتف) والضغط على 'إعادة المحاولة'.", isEn),
         field: null,
         ref: code || "network/offline",
         severity: "warning"
@@ -659,22 +713,50 @@
    * @param {object} [options={}]
    * @returns {HTMLElement|null}
    */
+  /**
+   * Renders an accessible, responsive error card inside a container (Vezeeta standard).
+   * @param {string|HTMLElement} container
+   * @param {*} err
+   * @param {object} [options={}]
+   * @returns {HTMLElement|null}
+   */
   function renderNotice(container, err, options = {}) {
     const el = resolveElement(container);
     if (!el || typeof document === "undefined") return null;
+
+    // Check if user previously dismissed this tip
+    if (options.tipId && global.HVUserPreferences && typeof global.HVUserPreferences.isTipDismissed === "function") {
+      if (global.HVUserPreferences.isTipDismissed(options.tipId)) {
+        return null;
+      }
+    }
 
     const isEn = options.isEn !== undefined
       ? options.isEn
       : (typeof global.currentLanguage !== "undefined" && global.currentLanguage === "en");
 
+    let guidanceLevel = options.guidanceLevel;
+    if (!guidanceLevel && global.HVUserPreferences && typeof global.HVUserPreferences.getPreferences === "function") {
+      guidanceLevel = global.HVUserPreferences.getPreferences().errorGuidanceLevel;
+    }
+    guidanceLevel = guidanceLevel || "detailed";
+
     const friendly = toFriendlyAppError(err, options.context, isEn);
 
     const card = document.createElement("div");
-    card.className = `friendly-error-card ${options.className || ""} severity-${friendly.severity}`;
+    card.className = `friendly-error-card ${options.className || ""} severity-${friendly.severity} level-${guidanceLevel}`;
     card.setAttribute("role", "alert");
     card.setAttribute("aria-live", "polite");
+    card.setAttribute("dir", isEn ? "ltr" : "rtl");
+    card.setAttribute("lang", isEn ? "en" : "ar");
 
     const badgeClass = friendly.severity === "warning" ? "pill warning" : "pill danger";
+    const howToFixText = getI18nText("errors.howToFix", isEn ? "How to fix:" : "كيفية التصحيح:", isEn);
+    const closeLabel = isEn ? "Close" : "إغلاق";
+
+    const msgHtml = isolateBidiNumbers(friendly.message);
+    const actionHtml = isolateBidiNumbers(friendly.action);
+    const refHtml = isolateBidiNumbers("REF: " + friendly.ref);
 
     card.innerHTML = `
       <div class="friendly-error-header">
@@ -686,17 +768,24 @@
           <h4 class="friendly-error-title">${friendly.title}</h4>
         </div>
         ${options.dismissible !== false ? `
-          <button type="button" class="friendly-close-btn" aria-label="${isEn ? "Close" : "إغلاق"}">&times;</button>
+          <button type="button" class="friendly-close-btn" aria-label="${closeLabel}">&times;</button>
         ` : ""}
       </div>
-      <div class="friendly-error-message">${friendly.message}</div>
-      <div class="friendly-error-guidance">
-        <span class="guidance-bulb" aria-hidden="true">💡</span>
-        <div class="guidance-content">
-          <strong>${isEn ? "How to fix:" : "كيفية التصحيح:"}</strong>
-          <span>${friendly.action}</span>
+      <div class="friendly-error-message">${msgHtml}</div>
+      ${guidanceLevel !== "compact" ? `
+        <div class="friendly-error-guidance">
+          <span class="guidance-bulb" aria-hidden="true">💡</span>
+          <div class="guidance-content">
+            <strong>${howToFixText}</strong>
+            <span>${actionHtml}</span>
+          </div>
         </div>
-      </div>
+      ` : `
+        <div class="friendly-error-guidance compact">
+          <span class="guidance-bulb" aria-hidden="true">💡</span>
+          <span class="compact-action">${actionHtml}</span>
+        </div>
+      `}
       ${options.onRetry || options.primaryAction ? `
         <div class="friendly-error-actions">
           ${options.onRetry ? `
@@ -711,7 +800,7 @@
           ` : ""}
         </div>
       ` : ""}
-      <div class="friendly-error-ref">REF: ${friendly.ref}</div>
+      <div class="friendly-error-ref">${refHtml}</div>
     `;
 
     // Wire retry button
@@ -734,15 +823,51 @@
       }
     }
 
-    // Wire close button
+    // Wire close button and persist tip dismissal if configured
     const closeBtn = card.querySelector(".friendly-close-btn");
     if (closeBtn) {
       closeBtn.addEventListener("click", () => {
+        if (options.tipId && global.HVUserPreferences && typeof global.HVUserPreferences.dismissTip === "function") {
+          global.HVUserPreferences.dismissTip(options.tipId);
+        }
         if (typeof options.onClose === "function") {
           options.onClose(card);
         }
         card.remove();
       });
+    }
+
+    // Dynamic language change listener for bilingual reactivity
+    if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+      const langHandler = (evt) => {
+        if (!card.isConnected) {
+          window.removeEventListener("languageChanged", langHandler);
+          return;
+        }
+        const updatedLang = (evt && evt.detail && evt.detail.language) || (global.currentLanguage || "ar");
+        const updatedIsEn = updatedLang === "en";
+        const updatedFriendly = toFriendlyAppError(err, options.context, updatedIsEn);
+        card.setAttribute("dir", updatedIsEn ? "ltr" : "rtl");
+        card.setAttribute("lang", updatedIsEn ? "en" : "ar");
+
+        const titleEl = card.querySelector(".friendly-error-title");
+        if (titleEl) titleEl.textContent = updatedFriendly.title;
+
+        const metaEl = card.querySelector(".friendly-error-meta span");
+        if (metaEl) metaEl.textContent = updatedFriendly.category;
+
+        const msgEl = card.querySelector(".friendly-error-message");
+        if (msgEl) msgEl.innerHTML = isolateBidiNumbers(updatedFriendly.message);
+
+        const guideContent = card.querySelector(".guidance-content");
+        if (guideContent) {
+          guideContent.innerHTML = `
+            <strong>${getI18nText("errors.howToFix", updatedIsEn ? "How to fix:" : "كيفية التصحيح:", updatedIsEn)}</strong>
+            <span>${isolateBidiNumbers(updatedFriendly.action)}</span>
+          `;
+        }
+      };
+      window.addEventListener("languageChanged", langHandler);
     }
 
     if (options.replace) {
@@ -754,7 +879,7 @@
 
   /**
    * Renders inline field feedback directly below a form input control.
-   * Sets aria-invalid and aria-describedby for accessibility.
+   * Sets aria-invalid, aria-describedby, dir, and BiDi isolation for accessibility.
    * @param {string|HTMLElement} inputOrSelector
    * @param {*} errOrKey
    * @param {object} [options={}]
@@ -790,7 +915,7 @@
       errorElem.setAttribute("aria-live", "polite");
 
       // Insert immediately after input (or input wrapper if wrapped in parent)
-      const parent = input.closest(".input-group, .form-group, .field-wrapper") || input.parentElement;
+      const parent = input.closest ? (input.closest(".input-group, .form-group, .field-wrapper") || input.parentElement) : input.parentElement;
       if (parent && parent !== input.parentElement) {
         parent.appendChild(errorElem);
       } else {
@@ -798,15 +923,45 @@
       }
     }
 
+    errorElem.setAttribute("dir", isEn ? "ltr" : "rtl");
+    errorElem.setAttribute("lang", isEn ? "en" : "ar");
+
+    const msgHtml = isolateBidiNumbers(friendly.message);
+    const actionHtml = isolateBidiNumbers(friendly.action);
+
     errorElem.innerHTML = `
       <span class="field-error-icon" aria-hidden="true">${friendly.icon}</span>
       <div class="field-error-body">
         <span class="field-error-title">${friendly.title}:</span>
-        <span class="field-error-msg">${friendly.message}</span>
-        <small class="friendly-field-guide">💡 ${friendly.action}</small>
+        <span class="field-error-msg">${msgHtml}</span>
+        <small class="friendly-field-guide">💡 ${actionHtml}</small>
       </div>
     `;
     errorElem.style.display = "flex";
+
+    // Dynamic language change listener for inline error
+    if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+      const langHandler = (evt) => {
+        if (!errorElem.isConnected) {
+          window.removeEventListener("languageChanged", langHandler);
+          return;
+        }
+        const updatedLang = (evt && evt.detail && evt.detail.language) || (global.currentLanguage || "ar");
+        const updatedIsEn = updatedLang === "en";
+        const updatedFriendly = toFriendlyAppError(errOrKey, options.context, updatedIsEn);
+        errorElem.setAttribute("dir", updatedIsEn ? "ltr" : "rtl");
+        errorElem.setAttribute("lang", updatedIsEn ? "en" : "ar");
+        errorElem.innerHTML = `
+          <span class="field-error-icon" aria-hidden="true">${updatedFriendly.icon}</span>
+          <div class="field-error-body">
+            <span class="field-error-title">${updatedFriendly.title}:</span>
+            <span class="field-error-msg">${isolateBidiNumbers(updatedFriendly.message)}</span>
+            <small class="friendly-field-guide">💡 ${isolateBidiNumbers(updatedFriendly.action)}</small>
+          </div>
+        `;
+      };
+      window.addEventListener("languageChanged", langHandler);
+    }
 
     return errorElem;
   }
@@ -985,12 +1140,136 @@
     }
 
     if (errorCode) {
+      // Auto-save form draft if input belongs to a form to prevent patient data loss
+      try {
+        const form = input.closest ? input.closest("form") : null;
+        const formId = options.formId || (form ? (form.id || form.getAttribute("data-form-id")) : null);
+        if (formId && form) {
+          const prefs = (global.HVUserPreferences && typeof global.HVUserPreferences.getPreferences === "function")
+            ? global.HVUserPreferences.getPreferences()
+            : null;
+          const autoRecoveryEnabled = prefs ? prefs.autoDraftRecovery !== false : true;
+          if (autoRecoveryEnabled) {
+            const formData = {};
+            const elements = form.querySelectorAll("input, select, textarea");
+            elements.forEach(el => {
+              const k = el.name || el.id;
+              if (k && el.type !== "password") {
+                formData[k] = el.value;
+              }
+            });
+            saveFormDraft(formId, formData);
+          }
+        }
+      } catch (_) {}
+
       const errObj = renderFieldFeedback(input, errorCode, { isEn, ...options });
       return { valid: false, error: toFriendlyAppError(errorCode, "", isEn) };
     } else {
       clearFieldFeedback(input);
       return { valid: true, error: null };
     }
+  }
+
+  /**
+   * Saves patient form input draft in local and session persistence.
+   * @param {string} formId
+   * @param {object} data
+   * @returns {object|null}
+   */
+  function saveFormDraft(formId, data) {
+    if (global.HVUserPreferences && typeof global.HVUserPreferences.saveFormDraft === "function") {
+      return global.HVUserPreferences.saveFormDraft(formId, data);
+    }
+    try {
+      const payload = { data, savedAt: new Date().toISOString() };
+      if (typeof sessionStorage !== "undefined") sessionStorage.setItem(`hv_form_draft_${formId}`, JSON.stringify(payload));
+      if (typeof localStorage !== "undefined") localStorage.setItem(`hv_form_draft_${formId}`, JSON.stringify(payload));
+      return payload;
+    } catch (_) {}
+    return null;
+  }
+
+  /**
+   * Restores patient form input draft.
+   * @param {string} formId
+   * @returns {object|null}
+   */
+  function restoreFormDraft(formId) {
+    if (global.HVUserPreferences && typeof global.HVUserPreferences.restoreFormDraft === "function") {
+      return global.HVUserPreferences.restoreFormDraft(formId);
+    }
+    try {
+      if (typeof sessionStorage !== "undefined") {
+        const raw = sessionStorage.getItem(`hv_form_draft_${formId}`);
+        if (raw) return JSON.parse(raw);
+      }
+      if (typeof localStorage !== "undefined") {
+        const raw = localStorage.getItem(`hv_form_draft_${formId}`);
+        if (raw) return JSON.parse(raw);
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /**
+   * Clears saved form draft upon successful submission.
+   * @param {string} formId
+   */
+  function clearFormDraft(formId) {
+    if (global.HVUserPreferences && typeof global.HVUserPreferences.clearFormDraft === "function") {
+      return global.HVUserPreferences.clearFormDraft(formId);
+    }
+    try {
+      if (typeof sessionStorage !== "undefined") sessionStorage.removeItem(`hv_form_draft_${formId}`);
+      if (typeof localStorage !== "undefined") localStorage.removeItem(`hv_form_draft_${formId}`);
+    } catch (_) {}
+  }
+
+  /**
+   * Automatically restores drafted inputs into matching form elements.
+   * @param {string|HTMLElement} formOrSelector
+   * @param {string} [formId]
+   * @param {object} [options={}]
+   * @returns {{ draft: object, restoredCount: number }|null}
+   */
+  function autoRestoreDraft(formOrSelector, formId, options = {}) {
+    const form = resolveElement(formOrSelector);
+    if (!form || typeof form.querySelectorAll !== "function") return null;
+
+    const targetId = formId || form.id || form.getAttribute("data-form-id");
+    if (!targetId) return null;
+
+    const draft = restoreFormDraft(targetId);
+    if (!draft || !draft.data) return null;
+
+    let restoredCount = 0;
+    const inputs = form.querySelectorAll("input, select, textarea");
+    inputs.forEach(el => {
+      const key = el.name || el.id;
+      if (key && draft.data[key] !== undefined && el.type !== "password") {
+        el.value = draft.data[key];
+        restoredCount++;
+      }
+    });
+
+    if (restoredCount > 0 && options.showNotice !== false) {
+      const isEn = options.isEn !== undefined
+        ? options.isEn
+        : (typeof global.currentLanguage !== "undefined" && global.currentLanguage === "en");
+      const noticeText = isEn
+        ? "Your unsaved form draft has been restored automatically."
+        : "تم استرجاع مسودتك المحفوظة تلقائياً.";
+      const noticeEl = document.createElement("div");
+      noticeEl.className = "friendly-draft-restored-pill";
+      noticeEl.setAttribute("role", "status");
+      noticeEl.setAttribute("aria-live", "polite");
+      noticeEl.innerHTML = `<span>📋 ${noticeText}</span>`;
+      form.insertAdjacentElement("beforebegin", noticeEl);
+      setTimeout(() => noticeEl.remove(), 4000);
+    }
+
+    return { draft, restoredCount };
   }
 
   /**
@@ -1035,7 +1314,12 @@
     renderFieldFeedback,
     clearFieldFeedback,
     validateField,
-    bindLiveValidation
+    bindLiveValidation,
+    isolateBidiNumbers,
+    saveFormDraft,
+    restoreFormDraft,
+    clearFormDraft,
+    autoRestoreDraft
   };
 
   const ErrorHandler = {
@@ -1043,6 +1327,7 @@
     categorizeClientError,
     isNetworkError,
     toFriendlyAppError,
+    isolateBidiNumbers,
     FriendlyErrorGuide
   };
 
@@ -1056,6 +1341,7 @@
       ErrorHandler,
       FriendlyErrorGuide,
       toFriendlyAppError,
+      isolateBidiNumbers,
       redactClientPii,
       categorizeClientError,
       isNetworkError

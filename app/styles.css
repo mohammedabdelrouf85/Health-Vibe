@@ -7197,6 +7197,7 @@ bdi.bidi-isolate {
   border-radius: 8px;
   transition: color 0.15s ease, background 0.15s ease;
   flex-shrink: 0;
+  margin-inline-start: auto;
 }
 
 .friendly-close-btn:hover,
@@ -7226,6 +7227,13 @@ bdi.bidi-isolate {
   font-size: 13px;
   line-height: 1.5;
   color: var(--ink, #e2f0ee);
+}
+
+.friendly-error-guidance.compact {
+  padding: 6px 12px;
+  font-size: 12.5px;
+  gap: 6px;
+  align-items: center;
 }
 
 .friendly-error-guidance .guidance-bulb {
@@ -7280,6 +7288,24 @@ bdi.bidi-isolate {
   opacity: 0.75;
   margin-top: 10px;
   word-break: break-all;
+  direction: ltr !important;
+  unicode-bidi: isolate !important;
+  display: inline-block;
+  text-align: start;
+}
+
+.friendly-draft-restored-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(9, 184, 182, 0.15);
+  border: 1px solid rgba(9, 184, 182, 0.35);
+  color: var(--teal-2, #5dd6d4);
+  font-size: 13px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  margin-bottom: 12px;
+  animation: friendlyFieldFadeIn 0.25s ease forwards;
 }
 
 /* Inline Field Validation (Immediate Vezeeta Form Assistance) */

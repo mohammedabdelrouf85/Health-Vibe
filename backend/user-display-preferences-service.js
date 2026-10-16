@@ -14,6 +14,10 @@ const DEFAULT_USER_DISPLAY_PREFERENCES = Object.freeze({
   lastActiveModule: 'respiratory',    // string
   lastActiveTab: null,          // string | null
   deviceTier: 'desktop',         // 'mobile' | 'tablet' | 'desktop' | 'wide'
+  errorGuidanceLevel: 'detailed', // 'detailed' | 'standard' | 'compact' (Vezeeta standard)
+  autoDraftRecovery: true,       // boolean
+  dismissedErrorTips: [],       // Array<string>
+  sessionDrafts: {},            // Record<string, { data: object, savedAt: string }>
   lastSessionAt: null,          // ISO timestamp
   updatedAt: null               // ISO timestamp
 });
@@ -24,9 +28,11 @@ const ALLOWED_DIRECTIONS = new Set(['rtl', 'ltr']);
 const ALLOWED_BREAKPOINTS = new Set(['auto', 'xs', 'sm', 'md', 'lg', 'xl', '2xl', 'mobile', 'tablet', 'desktop', 'wide']);
 const ALLOWED_DENSITIES = new Set(['compact', 'comfortable', 'spacious']);
 const ALLOWED_DEVICE_TIERS = new Set(['mobile', 'tablet', 'desktop', 'wide']);
+const ALLOWED_GUIDANCE_LEVELS = new Set(['detailed', 'standard', 'compact']);
 
 // In-memory cache for fast retrieval and fallback when Firestore is offline or local
 const inMemoryDisplayPreferences = new Map();
+const inMemoryDrafts = new Map();
 
 /**
  * Validates and sanitizes preference updates.
@@ -111,6 +117,36 @@ function validateDisplayPreferences(updates = {}) {
     }
   }
 
+  if (updates.errorGuidanceLevel !== undefined) {
+    const level = String(updates.errorGuidanceLevel).trim().toLowerCase();
+    if (!ALLOWED_GUIDANCE_LEVELS.has(level)) {
+      const err = new Error(`Invalid errorGuidanceLevel: '${updates.errorGuidanceLevel}'. Allowed values: detailed, standard, compact.`);
+      err.code = 'INVALID_GUIDANCE_LEVEL';
+      throw err;
+    }
+    sanitized.errorGuidanceLevel = level;
+  }
+
+  if (updates.autoDraftRecovery !== undefined) {
+    sanitized.autoDraftRecovery = Boolean(updates.autoDraftRecovery);
+  }
+
+  if (updates.dismissedErrorTips !== undefined) {
+    if (!Array.isArray(updates.dismissedErrorTips)) {
+      const err = new Error('dismissedErrorTips must be an array of string tip IDs.');
+      err.code = 'INVALID_DISMISSED_TIPS';
+      throw err;
+    }
+    sanitized.dismissedErrorTips = updates.dismissedErrorTips
+      .filter(tip => typeof tip === 'string' && tip.trim().length > 0)
+      .map(tip => tip.trim().slice(0, 64))
+      .slice(0, 50);
+  }
+
+  if (updates.sessionDrafts !== undefined && typeof updates.sessionDrafts === 'object' && updates.sessionDrafts !== null) {
+    sanitized.sessionDrafts = { ...updates.sessionDrafts };
+  }
+
   return sanitized;
 }
 
@@ -153,6 +189,10 @@ async function getUserDisplayPreferences(db, userId) {
     lastActiveModule: prefs.lastActiveModule || DEFAULT_USER_DISPLAY_PREFERENCES.lastActiveModule,
     lastActiveTab: prefs.lastActiveTab !== undefined ? prefs.lastActiveTab : DEFAULT_USER_DISPLAY_PREFERENCES.lastActiveTab,
     deviceTier: prefs.deviceTier || DEFAULT_USER_DISPLAY_PREFERENCES.deviceTier,
+    errorGuidanceLevel: prefs.errorGuidanceLevel || DEFAULT_USER_DISPLAY_PREFERENCES.errorGuidanceLevel,
+    autoDraftRecovery: typeof prefs.autoDraftRecovery === 'boolean' ? prefs.autoDraftRecovery : DEFAULT_USER_DISPLAY_PREFERENCES.autoDraftRecovery,
+    dismissedErrorTips: Array.isArray(prefs.dismissedErrorTips) ? prefs.dismissedErrorTips : [],
+    sessionDrafts: prefs.sessionDrafts && typeof prefs.sessionDrafts === 'object' ? prefs.sessionDrafts : {},
     lastSessionAt: prefs.lastSessionAt || null,
     updatedAt: prefs.updatedAt || null
   };
@@ -194,6 +234,76 @@ async function updateUserDisplayPreferences(db, userId, updates = {}) {
 }
 
 /**
+ * Persists a form draft for a specific user to prevent data loss.
+ */
+async function saveUserDraft(db, userId, formId, draftData = {}) {
+  if (!userId || !formId) {
+    const err = new Error('userId and formId are required to save draft.');
+    err.code = 'INVALID_PARAMETERS';
+    throw err;
+  }
+
+  const safeFormId = String(formId).trim().slice(0, 64);
+  const nowIso = new Date().toISOString();
+  const draftEntry = {
+    data: draftData || {},
+    savedAt: nowIso
+  };
+
+  const key = `${userId}:${safeFormId}`;
+  inMemoryDrafts.set(key, draftEntry);
+
+  const currentPrefs = await getUserDisplayPreferences(db, userId);
+  const updatedDrafts = {
+    ...(currentPrefs.sessionDrafts || {}),
+    [safeFormId]: draftEntry
+  };
+
+  await updateUserDisplayPreferences(db, userId, { sessionDrafts: updatedDrafts });
+  return draftEntry;
+}
+
+/**
+ * Retrieves a user's form draft.
+ */
+async function getUserDraft(db, userId, formId) {
+  if (!userId || !formId) return null;
+  const safeFormId = String(formId).trim().slice(0, 64);
+  const key = `${userId}:${safeFormId}`;
+
+  if (inMemoryDrafts.has(key)) {
+    return inMemoryDrafts.get(key);
+  }
+
+  const prefs = await getUserDisplayPreferences(db, userId);
+  if (prefs && prefs.sessionDrafts && prefs.sessionDrafts[safeFormId]) {
+    inMemoryDrafts.set(key, prefs.sessionDrafts[safeFormId]);
+    return prefs.sessionDrafts[safeFormId];
+  }
+
+  return null;
+}
+
+/**
+ * Deletes a form draft once successfully submitted.
+ */
+async function deleteUserDraft(db, userId, formId) {
+  if (!userId || !formId) return false;
+  const safeFormId = String(formId).trim().slice(0, 64);
+  const key = `${userId}:${safeFormId}`;
+  inMemoryDrafts.delete(key);
+
+  const currentPrefs = await getUserDisplayPreferences(db, userId);
+  if (currentPrefs.sessionDrafts && currentPrefs.sessionDrafts[safeFormId]) {
+    const updatedDrafts = { ...currentPrefs.sessionDrafts };
+    delete updatedDrafts[safeFormId];
+    await updateUserDisplayPreferences(db, userId, { sessionDrafts: updatedDrafts });
+  }
+
+  return true;
+}
+
+/**
  * Records a session checkpoint (active screen, module, device tier) quickly.
  */
 async function recordSessionCheckpoint(db, userId, { screenId, moduleId, tabId, deviceTier } = {}) {
@@ -208,6 +318,7 @@ async function recordSessionCheckpoint(db, userId, { screenId, moduleId, tabId, 
 
 function clearDisplayPreferencesMemory() {
   inMemoryDisplayPreferences.clear();
+  inMemoryDrafts.clear();
 }
 
 module.exports = {
@@ -215,6 +326,9 @@ module.exports = {
   validateDisplayPreferences,
   getUserDisplayPreferences,
   updateUserDisplayPreferences,
+  saveUserDraft,
+  getUserDraft,
+  deleteUserDraft,
   recordSessionCheckpoint,
   clearDisplayPreferencesMemory
 };

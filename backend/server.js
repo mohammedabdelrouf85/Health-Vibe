@@ -10700,6 +10700,60 @@ app.post('/api/user/session-state', requireAuth, async (req, res) => {
 });
 
 /**
+ * GET /api/user/form-draft/:formId
+ * Retrieves saved draft for patient input protection across sessions and errors.
+ */
+app.get('/api/user/form-draft/:formId', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.uid;
+    const formId = req.params.formId;
+    const draft = await userDisplayPreferencesService.getUserDraft(db, userId, formId);
+    return res.json({ success: true, formId, draft });
+  } catch (err) {
+    console.error('[GET FORM DRAFT ERROR]:', err);
+    return res.status(500).json({ error: 'FETCH_DRAFT_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/user/form-draft/:formId
+ * Persists a form draft for patient input recovery on validation error or network failure.
+ */
+app.post('/api/user/form-draft/:formId', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.uid;
+    const formId = req.params.formId;
+    const { data } = req.body || {};
+    const draft = await userDisplayPreferencesService.saveUserDraft(db, userId, formId, data);
+    return res.json({
+      success: true,
+      message: 'Form draft saved successfully.',
+      formId,
+      draft
+    });
+  } catch (err) {
+    console.error('[SAVE FORM DRAFT ERROR]:', err);
+    return res.status(500).json({ error: 'SAVE_DRAFT_FAILED', message: err.message });
+  }
+});
+
+/**
+ * DELETE /api/user/form-draft/:formId
+ * Clears form draft upon successful submission or user discard.
+ */
+app.delete('/api/user/form-draft/:formId', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.uid;
+    const formId = req.params.formId;
+    await userDisplayPreferencesService.deleteUserDraft(db, userId, formId);
+    return res.json({ success: true, message: 'Form draft deleted successfully.', formId });
+  } catch (err) {
+    console.error('[DELETE FORM DRAFT ERROR]:', err);
+    return res.status(500).json({ error: 'DELETE_DRAFT_FAILED', message: err.message });
+  }
+});
+
+/**
  * POST /api/notifications/dispatch
  * Server-side notification sender endpoint enforcing channel preferences, quiet hours,
  * and urgent clinical bypass policies.
