@@ -2794,6 +2794,7 @@ body.device-wide .mobile-only { display: none !important; }
     max-height: calc(100dvh - 44px) !important;
     box-shadow: 0 10px 30px rgba(3, 72, 74, .06) !important;
     border-radius: 30px !important;
+    will-change: auto !important;
   }
   .mobile-bottom-nav,
   .sidebar-backdrop {
@@ -5113,6 +5114,7 @@ body.sidebar-open .sidebar-backdrop {
   justify-content: space-around;
   align-items: center;
   box-shadow: 0 -4px 25px rgba(0, 0, 0, 0.06);
+  will-change: transform;
 }
 
 body.dark .mobile-bottom-nav {
@@ -5180,6 +5182,7 @@ body.dark .mobile-bottom-nav {
     height: 100dvh !important;
     max-height: 100dvh !important;
     width: min(310px, 85vw) !important;
+    will-change: transform !important;
     transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1) !important;
   }
 

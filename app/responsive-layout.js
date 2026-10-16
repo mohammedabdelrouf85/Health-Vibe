@@ -165,16 +165,12 @@
     }
   }
 
-  /**
-   * Handle viewport resize with debounce
-   */
-  function handleResize() {
-    const newTier = getBreakpointTier();
-    const newOrientation = getOrientation();
+  let lastResizeDuration = 0;
+  let transitionCount = 0;
 
-    syncBodyClasses();
-
+  function executeBreakpointChange(newTier, newOrientation, start) {
     if (newTier !== currentBreakpoint) {
+      transitionCount++;
       currentBreakpoint = newTier;
       const state = {
         breakpoint: newTier,
@@ -217,6 +213,58 @@
         } catch (e) {}
       }
     }
+
+    const end = (typeof performance !== "undefined" && typeof performance.now === "function") ? performance.now() : Date.now();
+    lastResizeDuration = end - start;
+  }
+
+  /**
+   * Handle viewport resize with debounce and requestAnimationFrame batching
+   */
+  function handleResize() {
+    const start = (typeof performance !== "undefined" && typeof performance.now === "function") ? performance.now() : Date.now();
+    const newTier = getBreakpointTier();
+    const newOrientation = getOrientation();
+
+    if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+      window.requestAnimationFrame(() => {
+        syncBodyClasses();
+        executeBreakpointChange(newTier, newOrientation, start);
+      });
+    } else {
+      syncBodyClasses();
+      executeBreakpointChange(newTier, newOrientation, start);
+    }
+  }
+
+  /**
+   * Benchmark breakpoint evaluation performance
+   * @param {number} [iterations=1000]
+   * @returns {{ iterations: number, totalMs: number, avgMsPerEval: number }}
+   */
+  function benchmarkEvaluation(iterations = 1000) {
+    const testWidths = [360, 480, 640, 768, 1024, 1280, 1536, 1920];
+    const start = (typeof performance !== "undefined" && typeof performance.now === "function") ? performance.now() : Date.now();
+    for (let i = 0; i < iterations; i++) {
+      const w = testWidths[i % testWidths.length];
+      getBreakpointTier(w);
+      getBreakpointToken(w);
+    }
+    const end = (typeof performance !== "undefined" && typeof performance.now === "function") ? performance.now() : Date.now();
+    const totalMs = Math.max(0.001, end - start);
+    return {
+      iterations,
+      totalMs,
+      avgMsPerEval: totalMs / iterations
+    };
+  }
+
+  function getPerformanceMetrics() {
+    return {
+      lastResizeDurationMs: lastResizeDuration,
+      transitionCount,
+      currentBreakpoint: currentBreakpoint || getBreakpointTier()
+    };
   }
 
   /**
@@ -284,6 +332,8 @@
     syncBodyClasses,
     adaptDoctorCockpit,
     subscribe,
+    benchmarkEvaluation,
+    getPerformanceMetrics,
     init
   };
 
