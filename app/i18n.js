@@ -830,7 +830,15 @@
         cancelReasonDoctorRequest: "طلب من الطبيب المعالج أو إدارة العيادة",
         cancelReasonOther: "سبب آخر",
         rescheduledNotificationSent: "تم إشعار الطبيب والعيادة بتعديل الموعد",
-        cancelledNotificationSent: "تم إشعار الطرف الآخر بإلغاء الموعد وإتاحة الفترة لمرضى الانتظار"
+        cancelledNotificationSent: "تم إشعار الطرف الآخر بإلغاء الموعد وإتاحة الفترة لمرضى الانتظار",
+        oneClickRebookBtn: "إعادة الحجز بضغطة زر واحدة",
+        clinicCancellationApology: "نعتذر عن إلغاء الموعد لظرف طارئ بالعيادة، يمكنك اختيار موعد بديل بضغطة زر واحدة.",
+        pastAppointmentRescheduleError: "لا يمكن تعديل موعد قد مضى وقته بالفعل.",
+        pastAppointmentCancelError: "لا يمكن إلغاء موعد قد مضى وقته بالفعل.",
+        sameSlotSelectedError: "الموعد البديل المختار مطابق تماماً للموعد الحالي.",
+        doctorUnavailableError: "الطبيب غير متاح في هذا التاريخ أو اليوم عطلة رسمية للعيادة.",
+        emergencyEscalationAlert: "تم رصد مؤشرات حيوية حرجة تتطلب تدخلاً إسعافياً عاجلاً (اتصل بـ 123).",
+        botMutationProhibited: "إجراءات تعديل وإلغاء المواعيد تتطلب تأكيداً بشرياً مباشراً ولا يُسمح للروبوتات الآلية بتنفيذها."
       },
       doctorSchedule: {
         title: "جدول الطبيب وإدارة الفروع",
@@ -2163,7 +2171,15 @@
         cancelReasonDoctorRequest: "Requested by treating doctor or clinic",
         cancelReasonOther: "Other reason",
         rescheduledNotificationSent: "Doctor & clinic have been notified of the reschedule",
-        cancelledNotificationSent: "Other party notified and slot made available to waiting list"
+        cancelledNotificationSent: "Other party notified and slot made available to waiting list",
+        oneClickRebookBtn: "1-Click Priority Rebooking",
+        clinicCancellationApology: "We apologize for the cancellation due to an urgent clinic circumstance. You can select an alternative slot with 1-click.",
+        pastAppointmentRescheduleError: "Past appointments cannot be rescheduled.",
+        pastAppointmentCancelError: "Past appointments cannot be cancelled.",
+        sameSlotSelectedError: "The selected alternative slot is identical to the current appointment.",
+        doctorUnavailableError: "Doctor is unavailable on this date or it is an official clinic closing day.",
+        emergencyEscalationAlert: "Critical emergency indicators detected requiring immediate ambulance triage (Call 123).",
+        botMutationProhibited: "Appointment modifications require human confirmation and cannot be executed autonomously by AI chatbots."
       },
       doctorSchedule: {
         title: "Doctor Schedule & Branch Manager",

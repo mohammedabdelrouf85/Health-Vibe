@@ -136,6 +136,10 @@ const EMERGENCY_RED_FLAGS = [
 function evaluateAppointmentEmergencyRisk(payload = {}) {
   const attachedAssessment = payload.attachedAssessment || payload.dossier || {};
   const textCorpus = [
+    payload.reason,
+    payload.rescheduleReason,
+    payload.cancelReason,
+    payload.cancellationReason,
     payload.symptoms,
     payload.patientNotes,
     payload.notes,
@@ -223,6 +227,7 @@ function evaluateAppointmentEmergencyRisk(payload = {}) {
 
   return {
     isEmergency,
+    requiresEmergencyRedirect: isEmergency,
     urgencyLevel: isEmergency ? 'CRITICAL_EMERGENCY' : 'ROUTINE_OUTPATIENT',
     redFlagsCount: detectedRedFlags.length,
     detectedRedFlags,
@@ -1058,7 +1063,7 @@ function validateAppointmentMutationSafety(payload = {}, actorUser = null, opera
   }
 
   // Prevent autonomous AI bots or unapproved chatbots from unilaterally mutating appointments
-  if (actorUser.role === 'ai_assistant' || actorUser.role === 'system_bot' || actorUser.isAutonomousAi) {
+  if (actorUser.role === 'ai_assistant' || actorUser.role === 'system_bot' || actorUser.role === 'ai_chatbot' || actorUser.isAutonomousAi || actorUser.isAutonomousBot) {
     const err = new Error(
       'Physician Primacy Violation: Autonomous AI chatbots cannot modify or cancel appointments without explicit human confirmation.'
     );
@@ -1070,8 +1075,8 @@ function validateAppointmentMutationSafety(payload = {}, actorUser = null, opera
   // Enforce physician role boundaries (no self-diagnoses / prescriptions)
   enforcePhysicianRoleBoundaries(payload, actorUser);
 
-  // If rescheduling, evaluate emergency red flags
-  if (operation === 'reschedule') {
+  // If rescheduling or cancelling, evaluate emergency red flags
+  if (operation === 'reschedule' || operation === 'cancel') {
     const triage = evaluateAppointmentEmergencyRisk(payload);
     if (triage.isEmergency && !payload.emergencyDisclaimerAcknowledged && !triage.isDisclaimerAcknowledged) {
       const err = new Error(

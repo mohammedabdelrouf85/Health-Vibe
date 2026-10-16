@@ -1881,8 +1881,13 @@ async function rescheduleAppointmentTransaction(db, payload, actorUser) {
     throw err;
   }
 
-  const oldDocSlotKey = appointment.slotKey || getDoctorSlotKey(doctorId, appointment.date, appointment.slotId);
-  const oldPatSlotKey = appointment.patientSlotKey || getPatientSlotKey(patientId, appointment.date, appointment.slotId);
+  const previousDate = appointment.date;
+  const previousSlotId = appointment.slotId;
+  const previousTimeSlot = appointment.timeSlot;
+  const previousTimeSlotEn = appointment.timeSlotEn;
+
+  const oldDocSlotKey = appointment.slotKey || getDoctorSlotKey(doctorId, previousDate, previousSlotId);
+  const oldPatSlotKey = appointment.patientSlotKey || getPatientSlotKey(patientId, previousDate, previousSlotId);
 
   const newDocSlotKey = getDoctorSlotKey(doctorId, newDate, newSlotId);
   const newPatSlotKey = getPatientSlotKey(patientId, newDate, newSlotId);
@@ -2174,10 +2179,10 @@ async function rescheduleAppointmentTransaction(db, payload, actorUser) {
       await waitingListService.processAvailableSlotForWaitingList(db, {
         doctorId: appointment.doctorId,
         clinicId: appointment.clinicId,
-        date: appointment.date,
-        slotId: appointment.slotId,
-        timeSlot: appointment.timeSlot,
-        timeSlotEn: appointment.timeSlotEn
+        date: previousDate,
+        slotId: previousSlotId,
+        timeSlot: previousTimeSlot,
+        timeSlotEn: previousTimeSlotEn
       });
     } catch (wlErr) {
       console.warn('[WAITING LIST OFFER RESCHEDULE WARNING]:', wlErr.message);
