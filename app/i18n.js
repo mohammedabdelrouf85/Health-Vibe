@@ -851,7 +851,12 @@
         revokeLeaveSuccess: "تم إلغاء الإجازة بنجاح",
         confirmRevokeLeave: "هل أنت متأكد من رغبتك في إلغاء هذه الإجازة؟",
         invalidDateRange: "تاريخ الانتهاء يجب أن يكون مساوياً أو بعد تاريخ البدء",
-        noLeavesRecorded: "لا توجد إجازات مسجلة حالياً لهذا الطبيب."
+        noLeavesRecorded: "لا توجد إجازات مسجلة حالياً لهذا الطبيب.",
+        conflictingBookingsAlert: "تم رصد مواعيد محجوزة مسبقاً خلال فترة الإجازة، وتم إشعار المرضى فوراً لإعادة الجدولة",
+        minDurationGuardrail: "مدة الكشف لا يمكن أن تقل عن 15 دقيقة لضمان الفحص السريري الدقيق",
+        shiftExceedsLimit: "وردية العمل المتصلة لا يمكن أن تتجاوز 12 ساعة لتفادي إجهاد الطبيب",
+        doctorOnLeaveBookingBlocked: "عذراً، الطبيب في إجازة معتمدة بهذا التاريخ، يرجى اختيار تاريخ بديل",
+        branchSpecificLeave: "إجازة خاصة بهذا الفرع فقط"
       },
       feedback: {
         title: "التقييم والآراء السريرية",
@@ -2153,7 +2158,12 @@
         revokeLeaveSuccess: "Leave revoked successfully",
         confirmRevokeLeave: "Are you sure you want to revoke this leave?",
         invalidDateRange: "End date must be on or after start date",
-        noLeavesRecorded: "No leave records found for this doctor."
+        noLeavesRecorded: "No leave records found for this doctor.",
+        conflictingBookingsAlert: "Pre-existing bookings detected during leave period. Affected patients have been alerted for immediate rescheduling.",
+        minDurationGuardrail: "Consultation duration cannot be less than 15 minutes to guarantee thorough clinical examination.",
+        shiftExceedsLimit: "Continuous shift cannot exceed 12 hours to prevent clinician cognitive fatigue.",
+        doctorOnLeaveBookingBlocked: "Doctor is on approved leave on this date. Please select an alternative date.",
+        branchSpecificLeave: "Leave applies specifically to this branch only"
       },
       feedback: {
         title: "Clinical Feedback & Rating",
