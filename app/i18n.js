@@ -297,6 +297,33 @@
           other: "تابع / قريب"
         }
       },
+      faq: {
+        title: "الأسئلة الشائعة ودليل المريض",
+        subtitle: "إجابات وافية وموثوقة عن كيفية عمل الفحص الذكي، دور الطبيب البشري، وحماية سرية بياناتك الطبية.",
+        searchPlaceholder: "ابحث عن أي سؤال، عَرَض مرضي، أو استفسار عن الخصوصية...",
+        searchAria: "البحث في الأسئلة الشائعة",
+        clearSearch: "مسح عبارة البحث",
+        emergencyTitle: "تنبيه الحالات الطارئة:",
+        emergencyDesc: "في حال الشعور بآلام حادة بالصدر، ضيق تنفس شديد أو إغماء، توجه فوراً لأقرب طوارئ أو اتصل بالإسعاف 123.",
+        emptyTitle: "لم يتم العثور على إجابات مطابقة",
+        emptyDesc: "جرب البحث بكلمات أخرى أو تواصل مع الدعم الطبي المباشر بالأسفل.",
+        helpfulPrompt: "هل كانت هذه الإجابة مفيدة؟",
+        yes: "نعم",
+        no: "لا",
+        feedbackThanks: "شكراً لمشاركتك رأيك!",
+        supportTitle: "هل لديك استفسار آخر أو تحتاج مساعدة مباشرة؟",
+        supportSubtitle: "منسقو الرعاية الطبية جاهزون للإجابة على استفساراتك وتوجيهك للتخصص الطبي المناسب.",
+        supportTeamBadge: "الفريق الطبي متاح يومياً",
+        whatsappAction: "محادثة فورية (واتساب)",
+        ticketAction: "إرسال سؤال للطبيب المشرف",
+        categories: {
+          all: "جميع الأسئلة",
+          platform: "كيف تعمل المنصة",
+          doctor: "دور الطبيب البشري",
+          privacy: "الخصوصية والأمان",
+          urgent: "الطوارئ والإسعاف"
+        }
+      },
       consent: {
         title: "الموافقة الطبية وسياسة الخصوصية",
         badgeRequired: "مطلوبة قبل الفحص",
@@ -1296,6 +1323,33 @@
           spouse: "Spouse",
           grandparent: "Grandparent",
           other: "Dependent / Other"
+        }
+      },
+      faq: {
+        title: "Help & Frequently Asked Questions",
+        subtitle: "Find quick answers about our clinical workflow, physician reviews, and HIPAA-compliant privacy.",
+        searchPlaceholder: "Search questions, symptoms, or privacy...",
+        searchAria: "Search FAQ catalog",
+        clearSearch: "Clear search query",
+        emergencyTitle: "Emergency Notice:",
+        emergencyDesc: "In case of severe chest pain, shortness of breath, or trauma, call emergency immediately (123 in Egypt).",
+        emptyTitle: "No matching answers found",
+        emptyDesc: "Try searching with different clinical keywords or reach out to our medical support below.",
+        helpfulPrompt: "Was this answer helpful?",
+        yes: "Yes",
+        no: "No",
+        feedbackThanks: "Thank you for your feedback!",
+        supportTitle: "Need further medical assistance?",
+        supportSubtitle: "Our certified clinical support coordinators are ready to assist you or connect you with the appropriate specialty.",
+        supportTeamBadge: "Medical team available daily",
+        whatsappAction: "WhatsApp Support",
+        ticketAction: "Send Question to Doctor",
+        categories: {
+          all: "All Questions",
+          platform: "How Platform Works",
+          doctor: "Physician's Role",
+          privacy: "Privacy & Security",
+          urgent: "Emergency & Urgent Care"
         }
       },
       consent: {

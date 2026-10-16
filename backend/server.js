@@ -81,6 +81,9 @@ const caseHandoverService = require('./case-handover-service');
 const userDisplayPreferencesService = require('./user-display-preferences-service');
 const familyProfilesService = require('../app/modules/patient/family-service');
 const _inMemoryFamilyStore = new Map();
+const faqService = require('../app/modules/help/faq-service');
+const _inMemoryFaqFeedbackStore = new Map();
+const _inMemoryFaqInquiryStore = [];
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -3101,6 +3104,96 @@ app.delete('/api/patient/family-members/:id', requireAuth, patientProfileLimiter
   } catch (err) {
     console.error('[DELETE FAMILY MEMBER ERROR]:', err);
     res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to remove family member.' });
+  }
+});
+
+/**
+ * GET /api/faq
+ * Retrieve Help & FAQ catalog with search & category filters (مرجع: Esaal)
+ */
+app.get('/api/faq', (req, res) => {
+  try {
+    const { category, q } = req.query || {};
+    const items = q ? faqService.searchFaqs(q, category || 'all') : faqService.getFaqs(category || 'all');
+    res.json({
+      success: true,
+      categories: faqService.CATEGORIES,
+      count: items.length,
+      data: items
+    });
+  } catch (err) {
+    console.error('[GET FAQ ERROR]:', err);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to retrieve FAQ catalog.' });
+  }
+});
+
+/**
+ * POST /api/faq/feedback
+ * Submit helpfulness rating for an FAQ answer
+ */
+app.post('/api/faq/feedback', (req, res) => {
+  try {
+    const { faqId, isHelpful } = req.body || {};
+    if (!faqId || typeof isHelpful !== 'boolean') {
+      return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'faqId and boolean isHelpful are required.' });
+    }
+    const userId = req.user?.uid || req.headers['x-client-id'] || 'anonymous';
+    const result = faqService.rateFaq(faqId, isHelpful, userId);
+    _inMemoryFaqFeedbackStore.set(`${faqId}:${userId}`, result.feedback);
+
+    if (auditService && typeof auditService.logSecurityEvent === 'function') {
+      auditService.logSecurityEvent({
+        type: 'FAQ_FEEDBACK_SUBMITTED',
+        actorUid: userId,
+        actorRole: req.user?.role || 'patient',
+        targetUserId: userId,
+        outcome: 'SUCCESS',
+        metadata: { faqId, isHelpful }
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Feedback submitted successfully.',
+      data: result
+    });
+  } catch (err) {
+    console.error('[POST FAQ FEEDBACK ERROR]:', err);
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message || 'Failed to submit feedback.' });
+  }
+});
+
+/**
+ * POST /api/faq/support-inquiry
+ * Submit a quick patient question or support inquiry (مرجع: Esaal)
+ */
+app.post('/api/faq/support-inquiry', (req, res) => {
+  try {
+    const { name, phoneOrEmail, message, urgency } = req.body || {};
+    const userId = req.user?.uid || 'guest';
+    const result = faqService.submitSupportInquiry({ name, phoneOrEmail, message, urgency, userId });
+    _inMemoryFaqInquiryStore.push(result.ticket);
+
+    if (auditService && typeof auditService.logSecurityEvent === 'function') {
+      auditService.logSecurityEvent({
+        type: 'FAQ_SUPPORT_INQUIRY_CREATED',
+        actorUid: userId,
+        actorRole: req.user?.role || 'patient',
+        targetUserId: userId,
+        outcome: 'SUCCESS',
+        metadata: { ticketId: result.ticketId, urgency: result.ticket.urgency }
+      });
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'Support inquiry submitted successfully.',
+      ticketId: result.ticketId,
+      data: result.ticket
+    });
+  } catch (err) {
+    console.error('[POST FAQ INQUIRY ERROR]:', err);
+    res.status(400).json({ error: 'VALIDATION_ERROR', message: err.message || 'Failed to submit support inquiry.' });
   }
 });
 
@@ -15473,5 +15566,7 @@ app.post('/api/hypertension/clarification/reply', requireAuth, (req, res) => {
 app.userDisplayPreferencesService = userDisplayPreferencesService;
 app.familyProfilesService = familyProfilesService;
 app._inMemoryFamilyStore = _inMemoryFamilyStore;
+app.faqService = faqService;
+app._inMemoryFaqFeedbackStore = _inMemoryFaqFeedbackStore;
 module.exports = app;
 

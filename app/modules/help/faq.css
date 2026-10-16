@@ -1,0 +1,419 @@
+/**
+ * Health Vibe AI - Help & FAQ Stylesheet (مرجع: Esaal)
+ * High-performance, accessible, responsive accordion & support interface.
+ */
+
+:root {
+  --faq-teal: #0d9488;
+  --faq-teal-dark: #0f766e;
+  --faq-teal-light: #ccfbf1;
+  --faq-border: #e2e8f0;
+  --faq-bg-card: #ffffff;
+  --faq-bg-surface: #f8fafc;
+  --faq-text-main: #0f172a;
+  --faq-text-muted: #64748b;
+  --faq-urgent-bg: #fef2f2;
+  --faq-urgent-border: #fecaca;
+  --faq-urgent-text: #b91c1c;
+}
+
+/* Dark mode overrides */
+body.dark-mode, [data-theme="dark"] {
+  --faq-teal: #14b8a6;
+  --faq-teal-dark: #2dd4bf;
+  --faq-teal-light: #134e4a;
+  --faq-border: #334155;
+  --faq-bg-card: #1e293b;
+  --faq-bg-surface: #0f172a;
+  --faq-text-main: #f8fafc;
+  --faq-text-muted: #94a3b8;
+  --faq-urgent-bg: #450a0a;
+  --faq-urgent-border: #7f1d1d;
+  --faq-urgent-text: #fca5a5;
+}
+
+/* Container */
+.faq-section-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 16px;
+  box-sizing: border-box;
+  contain: content;
+}
+
+/* Header & Intro */
+.faq-header {
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.faq-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--faq-text-main);
+  margin: 0 0 8px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.faq-subtitle {
+  font-size: 0.95rem;
+  color: var(--faq-text-muted);
+  max-width: 650px;
+  margin: 0 auto;
+  line-height: 1.5;
+}
+
+/* Emergency Advisory Banner */
+.faq-emergency-banner {
+  background: var(--faq-urgent-bg);
+  border: 1px solid var(--faq-urgent-border);
+  color: var(--faq-urgent-text);
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.faq-emergency-banner .banner-icon {
+  font-size: 1.3rem;
+  flex-shrink: 0;
+}
+
+/* Search Bar */
+.faq-search-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.faq-search-input {
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 16px;
+  padding-inline-start: 44px;
+  padding-inline-end: 40px;
+  border: 1.5px solid var(--faq-border);
+  border-radius: 12px;
+  background: var(--faq-bg-card);
+  color: var(--faq-text-main);
+  font-size: 0.95rem;
+  box-sizing: border-box;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.faq-search-input:focus {
+  outline: none;
+  border-color: var(--faq-teal);
+  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.15);
+}
+
+.faq-search-icon {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  inset-inline-start: 14px;
+  font-size: 1.1rem;
+  color: var(--faq-text-muted);
+  pointer-events: none;
+}
+
+.faq-search-clear {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  inset-inline-end: 12px;
+  background: none;
+  border: none;
+  color: var(--faq-text-muted);
+  cursor: pointer;
+  padding: 6px;
+  font-size: 1rem;
+  min-height: 32px;
+  min-width: 32px;
+  display: none;
+  border-radius: 50%;
+}
+
+.faq-search-clear:hover {
+  background: var(--faq-bg-surface);
+  color: var(--faq-text-main);
+}
+
+/* Category Filter Chips */
+.faq-categories {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 6px;
+  scrollbar-width: none;
+}
+
+.faq-categories::-webkit-scrollbar {
+  display: none;
+}
+
+.faq-category-chip {
+  min-height: 44px;
+  padding: 8px 16px;
+  border-radius: 9999px;
+  border: 1px solid var(--faq-border);
+  background: var(--faq-bg-card);
+  color: var(--faq-text-muted);
+  font-size: 0.88rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.faq-category-chip:hover {
+  border-color: var(--faq-teal);
+  color: var(--faq-teal);
+}
+
+.faq-category-chip.active {
+  background: var(--faq-teal);
+  color: #ffffff;
+  border-color: var(--faq-teal);
+  font-weight: 600;
+  box-shadow: 0 2px 6px rgba(13, 148, 136, 0.25);
+}
+
+/* Accordion List */
+.faq-accordion-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.faq-accordion-item {
+  border: 1px solid var(--faq-border);
+  border-radius: 12px;
+  background: var(--faq-bg-card);
+  overflow: hidden;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  will-change: transform;
+}
+
+.faq-accordion-item:hover {
+  border-color: #cbd5e1;
+}
+
+.faq-accordion-item.is-open {
+  border-color: var(--faq-teal);
+  box-shadow: 0 4px 12px rgba(13, 148, 136, 0.08);
+}
+
+.faq-accordion-header {
+  width: 100%;
+  min-height: 52px;
+  padding: 14px 18px;
+  background: none;
+  border: none;
+  text-align: inherit;
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--faq-text-main);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  box-sizing: border-box;
+}
+
+.faq-accordion-header:focus-visible {
+  outline: 2px solid var(--faq-teal);
+  outline-offset: -2px;
+}
+
+.faq-question-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  line-height: 1.4;
+  flex: 1;
+}
+
+.faq-question-icon {
+  font-size: 1.15rem;
+  flex-shrink: 0;
+}
+
+.faq-chevron {
+  font-size: 0.85rem;
+  color: var(--faq-text-muted);
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 0;
+}
+
+.faq-accordion-item.is-open .faq-chevron {
+  transform: rotate(180deg);
+  color: var(--faq-teal);
+}
+
+.faq-accordion-body {
+  display: none;
+  padding: 0 18px 18px 18px;
+  color: var(--faq-text-main);
+  font-size: 0.93rem;
+  line-height: 1.65;
+  border-top: 1px dashed var(--faq-border);
+  margin-top: 2px;
+  padding-top: 14px;
+  background: var(--faq-bg-surface);
+}
+
+.faq-accordion-item.is-open .faq-accordion-body {
+  display: block;
+}
+
+/* Feedback Row */
+.faq-feedback-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 10px;
+  border-top: 1px solid var(--faq-border);
+  font-size: 0.85rem;
+  color: var(--faq-text-muted);
+}
+
+.faq-feedback-btn {
+  background: none;
+  border: 1px solid var(--faq-border);
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  color: var(--faq-text-main);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 36px;
+  transition: background 0.15s ease;
+}
+
+.faq-feedback-btn:hover {
+  background: var(--faq-teal-light);
+  border-color: var(--faq-teal);
+}
+
+/* Quick Support Card (Esaal standard) */
+.faq-support-box {
+  margin-top: 24px;
+  padding: 20px;
+  border-radius: 14px;
+  border: 1px solid var(--faq-teal);
+  background: linear-gradient(135deg, rgba(13, 148, 136, 0.05), rgba(13, 148, 136, 0.12));
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.faq-support-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.faq-support-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--faq-teal-dark);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.faq-support-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.faq-action-btn {
+  min-height: 44px;
+  padding: 8px 16px;
+  border-radius: 10px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  text-decoration: none;
+  box-sizing: border-box;
+}
+
+.faq-action-whatsapp {
+  background: #25d366;
+  color: #ffffff;
+}
+
+.faq-action-whatsapp:hover {
+  background: #20ba5a;
+}
+
+.faq-action-ticket {
+  background: var(--faq-teal);
+  color: #ffffff;
+}
+
+.faq-action-ticket:hover {
+  background: var(--faq-teal-dark);
+}
+
+/* Empty State */
+.faq-empty-state {
+  text-align: center;
+  padding: 36px 16px;
+  color: var(--faq-text-muted);
+}
+
+.faq-empty-icon {
+  font-size: 2.2rem;
+  margin-bottom: 8px;
+}
+
+/* Mobile Media Queries */
+@media (max-width: 640px) {
+  .faq-section-container {
+    padding: 12px;
+  }
+  
+  .faq-accordion-header {
+    min-height: 54px;
+    padding: 12px 14px;
+  }
+
+  .faq-support-actions {
+    width: 100%;
+  }
+
+  .faq-action-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
