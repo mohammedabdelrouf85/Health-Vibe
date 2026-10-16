@@ -12101,7 +12101,9 @@ function renderAppointmentDoctorOptions(doctors) {
   return doctorSelect.value || "";
 }
 
-function generateAppointmentDays() {
+let apptCalendarWeekOffset = 0;
+
+function generateAppointmentDays(weekOffset = 0) {
   const days = [];
   const arDays = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
   const enDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -12109,7 +12111,7 @@ function generateAppointmentDays() {
   const enMonths = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
   const now = new Date();
-  const startOffset = now.getHours() >= 20 ? 1 : 0;
+  const startOffset = (now.getHours() >= 20 ? 1 : 0) + (weekOffset * 7);
 
   for (let i = 0; i < 7; i++) {
     const d = new Date();
@@ -12131,7 +12133,7 @@ function generateAppointmentDays() {
         labelAr = "غداً";
         labelEn = "Tomorrow";
       }
-    } else {
+    } else if (startOffset === 1) {
       if (i === 0) {
         labelAr = "غداً";
         labelEn = "Tomorrow";
@@ -12150,6 +12152,16 @@ function generateAppointmentDays() {
   }
   return days;
 }
+
+function navigateAppointmentWeek(dir) {
+  apptCalendarWeekOffset = Math.max(0, Math.min(8, apptCalendarWeekOffset + dir));
+  apptDaysList = generateAppointmentDays(apptCalendarWeekOffset);
+  if (apptDaysList.length > 0) {
+    apptSelectedDate = apptDaysList[0];
+  }
+  renderAppointmentsScreen();
+}
+window.navigateAppointmentWeek = navigateAppointmentWeek;
 
 function updateAppointmentSummary() {
   const isEn = currentLanguage === "en";
@@ -12241,7 +12253,7 @@ async function renderAppointmentsScreen() {
   const isEn = currentLanguage === "en";
   const approvedDoctors = await loadAvailableAppointmentDoctors();
   const selectedDoctorId = renderAppointmentDoctorOptions(approvedDoctors);
-  apptDaysList = generateAppointmentDays();
+  apptDaysList = generateAppointmentDays(apptCalendarWeekOffset);
 
   if (!apptSelectedDate) {
     apptSelectedDate = apptDaysList[0];
@@ -12290,10 +12302,53 @@ async function renderAppointmentsScreen() {
     apptSelectedSlot = availableSlots.length > 0 ? availableSlots[0] : null;
   }
 
-  // Render Date Selector
+  // 1. Render Vezeeta Doctor Filter Tabs (Treating Doctor vs All Pulmonologists)
+  if (window.HealthVibes?.AppointmentsUI?.renderDoctorFilterTabs) {
+    window.HealthVibes.AppointmentsUI.renderDoctorFilterTabs("vezeetaDoctorTabsMount", window.HealthVibes.AppointmentsUI.state.currentDoctorFilter, (filterId) => {
+      if (filterId === "clinic") {
+        apptSelectedType = "clinic";
+        document.querySelectorAll(".appt-type-btn").forEach(b => b.classList.toggle("active", b.dataset.type === "clinic"));
+      } else if (filterId === "video") {
+        apptSelectedType = "video";
+        document.querySelectorAll(".appt-type-btn").forEach(b => b.classList.toggle("active", b.dataset.type === "video"));
+      } else if (filterId === "treating") {
+        if (doctorSelect && approvedDoctors && approvedDoctors.length > 0) {
+          doctorSelect.value = approvedDoctors[0].id;
+        }
+      }
+      updateAppointmentSummary();
+      renderAppointmentsScreen();
+    });
+  }
+
+  // 2. Render Vezeeta Doctor Profile Showcase Card
+  const showcaseMount = document.getElementById("vezeetaDoctorShowcaseMount");
+  if (showcaseMount && window.HealthVibes?.AppointmentsUI?.renderDoctorCard) {
+    showcaseMount.innerHTML = window.HealthVibes.AppointmentsUI.renderDoctorCard(currentDoctor, isEn);
+  }
+
+  // 3. Render Beneficiary Selector (Family Profiles Integration)
+  if (window.HealthVibes?.AppointmentsUI?.renderBeneficiarySelector) {
+    window.HealthVibes.AppointmentsUI.renderBeneficiarySelector("vezeetaBeneficiaryMount", isEn);
+  }
+
+  // 4. Render Date Selector with Week Navigation (Vezeeta Interactive Calendar Strip)
   const dateContainer = document.getElementById("appointmentDateSelector");
   if (dateContainer) {
-    dateContainer.innerHTML = apptDaysList.map((dayItem) => {
+    const calendarHeaderHtml = `
+      <div class="vezeeta-calendar-header" style="width: 100%; margin-bottom: 8px;">
+        <div class="vezeeta-calendar-month-title" style="font-size: 13px; font-weight: 700; color: var(--ink);">
+          <span>📅</span>
+          <span>${isEn ? (apptSelectedDate.fullLabelEn || "Upcoming Dates") : (apptSelectedDate.fullLabelAr || "المواعيد المتاحة")}</span>
+        </div>
+        <div class="vezeeta-calendar-nav-btns" style="display: flex; gap: 4px;">
+          <button type="button" class="vezeeta-nav-btn" onclick="navigateAppointmentWeek(-1)" aria-label="${isEn ? "Previous Week" : "الأسبوع السابق"}" title="${isEn ? "Previous Week" : "الأسبوع السابق"}">‹</button>
+          <button type="button" class="vezeeta-nav-btn" onclick="navigateAppointmentWeek(1)" aria-label="${isEn ? "Next Week" : "الأسبوع القادم"}" title="${isEn ? "Next Week" : "الأسبوع القادم"}">›</button>
+        </div>
+      </div>
+    `;
+
+    const daysHtml = apptDaysList.map((dayItem) => {
       const isActive = dayItem.dateStr === apptSelectedDate.dateStr;
       const dayLabel = isEn ? dayItem.labelEn : dayItem.labelAr;
       return `
@@ -12303,9 +12358,11 @@ async function renderAppointmentsScreen() {
         </button>
       `;
     }).join("");
+
+    dateContainer.innerHTML = calendarHeaderHtml + `<div class="vezeeta-calendar-strip" style="width: 100%; display: flex; gap: 6px; overflow-x: auto;">${daysHtml}</div>`;
   }
 
-  // Render Slots Selector with Leave and Double-Booking Guards
+  // 5. Render Slots Selector with Grouped Morning & Evening Categories
   const slotsContainer = document.getElementById("appointmentTimeSlots");
   if (slotsContainer) {
     if (isDoctorOnLeave) {
@@ -12329,6 +12386,14 @@ async function renderAppointmentsScreen() {
           <span style="font-size: 13px; color: var(--muted);">${isEn ? "No clinic shifts scheduled on this day." : "لا توجد فترات عمل مجدولة في هذا اليوم."}</span>
         </div>
       `;
+    } else if (window.HealthVibes?.AppointmentsUI?.renderGroupedSlots) {
+      slotsContainer.innerHTML = window.HealthVibes.AppointmentsUI.renderGroupedSlots(
+        activeTemplateSlots,
+        doctorBookedSlotIds,
+        patientBookedSlotIds,
+        apptSelectedSlot ? apptSelectedSlot.id : "",
+        isEn
+      );
     } else {
       slotsContainer.innerHTML = activeTemplateSlots.map((slot) => {
         const isDocBooked = doctorBookedSlotIds.has(slot.id);
@@ -12406,7 +12471,7 @@ async function renderAppointmentsScreen() {
 
   // Confirm booking button
   if (confirmBtn) {
-    confirmBtn.onclick = () => confirmAppointmentBooking();
+    confirmBtn.onclick = () => confirmAppointmentBooking(false);
   }
 
   updateAppointmentSummary();
@@ -12441,8 +12506,61 @@ function updateLocalAppointmentStatus(apptId, newStatus) {
   purgeSensitiveLegacyStorage();
 }
 
-async function confirmAppointmentBooking() {
+async function confirmAppointmentBooking(forceDirect = false) {
   const isEn = currentLanguage === "en";
+
+  if (!apptSelectedDate || !apptSelectedSlot) {
+    showToast(isEn ? "Please select an available date and time slot." : "يرجى تحديد اليوم والفترة الزمنية المتاحة.");
+    return;
+  }
+
+  const doctorSelect = document.getElementById("apptDoctorSelect");
+  const selectedOption = doctorSelect ? doctorSelect.selectedOptions[0] : null;
+  const doctorId = doctorSelect ? doctorSelect.value : "";
+  const doctorName = selectedOption && selectedOption.value ? (selectedOption.dataset.name || "") : "";
+  const doctorSpecialty = selectedOption && selectedOption.value ? (selectedOption.dataset.spec || "") : "";
+  const clinicName = selectedOption && selectedOption.value ? (selectedOption.dataset.clinic || "") : "";
+  const doctorLicense = selectedOption && selectedOption.value ? (selectedOption.dataset.license || "") : "";
+
+  if (!doctorId || !doctorName || !doctorLicense) {
+    showToast(isEn
+      ? "No approved doctor is available for booking yet."
+      : "لا يوجد طبيب معتمد متاح للحجز حالياً.");
+    return;
+  }
+
+  const beneficiarySelect = document.getElementById("apptBeneficiarySelect");
+  const beneficiaryId = beneficiarySelect ? beneficiarySelect.value : "self";
+  let beneficiaryName = "";
+  if (beneficiarySelect && beneficiarySelect.selectedOptions && beneficiarySelect.selectedOptions[0]) {
+    beneficiaryName = beneficiarySelect.selectedOptions[0].textContent;
+  }
+
+  const dateLabel = isEn ? apptSelectedDate.fullLabelEn : apptSelectedDate.fullLabelAr;
+  const timeLabel = isEn ? apptSelectedSlot.timeEn : apptSelectedSlot.timeAr;
+  const typeLabel = apptSelectedType === "video" ? (isEn ? "Telehealth Video" : "فيديو عن بُعد") : (apptSelectedType === "clinic" ? (isEn ? "In-Clinic Visit" : "حضور العيادة") : (isEn ? "Results Follow-up" : "متابعة نتائج"));
+
+  if (!forceDirect && window.AppointmentsUI && typeof window.AppointmentsUI.openConfirmBookingModal === "function") {
+    const summaryData = {
+      doctorName,
+      doctorSpecialty,
+      clinicName,
+      dateLabel,
+      timeLabel,
+      typeLabel,
+      beneficiaryName,
+      dateStr: apptSelectedDate.dateStr
+    };
+    window.AppointmentsUI.openConfirmBookingModal(summaryData, (confirmedReason) => {
+      const notesInput = document.getElementById("apptNotesInput");
+      if (notesInput && confirmedReason) {
+        notesInput.value = confirmedReason;
+      }
+      confirmAppointmentBooking(true);
+    });
+    return;
+  }
+
   if (confirmAppointmentBooking._pending) {
     showToast(isEn ? "This booking is already being submitted." : "جاري إرسال هذا الحجز بالفعل.");
     return;
@@ -12456,33 +12574,16 @@ async function confirmAppointmentBooking() {
   }
 
   try {
-    if (!apptSelectedDate || !apptSelectedSlot) {
-      showToast(isEn ? "Please select an available date and time slot." : "يرجى تحديد اليوم والفترة الزمنية المتاحة.");
-      return;
-    }
-
-    const doctorSelect = document.getElementById("apptDoctorSelect");
-    const selectedOption = doctorSelect ? doctorSelect.selectedOptions[0] : null;
-    const doctorId = doctorSelect ? doctorSelect.value : "";
-    const doctorName = selectedOption && selectedOption.value ? (selectedOption.dataset.name || "") : "";
-    const doctorSpecialty = selectedOption && selectedOption.value ? (selectedOption.dataset.spec || "") : "";
-    const clinicName = selectedOption && selectedOption.value ? (selectedOption.dataset.clinic || "") : "";
-    const doctorLicense = selectedOption && selectedOption.value ? (selectedOption.dataset.license || "") : "";
-
-    if (!doctorId || !doctorName || !doctorLicense) {
-      showToast(isEn
-        ? "No approved doctor is available for booking yet."
-        : "لا يوجد طبيب معتمد متاح للحجز حالياً.");
-      return;
-    }
-
     const notesInput = document.getElementById("apptNotesInput");
     const notes = notesInput ? notesInput.value.trim() : "";
 
     const user = auth ? auth.currentUser : null;
     const cachedDoc = window._cachedUserDoc || {};
     const patientId = user ? user.uid : "anon_patient";
-    const patientName = cachedDoc.name || cachedDoc.displayName || user?.displayName || (user?.email ? user.email.split("@")[0] : (isEn ? "Patient" : "مريض"));
+    let patientName = cachedDoc.name || cachedDoc.displayName || user?.displayName || (user?.email ? user.email.split("@")[0] : (isEn ? "Patient" : "مريض"));
+    if (beneficiaryId && beneficiaryId !== "self" && beneficiaryName) {
+      patientName = `${patientName} (${beneficiaryName})`;
+    }
     const patientEmail = user?.email || cachedDoc.email || "";
     const patientPhone = cachedDoc.phoneNumber || user?.phoneNumber || "";
 
@@ -12509,13 +12610,12 @@ async function confirmAppointmentBooking() {
     }
 
     const apptId = "appt_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6);
-    const dateLabel = isEn ? apptSelectedDate.fullLabelEn : apptSelectedDate.fullLabelAr;
-    const timeLabel = isEn ? apptSelectedSlot.timeEn : apptSelectedSlot.timeAr;
 
     const apptData = {
       id: apptId,
       patientId: patientId,
       patientName: patientName,
+      beneficiaryId: beneficiaryId || "self",
       patientEmail: patientEmail,
       patientPhone: patientPhone,
       doctorId: doctorId,
@@ -12524,7 +12624,7 @@ async function confirmAppointmentBooking() {
       doctorLicense: doctorLicense,
       clinicName: clinicName,
       type: apptSelectedType,
-      typeLabel: apptSelectedType === "video" ? (isEn ? "Telehealth Video" : "فيديو عن بُعد") : (apptSelectedType === "clinic" ? (isEn ? "In-Clinic Visit" : "حضور العيادة") : (isEn ? "Results Follow-up" : "متابعة نتائج")),
+      typeLabel: typeLabel,
       date: apptSelectedDate.dateStr,
       dateLabel: dateLabel,
       timeSlot: timeLabel,
@@ -12546,6 +12646,9 @@ async function confirmAppointmentBooking() {
     }, data => data.success === true && data.appointment && data.appointment.id);
 
     purgeSensitiveLegacyStorage();
+    if (window.AppointmentsUI && typeof window.AppointmentsUI.closeConfirmBookingModal === "function") {
+      window.AppointmentsUI.closeConfirmBookingModal();
+    }
     showToast(isEn ? "Appointment confirmed successfully! Reminder notification scheduled." : "تم تأكيد حجز الموعد بنجاح! سيصلك تذكير قبل موعد الاستشارة.");
     if (notesInput) notesInput.value = "";
 

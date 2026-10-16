@@ -1,13 +1,25 @@
 <section id="screen-appointments" class="screen">
+        <!-- Vezeeta Doctor Filter Tabs Mount -->
+        <div id="vezeetaDoctorTabsMount" style="margin-bottom: 12px;"></div>
+
         <div class="content-grid">
           <!-- 1. Selection & Date Selector Panel -->
           <article class="panel">
             <div class="panel-head">
-              <h3 id="apptHeaderTitle">حجز موعد سريري جديد</h3>
-              <span class="pill ok" id="apptBookingPill">حجز فوري</span>
+              <h3 id="apptHeaderTitle">
+                <span class="lang-ar">حجز موعد سريري واستشارة</span>
+                <span class="lang-en">Book Clinical Appointment</span>
+              </h3>
+              <span class="pill ok" id="apptBookingPill">
+                <span class="lang-ar">⚡ حجز فوري مؤكد</span>
+                <span class="lang-en">⚡ Instant Confirmed</span>
+              </span>
             </div>
 
-            <!-- Doctor & Specialty Selection -->
+            <!-- Doctor Showcase Card (Vezeeta Standard) -->
+            <div id="vezeetaDoctorShowcaseMount"></div>
+
+            <!-- Doctor & Specialty Selection (Native Backwards-Compatible Selector) -->
             <div class="form-group" style="margin-bottom: 14px;">
               <label for="apptDoctorSelect" style="display:block; margin-bottom:6px; font-weight:600; font-size:13px;">
                 <span class="lang-ar">اختر الطبيب المعالج والعيادة:</span>
@@ -18,34 +30,37 @@
               </select>
             </div>
 
-            <!-- Consultation Type Selector -->
+            <!-- Consultation Type Selector (Vezeeta 3-Card Grid) -->
             <div class="form-group" style="margin-bottom: 16px;">
-              <label style="display:block; margin-bottom:6px; font-weight:600; font-size:13px;">
-                <span class="lang-ar">نوع الاستشارة:</span>
-                <span class="lang-en">Consultation Mode:</span>
+              <label style="display:block; margin-bottom:8px; font-weight:600; font-size:13px;">
+                <span class="lang-ar">نوع الاستشارة ومقر الكشف:</span>
+                <span class="lang-en">Consultation Mode &amp; Venue:</span>
               </label>
-              <div class="appt-types-row" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
-                <button type="button" class="appt-type-btn active" data-type="video" style="padding: 10px 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); color: var(--ink); text-align: center; cursor: pointer; font-size: 13px;">
-                  <strong style="display:block; font-size:13px;">📹 فيديو عن بُعد</strong>
-                  <span style="font-size: 11px; color: var(--muted);">Telehealth</span>
+              <div class="appt-types-row vezeeta-modes-grid">
+                <button type="button" class="appt-type-btn vezeeta-mode-card active" data-type="video">
+                  <strong>📹 فيديو عن بُعد</strong>
+                  <span>كشف فوري عالي الدقة HD</span>
                 </button>
-                <button type="button" class="appt-type-btn" data-type="clinic" style="padding: 10px 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); color: var(--ink); text-align: center; cursor: pointer; font-size: 13px;">
-                  <strong style="display:block; font-size:13px;">🏥 حضور العيادة</strong>
-                  <span style="font-size: 11px; color: var(--muted);">In-Clinic</span>
+                <button type="button" class="appt-type-btn vezeeta-mode-card" data-type="clinic">
+                  <strong>🏥 حضور العيادة</strong>
+                  <span>فحص سريري متكامل</span>
                 </button>
-                <button type="button" class="appt-type-btn" data-type="followup" style="padding: 10px 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); color: var(--ink); text-align: center; cursor: pointer; font-size: 13px;">
-                  <strong style="display:block; font-size:13px;">📋 متابعة نتائج</strong>
-                  <span style="font-size: 11px; color: var(--muted);">Follow-up</span>
+                <button type="button" class="appt-type-btn vezeeta-mode-card" data-type="followup">
+                  <strong>📋 متابعة نتائج</strong>
+                  <span>مراجعة وظائف الرئة</span>
                 </button>
               </div>
             </div>
 
-            <!-- Date Selector (Dynamic 7 Days) -->
+            <!-- Family Member Beneficiary Selector (Family Profiles Integration) -->
+            <div id="vezeetaBeneficiaryMount"></div>
+
+            <!-- Date Selector (Interactive Calendar Strip) -->
             <div class="form-group" style="margin-bottom: 14px;">
               <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                 <label style="font-weight:600; font-size:13px;">
-                  <span class="lang-ar">اختر اليوم المناسب:</span>
-                  <span class="lang-en">Select Date:</span>
+                  <span class="lang-ar">تقويم المواعيد المتاحة:</span>
+                  <span class="lang-en">Available Appointments Calendar:</span>
                 </label>
                 <span id="selectedDateBadge" class="pill info" style="font-size: 11px;">--</span>
               </div>
@@ -68,35 +83,39 @@
           <article class="panel">
             <div class="panel-head">
               <h3>
-                <span class="lang-ar">المواعيد المتاحة</span>
+                <span class="lang-ar">المواعيد والفترات المتاحة</span>
                 <span class="lang-en">Available Time Slots</span>
               </h3>
               <span class="pill ok" id="availableSlotsCount">5 فترات متاحة</span>
             </div>
 
-            <!-- Dynamic Time Slots -->
+            <!-- Dynamic Time Slots Container (Grouped Morning & Evening) -->
             <div id="appointmentTimeSlots" class="slot-list" style="margin-bottom: 16px;">
               <!-- Dynamically generated via renderAppointmentsScreen() -->
             </div>
 
             <!-- Booking Summary Box -->
-            <div id="apptSummaryCard" style="background: var(--surface-3, rgba(13,148,136,0.08)); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin-bottom: 16px; font-size: 13px;">
-              <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+            <div id="apptSummaryCard" style="background: var(--surface-3, rgba(13,148,136,0.08)); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; margin-bottom: 16px; font-size: 13px;">
+              <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
                 <span style="color:var(--muted);" class="lang-ar">الطبيب:</span>
                 <strong id="summaryDoctorName" style="color:var(--ink);">--</strong>
               </div>
-              <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
-                <span style="color:var(--muted);" class="lang-ar">الموعد:</span>
+              <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                <span style="color:var(--muted);" class="lang-ar">الموعد المحدد:</span>
                 <strong id="summaryDateTime" style="color:var(--teal-2, #0d9488);">--</strong>
               </div>
-              <div style="display:flex; justify-content:space-between;">
+              <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
                 <span style="color:var(--muted);" class="lang-ar">نوع الاستشارة:</span>
                 <span id="summaryApptType" class="pill info" style="font-size:11px;">فيديو عن بُعد</span>
               </div>
+              <div style="display:flex; justify-content:space-between; align-items:center; padding-top:6px; border-top:1px dashed var(--line);">
+                <span style="color:var(--muted); font-size:12px;">قيمة الكشف:</span>
+                <span style="font-weight:700; color:var(--teal, #0d9488);">٣٥٠ ج.م (تأمين طبي)</span>
+              </div>
             </div>
 
-            <button type="button" id="btnConfirmBooking" class="solid-button full" style="padding: 14px; font-size: 15px; font-weight: 600;">
-              <span class="lang-ar">✓ تأكيد حجز الموعد</span>
+            <button type="button" id="btnConfirmBooking" class="solid-button full" style="padding: 14px; font-size: 15px; font-weight: 700; border-radius: 12px;">
+              <span class="lang-ar">✓ تأكيد حجز الموعد الآن</span>
               <span class="lang-en">✓ Confirm Appointment Booking</span>
             </button>
           </article>
