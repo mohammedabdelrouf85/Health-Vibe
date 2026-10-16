@@ -7113,6 +7113,15 @@ bdi.bidi-isolate {
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .friendly-error-card,
+  .friendly-field-error,
+  .friendly-draft-restored-pill {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
 .friendly-error-card {
   position: relative;
   background: var(--surface, #0d2427);
@@ -7124,6 +7133,8 @@ bdi.bidi-isolate {
   animation: friendlyErrorSlideIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   text-align: start;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  contain: content;
+  will-change: transform, opacity;
 }
 
 .friendly-error-card.severity-warning {
@@ -7326,6 +7337,8 @@ bdi.bidi-isolate {
   color: #f87171;
   animation: friendlyFieldFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   text-align: start;
+  contain: content;
+  will-change: transform, opacity;
 }
 
 .field-error-icon {
