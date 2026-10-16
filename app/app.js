@@ -18454,7 +18454,6 @@ window.MODEL_VERSION = MODEL_VERSION;
 const ASSESSMENT_DRAFT_COLLECTION = "assessmentDrafts";
 const ASSESSMENT_DRAFT_VERSION = "2026-09-draft-v1";
 let _assessmentDraftSaveTimer = null;
-let _assessmentSubmitting = false;
 let _assessmentLoadedDraft = null;
 
 function getAssessmentDraftKey(user = getActiveUser()) {
