@@ -1,0 +1,182 @@
+/**
+ * Health Vibe AI - Connection Banner Stylesheet (مرجع: HealthVibe AI)
+ * Responsive, accessible, gentle offline/online status banner with form guard.
+ */
+
+:root {
+  --conn-offline-bg: #991b1b;
+  --conn-offline-border: #ef4444;
+  --conn-online-bg: #065f46;
+  --conn-online-border: #10b981;
+  --conn-reconnect-bg: #9a3412;
+  --conn-reconnect-border: #f97316;
+  --conn-text: #ffffff;
+}
+
+/* Base Banner */
+.connection-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 999999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 10px 18px;
+  color: var(--conn-text);
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  box-sizing: border-box;
+  contain: layout style;
+  will-change: transform, opacity;
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease;
+}
+
+/* Offline State */
+.connection-banner--offline {
+  background: linear-gradient(135deg, #7f1d1d, var(--conn-offline-bg));
+  border-bottom: 2px solid var(--conn-offline-border);
+}
+
+/* Reconnecting State */
+.connection-banner--reconnecting {
+  background: linear-gradient(135deg, #7c2d12, var(--conn-reconnect-bg));
+  border-bottom: 2px solid var(--conn-reconnect-border);
+}
+
+/* Online Success State */
+.connection-banner--online {
+  background: linear-gradient(135deg, #064e3b, var(--conn-online-bg));
+  border-bottom: 2px solid var(--conn-online-border);
+}
+
+/* Pulsing Reconnect Icon */
+@keyframes conn-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.conn-icon-pulse {
+  display: inline-block;
+  animation: conn-spin 1.2s linear infinite;
+}
+
+/* Banner Content Wrapper */
+.connection-banner-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1 1 auto;
+  max-width: 800px;
+  justify-content: center;
+  text-align: center;
+  line-height: 1.4;
+}
+
+.connection-banner-title {
+  font-weight: 700;
+}
+
+/* Action & Dismiss Buttons (WCAG 2.5.5 touch target >= 44px) */
+.connection-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.connection-banner-btn {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: none;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: opacity 0.15s ease, transform 0.1s ease;
+}
+
+.connection-banner-btn:active {
+  transform: scale(0.97);
+}
+
+.connection-banner-btn-retry {
+  background: #ffffff;
+  color: #7f1d1d;
+}
+
+.connection-banner-btn-retry:hover {
+  background: #f1f5f9;
+}
+
+.connection-banner-btn-dismiss {
+  background: transparent;
+  color: #ffffff;
+  font-size: 1rem;
+  padding: 8px;
+}
+
+.connection-banner-btn-dismiss:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* Form Guard Overlay & Tooltip */
+.form-offline-disabled {
+  position: relative;
+  opacity: 0.65 !important;
+  cursor: not-allowed !important;
+  pointer-events: none !important;
+}
+
+.form-offline-notice {
+  font-size: 0.85rem;
+  color: var(--conn-offline-border);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-weight: 500;
+}
+
+/* Accessibility: Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  .connection-banner {
+    transition: none !important;
+  }
+  .conn-icon-pulse {
+    animation: none !important;
+  }
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 640px) {
+  .connection-banner {
+    padding: 10px 14px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .connection-banner-content {
+    font-size: 0.85rem;
+  }
+
+  .connection-banner-actions {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .connection-banner-btn-retry {
+    flex: 1;
+    min-height: 44px;
+  }
+}

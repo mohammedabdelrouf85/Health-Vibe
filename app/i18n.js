@@ -324,6 +324,17 @@
           urgent: "الطوارئ والإسعاف"
         }
       },
+      connection: {
+        offline: "أنت غير متصل بالإنترنت حالياً — سيتم حفظ مسودة التقييم تلقائياً لحمايتها.",
+        restored: "تمت استعادة الاتصال بالإنترنت بنجاح — البيانات متزامنة ومحمية.",
+        reconnecting: "جارٍ التحقق من استقرار الشبكة وإعادة الاتصال...",
+        retryNow: "إعادة المحاولة",
+        retryAria: "إعادة محاولة الاتصال الآن",
+        dismissAria: "إغلاق التنبيه مؤقتاً",
+        formGuardNotice: "أنت غير متصل بالإنترنت حالياً — تم حفظ مسودتك مؤقتاً لتجنب فقدان البيانات. يرجى إعادة الاتصال لإرسال النموذج.",
+        formDisabledTooltip: "النموذج معطل مؤقتاً لعدم وجود اتصال بالإنترنت",
+        unreachableServer: "لم نتمكن من الوصول للخادم بعد. سنواصل الفحص تلقائياً بمجرد استقرار الشبكة."
+      },
       consent: {
         title: "الموافقة الطبية وسياسة الخصوصية",
         badgeRequired: "مطلوبة قبل الفحص",
@@ -1351,6 +1362,17 @@
           privacy: "Privacy & Security",
           urgent: "Emergency & Urgent Care"
         }
+      },
+      connection: {
+        offline: "You are currently offline. Your assessment draft will be saved automatically.",
+        restored: "Internet connection restored successfully — data is synchronized.",
+        reconnecting: "Checking network stability and reconnecting...",
+        retryNow: "Retry Now",
+        retryAria: "Retry connection now",
+        dismissAria: "Dismiss notification temporarily",
+        formGuardNotice: "You are currently offline. Your draft has been safely saved to avoid data loss. Please reconnect before submitting.",
+        formDisabledTooltip: "Form submission paused while offline",
+        unreachableServer: "Unable to reach the server yet. Will continue monitoring automatically."
       },
       consent: {
         title: "Medical Consent & Privacy Policy",

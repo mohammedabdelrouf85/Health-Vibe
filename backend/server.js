@@ -3198,6 +3198,53 @@ app.post('/api/faq/support-inquiry', (req, res) => {
 });
 
 /**
+ * GET /api/connection/ping
+ * Real connectivity probe endpoint to verify client-server reachability (مرجع: HealthVibe AI)
+ */
+app.get('/api/connection/ping', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.json({
+    success: true,
+    online: true,
+    timestamp: new Date().toISOString(),
+    serverTime: Date.now()
+  });
+});
+
+/**
+ * POST /api/connection/reconnect-event
+ * Client audit logging when network connection is restored
+ */
+app.post('/api/connection/reconnect-event', (req, res) => {
+  try {
+    const userId = req.user?.uid || req.body?.userId || 'anonymous';
+    const draftCount = req.body?.draftCount || 0;
+
+    if (auditService && typeof auditService.logSecurityEvent === 'function') {
+      auditService.logSecurityEvent({
+        type: 'CLIENT_NETWORK_RECONNECTED',
+        actorUid: userId,
+        actorRole: req.user?.role || 'patient',
+        targetUserId: userId,
+        outcome: 'SUCCESS',
+        metadata: { draftCount, clientTimestamp: req.body?.timestamp || new Date().toISOString() }
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Reconnection event acknowledged.',
+      synced: true
+    });
+  } catch (err) {
+    console.error('[POST RECONNECT EVENT ERROR]:', err);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to record reconnection event.' });
+  }
+});
+
+/**
  * GET /api/clinical/rules/versions
  * Returns the Clinical Rules Registry and all registered rule engine versions
  */
