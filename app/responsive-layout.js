@@ -132,18 +132,23 @@
         reviewPanel.classList.remove("mobile-hidden");
         // Ensure back-to-queue control is present
         let backBtn = reviewPanel.querySelector("#btnMobileBackToQueue");
+        const isRtl = (document.documentElement.dir === "rtl" || (document.body && document.body.dir === "rtl") || document.documentElement.lang === "ar");
+        const arrow = isRtl ? "→" : "←";
+        const label = isRtl ? "العودة لقائمة الانتظار" : "Back to Queue";
+
         if (!backBtn) {
           backBtn = document.createElement("button");
           backBtn.id = "btnMobileBackToQueue";
           backBtn.type = "button";
           backBtn.className = "mobile-back-to-queue-btn";
-          backBtn.innerHTML = `<span>←</span> <span>العودة لقائمة الانتظار / Back to Queue</span>`;
           backBtn.onclick = function () {
             queuePanel.classList.remove("mobile-hidden");
             reviewPanel.classList.add("mobile-hidden");
           };
           reviewPanel.prepend(backBtn);
         }
+        backBtn.innerHTML = `<span aria-hidden="true">${arrow}</span> <span>${label}</span>`;
+        backBtn.setAttribute("aria-label", label);
         backBtn.style.display = "flex";
       } else {
         queuePanel.classList.remove("mobile-hidden");

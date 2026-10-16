@@ -17604,8 +17604,10 @@ function initMobileTouchGestures() {
     const diffX = endX - startX;
     const diffY = Math.abs(endY - startY);
 
-    // Swipe horizontally to dismiss
-    if (diffX > 50 && diffY < 120) {
+    // Swipe horizontally to dismiss according to reading direction (RTL swipe right, LTR swipe left)
+    const isRtl = document.documentElement.dir === "rtl" || (document.body && document.body.dir === "rtl");
+    const dismissed = isRtl ? (diffX > 45) : (diffX < -45);
+    if (dismissed && diffY < 120) {
       closeSidebarDrawer();
     }
   }, { passive: true });
