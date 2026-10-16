@@ -8666,6 +8666,24 @@ app.post('/api/appointments/link-case-dossier', requireAuth, requireVerifiedEmai
 });
 
 /**
+ * GET /api/appointments/analytics
+ * Retrieves aggregated appointment utilization, adoption, success rate, and pre-visit dossier KPIs.
+ */
+app.get('/api/appointments/analytics', requireAuth, async (req, res) => {
+  const userRole = getTrustedClaimRole(req.user);
+  if (userRole !== ROLES.SUPER_ADMIN && userRole !== ROLES.CLINIC_ADMIN && userRole !== ROLES.DOCTOR && !hasTrustedAdminClaim(req.user)) {
+    return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Admin or clinician role required to view appointment analytics.' });
+  }
+  try {
+    const result = await schedulingService.getAppointmentAnalytics(db, req.query, req.user);
+    return res.json(result);
+  } catch (err) {
+    console.error('[APPOINTMENT ANALYTICS GET ERROR]:', err);
+    return res.status(500).json({ error: 'ANALYTICS_FETCH_FAILED', message: err.message });
+  }
+});
+
+/**
  * POST /api/notifications/send-email
  * Dedicated endpoint for dispatching clinical email notifications across all 6 categories:
  * result_ready, information_requested, doctor_assigned, escalation, appointment_changes, verification.

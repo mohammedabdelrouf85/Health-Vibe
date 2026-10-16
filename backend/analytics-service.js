@@ -41,7 +41,12 @@ const EVENT_TYPES = Object.freeze({
   APPOINTMENT_CANCEL: 'appointment_cancel',
   APPOINTMENT_RESCHEDULE: 'appointment_reschedule',
   APPOINTMENT_COMPLETE: 'appointment_complete',
-  APPOINTMENT_EMERGENCY_REDIRECT: 'appointment_emergency_redirect'
+  APPOINTMENT_EMERGENCY_REDIRECT: 'appointment_emergency_redirect',
+
+  // 📑 Pre-Visit Medical Dossier Telemetry (Doctolib Model)
+  DOSSIER_ATTACHED_TO_APPOINTMENT: 'dossier_attached_to_appointment',
+  PREVISIT_DOSSIER_ACCESSED: 'previsit_dossier_accessed',
+  DOSSIER_LINKAGE_FAILED: 'dossier_linkage_failed'
 });
 
 const FORBIDDEN_MEDICAL_KEYS = Object.freeze([
@@ -131,7 +136,7 @@ function sanitizeAndValidatePayload(eventType, payload = {}) {
     // Appointment specific metadata
     'doctorId', 'specialty', 'consultationType', 'isOnline', 'isDependent', 'beneficiaryType',
     'timeOfDay', 'slotId', 'date', 'weekOffset', 'action', 'reason', 'errorCode', 'failureReason',
-    'price', 'currency'
+    'price', 'currency', 'hasAttachedReport', 'hasAttachedDossier', 'isDoctorReview', 'isPostBookingLinkage', 'actorRole'
   ];
 
   for (const [k, v] of Object.entries(payload)) {
@@ -843,6 +848,46 @@ function calculateAppointmentKpis(events = inMemoryEvents, options = {}) {
     isEn
   });
 
+  // Pre-Visit Medical Dossier Metrics (Doctolib Standard)
+  const dossierAttachments = apptEvents.filter(e => matchType(e, EVENT_TYPES.DOSSIER_ATTACHED_TO_APPOINTMENT)).length;
+  const dossierAccesses = apptEvents.filter(e => matchType(e, EVENT_TYPES.PREVISIT_DOSSIER_ACCESSED));
+  const doctorDossierReviews = dossierAccesses.filter(e => {
+    const p = e.payload || e.properties || {};
+    return p.isDoctorReview || p.actorRole === 'doctor' || p.actorRole === 'super_admin';
+  }).length;
+
+  let dossierBookingsCount = 0;
+  successes.forEach(e => {
+    const p = e.payload || e.properties || {};
+    if (p.hasAttachedReport || p.hasAttachedDossier) {
+      dossierBookingsCount++;
+    }
+  });
+
+  const effectiveDossierBookings = Math.max(dossierBookingsCount, dossierAttachments);
+
+  const dossierAttachmentRate = buildKpiMetric({
+    name: 'Pre-Visit Dossier Attachment Rate',
+    timePeriod: periodLabel,
+    numeratorName: 'Appointments with Attached Medical Dossier',
+    numeratorValue: effectiveDossierBookings,
+    denominatorName: 'Total Confirmed Appointments',
+    denominatorValue: totalBookings,
+    unit: '%',
+    isEn
+  });
+
+  const previsitDoctorReviewRate = buildKpiMetric({
+    name: 'Pre-Visit Doctor Dossier Review Rate',
+    timePeriod: periodLabel,
+    numeratorName: 'Pre-Visit Dossiers Reviewed by Doctor',
+    numeratorValue: doctorDossierReviews,
+    denominatorName: 'Appointments with Attached Medical Dossier',
+    denominatorValue: effectiveDossierBookings,
+    unit: '%',
+    isEn
+  });
+
   const doctorBreakdown = Object.values(docUtilizationMap).map(d => ({
     doctorId: d.doctorId,
     bookingsCount: d.bookings
@@ -884,7 +929,11 @@ function calculateAppointmentKpis(events = inMemoryEvents, options = {}) {
       morningPreferenceRate: morningPreferenceRate.rate,
       familyDependentRate: familyDependentRate.rate,
       selfBookingRate: selfRate,
-      emergencyRedirects: emergencyIntercepts
+      emergencyRedirects: emergencyIntercepts,
+      totalWithDossier: effectiveDossierBookings,
+      dossierAttachmentRate: dossierAttachmentRate.rate,
+      doctorPrevisitReviews: doctorDossierReviews,
+      previsitDoctorReviewRate: previsitDoctorReviewRate.rate
     },
     bookingSuccessRate,
     telehealthRatio,
@@ -900,7 +949,9 @@ function calculateAppointmentKpis(events = inMemoryEvents, options = {}) {
       eveningPreferenceRate,
       morningPreferenceRate,
       familyDependentRate,
-      cancellationRate
+      cancellationRate,
+      dossierAttachmentRate,
+      previsitDoctorReviewRate
     }
   };
 }

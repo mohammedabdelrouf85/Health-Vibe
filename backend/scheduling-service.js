@@ -900,6 +900,16 @@ async function bookAppointmentTransaction(db, payload, authUser) {
   }
 
   // 3b. Validate Linked Medical Case Dossier Ownership & Certified Snapshot
+  function parseSpo2Number(val) {
+    if (val == null) return null;
+    if (typeof val === 'number') return isNaN(val) ? null : val;
+    if (typeof val === 'string') {
+      const num = parseFloat(val.replace(/[^0-9.]/g, ''));
+      return isNaN(num) ? null : num;
+    }
+    return null;
+  }
+
   let verifiedLinkedCase = null;
   if (payload.linkedCaseId) {
     try {
@@ -918,15 +928,6 @@ async function bookAppointmentTransaction(db, payload, authUser) {
           throw err;
         }
 
-        function parseSpo2Number(val) {
-          if (val == null) return null;
-          if (typeof val === 'number') return isNaN(val) ? null : val;
-          if (typeof val === 'string') {
-            const num = parseFloat(val.replace(/[^0-9.]/g, ''));
-            return isNaN(num) ? null : num;
-          }
-          return null;
-        }
         const spo2 = parseSpo2Number(cData.oxygenLevel != null ? cData.oxygenLevel : (cData.vitals?.oxygenSaturation || cData.spo2 || null));
         verifiedLinkedCase = {
           caseId: payload.linkedCaseId,
@@ -1315,6 +1316,7 @@ async function bookAppointmentTransaction(db, payload, authUser) {
     try {
       const isEvening = typeof savedAppointment.slotId === 'string' &&
         (parseInt(savedAppointment.slotId.replace(/\D/g, ''), 10) >= 1600 || savedAppointment.slotId.includes('evening'));
+      const hasDossier = Boolean(savedAppointment.hasAttachedReport || savedAppointment.linkedCaseId);
       analyticsService.recordEvent({
         eventType: analyticsService.EVENT_TYPES.APPOINTMENT_BOOK_SUCCESS,
         userId: savedAppointment.patientId,
@@ -1328,9 +1330,24 @@ async function bookAppointmentTransaction(db, payload, authUser) {
           beneficiaryType: (savedAppointment.beneficiaryId && savedAppointment.beneficiaryId !== 'self') ? 'dependent' : 'self',
           timeOfDay: isEvening ? 'evening' : 'morning',
           date: savedAppointment.date,
-          slotId: savedAppointment.slotId
+          slotId: savedAppointment.slotId,
+          hasAttachedReport: hasDossier,
+          hasAttachedDossier: hasDossier
         }
       });
+
+      if (hasDossier) {
+        analyticsService.recordEvent({
+          eventType: analyticsService.EVENT_TYPES.DOSSIER_ATTACHED_TO_APPOINTMENT,
+          userId: savedAppointment.patientId,
+          clinicId: savedAppointment.clinicId || DEFAULT_CLINIC_ID,
+          payload: {
+            appointmentId: savedAppointment.id,
+            doctorId: savedAppointment.doctorId,
+            consultationType: savedAppointment.consultationType || (savedAppointment.isOnlineConsultation ? 'video' : 'clinic')
+          }
+        });
+      }
     } catch (sucErr) {}
 
     return savedAppointment;
@@ -2538,7 +2555,11 @@ async function getAppointmentAnalytics(db, options = {}) {
       familyDependentRate: totalDb > 0 ? Number(((dependentCount / totalDb) * 100).toFixed(1)) : null,
       selfBookingRate: totalDb > 0 ? Number(((selfCount / totalDb) * 100).toFixed(1)) : null,
       bookingSuccessRate: telemetryKpis?.summary?.bookingSuccessRate !== undefined ? telemetryKpis.summary.bookingSuccessRate : (totalDb > 0 ? Number((((totalDb - totalCancelled) / totalDb) * 100).toFixed(1)) : null),
-      emergencyRedirects: telemetryKpis?.summary?.emergencyRedirects || 0
+      emergencyRedirects: telemetryKpis?.summary?.emergencyRedirects || 0,
+      totalWithDossier: filteredDbAppointments.filter(a => Boolean(a.hasAttachedReport || a.linkedCaseId)).length,
+      dossierAttachmentRate: totalDb > 0 ? Number(((filteredDbAppointments.filter(a => Boolean(a.hasAttachedReport || a.linkedCaseId)).length / totalDb) * 100).toFixed(1)) : null,
+      doctorPrevisitReviews: telemetryKpis?.summary?.doctorPrevisitReviews || 0,
+      previsitDoctorReviewRate: telemetryKpis?.summary?.previsitDoctorReviewRate !== undefined ? telemetryKpis.summary.previsitDoctorReviewRate : null
     };
   }
 
@@ -2664,7 +2685,7 @@ async function getAppointmentPrevisitDossier(db, appointmentId, actorUser) {
     };
   }
 
-  // Record audit access
+  // Record audit access & telemetry
   try {
     if (typeof auditService?.recordAuditEvent === 'function') {
       await auditService.recordAuditEvent(db, {
@@ -2680,6 +2701,17 @@ async function getAppointmentPrevisitDossier(db, appointmentId, actorUser) {
         }
       });
     }
+    analyticsService.recordEvent({
+      eventType: analyticsService.EVENT_TYPES.PREVISIT_DOSSIER_ACCESSED,
+      userId: uid,
+      clinicId: appt.clinicId || DEFAULT_CLINIC_ID,
+      payload: {
+        appointmentId,
+        doctorId: appt.doctorId,
+        actorRole: role,
+        isDoctorReview: role === 'doctor' || role === 'super_admin'
+      }
+    });
   } catch (audErr) {}
 
   return {
@@ -2868,13 +2900,23 @@ async function linkAppointmentCaseDossier(db, payload = {}, actorUser) {
     }
   } catch (cupErr) {}
 
-  // Emit notification to doctor
+  // Emit notification and telemetry
   try {
     await emitAppointmentNotificationEvent(db, {
       type: 'APPOINTMENT_STATUS_CHANGED',
       appointment: { ...appt, linkedCaseId: caseId, hasAttachedReport: true, attachedAssessment: attachedSnapshot },
       actorUser,
       details: { reason: 'PREVISIT_DOSSIER_ATTACHED', caseId }
+    });
+    analyticsService.recordEvent({
+      eventType: analyticsService.EVENT_TYPES.DOSSIER_ATTACHED_TO_APPOINTMENT,
+      userId: uid,
+      clinicId: appt.clinicId || DEFAULT_CLINIC_ID,
+      payload: {
+        appointmentId,
+        doctorId: appt.doctorId,
+        isPostBookingLinkage: true
+      }
     });
   } catch (notifErr) {}
 
