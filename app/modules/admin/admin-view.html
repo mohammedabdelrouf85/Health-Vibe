@@ -312,4 +312,65 @@
             </table>
           </div>
         </article>
+      
+        <!-- 30. APPOINTMENT CALENDAR TELEMETRY & BOOKING ANALYTICS -->
+        <article class="panel" id="adminAppointmentsAnalyticsPanel" style="margin-top: 24px;">
+          <div class="panel-head" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <h3 style="margin: 0; font-size: 19px;" data-i18n="appointments.calendarAnalyticsTitle">تحليلات ومراقبة حجز المواعيد (Appointment Calendar Analytics)</h3>
+                <span class="pill ok" id="adminApptHealthBadge" style="font-size: 11px;">مباشر 🟢</span>
+              </div>
+              <p style="margin: 4px 0 0; font-size: 13px; color: var(--muted);">
+                رصد دقيق لمعدلات إتمام الحجز، تفضيلات الاستشارة (حضوري / عن بُعد)، توزيع الأوقات، وحجوزات التابعين
+              </p>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <span class="pill info" id="adminApptTotalBookingsBadge">0 حجوزات</span>
+              <button type="button" class="soft-button" onclick="refreshAdminAppointmentAnalytics()" style="padding: 6px 12px; font-size: 12.5px; display: inline-flex; align-items: center; gap: 5px;">
+                <span>🔄</span> تحديث التحليلات
+              </button>
+            </div>
+          </div>
+
+          <!-- Appointments KPI Hero Cards -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-top: 18px;">
+            <div class="kpi-mini-card" style="padding: 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color, rgba(255,255,255,0.06)); border-radius: 12px;">
+              <div style="font-size: 12px; color: var(--muted);" data-i18n="appointments.bookingSuccessRate">معدل نجاح الحجز</div>
+              <div id="adminApptSuccessRate" style="font-size: 22px; font-weight: 800; color: #10b981; margin-top: 4px;">--%</div>
+              <div id="adminApptTotalBookings" style="font-size: 11px; color: var(--muted); margin-top: 2px;">0 حجز مكتمل</div>
+            </div>
+
+            <div class="kpi-mini-card" style="padding: 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color, rgba(255,255,255,0.06)); border-radius: 12px;">
+              <div style="font-size: 12px; color: var(--muted);" data-i18n="appointments.telehealthRatio">نسبة الكشف عن بُعد</div>
+              <div id="adminApptTelehealthRatio" style="font-size: 22px; font-weight: 800; color: #38bdf8; margin-top: 4px;">--%</div>
+              <div id="adminApptModalityBreakdown" style="font-size: 11px; color: var(--muted); margin-top: 2px;">حضوري: --% | عن بُعد: --%</div>
+            </div>
+
+            <div class="kpi-mini-card" style="padding: 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color, rgba(255,255,255,0.06)); border-radius: 12px;">
+              <div style="font-size: 12px; color: var(--muted);" data-i18n="appointments.eveningPreference">تفضيل الفترة المسائية</div>
+              <div id="adminApptEveningPref" style="font-size: 22px; font-weight: 800; color: #a855f7; margin-top: 4px;">--%</div>
+              <div id="adminApptTimeSlotsBreakdown" style="font-size: 11px; color: var(--muted); margin-top: 2px;">صباحي: --% | مسائي: --%</div>
+            </div>
+
+            <div class="kpi-mini-card" style="padding: 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color, rgba(255,255,255,0.06)); border-radius: 12px;">
+              <div style="font-size: 12px; color: var(--muted);" data-i18n="appointments.familyBookings">حجوزات التابعين والأسرة</div>
+              <div id="adminApptFamilyRatio" style="font-size: 22px; font-weight: 800; color: #f59e0b; margin-top: 4px;">--%</div>
+              <div id="adminApptFamilyBreakdown" style="font-size: 11px; color: var(--muted); margin-top: 2px;">للمريض نفسه: --% | أفراد الأسرة: --%</div>
+            </div>
+
+            <div class="kpi-mini-card" style="padding: 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color, rgba(255,255,255,0.06)); border-radius: 12px;">
+              <div style="font-size: 12px; color: var(--muted);" data-i18n="appointments.emergencyInterceptions">تحويلات الطوارئ الاستباقية</div>
+              <div id="adminApptEmergencyRedirects" style="font-size: 22px; font-weight: 800; color: #ef4444; margin-top: 4px;">0</div>
+              <div style="font-size: 11px; color: var(--muted); margin-top: 2px;">حماية فرز الأعراض الحرجة</div>
+            </div>
+
+            <div class="kpi-mini-card" style="padding: 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color, rgba(255,255,255,0.06)); border-radius: 12px;">
+              <div style="font-size: 12px; color: var(--muted);" data-i18n="appointments.cancellationRate">معدل الإلغاء</div>
+              <div id="adminApptCancellationRate" style="font-size: 22px; font-weight: 800; color: #94a3b8; margin-top: 4px;">--%</div>
+              <div id="adminApptCancellationCount" style="font-size: 11px; color: var(--muted); margin-top: 2px;">0 إلغاء</div>
+            </div>
+          </div>
+        </article>
+
       </section>

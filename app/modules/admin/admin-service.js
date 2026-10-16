@@ -357,11 +357,192 @@
     };
   }
 
+    const APPOINTMENT_EVENT_TYPES = Object.freeze({
+    APPOINTMENT_VIEW: 'appointment_view',
+    APPOINTMENT_SLOT_SELECTED: 'appointment_slot_selected',
+    APPOINTMENT_BOOK_ATTEMPT: 'appointment_book_attempt',
+    APPOINTMENT_BOOK_SUCCESS: 'appointment_book_success',
+    APPOINTMENT_BOOK_FAILURE: 'appointment_book_failure',
+    APPOINTMENT_CANCEL: 'appointment_cancel',
+    APPOINTMENT_RESCHEDULE: 'appointment_reschedule',
+    APPOINTMENT_COMPLETE: 'appointment_complete',
+    APPOINTMENT_EMERGENCY_REDIRECT: 'appointment_emergency_redirect',
+    VIEW: 'appointment_view',
+    SLOT_SELECTED: 'appointment_slot_selected',
+    BOOK_ATTEMPT: 'appointment_book_attempt',
+    BOOK_SUCCESS: 'appointment_book_success',
+    BOOK_FAILURE: 'appointment_book_failure',
+    CANCEL: 'appointment_cancel',
+    RESCHEDULE: 'appointment_reschedule',
+    COMPLETE: 'appointment_complete',
+    EMERGENCY_REDIRECT: 'appointment_emergency_redirect'
+  });
+
+    function calculateAppointmentKpis(appointments = [], options = {}) {
+    const isEn = Boolean(options.isEn);
+    const events = options.events || [];
+    const realAppointments = (appointments || []).filter(a => {
+      if (!a) return false;
+      return !a.isDemo && !a.isMock && !String(a.id || '').startsWith('demo_');
+    });
+
+    const clinicFilter = (options.clinicId || options.clinic || '').trim().toLowerCase();
+    const filteredAppts = clinicFilter && clinicFilter !== 'all'
+      ? realAppointments.filter(a => String(a.clinicId || '').trim().toLowerCase() === clinicFilter)
+      : realAppointments;
+
+    const total = filteredAppts.length;
+    const confirmed = filteredAppts.filter(a => a.status === 'confirmed').length;
+    const completed = filteredAppts.filter(a => a.status === 'completed').length;
+    const cancelled = filteredAppts.filter(a => a.status === 'cancelled').length;
+    const rescheduled = filteredAppts.filter(a => a.status === 'rescheduled').length;
+
+    let telehealthCount = 0;
+    let inClinicCount = 0;
+    let eveningCount = 0;
+    let morningCount = 0;
+    let dependentCount = 0;
+    let selfCount = 0;
+    const docUtilization = new Map();
+
+    filteredAppts.forEach(a => {
+      const isOnline = a.isOnlineConsultation || a.isOnline || a.consultationType === 'video' || a.consultationType === 'telehealth' || a.type === 'video';
+      if (isOnline) {
+        telehealthCount++;
+      } else {
+        inClinicCount++;
+      }
+
+      const slot = String(a.slotId || '');
+      const timeStr = String(a.time || a.timeOfDay || '').toLowerCase();
+      let isEvening = false;
+      if (timeStr.includes('evening') || timeStr.includes('pm') || slot.includes('evening') || slot.includes('pm')) {
+        isEvening = true;
+      } else if (timeStr.includes('morning') || timeStr.includes('am') || slot.includes('morning') || slot.includes('am')) {
+        isEvening = false;
+      } else {
+        const timeMatch = timeStr.match(/(\d{1,2}):(\d{2})/) || slot.match(/_(\d{1,2})-(\d{2})/);
+        if (timeMatch) {
+          isEvening = parseInt(timeMatch[1], 10) >= 16;
+        } else {
+          const num = parseInt(timeStr.replace(/\D/g, '') || slot.replace(/\D/g, ''), 10);
+          const h = !isNaN(num) && num >= 100 ? Math.floor(num / 100) : num;
+          isEvening = !isNaN(h) && h >= 16;
+        }
+      }
+
+      if (isEvening) {
+        eveningCount++;
+      } else {
+        morningCount++;
+      }
+
+      const isDep = a.isDependent === true || a.dependentId || (a.beneficiaryId && a.beneficiaryId !== 'self') || a.beneficiaryType === 'dependent' || a.beneficiaryType === 'family';
+      if (isDep) {
+        dependentCount++;
+      } else {
+        selfCount++;
+      }
+
+      const docId = a.doctorId || a.doctorName || 'unassigned';
+      docUtilization.set(docId, (docUtilization.get(docId) || 0) + 1);
+    });
+
+    const attempts = events.filter(e => {
+      const t = (e.eventType || e.type || '').toLowerCase();
+      return t === 'appointment_book_attempt';
+    }).length;
+
+    const successes = events.filter(e => {
+      const t = (e.eventType || e.type || '').toLowerCase();
+      return t === 'appointment_book_success';
+    }).length;
+
+    const emergencyIntercepts = events.filter(e => {
+      const t = (e.eventType || e.type || '').toLowerCase();
+      return t === 'appointment_emergency_redirect';
+    }).length;
+
+    const denominatorSuccess = attempts > 0 ? attempts : (total > 0 ? total : null);
+    const numeratorSuccess = successes > 0 ? successes : (confirmed + completed);
+    const bookingSuccessRate = denominatorSuccess && denominatorSuccess > 0
+      ? Number(((numeratorSuccess / denominatorSuccess) * 100).toFixed(1))
+      : null;
+
+    const telehealthRatio = total > 0 ? Number(((telehealthCount / total) * 100).toFixed(1)) : null;
+    const inClinicRatio = total > 0 ? Number(((inClinicCount / total) * 100).toFixed(1)) : null;
+    const cancellationRate = total > 0 ? Number(((cancelled / total) * 100).toFixed(1)) : null;
+
+    const totalCategorizedSlots = morningCount + eveningCount;
+    const eveningPreferenceRate = totalCategorizedSlots > 0 ? Number(((eveningCount / totalCategorizedSlots) * 100).toFixed(1)) : null;
+    const morningPreferenceRate = totalCategorizedSlots > 0 ? Number(((morningCount / totalCategorizedSlots) * 100).toFixed(1)) : null;
+    const familyDependentRate = total > 0 ? Number(((dependentCount / total) * 100).toFixed(1)) : null;
+    const selfBookingRate = total > 0 ? Number(((selfCount / total) * 100).toFixed(1)) : null;
+
+    const docUtilizationMap = {};
+    docUtilization.forEach((count, docId) => {
+      docUtilizationMap[docId] = { bookings: count, doctorId: docId };
+    });
+
+    const naText = isEn ? 'Unavailable' : 'غير متاح';
+
+    return {
+      summary: {
+        totalBookings: total,
+        totalCompleted: completed,
+        totalCancelled: cancelled,
+        bookingSuccessRate,
+        cancellationRate,
+        telehealthRatio,
+        inClinicRatio,
+        eveningPreferenceRate,
+        morningPreferenceRate,
+        familyDependentRate,
+        selfBookingRate,
+        emergencyRedirects: emergencyIntercepts
+      },
+      total,
+      confirmed,
+      completed,
+      cancelled,
+      rescheduled,
+      telehealthCount,
+      inClinicCount,
+      morningCount,
+      eveningCount,
+      selfCount,
+      dependentCount,
+      emergencyInterceptions: emergencyIntercepts,
+      bookingSuccessRate,
+      bookingSuccessRateDisplay: bookingSuccessRate !== null ? `${bookingSuccessRate}%` : naText,
+      bookingSuccessRateDisplayAr: bookingSuccessRate !== null ? `${bookingSuccessRate}%` : 'غير متاح',
+      telehealthRatio,
+      telehealthRatioDisplay: telehealthRatio !== null ? `${telehealthRatio}%` : naText,
+      telehealthRatioDisplayAr: telehealthRatio !== null ? `${telehealthRatio}%` : 'غير متاح',
+      inClinicRatio,
+      inClinicRatioDisplay: inClinicRatio !== null ? `${inClinicRatio}%` : naText,
+      inClinicRatioDisplayAr: inClinicRatio !== null ? `${inClinicRatio}%` : 'غير متاح',
+      eveningPreferenceRate,
+      eveningPreferenceRateDisplay: eveningPreferenceRate !== null ? `${eveningPreferenceRate}%` : naText,
+      eveningPreferenceRateDisplayAr: eveningPreferenceRate !== null ? `${eveningPreferenceRate}%` : 'غير متاح',
+      familyDependentRate,
+      familyDependentRateDisplay: familyDependentRate !== null ? `${familyDependentRate}%` : naText,
+      familyDependentRateDisplayAr: familyDependentRate !== null ? `${familyDependentRate}%` : 'غير متاح',
+      cancellationRate,
+      cancellationRateDisplay: cancellationRate !== null ? `${cancellationRate}%` : naText,
+      cancellationRateDisplayAr: cancellationRate !== null ? `${cancellationRate}%` : 'غير متاح',
+      doctorUtilization: docUtilizationMap,
+      doctorUtilizationList: Array.from(docUtilization.entries()).map(([doctorId, count]) => ({ doctorId, count }))
+    };
+  }
+
   const AdminService = {
     parseKpiTimestamp,
     calculateKpiMetrics,
     calculateAssessmentJourneyMetrics,
+    calculateAppointmentKpis,
     EVENT_TYPES,
+    APPOINTMENT_EVENT_TYPES,
     SUPPORT_TICKET_TYPES,
     filterTickets,
     calculateTicketMetrics

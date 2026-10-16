@@ -15169,11 +15169,102 @@ async function renderAdminMetrics() {
     // Update last refreshed time
     const now = new Date();
     const timeStr = now.toLocaleTimeString(isEn ? "en-US" : "ar-EG", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    await renderAdminAppointmentAnalytics(serverMetrics?.appointmentAnalytics);
     setText("adminLastRefreshedAt", isEn ? `Last updated: ${timeStr}` : `آخر تحديث: ${timeStr}`);
   } catch (error) {
     console.error("renderAdminMetrics error:", error);
   }
 }
+
+
+async function renderAdminAppointmentAnalytics(serverAnalytics = null) {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  try {
+    let summary = serverAnalytics?.summary;
+
+    if (!summary) {
+      if (typeof callBackend === "function") {
+        try {
+          const res = await callBackend("/api/admin/appointments/analytics");
+          if (res?.success && res.analytics?.summary) {
+            summary = res.analytics.summary;
+          }
+        } catch (_) {}
+      }
+
+      if (!summary && typeof db !== "undefined" && db?.collection) {
+        const apptsSnap = await db.collection("appointments").get().catch(() => ({ docs: [] }));
+        const appointments = (apptsSnap.docs || []).map(d => ({ id: d.id, ...d.data() }));
+        if (typeof HealthVibes !== "undefined" && HealthVibes.AdminService?.calculateAppointmentKpis) {
+          const calculated = HealthVibes.AdminService.calculateAppointmentKpis(appointments, { isEn });
+          summary = calculated.summary;
+        }
+      }
+    }
+
+    if (!summary) return;
+
+    const naText = isEn ? "Unavailable" : "غير متاح";
+
+    setText("adminApptTotalBookingsBadge", `${summary.totalBookings || 0} ${isEn ? "bookings" : "حجوزات"}`);
+    
+    setText("adminApptSuccessRate", summary.bookingSuccessRate !== null && summary.bookingSuccessRate !== undefined
+      ? `${summary.bookingSuccessRate}%`
+      : naText);
+    setText("adminApptTotalBookings", isEn
+      ? `${summary.totalCompleted || summary.totalBookings || 0} completed bookings`
+      : `${summary.totalCompleted || summary.totalBookings || 0} حجز مكتمل`);
+
+    setText("adminApptTelehealthRatio", summary.telehealthRatio !== null && summary.telehealthRatio !== undefined
+      ? `${summary.telehealthRatio}%`
+      : naText);
+    setText("adminApptModalityBreakdown", (summary.inClinicRatio !== null && summary.telehealthRatio !== null)
+      ? (isEn ? `In-Clinic: ${summary.inClinicRatio}% | Telehealth: ${summary.telehealthRatio}%` : `حضوري: ${summary.inClinicRatio}% | عن بُعد: ${summary.telehealthRatio}%`)
+      : naText);
+
+    setText("adminApptEveningPref", summary.eveningPreferenceRate !== null && summary.eveningPreferenceRate !== undefined
+      ? `${summary.eveningPreferenceRate}%`
+      : naText);
+    setText("adminApptTimeSlotsBreakdown", (summary.morningPreferenceRate !== null && summary.eveningPreferenceRate !== null)
+      ? (isEn ? `Morning: ${summary.morningPreferenceRate}% | Evening: ${summary.eveningPreferenceRate}%` : `صباحي: ${summary.morningPreferenceRate}% | مسائي: ${summary.eveningPreferenceRate}%`)
+      : naText);
+
+    setText("adminApptFamilyRatio", summary.familyDependentRate !== null && summary.familyDependentRate !== undefined
+      ? `${summary.familyDependentRate}%`
+      : naText);
+    setText("adminApptFamilyBreakdown", (summary.selfBookingRate !== null && summary.familyDependentRate !== null)
+      ? (isEn ? `Self: ${summary.selfBookingRate}% | Family: ${summary.familyDependentRate}%` : `للمريض نفسه: ${summary.selfBookingRate}% | أفراد الأسرة: ${summary.familyDependentRate}%`)
+      : naText);
+
+    setText("adminApptEmergencyRedirects", String(summary.emergencyRedirects || 0));
+
+    setText("adminApptCancellationRate", summary.cancellationRate !== null && summary.cancellationRate !== undefined
+      ? `${summary.cancellationRate}%`
+      : naText);
+    setText("adminApptCancellationCount", isEn
+      ? `${summary.totalCancelled || 0} cancelled`
+      : `${summary.totalCancelled || 0} إلغاء`);
+  } catch (err) {
+    console.error("renderAdminAppointmentAnalytics error:", err);
+  }
+}
+
+window.renderAdminAppointmentAnalytics = renderAdminAppointmentAnalytics;
+window.refreshAdminAppointmentAnalytics = async function() {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  try {
+    if (typeof showToast === "function") {
+      showToast(isEn ? "Refreshing appointment analytics..." : "جاري تحديث تحليلات حجز المواعيد...");
+    }
+    await renderAdminAppointmentAnalytics();
+    if (typeof showToast === "function") {
+      showToast(isEn ? "Appointment analytics updated!" : "تم تحديث تحليلات المواعيد بنجاح!");
+    }
+  } catch (e) {
+    console.error("refreshAdminAppointmentAnalytics error:", e);
+  }
+};
+
 
 window.refreshAdminDashboardLive = async function() {
   const btn = document.getElementById("btnRefreshAdminMetrics");

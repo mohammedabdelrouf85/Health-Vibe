@@ -771,7 +771,17 @@
         available: "متاح للحجز",
         booked: "محجوز",
         onLeave: "إجازة معتمدة",
-        offDay: "عطلة العيادة"
+        offDay: "عطلة العيادة",
+        calendarAnalyticsTitle: "تحليلات استخدام تقويم المواعيد",
+        totalBookings: "إجمالي الحجوزات المؤكدة",
+        bookingSuccessRate: "معدل نجاح الحجز",
+        telehealthRatio: "نسبة استشارات الفيديو عن بُعد",
+        inClinicRatio: "نسبة كشف العيادة",
+        eveningPreference: "الفترات المسائية",
+        morningPreference: "الفترات الصباحية",
+        familyBookings: "حجوزات أفراد العائلة",
+        emergencyInterceptions: "اعتراضات الطوارئ والتحويل لـ 123",
+        cancellationRate: "معدل إلغاء المواعيد"
       },
       feedback: {
         title: "التقييم والآراء السريرية",
@@ -1993,7 +2003,17 @@
         available: "Available",
         booked: "Booked",
         onLeave: "Approved Leave",
-        offDay: "Clinic Closed"
+        offDay: "Clinic Closed",
+        calendarAnalyticsTitle: "Appointment Calendar Analytics & Utilization",
+        totalBookings: "Total Confirmed Bookings",
+        bookingSuccessRate: "Booking Success Rate",
+        telehealthRatio: "Video Telehealth Ratio",
+        inClinicRatio: "In-Clinic Consultation Ratio",
+        eveningPreference: "Evening Slots",
+        morningPreference: "Morning Slots",
+        familyBookings: "Family Dependent Bookings",
+        emergencyInterceptions: "Emergency Red-Flag Interceptions",
+        cancellationRate: "Cancellation Rate"
       },
       feedback: {
         title: "Clinical Feedback & Rating",

@@ -30,7 +30,18 @@ const EVENT_TYPES = Object.freeze({
   ASSESSMENT_ABANDON: 'assessment_abandon',
   DOCTOR_REVIEW: 'doctor_review',
   RESULT_OPENED: 'result_opened',
-  FOLLOW_UP_BOOKED: 'follow_up_booked'
+  FOLLOW_UP_BOOKED: 'follow_up_booked',
+
+  // 🏥 Appointment Calendar & Utilization Telemetry (Vezeeta Flow)
+  APPOINTMENT_VIEW: 'appointment_view',
+  APPOINTMENT_SLOT_SELECTED: 'appointment_slot_selected',
+  APPOINTMENT_BOOK_ATTEMPT: 'appointment_book_attempt',
+  APPOINTMENT_BOOK_SUCCESS: 'appointment_book_success',
+  APPOINTMENT_BOOK_FAILURE: 'appointment_book_failure',
+  APPOINTMENT_CANCEL: 'appointment_cancel',
+  APPOINTMENT_RESCHEDULE: 'appointment_reschedule',
+  APPOINTMENT_COMPLETE: 'appointment_complete',
+  APPOINTMENT_EMERGENCY_REDIRECT: 'appointment_emergency_redirect'
 });
 
 const FORBIDDEN_MEDICAL_KEYS = Object.freeze([
@@ -116,7 +127,11 @@ function sanitizeAndValidatePayload(eventType, payload = {}) {
     'userId', 'role', 'clinicId', 'assessmentId', 'caseId', 'reportId', 'appointmentId',
     'step', 'status', 'durationMs', 'stepsCount', 'abandonStep', 'reasonCode', 'timeSpentMs',
     'reviewAction', 'responseTimeMs', 'appointmentType', 'device', 'platform', 'browser',
-    'locale', 'rating', 'feedbackId', 'ticketId', 'errorCategory', 'metadata'
+    'locale', 'rating', 'feedbackId', 'ticketId', 'errorCategory', 'metadata',
+    // Appointment specific metadata
+    'doctorId', 'specialty', 'consultationType', 'isOnline', 'isDependent', 'beneficiaryType',
+    'timeOfDay', 'slotId', 'date', 'weekOffset', 'action', 'reason', 'errorCode', 'failureReason',
+    'price', 'currency'
   ];
 
   for (const [k, v] of Object.entries(payload)) {
@@ -254,7 +269,8 @@ function buildKpiMetric({
   denominatorName,
   denominatorValue,
   unit = '%',
-  precision = 1
+  precision = 1,
+  isEn = true
 }) {
   const hasValidData = typeof denominatorValue === 'number' && denominatorValue > 0 && typeof numeratorValue === 'number';
   const rate = hasValidData ? Number(((numeratorValue / denominatorValue) * (unit === '%' ? 100 : 1)).toFixed(precision)) : null;
@@ -283,9 +299,10 @@ function buildKpiMetric({
     denominatorName,
     denominatorValue: typeof denominatorValue === 'number' ? denominatorValue : 0,
     rate,
-    unit,
+    metricValue: rate,
     display,
     displayAr,
+    displayValue: isEn ? display : displayAr,
     isAvailable: hasValidData
   };
 }
@@ -662,6 +679,228 @@ function calculateProductKpis(events = inMemoryEvents, options = {}) {
       openedTickets: supportOpened,
       resolvedTickets: supportResolved,
       resolutionRate: supportResolutionKpi
+    },
+
+    // 9. APPOINTMENT CALENDAR UTILIZATION & SUCCESS METRICS (Vezeeta Flow)
+    appointments: calculateAppointmentKpis(filteredEvents, {
+      timePeriod: periodLabel,
+      clinicId: clinicFilter
+    })
+  };
+}
+
+/**
+ * Calculates dedicated Appointment Calendar Utilization & Success Rate KPIs.
+ */
+function calculateAppointmentKpis(events = inMemoryEvents, options = {}) {
+  const isEn = Boolean(options.isEn);
+  const periodLabel = options.timePeriod || 'Rolling 30 Days';
+  const clinicFilter = options.clinicId ? String(options.clinicId).trim().toLowerCase() : null;
+
+  function matchType(e, targetType) {
+    const raw = String(e.eventType || e.type || '').trim().toLowerCase();
+    const target = String(targetType).trim().toLowerCase();
+    return raw === target;
+  }
+
+  const apptEvents = (events || []).filter(e => {
+    if (clinicFilter && clinicFilter !== 'all') {
+      const cId = String(e.clinicId || e.payload?.clinicId || e.properties?.clinicId || '').trim().toLowerCase();
+      if (cId && cId !== clinicFilter) return false;
+    }
+    return true;
+  });
+
+  const views = apptEvents.filter(e => matchType(e, EVENT_TYPES.APPOINTMENT_VIEW)).length;
+  const slotSelections = apptEvents.filter(e => matchType(e, EVENT_TYPES.APPOINTMENT_SLOT_SELECTED)).length;
+  const attempts = apptEvents.filter(e => matchType(e, EVENT_TYPES.APPOINTMENT_BOOK_ATTEMPT)).length;
+  const successes = apptEvents.filter(e => matchType(e, EVENT_TYPES.APPOINTMENT_BOOK_SUCCESS));
+  const failures = apptEvents.filter(e => matchType(e, EVENT_TYPES.APPOINTMENT_BOOK_FAILURE)).length;
+  const cancellations = apptEvents.filter(e => matchType(e, EVENT_TYPES.APPOINTMENT_CANCEL)).length;
+  const reschedules = apptEvents.filter(e => matchType(e, EVENT_TYPES.APPOINTMENT_RESCHEDULE)).length;
+  const completions = apptEvents.filter(e => matchType(e, EVENT_TYPES.APPOINTMENT_COMPLETE)).length;
+  const emergencyIntercepts = apptEvents.filter(e => matchType(e, EVENT_TYPES.APPOINTMENT_EMERGENCY_REDIRECT)).length;
+
+  const totalBookings = successes.length;
+  const totalAttempts = attempts > 0 ? attempts : (totalBookings + failures);
+
+  let videoCount = 0;
+  let inClinicCount = 0;
+  let morningCount = 0;
+  let eveningCount = 0;
+  let dependentCount = 0;
+  let selfCount = 0;
+  const docUtilizationMap = {};
+
+  successes.forEach(e => {
+    const p = e.payload || e.properties || {};
+    const isOnline = p.consultationType === 'video' || p.consultationType === 'telehealth' || p.isOnline === true;
+    if (isOnline) {
+      videoCount++;
+    } else {
+      inClinicCount++;
+    }
+
+    if (p.timeOfDay === 'evening') {
+      eveningCount++;
+    } else if (p.timeOfDay === 'morning') {
+      morningCount++;
+    } else if (p.time) {
+      const hour = parseInt(String(p.time).replace(/\D/g, ''), 10);
+      if (hour >= 16) eveningCount++;
+      else morningCount++;
+    }
+
+    const isDep = p.isDependent === true || p.beneficiaryType === 'dependent' || p.beneficiaryType === 'family' || p.beneficiaryType === 'child' || (p.beneficiaryId && p.beneficiaryId !== 'self');
+    if (isDep) {
+      dependentCount++;
+    } else {
+      selfCount++;
+    }
+
+    const docId = p.doctorId || 'unassigned';
+    if (!docUtilizationMap[docId]) {
+      docUtilizationMap[docId] = { bookings: 0, doctorId: docId };
+    }
+    docUtilizationMap[docId].bookings++;
+  });
+
+  const bookingSuccessRate = buildKpiMetric({
+    name: 'Appointment Booking Success Rate',
+    timePeriod: periodLabel,
+    numeratorName: 'Confirmed Appointments',
+    numeratorValue: totalBookings,
+    denominatorName: 'Total Booking Attempts',
+    denominatorValue: totalAttempts,
+    unit: '%',
+    isEn
+  });
+
+  const telehealthRatio = buildKpiMetric({
+    name: 'Video Telehealth Ratio',
+    timePeriod: periodLabel,
+    numeratorName: 'Video Consultations',
+    numeratorValue: videoCount,
+    denominatorName: 'Total Confirmed Appointments',
+    denominatorValue: totalBookings,
+    unit: '%',
+    isEn
+  });
+
+  const inClinicRatio = buildKpiMetric({
+    name: 'In-Clinic Consultation Ratio',
+    timePeriod: periodLabel,
+    numeratorName: 'In-Clinic Consultations',
+    numeratorValue: inClinicCount,
+    denominatorName: 'Total Confirmed Appointments',
+    denominatorValue: totalBookings,
+    unit: '%',
+    isEn
+  });
+
+  const totalCategorizedSlots = morningCount + eveningCount;
+  const eveningPreferenceRate = buildKpiMetric({
+    name: 'Evening Slot Preference Rate',
+    timePeriod: periodLabel,
+    numeratorName: 'Evening Slot Bookings',
+    numeratorValue: eveningCount,
+    denominatorName: 'Total Slot Bookings (Morning + Evening)',
+    denominatorValue: totalCategorizedSlots,
+    unit: '%',
+    isEn
+  });
+
+  const morningPreferenceRate = buildKpiMetric({
+    name: 'Morning Slot Preference Rate',
+    timePeriod: periodLabel,
+    numeratorName: 'Morning Slot Bookings',
+    numeratorValue: morningCount,
+    denominatorName: 'Total Slot Bookings (Morning + Evening)',
+    denominatorValue: totalCategorizedSlots,
+    unit: '%',
+    isEn
+  });
+
+  const familyDependentRate = buildKpiMetric({
+    name: 'Family Dependent Booking Ratio',
+    timePeriod: periodLabel,
+    numeratorName: 'Family Dependent Bookings',
+    numeratorValue: dependentCount,
+    denominatorName: 'Total Confirmed Bookings',
+    denominatorValue: totalBookings,
+    unit: '%',
+    isEn
+  });
+
+  const cancellationRate = buildKpiMetric({
+    name: 'Appointment Cancellation Rate',
+    timePeriod: periodLabel,
+    numeratorName: 'Cancelled Appointments',
+    numeratorValue: cancellations,
+    denominatorName: 'Total Confirmed Bookings',
+    denominatorValue: totalBookings,
+    unit: '%',
+    isEn
+  });
+
+  const doctorBreakdown = Object.values(docUtilizationMap).map(d => ({
+    doctorId: d.doctorId,
+    bookingsCount: d.bookings
+  }));
+
+  const selfRate = totalBookings > 0 ? Number(((selfCount / totalBookings) * 100).toFixed(1)) : null;
+
+  return {
+    timePeriod: periodLabel,
+    views,
+    slotSelections,
+    totalAttempts,
+    totalBookings,
+    failures,
+    cancellations,
+    reschedules,
+    completions,
+    emergencyInterceptions: emergencyIntercepts,
+    breakdown: {
+      inClinicCount,
+      videoCount,
+      morningCount,
+      eveningCount,
+      selfCount,
+      dependentCount
+    },
+    doctorUtilization: docUtilizationMap,
+    doctorBreakdown,
+    summary: {
+      totalAttempts,
+      totalBookings,
+      totalCompleted: completions,
+      totalCancelled: cancellations,
+      bookingSuccessRate: bookingSuccessRate.rate,
+      cancellationRate: cancellationRate.rate,
+      telehealthRatio: telehealthRatio.rate,
+      inClinicRatio: inClinicRatio.rate,
+      eveningPreferenceRate: eveningPreferenceRate.rate,
+      morningPreferenceRate: morningPreferenceRate.rate,
+      familyDependentRate: familyDependentRate.rate,
+      selfBookingRate: selfRate,
+      emergencyRedirects: emergencyIntercepts
+    },
+    bookingSuccessRate,
+    telehealthRatio,
+    inClinicRatio,
+    eveningPreferenceRate,
+    morningPreferenceRate,
+    familyDependentRate,
+    cancellationRate,
+    kpis: {
+      bookingSuccessRate,
+      telehealthRatio,
+      inClinicRatio,
+      eveningPreferenceRate,
+      morningPreferenceRate,
+      familyDependentRate,
+      cancellationRate
     }
   };
 }
@@ -680,8 +919,11 @@ module.exports = {
   FORBIDDEN_MEDICAL_KEYS,
   recordEvent,
   calculateProductKpis,
+  calculateAppointmentKpis,
   sanitizeAndValidatePayload,
+  sanitizeProperties: (props) => sanitizeAndValidatePayload(EVENT_TYPES.APPOINTMENT_BOOK_ATTEMPT, props).cleanPayload,
   buildKpiMetric,
   resetAnalyticsState,
-  getInMemoryEvents: () => inMemoryEvents
+  getInMemoryEvents: () => inMemoryEvents,
+  getEventStore: () => inMemoryEvents
 };

@@ -4085,6 +4085,34 @@ app.get('/api/admin/metrics', requireAuth, requireAdmin, async (req, res) => {
           auc: Number(metrics.auc || metrics.areaUnderCurve)
         };
       }
+
+      // Appointment Analytics summary
+      const confirmedAppts = realAppointments.filter(a => a.status === 'confirmed').length;
+      const completedAppts = realAppointments.filter(a => a.status === 'completed').length;
+      const cancelledAppts = realAppointments.filter(a => a.status === 'cancelled').length;
+      const telehealthAppts = realAppointments.filter(a => a.isOnlineConsultation || a.consultationType === 'video').length;
+      const inClinicAppts = realAppointments.length - telehealthAppts;
+
+      var apptAnalytics = null;
+      try {
+        if (typeof schedulingService?.getAppointmentAnalytics === 'function') {
+          apptAnalytics = await schedulingService.getAppointmentAnalytics(db, {
+            clinicId: scope.role === ROLES.CLINIC_ADMIN ? scope.clinicId : null
+          });
+        }
+      } catch (_) {}
+
+      if (!apptAnalytics) {
+        apptAnalytics = {
+          summary: {
+            totalBookings: totalAppointmentsCount,
+            totalCompleted: completedAppts,
+            totalCancelled: cancelledAppts,
+            telehealthRatio: totalAppointmentsCount > 0 ? Number((((telehealthAppts || 0) / totalAppointmentsCount) * 100).toFixed(1)) : null,
+            cancellationRate: totalAppointmentsCount > 0 ? Number((((cancelledAppts || 0) / totalAppointmentsCount) * 100).toFixed(1)) : null
+          }
+        };
+      }
     }
 
     res.json({
@@ -4118,10 +4146,44 @@ app.get('/api/admin/metrics', requireAuth, requireAdmin, async (req, res) => {
       branchCount,
       pendingReviews,
       urgentReviews,
-      aiModelMetrics
+      aiModelMetrics,
+      appointmentAnalytics: apptAnalytics
     });
   } catch (err) {
     console.error("[SERVER ADMIN METRICS ERROR]:", err);
+    res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
+  }
+});
+
+/**
+ * GET /api/admin/appointments/analytics
+ * Authoritative admin analytics for appointment calendar:
+ * booking success rate, consultation modality (clinic vs video),
+ * time of day preference (morning vs evening), safety emergency dropouts,
+ * cancellation rate, and doctor utilization.
+ */
+app.get('/api/admin/appointments/analytics', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const scope = await resolveRequesterClinic(req);
+    const requestedClinic = (req.query.clinicId || req.query.clinic || '').trim();
+    const userRole = normalizeRole(req.user.role);
+
+    if (userRole === ROLES.CLINIC_ADMIN && requestedClinic && scope.clinicId && requestedClinic !== scope.clinicId) {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Clinic Admin can only query analytics for their assigned clinic.' });
+    }
+
+    const effectiveClinic = userRole === ROLES.CLINIC_ADMIN ? scope.clinicId : requestedClinic;
+
+    const analytics = await schedulingService.getAppointmentAnalytics(db, {
+      timePeriod: req.query.timePeriod || req.query.period || 'last_30d',
+      startDate: req.query.startDate || req.query.from,
+      endDate: req.query.endDate || req.query.to,
+      clinicId: effectiveClinic
+    });
+
+    res.json(analytics);
+  } catch (err) {
+    console.error('[APPOINTMENT ANALYTICS ERROR]:', err);
     res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
   }
 });

@@ -14,6 +14,7 @@
  */
 
 const auditService = require('./audit-service');
+const analyticsService = require('./analytics-service');
 const {
   scheduleAppointmentReminder,
   cancelAppointmentReminders
@@ -757,14 +758,44 @@ async function emitAppointmentNotificationEvent(db, { type, appointment, actorUs
 
 async function bookAppointmentTransaction(db, payload, authUser) {
   const { doctorId, date, slotId } = payload;
-  const patientId = authUser.uid;
+  const effectiveAuthUser = authUser || { uid: payload.patientId || 'anon_patient', role: 'patient' };
+  const patientId = effectiveAuthUser.uid;
+
+  // Telemetry: Record booking attempt
+  try {
+    analyticsService.recordEvent({
+      eventType: analyticsService.EVENT_TYPES.APPOINTMENT_BOOK_ATTEMPT,
+      userId: patientId,
+      clinicId: payload.clinicId || DEFAULT_CLINIC_ID,
+      payload: {
+        doctorId,
+        consultationType: payload.consultationType || (payload.type === 'video' ? 'video' : 'clinic'),
+        isOnline: payload.consultationType === 'video' || payload.type === 'video',
+        isDependent: Boolean(payload.beneficiaryId && payload.beneficiaryId !== 'self'),
+        beneficiaryType: (payload.beneficiaryId && payload.beneficiaryId !== 'self') ? 'dependent' : 'self'
+      }
+    });
+  } catch (attErr) {}
 
   // 1. Physician Primacy Check: Non-physicians cannot inject diagnoses or prescriptions
-  appointmentSafetyService.enforcePhysicianRoleBoundaries(payload, authUser);
+  appointmentSafetyService.enforcePhysicianRoleBoundaries(payload, effectiveAuthUser);
 
   // 2. Emergency Red-Flag Triage Screening
   const triage = appointmentSafetyService.evaluateAppointmentEmergencyRisk(payload);
   if (triage.isEmergency && !triage.isDisclaimerAcknowledged) {
+    try {
+      analyticsService.recordEvent({
+        eventType: analyticsService.EVENT_TYPES.APPOINTMENT_EMERGENCY_REDIRECT,
+        userId: patientId,
+        clinicId: payload.clinicId || DEFAULT_CLINIC_ID,
+        payload: {
+          doctorId,
+          action: 'ambulance_123_redirect',
+          reason: 'critical_emergency_triage'
+        }
+      });
+    } catch (emErr) {}
+
     const err = new Error(
       `حالة طوارئ طبية محتملة: ${triage.emergencyActionAr} | ${triage.emergencyActionEn}`
     );
@@ -1080,7 +1111,44 @@ async function bookAppointmentTransaction(db, payload, authUser) {
       console.warn('[GCAL BOOKING SYNC WARNING]:', gcalErr.message);
     }
 
+    // Telemetry: Record successful appointment booking
+    try {
+      const isEvening = typeof savedAppointment.slotId === 'string' &&
+        (parseInt(savedAppointment.slotId.replace(/\D/g, ''), 10) >= 1600 || savedAppointment.slotId.includes('evening'));
+      analyticsService.recordEvent({
+        eventType: analyticsService.EVENT_TYPES.APPOINTMENT_BOOK_SUCCESS,
+        userId: savedAppointment.patientId,
+        clinicId: savedAppointment.clinicId || DEFAULT_CLINIC_ID,
+        payload: {
+          appointmentId: savedAppointment.id,
+          doctorId: savedAppointment.doctorId,
+          consultationType: savedAppointment.consultationType || (savedAppointment.isOnlineConsultation ? 'video' : 'clinic'),
+          isOnline: Boolean(savedAppointment.isOnlineConsultation),
+          isDependent: Boolean(savedAppointment.beneficiaryId && savedAppointment.beneficiaryId !== 'self'),
+          beneficiaryType: (savedAppointment.beneficiaryId && savedAppointment.beneficiaryId !== 'self') ? 'dependent' : 'self',
+          timeOfDay: isEvening ? 'evening' : 'morning',
+          date: savedAppointment.date,
+          slotId: savedAppointment.slotId
+        }
+      });
+    } catch (sucErr) {}
+
     return savedAppointment;
+  } catch (err) {
+    // Telemetry: Record failed booking attempt
+    try {
+      analyticsService.recordEvent({
+        eventType: analyticsService.EVENT_TYPES.APPOINTMENT_BOOK_FAILURE,
+        userId: patientId,
+        clinicId: payload.clinicId || DEFAULT_CLINIC_ID,
+        payload: {
+          doctorId,
+          failureReason: err.code || 'BOOKING_FAILED',
+          reason: err.code || 'BOOKING_FAILED'
+        }
+      });
+    } catch (failErr) {}
+    throw err;
   } finally {
     releaseLock();
   }
@@ -1376,6 +1444,19 @@ async function rescheduleAppointmentTransaction(db, payload, actorUser) {
       console.warn('[WAITING LIST OFFER RESCHEDULE WARNING]:', wlErr.message);
     }
 
+    // Telemetry: Record reschedule event
+    try {
+      analyticsService.recordEvent({
+        eventType: analyticsService.EVENT_TYPES.APPOINTMENT_RESCHEDULE,
+        userId: actorUser.uid,
+        clinicId: updatedAppointment.clinicId,
+        payload: {
+          appointmentId: updatedAppointment.id,
+          doctorId: updatedAppointment.doctorId
+        }
+      });
+    } catch (resyncErr) {}
+
     return { success: true, ...updatedAppointment, appointment: updatedAppointment };
   } finally {
     releaseLock();
@@ -1526,6 +1607,20 @@ async function cancelAppointmentTransaction(db, targetAppt, actorUser, options =
     console.warn('[TELEHEALTH ROOM CANCEL WARNING]:', tvErr.message);
   }
 
+  // Telemetry: Record cancellation event
+  try {
+    analyticsService.recordEvent({
+      eventType: analyticsService.EVENT_TYPES.APPOINTMENT_CANCEL,
+      userId: actorUser.uid,
+      clinicId: appt.clinicId,
+      payload: {
+        appointmentId: appt.id || appointmentId,
+        doctorId: appt.doctorId,
+        reason: opts.reason || 'patient_cancelled'
+      }
+    });
+  } catch (cancErr) {}
+
   const finalCancelledAppt = { ...appt, ...updatePayload };
   return { success: true, ...finalCancelledAppt, appointment: finalCancelledAppt };
 }
@@ -1642,6 +1737,21 @@ async function updateAppointmentStatusTransaction(db, { appointmentId, status, n
     });
   } catch (e) {
     console.warn('[STATUS UPDATE EVENT ERROR]:', e.message);
+  }
+
+  // Telemetry: Record completion event
+  if (status === APPOINTMENT_STATUSES.COMPLETED) {
+    try {
+      analyticsService.recordEvent({
+        eventType: analyticsService.EVENT_TYPES.APPOINTMENT_COMPLETE,
+        userId: appt.patientId,
+        clinicId: appt.clinicId,
+        payload: {
+          appointmentId: appt.id,
+          doctorId: appt.doctorId
+        }
+      });
+    } catch (compErr) {}
   }
 
   const finalUpdatedAppt = { ...appt, ...updatePayload };
@@ -2001,7 +2111,7 @@ async function getDoctorCalendarRange(db, options = {}, actorUser = null) {
     });
   }
 
-  return {
+  const calendarResult = {
     success: true,
     doctor: {
       doctorId: doctor.doctorId,
@@ -2029,6 +2139,22 @@ async function getDoctorCalendarRange(db, options = {}, actorUser = null) {
     },
     days
   };
+
+  // Telemetry: Record calendar range view
+  try {
+    analyticsService.recordEvent({
+      eventType: analyticsService.EVENT_TYPES.APPOINTMENT_VIEW,
+      userId: actorUser?.uid || null,
+      clinicId: doctor.clinicId,
+      payload: {
+        doctorId: doctor.doctorId,
+        weekOffset: parsedWeekOffset,
+        consultationType: consultationType || 'any'
+      }
+    });
+  } catch (viewErr) {}
+
+  return calendarResult;
 }
 
 /**
@@ -2096,6 +2222,110 @@ async function getPulmonologyDoctors(db, options = {}, actorUser = null) {
   };
 }
 
+/**
+ * Aggregates appointment utilization, success rates, modality breakdown,
+ * and emergency red-flag interception statistics for admin analytics dashboard.
+ */
+async function getAppointmentAnalytics(db, options = {}) {
+  const telemetryKpis = analyticsService.calculateAppointmentKpis(
+    options.events || undefined,
+    options
+  );
+
+  let dbAppointments = [];
+  if (db && typeof db.collection === 'function') {
+    try {
+      const snap = await db.collection('appointments').get();
+      if (snap && snap.docs) {
+        dbAppointments = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      }
+    } catch (e) {}
+  }
+
+  // Filter out demo/mock appointments
+  const realAppointments = dbAppointments.filter(a => !a.isDemo && !a.isMock && !String(a.id || '').startsWith('demo_'));
+  const clinicFilter = options.clinicId && options.clinicId !== 'all' ? options.clinicId : null;
+  const filteredDbAppointments = clinicFilter
+    ? realAppointments.filter(a => a.clinicId === clinicFilter)
+    : realAppointments;
+
+  const totalDb = filteredDbAppointments.length;
+  let summary = telemetryKpis?.summary || {};
+
+  if (totalDb > 0) {
+    const totalCompleted = filteredDbAppointments.filter(a => a.status === APPOINTMENT_STATUSES.COMPLETED || a.status === 'completed').length;
+    const totalCancelled = filteredDbAppointments.filter(a => a.status === APPOINTMENT_STATUSES.CANCELLED || a.status === 'cancelled').length;
+    const totalTelehealth = filteredDbAppointments.filter(a => a.isOnlineConsultation || a.isOnline || a.consultationType === 'video' || a.consultationType === 'telehealth').length;
+    const totalInClinic = totalDb - totalTelehealth;
+
+    let eveningCount = 0;
+    let morningCount = 0;
+    let dependentCount = 0;
+    let selfCount = 0;
+
+    filteredDbAppointments.forEach(a => {
+      const timeStr = String(a.time || a.timeOfDay || '').toLowerCase();
+      const slot = String(a.slotId || '');
+      let isEvening = false;
+      if (timeStr.includes('evening') || timeStr.includes('pm') || slot.includes('evening') || slot.includes('pm')) {
+        isEvening = true;
+      } else if (timeStr.includes('morning') || timeStr.includes('am') || slot.includes('morning') || slot.includes('am')) {
+        isEvening = false;
+      } else {
+        const timeMatch = timeStr.match(/(\d{1,2}):(\d{2})/) || slot.match(/_(\d{1,2})-(\d{2})/);
+        if (timeMatch) isEvening = parseInt(timeMatch[1], 10) >= 16;
+        else {
+          const num = parseInt(timeStr.replace(/\D/g, '') || slot.replace(/\D/g, ''), 10);
+          const h = !isNaN(num) && num >= 100 ? Math.floor(num / 100) : num;
+          isEvening = !isNaN(h) && h >= 16;
+        }
+      }
+      if (isEvening) eveningCount++;
+      else morningCount++;
+
+      if (a.isDependent === true || (a.beneficiaryId && a.beneficiaryId !== 'self') || a.beneficiaryType === 'dependent' || a.beneficiaryType === 'family') {
+        dependentCount++;
+      } else {
+        selfCount++;
+      }
+    });
+
+    const totalSlots = morningCount + eveningCount;
+
+    summary = {
+      totalBookings: totalDb,
+      totalCompleted,
+      totalCancelled,
+      cancellationRate: totalDb > 0 ? Number(((totalCancelled / totalDb) * 100).toFixed(1)) : null,
+      telehealthRatio: totalDb > 0 ? Number(((totalTelehealth / totalDb) * 100).toFixed(1)) : null,
+      inClinicRatio: totalDb > 0 ? Number(((totalInClinic / totalDb) * 100).toFixed(1)) : null,
+      eveningPreferenceRate: totalSlots > 0 ? Number(((eveningCount / totalSlots) * 100).toFixed(1)) : null,
+      morningPreferenceRate: totalSlots > 0 ? Number(((morningCount / totalSlots) * 100).toFixed(1)) : null,
+      familyDependentRate: totalDb > 0 ? Number(((dependentCount / totalDb) * 100).toFixed(1)) : null,
+      selfBookingRate: totalDb > 0 ? Number(((selfCount / totalDb) * 100).toFixed(1)) : null,
+      bookingSuccessRate: telemetryKpis?.summary?.bookingSuccessRate !== undefined ? telemetryKpis.summary.bookingSuccessRate : (totalDb > 0 ? Number((((totalDb - totalCancelled) / totalDb) * 100).toFixed(1)) : null),
+      emergencyRedirects: telemetryKpis?.summary?.emergencyRedirects || 0
+    };
+  }
+
+  return {
+    success: true,
+    timePeriod: options.timePeriod || 'Rolling 30 Days',
+    clinicId: clinicFilter || 'all',
+    summary,
+    telemetry: telemetryKpis,
+    dbSummary: {
+      totalPersisted: filteredDbAppointments.length,
+      confirmed: filteredDbAppointments.filter(a => a.status === APPOINTMENT_STATUSES.CONFIRMED).length,
+      completed: filteredDbAppointments.filter(a => a.status === APPOINTMENT_STATUSES.COMPLETED).length,
+      cancelled: filteredDbAppointments.filter(a => a.status === APPOINTMENT_STATUSES.CANCELLED).length,
+      rescheduled: filteredDbAppointments.filter(a => a.status === APPOINTMENT_STATUSES.RESCHEDULED).length,
+      telehealth: filteredDbAppointments.filter(a => a.isOnlineConsultation || a.consultationType === 'video').length,
+      inClinic: filteredDbAppointments.filter(a => !a.isOnlineConsultation && a.consultationType !== 'video').length
+    }
+  };
+}
+
 module.exports = {
   CLINICS,
   DOCTOR_SCHEDULES,
@@ -2125,6 +2355,7 @@ module.exports = {
   getDoctorCalendarRange,
   getPulmonologyDoctors,
   getClinicCalendar,
+  getAppointmentAnalytics,
   emitAppointmentNotificationEvent,
   scheduleAppointmentReminder,
   cancelAppointmentReminders,
