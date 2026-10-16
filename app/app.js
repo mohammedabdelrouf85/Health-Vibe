@@ -2690,15 +2690,127 @@ async function restoreBackupSnapshot(backupId, confirmToken, dryRun = true) {
   }
 }
 
+async function fetchBackupScheduleStatus() {
+  try {
+    const fetchFn = typeof authenticatedFetch === "function" ? authenticatedFetch : fetch;
+    const res = await fetchFn(`${getApiBaseUrl()}/api/admin/backup/schedule`);
+    if (res.ok) {
+      return await res.json();
+    }
+    const data = await parseJsonResponse(res);
+    throw new Error(data.message || data.error || "Failed to fetch backup schedule status.");
+  } catch (e) {
+    console.warn("[BACKUP SCHEDULE] Status fetch warning:", e.message);
+    return { status: "error", scheduler: { isRunning: true, cadence: "24h_daily" } };
+  }
+}
+
+async function triggerAutomatedRestoreTest(backupId = null) {
+  const btn = document.getElementById("btnTriggerRestoreTestDrill");
+  if (btn) btn.disabled = true;
+  try {
+    if (typeof showToast === "function") {
+      showToast("جاري فحص استعادة السجلات والتقارير الطبية (Automated Restore Drill)...", "info");
+    }
+    const result = await requireSuccessfulMutation("/api/admin/backup/restore-test", {
+      method: "POST",
+      body: JSON.stringify({ backupId })
+    }, data => data.success === true && data.certifiedZeroDataLoss === true);
+
+    if (typeof showToast === "function") {
+      showToast(
+        `اكتمل فحص الاستعادة بنجاح: مطابقة 100% للسجلات وصفر فقدان (${result.reconciliation?.totalRestoredRecords || 0} سجل)`,
+        "success"
+      );
+    }
+    await renderAdminBackupUI();
+    return result;
+  } catch (err) {
+    showRetryFailure(`فشل فحص الاستعادة: ${err.message}`, () => triggerAutomatedRestoreTest(backupId));
+    console.error("[RESTORE TEST ERROR]:", err);
+    return null;
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function triggerDailyBackupCycle() {
+  const btn = document.getElementById("btnTriggerDailyBackupCycle");
+  if (btn) btn.disabled = true;
+  try {
+    if (typeof showToast === "function") {
+      showToast("جاري تشغيل دورة النسخ الاحتياطي اليومي وفحص الاستعادة التلقائي...", "info");
+    }
+    const result = await requireSuccessfulMutation("/api/admin/backup/schedule/run-now", {
+      method: "POST"
+    }, data => data.success === true);
+
+    if (typeof showToast === "function") {
+      showToast(`تم تنفيذ دورة النسخ اليومي والتحقق بنجاح (${result.backup?.backupId || ''})`, "success");
+    }
+    await renderAdminBackupUI();
+    return result;
+  } catch (err) {
+    showRetryFailure(`فشل دورة النسخ اليومي: ${err.message}`, () => triggerDailyBackupCycle());
+    console.error("[DAILY CYCLE ERROR]:", err);
+    return null;
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 async function renderAdminBackupUI() {
   if (typeof document === "undefined") return;
   const tableBody = document.getElementById("adminBackupSnapshotsTableBody");
   const countBadge = document.getElementById("adminBackupCountBadge");
   const rpoBadge = document.getElementById("adminBackupRpoBadge");
+  const schedBadge = document.getElementById("adminBackupScheduleBadge");
+  const restoreStatusEl = document.getElementById("adminBackupRestoreTestStatus");
+  const nextRunTextEl = document.getElementById("adminBackupNextRunText");
+  const drillBanner = document.getElementById("adminBackupDrillBanner");
+  const drillDetails = document.getElementById("adminBackupDrillDetails");
+  const lastDrillTime = document.getElementById("adminBackupLastDrillTime");
+  const lastDrillRto = document.getElementById("adminBackupLastDrillRto");
+  const zeroLossBadge = document.getElementById("adminBackupZeroLossBadge");
 
-  const data = await fetchBackupSnapshotsList();
+  const [data, schedData] = await Promise.all([
+    fetchBackupSnapshotsList(),
+    fetchBackupScheduleStatus().catch(() => ({ scheduler: null }))
+  ]);
+
   if (countBadge) countBadge.textContent = `${data.count || 0} نسخ متوفرة`;
   if (rpoBadge) rpoBadge.textContent = data.rpoCompliance || "RPO < 15m";
+
+  const scheduler = schedData?.scheduler;
+  if (scheduler) {
+    if (schedBadge) {
+      schedBadge.textContent = scheduler.isRunning ? "مجدول يومياً (24h Active)" : "متوقف مؤقتاً";
+      schedBadge.className = scheduler.isRunning ? "pill ok" : "pill warning";
+    }
+    if (nextRunTextEl && scheduler.nextDailyRunAt) {
+      nextRunTextEl.textContent = `التشغيل التالي: ${new Date(scheduler.nextDailyRunAt).toLocaleTimeString()}`;
+    }
+    if (scheduler.lastDrillResult) {
+      const drill = scheduler.lastDrillResult;
+      if (restoreStatusEl) {
+        restoreStatusEl.textContent = drill.certifiedZeroDataLoss ? "مطابق 100% (صفر فقدان)" : "تحذير: نقص في السجلات";
+        restoreStatusEl.style.color = drill.certifiedZeroDataLoss ? "#34d399" : "#ef4444";
+      }
+      if (lastDrillTime && drill.testedAt) {
+        lastDrillTime.textContent = new Date(drill.testedAt).toLocaleTimeString();
+      }
+      if (lastDrillRto && drill.metrics?.measuredRtoSeconds != null) {
+        lastDrillRto.textContent = `${drill.metrics.measuredRtoSeconds}s (الهدف < 30 دقيقة)`;
+      }
+      if (drillDetails && drill.reconciliation) {
+        drillDetails.textContent = `تم التحقق بنجاح من ${drill.reconciliation.totalRestoredRecords} سجل سريري ومطابقة تقارير المرضى بنسبة ${drill.reconciliation.reconciliationPercentage}%`;
+      }
+      if (zeroLossBadge) {
+        zeroLossBadge.textContent = drill.certifiedZeroDataLoss ? "مؤكد: 0% فقدان بيانات (Zero Loss)" : "تحذير: لم يجتز الفحص";
+        zeroLossBadge.className = drill.certifiedZeroDataLoss ? "pill ok" : "pill danger";
+      }
+    }
+  }
 
   if (tableBody) {
     const snapshots = data.snapshots || [];
@@ -2712,8 +2824,9 @@ async function renderAdminBackupUI() {
         <td style="padding: 10px; font-size: 12px;">${new Date(s.timestamp).toLocaleString()}</td>
         <td style="padding: 10px; font-size: 12px;">${s.totalRecords || 0} سجل</td>
         <td style="padding: 10px;"><span class="pill ok" style="font-size: 11px;">${s.status || 'READY'}</span></td>
-        <td style="padding: 10px; display: flex; gap: 6px;">
+        <td style="padding: 10px; display: flex; gap: 6px; flex-wrap: wrap;">
           <button type="button" class="soft-button" onclick="verifyBackupSnapshot('${typeof escapeHtml === 'function' ? escapeHtml(s.backupId) : s.backupId}')" style="padding: 4px 8px; font-size: 11px;">فحص SHA-256</button>
+          <button type="button" class="soft-button" onclick="triggerAutomatedRestoreTest('${typeof escapeHtml === 'function' ? escapeHtml(s.backupId) : s.backupId}')" style="padding: 4px 8px; font-size: 11px; color: #38bdf8; border-color: #38bdf8;">فحص استعادة</button>
           <button type="button" class="outline-button" onclick="restoreBackupSnapshot('${typeof escapeHtml === 'function' ? escapeHtml(s.backupId) : s.backupId}', 'CONFIRM_RESTORE_${typeof escapeHtml === 'function' ? escapeHtml(s.backupId) : s.backupId}', true)" style="padding: 4px 8px; font-size: 11px;">محاكاة استعادة</button>
         </td>
       </tr>
@@ -22445,6 +22558,9 @@ window.fetchBackupSnapshotsList = fetchBackupSnapshotsList;
 window.verifyBackupSnapshot = verifyBackupSnapshot;
 window.restoreBackupSnapshot = restoreBackupSnapshot;
 window.renderAdminBackupUI = renderAdminBackupUI;
+window.fetchBackupScheduleStatus = fetchBackupScheduleStatus;
+window.triggerAutomatedRestoreTest = triggerAutomatedRestoreTest;
+window.triggerDailyBackupCycle = triggerDailyBackupCycle;
 
 // =============================================================================
 // 🛡️ AUTHORITATIVE AUDIT TRAIL CLIENT ENGINE

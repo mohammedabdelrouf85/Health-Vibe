@@ -109,6 +109,7 @@
     "test:csp": "node tests/csp_security_headers.test.js",
     "test:monitoring": "node tests/error_monitoring.test.js",
     "test:backup": "node tests/backup_restore.test.js",
+    "test:automated-backup-restore": "node tests/automated_daily_backup_and_restore_test.test.js",
     "test:privacy": "node tests/privacy_data_lifecycle.test.js",
     "test:audit": "node tests/audit_trail_system.test.js",
     "test:i18n": "node tests/i18n_system.test.js",

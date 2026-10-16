@@ -1391,6 +1391,60 @@ app.post('/api/admin/backup/restore', requireAuth, auditOperationalAccess('DATAB
   }
 });
 
+// Endpoint: Get automated daily backup scheduler status & restore drill history
+app.get('/api/admin/backup/schedule', requireAuth, auditOperationalAccess('BACKUP_SCHEDULE_INSPECTED'), requireSuperAdmin, (req, res) => {
+  try {
+    const status = backupService.getDailySchedulerStatus();
+    res.json({
+      status: 'ok',
+      scheduler: status
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'SCHEDULE_INSPECT_FAILED', message: err.message });
+  }
+});
+
+// Endpoint: Manually trigger automated daily backup cycle + automated restore drill immediately
+app.post('/api/admin/backup/schedule/run-now', requireAuth, auditOperationalAccess('DAILY_BACKUP_CYCLE_TRIGGERED'), requireSuperAdmin, async (req, res) => {
+  try {
+    const initiator = req.user?.uid || 'superadmin_manual_trigger';
+    const result = await backupService.runDailyBackupCycle({
+      firestoreDb: db,
+      storageBucket: backupStorageBucket,
+      initiator
+    });
+    if (result.backup?.backupId) {
+      res.locals.backupId = result.backup.backupId;
+    }
+    res.status(result.success ? 200 : 500).json(result);
+  } catch (err) {
+    res.status(500).json({ error: 'DAILY_CYCLE_FAILED', message: err.message });
+  }
+});
+
+// Endpoint: Run automated restore verification drill with zero data loss guarantee
+app.post('/api/admin/backup/restore-test', requireAuth, auditOperationalAccess('BACKUP_RESTORE_TEST_EXECUTED'), requireSuperAdmin, async (req, res) => {
+  try {
+    const { backupId } = req.body || {};
+    const result = await backupService.runAutomatedRestoreTest({
+      backupId,
+      firestoreDb: db,
+      storageBucket: backupStorageBucket
+    });
+    if (result.backupId) {
+      res.locals.backupId = result.backupId;
+    }
+    res.locals.auditDetails = {
+      certifiedZeroDataLoss: result.certifiedZeroDataLoss,
+      reconciliationPercentage: result.reconciliation?.reconciliationPercentage ?? 0,
+      missingRecordsCount: result.reconciliation?.missingRecordsCount ?? 0
+    };
+    res.status(result.success ? 200 : 422).json(result);
+  } catch (err) {
+    res.status(500).json({ error: 'RESTORE_TEST_FAILED', message: err.message });
+  }
+});
+
 // Diagnostic Health Check Route for Dev & Prod
 app.get(['/health', '/api/health'], (req, res) => {
   res.json({
@@ -1443,6 +1497,17 @@ if (admin.apps.length && typeof admin.storage === 'function') {
   } catch (err) {
     backupStorageBucket = null;
   }
+}
+
+// Initialize Automated Daily Clinical Backup Scheduler
+try {
+  backupService.initDailyBackupScheduler({
+    firestoreDb: db,
+    storageBucket: backupStorageBucket,
+    autoStart: true
+  });
+} catch (e) {
+  console.warn('[BACKUP SCHEDULER INIT]:', e.message);
 }
 
 function parseEmailList(value, fallback) {

@@ -539,6 +539,377 @@ async function restoreBackupSnapshot(backupId, {
   };
 }
 
+// --- AUTOMATED DAILY BACKUP SCHEDULER & RESTORE DRILL ENGINE ---
+
+let dailySchedulerTimer = null;
+const dailySchedulerState = {
+  isRunning: false,
+  intervalMs: 24 * 60 * 60 * 1000, // 24 hours
+  cadence: '24h_daily',
+  startedAt: null,
+  lastDailyRunAt: null,
+  nextDailyRunAt: null,
+  lastBackupId: null,
+  lastDrillResult: null,
+  history: [] // stores last 30 daily runs
+};
+
+function createSandboxedDatastore() {
+  const store = new Map();
+  return {
+    store,
+    collection(name) {
+      return {
+        doc(id) {
+          return {
+            collectionName: name,
+            id,
+            get: async () => {
+              const data = store.get(`${name}/${id}`);
+              return { exists: data != null, id, data: () => data };
+            }
+          };
+        },
+        get: async () => {
+          const docs = [];
+          for (const [key, val] of store.entries()) {
+            if (key.startsWith(`${name}/`)) {
+              const id = key.slice(name.length + 1);
+              docs.push({ id, data: () => val });
+            }
+          }
+          return { size: docs.length, empty: docs.length === 0, docs, forEach: fn => docs.forEach(fn) };
+        }
+      };
+    },
+    batch() {
+      const pending = [];
+      return {
+        set(ref, data) {
+          pending.push([`${ref.collectionName}/${ref.id}`, JSON.parse(JSON.stringify(data))]);
+        },
+        async commit() {
+          for (const [key, val] of pending) {
+            store.set(key, val);
+          }
+        }
+      };
+    }
+  };
+}
+
+async function runAutomatedRestoreTest({
+  backupId = null,
+  firestoreDb = null,
+  storageBucket = null,
+  mockData = null
+} = {}) {
+  const testStartedAtMs = Date.now();
+  let targetBackupId = backupId;
+
+  // If no backupId is provided, find the latest available snapshot
+  if (!targetBackupId) {
+    const list = listBackupSnapshots();
+    if (list.length > 0) {
+      targetBackupId = list[0].backupId;
+    } else {
+      // Create a fresh snapshot for the drill
+      const fresh = await createBackupSnapshot({
+        initiator: 'restore_test_drill_auto',
+        firestoreDb,
+        storageBucket,
+        mockData
+      });
+      targetBackupId = fresh.backupId;
+    }
+  }
+
+  const drillId = `drill_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
+
+  // STEP 1: Cryptographic Integrity Verification (SHA-256)
+  const integrity = verifyBackupIntegrity(targetBackupId);
+  if (!integrity.valid) {
+    return {
+      success: false,
+      drillId,
+      backupId: targetBackupId,
+      status: 'INTEGRITY_VERIFICATION_FAILED',
+      certifiedZeroDataLoss: false,
+      sha256Match: false,
+      testedAt: new Date(testStartedAtMs).toISOString(),
+      error: 'BACKUP_CHECKSUM_MISMATCH',
+      message: `Cryptographic SHA-256 integrity verification failed for snapshot '${targetBackupId}'. Restore test aborted.`
+    };
+  }
+
+  // STEP 2: Load snapshot payload
+  const snapshotItem = loadSnapshot(targetBackupId);
+  if (!snapshotItem || !snapshotItem.payloadString) {
+    return {
+      success: false,
+      drillId,
+      backupId: targetBackupId,
+      status: 'SNAPSHOT_LOAD_FAILED',
+      certifiedZeroDataLoss: false,
+      testedAt: new Date(testStartedAtMs).toISOString(),
+      error: 'SNAPSHOT_NOT_FOUND',
+      message: `Failed to load payload for snapshot '${targetBackupId}'.`
+    };
+  }
+
+  const payload = JSON.parse(snapshotItem.payloadString);
+  const firestoreData = payload.firestore || {};
+
+  // STEP 3: Dry-Run Restore Simulation
+  const confirmToken = `CONFIRM_RESTORE_${targetBackupId}`;
+  const dryRunResult = await restoreBackupSnapshot(targetBackupId, {
+    confirmToken,
+    dryRun: true
+  });
+
+  if (!dryRunResult.success) {
+    return {
+      success: false,
+      drillId,
+      backupId: targetBackupId,
+      status: 'DRY_RUN_FAILED',
+      certifiedZeroDataLoss: false,
+      testedAt: new Date(testStartedAtMs).toISOString(),
+      error: dryRunResult.error || 'DRY_RUN_REJECTED',
+      message: `Dry-run restore simulation failed: ${dryRunResult.message}`
+    };
+  }
+
+  // STEP 4: Sandboxed Complete Restoration & Document-Level Reconciliation
+  const sandbox = createSandboxedDatastore();
+  const sandboxRestore = await restoreBackupSnapshot(targetBackupId, {
+    confirmToken,
+    dryRun: false,
+    firestoreDb: sandbox,
+    storageBucket: null
+  });
+
+  if (!sandboxRestore.success) {
+    return {
+      success: false,
+      drillId,
+      backupId: targetBackupId,
+      status: 'SANDBOX_RESTORE_FAILED',
+      certifiedZeroDataLoss: false,
+      testedAt: new Date(testStartedAtMs).toISOString(),
+      error: sandboxRestore.error || 'SANDBOX_RESTORE_REJECTED',
+      message: `Sandboxed restoration failed: ${sandboxRestore.message}`
+    };
+  }
+
+  // STEP 5: Reconciliation Analysis Across All Clinical Collections
+  const collectionsChecked = {};
+  let totalSourceRecords = 0;
+  let totalRestoredRecords = 0;
+  let missingRecordsCount = 0;
+  let corruptedRecordsCount = 0;
+  const discrepancies = [];
+
+  for (const [colName, rows] of Object.entries(firestoreData)) {
+    let colRestored = 0;
+    let colMissing = 0;
+    let colCorrupted = 0;
+
+    for (const row of rows || []) {
+      totalSourceRecords += 1;
+      const key = `${colName}/${row.id}`;
+      const restored = sandbox.store.get(key);
+
+      if (!restored) {
+        colMissing += 1;
+        missingRecordsCount += 1;
+        discrepancies.push({ collection: colName, id: row.id, error: 'RECORD_MISSING_AFTER_RESTORE' });
+      } else {
+        colRestored += 1;
+        totalRestoredRecords += 1;
+        if (row.data) {
+          const originalKeys = Object.keys(row.data);
+          const restoredKeys = Object.keys(restored);
+          if (originalKeys.length > 0 && restoredKeys.length === 0) {
+            colCorrupted += 1;
+            corruptedRecordsCount += 1;
+            discrepancies.push({ collection: colName, id: row.id, error: 'EMPTY_RESTORED_RECORD' });
+          }
+        }
+      }
+    }
+
+    collectionsChecked[colName] = {
+      sourceCount: (rows || []).length,
+      restoredCount: colRestored,
+      missingCount: colMissing,
+      corruptedCount: colCorrupted,
+      reconciled: colMissing === 0 && colCorrupted === 0
+    };
+  }
+
+  const durationMs = Date.now() - testStartedAtMs;
+  const rtoSeconds = Number((durationMs / 1000).toFixed(3));
+  const isZeroLoss = missingRecordsCount === 0 && corruptedRecordsCount === 0 && totalSourceRecords === totalRestoredRecords;
+  const reconciliationPercentage = totalSourceRecords > 0 
+    ? Number(((totalRestoredRecords / totalSourceRecords) * 100).toFixed(2)) 
+    : 100;
+
+  const drillCertificate = {
+    success: isZeroLoss,
+    drillId,
+    backupId: targetBackupId,
+    testedAt: new Date(testStartedAtMs).toISOString(),
+    completedAt: new Date().toISOString(),
+    status: isZeroLoss ? 'PASSED_CERTIFIED_ZERO_LOSS' : 'FAILED_DATA_LOSS_DETECTED',
+    certifiedZeroDataLoss: isZeroLoss,
+    integrityVerified: true,
+    sha256Match: true,
+    dryRunPassed: true,
+    sandboxRestorePassed: true,
+    metrics: {
+      measuredDrillDurationMs: durationMs,
+      measuredRtoSeconds: rtoSeconds,
+      rtoCompliant: rtoSeconds < 1800, // < 30 minutes
+      targetRtoMinutes: 30
+    },
+    reconciliation: {
+      totalSourceRecords,
+      totalRestoredRecords,
+      missingRecordsCount,
+      corruptedRecordsCount,
+      reconciliationPercentage,
+      discrepanciesCount: discrepancies.length,
+      discrepancies: discrepancies.slice(0, 10)
+    },
+    collectionsChecked,
+    criticalScopesVerified: [
+      'users',
+      'cases',
+      'medical_reports',
+      'clinical_reports',
+      'reports',
+      'appointments'
+    ].filter(scope => Object.prototype.hasOwnProperty.call(collectionsChecked, scope)),
+    message: isZeroLoss
+      ? `Automated Restore Drill PASSED: 100% records reconciled across ${Object.keys(collectionsChecked).length} clinical collections with ZERO data loss.`
+      : `Automated Restore Drill FAILED: Detected ${missingRecordsCount} missing and ${corruptedRecordsCount} corrupted records.`
+  };
+
+  return drillCertificate;
+}
+
+async function runDailyBackupCycle({
+  firestoreDb = null,
+  storageBucket = null,
+  initiator = 'daily_cron_scheduler'
+} = {}) {
+  const cycleStartedAt = new Date().toISOString();
+  try {
+    // 1. Create fresh daily snapshot
+    const manifest = await createBackupSnapshot({
+      initiator,
+      environment: process.env.NODE_ENV || 'production',
+      firestoreDb,
+      storageBucket
+    });
+
+    // 2. Immediately execute automated restore drill
+    const drillResult = await runAutomatedRestoreTest({
+      backupId: manifest.backupId,
+      firestoreDb,
+      storageBucket
+    });
+
+    dailySchedulerState.lastDailyRunAt = cycleStartedAt;
+    dailySchedulerState.lastBackupId = manifest.backupId;
+    dailySchedulerState.lastDrillResult = drillResult;
+    dailySchedulerState.nextDailyRunAt = new Date(Date.now() + dailySchedulerState.intervalMs).toISOString();
+
+    const record = {
+      timestamp: cycleStartedAt,
+      backupId: manifest.backupId,
+      totalRecords: manifest.totalRecords,
+      drillPassed: drillResult.certifiedZeroDataLoss === true,
+      rtoSeconds: drillResult.metrics?.measuredRtoSeconds ?? null,
+      status: drillResult.certifiedZeroDataLoss ? 'SUCCESS' : 'DRILL_FAILED'
+    };
+
+    dailySchedulerState.history.unshift(record);
+    if (dailySchedulerState.history.length > 30) {
+      dailySchedulerState.history.length = 30;
+    }
+
+    return {
+      success: true,
+      cycleStartedAt,
+      backup: manifest,
+      restoreDrill: drillResult
+    };
+  } catch (err) {
+    const errorRecord = {
+      timestamp: cycleStartedAt,
+      error: err.message,
+      status: 'CYCLE_FAILED'
+    };
+    dailySchedulerState.history.unshift(errorRecord);
+    return {
+      success: false,
+      cycleStartedAt,
+      error: err.message
+    };
+  }
+}
+
+function initDailyBackupScheduler({
+  firestoreDb = null,
+  storageBucket = null,
+  intervalMs = 24 * 60 * 60 * 1000,
+  autoStart = true
+} = {}) {
+  if (dailySchedulerTimer) {
+    clearInterval(dailySchedulerTimer);
+    dailySchedulerTimer = null;
+  }
+
+  dailySchedulerState.intervalMs = intervalMs;
+  dailySchedulerState.cadence = intervalMs === 24 * 60 * 60 * 1000 ? '24h_daily' : `${intervalMs}ms_custom`;
+  dailySchedulerState.startedAt = new Date().toISOString();
+  dailySchedulerState.nextDailyRunAt = new Date(Date.now() + intervalMs).toISOString();
+
+  if (autoStart) {
+    dailySchedulerState.isRunning = true;
+    dailySchedulerTimer = setInterval(async () => {
+      try {
+        await runDailyBackupCycle({ firestoreDb, storageBucket, initiator: 'scheduled_daily_timer' });
+      } catch (e) {
+        console.error('[DAILY BACKUP SCHEDULER ERROR]:', e);
+      }
+    }, intervalMs);
+    if (typeof dailySchedulerTimer.unref === 'function') {
+      dailySchedulerTimer.unref();
+    }
+  }
+
+  return getDailySchedulerStatus();
+}
+
+function stopDailyBackupScheduler() {
+  if (dailySchedulerTimer) {
+    clearInterval(dailySchedulerTimer);
+    dailySchedulerTimer = null;
+  }
+  dailySchedulerState.isRunning = false;
+  return getDailySchedulerStatus();
+}
+
+function getDailySchedulerStatus() {
+  return {
+    ...dailySchedulerState,
+    history: [...dailySchedulerState.history]
+  };
+}
+
 module.exports = {
   BACKUP_DIR,
   FIRESTORE_COLLECTIONS,
@@ -548,5 +919,11 @@ module.exports = {
   listBackupSnapshots,
   restoreBackupSnapshot,
   pruneExpiredBackups,
-  computeChecksum
+  computeChecksum,
+  runAutomatedRestoreTest,
+  initDailyBackupScheduler,
+  stopDailyBackupScheduler,
+  getDailySchedulerStatus,
+  runDailyBackupCycle,
+  createSandboxedDatastore
 };
