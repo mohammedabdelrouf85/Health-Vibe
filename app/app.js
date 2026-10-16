@@ -13778,19 +13778,66 @@ function closeApprovalModal() {
   modal.setAttribute("aria-hidden", "true");
 }
 
+function updateThemeToggleButtons(theme = "dark") {
+  const isLight = (theme === "light");
+  const isEn = (typeof currentLanguage !== "undefined" && currentLanguage === "en");
+  const label = isLight
+    ? (isEn ? "Switch to Dark Mode" : "التبديل إلى الوضع الليلي")
+    : (isEn ? "Switch to Light Mode" : "التبديل إلى الوضع النهاري");
+  const icon = isLight ? "🌙" : "☀️";
+
+  const buttons = document.querySelectorAll("#themeToggle, #topbarThemeToggle, #siteThemeToggle, .theme-fab");
+  buttons.forEach(btn => {
+    btn.setAttribute("aria-label", label);
+    btn.setAttribute("title", label);
+    btn.innerHTML = `<span aria-hidden="true">${icon}</span>`;
+  });
+}
+
 function applyTheme(theme = "dark") {
-  document.body.classList.add("dark");
-  document.documentElement.classList.add("hv-theme-dark");
-  document.documentElement.classList.remove("hv-theme-light");
-  try {
-    localStorage.setItem("hv_theme", "dark");
-  } catch(e) {}
+  const isLight = (theme === "light");
+  if (isLight) {
+    if (document.body) {
+      document.body.classList.remove("dark");
+      document.body.classList.add("light");
+    }
+    document.documentElement.classList.remove("hv-theme-dark");
+    document.documentElement.classList.add("hv-theme-light");
+    document.documentElement.setAttribute("data-theme", "light");
+    try {
+      localStorage.setItem("hv_theme", "light");
+    } catch(e) {}
+  } else {
+    if (document.body) {
+      document.body.classList.add("dark");
+      document.body.classList.remove("light");
+    }
+    document.documentElement.classList.add("hv-theme-dark");
+    document.documentElement.classList.remove("hv-theme-light");
+    document.documentElement.setAttribute("data-theme", "dark");
+    try {
+      localStorage.setItem("hv_theme", "dark");
+    } catch(e) {}
+  }
+
   updateThemeLogos();
+  updateThemeToggleButtons(theme);
+
+  // Sync with backend preferences if available
+  if (typeof fetch === "function" && typeof auth !== "undefined" && auth && auth.currentUser) {
+    fetch("/api/patient/preferences/theme", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: auth.currentUser.uid, theme: theme })
+    }).catch(() => {});
+  }
 }
 
 let _themeToggling = false;
 function toggleTheme() {
-  applyTheme("dark");
+  const current = (typeof localStorage !== "undefined" && localStorage.getItem("hv_theme") === "light") ? "light" : "dark";
+  const next = current === "light" ? "dark" : "light";
+  applyTheme(next);
 }
 
 function initTheme() {
@@ -13798,10 +13845,13 @@ function initTheme() {
   try {
     if (localStorage.getItem("hv_theme_default_version") !== themeDefaultVersion) {
       localStorage.setItem("hv_theme_default_version", themeDefaultVersion);
-      localStorage.setItem("hv_theme", "dark");
+      if (!localStorage.getItem("hv_theme")) {
+        localStorage.setItem("hv_theme", "dark");
+      }
     }
   } catch(e) {}
-  applyTheme("dark");
+  const saved = (typeof localStorage !== "undefined" && localStorage.getItem("hv_theme")) || "dark";
+  applyTheme(saved);
 }
 window.toggleTheme = toggleTheme;
 window.applyTheme = applyTheme;

@@ -392,6 +392,16 @@
         copiedToast: "تم نسخ رابط التقرير بنجاح!",
         noReportSelected: "يرجى اختيار تقرير طبي أولاً"
       },
+      theme: {
+        toggleTheme: "تبديل المظهر",
+        switchToDark: "التبديل إلى الوضع الليلي",
+        switchToLight: "التبديل إلى الوضع النهاري",
+        currentThemeDark: "الوضع الليلي نشط",
+        currentThemeLight: "الوضع النهاري نشط",
+        flickerFreeNotice: "تم تطبيق المظهر المفضل فوراً دون وميض لحماية العين",
+        modeTitle: "المظهر وعرض الشاشة",
+        modeDesc: "اختر المظهر المريح لعينيك أثناء متابعة الفحوصات الطبية"
+      },
       consent: {
         title: "الموافقة الطبية وسياسة الخصوصية",
         badgeRequired: "مطلوبة قبل الفحص",
@@ -1487,6 +1497,16 @@
         copiedSuccess: "Copied!",
         copiedToast: "Report link copied to clipboard successfully!",
         noReportSelected: "Please select a medical report first"
+      },
+      theme: {
+        toggleTheme: "Toggle Theme",
+        switchToDark: "Switch to Dark Mode",
+        switchToLight: "Switch to Light Mode",
+        currentThemeDark: "Dark Mode Active",
+        currentThemeLight: "Light Mode Active",
+        flickerFreeNotice: "Theme applied instantaneously without flicker for eye protection",
+        modeTitle: "Theme & Display Appearance",
+        modeDesc: "Select the display theme most comfortable for reading medical charts"
       },
       consent: {
         title: "Medical Consent & Privacy Policy",

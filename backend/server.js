@@ -86,6 +86,7 @@ const _inMemoryFaqFeedbackStore = new Map();
 const _inMemoryFaqInquiryStore = [];
 const _inMemoryOnboardingStore = new Map();
 const _inMemoryConditionStore = new Map();
+const _inMemoryThemeStore = new Map();
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -3363,6 +3364,60 @@ app.put('/api/patient/primary-condition', (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to update condition preference.' });
+  }
+});
+
+/**
+ * GET /api/patient/preferences/theme
+ * Retrieves user theme preference (Light/Dark mode)
+ */
+app.get('/api/patient/preferences/theme', (req, res) => {
+  try {
+    const uid = (req.user && req.user.uid) || req.query.userId || 'guest';
+    const theme = _inMemoryThemeStore.get(uid) || 'dark';
+    res.json({
+      success: true,
+      userId: uid,
+      theme
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to retrieve theme preference.' });
+  }
+});
+
+/**
+ * PUT /api/patient/preferences/theme
+ * Updates user theme preference (Light/Dark mode) with audit trail
+ */
+app.put('/api/patient/preferences/theme', (req, res) => {
+  try {
+    const uid = (req.user && req.user.uid) || req.body.userId || 'guest';
+    const theme = req.body.theme;
+    if (theme !== 'dark' && theme !== 'light') {
+      return res.status(400).json({ error: 'INVALID_THEME', message: "theme must be 'dark' or 'light'" });
+    }
+
+    _inMemoryThemeStore.set(uid, theme);
+
+    if (auditService && typeof auditService.logSecurityEvent === 'function') {
+      auditService.logSecurityEvent({
+        type: 'PATIENT_THEME_PREFERENCE_UPDATED',
+        actorUid: uid,
+        actorRole: (req.user && req.user.role) || 'patient',
+        targetUserId: uid,
+        outcome: 'SUCCESS',
+        metadata: { theme, updatedAt: new Date().toISOString() }
+      });
+    }
+
+    res.json({
+      success: true,
+      userId: uid,
+      theme,
+      updatedAt: new Date().toISOString()
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to update theme preference.' });
   }
 });
 
