@@ -1106,3 +1106,288 @@
   }
 }
 
+/* ==========================================================================
+   8. OKADOC 1-CLICK RESCHEDULE & CANCELLATION FLOW (MOBILE & DESKTOP)
+   ========================================================================== */
+
+.okadoc-recap-box {
+  background: var(--surface-2, rgba(255, 255, 255, 0.05));
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.1));
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 16px;
+}
+
+.okadoc-recap-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.okadoc-recap-doctor {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--ink, #f8fafc);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.okadoc-recap-spec {
+  font-size: 12px;
+  color: var(--muted, #94a3b8);
+  margin-bottom: 8px;
+}
+
+.okadoc-previous-slot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px dashed rgba(239, 68, 68, 0.3);
+  font-size: 12px;
+  color: #ef4444;
+}
+
+.okadoc-previous-slot-text {
+  text-decoration: line-through;
+  opacity: 0.85;
+}
+
+.okadoc-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink, #f8fafc);
+  margin: 14px 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.okadoc-date-strip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+
+.okadoc-day-chip {
+  flex: 0 0 auto;
+  min-width: 64px;
+  min-height: 58px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.12));
+  background: var(--surface-2, rgba(255, 255, 255, 0.04));
+  color: var(--ink, #f8fafc);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  cursor: pointer;
+  scroll-snap-align: start;
+  transition: all 0.2s ease;
+}
+
+.okadoc-day-chip .day-name {
+  font-size: 11px;
+  color: var(--muted, #94a3b8);
+  font-weight: 500;
+}
+
+.okadoc-day-chip .day-num {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.okadoc-day-chip:hover {
+  background: rgba(13, 148, 136, 0.1);
+  border-color: var(--teal, #0d9488);
+}
+
+.okadoc-day-chip.active {
+  background: var(--teal, #0d9488);
+  border-color: var(--teal, #0d9488);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(13, 148, 136, 0.35);
+}
+
+.okadoc-day-chip.active .day-name {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.okadoc-slots-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.okadoc-slot-btn {
+  min-height: 46px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.12));
+  background: var(--surface-2, rgba(255, 255, 255, 0.04));
+  color: var(--ink, #f8fafc);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  transition: all 0.2s ease;
+}
+
+.okadoc-slot-btn:hover:not(:disabled) {
+  border-color: var(--teal, #0d9488);
+  background: rgba(13, 148, 136, 0.08);
+}
+
+.okadoc-slot-btn.active {
+  background: var(--teal, #0d9488);
+  border-color: var(--teal, #0d9488);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(13, 148, 136, 0.35);
+}
+
+.okadoc-slot-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: rgba(0, 0, 0, 0.15);
+  border-color: transparent;
+}
+
+.okadoc-reason-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.1));
+  background: var(--surface-2, rgba(255, 255, 255, 0.03));
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.okadoc-reason-option:hover {
+  border-color: var(--teal, #0d9488);
+  background: rgba(13, 148, 136, 0.06);
+}
+
+.okadoc-reason-option.selected {
+  border-color: var(--teal, #0d9488);
+  background: rgba(13, 148, 136, 0.12);
+}
+
+.okadoc-reason-option input[type="radio"] {
+  margin-top: 3px;
+  accent-color: var(--teal, #0d9488);
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+}
+
+.okadoc-reason-text {
+  font-size: 13px;
+  color: var(--ink, #f8fafc);
+  line-height: 1.4;
+}
+
+.okadoc-notice-box {
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 14px 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--brand-accent, #3b82f6);
+  line-height: 1.5;
+}
+
+.okadoc-success-box {
+  text-align: center;
+  padding: 16px;
+}
+
+.okadoc-success-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  font-size: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 12px;
+}
+
+.okadoc-cal-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+
+.okadoc-btn-google-cal {
+  flex: 1;
+  min-height: 46px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #1f2937;
+  font-weight: 600;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-decoration: none;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  transition: all 0.2s ease;
+}
+
+.okadoc-btn-google-cal:hover {
+  background: #f3f4f6;
+  transform: translateY(-1px);
+}
+
+.okadoc-btn-ics {
+  flex: 1;
+  min-height: 46px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--surface-3, rgba(255, 255, 255, 0.1));
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.15));
+  color: var(--ink, #f8fafc);
+  font-weight: 600;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.okadoc-btn-ics:hover {
+  background: var(--surface-2, rgba(255, 255, 255, 0.15));
+  border-color: var(--teal, #0d9488);
+}
+
+

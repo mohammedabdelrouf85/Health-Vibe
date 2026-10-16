@@ -894,6 +894,710 @@
     }
   }
 
+  /**
+   * Generates RFC 5545 compliant iCalendar (.ics) string for appointment
+   */
+  function generateIcsCalendarContent(appt = {}) {
+    const rawDate = appt.date || appt.dateStr || new Date().toISOString().split("T")[0];
+    const docName = appt.doctorName || "استشاري الصدر والحساسية";
+    const clinicName = appt.clinicName || (appt.type === "video" ? "Health Vibe Telehealth Room (استشارة فيديو)" : "مركز القاهرة التخصصي لأمراض الصدر");
+    const notes = appt.notes || "استشارة طبية للمتابعة السريرية";
+    const apptType = appt.typeLabel || appt.type || (appt.isOnlineConsultation ? "استشارة فيديو عن بُعد" : "كشف عيادة حضوري");
+
+    let hour = 10;
+    let min = 0;
+    const t = String(appt.timeSlot || appt.slotId || "");
+    const match = t.match(/(\d{1,2}):(\d{2})/);
+    if (match) {
+      hour = parseInt(match[1], 10);
+      min = parseInt(match[2], 10);
+      if ((t.includes("مساء") || t.toLowerCase().includes("pm")) && hour < 12) hour += 12;
+      if ((t.includes("صباح") || t.toLowerCase().includes("am")) && hour === 12) hour = 0;
+    } else if (t.startsWith("slot_")) {
+      const numPart = t.replace("slot_", "");
+      if (numPart.length === 4) {
+        hour = parseInt(numPart.substring(0, 2), 10);
+        min = parseInt(numPart.substring(2, 4), 10);
+      }
+    }
+
+    const pad = n => String(n).padStart(2, "0");
+    const dateClean = String(rawDate).replace(/-/g, "");
+    const startIso = `${dateClean}T${pad(hour)}${pad(min)}00Z`;
+    const endHour = min >= 30 ? hour + 1 : hour;
+    const endMin = min >= 30 ? min - 30 : min + 30;
+    const endIso = `${dateClean}T${pad(endHour)}${pad(endMin)}00Z`;
+    const nowIso = new Date().toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+    const uid = `hv-appt-${appt.id || Date.now()}@healthvibe.clinic`;
+
+    return [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "PRODID:-//Health Vibe//Appointment Calendar//AR_EN",
+      "CALSCALE:GREGORIAN",
+      "METHOD:REQUEST",
+      "BEGIN:VEVENT",
+      `UID:${uid}`,
+      `DTSTAMP:${nowIso}`,
+      `DTSTART:${startIso}`,
+      `DTEND:${endIso}`,
+      `SUMMARY:Health Vibe: استشارة مع ${docName}`,
+      `DESCRIPTION:موعد كشف/استشارة مع ${docName}\\nالنوع: ${apptType}\\nالمقر: ${clinicName}\\nملاحظات: ${notes}`,
+      `LOCATION:${clinicName}`,
+      "STATUS:CONFIRMED",
+      "BEGIN:VALARM",
+      "TRIGGER:-PT1H",
+      "ACTION:DISPLAY",
+      "DESCRIPTION:تذكير بموعد استشارتك الطبية بعد ساعة واحدة",
+      "END:VALARM",
+      "END:VEVENT",
+      "END:VCALENDAR"
+    ].join("\r\n");
+  }
+
+  /**
+   * Downloads iCalendar file directly to browser/device
+   */
+  function downloadIcsCalendar(appt = {}) {
+    try {
+      const ics = generateIcsCalendarContent(appt);
+      if (typeof window !== "undefined" && typeof window.Blob === "function") {
+        const blob = new window.Blob([ics], { type: "text/calendar;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `HealthVibe_Appointment_${appt.id || "visit"}.ics`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        return true;
+      }
+      return ics;
+    } catch (e) {
+      console.warn("Failed to download .ics calendar file:", e);
+      return false;
+    }
+  }
+
+  /**
+   * Generates Google Calendar web add URL
+   */
+  function buildGoogleCalendarUrl(appt = {}) {
+    const rawDate = appt.date || appt.dateStr || new Date().toISOString().split("T")[0];
+    const docName = appt.doctorName || "Treating Physician";
+    const clinicName = appt.clinicName || (appt.type === "video" ? "Health Vibe Telehealth (Video)" : (appt.branch || "Specialized Chest Clinic"));
+    const title = `Medical Appointment with ${docName}`;
+    const details = `Appointment with ${docName}\nType: ${appt.typeLabel || appt.type || 'Clinic'}\nLocation: ${clinicName}`;
+
+    let hour = 10, min = 0;
+    const t = String(appt.timeSlot || appt.slotId || "");
+    const match = t.match(/(\d{1,2}):(\d{2})/);
+    if (match) {
+      hour = parseInt(match[1], 10);
+      min = parseInt(match[2], 10);
+      if ((t.includes("مساء") || t.toLowerCase().includes("pm")) && hour < 12) hour += 12;
+      if ((t.includes("صباح") || t.toLowerCase().includes("am")) && hour === 12) hour = 0;
+    } else if (t.startsWith("slot_")) {
+      const numPart = t.replace("slot_", "");
+      if (numPart.length === 4) {
+        hour = parseInt(numPart.substring(0, 2), 10);
+        min = parseInt(numPart.substring(2, 4), 10);
+      }
+    }
+    const pad = n => String(n).padStart(2, "0");
+    const dateClean = String(rawDate).replace(/-/g, "");
+    const startIso = `${dateClean}T${pad(hour)}${pad(min)}00`;
+    const endHour = min >= 30 ? hour + 1 : hour;
+    const endMin = min >= 30 ? min - 30 : min + 30;
+    const endIso = `${dateClean}T${pad(endHour)}${pad(endMin)}00`;
+
+    return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&dates=${startIso}/${endIso}&details=${encodeURIComponent(details)}&location=${encodeURIComponent(clinicName)}`;
+  }
+
+  /**
+   * Generates Outlook / Office 365 web add URL
+   */
+  function getOutlookCalendarUrl(appt = {}) {
+    const rawDate = appt.date || appt.dateStr || new Date().toISOString().split("T")[0];
+    const docName = appt.doctorName || "Treating Physician";
+    const clinicName = appt.clinicName || (appt.type === "video" ? "Health Vibe Telehealth (Video)" : (appt.branch || "Specialized Chest Clinic"));
+    const title = `Medical Appointment with ${docName}`;
+    const details = `Appointment with ${docName}\nType: ${appt.typeLabel || appt.type || 'Clinic'}\nLocation: ${clinicName}`;
+
+    let hour = 10, min = 0;
+    const t = String(appt.timeSlot || appt.slotId || "");
+    const match = t.match(/(\d{1,2}):(\d{2})/);
+    if (match) {
+      hour = parseInt(match[1], 10);
+      min = parseInt(match[2], 10);
+      if ((t.includes("مساء") || t.toLowerCase().includes("pm")) && hour < 12) hour += 12;
+      if ((t.includes("صباح") || t.toLowerCase().includes("am")) && hour === 12) hour = 0;
+    } else if (t.startsWith("slot_")) {
+      const numPart = t.replace("slot_", "");
+      if (numPart.length === 4) {
+        hour = parseInt(numPart.substring(0, 2), 10);
+        min = parseInt(numPart.substring(2, 4), 10);
+      }
+    }
+    const pad = n => String(n).padStart(2, "0");
+    const startIso = `${rawDate}T${pad(hour)}:${pad(min)}:00`;
+    const endHour = min >= 30 ? hour + 1 : hour;
+    const endMin = min >= 30 ? min - 30 : min + 30;
+    const endIso = `${rawDate}T${pad(endHour)}:${pad(endMin)}:00`;
+
+    return `https://outlook.live.com/calendar/0/deeplink/compose?path=/calendar/action/compose&rru=addevent&subject=${encodeURIComponent(title)}&startdt=${encodeURIComponent(startIso)}&enddt=${encodeURIComponent(endIso)}&body=${encodeURIComponent(details)}&location=${encodeURIComponent(clinicName)}`;
+  }
+
+  /**
+   * Builds RFC 5545 compliant iCalendar string (.ics)
+   */
+  function buildIcsContent(appt = {}) {
+    const rawDate = appt.date || appt.dateStr || new Date().toISOString().split("T")[0];
+    const docName = appt.doctorName || "Treating Physician";
+    const clinicName = appt.branch || appt.clinicName || (appt.type === "video" ? "Health Vibe Telehealth Room" : "Specialized Chest Clinic");
+    const notes = appt.notes || "Medical Appointment";
+    const apptType = appt.typeLabel || appt.type || (appt.isOnlineConsultation ? "Video Consultation" : "In-Clinic Visit");
+
+    let hour = 10;
+    let min = 0;
+    const t = String(appt.timeSlot || appt.slotId || "");
+    const match = t.match(/(\d{1,2}):(\d{2})/);
+    if (match) {
+      hour = parseInt(match[1], 10);
+      min = parseInt(match[2], 10);
+      if ((t.includes("مساء") || t.toLowerCase().includes("pm")) && hour < 12) hour += 12;
+      if ((t.includes("صباح") || t.toLowerCase().includes("am")) && hour === 12) hour = 0;
+    } else if (t.startsWith("slot_")) {
+      const numPart = t.replace("slot_", "");
+      if (numPart.length === 4) {
+        hour = parseInt(numPart.substring(0, 2), 10);
+        min = parseInt(numPart.substring(2, 4), 10);
+      }
+    }
+
+    const pad = n => String(n).padStart(2, "0");
+    const dateClean = String(rawDate).replace(/-/g, "");
+    const startIso = `${dateClean}T${pad(hour)}${pad(min)}00Z`;
+    const endHour = min >= 30 ? hour + 1 : hour;
+    const endMin = min >= 30 ? min - 30 : min + 30;
+    const endIso = `${dateClean}T${pad(endHour)}${pad(endMin)}00Z`;
+    const nowIso = new Date().toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+    const uid = `${appt.id || Date.now()}@healthvibe.com`;
+    const safeLocation = clinicName.replace(/,/g, "\\,");
+
+    return [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "PRODID:-//Health-Vibe Clinic//Okadoc Scheduler//EN",
+      "CALSCALE:GREGORIAN",
+      "METHOD:REQUEST",
+      "BEGIN:VEVENT",
+      `UID:${uid}`,
+      `DTSTAMP:${nowIso}`,
+      `DTSTART:${startIso}`,
+      `DTEND:${endIso}`,
+      `SUMMARY:Medical Appointment with ${docName}`,
+      `DESCRIPTION:Appointment with ${docName}\\nType: ${apptType}\\nLocation: ${safeLocation}\\nNotes: ${notes}`,
+      `LOCATION:${safeLocation}`,
+      "STATUS:CONFIRMED",
+      "BEGIN:VALARM",
+      "TRIGGER:-PT2H",
+      "ACTION:DISPLAY",
+      "DESCRIPTION:Reminder: Medical Appointment with Doctor in 2 hours",
+      "END:VALARM",
+      "END:VEVENT",
+      "END:VCALENDAR"
+    ].join("\r\n");
+  }
+
+  /**
+   * Okadoc-style 1-Click Interactive Reschedule Modal
+   */
+  function openRescheduleModal(appt = {}, onConfirm = null) {
+    let modal = document.getElementById("rescheduleAppointmentModal");
+    const isEn = typeof global.currentLanguage !== "undefined" && global.currentLanguage === "en";
+
+    if (!modal) {
+      modal = document.createElement("div");
+      modal.id = "rescheduleAppointmentModal";
+      modal.className = "vezeeta-modal-overlay";
+      modal.setAttribute("role", "dialog");
+      modal.setAttribute("aria-modal", "true");
+      modal.setAttribute("aria-hidden", "true");
+      document.body.appendChild(modal);
+    }
+
+    const docName = isEn ? (appt.doctorNameEn || appt.doctorName || "Treating Physician") : (appt.doctorName || "طبيبك المعالج");
+    const clinicName = appt.clinicName || (appt.type === "video" ? (isEn ? "Telehealth Video Consultation" : "استشارة فيديو عن بُعد") : (isEn ? "Specialized Chest Clinic - Dokki" : "مركز القاهرة التخصصي - فرع الدقي"));
+    const prevDate = appt.date || appt.dateStr || "";
+    const prevSlot = appt.timeSlot || appt.slotId || "";
+    let selectedMode = appt.type || (appt.isOnlineConsultation ? "video" : "clinic");
+
+    // Generate upcoming 14 days
+    const daysWeek1 = generateAppointmentDays(0);
+    const daysWeek2 = generateAppointmentDays(1);
+    const allDays = [...daysWeek1, ...daysWeek2];
+
+    // Pick a default new date (skip previous if possible)
+    let selectedDateStr = allDays.length > 1 && allDays[0].dateStr === prevDate ? allDays[1].dateStr : (allDays[0] ? allDays[0].dateStr : "");
+    let selectedSlotId = "slot_1000";
+
+    const standardSlots = [
+      { id: "slot_0900", timeAr: "٠٩:٠٠ ص", timeEn: "09:00 AM", period: "morning" },
+      { id: "slot_1000", timeAr: "١٠:٠٠ ص", timeEn: "10:00 AM", period: "morning" },
+      { id: "slot_1100", timeAr: "١١:٠٠ ص", timeEn: "11:00 AM", period: "morning" },
+      { id: "slot_1200", timeAr: "١٢:٠٠ م", timeEn: "12:00 PM", period: "morning" },
+      { id: "slot_1600", timeAr: "٠٤:٠٠ م", timeEn: "04:00 PM", period: "evening" },
+      { id: "slot_1700", timeAr: "٠٥:٠٠ م", timeEn: "05:00 PM", period: "evening" },
+      { id: "slot_1800", timeAr: "٠٦:٠٠ م", timeEn: "06:00 PM", period: "evening" },
+      { id: "slot_1900", timeAr: "٠٧:٠٠ م", timeEn: "07:00 PM", period: "evening" },
+      { id: "slot_2000", timeAr: "٠٨:٠٠ م", timeEn: "08:00 PM", period: "evening" }
+    ];
+
+    function renderModalContent() {
+      modal.innerHTML = `
+        <div class="vezeeta-modal-dialog" style="max-width: 540px;">
+          <div class="vezeeta-modal-header">
+            <h3 class="vezeeta-modal-title" style="display:flex; align-items:center; gap:8px;">
+              <span>🔄</span> ${isEn ? "Reschedule Appointment (1-Click)" : "إعادة جدولة الموعد بضغطة زر"}
+            </h3>
+            <button type="button" class="vezeeta-modal-close" id="btnCloseRescheduleModal" aria-label="${isEn ? "Close" : "إغلاق"}">✕</button>
+          </div>
+          <div class="vezeeta-modal-body" style="padding: 16px 20px;">
+            <!-- Recap of current appointment -->
+            <div class="okadoc-recap-box">
+              <div class="okadoc-recap-header">
+                <span class="okadoc-recap-doctor">
+                  <span>👨‍⚕️</span> ${escapeHtml(docName)}
+                </span>
+                <span class="pill ${selectedMode === 'video' ? 'info' : 'ok'}" style="font-size:11px;">
+                  ${selectedMode === 'video' ? '📹 ' + (isEn ? 'Video' : 'فيديو') : '🏥 ' + (isEn ? 'In-Clinic' : 'عيادة')}
+                </span>
+              </div>
+              <div class="okadoc-recap-spec">${escapeHtml(clinicName)}</div>
+              <div class="okadoc-previous-slot">
+                <span>⏰ ${isEn ? "Current Slot (to be released):" : "الموعد الحالي (سيتم إتاحته لمريض آخر):"}</span>
+                <strong class="okadoc-previous-slot-text">${prevDate} - ${prevSlot}</strong>
+              </div>
+            </div>
+
+            <!-- Consultation Mode Switcher -->
+            <div style="margin-bottom: 14px;">
+              <span class="okadoc-section-title">
+                <span>🔄</span> ${isEn ? "Consultation Modality:" : "نوع الاستشارة:"}
+              </span>
+              <div style="display: flex; gap: 8px;">
+                <button type="button" class="outline-button okadoc-mode-btn ${selectedMode === 'video' ? 'active solid-button' : ''}" data-mode="video" style="flex:1; padding:8px; font-size:12px; justify-content:center;">
+                  📹 ${isEn ? "Video (Commute Relief)" : "استشارة فيديو عن بُعد"}
+                </button>
+                <button type="button" class="outline-button okadoc-mode-btn ${selectedMode === 'clinic' ? 'active solid-button' : ''}" data-mode="clinic" style="flex:1; padding:8px; font-size:12px; justify-content:center;">
+                  🏥 ${isEn ? "In-Clinic Visit" : "زيارة العيادة"}
+                </button>
+              </div>
+            </div>
+
+            <!-- Date Selector Strip -->
+            <span class="okadoc-section-title">
+              <span>📅</span> ${isEn ? "Select Replacement Date (Next 14 Days):" : "اختر اليوم البديل (خلال الأسبوعين القادمين):"}
+            </span>
+            <div class="okadoc-date-strip" id="okadocDateStrip">
+              ${allDays.map(d => `
+                <div class="okadoc-day-chip ${d.dateStr === selectedDateStr ? 'active' : ''}" data-date="${d.dateStr}">
+                  <span class="day-name">${isEn ? d.labelEn : d.labelAr}</span>
+                  <span class="day-num">${d.dayNumber}</span>
+                </div>
+              `).join("")}
+            </div>
+
+            <!-- Slot Grid -->
+            <span class="okadoc-section-title">
+              <span>⏰</span> ${isEn ? "Select Replacement Time Slot:" : "اختر الفترة الزمنية البديلة:"}
+            </span>
+            <div class="okadoc-slots-grid" id="okadocSlotsGrid">
+              ${standardSlots.map(s => {
+                const isSelected = s.id === selectedSlotId;
+                const isPrev = s.id === prevSlot && selectedDateStr === prevDate;
+                return `
+                  <button type="button" class="okadoc-slot-btn ${isSelected ? 'active' : ''}" data-slot="${s.id}" ${isPrev ? 'disabled title="الموعد الحالي"' : ''}>
+                    <span>${isEn ? s.timeEn : s.timeAr}</span>
+                    <span style="font-size:10px; opacity:0.8;">${isPrev ? (isEn ? "Current" : "الحالي") : (isSelected ? "✓ " + (isEn ? "Selected" : "محدد") : (isEn ? "Available" : "متاح"))}</span>
+                  </button>
+                `;
+              }).join("")}
+            </div>
+
+            <!-- Quick Reason Chips -->
+            <div style="margin-bottom: 12px;">
+              <span class="okadoc-section-title">
+                <span>💬</span> ${isEn ? "Reason for Rescheduling:" : "سبب تعديل الموعد:"}
+              </span>
+              <div class="vezeeta-quick-reasons" style="margin-bottom: 6px;">
+                <button type="button" class="vezeeta-reason-chip okadoc-resched-chip" data-reason="تعارض في مواعيد العمل أو ارتباطات شخصية">${isEn ? "Schedule Conflict" : "تعارض في المواعيد"}</button>
+                <button type="button" class="vezeeta-reason-chip okadoc-resched-chip" data-reason="ظرف صحي أو عائلي طارئ">${isEn ? "Personal Emergency" : "ظرف طارئ"}</button>
+                <button type="button" class="vezeeta-reason-chip okadoc-resched-chip" data-reason="تفضيل موعد مسائي لتجنب الزحام">${isEn ? "Prefer Evening" : "تفضيل موعد مسائي"}</button>
+                <button type="button" class="vezeeta-reason-chip okadoc-resched-chip" data-reason="التحويل لاستشارة عن بعد لتفادي مشقة الانتقال">${isEn ? "Avoid Traffic" : "تجنب مشقة الزحام"}</button>
+              </div>
+              <input type="text" id="okadocRescheduleReasonInput" class="form-control" style="width:100%; padding:9px 12px; border-radius:10px; border:1px solid var(--line); background:var(--surface-2); color:var(--ink); font-size:12.5px;" placeholder="${isEn ? "e.g. Schedule conflict, prefer earlier or later time..." : "مثال: تعارض في العمل، تفضيل وقت آخر..."}" value="Patient requested reschedule via 1-click portal">
+            </div>
+
+            <!-- Reciprocal Alert Notice -->
+            <div class="okadoc-notice-box">
+              <span style="font-size: 16px;">🔔</span>
+              <div>
+                <strong>${isEn ? "Instant Reciprocal Notification:" : "إشعار فوري للطرف الآخر:"}</strong><br>
+                <span>${isEn ? "The doctor and clinic will be notified immediately of your new appointment, and your previous slot will be released." : "سيتم إرسال إشعار فوري للطبيب والعيادة بالموعد الجديد وإتاحة موعدك السابق فوراً لمرضى آخرين."}</span>
+              </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div style="display:flex; gap:10px; margin-top:16px;">
+              <button type="button" class="outline-button" id="btnCancelRescheduleModal" style="flex:1; padding:12px; justify-content:center; min-height:48px;">
+                ${isEn ? "Dismiss" : "تراجع"}
+              </button>
+              <button type="button" class="solid-button" id="btnConfirmExecuteReschedule" style="flex:2; padding:12px; justify-content:center; font-weight:700; min-height:48px;">
+                🔄 ${isEn ? "Confirm Reschedule (1-Click)" : "تأكيد الموعد البديل بضغطة زر"}
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      // Event Bindings
+      const closeBtn = modal.querySelector("#btnCloseRescheduleModal");
+      const cancelBtn = modal.querySelector("#btnCancelRescheduleModal");
+      if (closeBtn) closeBtn.onclick = closeRescheduleModal;
+      if (cancelBtn) cancelBtn.onclick = closeRescheduleModal;
+
+      // Mode Switcher
+      modal.querySelectorAll(".okadoc-mode-btn").forEach(btn => {
+        btn.onclick = () => {
+          selectedMode = btn.dataset.mode;
+          renderModalContent();
+        };
+      });
+
+      // Date Chips
+      modal.querySelectorAll(".okadoc-day-chip").forEach(chip => {
+        chip.onclick = () => {
+          selectedDateStr = chip.dataset.date;
+          renderModalContent();
+        };
+      });
+
+      // Slot Buttons
+      modal.querySelectorAll(".okadoc-slot-btn").forEach(btn => {
+        btn.onclick = () => {
+          if (btn.disabled) return;
+          selectedSlotId = btn.dataset.slot;
+          renderModalContent();
+        };
+      });
+
+      // Quick Reason Chips
+      modal.querySelectorAll(".okadoc-resched-chip").forEach(chip => {
+        chip.onclick = () => {
+          const input = modal.querySelector("#okadocRescheduleReasonInput");
+          if (input) {
+            input.value = chip.dataset.reason;
+            input.focus();
+          }
+        };
+      });
+
+      // Confirm Execution
+      const confirmBtn = modal.querySelector("#btnConfirmExecuteReschedule");
+      if (confirmBtn) {
+        confirmBtn.onclick = () => {
+          const reasonInput = modal.querySelector("#okadocRescheduleReasonInput");
+          const reasonText = (reasonInput ? reasonInput.value : "").trim() || "Rescheduled via Okadoc 1-click flow";
+          confirmBtn.disabled = true;
+          confirmBtn.textContent = isEn ? "Rescheduling..." : "جاري حفظ الموعد البديل...";
+          closeRescheduleModal();
+          if (typeof onConfirm === "function") {
+            onConfirm({
+              appointmentId: appt.id,
+              newDate: selectedDateStr,
+              newSlotId: selectedSlotId,
+              reason: reasonText,
+              consultationType: selectedMode
+            });
+          }
+        };
+      }
+    }
+
+    renderModalContent();
+    modal.classList.add("open");
+    modal.setAttribute("aria-hidden", "false");
+  }
+
+  function closeRescheduleModal() {
+    const modal = document.getElementById("rescheduleAppointmentModal");
+    if (modal) {
+      modal.classList.remove("open");
+      modal.setAttribute("aria-hidden", "true");
+    }
+  }
+
+  /**
+   * Okadoc-style 1-Click Interactive Cancellation Modal with Structured Reason Selection
+   */
+  function openCancelModal(appt = {}, onConfirm = null, onRescheduleInstead = null) {
+    let modal = document.getElementById("cancelAppointmentModal");
+    const isEn = typeof global.currentLanguage !== "undefined" && global.currentLanguage === "en";
+
+    if (!modal) {
+      modal = document.createElement("div");
+      modal.id = "cancelAppointmentModal";
+      modal.className = "vezeeta-modal-overlay";
+      modal.setAttribute("role", "dialog");
+      modal.setAttribute("aria-modal", "true");
+      modal.setAttribute("aria-hidden", "true");
+      document.body.appendChild(modal);
+    }
+
+    const docName = isEn ? (appt.doctorNameEn || appt.doctorName || "Treating Physician") : (appt.doctorName || "طبيبك المعالج");
+    const clinicName = appt.clinicName || (appt.type === "video" ? (isEn ? "Telehealth Video Consultation" : "استشارة فيديو عن بُعد") : (isEn ? "Specialized Chest Clinic - Dokki" : "مركز القاهرة التخصصي - فرع الدقي"));
+    const apptDate = appt.date || appt.dateStr || "";
+    const apptSlot = appt.timeSlot || appt.slotId || "";
+
+    const reasons = [
+      { id: "schedule_conflict", textAr: "تعارض في مواعيد العمل أو ارتباط شخصي", textEn: "Work or personal schedule conflict" },
+      { id: "personal_emergency", textAr: "ظرف عائلي أو صحي طارئ", textEn: "Family or health emergency" },
+      { id: "feeling_better", textAr: "تحسنت الأعراض واستقرت الحالة الصحية ولله الحمد", textEn: "Symptoms improved / Feeling better" },
+      { id: "traffic_commute", textAr: "صعوبة في المواصلات أو بعد المسافة (يمكنك التحويل لاستشارة فيديو)", textEn: "Commute or distance issue (video call available)" },
+      { id: "doctor_clinic_emergency", textAr: "طلب من الطبيب المعالج أو إدارة العيادة", textEn: "Requested by treating doctor or clinic" },
+      { id: "other", textAr: "سبب آخر", textEn: "Other reason" }
+    ];
+
+    let selectedReasonId = "schedule_conflict";
+
+    function renderModalContent() {
+      modal.innerHTML = `
+        <div class="vezeeta-modal-dialog" style="max-width: 500px;">
+          <div class="vezeeta-modal-header">
+            <h3 class="vezeeta-modal-title" style="display:flex; align-items:center; gap:8px; color:#ef4444;">
+              <span>✕</span> ${isEn ? "Cancel Appointment" : "إلغاء الموعد الطبي"}
+            </h3>
+            <button type="button" class="vezeeta-modal-close" id="btnCloseCancelModal" aria-label="${isEn ? "Close" : "إغلاق"}">✕</button>
+          </div>
+          <div class="vezeeta-modal-body" style="padding: 16px 20px;">
+            <!-- Recap of appointment being cancelled -->
+            <div class="okadoc-recap-box" style="border-left: 4px solid #ef4444;">
+              <div class="okadoc-recap-header">
+                <span class="okadoc-recap-doctor">
+                  <span>👨‍⚕️</span> ${escapeHtml(docName)}
+                </span>
+                <span class="pill danger" style="font-size:11px;">
+                  ${isEn ? "Pending Cancellation" : "قيد الإلغاء"}
+                </span>
+              </div>
+              <div class="okadoc-recap-spec">${escapeHtml(clinicName)}</div>
+              <div style="font-size:12.5px; color:var(--ink);">
+                <span>⏰ <strong>${apptDate}</strong> - <span>${apptSlot}</span></span>
+              </div>
+            </div>
+
+            <!-- Reason Selector -->
+            <span class="okadoc-section-title" style="margin-top: 10px;">
+              <span>📋</span> ${isEn ? "Please let us know the reason for cancellation:" : "يرجى اختيار سبب إلغاء الموعد لنتمكن من تحسين الخدمة:"}
+            </span>
+            <div style="margin-bottom: 12px;">
+              ${reasons.map(r => `
+                <label class="okadoc-reason-option ${r.id === selectedReasonId ? 'selected' : ''}">
+                  <input type="radio" name="okadocCancelReason" value="${r.id}" ${r.id === selectedReasonId ? 'checked' : ''}>
+                  <span class="okadoc-reason-text">${isEn ? r.textEn : r.textAr}</span>
+                </label>
+              `).join("")}
+            </div>
+
+            <!-- Optional Custom Notes -->
+            <input type="text" id="okadocCancelNotesInput" class="form-control" style="width:100%; padding:8px 12px; border-radius:10px; border:1px solid var(--line); background:var(--surface-2); color:var(--ink); font-size:12px; margin-bottom:12px;" placeholder="${isEn ? "Additional comments (optional)..." : "ملاحظات إضافية (اختياري)..."}">
+
+            <!-- Reciprocal Alert Notice -->
+            <div class="okadoc-notice-box" style="background: rgba(239, 68, 68, 0.08); border-color: rgba(239, 68, 68, 0.25); color: #ef4444;">
+              <span style="font-size: 16px;">📢</span>
+              <div>
+                <strong>${isEn ? "Instant Reciprocal Notification:" : "إشعار فوري للطرف الآخر:"}</strong><br>
+                <span>${isEn ? "The doctor and clinic will be notified immediately, this slot will be offered to waiting patients, and calendar alerts will be removed." : "سيتم إشعار الطبيب والعيادة فوراً بالإلغاء، وإتاحة الموعد لمرضى قائمة الانتظار، وإلغاء تذكيرات التقويم."}</span>
+              </div>
+            </div>
+
+            <!-- Prominent Reschedule Instead Button (Okadoc Best Practice) -->
+            <div style="margin-bottom: 12px;">
+              <button type="button" class="solid-button" id="btnRescheduleInstead" style="width:100%; padding:12px; justify-content:center; background:var(--teal, #0d9488); font-weight:700; min-height:48px;">
+                🔄 ${isEn ? "Need a different time? Reschedule Instead" : "تحتاج توقيتاً آخر؟ إعادة الجدولة بدلاً من الإلغاء"}
+              </button>
+            </div>
+
+            <!-- Destructive Confirm and Back Buttons -->
+            <div style="display:flex; gap:10px;">
+              <button type="button" class="outline-button" id="btnDismissCancelModal" style="flex:1; padding:12px; justify-content:center; min-height:48px;">
+                ${isEn ? "Keep Appointment" : "تراجع والاحتفاظ بالموعد"}
+              </button>
+              <button type="button" class="soft-button" id="btnConfirmExecuteCancel" style="flex:1; padding:12px; justify-content:center; color:#ef4444; background:rgba(239, 68, 68, 0.12); font-weight:700; min-height:48px;">
+                ✕ ${isEn ? "Confirm Cancellation" : "تأكيد الإلغاء النهائي"}
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      // Event Bindings
+      const closeBtn = modal.querySelector("#btnCloseCancelModal");
+      const dismissBtn = modal.querySelector("#btnDismissCancelModal");
+      if (closeBtn) closeBtn.onclick = closeCancelModal;
+      if (dismissBtn) dismissBtn.onclick = closeCancelModal;
+
+      // Radio Selection
+      modal.querySelectorAll("input[name='okadocCancelReason']").forEach(radio => {
+        radio.onchange = () => {
+          selectedReasonId = radio.value;
+          modal.querySelectorAll(".okadoc-reason-option").forEach(opt => opt.classList.remove("selected"));
+          radio.closest(".okadoc-reason-option").classList.add("selected");
+        };
+      });
+
+      // Reschedule Instead
+      const reschedBtn = modal.querySelector("#btnRescheduleInstead");
+      if (reschedBtn) {
+        reschedBtn.onclick = () => {
+          closeCancelModal();
+          if (typeof onRescheduleInstead === "function") {
+            onRescheduleInstead(appt);
+          } else {
+            openRescheduleModal(appt);
+          }
+        };
+      }
+
+      // Confirm Cancellation
+      const confirmBtn = modal.querySelector("#btnConfirmExecuteCancel");
+      if (confirmBtn) {
+        confirmBtn.onclick = () => {
+          const notesInput = modal.querySelector("#okadocCancelNotesInput");
+          const notes = notesInput ? notesInput.value.trim() : "";
+          const reasonObj = reasons.find(r => r.id === selectedReasonId);
+          const fullReason = reasonObj ? (isEn ? reasonObj.textEn : r.textAr) + (notes ? ` (${notes})` : "") : "User cancelled via 1-click portal";
+
+          confirmBtn.disabled = true;
+          confirmBtn.textContent = isEn ? "Cancelling..." : "جاري الإلغاء...";
+          closeCancelModal();
+          if (typeof onConfirm === "function") {
+            onConfirm(fullReason);
+          }
+        };
+      }
+    }
+
+    renderModalContent();
+    modal.classList.add("open");
+    modal.setAttribute("aria-hidden", "false");
+  }
+
+  function closeCancelModal() {
+    const modal = document.getElementById("cancelAppointmentModal");
+    if (modal) {
+      modal.classList.remove("open");
+      modal.setAttribute("aria-hidden", "true");
+    }
+  }
+
+  /**
+   * Okadoc-style Celebratory Reschedule Success Modal with 1-Click Calendar Sync
+   */
+  function openRescheduleSuccessModal(appt = {}, onClose = null) {
+    let modal = document.getElementById("rescheduleSuccessModal");
+    const isEn = typeof global.currentLanguage !== "undefined" && global.currentLanguage === "en";
+
+    if (!modal) {
+      modal = document.createElement("div");
+      modal.id = "rescheduleSuccessModal";
+      modal.className = "vezeeta-modal-overlay";
+      modal.setAttribute("role", "dialog");
+      modal.setAttribute("aria-modal", "true");
+      modal.setAttribute("aria-hidden", "true");
+      document.body.appendChild(modal);
+    }
+
+    const docName = isEn ? (appt.doctorNameEn || appt.doctorName || "Treating Physician") : (appt.doctorName || "طبيبك المعالج");
+    const newDate = appt.date || appt.dateStr || "";
+    const newSlot = appt.timeSlot || appt.slotId || "";
+    const clinicName = appt.clinicName || (appt.type === "video" ? (isEn ? "Telehealth Video Consultation" : "استشارة فيديو عن بُعد") : (isEn ? "Specialized Chest Clinic - Dokki" : "مركز القاهرة التخصصي - فرع الدقي"));
+    const googleCalUrl = buildGoogleCalendarUrl(appt);
+
+    modal.innerHTML = `
+      <div class="vezeeta-modal-dialog" style="max-width: 480px;">
+        <div class="vezeeta-modal-body" style="padding: 24px 20px;">
+          <div class="okadoc-success-box">
+            <div class="okadoc-success-icon">✓</div>
+            <h3 style="font-size:18px; font-weight:800; color:var(--ink); margin:0 0 6px;">
+              ${isEn ? "Appointment Rescheduled!" : "تم تعديل الموعد بنجاح!"}
+            </h3>
+            <p style="font-size:13px; color:var(--muted); margin:0 0 16px;">
+              ${isEn ? "Your replacement slot is now locked, and the other party has been notified." : "تم حجز موعدك البديل بنجاح، وإرسال إشعار فوري للطرف الآخر."}
+            </p>
+
+            <div class="okadoc-recap-box" style="text-align:right; border-color:var(--teal, #0d9488);">
+              <div style="font-size:14px; font-weight:700; color:var(--ink); margin-bottom:4px;">
+                👨‍⚕️ ${escapeHtml(docName)}
+              </div>
+              <div style="font-size:12px; color:var(--muted); margin-bottom:8px;">
+                ${escapeHtml(clinicName)}
+              </div>
+              <div style="font-size:14px; color:var(--teal, #0d9488); font-weight:700;">
+                📅 ${newDate} — ⏰ ${newSlot}
+              </div>
+            </div>
+
+            <!-- Calendar Sync Options -->
+            <div style="font-size:12.5px; font-weight:600; color:var(--ink); margin-top:16px; text-align:start;">
+              <span>📲 ${isEn ? "Update your personal calendar:" : "تحديث تقويمك الشخصي بنقرة واحدة:"}</span>
+            </div>
+            <div class="okadoc-cal-actions">
+              <a href="${googleCalUrl}" target="_blank" rel="noopener noreferrer" class="okadoc-btn-google-cal">
+                <span>📅 + Google Calendar</span>
+              </a>
+              <button type="button" class="okadoc-btn-ics" id="btnDownloadUpdatedIcs">
+                <span>📥 ${isEn ? "Save to Phone (.ics)" : "حفظ في التقويم (.ics)"}</span>
+              </button>
+            </div>
+
+            <button type="button" class="solid-button" id="btnDoneRescheduleSuccess" style="width:100%; margin-top:18px; padding:12px; justify-content:center; font-weight:700; min-height:48px;">
+              ✓ ${isEn ? "Done" : "تم"}
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const icsBtn = modal.querySelector("#btnDownloadUpdatedIcs");
+    if (icsBtn) {
+      icsBtn.onclick = () => downloadIcsCalendar(appt);
+    }
+
+    const doneBtn = modal.querySelector("#btnDoneRescheduleSuccess");
+    if (doneBtn) {
+      doneBtn.onclick = () => {
+        closeRescheduleSuccessModal();
+        if (typeof onClose === "function") onClose();
+      };
+    }
+
+    modal.classList.add("open");
+    modal.setAttribute("aria-hidden", "false");
+  }
+
+  function closeRescheduleSuccessModal() {
+    const modal = document.getElementById("rescheduleSuccessModal");
+    if (modal) {
+      modal.classList.remove("open");
+      modal.setAttribute("aria-hidden", "true");
+    }
+  }
+
+
   const AppointmentsUI = {
     state,
     buildGoogleCalendarUrl,
@@ -914,7 +1618,18 @@
     renderConsultationModeSelector,
     renderConsultationDetailsCard,
     getSelectedConsultationType,
-    setSelectedConsultationType
+    setSelectedConsultationType,
+    generateIcsCalendarContent,
+    buildIcsContent,
+    downloadIcsCalendar,
+    getGoogleCalendarUrl: buildGoogleCalendarUrl,
+    getOutlookCalendarUrl,
+    openRescheduleModal,
+    closeRescheduleModal,
+    openCancelModal,
+    closeCancelModal,
+    openRescheduleSuccessModal,
+    closeRescheduleSuccessModal
   };
 
   global.HealthVibes = global.HealthVibes || {};

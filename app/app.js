@@ -12816,6 +12816,7 @@ async function renderPatientAppointmentsList() {
   localList.forEach(a => map.set(a.id, a));
   appts.forEach(a => map.set(a.id, a));
   const merged = Array.from(map.values()).sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  window._lastRenderedAppointments = merged;
 
   const countBadge = document.getElementById("patientApptsCount");
   if (countBadge) {
@@ -12922,6 +12923,9 @@ async function renderPatientAppointmentsList() {
             <button type="button" class="soft-button" style="padding: 6px 12px; font-size: 12px; color: #ef4444;" onclick="cancelAppointment('${appt.id}')">
               ✕ ${isEn ? "Cancel" : "إلغاء الموعد"}
             </button>
+            <button type="button" class="outline-button" style="padding: 6px 10px; font-size: 12px;" onclick="downloadAppointmentIcs('${appt.id}')" title="${isEn ? "Add to Calendar (.ics)" : "إضافة للتقويم (.ics)"}">
+              📅 ${isEn ? "Calendar" : "التقويم"}
+            </button>
           ` : `
             <span style="font-size: 12px; color: var(--muted);">${isCancelled ? (isEn ? "Booking Cancelled" : "تم إلغاء الحجز") : (isCompleted ? (isEn ? "Consultation Completed" : "اكتملت الاستشارة") : (isEn ? "Past Consultation" : "استشارة سابقة"))}</span>
           `}
@@ -12956,7 +12960,7 @@ async function renderPatientAppointmentsList() {
   container.innerHTML = html;
 }
 
-async function rescheduleAppointment(apptId, newDate, newSlotId, reason = "") {
+async function rescheduleAppointment(apptId, newDate, newSlotId, reason = "", consultationType = null) {
   const isEn = currentLanguage === "en";
   if (rescheduleAppointment._pending && rescheduleAppointment._pending[apptId]) {
     showToast(isEn ? "This reschedule request is already being processed." : "طلب إعادة الجدولة قيد المعالجة بالفعل.");
@@ -12971,14 +12975,19 @@ async function rescheduleAppointment(apptId, newDate, newSlotId, reason = "") {
     rescheduleAppointment._pending = rescheduleAppointment._pending || {};
     rescheduleAppointment._pending[apptId] = true;
 
+    const payload = {
+      appointmentId: apptId,
+      newDate: newDate,
+      newSlotId: newSlotId,
+      reason: reason || "Patient requested reschedule via portal"
+    };
+    if (consultationType) {
+      payload.consultationType = consultationType;
+    }
+
     await requireSuccessfulMutation("/api/appointments/reschedule", {
       method: "POST",
-      body: JSON.stringify({
-        appointmentId: apptId,
-        newDate: newDate,
-        newSlotId: newSlotId,
-        reason: reason || "Patient requested reschedule via portal"
-      })
+      body: JSON.stringify(payload)
     }, data => data.success === true && data.status === "rescheduled");
 
     showToast(isEn ? "Appointment rescheduled successfully! Replacement slot reserved." : "تمت إعادة جدولة الموعد بنجاح وحجز الموعد البديل.");
@@ -12987,7 +12996,8 @@ async function rescheduleAppointment(apptId, newDate, newSlotId, reason = "") {
     updatePatientDashboardNextAppt();
   } catch (err) {
     console.error("Reschedule appointment error:", err);
-    showRetryFailure(isEn ? "Failed to reschedule appointment: " + err.message : "تعذر إعادة جدولة الموعد: " + err.message, () => rescheduleAppointment(apptId, newDate, newSlotId, reason));
+    showRetryFailure(isEn ? "Failed to reschedule appointment: " + err.message : "تعذر إعادة جدولة الموعد: " + err.message, () => rescheduleAppointment(apptId, newDate, newSlotId, reason, consultationType));
+    throw err;
   } finally {
     if (rescheduleAppointment._pending) rescheduleAppointment._pending[apptId] = false;
   }
@@ -12995,6 +13005,37 @@ async function rescheduleAppointment(apptId, newDate, newSlotId, reason = "") {
 
 async function promptRescheduleAppointment(apptId, doctorId) {
   const isEn = currentLanguage === "en";
+  const appts = window._lastRenderedAppointments || [];
+  let appt = appts.find(a => a.id === apptId);
+  if (!appt) {
+    appt = {
+      id: apptId,
+      doctorId: doctorId,
+      date: apptSelectedDate ? apptSelectedDate.dateStr : "",
+      slotId: "slot_1000",
+      timeSlot: "slot_1000",
+      doctorName: isEn ? "Treating Doctor" : "الطبيب المعالج",
+      type: "clinic"
+    };
+  }
+
+  const apptUi = window.AppointmentsUI || (window.HealthVibes && window.HealthVibes.AppointmentsUI);
+  if (apptUi && typeof apptUi.openRescheduleModal === "function") {
+    apptUi.openRescheduleModal(appt, async (data) => {
+      await rescheduleAppointment(apptId, data.newDate, data.newSlotId, data.reason, data.consultationType);
+      if (typeof apptUi.openRescheduleSuccessModal === "function") {
+        apptUi.openRescheduleSuccessModal({
+          ...appt,
+          date: data.newDate,
+          slotId: data.newSlotId,
+          timeSlot: data.newSlotId,
+          type: data.consultationType || appt.type || "clinic"
+        });
+      }
+    });
+    return;
+  }
+
   if (apptSelectedDate && apptSelectedSlot) {
     const confirmMsg = isEn
       ? `Reschedule this appointment to ${apptSelectedDate.dateStr} at ${apptSelectedSlot.timeEn}?`
@@ -13020,33 +13061,60 @@ async function cancelAppointment(apptId) {
     showToast(isEn ? "This cancellation is already being saved." : "جاري حفظ إلغاء هذا الموعد بالفعل.");
     return;
   }
+
+  const appts = window._lastRenderedAppointments || [];
+  const appt = appts.find(a => a.id === apptId) || { id: apptId, doctorName: isEn ? "Treating Doctor" : "الطبيب المعالج" };
+
+  const executeCancel = async (reasonText) => {
+    try {
+      const user = auth ? auth.currentUser : null;
+      if (!user || user.isAnonymous) {
+        throw new Error(isEn ? "Please sign in before cancelling an appointment." : "يرجى تسجيل الدخول قبل إلغاء الموعد.");
+      }
+      cancelAppointment._pending = cancelAppointment._pending || {};
+      cancelAppointment._pending[apptId] = true;
+      await requireSuccessfulMutation("/api/appointments/cancel", {
+        method: "POST",
+        body: JSON.stringify({ appointmentId: apptId, reason: reasonText || "User cancelled via 1-click portal" })
+      }, data => data.success === true && data.status === "cancelled");
+
+      updateLocalAppointmentStatus(apptId, "cancelled");
+      showToast(isEn ? "Appointment has been cancelled." : "تم إلغاء الموعد الطبي بنجاح.");
+      await renderPatientAppointmentsList();
+      await renderAppointmentsScreen();
+      updatePatientDashboardNextAppt();
+    } catch (err) {
+      console.error("Cancel appointment error:", err);
+      showRetryFailure(isEn ? "Failed to cancel appointment: " + err.message : "تعذر إلغاء الموعد: " + err.message, () => executeCancel(reasonText));
+      throw err;
+    } finally {
+      if (cancelAppointment._pending) cancelAppointment._pending[apptId] = false;
+    }
+  };
+
+  const apptUi = window.AppointmentsUI || (window.HealthVibes && window.HealthVibes.AppointmentsUI);
+  if (apptUi && typeof apptUi.openCancelModal === "function") {
+    apptUi.openCancelModal(appt, executeCancel, (targetAppt) => {
+      promptRescheduleAppointment(targetAppt.id, targetAppt.doctorId);
+    });
+    return;
+  }
+
   const confirmed = window.confirm(isEn ? "Are you sure you want to cancel this appointment?" : "هل أنت متأكد من رغبتك في إلغاء هذا الموعد الطبي؟");
   if (!confirmed) return;
 
-  try {
-    const user = auth ? auth.currentUser : null;
-    if (!user || user.isAnonymous) {
-      throw new Error(isEn ? "Please sign in before cancelling an appointment." : "يرجى تسجيل الدخول قبل إلغاء الموعد.");
-    }
-    cancelAppointment._pending = cancelAppointment._pending || {};
-    cancelAppointment._pending[apptId] = true;
-    await requireSuccessfulMutation("/api/appointments/cancel", {
-      method: "POST",
-      body: JSON.stringify({ appointmentId: apptId })
-    }, data => data.success === true && data.status === "cancelled");
+  return executeCancel("Confirmed via alert");
+}
 
-    updateLocalAppointmentStatus(apptId, "cancelled");
-    showToast(isEn ? "Appointment has been cancelled." : "تم إلغاء الموعد الطبي بنجاح.");
-    await renderPatientAppointmentsList();
-    await renderAppointmentsScreen();
-    updatePatientDashboardNextAppt();
-  } catch (err) {
-    console.error("Cancel appointment error:", err);
-    showRetryFailure(isEn ? "Failed to cancel appointment: " + err.message : "تعذر إلغاء الموعد: " + err.message, () => cancelAppointment(apptId));
-  } finally {
-    if (cancelAppointment._pending) cancelAppointment._pending[apptId] = false;
+function downloadAppointmentIcs(apptId) {
+  const appts = window._lastRenderedAppointments || [];
+  const appt = appts.find(a => a.id === apptId) || { id: apptId };
+  const apptUi = window.AppointmentsUI || (window.HealthVibes && window.HealthVibes.AppointmentsUI);
+  if (apptUi && typeof apptUi.downloadIcsCalendar === "function") {
+    return apptUi.downloadIcsCalendar(appt);
   }
 }
+window.downloadAppointmentIcs = downloadAppointmentIcs;
 
 function joinAppointmentVideo(apptId) {
   const isEn = currentLanguage === "en";

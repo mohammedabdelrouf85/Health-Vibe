@@ -1034,8 +1034,8 @@ async function emitAppointmentNotificationEvent(db, { type, appointment, actorUs
     if (typeof auditService?.recordAuditEvent === 'function') {
       await auditService.recordAuditEvent(db, {
         type: type,
-        actorUid: actorUser.uid,
-        actorRole: actorUser.role || 'patient',
+        actorUid: actorUser?.uid || appointment?.patientId || 'system',
+        actorRole: actorUser?.role || 'patient',
         targetUserId: appointment.patientId,
         clinicId: appointment.clinicId || null,
         details: {
@@ -1403,8 +1403,8 @@ async function bookAppointmentTransaction(db, payload, authUser) {
         // Initialize change history
         const initialHistoryEntry = {
           action: 'BOOKED',
-          actorUid: authUser.uid,
-          actorRole: authUser.role || 'patient',
+          actorUid: effectiveAuthUser.uid,
+          actorRole: effectiveAuthUser.role || 'patient',
           timestamp: nowIso,
           details: { slotId, date, doctorId: doctor.doctorId }
         };
@@ -1413,8 +1413,8 @@ async function bookAppointmentTransaction(db, payload, authUser) {
           ...payload,
           id: appointmentId,
           patientId: patientId,
-          patientEmail: authUser.email || payload.patientEmail || null,
-          patientPhone: payload.patientPhone || authUser.phoneNumber || null,
+          patientEmail: effectiveAuthUser.email || payload.patientEmail || null,
+          patientPhone: payload.patientPhone || effectiveAuthUser.phoneNumber || null,
           beneficiaryId: validatedBeneficiary.beneficiaryId || payload.beneficiaryId || 'self',
           beneficiaryName: validatedBeneficiary.beneficiaryName || payload.beneficiaryName || null,
           beneficiaryRelationship: validatedBeneficiary.relationship || 'self',
@@ -1667,7 +1667,7 @@ async function bookAppointmentTransaction(db, payload, authUser) {
       }
     } catch (sucErr) {}
 
-    return savedAppointment;
+    return { success: true, ...savedAppointment, appointment: savedAppointment };
   } catch (err) {
     // Telemetry: Record failed booking attempt
     try {
@@ -2211,6 +2211,7 @@ async function cancelAppointmentTransaction(db, targetAppt, actorUser, options =
     cancelledBy: actorUser.uid,
     cancelledByRole: actorUser.role || 'patient',
     cancelReason: opts.reason || 'User cancelled',
+    cancellationReason: opts.reason || 'User cancelled',
     history
   };
 
