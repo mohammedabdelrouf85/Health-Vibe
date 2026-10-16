@@ -17,7 +17,10 @@ const auditService = require('./audit-service');
 const analyticsService = require('./analytics-service');
 const {
   scheduleAppointmentReminder,
+  scheduleDualWindowAppointmentReminders,
   cancelAppointmentReminders,
+  formatAppointmentReminderMessage,
+  sendMultiChannelAppointmentReminder,
   sendRescheduleNotification,
   sendCancelNotification
 } = require('./notification-service');
@@ -1676,9 +1679,9 @@ async function bookAppointmentTransaction(db, payload, authUser) {
       console.warn('[BOOKING EVENT ERROR]:', e.message);
     }
 
-    // Schedule automated pre-consultation reminder
+    // Schedule automated dual-window pre-consultation reminders (24h and 2h prior)
     try {
-      await scheduleAppointmentReminder(db, savedAppointment, { hoursBefore: 24 });
+      await scheduleDualWindowAppointmentReminders(db, savedAppointment);
     } catch (remErr) {
       console.warn('[REMINDER SCHEDULE WARNING]:', remErr.message);
     }
@@ -2160,10 +2163,10 @@ async function rescheduleAppointmentTransaction(db, payload, actorUser) {
       }
     } catch (anErr) {}
 
-    // Reschedule automated reminder: cancel old reminder and schedule for replacement slot
+    // Reschedule automated dual-window reminders: cancel old reminders and schedule for replacement slot
     try {
       await cancelAppointmentReminders(db, appointment.id, 'appointment_rescheduled');
-      await scheduleAppointmentReminder(db, updatedAppointment, { hoursBefore: 24 });
+      await scheduleDualWindowAppointmentReminders(db, updatedAppointment);
     } catch (remErr) {
       console.warn('[REMINDER RESCHEDULE WARNING]:', remErr.message);
     }
@@ -2675,6 +2678,197 @@ async function updateAppointmentStatusTransaction(db, { appointmentId, status, n
 
   const finalUpdatedAppt = { ...appt, ...updatePayload };
   return { success: true, ...finalUpdatedAppt, appointment: finalUpdatedAppt };
+}
+
+// ============================================================================
+// 🎯 DOCTOLIB 1-CLICK ATTENDANCE CONFIRMATION & NO-SHOW PREVENTION
+// ============================================================================
+
+/**
+ * Confirm appointment attendance in 1-click (Doctolib Model).
+ * Reduces no-show rates by allowing patient (or clinic staff) to confirm attendance in advance.
+ */
+async function confirmAppointmentAttendance(db, appointmentId, actorUser, options = {}) {
+  if (!appointmentId) {
+    const err = new Error('appointmentId is required.');
+    err.code = 'MISSING_APPOINTMENT_ID';
+    err.statusCode = 400;
+    throw err;
+  }
+
+  // Telemetry: Record confirmation attempt
+  try {
+    analyticsService.recordEvent({
+      eventType: analyticsService.EVENT_TYPES.APPOINTMENT_ATTENDANCE_CONFIRMATION_ATTEMPT,
+      userId: actorUser?.uid || null,
+      clinicId: null,
+      payload: {
+        appointmentId,
+        channel: options.channel || 'web_app',
+        initiatorRole: actorUser?.role || 'patient'
+      }
+    });
+  } catch (attErr) {}
+
+  let appt = null;
+  let saveAppt = null;
+
+  if (db && typeof db.collection === 'function') {
+    const apptRef = db.collection('appointments').doc(appointmentId);
+    const snap = await apptRef.get();
+    if (!snap.exists) {
+      const err = new Error('Appointment not found.');
+      err.code = 'APPOINTMENT_NOT_FOUND';
+      err.statusCode = 404;
+      throw err;
+    }
+    appt = snap.data() || {};
+    saveAppt = async (payload) => {
+      await apptRef.update(payload);
+    };
+  } else if (db && db.appointments) {
+    if (db.appointments instanceof Map) {
+      appt = db.appointments.get(appointmentId);
+      saveAppt = async (payload) => {
+        Object.assign(appt, payload);
+      };
+    } else if (typeof db.appointments === 'object') {
+      appt = db.appointments[appointmentId];
+      saveAppt = async (payload) => {
+        Object.assign(appt, payload);
+      };
+    }
+    if (!appt) {
+      const err = new Error('Appointment not found.');
+      err.code = 'APPOINTMENT_NOT_FOUND';
+      err.statusCode = 404;
+      throw err;
+    }
+  } else {
+    const err = new Error('Appointment storage is unavailable. Please retry shortly.');
+    err.code = 'APPOINTMENT_STORAGE_UNAVAILABLE';
+    err.statusCode = 503;
+    throw err;
+  }
+
+  // Verify actor permission (patient who booked, doctor, clinic_admin, super_admin)
+  const userRole = actorUser?.role || 'patient';
+  const isPatientOwner = actorUser && (actorUser.uid === appt.patientId || actorUser.uid === appt.userId);
+  const isStaff = userRole === 'doctor' || userRole === 'clinic_admin' || userRole === 'clinic' || userRole === 'super_admin';
+
+  if (!isPatientOwner && !isStaff) {
+    const err = new Error('Access denied. You can only confirm attendance for your own appointments.');
+    err.code = 'ACCESS_DENIED';
+    err.statusCode = 403;
+    throw err;
+  }
+
+  if (appt.status === APPOINTMENT_STATUSES.CANCELLED || appt.status === 'cancelled') {
+    const err = new Error('Cannot confirm attendance for a cancelled appointment.');
+    err.code = 'CANNOT_CONFIRM_CANCELLED';
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const nowIso = new Date().toISOString();
+  const historyEntry = {
+    action: 'ATTENDANCE_CONFIRMED',
+    actorUid: actorUser?.uid || 'patient',
+    actorRole: userRole,
+    timestamp: nowIso,
+    channel: options.channel || 'web_app',
+    details: {
+      channel: options.channel || 'web_app',
+      previousStatus: appt.status || 'confirmed'
+    }
+  };
+
+  const history = Array.isArray(appt.history) ? [...appt.history] : [];
+  history.push(historyEntry);
+
+  const updatePayload = {
+    attendanceConfirmed: true,
+    attendanceConfirmedAt: nowIso,
+    attendanceConfirmedBy: actorUser?.uid || 'patient',
+    attendanceConfirmedRole: userRole,
+    attendanceConfirmedChannel: options.channel || 'web_app',
+    status: APPOINTMENT_STATUSES.CONFIRMED,
+    history
+  };
+
+  await saveAppt(updatePayload);
+
+  const updatedAppointment = { ...appt, ...updatePayload };
+
+  if (db && Array.isArray(db.telemetryEvents)) {
+    db.telemetryEvents.push({
+      eventType: 'APPOINTMENT_ATTENDANCE_CONFIRMED',
+      appointmentId: appt.id || appointmentId,
+      patientId: appt.patientId,
+      doctorId: appt.doctorId,
+      timestamp: nowIso
+    });
+  }
+
+  // Telemetry: Record attendance confirmed event
+  try {
+    analyticsService.recordEvent({
+      eventType: analyticsService.EVENT_TYPES.APPOINTMENT_ATTENDANCE_CONFIRMED,
+      userId: appt.patientId,
+      clinicId: appt.clinicId,
+      payload: {
+        appointmentId: appt.id || appointmentId,
+        doctorId: appt.doctorId,
+        date: appt.date,
+        channel: options.channel || 'web_app',
+        initiatorRole: userRole
+      }
+    });
+  } catch (anErr) {}
+
+  return {
+    success: true,
+    appointment: updatedAppointment,
+    ...updatedAppointment
+  };
+}
+
+/**
+ * Retrieve appointment reminder & no-show risk assessment.
+ */
+async function getAppointmentReminderStatus(db, appointmentId) {
+  if (!db || !appointmentId) return null;
+  const appt = await getAppointmentById(db, appointmentId);
+  if (!appt) return null;
+
+  const now = new Date();
+  const apptDate = appt.date || (appt.slotStart ? appt.slotStart.slice(0, 10) : null);
+  const timeStr = appt.timeSlot ? appt.timeSlot.split(' ')[0] : '09:00';
+  const targetDate = new Date(`${apptDate}T${timeStr.includes(':') ? timeStr : '09:00'}:00`);
+  const diffHours = (targetDate.getTime() - now.getTime()) / (3600 * 1000);
+
+  let noShowRisk = 'low';
+  if (appt.status === 'confirmed' && !appt.attendanceConfirmed) {
+    if (diffHours <= 2 && diffHours > 0) {
+      noShowRisk = 'high';
+    } else if (diffHours <= 24 && diffHours > 2) {
+      noShowRisk = 'moderate';
+    }
+  }
+
+  return {
+    appointmentId,
+    status: appt.status,
+    attendanceConfirmed: Boolean(appt.attendanceConfirmed),
+    attendanceConfirmedAt: appt.attendanceConfirmedAt || null,
+    attendanceConfirmedChannel: appt.attendanceConfirmedChannel || null,
+    hoursUntilAppointment: Math.round(diffHours * 10) / 10,
+    noShowRisk,
+    reminderWindows: {
+      hours24Active: diffHours <= 24 && diffHours > 2,
+      hours2Active: diffHours <= 2 && diffHours > 0
+    }
+  };
 }
 
 // ============================================================================
@@ -3924,5 +4118,10 @@ module.exports = {
   validateAppointmentMutationSafety: appointmentSafetyService.validateAppointmentMutationSafety,
   buildIcsContent,
   sendRescheduleNotification,
-  sendCancelNotification
+  sendCancelNotification,
+  confirmAppointmentAttendance,
+  getAppointmentReminderStatus,
+  scheduleDualWindowAppointmentReminders,
+  formatAppointmentReminderMessage,
+  sendMultiChannelAppointmentReminder
 };

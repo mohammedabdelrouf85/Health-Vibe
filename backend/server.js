@@ -40,7 +40,10 @@ const {
   dispatchNotificationWithPreferences,
   DEFAULT_NOTIFICATION_PREFERENCES,
   NOTIFICATION_STATUS,
-  NOTIFICATION_TYPES
+  NOTIFICATION_TYPES,
+  sendMultiChannelAppointmentReminder,
+  scheduleDualWindowAppointmentReminders,
+  formatAppointmentReminderMessage
 } = require('./notification-service');
 const backupService = require('./backup-service');
 const partnerService = require('./partner-service');
@@ -8753,6 +8756,163 @@ app.get('/api/appointments/analytics', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('[APPOINTMENT ANALYTICS GET ERROR]:', err);
     return res.status(500).json({ error: 'ANALYTICS_FETCH_FAILED', message: err.message });
+  }
+});
+
+// ============================================================================
+// ⏰ DOCTOLIB AUTOMATED NO-SHOW REMINDERS & 1-CLICK ATTENDANCE CONFIRMATION
+// ============================================================================
+
+/**
+ * POST /api/appointments/:id/confirm-attendance
+ * POST /api/appointments/confirm-attendance
+ * Confirms patient attendance for an upcoming appointment to eliminate no-show risk (Doctolib Model).
+ */
+const handleAttendanceConfirmation = async (req, res) => {
+  const appointmentId = req.params?.id || req.body?.appointmentId;
+  if (!appointmentId) {
+    return res.status(400).json({ error: 'MISSING_APPOINTMENT_ID', message: 'appointmentId is required.' });
+  }
+
+  if (!db || typeof db.collection !== 'function') {
+    return res.status(503).json({ error: 'STORAGE_UNAVAILABLE', message: 'Appointment service temporarily unavailable.' });
+  }
+
+  try {
+    const result = await schedulingService.confirmAppointmentAttendance(db, appointmentId, req.user, {
+      channel: req.body?.channel || 'web_app'
+    });
+    return res.json({
+      success: true,
+      message: 'Attendance confirmed successfully. We look forward to your visit!',
+      messageAr: 'تم تأكيد حضورك بنجاح. نتطلع لرؤيتك في الموعد المحدد!',
+      appointment: result.appointment || result
+    });
+  } catch (err) {
+    console.error('[CONFIRM ATTENDANCE ERROR]:', err);
+    const statusCode = err.statusCode || (err.code === 'ACCESS_DENIED' ? 403 : (err.code === 'APPOINTMENT_NOT_FOUND' ? 404 : 400));
+    return res.status(statusCode).json({ error: err.code || 'CONFIRM_ATTENDANCE_FAILED', message: err.message });
+  }
+};
+
+app.post('/api/appointments/:id/confirm-attendance', requireAuth, requireVerifiedEmail, handleAttendanceConfirmation);
+app.post('/api/appointments/confirm-attendance', requireAuth, requireVerifiedEmail, handleAttendanceConfirmation);
+
+/**
+ * POST /api/appointments/:id/send-reminder
+ * POST /api/appointments/send-reminder
+ * Dispatches multi-channel automated reminder (In-App, Email, SMS, WhatsApp) for testing or clinic nudge.
+ */
+const handleSendAppointmentReminder = async (req, res) => {
+  const appointmentId = req.params?.id || req.body?.appointmentId;
+  if (!appointmentId) {
+    return res.status(400).json({ error: 'MISSING_APPOINTMENT_ID', message: 'appointmentId is required.' });
+  }
+
+  if (!db || typeof db.collection !== 'function') {
+    return res.status(503).json({ error: 'STORAGE_UNAVAILABLE', message: 'Service storage is temporarily unavailable.' });
+  }
+
+  try {
+    const appt = await schedulingService.getAppointmentById(db, appointmentId);
+    if (!appt) {
+      return res.status(404).json({ error: 'APPOINTMENT_NOT_FOUND', message: 'Appointment was not found.' });
+    }
+
+    const userRole = getTrustedClaimRole(req.user);
+    const isOwner = req.user && (req.user.uid === appt.patientId || req.user.uid === appt.userId);
+    const isStaff = userRole === ROLES.DOCTOR || userRole === ROLES.CLINIC_ADMIN || userRole === ROLES.SUPER_ADMIN || hasTrustedAdminClaim(req.user);
+
+    if (!isOwner && !isStaff) {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Access denied to send reminders for this appointment.' });
+    }
+
+    const { window = '24h', channels = ['in_app', 'email', 'sms', 'whatsapp'], lang = 'ar' } = req.body || {};
+
+    const dispatchResult = await sendMultiChannelAppointmentReminder(db, appt, {
+      window,
+      channels,
+      lang,
+      initiatorRole: userRole
+    });
+
+    return res.json({
+      success: true,
+      message: 'Multi-channel appointment reminder dispatched successfully.',
+      messageAr: 'تم إرسال تذكير الموعد بنجاح عبر القنوات المحددة (تطبيق، بريد، SMS، واتساب).',
+      details: dispatchResult
+    });
+  } catch (err) {
+    console.error('[SEND REMINDER ERROR]:', err);
+    return res.status(500).json({ error: 'SEND_REMINDER_FAILED', message: err.message });
+  }
+};
+
+app.post('/api/appointments/:id/send-reminder', requireAuth, requireVerifiedEmail, handleSendAppointmentReminder);
+app.post('/api/appointments/send-reminder', requireAuth, requireVerifiedEmail, handleSendAppointmentReminder);
+
+/**
+ * GET /api/appointments/:id/reminder-status
+ * Retrieves attendance confirmation status and no-show risk assessment.
+ */
+app.get('/api/appointments/:id/reminder-status', requireAuth, async (req, res) => {
+  const appointmentId = req.params.id;
+  try {
+    const status = await schedulingService.getAppointmentReminderStatus(db, appointmentId);
+    if (!status) {
+      return res.status(404).json({ error: 'APPOINTMENT_NOT_FOUND', message: 'Appointment was not found.' });
+    }
+    return res.json({ success: true, reminderStatus: status });
+  } catch (err) {
+    console.error('[REMINDER STATUS ERROR]:', err);
+    return res.status(500).json({ error: 'REMINDER_STATUS_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/appointments/reminders/preferences
+ * POST /api/appointments/reminders/preferences
+ * Manages user multi-channel reminder preferences (WhatsApp, SMS, Email, In-App) and timing toggles (24h, 2h).
+ */
+app.get('/api/appointments/reminders/preferences', requireAuth, async (req, res) => {
+  try {
+    const prefs = await getUserNotificationPreferences(db, req.user.uid);
+    return res.json({ success: true, preferences: prefs });
+  } catch (err) {
+    console.error('[GET REMINDER PREFERENCES ERROR]:', err);
+    return res.status(500).json({ error: 'PREFERENCES_FETCH_FAILED', message: err.message });
+  }
+});
+
+app.post('/api/appointments/reminders/preferences', requireAuth, requireVerifiedEmail, async (req, res) => {
+  try {
+    const updates = req.body || {};
+    const updated = await updateUserNotificationPreferences(db, req.user.uid, updates);
+
+    // Telemetry: Record reminder preferences updated
+    try {
+      const analyticsService = require('./analytics-service');
+      analyticsService.recordEvent({
+        eventType: analyticsService.EVENT_TYPES.REMINDER_PREFERENCES_UPDATED,
+        userId: req.user.uid,
+        clinicId: null,
+        payload: {
+          channels: updated.channels,
+          reminderWindows: updated.reminderWindows
+        }
+      });
+    } catch (e) {}
+
+    return res.json({
+      success: true,
+      message: 'Reminder notification preferences saved successfully.',
+      messageAr: 'تم حفظ تفضيلات تذكير المواعيد بنجاح.',
+      preferences: updated
+    });
+  } catch (err) {
+    console.error('[POST REMINDER PREFERENCES ERROR]:', err);
+    const statusCode = err.statusCode || (err.code === 'INVALID_TIME_FORMAT' ? 400 : 500);
+    return res.status(statusCode).json({ error: err.code || 'PREFERENCES_UPDATE_FAILED', message: err.message });
   }
 });
 

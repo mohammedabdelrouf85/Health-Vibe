@@ -1597,6 +1597,290 @@
     }
   }
 
+  // ==========================================================================
+  // DOCTOLIB AUTOMATED NO-SHOW REMINDERS & ATTENDANCE CONFIRMATION UI
+  // ==========================================================================
+
+  /**
+   * Calculates time delta between current time and appointment date/slot
+   */
+  function calculateHoursToAppointment(appt = {}) {
+    if (!appt.date) return 999;
+    try {
+      const parts = String(appt.date).split("-").map(Number);
+      let hour = 10;
+      let min = 0;
+      if (appt.timeSlot) {
+        const match = String(appt.timeSlot).match(/(\d{1,2}):(\d{2})/);
+        if (match) {
+          hour = parseInt(match[1], 10);
+          min = parseInt(match[2], 10);
+          const t = String(appt.timeSlot).toLowerCase();
+          if ((t.includes("مساء") || t.includes("pm")) && hour < 12) hour += 12;
+          if ((t.includes("صباح") || t.includes("am")) && hour === 12) hour = 0;
+        }
+      }
+      const apptTime = new Date(parts[0], parts[1] - 1, parts[2], hour, min, 0).getTime();
+      const diffMs = apptTime - Date.now();
+      return diffMs / (1000 * 60 * 60);
+    } catch (e) {
+      return 999;
+    }
+  }
+
+  /**
+   * Renders the Doctolib automated no-show reminder banner hero card
+   */
+  function renderReminderHero(appt, options = {}) {
+    if (!appt) return "";
+    const isEn = options.isEn ?? (typeof global.currentLanguage !== "undefined" && global.currentLanguage === "en");
+    const hoursTo = typeof options.hoursRemaining === "number"
+      ? options.hoursRemaining
+      : (typeof options.hoursTo === "number" ? options.hoursTo : calculateHoursToAppointment(appt));
+    const isUrgent2h = hoursTo > 0 && hoursTo <= 2.5;
+    const isWithin24h = !isUrgent2h && hoursTo > 0 && hoursTo <= 24.5;
+
+    let countdownBadgeText = isEn ? "Upcoming Soon" : "موعدك قادم قريباً";
+    let badgeClass = "";
+    if (isUrgent2h) {
+      countdownBadgeText = isEn ? "⚡ In 2 Hours" : "⚡ موعدك بعد ساعتين فقط";
+      badgeClass = "badge-2h";
+    } else if (isWithin24h) {
+      countdownBadgeText = isEn ? "⏰ Tomorrow (within 24h)" : "⏰ موعدك غداً (خلال 24 ساعة)";
+      badgeClass = "badge-24h";
+    }
+
+    const isConfirmed = appt.attendanceConfirmed === true;
+
+    return `
+      <div class="doctolib-reminder-hero ${isUrgent2h ? "urgent-2h" : ""}" id="doctolibReminderHero" role="region" aria-label="${isEn ? "Upcoming Appointment Reminder" : "تذكير بالموعد القادم"}">
+        <div class="doctolib-reminder-header">
+          <div class="doctolib-reminder-title-group">
+            <span class="doctolib-reminder-icon" aria-hidden="true">${isUrgent2h ? "⚡" : "⏰"}</span>
+            <h3 class="doctolib-reminder-title">
+              ${isEn ? "Upcoming Appointment Reminder" : "تذكير بموعدك القادم"}
+            </h3>
+          </div>
+          <span class="doctolib-badge-countdown ${badgeClass}">
+            ${countdownBadgeText}
+          </span>
+        </div>
+
+        <div class="doctolib-reminder-details">
+          <div class="doctolib-detail-item">
+            <span class="doctolib-detail-label">${isEn ? "Doctor" : "الطبيب"}</span>
+            <span class="doctolib-detail-value">🩺 ${appt.doctorName || (isEn ? "Treating Doctor" : "الطبيب المعالج")}</span>
+          </div>
+          <div class="doctolib-detail-item">
+            <span class="doctolib-detail-label">${isEn ? "Appointment Time" : "توقيت الموعد"}</span>
+            <span class="doctolib-detail-value">📅 ${appt.dateLabel || appt.date} — ${appt.timeSlot || appt.slotId}</span>
+          </div>
+          <div class="doctolib-detail-item">
+            <span class="doctolib-detail-label">${isEn ? "Consultation Type" : "نوع الاستشارة"}</span>
+            <span class="doctolib-detail-value">
+              ${appt.type === "video" ? (isEn ? "📹 Video Telehealth" : "📹 كشف فيديو عن بُعد") : (isEn ? "🏥 In-Clinic Visit" : "🏥 حضور في العيادة")}
+            </span>
+          </div>
+          <div class="doctolib-detail-item">
+            <span class="doctolib-detail-label">${isEn ? "Attendance Status" : "حالة تأكيد الحضور"}</span>
+            <span class="doctolib-detail-value">
+              ${isConfirmed
+                ? `<span class="doctolib-patient-confirmed-badge" id="attendanceStatusBadge">✓ ${isEn ? "Confirmed by you" : "تم تأكيد حضورك"}</span>`
+                : `<span class="doctolib-patient-unconfirmed-badge" id="attendanceStatusBadge">⏳ ${isEn ? "Awaiting your confirmation" : "بانتظار تأكيد حضورك"}</span>`}
+            </span>
+          </div>
+        </div>
+
+        <div class="doctolib-action-bar">
+          ${!isConfirmed ? `
+            <button type="button" class="doctolib-btn-confirm" id="btnConfirmAttendanceHero" onclick="confirmAppointmentAttendance('${appt.id}')">
+              ✓ ${isEn ? "Confirm Attendance Now" : "تأكيد الحضور الآن"}
+            </button>
+          ` : `
+            <div class="doctolib-btn-confirm confirmed" id="btnConfirmedState">
+              ✓ ${isEn ? "Attendance Confirmed" : "تم تأكيد الحضور"}
+            </div>
+          `}
+          <button type="button" class="doctolib-btn-secondary" onclick="promptRescheduleAppointment('${appt.id}', '${appt.doctorId}')">
+            🔄 ${isEn ? "Reschedule" : "تعديل الموعد"}
+          </button>
+          <button type="button" class="doctolib-btn-secondary doctolib-btn-cancel-link" onclick="cancelAppointment('${appt.id}')">
+            ✕ ${isEn ? "Polite Cancel" : "اعتذار عن الموعد"}
+          </button>
+          ${appt.type === "video" ? `
+            <button type="button" class="doctolib-btn-secondary" onclick="joinAppointmentVideo('${appt.id}')">
+              🎥 ${isEn ? "Video Room" : "غرفة الكشف"}
+            </button>
+          ` : `
+            <button type="button" class="doctolib-btn-secondary" onclick="showClinicDirections('${appt.id}')">
+              📍 ${isEn ? "Directions" : "مسار العيادة"}
+            </button>
+          `}
+          <button type="button" class="doctolib-btn-secondary" onclick="openReminderPreferencesModal('${appt.id}')" title="${isEn ? "Reminder Channels (WhatsApp, SMS, Email)" : "قنوات التذكير (واتساب، SMS، إيميل)"}">
+            🔔 ${isEn ? "Reminders" : "قنوات التذكير"}
+          </button>
+          <button type="button" class="doctolib-btn-secondary" onclick="testSendAppointmentReminder('${appt.id}')" title="${isEn ? "Send Instant Test Reminder" : "إرسال تذكير تجريبي فوري"}">
+            ⚡ ${isEn ? "Test Reminder" : "تذكير تجريبي"}
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * Opens the Notification Channels Preferences modal (In-App, Email, SMS, WhatsApp)
+   */
+  async function openReminderPreferencesModal(apptId, onSave = null) {
+    let modal = document.getElementById("doctolibReminderPrefsModal");
+    const isEn = typeof global.currentLanguage !== "undefined" && global.currentLanguage === "en";
+
+    if (!modal) {
+      modal = document.createElement("div");
+      modal.id = "doctolibReminderPrefsModal";
+      modal.className = "doctolib-preferences-modal";
+      modal.setAttribute("role", "dialog");
+      modal.setAttribute("aria-modal", "true");
+      document.body.appendChild(modal);
+    }
+
+    modal.innerHTML = `
+      <div class="doctolib-preferences-box">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+          <h3 style="margin: 0; font-size: 18px; color: var(--ink, #f8fafc); display: flex; align-items: center; gap: 8px;">
+            <span>🔔</span> ${isEn ? "Appointment Reminder Preferences" : "تفضيلات تذكيرات المواعيد"}
+          </h3>
+          <button type="button" class="soft-button" id="btnCloseReminderPrefs" style="padding: 4px 8px; font-size: 14px;">✕</button>
+        </div>
+        <p style="font-size: 13px; color: var(--muted, #94a3b8); margin-bottom: 16px;">
+          ${isEn 
+            ? "Configure your automated reminders (24h and 2h prior) across WhatsApp, SMS, Email, and In-App to avoid missed visits."
+            : "حدد قنوات التذكير التلقائية (قبل الموعد بـ 24 ساعة وساعتين) عبر الواتساب والرسائل القصيرة والبريد والتطبيق لضمان عدم تفويت موعدك."}
+        </p>
+
+        <h4 style="font-size: 13px; font-weight: 700; color: var(--ink); margin: 12px 0 6px;">
+          ${isEn ? "Delivery Channels:" : "قنوات الإرسال المعتمدة:"}
+        </h4>
+        <div class="doctolib-channel-grid">
+          <label class="doctolib-channel-chip active" id="chipInApp">
+            <span>📲 ${isEn ? "In-App Alerts" : "إشعارات التطبيق"}</span>
+            <input type="checkbox" id="prefInApp" checked />
+          </label>
+          <label class="doctolib-channel-chip active" id="chipWhatsApp">
+            <span>💬 ${isEn ? "WhatsApp Bot" : "بوت الواتساب الطبي"}</span>
+            <input type="checkbox" id="prefWhatsApp" checked />
+          </label>
+          <label class="doctolib-channel-chip active" id="chipEmail">
+            <span>✉️ ${isEn ? "Email Notification" : "البريد الإلكتروني"}</span>
+            <input type="checkbox" id="prefEmail" checked />
+          </label>
+          <label class="doctolib-channel-chip active" id="chipSms">
+            <span>💬 ${isEn ? "SMS Text Message" : "رسائل SMS النصية"}</span>
+            <input type="checkbox" id="prefSms" checked />
+          </label>
+        </div>
+
+        <h4 style="font-size: 13px; font-weight: 700; color: var(--ink); margin: 16px 0 6px;">
+          ${isEn ? "Reminder Windows:" : "مواعيد الإرسال المسبقة:"}
+        </h4>
+        <div class="doctolib-channel-grid">
+          <label class="doctolib-channel-chip active">
+            <span>⏰ ${isEn ? "24 Hours Prior" : "قبل الموعد بـ 24 ساعة"}</span>
+            <input type="checkbox" id="prefWindow24h" checked />
+          </label>
+          <label class="doctolib-channel-chip active">
+            <span>⚡ ${isEn ? "2 Hours Prior" : "قبل الموعد بساعتين (2h)"}</span>
+            <input type="checkbox" id="prefWindow2h" checked />
+          </label>
+        </div>
+
+        <div style="display: flex; gap: 10px; margin-top: 22px; justify-content: flex-end;">
+          <button type="button" class="outline-button" id="btnCancelReminderPrefs" style="min-height: 44px; padding: 10px 18px;">
+            ${isEn ? "Cancel" : "إلغاء"}
+          </button>
+          <button type="button" class="solid-button" id="btnSaveReminderPrefs" style="min-height: 44px; padding: 10px 22px; background: var(--teal, #0d9488);">
+            💾 ${isEn ? "Save Preferences" : "حفظ التفضيلات"}
+          </button>
+        </div>
+      </div>
+    `;
+
+    // Try to load user saved preferences
+    try {
+      const resp = await fetch("/api/appointments/reminders/preferences", { credentials: "same-origin" });
+      if (resp.ok) {
+        const data = await resp.json();
+        const p = data.preferences || {};
+        if (p.channels) {
+          if (document.getElementById("prefInApp")) document.getElementById("prefInApp").checked = p.channels.in_app !== false;
+          if (document.getElementById("prefEmail")) document.getElementById("prefEmail").checked = p.channels.email !== false;
+          if (document.getElementById("prefSms")) document.getElementById("prefSms").checked = p.channels.sms !== false;
+          if (document.getElementById("prefWhatsApp")) document.getElementById("prefWhatsApp").checked = p.channels.whatsapp !== false;
+        }
+        if (p.reminderWindows) {
+          if (document.getElementById("prefWindow24h")) document.getElementById("prefWindow24h").checked = p.reminderWindows["24h"] !== false;
+          if (document.getElementById("prefWindow2h")) document.getElementById("prefWindow2h").checked = p.reminderWindows["2h"] !== false;
+        }
+      }
+    } catch (e) {
+      console.warn("Could not fetch remote reminder preferences:", e);
+    }
+
+    modal.classList.add("active");
+
+    const close = () => closeReminderPreferencesModal();
+    const closeBtn = modal.querySelector("#btnCloseReminderPrefs");
+    const cancelBtn = modal.querySelector("#btnCancelReminderPrefs");
+    if (closeBtn) closeBtn.onclick = close;
+    if (cancelBtn) cancelBtn.onclick = close;
+
+    const saveBtn = modal.querySelector("#btnSaveReminderPrefs");
+    if (saveBtn) {
+      saveBtn.onclick = async () => {
+        saveBtn.disabled = true;
+        saveBtn.textContent = isEn ? "Saving..." : "جارٍ الحفظ...";
+        const prefs = {
+          channels: {
+            in_app: !!document.getElementById("prefInApp")?.checked,
+            email: !!document.getElementById("prefEmail")?.checked,
+            sms: !!document.getElementById("prefSms")?.checked,
+            whatsapp: !!document.getElementById("prefWhatsApp")?.checked
+          },
+          reminderWindows: {
+            "24h": !!document.getElementById("prefWindow24h")?.checked,
+            "2h": !!document.getElementById("prefWindow2h")?.checked
+          }
+        };
+
+        try {
+          await fetch("/api/appointments/reminders/preferences", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(prefs),
+            credentials: "same-origin"
+          });
+          if (typeof global.showToast === "function") {
+            global.showToast(isEn ? "Reminder preferences saved successfully!" : "تم حفظ تفضيلات تذكيرات المواعيد بنجاح!");
+          }
+          close();
+          if (typeof onSave === "function") onSave(prefs);
+        } catch (err) {
+          if (typeof global.showToast === "function") {
+            global.showToast(isEn ? "Failed to save preferences." : "تعذر حفظ التفضيلات.");
+          }
+          saveBtn.disabled = false;
+          saveBtn.textContent = isEn ? "Save Preferences" : "حفظ التفضيلات";
+        }
+      };
+    }
+  }
+
+  function closeReminderPreferencesModal() {
+    const modal = document.getElementById("doctolibReminderPrefsModal");
+    if (modal) {
+      modal.classList.remove("active");
+    }
+  }
+
 
   const AppointmentsUI = {
     state,
@@ -1629,7 +1913,11 @@
     openCancelModal,
     closeCancelModal,
     openRescheduleSuccessModal,
-    closeRescheduleSuccessModal
+    closeRescheduleSuccessModal,
+    calculateHoursToAppointment,
+    renderReminderHero,
+    openReminderPreferencesModal,
+    closeReminderPreferencesModal
   };
 
   global.HealthVibes = global.HealthVibes || {};

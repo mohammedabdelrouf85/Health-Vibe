@@ -1390,4 +1390,322 @@
   border-color: var(--teal, #0d9488);
 }
 
+/* ==========================================================================
+   DOCTOLIB NO-SHOW REMINDERS & 1-CLICK ATTENDANCE CONFIRMATION
+   ========================================================================== */
+
+.doctolib-reminder-hero {
+  position: relative;
+  background: linear-gradient(135deg, rgba(13, 148, 136, 0.08) 0%, rgba(59, 130, 246, 0.08) 100%);
+  border: 1px solid rgba(13, 148, 136, 0.3);
+  border-radius: 18px;
+  padding: 20px;
+  margin-bottom: 24px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.doctolib-reminder-hero::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #0d9488, #3b82f6, #10b981);
+}
+
+.doctolib-reminder-hero.urgent-2h {
+  border-color: rgba(239, 68, 68, 0.4);
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.08) 0%, rgba(245, 158, 11, 0.08) 100%);
+}
+
+.doctolib-reminder-hero.urgent-2h::before {
+  background: linear-gradient(90deg, #ef4444, #f59e0b);
+}
+
+.doctolib-reminder-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.doctolib-reminder-title-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.doctolib-reminder-icon {
+  font-size: 26px;
+  animation: pulse-gentle 2s infinite ease-in-out;
+}
+
+@keyframes pulse-gentle {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+.doctolib-reminder-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ink, #f8fafc);
+  margin: 0;
+}
+
+.doctolib-badge-countdown {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  background: rgba(13, 148, 136, 0.15);
+  color: var(--teal, #0d9488);
+  border: 1px solid rgba(13, 148, 136, 0.3);
+}
+
+.doctolib-badge-countdown.badge-24h {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+.doctolib-badge-countdown.badge-2h {
+  background: rgba(239, 68, 68, 0.18);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.35);
+  animation: pulse-badge 1.5s infinite;
+}
+
+@keyframes pulse-badge {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+}
+
+.doctolib-reminder-details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+  padding: 14px;
+  background: var(--surface-2, rgba(255, 255, 255, 0.04));
+  border-radius: 12px;
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.08));
+  margin-bottom: 18px;
+}
+
+.doctolib-detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.doctolib-detail-label {
+  font-size: 12px;
+  color: var(--muted, #94a3b8);
+  font-weight: 500;
+}
+
+.doctolib-detail-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink, #f8fafc);
+}
+
+.doctolib-action-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.doctolib-btn-confirm {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 22px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 14px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);
+  min-height: 46px;
+}
+
+.doctolib-btn-confirm:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+}
+
+.doctolib-btn-confirm:active {
+  transform: translateY(0);
+}
+
+.doctolib-btn-confirm.confirmed {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid #10b981;
+  cursor: default;
+  box-shadow: none;
+}
+
+.doctolib-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border-radius: 12px;
+  background: var(--surface-3, rgba(255, 255, 255, 0.06));
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.12));
+  color: var(--ink, #f8fafc);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-height: 44px;
+  text-decoration: none;
+}
+
+.doctolib-btn-secondary:hover {
+  background: var(--surface-2, rgba(255, 255, 255, 0.12));
+  border-color: var(--teal, #0d9488);
+}
+
+.doctolib-btn-cancel-link {
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.25);
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.doctolib-btn-cancel-link:hover {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: #ef4444;
+}
+
+/* Reminder Preferences Modal & Chips */
+.doctolib-preferences-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(6px);
+  z-index: 10000;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.doctolib-preferences-modal.active {
+  display: flex;
+}
+
+.doctolib-preferences-box {
+  background: var(--surface-1, #1e293b);
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.12));
+  border-radius: 20px;
+  max-width: 520px;
+  width: 100%;
+  padding: 24px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+  position: relative;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.doctolib-channel-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 16px 0;
+}
+
+@media (max-width: 500px) {
+  .doctolib-channel-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.doctolib-channel-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.12));
+  background: var(--surface-2, rgba(255, 255, 255, 0.04));
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.doctolib-channel-chip:hover {
+  border-color: var(--teal, #0d9488);
+}
+
+.doctolib-channel-chip.active {
+  border-color: #0d9488;
+  background: rgba(13, 148, 136, 0.1);
+}
+
+.doctolib-channel-chip input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--teal, #0d9488);
+  cursor: pointer;
+}
+
+/* Doctor Schedule Confirmation Badges */
+.doctolib-patient-confirmed-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  font-size: 11px;
+  font-weight: 700;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.doctolib-patient-unconfirmed-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  font-size: 11px;
+  font-weight: 700;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.doctolib-nudge-btn {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 1px solid rgba(13, 148, 136, 0.4);
+  background: rgba(13, 148, 136, 0.1);
+  color: var(--teal, #0d9488);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.doctolib-nudge-btn:hover {
+  background: #0d9488;
+  color: #ffffff;
+}
+
 

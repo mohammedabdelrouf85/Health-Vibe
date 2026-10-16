@@ -70,7 +70,14 @@ const EVENT_TYPES = Object.freeze({
   RECIPROCAL_NOTIFICATION_DISPATCHED: 'reciprocal_notification_dispatched',
   ONE_CLICK_REBOOK_CLICKED: 'one_click_rebook_clicked',
   ONE_CLICK_REBOOK_SUCCESS: 'one_click_rebook_success',
-  CALENDAR_ICS_DOWNLOADED: 'calendar_ics_downloaded'
+  CALENDAR_ICS_DOWNLOADED: 'calendar_ics_downloaded',
+
+  // ⏰ Doctolib Automated No-Show Reminders & Attendance Confirmation Telemetry
+  NO_SHOW_REMINDER_SCHEDULED: 'no_show_reminder_scheduled',
+  NO_SHOW_REMINDER_SENT: 'no_show_reminder_sent',
+  APPOINTMENT_ATTENDANCE_CONFIRMED: 'appointment_attendance_confirmed',
+  APPOINTMENT_ATTENDANCE_CONFIRMATION_ATTEMPT: 'appointment_attendance_confirmation_attempt',
+  REMINDER_PREFERENCES_UPDATED: 'reminder_preferences_updated'
 });
 
 const FORBIDDEN_MEDICAL_KEYS = Object.freeze([

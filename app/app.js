@@ -12880,6 +12880,15 @@ async function renderPatientAppointmentsList() {
             <span class="${statusPillClass}">${statusLabel}</span>
             <span class="${typePillClass}">${typeIcon} ${appt.typeLabel || appt.type}</span>
             <span class="pill" style="background:var(--surface-3); color:var(--ink); font-size:11px;">⏰ ${appt.dateLabel || appt.date} - ${appt.timeSlot}</span>
+            ${appt.attendanceConfirmed ? `
+              <span class="doctolib-patient-confirmed-badge">
+                ✓ ${isEn ? "Attendance Confirmed" : "حضور مؤكد"}
+              </span>
+            ` : (canModify ? `
+              <span class="doctolib-patient-unconfirmed-badge">
+                ⏳ ${isEn ? "Awaiting Confirmation" : "بانتظار التأكيد"}
+              </span>
+            ` : "")}
           </div>
           <strong style="display: block; font-size: 15px; color: var(--ink); margin-bottom: 2px;">
             ${appt.doctorName}
@@ -12908,6 +12917,11 @@ async function renderPatientAppointmentsList() {
         </div>
         <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px;">
           ${canModify ? `
+            ${!appt.attendanceConfirmed ? `
+              <button type="button" class="solid-button" style="padding: 6px 14px; font-size: 12px; background: #10b981;" onclick="confirmAppointmentAttendance('${appt.id}')">
+                ✓ ${isEn ? "Confirm Attendance" : "تأكيد الحضور"}
+              </button>
+            ` : ""}
             ${appt.type === "video" ? `
               <button type="button" class="solid-button" style="padding: 6px 12px; font-size: 12px;" onclick="joinAppointmentVideo('${appt.id}')">
                 📹 ${isEn ? "Join Video Call" : "انضمام للاستشارة"}
@@ -12926,6 +12940,9 @@ async function renderPatientAppointmentsList() {
             <button type="button" class="outline-button" style="padding: 6px 10px; font-size: 12px;" onclick="downloadAppointmentIcs('${appt.id}')" title="${isEn ? "Add to Calendar (.ics)" : "إضافة للتقويم (.ics)"}">
               📅 ${isEn ? "Calendar" : "التقويم"}
             </button>
+            <button type="button" class="outline-button" style="padding: 6px 10px; font-size: 12px;" onclick="openReminderPreferencesModal('${appt.id}')" title="${isEn ? "Reminder Preferences" : "تفضيلات التذكير"}">
+              🔔
+            </button>
           ` : `
             <span style="font-size: 12px; color: var(--muted);">${isCancelled ? (isEn ? "Booking Cancelled" : "تم إلغاء الحجز") : (isCompleted ? (isEn ? "Consultation Completed" : "اكتملت الاستشارة") : (isEn ? "Past Consultation" : "استشارة سابقة"))}</span>
           `}
@@ -12936,6 +12953,12 @@ async function renderPatientAppointmentsList() {
 
   let html = "";
   if (upcoming.length > 0) {
+    const primaryAppt = upcoming[0];
+    const apptUi = window.AppointmentsUI || (window.HealthVibes && window.HealthVibes.AppointmentsUI);
+    if (apptUi && typeof apptUi.renderReminderHero === "function") {
+      html += apptUi.renderReminderHero(primaryAppt, { isEn });
+    }
+
     html += `
       <div style="margin-bottom: 16px;">
         <h4 style="font-size: 14px; margin-bottom: 10px; color: var(--brand-accent, #3b82f6); display: flex; align-items: center; gap: 6px;">
@@ -13129,6 +13152,79 @@ function showClinicDirections(apptId) {
     ? "Clinic location: Specialized Respiratory Center, Medical District, Clinic 402."
     : "عنوان العيادة: مجمع العيادات التخصصية - مبنى الرعاية الصدرية والتنفسية، عيادة 402.");
 }
+
+async function confirmAppointmentAttendance(apptId) {
+  const isEn = currentLanguage === "en";
+  if (confirmAppointmentAttendance._pending && confirmAppointmentAttendance._pending[apptId]) return;
+  confirmAppointmentAttendance._pending = confirmAppointmentAttendance._pending || {};
+  confirmAppointmentAttendance._pending[apptId] = true;
+
+  try {
+    const heroBtn = document.getElementById("btnConfirmAttendanceHero");
+    if (heroBtn) {
+      heroBtn.disabled = true;
+      heroBtn.textContent = isEn ? "Confirming..." : "جارٍ التأكيد...";
+    }
+
+    await requireSuccessfulMutation(`/api/appointments/${apptId}/confirm-attendance`, {
+      method: "POST",
+      body: JSON.stringify({ appointmentId: apptId })
+    }, data => data.success === true);
+
+    showToast(isEn ? "✓ Attendance confirmed! We look forward to seeing you." : "✓ تم تأكيد حضورك بنجاح! ننتظر زيارتك في الموعد المحدد.");
+
+    // Update in-memory cached appointments
+    if (window._lastRenderedAppointments) {
+      const match = window._lastRenderedAppointments.find(a => a.id === apptId);
+      if (match) {
+        match.attendanceConfirmed = true;
+        match.attendanceConfirmedAt = new Date().toISOString();
+      }
+    }
+
+    await renderPatientAppointmentsList();
+    if (typeof updatePatientDashboardNextAppt === "function") {
+      updatePatientDashboardNextAppt();
+    }
+  } catch (err) {
+    console.error("Attendance confirmation error:", err);
+    showToast(isEn ? "Failed to confirm attendance: " + err.message : "تعذر تأكيد الحضور: " + err.message);
+  } finally {
+    if (confirmAppointmentAttendance._pending) confirmAppointmentAttendance._pending[apptId] = false;
+  }
+}
+window.confirmAppointmentAttendance = confirmAppointmentAttendance;
+
+async function testSendAppointmentReminder(apptId) {
+  const isEn = currentLanguage === "en";
+  try {
+    showToast(isEn ? "Dispatching multi-channel test reminder..." : "جارٍ إرسال التذكير التجريبي عبر القنوات المحددة...");
+    const res = await fetch(`/api/appointments/${apptId}/send-reminder`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ window: "24h", channels: ["in_app", "email", "sms", "whatsapp"] }),
+      credentials: "same-origin"
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast(isEn ? "✓ Test reminder sent successfully via In-App, Email, SMS & WhatsApp!" : "✓ تم إرسال التذكير بنجاح عبر التطبيق والبريد وSMS والواتساب!");
+    } else {
+      throw new Error(data.error || "Failed");
+    }
+  } catch (e) {
+    showToast(isEn ? "Could not send test reminder: " + e.message : "تعذر إرسال التذكير التجريبي: " + e.message);
+  }
+}
+window.testSendAppointmentReminder = testSendAppointmentReminder;
+
+function openReminderPreferencesModal(apptId) {
+  const apptUi = window.AppointmentsUI || (window.HealthVibes && window.HealthVibes.AppointmentsUI);
+  if (apptUi && typeof apptUi.openReminderPreferencesModal === "function") {
+    apptUi.openReminderPreferencesModal(apptId);
+  }
+}
+window.openReminderPreferencesModal = openReminderPreferencesModal;
+
 
 async function updatePatientDashboardNextAppt() {
   const nextApptEl = document.getElementById("patientNextAppt");
