@@ -629,6 +629,9 @@
       </div>
 
       <section id="screen-patient" class="screen active">
+        <!-- One Medical Model: Assigned Attending Physician Widget -->
+        <div id="patientAssignedDoctorCard" style="display: none; margin-bottom: 16px;"></div>
+
         <!-- Incomplete Medical Profile Reminder Banner -->
         <div id="patientIncompleteProfileBanner" style="display: none; background: rgba(245, 158, 11, 0.08); border: 1px solid #f59e0b; border-radius: 12px; padding: 12px 18px; margin-bottom: 16px; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
           <div style="display: flex; align-items: center; gap: 12px; max-width: 680px;">
@@ -1229,7 +1232,9 @@
                       <label for="cmpDoctorSelect" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;">الطبيب المشرف / المعتمد</label>
                       <select id="cmpDoctorSelect" style="width: 100%; box-sizing: border-box; height: 40px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 6px 10px;" onchange="handleCmpDoctorSelectChange()">
                         <option value="dr-tarek-mahmoud">🩺 د. طارق محمود (استشاري الأمراض الصدرية والباطنة - نقابة #44821)</option>
-                        <option value="clinic-assigned">🏥 تعيين تلقائي لطبيب معتمد حسب التخصص</option>
+                        <option value="dr-mona-sami">🩺 د. منى سامي (استشاري الأمراض الصدرية والعناية المركزة - نقابة #20491)</option>
+                        <option value="dr-ahmed-khalil">🩺 د. أحمد خليل (أخصائي أمراض الصدر والحساسية المناعية - نقابة #38910)</option>
+                        <option value="auto-workload-balanced">⚖️ توزيع تلقائي عادل على أطباء الصدر المتاحين (One Medical Model)</option>
                         <option value="external">✍️ إدخال اسم طبيبي الخاص</option>
                       </select>
                       <input type="text" id="cmpDoctorCustomName" placeholder="اكتب اسم طبيبك المعالج" style="display: none; width: 100%; box-sizing: border-box; height: 38px; border-radius: 8px; border: 1px solid var(--line); padding: 6px 12px; margin-top: 6px;">
@@ -4812,6 +4817,7 @@
   <script defer src="./modules/auth/auth-ui.js?v=5.3"></script>
   <script defer src="./modules/patient/patient-service.js?v=5.3"></script>
   <script defer src="./modules/patient/patient-ui.js?v=5.3"></script>
+  <script defer src="./modules/patient/doctor-assignment-client.js?v=5.3"></script>
   <script defer src="./modules/patient/blood-disorders-ui.js?v=5.3"></script>
   <script defer src="./modules/patient/obesity-ui.js?v=5.3"></script>
   <script defer src="./modules/assessment/assessment-validation.js?v=5.3"></script>

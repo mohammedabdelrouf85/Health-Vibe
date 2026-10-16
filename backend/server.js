@@ -89,6 +89,7 @@ const { passwordSecurityService } = require('./password-security-service');
 const { medicalCatalogService } = require('./medical-catalog-service');
 const { caseWorkflowService } = require('./case-workflow-service');
 const { externalApiGateway, SERVICE_DOMAINS, CIRCUIT_STATE, PROVIDER_TIER } = require('./external-api-gateway');
+const { DoctorAssignmentService } = require('./doctor-assignment-service');
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -1488,6 +1489,14 @@ if (!admin.apps.length) {
 const db = admin.apps.length ? admin.firestore() : null;
 if (db) feedbackSupportService.setDb(db);
 if (db) operationalSwitchesService.init(db).catch(() => {});
+
+// Initialize Doctor Assignment & Workload Balancing Service (One Medical Model)
+const doctorAssignmentService = new DoctorAssignmentService({
+  db,
+  relationalDb: relationalDbService,
+  auditLogger: auditService
+});
+app.doctorAssignmentService = doctorAssignmentService;
 let backupStorageBucket = null;
 if (admin.apps.length && typeof admin.storage === 'function') {
   try {
@@ -3148,6 +3157,167 @@ app.post('/api/patient/medical-profile/correct', requireAuth, patientProfileLimi
   } catch (err) {
     console.error('[PATIENT PROFILE CORRECTION ERROR]:', err);
     res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to correct patient medical profile.' });
+  }
+});
+
+// =============================================================================
+// 🩺 DOCTOR ASSIGNMENT & WORKLOAD BALANCING ENDPOINTS (One Medical Benchmark)
+// =============================================================================
+
+/**
+ * GET /api/doctors/available-pulmonologists
+ * Returns verified pulmonologists eligible for patient assignment
+ */
+app.get('/api/doctors/available-pulmonologists', requireAuth, async (req, res) => {
+  try {
+    const specialty = req.query.specialty || 'pulmonology';
+    const clinicId = req.query.clinicId || null;
+    const doctors = await doctorAssignmentService.getAvailableVerifiedPulmonologists({ specialty, clinicId });
+    res.json({
+      success: true,
+      count: doctors.length,
+      doctors
+    });
+  } catch (err) {
+    console.error('[DOCTOR ASSIGNMENT AVAILABLE ERROR]:', err);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to retrieve available pulmonologists.' });
+  }
+});
+
+/**
+ * POST /api/patient/assign-doctor
+ * Assigns an attending pulmonologist (Mode A: Patient Choice or Mode B: Auto Workload-Balanced)
+ */
+app.post('/api/patient/assign-doctor', requireAuth, patientProfileLimiter, async (req, res) => {
+  try {
+    const { doctorId, mode = 'auto', reason, patientId: targetPatientId } = req.body || {};
+    let patientUid = req.user.uid;
+
+    if (targetPatientId && targetPatientId !== req.user.uid) {
+      const userRole = getTrustedClaimRole(req.user);
+      if (NON_CLINICAL_ADMIN_ROLES.includes(userRole)) {
+        return res.status(403).json({
+          error: 'LEAST_PRIVILEGE_RESTRICTION',
+          message: 'Zero-Trust: Administrative sub-roles cannot modify doctor assignments.'
+        });
+      }
+      const isClinicianOrAdmin = ADMIN_ROLES.includes(userRole) || userRole === ROLES.DOCTOR_VERIFIED || hasTrustedOwnerClaim(req.user);
+      if (!isClinicianOrAdmin) {
+        return res.status(403).json({
+          error: 'FORBIDDEN',
+          message: 'Assigning doctors to other patients requires clinician or admin privileges.'
+        });
+      }
+      patientUid = targetPatientId;
+    }
+
+    const assignment = await doctorAssignmentService.assignDoctorToPatient({
+      patientId: patientUid,
+      doctorId,
+      mode,
+      assignedBy: req.user.role || 'patient',
+      actorUid: req.user.uid,
+      reason
+    });
+
+    res.json({
+      success: true,
+      message: assignment.assignmentMode === 'patient_choice'
+        ? 'تم ربط الطبيب المختار بنجاح.'
+        : 'تم التوزيع التلقائي العادل وربط طبيب صدر معتمد متاح.',
+      assignment
+    });
+  } catch (err) {
+    console.error('[DOCTOR ASSIGNMENT ERROR]:', err);
+    if (err.code === 'DOCTOR_NOT_VERIFIED' || err.code === 'DOCTOR_LICENSE_INACTIVE' || err.code === 'NO_VERIFIED_DOCTORS_AVAILABLE') {
+      return res.status(400).json({ error: err.code, message: err.message });
+    }
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message || 'Failed to complete doctor assignment.' });
+  }
+});
+
+/**
+ * GET /api/patient/assigned-doctor
+ * Retrieves assigned attending physician for patient
+ */
+app.get('/api/patient/assigned-doctor', requireAuth, async (req, res) => {
+  try {
+    let targetUid = req.user.uid;
+    const requestedUid = req.query.patientId || req.query.uid;
+
+    if (requestedUid && requestedUid !== req.user.uid) {
+      const userRole = getTrustedClaimRole(req.user);
+      const isClinicianOrAdmin = ADMIN_ROLES.includes(userRole) || userRole === ROLES.DOCTOR_VERIFIED || hasTrustedOwnerClaim(req.user);
+      if (!isClinicianOrAdmin) {
+        return res.status(403).json({
+          error: 'FORBIDDEN',
+          message: 'Viewing doctor assignment of another patient requires clinician or admin credentials.'
+        });
+      }
+      targetUid = requestedUid;
+    }
+
+    const attendingPhysician = await doctorAssignmentService.getPatientAssignedDoctor(targetUid);
+    if (!attendingPhysician) {
+      return res.json({
+        success: true,
+        assigned: false,
+        attendingPhysician: null
+      });
+    }
+
+    res.json({
+      success: true,
+      assigned: true,
+      attendingPhysician
+    });
+  } catch (err) {
+    console.error('[GET ASSIGNED DOCTOR ERROR]:', err);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to retrieve assigned doctor.' });
+  }
+});
+
+/**
+ * POST /api/patient/reassign-doctor
+ * Reassigns attending physician with audit trail
+ */
+app.post('/api/patient/reassign-doctor', requireAuth, patientProfileLimiter, async (req, res) => {
+  try {
+    const { newDoctorId, reason, patientId: targetPatientId } = req.body || {};
+    let patientUid = req.user.uid;
+
+    if (!newDoctorId) {
+      return res.status(400).json({ error: 'NEW_DOCTOR_ID_REQUIRED', message: 'newDoctorId is required for reassignment.' });
+    }
+
+    if (targetPatientId && targetPatientId !== req.user.uid) {
+      const userRole = getTrustedClaimRole(req.user);
+      const isClinicianOrAdmin = ADMIN_ROLES.includes(userRole) || userRole === ROLES.DOCTOR_VERIFIED || hasTrustedOwnerClaim(req.user);
+      if (!isClinicianOrAdmin) {
+        return res.status(403).json({
+          error: 'FORBIDDEN',
+          message: 'Reassigning doctors for another patient requires clinician or admin credentials.'
+        });
+      }
+      patientUid = targetPatientId;
+    }
+
+    const assignment = await doctorAssignmentService.reassignDoctor({
+      patientId: patientUid,
+      newDoctorId,
+      reason,
+      actorUid: req.user.uid,
+      actorRole: req.user.role || 'patient'
+    });
+
+    res.json({
+      success: true,
+      message: 'تمت إعادة تعيين الطبيب المعالج بنجاح.',
+      assignment
+    });
+  } catch (err) {
+    console.error('[REASSIGN DOCTOR ERROR]:', err);
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message || 'Failed to reassign doctor.' });
   }
 });
 

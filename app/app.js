@@ -9962,10 +9962,28 @@ async function handleSaveCompleteMedicalProfile() {
   }
 
   let doctorName = "د. طارق محمود (استشاري الأمراض الصدرية والباطنة)";
-  if (doctorSelect && doctorSelect.value === "external") {
-    doctorName = (customDoctor && customDoctor.value.trim()) ? customDoctor.value.trim() : "طبيب خاص";
-  } else if (doctorSelect && doctorSelect.value === "clinic-assigned") {
-    doctorName = "طبيب معتمد من العيادة";
+  let targetDoctorId = "tarek_mahmoud_md";
+  let assignmentMode = "patient_choice";
+
+  if (doctorSelect) {
+    const val = doctorSelect.value;
+    if (val === "auto-workload-balanced" || val === "clinic-assigned") {
+      assignmentMode = "auto";
+      doctorName = "طبيب صدر معتمد (توزيع متوازن)";
+      targetDoctorId = null;
+    } else if (val === "dr-tarek-mahmoud") {
+      targetDoctorId = "tarek_mahmoud_md";
+      doctorName = "د. طارق محمود (استشاري الأمراض الصدرية والباطنة - نقابة #44821)";
+    } else if (val === "dr-mona-sami") {
+      targetDoctorId = "mona_sami_md";
+      doctorName = "د. منى سامي (استشاري أمراض الصدر والعناية المركزة - نقابة #20491)";
+    } else if (val === "dr-ahmed-khalil") {
+      targetDoctorId = "ahmed_khalil_md";
+      doctorName = "د. أحمد خليل (أخصائي أمراض الصدر والحساسية المناعية - نقابة #38910)";
+    } else if (val === "external") {
+      doctorName = (customDoctor && customDoctor.value.trim()) ? customDoctor.value.trim() : "طبيب خاص";
+      targetDoctorId = "external_doctor";
+    }
   }
 
   const clinicId = clinicSelect ? clinicSelect.value : "clinic-pulmo-care";
@@ -9996,11 +10014,31 @@ async function handleSaveCompleteMedicalProfile() {
     clinicLinkage: {
       clinicId: clinicId,
       clinicName: clinicName,
-      linkedDoctorId: doctorSelect?.value === "dr-tarek-mahmoud" ? "tarek_mahmoud_md" : "clinic_assigned_doctor",
-      linkedDoctorName: doctorName
+      linkedDoctorId: targetDoctorId || "clinic_assigned_doctor",
+      linkedDoctorName: doctorName,
+      assignmentMode: assignmentMode
     },
     source: "onboarding_profile_screen"
   };
+
+  // Perform doctor assignment via DoctorAssignment client if available
+  if (window.HealthVibes && window.HealthVibes.DoctorAssignment) {
+    try {
+      const asgn = await window.HealthVibes.DoctorAssignment.assignDoctor({
+        doctorId: targetDoctorId,
+        mode: assignmentMode,
+        patientId: user ? user.uid : null
+      });
+      if (asgn && asgn.doctorName) {
+        doctorName = asgn.doctorName;
+        payload.clinicLinkage.linkedDoctorId = asgn.doctorId;
+        payload.clinicLinkage.linkedDoctorName = asgn.doctorName;
+        payload.clinicLinkage.assignmentMode = asgn.assignmentMode;
+      }
+    } catch (e) {
+      console.warn("Doctor assignment note:", e);
+    }
+  }
 
   // Cache locally
   if (!window._cachedUserDoc) window._cachedUserDoc = {};
@@ -10294,6 +10332,22 @@ async function renderPatientDashboard() {
     } else {
       incompleteBanner.style.display = "none";
     }
+  }
+
+  // Render One Medical Attending Physician Card
+  const assignedDoctorCard = document.getElementById("patientAssignedDoctorCard");
+  if (assignedDoctorCard && window.HealthVibes && window.HealthVibes.DoctorAssignment) {
+    window.HealthVibes.DoctorAssignment.getAssignedDoctor(user?.uid).then((doc) => {
+      if (doc && (doc.doctorName || doc.fullName)) {
+        window.HealthVibes.DoctorAssignment.renderAttendingDoctorBadge(assignedDoctorCard, doc, isEn);
+        assignedDoctorCard.style.display = "block";
+        const docNameDisplay = doc.doctorName || doc.fullName;
+        const docEl = document.getElementById("patientClinicalDoctor");
+        if (docEl && docEl.textContent === "--") docEl.textContent = docNameDisplay;
+      } else {
+        assignedDoctorCard.style.display = "none";
+      }
+    }).catch(() => {});
   }
   document.getElementById("patientAlertsCount").textContent = isEn ? "No live alerts yet" : "لا توجد تنبيهات حية بعد";
   document.getElementById("patientAlertsList").innerHTML = hvStateCard({
