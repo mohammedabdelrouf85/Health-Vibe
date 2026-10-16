@@ -84,6 +84,7 @@ const _inMemoryFamilyStore = new Map();
 const faqService = require('../app/modules/help/faq-service');
 const _inMemoryFaqFeedbackStore = new Map();
 const _inMemoryFaqInquiryStore = [];
+const _inMemoryOnboardingStore = new Map();
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -3241,6 +3242,71 @@ app.post('/api/connection/reconnect-event', (req, res) => {
   } catch (err) {
     console.error('[POST RECONNECT EVENT ERROR]:', err);
     res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to record reconnection event.' });
+  }
+});
+
+/**
+ * GET /api/patient/preferences/onboarding
+ * Checks if patient has seen onboarding walkthrough (مرجع: Ada Health)
+ */
+app.get('/api/patient/preferences/onboarding', requireAuth, (req, res) => {
+  try {
+    const uid = req.user.uid;
+    const hasSeen = _inMemoryOnboardingStore.get(uid) || false;
+    res.json({
+      success: true,
+      hasSeenOnboarding: hasSeen
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to retrieve onboarding preference.' });
+  }
+});
+
+/**
+ * POST /api/patient/preferences/onboarding
+ * Marks onboarding as completed for patient account
+ */
+app.post('/api/patient/preferences/onboarding', requireAuth, (req, res) => {
+  try {
+    const uid = req.user.uid;
+    _inMemoryOnboardingStore.set(uid, true);
+
+    if (auditService && typeof auditService.logSecurityEvent === 'function') {
+      auditService.logSecurityEvent({
+        type: 'PATIENT_ONBOARDING_COMPLETED',
+        actorUid: uid,
+        actorRole: req.user.role || 'patient',
+        targetUserId: uid,
+        outcome: 'SUCCESS',
+        metadata: { completedAt: new Date().toISOString() }
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Onboarding completed and preference saved.',
+      hasSeenOnboarding: true
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to save onboarding preference.' });
+  }
+});
+
+/**
+ * POST /api/patient/preferences/onboarding/reset
+ * Resets onboarding status so patient can replay the walkthrough
+ */
+app.post('/api/patient/preferences/onboarding/reset', requireAuth, (req, res) => {
+  try {
+    const uid = req.user.uid;
+    _inMemoryOnboardingStore.delete(uid);
+    res.json({
+      success: true,
+      message: 'Onboarding reset successfully.',
+      hasSeenOnboarding: false
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to reset onboarding preference.' });
   }
 });
 

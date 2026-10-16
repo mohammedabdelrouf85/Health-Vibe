@@ -335,6 +335,23 @@
         formDisabledTooltip: "النموذج معطل مؤقتاً لعدم وجود اتصال بالإنترنت",
         unreachableServer: "لم نتمكن من الوصول للخادم بعد. سنواصل الفحص تلقائياً بمجرد استقرار الشبكة."
       },
+      onboarding: {
+        stepOf: "الخطوة {step} من {total}",
+        skip: "تخطي الجولة",
+        next: "التالي",
+        back: "السابق",
+        startNow: "ابدأ فحصك الصحي الآن",
+        replayTour: "إعادة الجولة التعريفية",
+        step1Title: "تسجيل الأعراض والمؤشرات الحيوية",
+        step1Subtitle: "فرز ذكي مبدئي قائم على الأدلة السريرية",
+        step1Desc: "أدخل نسبة تشبع الأكسجين (SpO2) والأعراض بدقة. يقوم محرك الذكاء الاصطناعي بفرز البيانات وتجهيز مسودة إرشادية منظمة لدعم القرار الطبي.",
+        step2Title: "مراجعة وتدقيق طبيب بشري مرخص",
+        step2Subtitle: "الذكاء الاصطناعي لا يحل محل الطبيب",
+        step2Desc: "تُحال مسودتك الطبية فوراً إلى طبيب بشري مرخص ومسجل بالنقابة لتدقيق الأعراض، تعديل التوصيات، واعتماد التقرير الطبي بتوقيعه الرقمي.",
+        step3Title: "استلام التقرير الطبي ومشاركته بأمان",
+        step3Subtitle: "سجلات مشفرة برمز تحقق QR ومشاركة عائلية",
+        step3Desc: "احصل على تقريرك المعتمد بصيغة PDF قابلة للتحقق الفوري، مع إمكانية مشاركة رابط آمن مع طبيبك الخاص أو إدارة ملفات والديك وأطفالك من حسابك."
+      },
       consent: {
         title: "الموافقة الطبية وسياسة الخصوصية",
         badgeRequired: "مطلوبة قبل الفحص",
@@ -1373,6 +1390,23 @@
         formGuardNotice: "You are currently offline. Your draft has been safely saved to avoid data loss. Please reconnect before submitting.",
         formDisabledTooltip: "Form submission paused while offline",
         unreachableServer: "Unable to reach the server yet. Will continue monitoring automatically."
+      },
+      onboarding: {
+        stepOf: "Step {step} of {total}",
+        skip: "Skip Tour",
+        next: "Next",
+        back: "Back",
+        startNow: "Start Your Assessment Now",
+        replayTour: "Replay Walkthrough Tour",
+        step1Title: "Record Symptoms & Vital Signs",
+        step1Subtitle: "Evidence-grounded preliminary clinical triage",
+        step1Desc: "Enter your oxygen saturation (SpO2) and symptoms. The clinical AI engine triages your inputs and prepares an indicative structured draft for the doctor.",
+        step2Title: "Licensed Physician Clinical Review",
+        step2Subtitle: "AI never replaces human clinical judgment",
+        step2Desc: "Your clinical assessment is immediately routed to a verified, licensed physician who thoroughly reviews vitals, refines advice, and signs off digitally.",
+        step3Title: "Receive Certified Report & Secure Share",
+        step3Subtitle: "Encrypted records with QR verification and family profiles",
+        step3Desc: "Download your certified PDF report with cryptographic QR verification, share secure expiring links with family, and manage dependent profiles seamlessly."
       },
       consent: {
         title: "Medical Consent & Privacy Policy",

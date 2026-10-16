@@ -1,0 +1,252 @@
+/**
+ * Health Vibe AI - Patient Onboarding Walkthrough Stylesheet (مرجع: Ada Health)
+ * Premium glassmorphic cards, step indicators, and responsive touch controls.
+ */
+
+:root {
+  --onboard-teal: #0d9488;
+  --onboard-teal-dark: #0f766e;
+  --onboard-bg-card: #ffffff;
+  --onboard-border: #e2e8f0;
+  --onboard-text-main: #0f172a;
+  --onboard-text-muted: #64748b;
+}
+
+body.dark-mode, [data-theme="dark"] {
+  --onboard-teal: #14b8a6;
+  --onboard-teal-dark: #2dd4bf;
+  --onboard-bg-card: #1e293b;
+  --onboard-border: #334155;
+  --onboard-text-main: #f8fafc;
+  --onboard-text-muted: #94a3b8;
+}
+
+/* Modal Backdrop */
+.onboarding-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 999990;
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  box-sizing: border-box;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+  contain: content;
+}
+
+.onboarding-backdrop.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Modal Card Dialog */
+.onboarding-dialog {
+  background: var(--onboard-bg-card);
+  border: 1px solid var(--onboard-border);
+  border-radius: 20px;
+  max-width: 520px;
+  width: 100%;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transform: translateY(20px) scale(0.97);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform;
+}
+
+.onboarding-backdrop.is-open .onboarding-dialog {
+  transform: translateY(0) scale(1);
+}
+
+/* Header & Skip Button */
+.onboarding-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 24px 12px 24px;
+}
+
+.onboarding-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(13, 148, 136, 0.12);
+  color: var(--onboard-teal);
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 9999px;
+}
+
+.onboarding-btn-skip {
+  background: none;
+  border: none;
+  color: var(--onboard-text-muted);
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 6px 12px;
+  min-height: 44px;
+  min-width: 44px;
+  border-radius: 8px;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.onboarding-btn-skip:hover {
+  color: var(--onboard-text-main);
+  background: rgba(0, 0, 0, 0.05);
+}
+
+/* Card Body & Carousel Slide */
+.onboarding-body {
+  padding: 12px 24px 20px 24px;
+  text-align: center;
+}
+
+.onboarding-icon-wrapper {
+  width: 76px;
+  height: 76px;
+  margin: 0 auto 16px auto;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(13, 148, 136, 0.1), rgba(13, 148, 136, 0.2));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.2rem;
+  box-shadow: 0 4px 12px rgba(13, 148, 136, 0.15);
+}
+
+.onboarding-card-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--onboard-text-main);
+  margin: 0 0 6px 0;
+  line-height: 1.35;
+}
+
+.onboarding-card-subtitle {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--onboard-teal);
+  margin: 0 0 12px 0;
+}
+
+.onboarding-card-desc {
+  font-size: 0.92rem;
+  color: var(--onboard-text-muted);
+  line-height: 1.6;
+  margin: 0 auto;
+  max-width: 440px;
+}
+
+/* Step Progress Dots */
+.onboarding-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 16px 0 20px 0;
+}
+
+.onboarding-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--onboard-border);
+  transition: all 0.25s ease;
+}
+
+.onboarding-dot.active {
+  width: 26px;
+  border-radius: 9999px;
+  background: var(--onboard-teal);
+}
+
+/* Footer & Action Buttons */
+.onboarding-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px 24px 24px;
+  border-top: 1px solid var(--onboard-border);
+  gap: 12px;
+}
+
+.onboarding-btn {
+  min-height: 48px;
+  padding: 10px 20px;
+  border-radius: 12px;
+  font-family: inherit;
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.15s ease;
+}
+
+.onboarding-btn-prev {
+  background: none;
+  border: 1.5px solid var(--onboard-border);
+  color: var(--onboard-text-main);
+}
+
+.onboarding-btn-prev:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.onboarding-btn-next {
+  background: var(--onboard-teal);
+  color: #ffffff;
+  border: none;
+  flex: 1;
+  box-shadow: 0 4px 12px rgba(13, 148, 136, 0.3);
+}
+
+.onboarding-btn-next:hover {
+  background: var(--onboard-teal-dark);
+}
+
+/* Accessibility: Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  .onboarding-backdrop, .onboarding-dialog, .onboarding-dot {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* Mobile Responsiveness (Bottom Sheet) */
+@media (max-width: 640px) {
+  .onboarding-backdrop {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .onboarding-dialog {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    max-width: 100%;
+    transform: translateY(100%);
+  }
+
+  .onboarding-backdrop.is-open .onboarding-dialog {
+    transform: translateY(0);
+  }
+
+  .onboarding-footer {
+    padding: 14px 18px 22px 18px;
+  }
+
+  .onboarding-btn-next {
+    min-height: 48px;
+  }
+}
