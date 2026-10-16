@@ -880,7 +880,13 @@
         send_reminder_nudge: "إرسال تذكير فوري للمريض",
         no_upcoming_appointment: "لا توجد مواعيد قادمة تتطلب تأكيد الحضور حالياً",
         attendance_success_toast: "تم تأكيد حضورك بنجاح! يسعدنا حضورك في الموعد.",
-        error_confirming: "تعذر تأكيد الحضور. يرجى المحاولة مرة أخرى."
+        error_confirming: "تعذر تأكيد الحضور. يرجى المحاولة مرة أخرى.",
+        reminder_privacy_disclaimer: "تنبيه الخصوصية والأمان الطبي: رسائل التذكير مخصصة للتنسيق الإداري ولا تتضمن أي تفاصيل تشخيصية. جميع القرارات الطبية تخضع حصرياً للطبيب البشري المعالج.",
+        reminder_emergency_alert: "في الحالات الطارئة أو صعوبة التنفس الحادة، اتصل بالإسعاف (123) فوراً.",
+        reminder_physician_primacy_notice: "حصرية دور الطبيب البشري: يمنع الذكاء الاصطناعي من تقديم استشارات طبية أو تعديل جرعات الأدوية عبر رسائل التذكير.",
+        reminder_opt_out_success: "تم إيقاف التذكيرات التلقائية عبر الرسائل بنجاح بناءً على خيارات خصوصيتك.",
+        reminder_sensitive_specialty_masked: "الاستشارات الطبية التخصصية (محمية الخصوصية)",
+        reminder_quiet_hours_notice: "مراعاة أوقات الهدوء: يتم تعليق التذكيرات غير العاجلة تلقائياً بين الساعة 10 مساءً و8 صباحاً."
       },
       doctorSchedule: {
         title: "جدول الطبيب وإدارة الفروع",
@@ -2263,7 +2269,13 @@
         send_reminder_nudge: "Send Immediate Patient Reminder",
         no_upcoming_appointment: "No upcoming appointments requiring attendance confirmation at this time",
         attendance_success_toast: "Attendance confirmed successfully! We look forward to seeing you.",
-        error_confirming: "Could not confirm attendance. Please try again."
+        error_confirming: "Could not confirm attendance. Please try again.",
+        reminder_privacy_disclaimer: "Privacy & Safety Notice: Reminder notifications are administrative only and contain zero diagnostic PHI. All clinical decisions remain strictly under human physician oversight.",
+        reminder_emergency_alert: "In acute medical emergencies or severe dyspnea, call ambulance (123) immediately.",
+        reminder_physician_primacy_notice: "Physician Primacy Guard: Autonomous AI is strictly prohibited from providing clinical advice or altering medications via reminder channels.",
+        reminder_opt_out_success: "Automated message reminders have been paused in accordance with your privacy choices.",
+        reminder_sensitive_specialty_masked: "Specialized Medical Consultations (Privacy Protected)",
+        reminder_quiet_hours_notice: "Quiet Hours Protection: Non-urgent reminders are automatically paused between 10:00 PM and 8:00 AM."
       },
       doctorSchedule: {
         title: "Doctor Schedule & Branch Manager",

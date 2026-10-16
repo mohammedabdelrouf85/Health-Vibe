@@ -1723,6 +1723,9 @@
             ⚡ ${isEn ? "Test Reminder" : "تذكير تجريبي"}
           </button>
         </div>
+        <div class="doctolib-safety-disclaimer" style="margin-top: 14px; padding: 10px 14px; background: rgba(13,148,136,0.06); border: 1px solid rgba(13,148,136,0.18); border-radius: 10px; font-size: 11.5px; color: var(--muted, #64748b); line-height: 1.5;">
+          <span>🛡️ <strong>${isEn ? "Privacy & Clinical Safety:" : "الخصوصية والسلامة الطبية:"}</strong> ${isEn ? "Reminder notifications contain zero diagnostic PHI and are strictly administrative. In acute emergencies, call 123 immediately." : "رسائل التذكير مخصصة للتنسيق الإداري ولا تتضمن أي بيانات تشخيصية. في حالات الطوارئ اتصل بالإسعاف (123) فوراً."}</span>
+        </div>
       </div>
     `;
   }
@@ -1791,6 +1794,10 @@
             <span>⚡ ${isEn ? "2 Hours Prior" : "قبل الموعد بساعتين (2h)"}</span>
             <input type="checkbox" id="prefWindow2h" checked />
           </label>
+        </div>
+
+        <div style="background: rgba(15,23,42,0.04); border-radius: 10px; padding: 10px 12px; margin-top: 16px; font-size: 11.5px; color: var(--muted, #64748b); line-height: 1.5;">
+          <span>🌙 <strong>${isEn ? "Quiet Hours Protection:" : "مراعاة أوقات الهدوء:"}</strong> ${isEn ? "Non-urgent messages are paused between 10:00 PM and 8:00 AM. Medical disclaimers apply to all clinical communications." : "يتم تعليق الإشعارات غير العاجلة تلقائياً بين 10:00 مساءً و8:00 صباحاً. رسائل التذكير لا تحتوي على تشخيصات طبية."}</span>
         </div>
 
         <div style="display: flex; gap: 10px; margin-top: 22px; justify-content: flex-end;">

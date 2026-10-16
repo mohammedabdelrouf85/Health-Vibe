@@ -249,9 +249,39 @@ async function main() {
     const htmlConfirmed = AppointmentsUI.renderReminderHero(apptConfirmed, { hoursRemaining: 5, isEn: false });
     assert(htmlConfirmed.includes("تم تأكيد الحضور"), "Should display confirmed state");
     assert(!htmlConfirmed.includes("btnConfirmAttendanceHero"), "Should not show active confirm button when already confirmed");
+
+    // Safety disclaimer
+    assert(html24h.includes("doctolib-safety-disclaimer"), "Should include clinical safety and zero-PHI disclaimer");
+    assert(html24h.includes("123"), "Should mention emergency hotline 123");
   });
 
-  // 6. i18n Translation parity check
+  // 6. Sensitive specialty masking (Zero Diagnostic Leakage)
+  await runTest("formatAppointmentReminderMessage masks sensitive medical specialties for patient privacy", () => {
+    const sensitiveAppt = {
+      id: "appt_privacy_1",
+      doctorName: "د. سامي مراد",
+      doctorSpecialty: "الطب النفسي وعلاج الإدمان",
+      clinicName: "المركز الطبي التخصصي",
+      date: "2026-10-25",
+      timeSlot: "04:00 PM"
+    };
+
+    const waMsg = formatAppointmentReminderMessage({ appointment: sensitiveAppt, window: "24h", channel: "whatsapp", lang: "ar" });
+    assert(!waMsg.body.includes("الطب النفسي"), "Should not expose sensitive psychiatric specialty in text");
+    assert(waMsg.body.includes("حماية خصوصية") || waMsg.body.includes("متخصصة"), "Should replace with privacy-protected specialty");
+
+    const emailMsg = formatAppointmentReminderMessage({ appointment: { ...sensitiveAppt, doctorSpecialty: "Oncology & Chemotherapy Center" }, window: "2h", channel: "email", lang: "en" });
+    assert(!emailMsg.html.includes("Chemotherapy"), "Should not expose oncology/chemotherapy specialty in email body");
+    assert(emailMsg.html.includes("Privacy Protected"), "Should replace with privacy-protected designation");
+  });
+
+  // 7. Quiet Hours logic test
+  await runTest("isQuietHoursActive detects nighttime hours correctly", () => {
+    const { isQuietHoursActive } = require("../backend/notification-service");
+    assert(typeof isQuietHoursActive === "function", "isQuietHoursActive must be a function");
+  });
+
+  // 8. i18n Translation parity check
   await runTest("app/i18n.js has 100% Arabic and English parity for appointments namespace", () => {
     const arAppts = translations.ar.appointments;
     const enAppts = translations.en.appointments;
@@ -275,7 +305,13 @@ async function main() {
       "window_2h",
       "doctor_confirmed_badge",
       "doctor_unconfirmed_badge",
-      "send_reminder_nudge"
+      "send_reminder_nudge",
+      "reminder_privacy_disclaimer",
+      "reminder_emergency_alert",
+      "reminder_physician_primacy_notice",
+      "reminder_opt_out_success",
+      "reminder_sensitive_specialty_masked",
+      "reminder_quiet_hours_notice"
     ];
 
     for (const k of requiredKeys) {

@@ -1218,7 +1218,12 @@ function formatAppointmentReminderMessage(appointment = {}, options = {}) {
 
   const patientName = appointment.patientName || (isEn ? 'Patient' : 'المريض');
   const docName = appointment.doctorName || (isEn ? 'Specialist Physician' : 'طبيبك المعالج');
-  const docSpecialty = appointment.doctorSpecialty || (isEn ? 'Pulmonology & Respiratory Care' : 'استشاري الأمراض الصدرية والحساسية');
+  const rawSpecialty = appointment.doctorSpecialty || (isEn ? 'Pulmonology & Respiratory Care' : 'استشاري الأمراض الصدرية والحساسية');
+  const sensitiveRegex = /psychiatr|oncolog|urolog|venere|mental|addict|نفسي|أورام|تناسلي|إدمان/i;
+  const isSensitive = options.maskSensitiveSpecialty || sensitiveRegex.test(rawSpecialty);
+  const docSpecialty = isSensitive
+    ? (isEn ? 'Specialized Medical Consultations (Privacy Protected)' : 'استشارات طبية متخصصة (حماية خصوصية)')
+    : rawSpecialty;
   const clinicName = appointment.clinicName || (isEn ? 'Specialized Pulmonary Clinic' : 'مركز الصدر التخصصي');
   const date = appointment.date || (appointment.slotStart ? appointment.slotStart.slice(0, 10) : '');
   const timeSlot = appointment.timeSlot || (appointment.slotStart ? appointment.slotStart.slice(11, 16) : '');
@@ -1483,6 +1488,7 @@ async function scheduleDualWindowAppointmentReminders(db, appointment, options =
 
   return {
     success: true,
+    queued: true,
     remindersScheduled: scheduledReminders.map(r => r.window),
     details: scheduledReminders
   };
@@ -1491,8 +1497,8 @@ async function scheduleDualWindowAppointmentReminders(db, appointment, options =
 /**
  * Schedule an appointment reminder (backward-compatible alias supporting dual windows).
  */
-async function scheduleAppointmentReminder(db, appointment, { hoursBefore = 24, dualWindow = true } = {}) {
-  if (dualWindow) {
+async function scheduleAppointmentReminder(db, appointment, { hoursBefore = 24, dualWindow = false } = {}) {
+  if (dualWindow || appointment?.dualWindow) {
     return scheduleDualWindowAppointmentReminders(db, appointment);
   }
 

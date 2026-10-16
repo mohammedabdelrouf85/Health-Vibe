@@ -1092,10 +1092,266 @@ function validateAppointmentMutationSafety(payload = {}, actorUser = null, opera
   return { valid: true, physicianPrimacyGuaranteed: true };
 }
 
+// ============================================================================
+// 🛡️ AUTOMATED REMINDER SAFETY, PRIVACY & PHYSICIAN PRIMACY (Doctolib Benchmark)
+// ============================================================================
+
+const SENSITIVE_SPECIALTIES = [
+  'psychiatry',
+  'psychology',
+  'mental_health',
+  'addiction',
+  'oncology',
+  'sti',
+  'std',
+  'venereology',
+  'reproductive_health',
+  'andrology',
+  'sexology',
+  'طب نفسي',
+  'علاج إدمان',
+  'أورام',
+  'تناسلية',
+  'أمراض ذكورة',
+  'صحة إنجابية',
+  'تناسلية وعقم'
+];
+
+/**
+ * Masks a phone number to prevent PII exposure in logs and audit trails.
+ * Example: +201012345678 -> +20 10****5678
+ */
+function maskPhoneNumber(phone) {
+  if (!phone || typeof phone !== 'string') return '';
+  const clean = phone.trim();
+  if (clean.length <= 6) return '****';
+  const prefix = clean.slice(0, Math.min(5, Math.floor(clean.length / 2)));
+  const suffix = clean.slice(-4);
+  return `${prefix}****${suffix}`;
+}
+
+/**
+ * Strips all Protected Health Information (PHI), vitals, diagnoses, and sensitive specialties
+ * before any reminder payload is emitted to external channels (SMS, WhatsApp, Push).
+ */
+function sanitizeReminderForPrivacy(payload = {}, options = {}) {
+  if (!payload || typeof payload !== 'object') return { sanitizedPayload: {}, phiRedacted: true };
+
+  const sanitized = { ...payload };
+  const channel = options.channel || 'external';
+
+  // 1. Redact clinical and diagnostic fields completely
+  const clinicalFieldsToStrip = [
+    'diagnosis',
+    'diagnosisEn',
+    'diagnosisAr',
+    'symptoms',
+    'symptomsNotes',
+    'complaint',
+    'chiefComplaint',
+    'notes',
+    'clinicalNotes',
+    'prescription',
+    'medications',
+    'icd10Code',
+    'spo2',
+    'vitalSigns',
+    'bp',
+    'heartRate',
+    'bloodSugar',
+    'labResults',
+    'medicalHistory'
+  ];
+
+  for (const f of clinicalFieldsToStrip) {
+    if (f in sanitized) {
+      delete sanitized[f];
+    }
+  }
+
+  // 2. Sensitive Specialty Neutralization for external notifications (Zero Lock-Screen Stigma)
+  if (sanitized.doctorSpecialty || sanitized.specialty) {
+    const rawSpecialty = String(sanitized.doctorSpecialty || sanitized.specialty).toLowerCase().trim();
+    const isSensitive = SENSITIVE_SPECIALTIES.some(s => rawSpecialty.includes(s.toLowerCase()));
+
+    if (isSensitive && (channel === 'sms' || channel === 'whatsapp' || channel === 'push')) {
+      sanitized.doctorSpecialty = 'الاستشارات الطبية التخصصية';
+      sanitized.doctorSpecialtyEn = 'Specialized Medical Consultations';
+      sanitized.specialty = sanitized.doctorSpecialty;
+      sanitized.specialtyRedactedForPrivacy = true;
+    }
+  }
+
+  // 3. Mask recipient phone and email for audit records
+  if (sanitized.patientPhone || sanitized.phone) {
+    sanitized.maskedPhone = maskPhoneNumber(sanitized.patientPhone || sanitized.phone);
+  }
+
+  // 4. Scrub free text strings (subject, body, preview) of any inadvertent clinical vitals or diagnoses
+  const textKeys = ['body', 'subject', 'title', 'preview', 'text'];
+  for (const k of textKeys) {
+    if (typeof sanitized[k] === 'string') {
+      let t = sanitized[k];
+      t = t.replace(/(?:spo2|oxygen|o2|الأكسجين|نسبة الأكسجين)\s*[:=]?\s*\d+%?/gi, '[REDACTED_VITAL]');
+      t = t.replace(/(?:bp|blood pressure|ضغط الدم)\s*[:=]?\s*\d+\/\d+/gi, '[REDACTED_VITAL]');
+      t = t.replace(/(?:pulse|heart rate|النبض)\s*[:=]?\s*\d+/gi, '[REDACTED_VITAL]');
+      t = t.replace(/(?:diagnosis|تشخيص|الحالة السريرية|العرض|symptoms|أعراض)\s*[:=][^\n]+/gi, '');
+      sanitized[k] = t.trim();
+    }
+  }
+
+  return {
+    sanitizedPayload: sanitized,
+    phiRedacted: true,
+    maskedPhone: sanitized.maskedPhone || ''
+  };
+}
+
+/**
+ * Screens incoming patient messages received via WhatsApp/SMS reminder webhooks.
+ * Enforces:
+ * 1. Acute Emergency Red-Flag detection (escalates immediately to 123 / Emergency Room).
+ * 2. Physician Primacy enforcement: strictly blocks autonomous AI medical diagnosis,
+ *    dosage alteration, or clinical advice, redirecting to the human doctor.
+ * 3. Patient Privacy Opt-Out & Consent processing (STOP / إلغاء الاشتراك).
+ */
+function evaluateReminderInboundMessageSafety(textBody = '', options = {}) {
+  const rawText = String(textBody || '').trim();
+  const lower = rawText.toLowerCase();
+  const lang = options.lang || (/[a-zA-Z]/.test(rawText) && !/[\u0600-\u06FF]/.test(rawText) ? 'en' : 'ar');
+  const doctorTitle = options.doctorName ? `د. ${options.doctorName}` : 'طبيبك المعالج';
+  const doctorTitleEn = options.doctorName ? `Dr. ${options.doctorName}` : 'your treating physician';
+
+  // --------------------------------------------------------------------------
+  // 🚨 STAGE 1: ACUTE EMERGENCY RED-FLAG SCREENING
+  // --------------------------------------------------------------------------
+  const emergencyKeywords = [
+    'ألم في الصدر', 'الم بالصدر', 'وجع شديد في الصدر', 'الم في القلب', 'وجع في القلب',
+    'ضيق تنفس حاد', 'اختناق', 'عجز عن التنفس', 'مش قادر اتنفس', 'نهجان شديد جدا',
+    'زرقة', 'ازرقاق', 'كحة دم', 'سعال مدمم', 'خروج دم مع البلغم',
+    'فقدان الوعي', 'اغماء', 'إغماء', 'تشنجات', 'نزيف حاد', 'نزيف شديد',
+    'chest pain', 'heart attack', 'severe dyspnea', 'cannot breathe', 'hard to breathe',
+    'coughing blood', 'cyanosis', 'blue lips', 'unconscious', 'fainting',
+    'seizure', 'severe bleeding', 'anaphylaxis', 'suffocation'
+  ];
+
+  const matchedEmergency = emergencyKeywords.find(kw => lower.includes(kw));
+  if (matchedEmergency) {
+    const replyMessageAr = `🚨 تنبيه طوارئ طبي حرج: إذا كنت تعاني من أعراض طارئة أو حادة (مثل ألم بالصدر، صعوبة حادة بالتنفس، أو نزيف حاد)، يرجى عدم الانتظار والتوجه فوراً لأقرب قسم طوارئ أو الاتصال بالإسعاف على رقم 123.\n\n⚠️ هذا النظام مخصص للتنسيق الإداري للمواعيد فقط ولا يمكنه تقديم الرعاية الإسعافية أو الاستشارات الطبية الطارئة.`;
+    const replyMessageEn = `🚨 Critical Medical Emergency Alert: If you are experiencing acute or severe symptoms (such as chest pain, severe difficulty breathing, or heavy bleeding), do not wait! Go immediately to the nearest Emergency Room or dial 123 (Ambulance).\n\n⚠️ This automated system is strictly for administrative appointment coordination and cannot provide emergency medical care.`;
+
+    return {
+      isEmergency: true,
+      safetyAction: 'EMERGENCY_TRIAGE_ESCALATED',
+      matchedKeyword: matchedEmergency,
+      emergencyContacts: EMERGENCY_CONTACTS,
+      replyMessage: lang === 'en' ? replyMessageEn : replyMessageAr,
+      replyMessageAr,
+      replyMessageEn
+    };
+  }
+
+  // --------------------------------------------------------------------------
+  // 🩺 STAGE 2: PHYSICIAN PRIMACY & AI MEDICAL ADVICE PROHIBITION
+  // --------------------------------------------------------------------------
+  const clinicalAdviceKeywords = [
+    'دواء', 'جرعة', 'علاج', 'أدوية', 'روشتة', 'أوقف', 'اوقف', 'أتناول', 'اتناول',
+    'أخذ الدواء', 'اخذ العلاج', 'هل طبيعي', 'هل خطير', 'ألم', 'الم', 'وجع', 'سخونية',
+    'حرارة', 'تحليل', 'أشعة', 'اشعة', 'أعراض', 'اعراض', 'تشخيص', 'ضغط الدم', 'سكر',
+    'medicine', 'medication', 'dose', 'dosage', 'prescription', 'symptom', 'pain',
+    'fever', 'is this normal', 'stop taking', 'should i take', 'side effect',
+    'dangerous', 'headache', 'dizziness', 'diagnosis'
+  ];
+
+  const matchedClinical = clinicalAdviceKeywords.find(kw => lower.includes(kw));
+  if (matchedClinical) {
+    const replyMessageAr = `⚠️ تنبيه الأمان الطبي وحصرية دور الطبيب: نظام HealthVibe مخصص للتنسيق الإداري للمواعيد فقط، ومحمي ضد تقديم أي استشارات طبية أو تعديل جرعات الأدوية أو تشخيص الأعراض حفاظاً على سلامتك.\n\nجميع القرارات الطبية والتشخيصية هي مسؤولية حصرية لطبيبك المعالج البشري (${doctorTitle}). يرجى مناقشة استفسارك مباشرة خلال موعدك القادم، أو التواصل مع إدارة العيادة هاتفياً.`;
+    const replyMessageEn = `⚠️ Medical Safety Alert & Physician Primacy: HealthVibe is strictly an administrative appointment coordination system. In adherence to medical safety standards, autonomous AI is strictly prohibited from providing clinical advice, evaluating symptoms, or altering medications.\n\nAll medical evaluations are the exclusive responsibility of your licensed human physician (${doctorTitleEn}). Please contact the clinic directly or discuss your questions during your upcoming consultation.`;
+
+    return {
+      isClinicalInquiry: true,
+      physicianPrimacyEnforced: true,
+      safetyAction: 'CLINICAL_ADVICE_PROHIBITED',
+      matchedKeyword: matchedClinical,
+      doctorName: options.doctorName || null,
+      replyMessage: lang === 'en' ? replyMessageEn : replyMessageAr,
+      replyMessageAr,
+      replyMessageEn
+    };
+  }
+
+  // --------------------------------------------------------------------------
+  // 🔒 STAGE 3: PATIENT PRIVACY OPT-OUT & CONSENT WITHDRAWAL
+  // --------------------------------------------------------------------------
+  const optOutKeywords = [
+    'stop', 'unsubscribe', 'إيقاف', 'ايقاف', 'إلغاء الاشتراك', 'الغاء الاشتراك',
+    'توقف', 'لا ترسل لي', 'cancel reminders', 'quit', 'opt out', 'optout'
+  ];
+
+  const matchedOptOut = optOutKeywords.find(kw => lower === kw || lower.startsWith(kw + ' '));
+  if (matchedOptOut) {
+    const replyMessageAr = `✓ تم استلام طلبك وإيقاف التذكيرات التلقائية عبر الرسائل بنجاح بناءً على خيارات خصوصيتك. يمكنك إعادة تفعيلها دائماً من إعدادات حسابك في التطبيق.`;
+    const replyMessageEn = `✓ Your opt-out request has been processed. Automated message reminders have been paused in accordance with your privacy choices. You can reactivate them anytime from your account settings.`;
+
+    return {
+      isOptOut: true,
+      safetyAction: 'REMINDER_OPT_OUT_REQUESTED',
+      matchedKeyword: matchedOptOut,
+      replyMessage: lang === 'en' ? replyMessageEn : replyMessageAr,
+      replyMessageAr,
+      replyMessageEn
+    };
+  }
+
+  // --------------------------------------------------------------------------
+  // 📅 STAGE 4: ADMINISTRATIVE COORDINATION (PASSTHROUGH)
+  // --------------------------------------------------------------------------
+  return {
+    isSafeAdministrative: true,
+    safetyAction: 'ADMINISTRATIVE_PASSTHROUGH'
+  };
+}
+
+/**
+ * Validates outbound reminder dispatch against Quiet Hours and patient consent policies.
+ * Non-urgent reminders (24h) are deferred during quiet hours (22:00 to 08:00 local time).
+ */
+function validateReminderDispatchSafety(appointment = {}, window = '24h', options = {}) {
+  const now = options.now instanceof Date ? options.now : new Date();
+  const timezoneOffsetHours = typeof options.timezoneOffsetHours === 'number' ? options.timezoneOffsetHours : 2; // Default Egypt (UTC+2)
+  const localHour = (now.getUTCHours() + timezoneOffsetHours + 24) % 24;
+
+  const isQuietHours = localHour >= 22 || localHour < 8;
+  const is24hWindow = window === '24h' || window === 'window_24h';
+
+  // Defer non-urgent 24h reminders during quiet hours to protect patient from sleep disruption
+  const deferredDueToQuietHours = isQuietHours && is24hWindow;
+
+  // Sanitize payload
+  const { sanitizedPayload, phiRedacted, maskedPhone } = sanitizeReminderForPrivacy(appointment, {
+    channel: options.channel || 'external'
+  });
+
+  return {
+    safe: !deferredDueToQuietHours,
+    deferredDueToQuietHours,
+    localHour,
+    isQuietHours,
+    phiRedacted,
+    maskedPhone,
+    sanitizedPayload
+  };
+}
+
 module.exports = {
   STATUTORY_MEDICAL_DISCLAIMER,
   EMERGENCY_CONTACTS,
   EMERGENCY_RED_FLAGS,
+  SENSITIVE_SPECIALTIES,
+  maskPhoneNumber,
+  sanitizeReminderForPrivacy,
+  evaluateReminderInboundMessageSafety,
+  validateReminderDispatchSafety,
   evaluateAppointmentEmergencyRisk,
   enforcePhysicianRoleBoundaries,
   validateAppointmentMutationSafety,

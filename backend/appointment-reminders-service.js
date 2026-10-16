@@ -30,6 +30,8 @@ const notificationService = require('./notification-service');
 const analyticsService = require('./analytics-service');
 const whatsAppBotService = require('./whatsapp-bot');
 const schedulingService = require('./scheduling-service');
+const appointmentSafetyService = require('./appointment-safety-service');
+const auditService = require('./audit-service');
 
 const DEFAULT_SECRET = process.env.REMINDER_TOKEN_SECRET || process.env.JWT_SECRET || 'health_vibe_doctolib_reminder_token_secret_2026';
 
@@ -281,8 +283,13 @@ async function dispatchSingleAppointmentReminder(db, appointment, window, option
   const rescheduleUrl = `${baseUrl}/appointments/${appointment.id}/reschedule?token=${rescheduleToken}`;
   const cancelUrl = `${baseUrl}/appointments/${appointment.id}/cancel?token=${cancelToken}`;
 
+  // Medical Privacy & Zero-PHI Sanitization (Doctolib Benchmark)
+  const { sanitizedPayload: safeAppointment, maskedPhone } = appointmentSafetyService.sanitizeReminderForPrivacy(appointment, {
+    channel: 'external'
+  });
+
   // Get user/clinic preferences
-  const preferences = options.preferences || appointment.reminderPreferences || notificationService.DEFAULT_NOTIFICATION_PREFERENCES;
+  const preferences = options.preferences || appointment.reminderPreferences || appointment.notificationPreferences || notificationService.DEFAULT_NOTIFICATION_PREFERENCES;
   const channels = preferences.channels || { in_app: true, email: true, sms: true, whatsapp: true };
 
   const dispatchResults = {};
@@ -294,7 +301,7 @@ async function dispatchSingleAppointmentReminder(db, appointment, window, option
   if (channels.in_app !== false && patientId) {
     try {
       const inAppMsg = notificationService.formatAppointmentReminderMessage({
-        appointment,
+        appointment: safeAppointment,
         window,
         channel: 'in_app',
         lang,
@@ -333,7 +340,7 @@ async function dispatchSingleAppointmentReminder(db, appointment, window, option
   if (channels.email !== false && recipientEmail) {
     try {
       const emailMsg = notificationService.formatAppointmentReminderMessage({
-        appointment,
+        appointment: safeAppointment,
         window,
         channel: 'email',
         lang,
@@ -369,7 +376,7 @@ async function dispatchSingleAppointmentReminder(db, appointment, window, option
   if (channels.sms !== false && recipientPhone) {
     try {
       const smsMsg = notificationService.formatAppointmentReminderMessage({
-        appointment,
+        appointment: safeAppointment,
         window,
         channel: 'sms',
         lang,
@@ -386,6 +393,7 @@ async function dispatchSingleAppointmentReminder(db, appointment, window, option
         status: 'sent',
         deliveryId: smsDeliveryId,
         recipient: recipientPhone,
+        maskedRecipient: maskedPhone || appointmentSafetyService.maskPhoneNumber(recipientPhone),
         sanitizedBody: sanitizedSmsBody,
         timestamp: nowIso
       };
@@ -398,7 +406,7 @@ async function dispatchSingleAppointmentReminder(db, appointment, window, option
   if (channels.whatsapp !== false && recipientPhone) {
     try {
       const waMsg = notificationService.formatAppointmentReminderMessage({
-        appointment,
+        appointment: safeAppointment,
         window,
         channel: 'whatsapp',
         lang,
@@ -429,6 +437,7 @@ async function dispatchSingleAppointmentReminder(db, appointment, window, option
         status: waRes?.status || 'sent',
         deliveryId: waRes?.deliveryId || `wa_${window}_${Date.now()}`,
         recipient: recipientPhone,
+        maskedRecipient: maskedPhone || appointmentSafetyService.maskPhoneNumber(recipientPhone),
         sanitizedBody: sanitizedWaBody,
         timestamp: nowIso
       };
@@ -557,6 +566,7 @@ async function scanAndDispatchDueReminders(db, options = {}) {
   let dispatched24h = 0;
   let dispatched2h = 0;
   let skippedCount = 0;
+  let skippedQuietHoursCount = 0;
   const dispatchLogs = [];
 
   try {
@@ -586,6 +596,24 @@ async function scanAndDispatchDueReminders(db, options = {}) {
         continue;
       }
 
+      // Safety check: Validate Quiet Hours policy (Doctolib anti-harassment)
+      const safetyCheck = appointmentSafetyService.validateReminderDispatchSafety(appt, eligibility.window, {
+        now,
+        timezoneOffsetHours: options.timezoneOffsetHours || 2
+      });
+
+      if (safetyCheck.deferredDueToQuietHours && !options.overrideQuietHours) {
+        skippedQuietHoursCount++;
+        dispatchLogs.push({
+          appointmentId: appt.id,
+          window: eligibility.window,
+          status: 'deferred',
+          reason: 'QUIET_HOURS_ACTIVE',
+          localHour: safetyCheck.localHour
+        });
+        continue;
+      }
+
       eligibleCount++;
       const result = await dispatchSingleAppointmentReminder(db, appt, eligibility.window, {
         now,
@@ -607,12 +635,14 @@ async function scanAndDispatchDueReminders(db, options = {}) {
       dispatched24h,
       dispatched2h,
       skippedCount,
+      skippedQuietHoursCount,
       summary: {
         totalScanned: scannedCount,
         eligibleCount,
         dispatched24h,
         dispatched2h,
-        skippedCount
+        skippedCount,
+        skippedQuietHoursCount
       },
       dispatchLogs
     };
@@ -672,7 +702,173 @@ async function handleInboundReminderWebhook(db, {
   const cleanPhone = normalizePhoneNumber(fromPhone);
   const trimmed = textBody.trim().toLowerCase();
 
-  // Keyword Matching for Attendance Confirmation
+  // Find the patient's active upcoming appointment first
+  let appointmentsList = [];
+  if (db) {
+    if (typeof db.collection === 'function') {
+      const snap = await db.collection('appointments')
+        .where('status', '==', 'confirmed')
+        .get();
+      appointmentsList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    } else if (db.appointments) {
+      if (db.appointments instanceof Map) {
+        appointmentsList = Array.from(db.appointments.values());
+      } else if (typeof db.appointments === 'object') {
+        appointmentsList = Object.values(db.appointments);
+      }
+    }
+  }
+
+  // Match by normalized phone number
+  const patientAppt = appointmentsList.find(a => {
+    const p = normalizePhoneNumber(a.patientPhone || a.phone);
+    return p === cleanPhone && (a.status === 'confirmed' || a.status === 'booked');
+  });
+
+  const docName = patientAppt?.doctorName || 'طبيبك المعالج';
+  const apptLang = patientAppt?.lang || (/[a-zA-Z]/.test(textBody) && !/[\u0600-\u06FF]/.test(textBody) ? 'en' : 'ar');
+
+  // ============================================================================
+  // 🛡️ SAFETY & PRIVACY SCREENING (Doctolib Benchmark)
+  // 1. Emergency Red-Flag Interception (Chest Pain, Severe Dyspnea, SpO2)
+  // 2. Physician Primacy Guard (Prohibits AI Medical Advice / Dosage Alteration)
+  // 3. Privacy Opt-Out & Consent Withdrawal (STOP / إلغاء الاشتراك)
+  // ============================================================================
+  const safetyEval = appointmentSafetyService.evaluateReminderInboundMessageSafety(textBody, {
+    doctorName: patientAppt?.doctorName,
+    lang: apptLang
+  });
+
+  // 1. Emergency Red-Flag Intercepted
+  if (safetyEval.isEmergency) {
+    try {
+      auditService.recordAuditEvent({
+        type: 'REMINDER_EMERGENCY_INTERCEPTED',
+        action: 'REMINDER_EMERGENCY_INTERCEPTED',
+        actor: { uid: patientAppt?.patientId || 'patient_inbound', role: 'patient' },
+        targetUserId: patientAppt?.patientId || null,
+        clinicId: patientAppt?.clinicId || null,
+        outcome: 'ESCALATED',
+        details: {
+          channel,
+          phoneMasked: appointmentSafetyService.maskPhoneNumber(cleanPhone),
+          matchedKeyword: safetyEval.matchedKeyword,
+          statutoryContacts: safetyEval.emergencyContacts
+        }
+      });
+    } catch (e) {}
+
+    const evList = Array.isArray(db?.telemetryEvents) ? db.telemetryEvents : (Array.isArray(db?._events) ? db._events : null);
+    if (evList) {
+      evList.push({
+        eventType: 'REMINDER_EMERGENCY_INTERCEPTED',
+        appointmentId: patientAppt?.id || null,
+        matchedKeyword: safetyEval.matchedKeyword,
+        channel,
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    return {
+      handled: true,
+      emergency: true,
+      action: 'emergency_intercepted',
+      safetyAction: safetyEval.safetyAction,
+      appointmentId: patientAppt?.id || null,
+      replyMessage: safetyEval.replyMessage
+    };
+  }
+
+  // 2. Physician Primacy & AI Medical Advice Blocked
+  if (safetyEval.isClinicalInquiry) {
+    try {
+      auditService.recordAuditEvent({
+        type: 'REMINDER_AI_MEDICAL_ADVICE_BLOCKED',
+        action: 'REMINDER_AI_MEDICAL_ADVICE_BLOCKED',
+        actor: { uid: patientAppt?.patientId || 'patient_inbound', role: 'patient' },
+        targetUserId: patientAppt?.patientId || null,
+        clinicId: patientAppt?.clinicId || null,
+        outcome: 'BLOCKED',
+        details: {
+          channel,
+          phoneMasked: appointmentSafetyService.maskPhoneNumber(cleanPhone),
+          matchedKeyword: safetyEval.matchedKeyword,
+          doctorName: docName
+        }
+      });
+    } catch (e) {}
+
+    const evList = Array.isArray(db?.telemetryEvents) ? db.telemetryEvents : (Array.isArray(db?._events) ? db._events : null);
+    if (evList) {
+      evList.push({
+        eventType: 'REMINDER_AI_MEDICAL_ADVICE_BLOCKED',
+        appointmentId: patientAppt?.id || null,
+        matchedKeyword: safetyEval.matchedKeyword,
+        channel,
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    return {
+      handled: true,
+      physicianPrimacy: true,
+      action: 'clinical_advice_prohibited',
+      safetyAction: safetyEval.safetyAction,
+      appointmentId: patientAppt?.id || null,
+      replyMessage: safetyEval.replyMessage
+    };
+  }
+
+  // 3. Privacy Opt-Out & Consent Withdrawal
+  if (safetyEval.isOptOut) {
+    if (patientAppt?.patientId && db) {
+      try {
+        if (typeof db.collection === 'function') {
+          await db.collection('users').doc(patientAppt.patientId).set({
+            notificationPreferences: {
+              channels: { sms: false, whatsapp: false }
+            }
+          }, { merge: true });
+        }
+      } catch (e) {}
+    }
+
+    try {
+      auditService.recordAuditEvent({
+        type: 'REMINDER_OPT_OUT_HONORED',
+        action: 'REMINDER_OPT_OUT_HONORED',
+        actor: { uid: patientAppt?.patientId || 'patient_inbound', role: 'patient' },
+        targetUserId: patientAppt?.patientId || null,
+        clinicId: patientAppt?.clinicId || null,
+        outcome: 'SUCCESS',
+        details: {
+          channel,
+          phoneMasked: appointmentSafetyService.maskPhoneNumber(cleanPhone)
+        }
+      });
+    } catch (e) {}
+
+    const evList = Array.isArray(db?.telemetryEvents) ? db.telemetryEvents : (Array.isArray(db?._events) ? db._events : null);
+    if (evList) {
+      evList.push({
+        eventType: 'REMINDER_OPT_OUT_HONORED',
+        appointmentId: patientAppt?.id || null,
+        channel,
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    return {
+      handled: true,
+      optOut: true,
+      action: 'opt_out_honored',
+      safetyAction: safetyEval.safetyAction,
+      appointmentId: patientAppt?.id || null,
+      replyMessage: safetyEval.replyMessage
+    };
+  }
+
+  // Keyword Matching for Attendance Confirmation & Administrative Workflows
   const confirmKeywords = ['1', 'نعم', 'تأكيد', 'تاكيد', 'حاضر', 'سأحضر', 'ساحضر', 'تأكيد الحضور', 'confirm', 'yes', 'attend', 'y'];
   const rescheduleKeywords = ['2', 'تعديل', 'تغيير', 'reschedule'];
   const cancelKeywords = ['3', 'إلغاء', 'الغاء', 'اعتذار', 'cancel'];
@@ -690,40 +886,22 @@ async function handleInboundReminderWebhook(db, {
     return {
       handled: false,
       reason: 'UNRECOGNIZED_INTENT',
-      replyMessage: 'يرجى الرد بـ (1) لتأكيد الحضور، أو (2) لتعديل الموعد، أو (3) للاعتذار عن الموعد.'
+      replyMessage: apptLang === 'en'
+        ? 'Please reply with (1) to confirm attendance, (2) to reschedule, or (3) to politely cancel.'
+        : 'يرجى الرد بـ (1) لتأكيد الحضور، أو (2) لتعديل الموعد، أو (3) للاعتذار عن الموعد.'
     };
   }
-
-  // Find the patient's active upcoming appointment
-  let appointmentsList = [];
-  if (typeof db.collection === 'function') {
-    const snap = await db.collection('appointments')
-      .where('status', '==', 'confirmed')
-      .get();
-    appointmentsList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  } else if (db.appointments) {
-    if (db.appointments instanceof Map) {
-      appointmentsList = Array.from(db.appointments.values());
-    } else if (typeof db.appointments === 'object') {
-      appointmentsList = Object.values(db.appointments);
-    }
-  }
-
-  // Match by normalized phone number
-  const patientAppt = appointmentsList.find(a => {
-    const p = normalizePhoneNumber(a.patientPhone || a.phone);
-    return p === cleanPhone && a.status === 'confirmed';
-  });
 
   if (!patientAppt) {
     return {
       handled: false,
       reason: 'NO_ACTIVE_UPCOMING_APPOINTMENT_FOUND',
-      replyMessage: 'لم نتمكن من العثور على موعد طبي نشط مرتبط بهذا الرقم حالياً.'
+      replyMessage: apptLang === 'en'
+        ? 'We could not find an active upcoming appointment linked to this phone number.'
+        : 'لم نتمكن من العثور على موعد طبي نشط مرتبط بهذا الرقم حالياً.'
     };
   }
 
-  const docName = patientAppt.doctorName || 'طبيبك المعالج';
   const apptDate = patientAppt.date || 'اليوم';
   const timeSlot = patientAppt.timeSlot || '';
 
