@@ -106,7 +106,10 @@
       "ruleEngineReviewStatus": "pending-qualified-clinical-and-regulatory-review",
       "ruleScoreValidated": false,
       "confidence": "not-validated-rule-score",
-      "modelVersion": "HealthVibe-AI-v1.0"
+      "modelVersion": "resp_rf_v1.0.2",
+      "model_version": "resp_rf_v1.0.2",
+      "model_run_at": "2026-10-16T12:00:00.000Z",
+      "modelRunAt": "2026-10-16T12:00:00.000Z"
     }
   },
 
@@ -162,7 +165,10 @@
   "ruleScoreValidated": false,
   "confidence": "not-validated-rule-score",
   "reportVersion": "1.0.0",
-  "modelVersion": "HealthVibe-AI-v1.0",
+  "modelVersion": "resp_rf_v1.0.2",
+  "model_version": "resp_rf_v1.0.2",
+  "model_run_at": "2026-10-16T12:00:00.000Z",
+  "modelRunAt": "2026-10-16T12:00:00.000Z",
   "generatedAt": null,
   "approvedAt": null,
 

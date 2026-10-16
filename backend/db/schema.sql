@@ -109,6 +109,8 @@ CREATE TABLE IF NOT EXISTS clinical_cases (
     encryption_iv VARCHAR(32),
     encryption_auth_tag VARCHAR(32),
     encryption_algorithm VARCHAR(32) DEFAULT 'AES-256-GCM',
+    model_version VARCHAR(64) DEFAULT 'resp_rf_v1.0.2',
+    model_run_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT chk_case_approved_requires_verified_doctor_signature CHECK (
@@ -124,6 +126,7 @@ CREATE TABLE IF NOT EXISTS clinical_cases (
 CREATE INDEX IF NOT EXISTS idx_cases_patient_id ON clinical_cases(patient_id);
 CREATE INDEX IF NOT EXISTS idx_cases_doctor_id ON clinical_cases(assigned_doctor_id);
 CREATE INDEX IF NOT EXISTS idx_cases_approval_status ON clinical_cases(approval_status);
+CREATE INDEX IF NOT EXISTS idx_cases_model_version ON clinical_cases(model_version);
 
 -- -----------------------------------------------------------------------------
 -- 5. PATIENT HISTORY & LONGITUDINAL MEDICAL TIMELINE (PRD Section 9 & 13.1)

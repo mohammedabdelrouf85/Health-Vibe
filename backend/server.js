@@ -1364,7 +1364,7 @@ function isTrustedOwnerEmail(email) {
 }
 
 const REPORT_VERSION = '1.0.0';
-const MODEL_VERSION = 'HealthVibe-AI-v1.0';
+const MODEL_VERSION = 'resp_rf_v1.0.2';
 const ROLES = {
   PATIENT: 'patient',
   DOCTOR_PENDING: 'doctor_pending',
@@ -6652,14 +6652,17 @@ function buildApprovedReportSnapshot({ caseId, caseData, updateData, doctorIdent
     },
     versions: {
       reportVersion: REPORT_VERSION,
-      modelVersion: MODEL_VERSION,
+      modelVersion: caseData.modelVersion || caseData.model_version || MODEL_VERSION,
+      model_version: caseData.model_version || caseData.modelVersion || MODEL_VERSION,
       ruleEngineVersion: caseData.assessment?.aiTriage?.ruleEngineVersion || caseData.ruleEngineVersion || null
     },
     dates: {
       submittedAt: caseSnapshot.submittedAt,
       approvedAt: approvedAtIso,
       generatedAt: approvedAtIso,
-      snapshotCreatedAt: approvedAtIso
+      snapshotCreatedAt: approvedAtIso,
+      modelRunAt: caseData.modelRunAt || caseData.model_run_at || caseData.assessment?.aiTriage?.modelRunAt || caseData.assessment?.aiTriage?.model_run_at || approvedAtIso,
+      model_run_at: caseData.model_run_at || caseData.modelRunAt || caseData.assessment?.aiTriage?.model_run_at || caseData.assessment?.aiTriage?.modelRunAt || approvedAtIso
     },
     withdrawal: {
       status: 'active',
@@ -7053,9 +7056,11 @@ async function executeDoctorTransition({
             updateData.reportRef = reportRef || `HV-REP-${caseId.slice(-8).toUpperCase()}`;
             updateData.reportGeneratedAt = reportGeneratedAt || nowIso;
             updateData.approvedAt = admin.firestore.FieldValue.serverTimestamp();
-            updateData.generatedAt = admin.firestore.FieldValue.serverTimestamp();
             updateData.reportVersion = REPORT_VERSION;
-            updateData.modelVersion = MODEL_VERSION;
+            updateData.modelVersion = caseData.modelVersion || caseData.model_version || MODEL_VERSION;
+            updateData.model_version = caseData.model_version || caseData.modelVersion || MODEL_VERSION;
+            updateData.modelRunAt = caseData.modelRunAt || caseData.model_run_at || caseData.assessment?.aiTriage?.modelRunAt || caseData.assessment?.aiTriage?.model_run_at || nowIso;
+            updateData.model_run_at = caseData.model_run_at || caseData.modelRunAt || caseData.assessment?.aiTriage?.model_run_at || caseData.assessment?.aiTriage?.modelRunAt || nowIso;
             updateData.clinicalDiagnosis = typeof clinicalDiagnosis === 'string' ? clinicalDiagnosis.trim() : '';
             updateData.doctorNote = normalizedClinicalNotes;
             updateData.clinicalNotes = normalizedClinicalNotes;
