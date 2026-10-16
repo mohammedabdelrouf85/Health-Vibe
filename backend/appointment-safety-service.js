@@ -62,7 +62,7 @@ const EMERGENCY_RED_FLAGS = [
     nameAr: 'زرقة الشفاه أو أطراف الأصابع (Cyanosis)',
     nameEn: 'Cyanosis (Blue lips or fingernails)',
     tier: 'CRITICAL_EMERGENCY',
-    keywordsAr: ['زرقة الشفاه', 'زرقة في الوجه', 'أطراف زرقاء', 'الشفايف زرقاء', 'ازرقاق'],
+    keywordsAr: ['زرقة الشفاه', 'زرقة في الشفاه', 'زرقة بالشفاه', 'زرقة في الوجه', 'أطراف زرقاء', 'الشفايف زرقاء', 'ازرقاق', 'ازرقاق بالشفاه', 'زرقة'],
     keywordsEn: ['cyanosis', 'blue lips', 'blue fingers', 'bluish skin']
   },
   {

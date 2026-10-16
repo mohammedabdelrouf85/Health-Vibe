@@ -236,6 +236,14 @@ async function runTests() {
     role: 'patient'
   };
 
+  // Register dependent in user profile for security beneficiary check
+  await db.collection('users').doc('patient_alpha').set({
+    uid: 'patient_alpha',
+    familyMembers: [
+      { id: 'dep_son_01', fullName: 'عمر (الابن)', relationship: 'son' }
+    ]
+  });
+
   const bookedAppt = await schedulingService.bookAppointmentTransaction(db, bookingPayload, patientAuth);
 
   assert.strictEqual(bookedAppt.status, 'confirmed', "Appointment status must be confirmed");

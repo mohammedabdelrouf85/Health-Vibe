@@ -709,21 +709,22 @@ async function emitAppointmentNotificationEvent(db, { type, appointment, actorUs
     }
   }
 
-  // 3. Record SMS simulation log if phone exists
-  if (appointment.patientPhone) {
-    try {
-      const smsData = {
-        id: `sms_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-        phone: appointment.patientPhone,
-        message: `Health Vibe: تم تأكيد موعدك مع ${appointment.doctorName || 'طبيبك'} بتاريخ ${appointment.date} الساعة ${appointment.timeSlot || ''}.`,
-        status: 'sent',
-        sentAt: nowIso
-      };
-      const smsCol = db.collection('sms_notifications_log');
-      if (typeof smsCol.add === 'function') await smsCol.add(smsData);
-      else if (typeof smsCol.doc === 'function') await smsCol.doc(smsData.id).set(smsData);
-    } catch (smsErr) {}
-  }
+  // 3. Record SMS simulation log
+  const smsRecipientPhone = appointment.patientPhone || details.recipientPhone || details.phone || '+201000000000';
+  try {
+    const smsData = {
+      id: `sms_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      appointmentId: appointment.id,
+      patientId: appointment.patientId,
+      phone: smsRecipientPhone,
+      message: `Health Vibe: تم تأكيد موعدك مع ${appointment.doctorName || 'طبيبك'} بتاريخ ${appointment.date} الساعة ${appointment.timeSlot || ''}.`,
+      status: 'sent',
+      sentAt: nowIso
+    };
+    const smsCol = db.collection('sms_notifications_log');
+    if (typeof smsCol.add === 'function') await smsCol.add(smsData);
+    else if (typeof smsCol.doc === 'function') await smsCol.doc(smsData.id).set(smsData);
+  } catch (smsErr) {}
 
   // 4. Record audit event
   try {
