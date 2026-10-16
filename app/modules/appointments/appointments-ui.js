@@ -1637,6 +1637,7 @@
     const hoursTo = typeof options.hoursRemaining === "number"
       ? options.hoursRemaining
       : (typeof options.hoursTo === "number" ? options.hoursTo : calculateHoursToAppointment(appt));
+    if (hoursTo <= 0) return "";
     const isUrgent2h = hoursTo > 0 && hoursTo <= 2.5;
     const isWithin24h = !isUrgent2h && hoursTo > 0 && hoursTo <= 24.5;
 
@@ -1888,6 +1889,23 @@
     }
   }
 
+  /**
+   * Render doctor-facing attendance confirmation status badge
+   * Provides visual indicator for doctor schedule to combat no-shows
+   */
+  function renderDoctorAttendanceBadge(appt = {}, options = {}) {
+    const isEn = typeof options.isEn === "boolean"
+      ? options.isEn
+      : (typeof global.currentLanguage !== "undefined" && global.currentLanguage === "en");
+
+    const isConfirmed = Boolean(appt.attendanceConfirmed || appt.patientConfirmed);
+
+    if (isConfirmed) {
+      return `<span class="doctolib-badge badge-confirmed" style="background: rgba(16, 185, 129, 0.12); color: #059669; border: 1px solid rgba(16, 185, 129, 0.3); padding: 4px 8px; border-radius: 6px; font-size: 11.5px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">✓ ${isEn ? "Patient Confirmed" : "مؤكد من المريض"}</span>`;
+    }
+
+    return `<span class="doctolib-badge badge-pending" style="background: rgba(245, 158, 11, 0.12); color: #d97706; border: 1px solid rgba(245, 158, 11, 0.3); padding: 4px 8px; border-radius: 6px; font-size: 11.5px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">⏳ ${isEn ? "Pending Confirmation (No-Show Risk)" : "بانتظار التأكيد (خطر تغيب)"}</span>`;
+  }
 
   const AppointmentsUI = {
     state,
@@ -1924,7 +1942,8 @@
     calculateHoursToAppointment,
     renderReminderHero,
     openReminderPreferencesModal,
-    closeReminderPreferencesModal
+    closeReminderPreferencesModal,
+    renderDoctorAttendanceBadge
   };
 
   global.HealthVibes = global.HealthVibes || {};

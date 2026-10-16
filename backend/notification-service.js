@@ -1234,15 +1234,16 @@ function formatAppointmentReminderMessage(appointment = {}, options = {}) {
   if (channel === 'sms') {
     const smsText = is2h
       ? (isEn
-        ? `Health-Vibe: ⚡ Urgent: Your medical consultation with Dr. ${docName} is in 2 hours at ${timeSlot}. 1-Click attendance confirm: ${confirmLink} or reschedule: ${rescheduleLink}.`
-        : `Health-Vibe: ⚡ تذكير عاجل: موعد استشارتك مع د. ${docName} بعد ساعتين في (${timeSlot}). لتأكيد حضورك بضغطة زر: ${confirmLink} أو لتعديل الموعد: ${rescheduleLink}.`)
+        ? `Health-Vibe: ⚡ Urgent: Your medical consultation with Dr. ${docName} is in 2 hours at ${timeSlot}. 1-Click attendance confirm: ${confirmLink} or reschedule: ${rescheduleLink}. (Emergency: 123)`
+        : `Health-Vibe: ⚡ تذكير عاجل: موعد استشارتك مع د. ${docName} بعد ساعتين في (${timeSlot}). لتأكيد حضورك بضغطة زر: ${confirmLink} أو لتعديل الموعد: ${rescheduleLink}. (طوارئ: 123)`)
       : (isEn
-        ? `Health-Vibe: ⏰ Reminder: Your appointment with Dr. ${docName} is tomorrow ${date} at ${timeSlot}. Please confirm your attendance now: ${confirmLink} or reschedule: ${rescheduleLink}.`
-        : `Health-Vibe: ⏰ تذكير: موعدك الطبي مع د. ${docName} غداً ${date} في (${timeSlot}). يرجى تأكيد حضورك الآن بضغطة زر: ${confirmLink} أو لتعديل الموعد: ${rescheduleLink}.`);
+        ? `Health-Vibe: ⏰ Reminder: Your appointment with Dr. ${docName} is tomorrow ${date} at ${timeSlot}. Please confirm your attendance now: ${confirmLink} or reschedule: ${rescheduleLink}. (Emergency: 123)`
+        : `Health-Vibe: ⏰ تذكير: موعدك الطبي مع د. ${docName} غداً ${date} في (${timeSlot}). يرجى تأكيد حضورك الآن بضغطة زر: ${confirmLink} أو لتعديل الموعد: ${rescheduleLink}. (طوارئ: 123)`);
 
     return {
       channel: 'sms',
       window: is2h ? '2h' : '24h',
+      lang: isEn ? 'en' : 'ar',
       body: smsText,
       text: smsText,
       confirmLink,
@@ -1255,20 +1256,26 @@ function formatAppointmentReminderMessage(appointment = {}, options = {}) {
   if (channel === 'whatsapp') {
     const waText = is2h
       ? (isEn
-        ? `🩺 *Health-Vibe AI — Urgent Appointment Reminder (2 Hours)*\n\nDear ${patientName},\n⚡ *Your consultation is in 2 hours!*\n\n👨‍⚕️ *Doctor:* Dr. ${docName} (${docSpecialty})\n📅 *Date:* Today, ${date}\n⏰ *Time:* ${timeSlot}\n🏥 *Modality:* ${modalityEn} (${clinicName})\n\nTo secure your reserved slot and assist clinic coordination, please confirm:\n✅ *1-Click Attendance Confirmation:* ${confirmLink}\n_(Or reply to this message with *1* to confirm)_\n\n🔄 *Reschedule:* ${rescheduleLink} _(reply 2)_\n✕ *Polite Cancellation:* ${cancelLink} _(reply 3)_\n\n📍 *Arrival:* Please be ready 10 minutes prior.`
-        : `🩺 *Health-Vibe AI — تذكير عاجل بالموعد الطبي (بعد ساعتين)*\n\nعزيزي المريض / ${patientName}،\n⚡ *موعد استشارتك الطبية بعد ساعتين فقط!*\n\n👨‍⚕️ *الطبيب المعالج:* د. ${docName} (${docSpecialty})\n📅 *التاريخ:* اليوم ${date}\n⏰ *الوقت:* في تمام الساعة ${timeSlot}\n🏥 *النوع والمقر:* ${modalityAr} (${clinicName})\n\nلضمان استمرار الحجز وتفادي إلغائه التلقائي، نرجو تأكيد حضورك:\n✅ *اضغط لتأكيد الحضور فوراً:* ${confirmLink}\n_(أو قم بالرد على هذه الرسالة برقم *1* لإثبات الحضور)_\n\n🔄 *لتعديل الموعد بضغطة زر:* ${rescheduleLink} _(أو أرسل 2)_\n✕ *للاعتذار عن الموعد:* ${cancelLink} _(أو أرسل 3)_\n\n📍 *إرشادات:* يرجى التواجد أو الاتصال قبل الموعد بـ 10 دقائق.`)
+        ? `🩺 *Health-Vibe AI — Urgent Appointment Reminder (2 Hours)*\n\nDear ${patientName},\n⚡ *Your consultation is in 2 hours!*\n\n👨‍⚕️ *Doctor:* Dr. ${docName} (${docSpecialty})\n📅 *Date:* Today, ${date}\n⏰ *Time:* ${timeSlot}\n🏥 *Modality:* ${modalityEn} (${clinicName})\n\nTo secure your reserved slot and assist clinic coordination, please confirm:\n✅ *1-Click Attendance Confirmation:* ${confirmLink}\n_(Or reply to this message with *1* to confirm)_\n\n🔄 *Reschedule:* ${rescheduleLink} _(reply 2)_\n✕ *Polite Cancellation:* ${cancelLink} _(reply 3)_\n\n📍 *Arrival:* Please be ready 10 minutes prior.\n🚨 *Medical Emergencies:* Dial 123`
+        : `🩺 *Health-Vibe AI — تذكير عاجل بالموعد الطبي (بعد ساعتين)*\n\nعزيزي المريض / ${patientName}،\n⚡ *موعد استشارتك الطبية بعد ساعتين فقط!*\n\n👨‍⚕️ *الطبيب المعالج:* د. ${docName} (${docSpecialty})\n📅 *التاريخ:* اليوم ${date}\n⏰ *الوقت:* في تمام الساعة ${timeSlot}\n🏥 *النوع والمقر:* ${modalityAr} (${clinicName})\n\nلضمان استمرار الحجز وتفادي إلغائه التلقائي، نرجو تأكيد حضورك:\n✅ *اضغط لتأكيد الحضور فوراً:* ${confirmLink}\n_(أو قم بالرد على هذه الرسالة برقم *1* لإثبات الحضور)_\n\n🔄 *لتعديل الموعد بضغطة زر:* ${rescheduleLink} _(أو أرسل 2)_\n✕ *للاعتذار عن الموعد:* ${cancelLink} _(أو أرسل 3)_\n\n📍 *إرشادات:* يرجى التواجد أو الاتصال قبل الموعد بـ 10 دقائق.\n🚨 *في حالات الطوارئ الطارئة الحادة:* اتصل فوراً بالإسعاف (123)`)
       : (isEn
-        ? `🩺 *Health-Vibe AI — Appointment Reminder (24 Hours)*\n\nDear ${patientName},\n⏰ *Your consultation is scheduled for tomorrow.*\n\n👨‍⚕️ *Doctor:* Dr. ${docName} (${docSpecialty})\n📅 *Date:* Tomorrow, ${date}\n⏰ *Time:* ${timeSlot}\n🏥 *Modality:* ${modalityEn} (${clinicName})\n\nHelp us reduce no-shows by confirming your attendance:\n✅ *1-Click Attendance Confirmation:* ${confirmLink}\n_(Or reply with *1* to confirm)_\n\n🔄 *Reschedule:* ${rescheduleLink} _(reply 2)_\n✕ *Polite Cancellation:* ${cancelLink} _(reply 3)_\n\nHealth-Vibe Clinical Team`
-        : `🩺 *Health-Vibe AI — تذكير بموعدك الطبي (خلال 24 ساعة)*\n\nعزيزي المريض / ${patientName}،\n⏰ *نذكرك بموعد استشارتك الطبية المقرر غداً.*\n\n👨‍⚕️ *الطبيب المعالج:* د. ${docName} (${docSpecialty})\n📅 *التاريخ:* غداً ${date}\n⏰ *الوقت:* في تمام الساعة ${timeSlot}\n🏥 *النوع والمقر:* ${modalityAr} (${clinicName})\n\nللمساعدة في تنظيم مواعيد العيادة وتقليل فترات الانتظار، يرجى تأكيد حضورك:\n✅ *اضغط لتأكيد الحضور فوراً:* ${confirmLink}\n_(أو قم بالرد برقم *1* لتأكيد الحضور)_\n\n🔄 *لتعديل الموعد بضغطة زر:* ${rescheduleLink} _(أو أرسل 2)_\n✕ *للاعتذار عن الموعد:* ${cancelLink} _(أو أرسل 3)_\n\nفريق الرعاية الطبية — Health-Vibe`);
+        ? `🩺 *Health-Vibe AI — Appointment Reminder (24 Hours)*\n\nDear ${patientName},\n⏰ *Your consultation is scheduled for tomorrow.*\n\n👨‍⚕️ *Doctor:* Dr. ${docName} (${docSpecialty})\n📅 *Date:* Tomorrow, ${date}\n⏰ *Time:* ${timeSlot}\n🏥 *Modality:* ${modalityEn} (${clinicName})\n\nHelp us reduce no-shows by confirming your attendance:\n✅ *1-Click Attendance Confirmation:* ${confirmLink}\n_(Or reply with *1* to confirm)_\n\n🔄 *Reschedule:* ${rescheduleLink} _(reply 2)_\n✕ *Polite Cancellation:* ${cancelLink} _(reply 3)_\n\n🚨 *Medical Emergencies:* Dial 123\nHealth-Vibe Clinical Team`
+        : `🩺 *Health-Vibe AI — تذكير بموعدك الطبي (خلال 24 ساعة)*\n\nعزيزي المريض / ${patientName}،\n⏰ *نذكرك بموعد استشارتك الطبية المقرر غداً.*\n\n👨‍⚕️ *الطبيب المعالج:* د. ${docName} (${docSpecialty})\n📅 *التاريخ:* غداً ${date}\n⏰ *الوقت:* في تمام الساعة ${timeSlot}\n🏥 *النوع والمقر:* ${modalityAr} (${clinicName})\n\nللمساعدة في تنظيم مواعيد العيادة وتقليل فترات الانتظار، يرجى تأكيد حضورك:\n✅ *اضغط لتأكيد الحضور فوراً:* ${confirmLink}\n_(أو قم بالرد برقم *1* لتأكيد الحضور)_\n\n🔄 *لتعديل الموعد بضغطة زر:* ${rescheduleLink} _(أو أرسل 2)_\n✕ *للاعتذار عن الموعد:* ${cancelLink} _(أو أرسل 3)_\n\n🚨 *في حالات الطوارئ الطارئة الحادة:* اتصل بالإسعاف (123)\nفريق الرعاية الطبية — Health-Vibe`);
 
     return {
       channel: 'whatsapp',
       window: is2h ? '2h' : '24h',
+      lang: isEn ? 'en' : 'ar',
       body: waText,
       text: waText,
       confirmLink,
       rescheduleLink,
       cancelLink,
+      interactiveOptions: {
+        '1': 'confirm_attendance',
+        '2': 'reschedule',
+        '3': 'cancel'
+      },
       toString: () => waText
     };
   }
@@ -1280,11 +1287,11 @@ function formatAppointmentReminderMessage(appointment = {}, options = {}) {
 
     const body = isEn
       ? (is2h
-        ? `Your appointment is scheduled today at ${timeSlot} (${modalityEn}). Please confirm your attendance now to eliminate no-show risk.`
-        : `Your appointment is scheduled tomorrow ${date} at ${timeSlot}. Please confirm your attendance to secure your slot.`)
+        ? `Your appointment is scheduled today at ${timeSlot} (${modalityEn}). Please confirm your attendance now to eliminate no-show risk. (Emergency: 123)`
+        : `Your appointment is scheduled tomorrow ${date} at ${timeSlot}. Please confirm your attendance to secure your slot. (Emergency: 123)`)
       : (is2h
-        ? `موعدك الطبي اليوم في تمام ${timeSlot} (${modalityAr}). يرجى تأكيد حضورك الآن بضغطة زر لضمان عدم إلغاء الموعد.`
-        : `موعدك الطبي غداً ${date} في تمام الساعة ${timeSlot}. يرجى تأكيد الحضور الآن لضمان حجزك.`);
+        ? `موعدك الطبي اليوم في تمام ${timeSlot} (${modalityAr}). يرجى تأكيد حضورك الآن بضغطة زر لضمان عدم إلغاء الموعد. (طوارئ: 123)`
+        : `موعدك الطبي غداً ${date} في تمام الساعة ${timeSlot}. يرجى تأكيد الحضور الآن لضمان حجزك. (طوارئ: 123)`);
 
     return {
       channel: 'in_app',
@@ -1292,6 +1299,7 @@ function formatAppointmentReminderMessage(appointment = {}, options = {}) {
       body,
       message: body,
       text: body,
+      lang: isEn ? 'en' : 'ar',
       authorizedDestinationLink: confirmLink,
       confirmLink,
       rescheduleLink,
@@ -1363,6 +1371,7 @@ function formatAppointmentReminderMessage(appointment = {}, options = {}) {
   return {
     channel: 'email',
     window: is2h ? '2h' : '24h',
+    lang: isEn ? 'en' : 'ar',
     subject,
     body: bodyText,
     text: bodyText,
@@ -1677,7 +1686,7 @@ async function sendMultiChannelAppointmentReminder(db, appointment = {}, options
  * Cancel pending reminders for a given appointment (e.g. upon cancellation or reschedule).
  */
 async function cancelAppointmentReminders(db, appointmentId, reason = 'appointment_cancelled') {
-  if (!db || !appointmentId) return { cancelledCount: 0 };
+  if (!db || !appointmentId) return { success: false, cancelledCount: 0 };
 
   const nowIso = new Date().toISOString();
   let cancelledCount = 0;
@@ -1705,7 +1714,7 @@ async function cancelAppointmentReminders(db, appointmentId, reason = 'appointme
     console.warn('[CANCEL REMINDERS WARNING]:', err.message);
   }
 
-  return { cancelledCount };
+  return { success: true, cancelledCount };
 }
 
 /**

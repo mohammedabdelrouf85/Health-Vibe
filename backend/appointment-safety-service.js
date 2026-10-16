@@ -1175,8 +1175,8 @@ function sanitizeReminderForPrivacy(payload = {}, options = {}) {
     const isSensitive = SENSITIVE_SPECIALTIES.some(s => rawSpecialty.includes(s.toLowerCase()));
 
     if (isSensitive && (channel === 'sms' || channel === 'whatsapp' || channel === 'push')) {
-      sanitized.doctorSpecialty = 'الاستشارات الطبية التخصصية';
-      sanitized.doctorSpecialtyEn = 'Specialized Medical Consultations';
+      sanitized.doctorSpecialty = 'استشارات طبية متخصصة (حماية خصوصية)';
+      sanitized.doctorSpecialtyEn = 'Specialized Medical Consultations (Privacy Protected)';
       sanitized.specialty = sanitized.doctorSpecialty;
       sanitized.specialtyRedactedForPrivacy = true;
     }

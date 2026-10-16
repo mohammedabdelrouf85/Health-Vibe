@@ -53,14 +53,26 @@ const activeScanLocks = new Set();
 /**
  * Generates an HMAC-SHA256 signed action token for 1-click confirmation without requiring password login.
  */
-function generateActionToken({
-  appointmentId,
-  action = 'confirm',
-  patientId = '',
-  secret = DEFAULT_SECRET,
-  expiresInHours,
-  expiresInMs = 72 * 3600 * 1000 // 72 hours
-} = {}) {
+function generateActionToken(optsOrApptId, actionArg, optionsArg) {
+  let appointmentId, action, patientId, secret, expiresInHours, expiresInMs;
+  if (typeof optsOrApptId === 'object' && optsOrApptId !== null) {
+    ({
+      appointmentId,
+      action = 'confirm',
+      patientId = '',
+      secret = DEFAULT_SECRET,
+      expiresInHours,
+      expiresInMs = 72 * 3600 * 1000 // 72 hours
+    } = optsOrApptId);
+  } else {
+    appointmentId = optsOrApptId;
+    action = typeof actionArg === 'string' ? actionArg : 'confirm';
+    const opts = typeof actionArg === 'object' && actionArg !== null ? actionArg : (optionsArg || {});
+    patientId = opts.patientId || '';
+    secret = opts.secret || DEFAULT_SECRET;
+    expiresInHours = opts.expiresInHours;
+    expiresInMs = opts.expiresInMs || 72 * 3600 * 1000;
+  }
   if (!appointmentId) throw new Error('appointmentId is required to generate action token');
   const duration = expiresInHours != null ? expiresInHours * 3600 * 1000 : expiresInMs;
   const expiresAt = Date.now() + duration;
@@ -90,7 +102,7 @@ function verifyActionToken(tokenOrOpts, maybeSecret) {
       err.code = code;
       throw err;
     }
-    return { valid: false, error: code };
+    return { valid: false, error: code, reason: code, message: msg || code };
   };
 
   if (!token || typeof token !== 'string' || !token.includes('.')) {
