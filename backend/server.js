@@ -88,6 +88,7 @@ const { falseNegativeAnalyzer } = require('../evaluation/false_negative_analyzer
 const { passwordSecurityService } = require('./password-security-service');
 const { medicalCatalogService } = require('./medical-catalog-service');
 const { caseWorkflowService } = require('./case-workflow-service');
+const { externalApiGateway, SERVICE_DOMAINS, CIRCUIT_STATE, PROVIDER_TIER } = require('./external-api-gateway');
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -957,6 +958,112 @@ app.post('/api/monitoring/sessions', (req, res) => {
     sessionId: session.sessionId,
     startedAt: session.startedAt,
     hasCrashed: session.hasCrashed
+  });
+});
+
+// =============================================================================
+// 🌐 EXTERNAL API GATEWAY & RESILIENT ABSTRACTION LAYER (PRD Req 57)
+// Rate Limit Monitoring, Circuit Breaker, & Deterministic Fallback Plan
+// =============================================================================
+
+// Status and Rate Limits / Circuit Health Metrics
+app.get('/api/external-gateway/status', (req, res) => {
+  try {
+    const metrics = externalApiGateway.getMetrics();
+    res.json({
+      status: 'ok',
+      service: 'Health Vibe External API Gateway',
+      timestamp: new Date().toISOString(),
+      metrics
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'GATEWAY_STATUS_FAILED', message: err.message });
+  }
+});
+
+// Chatbot / AI Assistant Dispatch with Upstream Rate-Limit & Fallback
+app.post('/api/external-gateway/chat', async (req, res) => {
+  const { query, message, language, certifiedReport, simulateError, simulate429, simulateSecondaryError } = req.body || {};
+  if (!query && !message) {
+    return res.status(400).json({ error: 'QUERY_REQUIRED', message: 'Query or message is required.' });
+  }
+
+  try {
+    const result = await externalApiGateway.sendChatMessage({
+      query: query || message,
+      language: language || 'ar',
+      certifiedReport,
+      simulateError,
+      simulate429,
+      simulateSecondaryError
+    });
+
+    res.json({
+      success: true,
+      data: result.data,
+      providerId: result.providerId,
+      tier: result.tier,
+      fallbackExecuted: result.fallbackExecuted,
+      fallbackReason: result.fallbackReason || null,
+      executionTrace: result.executionTrace
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
+  }
+});
+
+// Transactional & Clinical Email Dispatch with Fallback & Offline Outbox
+app.post('/api/external-gateway/email', async (req, res) => {
+  const { to, subject, html, text, category, simulateEmail429, simulateEmailError, simulateSecondaryEmailError } = req.body || {};
+  if (!to || !subject) {
+    return res.status(400).json({ error: 'EMAIL_FIELDS_REQUIRED', message: 'Recipient (to) and subject are required.' });
+  }
+
+  try {
+    const result = await externalApiGateway.sendEmail({
+      to,
+      subject,
+      html: html || text,
+      text: text || html,
+      category,
+      simulateEmail429,
+      simulateEmailError,
+      simulateSecondaryEmailError
+    });
+
+    res.json({
+      success: true,
+      data: result.data,
+      providerId: result.providerId,
+      tier: result.tier,
+      fallbackExecuted: result.fallbackExecuted,
+      fallbackReason: result.fallbackReason || null,
+      executionTrace: result.executionTrace
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
+  }
+});
+
+// Circuit Breaker Reset for Maintenance / Diagnostic Probing
+app.post('/api/external-gateway/circuit-reset', (req, res) => {
+  const { domain, providerId } = req.body || {};
+  if (!domain || !providerId) {
+    return res.status(400).json({ error: 'MISSING_FIELDS', message: 'domain and providerId are required.' });
+  }
+
+  const reset = externalApiGateway.resetCircuit(domain, providerId);
+  res.json({
+    success: reset,
+    domain,
+    providerId,
+    message: reset ? 'Circuit breaker successfully reset to CLOSED' : 'Provider not found'
   });
 });
 

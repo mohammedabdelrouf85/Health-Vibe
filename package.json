@@ -15,6 +15,7 @@
     "test:fn-tuning": "node tests/false_negative_analysis_and_threshold_tuning.test.js",
     "test:ml-processing": "node tests/ml_processing_indicator_and_double_submission.test.js",
     "test:model-version": "node tests/model_version_and_audit_logging.test.js",
+    "test:external-api-gateway": "node tests/external_api_abstraction_and_rate_limits.test.js",
     "test:auth-loading": "node tests/auth_loading_and_forms.test.js",
     "test:auth-validation": "node tests/auth_strict_validation.test.js",
     "test:auth-root-cause": "node tests/strict_auth_google_and_email_root_cause.test.js",
