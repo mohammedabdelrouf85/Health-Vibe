@@ -170,6 +170,7 @@ const titles = {
   assistant: "المساعد الطبي",
   verification: "توثيق الطبيب",
   doctor: "مراجعة الطبيب",
+  "doctor-schedule": "إدارة جدول مواعيد الطبيب والفروع",
   admin: "لوحة الإدارة",
   audit: "سجل التدقيق",
   report: "التقرير",
@@ -364,11 +365,11 @@ const ROLE_ALLOWED_SCREENS = {
     "disease-dashboard", "disease", "diabetes", "hypertension", "blood-disorders", "obesity"
   ],
   [ROLES.DOCTOR]: [
-    "doctor", "verification", "history", "appointments", "feedback", "report", "profile", "kpi", "patient", "verify-report", "verify",
+    "doctor", "doctor-schedule", "verification", "history", "appointments", "feedback", "report", "profile", "kpi", "patient", "verify-report", "verify",
     "disease-dashboard", "disease", "diabetes", "hypertension", "blood-disorders", "obesity"
   ],
   [ROLES.CLINIC_ADMIN]: [
-    "profile", "history", "appointments", "feedback", "doctor", "report", "admin", "audit", "kpi", "verify-report", "verify",
+    "profile", "history", "appointments", "feedback", "doctor", "doctor-schedule", "report", "admin", "audit", "kpi", "verify-report", "verify",
     "disease-dashboard", "disease", "diabetes", "hypertension", "blood-disorders", "obesity"
   ],
   [ROLES.OPS]: [
@@ -383,7 +384,7 @@ const ROLE_ALLOWED_SCREENS = {
   [ROLES.SUPER_ADMIN]: [
     "patient", "consent", "profile", "complete-medical-profile", "assessment", "pending", "result",
     "history", "appointments", "feedback", "assistant", "verification",
-    "doctor", "kpi", "report", "admin", "audit", "verify-report", "verify",
+    "doctor", "doctor-schedule", "kpi", "report", "admin", "audit", "verify-report", "verify",
     "disease-dashboard", "disease", "diabetes", "hypertension", "blood-disorders", "obesity"
   ]
 };
@@ -409,7 +410,7 @@ window.handleOpenDoctorApply = handleOpenDoctorApply;
 const AUTH_REQUIRED_SCREENS = [
   "consent", "profile", "complete-medical-profile", "assessment", "pending", "result",
   "history", "appointments", "feedback", "assistant", "report",
-  "verification", "doctor", "kpi", "admin", "audit",
+  "verification", "doctor", "doctor-schedule", "kpi", "admin", "audit",
   "disease-dashboard", "disease", "diabetes", "hypertension", "blood-disorders", "obesity"
 ];
 
@@ -418,7 +419,7 @@ const AUTH_REQUIRED_SCREENS = [
  * Unverified users are redirected to their role default and prompted to verify.
  */
 const VERIFICATION_REQUIRED_SCREENS = [
-  "assessment", "result", "doctor", "admin", "audit", "kpi", "report"
+  "assessment", "result", "doctor", "doctor-schedule", "admin", "audit", "kpi", "report"
 ];
 
 /**
@@ -855,6 +856,7 @@ const englishTitles = {
   assistant: "Medical Assistant",
   verification: "Doctor Verification",
   doctor: "Doctor Review",
+  "doctor-schedule": "Doctor Schedule & Branch Manager",
   admin: "Admin Dashboard",
   audit: "Audit Log",
   report: "Report",
@@ -9468,6 +9470,11 @@ function showScreen(name) {
   }
   if (name === "appointments") {
     renderAppointmentsScreen();
+  }
+  if (name === "doctor-schedule") {
+    if (window.HealthVibes?.DoctorScheduleUI?.renderDoctorScheduleManager) {
+      window.HealthVibes.DoctorScheduleUI.renderDoctorScheduleManager("screen-doctor-schedule");
+    }
   }
   if (name === "feedback") {
     renderFeedbackScreen();

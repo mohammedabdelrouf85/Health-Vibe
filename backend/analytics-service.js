@@ -51,7 +51,12 @@ const EVENT_TYPES = Object.freeze({
   // 🚗 CliniDo Consultation Type & Egypt Commute Relief Telemetry
   CONSULTATION_TYPE_SELECTED: 'consultation_type_selected',
   COMMUTE_RELIEF_VIEWED: 'commute_relief_viewed',
-  CONSULTATION_MODE_SWITCHED: 'consultation_mode_switched'
+  CONSULTATION_MODE_SWITCHED: 'consultation_mode_switched',
+
+  // 🏥 Doctor Schedule & Branch Manager Telemetry
+  DOCTOR_SCHEDULE_UPDATED: 'doctor_schedule_updated',
+  DOCTOR_LEAVE_REQUESTED: 'doctor_leave_requested',
+  DOCTOR_LEAVE_CANCELLED: 'doctor_leave_cancelled'
 });
 
 const FORBIDDEN_MEDICAL_KEYS = Object.freeze([
@@ -142,7 +147,9 @@ function sanitizeAndValidatePayload(eventType, payload = {}) {
     'doctorId', 'specialty', 'consultationType', 'previousConsultationType', 'modeSwitched', 'isOnline',
     'commuteReliefActive', 'branch', 'source', 'switchReason', 'isDependent', 'beneficiaryType',
     'timeOfDay', 'slotId', 'date', 'weekOffset', 'action', 'reason', 'errorCode', 'failureReason',
-    'price', 'currency', 'hasAttachedReport', 'hasAttachedDossier', 'isDoctorReview', 'isPostBookingLinkage', 'actorRole'
+    'price', 'currency', 'hasAttachedReport', 'hasAttachedDossier', 'isDoctorReview', 'isPostBookingLinkage', 'actorRole',
+    // Doctor Schedule & Branch Manager metadata
+    'branchId', 'bufferBetweenSlotsMinutes', 'leaveType', 'emergencyOverride', 'startDate', 'endDate', 'leaveId'
   ];
 
   for (const [k, v] of Object.entries(payload)) {
@@ -1022,10 +1029,43 @@ function resetAnalyticsState() {
   recentDebounceMap.clear();
 }
 
+/**
+ * Helper to record event and optionally persist to db collection
+ */
+async function logTelemetryEvent(db, eventData = {}) {
+  const { eventType, userId, doctorId, clinicId, timestamp, payload: existingPayload, ...rest } = eventData;
+  const combinedPayload = existingPayload ? { ...existingPayload, ...rest } : { doctorId, ...rest };
+  delete combinedPayload.payload;
+
+  const res = recordEvent({
+    eventType,
+    userId,
+    clinicId,
+    timestamp,
+    payload: combinedPayload
+  });
+
+  if (db && typeof db.collection === 'function') {
+    try {
+      await db.collection('telemetry').add({
+        eventType,
+        userId: userId || null,
+        doctorId: doctorId || null,
+        clinicId: clinicId || null,
+        timestamp: timestamp || new Date().toISOString(),
+        ...combinedPayload
+      });
+    } catch (_) {}
+  }
+
+  return res;
+}
+
 module.exports = {
   EVENT_TYPES,
   FORBIDDEN_MEDICAL_KEYS,
   recordEvent,
+  logTelemetryEvent,
   calculateProductKpis,
   calculateAppointmentKpis,
   sanitizeAndValidatePayload,

@@ -68,6 +68,7 @@
   <link rel="stylesheet" href="./modules/core/connection-banner.css">
   <link rel="stylesheet" href="./modules/core/lite-mode.css">
   <link rel="stylesheet" href="./modules/doctor/doctor.css">
+  <link rel="stylesheet" href="./modules/doctor/doctor-schedule.css">
   <link rel="stylesheet" href="./modules/admin/admin.css">
   <link rel="stylesheet" href="./modules/appointments/appointments.css">
   <link rel="stylesheet" href="./modules/assessment/assessment.css">
@@ -566,6 +567,7 @@
         <button class="nav-item" data-screen="assistant" data-i18n-title="nav.assistant"><span class="nav-icon">🤖</span><span class="nav-label" data-i18n="nav.assistant">Medical Assistant</span></button>
         <button class="nav-item" data-screen="verification" style="display:none;" data-i18n-title="nav.verification"><span class="nav-icon">✅</span><span class="nav-label" data-i18n="nav.verification">Doctor Verification</span></button>
         <button class="nav-item" data-screen="doctor" style="display:none;" data-i18n-title="nav.doctor"><span class="nav-icon">🩺</span><span class="nav-label" data-i18n="nav.doctor">Doctor Dashboard</span></button>
+        <button class="nav-item" data-screen="doctor-schedule" style="display:none;" data-i18n-title="nav.doctorSchedule"><span class="nav-icon">🗓️</span><span class="nav-label" data-i18n="nav.doctorSchedule">Doctor Schedule & Branches</span></button>
         <button class="nav-item" data-screen="kpi" style="display:none;" data-i18n-title="nav.kpi"><span class="nav-icon">📊</span><span class="nav-label" data-i18n="nav.kpi">KPI Dashboard</span></button>
         <button class="nav-item" data-screen="report" data-i18n-title="nav.report"><span class="nav-icon">📄</span><span class="nav-label" data-i18n="nav.report">Report</span></button>
         <button class="nav-item" data-screen="admin" style="display:none;" data-i18n-title="nav.admin"><span class="nav-icon">⚙️</span><span class="nav-label" data-i18n="nav.admin">Admin Dashboard</span></button>
@@ -2136,6 +2138,11 @@
             <!-- Rendered via JS -->
           </article>
         </div>
+      </section>
+ 
+      <!-- 🗓️ Doctor Schedule & Branch Manager Screen -->
+      <section id="screen-doctor-schedule" class="screen">
+        <!-- Rendered dynamically by HealthVibes.DoctorScheduleUI.renderDoctorScheduleManager() -->
       </section>
 
       <section id="screen-admin" class="screen">
@@ -4007,6 +4014,8 @@
   <script defer src="./modules/assessment/assessment-comparison-ui.js?v=1.0"></script>
   <script defer src="./modules/doctor/doctor-service.js?v=1.0"></script>
   <script defer src="./modules/doctor/doctor-ui.js?v=1.0"></script>
+  <script defer src="./modules/doctor/doctor-schedule-service.js?v=1.0"></script>
+  <script defer src="./modules/doctor/doctor-schedule-ui.js?v=1.0"></script>
   <script defer src="./modules/reports/reports-service.js?v=1.0"></script>
   <script defer src="./modules/reports/reports-ui.js?v=1.0"></script>
   <script defer src="./modules/reports/quick-share-ui.js?v=1.0"></script>

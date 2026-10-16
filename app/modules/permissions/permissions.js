@@ -124,11 +124,11 @@
       "diabetes", "hypertension", "blood-disorders", "obesity"
     ],
     [ROLES.DOCTOR]: [
-      "doctor", "verification", "history", "appointments", "feedback", "report", "profile", "kpi", "patient", "verify-report", "verify",
+      "doctor", "doctor-schedule", "verification", "history", "appointments", "feedback", "report", "profile", "kpi", "patient", "verify-report", "verify",
       "diabetes", "hypertension", "blood-disorders", "obesity"
     ],
     [ROLES.CLINIC_ADMIN]: [
-      "profile", "history", "appointments", "feedback", "doctor", "report", "admin", "audit", "kpi", "verify-report", "verify",
+      "profile", "history", "appointments", "feedback", "doctor", "doctor-schedule", "report", "admin", "audit", "kpi", "verify-report", "verify",
       "diabetes", "hypertension", "blood-disorders", "obesity"
     ],
     [ROLES.OPS]: [
@@ -143,7 +143,7 @@
     [ROLES.SUPER_ADMIN]: [
       "patient", "consent", "profile", "assessment", "pending", "result",
       "history", "appointments", "feedback", "assistant", "verification",
-      "doctor", "kpi", "report", "admin", "audit", "verify-report", "verify",
+      "doctor", "doctor-schedule", "kpi", "report", "admin", "audit", "verify-report", "verify",
       "diabetes", "hypertension", "blood-disorders", "obesity"
     ]
   };
@@ -151,12 +151,12 @@
   const AUTH_REQUIRED_SCREENS = [
     "consent", "profile", "assessment", "pending", "result",
     "history", "appointments", "feedback", "assistant", "report",
-    "verification", "doctor", "kpi", "admin", "audit",
+    "verification", "doctor", "doctor-schedule", "kpi", "admin", "audit",
     "diabetes", "hypertension", "blood-disorders", "obesity"
   ];
 
   const VERIFICATION_REQUIRED_SCREENS = [
-    "assessment", "result", "doctor", "admin", "audit", "kpi", "report"
+    "assessment", "result", "doctor", "doctor-schedule", "admin", "audit", "kpi", "report"
   ];
 
   const CONSENT_REQUIRED_SCREENS = ["assessment"];
