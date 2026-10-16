@@ -55,7 +55,9 @@ const NOTIFICATION_TYPES = {
   APPOINTMENT_RESCHEDULED: 'appointment_rescheduled',
   APPOINTMENT_CANCELLED: 'appointment_cancelled',
   APPOINTMENT_REMINDER: 'appointment_reminder',
-  VERIFICATION: 'verification'
+  VERIFICATION: 'verification',
+  DOCTOR_SCHEDULE_UPDATED: 'doctor_schedule_updated',
+  DOCTOR_LEAVE_EXCEPTION: 'doctor_leave_exception'
 };
 
 function escapeHtml(value) {

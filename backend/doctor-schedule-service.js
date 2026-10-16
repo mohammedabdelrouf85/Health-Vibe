@@ -1,17 +1,20 @@
 // @ts-check
 /**
  * @fileoverview Doctor Schedule & Branch Manager Service
- * Manages Egyptian clinic branches, working hours, buffers, emergency leaves, and slot availability.
- * Features zero-PHI telemetry integration.
+ * Manages Egyptian clinic branches, working hours, buffers, emergency leaves, slot availability,
+ * and multi-channel notification dispatching with zero-PHI telemetry integration.
  */
 
-import analyticsPkg from './analytics-service.js';
-const { EVENT_TYPES, logTelemetryEvent } = analyticsPkg;
+const analyticsService = require('./analytics-service');
+const auditService = require('./audit-service');
+const notificationService = require('./notification-service');
+
+const { EVENT_TYPES, logTelemetryEvent } = analyticsService;
 
 /**
  * Egyptian Clinic Branches Catalog with governorate and operational parameters
  */
-export const EGYPT_BRANCHES = Object.freeze({
+const EGYPT_BRANCHES = Object.freeze({
   cairo_nasr_city: {
     id: 'cairo_nasr_city',
     nameAr: 'عيادة مدينة نصر - القاهرة',
@@ -63,9 +66,14 @@ export const EGYPT_BRANCHES = Object.freeze({
 });
 
 /**
+ * Valid consultation slot durations in minutes
+ */
+const VALID_SLOT_DURATIONS = [15, 20, 30, 45, 60];
+
+/**
  * Standard default working days template
  */
-export const DEFAULT_BRANCH_HOURS = Object.freeze({
+const DEFAULT_BRANCH_HOURS = Object.freeze({
   sunday: { active: true, start: '09:00', end: '17:00', slotDurationMinutes: 30, maxCapacity: 16 },
   monday: { active: true, start: '09:00', end: '17:00', slotDurationMinutes: 30, maxCapacity: 16 },
   tuesday: { active: true, start: '09:00', end: '17:00', slotDurationMinutes: 30, maxCapacity: 16 },
@@ -87,6 +95,7 @@ function createDefaultSchedule(doctorId) {
     branches[branchId] = {
       branchId,
       bufferBetweenSlotsMinutes: 5,
+      slotDurationMinutes: 30,
       workingDays: JSON.parse(JSON.stringify(DEFAULT_BRANCH_HOURS))
     };
   }
@@ -104,7 +113,7 @@ function createDefaultSchedule(doctorId) {
  * @param {any} db 
  * @param {string} doctorId 
  */
-export async function getDoctorSchedule(db, doctorId) {
+async function getDoctorSchedule(db, doctorId) {
   if (!doctorId) throw new Error('DOCTOR_ID_REQUIRED');
 
   if (db && typeof db.collection === 'function') {
@@ -120,37 +129,138 @@ export async function getDoctorSchedule(db, doctorId) {
 }
 
 /**
- * Update working hours and slot parameters for a doctor at a branch
+ * Find confirmed or rescheduled appointments for a doctor within a date range
  * @param {any} db 
- * @param {{ doctorId: string, branchId: string, workingDays: Record<string, any>, bufferBetweenSlotsMinutes?: number, updatedBy?: string }} params 
+ * @param {{ doctorId: string, branchId?: string, startDate: string, endDate: string }} params 
  */
-export async function updateBranchSchedule(db, params) {
-  const { doctorId, branchId, workingDays, bufferBetweenSlotsMinutes = 5, updatedBy = doctorId } = params;
+async function findConflictingAppointments(db, params) {
+  const { doctorId, branchId, startDate, endDate } = params;
+  if (!db || typeof db.collection !== 'function' || !doctorId) return [];
+
+  try {
+    const colRef = db.collection('appointments');
+    let query = colRef.where('doctorId', '==', doctorId);
+    const snap = await query.get();
+    if (!snap || !snap.docs) return [];
+
+    return snap.docs
+      .map(doc => ({ id: doc.id, ...doc.data() }))
+      .filter(appt => {
+        if (appt.status !== 'confirmed' && appt.status !== 'rescheduled') return false;
+        if (branchId && branchId !== 'all' && appt.branchId && appt.branchId !== branchId) return false;
+        if (appt.date < startDate || appt.date > endDate) return false;
+        return true;
+      });
+  } catch (err) {
+    console.warn('[DOCTOR SCHEDULE] Could not fetch conflicting appointments:', err.message);
+    return [];
+  }
+}
+
+/**
+ * Update working hours, slot duration, and buffer for a doctor at a branch
+ * @param {any} db 
+ * @param {{ doctorId: string, branchId: string, workingDays?: Record<string, any>, slotDurationMinutes?: number, bufferBetweenSlotsMinutes?: number, updatedBy?: string, userRole?: string }} params 
+ */
+async function updateBranchSchedule(db, params) {
+  const {
+    doctorId,
+    branchId,
+    workingDays,
+    slotDurationMinutes,
+    bufferBetweenSlotsMinutes = 5,
+    updatedBy = doctorId,
+    userRole = 'doctor'
+  } = params;
+
   if (!doctorId) throw new Error('DOCTOR_ID_REQUIRED');
   if (!branchId || (!EGYPT_BRANCHES[branchId] && branchId !== 'all')) {
     throw new Error('INVALID_BRANCH_ID');
   }
 
-  const schedule = await getDoctorSchedule(db, doctorId);
-  if (!schedule.branches[branchId]) {
-    schedule.branches[branchId] = {
-      branchId,
-      bufferBetweenSlotsMinutes,
-      workingDays: JSON.parse(JSON.stringify(DEFAULT_BRANCH_HOURS))
-    };
+  if (slotDurationMinutes !== undefined && !VALID_SLOT_DURATIONS.includes(Number(slotDurationMinutes))) {
+    throw new Error('INVALID_SLOT_DURATION: Supported durations are 15, 20, 30, 45, or 60 minutes.');
   }
 
-  schedule.branches[branchId].bufferBetweenSlotsMinutes = Number(bufferBetweenSlotsMinutes) || 0;
+  // Validate working days format
   if (workingDays && typeof workingDays === 'object') {
-    schedule.branches[branchId].workingDays = {
-      ...schedule.branches[branchId].workingDays,
-      ...workingDays
-    };
+    for (const [day, cfg] of Object.entries(workingDays)) {
+      if (cfg && cfg.active) {
+        if (!cfg.start || !cfg.end) {
+          throw new Error(`INVALID_HOURS_FOR_${day.toUpperCase()}: Start and end times required for active days.`);
+        }
+        const [sh, sm] = cfg.start.split(':').map(Number);
+        const [eh, em] = cfg.end.split(':').map(Number);
+        if (eh * 60 + em <= sh * 60 + sm) {
+          throw new Error(`INVALID_HOURS_FOR_${day.toUpperCase()}: End time must be after start time.`);
+        }
+      }
+    }
+  }
+
+  const schedule = await getDoctorSchedule(db, doctorId);
+  const targetBranches = branchId === 'all' ? Object.keys(EGYPT_BRANCHES) : [branchId];
+
+  for (const bId of targetBranches) {
+    if (!schedule.branches[bId]) {
+      schedule.branches[bId] = {
+        branchId: bId,
+        bufferBetweenSlotsMinutes,
+        slotDurationMinutes: slotDurationMinutes || 30,
+        workingDays: JSON.parse(JSON.stringify(DEFAULT_BRANCH_HOURS))
+      };
+    }
+
+    schedule.branches[bId].bufferBetweenSlotsMinutes = Number(bufferBetweenSlotsMinutes) || 0;
+    if (slotDurationMinutes !== undefined) {
+      schedule.branches[bId].slotDurationMinutes = Number(slotDurationMinutes);
+    }
+    if (workingDays && typeof workingDays === 'object') {
+      schedule.branches[bId].workingDays = {
+        ...schedule.branches[bId].workingDays,
+        ...workingDays
+      };
+    }
   }
   schedule.updatedAt = new Date().toISOString();
 
+  // Save to database
   if (db && typeof db.collection === 'function') {
     await db.collection('doctor_schedules').doc(doctorId).set(schedule, { merge: true });
+
+    // Multi-channel Notification to Doctor/Clinic
+    try {
+      if (typeof notificationService?.recordNotificationHistory === 'function') {
+        await notificationService.recordNotificationHistory(db, {
+          userId: doctorId,
+          eventType: 'doctor_schedule_updated',
+          title: 'تم تحديث جدول العمل وساعات الفروع بنجاح',
+          message: `تم حفظ مواعيد العمل الجديدة لفرع ${branchId === 'all' ? 'جميع الفروع' : branchId}.`,
+          urgent: false,
+          metadata: { doctorId, branchId, bufferBetweenSlotsMinutes }
+        });
+      }
+    } catch (_) {}
+
+    // Security Audit Event
+    try {
+      if (typeof auditService?.recordAuditEvent === 'function') {
+        await auditService.recordAuditEvent(db, {
+          type: 'DOCTOR_SCHEDULE_UPDATED',
+          actorUid: updatedBy,
+          actorRole: userRole,
+          targetUserId: doctorId,
+          clinicId: branchId,
+          outcome: 'SUCCESS',
+          details: {
+            doctorId,
+            branchId,
+            bufferBetweenSlotsMinutes,
+            slotDurationMinutes: slotDurationMinutes || 30
+          }
+        });
+      }
+    } catch (_) {}
 
     // Telemetry: strictly zero PHI
     await logTelemetryEvent(db, {
@@ -158,7 +268,7 @@ export async function updateBranchSchedule(db, params) {
       userId: updatedBy,
       doctorId,
       branchId,
-      bufferBetweenSlotsMinutes: schedule.branches[branchId].bufferBetweenSlotsMinutes,
+      bufferBetweenSlotsMinutes: Number(bufferBetweenSlotsMinutes) || 0,
       timestamp: schedule.updatedAt
     });
   }
@@ -167,11 +277,11 @@ export async function updateBranchSchedule(db, params) {
 }
 
 /**
- * Request or record an emergency leave / exception
+ * Request or record an emergency leave / exception with conflicting booking alerts
  * @param {any} db 
- * @param {{ doctorId: string, branchId: string, startDate: string, endDate: string, reasonType: string, notes?: string, emergencyOverride?: boolean, requestedBy?: string }} params 
+ * @param {{ doctorId: string, branchId?: string, startDate: string, endDate: string, reasonType?: string, notes?: string, emergencyOverride?: boolean, requestedBy?: string, userRole?: string }} params 
  */
-export async function addDoctorLeaveException(db, params) {
+async function addDoctorLeaveException(db, params) {
   const {
     doctorId,
     branchId = 'all',
@@ -180,7 +290,8 @@ export async function addDoctorLeaveException(db, params) {
     reasonType = 'personal',
     notes = '',
     emergencyOverride = false,
-    requestedBy = doctorId
+    requestedBy = doctorId,
+    userRole = 'doctor'
   } = params;
 
   if (!doctorId) throw new Error('DOCTOR_ID_REQUIRED');
@@ -199,7 +310,7 @@ export async function addDoctorLeaveException(db, params) {
     reasonType,
     notes: String(notes || '').trim(),
     emergencyOverride: Boolean(emergencyOverride),
-    status: emergencyOverride ? 'approved' : 'approved',
+    status: 'approved',
     createdAt: new Date().toISOString(),
     createdBy: requestedBy
   };
@@ -208,8 +319,94 @@ export async function addDoctorLeaveException(db, params) {
   schedule.leaves.push(leaveRecord);
   schedule.updatedAt = new Date().toISOString();
 
+  // Find conflicting patient bookings in the leave window
+  const conflictingAppointments = await findConflictingAppointments(db, {
+    doctorId,
+    branchId,
+    startDate,
+    endDate
+  });
+
   if (db && typeof db.collection === 'function') {
     await db.collection('doctor_schedules').doc(doctorId).set(schedule, { merge: true });
+
+    // Notify affected patients about schedule conflict & provide direct reschedule assistance
+    for (const appt of conflictingAppointments) {
+      if (appt.patientId) {
+        try {
+          if (typeof notificationService?.recordNotificationHistory === 'function') {
+            await notificationService.recordNotificationHistory(db, {
+              userId: appt.patientId,
+              eventType: 'doctor_leave_exception',
+              title: 'تنبيه عاجل: اعتذار الطبيب عن موعد الكشف',
+              message: `نعتذر لك عن إلغاء الموعد بسبب اعتذار الطبيب لظرف طارئ بتاريخ ${appt.date}. يرجى الضغط لاختيار موعد بديل فوراً دون رسوم إضافية.`,
+              urgent: true,
+              metadata: {
+                appointmentId: appt.id,
+                doctorId,
+                originalDate: appt.date,
+                originalSlotId: appt.slotId,
+                action: 'reschedule_required'
+              }
+            });
+          }
+
+          if (typeof notificationService?.enqueueNotification === 'function') {
+            await notificationService.enqueueNotification(db, {
+              type: notificationService.NOTIFICATION_TYPES.DOCTOR_LEAVE_EXCEPTION || 'doctor_leave_exception',
+              recipient: appt.patientEmail || appt.patientPhone || appt.patientId,
+              priority: 'high',
+              payload: {
+                appointmentId: appt.id,
+                doctorId,
+                date: appt.date,
+                reasonType
+              }
+            });
+          }
+        } catch (err) {
+          console.warn('[DOCTOR LEAVE] Failed to notify affected patient:', err.message);
+        }
+      }
+    }
+
+    // Confirmation notification to doctor
+    try {
+      if (typeof notificationService?.recordNotificationHistory === 'function') {
+        await notificationService.recordNotificationHistory(db, {
+          userId: doctorId,
+          eventType: 'doctor_leave_exception',
+          title: 'تم اعتماد الإجازة / الظرف الطارئ',
+          message: `تم تسجيل إجازتك بنجاح من ${startDate} إلى ${endDate}. عدد المواعيد المتأثرة التي تم تنبيهها: ${conflictingAppointments.length}.`,
+          urgent: false,
+          metadata: { leaveId, startDate, endDate, affectedCount: conflictingAppointments.length }
+        });
+      }
+    } catch (_) {}
+
+    // Security Audit Event
+    try {
+      if (typeof auditService?.recordAuditEvent === 'function') {
+        await auditService.recordAuditEvent(db, {
+          type: 'DOCTOR_LEAVE_REQUESTED',
+          actorUid: requestedBy,
+          actorRole: userRole,
+          targetUserId: doctorId,
+          clinicId: branchId,
+          outcome: 'SUCCESS',
+          details: {
+            leaveId,
+            doctorId,
+            branchId,
+            reasonType,
+            startDate,
+            endDate,
+            emergencyOverride: Boolean(emergencyOverride),
+            affectedAppointmentsCount: conflictingAppointments.length
+          }
+        });
+      }
+    } catch (_) {}
 
     // Telemetry: zero PHI (do not log notes as they may contain text)
     await logTelemetryEvent(db, {
@@ -224,16 +421,20 @@ export async function addDoctorLeaveException(db, params) {
     });
   }
 
-  return leaveRecord;
+  return {
+    ...leaveRecord,
+    conflictingAppointmentsCount: conflictingAppointments.length,
+    conflictingAppointments
+  };
 }
 
 /**
  * Cancel or revoke a doctor's leave
  * @param {any} db 
- * @param {{ doctorId: string, leaveId: string, revokedBy?: string }} params 
+ * @param {{ doctorId: string, leaveId: string, revokedBy?: string, userRole?: string }} params 
  */
-export async function revokeDoctorLeaveException(db, params) {
-  const { doctorId, leaveId, revokedBy = doctorId } = params;
+async function revokeDoctorLeaveException(db, params) {
+  const { doctorId, leaveId, revokedBy = doctorId, userRole = 'doctor' } = params;
   if (!doctorId || !leaveId) throw new Error('DOCTOR_AND_LEAVE_ID_REQUIRED');
 
   const schedule = await getDoctorSchedule(db, doctorId);
@@ -247,6 +448,35 @@ export async function revokeDoctorLeaveException(db, params) {
 
   if (db && typeof db.collection === 'function') {
     await db.collection('doctor_schedules').doc(doctorId).set(schedule, { merge: true });
+
+    // Notification to doctor
+    try {
+      if (typeof notificationService?.recordNotificationHistory === 'function') {
+        await notificationService.recordNotificationHistory(db, {
+          userId: doctorId,
+          eventType: 'doctor_leave_cancelled',
+          title: 'تم إلغاء الإجازة وإعادة إتاحة المواعيد',
+          message: `تم إلغاء الإجازة رقم ${leaveId} بنجاح وأصبحت فترات الحجز متاحة مجدداً للمرضى.`,
+          urgent: false,
+          metadata: { leaveId }
+        });
+      }
+    } catch (_) {}
+
+    // Audit event
+    try {
+      if (typeof auditService?.recordAuditEvent === 'function') {
+        await auditService.recordAuditEvent(db, {
+          type: 'DOCTOR_LEAVE_CANCELLED',
+          actorUid: revokedBy,
+          actorRole: userRole,
+          targetUserId: doctorId,
+          clinicId: target.branchId,
+          outcome: 'SUCCESS',
+          details: { leaveId, doctorId, branchId: target.branchId }
+        });
+      }
+    } catch (_) {}
 
     await logTelemetryEvent(db, {
       eventType: EVENT_TYPES.DOCTOR_LEAVE_CANCELLED,
@@ -266,14 +496,13 @@ export async function revokeDoctorLeaveException(db, params) {
  * @param {string} branchId 
  * @param {string} dateStr YYYY-MM-DD
  */
-export function isDoctorOnLeave(leaves = [], branchId, dateStr) {
+function isDoctorOnLeave(leaves = [], branchId, dateStr) {
   const checkDate = new Date(dateStr);
   return leaves.some(l => {
     if (l.status !== 'approved') return false;
     if (l.branchId !== 'all' && l.branchId !== branchId) return false;
     const start = new Date(l.startDate);
     const end = new Date(l.endDate);
-    // Include full day of end date
     end.setHours(23, 59, 59, 999);
     return checkDate >= start && checkDate <= end;
   });
@@ -284,7 +513,7 @@ export function isDoctorOnLeave(leaves = [], branchId, dateStr) {
  * @param {any} db 
  * @param {{ doctorId: string, branchId: string, date: string, bookedSlotIds?: string[] }} params 
  */
-export async function getAvailableDoctorSlots(db, params) {
+async function getAvailableDoctorSlots(db, params) {
   const { doctorId, branchId, date, bookedSlotIds = [] } = params;
   if (!doctorId || !branchId || !date) return [];
 
@@ -305,7 +534,7 @@ export async function getAvailableDoctorSlots(db, params) {
 
   const [startHour, startMin] = dayConfig.start.split(':').map(Number);
   const [endHour, endMin] = dayConfig.end.split(':').map(Number);
-  const slotMinutes = dayConfig.slotDurationMinutes || 30;
+  const slotMinutes = dayConfig.slotDurationMinutes || branchConfig.slotDurationMinutes || 30;
   const bufferMinutes = branchConfig.bufferBetweenSlotsMinutes || 0;
   const totalStepMinutes = slotMinutes + bufferMinutes;
 
@@ -343,7 +572,7 @@ export async function getAvailableDoctorSlots(db, params) {
  * @param {any} db 
  * @param {{ doctorId: string, branchId: string, date: string, time: string }} params 
  */
-export async function isDoctorAvailableAtTime(db, params) {
+async function isDoctorAvailableAtTime(db, params) {
   const { doctorId, branchId, date, time } = params;
   const schedule = await getDoctorSchedule(db, doctorId);
 
@@ -374,3 +603,17 @@ export async function isDoctorAvailableAtTime(db, params) {
 
   return { available: true };
 }
+
+module.exports = {
+  EGYPT_BRANCHES,
+  VALID_SLOT_DURATIONS,
+  DEFAULT_BRANCH_HOURS,
+  getDoctorSchedule,
+  updateBranchSchedule,
+  addDoctorLeaveException,
+  revokeDoctorLeaveException,
+  findConflictingAppointments,
+  isDoctorOnLeave,
+  getAvailableDoctorSlots,
+  isDoctorAvailableAtTime
+};

@@ -49,6 +49,7 @@ const privacyService = require('./privacy-service');
 const auditService = require('./audit-service');
 const mfaService = require('./mfa-service');
 const schedulingService = require('./scheduling-service');
+const doctorScheduleService = require('./doctor-schedule-service');
 const appointmentSafetyService = require('./appointment-safety-service');
 const timelineService = require('./timeline-service');
 const monitoringService = require('./monitoring-service');
@@ -8723,6 +8724,168 @@ app.get('/api/appointments/analytics', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('[APPOINTMENT ANALYTICS GET ERROR]:', err);
     return res.status(500).json({ error: 'ANALYTICS_FETCH_FAILED', message: err.message });
+  }
+});
+
+// ============================================================================
+// 🗓️ DOCTOR SCHEDULE & BRANCH MANAGER (TabeebHub Benchmark)
+// ============================================================================
+
+/**
+ * GET /api/doctor-schedules/branches
+ * Retrieves the catalog of Egyptian clinic branches.
+ */
+app.get('/api/doctor-schedules/branches', (req, res) => {
+  return res.json({
+    success: true,
+    branches: Object.values(doctorScheduleService.EGYPT_BRANCHES)
+  });
+});
+
+/**
+ * GET /api/doctor-schedules/:doctorId
+ * Retrieves multi-branch working hours, slot durations, buffer times, and leave exceptions.
+ */
+app.get('/api/doctor-schedules/:doctorId', async (req, res) => {
+  const { doctorId } = req.params;
+  try {
+    const schedule = await doctorScheduleService.getDoctorSchedule(db, doctorId);
+    return res.json({ success: true, schedule });
+  } catch (err) {
+    console.error('[DOCTOR SCHEDULE GET ERROR]:', err);
+    return res.status(500).json({ error: 'FETCH_SCHEDULE_FAILED', message: err.message });
+  }
+});
+
+/**
+ * PUT /api/doctor-schedules/:doctorId/branches/:branchId
+ * Updates working hours, days, duration, and buffer for a specific branch.
+ * Enforces RBAC (Doctor themselves, Clinic Admin, or Super Admin).
+ */
+app.put('/api/doctor-schedules/:doctorId/branches/:branchId', requireAuth, requireVerifiedEmail, async (req, res) => {
+  const { doctorId, branchId } = req.params;
+  const userRole = getTrustedClaimRole(req.user);
+  const isSelf = req.user.uid === doctorId;
+  const isAdmin = userRole === ROLES.SUPER_ADMIN || userRole === ROLES.CLINIC_ADMIN || hasTrustedAdminClaim(req.user);
+
+  if (!isSelf && !isAdmin) {
+    return res.status(403).json({
+      error: 'ACCESS_DENIED',
+      message: 'Only the doctor or an authorized clinic administrator may configure branch working schedules.'
+    });
+  }
+
+  try {
+    const { workingDays, slotDurationMinutes, bufferBetweenSlotsMinutes } = req.body;
+    const result = await doctorScheduleService.updateBranchSchedule(db, {
+      doctorId,
+      branchId,
+      workingDays,
+      slotDurationMinutes,
+      bufferBetweenSlotsMinutes,
+      updatedBy: req.user.uid,
+      userRole
+    });
+    return res.json(result);
+  } catch (err) {
+    console.error('[DOCTOR SCHEDULE UPDATE ERROR]:', err);
+    const statusCode = err.message && err.message.startsWith('INVALID_') ? 400 : 500;
+    return res.status(statusCode).json({ error: 'SCHEDULE_UPDATE_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/doctor-schedules/:doctorId/leaves
+ * Records an emergency leave, annual vacation, or conference exception.
+ * Enforces RBAC & alerts any affected patients.
+ */
+app.post('/api/doctor-schedules/:doctorId/leaves', requireAuth, requireVerifiedEmail, async (req, res) => {
+  const { doctorId } = req.params;
+  const userRole = getTrustedClaimRole(req.user);
+  const isSelf = req.user.uid === doctorId;
+  const isAdmin = userRole === ROLES.SUPER_ADMIN || userRole === ROLES.CLINIC_ADMIN || hasTrustedAdminClaim(req.user);
+
+  if (!isSelf && !isAdmin) {
+    return res.status(403).json({
+      error: 'ACCESS_DENIED',
+      message: 'Only the doctor or an authorized clinic administrator may record leaves and exceptions.'
+    });
+  }
+
+  try {
+    const { branchId, startDate, endDate, reasonType, notes, emergencyOverride } = req.body;
+    const result = await doctorScheduleService.addDoctorLeaveException(db, {
+      doctorId,
+      branchId: branchId || 'all',
+      startDate,
+      endDate,
+      reasonType,
+      notes,
+      emergencyOverride: Boolean(emergencyOverride),
+      requestedBy: req.user.uid,
+      userRole
+    });
+    return res.json({ success: true, leave: result });
+  } catch (err) {
+    console.error('[DOCTOR LEAVE CREATE ERROR]:', err);
+    const statusCode = err.message && (err.message.includes('REQUIRED') || err.message.includes('BEFORE')) ? 400 : 500;
+    return res.status(statusCode).json({ error: 'LEAVE_CREATION_FAILED', message: err.message });
+  }
+});
+
+/**
+ * DELETE /api/doctor-schedules/:doctorId/leaves/:leaveId
+ * Revokes an active leave exception and restores slot availability.
+ */
+app.delete('/api/doctor-schedules/:doctorId/leaves/:leaveId', requireAuth, requireVerifiedEmail, async (req, res) => {
+  const { doctorId, leaveId } = req.params;
+  const userRole = getTrustedClaimRole(req.user);
+  const isSelf = req.user.uid === doctorId;
+  const isAdmin = userRole === ROLES.SUPER_ADMIN || userRole === ROLES.CLINIC_ADMIN || hasTrustedAdminClaim(req.user);
+
+  if (!isSelf && !isAdmin) {
+    return res.status(403).json({
+      error: 'ACCESS_DENIED',
+      message: 'Only the doctor or an authorized clinic administrator may revoke leave exceptions.'
+    });
+  }
+
+  try {
+    const result = await doctorScheduleService.revokeDoctorLeaveException(db, {
+      doctorId,
+      leaveId,
+      revokedBy: req.user.uid,
+      userRole
+    });
+    return res.json(result);
+  } catch (err) {
+    console.error('[DOCTOR LEAVE REVOKE ERROR]:', err);
+    return res.status(500).json({ error: 'LEAVE_REVOCATION_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/doctor-schedules/:doctorId/slots
+ * Generates real-time available slots for a doctor on a specific date at a branch.
+ */
+app.get('/api/doctor-schedules/:doctorId/slots', async (req, res) => {
+  const { doctorId } = req.params;
+  const { branchId, date } = req.query;
+
+  if (!branchId || !date) {
+    return res.status(400).json({ error: 'MISSING_PARAMS', message: 'branchId and date query parameters are required.' });
+  }
+
+  try {
+    const slots = await doctorScheduleService.getAvailableDoctorSlots(db, {
+      doctorId,
+      branchId: String(branchId),
+      date: String(date)
+    });
+    return res.json({ success: true, count: slots.length, slots });
+  } catch (err) {
+    console.error('[DOCTOR SLOTS GET ERROR]:', err);
+    return res.status(500).json({ error: 'SLOTS_FETCH_FAILED', message: err.message });
   }
 });
 

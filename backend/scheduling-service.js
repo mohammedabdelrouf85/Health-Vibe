@@ -1297,6 +1297,25 @@ async function bookAppointmentTransaction(db, payload, authUser) {
     throw err;
   }
 
+  // Dynamic Doctor Schedule & Leave Check (TabeebHub integration)
+  if (db && typeof db.collection === 'function') {
+    try {
+      const doctorScheduleService = require('./doctor-schedule-service');
+      const docSchedule = await doctorScheduleService.getDoctorSchedule(db, doctorId);
+      if (docSchedule && Array.isArray(docSchedule.leaves)) {
+        const onDynamicLeave = doctorScheduleService.isDoctorOnLeave(docSchedule.leaves, payload.branchId || 'all', date);
+        if (onDynamicLeave) {
+          const err = new Error('Doctor is on approved emergency leave or vacation on this date.');
+          err.code = 'DOCTOR_ON_LEAVE';
+          err.statusCode = 400;
+          throw err;
+        }
+      }
+    } catch (schedErr) {
+      if (schedErr.code === 'DOCTOR_ON_LEAVE') throw schedErr;
+    }
+  }
+
   const validSlot = availability.slots.find(s => s.id === slotId);
   if (!validSlot) {
     const err = new Error(`Slot '${slotId}' is not available in the doctor's schedule for ${date}.`);
@@ -1771,6 +1790,25 @@ async function rescheduleAppointmentTransaction(db, payload, actorUser) {
     err.code = availability.reason === 'ON_LEAVE' ? 'DOCTOR_ON_LEAVE' : 'DOCTOR_UNAVAILABLE';
     err.statusCode = 400;
     throw err;
+  }
+
+  // Dynamic Doctor Schedule & Leave Check (TabeebHub integration)
+  if (db && typeof db.collection === 'function') {
+    try {
+      const doctorScheduleService = require('./doctor-schedule-service');
+      const docSchedule = await doctorScheduleService.getDoctorSchedule(db, doctorId);
+      if (docSchedule && Array.isArray(docSchedule.leaves)) {
+        const onDynamicLeave = doctorScheduleService.isDoctorOnLeave(docSchedule.leaves, payload.branchId || appointment.branchId || 'all', newDate);
+        if (onDynamicLeave) {
+          const err = new Error('Doctor is on approved emergency leave or vacation on this date.');
+          err.code = 'DOCTOR_ON_LEAVE';
+          err.statusCode = 400;
+          throw err;
+        }
+      }
+    } catch (schedErr) {
+      if (schedErr.code === 'DOCTOR_ON_LEAVE') throw schedErr;
+    }
   }
 
   const newSlot = availability.slots.find(s => s.id === newSlotId);
