@@ -329,6 +329,8 @@
     mgmtEls.forEach(el => renderFamilyManagementSection(el));
   }
 
+  let escapeListener = null;
+
   /**
    * Opens the family member add/edit modal dialog.
    * @param {string|null} [memberIdToEdit=null]
@@ -400,6 +402,15 @@
     modal.style.display = "flex";
     modal.classList.add("modal-open");
     if (nameEl) nameEl.focus();
+
+    if (!escapeListener && typeof document !== "undefined") {
+      escapeListener = function (e) {
+        if (e.key === "Escape" || e.keyCode === 27) {
+          closeFamilyModal();
+        }
+      };
+      document.addEventListener("keydown", escapeListener);
+    }
   }
 
   /**
@@ -410,6 +421,10 @@
     if (modal) {
       modal.style.display = "none";
       modal.classList.remove("modal-open");
+    }
+    if (escapeListener && typeof document !== "undefined") {
+      document.removeEventListener("keydown", escapeListener);
+      escapeListener = null;
     }
   }
 
