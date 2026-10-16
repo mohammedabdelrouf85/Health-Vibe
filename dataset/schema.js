@@ -18,6 +18,25 @@
     }),
 
     /**
+     * Formal Patient-Level Partitioning & Anti-Leakage Specification (PRD Req 52 & 53)
+     */
+    partitioning: Object.freeze({
+      methodology: "STRATIFIED_GROUP_PATIENT_LEVEL_SPLIT",
+      targetRatios: Object.freeze({
+        train: 0.70,
+        validation: 0.15,
+        test: 0.15
+      }),
+      allowedPatientLeakage: 0.0,
+      invariants: Object.freeze([
+        "DISJOINT_PATIENT_SETS",
+        "ALL_RECORDS_OF_PATIENT_IN_SINGLE_PARTITION",
+        "STRATIFIED_CLINICAL_RISK_DISTRIBUTION"
+      ]),
+      manifestFormat: "SHA256_CRYPTOGRAPHICALLY_SEALED"
+    }),
+
+    /**
      * Formal Input Specifications
      */
     inputs: Object.freeze({

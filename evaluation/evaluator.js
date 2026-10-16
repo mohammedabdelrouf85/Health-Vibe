@@ -18,6 +18,7 @@ const path = require("path");
 const Metrics = require("./metrics");
 const Schema = require("../dataset/schema");
 const { validateDeidentifiedRecord } = require("../dataset/deidentification");
+const { patientLevelSplitService } = require("../dataset/patient_level_split_service");
 
 /**
  * Predicts triage using the Health Vibe deterministic rule engine.
@@ -118,13 +119,22 @@ function runClinicalEvaluation({
   evalDatasetPath = path.join(__dirname, "../dataset/evaluation_dataset.json"),
   devDatasetPath = path.join(__dirname, "../dataset/development_dataset.json"),
   reviewsPath = path.join(__dirname, "../dataset/specialist_reviews.json"),
-  rulesVersion = "HealthVibe-Rules-v1.0"
+  trainDatasetPath = path.join(__dirname, "../dataset/train_dataset.json"),
+  valDatasetPath = path.join(__dirname, "../dataset/validation_dataset.json"),
+  testDatasetPath = path.join(__dirname, "../dataset/test_dataset.json"),
+  rulesVersion = "HealthVibe-Rules-v1.0",
+  usePatientLevelTestSplit = false
 } = {}) {
-  const evalData = JSON.parse(fs.readFileSync(evalDatasetPath, "utf8"));
+  let evalData;
+  if (usePatientLevelTestSplit && fs.existsSync(testDatasetPath)) {
+    evalData = JSON.parse(fs.readFileSync(testDatasetPath, "utf8"));
+  } else {
+    evalData = JSON.parse(fs.readFileSync(evalDatasetPath, "utf8"));
+  }
   const devData = JSON.parse(fs.readFileSync(devDatasetPath, "utf8"));
   const reviews = JSON.parse(fs.readFileSync(reviewsPath, "utf8"));
 
-  // 1. Data Integrity & Leakage Verification
+  // 1. Data Integrity & Leakage Verification (Dev vs Eval)
   const devIds = new Set(devData.map(d => d.subjectId));
   const evalIds = new Set(evalData.map(d => d.subjectId));
   const leakage = [];
@@ -133,6 +143,14 @@ function runClinicalEvaluation({
   }
   if (leakage.length > 0) {
     throw new Error(`Data leakage violation: ${leakage.length} subjects found in both splits!`);
+  }
+
+  // 1b. Strict 3-Way Patient-Level Zero Leakage Verification
+  if (fs.existsSync(trainDatasetPath) && fs.existsSync(valDatasetPath) && fs.existsSync(testDatasetPath)) {
+    const trData = JSON.parse(fs.readFileSync(trainDatasetPath, "utf8"));
+    const vaData = JSON.parse(fs.readFileSync(valDatasetPath, "utf8"));
+    const teData = JSON.parse(fs.readFileSync(testDatasetPath, "utf8"));
+    patientLevelSplitService.assertZeroPatientLeakage(trData, vaData, teData);
   }
 
   // 2. De-identification Verification

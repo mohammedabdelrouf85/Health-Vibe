@@ -630,6 +630,20 @@ class SyntheticPatientsService {
       leaksDetected
     };
   }
+
+  /**
+   * Partitions the synthetic patient cohort strictly on the patient level (Train/Val/Test).
+   * Guarantees zero patient leakage across synthetic personas.
+   */
+  getPartitionedSyntheticCohort(options = {}) {
+    const { patientLevelSplitService } = require('../dataset/patient_level_split_service');
+    return patientLevelSplitService.splitByPatient(SYNTHETIC_PATIENTS_COHORT, {
+      trainRatio: options.trainRatio || 0.70,
+      valRatio: options.valRatio || 0.15,
+      testRatio: options.testRatio || 0.15,
+      seed: options.seed || 42
+    });
+  }
 }
 
 // Singleton instance
