@@ -1,0 +1,258 @@
+/**
+ * Health Vibe AI - Quick Report Share Stylesheet (مرجع: HealthTag)
+ * Responsive modal, QR preview, WhatsApp/family quick buttons, and dark mode support.
+ */
+
+:root {
+  --qshare-teal: #0d9488;
+  --qshare-teal-dark: #0f766e;
+  --qshare-teal-light: #ccfbf1;
+  --qshare-bg: #ffffff;
+  --qshare-surface: #f8fafc;
+  --qshare-border: #e2e8f0;
+  --qshare-text: #0f172a;
+  --qshare-muted: #64748b;
+  --qshare-whatsapp: #25d366;
+}
+
+body.dark-mode, [data-theme="dark"], body.dark {
+  --qshare-teal: #14b8a6;
+  --qshare-teal-dark: #2dd4bf;
+  --qshare-teal-light: rgba(20, 184, 166, 0.15);
+  --qshare-bg: #1e293b;
+  --qshare-surface: #0f172a;
+  --qshare-border: #334155;
+  --qshare-text: #f8fafc;
+  --qshare-muted: #94a3b8;
+  --qshare-whatsapp: #22c55e;
+}
+
+/* Quick Share Trigger Button in Patient Dashboard */
+.btn-quick-share-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  min-height: 44px; /* WCAG 2.5.5 */
+  border-radius: 20px;
+  background: var(--qshare-teal-light);
+  color: var(--qshare-teal);
+  border: 1px solid var(--qshare-teal);
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  margin-top: 8px;
+}
+
+.btn-quick-share-badge:hover {
+  background: var(--qshare-teal);
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.btn-quick-share-badge:focus-visible {
+  outline: 2px solid var(--qshare-teal);
+  outline-offset: 2px;
+}
+
+/* Quick Share Modal Overlay */
+.quick-share-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: 16px;
+  contain: strict;
+}
+
+.quick-share-modal {
+  width: 100%;
+  max-width: 500px;
+  background: var(--qshare-bg);
+  border: 1.5px solid var(--qshare-border);
+  border-radius: 20px;
+  padding: 24px;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  contain: content;
+  animation: qshareModalPop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes qshareModalPop {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.quick-share-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--qshare-border);
+  padding-bottom: 12px;
+}
+
+.quick-share-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.quick-share-icon {
+  font-size: 1.5rem;
+}
+
+.quick-share-title-wrap h3 {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--qshare-text);
+}
+
+.quick-share-title-wrap p {
+  margin: 2px 0 0 0;
+  font-size: 0.82rem;
+  color: var(--qshare-muted);
+}
+
+.quick-share-close-btn {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  font-size: 1.5rem;
+  color: var(--qshare-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.quick-share-close-btn:hover {
+  background: var(--qshare-surface);
+  color: var(--qshare-text);
+}
+
+/* Reassurance Note Box */
+.quick-share-assurance {
+  background: var(--qshare-teal-light);
+  border: 1px solid var(--qshare-teal);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 0.85rem;
+  color: var(--qshare-text);
+  line-height: 1.5;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+/* Quick Channels Row */
+.quick-share-channels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.btn-qshare-channel {
+  min-height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 12px;
+  font-family: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--qshare-border);
+  background: var(--qshare-surface);
+  color: var(--qshare-text);
+  transition: all 0.15s ease;
+}
+
+.btn-qshare-channel:hover {
+  transform: translateY(-1px);
+}
+
+.btn-qshare-channel.whatsapp {
+  background: #25d366;
+  color: #ffffff;
+  border-color: #25d366;
+}
+
+.btn-qshare-channel.whatsapp:hover {
+  background: #20ba5a;
+}
+
+.btn-qshare-channel.copy {
+  background: var(--qshare-teal);
+  color: #ffffff;
+  border-color: var(--qshare-teal);
+}
+
+.btn-qshare-channel.copy:hover {
+  background: var(--qshare-teal-dark);
+}
+
+/* Link Box */
+.quick-share-link-box {
+  background: var(--qshare-surface);
+  border: 1px solid var(--qshare-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.quick-share-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  font-family: monospace;
+  font-size: 0.82rem;
+  color: var(--qshare-text);
+  outline: none;
+}
+
+.quick-share-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.78rem;
+  color: var(--qshare-muted);
+}
+
+/* Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  .quick-share-modal {
+    animation: none !important;
+  }
+  .btn-quick-share-badge,
+  .btn-qshare-channel {
+    transition: none !important;
+    transform: none !important;
+  }
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 480px) {
+  .quick-share-channels {
+    grid-template-columns: 1fr;
+  }
+  .quick-share-modal {
+    padding: 18px 16px;
+  }
+}

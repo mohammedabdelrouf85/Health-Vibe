@@ -6181,6 +6181,58 @@ app.post('/api/reports/share', requireAuth, async (req, res) => {
 });
 
 /**
+ * POST /api/reports/:id/share-link
+ * Quick 1-click share link generator for family and attending physicians (مرجع: HealthTag)
+ */
+app.post('/api/reports/:id/share-link', async (req, res) => {
+  try {
+    const caseId = req.params.id;
+    const { recipientType = 'family', expiresInHours = 48 } = req.body || {};
+    const uid = (req.user && req.user.uid) || 'guest';
+    const hours = Math.min(Math.max(Number(expiresInHours) || 48, 1), 720);
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + hours * 3600 * 1000).toISOString();
+    const shareId = crypto.randomBytes(24).toString('hex');
+    const reportRef = `HV-REP-${String(caseId).slice(-8).toUpperCase()}`;
+
+    const shareRecord = {
+      shareId,
+      caseId,
+      recipientType,
+      createdBy: uid,
+      createdAt: now.toISOString(),
+      expiresAt,
+      status: 'active',
+      reportRef
+    };
+
+    reportSharesRegistry.set(shareId, shareRecord);
+
+    if (auditService && typeof auditService.logSecurityEvent === 'function') {
+      auditService.logSecurityEvent({
+        type: 'PATIENT_REPORT_QUICK_SHARED',
+        actorUid: uid,
+        actorRole: (req.user && req.user.role) || 'patient',
+        targetUserId: uid,
+        outcome: 'SUCCESS',
+        metadata: { caseId, shareId, recipientType, expiresAt }
+      });
+    }
+
+    res.json({
+      success: true,
+      caseId,
+      shareId,
+      shareUrl: `/shared-report.html?token=${shareId}`,
+      expiresAt,
+      reportRef
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to generate share link.' });
+  }
+});
+
+/**
  * POST /api/reports/share/revoke
  * Revokes an existing time-limited share link.
  */

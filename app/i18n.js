@@ -373,6 +373,25 @@
         generalSubtitle: "المؤشرات الحيوية السريرية الأساسية",
         generalAction: "تسجيل فحص سريري شامل"
       },
+      quickShare: {
+        quickShareBtn: "مشاركة مع العائلة",
+        modalTitle: "مشاركة التقرير الطبي مع العائلة",
+        modalSubtitle: "رابط آمن ومشفر للاطمئنان على الحالة الصحية",
+        closeAria: "إغلاق نافذة المشاركة",
+        reassuranceTitle: "مشاركة آمنة ومحمية سريرياً:",
+        reassuranceBody: "يتيح هذا الرابط لأفراد أسرتك أو طبيبك الإطلاع المباشر على التقرير المعتمد ونتائج الفحص دون الحاجة لتسجيل حساب.",
+        generatingLink: "جارٍ توليد الرابط الآمن...",
+        linkInputAria: "رابط المشاركة المعتمد",
+        validityNotice: "صلاحية الرابط: 48 ساعة من الآن",
+        encryptedBadge: "مشفر وموثق",
+        whatsappAria: "مشاركة التقرير عبر واتساب",
+        shareWhatsApp: "مشاركة عبر واتساب",
+        copyAria: "نسخ رابط التقرير",
+        copyLink: "نسخ الرابط",
+        copiedSuccess: "تم النسخ!",
+        copiedToast: "تم نسخ رابط التقرير بنجاح!",
+        noReportSelected: "يرجى اختيار تقرير طبي أولاً"
+      },
       consent: {
         title: "الموافقة الطبية وسياسة الخصوصية",
         badgeRequired: "مطلوبة قبل الفحص",
@@ -1449,6 +1468,25 @@
         generalTitle: "Comprehensive Health Care",
         generalSubtitle: "Core Clinical Vital Indicators",
         generalAction: "Log Clinical Vitals"
+      },
+      quickShare: {
+        quickShareBtn: "Share with Family",
+        modalTitle: "Share Medical Report with Family",
+        modalSubtitle: "Secure encrypted link for peace of mind",
+        closeAria: "Close share dialog",
+        reassuranceTitle: "Clinically Protected Sharing:",
+        reassuranceBody: "This link allows your family members or consulting doctor direct access to review the certified report without requiring account registration.",
+        generatingLink: "Generating secure link...",
+        linkInputAria: "Certified share link",
+        validityNotice: "Link validity: 48 hours from now",
+        encryptedBadge: "Encrypted & Certified",
+        whatsappAria: "Share report via WhatsApp",
+        shareWhatsApp: "Share via WhatsApp",
+        copyAria: "Copy report link",
+        copyLink: "Copy Link",
+        copiedSuccess: "Copied!",
+        copiedToast: "Report link copied to clipboard successfully!",
+        noReportSelected: "Please select a medical report first"
       },
       consent: {
         title: "Medical Consent & Privacy Policy",

@@ -68,6 +68,7 @@
   <link rel="stylesheet" href="./modules/appointments/appointments.css">
   <link rel="stylesheet" href="./modules/assessment/assessment.css">
   <link rel="stylesheet" href="./modules/reports/reports.css">
+  <link rel="stylesheet" href="./modules/reports/quick-share.css">
   <script src="./bootstrap.js?v=5.0"></script>
   <script src="./network-resilience.js?v=1.0"></script>
   <script src="./modules/core/connection-banner.js?v=1.0"></script>
@@ -568,7 +569,14 @@
 
         <div class="metric-grid">
           <article><span data-i18n="patient.nextAppointment">Next appointment</span><strong id="patientNextAppt">--</strong><small data-i18n="patient.followUpConsultation">Follow-up consultation</small></article>
-          <article><span data-i18n="patient.latestReport">Latest report</span><strong id="patientLatestReport">--</strong><small data-i18n="nav.assessment">Breathing Assessment</small></article>
+          <article>
+            <span data-i18n="patient.latestReport">Latest report</span>
+            <strong id="patientLatestReport">--</strong>
+            <small data-i18n="nav.assessment">Breathing Assessment</small>
+            <button type="button" id="btnPatientQuickShare" class="btn-quick-share-badge" onclick="if(window.HealthVibes && HealthVibes.QuickShareUI) HealthVibes.QuickShareUI.open(window._lastPatientReportCase || { id: 'latest' }); else if(window.openShareReportModal) openShareReportModal('latest');" aria-label="Quick Share Report with Family">
+              <span>🔗</span> <span data-i18n="quickShare.quickShareBtn">مشاركة مع العائلة</span>
+            </button>
+          </article>
           <article><span data-i18n="patient.resultStatus">Result status</span><strong id="patientResultStatus">--</strong><small data-i18n="patient.waitingForDoctor">Waiting for doctor</small></article>
           <article><span data-i18n="patient.medicalProfile">Medical Profile</span><strong id="patientProfileCompletion">100%</strong><small data-i18n="common.complete">Complete</small></article>
         </div>
@@ -3196,6 +3204,7 @@
   <script defer src="./modules/doctor/doctor-ui.js?v=1.0"></script>
   <script defer src="./modules/reports/reports-service.js?v=1.0"></script>
   <script defer src="./modules/reports/reports-ui.js?v=1.0"></script>
+  <script defer src="./modules/reports/quick-share-ui.js?v=1.0"></script>
   <script defer src="./modules/appointments/appointments-service.js?v=1.0"></script>
   <script defer src="./modules/appointments/appointments-ui.js?v=1.0"></script>
   <script defer src="./modules/admin/admin-service.js?v=1.0"></script>
