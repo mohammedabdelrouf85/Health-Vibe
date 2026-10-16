@@ -123,7 +123,9 @@ function runDeploy({ env = 'staging', dryRun = false, force = false, only = null
   // 4. Execute Firebase deployment
   console.log(`\n[3/4] Deploying to Firebase (${targetProject})...`);
   const deployTargets = only || (process.env.FIREBASE_DEPLOY_ONLY || 'hosting,firestore:rules');
-  const deployCmd = `npx firebase-tools deploy --project ${targetProject} --only ${deployTargets}`;
+  const localFirebaseBin = path.join(rootDir, 'node_modules', 'firebase-tools', 'lib', 'bin', 'firebase.js');
+  const firebaseExec = fs.existsSync(localFirebaseBin) ? `node "${localFirebaseBin}"` : 'npx firebase-tools';
+  const deployCmd = `${firebaseExec} deploy --project ${targetProject} --only ${deployTargets} --non-interactive`;
 
   if (dryRun) {
     console.log(`[DRY-RUN] Simulated execution of: ${deployCmd}`);
