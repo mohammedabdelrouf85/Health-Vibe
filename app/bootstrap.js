@@ -80,7 +80,26 @@
   window.hideAuth = hideAuth;
   window.dismissLoader = dismissLoader;
 
+  // Immediate check if document is already ready
+  if (document.readyState === "complete" || document.readyState === "interactive") {
+    setTimeout(dismissLoader, 100);
+  }
+
+  // Listen to both DOMContentLoaded and load
+  document.addEventListener("DOMContentLoaded", function() {
+    setTimeout(dismissLoader, 150);
+  });
+
   window.addEventListener("load", function() {
-    window.dismissLoader();
+    dismissLoader();
   }, { once: true });
+
+  // Ultimate watchdog safety timer: under no circumstances should any user get stuck on the loader
+  setTimeout(function() {
+    dismissLoader();
+    var publicSite = document.getElementById("publicSite");
+    if (publicSite && !document.documentElement.classList.contains("hv-has-session")) {
+      publicSite.classList.remove("is-hidden");
+    }
+  }, 1200);
 })();

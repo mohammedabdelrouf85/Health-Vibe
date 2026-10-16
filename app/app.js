@@ -2196,12 +2196,42 @@ const loaderSafetyTimer = window.setTimeout(() => {
   }
 }, loaderSafetyTimeoutMs);
 
-// Initialize Firebase
-if (!firebase.apps || !firebase.apps.length) {
-  firebase.initializeApp(firebaseConfig);
+// Initialize Firebase safely
+let db = null;
+let auth = null;
+try {
+  if (typeof firebase !== "undefined") {
+    if (!firebase.apps || !firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
+    db = typeof firebase.firestore === "function" ? firebase.firestore() : null;
+    auth = typeof firebase.auth === "function" ? firebase.auth() : null;
+  }
+} catch (fbInitErr) {
+  console.warn("[Health Vibe] Firebase early initialization deferred:", fbInitErr);
 }
-const db = firebase.firestore();
-const auth = firebase.auth();
+
+// Fallback poller if Firebase CDN scripts load with a slight delay
+if ((!db || !auth) && typeof window !== "undefined") {
+  const fbPoller = setInterval(() => {
+    try {
+      if (typeof firebase !== "undefined") {
+        if (!firebase.apps || !firebase.apps.length) {
+          firebase.initializeApp(firebaseConfig);
+        }
+        if (!db && typeof firebase.firestore === "function") db = firebase.firestore();
+        if (!auth && typeof firebase.auth === "function") {
+          auth = firebase.auth();
+          if (auth && typeof auth.onAuthStateChanged === "function") {
+            try { setupAuthStateListener(); } catch(e) {}
+          }
+        }
+        if (db && auth) clearInterval(fbPoller);
+      }
+    } catch(e) {}
+  }, 100);
+  setTimeout(() => clearInterval(fbPoller), 12000);
+}
 let googleProvider = null;
 function getGoogleAuthProvider() {
   try {
