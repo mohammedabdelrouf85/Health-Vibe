@@ -78,6 +78,7 @@ const diagnosticIntegrationService = require('./diagnostic-integration-service')
 const clinicalInfoExchangeService = require('./clinical-info-exchange-service');
 const operationalSwitchesService = require('./operational-switches-service');
 const caseHandoverService = require('./case-handover-service');
+const userDisplayPreferencesService = require('./user-display-preferences-service');
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -10636,6 +10637,69 @@ app.put('/api/notifications/preferences', requireAuth, async (req, res) => {
 });
 
 /**
+ * GET /api/user/preferences
+ * Returns the authenticated user's display, responsive preferences, and session state.
+ */
+app.get('/api/user/preferences', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.uid;
+    const preferences = await userDisplayPreferencesService.getUserDisplayPreferences(db, userId);
+    return res.json({ success: true, preferences });
+  } catch (err) {
+    console.error('[GET DISPLAY PREFERENCES ERROR]:', err);
+    return res.status(500).json({ error: 'FETCH_FAILED', message: err.message });
+  }
+});
+
+/**
+ * PUT /api/user/preferences
+ * Updates and merges user display/responsive preferences and session state.
+ */
+app.put('/api/user/preferences', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.uid;
+    const updates = req.body || {};
+    const preferences = await userDisplayPreferencesService.updateUserDisplayPreferences(db, userId, updates);
+    return res.json({
+      success: true,
+      message: 'User display preferences updated successfully.',
+      preferences
+    });
+  } catch (err) {
+    if (err.code && err.code.startsWith('INVALID_')) {
+      return res.status(400).json({ error: err.code, message: err.message });
+    }
+    console.error('[UPDATE DISPLAY PREFERENCES ERROR]:', err);
+    return res.status(500).json({ error: 'UPDATE_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/user/session-state
+ * Checkpoint active screen, module, or device tier for seamless resumption across devices.
+ */
+app.post('/api/user/session-state', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.uid;
+    const { screenId, moduleId, tabId, deviceTier } = req.body || {};
+    const preferences = await userDisplayPreferencesService.recordSessionCheckpoint(db, userId, {
+      screenId,
+      moduleId,
+      tabId,
+      deviceTier
+    });
+    return res.json({
+      success: true,
+      message: 'Session state saved successfully.',
+      preferences
+    });
+  } catch (err) {
+    console.error('[SESSION STATE ERROR]:', err);
+    return res.status(500).json({ error: 'SESSION_STATE_FAILED', message: err.message });
+  }
+});
+
+/**
  * POST /api/notifications/dispatch
  * Server-side notification sender endpoint enforcing channel preferences, quiet hours,
  * and urgent clinical bypass policies.
@@ -15089,5 +15153,6 @@ app.post('/api/hypertension/clarification/reply', requireAuth, (req, res) => {
   }
 });
 
+app.userDisplayPreferencesService = userDisplayPreferencesService;
 module.exports = app;
 

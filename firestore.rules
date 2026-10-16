@@ -748,6 +748,13 @@ service cloud.firestore {
     }
 
     // =========================================================================
+    // ⚙️ USER DISPLAY PREFERENCES & RESPONSIVE STATE (/user_display_preferences/{userId})
+    // =========================================================================
+    match /user_display_preferences/{userId} {
+      allow read, write: if isOwner() || (isAuthenticated() && isSelf(userId));
+    }
+
+    // =========================================================================
     // 13. 👑 MASTER CATCH-ALL OVERRIDE
     // =========================================================================
     match /{document=**} {

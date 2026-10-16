@@ -59,6 +59,7 @@
     "test:mobile": "node tests/mobile_ux.test.js",
     "test:responsive": "node tests/responsive_design_and_breakpoints.test.js",
     "test:bidi-responsive": "node tests/bidi_responsive_rtl_ltr.test.js",
+    "test:preferences": "node tests/user_preferences_and_session_persistence.test.js",
     "test:security": "node tests/security_scan.test.js",
     "test:appcheck": "node tests/app_check.test.js",
     "test:csp": "node tests/csp_security_headers.test.js",

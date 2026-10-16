@@ -25,8 +25,28 @@
   --bp-lg: 1024px;
   --bp-xl: 1280px;
   --bp-2xl: 1536px;
+  /* Clinical Density Tokens (Doctolib Ergonomics) */
+  --spacing-unit: 8px;
+  --card-padding: 20px;
+  --queue-item-padding: 14px 16px;
+  --control-height: 44px;
   color-scheme: dark;
   font-family: "Cairo", "IBM Plex Sans Arabic", "Segoe UI", Tahoma, sans-serif;
+}
+
+/* Clinical Density Modes (Doctolib Workstation Optimization) */
+[data-density="compact"] {
+  --spacing-unit: 6px;
+  --card-padding: 14px;
+  --queue-item-padding: 8px 12px;
+  --control-height: 38px;
+}
+
+[data-density="spacious"] {
+  --spacing-unit: 10px;
+  --card-padding: 24px;
+  --queue-item-padding: 18px 20px;
+  --control-height: 48px;
 }
 
 html.hv-theme-dark body,

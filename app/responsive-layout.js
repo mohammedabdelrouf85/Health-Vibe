@@ -209,6 +209,13 @@
           global.updateMobileBottomNav();
         } catch (e) {}
       }
+
+      // Synchronize device tier with user display preferences
+      if (typeof window !== "undefined" && window.HVUserPreferences && typeof window.HVUserPreferences.updateDeviceTier === "function") {
+        try {
+          window.HVUserPreferences.updateDeviceTier(newTier);
+        } catch (e) {}
+      }
     }
   }
 

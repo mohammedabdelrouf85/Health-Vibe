@@ -7464,6 +7464,13 @@ function showScreen(name) {
     button.classList.toggle("active", button.dataset.mobileScreen === name);
   });
 
+  // Persist session checkpoint in user display preferences
+  if (typeof window !== "undefined" && window.HVUserPreferences && typeof window.HVUserPreferences.checkpointSession === "function") {
+    try {
+      window.HVUserPreferences.checkpointSession(`screen-${name}`);
+    } catch (_) {}
+  }
+
   if (window.operationalSwitchesClient && typeof window.operationalSwitchesClient.renderAvailabilityBanners === "function") {
     window.operationalSwitchesClient.renderAvailabilityBanners();
   }
@@ -15825,6 +15832,13 @@ function initHVAuthListener() {
       saveActiveSession(user, selectedRole);
       // 1. Instantly transition UI into the app so user never hangs
       transitionToApp(user, { navigate: false });
+
+      // 2. Synchronize user display preferences & responsive settings with server
+      if (typeof window !== "undefined" && window.HVUserPreferences && typeof window.HVUserPreferences.syncWithServer === "function") {
+        try {
+          user.getIdToken().then(tok => window.HVUserPreferences.syncWithServer(tok)).catch(() => {});
+        } catch (_) {}
+      }
 
       const isOwner = isOwnerUser(user.email);
       const verificationRevoked = isVerificationRevoked(user.email);
