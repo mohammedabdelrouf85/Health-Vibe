@@ -49,6 +49,7 @@ const privacyService = require('./privacy-service');
 const auditService = require('./audit-service');
 const mfaService = require('./mfa-service');
 const schedulingService = require('./scheduling-service');
+const appointmentSafetyService = require('./appointment-safety-service');
 const timelineService = require('./timeline-service');
 const monitoringService = require('./monitoring-service');
 const incidentService = require('./incident-service');
@@ -8336,13 +8337,54 @@ app.get('/api/appointments/availability', async (req, res) => {
 });
 
 /**
+ * POST /api/appointments/evaluate-triage
+ * Real-time clinical safety & emergency red-flag triage screening for appointment calendar & chatbot.
+ */
+app.post('/api/appointments/evaluate-triage', async (req, res) => {
+  try {
+    const triage = appointmentSafetyService.evaluateAppointmentEmergencyRisk(req.body || {});
+    return res.json({ success: true, triage });
+  } catch (err) {
+    console.error('[TRIAGE EVALUATION ERROR]:', err);
+    return res.status(500).json({ error: 'TRIAGE_EVALUATION_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/appointments/clinical-evaluation
+ * Physician-exclusive clinical documentation, diagnosis, prescriptions, and ICD-10 coding.
+ * Enforces verified physician primacy and blocks autonomous AI or patient circumvention.
+ */
+app.post('/api/appointments/clinical-evaluation', requireAuth, requireVerifiedEmail, async (req, res) => {
+  try {
+    const userRole = getTrustedClaimRole(req.user);
+    if (userRole !== ROLES.DOCTOR && userRole !== ROLES.SUPER_ADMIN && !hasTrustedAdminClaim(req.user)) {
+      return res.status(403).json({
+        error: 'CLINICIAN_ROLE_REQUIRED',
+        message: 'Access denied: Clinical diagnoses and prescriptions can only be authored by licensed human physicians.'
+      });
+    }
+
+    const result = await appointmentSafetyService.recordDoctorClinicalEvaluation(db, req.body || {}, req.user);
+    return res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('[CLINICAL EVALUATION ERROR]:', err);
+    const statusCode = err.statusCode || 500;
+    return res.status(statusCode).json({ error: err.code || 'CLINICAL_EVALUATION_FAILED', message: err.message });
+  }
+});
+
+/**
  * POST /api/appointments/book
  * Server-authoritative appointment booking with ACID transaction,
  * stable canonical identifiers, and anti-double booking concurrency locks.
  * Guarantees that an appointment is NEVER marked confirmed before it is saved!
  */
 app.post('/api/appointments/book', requireAuth, requireVerifiedEmail, async (req, res) => {
-  const data = req.body || {};
+  const data = {
+    ...(req.body || {}),
+    _inMemoryStore: _inMemoryFamilyStore
+  };
 
   if (!data.doctorId || !data.date || !data.slotId) {
     return res.status(400).json({ error: 'INVALID_APPOINTMENT', message: 'doctorId, date, and slotId are required.' });

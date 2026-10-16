@@ -21,6 +21,7 @@ const {
 const waitingListService = require('./waiting-list-service');
 const googleCalendarService = require('./google-calendar-service');
 const telehealthVideoService = require('./telehealth-video-service');
+const appointmentSafetyService = require('./appointment-safety-service');
 
 // ============================================================================
 // 🏥 CLINICS REGISTRY
@@ -757,6 +758,31 @@ async function bookAppointmentTransaction(db, payload, authUser) {
   const { doctorId, date, slotId } = payload;
   const patientId = authUser.uid;
 
+  // 1. Physician Primacy Check: Non-physicians cannot inject diagnoses or prescriptions
+  appointmentSafetyService.enforcePhysicianRoleBoundaries(payload, authUser);
+
+  // 2. Emergency Red-Flag Triage Screening
+  const triage = appointmentSafetyService.evaluateAppointmentEmergencyRisk(payload);
+  if (triage.isEmergency && !triage.isDisclaimerAcknowledged) {
+    const err = new Error(
+      `حالة طوارئ طبية محتملة: ${triage.emergencyActionAr} | ${triage.emergencyActionEn}`
+    );
+    err.code = 'EMERGENCY_TRIAGE_ESCALATION_REQUIRED';
+    err.statusCode = 422;
+    err.details = triage;
+    throw err;
+  }
+
+  // 3. Family Beneficiary Verification & Authorization Boundary
+  let validatedBeneficiary = { isSelf: true, beneficiaryId: 'self', beneficiaryName: null };
+  if (payload.beneficiaryId && payload.beneficiaryId !== 'self') {
+    validatedBeneficiary = await appointmentSafetyService.validateFamilyBeneficiaryAccess(
+      db,
+      { patientId, beneficiaryId: payload.beneficiaryId },
+      payload._inMemoryStore || null
+    );
+  }
+
   if (!doctorId || !date || !slotId) {
     const err = new Error('doctorId, date, and slotId are required.');
     err.code = 'INVALID_APPOINTMENT';
@@ -778,7 +804,7 @@ async function bookAppointmentTransaction(db, payload, authUser) {
     throw err;
   }
 
-  // 1. Authoritative Work Schedule & Leave Validation
+  // 4. Authoritative Work Schedule & Leave Validation
   const doctor = getDoctorWithSchedule(doctorId, payload.doctorName);
   const availability = calculateDoctorSlots(doctor, date);
 
@@ -890,8 +916,9 @@ async function bookAppointmentTransaction(db, payload, authUser) {
           patientId: patientId,
           patientEmail: authUser.email || payload.patientEmail || null,
           patientPhone: payload.patientPhone || authUser.phoneNumber || null,
-          beneficiaryId: payload.beneficiaryId || 'self',
-          beneficiaryName: payload.beneficiaryName || null,
+          beneficiaryId: validatedBeneficiary.beneficiaryId || payload.beneficiaryId || 'self',
+          beneficiaryName: validatedBeneficiary.beneficiaryName || payload.beneficiaryName || null,
+          beneficiaryRelationship: validatedBeneficiary.relationship || 'self',
           consultationType: payload.consultationType || (isOnline ? 'video' : 'clinic'),
           type: payload.type || (isOnline ? 'video' : 'clinic'),
           typeLabel: payload.typeLabel || (isOnline ? 'استشارة فيديو عن بُعد' : 'حضور العيادة'),
@@ -913,6 +940,13 @@ async function bookAppointmentTransaction(db, payload, authUser) {
           slotKey: doctorSlotKey,
           patientSlotKey: patientSlotKey,
           status: APPOINTMENT_STATUSES.CONFIRMED,
+          emergencyRiskFlag: triage.isEmergency,
+          triageUrgency: triage.urgencyLevel,
+          detectedRedFlags: triage.detectedRedFlags,
+          emergencyActionPlan: triage.emergencyActionAr,
+          statutoryMedicalDisclaimer: appointmentSafetyService.STATUTORY_MEDICAL_DISCLAIMER.ar,
+          statutoryMedicalDisclaimerEn: appointmentSafetyService.STATUTORY_MEDICAL_DISCLAIMER.en,
+          physicianPrimacyGuaranteed: true,
           history: [initialHistoryEntry],
           createdAt: nowIso,
           confirmedAt: nowIso,
@@ -958,8 +992,9 @@ async function bookAppointmentTransaction(db, payload, authUser) {
         patientId: patientId,
         patientEmail: authUser.email || payload.patientEmail || null,
         patientPhone: payload.patientPhone || authUser.phoneNumber || null,
-        beneficiaryId: payload.beneficiaryId || 'self',
-        beneficiaryName: payload.beneficiaryName || null,
+        beneficiaryId: validatedBeneficiary.beneficiaryId || payload.beneficiaryId || 'self',
+        beneficiaryName: validatedBeneficiary.beneficiaryName || payload.beneficiaryName || null,
+        beneficiaryRelationship: validatedBeneficiary.relationship || 'self',
         consultationType: payload.consultationType || (isOnline ? 'video' : 'clinic'),
         type: payload.type || (isOnline ? 'video' : 'clinic'),
         typeLabel: payload.typeLabel || (isOnline ? 'استشارة فيديو عن بُعد' : 'حضور العيادة'),
@@ -973,6 +1008,13 @@ async function bookAppointmentTransaction(db, payload, authUser) {
         slotKey: doctorSlotKey,
         patientSlotKey: patientSlotKey,
         status: APPOINTMENT_STATUSES.CONFIRMED,
+        emergencyRiskFlag: triage.isEmergency,
+        triageUrgency: triage.urgencyLevel,
+        detectedRedFlags: triage.detectedRedFlags,
+        emergencyActionPlan: triage.emergencyActionAr,
+        statutoryMedicalDisclaimer: appointmentSafetyService.STATUTORY_MEDICAL_DISCLAIMER.ar,
+        statutoryMedicalDisclaimerEn: appointmentSafetyService.STATUTORY_MEDICAL_DISCLAIMER.en,
+        physicianPrimacyGuaranteed: true,
         history: [{
           action: 'BOOKED',
           actorUid: authUser.uid,
@@ -1051,7 +1093,12 @@ async function bookAppointmentTransaction(db, payload, authUser) {
  * Reschedule appointment: Safely reserves the replacement slot and releases the old slot atomically.
  * Preserves appointment change history and enforces role permissions and cancellation/reschedule policy.
  */
-async function rescheduleAppointmentTransaction(db, { appointmentId, newDate, newSlotId, reason }, actorUser) {
+async function rescheduleAppointmentTransaction(db, payload, actorUser) {
+  const { appointmentId, newDate, newSlotId, reason } = payload || {};
+
+  // Enforce physician role boundaries on any potential clinical input
+  appointmentSafetyService.enforcePhysicianRoleBoundaries(payload, actorUser);
+
   if (!appointmentId || !newDate || !newSlotId) {
     const err = new Error('appointmentId, newDate, and newSlotId are required.');
     err.code = 'MISSING_PARAMETERS';
@@ -1744,13 +1791,16 @@ async function getDoctorCalendar(db, { doctorId, startDate, endDate }, actorUser
     const availability = calculateDoctorSlots(doctor, dateStr);
     const daySlots = availability.slots.map(s => {
       const booking = bookedSlotsMap.get(`${dateStr}_${s.id}`);
-      return {
+      const rawSlot = {
         ...s,
         slotId: s.id,
         status: booking ? booking.status : (availability.available ? 'available' : availability.reason.toLowerCase()),
+        isBooked: Boolean(booking),
         appointmentId: booking ? booking.id : null,
-        patientName: booking && (actorUser?.role !== 'patient') ? booking.patientName : null
+        patientName: booking ? booking.patientName : null,
+        patientId: booking ? booking.patientId : null
       };
+      return appointmentSafetyService.sanitizeCalendarSlotForPrivacy(rawSlot, actorUser, doctor.doctorId);
     });
 
     days.push({
@@ -1897,11 +1947,15 @@ async function getDoctorCalendarRange(db, options = {}, actorUser = null) {
     if (availability.available && Array.isArray(availability.slots)) {
       availability.slots.forEach(slot => {
         const isBooked = bookedSlotsMap.has(`${dateStr}_${slot.id}`);
-        const slotItem = {
+        const booking = isBooked ? bookedSlotsMap.get(`${dateStr}_${slot.id}`) : null;
+        const rawSlotItem = {
           ...slot,
           isBooked,
-          status: isBooked ? 'booked' : 'available'
+          status: isBooked ? 'booked' : 'available',
+          patientName: booking?.patientName || null,
+          patientId: booking?.patientId || null
         };
+        const slotItem = appointmentSafetyService.sanitizeCalendarSlotForPrivacy(rawSlotItem, actorUser, doctor.doctorId);
 
         if (!isBooked) {
           dayAvailableCount++;
@@ -2077,5 +2131,12 @@ module.exports = {
   _activeMemorySlotLocks: activeMemorySlotLocks,
   waitingListService,
   googleCalendarService,
-  telehealthVideoService
+  telehealthVideoService,
+  appointmentSafetyService,
+  recordDoctorClinicalEvaluation: appointmentSafetyService.recordDoctorClinicalEvaluation,
+  evaluateAppointmentEmergencyRisk: appointmentSafetyService.evaluateAppointmentEmergencyRisk,
+  enforcePhysicianRoleBoundaries: appointmentSafetyService.enforcePhysicianRoleBoundaries,
+  validateFamilyBeneficiaryAccess: appointmentSafetyService.validateFamilyBeneficiaryAccess,
+  sanitizeCalendarSlotForPrivacy: appointmentSafetyService.sanitizeCalendarSlotForPrivacy,
+  STATUTORY_MEDICAL_DISCLAIMER: appointmentSafetyService.STATUTORY_MEDICAL_DISCLAIMER
 };
