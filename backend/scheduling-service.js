@@ -710,6 +710,69 @@ async function emitAppointmentNotificationEvent(db, { type, appointment, actorUs
     }
   }
 
+  // 2b. Record in-app & email notification to Attending Doctor if Pre-Visit Dossier is attached
+  if (appointment.doctorId && (appointment.hasAttachedReport || appointment.linkedCaseId)) {
+    try {
+      const spo2 = appointment.attachedAssessment?.oxygenLevel != null ? `${appointment.attachedAssessment.oxygenLevel}%` : 'طبيعي';
+      const docNotif = {
+        id: `unotif_doc_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+        userId: appointment.doctorId,
+        title: 'ملف حالة مسبق مرفق بالموعد (Pre-Visit Dossier)',
+        titleEn: 'Pre-Visit Medical Dossier Attached',
+        body: `قام المريض ${appointment.patientName || 'المريض'} بحجز موعد استشارة بتاريخ ${appointment.date} مع إرفاق تقرير التقييم التنفسي المعتمد (SpO2: ${spo2}). يرجى مراجعة ملف الحالة السريري قبل الزيارة.`,
+        bodyEn: `Patient ${appointment.patientName || 'Patient'} booked an appointment for ${appointment.date} with attached certified respiratory report (SpO2: ${spo2}). Please review clinical findings before visit.`,
+        category: 'clinical_dossier',
+        type: 'previsit_dossier_attached',
+        appointmentId: appointment.id,
+        linkedCaseId: appointment.linkedCaseId,
+        patientId: appointment.patientId,
+        patientName: appointment.patientName,
+        date: appointment.date,
+        timeSlot: appointment.timeSlot,
+        read: false,
+        createdAt: nowIso
+      };
+      const userColRef = db.collection('user_notifications');
+      if (typeof userColRef.add === 'function') {
+        await userColRef.add(docNotif);
+      } else if (typeof userColRef.doc === 'function') {
+        await userColRef.doc(docNotif.id).set(docNotif);
+      }
+
+      // Email notification record for doctor
+      const docEmail = DOCTOR_SCHEDULES[appointment.doctorId]?.email || `${appointment.doctorId}@healthvibes.org`;
+      const docEmailNotif = {
+        appointmentId: appointment.id,
+        linkedCaseId: appointment.linkedCaseId,
+        type: 'previsit_dossier_attached',
+        recipient: docEmail,
+        patientName: appointment.patientName || null,
+        doctorName: appointment.doctorName || null,
+        clinicId: appointment.clinicId || null,
+        date: appointment.date,
+        timeSlot: appointment.timeSlot,
+        subject: `📑 ملف تقييم تنفسي مسبق مرفق بموعد المريض: ${appointment.patientName} (${appointment.date})`,
+        status: 'sent',
+        sentAt: nowIso,
+        details: {
+          actorUid: actorUser.uid,
+          actorRole: actorUser.role || 'patient',
+          linkedCaseId: appointment.linkedCaseId,
+          attachedAssessment: appointment.attachedAssessment || null
+        }
+      };
+      const emailColRef = db.collection('email_notifications');
+      if (typeof emailColRef.add === 'function') {
+        await emailColRef.add(docEmailNotif);
+      } else if (typeof emailColRef.doc === 'function') {
+        const notifId = `notif_doc_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+        await emailColRef.doc(notifId).set(docEmailNotif);
+      }
+    } catch (docNotifErr) {
+      console.warn('[DOCTOR NOTIFICATION WARNING] Failed to persist previsit_dossier notification:', docNotifErr.message);
+    }
+  }
+
   // 3. Record SMS simulation log
   const smsRecipientPhone = appointment.patientPhone || details.recipientPhone || details.phone || '+201000000000';
   try {
@@ -834,6 +897,52 @@ async function bookAppointmentTransaction(db, payload, authUser) {
     err.code = 'APPOINTMENT_STORAGE_UNAVAILABLE';
     err.statusCode = 503;
     throw err;
+  }
+
+  // 3b. Validate Linked Medical Case Dossier Ownership & Certified Snapshot
+  let verifiedLinkedCase = null;
+  if (payload.linkedCaseId) {
+    try {
+      const caseRef = db.collection('cases').doc(payload.linkedCaseId);
+      const caseSnap = await caseRef.get();
+      if (caseSnap && caseSnap.exists) {
+        const cData = caseSnap.data() || {};
+        const belongsToUser = [cData.patientId, cData.patientUid, cData.userId, cData.uid].includes(patientId) ||
+          (effectiveAuthUser.email && [cData.patientEmail, cData.email].includes(effectiveAuthUser.email)) ||
+          (payload.beneficiaryId && payload.beneficiaryId !== 'self' && cData.beneficiaryId === payload.beneficiaryId);
+
+        if (!belongsToUser && effectiveAuthUser.role !== 'super_admin') {
+          const err = new Error('Access denied: You cannot attach a medical case that belongs to another patient.');
+          err.code = 'UNAUTHORIZED_CASE_ATTACHMENT';
+          err.statusCode = 403;
+          throw err;
+        }
+
+        const spo2 = cData.oxygenLevel != null ? Number(cData.oxygenLevel) : (cData.vitals?.oxygenSaturation || cData.spo2 || null);
+        verifiedLinkedCase = {
+          caseId: payload.linkedCaseId,
+          assessmentId: cData.assessmentId || cData.id || payload.linkedCaseId,
+          patientName: cData.patientName || payload.patientName || null,
+          oxygenLevel: spo2,
+          diagnosis: cData.diagnosis || cData.recordedDiag || 'Certified Respiratory Assessment',
+          status: cData.status || 'approved',
+          submittedAt: cData.submittedAt || cData.createdAt || new Date().toISOString(),
+          approvedAt: cData.approvedAt || cData.certifiedAt || null,
+          approvedByDoctorName: cData.approvedByDoctorName || cData.doctorName || null
+        };
+      }
+    } catch (csErr) {
+      if (csErr.statusCode === 403) throw csErr;
+      console.warn('Could not read linked case from Firestore:', csErr.message);
+    }
+
+    if (!verifiedLinkedCase && payload.attachedAssessment) {
+      verifiedLinkedCase = {
+        caseId: payload.linkedCaseId,
+        assessmentId: payload.linkedAssessmentId || payload.linkedCaseId,
+        ...payload.attachedAssessment
+      };
+    }
   }
 
   // 4. Authoritative Work Schedule & Leave Validation
@@ -979,10 +1088,10 @@ async function bookAppointmentTransaction(db, payload, authUser) {
           statutoryMedicalDisclaimer: appointmentSafetyService.STATUTORY_MEDICAL_DISCLAIMER.ar,
           statutoryMedicalDisclaimerEn: appointmentSafetyService.STATUTORY_MEDICAL_DISCLAIMER.en,
           physicianPrimacyGuaranteed: true,
-          linkedCaseId: payload.linkedCaseId || null,
-          linkedAssessmentId: payload.linkedAssessmentId || null,
-          hasAttachedReport: Boolean(payload.linkedCaseId || payload.hasAttachedReport),
-          attachedAssessment: payload.attachedAssessment || null,
+          linkedCaseId: (verifiedLinkedCase ? verifiedLinkedCase.caseId : payload.linkedCaseId) || null,
+          linkedAssessmentId: (verifiedLinkedCase ? verifiedLinkedCase.assessmentId : payload.linkedAssessmentId) || null,
+          hasAttachedReport: Boolean(verifiedLinkedCase || payload.linkedCaseId || payload.hasAttachedReport),
+          attachedAssessment: verifiedLinkedCase || payload.attachedAssessment || null,
           reportAccessGranted: Boolean(payload.reportAccessGranted || payload.linkedCaseId),
           history: [initialHistoryEntry],
           createdAt: nowIso,
@@ -1016,6 +1125,29 @@ async function bookAppointmentTransaction(db, payload, authUser) {
         });
 
         transaction.set(apptRef, appointmentDoc);
+
+        // Record bidirectional appointment reference on linked case document
+        if (payload.linkedCaseId) {
+          try {
+            const linkedCaseRef = db.collection('cases').doc(payload.linkedCaseId);
+            transaction.update(linkedCaseRef, {
+              appointmentRef: {
+                appointmentId: appointmentId,
+                doctorId: doctorId,
+                doctorName: doctor.name,
+                doctorSpecialty: doctor.specialty,
+                clinicId: doctor.clinicId,
+                clinicName: availability.clinic.name,
+                date: date,
+                slotId: slotId,
+                timeSlot: payload.timeSlot || validSlot.timeAr,
+                consultationType: isOnline ? 'video' : 'clinic',
+                linkedAt: nowIso
+              },
+              hasLinkedAppointment: true
+            });
+          } catch (cLinkErr) {}
+        }
 
         return appointmentDoc;
       });
@@ -1052,10 +1184,10 @@ async function bookAppointmentTransaction(db, payload, authUser) {
         statutoryMedicalDisclaimer: appointmentSafetyService.STATUTORY_MEDICAL_DISCLAIMER.ar,
         statutoryMedicalDisclaimerEn: appointmentSafetyService.STATUTORY_MEDICAL_DISCLAIMER.en,
         physicianPrimacyGuaranteed: true,
-        linkedCaseId: payload.linkedCaseId || null,
-        linkedAssessmentId: payload.linkedAssessmentId || null,
-        hasAttachedReport: Boolean(payload.linkedCaseId || payload.hasAttachedReport),
-        attachedAssessment: payload.attachedAssessment || null,
+        linkedCaseId: (verifiedLinkedCase ? verifiedLinkedCase.caseId : payload.linkedCaseId) || null,
+        linkedAssessmentId: (verifiedLinkedCase ? verifiedLinkedCase.assessmentId : payload.linkedAssessmentId) || null,
+        hasAttachedReport: Boolean(verifiedLinkedCase || payload.linkedCaseId || payload.hasAttachedReport),
+        attachedAssessment: verifiedLinkedCase || payload.attachedAssessment || null,
         reportAccessGranted: Boolean(payload.reportAccessGranted || payload.linkedCaseId),
         history: [{
           action: 'BOOKED',
@@ -2341,6 +2473,287 @@ async function getAppointmentAnalytics(db, options = {}) {
   };
 }
 
+
+// ============================================================================
+// 📑 DOCTOLIB PRE-VISIT MEDICAL DOSSIER ACCESS & LINKAGE ENGINE
+// ============================================================================
+
+/**
+ * Retrieve the full Pre-Visit Medical Dossier for an appointment (Doctolib Model).
+ * Enables the attending physician or patient to inspect certified clinical history,
+ * respiratory vitals, SpO2, cough severity, notes, and approved report before consultation.
+ */
+async function getAppointmentPrevisitDossier(db, appointmentId, actorUser) {
+  if (!appointmentId) {
+    const err = new Error('appointmentId is required.');
+    err.code = 'MISSING_APPOINTMENT_ID';
+    err.statusCode = 400;
+    throw err;
+  }
+  if (!actorUser) {
+    const err = new Error('Authentication required.');
+    err.code = 'AUTHENTICATION_REQUIRED';
+    err.statusCode = 401;
+    throw err;
+  }
+  if (!db || typeof db.collection !== 'function') {
+    const err = new Error('Database storage is unavailable.');
+    err.code = 'STORAGE_UNAVAILABLE';
+    err.statusCode = 503;
+    throw err;
+  }
+
+  const apptRef = db.collection('appointments').doc(appointmentId);
+  const apptSnap = await apptRef.get();
+  if (!apptSnap.exists) {
+    const err = new Error('Appointment was not found.');
+    err.code = 'APPOINTMENT_NOT_FOUND';
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const appt = apptSnap.data() || {};
+
+  // RBAC Permission check
+  const role = actorUser.role || 'patient';
+  const uid = actorUser.uid;
+  const isSuperAdmin = role === 'super_admin' || actorUser.isSuperAdmin;
+  const isAssignedDoctor = (role === 'doctor' && (appt.doctorId === uid || appt.doctorUid === uid || appt.assignedDoctorId === uid));
+  const isPatient = (role === 'patient' && appt.patientId === uid);
+  const isClinicAdmin = (role === 'clinic_admin' && actorUser.clinicId === appt.clinicId);
+
+  if (!isSuperAdmin && !isAssignedDoctor && !isPatient && !isClinicAdmin) {
+    const err = new Error("Access denied: You are not authorized to view this appointment's medical dossier.");
+    err.code = 'ACCESS_DENIED';
+    err.statusCode = 403;
+    throw err;
+  }
+
+  const linkedCaseId = appt.linkedCaseId || appt.attachedAssessment?.caseId;
+  if (!linkedCaseId) {
+    return {
+      success: true,
+      appointmentId,
+      hasAttachedReport: false,
+      message: 'No medical assessment dossier is attached to this appointment.',
+      appointment: {
+        id: appt.id,
+        patientName: appt.patientName,
+        date: appt.date,
+        timeSlot: appt.timeSlot,
+        type: appt.type,
+        status: appt.status
+      }
+    };
+  }
+
+  let caseData = null;
+  try {
+    const caseSnap = await db.collection('cases').doc(linkedCaseId).get();
+    if (caseSnap.exists) {
+      caseData = { id: caseSnap.id, ...caseSnap.data() };
+    }
+  } catch (cErr) {
+    console.warn('Could not fetch linked case document:', cErr.message);
+  }
+
+  if (!caseData && appt.attachedAssessment) {
+    caseData = {
+      id: linkedCaseId,
+      ...appt.attachedAssessment
+    };
+  }
+
+  // Clinical Safety Gate: If requester is patient and case is unapproved, mask clinical outcomes
+  if (isPatient && caseData && caseData.status !== 'approved' && caseData.status !== 'certified') {
+    caseData = {
+      id: caseData.id,
+      patientId: caseData.patientId,
+      status: 'pending_review',
+      submittedAt: caseData.submittedAt,
+      notice: 'التقرير قيد المراجعة السريرية من قِبل الطبيب المعالج.'
+    };
+  }
+
+  // Record audit access
+  try {
+    if (typeof auditService?.recordAuditEvent === 'function') {
+      await auditService.recordAuditEvent(db, {
+        type: 'PREVISIT_DOSSIER_ACCESSED',
+        actorUid: uid,
+        actorRole: role,
+        targetUserId: appt.patientId,
+        clinicId: appt.clinicId,
+        details: {
+          appointmentId,
+          linkedCaseId,
+          consultationDate: appt.date
+        }
+      });
+    }
+  } catch (audErr) {}
+
+  return {
+    success: true,
+    appointmentId,
+    hasAttachedReport: true,
+    linkedCaseId,
+    patient: {
+      id: appt.patientId,
+      name: appt.patientName,
+      email: appt.patientEmail,
+      phone: appt.patientPhone,
+      beneficiaryId: appt.beneficiaryId || 'self',
+      beneficiaryName: appt.beneficiaryName || null
+    },
+    appointment: {
+      id: appt.id,
+      doctorId: appt.doctorId,
+      doctorName: appt.doctorName,
+      doctorSpecialty: appt.doctorSpecialty,
+      clinicName: appt.clinicName,
+      date: appt.date,
+      timeSlot: appt.timeSlot,
+      type: appt.type,
+      typeLabel: appt.typeLabel,
+      status: appt.status,
+      notes: appt.notes || null
+    },
+    dossier: caseData
+  };
+}
+
+/**
+ * Atomically link a certified clinical case/assessment report to an appointment.
+ */
+async function linkAppointmentCaseDossier(db, { appointmentId, caseId }, actorUser) {
+  if (!appointmentId || !caseId) {
+    const err = new Error('Both appointmentId and caseId are required.');
+    err.code = 'MISSING_PARAMETERS';
+    err.statusCode = 400;
+    throw err;
+  }
+  if (!actorUser) {
+    const err = new Error('Authentication required.');
+    err.code = 'AUTHENTICATION_REQUIRED';
+    err.statusCode = 401;
+    throw err;
+  }
+
+  const apptRef = db.collection('appointments').doc(appointmentId);
+  const apptSnap = await apptRef.get();
+  if (!apptSnap.exists) {
+    const err = new Error('Appointment was not found.');
+    err.code = 'APPOINTMENT_NOT_FOUND';
+    err.statusCode = 404;
+    throw err;
+  }
+  const appt = apptSnap.data() || {};
+
+  // Check authorization
+  const role = actorUser.role || 'patient';
+  const uid = actorUser.uid;
+  const isSuperAdmin = role === 'super_admin' || actorUser.isSuperAdmin;
+  const isPatient = role === 'patient' && appt.patientId === uid;
+  const isDoctor = role === 'doctor' && (appt.doctorId === uid || appt.doctorUid === uid);
+
+  if (!isSuperAdmin && !isPatient && !isDoctor) {
+    const err = new Error('Access denied: You cannot modify this appointment.');
+    err.code = 'ACCESS_DENIED';
+    err.statusCode = 403;
+    throw err;
+  }
+
+  // Fetch case
+  const caseRef = db.collection('cases').doc(caseId);
+  const caseSnap = await caseRef.get();
+  if (!caseSnap.exists) {
+    const err = new Error('Case was not found.');
+    err.code = 'CASE_NOT_FOUND';
+    err.statusCode = 404;
+    throw err;
+  }
+  const caseData = caseSnap.data() || {};
+
+  // Ownership check
+  const belongsToPatient = [caseData.patientId, caseData.patientUid, caseData.userId, caseData.uid].includes(appt.patientId) ||
+    (caseData.email && caseData.email === appt.patientEmail);
+  if (!belongsToPatient && !isSuperAdmin) {
+    const err = new Error('Access denied: Case does not belong to the patient of this appointment.');
+    err.code = 'UNAUTHORIZED_CASE_ATTACHMENT';
+    err.statusCode = 403;
+    throw err;
+  }
+
+  const nowIso = new Date().toISOString();
+  const spo2 = caseData.oxygenLevel != null ? Number(caseData.oxygenLevel) : (caseData.vitals?.oxygenSaturation || caseData.spo2 || null);
+
+  const attachedSnapshot = {
+    caseId,
+    assessmentId: caseData.assessmentId || caseId,
+    oxygenLevel: spo2,
+    diagnosis: caseData.diagnosis || caseData.recordedDiag || 'Certified Respiratory Assessment',
+    status: caseData.status || 'approved',
+    submittedAt: caseData.submittedAt || caseData.createdAt || nowIso,
+    approvedAt: caseData.approvedAt || null,
+    approvedByDoctorName: caseData.approvedByDoctorName || caseData.doctorName || null
+  };
+
+  const historyEntry = {
+    action: 'PREVISIT_DOSSIER_ATTACHED',
+    actorUid: uid,
+    actorRole: role,
+    timestamp: nowIso,
+    details: { caseId, attachedBy: uid }
+  };
+  const history = Array.isArray(appt.history) ? [...appt.history, historyEntry] : [historyEntry];
+
+  // Update appointment
+  await apptRef.update({
+    linkedCaseId: caseId,
+    linkedAssessmentId: attachedSnapshot.assessmentId,
+    hasAttachedReport: true,
+    attachedAssessment: attachedSnapshot,
+    reportAccessGranted: true,
+    history
+  });
+
+  // Update case with bidirectional reference
+  try {
+    if (typeof caseRef.update === 'function') {
+      await caseRef.update({
+        appointmentRef: {
+          appointmentId,
+          doctorId: appt.doctorId,
+          doctorName: appt.doctorName,
+          date: appt.date,
+          slotId: appt.slotId,
+          timeSlot: appt.timeSlot,
+          linkedAt: nowIso
+        },
+        hasLinkedAppointment: true
+      });
+    }
+  } catch (cupErr) {}
+
+  // Emit notification to doctor
+  try {
+    await emitAppointmentNotificationEvent(db, {
+      type: 'APPOINTMENT_STATUS_CHANGED',
+      appointment: { ...appt, linkedCaseId: caseId, hasAttachedReport: true, attachedAssessment: attachedSnapshot },
+      actorUser,
+      details: { reason: 'PREVISIT_DOSSIER_ATTACHED', caseId }
+    });
+  } catch (notifErr) {}
+
+  return {
+    success: true,
+    appointmentId,
+    linkedCaseId: caseId,
+    attachedAssessment: attachedSnapshot
+  };
+}
+
 module.exports = {
   CLINICS,
   DOCTOR_SCHEDULES,
@@ -2370,6 +2783,8 @@ module.exports = {
   getDoctorCalendarRange,
   getPulmonologyDoctors,
   getClinicCalendar,
+  getAppointmentPrevisitDossier,
+  linkAppointmentCaseDossier,
   getAppointmentAnalytics,
   emitAppointmentNotificationEvent,
   scheduleAppointmentReminder,

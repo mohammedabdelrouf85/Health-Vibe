@@ -513,6 +513,7 @@ app.use([
   '/api/notifications/delivery-webhook',
   '/api/feedback/submit',
   '/api/appointments/book',
+  '/api/appointments/link-case-dossier',
   '/api/appointments/reschedule',
   '/api/appointments/cancel',
   '/api/appointments/update-status',
@@ -8620,6 +8621,47 @@ app.get('/api/appointments/clinic-calendar', requireAuth, async (req, res) => {
     console.error('[CLINIC CALENDAR ERROR]:', err);
     const statusCode = err.statusCode || 500;
     return res.status(statusCode).json({ error: err.code || 'CLINIC_CALENDAR_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/appointments/:id/previsit-dossier
+ * Retrieves the full Pre-Visit Medical Dossier for attending physician review before consultation.
+ */
+app.get('/api/appointments/:id/previsit-dossier', requireAuth, async (req, res) => {
+  const appointmentId = req.params.id;
+  if (!db || typeof db.collection !== 'function') {
+    return res.status(503).json({ error: 'STORAGE_UNAVAILABLE', message: 'Storage unavailable.' });
+  }
+  try {
+    const result = await schedulingService.getAppointmentPrevisitDossier(db, appointmentId, req.user);
+    return res.json(result);
+  } catch (err) {
+    console.error('[PREVISIT DOSSIER GET ERROR]:', err);
+    const statusCode = err.statusCode || 500;
+    return res.status(statusCode).json({ error: err.code || 'DOSSIER_FETCH_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/appointments/link-case-dossier
+ * Links a certified clinical case/assessment report to an appointment.
+ */
+app.post('/api/appointments/link-case-dossier', requireAuth, requireVerifiedEmail, async (req, res) => {
+  const { appointmentId, caseId } = req.body || {};
+  if (!appointmentId || !caseId) {
+    return res.status(400).json({ error: 'MISSING_PARAMETERS', message: 'Both appointmentId and caseId are required.' });
+  }
+  if (!db || typeof db.collection !== 'function') {
+    return res.status(503).json({ error: 'STORAGE_UNAVAILABLE', message: 'Storage unavailable.' });
+  }
+  try {
+    const result = await schedulingService.linkAppointmentCaseDossier(db, { appointmentId, caseId }, req.user);
+    return res.json(result);
+  } catch (err) {
+    console.error('[LINK CASE DOSSIER ERROR]:', err);
+    const statusCode = err.statusCode || 500;
+    return res.status(statusCode).json({ error: err.code || 'DOSSIER_LINK_FAILED', message: err.message });
   }
 });
 
