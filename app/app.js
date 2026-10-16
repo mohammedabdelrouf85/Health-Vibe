@@ -5294,33 +5294,146 @@ window.showForgotView = showForgotView;
 
 function toFriendlyAppError(err, context = "") {
   const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  if (typeof window !== "undefined" && window.HealthVibes && window.HealthVibes.ErrorHandler && typeof window.HealthVibes.ErrorHandler.toFriendlyAppError === "function") {
+    return window.HealthVibes.ErrorHandler.toFriendlyAppError(err, context, isEn);
+  }
+
   let code = "";
   let rawMessage = "";
 
   if (typeof err === "string") {
     rawMessage = err;
-    if (err.startsWith("auth/") || err.startsWith("firestore/")) {
-      code = err;
+    if (err.includes("/") || err.includes("-")) {
+      code = err.trim().toLowerCase();
     }
   } else if (err && typeof err === "object") {
     code = String(err.code || "").toLowerCase();
     rawMessage = String(err.message || "");
   }
 
-  // Detect patterns in raw error message when code is not standard
+  const rawLower = (rawMessage + " " + code).toLowerCase();
+
   if (!code && rawMessage) {
-    if (rawMessage.includes("permission-denied") || rawMessage.includes("insufficient permissions")) {
+    if (rawLower.includes("permission-denied") || rawLower.includes("insufficient permissions")) {
       code = "permission-denied";
-    } else if (rawMessage.includes("network") || rawMessage.includes("Failed to fetch") || rawMessage.includes("offline")) {
+    } else if (rawLower.includes("network") || rawLower.includes("failed to fetch") || rawLower.includes("offline")) {
       code = "network-error";
-    } else if (rawMessage.includes("quota") || rawMessage.includes("resource-exhausted")) {
+    } else if (rawLower.includes("quota") || rawLower.includes("resource-exhausted")) {
       code = "resource-exhausted";
-    } else if (rawMessage.includes("user-not-found") || rawMessage.includes("wrong-password") || rawMessage.includes("invalid-credential")) {
+    } else if (rawLower.includes("user-not-found") || rawLower.includes("wrong-password") || rawLower.includes("invalid-credential")) {
       code = "auth/invalid-credential";
+    } else if (rawLower.includes("spo2") || rawLower.includes("oxygen")) {
+      code = "clinical/spo2-out-of-range";
+    } else if (rawLower.includes("temperature") || rawLower.includes("fever") || rawLower.includes("حرارة")) {
+      code = "clinical/temperature-out-of-range";
+    } else if (rawLower.includes("pulse") || rawLower.includes("heart rate") || rawLower.includes("نبض")) {
+      code = "clinical/heart-rate-out-of-range";
+    } else if (rawLower.includes("respiratory") || rawLower.includes("تنفس")) {
+      code = "clinical/respiratory-rate-out-of-range";
+    } else if (rawLower.includes("phone") || rawLower.includes("هاتف") || rawLower.includes("محمول")) {
+      code = "validation/phone-invalid";
+    } else if (rawLower.includes("national id") || rawLower.includes("الرقم القومي")) {
+      code = "validation/national-id-invalid";
+    } else if (rawLower.includes("slot") || rawLower.includes("appointment") || rawLower.includes("موعد")) {
+      code = "appointment/slot-taken";
+    } else if (rawLower.includes("file") && (rawLower.includes("large") || rawLower.includes("size") || rawLower.includes("حجم"))) {
+      code = "file/too-large";
     }
   }
 
-  // 1. Authentication Credentials
+  // Clinical Vitals
+  if (code.includes("spo2") || code.includes("oxygen")) {
+    return {
+      icon: "🩺",
+      category: isEn ? "Vital Signs" : "العلامات الحيوية",
+      title: isEn ? "Invalid Oxygen Saturation (SpO2)" : "نسبة الأكسجين غير صالحة",
+      message: isEn ? "Blood oxygen saturation must be a valid integer percentage between 50% and 100%." : "نسبة تشبع الأكسجين في الدم يجب أن تكون قيمة صحيحة بين 50% و 100%.",
+      action: isEn ? "Please re-check your pulse oximeter reading on your finger and enter a value between 50 and 100." : "يرجى التحقق من القراءة عبر جهاز مقياس النبض (Pulse Oximeter) وإعادة كتابة رقم صحيح بين 50 و 100.",
+      field: "spo2",
+      ref: "clinical/spo2-out-of-range",
+      severity: "error"
+    };
+  }
+
+  if (code.includes("temp") || code.includes("fever")) {
+    return {
+      icon: "🌡️",
+      category: isEn ? "Vital Signs" : "العلامات الحيوية",
+      title: isEn ? "Temperature Out of Clinical Range" : "درجة الحرارة خارج النطاق الطبي",
+      message: isEn ? "Body temperature must be within a physiologically safe human range (34.0°C to 43.0°C)." : "درجة حرارة الجسم المسجلة غير متوافقة مع القياس البشري المعتمد (المسموح بين 34.0° و 43.0° مئوية).",
+      action: isEn ? "Check with a clinical thermometer and enter a reading with one decimal place (e.g. 37.2 or 38.5)." : "أعد قياس الحرارة بالترمومتر واكتب الرقم بالفواصل العشرية المعتادة (مثال: 37.2 أو 38.5).",
+      field: "temperature",
+      ref: "clinical/temperature-out-of-range",
+      severity: "error"
+    };
+  }
+
+  if (code.includes("heart-rate") || code.includes("pulse")) {
+    return {
+      icon: "💓",
+      category: isEn ? "Vital Signs" : "العلامات الحيوية",
+      title: isEn ? "Invalid Heart Rate" : "معدل النبض غير منطقي",
+      message: isEn ? "Resting heart rate must be within the physiological range of 30 to 250 beats per minute (bpm)." : "معدل نبضات القلب يجب أن يتراوح بين 30 و 250 نبضة في الدقيقة.",
+      action: isEn ? "Count your radial pulse for 60 seconds or use a digital monitor, then enter an integer." : "يرجى إعادة قياس النبض يدوياً أو عبر الساعة الذكية وإدخال رقم صحيح بين 30 و 250.",
+      field: "heart_rate",
+      ref: "clinical/heart-rate-out-of-range",
+      severity: "error"
+    };
+  }
+
+  if (code.includes("phone") || code.includes("mobile")) {
+    return {
+      icon: "📱",
+      category: isEn ? "Contact Information" : "بيانات التواصل",
+      title: isEn ? "Invalid Mobile Number" : "رقم الهاتف غير صحيح",
+      message: isEn ? "Egyptian mobile numbers must consist of 11 digits starting with 010, 011, 012, or 015." : "رقم المحمول المصري يتكون من 11 رقماً ويبدأ بأحد الشبكات: 010 أو 011 أو 012 أو 015.",
+      action: isEn ? "Check for missing digits or accidental spaces and enter an 11-digit mobile number (e.g. 01012345678)." : "تأكد من كتابة 11 رقماً بدون مسافات أو رموز خاصة (مثال: 01012345678).",
+      field: "phone",
+      ref: "validation/phone-invalid",
+      severity: "error"
+    };
+  }
+
+  if (code.includes("national-id") || code.includes("nid")) {
+    return {
+      icon: "🪪",
+      category: isEn ? "National Identity" : "الهوية الشخصية",
+      title: isEn ? "Invalid National ID" : "الرقم القومي غير مطابق",
+      message: isEn ? "Egyptian National ID consists of exactly 14 digits starting with 2 or 3 matching official records." : "الرقم القومي المصري يتكون من 14 رقماً ويبدأ بالرقم 2 أو 3 وفقاً لسجلات شهادة الميلاد وبطاقة الهوية.",
+      action: isEn ? "Check your national identity card and enter all 14 digits without spaces or dashes." : "راجع بطاقة الرقم القومي وأدخل الـ 14 رقماً بالكامل دون فواصل أو مسافات.",
+      field: "national_id",
+      ref: "validation/national-id-invalid",
+      severity: "error"
+    };
+  }
+
+  if (code.includes("slot-taken") || code.includes("slot-already-booked")) {
+    return {
+      icon: "📅",
+      category: isEn ? "Appointments" : "حجز المواعيد",
+      title: isEn ? "Time Slot Already Booked" : "الموعد تم حجزه للتو",
+      message: isEn ? "Another patient just confirmed this specific appointment slot. Clinic schedules update in real time." : "قام مريض آخر بحجز هذا الموعد قبل ثوانٍ قليلة. يتم تحديث جدول العيادة فورياً.",
+      action: isEn ? "Please select another convenient slot from the doctor's available calendar." : "يرجى اختيار موعد بديل مناسب من جدول المواعيد المتاحة لدى الطبيب.",
+      field: "appointment_slot",
+      ref: "appointment/slot-taken",
+      severity: "warning"
+    };
+  }
+
+  if (code.includes("too-large") || code.includes("file-size")) {
+    return {
+      icon: "📎",
+      category: isEn ? "Medical Attachments" : "الملفات الطبية",
+      title: isEn ? "Attachment Exceeds 10 MB" : "حجم الملف يتجاوز الحد المسموح",
+      message: isEn ? "The selected medical report or scan exceeds the maximum allowed upload limit of 10 MB." : "حجم التقرير أو الأشعة المرفقة يتجاوز الحد الأقصى المسموح به (10 ميجابايت).",
+      action: isEn ? "Please compress your PDF or choose a medium-resolution photo of the document." : "يرجى ضغط ملف الـ PDF أو تصوير التقرير بجودة مناسبة دون تجاوز 10 ميجابايت.",
+      field: "medical_file",
+      ref: "file/too-large",
+      severity: "error"
+    };
+  }
+
+  // Authentication Credentials
   if (code.includes("user-not-found") || code.includes("wrong-password") || code.includes("invalid-credential")) {
     return {
       icon: "🔒",
@@ -5330,7 +5443,8 @@ function toFriendlyAppError(err, context = "") {
         ? "The email address or password entered does not match our verified records. Please check your credentials."
         : "البريد الإلكتروني أو كلمة المرور غير مطابقة لسجلاتنا. يرجى التحقق من صحة البيانات والمحاولة ثانية.",
       action: isEn ? "Check for typos in your email and password, or use 'Forgot Password?' to restore access." : "تأكد من كتابة البريد وكلمة المرور بدقة، أو اضغط على 'نسيت كلمة المرور؟' لاستعادة الحساب.",
-      ref: code || "auth/invalid-credential"
+      ref: code || "auth/invalid-credential",
+      severity: "error"
     };
   }
 
@@ -5343,7 +5457,8 @@ function toFriendlyAppError(err, context = "") {
         ? "Please enter a valid email address (e.g. user@example.com)."
         : "يرجى كتابة عنوان بريد إلكتروني صحيح ومكتمل (مثال: user@example.com).",
       action: isEn ? "Verify there are no extra spaces or missing symbols in the email field." : "تأكد من عدم وجود مسافات إضافية وكتابة الرمز @ واسم النطاق بشكل صحيح.",
-      ref: code || "auth/invalid-email"
+      ref: code || "auth/invalid-email",
+      severity: "error"
     };
   }
 
@@ -5356,7 +5471,8 @@ function toFriendlyAppError(err, context = "") {
         ? "An existing Health Vibe account is already associated with this email address."
         : "يوجد حساب مسجل مسبقاً بهذا البريد الإلكتروني في النظام.",
       action: isEn ? "Please switch to 'Sign In' or recover your password if you forgot it." : "يرجى التبديل إلى 'تسجيل الدخول' أو استعادة كلمة المرور إذا كنت قد نسيتها.",
-      ref: code || "auth/email-already-in-use"
+      ref: code || "auth/email-already-in-use",
+      severity: "warning"
     };
   }
 
@@ -5369,7 +5485,8 @@ function toFriendlyAppError(err, context = "") {
         ? "This credential is already connected to another Health Vibes profile. Medical records cannot be merged automatically."
         : "وسيلة تسجيل الدخول هذه مرتبطة بالفعل بملف مستخدم آخر. لحماية خصوصية وسجلات المرضى، لا يمكن دمج الحسابات تلقائياً.",
       action: isEn ? "Sign in using that method directly, or verify ownership of both accounts." : "يرجى تسجيل الدخول بتلك الوسيلة مباشرة، أو إثبات ملكية الحسابين للتنسيق.",
-      ref: code || "auth/credential-already-in-use"
+      ref: code || "auth/credential-already-in-use",
+      severity: "warning"
     };
   }
 
@@ -5382,7 +5499,8 @@ function toFriendlyAppError(err, context = "") {
         ? "An account with this email address already exists using a password. Please sign in with your email and password first, then link Google from your Profile settings."
         : "يوجد حساب مسجل بهذا البريد مسبقاً بكلمة المرور. يرجى تسجيل الدخول بالبريد وكلمة المرور أولاً، ثم ربط حساب Google من إعدادات الملف الشخصي.",
       action: isEn ? "Enter your password to sign in and prove account ownership." : "أدخل كلمة المرور لتسجيل الدخول وإثبات ملكية الحساب.",
-      ref: code || "auth/account-exists-with-different-credential"
+      ref: code || "auth/account-exists-with-different-credential",
+      severity: "warning"
     };
   }
 
@@ -5395,7 +5513,8 @@ function toFriendlyAppError(err, context = "") {
         ? "The authentication popup was closed before completing the process."
         : "تم إغلاق نافذة المصادقة قبل اكتمال العملية.",
       action: isEn ? "You can try again whenever you are ready." : "يمكنك المحاولة مجدداً في أي وقت.",
-      ref: code || "auth/popup-closed-by-user"
+      ref: code || "auth/popup-closed-by-user",
+      severity: "info"
     };
   }
 
@@ -5405,10 +5524,11 @@ function toFriendlyAppError(err, context = "") {
       category: isEn ? "Security" : "أمان الحساب",
       title: isEn ? "Password Too Weak" : "كلمة المرور قصيرة جداً",
       message: isEn
-        ? "For patient clinical data privacy, passwords must contain at least 6 characters."
-        : "لحماية خصوصية وسجلاتك الطبية، يجب أن تتكون كلمة المرور من 6 خانات على الأقل.",
+        ? "For patient clinical data privacy, passwords must contain at least 8 characters with letters and numbers."
+        : "لحماية خصوصية وسجلاتك الطبية، يجب ألا تقل كلمة المرور عن 8 خانات وتحتوي على أحرف وأرقام معاً.",
       action: isEn ? "Please enter a stronger password combining letters and numbers." : "يرجى اختيار كلمة مرور أطول تحتوي على أحرف وأرقام.",
-      ref: code || "auth/weak-password"
+      ref: code || "auth/weak-password",
+      severity: "error"
     };
   }
 
@@ -5421,7 +5541,8 @@ function toFriendlyAppError(err, context = "") {
         ? "Access has been temporarily paused due to multiple consecutive incorrect attempts."
         : "تم تعليق المحاولات مؤقتاً لحماية الحساب بعد تكرار إدخال بيانات غير صحيحة.",
       action: isEn ? "Please wait 1-2 minutes before attempting to sign in again." : "يرجى الانتظار لمدة دقيقة أو دقيقتين ثم إعادة المحاولة.",
-      ref: code || "auth/too-many-requests"
+      ref: code || "auth/too-many-requests",
+      severity: "warning"
     };
   }
 
@@ -5434,7 +5555,8 @@ function toFriendlyAppError(err, context = "") {
         ? "This sensitive operation requires confirming your password to ensure account ownership."
         : "هذا الإجراء الحساس يتطلب تأكيد كلمة المرور الحالية للتأكد من هوية صاحب الحساب.",
       action: isEn ? "Please enter your password in the prompt to proceed." : "يرجى كتابة كلمة المرور الحالية لتأكيد الإجراء بأمان.",
-      ref: code || "auth/requires-recent-login"
+      ref: code || "auth/requires-recent-login",
+      severity: "info"
     };
   }
 
@@ -5447,7 +5569,8 @@ function toFriendlyAppError(err, context = "") {
         ? "This account has been disabled by platform administration."
         : "تم تعطيل هذا الحساب بواسطة إدارة المنصة لمراجعة أمنية أو إدارية.",
       action: isEn ? "Please contact support if you believe this is in error." : "يرجى التواصل مع الدعم الفني للاستفسار والمراجعة.",
-      ref: code || "auth/user-disabled"
+      ref: code || "auth/user-disabled",
+      severity: "error"
     };
   }
 
@@ -5460,7 +5583,8 @@ function toFriendlyAppError(err, context = "") {
         ? "Could not establish a stable connection with the medical cloud service. Your local records are secure."
         : "تعذر الوصول إلى خوادم السحابة الطبية حالياً. بياناتك المسجلة بأمان.",
       action: isEn ? "Please check your internet or Wi-Fi connection and try again." : "يرجى التأكد من اتصالك بالإنترنت (واي فاي أو باقة الهاتف) وإعادة المحاولة.",
-      ref: code || "network/offline"
+      ref: code || "network/offline",
+      severity: "warning"
     };
   }
 
@@ -5473,7 +5597,8 @@ function toFriendlyAppError(err, context = "") {
         ? "You do not have the required medical or administrative permissions for this operation."
         : "لا تملك الصلاحيات الطبية أو الإدارية الكافية لإتمام هذا الإجراء (امتثالاً لسياسة الخصوصية والأمان).",
       action: isEn ? "If you are an attending doctor, verify that your syndicate license is approved." : "إذا كنت طبيباً، تأكد من اعتماد ترخيصك وتكليفك بالحالة من إدارة المنصة.",
-      ref: code || "firestore/permission-denied"
+      ref: code || "firestore/permission-denied",
+      severity: "error"
     };
   }
 
@@ -5486,7 +5611,8 @@ function toFriendlyAppError(err, context = "") {
         ? "The system is currently experiencing high request traffic."
         : "الخدمة الطبية تشهد ضغطاً مؤقتاً في معالجة الطلبات السريرية.",
       action: isEn ? "Please wait a moment and submit your request again." : "يرجى الانتظار بضع لحظات والمحاولة مجدداً.",
-      ref: code || "system/quota-exhausted"
+      ref: code || "system/quota-exhausted",
+      severity: "warning"
     };
   }
 
@@ -5499,7 +5625,8 @@ function toFriendlyAppError(err, context = "") {
       ? "An unexpected issue occurred while processing your request. Please rest assured your saved medical records remain safe."
       : "حدث أمر غير متوقع أثناء معالجة طلبك. نؤكد لك أن سجلاتك الطبية المحفوظة بأمان تام.",
     action: isEn ? "Please try again in a few moments, or contact support if this recurs." : "يرجى المحاولة بعد لحظات، أو التواصل مع الدعم الفني إذا استمرت المشكلة.",
-    ref: code || (rawMessage ? `MSG-${rawMessage.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 24)}` : "ERR-GENERAL")
+    ref: code || (rawMessage ? `MSG-${rawMessage.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 24)}` : "ERR-GENERAL"),
+    severity: "error"
   };
 }
 
@@ -5516,16 +5643,42 @@ function showAppError(err, options = {}) {
     return friendly;
   }
 
-  // 1. If targeted at Auth screen banner:
+  // 1. If targeted at a specific form input field:
+  if (options.field || (options.target && options.target !== "auth" && typeof document !== "undefined" && document.querySelector(options.target))) {
+    const targetSelector = options.field || options.target;
+    const guide = window.FriendlyErrorGuide || (window.HealthVibes && window.HealthVibes.FriendlyErrorGuide);
+    if (guide && typeof guide.renderFieldFeedback === "function") {
+      const fieldEl = guide.renderFieldFeedback(targetSelector, err, { isEn, ...options });
+      if (fieldEl) return friendly;
+    }
+  }
+
+  // 2. If targeted at an inline notice container:
+  if (options.container && typeof document !== "undefined" && document.querySelector(options.container)) {
+    const guide = window.FriendlyErrorGuide || (window.HealthVibes && window.HealthVibes.FriendlyErrorGuide);
+    if (guide && typeof guide.renderNotice === "function") {
+      const noticeCard = guide.renderNotice(options.container, err, { isEn, ...options });
+      if (noticeCard) return friendly;
+    }
+  }
+
+  // 3. If targeted at Auth screen banner:
   if (options.target === "auth") {
     if (authErrorBanner) {
       authErrorBanner.innerHTML = `
-        <div style="display: flex; align-items: flex-start; gap: 10px; text-align: start;">
-          <span style="font-size: 20px; line-height: 1;">${friendly.icon}</span>
-          <div>
-            <strong style="display: block; font-size: 13.5px; margin-bottom: 2px;">${friendly.title}</strong>
-            <span style="display: block; font-size: 12px; opacity: 0.95; line-height: 1.4;">${friendly.message}</span>
-            <small style="display: block; font-size: 11px; margin-top: 4px; opacity: 0.85;">💡 ${friendly.action}</small>
+        <div class="friendly-error-card severity-${friendly.severity || "error"}" style="margin: 0; padding: 12px 14px; border-radius: 12px;">
+          <div style="display: flex; align-items: flex-start; gap: 10px; text-align: start;">
+            <span style="font-size: 20px; line-height: 1;">${friendly.icon}</span>
+            <div style="flex: 1;">
+              <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 2px;">
+                <span class="pill ${friendly.severity === "warning" ? "warning" : "danger"}" style="font-size: 10px; padding: 1px 6px;">${friendly.category}</span>
+                <strong style="font-size: 13.5px; margin-bottom: 2px;">${friendly.title}</strong>
+              </div>
+              <span style="display: block; font-size: 12px; opacity: 0.95; line-height: 1.4;">${friendly.message}</span>
+              <div class="friendly-error-guidance" style="margin-top: 6px; padding: 6px 10px; font-size: 11.5px;">
+                <strong>${isEn ? "How to fix:" : "كيفية التصحيح:"}</strong> ${friendly.action}
+              </div>
+            </div>
           </div>
         </div>
       `;
@@ -5535,13 +5688,13 @@ function showAppError(err, options = {}) {
     return friendly;
   }
 
-  // 2. If quick toast requested:
+  // 4. If quick toast requested:
   if (options.mode === "toast") {
     showToast(`${friendly.icon} ${friendly.title}: ${friendly.message}`);
     return friendly;
   }
 
-  // 3. Centralized Modal Presentation:
+  // 5. Centralized Modal Presentation:
   const modal = document.getElementById("centralErrorModal");
   if (modal) {
     const iconEl = document.getElementById("centralErrorIcon");
@@ -5554,7 +5707,10 @@ function showAppError(err, options = {}) {
 
     if (iconEl) iconEl.textContent = friendly.icon;
     if (titleEl) titleEl.textContent = friendly.title;
-    if (catEl) catEl.textContent = friendly.category;
+    if (catEl) {
+      catEl.textContent = friendly.category;
+      catEl.className = friendly.severity === "warning" ? "pill warning" : "pill danger";
+    }
     if (msgEl) msgEl.textContent = friendly.message;
     if (actionEl) actionEl.innerHTML = `💡 ${friendly.action}`;
     if (refEl) refEl.textContent = `REF: ${friendly.ref} • TIMESTAMP: ${new Date().toISOString()}`;
@@ -5581,6 +5737,7 @@ function showAppError(err, options = {}) {
 
 window.showAppError = showAppError;
 window.toFriendlyAppError = toFriendlyAppError;
+window.FriendlyErrorGuide = window.FriendlyErrorGuide || (window.HealthVibes && window.HealthVibes.FriendlyErrorGuide);
 
 window.closeCentralErrorModal = function() {
   const modal = document.getElementById("centralErrorModal");

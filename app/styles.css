@@ -7086,4 +7086,334 @@ bdi.bidi-isolate {
   unicode-bidi: isolate !important;
 }
 
+/* =========================================================================
+ * 🛡️ VEZEETA-GRADE HUMAN-FRIENDLY ERROR GUIDANCE & FORM VALIDATION STYLES
+ * High-contrast, responsive, accessible, mobile-first error UI.
+ * ========================================================================= */
+
+@keyframes friendlyErrorSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes friendlyFieldFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.friendly-error-card {
+  position: relative;
+  background: var(--surface, #0d2427);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: 16px;
+  padding: 18px 20px;
+  margin: 14px 0;
+  box-shadow: 0 12px 36px -10px rgba(0, 0, 0, 0.45);
+  animation: friendlyErrorSlideIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  text-align: start;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.friendly-error-card.severity-warning {
+  border-color: rgba(240, 180, 41, 0.4);
+  background: linear-gradient(180deg, rgba(240, 180, 41, 0.06) 0%, var(--surface, #0d2427) 100%);
+}
+
+.friendly-error-card.severity-error {
+  border-color: rgba(239, 68, 68, 0.4);
+  background: linear-gradient(180deg, rgba(239, 68, 68, 0.08) 0%, var(--surface, #0d2427) 100%);
+}
+
+.friendly-error-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.friendly-error-icon {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  border-radius: 12px;
+  background: rgba(239, 68, 68, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.severity-warning .friendly-error-icon {
+  background: rgba(240, 180, 41, 0.15);
+}
+
+.friendly-error-title-wrap {
+  flex: 1;
+  min-width: 0;
+}
+
+.friendly-error-meta {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.friendly-error-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink, #e2f0ee);
+  line-height: 1.35;
+}
+
+.friendly-close-btn {
+  background: none;
+  border: none;
+  font-size: 24px;
+  line-height: 1;
+  color: var(--muted, #9ac1bf);
+  cursor: pointer;
+  padding: 4px;
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  transition: color 0.15s ease, background 0.15s ease;
+  flex-shrink: 0;
+}
+
+.friendly-close-btn:hover,
+.friendly-close-btn:focus-visible {
+  color: var(--ink, #e2f0ee);
+  background: rgba(255, 255, 255, 0.08);
+  outline: none;
+}
+
+.friendly-error-message {
+  font-size: 14px;
+  color: var(--ink, #e2f0ee);
+  line-height: 1.6;
+  margin-bottom: 12px;
+}
+
+.friendly-error-guidance {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: rgba(9, 184, 182, 0.08);
+  border: 1px solid rgba(9, 184, 182, 0.25);
+  border-inline-start: 4px solid var(--teal, #09b8b6);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink, #e2f0ee);
+}
+
+.friendly-error-guidance .guidance-bulb {
+  font-size: 18px;
+  line-height: 1.2;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.friendly-error-guidance .guidance-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.friendly-error-guidance .guidance-content strong {
+  color: var(--teal-2, #5dd6d4);
+  font-size: 12px;
+}
+
+.friendly-error-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+.friendly-retry-btn,
+.friendly-primary-action-btn {
+  min-height: 44px;
+  padding: 0 20px;
+  font-size: 13.5px;
+  font-weight: 600;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.friendly-retry-btn:active,
+.friendly-primary-action-btn:active {
+  transform: scale(0.98);
+}
+
+.friendly-error-ref {
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: var(--muted, #9ac1bf);
+  opacity: 0.75;
+  margin-top: 10px;
+  word-break: break-all;
+}
+
+/* Inline Field Validation (Immediate Vezeeta Form Assistance) */
+.friendly-field-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: #f87171;
+  animation: friendlyFieldFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  text-align: start;
+}
+
+.field-error-icon {
+  font-size: 15px;
+  line-height: 1.2;
+  flex-shrink: 0;
+}
+
+.field-error-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.field-error-title {
+  font-weight: 700;
+  color: #ef4444;
+}
+
+.field-error-msg {
+  color: var(--ink, #e2f0ee);
+}
+
+.friendly-field-guide {
+  display: block;
+  font-size: 11.5px;
+  color: var(--teal-2, #5dd6d4);
+  margin-top: 2px;
+  opacity: 0.95;
+}
+
+/* Control Error State Highlights */
+input.input-has-error,
+select.input-has-error,
+textarea.input-has-error {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.25) !important;
+  outline: none !important;
+}
+
+/* Responsive Mobile Layout (Doctolib / Vezeeta Mobile Standard) */
+@media (max-width: 640px) {
+  .friendly-error-card {
+    padding: 14px 16px;
+    border-radius: 14px;
+    margin: 10px 0;
+  }
+
+  .friendly-error-header {
+    gap: 10px;
+  }
+
+  .friendly-error-icon {
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    font-size: 20px;
+  }
+
+  .friendly-error-title {
+    font-size: 15px;
+  }
+
+  .friendly-error-message {
+    font-size: 13px;
+  }
+
+  .friendly-error-guidance {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+
+  .friendly-error-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .friendly-retry-btn,
+  .friendly-primary-action-btn {
+    width: 100%;
+    min-height: 48px;
+    font-size: 14px;
+  }
+}
+
+/* Light Theme Overrides */
+html.hv-theme-light body .friendly-error-card,
+body.light .friendly-error-card {
+  background: #ffffff;
+  border-color: rgba(239, 68, 68, 0.4);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.1);
+}
+
+html.hv-theme-light body .friendly-error-title,
+body.light .friendly-error-title,
+html.hv-theme-light body .friendly-error-message,
+body.light .friendly-error-message,
+html.hv-theme-light body .field-error-msg,
+body.light .field-error-msg {
+  color: #1e293b;
+}
+
+html.hv-theme-light body .friendly-field-error,
+body.light .friendly-field-error {
+  color: #dc2626;
+}
+
+html.hv-theme-light body .friendly-error-guidance,
+body.light .friendly-error-guidance {
+  background: rgba(9, 184, 182, 0.08);
+  border-color: rgba(9, 184, 182, 0.3);
+  color: #0f172a;
+}
+
+html.hv-theme-light body .friendly-error-guidance .guidance-content strong,
+body.light .friendly-error-guidance .guidance-content strong,
+html.hv-theme-light body .friendly-field-guide,
+body.light .friendly-field-guide {
+  color: #0f766e;
+}
+
+
 
