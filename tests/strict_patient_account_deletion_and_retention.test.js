@@ -343,8 +343,18 @@ function createMockAdminAuth() {
   // Retention Policy Modal
   assert(indexHtml.includes('id="retentionPolicyModal"'), 'Must have retentionPolicyModal');
   assert(indexHtml.includes('id="retentionPolicyModalBody"'), 'Must have retentionPolicyModalBody');
+
+  // Patient Settings Quick Card & Pathway Entrypoints
+  assert(indexHtml.includes('id="patientSettingsQuickCard"'), 'Must have patientSettingsQuickCard on patient home dashboard');
+  assert(indexHtml.includes('patient-settings-tabs'), 'Must have patient-settings-tabs sub-navigation bar in profile settings');
+  assert(indexHtml.includes('openPatientSettingsPathway'), 'Must have openPatientSettingsPathway handler calls');
+  assert(indexHtml.includes('المرحلة 1: قابلية النقل والتصدير'), 'Must show Stage 1 Data Portability in deletion card');
+  assert(indexHtml.includes('المرحلة 2: التدقيق والاحتفاظ القانوني'), 'Must show Stage 2 Legal Retention in deletion card');
+  assert(indexHtml.includes('المرحلة 3: التحقق والتطهير الفوري'), 'Must show Stage 3 Verification & Purge in deletion card');
+
   console.log('  ✓ Patient Settings UI contains clear deletion flow, retention highlights, and export options.');
   console.log('  ✓ deleteAccountModal & retentionPolicyModal correctly configured.');
+  console.log('  ✓ 3-stage visual pathway and home quick card validated.');
 
   // ---------------------------------------------------------------------------
   // TEST 5: Frontend Script Logic in app/app.js
@@ -357,10 +367,13 @@ function createMockAdminAuth() {
   assert(appJs.includes('window.openRetentionPolicyModal'), 'app.js must define window.openRetentionPolicyModal');
   assert(appJs.includes('window.closeRetentionPolicyModal'), 'app.js must define window.closeRetentionPolicyModal');
   assert(appJs.includes('window.exportUserData'), 'app.js must define window.exportUserData');
+  assert(appJs.includes('window.openPatientSettingsPathway'), 'app.js must define window.openPatientSettingsPathway');
+  assert(appJs.includes('window.switchPatientProfileTab'), 'app.js must define window.switchPatientProfileTab');
   assert(appJs.includes('/api/user/privacy/retention-policy'), 'app.js must fetch /api/user/privacy/retention-policy');
   assert(appJs.includes('/api/user/delete-account'), 'app.js must call /api/user/delete-account');
 
   console.log('  ✓ app.js defines all required modal handlers and retention policy controller.');
+  console.log('  ✓ app.js defines patient settings pathway and tab switching controller.');
 
   // ---------------------------------------------------------------------------
   // TEST 6: Backend Route Registration in backend/server.js

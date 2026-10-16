@@ -215,6 +215,11 @@ function normalizeAssessment(caseData, caseId, isPatient) {
       vitalSigns: caseData.vitals || caseData.vitalSigns || null,
       clinicName: caseData.clinicName || null,
       assignedDoctorName: caseData.assignedDoctorName || null,
+      approvingDoctorName: caseData.approvingDoctorName || caseData.assignedDoctorName || null,
+      doctorSpecialty: caseData.doctorSpecialty || null,
+      clinicalDiagnosis: caseData.clinicalDiagnosis || null,
+      reportRef: caseData.reportRef || null,
+      doctorApproved: Boolean(caseData.doctorApproved || caseData.status === 'approved'),
       status: caseData.status || 'pending'
     },
     link: `/app/index.html?screen=pending&caseId=${encodeURIComponent(caseId)}`,
@@ -329,6 +334,9 @@ function normalizeReport(reportData, reportId) {
       reportId,
       caseId,
       reportRef,
+      oxygenLevel: reportData.oxygenLevel ?? reportData.o2 ?? null,
+      patientName: reportData.patientName || null,
+      patientAge: reportData.patientAge || null,
       clinicalDiagnosis: reportData.clinicalDiagnosis || null,
       approvingDoctorName: reportData.approvingDoctorName || null,
       doctorSpecialty: reportData.doctorSpecialty || null,
@@ -746,8 +754,12 @@ async function buildPatientTimeline({
   let filtered = sanitized;
   const normalizedType = String(type || 'all').trim().toLowerCase();
   if (normalizedType && normalizedType !== 'all') {
-    const allowedTypes = normalizedType.split(',').map(t => t.trim());
-    filtered = filtered.filter(item => allowedTypes.includes(item.type));
+    if (normalizedType === 'approved') {
+      filtered = filtered.filter(item => item.type === TIMELINE_TYPES.REPORT || item.status === 'approved' || item.details?.doctorApproved === true || item.details?.status === 'approved');
+    } else {
+      const allowedTypes = normalizedType.split(',').map(t => t.trim());
+      filtered = filtered.filter(item => allowedTypes.includes(item.type));
+    }
   }
 
   // 5. Filtering by Date Range

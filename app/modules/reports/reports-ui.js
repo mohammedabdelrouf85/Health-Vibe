@@ -15,12 +15,77 @@
   }
 
   /**
-   * Triggers bilingual PDF export matching the approved report version.
-   * Configures document typography, pagination metadata, and print layout.
-   * @param {object} record
+   * Opens the self-contained certified PDF report in a new printable window,
+   * with automatic fallback to high-fidelity modal preview if popups are blocked.
+   * @param {object|string} recordOrId
    * @param {'ar'|'en'} language
+   * @returns {Window|null}
    */
-  function exportReportToPdf(record, language = "ar") {
+  function openCertifiedPdfReport(recordOrId, language = "ar") {
+    if (typeof window === "undefined") return null;
+    let record = recordOrId;
+    if (typeof recordOrId === "string") {
+      record = (global._currentViewingCase && global._currentViewingCase.id === recordOrId)
+        ? global._currentViewingCase
+        : (global.__selectedHistoryRecord && global.__selectedHistoryRecord.id === recordOrId)
+          ? global.__selectedHistoryRecord
+          : (global._patientHistoryCache && global._patientHistoryCache[recordOrId])
+            ? global._patientHistoryCache[recordOrId]
+            : { id: recordOrId };
+    }
+    const reportService = global.HealthVibes?.ReportsService;
+    if (!reportService || typeof reportService.generateCertifiedReportPdfHtml !== "function") {
+      exportReportToPdfFallback(record, language);
+      return null;
+    }
+
+    const html = reportService.generateCertifiedReportPdfHtml(record, language);
+    let printWin = null;
+    try {
+      printWin = window.open("", "_blank");
+    } catch (e) {
+      printWin = null;
+    }
+
+    if (printWin && printWin.document) {
+      printWin.document.open();
+      printWin.document.write(html);
+      printWin.document.close();
+      try {
+        printWin.focus();
+      } catch (e) {}
+      return printWin;
+    }
+
+    // Fallback: If popup was blocked by browser, render inline preview modal
+    let modal = document.getElementById("certifiedPdfPreviewModal");
+    if (!modal) {
+      modal = document.createElement("div");
+      modal.id = "certifiedPdfPreviewModal";
+      modal.className = "modal-overlay no-print";
+      modal.style.cssText = "position:fixed; inset:0; z-index:99999; background:rgba(0,0,0,0.7); display:flex; flex-direction:column; align-items:center; justify-content:center; padding:15px;";
+      document.body.appendChild(modal);
+    }
+    const isEn = language === "en";
+    modal.style.display = "flex";
+    modal.innerHTML = `
+      <div style="background:#fff; width:100%; max-width:900px; max-height:92vh; border-radius:12px; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 25px 50px rgba(0,0,0,0.3);">
+        <div style="background:#0f172a; color:#fff; padding:12px 20px; display:flex; justify-content:space-between; align-items:center;">
+          <strong style="font-size:15px;">📄 ${isEn ? "Certified Medical Report PDF Preview" : "معاينة التقرير الطبي المعتمد"}</strong>
+          <div style="display:flex; gap:10px;">
+            <button type="button" class="solid-button" style="padding:6px 14px; font-size:13px; background:#10b981; color:#fff; border:none; border-radius:6px; font-weight:700; cursor:pointer;" onclick="const f = document.getElementById('certifiedPdfIframe'); if(f && f.contentWindow) f.contentWindow.print(); else window.print();">
+              🖨️ ${isEn ? "Print / Save PDF" : "طباعة / حفظ PDF"}
+            </button>
+            <button type="button" class="icon-button" style="color:#fff; font-size:22px; border:none; background:none; cursor:pointer;" onclick="document.getElementById('certifiedPdfPreviewModal').style.display='none';">&times;</button>
+          </div>
+        </div>
+        <iframe id="certifiedPdfIframe" style="width:100%; flex:1; border:none; min-height:550px;" srcdoc="${html.replace(/"/g, '&quot;')}"></iframe>
+      </div>
+    `;
+    return modal;
+  }
+
+  function exportReportToPdfFallback(record, language = "ar") {
     if (typeof window === "undefined" || !record) return;
     const isEn = language === "en";
     const reportService = global.HealthVibes?.ReportsService;
@@ -40,7 +105,7 @@
     }
 
     // Set page title for saved PDF file name
-    const reportRef = reportData.reportRef || `HV-REP-${reportData.id.slice(-8).toUpperCase()}`;
+    const reportRef = reportData.reportRef || `HV-REP-${reportData.id ? reportData.id.slice(-8).toUpperCase() : "RECORD"}`;
     const originalTitle = document.title;
     document.title = `HealthVibes_Report_${reportRef}_${language.toUpperCase()}`;
 
@@ -81,6 +146,20 @@
       document.body.classList.remove("printing-pdf-mode", "print-lang-en", "print-lang-ar");
       document.title = originalTitle;
     }
+  }
+
+  /**
+   * Triggers bilingual PDF export matching the approved report version.
+   * Configures document typography, pagination metadata, and print layout.
+   * @param {object} record
+   * @param {'ar'|'en'} language
+   */
+  function exportReportToPdf(record, language = "ar") {
+    const reportService = global.HealthVibes?.ReportsService;
+    if (reportService && typeof reportService.generateCertifiedReportPdfHtml === "function") {
+      return openCertifiedPdfReport(record, language);
+    }
+    return exportReportToPdfFallback(record, language);
   }
 
   function renderReportSecurityBadge(record, isEn = false) {
@@ -647,6 +726,7 @@
   const ReportsUI = {
     triggerPrintReport,
     exportReportToPdf,
+    openCertifiedPdfReport,
     renderReportSecurityBadge,
     openShareReportModal,
     renderVerificationView,
@@ -656,6 +736,7 @@
 
   global.HealthVibes = global.HealthVibes || {};
   global.HealthVibes.ReportsUI = ReportsUI;
+  global.openCertifiedPdfReport = openCertifiedPdfReport;
 
   if (typeof module !== "undefined" && module.exports) {
     module.exports = ReportsUI;

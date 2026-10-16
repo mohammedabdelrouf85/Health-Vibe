@@ -15,9 +15,11 @@
  */
 
 const crypto = require("crypto");
+const { datasetGovernanceService } = require("../dataset/dataset_governance_service");
 
 class KaggleTrainingService {
   constructor(options = {}) {
+    this.datasetGovernance = options.datasetGovernance || datasetGovernanceService;
     this.allowedTrainingSources = new Set([
       "kaggle/respiratory-sound-database",
       "kaggle/asthma-copd-clinical-dataset",
@@ -80,6 +82,18 @@ class KaggleTrainingService {
       purpose: "offline_model_training_only",
       operationalStorageAllowed: false
     };
+  }
+
+  /**
+   * Audits legal licensing and scientific quality for a Kaggle or open dataset.
+   * Enforces PRD Requirement 46 compliance.
+   */
+  auditDatasetQualityAndLicense(sourceIdentifier, dataSample = []) {
+    const reg = this.datasetGovernance.getRegisteredDataset(sourceIdentifier);
+    if (!reg) {
+      throw new Error(`Dataset '${sourceIdentifier}' not found in approved dataset registry.`);
+    }
+    return this.datasetGovernance.auditFullDataset(reg, dataSample);
   }
 
   /**

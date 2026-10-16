@@ -68,10 +68,10 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: AppColors.statusApproved.withOpacity(0.1),
+                          color: AppColors.statusApproved.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
-                            color: AppColors.statusApproved.withOpacity(0.3),
+                            color: AppColors.statusApproved.withValues(alpha: 0.3),
                           ),
                         ),
                         child: Row(

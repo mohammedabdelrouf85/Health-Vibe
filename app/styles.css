@@ -70,7 +70,7 @@ body.light {
   --line-strong: #94a3b8;
   --ink: #0f172a;
   --ink-secondary: #1e293b;
-  --muted: #334155;
+  --muted: #2e4d50;
   --cyan: #e6f6f5;
   --shadow: 0 16px 40px rgba(15, 23, 42, .08);
   --teal: #0f766e;
@@ -2008,6 +2008,44 @@ body.dark .logout-button:hover {
   background: rgba(239, 68, 68, 0.08);
 }
 
+/* Patient Settings & Data Deletion Pathway Animations */
+@keyframes pathwayFocusGlow {
+  0% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+    border-color: #ef4444;
+  }
+  50% {
+    box-shadow: 0 0 25px 6px rgba(239, 68, 68, 0.35);
+    border-color: #dc2626;
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+    border-color: rgba(239, 68, 68, 0.35);
+  }
+}
+
+.pathway-focus-pulse {
+  animation: pathwayFocusGlow 2.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.patient-settings-tabs {
+  scrollbar-width: thin;
+}
+
+.patient-settings-tab {
+  transition: all 0.2s ease-in-out;
+  font-family: inherit;
+}
+
+.patient-settings-tab:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+.patient-settings-tab:active {
+  transform: translateY(0);
+}
+
 /* Saved Accounts Quick Switcher in Auth Modal */
 .saved-accounts-switcher {
   background: color-mix(in srgb, var(--surface-2) 65%, transparent);
@@ -2811,8 +2849,41 @@ body.dark .result-main { background: var(--surface); }
   background: white;
   border: 5px solid var(--amber);
   top: -4px;
-  left: 54%;
+  left: 50%;
   box-shadow: 0 6px 18px rgba(0,0,0,.18);
+  transition: left 0.4s ease, border-color 0.4s ease;
+}
+
+/* PRD Page 11 Tri-Color Clinical Risk System */
+.risk-meter.low span {
+  left: 15%;
+  border-color: #18a058;
+}
+.risk-meter.caution span {
+  left: 50%;
+  border-color: #d97706;
+}
+.risk-meter.high span {
+  left: 85%;
+  border-color: #dc2626;
+}
+
+.pill.risk-low, .risk-badge-low {
+  background: rgba(24, 160, 88, 0.12) !important;
+  color: #15803d !important;
+  border: 1px solid rgba(24, 160, 88, 0.35) !important;
+}
+
+.pill.risk-caution, .risk-badge-caution {
+  background: rgba(217, 119, 6, 0.12) !important;
+  color: #b45309 !important;
+  border: 1px solid rgba(217, 119, 6, 0.35) !important;
+}
+
+.pill.risk-high, .risk-badge-high {
+  background: rgba(220, 38, 38, 0.12) !important;
+  color: #dc2626 !important;
+  border: 1px solid rgba(220, 38, 38, 0.35) !important;
 }
 
 .recommendations {
@@ -7497,3 +7568,713 @@ body.dark .thread-direct-action-card {
     gap: 10px !important;
   }
 }
+
+/* =============================================================================
+ * 🩺 PRD Req 39: Complete Medical Profile Setup Screen Styling
+ * ============================================================================= */
+.cmp-container {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.cmp-panel {
+  border-top: 4px solid var(--teal, #0ea5a4) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08) !important;
+  padding: 24px !important;
+  background: var(--surface) !important;
+}
+
+.cmp-progress-container {
+  background: var(--surface-2, rgba(0, 0, 0, 0.04));
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 14px;
+  margin-bottom: 20px;
+}
+
+.cmp-progress-track {
+  background: var(--surface-2, rgba(0, 0, 0, 0.08));
+  border-radius: 10px;
+  height: 10px;
+  overflow: hidden;
+  position: relative;
+}
+
+.cmp-progress-fill {
+  background: linear-gradient(90deg, var(--teal, #0ea5a4), #10b981);
+  height: 100%;
+  border-radius: 10px;
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 0 12px rgba(14, 165, 164, 0.4);
+}
+
+.cmp-section-card {
+  background: var(--surface-2, rgba(0, 0, 0, 0.02));
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.cmp-section-card:hover {
+  border-color: rgba(14, 165, 164, 0.4);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+}
+
+.cmp-section-card:focus-within {
+  border-color: var(--teal, #0ea5a4);
+  box-shadow: 0 0 0 3px rgba(14, 165, 164, 0.15);
+}
+
+.cmp-sex-label {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.cmp-sex-label:hover {
+  border-color: var(--teal, #0ea5a4);
+  background: rgba(14, 165, 164, 0.04);
+  transform: translateY(-1px);
+}
+
+.cmp-sex-label:has(input:checked) {
+  border-color: var(--teal, #0ea5a4);
+  background: rgba(14, 165, 164, 0.12);
+  box-shadow: 0 0 0 2px rgba(14, 165, 164, 0.25);
+}
+
+.cmp-chip-group {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.cmp-chip {
+  font-size: 11.5px !important;
+  padding: 5px 12px !important;
+  border-radius: 20px !important;
+  transition: all 0.2s ease !important;
+}
+
+.cmp-chip:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.08);
+}
+
+.cmp-chip:active {
+  transform: translateY(0);
+}
+
+@media (max-width: 640px) {
+  .cmp-panel {
+    padding: 16px !important;
+    border-radius: 12px !important;
+  }
+}
+
+/* =============================================================================
+ * 🫁 PRD Req 40: Patient Home Dashboard (Modules, Status, Appointments, Alerts)
+ * ============================================================================= */
+.patient-dashboard-v2 {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.patient-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.patient-section-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.patient-section-subtitle {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+/* ── Available Clinical Modules Grid ── */
+.patient-modules-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.patient-module-card {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.04);
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.patient-module-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--teal, #0ea5a4);
+  box-shadow: 0 12px 30px rgba(14, 165, 164, 0.12);
+}
+
+.patient-module-card.flagship {
+  grid-column: 1 / -1;
+  background: linear-gradient(135deg, var(--surface) 0%, var(--surface-2) 100%);
+  border: 2px solid var(--teal, #0ea5a4);
+  box-shadow: 0 8px 30px rgba(14, 165, 164, 0.12);
+}
+
+body.dark .patient-module-card.flagship {
+  background: linear-gradient(135deg, rgba(14, 165, 164, 0.08) 0%, rgba(15, 23, 42, 0.8) 100%);
+  border-color: rgba(14, 165, 164, 0.5);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.4);
+}
+
+.patient-module-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.patient-module-icon-wrap {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  background: rgba(14, 165, 164, 0.12);
+  color: var(--teal, #0ea5a4);
+  flex-shrink: 0;
+}
+
+.patient-module-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.patient-module-badge.active {
+  background: rgba(16, 185, 129, 0.14);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.patient-module-badge.flagship {
+  background: rgba(14, 165, 164, 0.15);
+  color: var(--teal, #0ea5a4);
+  border: 1px solid rgba(14, 165, 164, 0.4);
+}
+
+.patient-module-badge.coming-soon {
+  background: rgba(100, 116, 139, 0.12);
+  color: var(--muted);
+  border: 1px solid var(--line);
+}
+
+.patient-module-features {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 12px 0 16px;
+}
+
+.patient-module-chip {
+  font-size: 11.5px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* ── Latest Assessment & Upcoming Appointment Dual Grid ── */
+.patient-dual-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 18px;
+}
+
+.patient-status-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.patient-status-card.approved {
+  border-top: 4px solid #16a34a;
+}
+
+.patient-status-card.pending {
+  border-top: 4px solid #f59e0b;
+}
+
+.patient-status-card.needs-followup {
+  border-top: 4px solid #ea580c;
+}
+
+.patient-status-card.escalated {
+  border-top: 4px solid #ef4444;
+}
+
+.patient-status-vitals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+  margin: 14px 0;
+}
+
+.patient-vital-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.patient-vital-label {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.patient-vital-value {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.patient-status-banner {
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.patient-status-banner.approved {
+  background: rgba(22, 163, 74, 0.1);
+  border: 1px solid rgba(22, 163, 74, 0.3);
+  color: #15803d;
+}
+
+body.dark .patient-status-banner.approved {
+  color: #4ade80;
+}
+
+.patient-status-banner.pending {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #b45309;
+}
+
+body.dark .patient-status-banner.pending {
+  color: #fbbf24;
+}
+
+.patient-status-banner.needs-followup {
+  background: rgba(234, 88, 12, 0.1);
+  border: 1px solid rgba(234, 88, 12, 0.3);
+  color: #c2410c;
+}
+
+body.dark .patient-status-banner.needs-followup {
+  color: #fb923c;
+}
+
+.patient-status-banner.escalated {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #b91c1c;
+}
+
+body.dark .patient-status-banner.escalated {
+  color: #f87171;
+}
+
+.patient-status-banner.ready {
+  background: rgba(14, 165, 164, 0.08);
+  border: 1px solid rgba(14, 165, 164, 0.25);
+  color: var(--teal, #0ea5a4);
+}
+
+/* ── Upcoming Appointment Card ── */
+.patient-appt-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  border-top: 4px solid var(--teal, #0ea5a4);
+}
+
+.patient-appt-body {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+  margin: 14px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.patient-appt-time-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.patient-appt-doc-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+/* ── Alerts & Notifications Feed ── */
+.patient-alerts-panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+}
+
+@media (max-width: 640px) {
+  .patient-dual-grid {
+    grid-template-columns: 1fr;
+  }
+  .patient-modules-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* =============================================================================
+ * 🩺 PRD Req 41: Verified Doctor Screen Workspace (Tabs, Patients, Queue, Reports)
+ * ============================================================================= */
+.doctor-workspace-tabs {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 18px;
+  border-bottom: 2px solid var(--line);
+  padding-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.doctor-workspace-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 12px;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--muted);
+  transition: all 0.25s ease;
+  user-select: none;
+}
+
+.doctor-workspace-tab:hover {
+  background: rgba(14, 165, 164, 0.08);
+  border-color: var(--teal, #0ea5a4);
+  color: var(--teal, #0ea5a4);
+  transform: translateY(-1px);
+}
+
+.doctor-workspace-tab.active {
+  background: var(--teal, #0ea5a4) !important;
+  border-color: var(--teal, #0ea5a4) !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 14px rgba(14, 165, 164, 0.3);
+}
+
+.doctor-workspace-tab.active .pill {
+  background: rgba(255, 255, 255, 0.25) !important;
+  color: #ffffff !important;
+  border-color: transparent !important;
+}
+
+/* ── Assigned Patients Directory Cards ── */
+.doctor-patient-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+  margin-top: 14px;
+}
+
+.doctor-assigned-patient-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 18px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.03);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.doctor-assigned-patient-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--teal, #0ea5a4);
+  box-shadow: 0 8px 24px rgba(14, 165, 164, 0.1);
+}
+
+.doctor-patient-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.doctor-patient-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  background: rgba(14, 165, 164, 0.12);
+  color: var(--teal, #0ea5a4);
+  flex-shrink: 0;
+}
+
+.doctor-patient-metrics-strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px;
+  margin: 10px 0;
+  text-align: center;
+}
+
+.doctor-patient-metric-box {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.doctor-patient-metric-box small {
+  font-size: 10.5px;
+  color: var(--muted);
+}
+
+.doctor-patient-metric-box strong {
+  font-size: 13px;
+  color: var(--ink);
+}
+
+/* ── Approved Reports Ledger Cards ── */
+.doctor-reports-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.doctor-approved-report-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 4px solid #16a34a;
+  border-radius: 14px;
+  padding: 18px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.03);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+[dir="rtl"] .doctor-approved-report-card {
+  border-left: 1px solid var(--line);
+  border-right: 4px solid #16a34a;
+}
+
+.doctor-approved-report-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(22, 163, 74, 0.12);
+}
+
+@media (max-width: 768px) {
+  .doctor-approved-report-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   ADMIN WORKSPACE & AI QUALITY BENCHMARK STYLES (Req 42)
+   ══════════════════════════════════════════════════════════════ */
+.admin-workspace-tabs {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 22px;
+  border-bottom: 2px solid var(--line);
+  padding-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.admin-workspace-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 12px;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--muted);
+  transition: all 0.25s ease;
+  user-select: none;
+}
+
+.admin-workspace-tab:hover {
+  background: rgba(14, 165, 164, 0.08);
+  border-color: var(--teal, #0ea5a4);
+  color: var(--teal, #0ea5a4);
+  transform: translateY(-1px);
+}
+
+.admin-workspace-tab.active {
+  background: var(--teal, #0ea5a4) !important;
+  border-color: var(--teal, #0ea5a4) !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 14px rgba(14, 165, 164, 0.3);
+}
+
+.admin-workspace-tab.active .pill {
+  background: rgba(255, 255, 255, 0.25) !important;
+  color: #ffffff !important;
+  border-color: transparent !important;
+}
+
+/* AI Quality & Performance Metric Cards */
+.admin-ai-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 16px;
+  margin-bottom: 22px;
+}
+
+.admin-ai-metric-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.admin-ai-metric-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.07);
+}
+
+.admin-ai-metric-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.admin-ai-metric-value {
+  font-size: 28px;
+  font-weight: 800;
+  font-family: var(--font-mono, monospace);
+  line-height: 1.1;
+  margin-bottom: 4px;
+}
+
+.admin-benchmark-matrix {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+
+.admin-benchmark-matrix th,
+.admin-benchmark-matrix td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  text-align: start;
+}
+
+.admin-benchmark-matrix th {
+  background: var(--surface-2);
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 12.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.admin-benchmark-matrix tr:last-child td {
+  border-bottom: none;
+}
+
+
+

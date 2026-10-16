@@ -56,9 +56,9 @@ function getLegalRetentionPolicy() {
         scope: 'System security audit logs, access logs, and authorization records must be maintained for 6 years from creation date.'
       },
       {
-        regulation: 'Egyptian Medical Ethics & Health Records Regulations',
-        title: 'قانون تنظيم مهنة الطب ولائحة آداب المهنة (5 سنوات)',
-        scope: 'إلزامية الاحتفاظ بسجلات الفحص الطبي والقرارات السريرية لمدة 5 سنوات كحد أدنى لأغراض المراجعة السريرية والمسؤولية الطبية مع فك الارتباط الكامل بالهوية الشخصية للمريض.'
+        regulation: 'Egyptian Personal Data Protection Law No. 151 of 2020 & Medical Syndicate Telehealth Regulations',
+        title: 'قانون حماية البيانات الشخصية رقم 151 لسنة 2020 ولائحة آداب المهنة ونقابة الأطباء',
+        scope: 'تصنيف البيانات الصحية كبيانات شخصية حساسة (المادتان 1 و12) وإلزامية الاحتفاظ بسجلات الفحص الطبي والقرارات السريرية المعتمدة لمدة 5 سنوات كحد أدنى لأغراض المراجعة السريرية والمسؤولية الطبية وفق قواعد نقابة الأطباء، مع فك الارتباط الكامل بالهوية الشخصية للمريض وحظر التطبيب عن بُعد للحالات الإسعافية الحادة.'
       }
     ],
     categories: [
