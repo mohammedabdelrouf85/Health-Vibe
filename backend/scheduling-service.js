@@ -2019,6 +2019,9 @@ async function rescheduleAppointmentTransaction(db, payload, actorUser) {
             'appointmentRef.date': newDate,
             'appointmentRef.slotId': newSlotId,
             'appointmentRef.timeSlot': newSlot.timeAr,
+            'appointmentRef.consultationType': newConsultationType,
+            'appointmentRef.commuteReliefActive': isCommuteReliefResched,
+            'appointmentRef.branchLocation': branchLocationResched,
             'appointmentRef.rescheduledAt': nowIso
           });
         }

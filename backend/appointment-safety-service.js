@@ -814,7 +814,8 @@ async function validateFamilyBeneficiaryAccess(db, { patientId, beneficiaryId },
 
   // 1. Check in-memory store if supplied
   if (inMemoryStore && typeof inMemoryStore.get === 'function') {
-    familyMembers = inMemoryStore.get(patientId) || [];
+    const raw = inMemoryStore.get(patientId) || inMemoryStore.get(`family_${patientId}`) || [];
+    familyMembers = Array.isArray(raw) ? raw : (raw.members || []);
   }
 
   // 2. Check Firestore user profile
