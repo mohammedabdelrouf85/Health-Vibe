@@ -3991,6 +3991,10 @@ window.escalateCase = async function(id) {
 
 window.rejectCase = async function(id) {
   if (!enforcePermission(PERMISSIONS.REVIEW_CASE, "Reject Case")) return;
+  if (window.HealthVibes?.DoctorUI?.openRejectReentryModal) {
+    window.HealthVibes.DoctorUI.openRejectReentryModal(id, "reentry");
+    return;
+  }
   const isEn = currentLanguage === "en";
   const defaultReason = isEn ? "Non-clinical data or duplicate submission" : "بيانات غير طبية أو تقييم مكرر";
 
@@ -4588,6 +4592,9 @@ async function selectDoctorCase(id) {
     actionToolbarHtml = `
       <div class="doctor-actions-toolbar">
         ${approveButtonHtml}
+        <button type="button" class="btn-clinical" style="background: rgba(14, 165, 233, 0.15); border: 1.5px solid #0284c7; color: #38bdf8;" onclick="HealthVibes?.DoctorUI?.openOverrideRiskModal('${c.id}')" title="${isEn ? 'Override advisory risk level' : 'تعديل درجة الخطورة السريرية'}">
+          <span>⚖️</span> ${isEn ? 'Override Risk' : 'تعديل الخطورة'}
+        </button>
         <button type="button" class="btn-clinical resume" onclick="previewCaseReport('${c.id}')" title="${isEn ? 'Preview report before final approval' : 'معاينة شكل التقرير الطبي قبل الاعتماد'}">
           <span>👁️</span> ${isEn ? 'Preview Report' : 'معاينة التقرير'}
         </button>
@@ -4597,8 +4604,8 @@ async function selectDoctorCase(id) {
         <button type="button" class="btn-clinical escalate" onclick="escalateCase('${c.id}')">
           <span>🚨</span> ${isEn ? 'Escalate (Emergency)' : 'تصعيد الحالة'}
         </button>
-        <button type="button" class="btn-clinical reject" onclick="rejectCase('${c.id}')">
-          <span>❌</span> ${isEn ? 'Reject' : 'رفض'}
+        <button type="button" class="btn-clinical reject" onclick="HealthVibes?.DoctorUI?.openRejectReentryModal('${c.id}', 'reentry')" title="${isEn ? 'Reject intake & request patient re-entry' : 'رفض التقييم المبدئي وطلب إعادة قياس'}">
+          <span>❌</span> ${isEn ? 'Reject / Re-entry' : 'رفض وإعادة قياس'}
         </button>
         <button type="button" class="btn-clinical close" onclick="closeCase('${c.id}')">
           <span>🔒</span> ${isEn ? 'Close Case' : 'إغلاق الحالة'}
@@ -4826,6 +4833,12 @@ async function selectDoctorCase(id) {
   const topActionsToolbarHtml = `
     <div class="doctor-top-actions">
       ${approveButtonHtml}
+      <button type="button" class="btn-clinical reject-reentry-top-btn" style="background: rgba(234, 88, 12, 0.15); border: 1.5px solid #ea580c; color: #fb923c; font-weight: 700;" onclick="HealthVibes?.DoctorUI?.openRejectReentryModal('${c.id}', 'reentry')" title="${isEn ? 'Reject invalid intake & request patient re-entry' : 'رفض التقييم المبدئي وطلب إعادة إدخال القياسات'}">
+        <span>⚠️</span> ${isEn ? 'Reject / Re-entry' : 'رفض وطلب إعادة قياس'}
+      </button>
+      <button type="button" class="btn-clinical" style="background: rgba(14, 165, 233, 0.15); border: 1.5px solid #0284c7; color: #38bdf8;" onclick="HealthVibes?.DoctorUI?.openOverrideRiskModal('${c.id}')" title="${isEn ? 'Override advisory risk level' : 'تعديل درجة الخطورة السريرية'}">
+        <span>⚖️</span> ${isEn ? 'Override Risk' : 'تعديل الخطورة'}
+      </button>
       <button type="button" class="btn-clinical resume" onclick="previewCaseReport('${c.id}')" title="${isEn ? 'Preview report before final approval' : 'معاينة شكل التقرير الطبي قبل الاعتماد'}">
         <span>👁️</span> ${isEn ? 'Preview Report' : 'معاينة التقرير'}
       </button>
@@ -4834,6 +4847,10 @@ async function selectDoctorCase(id) {
       </button>
     </div>
   `;
+
+  const riskOverrideHtml = (window.HealthVibes?.DoctorUI?.renderRiskOverrideSection)
+    ? window.HealthVibes.DoctorUI.renderRiskOverrideSection(c, isEn)
+    : '';
 
   const bpHistoryHtml = (window.HealthVibes?.DoctorUI?.renderHypertensionBpHistorySection)
     ? window.HealthVibes.DoctorUI.renderHypertensionBpHistorySection(c, isEn)
@@ -4871,6 +4888,7 @@ async function selectDoctorCase(id) {
       </div>
       ${demoCaseBanner}
       ${emergencyDoctorBanner}
+      ${riskOverrideHtml}
       <div class="summary-list">
         <div><span>${isEn ? 'Rules-based suggestion' : 'اقتراح مبني على قواعد'}</span><strong>${(isEn ? c.aiScoreEn : c.aiScore) || (isEn ? 'Not clinically validated' : 'غير مدقق سريرياً')}${isDemoCase ? ' (Demo Data)' : ''}</strong></div>
         <div><span>${isEn ? 'Rule score' : 'مؤشر القواعد'}</span><strong>${(isEn ? c.ruleScoreLabelEn : c.ruleScoreLabelAr) || c.ruleScore || (isEn ? 'No validated confidence value' : 'لا توجد قيمة ثقة معتمدة')}</strong></div>
@@ -5014,9 +5032,14 @@ async function selectDoctorCase(id) {
     </div>
   `;
 
+  const reentryAlertBannerHtml = (window.HealthVibes?.DoctorUI?.renderReentryStatusAlertBanner)
+    ? window.HealthVibes.DoctorUI.renderReentryStatusAlertBanner(c, isEn)
+    : '';
+
   reviewPanel.innerHTML = `
     ${mobileNavBarHtml}
     ${persistentHeaderHtml}
+    ${reentryAlertBannerHtml}
     ${staleRevisionBannerHtml}
     ${topActionsToolbarHtml}
     ${reviewTabsHtml}
@@ -5087,6 +5110,16 @@ function hideAuth() {
 
 window.showAuth = showAuth;
 window.hideAuth = hideAuth;
+window.openOverrideRiskModal = function(caseId) {
+  if (window.HealthVibes?.DoctorUI?.openOverrideRiskModal) {
+    window.HealthVibes.DoctorUI.openOverrideRiskModal(caseId);
+  }
+};
+window.closeOverrideRiskModal = function() {
+  if (window.HealthVibes?.DoctorUI?.closeOverrideRiskModal) {
+    window.HealthVibes.DoctorUI.closeOverrideRiskModal();
+  }
+};
 
 function showForgotView() {
   clearAuthError();

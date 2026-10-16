@@ -39,7 +39,163 @@
     return isEn ? `${days}d ${rest}h` : `${days}ي ${rest}س`;
   }
 
+  const VALID_OVERRIDE_PRIORITIES = ["urgent", "high", "normal"];
+  const VALID_OVERRIDE_CATEGORIES = [
+    "CLINICAL_SIGNS_OF_EXHAUSTION",
+    "RAPID_TRAJECTORY",
+    "ARTIFACT_CORRECTION",
+    "COMORBIDITY_RISK",
+    "OTHER_CLINICAL_JUDGMENT"
+  ];
+
+  const OVERRIDE_CATEGORY_META = {
+    CLINICAL_SIGNS_OF_EXHAUSTION: {
+      ar: "علامات سريرية للإجهاد التنفسي / الإرهاق",
+      en: "Clinical Signs of Respiratory Exhaustion",
+      descAr: "سحب بين الأضلاع، صعوبة إكمال جملة، أو إجهاد عضلات التنفس رغم قراءات الأكسجين",
+      descEn: "Intercostal retractions, inability to complete sentences, or respiratory muscle fatigue"
+    },
+    RAPID_TRAJECTORY: {
+      ar: "تدهور سريع أو تسارع في تفاقم الأعراض",
+      en: "Rapid Trajectory / Acute Worsening",
+      descAr: "انحدار متسارع خلال وقت قصير يستدعي رفع الجاهزية والتدخل الفوري",
+      descEn: "Accelerated decline within a short timeframe requiring immediate escalation"
+    },
+    ARTIFACT_CORRECTION: {
+      ar: "تصحيح قراءة خاطئة أو قياس غير دقيق للجهاز",
+      en: "Artifact / Sensor Measurement Correction",
+      descAr: "قراءة SpO2 منخفضة بسبب برودة الأطراف أو حركة المريض مع استقرار الفحص السريري",
+      descEn: "Falsely low SpO2 due to cold extremities, sensor slip, or motion artifact"
+    },
+    COMORBIDITY_RISK: {
+      ar: "عوامل خطورة وأمراض مصاحبة معقدة",
+      en: "High-Risk Comorbidity / Vulnerability",
+      descAr: "وجود أمراض مزمنة مصاحبة (فشل قلبي، نقص مناعة، كبر سن) ترفع درجة الخطورة",
+      descEn: "Severe chronic comorbidities (heart failure, immunocompromise) elevating clinical risk"
+    },
+    OTHER_CLINICAL_JUDGMENT: {
+      ar: "تقدير وخبرة الطبيب السريرية بعد الفحص المباشر",
+      en: "Other Physician Clinical Judgment",
+      descAr: "تقييم سريري شامل مبني على الفحص الإكلينيكي المباشر للعيادة",
+      descEn: "Comprehensive clinical evaluation based on direct physical examination"
+    }
+  };
+
+  // ===========================================================================
+  // REJECT / REQUEST RE-ENTRY TAXONOMY & CLINICAL GOVERNANCE (K HEALTH)
+  // ===========================================================================
+
+  const REJECTION_REENTRY_CATEGORIES = [
+    "INCOMPLETE_MEASUREMENTS",
+    "CONTRADICTORY_VITALS",
+    "UNREADABLE_ATTACHMENTS",
+    "CLINICAL_INCONSISTENCY",
+    "OTHER_CLINICAL_JUSTIFICATION"
+  ];
+
+  const REJECTION_REENTRY_META = {
+    INCOMPLETE_MEASUREMENTS: {
+      key: "INCOMPLETE_MEASUREMENTS",
+      ar: "نقص القياسات أو المؤشرات الحيوية الأساسية",
+      en: "Incomplete / Missing Vital Measurements",
+      descAr: "تم إغفال قياسات حيوية أساسية مثل نسبة تشبع الأكسجين أو ضغط الدم لتقييم آمن للحالة.",
+      descEn: "Essential clinical vitals such as SpO2 or blood pressure were omitted, preventing safe triage."
+    },
+    CONTRADICTORY_VITALS: {
+      key: "CONTRADICTORY_VITALS",
+      ar: "قياسات أو مؤشرات حيوية متناقضة أو غير منطقية",
+      en: "Contradictory / Implausible Vital Readings",
+      descAr: "القراءات المسجلة متناقضة فيزيولوجياً (مثل SpO2 منخفض جداً مع حركة طبيعية، أو نبض غير سليم).",
+      descEn: "Recorded values are physiologically contradictory or clinically implausible (e.g. sensor artifact)."
+    },
+    UNREADABLE_ATTACHMENTS: {
+      key: "UNREADABLE_ATTACHMENTS",
+      ar: "مرفقات أو صور تحاليل/روشتات غير واضحة",
+      en: "Unreadable / Blurry Attachments & Labs",
+      descAr: "صور التحاليل المخبرية أو الروشتات المرفقة ضبابية أو مقطوعة وتتعذر قراءتها سريرياً.",
+      descEn: "Uploaded photos of lab tests, ECG or prescriptions are blurry, cropped, or illegible."
+    },
+    CLINICAL_INCONSISTENCY: {
+      key: "CLINICAL_INCONSISTENCY",
+      ar: "عدم تطابق الأعراض مع التاريخ المرضي المسجل",
+      en: "Symptom-History Discrepancy",
+      descAr: "الأعراض الحالية للمريض تتناقض صراحة مع الشكوى أو الإجابات السابقة المسجلة.",
+      descEn: "Current symptoms contradict previously documented answers or intake responses."
+    },
+    OTHER_CLINICAL_JUSTIFICATION: {
+      key: "OTHER_CLINICAL_JUSTIFICATION",
+      ar: "مبررات سريرية أخرى يحددها الطبيب",
+      en: "Other Physician Clinical Justification",
+      descAr: "تقييم سريري مباشر من الطبيب المعالج يستدعي تصحيح المدخلات وإعادة أخذ القياسات.",
+      descEn: "Direct attending physician clinical assessment requiring intake correction."
+    }
+  };
+
+  const REENTRY_REQUEST_FIELDS = [
+    { id: "spo2", labelEn: "SpO2 (Oxygen Saturation)", labelAr: "نسبة تشبع الأكسجين (SpO2)", icon: "💨" },
+    { id: "blood_pressure", labelEn: "Blood Pressure & Pulse", labelAr: "ضغط الدم والنبض", icon: "❤️" },
+    { id: "temperature", labelEn: "Body Temperature", labelAr: "درجة حرارة الجسم", icon: "🌡️" },
+    { id: "symptoms_detail", labelEn: "Symptom Onset & Severity", labelAr: "بداية الأعراض وشدتها", icon: "📋" },
+    { id: "attachments", labelEn: "Clear Lab / Report Photos", labelAr: "صورة واضحة للتحاليل أو التقرير", icon: "📷" },
+    { id: "medications", labelEn: "Current Medications List", labelAr: "قائمة الأدوية الحالية والجرعات", icon: "💊" }
+  ];
+
+  const QUICK_REENTRY_INSTRUCTION_CHIPS = [
+    {
+      en: "Please warm your hands, rest for 5 minutes, and retake your pulse oximeter (SpO2) reading.",
+      ar: "يرجى تدفئة اليدين والراحة لمدة 5 دقائق ثم إعادة قياس نسبة الأكسجين والتأكد من ثبات القراءة."
+    },
+    {
+      en: "Blood pressure reading appears implausible. Please re-measure while seated quietly using a calibrated cuff.",
+      ar: "قراءة ضغط الدم تبدو غير دقيقة، يرجى إعادة القياس في وضعية الجلوس بهدوء بجهاز معتمد."
+    },
+    {
+      en: "The uploaded lab result photo is blurry or cropped. Please upload a clear, flat photo in good lighting.",
+      ar: "صورة نتيجة التحليل المرفقة غير واضحة، يرجى إعادة تصوير الورقة كاملة بإضاءة جيدة بدون اهتزاز."
+    },
+    {
+      en: "Reported symptoms are contradictory. Please clarify which symptom is primary and when it started.",
+      ar: "هناك تضارب في الأعراض المسجلة، يرجى توضيح العرض الرئيسي وتاريخ بدايته بدقة."
+    },
+    {
+      en: "Please confirm your current chronic disease medications and exact daily dosages.",
+      ar: "يرجى كتابة أسماء أدوية الأمراض المزمنة التي تتناولها حالياً بجرعاتها اليومية بوضوح."
+    }
+  ];
+
+  function getReentryCategoryMeta(categoryKey, isEn = false) {
+    const meta = REJECTION_REENTRY_META[categoryKey];
+    if (!meta) return { label: categoryKey || "", desc: "" };
+    return {
+      label: isEn ? meta.en : meta.ar,
+      desc: isEn ? meta.descEn : meta.descAr
+    };
+  }
+
+  function validateRejectReentryPayload({ mode, reasonCategory, requiredFields = [], doctorNote = "" }) {
+    if (!["reentry", "definitive_reject"].includes(mode)) {
+      return { valid: false, error: "INVALID_MODE", messageEn: "Invalid rejection mode.", messageAr: "نوع الرفض غير صالح." };
+    }
+    if (!REJECTION_REENTRY_CATEGORIES.includes(reasonCategory)) {
+      return { valid: false, error: "INVALID_CATEGORY", messageEn: "Please select a valid clinical category.", messageAr: "يرجى اختيار فئة سريرية صالحة." };
+    }
+    const cleanNote = String(doctorNote || "").trim();
+    if (cleanNote.length < 10) {
+      return { valid: false, error: "NOTE_TOO_SHORT", messageEn: "Physician instruction note must be at least 10 characters.", messageAr: "يجب ألا تقل ملاحظات وتوجيهات الطبيب عن 10 أحرف." };
+    }
+    if (mode === "reentry") {
+      if (!Array.isArray(requiredFields) || requiredFields.length === 0) {
+        return { valid: false, error: "NO_FIELDS_SELECTED", messageEn: "Please select at least one field requiring patient re-entry.", messageAr: "يرجى اختيار حقل واحد على الأقل يطلب من المريض إعادة إدخاله." };
+      }
+    }
+    return { valid: true };
+  }
+
+
   function getCasePriorityKey(c) {
+    if (c?.triageOverride?.overriddenPriority) {
+      return String(c.triageOverride.overriddenPriority).toLowerCase();
+    }
     const priority = String(c?.priority || c?.risk || c?.assessment?.aiTriage?.priority || "").toLowerCase();
     const o2 = getCaseOxygenValue(c);
     if (priority.includes("urgent") || priority.includes("emergency") || priority.includes("عاجل") || (o2 > 0 && o2 < 90)) return "urgent";
@@ -249,7 +405,308 @@
     });
   }
 
+  async function overrideTriagePriority({ caseId, overriddenPriority, overrideReason, overrideCategory }) {
+    if (!caseId || !VALID_OVERRIDE_PRIORITIES.includes(overriddenPriority)) {
+      throw new Error(`caseId and valid overriddenPriority (${VALID_OVERRIDE_PRIORITIES.join(", ")}) required.`);
+    }
+    if (!overrideReason || String(overrideReason).trim().length < 10) {
+      throw new Error("A structured clinical overrideReason of at least 10 characters is mandatory to override system triage.");
+    }
+    if (!overrideCategory || !VALID_OVERRIDE_CATEGORIES.includes(overrideCategory)) {
+      throw new Error(`overrideCategory must be one of: ${VALID_OVERRIDE_CATEGORIES.join(", ")}`);
+    }
+
+    try {
+      if (typeof global.callBackend === "function" || typeof fetch !== "undefined") {
+        return await apiCall("/api/doctor/override-triage-priority", {
+          method: "POST",
+          body: JSON.stringify({ caseId, overriddenPriority, overrideReason, overrideCategory })
+        });
+      }
+    } catch (err) {
+      // In offline / local demo environment without live backend API, provide seamless client fallback
+      if (global.db && global.db.collection) {
+        const caseRef = global.db.collection("cases").doc(caseId);
+        const caseDoc = await caseRef.get().catch(() => null);
+        const currentData = caseDoc && caseDoc.exists ? caseDoc.data() : {};
+        const origPriority = currentData.priority || currentData.triageLevel || "normal";
+        const docUser = global.auth?.currentUser || {};
+        const doctorName = docUser.displayName || "Licensed Doctor";
+        const doctorLicense = "EG-MED-VERIFIED";
+        const nowIso = new Date().toISOString();
+
+        const overrideRecord = {
+          isOverridden: true,
+          overriddenPriority,
+          overrideReason: String(overrideReason).trim(),
+          overrideCategory,
+          overriddenBy: {
+            uid: docUser.uid || "doc_demo",
+            name: doctorName,
+            license: doctorLicense,
+            email: docUser.email || ""
+          },
+          timestamp: nowIso,
+          originalPriority: origPriority
+        };
+
+        const updatePayload = {
+          priority: overriddenPriority,
+          triageLevel: overriddenPriority,
+          triageOverride: overrideRecord
+        };
+
+        if (global.firebase?.firestore?.FieldValue?.arrayUnion) {
+          updatePayload.statusHistory = global.firebase.firestore.FieldValue.arrayUnion({
+            oldStatus: currentData.status || "under_review",
+            newStatus: currentData.status || "under_review",
+            action: "TRIAGE_OVERRIDE",
+            actor: { uid: docUser.uid || "doc_demo", name: doctorName, role: "doctor" },
+            reason: overrideRecord.overrideReason,
+            timestamp: nowIso
+          });
+        }
+
+        await caseRef.update(updatePayload);
+        return {
+          success: true,
+          message: `Triage priority overridden to '${overriddenPriority}' with clinical justification.`,
+          overrideRecord
+        };
+      }
+    }
+
+    // Default standalone return when backend and db are not connected (e.g. unit tests or local preview)
+    const fallbackRecord = {
+      isOverridden: true,
+      overriddenPriority,
+      overrideReason: String(overrideReason).trim(),
+      overrideCategory,
+      overriddenBy: {
+        uid: "doc_demo_local",
+        name: "Treating Physician",
+        license: "EG-MED-VERIFIED"
+      },
+      timestamp: new Date().toISOString()
+    };
+    return {
+      success: true,
+      message: `Triage priority overridden to '${overriddenPriority}' with clinical justification.`,
+      overrideRecord: fallbackRecord
+    };
+  }
+
+  /**
+   * Reject initial intake or request patient re-entry with clinical justification (K Health)
+   */
+  async function rejectOrRequestReentry({ caseId, mode = "reentry", reasonCategory, requiredFields = [], doctorNote }) {
+    if (!caseId) {
+      throw new Error("caseId is required.");
+    }
+    const val = validateRejectReentryPayload({ mode, reasonCategory, requiredFields, doctorNote });
+    if (!val.valid) {
+      const err = new Error(val.messageEn || "Validation failed.");
+      err.code = val.error || "VALIDATION_FAILED";
+      throw err;
+    }
+
+    try {
+      if (typeof global.callBackend === "function" || typeof fetch !== "undefined") {
+        return await apiCall(`/api/cases/${encodeURIComponent(caseId)}/reject-reentry`, {
+          method: "POST",
+          body: JSON.stringify({
+            mode,
+            reasonCategory,
+            requiredFields,
+            doctorNote
+          })
+        });
+      }
+    } catch (err) {
+      // Offline / client-side Firestore fallback
+      if (global.db && global.db.collection) {
+        const caseRef = global.db.collection("cases").doc(caseId);
+        const caseDoc = await caseRef.get().catch(() => null);
+        const currentData = caseDoc && caseDoc.exists ? caseDoc.data() : {};
+        const docUser = global.auth?.currentUser || {};
+        const doctorName = docUser.displayName || "Licensed Physician";
+        const nowIso = new Date().toISOString();
+        const isReentry = mode === "reentry";
+        const targetStatus = isReentry ? "more_info_requested" : "rejected";
+
+        const reentryRecord = {
+          mode,
+          isReentryRequest: isReentry,
+          reasonCategory,
+          rejectionReason: String(doctorNote).trim(),
+          requiredFields: isReentry ? requiredFields : [],
+          flaggedBy: {
+            uid: docUser.uid || "doc_demo",
+            name: doctorName,
+            email: docUser.email || ""
+          },
+          timestamp: nowIso
+        };
+
+        const updatePayload = {
+          status: targetStatus,
+          rejectionReason: String(doctorNote).trim(),
+          rejectionCategory: reasonCategory,
+          isReentryRequest: isReentry,
+          reentryMode: mode,
+          requiredFields: isReentry ? requiredFields : [],
+          doctorNote: String(doctorNote).trim(),
+          doctorApproved: false,
+          reentryRecord,
+          updatedAt: nowIso
+        };
+
+        if (global.firebase?.firestore?.FieldValue?.arrayUnion) {
+          updatePayload.statusHistory = global.firebase.firestore.FieldValue.arrayUnion({
+            oldStatus: currentData.status || "under_review",
+            newStatus: targetStatus,
+            action: isReentry ? "REJECT_REQUEST_REENTRY" : "DEFINITIVE_REJECTION",
+            actor: { uid: docUser.uid || "doc_demo", name: doctorName, role: "doctor" },
+            reason: String(doctorNote).trim(),
+            timestamp: nowIso
+          });
+        }
+
+        await caseRef.update(updatePayload);
+        return {
+          success: true,
+          caseId,
+          mode,
+          targetStatus,
+          message: isReentry ? "Re-entry request sent to patient." : "Case definitively rejected.",
+          reentryRecord
+        };
+      }
+      throw err;
+    }
+
+    return {
+      success: true,
+      caseId,
+      mode,
+      targetStatus: mode === "reentry" ? "more_info_requested" : "rejected",
+      message: mode === "reentry" ? "Re-entry request sent to patient." : "Case definitively rejected.",
+      reentryRecord: {
+        mode,
+        isReentryRequest: mode === "reentry",
+        reasonCategory,
+        rejectionReason: String(doctorNote).trim(),
+        requiredFields: mode === "reentry" ? requiredFields : [],
+        timestamp: new Date().toISOString()
+      }
+    };
+  }
+
+  /**
+   * Retrieves rejection / re-entry telemetry and details for a case
+   */
+  async function getCaseRejectReentryStatus(caseId) {
+    if (!caseId) throw new Error("caseId is required.");
+    return await apiCall(`/api/cases/${encodeURIComponent(caseId)}/reject-reentry`);
+  }
+
+  function getOverrideCategoryLabel(catKey, isEn = false) {
+    const meta = OVERRIDE_CATEGORY_META[catKey];
+    if (!meta) return catKey;
+    return isEn ? meta.en : meta.ar;
+  }
+
+  function getOverrideCategoryDesc(catKey, isEn = false) {
+    const meta = OVERRIDE_CATEGORY_META[catKey];
+    if (!meta) return "";
+    return isEn ? meta.descEn : meta.descAr;
+  }
+
+  function detectBilingualDirection(text) {
+    if (!text) return "ltr";
+    const arabicPattern = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
+    return arabicPattern.test(String(text)) ? "rtl" : "ltr";
+  }
+
+  const _caseDataCache = new Map();
+  const CASE_CACHE_TTL_MS = 60000;
+
+  function setCachedCase(caseId, data) {
+    if (!caseId) return;
+    _caseDataCache.set(caseId, {
+      data,
+      cachedAt: Date.now()
+    });
+  }
+
+  function getCachedCase(caseId) {
+    if (!caseId || !_caseDataCache.has(caseId)) return null;
+    const entry = _caseDataCache.get(caseId);
+    if (Date.now() - entry.cachedAt > CASE_CACHE_TTL_MS) {
+      _caseDataCache.delete(caseId);
+      return null;
+    }
+    return entry.data;
+  }
+
+  function invalidateCachedCase(caseId) {
+    if (caseId) _caseDataCache.delete(caseId);
+    else _caseDataCache.clear();
+  }
+
+  async function loadCaseWithHistoryPerformance(caseId, options = {}) {
+    const startTime = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+
+    // 1. Check cache for instant retrieval (< 50ms)
+    const cached = getCachedCase(caseId);
+    if (cached && !options.forceFresh) {
+      const elapsedMs = ((typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now()) - startTime;
+      return {
+        caseData: cached,
+        history: cached.medicalHistory || cached.statusHistory || [],
+        elapsedMs: Math.round(elapsedMs * 100) / 100,
+        fromCache: true,
+        underOneSecond: elapsedMs < 1000
+      };
+    }
+
+    // 2. Fetch fresh
+    let caseData = null;
+    if (typeof options.fetcher === "function") {
+      caseData = await options.fetcher(caseId);
+    } else if (Array.isArray(global.cases)) {
+      caseData = global.cases.find(c => c.id === caseId) || null;
+    } else if (Array.isArray(global.state?.doctorQueue)) {
+      caseData = global.state.doctorQueue.find(c => c.id === caseId) || null;
+    }
+
+    if (caseData) {
+      setCachedCase(caseId, caseData);
+    }
+
+    const endTime = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+    const elapsedMs = endTime - startTime;
+
+    return {
+      caseData: caseData || { id: caseId },
+      history: caseData?.medicalHistory || caseData?.statusHistory || [],
+      elapsedMs: Math.round(elapsedMs * 100) / 100,
+      fromCache: false,
+      underOneSecond: elapsedMs < 1000
+    };
+  }
+
   const DoctorService = {
+    VALID_OVERRIDE_PRIORITIES,
+    VALID_OVERRIDE_CATEGORIES,
+    OVERRIDE_CATEGORY_META,
+    getOverrideCategoryLabel,
+    getOverrideCategoryDesc,
+    detectBilingualDirection,
+    setCachedCase,
+    getCachedCase,
+    invalidateCachedCase,
+    loadCaseWithHistoryPerformance,
     getCaseOxygenValue,
     getCaseSubmittedMillis,
     getCaseWaitingMinutes,
@@ -267,7 +724,16 @@
     acknowledgeEscalation,
     getOverdueHandovers,
     getUnassignedCases,
-    claimCase
+    claimCase,
+    overrideTriagePriority,
+    REJECTION_REENTRY_CATEGORIES,
+    REJECTION_REENTRY_META,
+    REENTRY_REQUEST_FIELDS,
+    QUICK_REENTRY_INSTRUCTION_CHIPS,
+    getReentryCategoryMeta,
+    validateRejectReentryPayload,
+    rejectOrRequestReentry,
+    getCaseRejectReentryStatus
   };
 
   global.HealthVibes = global.HealthVibes || {};

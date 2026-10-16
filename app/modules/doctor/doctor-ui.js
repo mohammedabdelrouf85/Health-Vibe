@@ -324,7 +324,7 @@
     };
 
     const statusKey = String(c.status || "under_review").toLowerCase();
-    const statusMeta = (typeof global.getCaseStatusMeta === "function" && global.getCaseStatusMeta(c.status)?.icon)
+    let statusMeta = (typeof global.getCaseStatusMeta === "function" && global.getCaseStatusMeta(c.status)?.icon)
       ? global.getCaseStatusMeta(c.status)
       : (STATUS_META[statusKey] || {
           icon: "🩺",
@@ -332,6 +332,15 @@
           ar: "قيد الفحص",
           pillClass: "pending"
         });
+
+    if (c?.isReentryRequest && statusKey === "more_info_requested") {
+      statusMeta = {
+        icon: "⚠️",
+        en: isEn ? "Pending Re-entry" : "بانتظار إعادة القياس",
+        ar: "بانتظار إعادة القياس",
+        pillClass: "warning"
+      };
+    }
 
     // Priority Pill Meta (Text + Icon + Color)
     const o2Val = Number(c.o2 ?? c.oxygenLevel ?? 0);
@@ -397,6 +406,15 @@
               <span class="pill ${priorityMeta.pill}" style="font-size: 11.5px; padding: 4px 10px; font-weight: 800;" title="${isEn ? 'Triage Priority Level' : 'درجة أولوية الفرز'}">
                 <span>${priorityMeta.icon || (priorityMeta.pill === 'danger' ? '🚨' : '🟢')}</span> <span>${priorityMeta.label}</span>
               </span>
+              ${(c.triageOverride?.isOverridden || c.isOverridden) ? `
+                <button type="button" class="pill danger" onclick="HealthVibes?.DoctorUI?.openOverrideRiskModal('${c.id}')" style="font-size: 11px; padding: 3px 8px; font-weight: 800; border: 1px solid #ef4444; background: rgba(239, 68, 68, 0.15); color: #f87171; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;" title="${isEn ? 'Clinically overridden priority. Click to view or update override.' : 'تم تعديل درجة الخطورة سريرياً. انقر للمراجعة أو التحديث.'}">
+                  <span>⚡</span> <span>${isEn ? 'Overridden' : 'معدل سريرياً'}</span>
+                </button>
+              ` : `
+                <button type="button" class="override-pill-trigger-btn" onclick="HealthVibes?.DoctorUI?.openOverrideRiskModal('${c.id}')" title="${isEn ? 'Override advisory risk level' : 'تعديل درجة الخطورة السريرية'}" aria-label="${isEn ? 'Override advisory risk level' : 'تعديل درجة الخطورة السريرية'}" style="background: rgba(14, 165, 233, 0.12); border: 1px solid #0284c7; color: #38bdf8; border-radius: 6px; padding: 2px 7px; font-size: 11px; cursor: pointer; font-weight: 700; display: inline-flex; align-items: center; gap: 3px;">
+                  <span>⚖️</span> <span>${isEn ? 'Override' : 'تعديل'}</span>
+                </button>
+              `}
             </div>
           </div>
         </div>
@@ -3063,7 +3081,1792 @@
   }
 
   // ===========================================================================
-  // 8. EXPORTS & ATTACHMENT TO HEALTHVIBES GLOBAL
+  // 8. CLINICAL RISK OVERRIDE WORKFLOW (HUMAN-IN-THE-LOOP AI FEEDBACK)
+  // ===========================================================================
+
+  const VALID_OVERRIDE_PRIORITIES = ["urgent", "high", "normal"];
+  const VALID_OVERRIDE_CATEGORIES = [
+    "CLINICAL_SIGNS_OF_EXHAUSTION",
+    "RAPID_TRAJECTORY",
+    "ARTIFACT_CORRECTION",
+    "COMORBIDITY_RISK",
+    "OTHER_CLINICAL_JUDGMENT"
+  ];
+
+  const OVERRIDE_CATEGORY_META = {
+    CLINICAL_SIGNS_OF_EXHAUSTION: {
+      ar: "علامات سريرية للإجهاد التنفسي / الإرهاق",
+      en: "Clinical Signs of Respiratory Exhaustion",
+      descAr: "سحب بين الأضلاع، صعوبة إكمال جملة، أو إجهاد عضلات التنفس رغم قراءات الأكسجين",
+      descEn: "Intercostal retractions, unable to complete sentences, or respiratory muscle exhaustion"
+    },
+    RAPID_TRAJECTORY: {
+      ar: "تدهور سريع أو تسارع في تفاقم الأعراض",
+      en: "Rapid Trajectory / Acute Worsening",
+      descAr: "انحدار متسارع خلال وقت قصير يستدعي رفع الجاهزية والتدخل الإسعافي الفوري",
+      descEn: "Accelerated decline within a short timeframe requiring immediate escalation"
+    },
+    ARTIFACT_CORRECTION: {
+      ar: "تصحيح قراءة خاطئة أو قياس غير دقيق للجهاز",
+      en: "Artifact / Sensor Measurement Correction",
+      descAr: "قراءة SpO2 منخفضة بسبب برودة الأطراف أو حركة المريض مع استقرار الفحص السريري",
+      descEn: "Falsely low SpO2 due to cold extremities, sensor slip, or motion artifact"
+    },
+    COMORBIDITY_RISK: {
+      ar: "عوامل خطورة وأمراض مصاحبة معقدة",
+      en: "High-Risk Comorbidity / Vulnerability",
+      descAr: "وجود أمراض مزمنة مصاحبة (فشل قلبي، نقص مناعة، كبر سن) ترفع درجة الخطورة السريرية",
+      descEn: "Severe chronic comorbidities (heart failure, immunocompromise) elevating clinical risk"
+    },
+    OTHER_CLINICAL_JUDGMENT: {
+      ar: "تقدير وخبرة الطبيب السريرية بعد الفحص المباشر",
+      en: "Other Direct Physician Clinical Judgment",
+      descAr: "تقييم سريري شامل مبني على الفحص الإكلينيكي المباشر داخل العيادة",
+      descEn: "Comprehensive clinical evaluation based on direct physical examination"
+    }
+  };
+
+  const QUICK_CLINICAL_REASON_CHIPS = [
+    {
+      ar: "المريض يعاني من إجهاد تنفسي وسحب بين الأضلاع رغم استقرار الأكسجين الظاهري",
+      en: "Patient exhibits intercostal retractions and respiratory muscle exhaustion despite borderline stable SpO2"
+    },
+    {
+      ar: "قراءة مقياس النبض غير دقيقة بسبب برودة الأطراف والفحص السريري المباشر مستقر تماماً",
+      en: "Pulse oximeter reading inaccurate due to cold extremities; physical exam demonstrates normal respiratory mechanics"
+    },
+    {
+      ar: "وجود تاريخ مرضي تنفسي حرج وتدهور سريع يستدعي رفع الأولوية والجاهزية الفورية",
+      en: "History of critical respiratory vulnerability with rapid symptom trajectory requiring urgent clinical escalation"
+    },
+    {
+      ar: "استجابة ممتازة وسريعة للبخاخ الإسعافي والأعراض أصبحت خفيفة ومستقرة للمتابعة الروتينية",
+      en: "Rapid, sustained response to rescue bronchodilator; patient now clinically stable for routine outpatient follow-up"
+    }
+  ];
+
+  let activeOverridePrioritySelection = null;
+  let lastRiskModalOpener = null;
+  let riskModalKeydownHandler = null;
+
+  function getPriorityMetaInternal(priorityKey, isEn = false) {
+    const key = String(priorityKey || "normal").toLowerCase();
+    const map = {
+      urgent: {
+        key: "urgent",
+        pillClass: "danger",
+        icon: "🚨",
+        ar: "عاجل / أحمر",
+        en: "Urgent (Red)",
+        badgeBorder: "#ef4444",
+        badgeBg: "rgba(239, 68, 68, 0.12)",
+        glowColor: "rgba(239, 68, 68, 0.35)",
+        slaMinutes: 15,
+        descAr: "خطر تدهور حاد أو نقص أكسجين يستدعي فحصاً فورياً خلال 15 دقيقة",
+        descEn: "Critical deterioration risk or severe hypoxemia requiring immediate evaluation in 15 min"
+      },
+      high: {
+        key: "high",
+        pillClass: "pending",
+        icon: "⚠️",
+        ar: "أولوية عالية / أصفر",
+        en: "High Priority (Yellow)",
+        badgeBorder: "#f59e0b",
+        badgeBg: "rgba(245, 158, 11, 0.12)",
+        glowColor: "rgba(245, 158, 11, 0.35)",
+        slaMinutes: 30,
+        descAr: "أعراض متوسطة أو عوامل خطورة متعددة تستدعي فحصاً سريرياً مستعجلاً خلال 30 دقيقة",
+        descEn: "Moderate symptoms or compound risk factors requiring urgent clinical review in 30 min"
+      },
+      normal: {
+        key: "normal",
+        pillClass: "ok",
+        icon: "🟢",
+        ar: "عادي / أخضر",
+        en: "Routine / Normal (Green)",
+        badgeBorder: "#10b981",
+        badgeBg: "rgba(16, 185, 129, 0.12)",
+        glowColor: "rgba(16, 185, 129, 0.35)",
+        slaMinutes: 120,
+        descAr: "أعراض مستقرة أو خفيفة يمكن متابعتها روتينياً ضمن 120 دقيقة",
+        descEn: "Stable routine symptoms managed under standard 120 min outpatient SLA"
+      }
+    };
+    return map[key] || map.normal;
+  }
+
+  function renderRiskOverrideSection(c, isEn = false, options = {}) {
+    if (!c) return "";
+
+    const override = c.triageOverride || (c.isOverridden ? {
+      isOverridden: true,
+      overriddenPriority: c.overriddenPriority || c.priority,
+      overrideReason: c.overrideReason,
+      overrideCategory: c.overrideCategory,
+      overriddenBy: c.overriddenBy,
+      timestamp: c.overriddenAt || c.updatedAt
+    } : null);
+
+    const currentUser = options.doctorUser || global.auth?.currentUser || null;
+    const hasExplicitAssignment = Boolean(c.assignedDoctorId || c.assignedDoctorEmail || c.doctorId);
+    const isAssigned = isCaseAssignedToDoctor(c, currentUser);
+    const isRestrictedToAssigned = hasExplicitAssignment && currentUser && !isAssigned;
+
+    const isOverridden = Boolean(override && override.isOverridden !== false && override.overriddenPriority);
+    const origPriorityKey = override?.originalPriority || c.originalPriority || c.aiTriagePriority || (global.HealthVibes?.DoctorService?.getCasePriorityKey ? global.HealthVibes.DoctorService.getCasePriorityKey(c) : (c.priority || "normal"));
+    const activePriorityKey = isOverridden ? override.overriddenPriority : (global.HealthVibes?.DoctorService?.getCasePriorityKey ? global.HealthVibes.DoctorService.getCasePriorityKey(c) : (c.priority || "normal"));
+
+    const activeMeta = getPriorityMetaInternal(activePriorityKey, isEn);
+    const origMeta = getPriorityMetaInternal(origPriorityKey, isEn);
+
+    const catKey = override?.overrideCategory || "OTHER_CLINICAL_JUDGMENT";
+    const catLabel = isEn ? (OVERRIDE_CATEGORY_META[catKey]?.en || catKey) : (OVERRIDE_CATEGORY_META[catKey]?.ar || catKey);
+    const catDesc = isEn ? (OVERRIDE_CATEGORY_META[catKey]?.descEn || "") : (OVERRIDE_CATEGORY_META[catKey]?.descAr || "");
+
+    const docName = override?.overriddenBy?.name || (isEn ? "Treating Physician" : "الطبيب المعالج");
+    const docLicense = override?.overriddenBy?.license || "EG-MED-VERIFIED";
+    const timestampStr = override?.timestamp
+      ? new Date(override.timestamp).toLocaleString(isEn ? "en-US" : "ar-EG", { dateStyle: "short", timeStyle: "short" })
+      : "";
+
+    return `
+      <div class="doctor-risk-override-card ${isOverridden ? 'is-overridden' : 'is-ai-advisory'} ${isRestrictedToAssigned ? 'is-quarantined' : ''}" id="doctorRiskOverrideSection" data-case-id="${c.id}" role="region" aria-label="${isEn ? 'Clinical Risk Level & Triage Classification' : 'مسار تصنيف درجة الخطورة السريرية'}">
+        <!-- Header -->
+        <div class="risk-card-header">
+          <div class="risk-card-title-group">
+            <span class="risk-header-icon" aria-hidden="true">⚖️</span>
+            <div>
+              <h5 class="risk-card-heading">
+                ${isEn ? 'Clinical Risk Level & Triage Classification' : 'مسار تصنيف درجة الخطورة والفرز السريري'}
+              </h5>
+              <span class="risk-card-subheading">
+                ${isEn ? 'Infermedica / Rules Engine Decision Support & Human Override' : 'الفرز الاسترشادي للذكاء الاصطناعي (Infermedica) ومسار التدخل السريري البشري'}
+              </span>
+            </div>
+          </div>
+          <div class="risk-card-badge-group">
+            ${isOverridden ? `
+              <span class="pill danger override-active-badge" style="font-size: 11px; padding: 4px 10px; font-weight: 800;">
+                <span>⚡</span> ${isEn ? 'Clinically Overridden by Physician' : 'معتمد سريرياً بتعديل الطبيب'}
+              </span>
+            ` : `
+              <span class="pill info advisory-active-badge" style="font-size: 11px; padding: 4px 10px; font-weight: 800;">
+                <span>🤖</span> ${isEn ? 'AI / Infermedica Advisory' : 'تصنيف استرشادي بالذكاء الاصطناعي'}
+              </span>
+            `}
+          </div>
+        </div>
+
+        <!-- Overridden State Display -->
+        ${isOverridden ? `
+          <div class="risk-comparison-flow">
+            <!-- Box 1: Original AI Triage -->
+            <div class="flow-step original-ai-step">
+              <span class="step-label">
+                <span>🤖</span> ${isEn ? 'AI / Infermedica Suggestion:' : 'تصنيف الذكاء الاصطناعي الأصلي:'}
+              </span>
+              <div class="step-priority-pill pill ${origMeta.pillClass}" style="opacity: 0.85;">
+                <span>${origMeta.icon}</span>
+                <span style="text-decoration: line-through; opacity: 0.85;">${isEn ? origMeta.en : origMeta.ar}</span>
+              </div>
+              <small class="step-footnote">${isEn ? 'Initial rules/model triage' : 'التقييم الآلي المبدئي'}</small>
+            </div>
+
+            <!-- Directional Arrow -->
+            <div class="flow-arrow" aria-hidden="true">
+              <span class="arrow-symbol">${isEn ? '➔' : '🡨'}</span>
+            </div>
+
+            <!-- Box 2: Doctor Overridden Priority -->
+            <div class="flow-step overridden-doctor-step" style="border-color: ${activeMeta.badgeBorder}; background: ${activeMeta.badgeBg};">
+              <span class="step-label" style="color: ${activeMeta.badgeBorder};">
+                <span>🩺</span> ${isEn ? 'Physician Clinical Override:' : 'التصنيف المعتمد سريرياً:'}
+              </span>
+              <div class="step-priority-pill pill ${activeMeta.pillClass}" style="font-weight: 900; box-shadow: 0 0 14px ${activeMeta.glowColor};">
+                <span>${activeMeta.icon}</span>
+                <span>${isEn ? activeMeta.en : activeMeta.ar}</span>
+              </div>
+              <small class="step-footnote" style="color: ${activeMeta.badgeBorder}; font-weight: 700;">
+                ⏱️ SLA: ${activeMeta.slaMinutes} ${isEn ? 'min target' : 'دقيقة كهدف استجابة'}
+              </small>
+            </div>
+          </div>
+
+          <!-- Audit & Reason Metadata Panel -->
+          <div class="override-rationale-box">
+            <div class="rationale-header-row">
+              <span class="rationale-category-badge">
+                <span>📑</span> <strong>${isEn ? 'Category:' : 'الفئة السريرية:'}</strong> ${catLabel}
+              </span>
+              ${timestampStr ? `<span class="rationale-timestamp"><span>🕒</span> ${timestampStr}</span>` : ''}
+            </div>
+            ${catDesc ? `<p class="rationale-category-desc">${catDesc}</p>` : ''}
+            <div class="rationale-text-card">
+              <strong class="rationale-label">
+                <span>📝</span> ${isEn ? 'Documented Clinical Rationale:' : 'المبررات السريرية الموثقة:'}
+              </strong>
+              <p class="rationale-quote">“${escapeHtml(override.overrideReason || '')}”</p>
+            </div>
+            <div class="rationale-signature-row">
+              <span class="signature-item">
+                <span>👨‍⚕️</span> <strong>${isEn ? 'Attesting Physician:' : 'الطبيب المعتمد:'}</strong> ${escapeHtml(docName)}
+              </span>
+              <span class="signature-item">
+                <span>🆔</span> <strong>${isEn ? 'License:' : 'رقم القيد النقابي:'}</strong> <code>${escapeHtml(docLicense)}</code>
+              </span>
+            </div>
+          </div>
+
+          <!-- AI Retraining Continuous Learning Banner -->
+          <div class="ai-feedback-assurance-banner" role="note">
+            <div class="ai-banner-icon" aria-hidden="true">🧠</div>
+            <div class="ai-banner-content">
+              <strong>${isEn ? 'AI Model & Infermedica Calibration Telemetry' : 'تغذية وتحسين نموذج الذكاء الاصطناعي (Model Retraining)'}</strong>
+              <p>${isEn
+                ? 'This override and clinical rationale are logged to the Safety Register and retraining store to calibrate triage thresholds, refine future advisory recommendations, and minimize false alarms.'
+                : 'تم تسجيل هذا التعديل ومبرراته السريرية في سجل الأمان وسجل إعادة المعايرة لتدريب خوارزميات الذكاء الاصطناعي وقواعد الفرز، مما يقلل الإنذارات الكاذبة ويرفع دقة التوصيات المستقبلية.'}
+              </p>
+            </div>
+          </div>
+
+          <!-- Action Row -->
+          <div class="override-actions-row">
+            ${isRestrictedToAssigned ? `
+              <div class="advisory-disclaimer-card quarantine-banner" style="border-left-color: #f59e0b; background: rgba(245, 158, 11, 0.08); margin-bottom: 8px; width: 100%;">
+                <span class="disclaimer-icon">🔒</span>
+                <div class="disclaimer-text">
+                  <strong style="color: #b45309;">${isEn ? 'Patient Assignment & Data Isolation Restriction:' : 'عزل بيانات المرضى والحوكمة السريرية:'}</strong>
+                  <span>${isEn
+                    ? 'This case is assigned to another attending physician. Triage risk overrides are quarantined and restricted to the assigned clinician.'
+                    : 'هذه الحالة مسندة لطبيب معالج آخر. مسار تعديل درجة الخطورة محمي وخاص بالطبيب المكلف بمتابعة الحالة حصراً.'}
+                  </span>
+                </div>
+              </div>
+              <button type="button" class="solid-button btn-override-trigger is-disabled" disabled="disabled" style="opacity: 0.55; cursor: not-allowed; background: var(--surface-2); border-color: var(--line); color: var(--muted); padding: 9px 20px; font-weight: 700; border-radius: 10px; display: inline-flex; align-items: center; gap: 8px;" title="${isEn ? 'Override restricted to assigned physician' : 'تعديل درجة الخطورة مقيد بالطبيب المعين للحالة'}">
+                <span>🔒</span> <span>${isEn ? 'Override Restricted (Assigned Clinician Only)' : 'التعديل مقيد بالطبيب المعين'}</span>
+              </button>
+            ` : `
+              <button type="button" class="soft-button btn-override-trigger" onclick="HealthVibes.DoctorUI.openOverrideRiskModal('${c.id}')" title="${isEn ? 'Modify existing clinical override (Alt+O)' : 'تعديل أو تحديث درجة الخطورة السريرية (Alt+O)'}">
+                <span>✏️</span> <span>${isEn ? 'Update Risk Override' : 'إعادة تعديل درجة الخطورة'}</span>
+                <kbd class="shortcut-badge shortcut-badge-pill" title="${isEn ? 'Keyboard shortcut: Alt+O' : 'اختصار لوحة المفاتيح: Alt+O'}">Alt+O</kbd>
+              </button>
+            `}
+          </div>
+        ` : `
+          <!-- Non-Overridden (AI Advisory) State Display -->
+          <div class="advisory-priority-overview">
+            <div class="advisory-pill-box" style="border-color: ${activeMeta.badgeBorder}; background: ${activeMeta.badgeBg};">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 26px;">${activeMeta.icon}</span>
+                <div>
+                  <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); font-weight: 700;">
+                    ${isEn ? 'Current Advisory Triage Level' : 'درجة الخطورة الاسترشادية الحالية'}
+                  </div>
+                  <strong style="font-size: 16px; color: var(--ink); display: flex; align-items: center; gap: 6px;">
+                    ${isEn ? activeMeta.en : activeMeta.ar}
+                    <span class="pill ${activeMeta.pillClass}" style="font-size: 11px; padding: 2px 8px;">
+                      ⏱️ SLA: ${activeMeta.slaMinutes} ${isEn ? 'min' : 'دقيقة'}
+                    </span>
+                  </strong>
+                </div>
+              </div>
+              <p style="margin: 8px 0 0; font-size: 12.5px; color: var(--ink); line-height: 1.4;">
+                ${isEn ? activeMeta.descEn : activeMeta.descAr}
+              </p>
+            </div>
+
+            <div class="advisory-disclaimer-card">
+              <span class="disclaimer-icon">💡</span>
+              <div class="disclaimer-text">
+                <strong>${isEn ? 'Physician Authority & Clinical Governance:' : 'سلطة الطبيب وحوكمة الذكاء الاصطناعي:'}</strong>
+                <span>${isEn
+                  ? 'Health Vibe AI and Infermedica recommendations provide decision support only. If direct clinic examination diverges from advisory triage, you can override the risk level and record your clinical rationale.'
+                  : 'توصيات الذكاء الاصطناعي (Infermedica) استرشادية فقط. إذا كشف الفحص السريري المباشر بالعيادة عن مؤشرات تتطلب رفع أو خفض درجة الخطورة، يمكنك تعديلها فوراً مع تسجيل السبب لتحسين النموذج.'}
+                </span>
+              </div>
+            </div>
+
+            ${isRestrictedToAssigned ? `
+              <div class="advisory-disclaimer-card quarantine-banner" style="border-left-color: #f59e0b; background: rgba(245, 158, 11, 0.08); margin-top: 10px;">
+                <span class="disclaimer-icon">🔒</span>
+                <div class="disclaimer-text">
+                  <strong style="color: #b45309;">${isEn ? 'Patient Assignment & Data Isolation Restriction:' : 'عزل بيانات المرضى والحوكمة السريرية:'}</strong>
+                  <span>${isEn
+                    ? 'This case is assigned to another attending physician. Triage risk overrides are quarantined and restricted to the assigned clinician.'
+                    : 'هذه الحالة مسندة لطبيب معالج آخر. مسار تعديل درجة الخطورة محمي وخاص بالطبيب المكلف بمتابعة الحالة حصراً.'}
+                  </span>
+                </div>
+              </div>
+            ` : ''}
+
+            <!-- Action Row -->
+            <div class="override-actions-row">
+              ${isRestrictedToAssigned ? `
+                <button type="button" class="solid-button btn-override-trigger is-disabled" disabled="disabled" style="opacity: 0.55; cursor: not-allowed; background: var(--surface-2); border-color: var(--line); color: var(--muted); padding: 9px 20px; font-weight: 700; border-radius: 10px; display: inline-flex; align-items: center; gap: 8px;" title="${isEn ? 'Override restricted to assigned physician' : 'تعديل درجة الخطورة مقيد بالطبيب المعين للحالة'}">
+                  <span>🔒</span> <span>${isEn ? 'Override Restricted (Assigned Clinician Only)' : 'التعديل مقيد بالطبيب المعين'}</span>
+                </button>
+              ` : `
+                <button type="button" class="solid-button btn-override-trigger" style="background: linear-gradient(135deg, #0284c7, #0369a1); border-color: #0284c7; padding: 9px 20px; font-weight: 800; border-radius: 10px; display: inline-flex; align-items: center; gap: 8px;" onclick="HealthVibes.DoctorUI.openOverrideRiskModal('${c.id}')" title="${isEn ? 'Override advisory triage risk level (Alt+O)' : 'تعديل درجة الخطورة السريرية (Alt+O)'}">
+                  <span>⚖️</span> <span>${isEn ? 'Override Risk Level' : 'تعديل درجة الخطورة السريرية'}</span>
+                  <kbd class="shortcut-badge shortcut-badge-pill" title="${isEn ? 'Keyboard shortcut: Alt+O' : 'اختصار لوحة المفاتيح: Alt+O'}">Alt+O</kbd>
+                </button>
+              `}
+            </div>
+          </div>
+        `}
+      </div>
+    `;
+  }
+
+  function renderRiskOverrideModalHtml(c, isEn = false) {
+    if (!c) return "";
+
+    const override = c.triageOverride || (c.isOverridden ? {
+      isOverridden: true,
+      overriddenPriority: c.overriddenPriority || c.priority,
+      overrideReason: c.overrideReason,
+      overrideCategory: c.overrideCategory
+    } : null);
+
+    const isOverridden = Boolean(override && override.isOverridden !== false && override.overriddenPriority);
+    const origPriorityKey = override?.originalPriority || c.originalPriority || c.aiTriagePriority || (global.HealthVibes?.DoctorService?.getCasePriorityKey ? global.HealthVibes.DoctorService.getCasePriorityKey(c) : (c.priority || "normal"));
+    const currentPriorityKey = isOverridden ? override.overriddenPriority : origPriorityKey;
+
+    const patientName = isEn
+      ? (c.patientNameEn || c.nameEn || c.patientName || c.name || "Anonymous Patient")
+      : (c.patientName || c.name || c.patientNameEn || c.nameEn || "مريض غير مسجل");
+
+    const shortId = c.id ? c.id.slice(-6).toUpperCase() : "--";
+    const o2Val = Number(c.o2 ?? c.oxygenLevel ?? 0);
+    const existingReason = override?.overrideReason || "";
+    const selectedCategory = override?.overrideCategory || "CLINICAL_SIGNS_OF_EXHAUSTION";
+
+    const PRIORITY_OPTIONS = [
+      {
+        key: "urgent",
+        colorClass: "urgent",
+        icon: "🚨",
+        titleAr: "عاجل / أحمر",
+        titleEn: "Urgent (Red)",
+        slaMinutes: 15,
+        descAr: "حالات حرجة، نقص أكسجين حاد (<90%)، أو إجهاد تنفسي شديد يستدعي تدخلاً إسعافياً خلال 15 دقيقة.",
+        descEn: "Critical emergencies, severe hypoxemia (<90%), or severe dyspnea requiring urgent 15-min intervention."
+      },
+      {
+        key: "high",
+        colorClass: "high",
+        icon: "⚠️",
+        titleAr: "أولوية عالية / أصفر",
+        titleEn: "High Priority (Yellow)",
+        slaMinutes: 30,
+        descAr: "أعراض متوسطة أو عوامل خطورة متعددة تستدعي فحصاً سريرياً مستعجلاً خلال 30 دقيقة.",
+        descEn: "Moderate-severe presentation or compound risk factors requiring clinical review within 30 min."
+      },
+      {
+        key: "normal",
+        colorClass: "normal",
+        icon: "🟢",
+        titleAr: "عادي / أخضر",
+        titleEn: "Routine / Normal (Green)",
+        slaMinutes: 120,
+        descAr: "حالة مستقرة، أعراض خفيفة أو مزمنة مستقرة يمكن متابعتها روتينياً ضمن 120 دقيقة.",
+        descEn: "Stable routine vitals and mild symptoms safely managed within standard 120 min outpatient SLA."
+      }
+    ];
+
+    const currentDocName = (global.auth?.currentUser?.displayName) || (isEn ? "Dr. Tarek Mahmoud, MD" : "د. طارق محمود");
+    const currentDocLic = "EG-MED-44821";
+
+    return `
+      <div class="doctor-override-modal-backdrop" id="doctorOverrideRiskModalBackdrop" onclick="HealthVibes.DoctorUI.handleRiskModalBackdropClick(event)" role="presentation">
+        <div class="doctor-override-modal-container" id="doctorOverrideRiskModal" role="dialog" aria-modal="true" aria-labelledby="overrideRiskModalTitle" tabindex="-1">
+          <!-- Modal Header -->
+          <header class="override-modal-header">
+            <div class="modal-title-row">
+              <span class="modal-icon-badge" aria-hidden="true">⚖️</span>
+              <div>
+                <h3 class="modal-main-title" id="overrideRiskModalTitle">
+                  ${isEn ? 'Override Triage Risk Level' : 'مسار تعديل درجة الخطورة السريرية'}
+                </h3>
+                <p class="modal-sub-title">
+                  ${isEn
+                    ? 'Clinical judgment override with structured rationale to calibrate Infermedica & AI models'
+                    : 'توثيق التدخل السريري البشري وتعديل درجة الفرز مع تسجيل المبررات لتحسين نموذج الذكاء الاصطناعي'}
+                </p>
+              </div>
+            </div>
+            <button type="button" class="btn-close-override-modal" onclick="HealthVibes.DoctorUI.closeOverrideRiskModal()" title="${isEn ? 'Close modal' : 'إغلاق النافذة'}" aria-label="${isEn ? 'Close modal' : 'إغلاق النافذة'}">
+              ✖
+            </button>
+          </header>
+
+          <!-- Compact Patient Vitals Strip -->
+          <div class="modal-patient-strip">
+            <div class="patient-strip-main">
+              <span class="patient-avatar-mini" aria-hidden="true">👤</span>
+              <div class="patient-strip-details">
+                <strong>${escapeHtml(patientName)}</strong>
+                <span class="case-id-tag">#${shortId}</span>
+              </div>
+            </div>
+            <div class="patient-strip-vitals">
+              <span class="vital-chip">
+                <span>💨 SpO2:</span> <strong style="${o2Val > 0 && o2Val < 90 ? 'color: #ef4444;' : ''}">${o2Val ? o2Val + '%' : '--'}</strong>
+              </span>
+              <span class="vital-chip">
+                <span>🤖 ${isEn ? 'AI Original:' : 'الأصلي:'}</span> <strong class="pill ${getPriorityMetaInternal(origPriorityKey, isEn).pillClass}" style="font-size: 10.5px; padding: 1px 7px;">${isEn ? getPriorityMetaInternal(origPriorityKey, isEn).en : getPriorityMetaInternal(origPriorityKey, isEn).ar}</strong>
+              </span>
+            </div>
+          </div>
+
+          <!-- Modal Scrollable Body -->
+          <div class="override-modal-body">
+            <!-- STEP 1: Select New Priority Level -->
+            <div class="form-step-section">
+              <label class="step-label-title" id="prioritySelectionLabel">
+                <span class="step-number">1</span>
+                <span>${isEn ? 'Select Authorized Clinical Risk Level *' : 'اختر درجة الخطورة السريرية المعتمدة *'}</span>
+              </label>
+              <div class="risk-priority-options-grid" role="radiogroup" aria-labelledby="prioritySelectionLabel">
+                ${PRIORITY_OPTIONS.map(opt => {
+                  const isCurrent = opt.key === currentPriorityKey;
+                  const shortcutDigit = opt.key === 'urgent' ? '1' : opt.key === 'high' ? '2' : '3';
+                  return `
+                    <button type="button" class="risk-priority-card card-${opt.colorClass} ${isCurrent ? 'is-selected is-initial-current' : ''}" id="riskOpt_${opt.key}" data-priority="${opt.key}" onclick="HealthVibes.DoctorUI.selectOverridePriorityOption('${opt.key}')" role="radio" aria-checked="${isCurrent ? 'true' : 'false'}">
+                      <div class="card-top-row">
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                          <span class="card-icon" aria-hidden="true">${opt.icon}</span>
+                          <kbd class="shortcut-badge-kbd" title="Shortcut: ${shortcutDigit} or Alt+${shortcutDigit}">[${shortcutDigit}]</kbd>
+                        </div>
+                        <div class="card-sla-badge">
+                          ⏱️ SLA: ${opt.slaMinutes} ${isEn ? 'min' : 'دقيقة'}
+                        </div>
+                      </div>
+                      <strong class="card-title">${isEn ? opt.titleEn : opt.titleAr}</strong>
+                      <p class="card-desc">${isEn ? opt.descEn : opt.descAr}</p>
+                      <div class="card-status-indicator">
+                        ${isCurrent ? `<span class="indicator-current">✓ ${isEn ? 'Currently Active' : 'التصنيف الفعّال'}</span>` : `<span class="indicator-select">${isEn ? 'Select Level' : 'اختر هذا المستوى'}</span>`}
+                      </div>
+                    </button>
+                  `;
+                }).join('')}
+              </div>
+              <input type="hidden" id="overrideSelectedPriorityInput" value="${currentPriorityKey}" />
+            </div>
+
+            <!-- STEP 2: Clinical Category Selector -->
+            <div class="form-step-section" style="margin-top: 18px;">
+              <label for="overrideCategorySelect" class="step-label-title">
+                <span class="step-number">2</span>
+                <span>${isEn ? 'Clinical Override Category *' : 'فئة التعديل السريري *'}</span>
+              </label>
+              <div class="category-select-wrapper">
+                <select id="overrideCategorySelect" class="override-category-select" required aria-required="true">
+                  ${VALID_OVERRIDE_CATEGORIES.map(cat => {
+                    const meta = OVERRIDE_CATEGORY_META[cat];
+                    const selected = cat === selectedCategory ? 'selected="selected"' : '';
+                    return `
+                      <option value="${cat}" ${selected}>
+                        ${isEn ? (meta?.en || cat) : (meta?.ar || cat)}
+                      </option>
+                    `;
+                  }).join('')}
+                </select>
+                <span class="select-dropdown-chevron" aria-hidden="true">▼</span>
+              </div>
+              <p class="category-helper-text" id="categoryHelperText">
+                ${isEn ? (OVERRIDE_CATEGORY_META[selectedCategory]?.descEn || "") : (OVERRIDE_CATEGORY_META[selectedCategory]?.descAr || "")}
+              </p>
+            </div>
+
+            <!-- STEP 3: Mandatory Clinical Justification / Reason -->
+            <div class="form-step-section" style="margin-top: 18px;">
+              <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 6px;">
+                <label for="overrideReasonTextarea" class="step-label-title">
+                  <span class="step-number">3</span>
+                  <span>${isEn ? 'Document Mandatory Clinical Rationale *' : 'توثيق المبررات السريرية للتعديل *'}</span>
+                </label>
+                <div class="char-count-pill" id="overrideReasonCharCountWrapper">
+                  <span id="overrideReasonCharCount">${existingReason.length}</span> / 10 ${isEn ? 'chars min' : 'حرف كحد أدنى'}
+                </div>
+              </div>
+
+              <!-- Quick Clinical Reason Chips & Language Presets Toggle -->
+              <div class="override-quick-chips-wrapper">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 6px;">
+                  <span class="chips-label">💡 ${isEn ? 'Quick clinical notes / Presets:' : 'صيغ سريرية شائعة بنقرة واحدة:'}</span>
+                  <div class="chips-lang-toggle" role="group" aria-label="${isEn ? 'Presets Language' : 'لغة الصيغ السريرية'}">
+                    <button type="button" class="btn-chips-lang ${isEn ? 'is-active' : ''}" id="btnChipsLangEn" onclick="HealthVibes.DoctorUI.setOverrideChipsLang('en')" title="${isEn ? 'Clinical English presets (Alt+E)' : 'صيغ إنجليزية سريرية (Alt+E)'}">
+                      🇬🇧 Clinical EN <kbd class="shortcut-badge-kbd" style="font-size: 9.5px; margin-inline-start: 4px;">Alt+E</kbd>
+                    </button>
+                    <button type="button" class="btn-chips-lang ${!isEn ? 'is-active' : ''}" id="btnChipsLangAr" onclick="HealthVibes.DoctorUI.setOverrideChipsLang('ar')" title="${isEn ? 'Arabic clinical presets (Alt+R)' : 'صيغ عربية معتمدة (Alt+R)'}">
+                      🇪🇬 عربي <kbd class="shortcut-badge-kbd" style="font-size: 9.5px; margin-inline-start: 4px;">Alt+R</kbd>
+                    </button>
+                  </div>
+                </div>
+                <div class="override-chips-container" id="overrideChipsContainer">
+                  ${QUICK_CLINICAL_REASON_CHIPS.map(chip => `
+                    <button type="button" class="override-chip-btn" onclick="HealthVibes.DoctorUI.applyOverrideReasonChip('${escapeHtml(isEn ? chip.en : chip.ar)}')">
+                      + ${isEn ? chip.en : chip.ar}
+                    </button>
+                  `).join('')}
+                </div>
+              </div>
+
+              <textarea id="overrideReasonTextarea" class="override-textarea" dir="auto" lang="${isEn ? 'en' : 'ar'}" minlength="10" rows="3" placeholder="${isEn ? 'Detailed physician clinical observations in English or Arabic (e.g. Patient exhibits intercostal retractions, unable to complete sentences, severe bronchospasm despite SpO2 93%)...' : 'أدخل الفحص الإكلينيكي المباشر بالعربية أو الإنجليزية (مثال: سحب بين الأضلاع وإجهاد تنفسي شديد، أو قراءة SpO2 كانت خطأ قياس بسبب برودة الأطراف)...'}" required aria-required="true">${escapeHtml(existingReason)}</textarea>
+              <div id="overrideReasonValidationMsg" class="form-validation-error" style="display: none;" role="alert"></div>
+            </div>
+
+            <!-- STEP 4: AI Retraining & Continuous Calibration Callout -->
+            <div class="modal-ai-feedback-callout" role="note">
+              <div class="callout-icon" aria-hidden="true">🤖</div>
+              <div class="callout-body">
+                <strong>${isEn ? 'Human-in-the-Loop AI Model Training (Infermedica Feedback Loop)' : 'حوكمة وتدريب نموذج الذكاء الاصطناعي (Infermedica Retraining Loop)'}</strong>
+                <p>${isEn
+                  ? 'Your clinical override records directly into the safety registry and calibration telemetry. This provides verified ground-truth data to continuously reduce false alarms and refine model weights for Egyptian clinical settings.'
+                  : 'يتم تسجيل تعديلك ومبرراتك السريرية في سجل الأمان ومستودع إعادة المعايرة، مما يمنح خوارزميات الذكاء الاصطناعي بيانات دقيقة من واقع العيادات المصرية لتقليل الإنذارات الكاذبة وتحسين دقة الفرز.'}
+                </p>
+              </div>
+            </div>
+
+            <!-- STEP 5: Physician Attestation Footer -->
+            <div class="modal-doctor-attestation-card">
+              <span class="attestation-icon" aria-hidden="true">🛡️</span>
+              <div class="attestation-meta">
+                <span>${isEn ? 'Attesting Physician:' : 'الطبيب المعتمد:'} <strong>${escapeHtml(currentDocName)}</strong></span>
+                <span>${isEn ? 'Syndicate License:' : 'القيد النقابي:'} <code>${escapeHtml(currentDocLic)}</code></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Modal Footer Actions -->
+          <footer class="override-modal-footer">
+            <div class="shortcuts-legend" aria-label="${isEn ? 'Keyboard Shortcuts' : 'اختصارات لوحة المفاتيح'}">
+              <span class="legend-item"><kbd class="shortcut-badge-kbd">1</kbd>/<kbd class="shortcut-badge-kbd">2</kbd>/<kbd class="shortcut-badge-kbd">3</kbd> ${isEn ? 'Priority' : 'المستوى'}</span>
+              <span class="legend-item"><kbd class="shortcut-badge-kbd">Alt+E/R</kbd> ${isEn ? 'Presets' : 'الصيغ'}</span>
+              <span class="legend-item"><kbd class="shortcut-badge-kbd">Ctrl+↵</kbd> ${isEn ? 'Save' : 'اعتماد'}</span>
+              <span class="legend-item"><kbd class="shortcut-badge-kbd">Esc</kbd> ${isEn ? 'Cancel' : 'إلغاء'}</span>
+            </div>
+            <div class="override-modal-footer-btns">
+              <button type="button" class="outline-button btn-cancel-override" onclick="HealthVibes.DoctorUI.closeOverrideRiskModal()">
+                <span>${isEn ? 'Cancel' : 'إلغاء'}</span>
+                <kbd class="shortcut-badge-kbd" style="font-size: 10px; margin-inline-start: 4px;">Esc</kbd>
+              </button>
+              <button type="button" class="solid-button btn-confirm-override" id="btnSubmitRiskOverride" onclick="HealthVibes.DoctorUI.submitOverrideRisk('${c.id}')">
+                <span>💾</span> <span>${isEn ? 'Save & Apply Clinical Override' : 'حفظ واعتماد التعديل السريري'}</span>
+                <kbd class="shortcut-badge-kbd" style="font-size: 10px; margin-inline-start: 4px; background: rgba(255,255,255,0.22); border-color: rgba(255,255,255,0.35); color: #fff;">Ctrl+↵</kbd>
+              </button>
+            </div>
+          </footer>
+        </div>
+      </div>
+    `;
+  }
+
+  function handleRiskModalBackdropClick(evt) {
+    if (evt && evt.target && evt.target.id === "doctorOverrideRiskModalBackdrop") {
+      closeOverrideRiskModal();
+    }
+  }
+
+  function openOverrideRiskModal(caseId) {
+    if (typeof document === "undefined") return;
+    const isEn = (global.currentLanguage || "ar") === "en";
+
+    const activeCase = (global.cases || []).find(c => c.id === caseId) ||
+                       (global.state?.doctorQueue || []).find(c => c.id === caseId) ||
+                       { id: caseId, priority: "normal" };
+
+    if (activeCase && global.auth?.currentUser) {
+      const hasExplicitAssignment = Boolean(activeCase.assignedDoctorId || activeCase.assignedDoctorEmail || activeCase.doctorId);
+      if (hasExplicitAssignment && !isCaseAssignedToDoctor(activeCase, global.auth.currentUser)) {
+        if (typeof global.showToast === "function") {
+          global.showToast(isEn
+            ? "Access Denied: Triage risk override is restricted to the assigned physician."
+            : "تم رفض الإجراء: مسار تعديل درجة الخطورة مقيد بالطبيب المكلف بمتابعة الحالة حصراً.");
+        }
+        return;
+      }
+    }
+
+    lastRiskModalOpener = document.activeElement;
+
+    // Remove any previously open override modal
+    closeOverrideRiskModal();
+
+    // Render HTML
+    const modalHtml = renderRiskOverrideModalHtml(activeCase, isEn);
+    const container = document.createElement("div");
+    container.id = "doctorRiskModalMountPoint";
+    container.innerHTML = modalHtml;
+    document.body.appendChild(container);
+
+    // Initial state setup
+    const initialPriority = (activeCase.triageOverride?.overriddenPriority) ||
+                            (activeCase.priority) ||
+                            "normal";
+    selectOverridePriorityOption(initialPriority);
+
+    // Attach Category Change Listener for Description Helper
+    const catSelect = document.getElementById("overrideCategorySelect");
+    const catHelper = document.getElementById("categoryHelperText");
+    if (catSelect && catHelper) {
+      catSelect.addEventListener("change", () => {
+        const selectedVal = catSelect.value;
+        const meta = OVERRIDE_CATEGORY_META[selectedVal];
+        catHelper.textContent = isEn ? (meta?.descEn || "") : (meta?.descAr || "");
+      });
+    }
+
+    // Attach Textarea Character Counter & Live Validation
+    const textarea = document.getElementById("overrideReasonTextarea");
+    const charCount = document.getElementById("overrideReasonCharCount");
+    const countWrapper = document.getElementById("overrideReasonCharCountWrapper");
+    const submitBtn = document.getElementById("btnSubmitRiskOverride");
+
+    const updateValidation = () => {
+      const text = textarea ? textarea.value.trim() : "";
+      const len = text.length;
+      if (charCount) charCount.textContent = String(len);
+
+      if (len >= 10) {
+        if (countWrapper) {
+          countWrapper.style.color = "#10b981";
+          countWrapper.style.borderColor = "#10b981";
+        }
+        if (submitBtn) {
+          submitBtn.removeAttribute("disabled");
+          submitBtn.style.opacity = "1";
+        }
+      } else {
+        if (countWrapper) {
+          countWrapper.style.color = "#ea580c";
+          countWrapper.style.borderColor = "#ea580c";
+        }
+        if (submitBtn) {
+          submitBtn.style.opacity = "0.7";
+        }
+      }
+    };
+
+    if (textarea) {
+      textarea.addEventListener("input", updateValidation);
+      textarea.addEventListener("keyup", updateValidation);
+      updateValidation();
+    }
+
+    // Keyboard focus trap & Rapid override shortcuts
+    riskModalKeydownHandler = (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        closeOverrideRiskModal();
+        return;
+      }
+
+      // Quick Submit: Ctrl + Enter or Cmd + Enter
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+        e.preventDefault();
+        submitOverrideRisk(activeCase.id);
+        return;
+      }
+
+      // Check if user is typing inside textarea
+      const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : "";
+      const isInputFocused = activeTag === "textarea" || activeTag === "input" || activeTag === "select";
+
+      // 1: Urgent (Red)
+      if ((e.altKey && e.key === "1") || (!isInputFocused && e.key === "1")) {
+        e.preventDefault();
+        selectOverridePriorityOption("urgent");
+        return;
+      }
+      // 2: High (Yellow)
+      if ((e.altKey && e.key === "2") || (!isInputFocused && e.key === "2")) {
+        e.preventDefault();
+        selectOverridePriorityOption("high");
+        return;
+      }
+      // 3: Normal (Green)
+      if ((e.altKey && e.key === "3") || (!isInputFocused && e.key === "3")) {
+        e.preventDefault();
+        selectOverridePriorityOption("normal");
+        return;
+      }
+
+      // Alt + E for English presets, Alt + R for Arabic presets
+      if (e.altKey && (e.key === "e" || e.key === "E")) {
+        e.preventDefault();
+        setOverrideChipsLang("en");
+        return;
+      }
+      if (e.altKey && (e.key === "r" || e.key === "R")) {
+        e.preventDefault();
+        setOverrideChipsLang("ar");
+        return;
+      }
+
+      // Accessible Focus Trap (Tab and Shift+Tab)
+      if (e.key === "Tab") {
+        const modalContainer = document.getElementById("doctorOverrideRiskModal");
+        if (!modalContainer) return;
+        const focusable = modalContainer.querySelectorAll('button:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])');
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+
+        if (e.shiftKey) {
+          if (document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else {
+          if (document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      }
+    };
+    document.addEventListener("keydown", riskModalKeydownHandler);
+
+    // Focus on modal
+    const modalBox = document.getElementById("doctorOverrideRiskModal");
+    if (modalBox && typeof modalBox.focus === "function") {
+      modalBox.focus();
+    }
+  }
+
+  function closeOverrideRiskModal() {
+    if (typeof document === "undefined") return;
+
+    if (riskModalKeydownHandler) {
+      document.removeEventListener("keydown", riskModalKeydownHandler);
+      riskModalKeydownHandler = null;
+    }
+
+    const mount = document.getElementById("doctorRiskModalMountPoint");
+    if (mount) {
+      mount.remove();
+    } else {
+      const backdrop = document.getElementById("doctorOverrideRiskModalBackdrop");
+      if (backdrop) backdrop.remove();
+    }
+
+    if (lastRiskModalOpener && typeof lastRiskModalOpener.focus === "function") {
+      lastRiskModalOpener.focus();
+      lastRiskModalOpener = null;
+    }
+  }
+
+  function selectOverridePriorityOption(priorityKey) {
+    if (typeof document === "undefined") return;
+    const valid = VALID_OVERRIDE_PRIORITIES.includes(priorityKey) ? priorityKey : "normal";
+    activeOverridePrioritySelection = valid;
+
+    const input = document.getElementById("overrideSelectedPriorityInput");
+    if (input) input.value = valid;
+
+    VALID_OVERRIDE_PRIORITIES.forEach(key => {
+      const card = document.getElementById(`riskOpt_${key}`);
+      if (card) {
+        if (key === valid) {
+          card.classList.add("is-selected");
+          card.setAttribute("aria-checked", "true");
+        } else {
+          card.classList.remove("is-selected");
+          card.setAttribute("aria-checked", "false");
+        }
+      }
+    });
+  }
+
+  function setOverrideChipsLang(lang) {
+    if (typeof document === "undefined") return;
+    const targetLang = (lang === "en" || lang === "ar") ? lang : ((global.currentLanguage || "ar") === "en" ? "en" : "ar");
+
+    const container = document.getElementById("overrideChipsContainer");
+    if (container) {
+      container.innerHTML = QUICK_CLINICAL_REASON_CHIPS.map(chip => {
+        const text = targetLang === "en" ? chip.en : chip.ar;
+        return `
+          <button type="button" class="override-chip-btn" onclick="HealthVibes.DoctorUI.applyOverrideReasonChip('${escapeHtml(text)}')">
+            + ${text}
+          </button>
+        `;
+      }).join('');
+    }
+
+    const btnEn = document.getElementById("btnChipsLangEn");
+    const btnAr = document.getElementById("btnChipsLangAr");
+    if (btnEn && btnAr) {
+      if (targetLang === "en") {
+        btnEn.classList.add("is-active");
+        btnAr.classList.remove("is-active");
+      } else {
+        btnAr.classList.add("is-active");
+        btnEn.classList.remove("is-active");
+      }
+    }
+  }
+
+  function applyOverrideReasonChip(chipText) {
+    if (typeof document === "undefined") return;
+    const textarea = document.getElementById("overrideReasonTextarea");
+    if (!textarea) return;
+
+    const existing = textarea.value.trim();
+    if (existing) {
+      textarea.value = `${existing}. ${chipText}`;
+    } else {
+      textarea.value = chipText;
+    }
+
+    // Dispatch input event to update char counter and validation
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    textarea.focus();
+  }
+
+  async function submitOverrideRisk(caseId) {
+    if (typeof document === "undefined") return;
+    const isEn = (global.currentLanguage || "ar") === "en";
+
+    const priorityInput = document.getElementById("overrideSelectedPriorityInput");
+    const categorySelect = document.getElementById("overrideCategorySelect");
+    const textarea = document.getElementById("overrideReasonTextarea");
+    const validationMsg = document.getElementById("overrideReasonValidationMsg");
+    const submitBtn = document.getElementById("btnSubmitRiskOverride");
+
+    const overriddenPriority = priorityInput ? priorityInput.value : activeOverridePrioritySelection;
+    const overrideCategory = categorySelect ? categorySelect.value : "";
+    const overrideReason = textarea ? textarea.value.trim() : "";
+
+    // Client validation
+    if (!VALID_OVERRIDE_PRIORITIES.includes(overriddenPriority)) {
+      if (validationMsg) {
+        validationMsg.style.display = "block";
+        validationMsg.textContent = isEn ? "Please select a valid triage risk level." : "يرجى اختيار درجة خطورة صالحة.";
+      }
+      return;
+    }
+
+    if (!VALID_OVERRIDE_CATEGORIES.includes(overrideCategory)) {
+      if (validationMsg) {
+        validationMsg.style.display = "block";
+        validationMsg.textContent = isEn ? "Please select a valid clinical override category." : "يرجى اختيار فئة تعديل سريري صالحة.";
+      }
+      return;
+    }
+
+    if (!overrideReason || overrideReason.length < 10) {
+      if (validationMsg) {
+        validationMsg.style.display = "block";
+        validationMsg.textContent = isEn
+          ? "A clinical justification of at least 10 characters is mandatory to override advisory triage."
+          : "يجب تسجيل مبررات سريرية لا تقل عن 10 أحرف لاعتماد تعديل درجة الخطورة.";
+      }
+      if (textarea) textarea.focus();
+      return;
+    }
+
+    if (validationMsg) {
+      validationMsg.style.display = "none";
+    }
+
+    // Show loading state
+    if (submitBtn) {
+      submitBtn.setAttribute("disabled", "disabled");
+      submitBtn.style.opacity = "0.7";
+      submitBtn.innerHTML = `<span>⏳</span> <span>${isEn ? 'Saving Clinical Override...' : 'جاري حفظ التعديل السريري...'}</span>`;
+    }
+
+    try {
+      let result = null;
+      if (global.HealthVibes?.DoctorService?.overrideTriagePriority) {
+        result = await global.HealthVibes.DoctorService.overrideTriagePriority({
+          caseId,
+          overriddenPriority,
+          overrideReason,
+          overrideCategory
+        });
+      } else {
+        // Direct fallback
+        const record = {
+          isOverridden: true,
+          overriddenPriority,
+          overrideReason,
+          overrideCategory,
+          timestamp: new Date().toISOString()
+        };
+        result = { success: true, overrideRecord: record };
+      }
+
+      // Update in-memory case in state
+      const targetCase = (global.cases || []).find(c => c.id === caseId) ||
+                         (global.state?.doctorQueue || []).find(c => c.id === caseId);
+      if (targetCase) {
+        targetCase.priority = overriddenPriority;
+        targetCase.triageLevel = overriddenPriority;
+        targetCase.isOverridden = true;
+        targetCase.triageOverride = result?.overrideRecord || {
+          isOverridden: true,
+          overriddenPriority,
+          overrideReason,
+          overrideCategory,
+          timestamp: new Date().toISOString()
+        };
+      }
+
+      // Close modal
+      closeOverrideRiskModal();
+
+      if (typeof global.showToast === "function") {
+        const meta = getPriorityMetaInternal(overriddenPriority, isEn);
+        const prioLabel = isEn ? meta.en : meta.ar;
+        global.showToast(
+          isEn
+            ? `Risk level successfully overridden to "${prioLabel}" with clinical rationale recorded.`
+            : `تم تعديل درجة الخطورة إلى "${prioLabel}" بنجاح وتوثيق المبررات لتحسين الذكاء الاصطناعي.`
+        );
+      }
+
+      // Re-render UI
+      if (typeof global.selectDoctorCase === "function") {
+        global.selectDoctorCase(caseId);
+      } else if (typeof global.renderDoctorDetail === "function") {
+        global.renderDoctorDetail(caseId);
+      }
+
+      if (typeof global.renderDoctorQueue === "function") {
+        global.renderDoctorQueue();
+      }
+    } catch (err) {
+      console.error("[DoctorUI] Error submitting risk override:", err);
+      if (submitBtn) {
+        submitBtn.removeAttribute("disabled");
+        submitBtn.style.opacity = "1";
+        submitBtn.innerHTML = `<span>💾</span> <span>${isEn ? 'Save & Apply Clinical Override' : 'حفظ واعتماد التعديل السريري'}</span>`;
+      }
+      if (validationMsg) {
+        validationMsg.style.display = "block";
+        validationMsg.textContent = err.message || (isEn ? "Failed to save override. Please try again." : "فشل حفظ التعديل، يرجى المحاولة مرة أخرى.");
+      }
+    }
+  }
+
+  // ===========================================================================
+  // 9. REJECT ASSESSMENT & REQUEST RE-ENTRY WORKFLOW (K HEALTH INTAKE GOVERNANCE)
+  // ===========================================================================
+
+  let activeRejectReentryMode = "reentry"; // 'reentry' | 'definitive_reject'
+  let selectedReentryFields = new Set(["spo2"]);
+  let lastRejectModalOpener = null;
+  let rejectModalKeydownHandler = null;
+
+  const REJECTION_REENTRY_CATEGORIES = (global.HealthVibes?.DoctorService?.REJECTION_REENTRY_CATEGORIES) || [
+    "INCOMPLETE_MEASUREMENTS",
+    "CONTRADICTORY_VITALS",
+    "UNREADABLE_ATTACHMENTS",
+    "CLINICAL_INCONSISTENCY",
+    "OTHER_CLINICAL_JUSTIFICATION"
+  ];
+
+  const REJECTION_REENTRY_META = (global.HealthVibes?.DoctorService?.REJECTION_REENTRY_META) || {
+    INCOMPLETE_MEASUREMENTS: {
+      ar: "نقص القياسات أو المؤشرات الحيوية الأساسية",
+      en: "Incomplete / Missing Vital Measurements",
+      descAr: "تم إغفال قياسات حيوية أساسية مثل نسبة تشبع الأكسجين أو ضغط الدم لتقييم آمن للحالة.",
+      descEn: "Essential clinical vitals such as SpO2 or blood pressure were omitted, preventing safe triage."
+    },
+    CONTRADICTORY_VITALS: {
+      ar: "قياسات أو مؤشرات حيوية متناقضة أو غير منطقية",
+      en: "Contradictory / Implausible Vital Readings",
+      descAr: "القراءات المسجلة متناقضة فيزيولوجياً (مثل SpO2 منخفض جداً مع حركة طبيعية، أو نبض غير سليم).",
+      descEn: "Recorded values are physiologically contradictory or clinically implausible (e.g. sensor artifact)."
+    },
+    UNREADABLE_ATTACHMENTS: {
+      ar: "مرفقات أو صور تحاليل/روشتات غير واضحة",
+      en: "Unreadable / Blurry Attachments & Labs",
+      descAr: "صور التحاليل المخبرية أو الروشتات المرفقة ضبابية أو مقطوعة وتتعذر قراءتها سريرياً.",
+      descEn: "Uploaded photos of lab tests, ECG or prescriptions are blurry, cropped, or illegible."
+    },
+    CLINICAL_INCONSISTENCY: {
+      ar: "عدم تطابق الأعراض مع التاريخ المرضي المسجل",
+      en: "Symptom-History Discrepancy",
+      descAr: "الأعراض الحالية للمريض تتناقض صراحة مع الشكوى أو الإجابات السابقة المسجلة.",
+      descEn: "Current symptoms contradict previously documented answers or intake responses."
+    },
+    OTHER_CLINICAL_JUSTIFICATION: {
+      ar: "مبررات سريرية أخرى يحددها الطبيب",
+      en: "Other Physician Clinical Justification",
+      descAr: "تقييم سريري مباشر من الطبيب المعالج يستدعي تصحيح المدخلات وإعادة أخذ القياسات.",
+      descEn: "Direct attending physician clinical assessment requiring intake correction."
+    }
+  };
+
+  const REENTRY_REQUEST_FIELDS = (global.HealthVibes?.DoctorService?.REENTRY_REQUEST_FIELDS) || [
+    { id: "spo2", labelEn: "SpO2 (Oxygen Saturation)", labelAr: "نسبة تشبع الأكسجين (SpO2)", icon: "💨" },
+    { id: "blood_pressure", labelEn: "Blood Pressure & Pulse", labelAr: "ضغط الدم والنبض", icon: "❤️" },
+    { id: "temperature", labelEn: "Body Temperature", labelAr: "درجة حرارة الجسم", icon: "🌡️" },
+    { id: "symptoms_detail", labelEn: "Symptom Onset & Severity", labelAr: "بداية الأعراض وشدتها", icon: "📋" },
+    { id: "attachments", labelEn: "Clear Lab / Report Photos", labelAr: "صورة واضحة للتحاليل أو التقرير", icon: "📷" },
+    { id: "medications", labelEn: "Current Medications List", labelAr: "قائمة الأدوية الحالية والجرعات", icon: "💊" }
+  ];
+
+  const QUICK_REENTRY_INSTRUCTION_CHIPS = (global.HealthVibes?.DoctorService?.QUICK_REENTRY_INSTRUCTION_CHIPS) || [
+    {
+      en: "Please warm your hands, rest for 5 minutes, and retake your pulse oximeter (SpO2) reading.",
+      ar: "يرجى تدفئة اليدين والراحة لمدة 5 دقائق ثم إعادة قياس نسبة الأكسجين والتأكد من ثبات القراءة."
+    },
+    {
+      en: "Blood pressure reading appears implausible. Please re-measure while seated quietly using a calibrated cuff.",
+      ar: "قراءة ضغط الدم تبدو غير دقيقة، يرجى إعادة القياس في وضعية الجلوس بهدوء بجهاز معتمد."
+    },
+    {
+      en: "The uploaded lab result photo is blurry or cropped. Please upload a clear, flat photo in good lighting.",
+      ar: "صورة نتيجة التحليل المرفقة غير واضحة، يرجى إعادة تصوير الورقة كاملة بإضاءة جيدة بدون اهتزاز."
+    },
+    {
+      en: "Reported symptoms are contradictory. Please clarify which symptom is primary and when it started.",
+      ar: "هناك تضارب في الأعراض المسجلة، يرجى توضيح العرض الرئيسي وتاريخ بدايته بدقة."
+    },
+    {
+      en: "Please confirm your current chronic disease medications and exact daily dosages.",
+      ar: "يرجى كتابة أسماء أدوية الأمراض المزمنة التي تتناولها حالياً بجرعاتها اليومية بوضوح."
+    }
+  ];
+
+  function renderRejectReentryModalHtml(c, isEn = false) {
+    if (!c) return "";
+
+    const patientName = isEn
+      ? (c.patientNameEn || c.nameEn || c.patientName || c.name || "Anonymous Patient")
+      : (c.patientName || c.name || c.patientNameEn || c.nameEn || "مريض غير مسجل");
+
+    const shortId = c.id ? c.id.slice(-6).toUpperCase() : "--";
+    const o2Val = Number(c.o2 ?? c.oxygenLevel ?? 0);
+    const existingReason = c.rejectionReason || c.doctorNote || "";
+    const selectedCategory = c.rejectionCategory || "INCOMPLETE_MEASUREMENTS";
+
+    const currentDocName = (global.auth?.currentUser?.displayName) || (isEn ? "Dr. Tarek Mahmoud, MD" : "د. طارق محمود");
+    const currentDocLic = "EG-MED-44821";
+
+    const fieldMetaMap = {};
+    REENTRY_REQUEST_FIELDS.forEach(f => { fieldMetaMap[f.id] = f; });
+
+    return `
+      <div class="doctor-override-modal-backdrop" id="doctorRejectReentryModalBackdrop" onclick="HealthVibes.DoctorUI.handleRejectModalBackdropClick(event)" role="presentation">
+        <div class="doctor-override-modal-container doctor-reject-reentry-container" id="doctorRejectReentryModal" role="dialog" aria-modal="true" aria-labelledby="rejectReentryModalTitle" tabindex="-1">
+          <!-- Modal Header -->
+          <header class="override-modal-header" style="background: linear-gradient(135deg, rgba(239, 68, 68, 0.12), rgba(245, 158, 11, 0.12)); border-bottom-color: rgba(239, 68, 68, 0.25);">
+            <div class="modal-title-row">
+              <span class="modal-icon-badge" style="background: rgba(239, 68, 68, 0.18); color: #ef4444;" aria-hidden="true">⚠️</span>
+              <div>
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                  <h3 class="modal-main-title" id="rejectReentryModalTitle">
+                    ${isEn ? 'Reject Assessment & Request Patient Re-entry' : 'مسار رفض التقييم وطلب إعادة إدخال القياسات'}
+                  </h3>
+                  <span class="pill warning" style="font-size: 10px; padding: 2px 7px; font-weight: 800;">K Health Intake Protocol</span>
+                </div>
+                <p class="modal-sub-title">
+                  ${isEn
+                    ? 'Clinical intake governance: Reject contradictory or incomplete data and alert the patient to re-enter accurate vitals.'
+                    : 'حوكمة مدخلات الفرز المبدئي: رفض البيانات المتناقضة أو الناقصة وإرسال إشعار للمريض لإعادة القياس فوراً.'}
+                </p>
+              </div>
+            </div>
+            <button type="button" class="btn-close-override-modal" onclick="HealthVibes.DoctorUI.closeRejectReentryModal()" title="${isEn ? 'Close modal (Esc)' : 'إغلاق النافذة (Esc)'}" aria-label="${isEn ? 'Close modal' : 'إغلاق النافذة'}">
+              ✖
+            </button>
+          </header>
+
+          <!-- Patient Vitals Strip -->
+          <div class="modal-patient-strip">
+            <div class="patient-strip-main">
+              <span class="patient-avatar-mini" aria-hidden="true">👤</span>
+              <div class="patient-strip-details">
+                <strong>${escapeHtml(patientName)}</strong>
+                <span class="case-id-tag">#${shortId}</span>
+              </div>
+            </div>
+            <div class="patient-strip-vitals">
+              <span class="vital-chip">
+                <span>💨 SpO2:</span> <strong style="${o2Val > 0 && o2Val < 90 ? 'color: #ef4444;' : ''}">${o2Val ? o2Val + '%' : '--'}</strong>
+              </span>
+              <span class="vital-chip">
+                <span>⏱️ ${isEn ? 'Waiting:' : 'الانتظار:'}</span> <strong>${escapeHtml(c.duration || (isEn ? '1 hour' : 'ساعة واحدة'))}</strong>
+              </span>
+            </div>
+          </div>
+
+          <!-- Modal Scrollable Body -->
+          <div class="override-modal-body">
+            <!-- REJECTION MODE SELECTOR -->
+            <div class="form-step-section">
+              <label class="step-label-title" id="reentryModeLabel">
+                <span class="step-number">1</span>
+                <span>${isEn ? 'Choose Rejection & Governance Action *' : 'حدد مسار الرفض والحوكمة السريرية *'}</span>
+              </label>
+              <div class="reentry-mode-grid" role="radiogroup" aria-labelledby="reentryModeLabel">
+                <button type="button" class="reentry-mode-card ${activeRejectReentryMode === 'reentry' ? 'is-selected' : ''}" id="modeCard_reentry" onclick="HealthVibes.DoctorUI.setRejectReentryMode('reentry')" role="radio" aria-checked="${activeRejectReentryMode === 'reentry' ? 'true' : 'false'}">
+                  <div class="mode-card-header">
+                    <span class="mode-card-icon">🔄</span>
+                    <span class="pill ok" style="font-size: 10px; padding: 2px 7px;">${isEn ? 'Recommended' : 'موصى به'}</span>
+                  </div>
+                  <strong class="mode-card-title">${isEn ? 'Reject & Request Re-entry' : 'رفض التقييم وطلب إعادة القياس'}</strong>
+                  <p class="mode-card-desc">
+                    ${isEn
+                      ? 'Rejects initial intake for incomplete or contradictory values and immediately alerts the patient to re-measure flagged items.'
+                      : 'رفض التقييم المبدئي لوجود نقص أو تناقض وإشعار المريض فوراً لإعادة قياس وإدخال البيانات المطلوبة.'}
+                  </p>
+                </button>
+
+                <button type="button" class="reentry-mode-card ${activeRejectReentryMode === 'definitive_reject' ? 'is-selected' : ''}" id="modeCard_definitive" onclick="HealthVibes.DoctorUI.setRejectReentryMode('definitive_reject')" role="radio" aria-checked="${activeRejectReentryMode === 'definitive_reject' ? 'true' : 'false'}">
+                  <div class="mode-card-header">
+                    <span class="mode-card-icon">🚫</span>
+                    <span class="pill danger" style="font-size: 10px; padding: 2px 7px;">${isEn ? 'Terminal' : 'نهائي'}</span>
+                  </div>
+                  <strong class="mode-card-title">${isEn ? 'Definitive Rejection' : 'رفض سريري نهائي'}</strong>
+                  <p class="mode-card-desc">
+                    ${isEn
+                      ? 'Permanently terminates intake for non-medical submissions, duplicate cases, or out-of-scope complaints without re-entry.'
+                      : 'إنهاء الحالة نهائياً كتقييم مكرر أو مدخلات غير طبية أو خارجة عن نطاق الاستشارة دون طلب إعادة إدخال.'}
+                  </p>
+                </button>
+              </div>
+            </div>
+
+            <!-- STEP 2: Clinical Rejection Category -->
+            <div class="form-step-section" style="margin-top: 18px;">
+              <label for="rejectCategorySelect" class="step-label-title">
+                <span class="step-number">2</span>
+                <span>${isEn ? 'Clinical Rejection Category *' : 'فئة سبب الرفض السريري *'}</span>
+              </label>
+              <div class="category-select-wrapper">
+                <select id="rejectCategorySelect" class="override-category-select" required aria-required="true">
+                  ${REJECTION_REENTRY_CATEGORIES.map(cat => {
+                    const meta = REJECTION_REENTRY_META[cat];
+                    const selected = cat === selectedCategory ? 'selected="selected"' : '';
+                    return `
+                      <option value="${cat}" ${selected}>
+                        ${isEn ? (meta?.en || cat) : (meta?.ar || cat)}
+                      </option>
+                    `;
+                  }).join('')}
+                </select>
+                <span class="select-dropdown-chevron" aria-hidden="true">▼</span>
+              </div>
+              <p class="category-helper-text" id="rejectCategoryHelperText">
+                ${isEn ? (REJECTION_REENTRY_META[selectedCategory]?.descEn || "") : (REJECTION_REENTRY_META[selectedCategory]?.descAr || "")}
+              </p>
+            </div>
+
+            <!-- STEP 3: Required Fields for Patient Re-entry (Visible only in reentry mode) -->
+            <div class="form-step-section" id="reentryFieldsSection" style="margin-top: 18px; ${activeRejectReentryMode === 'reentry' ? 'display: flex;' : 'display: none;'}">
+              <label class="step-label-title" id="reentryFieldsLabel">
+                <span class="step-number">3</span>
+                <span>${isEn ? 'Select Flagged Fields for Patient Re-entry *' : 'حدد الحقول والقياسات المطلوب من المريض إعادة إدخالها *'}</span>
+              </label>
+              <div class="reentry-fields-grid" role="group" aria-labelledby="reentryFieldsLabel">
+                ${REENTRY_REQUEST_FIELDS.map(f => {
+                  const isChecked = selectedReentryFields.has(f.id);
+                  return `
+                    <button type="button" class="reentry-field-btn ${isChecked ? 'is-checked' : ''}" id="reentryFieldBtn_${f.id}" onclick="HealthVibes.DoctorUI.toggleReentryField('${f.id}')" aria-pressed="${isChecked ? 'true' : 'false'}">
+                      <span class="field-btn-checkbox" aria-hidden="true">${isChecked ? '☑' : '☐'}</span>
+                      <span class="field-btn-icon" aria-hidden="true">${f.icon}</span>
+                      <span class="field-btn-label">${isEn ? f.labelEn : f.labelAr}</span>
+                    </button>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+
+            <!-- STEP 4: Mandatory Physician Instructions & Guidance for the Patient -->
+            <div class="form-step-section" style="margin-top: 18px;">
+              <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 6px;">
+                <label for="rejectReentryInstructionTextarea" class="step-label-title">
+                  <span class="step-number">${activeRejectReentryMode === 'reentry' ? '4' : '3'}</span>
+                  <span>${isEn ? 'Physician Clinical Instructions for the Patient *' : 'توجيهات وإرشادات الطبيب الموجهة للمريض *'}</span>
+                </label>
+                <div class="char-count-pill" id="rejectCharCountWrapper">
+                  <span id="rejectInstructionCharCount">${existingReason.length}</span> / 10 ${isEn ? 'chars min' : 'حرف كحد أدنى'}
+                </div>
+              </div>
+
+              <!-- Quick Clinical Instruction Presets -->
+              <div class="override-quick-chips-wrapper">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 6px;">
+                  <span class="chips-label">💡 ${isEn ? 'Clinical instruction presets for patient guidance:' : 'صيغ وتوجيهات شائعة للمريض بنقرة واحدة:'}</span>
+                  <div class="chips-lang-toggle" role="group" aria-label="${isEn ? 'Presets Language' : 'لغة الصيغ'}">
+                    <button type="button" class="btn-chips-lang ${isEn ? 'is-active' : ''}" id="btnReentryLangEn" onclick="HealthVibes.DoctorUI.setReentryChipsLang('en')" title="${isEn ? 'Clinical English presets' : 'صيغ إنجليزية'}">
+                      🇬🇧 Clinical EN
+                    </button>
+                    <button type="button" class="btn-chips-lang ${!isEn ? 'is-active' : ''}" id="btnReentryLangAr" onclick="HealthVibes.DoctorUI.setReentryChipsLang('ar')" title="${isEn ? 'Arabic presets' : 'صيغ عربية معتمدة'}">
+                      🇪🇬 عربي
+                    </button>
+                  </div>
+                </div>
+                <div class="override-chips-container" id="reentryChipsContainer">
+                  ${QUICK_REENTRY_INSTRUCTION_CHIPS.map(chip => `
+                    <button type="button" class="override-chip-btn" onclick="HealthVibes.DoctorUI.applyReentryInstructionChip('${escapeHtml(isEn ? chip.en : chip.ar)}')">
+                      + ${isEn ? chip.en : chip.ar}
+                    </button>
+                  `).join('')}
+                </div>
+              </div>
+
+              <textarea id="rejectReentryInstructionTextarea" class="override-textarea" dir="auto" lang="${isEn ? 'en' : 'ar'}" minlength="10" rows="3" placeholder="${isEn ? 'Clear instructions explaining what measurements to retake and how to ensure accurate readings (e.g. Please warm hands, sit quietly, and retake SpO2 and BP)...' : 'أدخل التوجيهات الطبية الواضحة للمريض لشرح القياسات المطلوب إعادتها وكيفية إجرائها بشكل دقيق (مثال: يرجى الجلوس بهدوء وتدفئة اليدين وإعادة قياس الأكسجين)...'}" required aria-required="true">${escapeHtml(existingReason)}</textarea>
+              <div id="rejectReentryValidationMsg" class="form-validation-error" style="display: none;" role="alert"></div>
+            </div>
+
+            <!-- STEP 5: Live Patient Push Notification Preview -->
+            <div class="reentry-notification-preview-card" id="reentryNotificationPreviewCard" role="region" aria-label="${isEn ? 'Patient Notification Preview' : 'معاينة إشعار المريض'}">
+              <div class="preview-card-header">
+                <span class="preview-bell-icon">🔔</span>
+                <span class="preview-header-title">${isEn ? 'Live Patient In-App Push & SMS Alert Preview' : 'معاينة حية للإشعار والرسالة التي ستصل للمريض عبر التطبيق'}</span>
+              </div>
+              <div class="preview-bubble">
+                <div class="preview-bubble-meta">
+                  <strong class="preview-app-name">Health Vibe AI</strong>
+                  <span class="preview-timestamp">${isEn ? 'Just now' : 'الآن'}</span>
+                </div>
+                <p class="preview-bubble-body" id="previewBubbleBody">
+                  ${isEn
+                    ? `Dr. ${currentDocName} requested intake re-entry for: [SpO2 (Oxygen Saturation)]. Guidance: ${existingReason || "Please re-measure your vitals accurately."}`
+                    : `${currentDocName}: تم رفض التقييم المبدئي لحاجته لإعادة قياس: [نسبة تشبع الأكسجين (SpO2)]. توجيهات الطبيب: ${existingReason || "يرجى إعادة قياس المؤشرات الحيوية بدقة."}`}
+                </p>
+              </div>
+            </div>
+
+            <!-- STEP 6: Physician Attestation Footer -->
+            <div class="modal-doctor-attestation-card" style="margin-top: 14px;">
+              <span class="attestation-icon" aria-hidden="true">🛡️</span>
+              <div class="attestation-meta">
+                <span>${isEn ? 'Attesting Physician:' : 'الطبيب المعتمد:'} <strong>${escapeHtml(currentDocName)}</strong></span>
+                <span>${isEn ? 'Syndicate License:' : 'القيد النقابي:'} <code>${escapeHtml(currentDocLic)}</code></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Modal Footer Actions -->
+          <footer class="override-modal-footer">
+            <button type="button" class="outline-button btn-cancel-override" onclick="HealthVibes.DoctorUI.closeRejectReentryModal()">
+              ${isEn ? 'Cancel' : 'إلغاء'}
+            </button>
+            <button type="button" class="solid-button btn-confirm-override" id="btnConfirmRejectReentry" style="background: linear-gradient(135deg, #ea580c, #c2410c); border-color: #ea580c;" onclick="HealthVibes.DoctorUI.submitRejectReentry('${c.id}')">
+              <span>📤</span> <span id="btnConfirmRejectReentryText">${activeRejectReentryMode === 'reentry' ? (isEn ? 'Send Re-entry Request to Patient' : 'إرسال طلب إعادة القياس للمريض') : (isEn ? 'Confirm Definitive Rejection' : 'تأكيد الرفض النهائي')}</span>
+            </button>
+          </footer>
+        </div>
+      </div>
+    `;
+  }
+
+  function handleRejectModalBackdropClick(evt) {
+    if (evt && evt.target && evt.target.id === "doctorRejectReentryModalBackdrop") {
+      closeRejectReentryModal();
+    }
+  }
+
+  function openRejectReentryModal(caseId, initialMode = "reentry") {
+    if (typeof document === "undefined") return;
+    const isEn = (global.currentLanguage || "ar") === "en";
+
+    const activeCase = (global.cases || []).find(c => c.id === caseId) ||
+                       (global.state?.doctorQueue || []).find(c => c.id === caseId) ||
+                       { id: caseId, priority: "normal" };
+
+    if (activeCase && global.auth?.currentUser) {
+      const hasExplicitAssignment = Boolean(activeCase.assignedDoctorId || activeCase.assignedDoctorEmail || activeCase.doctorId);
+      if (hasExplicitAssignment && !isCaseAssignedToDoctor(activeCase, global.auth.currentUser)) {
+        if (typeof global.showToast === "function") {
+          global.showToast(isEn
+            ? "Access Denied: Rejection or re-entry request is restricted to the assigned clinician."
+            : "تم رفض الإجراء: مسار رفض الحالة مقيد بالطبيب المكلف بمتابعتها حصراً.");
+        }
+        return;
+      }
+    }
+
+    lastRejectModalOpener = document.activeElement;
+    closeRejectReentryModal();
+
+    activeRejectReentryMode = initialMode === "definitive_reject" ? "definitive_reject" : "reentry";
+    selectedReentryFields = new Set(["spo2"]);
+
+    const modalHtml = renderRejectReentryModalHtml(activeCase, isEn);
+    const container = document.createElement("div");
+    container.id = "doctorRejectModalMountPoint";
+    container.innerHTML = modalHtml;
+    document.body.appendChild(container);
+
+    // Initial mode state
+    setRejectReentryMode(activeRejectReentryMode);
+
+    // Category Change Listener
+    const catSelect = document.getElementById("rejectCategorySelect");
+    const catHelper = document.getElementById("rejectCategoryHelperText");
+    if (catSelect && catHelper) {
+      catSelect.addEventListener("change", () => {
+        const val = catSelect.value;
+        const meta = REJECTION_REENTRY_META[val];
+        catHelper.textContent = isEn ? (meta?.descEn || "") : (meta?.descAr || "");
+      });
+    }
+
+    // Textarea validation & live preview update
+    const textarea = document.getElementById("rejectReentryInstructionTextarea");
+    const charCount = document.getElementById("rejectInstructionCharCount");
+    const countWrapper = document.getElementById("rejectCharCountWrapper");
+    const submitBtn = document.getElementById("btnConfirmRejectReentry");
+
+    const updateValidationAndPreview = () => {
+      const text = textarea ? textarea.value.trim() : "";
+      const len = text.length;
+      if (charCount) charCount.textContent = String(len);
+
+      if (len >= 10) {
+        if (countWrapper) {
+          countWrapper.style.color = "#10b981";
+          countWrapper.style.borderColor = "#10b981";
+        }
+        if (submitBtn) {
+          submitBtn.removeAttribute("disabled");
+          submitBtn.style.opacity = "1";
+        }
+      } else {
+        if (countWrapper) {
+          countWrapper.style.color = "#ea580c";
+          countWrapper.style.borderColor = "#ea580c";
+        }
+        if (submitBtn) {
+          submitBtn.style.opacity = "0.7";
+        }
+      }
+      updateReentryNotificationPreview();
+    };
+
+    if (textarea) {
+      textarea.addEventListener("input", updateValidationAndPreview);
+      textarea.addEventListener("keyup", updateValidationAndPreview);
+      updateValidationAndPreview();
+    }
+
+    // Keydown shortcuts
+    rejectModalKeydownHandler = (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        closeRejectReentryModal();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+        e.preventDefault();
+        submitRejectReentry(activeCase.id);
+        return;
+      }
+      // Accessible Tab Trap
+      if (e.key === "Tab") {
+        const modalContainer = document.getElementById("doctorRejectReentryModal");
+        if (!modalContainer) return;
+        const focusable = modalContainer.querySelectorAll('button:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])');
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey) {
+          if (document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else {
+          if (document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      }
+    };
+    document.addEventListener("keydown", rejectModalKeydownHandler);
+
+    const modalBox = document.getElementById("doctorRejectReentryModal");
+    if (modalBox && typeof modalBox.focus === "function") {
+      modalBox.focus();
+    }
+  }
+
+  function closeRejectReentryModal() {
+    if (typeof document === "undefined") return;
+    if (rejectModalKeydownHandler) {
+      document.removeEventListener("keydown", rejectModalKeydownHandler);
+      rejectModalKeydownHandler = null;
+    }
+    const mount = document.getElementById("doctorRejectModalMountPoint");
+    if (mount) {
+      mount.remove();
+    } else {
+      const backdrop = document.getElementById("doctorRejectReentryModalBackdrop");
+      if (backdrop) backdrop.remove();
+    }
+    if (lastRejectModalOpener && typeof lastRejectModalOpener.focus === "function") {
+      lastRejectModalOpener.focus();
+      lastRejectModalOpener = null;
+    }
+  }
+
+  function setRejectReentryMode(mode) {
+    if (typeof document === "undefined") return;
+    const isEn = (global.currentLanguage || "ar") === "en";
+    activeRejectReentryMode = mode === "definitive_reject" ? "definitive_reject" : "reentry";
+
+    const cardReentry = document.getElementById("modeCard_reentry");
+    const cardDefinitive = document.getElementById("modeCard_definitive");
+    const fieldsSection = document.getElementById("reentryFieldsSection");
+    const submitBtnText = document.getElementById("btnConfirmRejectReentryText");
+    const submitBtn = document.getElementById("btnConfirmRejectReentry");
+
+    if (activeRejectReentryMode === "reentry") {
+      if (cardReentry) {
+        cardReentry.classList.add("is-selected");
+        cardReentry.setAttribute("aria-checked", "true");
+      }
+      if (cardDefinitive) {
+        cardDefinitive.classList.remove("is-selected");
+        cardDefinitive.setAttribute("aria-checked", "false");
+      }
+      if (fieldsSection) fieldsSection.style.display = "flex";
+      if (submitBtnText) submitBtnText.textContent = isEn ? "Send Re-entry Request to Patient" : "إرسال طلب إعادة القياس للمريض";
+      if (submitBtn) {
+        submitBtn.style.background = "linear-gradient(135deg, #ea580c, #c2410c)";
+        submitBtn.style.borderColor = "#ea580c";
+      }
+    } else {
+      if (cardDefinitive) {
+        cardDefinitive.classList.add("is-selected");
+        cardDefinitive.setAttribute("aria-checked", "true");
+      }
+      if (cardReentry) {
+        cardReentry.classList.remove("is-selected");
+        cardReentry.setAttribute("aria-checked", "false");
+      }
+      if (fieldsSection) fieldsSection.style.display = "none";
+      if (submitBtnText) submitBtnText.textContent = isEn ? "Confirm Definitive Rejection" : "تأكيد الرفض النهائي";
+      if (submitBtn) {
+        submitBtn.style.background = "linear-gradient(135deg, #dc2626, #b91c1c)";
+        submitBtn.style.borderColor = "#dc2626";
+      }
+    }
+    updateReentryNotificationPreview();
+  }
+
+  function toggleReentryField(fieldId) {
+    if (typeof document === "undefined") return;
+    if (selectedReentryFields.has(fieldId)) {
+      selectedReentryFields.delete(fieldId);
+    } else {
+      selectedReentryFields.add(fieldId);
+    }
+    const btn = document.getElementById(`reentryFieldBtn_${fieldId}`);
+    if (btn) {
+      const isChecked = selectedReentryFields.has(fieldId);
+      if (isChecked) {
+        btn.classList.add("is-checked");
+        btn.setAttribute("aria-pressed", "true");
+        const box = btn.querySelector(".field-btn-checkbox");
+        if (box) box.textContent = "☑";
+      } else {
+        btn.classList.remove("is-checked");
+        btn.setAttribute("aria-pressed", "false");
+        const box = btn.querySelector(".field-btn-checkbox");
+        if (box) box.textContent = "☐";
+      }
+    }
+    updateReentryNotificationPreview();
+  }
+
+  function setReentryChipsLang(lang) {
+    if (typeof document === "undefined") return;
+    const targetLang = (lang === "en" || lang === "ar") ? lang : "ar";
+    const container = document.getElementById("reentryChipsContainer");
+    if (container) {
+      container.innerHTML = QUICK_REENTRY_INSTRUCTION_CHIPS.map(chip => {
+        const text = targetLang === "en" ? chip.en : chip.ar;
+        return `
+          <button type="button" class="override-chip-btn" onclick="HealthVibes.DoctorUI.applyReentryInstructionChip('${escapeHtml(text)}')">
+            + ${text}
+          </button>
+        `;
+      }).join('');
+    }
+    const btnEn = document.getElementById("btnReentryLangEn");
+    const btnAr = document.getElementById("btnReentryLangAr");
+    if (btnEn && btnAr) {
+      if (targetLang === "en") {
+        btnEn.classList.add("is-active");
+        btnAr.classList.remove("is-active");
+      } else {
+        btnAr.classList.add("is-active");
+        btnEn.classList.remove("is-active");
+      }
+    }
+  }
+
+  function applyReentryInstructionChip(chipText) {
+    if (typeof document === "undefined") return;
+    const textarea = document.getElementById("rejectReentryInstructionTextarea");
+    if (!textarea) return;
+    const existing = textarea.value.trim();
+    textarea.value = existing ? `${existing}. ${chipText}` : chipText;
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    textarea.focus();
+  }
+
+  function updateReentryNotificationPreview() {
+    if (typeof document === "undefined") return;
+    const isEn = (global.currentLanguage || "ar") === "en";
+    const previewBody = document.getElementById("previewBubbleBody");
+    if (!previewBody) return;
+
+    const textarea = document.getElementById("rejectReentryInstructionTextarea");
+    const userNote = textarea ? textarea.value.trim() : "";
+    const currentDocName = (global.auth?.currentUser?.displayName) || (isEn ? "Dr. Tarek Mahmoud, MD" : "د. طارق محمود");
+
+    if (activeRejectReentryMode === "definitive_reject") {
+      previewBody.innerHTML = isEn
+        ? `<strong>Health Vibe Advisory:</strong> Your submitted assessment intake has been formally closed/rejected by ${currentDocName}. Rationale: “${escapeHtml(userNote || 'Intake does not meet clinical criteria.')}”`
+        : `<strong>تنبيه من منصة Health Vibe:</strong> تم إغلاق ورفض التقييم المبدئي سريرياً بواسطة ${currentDocName}. السبب الموثق: “${escapeHtml(userNote || 'البيانات غير مطابقة للمعايير الطبية.')}”`;
+      return;
+    }
+
+    const fieldMetaMap = {};
+    REENTRY_REQUEST_FIELDS.forEach(f => { fieldMetaMap[f.id] = f; });
+
+    const fieldLabels = Array.from(selectedReentryFields).map(id => {
+      const meta = fieldMetaMap[id];
+      return meta ? (isEn ? meta.labelEn : meta.labelAr) : id;
+    });
+
+    const fieldsStr = fieldLabels.length > 0 ? fieldLabels.join(" • ") : (isEn ? "General Vitals" : "القياسات العامة");
+    const defaultNote = isEn ? "Please re-measure your vitals accurately and re-submit." : "يرجى إعادة قياس المؤشرات الحيوية بدقة وإعادة الإرسال.";
+
+    previewBody.innerHTML = isEn
+      ? `<strong>Action Required:</strong> ${currentDocName} flagged inaccurate intake data. Please re-enter: <span class="preview-fields-tag">[${escapeHtml(fieldsStr)}]</span>. Instructions: “${escapeHtml(userNote || defaultNote)}”`
+      : `<strong>مطلوب إجراء فوري:</strong> ${currentDocName} يطلب تصريح وإعادة إدخال: <span class="preview-fields-tag">[${escapeHtml(fieldsStr)}]</span>. توجيهات الطبيب: “${escapeHtml(userNote || defaultNote)}”`;
+  }
+
+  async function submitRejectReentry(caseId) {
+    if (typeof document === "undefined") return;
+    const isEn = (global.currentLanguage || "ar") === "en";
+
+    const categorySelect = document.getElementById("rejectCategorySelect");
+    const textarea = document.getElementById("rejectReentryInstructionTextarea");
+    const validationMsg = document.getElementById("rejectReentryValidationMsg");
+    const submitBtn = document.getElementById("btnConfirmRejectReentry");
+
+    const reasonCategory = categorySelect ? categorySelect.value : "";
+    const doctorNote = textarea ? textarea.value.trim() : "";
+    const mode = activeRejectReentryMode;
+    const requiredFields = Array.from(selectedReentryFields);
+
+    const validation = (global.HealthVibes?.DoctorService?.validateRejectReentryPayload)
+      ? global.HealthVibes.DoctorService.validateRejectReentryPayload({ mode, reasonCategory, requiredFields, doctorNote })
+      : { valid: doctorNote.length >= 10 && (mode !== "reentry" || requiredFields.length > 0) };
+
+    if (!validation.valid) {
+      if (validationMsg) {
+        validationMsg.style.display = "block";
+        validationMsg.textContent = isEn ? (validation.messageEn || "Please complete all mandatory fields.") : (validation.messageAr || "يرجى استكمال الحقول الإلزامية.");
+      }
+      return;
+    }
+
+    if (validationMsg) validationMsg.style.display = "none";
+
+    if (submitBtn) {
+      submitBtn.setAttribute("disabled", "disabled");
+      submitBtn.style.opacity = "0.7";
+      submitBtn.innerHTML = `<span>⏳</span> <span>${isEn ? 'Processing...' : 'جاري المعالجة والتحديث...'}</span>`;
+    }
+
+    try {
+      const isReentry = mode === "reentry";
+      const targetStatus = isReentry ? "more_info_requested" : "rejected";
+      const targetStatusConstant = global.CASE_STATUS
+        ? (isReentry ? global.CASE_STATUS.MORE_INFO_REQUESTED : global.CASE_STATUS.REJECTED)
+        : targetStatus;
+
+      const user = global.auth?.currentUser;
+      const currentDocName = user ? (user.displayName || user.email) : (isEn ? "Treating Physician" : "الطبيب المعالج");
+
+      const payload = {
+        rejectionReason: doctorNote,
+        rejectionCategory: reasonCategory,
+        isReentryRequest: isReentry,
+        reentryMode: mode,
+        requiredFields: isReentry ? requiredFields : [],
+        doctorNote: doctorNote,
+        doctorApproved: false,
+        flaggedAt: new Date().toISOString(),
+        requestingDoctorName: currentDocName,
+        requestingDoctorId: user?.uid || null,
+        patientNotification: {
+          title: isEn ? "Intake Re-entry Required" : "مطلوب إعادة إدخال بيانات التقييم",
+          body: doctorNote,
+          requiredFields: isReentry ? requiredFields : [],
+          sentAt: new Date().toISOString()
+        }
+      };
+
+      if (global.HealthVibes?.DoctorService?.rejectOrRequestReentry) {
+        await global.HealthVibes.DoctorService.rejectOrRequestReentry({
+          caseId,
+          mode,
+          reasonCategory,
+          requiredFields: isReentry ? requiredFields : [],
+          doctorNote
+        }).catch(err => {
+          console.warn("[DoctorUI] rejectOrRequestReentry backend call notice:", err);
+        });
+      }
+
+      if (typeof global.updateCaseStatus === "function") {
+        await global.updateCaseStatus(caseId, targetStatusConstant, doctorNote, payload);
+      } else {
+        const targetCase = (global.cases || []).find(c => c.id === caseId) ||
+                           (global.state?.doctorQueue || []).find(c => c.id === caseId);
+        if (targetCase) {
+          targetCase.status = targetStatus;
+          targetCase.rejectionReason = doctorNote;
+          targetCase.rejectionCategory = reasonCategory;
+          targetCase.isReentryRequest = isReentry;
+          targetCase.requiredFields = isReentry ? requiredFields : [];
+          targetCase.doctorNote = doctorNote;
+        }
+      }
+
+      closeRejectReentryModal();
+
+      if (typeof global.showToast === "function") {
+        global.showToast(isEn
+          ? (isReentry ? "Intake rejected. Re-entry request and notification sent to patient." : "Case definitively rejected.")
+          : (isReentry ? "تم رفض التقييم المبدئي وإرسال إشعار للمريض لإعادة إدخال القياسات بنجاح." : "تم الرفض النهائي للحالة وتوثيق السبب في السجل الطبي."));
+      }
+
+      if (typeof global.selectDoctorCase === "function") {
+        global.selectDoctorCase(caseId);
+      } else if (typeof global.renderDoctorDetail === "function") {
+        global.renderDoctorDetail(caseId);
+      }
+      if (typeof global.renderDoctorQueue === "function") {
+        global.renderDoctorQueue();
+      }
+    } catch (err) {
+      console.error("[DoctorUI] Error submitting reject/re-entry:", err);
+      if (submitBtn) {
+        submitBtn.removeAttribute("disabled");
+        submitBtn.style.opacity = "1";
+        submitBtn.innerHTML = `<span>📤</span> <span>${isEn ? 'Retry' : 'إعادة المحاولة'}</span>`;
+      }
+      if (validationMsg) {
+        validationMsg.style.display = "block";
+        validationMsg.textContent = err.message || (isEn ? "Failed to process request." : "فشل تنفيذ الطلب، يرجى المحاولة مرة أخرى.");
+      }
+    }
+  }
+
+  function renderReentryStatusAlertBanner(c, isEn = false) {
+    if (!c || c.status !== "more_info_requested" || (!c.isReentryRequest && !c.reentryCategory && !c.rejectionReason)) {
+      return "";
+    }
+
+    const catKey = c.rejectionCategory || "INCOMPLETE_MEASUREMENTS";
+    const catMeta = REJECTION_REENTRY_META[catKey] || { ar: "نقص القياسات أو المؤشرات الحيوية", en: "Incomplete Vital Measurements" };
+    const catLabel = isEn ? catMeta.en : catMeta.ar;
+    const reasonText = c.rejectionReason || c.doctorNote || (isEn ? "Intake rejected pending patient correction." : "تم رفض التقييم المبدئي لحين تصحيح القياسات.");
+    const fields = Array.isArray(c.requiredFields) ? c.requiredFields : [];
+
+    const fieldMetaMap = {};
+    REENTRY_REQUEST_FIELDS.forEach(f => { fieldMetaMap[f.id] = f; });
+
+    return `
+      <div class="doctor-reentry-alert-card" id="reentryAlertBanner_${c.id}" role="alert">
+        <div class="reentry-alert-top">
+          <div class="reentry-alert-title-wrap">
+            <span class="reentry-alert-icon" aria-hidden="true">⚠️</span>
+            <div>
+              <h5 class="reentry-alert-heading">
+                ${isEn ? 'Assessment Intake Rejected — Awaiting Patient Re-entry' : 'تم رفض التقييم المبدئي — بانتظار إعادة إدخال المريض للقياسات'}
+              </h5>
+              <span class="reentry-alert-subheading">
+                ${isEn ? 'K Health Intake Protocol: ' : 'بروتوكول حوكمة الفرز (K Health): '}<strong>${escapeHtml(catLabel)}</strong>
+              </span>
+            </div>
+          </div>
+          <span class="pill warning" style="font-size: 11px; padding: 4px 10px; font-weight: 800;">
+            <span>⚠️</span> ${isEn ? 'Pending Re-entry' : 'معلق لإعادة القياس'}
+          </span>
+        </div>
+        <div class="reentry-alert-body">
+          <p class="reentry-alert-quote">“${escapeHtml(reasonText)}”</p>
+          ${fields.length > 0 ? `
+            <div class="reentry-flagged-fields-row">
+              <span class="reentry-fields-label">${isEn ? 'Flagged items for re-entry:' : 'القياسات المطلوب تصحيحها وإعادتها:'}</span>
+              <div class="reentry-fields-pills">
+                ${fields.map(fid => {
+                  const meta = fieldMetaMap[fid] || { icon: "📌", labelEn: fid, labelAr: fid };
+                  return `
+                    <span class="reentry-field-pill">
+                      <span>${meta.icon}</span> <span>${isEn ? meta.labelEn : meta.labelAr}</span>
+                    </span>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+          ` : ''}
+        </div>
+        <div class="reentry-alert-footer">
+          <button type="button" class="btn-clinical resume" style="font-size: 12px; padding: 5px 12px;" onclick="HealthVibes.DoctorUI.openRejectReentryModal('${c.id}', 'reentry')">
+            <span>✏️</span> <span>${isEn ? 'Update Re-entry Request' : 'تعديل أو متابعة طلب إعادة القياس'}</span>
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+
+  // ===========================================================================
+  // 9. GLOBAL KEYBOARD SHORTCUTS CONTROLLER
+  // ===========================================================================
+
+  let _doctorShortcutsInitialized = false;
+
+  function initDoctorKeyboardShortcuts() {
+    if (typeof document === "undefined") return;
+    if (_doctorShortcutsInitialized) return;
+    _doctorShortcutsInitialized = true;
+
+    document.addEventListener("keydown", (e) => {
+      // Global Alt + O (or Alt + o) opens Override Risk Modal for active case
+      if (e.altKey && (e.key === "o" || e.key === "O" || e.code === "KeyO")) {
+        if (document.getElementById("doctorOverrideRiskModal")) {
+          return;
+        }
+
+        const activeCard = document.getElementById("doctorRiskOverrideSection");
+        const activeCaseId = activeCard?.getAttribute("data-case-id") ||
+                             global.activeDoctorCaseId ||
+                             global.state?.activeDoctorCaseId ||
+                             global.state?.activeCaseId ||
+                             (global.cases && global.cases[0] ? global.cases[0].id : null) ||
+                             (global.state?.doctorQueue && global.state.doctorQueue[0] ? global.state.doctorQueue[0].id : null);
+
+        if (activeCaseId) {
+          e.preventDefault();
+          openOverrideRiskModal(activeCaseId);
+        }
+      }
+    });
+  }
+
+  // ===========================================================================
+  // 10. EXPORTS & ATTACHMENT TO HEALTHVIBES GLOBAL
   // ===========================================================================
 
   const DoctorUI = {
@@ -3119,7 +4922,37 @@
     getBloodDisorderProvenanceBadge,
     renderBloodDisordersReviewSection,
     // Obesity & Metabolic Health Doctor Review Workflow
-    renderObesityReviewSection
+    renderObesityReviewSection,
+    // Clinical Risk Override Workflow
+    VALID_OVERRIDE_PRIORITIES,
+    VALID_OVERRIDE_CATEGORIES,
+    OVERRIDE_CATEGORY_META,
+    QUICK_CLINICAL_REASON_CHIPS,
+    renderRiskOverrideSection,
+    renderRiskOverrideModalHtml,
+    openOverrideRiskModal,
+    closeOverrideRiskModal,
+    handleRiskModalBackdropClick,
+    selectOverridePriorityOption,
+    applyOverrideReasonChip,
+    setOverrideChipsLang,
+    submitOverrideRisk,
+    initDoctorKeyboardShortcuts,
+    // Reject Assessment & Request Re-entry Workflow (K Health)
+    REJECTION_REENTRY_CATEGORIES,
+    REJECTION_REENTRY_META,
+    REENTRY_REQUEST_FIELDS,
+    QUICK_REENTRY_INSTRUCTION_CHIPS,
+    renderRejectReentryModalHtml,
+    openRejectReentryModal,
+    closeRejectReentryModal,
+    handleRejectModalBackdropClick,
+    setRejectReentryMode,
+    toggleReentryField,
+    setReentryChipsLang,
+    applyReentryInstructionChip,
+    submitRejectReentry,
+    renderReentryStatusAlertBanner
   };
 
   global.HealthVibes = global.HealthVibes || {};
@@ -3132,6 +4965,14 @@
     PERMITTED_ATTACHMENT_CONFIG,
     CLINICAL_MEASUREMENT_UNITS
   };
+
+  if (typeof window !== "undefined" && typeof document !== "undefined") {
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", () => initDoctorKeyboardShortcuts());
+    } else {
+      initDoctorKeyboardShortcuts();
+    }
+  }
 
   if (typeof module !== "undefined" && module.exports) {
     module.exports = DoctorUI;

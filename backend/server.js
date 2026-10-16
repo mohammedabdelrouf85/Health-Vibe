@@ -78,6 +78,8 @@ const bloodDisordersService = require('./blood-disorders-service');
 const obesityService = require('./obesity-service');
 const diabetesService = require('./diabetes-service');
 const diseaseAuthorizationService = require('./disease-authorization-service');
+const triageOverrideService = require('./triage-override-service');
+const rejectReentryService = require('./reject-reentry-service');
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -2803,105 +2805,161 @@ app.get('/api/clinical/rules/audit-log', requireAuth, (req, res) => {
 });
 
 /**
- * POST /api/doctor/override-triage-priority
- * Doctor reasoned clinical override of advisory triage priority
+ * Helper to process reasoned clinical override of advisory triage priority
  */
-app.post('/api/doctor/override-triage-priority', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
-  const { caseId, overriddenPriority, overrideReason, overrideCategory } = req.body || {};
-  const VALID_PRIORITIES = ['urgent', 'high', 'normal'];
-  const VALID_CATEGORIES = [
-    'CLINICAL_SIGNS_OF_EXHAUSTION',
-    'RAPID_TRAJECTORY',
-    'ARTIFACT_CORRECTION',
-    'COMORBIDITY_RISK',
-    'OTHER_CLINICAL_JUDGMENT'
-  ];
-
-  if (!caseId || !VALID_PRIORITIES.includes(overriddenPriority)) {
-    return res.status(400).json({
-      error: 'INVALID_OVERRIDE_PRIORITY',
-      message: `caseId and valid overriddenPriority (${VALID_PRIORITIES.join(', ')}) required.`
-    });
-  }
-  if (!overrideReason || String(overrideReason).trim().length < 10) {
-    return res.status(400).json({
-      error: 'MANDATORY_OVERRIDE_REASON_REQUIRED',
-      message: 'A structured clinical overrideReason of at least 10 characters is mandatory to override system triage.'
-    });
-  }
-  if (!overrideCategory || !VALID_CATEGORIES.includes(overrideCategory)) {
-    return res.status(400).json({
-      error: 'INVALID_OVERRIDE_CATEGORY',
-      message: `overrideCategory must be one of: ${VALID_CATEGORIES.join(', ')}`
-    });
-  }
-
+async function handleClinicalTriageOverride(req, res) {
   try {
-    const doctorProfile = await getServerUserProfile(req.user.uid);
-    const doctorName = doctorProfile?.displayName || doctorProfile?.name || req.user.displayName || 'Licensed Doctor';
-    const doctorLicense = doctorProfile?.doctorLicense || doctorProfile?.syndicateCardNumber || 'EG-MED-VERIFIED';
+    const doctorProfile = req.doctorProfile || await getServerUserProfile(req.user.uid);
+    const doctorIdentity = req.doctorIdentity || await getVerifiedDoctorIdentity(req.user.uid);
 
-    const overrideRecord = {
-      isOverridden: true,
-      overriddenPriority,
-      overrideReason: String(overrideReason).trim(),
-      overrideCategory,
-      overriddenBy: {
-        uid: req.user.uid,
-        name: doctorName,
-        license: doctorLicense,
-        email: req.user.email || ''
-      },
-      timestamp: new Date().toISOString()
-    };
-
-    if (db) {
-      const caseRef = db.collection('cases').doc(caseId);
-      const caseDoc = await caseRef.get();
-      if (!caseDoc.exists) {
-        return res.status(404).json({ error: 'NOT_FOUND', message: 'Case not found.' });
+    const result = await triageOverrideService.processTriageOverride({
+      caseId: req.body?.caseId,
+      overriddenPriority: req.body?.overriddenPriority,
+      overrideReason: req.body?.overrideReason,
+      overrideCategory: req.body?.overrideCategory,
+      user: req.user,
+      doctorProfile,
+      doctorIdentity,
+      db,
+      metadata: {
+        ip: req.ip || req.connection?.remoteAddress || '127.0.0.1',
+        userAgent: req.headers['user-agent'] || ''
       }
-
-      const caseData = caseDoc.data() || {};
-      const originalPriority = caseData.priority || caseData.triageLevel || 'normal';
-      overrideRecord.originalPriority = originalPriority;
-
-      await caseRef.update({
-        priority: overriddenPriority,
-        triageLevel: overriddenPriority,
-        triageOverride: overrideRecord,
-        statusHistory: admin.firestore.FieldValue.arrayUnion({
-          oldStatus: caseData.status,
-          newStatus: caseData.status,
-          action: 'TRIAGE_OVERRIDE',
-          actor: { uid: req.user.uid, name: doctorName, role: 'doctor' },
-          reason: overrideRecord.overrideReason,
-          timestamp: overrideRecord.timestamp
-        })
-      });
-
-      await db.collection('audit_events').add({
-        type: 'TRIAGE_OVERRIDDEN_BY_CLINICIAN',
-        caseId,
-        doctorId: req.user.uid,
-        originalPriority,
-        overriddenPriority,
-        overrideCategory,
-        overrideReason: overrideRecord.overrideReason,
-        timestamp: admin.firestore.FieldValue.serverTimestamp()
-      });
-    }
-
-    res.json({
-      success: true,
-      message: `Triage priority overridden to '${overriddenPriority}' with clinical justification.`,
-      overrideRecord
     });
+
+    res.json(result);
   } catch (err) {
+    if (err.statusCode && err.statusCode < 500) {
+      return res.status(err.statusCode).json({ error: err.code || 'BAD_REQUEST', message: err.message });
+    }
     console.error('[OVERRIDE ERROR]:', err);
     res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
   }
+}
+
+/**
+ * POST /api/doctor/override-triage-priority
+ * Doctor reasoned clinical override of advisory triage priority
+ */
+app.post('/api/doctor/override-triage-priority', requireAuth, requireVerifiedEmail, requireDoctor, handleClinicalTriageOverride);
+
+/**
+ * POST /api/doctor/override-risk-level (Alias endpoint)
+ */
+app.post('/api/doctor/override-risk-level', requireAuth, requireVerifiedEmail, requireDoctor, handleClinicalTriageOverride);
+
+/**
+ * GET /api/doctor/override-triage-priority/:caseId
+ * Retrieve triage override and AI model calibration details for a case
+ */
+app.get('/api/doctor/override-triage-priority/:caseId', requireAuth, requireDoctor, async (req, res) => {
+  try {
+    const doctorProfile = req.doctorProfile || await getServerUserProfile(req.user.uid);
+    const result = await triageOverrideService.getCaseTriageOverride(req.params.caseId, {
+      db,
+      user: req.user,
+      doctorProfile
+    });
+    res.json(result);
+  } catch (err) {
+    if (err.statusCode && err.statusCode < 500) {
+      return res.status(err.statusCode).json({ error: err.code || 'BAD_REQUEST', message: err.message });
+    }
+    console.error('[GET OVERRIDE ERROR]:', err);
+    res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
+  }
 });
+
+/**
+ * GET /api/doctor/cases/:caseId/triage-override (RESTful alias)
+ */
+app.get('/api/doctor/cases/:caseId/triage-override', requireAuth, requireDoctor, async (req, res) => {
+  req.url = `/api/doctor/override-triage-priority/${encodeURIComponent(req.params.caseId)}`;
+  app.handle(req, res);
+});
+
+/**
+ * Helper to process reasoned clinical intake rejection & re-entry request (K Health)
+ */
+async function handleClinicalRejectReentry(req, res) {
+  try {
+    const doctorProfile = req.doctorProfile || await getServerUserProfile(req.user.uid);
+    const doctorIdentity = req.doctorIdentity || await getVerifiedDoctorIdentity(req.user.uid);
+    const caseId = req.params?.caseId || req.body?.caseId;
+
+    const result = await rejectReentryService.processRejectReentry({
+      caseId,
+      mode: req.body?.mode || 'reentry',
+      reasonCategory: req.body?.reasonCategory || req.body?.rejectionCategory,
+      requiredFields: req.body?.requiredFields || [],
+      doctorNote: req.body?.doctorNote || req.body?.rejectionReason,
+      user: req.user,
+      doctorProfile,
+      doctorIdentity,
+      db,
+      metadata: {
+        ip: req.ip || req.connection?.remoteAddress || '127.0.0.1',
+        userAgent: req.headers['user-agent'] || '',
+        lang: req.headers['accept-language']?.includes('ar') ? 'ar' : 'en'
+      }
+    });
+
+    res.json(result);
+  } catch (err) {
+    if (err.statusCode && err.statusCode < 500) {
+      return res.status(err.statusCode).json({ error: err.code || 'BAD_REQUEST', message: err.message });
+    }
+    console.error('[REJECT RE-ENTRY ERROR]:', err);
+    res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
+  }
+}
+
+/**
+ * POST /api/cases/:caseId/reject-reentry
+ * Reject initial intake and issue structured patient re-entry request or definitive rejection
+ */
+app.post('/api/cases/:caseId/reject-reentry', requireAuth, requireVerifiedEmail, requireDoctor, handleClinicalRejectReentry);
+
+/**
+ * POST /api/doctor/cases/:caseId/reject-reentry (Alias)
+ */
+app.post('/api/doctor/cases/:caseId/reject-reentry', requireAuth, requireVerifiedEmail, requireDoctor, handleClinicalRejectReentry);
+
+/**
+ * POST /api/doctor/reject-reentry (Body payload alias)
+ */
+app.post('/api/doctor/reject-reentry', requireAuth, requireVerifiedEmail, requireDoctor, handleClinicalRejectReentry);
+
+/**
+ * GET /api/cases/:caseId/reject-reentry
+ * Retrieve rejection & re-entry details for a case
+ */
+app.get('/api/cases/:caseId/reject-reentry', requireAuth, requireDoctor, async (req, res) => {
+  try {
+    const doctorProfile = req.doctorProfile || await getServerUserProfile(req.user.uid);
+    const result = await rejectReentryService.getCaseRejectReentryStatus(req.params.caseId, {
+      db,
+      user: req.user,
+      doctorProfile
+    });
+    res.json(result);
+  } catch (err) {
+    if (err.statusCode && err.statusCode < 500) {
+      return res.status(err.statusCode).json({ error: err.code || 'BAD_REQUEST', message: err.message });
+    }
+    console.error('[GET REJECT RE-ENTRY ERROR]:', err);
+    res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
+  }
+});
+
+/**
+ * GET /api/doctor/cases/:caseId/reject-reentry (Alias)
+ */
+app.get('/api/doctor/cases/:caseId/reject-reentry', requireAuth, requireDoctor, async (req, res) => {
+  req.url = `/api/cases/${encodeURIComponent(req.params.caseId)}/reject-reentry`;
+  app.handle(req, res);
+});
+
 
 /**
  * POST /api/clinical/assessments/explain-factors
@@ -6142,6 +6200,20 @@ async function executeDoctorTransition({
           } else if (targetStatus === 'more_info_requested') {
             updateData.moreInfoRequestedAt = admin.firestore.FieldValue.serverTimestamp();
             updateData.moreInfoNote = transitionReason;
+            if (req.body.isReentryRequest || req.body.reentryMode === 'reentry') {
+              updateData.isReentryRequest = true;
+              updateData.reentryMode = 'reentry';
+              updateData.rejectionCategory = req.body.rejectionCategory || req.body.reasonCategory || 'INCOMPLETE_MEASUREMENTS';
+              updateData.requiredFields = Array.isArray(req.body.requiredFields) ? req.body.requiredFields : [];
+              updateData.rejectionReason = transitionReason;
+            }
+          } else if (targetStatus === 'rejected') {
+            updateData.rejectedAt = admin.firestore.FieldValue.serverTimestamp();
+            updateData.rejectionReason = transitionReason;
+            if (req.body.reentryMode === 'definitive_reject') {
+              updateData.reentryMode = 'definitive_reject';
+              updateData.rejectionCategory = req.body.rejectionCategory || req.body.reasonCategory || 'OTHER_CLINICAL_JUSTIFICATION';
+            }
           } else if (targetStatus === 'escalated') {
             updateData.escalatedAt = admin.firestore.FieldValue.serverTimestamp();
             updateData.escalationReason = transitionReason;
