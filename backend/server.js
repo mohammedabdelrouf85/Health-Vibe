@@ -7253,6 +7253,37 @@ async function executeDoctorTransition({
             return { duplicate: true, caseData, currentStatus, updateData: null };
           }
 
+          // Docus AI Benchmark (Req #61): Mandatory Clinical Justification / Directive on Rejection
+          if (targetStatus === 'rejected') {
+            const rejectReason = String(note || transitionReason || req.body?.rejectionReason || req.body?.note || '').trim();
+            if (!rejectReason || rejectReason.length < 15) {
+              return {
+                statusCode: 400,
+                body: {
+                  error: 'MANDATORY_CLINICAL_REJECTION_REASON_REQUIRED',
+                  message: 'A documented clinical reason or clear patient directive is strictly mandatory when rejecting a case (minimum 15 characters).'
+                }
+              };
+            }
+          }
+
+          // Docus AI Benchmark (Req #61): Mandatory Clinical Justification on AI Diagnosis / Risk Level Override
+          if (targetStatus === 'approved') {
+            const isAiOverridden = Boolean(req.body?.isAiOverridden || req.body?.riskModified);
+            if (isAiOverridden) {
+              const overrideReason = String(req.body?.clinicalOverrideReason || req.body?.aiOverrideReason || req.body?.riskOverrideReason || '').trim();
+              if (!overrideReason || overrideReason.length < 15) {
+                return {
+                  statusCode: 400,
+                  body: {
+                    error: 'MANDATORY_CLINICAL_OVERRIDE_REASON_REQUIRED',
+                    message: 'A clinical justification or patient guidance is mandatory when modifying AI diagnosis or risk level (minimum 15 characters).'
+                  }
+                };
+              }
+            }
+          }
+
           const allowedNext = VALID_TRANSITIONS[currentStatus] || [];
           if (!allowedNext.includes(targetStatus)) {
             return {
@@ -7422,6 +7453,21 @@ async function executeDoctorTransition({
             updateData.currentReportRevisionId = updateData.reportSnapshot.revisionId;
             updateData.originalCaseId = updateData.reportSnapshot.originalCaseId;
             updateData.previousReportRevisionId = previousRevisionId;
+            if (req.body?.isAiOverridden || req.body?.riskModified) {
+              const overrideReason = String(req.body?.clinicalOverrideReason || req.body?.aiOverrideReason || req.body?.riskOverrideReason || '').trim();
+              updateData.isAiOverridden = true;
+              updateData.clinicalOverrideReason = overrideReason;
+              updateData.aiOverrideReason = overrideReason;
+              updateData.aiOverrideAudit = {
+                originalDiagnosis: req.body?.originalDiagnosis || caseData.aiPrediction || caseData.assessment?.aiTriage?.priority || '',
+                newDiagnosis: clinicalDiagnosis || updateData.clinicalDiagnosis || '',
+                originalRisk: req.body?.originalRisk || caseData.priority || '',
+                newRisk: req.body?.newRisk || caseData.priority || '',
+                overrideReason,
+                overriddenAt: nowIso,
+                overriddenBy: req.user.uid
+              };
+            }
             updateData.approvalHistory = admin.firestore.FieldValue.arrayUnion({
               revisionId: updateData.reportSnapshot.revisionId,
               revisionNumber: updateData.reportSnapshot.revisionNumber,
@@ -7429,6 +7475,13 @@ async function executeDoctorTransition({
               approvedBy: actor,
               signatureWorkflow: updateData.reportSnapshot.signature.workflow
             });
+          } else if (targetStatus === 'rejected') {
+            const rejectReason = String(note || transitionReason || req.body?.rejectionReason || req.body?.note || '').trim();
+            updateData.rejectedAt = admin.firestore.FieldValue.serverTimestamp();
+            updateData.rejectionReason = rejectReason;
+            updateData.clinicalOverrideReason = rejectReason;
+            updateData.doctorNote = rejectReason;
+            updateData.doctorApproved = false;
           } else if (targetStatus === 'more_info_requested') {
             updateData.moreInfoRequestedAt = admin.firestore.FieldValue.serverTimestamp();
             updateData.moreInfoNote = transitionReason;

@@ -568,6 +568,7 @@
     const cases = (typeof global.getCases === "function") ? await global.getCases({ includeTest: true }) : [];
     const targetCase = cases.find(c => c.id === caseId) || { id: caseId };
     const defaultCondition = deriveAiCondition(targetCase, isEn);
+    const defaultPriority = targetCase.priority || "routine";
     const protocol = getStandardCareProtocol(defaultCondition, isEn);
 
     const modalHtml = `
@@ -594,9 +595,9 @@
                 ${isEn ? "Quick Presets:" : "اختصارات تشخيصية سريعة:"}
               </label>
               <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-                <button type="button" class="soft-button" style="font-size: 11.5px; padding: 4px 8px;" onclick="document.getElementById('modalDiagInput').value='${isEn ? "Acute Bronchial Asthma Exacerbation" : "حساسية صدرية ونوبة ربو شعبي حادة"}'">🫁 ${isEn ? "Asthma Flare" : "نوبة ربو"}</button>
-                <button type="button" class="soft-button" style="font-size: 11.5px; padding: 4px 8px;" onclick="document.getElementById('modalDiagInput').value='${isEn ? "Acute Bronchitis & Reactive Airway" : "التهاب شعبي حاد وتهيج بالقصبات"}'">🌡️ ${isEn ? "Bronchitis" : "التهاب شعبي"}</button>
-                <button type="button" class="soft-button" style="font-size: 11.5px; padding: 4px 8px;" onclick="document.getElementById('modalDiagInput').value='${isEn ? "Community-Acquired Lower Respiratory Infection (Suspected Pneumonia)" : "التهاب رئوي مكتسب مجتمعياً"}'">🩻 ${isEn ? "Pneumonia" : "اشتباه التهاب رئوي"}</button>
+                <button type="button" class="soft-button" style="font-size: 11.5px; padding: 4px 8px;" onclick="document.getElementById('modalDiagInput').value='${isEn ? "Acute Bronchial Asthma Exacerbation" : "حساسية صدرية ونوبة ربو شعبي حادة"}'; HealthVibes.DoctorReviewCockpit.checkOverrideState('${escapeHtml(defaultCondition)}', '${escapeHtml(defaultPriority)}')">🫁 ${isEn ? "Asthma Flare" : "نوبة ربو"}</button>
+                <button type="button" class="soft-button" style="font-size: 11.5px; padding: 4px 8px;" onclick="document.getElementById('modalDiagInput').value='${isEn ? "Acute Bronchitis & Reactive Airway" : "التهاب شعبي حاد وتهيج بالقصبات"}'; HealthVibes.DoctorReviewCockpit.checkOverrideState('${escapeHtml(defaultCondition)}', '${escapeHtml(defaultPriority)}')">🌡️ ${isEn ? "Bronchitis" : "التهاب شعبي"}</button>
+                <button type="button" class="soft-button" style="font-size: 11.5px; padding: 4px 8px;" onclick="document.getElementById('modalDiagInput').value='${isEn ? "Community-Acquired Lower Respiratory Infection (Suspected Pneumonia)" : "التهاب رئوي مكتسب مجتمعياً"}'; HealthVibes.DoctorReviewCockpit.checkOverrideState('${escapeHtml(defaultCondition)}', '${escapeHtml(defaultPriority)}')">🩻 ${isEn ? "Pneumonia" : "اشتباه التهاب رئوي"}</button>
               </div>
             </div>
 
@@ -605,13 +606,46 @@
               <label for="modalDiagInput" style="font-size: 13px; font-weight: 800; display: block; margin-bottom: 4px;">
                 ${isEn ? "1. Physician Clinical Diagnosis *" : "1. التشخيص الطبي السريري المعتمد *"}
               </label>
-              <input type="text" id="modalDiagInput" value="${escapeHtml(defaultCondition)}" style="width: 100%; padding: 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-family: inherit; font-size: 13.5px;" />
+              <input type="text" id="modalDiagInput" value="${escapeHtml(defaultCondition)}" style="width: 100%; padding: 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-family: inherit; font-size: 13.5px;" oninput="HealthVibes.DoctorReviewCockpit.checkOverrideState('${escapeHtml(defaultCondition)}', '${escapeHtml(defaultPriority)}')" />
+            </div>
+
+            <!-- Risk Level / Priority Selector -->
+            <div style="margin-bottom: 12px;">
+              <label for="modalRiskSelect" style="font-size: 13px; font-weight: 800; display: block; margin-bottom: 4px;">
+                ${isEn ? "2. Triage Priority & Risk Level *" : "2. مستوى الخطورة والأولوية السريرية *"}
+              </label>
+              <select id="modalRiskSelect" style="width: 100%; padding: 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-family: inherit; font-size: 13.5px;" onchange="HealthVibes.DoctorReviewCockpit.checkOverrideState('${escapeHtml(defaultCondition)}', '${escapeHtml(defaultPriority)}')">
+                <option value="urgent" ${targetCase.priority === 'urgent' ? 'selected' : ''}>🚨 ${isEn ? "Urgent / Critical (Tier 1)" : "حرج / عاجل (المستوى 1)"}</option>
+                <option value="high" ${targetCase.priority === 'high' ? 'selected' : ''}>⚠️ ${isEn ? "High Priority (Tier 2)" : "أولوية عالية (المستوى 2)"}</option>
+                <option value="routine" ${(!targetCase.priority || targetCase.priority === 'routine') ? 'selected' : ''}>🟢 ${isEn ? "Routine / Standard (Tier 3)" : "اعتيادي / مستقر (المستوى 3)"}</option>
+              </select>
+            </div>
+
+            <!-- 🛡️ Docus AI Mandatory Clinical Override Box (Revealed upon AI Diagnosis or Risk Modification) -->
+            <div id="mandatoryOverrideBox" class="mandatory-override-box" style="display: none;">
+              <div class="docus-override-notice">
+                <span style="font-size: 20px;">🛡️</span>
+                <div>
+                  <strong>${isEn ? "Docus AI Clinical Override Governance:" : "معيار Docus AI للحوكمة السريرية عند التعديل:"}</strong>
+                  <div style="margin-top: 2px;">
+                    ${isEn
+                      ? "You are overriding the AI diagnosis or modifying the clinical risk level. Documenting a clear medical rationale and guidance for the patient is strictly required (minimum 15 characters) before certifying the report."
+                      : "لقد قمت بتعديل تشخيص الذكاء الاصطناعي أو تغيير مستوى الخطورة. يلزم توثيق سبب سريري وتوجيه واضح للمريض (15 حرفاً على الأقل) قبل اعتماد التقرير الطبي."}
+                  </div>
+                </div>
+              </div>
+
+              <label for="modalOverrideReasonInput" style="font-size: 13px; font-weight: 800; display: block; margin-bottom: 4px; color: #d97706;">
+                ${isEn ? "Clinical Justification for AI Override & Patient Guidance *" : "سبب التعديل السريري وتوجيه المريض *"}
+              </label>
+              <textarea id="modalOverrideReasonInput" placeholder="${isEn ? 'Specify reason for altering AI outcome and instructions for patient (minimum 15 characters)...' : 'اكتب السبب السريري لتعديل التشخيص أو مستوى الخطورة مع التوجيه الموجه للمريض (15 حرفاً على الأقل)...'}" style="width: 100%; min-height: 75px; padding: 10px; border-radius: 10px; border: 1.5px solid #f59e0b; background: var(--surface); color: var(--ink); font-family: inherit; font-size: 13px;" oninput="HealthVibes.DoctorReviewCockpit.updateOverrideCharCount(this.value)"></textarea>
+              <div id="overrideCharCounter" class="override-validation-badge invalid">0 / 15 ${isEn ? "characters minimum" : "حرف كحد أدنى"}</div>
             </div>
 
             <!-- Medications Input -->
             <div style="margin-bottom: 12px;">
               <label for="modalMedsInput" style="font-size: 13px; font-weight: 800; display: block; margin-bottom: 4px;">
-                ${isEn ? "2. Prescriptions & Medication Regimen (Rx) *" : "2. الروشتة والأدوية الموصوفة (Rx) *"}
+                ${isEn ? "3. Prescriptions & Medication Regimen (Rx) *" : "3. الروشتة والأدوية الموصوفة (Rx) *"}
               </label>
               <textarea id="modalMedsInput" style="width: 100%; min-height: 85px; padding: 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-family: inherit; font-size: 13px;">${escapeHtml(protocol.medications)}</textarea>
             </div>
@@ -619,7 +653,7 @@
             <!-- Recommendations Input -->
             <div style="margin-bottom: 14px;">
               <label for="modalRecsInput" style="font-size: 13px; font-weight: 800; display: block; margin-bottom: 4px;">
-                ${isEn ? "3. Clinical Care Plan & Follow-up Instructions *" : "3. خطة الرعاية والتوصيات السريرية *"}
+                ${isEn ? "4. Clinical Care Plan & Follow-up Instructions *" : "4. خطة الرعاية والتوصيات السريرية *"}
               </label>
               <textarea id="modalRecsInput" style="width: 100%; min-height: 85px; padding: 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-family: inherit; font-size: 13px;">${escapeHtml(protocol.recommendations)}</textarea>
             </div>
@@ -627,7 +661,7 @@
 
           <div class="modal-footer">
             <button type="button" class="outline-button" onclick="HealthVibes.DoctorReviewCockpit.closeCockpitModal()">${isEn ? "Cancel" : "إلغاء"}</button>
-            <button type="button" class="btn-cockpit approve" onclick="HealthVibes.DoctorReviewCockpit.submitModifiedApproval('${caseId}')">
+            <button type="button" class="btn-cockpit approve" onclick="HealthVibes.DoctorReviewCockpit.submitModifiedApproval('${caseId}', '${escapeHtml(defaultCondition)}', '${escapeHtml(defaultPriority)}')">
               <span>✨</span>
               <span>${isEn ? "Confirm & Certify Report" : "تأكيد واعتماد التقرير الطبي"}</span>
             </button>
@@ -642,11 +676,51 @@
     container.appendChild(el);
   }
 
-  async function submitModifiedApproval(caseId) {
+  function checkOverrideState(defaultCondition, defaultPriority) {
+    const isEn = (global.currentLanguage || "ar") === "en";
+    const currentDiag = (document.getElementById("modalDiagInput")?.value || "").trim();
+    const currentRisk = (document.getElementById("modalRiskSelect")?.value || "").trim();
+    const overrideBox = document.getElementById("mandatoryOverrideBox");
+
+    const isDiagModified = currentDiag.toLowerCase() !== String(defaultCondition || "").trim().toLowerCase();
+    const isRiskModified = currentRisk.toLowerCase() !== String(defaultPriority || "routine").trim().toLowerCase();
+    const isOverridden = isDiagModified || isRiskModified;
+
+    if (overrideBox) {
+      if (isOverridden) {
+        overrideBox.style.display = "block";
+        overrideBox.classList.add("highlight-required");
+      } else {
+        overrideBox.style.display = "none";
+        overrideBox.classList.remove("highlight-required");
+      }
+    }
+    return isOverridden;
+  }
+
+  function updateOverrideCharCount(text) {
+    const isEn = (global.currentLanguage || "ar") === "en";
+    const counter = document.getElementById("overrideCharCounter");
+    const len = String(text || "").trim().length;
+    if (counter) {
+      if (len >= 15) {
+        counter.className = "override-validation-badge valid";
+        counter.innerHTML = `✓ ${len} / 15 ${isEn ? "characters (Valid justification)" : "حرف (السبب موثق سريرياً)"}`;
+      } else {
+        counter.className = "override-validation-badge invalid";
+        counter.innerHTML = `⚠️ ${len} / 15 ${isEn ? "characters (15 characters minimum required)" : "حرف (يلزم 15 حرفاً على الأقل)"}`;
+      }
+    }
+    return len >= 15;
+  }
+
+  async function submitModifiedApproval(caseId, defaultCondition, defaultPriority) {
     const isEn = (global.currentLanguage || "ar") === "en";
     const diag = (document.getElementById("modalDiagInput")?.value || "").trim();
+    const risk = (document.getElementById("modalRiskSelect")?.value || "").trim();
     const meds = (document.getElementById("modalMedsInput")?.value || "").trim();
     const recs = (document.getElementById("modalRecsInput")?.value || "").trim();
+    const overrideReason = (document.getElementById("modalOverrideReasonInput")?.value || "").trim();
 
     if (!diag || !recs) {
       if (typeof global.showToast === "function") {
@@ -654,6 +728,42 @@
       }
       return;
     }
+
+    // Check if physician modified AI diagnosis or altered risk tier (Docus AI Benchmark)
+    const isDiagModified = diag.toLowerCase() !== String(defaultCondition || "").trim().toLowerCase();
+    const isRiskModified = risk.toLowerCase() !== String(defaultPriority || "routine").trim().toLowerCase();
+    const isOverridden = isDiagModified || isRiskModified;
+
+    if (isOverridden) {
+      if (!overrideReason || overrideReason.length < 15) {
+        const overrideBox = document.getElementById("mandatoryOverrideBox");
+        if (overrideBox) {
+          overrideBox.style.display = "block";
+          overrideBox.classList.add("highlight-required");
+        }
+        const reasonInput = document.getElementById("modalOverrideReasonInput");
+        if (reasonInput) reasonInput.focus();
+
+        if (typeof global.showToast === "function") {
+          global.showToast(isEn
+            ? "A clinical justification or patient guidance is mandatory when modifying AI diagnosis or risk level (minimum 15 characters)."
+            : "يلزم كتابة سبب سريري أو توجيه واضح للمريض عند تعديل نتيجة الذكاء الاصطناعي أو مستوى الخطورة (15 حرفاً على الأقل).");
+        }
+        return;
+      }
+    }
+
+    // Store active override details on window for approval payload
+    global._doctorActiveModifiedOverride = {
+      isAiOverridden: isOverridden,
+      riskModified: isRiskModified,
+      clinicalOverrideReason: overrideReason,
+      aiOverrideReason: overrideReason,
+      originalDiagnosis: defaultCondition,
+      newDiagnosis: diag,
+      originalRisk: defaultPriority,
+      newRisk: risk
+    };
 
     // Sync to DOM fields in review panel
     const diagInput = document.getElementById("doctorDiagnosisInput");
@@ -673,7 +783,7 @@
   }
 
   /**
-   * 3. Reject Modal with 1-Click Clinical Rationale
+   * 3. Reject Modal with 1-Click Clinical Rationale & Docus AI Mandatory Reason Requirement
    */
   function openRejectCaseModal(caseId) {
     const isEn = (global.currentLanguage || "ar") === "en";
@@ -691,27 +801,34 @@
           </div>
 
           <div class="modal-body">
-            <p style="margin: 0 0 12px; font-size: 13px; color: var(--muted);">
-              ${isEn
-                ? "Select a documented medical justification for rejecting this assessment. This rationale will be permanently recorded in the patient audit log."
-                : "اختر أو اكتب السبب الطبي لرفض الحالة، وسيتم تسجيل هذا التوثيق رسمياً في سجل التدقيق الطبي."}
-            </p>
+            <!-- 🛡️ Docus AI Mandatory Rejection Guidance Notice -->
+            <div class="docus-override-notice rejection">
+              <span style="font-size: 20px;">🛡️</span>
+              <div>
+                <strong>${isEn ? "Docus AI Rejection Requirement:" : "معيار Docus AI الإلزامي لرفض الحالة:"}</strong>
+                <div style="margin-top: 2px;">
+                  ${isEn
+                    ? "A documented clinical reason or clear directive for the patient is strictly mandatory (minimum 15 characters) before rejecting an assessment."
+                    : "يلزم توثيق سبب سريري دقيق أو توجيه واضح للمريض (15 حرفاً على الأقل) عند رفض الحالة لضمان السلامة السريرية والمسؤولية الطبية."}
+                </div>
+              </div>
+            </div>
 
             <div style="margin-bottom: 12px;">
               <label style="font-size: 12px; font-weight: 700; color: var(--muted); display: block; margin-bottom: 6px;">
-                ${isEn ? "Quick Justification Categories:" : "أسباب شائعة للرفض السريع:"}
+                ${isEn ? "Quick Justification Presets:" : "أسباب شائعة للرفض السريع:"}
               </label>
               <div style="display: flex; flex-direction: column; gap: 6px;">
-                <button type="button" class="soft-button" style="text-align: inherit; font-size: 12.5px; padding: 7px 12px;" onclick="document.getElementById('rejectReasonInput').value=this.textContent.trim()">
+                <button type="button" class="soft-button" style="text-align: inherit; font-size: 12.5px; padding: 7px 12px;" onclick="document.getElementById('rejectReasonInput').value='${isEn ? "Unreadable or blurred radiology images requiring re-examination" : "صور الأشعة غير واضحة أو غير مقروءة طبياً ويلزم إعادة التصوير"}'; HealthVibes.DoctorReviewCockpit.updateRejectCharCount(document.getElementById('rejectReasonInput').value)">
                   ❌ ${isEn ? "Unreadable or blurred radiology images" : "صور الأشعة غير واضحة أو غير مقروءة طبياً"}
                 </button>
-                <button type="button" class="soft-button" style="text-align: inherit; font-size: 12.5px; padding: 7px 12px;" onclick="document.getElementById('rejectReasonInput').value=this.textContent.trim()">
+                <button type="button" class="soft-button" style="text-align: inherit; font-size: 12.5px; padding: 7px 12px;" onclick="document.getElementById('rejectReasonInput').value='${isEn ? "Duplicate case evaluation submitted by patient within short interval" : "تقييم سريري مكرر لنفس المريض في فترة زمنية متقاربة"}'; HealthVibes.DoctorReviewCockpit.updateRejectCharCount(document.getElementById('rejectReasonInput').value)">
                   📄 ${isEn ? "Duplicate case evaluation submitted by patient" : "تقييم سريري مكرر لنفس المريض"}
                 </button>
-                <button type="button" class="soft-button" style="text-align: inherit; font-size: 12.5px; padding: 7px 12px;" onclick="document.getElementById('rejectReasonInput').value=this.textContent.trim()">
+                <button type="button" class="soft-button" style="text-align: inherit; font-size: 12.5px; padding: 7px 12px;" onclick="document.getElementById('rejectReasonInput').value='${isEn ? "Non-clinical data or invalid vital entry, please retake vitals" : "بيانات غير طبية أو إدخال غير منطقي للمؤشرات الحيوية"}'; HealthVibes.DoctorReviewCockpit.updateRejectCharCount(document.getElementById('rejectReasonInput').value)">
                   ⚠️ ${isEn ? "Non-clinical data or invalid vital entry" : "بيانات غير طبية أو إدخال غير منطقي للمؤشرات"}
                 </button>
-                <button type="button" class="soft-button" style="text-align: inherit; font-size: 12.5px; padding: 7px 12px;" onclick="document.getElementById('rejectReasonInput').value=this.textContent.trim()">
+                <button type="button" class="soft-button" style="text-align: inherit; font-size: 12.5px; padding: 7px 12px;" onclick="document.getElementById('rejectReasonInput').value='${isEn ? "Outside pulmonary scope: Referred to Cardiology/ENT for evaluation" : "حالة غير تنفسية خارج نطاق الصدر: تم التوجيه لقسم القلب/الأنف والأذن"}'; HealthVibes.DoctorReviewCockpit.updateRejectCharCount(document.getElementById('rejectReasonInput').value)">
                   🏥 ${isEn ? "Outside pulmonary scope: Referred to Cardiology/ENT" : "حالة غير تنفسية: تم التوجيه لقسم القلب/الأنف والأذن"}
                 </button>
               </div>
@@ -719,9 +836,10 @@
 
             <div style="margin-bottom: 12px;">
               <label for="rejectReasonInput" style="font-size: 13px; font-weight: 800; display: block; margin-bottom: 4px;">
-                ${isEn ? "Documented Reason for Rejection *" : "السبب الموثق للرفض *"}
+                ${isEn ? "Documented Reason for Rejection & Patient Guidance *" : "السبب السريري الموثق للرفض وتوجيه المريض *"}
               </label>
-              <textarea id="rejectReasonInput" placeholder="${isEn ? 'Specify reason...' : 'حدد سبب الرفض السريري...'}" style="width: 100%; min-height: 80px; padding: 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-family: inherit; font-size: 13px;">${isEn ? "Unreadable or blurred radiology images" : "صور الأشعة غير واضحة أو غير مقروءة طبياً"}</textarea>
+              <textarea id="rejectReasonInput" placeholder="${isEn ? 'Specify detailed medical rationale (minimum 15 characters)...' : 'حدد سبب الرفض السريري وتوجيه المريض بالتفصيل (15 حرفاً على الأقل)...'}" style="width: 100%; min-height: 85px; padding: 10px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink); font-family: inherit; font-size: 13px;" oninput="HealthVibes.DoctorReviewCockpit.updateRejectCharCount(this.value)">${isEn ? "Unreadable or blurred radiology images requiring re-examination" : "صور الأشعة غير واضحة أو غير مقروءة طبياً ويلزم إعادة التصوير"}</textarea>
+              <div id="rejectCharCounter" class="override-validation-badge valid">✓ ${isEn ? "Valid clinical justification" : "السبب السريري مستوفٍ للشروط"}</div>
             </div>
           </div>
 
@@ -742,18 +860,51 @@
     container.appendChild(el);
   }
 
+  function updateRejectCharCount(text) {
+    const isEn = (global.currentLanguage || "ar") === "en";
+    const counter = document.getElementById("rejectCharCounter");
+    const len = String(text || "").trim().length;
+    if (counter) {
+      if (len >= 15) {
+        counter.className = "override-validation-badge valid";
+        counter.innerHTML = `✓ ${len} / 15 ${isEn ? "characters (Valid justification)" : "حرف (السبب موثق سريرياً)"}`;
+      } else {
+        counter.className = "override-validation-badge invalid";
+        counter.innerHTML = `⚠️ ${len} / 15 ${isEn ? "characters (15 characters minimum required)" : "حرف (يلزم 15 حرفاً على الأقل)"}`;
+      }
+    }
+    return len >= 15;
+  }
+
   async function submitCaseRejection(caseId) {
     const isEn = (global.currentLanguage || "ar") === "en";
-    const reason = (document.getElementById("rejectReasonInput")?.value || "").trim() || (isEn ? "Non-clinical data or duplicate submission" : "بيانات غير طبية أو تقييم مكرر");
+    const reason = (document.getElementById("rejectReasonInput")?.value || "").trim();
+
+    // Docus AI Benchmark: Strictly enforce minimum 15 characters
+    if (!reason || reason.length < 15) {
+      const reasonInput = document.getElementById("rejectReasonInput");
+      if (reasonInput) reasonInput.focus();
+      if (typeof global.showToast === "function") {
+        global.showToast(isEn
+          ? "A clinical justification or clear directive for the patient is required (minimum 15 characters)."
+          : "يلزم كتابة سبب سريري أو توجيه واضح للمريض لرفض الحالة (15 حرفاً على الأقل).");
+      }
+      return;
+    }
 
     closeCockpitModal();
 
     if (typeof global.rejectCase === "function") {
       const diagInput = document.getElementById("doctorDiagnosisInput");
       if (diagInput) diagInput.value = reason;
-      await global.rejectCase(caseId);
+      await global.rejectCase(caseId, reason);
     } else if (typeof global.updateCaseStatus === "function") {
-      await global.updateCaseStatus(caseId, "rejected", reason, { rejectionReason: reason, doctorApproved: false });
+      await global.updateCaseStatus(caseId, "rejected", reason, {
+        rejectionReason: reason,
+        clinicalOverrideReason: reason,
+        doctorNote: reason,
+        doctorApproved: false
+      });
     }
   }
 
@@ -911,8 +1062,11 @@
     approveDirect,
     openModifyAndApproveModal,
     submitModifiedApproval,
+    checkOverrideState,
+    updateOverrideCharCount,
     openRejectCaseModal,
     submitCaseRejection,
+    updateRejectCharCount,
     openRequestFollowUpModal,
     submitFollowUpRequest,
     openRadiologyViewer,

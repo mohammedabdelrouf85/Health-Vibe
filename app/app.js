@@ -4176,15 +4176,42 @@ async function updateCaseStatus(id, newStatus, note, extraFields = {}) {
     if (newStatus === CASE_STATUS.APPROVED) {
       if (typeof isDoctor === "function" && !isDoctor()) {
         showToast(isEn ? "Only verified physicians with active credentials can certify and approve clinical reports." : "فقط الأطباء المعتمدون سريرياً يمكنهم توقيع واعتماد التقارير الطبية.");
+        transitionLocks.delete(transitionKey);
         return false;
       }
       if (!(extraFields.clinicalNotes || note || "").trim() || !((extraFields.recommendations || []).length || (extraFields.recommendation || "").trim())) {
         showToast(isEn ? "Clinical notes and at least one recommendation are required before approval." : "يجب تسجيل الملاحظات السريرية وتوصية واحدة على الأقل قبل الاعتماد.");
+        transitionLocks.delete(transitionKey);
+        return false;
+      }
+      // Docus AI Benchmark (Req #61): Mandatory Clinical Note on AI Diagnosis or Risk Override
+      if (extraFields.isAiOverridden || extraFields.riskModified) {
+        const overrideReason = String(extraFields.clinicalOverrideReason || extraFields.aiOverrideReason || "").trim();
+        if (!overrideReason || overrideReason.length < 15) {
+          showToast(isEn
+            ? "A clinical justification or patient guidance is mandatory when modifying AI diagnosis or risk level (minimum 15 characters)."
+            : "يلزم كتابة سبب سريري أو توجيه واضح للمريض عند تعديل نتيجة الذكاء الاصطناعي أو مستوى الخطورة (15 حرفاً على الأقل).");
+          transitionLocks.delete(transitionKey);
+          return false;
+        }
+      }
+    }
+
+    // Docus AI Benchmark (Req #61): Mandatory Clinical Justification / Patient Directive on Rejection
+    if (newStatus === CASE_STATUS.REJECTED) {
+      const rejectReason = String(note || extraFields.rejectionReason || "").trim();
+      if (!rejectReason || rejectReason.length < 15) {
+        showToast(isEn
+          ? "A clinical justification or clear directive for the patient is required (minimum 15 characters)."
+          : "يلزم كتابة سبب سريري أو توجيه واضح للمريض لرفض الحالة (15 حرفاً على الأقل).");
+        transitionLocks.delete(transitionKey);
         return false;
       }
     }
-    if ([CASE_STATUS.REJECTED, CASE_STATUS.MORE_INFO_REQUESTED, CASE_STATUS.ESCALATED].includes(newStatus) && !String(note || "").trim()) {
+
+    if ([CASE_STATUS.MORE_INFO_REQUESTED, CASE_STATUS.ESCALATED].includes(newStatus) && !String(note || "").trim()) {
       showToast(isEn ? "A note or reason is required before saving this action." : "يجب تسجيل ملاحظة أو سبب قبل حفظ هذا الإجراء.");
+      transitionLocks.delete(transitionKey);
       return false;
     }
 
@@ -4206,6 +4233,15 @@ async function updateCaseStatus(id, newStatus, note, extraFields = {}) {
         medications: extraFields.medications || "",
         recommendation: extraFields.recommendation || "",
         recommendations: extraFields.recommendations || [],
+        isAiOverridden: Boolean(extraFields.isAiOverridden),
+        riskModified: Boolean(extraFields.riskModified),
+        clinicalOverrideReason: extraFields.clinicalOverrideReason || "",
+        aiOverrideReason: extraFields.aiOverrideReason || extraFields.clinicalOverrideReason || "",
+        originalDiagnosis: extraFields.originalDiagnosis || "",
+        newDiagnosis: extraFields.newDiagnosis || extraFields.clinicalDiagnosis || "",
+        originalRisk: extraFields.originalRisk || "",
+        newRisk: extraFields.newRisk || "",
+        rejectionReason: extraFields.rejectionReason || note || "",
         approvingDoctorName: extraFields.approvingDoctorName || "",
         doctorSpecialty: extraFields.doctorSpecialty || "",
         doctorLicense: extraFields.doctorLicense || "",
@@ -4867,6 +4903,8 @@ window.generateAndApproveReport = async function(id) {
     ? Number(window._doctorActiveCaseReviewedRevision)
     : 1;
 
+  const activeOverride = window._doctorActiveModifiedOverride || null;
+
   const payload = {
     clinicalDiagnosis,
     clinicalNotes: clinicalDiagnosis,
@@ -4879,11 +4917,20 @@ window.generateAndApproveReport = async function(id) {
     clinicalRevision: reviewedRevision,
     reviewedRevision: reviewedRevision,
     expectedRevision: reviewedRevision || currentCaseRevision,
-    reviewedSnapshot: window._doctorActiveCaseReviewedSnapshot || null
+    reviewedSnapshot: window._doctorActiveCaseReviewedSnapshot || null,
+    isAiOverridden: Boolean(activeOverride && activeOverride.isAiOverridden),
+    riskModified: Boolean(activeOverride && activeOverride.riskModified),
+    clinicalOverrideReason: activeOverride ? (activeOverride.clinicalOverrideReason || "") : "",
+    aiOverrideReason: activeOverride ? (activeOverride.aiOverrideReason || "") : "",
+    originalDiagnosis: activeOverride ? (activeOverride.originalDiagnosis || "") : "",
+    newDiagnosis: activeOverride ? (activeOverride.newDiagnosis || clinicalDiagnosis) : clinicalDiagnosis,
+    originalRisk: activeOverride ? (activeOverride.originalRisk || "") : "",
+    newRisk: activeOverride ? (activeOverride.newRisk || "") : ""
   };
 
   const success = await updateCaseStatus(id, CASE_STATUS.APPROVED, clinicalDiagnosis, payload);
   if (success) {
+    window._doctorActiveModifiedOverride = null;
     if (typeof clearDoctorConflictBanner === "function") clearDoctorConflictBanner();
     if (window.HealthVibes?.DoctorUI?.clearDraftNotes) {
       window.HealthVibes.DoctorUI.clearDraftNotes(id);
@@ -4968,15 +5015,22 @@ window.rejectCase = async function(id) {
   const existingNote = diagInput && diagInput.value.trim() ? diagInput.value.trim() : "";
 
   const reason = window.prompt(
-    isEn ? "Enter rejection reason or invalid clinical entry:" : "أدخل سبب رفض الحالة أو عدم صحة البيانات:",
+    isEn ? "Enter rejection reason and patient directive (minimum 15 characters):" : "أدخل سبب رفض الحالة السريري وتوجيه المريض (15 حرفاً على الأقل):",
     existingNote || defaultReason
   );
   if (reason === null) return; // Cancelled
 
   const finalReason = (reason && reason.trim()) ? reason.trim() : (existingNote || defaultReason);
+  if (!finalReason || finalReason.length < 15) {
+    showToast(isEn
+      ? "A clinical justification or clear directive for the patient is required (minimum 15 characters)."
+      : "يلزم كتابة سبب سريري أو توجيه واضح للمريض لرفض الحالة (15 حرفاً على الأقل).");
+    return;
+  }
 
   const payload = {
     rejectionReason: finalReason,
+    clinicalOverrideReason: finalReason,
     doctorNote: finalReason,
     doctorApproved: false,
     rejectingDoctorName: (auth && auth.currentUser) ? (auth.currentUser.displayName || auth.currentUser.email) : (isEn ? "Physician" : "الطبيب المعالج")
