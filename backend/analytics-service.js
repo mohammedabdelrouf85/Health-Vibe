@@ -46,7 +46,12 @@ const EVENT_TYPES = Object.freeze({
   // 📑 Pre-Visit Medical Dossier Telemetry (Doctolib Model)
   DOSSIER_ATTACHED_TO_APPOINTMENT: 'dossier_attached_to_appointment',
   PREVISIT_DOSSIER_ACCESSED: 'previsit_dossier_accessed',
-  DOSSIER_LINKAGE_FAILED: 'dossier_linkage_failed'
+  DOSSIER_LINKAGE_FAILED: 'dossier_linkage_failed',
+
+  // 🚗 CliniDo Consultation Type & Egypt Commute Relief Telemetry
+  CONSULTATION_TYPE_SELECTED: 'consultation_type_selected',
+  COMMUTE_RELIEF_VIEWED: 'commute_relief_viewed',
+  CONSULTATION_MODE_SWITCHED: 'consultation_mode_switched'
 });
 
 const FORBIDDEN_MEDICAL_KEYS = Object.freeze([
@@ -134,7 +139,8 @@ function sanitizeAndValidatePayload(eventType, payload = {}) {
     'reviewAction', 'responseTimeMs', 'appointmentType', 'device', 'platform', 'browser',
     'locale', 'rating', 'feedbackId', 'ticketId', 'errorCategory', 'metadata',
     // Appointment specific metadata
-    'doctorId', 'specialty', 'consultationType', 'isOnline', 'isDependent', 'beneficiaryType',
+    'doctorId', 'specialty', 'consultationType', 'previousConsultationType', 'modeSwitched', 'isOnline',
+    'commuteReliefActive', 'branch', 'source', 'switchReason', 'isDependent', 'beneficiaryType',
     'timeOfDay', 'slotId', 'date', 'weekOffset', 'action', 'reason', 'errorCode', 'failureReason',
     'price', 'currency', 'hasAttachedReport', 'hasAttachedDossier', 'isDoctorReview', 'isPostBookingLinkage', 'actorRole'
   ];
@@ -731,6 +737,8 @@ function calculateAppointmentKpis(events = inMemoryEvents, options = {}) {
 
   let videoCount = 0;
   let inClinicCount = 0;
+  let followupCount = 0;
+  let commuteReliefCount = 0;
   let morningCount = 0;
   let eveningCount = 0;
   let dependentCount = 0;
@@ -739,11 +747,20 @@ function calculateAppointmentKpis(events = inMemoryEvents, options = {}) {
 
   successes.forEach(e => {
     const p = e.payload || e.properties || {};
-    const isOnline = p.consultationType === 'video' || p.consultationType === 'telehealth' || p.isOnline === true;
-    if (isOnline) {
+    const rawType = String(p.consultationType || (p.isOnline ? 'video' : 'clinic')).toLowerCase();
+    const isOnline = rawType === 'video' || rawType === 'telehealth' || rawType === 'followup' || p.isOnline === true;
+    const isCommuteRelief = Boolean(p.commuteReliefActive || rawType === 'video' || rawType === 'followup');
+
+    if (rawType === 'video' || rawType === 'telehealth') {
       videoCount++;
+    } else if (rawType === 'followup') {
+      followupCount++;
     } else {
       inClinicCount++;
+    }
+
+    if (isCommuteRelief) {
+      commuteReliefCount++;
     }
 
     if (p.timeOfDay === 'evening') {
@@ -802,6 +819,29 @@ function calculateAppointmentKpis(events = inMemoryEvents, options = {}) {
     unit: '%',
     isEn
   });
+
+  const commuteReliefRate = buildKpiMetric({
+    name: 'Egypt Commute Relief Adoption Rate',
+    timePeriod: periodLabel,
+    numeratorName: 'Remote & Commute Relief Consultations',
+    numeratorValue: commuteReliefCount,
+    denominatorName: 'Total Confirmed Appointments',
+    denominatorValue: totalBookings,
+    unit: '%',
+    isEn
+  });
+
+  const estimatedTrafficHoursSaved = Number((commuteReliefCount * 1.5).toFixed(1));
+  const videoRate = totalBookings > 0 ? Number(((videoCount / totalBookings) * 100).toFixed(1)) : null;
+  const clinicRate = totalBookings > 0 ? Number(((inClinicCount / totalBookings) * 100).toFixed(1)) : null;
+  const followupRate = totalBookings > 0 ? Number(((followupCount / totalBookings) * 100).toFixed(1)) : null;
+
+  const consultationTypeBreakdown = {
+    video: { count: videoCount, ratio: videoRate },
+    clinic: { count: inClinicCount, ratio: clinicRate },
+    followup: { count: followupCount, ratio: followupRate },
+    commuteRelief: { count: commuteReliefCount, rate: commuteReliefRate.rate, estimatedTrafficHoursSaved }
+  };
 
   const totalCategorizedSlots = morningCount + eveningCount;
   const eveningPreferenceRate = buildKpiMetric({
@@ -909,6 +949,10 @@ function calculateAppointmentKpis(events = inMemoryEvents, options = {}) {
     breakdown: {
       inClinicCount,
       videoCount,
+      followupCount,
+      commuteReliefCount,
+      estimatedTrafficHoursSaved,
+      consultationTypeBreakdown,
       morningCount,
       eveningCount,
       selfCount,
@@ -925,6 +969,15 @@ function calculateAppointmentKpis(events = inMemoryEvents, options = {}) {
       cancellationRate: cancellationRate.rate,
       telehealthRatio: telehealthRatio.rate,
       inClinicRatio: inClinicRatio.rate,
+      commuteReliefCount,
+      commuteReliefRate: commuteReliefRate.rate,
+      estimatedTrafficHoursSaved,
+      consultationTypeBreakdown: {
+        video: videoCount,
+        clinic: inClinicCount,
+        followup: followupCount,
+        commuteRelief: commuteReliefCount
+      },
       eveningPreferenceRate: eveningPreferenceRate.rate,
       morningPreferenceRate: morningPreferenceRate.rate,
       familyDependentRate: familyDependentRate.rate,
@@ -938,6 +991,9 @@ function calculateAppointmentKpis(events = inMemoryEvents, options = {}) {
     bookingSuccessRate,
     telehealthRatio,
     inClinicRatio,
+    commuteReliefRate,
+    consultationTypeBreakdown,
+    estimatedTrafficHoursSaved,
     eveningPreferenceRate,
     morningPreferenceRate,
     familyDependentRate,
@@ -946,6 +1002,7 @@ function calculateAppointmentKpis(events = inMemoryEvents, options = {}) {
       bookingSuccessRate,
       telehealthRatio,
       inClinicRatio,
+      commuteReliefRate,
       eveningPreferenceRate,
       morningPreferenceRate,
       familyDependentRate,

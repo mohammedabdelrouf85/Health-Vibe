@@ -15349,6 +15349,23 @@ async function renderAdminAppointmentAnalytics(serverAnalytics = null) {
       ? (isEn ? `In-Clinic: ${summary.inClinicRatio}% | Telehealth: ${summary.telehealthRatio}%` : `حضوري: ${summary.inClinicRatio}% | عن بُعد: ${summary.telehealthRatio}%`)
       : naText);
 
+    if (summary.consultationTypeBreakdown) {
+      const b = summary.consultationTypeBreakdown;
+      const vCnt = b.video?.count !== undefined ? b.video.count : (b.video || 0);
+      const cCnt = b.clinic?.count !== undefined ? b.clinic.count : (b.clinic || 0);
+      const fCnt = b.followup?.count !== undefined ? b.followup.count : (b.followup || 0);
+      setText("adminApptConsultationBreakdown", isEn
+        ? `Video: ${vCnt} | Clinic: ${cCnt} | Follow-up: ${fCnt}`
+        : `فيديو: ${vCnt} | عيادة: ${cCnt} | متابعة: ${fCnt}`);
+    }
+
+    setText("adminApptCommuteReliefRate", summary.commuteReliefRate !== null && summary.commuteReliefRate !== undefined
+      ? `${summary.commuteReliefRate}%`
+      : (summary.telehealthRatio !== null && summary.telehealthRatio !== undefined ? `${summary.telehealthRatio}%` : naText));
+    setText("adminApptCommuteHoursSaved", isEn
+      ? `${summary.estimatedTrafficHoursSaved || 0} hrs traffic saved (Cairo & Giza)`
+      : `${summary.estimatedTrafficHoursSaved || 0} ساعة زحام موفرة (القاهرة والجيزة)`);
+
     setText("adminApptEveningPref", summary.eveningPreferenceRate !== null && summary.eveningPreferenceRate !== undefined
       ? `${summary.eveningPreferenceRate}%`
       : naText);

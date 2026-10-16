@@ -357,7 +357,7 @@
     };
   }
 
-    const APPOINTMENT_EVENT_TYPES = Object.freeze({
+  const APPOINTMENT_EVENT_TYPES = Object.freeze({
     APPOINTMENT_VIEW: 'appointment_view',
     APPOINTMENT_SLOT_SELECTED: 'appointment_slot_selected',
     APPOINTMENT_BOOK_ATTEMPT: 'appointment_book_attempt',
@@ -367,6 +367,9 @@
     APPOINTMENT_RESCHEDULE: 'appointment_reschedule',
     APPOINTMENT_COMPLETE: 'appointment_complete',
     APPOINTMENT_EMERGENCY_REDIRECT: 'appointment_emergency_redirect',
+    CONSULTATION_TYPE_SELECTED: 'consultation_type_selected',
+    COMMUTE_RELIEF_VIEWED: 'commute_relief_viewed',
+    CONSULTATION_MODE_SWITCHED: 'consultation_mode_switched',
     VIEW: 'appointment_view',
     SLOT_SELECTED: 'appointment_slot_selected',
     BOOK_ATTEMPT: 'appointment_book_attempt',
@@ -378,7 +381,7 @@
     EMERGENCY_REDIRECT: 'appointment_emergency_redirect'
   });
 
-    function calculateAppointmentKpis(appointments = [], options = {}) {
+  function calculateAppointmentKpis(appointments = [], options = {}) {
     const isEn = Boolean(options.isEn);
     const events = options.events || [];
     const realAppointments = (appointments || []).filter(a => {
@@ -398,7 +401,10 @@
     const rescheduled = filteredAppts.filter(a => a.status === 'rescheduled').length;
 
     let telehealthCount = 0;
+    let videoCount = 0;
     let inClinicCount = 0;
+    let followupCount = 0;
+    let commuteReliefCount = 0;
     let eveningCount = 0;
     let morningCount = 0;
     let dependentCount = 0;
@@ -406,11 +412,22 @@
     const docUtilization = new Map();
 
     filteredAppts.forEach(a => {
-      const isOnline = a.isOnlineConsultation || a.isOnline || a.consultationType === 'video' || a.consultationType === 'telehealth' || a.type === 'video';
-      if (isOnline) {
+      const rawType = String(a.consultationType || (a.isOnlineConsultation || a.isOnline ? 'video' : 'clinic')).toLowerCase();
+      const isOnline = rawType === 'video' || rawType === 'telehealth' || rawType === 'followup' || a.isOnlineConsultation === true;
+      const isCommuteRelief = Boolean(a.commuteReliefActive || rawType === 'video' || rawType === 'followup');
+
+      if (rawType === 'video' || rawType === 'telehealth') {
+        videoCount++;
+        telehealthCount++;
+      } else if (rawType === 'followup') {
+        followupCount++;
         telehealthCount++;
       } else {
         inClinicCount++;
+      }
+
+      if (isCommuteRelief) {
+        commuteReliefCount++;
       }
 
       const slot = String(a.slotId || '');
@@ -479,6 +496,18 @@
     const familyDependentRate = total > 0 ? Number(((dependentCount / total) * 100).toFixed(1)) : null;
     const selfBookingRate = total > 0 ? Number(((selfCount / total) * 100).toFixed(1)) : null;
 
+    const commuteReliefRate = total > 0 ? Number(((commuteReliefCount / total) * 100).toFixed(1)) : null;
+    const estimatedTrafficHoursSaved = Number((commuteReliefCount * 1.5).toFixed(1));
+    const videoRatio = total > 0 ? Number(((videoCount / total) * 100).toFixed(1)) : null;
+    const followupRatio = total > 0 ? Number(((followupCount / total) * 100).toFixed(1)) : null;
+
+    const consultationTypeBreakdown = {
+      video: { count: videoCount, ratio: videoRatio },
+      clinic: { count: inClinicCount, ratio: inClinicRatio },
+      followup: { count: followupCount, ratio: followupRatio },
+      commuteRelief: { count: commuteReliefCount, rate: commuteReliefRate, estimatedTrafficHoursSaved }
+    };
+
     const docUtilizationMap = {};
     docUtilization.forEach((count, docId) => {
       docUtilizationMap[docId] = { bookings: count, doctorId: docId };
@@ -495,6 +524,15 @@
         cancellationRate,
         telehealthRatio,
         inClinicRatio,
+        commuteReliefCount,
+        commuteReliefRate,
+        estimatedTrafficHoursSaved,
+        consultationTypeBreakdown: {
+          video: videoCount,
+          clinic: inClinicCount,
+          followup: followupCount,
+          commuteRelief: commuteReliefCount
+        },
         eveningPreferenceRate,
         morningPreferenceRate,
         familyDependentRate,
@@ -507,7 +545,16 @@
       cancelled,
       rescheduled,
       telehealthCount,
+      videoCount,
+      followupCount,
       inClinicCount,
+      commuteReliefCount,
+      commuteReliefRate,
+      commuteReliefRateDisplay: commuteReliefRate !== null ? `${commuteReliefRate}%` : naText,
+      commuteReliefRateDisplayAr: commuteReliefRate !== null ? `${commuteReliefRate}%` : 'غير متاح',
+      estimatedTrafficHoursSaved,
+      estimatedTrafficHoursSavedDisplay: isEn ? `${estimatedTrafficHoursSaved} hrs traffic saved` : `${estimatedTrafficHoursSaved} ساعة زحام موفرة`,
+      consultationTypeBreakdown,
       morningCount,
       eveningCount,
       selfCount,

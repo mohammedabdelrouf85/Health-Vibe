@@ -804,7 +804,11 @@
         morningPreference: "الفترات الصباحية",
         familyBookings: "حجوزات أفراد العائلة",
         emergencyInterceptions: "اعتراضات الطوارئ والتحويل لـ 123",
-        cancellationRate: "معدل إلغاء المواعيد"
+        cancellationRate: "معدل إلغاء المواعيد",
+        commuteReliefAdoptionRate: "تخفيف زحام الطرق (عن بُعد)",
+        commuteHoursSavedTitle: "ساعات زحام الطرق الموفرة",
+        consultationTypeBreakdownTitle: "توزيع أنماط المواعيد (فيديو / عيادة / متابعة)",
+        commuteHoursSavedLabel: "ساعة زحام موفرة في القاهرة والجيزة"
       },
       feedback: {
         title: "التقييم والآراء السريرية",
@@ -2059,7 +2063,11 @@
         morningPreference: "Morning Slots",
         familyBookings: "Family Dependent Bookings",
         emergencyInterceptions: "Emergency Red-Flag Interceptions",
-        cancellationRate: "Cancellation Rate"
+        cancellationRate: "Cancellation Rate",
+        commuteReliefAdoptionRate: "Egypt Commute Relief (Remote Care)",
+        commuteHoursSavedTitle: "Estimated Traffic Hours Saved",
+        consultationTypeBreakdownTitle: "Consultation Modality Breakdown",
+        commuteHoursSavedLabel: "hours of Egypt traffic avoided"
       },
       feedback: {
         title: "Clinical Feedback & Rating",

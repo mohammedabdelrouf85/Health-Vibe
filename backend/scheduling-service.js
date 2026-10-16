@@ -1623,6 +1623,7 @@ async function bookAppointmentTransaction(db, payload, authUser) {
           doctorId: savedAppointment.doctorId,
           consultationType: savedAppointment.consultationType || (savedAppointment.isOnlineConsultation ? 'video' : 'clinic'),
           isOnline: Boolean(savedAppointment.isOnlineConsultation),
+          commuteReliefActive: Boolean(savedAppointment.commuteReliefActive || savedAppointment.consultationType === 'video' || savedAppointment.consultationType === 'followup'),
           isDependent: Boolean(savedAppointment.beneficiaryId && savedAppointment.beneficiaryId !== 'self'),
           beneficiaryType: (savedAppointment.beneficiaryId && savedAppointment.beneficiaryId !== 'self') ? 'dependent' : 'self',
           timeOfDay: isEvening ? 'evening' : 'morning',
@@ -1714,7 +1715,8 @@ async function rescheduleAppointmentTransaction(db, payload, actorUser) {
   validateReschedulingPolicy(appointment, actorUser);
 
   // Handle consultation type in rescheduling
-  let newConsultationType = appointment.consultationType || appointment.type || 'clinic';
+  const previousConsultationType = appointment.consultationType || appointment.type || 'clinic';
+  let newConsultationType = previousConsultationType;
   if (payload.consultationType || payload.type) {
     const rawType = payload.consultationType || payload.type;
     const validatedType = normalizeConsultationType(rawType);
@@ -1994,6 +1996,41 @@ async function rescheduleAppointmentTransaction(db, payload, actorUser) {
     } catch (e) {
       console.warn('[RESCHEDULE EVENT ERROR]:', e.message);
     }
+
+    // Telemetry: Record appointment reschedule and potential consultation mode transition
+    try {
+      analyticsService.recordEvent({
+        eventType: analyticsService.EVENT_TYPES.APPOINTMENT_RESCHEDULE,
+        userId: updatedAppointment.patientId,
+        clinicId: updatedAppointment.clinicId || DEFAULT_CLINIC_ID,
+        payload: {
+          appointmentId: updatedAppointment.id,
+          doctorId: updatedAppointment.doctorId,
+          consultationType: updatedAppointment.consultationType || 'clinic',
+          previousConsultationType: previousConsultationType,
+          modeSwitched: Boolean(previousConsultationType && updatedAppointment.consultationType && previousConsultationType !== updatedAppointment.consultationType),
+          commuteReliefActive: Boolean(updatedAppointment.commuteReliefActive),
+          date: updatedAppointment.date,
+          slotId: updatedAppointment.slotId,
+          reason: reason || 'Patient requested reschedule'
+        }
+      });
+
+      if (previousConsultationType && updatedAppointment.consultationType && previousConsultationType !== updatedAppointment.consultationType) {
+        analyticsService.recordEvent({
+          eventType: analyticsService.EVENT_TYPES.CONSULTATION_MODE_SWITCHED,
+          userId: updatedAppointment.patientId,
+          clinicId: updatedAppointment.clinicId || DEFAULT_CLINIC_ID,
+          payload: {
+            appointmentId: updatedAppointment.id,
+            previousConsultationType: previousConsultationType,
+            consultationType: updatedAppointment.consultationType,
+            commuteReliefActive: Boolean(updatedAppointment.commuteReliefActive),
+            reason: reason || 'Mode switch upon reschedule'
+          }
+        });
+      }
+    } catch (anErr) {}
 
     // Reschedule automated reminder: cancel old reminder and schedule for replacement slot
     try {
@@ -2945,8 +2982,13 @@ async function getAppointmentAnalytics(db, options = {}) {
   if (totalDb > 0) {
     const totalCompleted = filteredDbAppointments.filter(a => a.status === APPOINTMENT_STATUSES.COMPLETED || a.status === 'completed').length;
     const totalCancelled = filteredDbAppointments.filter(a => a.status === APPOINTMENT_STATUSES.CANCELLED || a.status === 'cancelled').length;
-    const totalTelehealth = filteredDbAppointments.filter(a => a.isOnlineConsultation || a.isOnline || a.consultationType === 'video' || a.consultationType === 'telehealth').length;
-    const totalInClinic = totalDb - totalTelehealth;
+    const totalTelehealth = filteredDbAppointments.filter(a => a.isOnlineConsultation || a.isOnline || a.consultationType === 'video' || a.consultationType === 'telehealth' || a.consultationType === 'followup').length;
+    const totalVideo = filteredDbAppointments.filter(a => a.consultationType === 'video' || (a.isOnlineConsultation && a.consultationType !== 'followup')).length;
+    const totalFollowup = filteredDbAppointments.filter(a => a.consultationType === 'followup').length;
+    const totalInClinic = filteredDbAppointments.filter(a => a.consultationType === 'clinic' || (!a.isOnlineConsultation && !a.isOnline && a.consultationType !== 'video' && a.consultationType !== 'telehealth' && a.consultationType !== 'followup')).length;
+    const totalCommuteRelief = filteredDbAppointments.filter(a => Boolean(a.commuteReliefActive || a.consultationType === 'video' || a.consultationType === 'followup')).length;
+    const estimatedTrafficHoursSaved = Number((totalCommuteRelief * 1.5).toFixed(1));
+    const commuteReliefRate = totalDb > 0 ? Number(((totalCommuteRelief / totalDb) * 100).toFixed(1)) : null;
 
     let eveningCount = 0;
     let morningCount = 0;
@@ -2989,6 +3031,15 @@ async function getAppointmentAnalytics(db, options = {}) {
       cancellationRate: totalDb > 0 ? Number(((totalCancelled / totalDb) * 100).toFixed(1)) : null,
       telehealthRatio: totalDb > 0 ? Number(((totalTelehealth / totalDb) * 100).toFixed(1)) : null,
       inClinicRatio: totalDb > 0 ? Number(((totalInClinic / totalDb) * 100).toFixed(1)) : null,
+      commuteReliefCount: totalCommuteRelief,
+      commuteReliefRate,
+      estimatedTrafficHoursSaved,
+      consultationTypeBreakdown: {
+        video: totalVideo,
+        clinic: totalInClinic,
+        followup: totalFollowup,
+        commuteRelief: totalCommuteRelief
+      },
       eveningPreferenceRate: totalSlots > 0 ? Number(((eveningCount / totalSlots) * 100).toFixed(1)) : null,
       morningPreferenceRate: totalSlots > 0 ? Number(((morningCount / totalSlots) * 100).toFixed(1)) : null,
       familyDependentRate: totalDb > 0 ? Number(((dependentCount / totalDb) * 100).toFixed(1)) : null,
@@ -3015,7 +3066,10 @@ async function getAppointmentAnalytics(db, options = {}) {
       cancelled: filteredDbAppointments.filter(a => a.status === APPOINTMENT_STATUSES.CANCELLED).length,
       rescheduled: filteredDbAppointments.filter(a => a.status === APPOINTMENT_STATUSES.RESCHEDULED).length,
       telehealth: filteredDbAppointments.filter(a => a.isOnlineConsultation || a.consultationType === 'video').length,
-      inClinic: filteredDbAppointments.filter(a => !a.isOnlineConsultation && a.consultationType !== 'video').length
+      inClinic: filteredDbAppointments.filter(a => !a.isOnlineConsultation && a.consultationType !== 'video').length,
+      video: filteredDbAppointments.filter(a => a.consultationType === 'video').length,
+      followup: filteredDbAppointments.filter(a => a.consultationType === 'followup').length,
+      commuteRelief: filteredDbAppointments.filter(a => Boolean(a.commuteReliefActive || a.consultationType === 'video' || a.consultationType === 'followup')).length
     }
   };
 }
