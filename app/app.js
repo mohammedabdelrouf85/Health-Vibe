@@ -16202,7 +16202,7 @@ function updateThemeToggleButtons(theme = "dark") {
 }
 
 function applyTheme(theme = "dark") {
-  const isLight = (theme === "light");
+  const isLight = theme === "light";
   const targetTheme = isLight ? "light" : "dark";
 
   if (isLight) {
