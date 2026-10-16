@@ -8414,6 +8414,28 @@ app.post('/api/appointments/evaluate-triage', async (req, res) => {
 });
 
 /**
+ * POST /api/appointments/validate-safety
+ * Pre-booking clinical safety, remote care contraindication screening, and physician primacy validation.
+ */
+app.post('/api/appointments/validate-safety', async (req, res) => {
+  try {
+    const safety = appointmentSafetyService.validateConsultationSafety({
+      ...(req.body || {}),
+      actorUser: req.user || null
+    });
+    return res.json({ success: true, safety });
+  } catch (err) {
+    console.error('[SAFETY VALIDATION ERROR]:', err);
+    const statusCode = err.statusCode || 500;
+    return res.status(statusCode).json({
+      error: err.code || 'SAFETY_VALIDATION_FAILED',
+      message: err.message,
+      details: err.details || null
+    });
+  }
+});
+
+/**
  * POST /api/appointments/clinical-evaluation
  * Physician-exclusive clinical documentation, diagnosis, prescriptions, and ICD-10 coding.
  * Enforces verified physician primacy and blocks autonomous AI or patient circumvention.

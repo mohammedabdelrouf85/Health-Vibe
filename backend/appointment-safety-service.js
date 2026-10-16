@@ -29,6 +29,32 @@ const STATUTORY_MEDICAL_DISCLAIMER = {
   regulatoryBasis: 'Egyptian Ministry of Health Regulations, WHO ETAT Guidelines, BTS Respiratory Safety Standards, HIPAA / GDPR Health Privacy Compliance'
 };
 
+// ============================================================================
+// 🏥 CLINIDO CONSULTATION TYPES & SAFETY CONTRACTS
+// ============================================================================
+const CLINIDO_CONSULTATION_TYPES = {
+  VIDEO: 'video',
+  CLINIC: 'clinic',
+  FOLLOWUP: 'followup'
+};
+
+const VALID_CONSULTATION_TYPES = ['video', 'clinic', 'followup', 'telehealth'];
+
+function normalizeConsultationType(typeInput) {
+  if (!typeInput) return CLINIDO_CONSULTATION_TYPES.CLINIC;
+  const raw = String(typeInput).trim().toLowerCase();
+  if (raw === 'telehealth' || raw === 'video' || raw === 'online') {
+    return CLINIDO_CONSULTATION_TYPES.VIDEO;
+  }
+  if (raw === 'clinic' || raw === 'in_person' || raw === 'in-clinic' || raw === 'physical') {
+    return CLINIDO_CONSULTATION_TYPES.CLINIC;
+  }
+  if (raw === 'followup' || raw === 'follow_up' || raw === 'follow-up') {
+    return CLINIDO_CONSULTATION_TYPES.FOLLOWUP;
+  }
+  return null;
+}
+
 const EMERGENCY_CONTACTS = {
   egypt: '123',
   ksa: '997',
@@ -470,7 +496,9 @@ async function recordDoctorClinicalEvaluation(db, evaluationInput = {}, actorDoc
   return {
     success: true,
     appointmentId,
-    clinicalEvaluation: clinicalEvaluationRecord
+    clinicalEvaluation: clinicalEvaluationRecord,
+    humanPhysicianReviewStatus: 'EVALUATED_BY_PHYSICIAN',
+    evaluatingDoctorId: actorDoctor.uid
   };
 }
 
@@ -575,6 +603,121 @@ function validatePrevisitDossierSafety({ payload = {}, caseRecord = null, actorU
  * Anonymize calendar slot representations for patients and unauthenticated visitors.
  * Prevents any PII leakage across patients browsing the interactive calendar strip.
  */
+
+/**
+ * Comprehensive Safety & Privacy Evaluation for CliniDo Consultation Types.
+ * 
+ * Enforces:
+ * 1. Whitelist validation of consultation type (video, clinic, followup).
+ * 2. Emergency Triage for Remote Care:
+ *    - Remote video or followup care cannot substitute for emergency room / ambulance (123) care
+ *      when acute respiratory red flags are present (SpO2 < 90%, acute dyspnea, cyanosis, etc.).
+ *    - Halts booking with EMERGENCY_TRIAGE_ESCALATION_REQUIRED unless emergency disclaimer is explicitly acknowledged.
+ * 3. Physician Primacy & Anti-Autonomous AI Circumvention:
+ *    - Blocks non-physicians from authoring clinical diagnoses, prescriptions, treatment plans, or ICD-10 codes.
+ *    - Guarantees statutory medical disclaimers and human physician review status.
+ */
+function validateConsultationSafety({
+  consultationType,
+  symptoms,
+  vitals = {},
+  attachedAssessment = null,
+  actorUser = null,
+  emergencyDisclaimerAcknowledged = false,
+  payload = {}
+} = {}) {
+  // 1. Whitelist & Normalization
+  const rawType = consultationType || payload.consultationType || payload.type;
+  const normalizedType = rawType ? normalizeConsultationType(rawType) : CLINIDO_CONSULTATION_TYPES.CLINIC;
+  if (rawType && !normalizedType) {
+    const err = new Error('نوع الموعد غير صالح. يرجى الاختيار بين: استشارة فيديو عن بُعد، زيارة العيادة، أو متابعة تقارير التحاليل. (Invalid consultation type)');
+    err.code = 'INVALID_CONSULTATION_TYPE';
+    err.statusCode = 400;
+    throw err;
+  }
+
+  // 2. Physician Primacy & Role Boundaries (Non-physicians cannot inject diagnoses or prescriptions)
+  if (actorUser) {
+    enforcePhysicianRoleBoundaries(payload, actorUser);
+  }
+
+  // 3. Acute Emergency Screening for Remote & In-Clinic Modes
+  function parseSpo2(val) {
+    if (val == null) return null;
+    if (typeof val === 'number') return isNaN(val) ? null : val;
+    if (typeof val === 'string') {
+      const num = parseFloat(val.replace(/[^0-9.]/g, ''));
+      return isNaN(num) ? null : num;
+    }
+    return null;
+  }
+
+  const rawSpo2 = vitals?.spo2 != null
+    ? vitals.spo2
+    : (vitals?.oxygenLevel != null
+      ? vitals.oxygenLevel
+      : (vitals?.oxygenSaturation != null
+        ? vitals.oxygenSaturation
+        : (attachedAssessment?.oxygenLevel != null
+          ? attachedAssessment.oxygenLevel
+          : (attachedAssessment?.vitals?.oxygenSaturation != null
+            ? attachedAssessment.vitals.oxygenSaturation
+            : (payload.spo2 != null ? payload.spo2 : null)))));
+
+  const combinedSymptoms = [
+    symptoms,
+    payload.symptoms,
+    payload.chiefComplaint,
+    attachedAssessment?.symptoms,
+    attachedAssessment?.chiefComplaint
+  ].filter(Boolean).join(' ');
+
+  const triage = evaluateAppointmentEmergencyRisk({
+    symptoms: combinedSymptoms,
+    spo2: parseSpo2(rawSpo2),
+    vitals: { ...vitals, spo2: parseSpo2(rawSpo2) }
+  });
+
+  const isRemote = normalizedType === CLINIDO_CONSULTATION_TYPES.VIDEO || normalizedType === CLINIDO_CONSULTATION_TYPES.FOLLOWUP;
+  const isEmergency = triage.isEmergency;
+
+  // Remote care safety: If acute emergency exists, remote care is contraindicated without emergency acknowledgement
+  if (isEmergency && !emergencyDisclaimerAcknowledged && !triage.isDisclaimerAcknowledged) {
+    const remoteWarningAr = isRemote
+      ? 'تحذير طبي عاجل: الاستشارة عن بُعد أو المتابعة الافتراضية لا تناسب الحالات الحرجة أو ضيق التنفس الحاد. '
+      : 'تحذير طبي عاجل: ';
+    const remoteWarningEn = isRemote
+      ? 'Urgent Medical Notice: Remote video consultation is contraindicated for acute respiratory emergencies. '
+      : 'Urgent Medical Notice: ';
+
+    const err = new Error(
+      `${remoteWarningAr}${triage.emergencyActionAr} | ${remoteWarningEn}${triage.emergencyActionEn}`
+    );
+    err.code = 'EMERGENCY_TRIAGE_ESCALATION_REQUIRED';
+    err.statusCode = 422;
+    err.details = {
+      triage,
+      consultationType: normalizedType,
+      isRemote,
+      emergencyContactEgypt: EMERGENCY_CONTACTS.egypt,
+      disclaimer: STATUTORY_MEDICAL_DISCLAIMER
+    };
+    throw err;
+  }
+
+  return {
+    valid: true,
+    consultationType: normalizedType,
+    isRemote,
+    isEmergency,
+    triage,
+    physicianPrimacyGuaranteed: true,
+    clinicalEvaluationRequired: true,
+    humanPhysicianReviewStatus: 'PENDING_CLINICAL_EVALUATION',
+    statutoryDisclaimer: STATUTORY_MEDICAL_DISCLAIMER
+  };
+}
+
 function sanitizeCalendarSlotForPrivacy(slot = {}, actorUser = null, assignedDoctorId = null) {
   const isPrivileged = actorUser && (
     actorUser.role === 'super_admin' ||
@@ -583,11 +726,17 @@ function sanitizeCalendarSlotForPrivacy(slot = {}, actorUser = null, assignedDoc
     actorUser.role === 'clinic_admin'
   );
 
-  if (isPrivileged) {
+  const isOwnerPatient = actorUser && actorUser.uid && (
+    slot.patientId === actorUser.uid ||
+    slot.userId === actorUser.uid ||
+    slot.createdBy === actorUser.uid
+  );
+
+  if (isPrivileged || isOwnerPatient) {
     return { ...slot };
   }
 
-  // Patient or public viewer: strict data minimization
+  // Patient or public viewer viewing someone else's slot: strict data minimization
   const sanitized = {
     id: slot.id,
     startTime: slot.startTime,
@@ -625,6 +774,22 @@ function sanitizeCalendarSlotForPrivacy(slot = {}, actorUser = null, assignedDoc
   sanitized.detectedRedFlags = null;
   sanitized.oxygenLevel = null;
   sanitized.spo2 = null;
+
+  // CliniDo Consultation Type & Venue Privacy Isolation (Zero venue/commute/room leakage to other patients)
+  sanitized.consultationType = null;
+  sanitized.type = null;
+  sanitized.typeLabel = null;
+  sanitized.typeLabelEn = null;
+  sanitized.isOnlineConsultation = null;
+  sanitized.commuteReliefActive = null;
+  sanitized.commuteReliefNote = null;
+  sanitized.commuteReliefNoteEn = null;
+  sanitized.branchLocation = null;
+  sanitized.arrivalGuidance = null;
+  sanitized.followupScope = null;
+  sanitized.telehealthUrl = null;
+  sanitized.meetingLink = null;
+  sanitized.telehealthRoomId = null;
 
   return sanitized;
 }
@@ -715,6 +880,10 @@ module.exports = {
   recordDoctorClinicalEvaluation,
   sanitizeCalendarSlotForPrivacy,
   validateFamilyBeneficiaryAccess,
+  CLINIDO_CONSULTATION_TYPES,
+  VALID_CONSULTATION_TYPES,
+  normalizeConsultationType,
+  validateConsultationSafety,
   validatePrevisitDossierSafety,
   PROTECTED_CLINICIAN_FIELDS
 };
