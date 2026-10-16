@@ -14,10 +14,14 @@
     DOCTOR: "doctor",
     CLINIC_ADMIN: "clinic_admin",
     SUPPORT: "support",
+    OPS: "ops",
+    CLINICAL_QA: "clinical_qa",
     SUPER_ADMIN: "super_admin"
   };
 
-  const ADMIN_ROLES = [ROLES.CLINIC_ADMIN, ROLES.SUPER_ADMIN];
+  const ADMIN_ROLES = [ROLES.CLINIC_ADMIN, ROLES.SUPER_ADMIN, ROLES.OPS, ROLES.CLINICAL_QA, ROLES.SUPPORT];
+  const ADMIN_SUB_ROLES = [ROLES.SUPER_ADMIN, ROLES.OPS, ROLES.CLINICAL_QA, ROLES.SUPPORT];
+  const NON_CLINICAL_ADMIN_ROLES = [ROLES.OPS, ROLES.CLINICAL_QA, ROLES.SUPPORT];
   const VALID_ROLES = Object.values(ROLES);
 
   const PERMISSIONS = {
@@ -40,7 +44,10 @@
     MANAGE_AI_MODELS: "manage:ai_models",
     MANAGE_USER_ROLES: "manage:user_roles",
     MANAGE_USERS: "manage:users",
-    VIEW_SYSTEM_METRICS: "view:system_metrics"
+    VIEW_SYSTEM_METRICS: "view:system_metrics",
+    MANAGE_SYSTEM_SETTINGS: "manage:system_settings",
+    VIEW_CLINICAL_METRICS_AGGREGATE: "view:clinical_metrics_aggregate",
+    VIEW_SUPPORT_QUEUE: "view:support_queue"
   };
 
   const ROLE_PERMISSIONS_MAP = {
@@ -73,7 +80,23 @@
       PERMISSIONS.MANAGE_USERS,
       PERMISSIONS.VIEW_SYSTEM_METRICS
     ],
-    [ROLES.SUPPORT]: [PERMISSIONS.VIEW_SYSTEM_METRICS],
+    [ROLES.OPS]: [
+      PERMISSIONS.VIEW_ADMIN_DASHBOARD,
+      PERMISSIONS.VIEW_SYSTEM_METRICS,
+      PERMISSIONS.MANAGE_SYSTEM_SETTINGS,
+      PERMISSIONS.VIEW_AUDIT_LOG
+    ],
+    [ROLES.CLINICAL_QA]: [
+      PERMISSIONS.VIEW_ADMIN_DASHBOARD,
+      PERMISSIONS.VIEW_SYSTEM_METRICS,
+      PERMISSIONS.MANAGE_AI_MODELS,
+      PERMISSIONS.VIEW_CLINICAL_METRICS_AGGREGATE,
+      PERMISSIONS.VIEW_AUDIT_LOG
+    ],
+    [ROLES.SUPPORT]: [
+      PERMISSIONS.VIEW_SYSTEM_METRICS,
+      PERMISSIONS.VIEW_SUPPORT_QUEUE
+    ],
     [ROLES.SUPER_ADMIN]: [
       PERMISSIONS.VIEW_ADMIN_DASHBOARD,
       PERMISSIONS.VIEW_AUDIT_LOG,
@@ -83,6 +106,8 @@
       PERMISSIONS.MANAGE_USER_ROLES,
       PERMISSIONS.MANAGE_USERS,
       PERMISSIONS.VIEW_SYSTEM_METRICS,
+      PERMISSIONS.MANAGE_SYSTEM_SETTINGS,
+      PERMISSIONS.VIEW_CLINICAL_METRICS_AGGREGATE,
       PERMISSIONS.VIEW_PATIENT_DASHBOARD,
       PERMISSIONS.VIEW_OWN_CASES
     ]
@@ -91,29 +116,34 @@
   const ROLE_ALLOWED_SCREENS = {
     [ROLES.PATIENT]: [
       "patient", "consent", "profile", "assessment", "pending", "result",
-      "history", "appointments", "feedback", "assistant", "report", "verify-report",
+      "history", "appointments", "feedback", "assistant", "report", "verify-report", "verify",
       "diabetes", "hypertension", "blood-disorders", "obesity"
     ],
     [ROLES.DOCTOR_PENDING]: [
-      "patient", "verification", "history", "appointments", "feedback", "report", "profile", "verify-report",
+      "patient", "verification", "history", "appointments", "feedback", "report", "profile", "verify-report", "verify",
       "diabetes", "hypertension", "blood-disorders", "obesity"
     ],
     [ROLES.DOCTOR]: [
-      "doctor", "verification", "history", "appointments", "feedback", "report", "profile", "kpi", "patient", "verify-report",
+      "doctor", "verification", "history", "appointments", "feedback", "report", "profile", "kpi", "patient", "verify-report", "verify",
       "diabetes", "hypertension", "blood-disorders", "obesity"
     ],
     [ROLES.CLINIC_ADMIN]: [
-      "profile", "history", "appointments", "feedback", "doctor", "report", "admin", "audit", "kpi", "verify-report",
+      "profile", "history", "appointments", "feedback", "doctor", "report", "admin", "audit", "kpi", "verify-report", "verify",
       "diabetes", "hypertension", "blood-disorders", "obesity"
     ],
+    [ROLES.OPS]: [
+      "profile", "admin", "audit", "kpi", "verify-report", "verify"
+    ],
+    [ROLES.CLINICAL_QA]: [
+      "profile", "admin", "audit", "kpi", "verify-report", "verify"
+    ],
     [ROLES.SUPPORT]: [
-      "profile", "kpi", "verify-report",
-      "diabetes", "hypertension", "blood-disorders", "obesity"
+      "profile", "kpi", "verify-report", "verify"
     ],
     [ROLES.SUPER_ADMIN]: [
       "patient", "consent", "profile", "assessment", "pending", "result",
       "history", "appointments", "feedback", "assistant", "verification",
-      "doctor", "kpi", "report", "admin", "audit", "verify-report",
+      "doctor", "kpi", "report", "admin", "audit", "verify-report", "verify",
       "diabetes", "hypertension", "blood-disorders", "obesity"
     ]
   };
@@ -155,12 +185,26 @@
     return normalizeRole(role) === ROLES.SUPPORT;
   }
 
+  function isOpsRole(role) {
+    return normalizeRole(role) === ROLES.OPS;
+  }
+
+  function isClinicalQaRole(role) {
+    return normalizeRole(role) === ROLES.CLINICAL_QA;
+  }
+
+  function isNonClinicalAdminRole(role) {
+    const r = normalizeRole(role);
+    return NON_CLINICAL_ADMIN_ROLES.includes(r);
+  }
+
   function getRoleDefaultScreen(role) {
     const r = normalizeRole(role);
+    if (r === ROLES.SUPPORT) return "kpi";
+    if (r === ROLES.CLINICAL_QA) return "kpi";
     if (isAdminRole(r)) return "admin";
     if (r === ROLES.DOCTOR) return "doctor";
     if (r === ROLES.DOCTOR_PENDING) return "verification";
-    if (r === ROLES.SUPPORT) return "kpi";
     return "patient";
   }
 
@@ -183,6 +227,8 @@
   const Permissions = {
     ROLES,
     ADMIN_ROLES,
+    ADMIN_SUB_ROLES,
+    NON_CLINICAL_ADMIN_ROLES,
     VALID_ROLES,
     PERMISSIONS,
     ROLE_PERMISSIONS_MAP,
@@ -195,6 +241,9 @@
     isDoctorRole,
     isAnyDoctorRole,
     isSupportRole,
+    isOpsRole,
+    isClinicalQaRole,
+    isNonClinicalAdminRole,
     getRoleDefaultScreen,
     hasPermission,
     canAccessScreen

@@ -93,13 +93,20 @@ assert(clinicsHtmlContent.includes('function handleClinicLeadSubmit('), 'Form su
 console.log('  ✓ Lead capture form, validation inputs, and async submission logic verified.\n');
 
 // -----------------------------------------------------------------------------
-// TEST 6: Bilingual Arabic & English Support
+// TEST 6: Bilingual Arabic & English Support & LocalStorage Persistence
 // -----------------------------------------------------------------------------
-console.log('▶ TEST 6: Bilingual Arabic & English Support');
+console.log('▶ TEST 6: Bilingual Arabic & English Support & LocalStorage Persistence');
 assert(clinicsHtmlContent.includes('clinicTranslations'), 'Translation dictionary declared');
 assert(clinicsHtmlContent.includes('function toggleClinicLang()'), 'Language toggle handler defined');
+assert(clinicsHtmlContent.includes('function applyClinicLang('), 'applyClinicLang function defined');
+assert(clinicsHtmlContent.includes('function initClinicLanguage()'), 'initClinicLanguage function defined');
 assert(clinicsHtmlContent.includes('id="clinicLangToggle"'), 'Language switcher button exists');
-console.log('  ✓ In-place bilingual translation engine and RTL/LTR switching verified.\n');
+assert(clinicsHtmlContent.includes('localStorage.setItem("hv_lang", lang)'), 'Persists language choice to localStorage');
+assert(clinicsHtmlContent.includes('localStorage.getItem("hv_clinic_lang")'), 'Loads language choice from localStorage');
+assert(clinicsHtmlContent.includes('compEyebrow:'), 'Contains comparison section translations');
+assert(clinicsHtmlContent.includes('pillarsEyebrow:'), 'Contains pillars section translations');
+assert(clinicsHtmlContent.includes('faq1Q:'), 'Contains FAQ section translations');
+console.log('  ✓ In-place bilingual translation engine, localStorage persistence and RTL/LTR switching verified.\n');
 
 // -----------------------------------------------------------------------------
 // TEST 7: Cross-linking & Entry Points from app/index.html
@@ -175,8 +182,47 @@ server.listen(0, async () => {
     assert(clinicsHtmlContent.includes('function selectPilotPackage()'), 'Pilot package CTA handler function exists');
     console.log('  ✓ Pilot Package (1 Clinic, 3 Doctors, 30 Days) verified across UI, form, and backend API.\n');
 
+    // TEST 10: Explicit Fallbacks, Non-Floating Asterisks & 100% Symmetrical i18n
+    console.log('▶ TEST 10: Explicit Fallbacks, Non-Floating Asterisks & Symmetrical i18n');
+    // 10a. All labels have explicit for attributes
+    const labelMatches = [...clinicsHtmlContent.matchAll(/<label([^>]*)>/gi)];
+    assert(labelMatches.length >= 13, 'At least 13 form/calculator labels found in clinics.html');
+    labelMatches.forEach((m, idx) => {
+      assert(m[1].includes('for='), `Label ${idx + 1} must have an explicit for attribute: ${m[0]}`);
+    });
+
+    // 10b. Form required labels have req-star badges
+    assert(clinicsHtmlContent.includes('class="req-star"'), 'clinics.html defines req-star class for asterisks');
+    assert(clinicsHtmlContent.includes('id="labelClinicName"'), 'Clinic name label exists');
+    assert(clinicsHtmlContent.includes('id="labelContactName"'), 'Contact name label exists');
+    assert(clinicsHtmlContent.includes('id="labelEmail"'), 'Email label exists');
+    assert(clinicsHtmlContent.includes('id="labelPhone"'), 'Phone label exists');
+
+    // 10c. Explicit fallback text on dynamic elements
+    assert(!clinicsHtmlContent.includes('id="leadSuccessRef"></strong>'), 'leadSuccessRef must have fallback text');
+    assert(!clinicsHtmlContent.includes('id="summaryClinicName"></strong>'), 'summaryClinicName must have fallback text');
+    assert(!clinicsHtmlContent.includes('id="summaryContactName"></strong>'), 'summaryContactName must have fallback text');
+    assert(!clinicsHtmlContent.includes('id="summaryPhone"></span>'), 'summaryPhone must have fallback text');
+    assert(!clinicsHtmlContent.includes('id="summaryPackage"></strong>'), 'summaryPackage must have fallback text');
+
+    // 10d. Symmetrical i18n dictionary resolution
+    const scriptMatch = clinicsHtmlContent.match(/const clinicTranslations = (\{[\s\S]*?\n    \};)/);
+    assert(scriptMatch, 'clinicTranslations dictionary found in script');
+    const getTrans = new Function('return ' + scriptMatch[1]);
+    const transObj = getTrans();
+    const arKeys = Object.keys(transObj.ar);
+    const enKeys = Object.keys(transObj.en);
+    assert.strictEqual(arKeys.length, enKeys.length, 'AR and EN translation dictionaries have exact same key count');
+    arKeys.forEach(k => {
+      assert(enKeys.includes(k), `Translation key ${k} must exist in EN dictionary`);
+      assert(transObj.ar[k] && transObj.ar[k].trim() !== '', `AR key ${k} must not be empty`);
+      assert(transObj.en[k] && transObj.en[k].trim() !== '', `EN key ${k} must not be empty`);
+      assert(clinicsHtmlContent.includes(`id="${k}"`), `Translation key ${k} must map to a DOM element with id="${k}"`);
+    });
+    console.log(`  ✓ All ${arKeys.length} translation keys resolve symmetrically with 100% DOM mapping & non-empty fallbacks.\n`);
+
     console.log('==================================================================');
-    console.log('🎉 ALL 9 CLINIC SALES & PILOT PACKAGE TESTS PASSED WITH 100% SUCCESS!');
+    console.log('🎉 ALL 10 CLINIC SALES & I18N ENHANCEMENT TESTS PASSED WITH 100% SUCCESS!');
     console.log('==================================================================');
 
     server.close();

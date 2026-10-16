@@ -20,10 +20,13 @@ function parseArgs() {
   let env = 'staging';
   let dryRun = process.env.DRY_RUN === 'true';
   let force = false;
+  let only = null;
 
   for (const arg of args) {
     if (arg.startsWith('--env=')) {
       env = arg.split('=')[1].toLowerCase().trim();
+    } else if (arg.startsWith('--only=')) {
+      only = arg.split('=')[1].trim();
     } else if (arg === '--dry-run') {
       dryRun = true;
     } else if (arg === '--force') {
@@ -31,7 +34,7 @@ function parseArgs() {
     }
   }
 
-  return { env, dryRun, force };
+  return { env, dryRun, force, only };
 }
 
 function ensureDeploymentsDir(rootDir) {
@@ -75,7 +78,7 @@ function checkStagingGate(rootDir) {
   console.log('[Health Vibe Deploy Gate] Staging verification gate PASSED.');
 }
 
-function runDeploy({ env = 'staging', dryRun = false, force = false } = {}) {
+function runDeploy({ env = 'staging', dryRun = false, force = false, only = null } = {}) {
   const rootDir = path.resolve(__dirname, '..');
   const targetProject = ENV_PROJECT_MAP[env];
 
@@ -119,7 +122,8 @@ function runDeploy({ env = 'staging', dryRun = false, force = false } = {}) {
 
   // 4. Execute Firebase deployment
   console.log(`\n[3/4] Deploying to Firebase (${targetProject})...`);
-  const deployCmd = `npx firebase-tools deploy --project ${targetProject} --only hosting,functions,firestore,storage`;
+  const deployTargets = only || (process.env.FIREBASE_DEPLOY_ONLY || 'hosting,firestore:rules');
+  const deployCmd = `npx firebase-tools deploy --project ${targetProject} --only ${deployTargets}`;
 
   if (dryRun) {
     console.log(`[DRY-RUN] Simulated execution of: ${deployCmd}`);

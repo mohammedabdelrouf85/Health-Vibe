@@ -459,6 +459,13 @@ async function runE2ESuite() {
       await desktopPage.goto(`${serverUrl}/index.html`, { waitUntil: 'domcontentloaded' });
       await desktopPage.waitForSelector('#authScreen', { timeout: 8000 });
 
+      // Wait for auth initialization / loader dismissal to settle so initial LOGOUT DOM scrubber doesn't wipe inputs
+      await desktopPage.waitForFunction(() => {
+        const loader = document.getElementById('loader');
+        return !loader || loader.style.display === 'none' || !loader.classList.contains('active');
+      }, { timeout: 8000 }).catch(() => {});
+      await new Promise(r => setTimeout(r, 600));
+
       // Trigger Auth Modal open via global helper
       await desktopPage.evaluate(() => {
         window.showAuth();

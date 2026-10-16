@@ -108,6 +108,74 @@
   }
 
   /**
+   * Parses and validates systolic blood pressure (60 - 260 mmHg).
+   * Does not silently convert invalid text, rejects negative and empty inputs, supports Arabic numerals & decimals.
+   * Never invents a blood-pressure measurement.
+   * @param {*} value
+   * @returns {{ ok: boolean, value: number|null, unit: string, reason: string|null }}
+   */
+  function parseStrictSystolicInput(value) {
+    if (value === null || value === undefined) return { ok: false, value: null, unit: "mmHg", reason: "empty" };
+    if (typeof value === "boolean" || (typeof value === "object" && !value.isUnknown)) return { ok: false, value: null, unit: "mmHg", reason: "unsupported" };
+    const raw = String(value ?? "").trim();
+    if (!raw) return { ok: false, value: null, unit: "mmHg", reason: "empty" };
+    if (/^(unknown|غير معروف|غير معلوم|not-provided|none)$/i.test(raw)) return { ok: false, value: null, unit: "mmHg", reason: "unknown" };
+    const normalized = normalizeArabicIndicDigits(raw).replace(/\s*mmHg$/i, "").replace(/[\u066B,]/g, ".").trim();
+    if (normalized.startsWith("-")) return { ok: false, value: null, unit: "mmHg", reason: "negative" };
+    if (!/^\d+(?:\.\d+)?$/.test(normalized)) return { ok: false, value: null, unit: "mmHg", reason: "format" };
+    const parsed = Number(normalized);
+    if (!Number.isFinite(parsed) || isNaN(parsed)) return { ok: false, value: null, unit: "mmHg", reason: "format" };
+    const rounded = Math.round(parsed * 10) / 10;
+    if (rounded < 60 || rounded > 260) {
+      return { ok: false, value: rounded, unit: "mmHg", reason: rounded > 260 ? "above-range" : "below-range" };
+    }
+    return { ok: true, value: rounded, unit: "mmHg", reason: null };
+  }
+
+  /**
+   * Parses and validates diastolic blood pressure (40 - 160 mmHg).
+   * @param {*} value
+   * @returns {{ ok: boolean, value: number|null, unit: string, reason: string|null }}
+   */
+  function parseStrictDiastolicInput(value) {
+    if (value === null || value === undefined) return { ok: false, value: null, unit: "mmHg", reason: "empty" };
+    if (typeof value === "boolean" || (typeof value === "object" && !value.isUnknown)) return { ok: false, value: null, unit: "mmHg", reason: "unsupported" };
+    const raw = String(value ?? "").trim();
+    if (!raw) return { ok: false, value: null, unit: "mmHg", reason: "empty" };
+    if (/^(unknown|غير معروف|غير معلوم|not-provided|none)$/i.test(raw)) return { ok: false, value: null, unit: "mmHg", reason: "unknown" };
+    const normalized = normalizeArabicIndicDigits(raw).replace(/\s*mmHg$/i, "").replace(/[\u066B,]/g, ".").trim();
+    if (normalized.startsWith("-")) return { ok: false, value: null, unit: "mmHg", reason: "negative" };
+    if (!/^\d+(?:\.\d+)?$/.test(normalized)) return { ok: false, value: null, unit: "mmHg", reason: "format" };
+    const parsed = Number(normalized);
+    if (!Number.isFinite(parsed) || isNaN(parsed)) return { ok: false, value: null, unit: "mmHg", reason: "format" };
+    const rounded = Math.round(parsed * 10) / 10;
+    if (rounded < 40 || rounded > 160) {
+      return { ok: false, value: rounded, unit: "mmHg", reason: rounded > 160 ? "above-range" : "below-range" };
+    }
+    return { ok: true, value: rounded, unit: "mmHg", reason: null };
+  }
+
+  /**
+   * Validates structured blood-pressure measurement (systolic > diastolic).
+   * @param {{ systolic: *, diastolic: *, unit: string }} param0
+   * @returns {{ ok: boolean, systolic: number|null, diastolic: number|null, unit: string, reason: string|null }}
+   */
+  function parseStrictBloodPressureReading({ systolic, diastolic, unit = "mmHg" } = {}) {
+    const sRes = parseStrictSystolicInput(systolic);
+    if (!sRes.ok) return { ok: false, systolic: sRes.value, diastolic: null, unit: "mmHg", reason: `systolic-${sRes.reason}` };
+    const dRes = parseStrictDiastolicInput(diastolic);
+    if (!dRes.ok) return { ok: false, systolic: sRes.value, diastolic: dRes.value, unit: "mmHg", reason: `diastolic-${dRes.reason}` };
+    if (sRes.value <= dRes.value) {
+      return { ok: false, systolic: sRes.value, diastolic: dRes.value, unit: "mmHg", reason: "systolic-must-exceed-diastolic" };
+    }
+    const cleanUnit = String(unit || "mmHg").trim();
+    if (cleanUnit && !["mmhg", "mm hg"].includes(cleanUnit.toLowerCase())) {
+      return { ok: false, systolic: sRes.value, diastolic: dRes.value, unit: cleanUnit, reason: "invalid-unit" };
+    }
+    return { ok: true, systolic: sRes.value, diastolic: dRes.value, unit: "mmHg", reason: null };
+  }
+
+  /**
    * Normalizes yes/no/unknown clinical values across bilingual inputs.
    * @param {string} value
    * @returns {"yes"|"no"|"unknown"|""}
@@ -165,12 +233,53 @@
   }
 
   /**
-   * Validates password strength (min 8 characters, letters & digits).
+   * Evaluates password strength according to strict clinical rules:
+   * 1. At least 8 characters
+   * 2. At least one uppercase letter (A-Z)
+   * 3. At least one number (0-9)
+   * 4. At least one special symbol
    * @param {string} password
-   * @returns {{ isValid: boolean, message: string }}
+   * @returns {{ isValid: boolean, rules: { minLength: boolean, hasUpper: boolean, hasNumber: boolean, hasSymbol: boolean }, message: string }}
    */
-  function validatePassword(password) {
+  function validatePasswordStrength(password) {
     const str = String(password || "");
+    const minLength = str.length >= 8;
+    const hasUpper = /[A-Z]/.test(str);
+    const hasNumber = /[0-9]/.test(str);
+    const hasSymbol = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~`]/.test(str);
+    const isValid = minLength && hasUpper && hasNumber && hasSymbol;
+    let message = "";
+    if (!isValid) {
+      const missing = [];
+      if (!minLength) missing.push("at least 8 characters");
+      if (!hasUpper) missing.push("uppercase letter (A-Z)");
+      if (!hasNumber) missing.push("number (0-9)");
+      if (!hasSymbol) missing.push("special symbol (!@#$)");
+      message = "Password must include: " + missing.join(", ");
+    }
+    return {
+      isValid,
+      rules: {
+        minLength,
+        hasUpper,
+        hasNumber,
+        hasSymbol
+      },
+      message
+    };
+  }
+
+  /**
+   * Validates password strength (min 8 characters, letters & digits, optional strict).
+   * @param {string} password
+   * @param {{ strict?: boolean }} [options]
+   * @returns {{ isValid: boolean, message: string, rules?: object }}
+   */
+  function validatePassword(password, options = {}) {
+    const str = String(password || "");
+    if (options && options.strict) {
+      return validatePasswordStrength(str);
+    }
     if (str.length < 8) {
       return { isValid: false, message: "Password must be at least 8 characters long." };
     }
@@ -211,12 +320,16 @@
     parseStrictSymptomDurationInput,
     parseOptionalTemperatureInput,
     parseOptionalRespiratoryRateInput,
+    parseStrictSystolicInput,
+    parseStrictDiastolicInput,
+    parseStrictBloodPressureReading,
     normalizeYesNoUnknown,
     normalizeSymptomProgression,
     validateEmail,
     validatePhone,
     validateNationalId,
     validatePassword,
+    validatePasswordStrength,
     escapeHtml,
     textToHtml
   };

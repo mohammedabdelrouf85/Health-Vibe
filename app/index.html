@@ -1,9 +1,9 @@
 <!doctype html>
 <html lang="en" dir="ltr">
 <head>
-  <meta charset="utf-8">
+  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com https://www.google.com https://www.recaptcha.net; script-src-attr 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://www.gstatic.com https://*.googleusercontent.com https://firebasestorage.googleapis.com https://*.firebasestorage.app; media-src 'self' data: blob:; connect-src 'self' http://localhost:4000 http://127.0.0.1:4000 https://healthvibe.ai https://*.healthvibe.ai https://staging.healthvibe.ai https://*.cloudfunctions.net https://*.firebaseio.com https://*.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://firebasestorage.googleapis.com https://*.firebasestorage.app https://firebaseinstallations.googleapis.com https://firebaseappcheck.googleapis.com https://www.google.com https://www.recaptcha.net; frame-src 'self' https://health-vibes-a4b3b.firebaseapp.com https://health-vibes-staging.firebaseapp.com https://*.firebaseapp.com https://www.google.com https://recaptcha.google.com https://www.recaptcha.net; object-src 'none'; base-uri 'self'; form-action 'self';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com https://www.google.com https://www.recaptcha.net; script-src-attr 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://www.gstatic.com https://*.googleusercontent.com https://firebasestorage.googleapis.com https://*.firebasestorage.app; media-src 'self' data: blob:; connect-src 'self' http://localhost:4000 http://127.0.0.1:4000 https://healthvibes.app https://*.healthvibes.app https://healthvibe.ai https://*.healthvibe.ai https://staging.healthvibe.ai https://*.cloudfunctions.net https://*.firebaseio.com https://*.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://firebasestorage.googleapis.com https://*.firebasestorage.app https://firebaseinstallations.googleapis.com https://firebaseappcheck.googleapis.com https://www.google.com https://www.recaptcha.net; frame-src 'self' https://healthvibes.app https://*.healthvibes.app https://health-vibes-a4b3b.firebaseapp.com https://health-vibes-staging.firebaseapp.com https://*.firebaseapp.com https://www.google.com https://recaptcha.google.com https://www.recaptcha.net; object-src 'none'; base-uri 'self'; form-action 'self';">
   <title>Health Vibe AI | Smart Respiratory Clinical Triage & Patient Health Hub</title>
   <meta name="description" content="منظومة Health Vibe AI الذكية لتقييم الأعراض التنفسية: فرز سريري استباقي مدعوم بالذكاء الاصطناعي وبإشراف طبي كامل. متابعة صحية آمنة لحالات السعال والربو وضيق التنفس.">
   <link rel="canonical" href="https://healthvibe.ai/app/">
@@ -53,6 +53,9 @@
   </script>
   <link rel="icon" type="image/webp" href="./logo-light-mark.webp">
   <link rel="alternate icon" type="image/png" href="./logo-light.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet">
   <link rel="preload" href="./styles.css?v=5.0" as="style">
   <link rel="stylesheet" href="./styles.css?v=5.0">
   <!-- Modular Feature Stylesheets -->
@@ -89,7 +92,7 @@
   <div id="loader" class="loader" aria-live="polite">
     <div class="loader-card">
       <div class="loader-media" aria-hidden="true">
-        <img src="./logo-dark.webp" alt="Health Vibe AI" class="loader-logo" data-logo fetchpriority="high" decoding="async" />
+        <img src="./logo-dark.webp" alt="Health Vibe AI" class="loader-logo" data-logo fetchpriority="high" decoding="async" width="180" height="180" style="aspect-ratio: 1 / 1;" />
         <div class="loader-fallback-animation">
           <span></span>
           <span></span>
@@ -106,41 +109,98 @@
   <div id="srStatus" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
 
   <main id="publicSite" class="site-shell is-hidden">
-    <header class="site-nav">
-      <div class="brand">
-        <img src="./logo-dark-mark.webp" alt="Health Vibe AI logo" class="brand-logo" data-logo-mark decoding="async" />
-        <div>
-          <strong>Health Vibe AI</strong>
-          <span>AI-supported healthcare reviewed by doctors</span>
+    <header class="site-nav" id="siteNav">
+      <div class="site-nav-bar">
+        <div class="brand">
+          <img src="./logo-dark-mark.webp" alt="Health Vibe AI logo" class="brand-logo" data-logo-mark decoding="async" width="58" height="42" style="aspect-ratio: 58 / 42;" />
+          <div>
+            <strong>Health Vibe AI</strong>
+            <span class="brand-subtitle">AI-supported healthcare reviewed by doctors</span>
+          </div>
         </div>
-      </div>
-      <nav class="site-links" aria-label="Site navigation">
-        <a href="#workflow">Workflow</a>
-        <a href="#roles">Accounts</a>
-        <a href="#safety">Safety</a>
-        <a href="./clinics.html" style="color: var(--teal); font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">🏥 For Clinics / للعيادات</a>
-        <a href="./pitch.html" target="_blank" rel="noopener" style="color: #38bdf8; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">📽️ Pitch Deck</a>
-      </nav>
-      <div class="nav-actions">
-        <button id="siteThemeToggle" class="icon-button" type="button" aria-label="تبديل المظهر / Toggle theme">☀️</button>
-        <button id="siteBackToAppBtn" type="button" class="solid-button" onclick="showAppView(event)" style="display:none; align-items:center; gap:6px; background:linear-gradient(135deg, var(--teal), #00796b); font-weight:700;">
-          <span>📱</span>
-          <span>لوحة التحكم (App)</span>
+        <nav class="site-links" aria-label="Site navigation">
+          <a href="#workflow" data-i18n="nav.workflow">Workflow</a>
+          <a href="#roles" data-i18n="nav.accounts">Accounts</a>
+          <a href="#safety" data-i18n="nav.safety">Safety</a>
+          <a href="./clinics.html" style="color: var(--teal); font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
+            <span>🏥</span>
+            <span id="siteHeaderClinicsLink" data-i18n="nav.forClinics">For Clinics</span>
+          </a>
+          <a href="./pitch.html" target="_blank" rel="noopener" class="pitch-link">📽️ Pitch Deck</a>
+        </nav>
+        <div class="nav-actions">
+          <button id="siteThemeToggle" type="button" class="theme-toggle" aria-label="تبديل المظهر / Toggle theme" title="Toggle theme"><span class="theme-icon">🌙</span></button>
+          <button id="siteBackToAppBtn" type="button" class="solid-button" onclick="showAppView(event)" style="display:none; align-items:center; gap:6px; background:linear-gradient(135deg, var(--teal), #00796b); font-weight:700;">
+            <span>📱</span>
+            <span>لوحة التحكم (App)</span>
+          </button>
+          <button id="siteLanguageToggle" type="button" class="lang-toggle" onclick="if(typeof toggleAppLanguage==='function'){toggleAppLanguage();}else{applyLanguage(currentLanguage==='ar'?'en':'ar');}" aria-label="Switch language" title="Switch language">
+            <span class="lang-globe">🌐</span>
+            <span class="lang-label">العربية</span>
+          </button>
+          <button type="button" class="outline-button" data-auth-open onclick="if(typeof setAuthMode==='function') setAuthMode('signin'); showAuth();">Sign in</button>
+          <button type="button" class="solid-button" data-auth-open onclick="if(typeof setAuthMode==='function') setAuthMode('signup'); showAuth();">Get started</button>
+        </div>
+
+        <!-- Mobile Hamburger Button (< 768px, < 375px) -->
+        <button type="button" class="site-hamburger-btn" id="siteNavHamburger" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="siteNavDrawer" onclick="toggleSiteNavMenu()">
+          <span class="hamburger-bar"></span>
+          <span class="hamburger-bar"></span>
+          <span class="hamburger-bar"></span>
         </button>
-        <button type="button" class="outline-button" data-auth-open onclick="if(typeof setAuthMode==='function') setAuthMode('signin'); showAuth();">Sign in</button>
-        <button type="button" class="solid-button" data-auth-open onclick="if(typeof setAuthMode==='function') setAuthMode('signup'); showAuth();">Get started</button>
+      </div>
+
+      <!-- Responsive Mobile Navigation Drawer -->
+      <div class="site-nav-drawer" id="siteNavDrawer" aria-hidden="true">
+        <nav class="drawer-links" aria-label="Mobile Navigation Links">
+          <a href="#workflow" onclick="closeSiteNavMenu()">
+            <span class="drawer-icon">🧭</span>
+            <span data-i18n="nav.workflow">Workflow</span>
+          </a>
+          <a href="#roles" onclick="closeSiteNavMenu()">
+            <span class="drawer-icon">👥</span>
+            <span data-i18n="nav.accounts">Accounts</span>
+          </a>
+          <a href="#safety" onclick="closeSiteNavMenu()">
+            <span class="drawer-icon">🛡️</span>
+            <span data-i18n="nav.safety">Safety</span>
+          </a>
+          <a href="./clinics.html" onclick="closeSiteNavMenu()" style="color: var(--teal); font-weight: 700;">
+            <span class="drawer-icon">🏥</span>
+            <span id="siteDrawerClinicsLink" data-i18n="nav.forClinics">For Clinics</span>
+          </a>
+          <a href="./pitch.html" target="_blank" rel="noopener" onclick="closeSiteNavMenu()" style="color: #38bdf8; font-weight: 700;">
+            <span class="drawer-icon">📽️</span>
+            <span>Pitch Deck</span>
+          </a>
+        </nav>
+
+        <div class="drawer-divider"></div>
+
+        <div class="drawer-actions">
+          <button id="siteDrawerLanguageToggle" type="button" class="lang-toggle drawer-lang-btn" onclick="if(typeof toggleAppLanguage==='function'){toggleAppLanguage();}else{applyLanguage(currentLanguage==='ar'?'en':'ar');}" aria-label="Switch language" title="Switch language">
+            <span class="lang-globe">🌐</span>
+            <span class="lang-label">العربية</span>
+          </button>
+          <button id="siteDrawerBackToAppBtn" type="button" class="solid-button drawer-app-btn" onclick="closeSiteNavMenu(); showAppView(event);" style="display:none;">
+            <span>📱</span>
+            <span>لوحة التحكم (App)</span>
+          </button>
+          <button type="button" class="outline-button drawer-action-btn" data-auth-open onclick="closeSiteNavMenu(); if(typeof setAuthMode==='function') setAuthMode('signin'); showAuth();">Sign in</button>
+          <button type="button" class="solid-button drawer-action-btn" data-auth-open onclick="closeSiteNavMenu(); if(typeof setAuthMode==='function') setAuthMode('signup'); showAuth();">Get started</button>
+        </div>
       </div>
     </header>
 
     <section class="site-hero">
       <div class="hero-copy">
-        <img src="./logo-dark.webp" alt="Health Vibe AI" class="hero-brand-logo" data-logo fetchpriority="high" decoding="async" />
+        <img src="./logo-dark.webp" alt="Health Vibe AI" class="hero-brand-logo" data-logo fetchpriority="high" decoding="async" width="132" height="132" style="aspect-ratio: 1 / 1;" />
         <span class="eyebrow">First Respiratory Assessment Unit</span>
         <h1>Digital healthcare connecting patients with doctors before any final result</h1>
         <p>Health Vibe AI unites clinical evaluation, physician review, verified reports, scheduling, and medical records into one seamless platform built for individuals and clinics.</p>
         <div class="hero-actions">
-          <button type="button" class="solid-button large" data-auth-open onclick="if(typeof setAuthMode==='function') setAuthMode('signin'); showAuth();">Get Started</button>
-          <button type="button" class="soft-button large" data-preview-app onclick="if(typeof setAuthMode==='function') setAuthMode('signin'); showAuth();">Preview Experience</button>
+          <button type="button" class="solid-button large" data-auth-open onclick="if(typeof setAuthMode==='function') setAuthMode('signup'); showAuth();">Get Started</button>
+          <button type="button" class="soft-button large" data-preview-app onclick="if(typeof enterDemoMode==='function') enterDemoMode(); else showAppView();">Preview Experience</button>
         </div>
         <div class="trust-row">
           <span>AI does not make independent diagnoses</span>
@@ -149,13 +209,16 @@
         </div>
       </div>
 
-      <div class="hero-product-card" aria-label="Product Preview (Demo Data)">
+      <div class="hero-product-card" id="heroRespiratoryCard" role="button" tabindex="0" aria-haspopup="dialog" aria-label="Respiratory Assessment (SpO2 = 95%) - Click to open interactive doctor review walkthrough" onclick="openDoctorReviewTour()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault(); openDoctorReviewTour();}">
         <div class="phone-frame" style="position: relative;">
           <span class="pill demo-preview-badge" style="position: absolute; top: 12px; left: 16px; z-index: 10; font-size: 10px; background: rgba(245, 158, 11, 0.2); color: #d97706; border: 1px solid rgba(245, 158, 11, 0.4); padding: 2px 8px; border-radius: 99px; font-weight: bold;">🧪 Demo Data / معاينة تجريبية</span>
           <div class="phone-screen" style="padding-top: 36px;">
             <div class="mini-top">
               <span>New patient account</span>
-              <b>In Review</b>
+              <b style="display: inline-flex; align-items: center; gap: 4px;">
+                <span class="status-dot-pulse" style="width: 7px; height: 7px; border-radius: 50%; background: #f59e0b; display: inline-block;"></span>
+                <span>In Review</span>
+              </b>
             </div>
             <div class="breath-orb"><span></span></div>
             <h3>Respiratory Assessment</h3>
@@ -165,23 +228,28 @@
               <div><span>Doctor Review</span><strong>Pending</strong></div>
               <div><span>Report</span><strong>Locked until approval</strong></div>
             </div>
+            <!-- Clickable Interactive Prompt -->
+            <div class="hero-tour-prompt">
+              <span style="font-size: 15px;">🩺</span>
+              <span style="font-size: 11.5px; font-weight: 800; color: var(--teal-2);" data-i18n="hero.tourPrompt">كيف يراجع الطبيب هذه الحالة؟ (اضغط للجولة)</span>
+            </div>
           </div>
         </div>
-        <div class="floating-card card-a"><b>Rule</b><span>Non-validated rule indicator</span></div>
-        <div class="floating-card card-b"><b>Verified</b><span>Physician Approval</span></div>
+        <div class="floating-card card-a" onclick="event.stopPropagation(); openDoctorReviewTour();" style="cursor: pointer;" title="Non-validated rule indicator"><b>Rule</b><span>Non-validated rule indicator</span></div>
+        <div class="floating-card card-b" onclick="event.stopPropagation(); openDoctorReviewTour();" style="cursor: pointer;" title="Physician Approval"><b>Verified</b><span>Physician Approval</span></div>
       </div>
     </section>
 
     <section id="workflow" class="site-section">
       <div class="section-head">
-        <span class="eyebrow">Workflow</span>
-        <h2>A Clear Pathway From Data to Certified Report</h2>
+        <span class="eyebrow" data-i18n="workflow.eyebrow">Workflow</span>
+        <h2 data-i18n="workflow.title">A Clear Pathway From Data to Certified Report</h2>
       </div>
       <div class="workflow-grid">
-        <article><b>1</b><h3>Patient Data</h3><p>Symptoms, vitals, medical history, and transparent privacy consent.</p></article>
-        <article><b>2</b><h3>AI Analysis</h3><p>Rule-based triage classification with unvalidated clinical indicators flagged.</p></article>
-        <article><b>3</b><h3>Doctor Review</h3><p>Licensed physician approves, rejects, or requests supplementary follow-up.</p></article>
-        <article><b>4</b><h3>Certified Report</h3><p>Validated results, medical recommendations, and safety alerts recorded securely.</p></article>
+        <article><b>1</b><h3 data-i18n="workflow.step1Title">Patient Data</h3><p data-i18n="workflow.step1Desc">Symptoms, vitals, medical history, and transparent privacy consent.</p></article>
+        <article><b>2</b><h3 data-i18n="workflow.step2Title">AI Analysis</h3><p data-i18n="workflow.step2Desc">Validated Machine Learning Model + Clinical Rules for objective risk classification and triage prioritization (PRD 7.1).</p></article>
+        <article><b>3</b><h3 data-i18n="workflow.step3Title">Doctor Review</h3><p data-i18n="workflow.step3Desc">Licensed physician approves, rejects, or requests supplementary follow-up.</p></article>
+        <article><b>4</b><h3 data-i18n="workflow.step4Title">Certified Report</h3><p data-i18n="workflow.step4Desc">Validated results, medical recommendations, and safety alerts recorded securely.</p></article>
       </div>
     </section>
 
@@ -209,7 +277,10 @@
 
     <!-- Clinic B2B Showcase Section -->
     <section id="clinicsTeaser" class="site-section" style="background: radial-gradient(circle at center, rgba(9, 184, 182, 0.12) 0%, transparent 70%), #0c2326; border: 1px solid var(--clinic-line, rgba(9, 184, 182, 0.25)); border-radius: 24px; padding: 42px 32px; margin: 40px auto; max-width: 1100px; text-align: center;">
-      <span class="pill" style="background: rgba(9, 184, 182, 0.2); color: #2dd4bf; border: 1px solid rgba(9, 184, 182, 0.4); padding: 4px 14px; border-radius: 99px; font-size: 12px; font-weight: 700;">🏥 للأطباء والمراكز الطبية / For Clinics</span>
+      <span class="pill" style="background: rgba(9, 184, 182, 0.2); color: #2dd4bf; border: 1px solid rgba(9, 184, 182, 0.4); padding: 4px 14px; border-radius: 99px; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px;">
+        <span>🏥</span>
+        <span data-i18n="nav.forClinicsFull">For Doctors & Medical Clinics</span>
+      </span>
       <h2 style="font-size: 28px; font-weight: 800; color: #ffffff; margin: 16px 0 10px;">هل تدير عيادة أو مركزاً متخصصاً للأمراض الصدرية؟</h2>
       <p style="font-size: 15px; color: #92b1af; max-width: 680px; margin: 0 auto 24px; line-height: 1.6;">
         اكتشف منظومة Health Vibe AI المتكاملة للعيادات والمراكز: فرز سريري استباقي للمرضى، تقارير طبية معتمدة برمز QR، بوت واتساب للمواعيد، ومضاعفة القدرة الاستيعابية.
@@ -244,12 +315,18 @@
   <section id="authScreen" class="auth-screen" role="dialog" aria-modal="true" aria-labelledby="authDialogTitle" aria-describedby="authDialogDescription" aria-hidden="true" aria-label="Sign in">
     <div class="auth-card">
       <button id="authClose" class="close-button" aria-label="Close" onclick="hideAuth()">×</button>
-      <div class="brand auth-brand">
-        <img src="./logo-dark-mark.webp" alt="Health Vibe AI" class="brand-logo" data-logo-mark loading="lazy" decoding="async" />
-        <div>
-          <strong>Health Vibe AI</strong>
-          <span>Secure account login</span>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <div class="brand auth-brand" style="margin-bottom:0;">
+          <img src="./logo-dark-mark.webp" alt="Health Vibe AI logo" class="brand-logo" data-logo-mark loading="lazy" decoding="async" width="58" height="42" style="aspect-ratio: 58 / 42;" />
+          <div>
+            <strong>Health Vibe AI</strong>
+            <span>Secure account login</span>
+          </div>
         </div>
+        <button id="authLanguageToggle" type="button" class="lang-toggle" onclick="if(typeof toggleAppLanguage==='function'){toggleAppLanguage();}else{applyLanguage(currentLanguage==='ar'?'en':'ar');}" aria-label="Switch language" title="Switch language" style="margin-inline-start:auto; margin-inline-end:36px;">
+          <span class="lang-globe">🌐</span>
+          <span class="lang-label">العربية</span>
+        </button>
       </div>
       <div id="authErrorBanner" class="auth-error-banner" role="alert"></div>
 
@@ -286,6 +363,18 @@
             <input type="text" id="authName" placeholder="e.g. Full Name" data-i18n-placeholder="auth.fullNamePlaceholder" autocomplete="name" />
           </div>
 
+          <div id="authRoleGroup" class="form-group" style="display:none;">
+            <label for="authRole" data-i18n="auth.accountType">Account Type</label>
+            <select id="authRole" style="width: 100%; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 14px; outline: none; cursor: pointer;">
+              <option value="patient" selected data-i18n="auth.rolePatient">👤 Patient (مريض)</option>
+              <option value="doctor_pending" data-i18n="auth.roleDoctor">🩺 Doctor (طبيب ممارس)</option>
+              <option value="clinic_admin" data-i18n="auth.roleClinic">🏥 Clinic / Medical Center (عيادة / مركز طبي)</option>
+            </select>
+            <div id="authRoleHint" style="font-size: 11.5px; color: var(--muted); margin-top: 5px; line-height: 1.4;">
+              <span data-i18n="auth.roleHintPatient">Access medical evaluations, verified reports, and appointments.</span>
+            </div>
+          </div>
+
           <div class="form-group">
             <label for="authEmail" data-i18n="auth.email">Email Address</label>
             <input type="email" id="authEmail" placeholder="name@example.com" data-i18n-placeholder="auth.emailPlaceholder" required autocomplete="email" />
@@ -294,6 +383,29 @@
           <div class="form-group">
             <label for="authPassword" data-i18n="auth.password">Password</label>
             <input type="password" id="authPassword" placeholder="••••••••" data-i18n-placeholder="auth.passwordPlaceholder" required autocomplete="current-password" minlength="6" />
+            <div id="authPasswordRules" style="display: none; margin-top: 8px; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; font-size: 11.5px; line-height: 1.5;">
+              <div id="pwdRulesTitle" style="font-weight: 600; color: var(--muted); margin-bottom: 6px; display: flex; align-items: center; gap: 5px;">
+                <span>🔐</span> <span data-i18n="auth.passwordRulesTitle">Requirements for account creation:</span>
+              </div>
+              <ul style="list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 4px 10px;">
+                <li id="ruleLength" class="pwd-rule-item" style="color: var(--muted); display: flex; align-items: center; gap: 6px; transition: all 0.2s;">
+                  <span class="rule-icon" style="font-size: 11px; font-weight: bold;">○</span>
+                  <span data-i18n="auth.ruleLength">8+ characters</span>
+                </li>
+                <li id="ruleUpper" class="pwd-rule-item" style="color: var(--muted); display: flex; align-items: center; gap: 6px; transition: all 0.2s;">
+                  <span class="rule-icon" style="font-size: 11px; font-weight: bold;">○</span>
+                  <span data-i18n="auth.ruleUpper">Uppercase (A-Z)</span>
+                </li>
+                <li id="ruleNumber" class="pwd-rule-item" style="color: var(--muted); display: flex; align-items: center; gap: 6px; transition: all 0.2s;">
+                  <span class="rule-icon" style="font-size: 11px; font-weight: bold;">○</span>
+                  <span data-i18n="auth.ruleNumber">Number (0-9)</span>
+                </li>
+                <li id="ruleSymbol" class="pwd-rule-item" style="color: var(--muted); display: flex; align-items: center; gap: 6px; transition: all 0.2s;">
+                  <span class="rule-icon" style="font-size: 11px; font-weight: bold;">○</span>
+                  <span data-i18n="auth.ruleSymbol">Special symbol (!@#$)</span>
+                </li>
+              </ul>
+            </div>
           </div>
 
           <div class="auth-options" style="flex-direction: column; align-items: stretch; gap: 8px;">
@@ -308,6 +420,18 @@
               <span style="font-size: 12px; line-height: 1;">🛡️</span>
               <span data-i18n="auth.rememberMeTip">تنبيه أمني: ألغِ التحديد إذا كنت تستخدم حاسوباً مشتركاً في العيادة أو المستشفى.</span>
             </div>
+          </div>
+
+          <!-- PRD Section 10: Explicit Medical Consent Checkbox -->
+          <div id="authConsentGroup" class="form-group" style="display:none; margin: 12px 0 14px; padding: 12px 14px; background: rgba(9, 184, 182, 0.06); border: 1px solid rgba(9, 184, 182, 0.25); border-radius: 12px;">
+            <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; user-select: none;">
+              <input type="checkbox" id="authMedicalConsentChk" style="accent-color: var(--teal); width: 18px; height: 18px; margin-top: 2px; cursor: pointer;" />
+              <span style="font-size: 12px; line-height: 1.55; color: var(--ink);">
+                <span data-i18n="auth.medicalConsentText">أوافق صراحة على معالجة بياناتي الطبية السريرية وقياسات الأكسجين والأعراض، ومراجعتها من قبل الطبيب البشري المختص وفقاً لـ</span>
+                <button type="button" style="background:none;border:none;color:var(--teal);text-decoration:underline;cursor:pointer;padding:0;font-size:inherit;font-weight:700;" onclick="openLegalModal('privacy')">سياسة الخصوصية</button> و
+                <button type="button" style="background:none;border:none;color:#ef4444;text-decoration:underline;cursor:pointer;padding:0;font-size:inherit;font-weight:700;" onclick="openLegalModal('disclaimer')">إخلاء المسؤولية الطبية</button>.
+              </span>
+            </label>
           </div>
 
           <div style="margin: 12px 0 16px; text-align: center; font-size: 11.5px; color: var(--muted); line-height: 1.6;">
@@ -336,13 +460,13 @@
           <button id="backToSignInBtn" type="button" class="back-link-btn" title="Back to sign in" aria-label="العودة لتسجيل الدخول / Back to sign in">←</button>
           <h2 style="margin:0;font-size:24px;" data-i18n="auth.resetPassword">Reset Password</h2>
         </div>
-        <p style="margin-bottom:16px;color:var(--muted);font-size:13.5px;line-height:1.5;">
+        <p style="margin-bottom:16px;color:var(--muted);font-size:13.5px;line-height:1.5;" data-i18n="auth.resetPasswordDesc">
           Enter your account email and we will send you an official password reset link.
         </p>
 
         <div id="resetSuccessMessage" class="reset-success-box" style="display:none;">
-          <strong>Reset link sent!</strong>
-          <p style="margin:4px 0 0;color:var(--ink);font-size:12.5px;">Please check your Inbox and Spam/Junk folder for the password reset email from Health Vibe AI.</p>
+          <strong data-i18n="auth.resetSuccessTitle">Reset link sent!</strong>
+          <p style="margin:4px 0 0;color:var(--ink);font-size:12.5px;" data-i18n="auth.resetSuccessDesc">Please check your Inbox and Spam/Junk folder for the password reset email from Health Vibe AI.</p>
         </div>
 
         <form id="forgotPasswordForm">
@@ -390,7 +514,7 @@
 
     <aside class="sidebar" id="appSidebar" aria-label="التنقل داخل التطبيق">
       <div class="brand">
-        <img src="./logo-dark-mark.webp" alt="Health Vibe AI" class="brand-logo" data-logo-mark loading="lazy" decoding="async" />
+        <img src="./logo-dark-mark.webp" alt="Health Vibe AI logo" class="brand-logo" data-logo-mark loading="lazy" decoding="async" width="58" height="42" style="aspect-ratio: 58 / 42;" />
         <div>
           <strong>Health Vibe AI</strong>
           <span id="accountLabel">Patient account</span>
@@ -399,21 +523,21 @@
 
       <nav class="nav-list" aria-label="Navigation">
         <button class="nav-item active" data-screen="patient" data-i18n-title="nav.home"><span class="nav-icon">🏠</span><span class="nav-label" data-i18n="nav.home">Home</span></button>
-        <button class="nav-item" data-screen="consent" data-i18n-title="nav.consent"><span class="nav-icon">🔒</span><span class="nav-label" data-i18n="nav.consent">Consent & Privacy</span></button>
         <button class="nav-item" data-screen="profile" data-i18n-title="nav.profile"><span class="nav-icon">👤</span><span class="nav-label" data-i18n="nav.profile">Medical Profile</span></button>
+        <button class="nav-item" data-screen="consent" data-i18n-title="nav.consent"><span class="nav-icon">🔒</span><span class="nav-label" data-i18n="nav.consent">Consent & Privacy</span></button>
         <button class="nav-item" data-screen="assessment" data-i18n-title="nav.assessment"><span class="nav-icon">🫁</span><span class="nav-label" data-i18n="nav.assessment">Breathing Assessment</span></button>
 
-        <!-- Expandable Disease Category -->
+        <!-- Expandable Clinical Triage Category -->
         <div class="nav-group" id="navGroupDisease">
           <button type="button" class="nav-item nav-group-header" id="navCategoryDisease" aria-expanded="false" aria-controls="diseaseSubmenu" data-i18n-title="nav.disease">
             <span class="nav-icon">🩺</span>
-            <span class="nav-label" data-i18n="nav.disease">Disease</span>
+            <span class="nav-label" data-i18n="nav.disease">Clinical Triage & Differential Assessment</span>
             <span class="nav-group-chevron" aria-hidden="true">▾</span>
           </button>
-          <div class="nav-group-children" id="diseaseSubmenu" role="group" aria-label="Disease" hidden>
+          <div class="nav-group-children" id="diseaseSubmenu" role="group" aria-label="Clinical Triage & Differential Assessment" hidden>
             <button class="nav-item nav-sub-item" data-screen="disease-dashboard" data-i18n-title="nav.diseaseDashboard">
               <span class="nav-icon">📊</span>
-              <span class="nav-label" data-i18n="diseaseDashboard.title">Disease Dashboard</span>
+              <span class="nav-label" data-i18n="diseaseDashboard.title">Clinical Triage & Differential Assessment</span>
             </button>
             <button class="nav-item nav-sub-item" data-screen="diabetes" data-i18n-title="nav.diabetes">
               <span class="nav-icon">🩸</span>
@@ -484,13 +608,16 @@
 
     <section class="workspace" aria-labelledby="screenTitle">
       <header class="topbar">
-        <button id="menuToggle" class="icon-button" aria-label="تبديل القائمة / Toggle menu" aria-expanded="false" aria-controls="appSidebar">☰</button>
-        <div>
-          <p>Health Vibe AI</p>
-          <h2 id="screenTitle">Home</h2>
+        <div class="topbar-brand-group">
+          <button id="menuToggle" class="icon-button" aria-label="تبديل القائمة / Toggle menu" aria-expanded="false" aria-controls="appSidebar">☰</button>
+          <img src="./logo-dark-mark.webp" alt="Health Vibe AI logo" class="brand-logo topbar-brand-logo" data-logo-mark decoding="async" width="40" height="29" style="aspect-ratio: 40 / 29; object-fit: contain;" />
+          <div>
+            <p style="margin: 0; font-size: 11.5px; color: var(--muted); line-height: 1.2;">Health Vibe AI</p>
+            <h2 id="screenTitle" style="margin: 0; font-size: 20px; color: var(--teal-2); line-height: 1.2;">Home</h2>
+          </div>
         </div>
         <div class="top-actions">
-          <button id="topbarThemeToggle" class="icon-button" type="button" aria-label="تبديل المظهر / Toggle theme">☀️</button>
+          <button id="topbarThemeToggle" type="button" class="theme-toggle" aria-label="تبديل المظهر / Toggle theme" title="Toggle theme"><span class="theme-icon">🌙</span></button>
           <a href="./clinics.html" target="_blank" rel="noopener" class="soft-button" style="text-decoration:none; padding:6px 12px; font-size:12px; font-weight:700; display:inline-flex; align-items:center; gap:6px; border-radius:8px; border:1px solid rgba(9, 184, 182, 0.4); color:var(--teal); background:rgba(9, 184, 182, 0.08);" data-i18n-title="nav.clinicsSales">
             <span>🏥</span>
             <span data-i18n="nav.clinicsSales">حلول العيادات (Sales) ↗</span>
@@ -526,6 +653,22 @@
       </div>
 
       <section id="screen-patient" class="screen active">
+        <!-- Incomplete Medical Profile Reminder Banner -->
+        <div id="patientIncompleteProfileBanner" style="display: none; background: rgba(245, 158, 11, 0.08); border: 1px solid #f59e0b; border-radius: 12px; padding: 12px 18px; margin-bottom: 16px; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+          <div style="display: flex; align-items: center; gap: 12px; max-width: 680px;">
+            <span style="font-size: 26px;">⚠️</span>
+            <div>
+              <strong style="color: #d97706; font-size: 14px;">استكمال الملف الطبي السريري مطلوب (السن، النوع، الوزن، الطول، التدخين، الأمراض المزمنة، الحساسية، الطبيب):</strong>
+              <p style="margin: 2px 0 0; font-size: 12.5px; color: var(--ink); line-height: 1.45;">
+                تعتمد دقة فرز أعراضك التنفسية واستشارات الذكاء الاصطناعي ومراجعة الطبيب الاستشاري على اكتمال مؤشراتك الحيوية.
+              </p>
+            </div>
+          </div>
+          <button type="button" class="solid-button" onclick="showScreen('complete-medical-profile')" style="padding: 8px 18px; font-size: 13px; font-weight: 700; background: #d97706; border-color: #d97706; color: #fff; white-space: nowrap;">
+            استكمال الملف الطبي الآن ➔
+          </button>
+        </div>
+
         <!-- Family Profiles & Dependents Switcher Bar -->
         <div id="patientFamilySwitcher" class="family-switcher-mount"></div>
         <div id="patientFamilyActiveBanner" class="family-active-banner-mount" style="display: none;"></div>
@@ -540,6 +683,7 @@
             <p data-i18n="patient.heroSubtitle">Enter symptoms and measurements. The doctor receives a rule-based risk preview before approving any report shown to you.</p>
             <div class="hero-actions">
               <button class="solid-button large" data-screen="assessment" data-i18n="patient.startBreathingAssessment">Start breathing assessment</button>
+              <button class="soft-button large" type="button" data-screen="hypertension">❤️ <span data-i18n="nav.hypertension">Blood Pressure & Trends</span></button>
               <button class="soft-button large" type="button" onclick="if(window.auth && auth.currentUser) openAssessmentComparisonModal(auth.currentUser.uid); else showAuth();">📊 <span data-i18n="patient.compareAssessments">Compare Assessments</span></button>
               <button class="soft-button large" data-screen="history" data-i18n="patient.viewHistory">View history</button>
             </div>
@@ -564,7 +708,7 @@
           </div>
           <ol>
             <li><strong>1. Share</strong><span>Enter oxygen, symptoms, history, and consent.</span></li>
-            <li><strong>2. Triage</strong><span>Rule-based risk helps prioritize review.</span></li>
+            <li><strong>2. Triage</strong><span>Validated Machine Learning Model + Clinical Rules prioritize physician review (PRD 7.1).</span></li>
             <li><strong>3. Review</strong><span>A doctor approves, asks follow-up, or escalates.</span></li>
             <li><strong>4. Receive</strong><span>Your certified report appears only after approval.</span></li>
           </ol>
@@ -646,6 +790,200 @@
                 <button type="button" class="soft-button" style="font-size: 12px; padding: 6px 10px; color: #f87171;" onclick="openLegalModal('disclaimer')" data-i18n="consent.disclaimerBtn">🚨 إخلاء المسؤولية</button>
               </div>
             </div>
+          </article>
+        </div>
+      </section>
+
+      <!-- SCREEN: Complete Medical Profile Setup Immediately After Registration (PRD Page 8 Req 39) -->
+      <section id="screen-complete-medical-profile" class="screen" data-screen="complete-medical-profile" aria-labelledby="cmpTitle">
+        <div class="form-layout" style="max-width: 900px; margin: 0 auto;">
+          <article class="panel form-panel" style="grid-column: 1 / -1; border-top: 4px solid var(--teal, #0ea5a4); border-radius: 14px; box-shadow: 0 4px 20px rgba(0,0,0,0.06); padding: 20px;">
+            <div class="panel-head" style="border-bottom: 1px solid var(--line); padding-bottom: 14px; margin-bottom: 16px;">
+              <div>
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                  <span style="font-size: 26px;">🩺</span>
+                  <h3 id="cmpTitle" style="margin: 0; font-size: 20px; color: var(--teal, #0ea5a4);" data-i18n="onboarding.title">
+                    استكمال الملف الطبي للمريض (Medical Profile Setup)
+                  </h3>
+                </div>
+                <p style="margin: 0; font-size: 13px; color: var(--muted); line-height: 1.5;" data-i18n="onboarding.subtitle">
+                  مرحباً بك في <strong>Health Vibe AI</strong>! لإجراء فرز سريري دقيق لحالتك وتزويد الطبيب المعالج بالبيانات الحيوية اللازمة لاعتماد تقييماتك، يرجى استكمال مؤشرات ملفك الطبي الأساسية:
+                </p>
+              </div>
+              <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                <span class="pill info" style="font-size: 11px;">مطلوب فور التسجيل</span>
+                <span class="pill ok" id="cmpProgressPill" style="font-size: 11px;">8 عناصر سريرية أساسية</span>
+              </div>
+            </div>
+
+            <!-- Quick Progress Bar -->
+            <div style="background: var(--surface-2, rgba(0,0,0,0.04)); border-radius: 8px; height: 8px; overflow: hidden; margin-bottom: 20px;">
+              <div id="cmpProgressBar" style="background: var(--teal, #0ea5a4); width: 25%; height: 100%; transition: width 0.3s ease;"></div>
+            </div>
+
+            <form id="cmpForm" onsubmit="event.preventDefault(); handleSaveCompleteMedicalProfile();">
+              <div style="display: flex; flex-direction: column; gap: 16px;">
+                
+                <!-- ROW 1: العمر / تاريخ الميلاد + النوع البيولوجي -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px;">
+                  <!-- 1. السن وتاريخ الميلاد -->
+                  <div class="profile-section-card" style="background: var(--surface-2, rgba(0,0,0,0.02)); border: 1px solid var(--line); border-radius: 10px; padding: 14px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                      <label for="cmpDob" style="font-size: 13px; font-weight: 700; color: var(--ink); margin: 0;">
+                        1. تاريخ الميلاد والسن (Age & DOB) <span style="color: #ef4444;">*</span>
+                      </label>
+                      <span class="pill ok" id="cmpCalculatedAgeBadge" style="font-size: 11px; padding: 2px 8px;">العمر: --</span>
+                    </div>
+                    <input type="date" id="cmpDob" required style="width: 100%; box-sizing: border-box; height: 40px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);" onchange="handleCmpDobChange()">
+                    <div style="display: flex; align-items: center; gap: 6px; margin-top: 6px;">
+                      <small style="font-size: 11px; color: var(--muted);">أو العمر بالسنوات:</small>
+                      <input type="number" id="cmpAgeFallback" min="1" max="120" placeholder="مثال: 35" style="width: 80px; height: 28px; font-size: 12px; padding: 2px 8px; border-radius: 6px; border: 1px solid var(--line);" oninput="handleCmpAgeFallbackChange()">
+                    </div>
+                  </div>
+
+                  <!-- 2. النوع البيولوجي -->
+                  <div class="profile-section-card" style="background: var(--surface-2, rgba(0,0,0,0.02)); border: 1px solid var(--line); border-radius: 10px; padding: 14px;">
+                    <label style="font-size: 13px; font-weight: 700; color: var(--ink); display: block; margin-bottom: 8px;">
+                      2. النوع السريري (Biological Sex) <span style="color: #ef4444;">*</span>
+                    </label>
+                    <div style="display: flex; gap: 12px;">
+                      <label style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); cursor: pointer;">
+                        <input type="radio" name="cmpSex" value="male" id="cmpSexMale" checked onchange="updateCmpProgress()">
+                        <span style="font-size: 13px; font-weight: 600;">👨 ذكر (Male)</span>
+                      </label>
+                      <label style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); cursor: pointer;">
+                        <input type="radio" name="cmpSex" value="female" id="cmpSexFemale" onchange="updateCmpProgress()">
+                        <span style="font-size: 13px; font-weight: 600;">👩 أنثى (Female)</span>
+                      </label>
+                    </div>
+                    <small style="display: block; margin-top: 6px; font-size: 11px; color: var(--muted); line-height: 1.4;">
+                      مطلوب لمعادلات قياس السعة الرئوية المرجعية وحساب الجرعات الدوائية.
+                    </small>
+                  </div>
+                </div>
+
+                <!-- ROW 2: الوزن + الطول ومؤشر كتلة الجسم -->
+                <div class="profile-section-card" style="background: var(--surface-2, rgba(0,0,0,0.02)); border: 1px solid var(--line); border-radius: 10px; padding: 14px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+                    <strong style="font-size: 13px; color: var(--teal, #0ea5a4);">
+                      3 & 4. القياسات البدنية وكتلة الجسم (Biometrics & BMI) <span style="color: #ef4444;">*</span>
+                    </strong>
+                    <span class="pill info" id="cmpBmiBadge" style="font-size: 11px; padding: 3px 10px; font-weight: 700;">مؤشر الكتلة (BMI): --</span>
+                  </div>
+                  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px;">
+                    <div>
+                      <label for="cmpWeight" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;">
+                        الوزن (كجم) <span style="color: #ef4444;">*</span>
+                      </label>
+                      <input type="number" id="cmpWeight" min="2" max="300" step="0.5" placeholder="مثال: 75" required style="width: 100%; box-sizing: border-box; height: 38px; border-radius: 8px; border: 1px solid var(--line); padding: 6px 12px; background: var(--surface); color: var(--ink);" oninput="updateCmpBmi()">
+                    </div>
+                    <div>
+                      <label for="cmpHeight" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;">
+                        الطول (سم) <span style="color: #ef4444;">*</span>
+                      </label>
+                      <input type="number" id="cmpHeight" min="30" max="250" step="1" placeholder="مثال: 172" required style="width: 100%; box-sizing: border-box; height: 38px; border-radius: 8px; border: 1px solid var(--line); padding: 6px 12px; background: var(--surface); color: var(--ink);" oninput="updateCmpBmi()">
+                    </div>
+                  </div>
+                </div>
+
+                <!-- ROW 3: التدخين والتفاصيل -->
+                <div class="profile-section-card" style="background: var(--surface-2, rgba(0,0,0,0.02)); border: 1px solid var(--line); border-radius: 10px; padding: 14px;">
+                  <label for="cmpSmokingStatus" style="font-size: 13px; font-weight: 700; color: var(--ink); display: block; margin-bottom: 6px;">
+                    5. حالة التدخين وتفاصيله (Smoking History) <span style="color: #ef4444;">*</span>
+                  </label>
+                  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+                    <div>
+                      <select id="cmpSmokingStatus" style="width: 100%; box-sizing: border-box; height: 40px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 6px 10px;" onchange="updateCmpProgress()">
+                        <option value="never">🚭 غير مدخن تماماً (Never smoked)</option>
+                        <option value="former">⏱️ مدخن سابق وأقلع (Former smoker)</option>
+                        <option value="current">🚬 مدخن حالي (Current active smoker)</option>
+                        <option value="passive">💨 تدخين سلبي / مخالط (Passive smoking)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <input type="text" id="cmpSmokingDetails" placeholder="تفاصيل التدخين (النوع، المدة، الكمية اليومية إن وجد)" style="width: 100%; box-sizing: border-box; height: 40px; border-radius: 8px; border: 1px solid var(--line); padding: 6px 12px; background: var(--surface); color: var(--ink);" oninput="updateCmpProgress()">
+                    </div>
+                  </div>
+                </div>
+
+                <!-- ROW 4: الأمراض المزمنة -->
+                <div class="profile-section-card" style="background: var(--surface-2, rgba(0,0,0,0.02)); border: 1px solid var(--line); border-radius: 10px; padding: 14px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <label for="cmpChronicConditions" style="font-size: 13px; font-weight: 700; color: var(--ink); margin: 0;">
+                      6. الأمراض المزمنة (Chronic Conditions) <span style="color: #ef4444;">*</span>
+                    </label>
+                    <small style="font-size: 11px; color: var(--muted);">انقر على الحالات المطابقة للإضافة السريعة:</small>
+                  </div>
+                  <!-- Quick chips -->
+                  <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px;">
+                    <button type="button" class="soft-button" onclick="addCmpTag('cmpChronicConditions', 'لا توجد أمراض مزمنة', true)" style="font-size: 11.5px; padding: 4px 10px; background: rgba(16, 185, 129, 0.1); border-color: #10b981; color: #047857;">🟢 لا توجد أمراض مزمنة</button>
+                    <button type="button" class="soft-button" onclick="addCmpTag('cmpChronicConditions', 'ربو شعبي (Asthma)')" style="font-size: 11.5px; padding: 4px 10px;">ربو شعبي (Asthma)</button>
+                    <button type="button" class="soft-button" onclick="addCmpTag('cmpChronicConditions', 'حساسية صدرية')" style="font-size: 11.5px; padding: 4px 10px;">حساسية صدرية</button>
+                    <button type="button" class="soft-button" onclick="addCmpTag('cmpChronicConditions', 'ارتفاع ضغط الدم')" style="font-size: 11.5px; padding: 4px 10px;">ارتفاع ضغط الدم</button>
+                    <button type="button" class="soft-button" onclick="addCmpTag('cmpChronicConditions', 'السكري')" style="font-size: 11.5px; padding: 4px 10px;">السكري</button>
+                    <button type="button" class="soft-button" onclick="addCmpTag('cmpChronicConditions', 'انسداد رئوي مزمن (COPD)')" style="font-size: 11.5px; padding: 4px 10px;">انسداد رئوي مزمن (COPD)</button>
+                    <button type="button" class="soft-button" onclick="addCmpTag('cmpChronicConditions', 'أمراض قلب')" style="font-size: 11.5px; padding: 4px 10px;">أمراض قلب</button>
+                  </div>
+                  <input type="text" id="cmpChronicConditions" placeholder="اكتب الأمراض المزمنة هنا أو اختر من الأعلى..." required style="width: 100%; box-sizing: border-box; height: 40px; border-radius: 8px; border: 1px solid var(--line); padding: 6px 12px; background: var(--surface); color: var(--ink);" oninput="updateCmpProgress()">
+                </div>
+
+                <!-- ROW 5: الحساسية الدوائية -->
+                <div class="profile-section-card" style="background: var(--surface-2, rgba(0,0,0,0.02)); border: 1px solid var(--line); border-radius: 10px; padding: 14px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <label for="cmpDrugAllergies" style="font-size: 13px; font-weight: 700; color: var(--ink); margin: 0;">
+                      7. الحساسية الدوائية (Drug Allergies) <span style="color: #ef4444;">*</span>
+                    </label>
+                    <small style="font-size: 11px; color: var(--muted);">ضروري لسلامة الوصفات وتوصيات العلاج:</small>
+                  </div>
+                  <!-- Quick chips -->
+                  <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px;">
+                    <button type="button" class="soft-button" onclick="addCmpTag('cmpDrugAllergies', 'لا توجد حساسية دوائية معروفة (NKDA)', true)" style="font-size: 11.5px; padding: 4px 10px; background: rgba(16, 185, 129, 0.1); border-color: #10b981; color: #047857;">🟢 لا توجد حساسية دوائية (NKDA)</button>
+                    <button type="button" class="soft-button" onclick="addCmpTag('cmpDrugAllergies', 'حساسية بنسلين (Penicillin)')" style="font-size: 11.5px; padding: 4px 10px;">حساسية بنسلين</button>
+                    <button type="button" class="soft-button" onclick="addCmpTag('cmpDrugAllergies', 'أسبرين / بروفين (NSAIDs)')" style="font-size: 11.5px; padding: 4px 10px;">أسبرين / مضادات التهاب</button>
+                    <button type="button" class="soft-button" onclick="addCmpTag('cmpDrugAllergies', 'سلفا (Sulfa Drugs)')" style="font-size: 11.5px; padding: 4px 10px;">سلفا (Sulfa)</button>
+                    <button type="button" class="soft-button" onclick="addCmpTag('cmpDrugAllergies', 'مضادات حيوية معينة')" style="font-size: 11.5px; padding: 4px 10px;">مضادات حيوية</button>
+                  </div>
+                  <input type="text" id="cmpDrugAllergies" placeholder="اكتب الحساسية الدوائية (أو اختر لا توجد حساسية)..." required style="width: 100%; box-sizing: border-box; height: 40px; border-radius: 8px; border: 1px solid var(--line); padding: 6px 12px; background: var(--surface); color: var(--ink);" oninput="updateCmpProgress()">
+                </div>
+
+                <!-- ROW 6: الطبيب المعالج والعيادة -->
+                <div class="profile-section-card" style="background: var(--surface-2, rgba(0,0,0,0.02)); border: 1px solid var(--line); border-radius: 10px; padding: 14px;">
+                  <label style="font-size: 13px; font-weight: 700; color: var(--ink); display: block; margin-bottom: 6px;">
+                    8. الطبيب المعالج والعيادة المعتمدة (Attending Physician & Clinic) <span style="color: #ef4444;">*</span>
+                  </label>
+                  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px;">
+                    <div>
+                      <label for="cmpDoctorSelect" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;">الطبيب المشرف / المعتمد</label>
+                      <select id="cmpDoctorSelect" style="width: 100%; box-sizing: border-box; height: 40px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 6px 10px;" onchange="handleCmpDoctorSelectChange()">
+                        <option value="dr-tarek-mahmoud">🩺 د. طارق محمود (استشاري الأمراض الصدرية والباطنة - نقابة #44821)</option>
+                        <option value="clinic-assigned">🏥 تعيين تلقائي لطبيب معتمد حسب التخصص</option>
+                        <option value="external">✍️ إدخال اسم طبيبي الخاص</option>
+                      </select>
+                      <input type="text" id="cmpDoctorCustomName" placeholder="اكتب اسم طبيبك المعالج" style="display: none; width: 100%; box-sizing: border-box; height: 38px; border-radius: 8px; border: 1px solid var(--line); padding: 6px 12px; margin-top: 6px;">
+                    </div>
+                    <div>
+                      <label for="cmpClinicSelect" style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;">العيادة / المركز الطبي</label>
+                      <select id="cmpClinicSelect" style="width: 100%; box-sizing: border-box; height: 40px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 6px 10px;" onchange="updateCmpProgress()">
+                        <option value="clinic-pulmo-care">مركز رعاية الجهاز التنفسي التخصصي (معتمد)</option>
+                        <option value="clinic-central-01">مركز الحياة الطبي العام (معتمد)</option>
+                        <option value="clinic-wellness-hub">عيادات ويلنس الصحية الشاملة (معتمد)</option>
+                        <option value="independent">مستقل / متابعة منزلية</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div style="display: flex; gap: 12px; margin-top: 10px; flex-wrap: wrap;">
+                  <button type="submit" id="btnSaveCompleteMedicalProfile" class="solid-button" style="flex: 2; min-width: 220px; padding: 14px; font-size: 15px; font-weight: 700; background: var(--teal, #0ea5a4); border-color: var(--teal, #0ea5a4); color: #fff; justify-content: center;">
+                    💾 حفظ وتفعيل الملف الطبي وبدء الاستخدام
+                  </button>
+                  <button type="button" id="btnSkipMedicalProfile" class="outline-button" onclick="handleSkipCompleteMedicalProfile()" style="flex: 1; min-width: 180px; padding: 12px; font-size: 13.5px; justify-content: center;">
+                    استكمال لاحقاً والذهاب للوحة التحكم
+                  </button>
+                </div>
+              </div>
+            </form>
           </article>
         </div>
       </section>
@@ -970,29 +1308,43 @@
           <!-- Authentication Providers & Security Panel -->
           <div id="authProvidersContainer" style="grid-column: 1 / -1;"></div>
 
-          <!-- Account & Data Deletion Card (GDPR / HIPAA Right to Erasure) -->
-          <article class="panel" id="accountDeletionCard" style="grid-column: 1 / -1; margin-top: 14px; border: 1px solid rgba(239, 68, 68, 0.25); background: rgba(239, 68, 68, 0.03);">
-            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
-              <div>
-                <strong style="color: #ef4444; font-size: 15px; display: flex; align-items: center; gap: 6px;">
-                  <span>🗑️</span> إدارة وتصدير البيانات وحذف الحساب (Privacy & Data Rights)
+          <!-- Account & Medical Data Deletion Card (GDPR / HIPAA Right to Erasure & Legal Retention) -->
+          <article class="panel" id="accountDeletionCard" style="grid-column: 1 / -1; margin-top: 14px; border: 1px solid rgba(239, 68, 68, 0.3); background: rgba(239, 68, 68, 0.025); border-radius: 12px; padding: 16px 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px;">
+              <div style="max-width: 680px;">
+                <strong style="color: #ef4444; font-size: 16px; display: flex; align-items: center; gap: 8px;">
+                  <span>🗑️</span> مسار طلب حذف الحساب والبيانات الطبية وسجل الخصوصية (Account & Data Deletion)
                 </strong>
-                <p style="margin: 4px 0 0; font-size: 13px; color: var(--muted); line-height: 1.5;">
-                  بموجب معايير حماية الخصوصية وميثاق الحق في محو البيانات، يمكنك تنزيل نسخة من سجلاتك أو حذف حسابك نهائياً.
+                <p style="margin: 6px 0 10px; font-size: 13px; color: var(--muted); line-height: 1.6;">
+                  بموجب معايير حماية البيانات والحق في محو السجلات (Right to Erasure / GDPR Art. 17)، تتيح لك المنصة طلب حذف حسابك وبياناتك الطبية بالكامل أو تنزيل نسخة موثقة منها قبل الحذف، مع الالتزام بـ <strong>سياسة الاحتفاظ القانونية (Retention Policy)</strong> للسجلات السريرية المعتمدة.
                 </p>
+
+                <!-- Retention Policy Highlights Box -->
+                <div style="background: var(--surface-2, rgba(0,0,0,0.03)); border: 1px solid var(--line, rgba(0,0,0,0.08)); border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; font-size: 12.5px; line-height: 1.65; color: var(--ink);">
+                  <div style="font-weight: 700; color: var(--teal, #0ea5a4); margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                    <span>⚖️</span> سياسة الاحتفاظ القانونية بالسجلات الطبية (Legal Retention Policy):
+                  </div>
+                  <ul style="margin: 0; padding-inline-start: 18px; color: var(--muted);">
+                    <li><strong>حذف فوري (0 أيام):</strong> البيانات الشخصية المباشرة (PII)، بيانات الاعتماد، المسودات غير المعتمدة، وسجلات الجلسة المحلية.</li>
+                    <li><strong>حفظ مشروط مع حجب الهوية (5 سنوات):</strong> السجلات والتقارير الطبية المعتمدة سريرياً تُجرّد من الهوية بالكامل (Anonymization) وتُحفظ لمدة 5 سنوات لأغراض المسؤولية والتدقيق السريري الطبي (GDPR Art. 17(3)(b) وقوانين آداب المهنة الطبية).</li>
+                    <li><strong>سجلات التدقيق الأمني (6 سنوات):</strong> أرشفة غير قابلة للتعديل وبدون PII امتثالاً لمعيار HIPAA § 164.316.</li>
+                    <li><strong>النسخ الاحتياطية (30 يوماً):</strong> تدوير وتطهير سحابي آلي مع شواهد حظر الاسترجاع (Tombstones).</li>
+                  </ul>
+                </div>
               </div>
-              <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                <button type="button" class="soft-button" onclick="switchAccount(event)" style="font-size: 13px; padding: 8px 14px; display: inline-flex; align-items: center; gap: 6px;" data-i18n-title="nav.switchAccount">
-                  <span>🔄</span> <span data-i18n="nav.switchAccount">تبديل الحساب</span>
+
+              <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                <button type="button" class="soft-button" onclick="exportUserData()" style="font-size: 13px; padding: 9px 14px; font-weight: 600;">
+                  📥 تصدير بياناتي الطبية (JSON)
                 </button>
-                <button type="button" class="soft-button" onclick="exportUserData()" style="font-size: 13px; padding: 8px 14px;">
-                  📥 تصدير بياناتي (JSON)
+                <button type="button" class="soft-button" onclick="openRetentionPolicyModal()" style="font-size: 13px; padding: 9px 14px;">
+                  📜 سياسة الاحتفاظ القانونية
                 </button>
-                <button type="button" class="soft-button" onclick="requestAccessReport()" style="font-size: 13px; padding: 8px 14px;">
+                <button type="button" class="soft-button" onclick="requestAccessReport()" style="font-size: 13px; padding: 9px 14px;">
                   📋 تقرير الوصول (Art. 15)
                 </button>
-                <button type="button" class="outline-button" onclick="openDeleteAccountModal()" style="border-color: rgba(239, 68, 68, 0.5); color: #ef4444; font-size: 13px; padding: 8px 14px;">
-                  ⚠️ حذف الحساب والبيانات
+                <button type="button" class="solid-button" onclick="openDeleteAccountModal()" style="background: #dc2626; border-color: #dc2626; color: #fff; font-size: 13px; padding: 9px 16px; font-weight: 600;">
+                  ⚠️ طلب حذف الحساب والبيانات
                 </button>
               </div>
             </div>
@@ -1131,6 +1483,24 @@
             <div class="clinical-note">هذه البيانات لا تتحول إلى تقرير للمريض إلا بعد اعتماد الطبيب.</div>
           </article>
         </div>
+
+        <!-- PRD Page 21: Prominent & Permanent Clinical Medical Disclaimer (Assessment Screen) -->
+        <aside class="prd-medical-disclaimer-box" role="note" aria-label="Medical Disclaimer" style="margin-top: 20px; padding: 16px 20px; background: rgba(239, 68, 68, 0.05); border: 1.5px solid rgba(239, 68, 68, 0.28); border-radius: 14px; display: flex; gap: 14px; align-items: flex-start; line-height: 1.6;">
+          <span style="font-size: 24px; flex-shrink: 0; line-height: 1;">🚨</span>
+          <div style="flex: 1;">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 6px;">
+              <strong style="color: #dc2626; font-size: 13.5px; font-weight: 800;" data-i18n="legal.prdDisclaimerTitle">
+                تنبيه وإخلاء مسؤولية طبي معتمد (PRD)
+              </strong>
+              <button type="button" onclick="openLegalModal('disclaimer')" style="background: none; border: none; color: var(--teal); font-size: 12px; font-weight: 700; text-decoration: underline; cursor: pointer; padding: 0;">
+                <span data-i18n="legal.tabDisclaimer">🚨 إخلاء المسؤولية الطبي الكامل</span> ↗
+              </button>
+            </div>
+            <p style="margin: 0; font-size: 12.5px; color: var(--ink); opacity: 0.92;" data-i18n="legal.prdDisclaimerBody">
+              المعلومات والنتائج المقدمة عبر HealthVibe AI هي لأغراض التوعية ودعم القرار الطبي فقط، ولا تُعد تشخيصاً طبياً مستقلاً أو بديلاً عن تقييم طبيب مؤهل. يجب مراجعة النتائج مع طبيب قبل اتخاذ أي قرار علاجي. في حالات الطوارئ أو الأعراض الشديدة، يجب طلب الرعاية الطبية العاجلة من الجهات المختصة فوراً.
+            </p>
+          </div>
+        </aside>
       </section>
 
       <section id="screen-pending" class="screen">
@@ -1170,6 +1540,24 @@
         <div id="resultContainer">
           <!-- Dynamically rendered via renderResultScreen() -->
         </div>
+
+        <!-- PRD Page 21: Permanent Static Disclaimer Anchor on Result View -->
+        <aside id="resultStaticPrdDisclaimer" class="prd-medical-disclaimer-box" role="note" aria-label="Medical Disclaimer" style="margin-top: 20px; padding: 16px 20px; background: rgba(239, 68, 68, 0.05); border: 1.5px solid rgba(239, 68, 68, 0.28); border-radius: 14px; display: flex; gap: 14px; align-items: flex-start; line-height: 1.6;">
+          <span style="font-size: 24px; flex-shrink: 0; line-height: 1;">🚨</span>
+          <div style="flex: 1;">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 6px;">
+              <strong style="color: #dc2626; font-size: 13.5px; font-weight: 800;" data-i18n="legal.prdDisclaimerTitle">
+                تنبيه وإخلاء مسؤولية طبي معتمد (PRD)
+              </strong>
+              <button type="button" onclick="openLegalModal('disclaimer')" style="background: none; border: none; color: var(--teal); font-size: 12px; font-weight: 700; text-decoration: underline; cursor: pointer; padding: 0;">
+                <span data-i18n="legal.tabDisclaimer">🚨 إخلاء المسؤولية الطبي الكامل</span> ↗
+              </button>
+            </div>
+            <p style="margin: 0; font-size: 12.5px; color: var(--ink); opacity: 0.92;" data-i18n="legal.prdDisclaimerBody">
+              المعلومات والنتائج المقدمة عبر HealthVibe AI هي لأغراض التوعية ودعم القرار الطبي فقط، ولا تُعد تشخيصاً طبياً مستقلاً أو بديلاً عن تقييم طبيب مؤهل. يجب مراجعة النتائج مع طبيب قبل اتخاذ أي قرار علاجي. في حالات الطوارئ أو الأعراض الشديدة، يجب طلب الرعاية الطبية العاجلة من الجهات المختصة فوراً.
+            </p>
+          </div>
+        </aside>
       </section>
 
       <section id="screen-history" class="screen">
@@ -2444,7 +2832,7 @@
               <span style="font-size: 26px;">🩸</span>
               <div>
                 <h3 id="diabetesModuleTitle" data-i18n="common.diabetesTitle">Diabetes Module</h3>
-                <p style="font-size: 13px; color: var(--muted); margin: 2px 0 0;" data-i18n="nav.disease">Disease</p>
+                <p style="font-size: 13px; color: var(--muted); margin: 2px 0 0;" data-i18n="nav.disease">Clinical Triage &amp; Differential Assessment</p>
               </div>
             </div>
             <span class="pill pending" data-i18n="common.diseaseUnderPrep">Under Clinical Preparation</span>
@@ -2469,22 +2857,23 @@
             <div style="display: flex; align-items: center; gap: 10px;">
               <span style="font-size: 26px;">❤️</span>
               <div>
-                <h3 id="hypertensionModuleTitle" data-i18n="common.hypertensionTitle">Hypertension Module</h3>
-                <p style="font-size: 13px; color: var(--muted); margin: 2px 0 0;" data-i18n="nav.disease">Disease</p>
+                <h3 id="hypertensionModuleTitle" data-i18n="common.hypertensionTitle">Hypertension & Blood Pressure History</h3>
+                <p style="font-size: 13px; color: var(--muted); margin: 2px 0 0;" data-i18n="nav.disease">Cardiovascular & Blood Pressure Vitals</p>
               </div>
             </div>
-            <span class="pill pending" data-i18n="common.diseaseUnderPrep">Under Clinical Preparation</span>
-          </div>
-          <div style="padding: 24px 16px; text-align: center; max-width: 600px; margin: 0 auto;">
-            <p style="font-size: 15px; color: var(--ink); line-height: 1.6; margin-bottom: 16px;" data-i18n="common.hypertensionDesc">
-              Clinical module for blood pressure tracking, hemodynamic indicators, and cardiovascular health follow-up.
-            </p>
-            <div class="notice-card" style="margin-bottom: 24px; text-align: start;">
-              <p style="font-size: 13px; color: var(--muted); margin: 0; line-height: 1.5;" data-i18n="common.diseaseClinicalNotice">
-                This specialized module is under certified clinical preparation adhering to medical care standards. No unverified data or clinical results are displayed.
-              </p>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="pill info" id="hypertensionPersistedStatusPill" style="font-size: 11px;">Persisted Data Only</span>
+              <button type="button" class="soft-button" data-screen="patient" data-i18n="common.backToHome">Return to Home</button>
             </div>
-            <button type="button" class="soft-button" data-screen="patient" data-i18n="common.backToHome">Return to Home</button>
+          </div>
+          <div style="padding: 16px;">
+            <!-- Patient Blood Pressure History & Trend View Container -->
+            <div id="patientBpViewContainer">
+              <div style="text-align: center; padding: 32px 16px; color: var(--muted);">
+                <div class="spinner" style="margin: 0 auto 12px;"></div>
+                <p>Loading persisted blood-pressure history...</p>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -2496,21 +2885,21 @@
               <span style="font-size: 26px;">🩹</span>
               <div>
                 <h3 id="bloodDisordersModuleTitle" data-i18n="common.bloodDisordersTitle">Blood Clotting & Blood Disorders Module</h3>
-                <p style="font-size: 13px; color: var(--muted); margin: 2px 0 0;" data-i18n="nav.disease">Disease</p>
+                <p style="font-size: 13px; color: var(--muted); margin: 2px 0 0;" data-i18n="nav.disease">Clinical Triage &amp; Differential Assessment</p>
               </div>
             </div>
-            <span class="pill pending" data-i18n="common.diseaseUnderPrep">Under Clinical Preparation</span>
-          </div>
-          <div style="padding: 24px 16px; text-align: center; max-width: 600px; margin: 0 auto;">
-            <p style="font-size: 15px; color: var(--ink); line-height: 1.6; margin-bottom: 16px;" data-i18n="common.bloodDisordersDesc">
-              Specialized clinical module for coagulation profiles, hematology consultations, and lab review.
-            </p>
-            <div class="notice-card" style="margin-bottom: 24px; text-align: start;">
-              <p style="font-size: 13px; color: var(--muted); margin: 0; line-height: 1.5;" data-i18n="common.diseaseClinicalNotice">
-                This specialized module is under certified clinical preparation adhering to medical care standards. No unverified data or clinical results are displayed.
-              </p>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="pill info" id="bloodDisordersStatusBadge" style="font-size: 11px;">Configurable & Medically Reviewable</span>
+              <button type="button" class="soft-button" data-screen="patient" data-i18n="common.backToHome">Return to Home</button>
             </div>
-            <button type="button" class="soft-button" data-screen="patient" data-i18n="common.backToHome">Return to Home</button>
+          </div>
+          <div style="padding: 16px;">
+            <div id="bloodDisordersViewContainer">
+              <div style="text-align: center; padding: 32px 16px; color: var(--muted);">
+                <div class="spinner" style="margin: 0 auto 12px;"></div>
+                <p>Loading Blood Disorders Module...</p>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -2522,21 +2911,21 @@
               <span style="font-size: 26px;">⚖️</span>
               <div>
                 <h3 id="obesityModuleTitle" data-i18n="common.obesityTitle">Obesity & Metabolic Health Module</h3>
-                <p style="font-size: 13px; color: var(--muted); margin: 2px 0 0;" data-i18n="nav.disease">Disease</p>
+                <p style="font-size: 13px; color: var(--muted); margin: 2px 0 0;" data-i18n="nav.disease">Clinical Triage &amp; Differential Assessment</p>
               </div>
             </div>
-            <span class="pill pending" data-i18n="common.diseaseUnderPrep">Under Clinical Preparation</span>
-          </div>
-          <div style="padding: 24px 16px; text-align: center; max-width: 600px; margin: 0 auto;">
-            <p style="font-size: 15px; color: var(--ink); line-height: 1.6; margin-bottom: 16px;" data-i18n="common.obesityDesc">
-              Specialized clinical module for weight management, BMI assessment, and clinical nutrition plans.
-            </p>
-            <div class="notice-card" style="margin-bottom: 24px; text-align: start;">
-              <p style="font-size: 13px; color: var(--muted); margin: 0; line-height: 1.5;" data-i18n="common.diseaseClinicalNotice">
-                This specialized module is under certified clinical preparation adhering to medical care standards. No unverified data or clinical results are displayed.
-              </p>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="pill info" id="obesityStatusBadge" style="font-size: 11px;">Anthropometric & Medically Reviewable</span>
+              <button type="button" class="soft-button" data-screen="patient" data-i18n="common.backToHome">Return to Home</button>
             </div>
-            <button type="button" class="soft-button" data-screen="patient" data-i18n="common.backToHome">Return to Home</button>
+          </div>
+          <div style="padding: 16px;">
+            <div id="obesityViewContainer">
+              <div style="text-align: center; padding: 32px 16px; color: var(--muted);">
+                <div class="spinner" style="margin: 0 auto 12px;"></div>
+                <p>Loading Obesity & Metabolic Health Module...</p>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -2876,7 +3265,7 @@
 
 
 
-  <button id="themeToggle" class="theme-fab" type="button" aria-label="تبديل المظهر / Toggle theme">☀️</button>
+  <button id="themeToggle" class="theme-fab" type="button" aria-label="تبديل المظهر / Toggle theme" title="Toggle theme"><span class="theme-fab-icon">🌙</span></button>
 
   <!-- Legal & Compliance Modal (Privacy Policy + Terms + Medical Disclaimer) -->
   <div id="legalModal" class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="legalModalTitle" aria-describedby="legalModalBody" aria-hidden="true">
@@ -2884,20 +3273,20 @@
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
         <div style="display: flex; align-items: center; gap: 8px;">
           <span style="font-size: 20px;">⚖️</span>
-          <h3 id="legalModalTitle" style="margin: 0; font-size: 17px; color: var(--teal-2);">المعايير القانونية والطبية</h3>
+          <h3 id="legalModalTitle" style="margin: 0; font-size: 17px; color: var(--teal-2);" data-i18n="legal.modalTitle">المعايير القانونية والطبية</h3>
         </div>
         <button type="button" class="close-button" onclick="closeLegalModal()" aria-label="Close">×</button>
       </div>
 
       <!-- Legal Tabs -->
       <div class="legal-tabs" role="tablist">
-        <button type="button" class="legal-tab-btn active" data-legal-tab="privacy" onclick="switchLegalTab('privacy')">
+        <button type="button" class="legal-tab-btn active" data-legal-tab="privacy" data-i18n="legal.tabPrivacy" onclick="switchLegalTab('privacy')">
           🔒 سياسة الخصوصية
         </button>
-        <button type="button" class="legal-tab-btn" data-legal-tab="terms" onclick="switchLegalTab('terms')">
+        <button type="button" class="legal-tab-btn" data-legal-tab="terms" data-i18n="legal.tabTerms" onclick="switchLegalTab('terms')">
           📜 شروط الاستخدام
         </button>
-        <button type="button" class="legal-tab-btn danger-tab" data-legal-tab="disclaimer" onclick="switchLegalTab('disclaimer')">
+        <button type="button" class="legal-tab-btn danger-tab" data-legal-tab="disclaimer" data-i18n="legal.tabDisclaimer" onclick="switchLegalTab('disclaimer')">
           🚨 إخلاء المسؤولية الطبي
         </button>
       </div>
@@ -2972,7 +3361,7 @@
       </div>
 
       <div style="margin-top: 16px; display: flex; justify-content: flex-end;">
-        <button type="button" class="solid-button" onclick="closeLegalModal()" style="padding: 8px 22px;">
+        <button type="button" id="legalModalCloseBtn" class="solid-button" onclick="closeLegalModal()" style="padding: 8px 22px;" data-i18n="legal.closeBtn">
           فهمت ذلك وإغلاق
         </button>
       </div>
@@ -2981,51 +3370,72 @@
 
   <!-- Delete Account Confirmation Modal -->
   <div id="deleteAccountModal" class="confirm-modal" role="alertdialog" aria-modal="true" aria-labelledby="deleteAccountTitle" aria-describedby="deleteAccountWarning" aria-hidden="true">
-    <div class="confirm-card" style="width: min(520px, 100%); text-align: right; max-height: 90vh; overflow-y: auto;">
+    <div class="confirm-card" style="width: min(560px, 100%); text-align: right; max-height: 90vh; overflow-y: auto;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
         <div style="display: flex; align-items: center; gap: 8px;">
           <span style="font-size: 22px;">⚠️</span>
-          <h3 id="deleteAccountTitle" style="margin: 0; font-size: 18px; color: #ef4444;" data-i18n="auth.deleteAccountTitle">حذف الحساب والبيانات السريرية</h3>
+          <h3 id="deleteAccountTitle" style="margin: 0; font-size: 18px; color: #ef4444;" data-i18n="auth.deleteAccountTitle">حذف الحساب والبيانات الطبية (Right to Erasure)</h3>
         </div>
         <button type="button" class="close-button" onclick="closeDeleteAccountModal()" aria-label="Close">×</button>
       </div>
 
-      <div id="deleteAccountWarning" class="emergency-alert-card critical-oxygen" style="margin-bottom: 16px; padding: 12px 14px;">
+      <div id="deleteAccountWarning" class="emergency-alert-card critical-oxygen" style="margin-bottom: 14px; padding: 12px 14px;">
         <strong style="color: #dc2626; font-size: 13px;">تنبيه هام: هذا الإجراء نهائي ولا يمكن التراجع عنه!</strong>
         <p style="font-size: 12.5px; margin: 4px 0 0; color: var(--ink); line-height: 1.5;">
-          عند إتمام الحذف، ستفقد إمكانية الوصول إلى المنصة وسيتم حذف أو إخفاء هوية كافة بياناتك المسجلة.
+          عند إتمام الحذف، سيتم إنهاء حسابك وحذف كافة بياناتك الشخصية المباشرة فوراً وتطبيق سياسة الاحتفاظ القانونية على السجلات السريرية المعتمدة.
         </p>
       </div>
 
-      <ul style="font-size: 13px; color: var(--muted); line-height: 1.8; margin-bottom: 16px; padding-inline-start: 20px;">
-        <li>سيتم حذف حسابك من نظام المصادقة (Firebase Auth) فوراً.</li>
-        <li>سيتم حذف ملفك الطبي ومعلومات الاتصال بالكامل من قاعدة البيانات.</li>
-        <li>سيتم حذف أي طلبات توثيق طبية أو مستندات مرفوعة.</li>
-        <li>الحالات والتقارير المعتمدة سابقاً سيتم حجب هويتك عنها بالكامل (Anonymization) امتثالاً لسجلات التدقيق السريري.</li>
-        <li>سيتم تطهير وتصفير كافة سجلات الموافقة والجلسة المخزنة على هذا الجهاز.</li>
-      </ul>
+      <!-- Pre-deletion Data Portability / Export Banner -->
+      <div style="background: rgba(14, 165, 164, 0.08); border: 1px dashed var(--teal, #0ea5a4); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+        <div style="font-size: 12.5px; color: var(--ink);">
+          💡 <strong>هل ترغب في حفظ نسخة من ملفك؟</strong> يمكنك تنزيل بياناتك الطبية قبل الحذف:
+        </div>
+        <button type="button" class="soft-button" onclick="exportUserData()" style="font-size: 12px; padding: 6px 12px; font-weight: 600;">
+          📥 تصدير بياناتي (JSON)
+        </button>
+      </div>
 
-      <div style="margin-bottom: 16px;">
+      <!-- Legal Retention Policy Breakdown -->
+      <div style="background: var(--surface-2, rgba(0,0,0,0.03)); border: 1px solid var(--line, rgba(0,0,0,0.08)); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+          <strong style="font-size: 13px; color: var(--teal, #0ea5a4); display: flex; align-items: center; gap: 6px;">
+            <span>⚖️</span> سياسة الاحتفاظ القانونية بالبيانات (Retention Policy)
+          </strong>
+          <button type="button" class="link-button" onclick="openRetentionPolicyModal()" style="font-size: 12px; text-decoration: underline; color: var(--teal, #0ea5a4); background: transparent; border: none; cursor: pointer; padding: 0;">
+            عرض السياسة الكاملة
+          </button>
+        </div>
+        <ul style="font-size: 12.5px; color: var(--muted); line-height: 1.7; margin: 0; padding-inline-start: 18px;">
+          <li><strong>البيانات الشخصية (PII):</strong> حذف فوري ونهائي من Firebase Auth وقاعدة البيانات ومن الجلسات النشطة.</li>
+          <li><strong>المسودات والتقييمات غير المعتمدة:</strong> حذف كامل وفوري.</li>
+          <li><strong>السجلات الطبية المعتمدة سريرياً:</strong> فك الارتباط وحجب الهوية بالكامل (Anonymization) مع الاحتفاظ بالقيم السريرية لمدة <strong>5 سنوات</strong> التزاماً بالقوانين الطبية والمسؤولية والتدقيق السريري (GDPR Art. 17(3)(b)).</li>
+          <li><strong>سجلات التدقيق الأمني:</strong> أرشفة مشفرة لمدة <strong>6 سنوات</strong> امتثالاً للائحة HIPAA § 164.316.</li>
+          <li><strong>النسخ الاحتياطية:</strong> تدوير وتطهير سحابي آلي كل <strong>30 يوماً</strong> مع حظر الاسترجاع (Tombstone).</li>
+        </ul>
+      </div>
+
+      <div style="margin-bottom: 14px;">
         <label for="deleteConfirmationInput" style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--ink);">
           لتأكيد الحذف، اكتب كلمة <strong style="color: #ef4444;">DELETE</strong> أو <strong style="color: #ef4444;">حذف</strong> أدناه:
         </label>
         <input type="text" id="deleteConfirmationInput" placeholder="اكتب DELETE أو حذف هنا" autocomplete="off" style="width: 100%; padding: 10px 14px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; background: var(--surface-2); color: var(--ink);">
       </div>
 
-      <div id="deleteReauthGroup" style="display: none; margin-bottom: 16px;">
+      <div id="deleteReauthGroup" style="display: none; margin-bottom: 14px;">
         <label for="deletePasswordInput" style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--ink);">
           يرجى إدخال كلمة المرور الحالية لتأكيد الهوية:
         </label>
         <input type="password" id="deletePasswordInput" placeholder="كلمة المرور الحالية" autocomplete="current-password" style="width: 100%; padding: 10px 14px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; background: var(--surface-2); color: var(--ink);">
       </div>
 
-      <div id="deleteProgressContainer" style="display: none; margin-bottom: 16px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px;">
+      <div id="deleteProgressContainer" style="display: none; margin-bottom: 14px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px;">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
           <span style="font-size: 13px; font-weight: 700; color: var(--ink);" id="deleteProgressTitle">جاري تنفيذ مراحل الحذف والتعقيم...</span>
           <span class="pill" id="deleteProgressBadge" style="font-size: 10.5px; padding: 2px 8px; background: rgba(14, 165, 164, 0.15); color: var(--teal);">قيد المعالجة</span>
         </div>
         <div style="font-size: 12px; color: var(--muted); line-height: 1.6;" id="deleteProgressStatus">
-          فحص الملفات والسجلات والنسخ الاحتياطية...
+          فحص الملفات والسجلات والنسخ الاحتياطية وتطبيق شواهد الحذف...
         </div>
         <div id="deleteStepsList" style="margin-top: 8px; font-size: 11.5px; color: var(--muted); display: flex; flex-direction: column; gap: 4px;"></div>
       </div>
@@ -3039,6 +3449,32 @@
         </button>
         <button type="button" class="outline-button" onclick="closeDeleteAccountModal()" style="width: 100%; justify-content: center; padding: 10px; font-size: 13.5px;">
           إلغاء والاحتفاظ بحسابي
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Legal Retention Policy Full Details Modal -->
+  <div id="retentionPolicyModal" class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="retentionPolicyModalTitle" aria-describedby="retentionPolicyModalBody" aria-hidden="true" style="display: none;">
+    <div class="confirm-card" style="width: min(680px, 100%); text-align: start; max-height: 90vh; overflow-y: auto;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 22px;">📜</span>
+          <h3 id="retentionPolicyModalTitle" style="margin: 0; font-size: 18px; color: var(--ink);">سياسة الاحتفاظ القانونية بالسجلات الطبية (Legal Retention Policy)</h3>
+        </div>
+        <button type="button" class="close-button" onclick="closeRetentionPolicyModal()" aria-label="Close">×</button>
+      </div>
+
+      <div id="retentionPolicyModalBody" style="font-size: 13px; color: var(--ink); line-height: 1.7; margin-bottom: 18px;">
+        <!-- Dynamically populated or static fallback -->
+      </div>
+
+      <div style="display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap;">
+        <button type="button" class="soft-button" onclick="exportUserData()" style="padding: 8px 18px; font-size: 13px;">
+          📥 تصدير بياناتي الطبية (JSON)
+        </button>
+        <button type="button" class="solid-button" onclick="closeRetentionPolicyModal()" style="padding: 8px 22px; font-size: 13px;">
+          فهمت سياسة الاحتفاظ
         </button>
       </div>
     </div>
@@ -3178,9 +3614,280 @@
     </div>
   </div>
 
+  <!-- Log Blood Pressure Measurement Modal (Persisted Storage) -->
+  <div id="patientLogBpModal" class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="logBpModalTitle" aria-hidden="true" style="display: none; position: fixed; inset: 0; background: rgba(11, 19, 43, 0.8); backdrop-filter: blur(8px); z-index: 999990; align-items: center; justify-content: center; padding: 16px;">
+    <div class="confirm-card" style="max-width: 480px; width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 22px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5); text-align: start;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 22px;">🩸</span>
+          <h3 id="logBpModalTitle" style="margin: 0; font-size: 16px; color: var(--ink);">تسجيل قياس ضغط الدم / Log Blood Pressure</h3>
+        </div>
+        <button type="button" class="close-button" onclick="closeLogBpModal()" style="background: none; border: none; font-size: 22px; cursor: pointer; color: var(--muted);">×</button>
+      </div>
+
+      <form id="logBpForm" onsubmit="event.preventDefault(); submitPatientBpMeasurement();">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
+          <div>
+            <label for="bpInputSystolic" style="display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px;">الانقباضي (Systolic) *</label>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <input type="number" id="bpInputSystolic" min="60" max="260" required placeholder="120" style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 14px;">
+              <span style="font-size: 11px; color: var(--muted);">mmHg</span>
+            </div>
+          </div>
+          <div>
+            <label for="bpInputDiastolic" style="display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px;">الانبساطي (Diastolic) *</label>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <input type="number" id="bpInputDiastolic" min="40" max="160" required placeholder="80" style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 14px;">
+              <span style="font-size: 11px; color: var(--muted);">mmHg</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
+          <div>
+            <label for="bpInputPulse" style="display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px;">النبض (Pulse / Heart Rate)</label>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <input type="number" id="bpInputPulse" min="30" max="220" placeholder="72" style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 14px;">
+              <span style="font-size: 11px; color: var(--muted);">bpm</span>
+            </div>
+          </div>
+          <div>
+            <label for="bpInputSource" style="display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px;">مصدر القياس (Source) *</label>
+            <select id="bpInputSource" style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 13px;">
+              <option value="manual_patient_log">✍️ تسجيل يدوي (Manual Log)</option>
+              <option value="bluetooth_device">📶 جهاز بلوتوث (Bluetooth Cuff)</option>
+              <option value="clinic_reading">🏥 قياس بالعيادة (Clinic Reading)</option>
+              <option value="medical_ocr">📄 مسح تقرير طبي (Medical OCR)</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
+          <div>
+            <label for="bpInputTiming" style="display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px;">وقت القياس (Period)</label>
+            <select id="bpInputTiming" style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 13px;">
+              <option value="morning">🌅 صباحاً (Morning)</option>
+              <option value="afternoon">☀️ ظهراً (Afternoon)</option>
+              <option value="evening">🌆 مساءً (Evening)</option>
+              <option value="night">🌙 ليلاً (Night)</option>
+            </select>
+          </div>
+          <div>
+            <label for="bpInputArm" style="display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px;">الذراع (Arm)</label>
+            <select id="bpInputArm" style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 13px;">
+              <option value="right_arm">الذراع الأيمن (Right Arm)</option>
+              <option value="left_arm">الذراع الأيسر (Left Arm)</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="font-size: 11px; color: var(--muted); margin-bottom: 16px; background: rgba(9, 184, 182, 0.08); padding: 8px 12px; border-radius: 8px; border: 1px solid var(--teal);">
+          🛡️ يتم حفظ القياس بشكل دائم وربطه بملفك الطبي السريري دون اصطناع أي بيانات.
+        </div>
+
+        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+          <button type="button" class="outline-button" onclick="closeLogBpModal()" style="padding: 8px 16px; font-size: 13px;">إلغاء / Cancel</button>
+          <button type="submit" id="btnSubmitBpReading" class="solid-button" style="padding: 8px 20px; font-size: 13px; background: var(--teal); color: #07191b; font-weight: 600;">حفظ القياس / Save</button>
+        </div>
+      </form>
+    </div>
+  <!-- =========================================================================
+       🩺 DOCTOR REVIEW WALKTHROUGH TOUR MODAL (Request 22)
+       Interactive walkthrough showing how a doctor reviews Respiratory Assessment (SpO2=95%) before unlocking
+       ========================================================================= -->
+  <div id="doctorTourModal" class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="doctorTourTitle" aria-describedby="doctorTourSubtitle" aria-hidden="true" style="display: none; position: fixed; inset: 0; z-index: 100000; background: rgba(3, 18, 20, 0.85); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); align-items: center; justify-content: center; padding: 16px;">
+    <div class="confirm-card doctor-tour-card" style="background: var(--surface); border: 1.5px solid var(--line); border-radius: 24px; width: 100%; max-width: 720px; max-height: 90vh; overflow-y: auto; padding: 0; box-shadow: 0 25px 80px rgba(0, 0, 0, 0.55); position: relative; display: flex; flex-direction: column;">
+      
+      <!-- Modal Header -->
+      <div style="padding: 20px 24px 16px; border-bottom: 1px solid var(--line); background: var(--surface-2); display: flex; align-items: flex-start; justify-content: space-between; gap: 14px;">
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          <div style="display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 800; color: var(--teal-2); text-transform: uppercase; letter-spacing: 0.5px;">
+            <span>🩺</span>
+            <span data-i18n="doctorTour.badge">جولة المراجعة السريرية • Clinical Walkthrough</span>
+          </div>
+          <h3 id="doctorTourTitle" style="margin: 0; font-size: 18px; color: var(--ink); line-height: 1.3;" data-i18n="doctorTour.title">
+            كيف يراجع الطبيب حالة التقييم التنفسي (SpO2 = 95%) قبل فك القفل؟
+          </h3>
+          <p id="doctorTourSubtitle" style="margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.45;" data-i18n="doctorTour.subtitle">
+            جولة تفاعلية من 4 خطوات توضح معايير الأمان والفرز الطبي لحماية المريض قبل إصدار التقرير النهائي.
+          </p>
+        </div>
+        <button id="doctorTourCloseBtn" type="button" onclick="closeDoctorReviewTour()" aria-label="Close Tour" style="width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); font-size: 18px; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: all 0.2s;">&times;</button>
+      </div>
+
+      <!-- Stepper Header Navigation -->
+      <div style="padding: 12px 24px 0; background: var(--surface);">
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 10px;" role="tablist">
+          <button type="button" id="tourStepTab-1" class="tour-step-tab active" onclick="goToDoctorTourStep(1)" role="tab" aria-selected="true" style="padding: 8px 6px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 11.5px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;">
+            <span>1️⃣</span> <span data-i18n="doctorTour.tab1">الفرز</span>
+          </button>
+          <button type="button" id="tourStepTab-2" class="tour-step-tab" onclick="goToDoctorTourStep(2)" role="tab" aria-selected="false" style="padding: 8px 6px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 11.5px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;">
+            <span>2️⃣</span> <span data-i18n="doctorTour.tab2">فحص الـ AI</span>
+          </button>
+          <button type="button" id="tourStepTab-3" class="tour-step-tab" onclick="goToDoctorTourStep(3)" role="tab" aria-selected="false" style="padding: 8px 6px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 11.5px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;">
+            <span>3️⃣</span> <span data-i18n="doctorTour.tab3">القرار</span>
+          </button>
+          <button type="button" id="tourStepTab-4" class="tour-step-tab" onclick="goToDoctorTourStep(4)" role="tab" aria-selected="false" style="padding: 8px 6px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 11.5px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;">
+            <span>4️⃣</span> <span data-i18n="doctorTour.tab4">فك القفل</span>
+          </button>
+        </div>
+        <div style="width: 100%; height: 4px; background: var(--line); border-radius: 99px; overflow: hidden;">
+          <div id="tourProgressBar" style="width: 25%; height: 100%; background: linear-gradient(90deg, var(--teal), var(--teal-2)); transition: width 0.3s ease;"></div>
+        </div>
+      </div>
+
+      <!-- Modal Body Content -->
+      <div style="padding: 20px 24px; flex: 1;">
+        
+        <!-- STEP 1: Case Intake & Clinical Triage -->
+        <div id="tourStepContent-1" class="tour-step-content" style="display: block;">
+          <div style="display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 16px;">
+            <div style="flex: 1; min-width: 240px; padding: 14px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px;">
+              <div style="font-size: 11px; font-weight: 700; color: var(--muted); margin-bottom: 6px;" data-i18n="doctorTour.patientVitals">بيانات الحالة المُسجلة:</div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12.5px;">
+                <div><span style="color: var(--muted);">نسبة الأكسجين:</span> <strong style="color: #f59e0b;">95% (SpO2)</strong></div>
+                <div><span style="color: var(--muted);">درجة الكحة:</span> <strong style="color: var(--ink);">معتدلة</strong></div>
+                <div><span style="color: var(--muted);">مدة الأعراض:</span> <strong style="color: var(--ink);">3 أيام</strong></div>
+                <div><span style="color: var(--muted);">معدل التنفس:</span> <strong style="color: var(--ink);">18 نَفَس/د</strong></div>
+              </div>
+            </div>
+            <div style="flex: 1; min-width: 240px; padding: 14px; background: rgba(245, 158, 11, 0.08); border: 1px dashed rgba(245, 158, 11, 0.4); border-radius: 14px;">
+              <div style="font-size: 11px; font-weight: 700; color: #f59e0b; margin-bottom: 6px;" data-i18n="doctorTour.triagePriority">تصنيف الفرز في طابور الطبيب:</div>
+              <div style="font-size: 14px; font-weight: 800; color: var(--ink); margin-bottom: 4px;">
+                ⚡ أولوية متوسطة (Moderate Priority)
+              </div>
+              <p style="margin: 0; font-size: 11.5px; color: var(--muted); line-height: 1.4;" data-i18n="doctorTour.slaNotice">
+                الهدف الزمني للاستجابة السريرية (SLA): مراجعة خلال 15 دقيقة لمنع تفاقم نقص الأكسجين.
+              </p>
+            </div>
+          </div>
+          <div style="padding: 12px 16px; background: rgba(9, 184, 182, 0.08); border: 1px solid var(--teal); border-radius: 12px; font-size: 12.5px; color: var(--ink); line-height: 1.55;">
+            <strong style="color: var(--teal-2); display: block; margin-bottom: 4px;">🔒 لماذا التقرير مقفل للمريض الآن؟</strong>
+            <span data-i18n="doctorTour.whyLockedDesc">
+              وفقاً لقواعد السلامة السريرية الصارمة (PRD Section 7.1)، لا يجوز عرض أي نتائج أو احتمالات للمريض دون تدقيق الطبيب البشري، منعاً لإثارة الهلع أو أخذ أدوية غير مناسبة.
+            </span>
+          </div>
+        </div>
+
+        <!-- STEP 2: AI Differential Analysis & Safety Checks -->
+        <div id="tourStepContent-2" class="tour-step-content" style="display: none;">
+          <div style="padding: 14px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px; margin-bottom: 14px;">
+            <div style="font-size: 12px; font-weight: 700; color: var(--teal-2); margin-bottom: 8px;" data-i18n="doctorTour.aiDifferentialTitle">
+              🤖 مصفوفة التحليل الاحتمالي للذكاء الاصطناعي (AI Differential Classifier):
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <div>
+                <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 3px;">
+                  <span>التهاب شعبي حاد خفيف (Acute Bronchitis)</span>
+                  <strong style="color: var(--teal-2);">72%</strong>
+                </div>
+                <div style="height: 6px; background: var(--line); border-radius: 99px; overflow: hidden;">
+                  <div style="width: 72%; height: 100%; background: var(--teal);"></div>
+                </div>
+              </div>
+              <div>
+                <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 3px;">
+                  <span>نزلة برد فيروسية تنفسية (Viral URI)</span>
+                  <strong style="color: var(--ink);">18%</strong>
+                </div>
+                <div style="height: 6px; background: var(--line); border-radius: 99px; overflow: hidden;">
+                  <div style="width: 18%; height: 100%; background: #38bdf8;"></div>
+                </div>
+              </div>
+              <div>
+                <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 3px;">
+                  <span>تحسس قصبي موسمي (Bronchial Hyperresponsiveness)</span>
+                  <strong style="color: var(--muted);">10%</strong>
+                </div>
+                <div style="height: 6px; background: var(--line); border-radius: 99px; overflow: hidden;">
+                  <div style="width: 10%; height: 100%; background: #94a3b8;"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div style="padding: 12px 14px; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 12px; font-size: 12px; color: var(--ink); line-height: 1.5;">
+            <strong style="color: #10b981;">🛡️ التحقق من خلو علامات الطوارئ الحمراء (Red-Flag Exclusion):</strong><br>
+            لا يوجد ألم بالصدر • لا زرقة بالأطراف • نسبة الأكسجين 95% مستقرة ولا تمثل فشلاً تنفسياً حاداً.
+          </div>
+        </div>
+
+        <!-- STEP 3: Physician Clinical Decision & Digital Sign-off -->
+        <div id="tourStepContent-3" class="tour-step-content" style="display: none;">
+          <div style="padding: 14px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px; margin-bottom: 14px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 20px;">🩺</span>
+                <div>
+                  <strong style="font-size: 13.5px; color: var(--ink);">د. أحمد ممدوح</strong>
+                  <div style="font-size: 11px; color: var(--muted);">استشاري الأمراض الصدرية • ترخيص نقابة #14892</div>
+                </div>
+              </div>
+              <span style="padding: 3px 8px; border-radius: 6px; background: rgba(9, 184, 182, 0.15); color: var(--teal-2); font-size: 11px; font-weight: 700;">معتمد سريرياً</span>
+            </div>
+            <div style="font-size: 12.5px; color: var(--ink); line-height: 1.5; background: var(--surface); padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); margin-bottom: 10px;">
+              <strong style="color: var(--teal-2); display: block; margin-bottom: 4px;">التشخيص والتوصيات المعتمدة:</strong>
+              1. راحة منزلية 48 ساعة مع تناول السوائل الدافئة.<br>
+              2. موسع شعب هوائي خفيف عند الحاجة واستنشاق البخار الطبيعي.<br>
+              3. إعادة قياس الأكسجين مرتين يومياً، والتوجه للطوارئ فوراً إذا انخفض عن 93%.
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--muted);">
+              <span>🔐 التوقيع الرقمي: SHA256:7c8b9...f2</span>
+              <span>📅 ختم الاعتماد: 2026-10-14 07:38</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- STEP 4: Unlocking & Certified Report Delivery (Interactive Simulation) -->
+        <div id="tourStepContent-4" class="tour-step-content" style="display: none;">
+          <div id="tourUnlockCardPreview" style="padding: 16px; background: var(--surface-2); border: 1.5px solid var(--line); border-radius: 16px; text-align: center; margin-bottom: 16px; transition: all 0.3s ease;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+              <span style="font-size: 12px; font-weight: 700; color: var(--ink);">تقرير التقييم التنفسي (Patient Report)</span>
+              <span id="tourUnlockStatusBadge" style="padding: 4px 10px; border-radius: 99px; border: 1px solid rgba(245, 158, 11, 0.35); background: rgba(245, 158, 11, 0.15); color: #f59e0b; font-size: 11.5px; font-weight: 700; display: inline-flex; align-items: center;">
+                <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#f59e0b; margin-inline-end:6px;"></span>
+                <span data-i18n="doctorTour.lockedStatus">🔒 قيد المراجعة الطبية (Locked)</span>
+              </span>
+            </div>
+            <div id="tourCertifiedDetails" style="display: none; padding: 12px; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 12px; margin-bottom: 12px; text-align: start;">
+              <div style="font-size: 12px; color: var(--ink); line-height: 1.5;">
+                <strong style="color: #10b981;">📜 تم إصدار التقرير الطبي المعتمد:</strong><br>
+                • باركود التوثيق (QR Code): صالح للتحقق الرسمي.<br>
+                • تم إرسال تنبيه بالنتيجة المعتمدة للمريض على الواتساب وتطبيق الويب.<br>
+                • إمكانية تصدير التقرير PDF بختم الطبيب وترخيص النقابة.
+              </div>
+            </div>
+            <button type="button" id="btnSimulateUnlock" onclick="simulateReportUnlock()" class="solid-button large" style="width: 100%; justify-content: center; font-size: 14px; gap: 8px;">
+              <span>🔓</span>
+              <span data-i18n="doctorTour.btnUnlock">محاكاة اعتماد الطبيب وفك القفل الآن</span>
+            </button>
+          </div>
+          <div id="tourUnlockSuccessNotice" style="display: none; align-items: center; gap: 8px; font-size: 12px; color: #10b981; justify-content: center; font-weight: 700;">
+            <span>🎉</span>
+            <span data-i18n="doctorTour.unlockSuccess">تم فك القفل بنجاح! يمكن للمريض الآن قراءة التوصيات وتنزيل التقرير الرسمي.</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Modal Footer Controls -->
+      <div style="padding: 14px 24px 20px; border-top: 1px solid var(--line); background: var(--surface-2); display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+        <button type="button" id="tourPrevBtn" onclick="prevDoctorTourStep()" class="outline-button" style="padding: 8px 16px; font-size: 13px; visibility: hidden;">
+          <span data-i18n="doctorTour.btnPrev">السابق</span>
+        </button>
+        <span id="tourStepIndicator" style="font-size: 12.5px; font-weight: 700; color: var(--muted);" data-i18n="doctorTour.stepIndicator">
+          خطوة 1 من 4
+        </span>
+        <button type="button" id="tourNextBtn" onclick="nextDoctorTourStep()" class="solid-button" style="padding: 8px 20px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px;">
+          <span data-i18n="doctorTour.btnNext">الخطوة التالية</span> <span>←</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
   <script src="./i18n.js?v=4.6"></script>
   <!-- Modular Architecture: Core, Auth, Permissions, Patient, Assessment, Doctor, Reports, Appointments, Admin, Notifications -->
   <script defer src="./modules/core/template-loader.js?v=1.0"></script>
+  <script defer src="./modules/doctor/doctor-tour.js?v=1.0"></script>
   <script defer src="./modules/core/async-context-manager.js?v=1.0"></script>
   <script defer src="./modules/core/operational-switches-client.js?v=1.0"></script>
   <script defer src="./modules/core/validation.js?v=1.0"></script>
@@ -3197,6 +3904,8 @@
   <script defer src="./modules/patient/onboarding-ui.js?v=1.0"></script>
   <script defer src="./modules/patient/condition-tailoring-service.js?v=1.0"></script>
   <script defer src="./modules/patient/condition-tailoring-ui.js?v=1.0"></script>
+  <script defer src="./modules/patient/blood-disorders-ui.js?v=1.0"></script>
+  <script defer src="./modules/patient/obesity-ui.js?v=1.0"></script>
   <script defer src="./modules/help/faq-service.js?v=1.0"></script>
   <script defer src="./modules/help/faq-ui.js?v=1.0"></script>
   <script defer src="./modules/assessment/assessment-validation.js?v=1.0"></script>

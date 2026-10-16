@@ -134,6 +134,20 @@ service cloud.firestore {
       return isAuthenticated() && getUserRole() == 'support';
     }
 
+    function isOps() {
+      return isAuthenticated() && getUserRole() == 'ops';
+    }
+
+    function isClinicalQa() {
+      return isAuthenticated() && getUserRole() == 'clinical_qa';
+    }
+
+    // PRD Page 13: Administrative sub-roles (Ops, Support, Clinical QA) have zero access to raw clinical data
+    function isNonClinicalAdminSubRole() {
+      return 'role' in request.auth.token &&
+             request.auth.token.role in ['support', 'ops', 'clinical_qa'];
+    }
+
     // Doctor role is strictly clinical and separated from administrative access
     function isDoctor() {
       return isAuthenticated() && getUserRole() == 'doctor';
@@ -319,7 +333,8 @@ service cloud.firestore {
              !('officialDiagnosis' in data) &&
              (!('doctorApproved' in data) || data.doctorApproved == false) &&
              !('approvedAt' in data) &&
-             !('assignedDoctorId' in data) && !('doctorIdentity' in data) && !('approvingDoctorId' in data);
+             !('assignedDoctorId' in data) && !('doctorIdentity' in data) && !('approvingDoctorId' in data) &&
+             !('doctorSignature' in data);
     }
 
     function isPatientMoreInfoResponse() {
@@ -435,23 +450,22 @@ service cloud.firestore {
     // =========================================================================
     // 3. 📋 CLINICAL CASES (/cases/{caseId})
     // =========================================================================
-    // Direct client writes must never bypass doctor review, report approval, or modify closed cases.
+    // Approval and verified identity are written only by the Admin SDK backend.
     function preservesServerApproval() {
-      return resource.data.status != 'closed' &&
-             request.resource.data.status != 'closed' &&
-             request.resource.data.status != 'approved' &&
-             !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-               'doctorApproved', 'approvingDoctorId', 'approvingDoctorEmail',
-               'approvingDoctorName', 'doctorLicense', 'doctorSpecialty', 'clinicName',
-               'doctorIdentity', 'approvedAt', 'reportGeneratedAt', 'generatedAt', 'reportRef',
-               'clinicalDiagnosis', 'clinicalNotes', 'doctorNotes', 'doctorNote',
-               'medications', 'recommendation', 'recommendations', 'reviewedBy', 'reviewedAt', 'result'
-             ]);
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        'doctorApproved', 'approvingDoctorId', 'approvingDoctorEmail',
+        'approvingDoctorName', 'doctorLicense', 'doctorSpecialty', 'clinicName',
+        'doctorIdentity', 'approvedAt', 'reportGeneratedAt', 'generatedAt', 'doctorSignature'
+      ]) && (!(request.resource.data.status in ['approved', 'closed']) || request.resource.data.status == resource.data.status) &&
+      (!('doctorApproved' in resource.data) || resource.data.doctorApproved != true ||
+       !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+         'clinicalDiagnosis', 'clinicalNotes', 'medications', 'recommendation', 'recommendations'
+       ]));
     }
 
     match /cases/{caseId} {
       allow read: if isAuthenticated() &&
-                     !('role' in request.auth.token && request.auth.token.role == 'support') &&
+                     !isNonClinicalAdminSubRole() &&
                      ((resource.data.patientId == request.auth.uid &&
                        (isDoctorApprovedCase(resource.data) || hasNoUnreleasedClinicalResult(resource.data))) ||
                        (('role' in request.auth.token && request.auth.token.role == 'doctor') &&
@@ -480,7 +494,7 @@ service cloud.firestore {
                         !request.resource.data.diff(resource.data).affectedKeys().hasAny([
                           'clinicId', 'clinic', 'branchId', 'assignedDoctorId', 'doctorId', 'doctorUid'
                         ]) &&
-                        !('role' in request.auth.token && request.auth.token.role == 'support') &&
+                        !isNonClinicalAdminSubRole() &&
                         ((('role' in request.auth.token && request.auth.token.role == 'doctor') &&
                           ('verifiedDoctor' in request.auth.token && request.auth.token.verifiedDoctor == true) &&
                           request.resource.data.status == resource.data.status &&
@@ -517,7 +531,7 @@ service cloud.firestore {
 
     match /case_files/{fileId} {
       allow read: if isAuthenticated() &&
-                    !('role' in request.auth.token && request.auth.token.role == 'support') &&
+                    !isNonClinicalAdminSubRole() &&
                     (resource.data.patientId == request.auth.uid ||
                      isAssignedDoctorForCaseId(resource.data.caseId) ||
                      isOwner() ||
@@ -536,7 +550,7 @@ service cloud.firestore {
 
     match /assessments/{assessmentId} {
       allow read: if isAuthenticated() &&
-                    !('role' in request.auth.token && request.auth.token.role == 'support') &&
+                    !isNonClinicalAdminSubRole() &&
                     ((isPatientOwnedRecord(resource.data) &&
                       (isDoctorApprovedCase(resource.data) || hasNoUnreleasedClinicalResult(resource.data))) ||
                      ('role' in request.auth.token && request.auth.token.role == 'super_admin') ||
@@ -545,7 +559,7 @@ service cloud.firestore {
 
     match /reports/{reportId} {
       allow read: if isAuthenticated() &&
-                    !('role' in request.auth.token && request.auth.token.role == 'support') &&
+                    !isNonClinicalAdminSubRole() &&
                     ((isPatientOwnedRecord(resource.data) && isPublishedReport(resource.data)) ||
                      ('role' in request.auth.token && request.auth.token.role == 'super_admin') ||
                      tokenClinicAdminFor(resource.data));
@@ -553,7 +567,7 @@ service cloud.firestore {
 
     match /medical_reports/{reportId} {
       allow read: if isAuthenticated() &&
-                    !('role' in request.auth.token && request.auth.token.role == 'support') &&
+                    !isNonClinicalAdminSubRole() &&
                     ((isPatientOwnedRecord(resource.data) && isPublishedReport(resource.data)) ||
                      ('role' in request.auth.token && request.auth.token.role == 'super_admin') ||
                      tokenClinicAdminFor(resource.data));
@@ -561,7 +575,7 @@ service cloud.firestore {
 
     match /clinical_reports/{reportId} {
       allow read: if isAuthenticated() &&
-                    !('role' in request.auth.token && request.auth.token.role == 'support') &&
+                    !isNonClinicalAdminSubRole() &&
                     ((isPatientOwnedRecord(resource.data) && isPublishedReport(resource.data)) ||
                      (isPatientOwnedRecord(resource.data) && ('withdrawal' in resource.data) && resource.data.withdrawal.status == 'withdrawn') ||
                      (('role' in request.auth.token && request.auth.token.role == 'doctor') &&
@@ -610,7 +624,7 @@ service cloud.firestore {
     // =========================================================================
     match /appointments/{appointmentId} {
       allow read: if isAuthenticated() &&
-        !('role' in request.auth.token && request.auth.token.role == 'support') && (
+        !isNonClinicalAdminSubRole() && (
         ('role' in request.auth.token && request.auth.token.role == 'super_admin') ||
         tokenClinicAdminFor(resource.data) ||
         (('role' in request.auth.token && request.auth.token.role == 'doctor') &&
@@ -707,31 +721,7 @@ service cloud.firestore {
     }
 
     // =========================================================================
-    // 11. 🏢 MULTI-TENANT ORGANIZATIONS, CLINICS & MEMBERSHIPS
-    // =========================================================================
-    match /organizations/{orgId} {
-      // Public branding lookup is allowed for custom domain/portal resolution; writes restricted to platform admins
-      allow read: if true;
-      allow write: if isOwner() || isSuperAdmin();
-    }
-
-    match /org_private_config/{orgId} {
-      // Strictly shielded: secrets & private tokens can NEVER be read publicly
-      allow read, write: if isOwner() || isSuperAdmin();
-    }
-
-    match /clinics/{clinicId} {
-      allow read: if isAuthenticated();
-      allow write: if isOwner() || isSuperAdmin() || isClinicAdmin();
-    }
-
-    match /org_memberships/{membershipId} {
-      allow read: if isOwner() || isSuperAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
-      allow write: if isOwner() || isSuperAdmin();
-    }
-
-    // =========================================================================
-    // 12. ⚙️ OPERATIONAL FEATURE SWITCHES (/system_settings/operational_switches)
+    // ⚙️ OPERATIONAL FEATURE SWITCHES (/system_settings/operational_switches)
     // =========================================================================
     match /system_settings/operational_switches {
       allow read: if isAuthenticated();
@@ -747,11 +737,164 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // =========================================================================
     // ⚙️ USER DISPLAY PREFERENCES & RESPONSIVE STATE (/user_display_preferences/{userId})
     // =========================================================================
     match /user_display_preferences/{userId} {
       allow read, write: if isOwner() || (isAuthenticated() && isSelf(userId));
+    }
+
+    // =========================================================================
+    // 💉 UNIFIED DISEASE RECORD AUTHORIZATION (Diabetes, Hypertension, Blood Disorders, Obesity)
+    // - Suspended accounts rejected automatically via isAuthenticated()
+    // - Patients may access only their own records
+    // - Doctors may access only records they are authorized and assigned to review
+    // - Administrators may access only according to configured clinic / platform permissions
+    // - Support role denied access to clinical records
+    // =========================================================================
+    function isDiseaseRecordAccessible(data) {
+      return isAuthenticated() &&
+        !isNonClinicalAdminSubRole() &&
+        (
+          isOwner() ||
+          isPlatformAdmin() ||
+          (('patientId' in data && data.patientId == request.auth.uid) ||
+           ('userId' in data && data.userId == request.auth.uid)) ||
+          isDoctorLinkedRecord(data) ||
+          tokenClinicAdminFor(data)
+        );
+    }
+
+    function isDiseaseRecordWritable(data) {
+      return isAuthenticated() &&
+        !isNonClinicalAdminSubRole() &&
+        (
+          isOwner() ||
+          isPlatformAdmin() ||
+          (('role' in request.auth.token && request.auth.token.role == 'patient') &&
+           (('patientId' in data && data.patientId == request.auth.uid) ||
+            ('userId' in data && data.userId == request.auth.uid))) ||
+          isDoctorLinkedRecord(data)
+        );
+    }
+
+    match /disease_records/{recordId} {
+      allow read: if isDiseaseRecordAccessible(resource.data);
+      allow create: if isDiseaseRecordWritable(request.resource.data);
+      allow update, delete: if isOwner() || isPlatformAdmin() || tokenClinicAdminFor(resource.data);
+    }
+
+    match /diabetes_records/{recordId} {
+      allow read: if isDiseaseRecordAccessible(resource.data);
+      allow create: if isDiseaseRecordWritable(request.resource.data);
+      allow update, delete: if isOwner() || isPlatformAdmin() || tokenClinicAdminFor(resource.data);
+    }
+
+    match /diabetes_cases/{caseId} {
+      allow read: if isDiseaseRecordAccessible(resource.data);
+      allow create: if isDiseaseRecordWritable(request.resource.data);
+      allow update: if isOwner() || isPlatformAdmin() || isDoctorLinkedRecord(resource.data);
+      allow delete: if isOwner() || isPlatformAdmin();
+    }
+
+    match /hypertension_records/{recordId} {
+      allow read: if isDiseaseRecordAccessible(resource.data);
+      allow create: if isDiseaseRecordWritable(request.resource.data);
+      allow update, delete: if isOwner() || isPlatformAdmin() || tokenClinicAdminFor(resource.data);
+    }
+
+    match /blood_disorders_cases/{caseId} {
+      allow read: if isDiseaseRecordAccessible(resource.data);
+      allow create: if isDiseaseRecordWritable(request.resource.data);
+      allow update: if isOwner() || isPlatformAdmin() || isDoctorLinkedRecord(resource.data);
+      allow delete: if isOwner() || isPlatformAdmin();
+    }
+
+    match /blood_disorders_observations/{obsId} {
+      allow read: if isDiseaseRecordAccessible(resource.data);
+      allow create: if isDiseaseRecordWritable(request.resource.data);
+      allow update, delete: if isOwner() || isPlatformAdmin() || tokenClinicAdminFor(resource.data);
+    }
+
+    match /obesity_measurements/{measurementId} {
+      allow read: if isDiseaseRecordAccessible(resource.data);
+      allow create: if isDiseaseRecordWritable(request.resource.data);
+      allow update, delete: if isOwner() || isPlatformAdmin() || tokenClinicAdminFor(resource.data);
+    }
+
+    match /obesity_cases/{caseId} {
+      allow read: if isDiseaseRecordAccessible(resource.data);
+      allow create: if isDiseaseRecordWritable(request.resource.data);
+      allow update: if isOwner() || isPlatformAdmin() || isDoctorLinkedRecord(resource.data);
+      allow delete: if isOwner() || isPlatformAdmin();
+    }
+
+    // =========================================================================
+    // 10. REFERENCE CATALOGS & OPERATIONAL LAYER (PRD Architecture)
+    // =========================================================================
+    match /diseases_catalog/{diseaseId} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner() || isPlatformAdmin();
+    }
+
+    match /symptoms_catalog/{symptomId} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner() || isPlatformAdmin();
+    }
+
+    match /clinical_rules/{ruleId} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner() || isPlatformAdmin();
+    }
+
+    match /patients/{patientId} {
+      allow read: if isAuthenticated() &&
+                    (request.auth.uid == patientId ||
+                     isOwner() ||
+                     isPlatformAdmin() ||
+                     (request.auth.token.role == 'doctor' && request.auth.token.verifiedDoctor == true));
+      allow create, update: if isAuthenticated() &&
+                              (request.auth.uid == patientId || isOwner() || isPlatformAdmin());
+      allow delete: if isOwner() || isPlatformAdmin();
+    }
+
+    match /doctors/{doctorId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() &&
+                              (request.auth.uid == doctorId || isOwner() || isPlatformAdmin());
+      allow delete: if isOwner() || isPlatformAdmin();
+    }
+
+    match /clinics/{clinicId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isOwner() || isPlatformAdmin() || tokenClinicAdminFor(resource.data);
+    }
+
+    match /case_status_history/{historyId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if false; // Append-only immutable history
+    }
+
+    match /medical_uploads/{uploadId} {
+      allow read: if isAuthenticated() &&
+                    (resource.data.patientId == request.auth.uid ||
+                     isOwner() ||
+                     isPlatformAdmin() ||
+                     (request.auth.token.role == 'doctor' && request.auth.token.verifiedDoctor == true));
+      allow create: if isAuthenticated() && request.resource.data.patientId == request.auth.uid;
+      allow update, delete: if isAuthenticated() &&
+                              (resource.data.patientId == request.auth.uid || isOwner() || isPlatformAdmin());
+    }
+
+    match /email_queue/{emailId} {
+      allow read, write: if isOwner() || isPlatformAdmin();
+    }
+
+    match /audit_logs/{auditId} {
+      allow read: if isOwner() || isPlatformAdmin();
+      allow create: if isAuthenticated();
+      allow update, delete: if false; // Immutable audit trail
     }
 
     // =========================================================================

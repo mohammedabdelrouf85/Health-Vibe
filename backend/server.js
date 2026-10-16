@@ -16,6 +16,7 @@ const admin = require('firebase-admin');
 const dotenv = require('dotenv');
 const whatsappBot = require('./whatsapp-bot');
 const {
+  createTransporter,
   sendClinicalNotificationEmail,
   enqueueNotification,
   processNotificationQueue,
@@ -88,6 +89,14 @@ const _inMemoryOnboardingStore = new Map();
 const _inMemoryConditionStore = new Map();
 const _inMemoryThemeStore = new Map();
 const _inMemoryLiteModeStore = new Map();
+const bloodDisordersService = require('./blood-disorders-service');
+const obesityService = require('./obesity-service');
+const diseaseAuthorizationService = require('./disease-authorization-service');
+const { relationalDbService } = require('./relational-db-service');
+const { kaggleTrainingService } = require('./kaggle-training-service');
+const { passwordSecurityService } = require('./password-security-service');
+const { medicalCatalogService } = require('./medical-catalog-service');
+const { caseWorkflowService } = require('./case-workflow-service');
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -191,13 +200,19 @@ const allowedOrigins = isDevelopment
   ? Array.from(new Set([...devDefaultOrigins, ...configuredOrigins]))
   : (configuredOrigins.length > 0
     ? configuredOrigins
-    : (isStaging ? ['https://staging.healthvibe.ai'] : ['https://healthvibe.ai', 'https://app.healthvibe.ai']));
+    : (isStaging
+        ? ['https://staging.healthvibe.ai', 'https://health-vibes-staging.web.app', 'https://health-vibes-staging.firebaseapp.com']
+        : ['https://healthvibes.app', 'https://www.healthvibes.app', 'https://healthvibe.ai', 'https://app.healthvibe.ai', 'https://health-vibes-a4b3b.web.app', 'https://health-vibes-a4b3b.firebaseapp.com']));
 
 // =============================================================================
 // 🛡️ SECURITY HARDENING & OWASP COMPLIANCE
 // =============================================================================
 // Suppress server fingerprinting
 app.disable('x-powered-by');
+
+// Enforce HTTPS & TLS 1.3 on all healthvibes.app domains and APIs (Request 36)
+const { httpsAndTls13EnforcementMiddleware } = require('./tls-security-service');
+app.use(httpsAndTls13EnforcementMiddleware);
 
 // Defense-in-depth OWASP Security Response Headers
 app.use((req, res, next) => {
@@ -206,10 +221,10 @@ app.use((req, res, next) => {
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
-  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com https://www.google.com https://www.recaptcha.net; script-src-attr 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://www.gstatic.com https://*.googleusercontent.com https://firebasestorage.googleapis.com; connect-src 'self' http://localhost:4000 http://127.0.0.1:4000 https://healthvibe.ai https://*.firebaseio.com https://*.googleapis.com https://*.google.com https://www.recaptcha.net; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self';");
-  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com https://accounts.google.com https://www.google.com https://www.recaptcha.net; script-src-attr 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://www.gstatic.com https://*.googleusercontent.com https://firebasestorage.googleapis.com; connect-src 'self' http://localhost:4000 http://127.0.0.1:4000 https://healthvibes.app https://*.healthvibes.app https://healthvibe.ai https://*.healthvibe.ai https://*.firebaseio.com https://*.googleapis.com https://accounts.google.com https://*.google.com https://www.recaptcha.net; frame-src 'self' https://healthvibes.app https://*.healthvibes.app https://health-vibes-a4b3b.web.app https://health-vibes-a4b3b.firebaseapp.com https://accounts.google.com https://www.google.com https://recaptcha.google.com https://www.recaptcha.net; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self';");
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-  if (isProduction) {
+  if (isProduction || isStaging || (req.headers.host && req.headers.host.includes('healthvibes.app')) || req.secure || req.headers['x-forwarded-proto'] === 'https') {
     res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
   }
 
@@ -1366,10 +1381,14 @@ const ROLES = {
   CLINIC_ADMIN: 'clinic_admin',
   ORG_ADMIN: 'org_admin',
   SUPPORT: 'support',
+  OPS: 'ops',
+  CLINICAL_QA: 'clinical_qa',
   SUPER_ADMIN: 'super_admin'
 };
 const VALID_ROLES = Object.values(ROLES);
 const ADMIN_ROLES = [ROLES.CLINIC_ADMIN, ROLES.ORG_ADMIN, ROLES.SUPER_ADMIN];
+const ADMIN_SUB_ROLES = [ROLES.SUPER_ADMIN, ROLES.OPS, ROLES.CLINICAL_QA, ROLES.SUPPORT];
+const NON_CLINICAL_ADMIN_ROLES = [ROLES.OPS, ROLES.CLINICAL_QA, ROLES.SUPPORT];
 
 // =============================================================================
 // 🏢 B2B & ENTERPRISE PLAN TIERS & CONTRACT CONFIGURATION
@@ -2424,6 +2443,45 @@ async function requireDoctor(req, res, next) {
   });
 }
 
+/**
+ * Middleware: Enforce Server-Verified Patient Role
+ * Strictly blocks doctors and admins from spoofing or submitting patient triage records
+ * under administrative or clinical sessions.
+ */
+async function requirePatient(req, res, next) {
+  const role = getTrustedClaimRole(req.user);
+  if (role === ROLES.PATIENT || role === 'patient') {
+    return next();
+  }
+  return res.status(403).json({
+    error: 'ACCESS_DENIED',
+    message: 'Server verification failed: Patient role required for this endpoint.'
+  });
+}
+
+/**
+ * Middleware Factory: Enforce Strict Role-Based Access Control
+ * Ensures the authenticated user belongs strictly to one of the authorized roles.
+ */
+function requireStrictRole(allowedRoles = []) {
+  return (req, res, next) => {
+    const role = getTrustedClaimRole(req.user);
+    if (allowedRoles.includes(role) || (allowedRoles.includes('super_admin') && hasTrustedOwnerClaim(req.user))) {
+      return next();
+    }
+    return res.status(403).json({
+      error: 'ROLE_FORBIDDEN',
+      message: `Access denied: Role '${role}' is not authorized for this route. Permitted roles: ${allowedRoles.join(', ')}.`
+    });
+  };
+}
+
+// Attach RBAC middlewares to app for testing and sub-routing
+app.requirePatient = requirePatient;
+app.requireDoctor = requireDoctor;
+app.requireAdmin = requireAdmin;
+app.requireStrictRole = requireStrictRole;
+
 // ==========================================
 // API ENDPOINTS
 // ==========================================
@@ -2474,13 +2532,53 @@ app.get('/api/patient/medical-profile', requireAuth, patientProfileLimiter, asyn
 
     if (requestedUid && requestedUid !== req.user.uid) {
       const userRole = getTrustedClaimRole(req.user);
-      const isClinicianOrAdmin = ADMIN_ROLES.includes(userRole) || userRole === ROLES.DOCTOR_VERIFIED || hasTrustedOwnerClaim(req.user);
+
+      // PRD Page 13: Revoke default universal access to sensitive medical data for administrative sub-roles
+      if (NON_CLINICAL_ADMIN_ROLES.includes(userRole)) {
+        return res.status(403).json({
+          error: 'LEAST_PRIVILEGE_RESTRICTION',
+          message: 'Zero-Trust: Administrative sub-roles (Ops, Support, Clinical QA) are restricted from accessing unmasked patient medical profiles under PRD Page 13 Least-Privilege policy.'
+        });
+      }
+
+      const isClinicianOrAdmin = ADMIN_ROLES.includes(userRole) || userRole === ROLES.DOCTOR_VERIFIED || userRole === ROLES.DOCTOR || hasTrustedOwnerClaim(req.user);
       if (!isClinicianOrAdmin) {
         return res.status(403).json({
           error: 'FORBIDDEN',
           message: 'Accessing other patient profiles requires verified clinician or administrator credentials.'
         });
       }
+
+      // If requester is a physician, strictly verify that the patient is assigned to their clinical care
+      if (!ADMIN_ROLES.includes(userRole) && !hasTrustedOwnerClaim(req.user)) {
+        let isDoctorAssigned = false;
+        if (db) {
+          const casesSnap = await db.collection('cases').where('patientId', '==', requestedUid).get();
+          casesSnap.forEach(doc => {
+            const d = doc.data() || {};
+            if ([d.assignedDoctorId, d.doctorId, d.doctorUid, d.approvingDoctorId].includes(req.user.uid)) {
+              isDoctorAssigned = true;
+            }
+          });
+          if (!isDoctorAssigned) {
+            const apptSnap = await db.collection('appointments').where('patientId', '==', requestedUid).where('doctorId', '==', req.user.uid).get();
+            if (!apptSnap.empty) isDoctorAssigned = true;
+          }
+          if (!isDoctorAssigned) {
+            const pDoc = await db.collection('users').doc(requestedUid).get();
+            if (pDoc.exists && pDoc.data()?.medicalProfile?.clinicLinkage?.linkedDoctorId === req.user.uid) {
+              isDoctorAssigned = true;
+            }
+          }
+        }
+        if (!isDoctorAssigned) {
+          return res.status(403).json({
+            error: 'PATIENT_NOT_ASSIGNED_TO_DOCTOR',
+            message: 'Zero-Trust enforcement: Physicians can only access medical profiles for patients assigned to their clinical care.'
+          });
+        }
+      }
+
       targetUid = requestedUid;
     }
 
@@ -2565,6 +2663,17 @@ app.get('/api/patient/medical-profile', requireAuth, patientProfileLimiter, asyn
       correctionHistory: storedProfile.correctionHistory || userDoc.correctionHistory || []
     };
 
+    // Request 32: Log immutable clinical audit for VIEW action
+    relationalDbService.logClinicalAudit({
+      actor_id: req.user.uid,
+      role: getTrustedClaimRole(req.user),
+      action: 'VIEW',
+      target_record: `medical_profile:${targetUid}`,
+      ip_address: getClientIp(req) || '127.0.0.1',
+      userAgent: req.headers['user-agent'] || 'HealthVibe-Client/1.0',
+      metadata: { targetPatientUid: targetUid }
+    }).catch(() => {});
+
     res.json({ ok: true, profile: fullProfile });
   } catch (err) {
     console.error('[PATIENT PROFILE GET ERROR]:', err);
@@ -2615,6 +2724,15 @@ app.post('/api/patient/medical-profile', requireAuth, patientProfileLimiter, asy
 
     if (requestedUid && requestedUid !== req.user.uid) {
       const userRole = getTrustedClaimRole(req.user);
+
+      // PRD Page 13: Revoke default universal access to sensitive medical data for administrative sub-roles
+      if (NON_CLINICAL_ADMIN_ROLES.includes(userRole)) {
+        return res.status(403).json({
+          error: 'LEAST_PRIVILEGE_RESTRICTION',
+          message: 'Zero-Trust: Administrative sub-roles (Ops, Support, Clinical QA) cannot modify patient medical profiles.'
+        });
+      }
+
       const isClinicianOrAdmin = ADMIN_ROLES.includes(userRole) || userRole === ROLES.DOCTOR_VERIFIED || hasTrustedOwnerClaim(req.user);
       if (!isClinicianOrAdmin) {
         return res.status(403).json({
@@ -2713,6 +2831,17 @@ app.post('/api/patient/medical-profile', requireAuth, patientProfileLimiter, asy
       }
     });
 
+    // Request 32: Log immutable clinical audit for MODIFY action
+    relationalDbService.logClinicalAudit({
+      actor_id: req.user.uid,
+      role: getTrustedClaimRole(req.user),
+      action: 'MODIFY',
+      target_record: `medical_profile:${targetUid}`,
+      ip_address: getClientIp(req) || '127.0.0.1',
+      userAgent: req.headers['user-agent'] || 'HealthVibe-Client/1.0',
+      metadata: { version: provenance.version, updatedBy: provenance.updatedBy }
+    }).catch(() => {});
+
     res.json({
       ok: true,
       message: 'Patient medical profile updated successfully.',
@@ -2744,6 +2873,15 @@ app.post('/api/patient/medical-profile/correct', requireAuth, patientProfileLimi
 
     if (requestedUid && requestedUid !== req.user.uid) {
       const userRole = getTrustedClaimRole(req.user);
+
+      // PRD Page 13: Revoke default universal access to sensitive medical data for administrative sub-roles
+      if (NON_CLINICAL_ADMIN_ROLES.includes(userRole)) {
+        return res.status(403).json({
+          error: 'LEAST_PRIVILEGE_RESTRICTION',
+          message: 'Zero-Trust: Administrative sub-roles (Ops, Support, Clinical QA) cannot correct patient medical profiles.'
+        });
+      }
+
       const isClinicianOrAdmin = ADMIN_ROLES.includes(userRole) || userRole === ROLES.DOCTOR_VERIFIED || hasTrustedOwnerClaim(req.user);
       if (!isClinicianOrAdmin) {
         return res.status(403).json({
@@ -4653,13 +4791,18 @@ app.post('/api/user/sync-role', requireAuth, async (req, res) => {
         } else if (data.role && VALID_ROLES.includes(data.role)) {
           role = data.role;
         } else {
-          role = ROLES.PATIENT;
+          const requestedRole = req.body && req.body.requestedRole ? String(req.body.requestedRole).toLowerCase() : null;
+          const allowedSignupRoles = [ROLES.PATIENT, ROLES.DOCTOR_PENDING, ROLES.CLINIC_ADMIN];
+          role = (requestedRole && allowedSignupRoles.includes(requestedRole)) ? requestedRole : ROLES.PATIENT;
           await userRef.set({ role, isOwner: false }, { merge: true });
         }
         verifiedDoctor = isOwner || Boolean(data.verifiedDoctor || role === ROLES.DOCTOR);
       } else {
         // Initialize new user on the backend
-        role = isOwner ? ROLES.SUPER_ADMIN : (hasTrustedAdminClaim(req.user) ? getTrustedClaimRole(req.user) : ROLES.PATIENT);
+        const requestedRole = req.body && req.body.requestedRole ? String(req.body.requestedRole).toLowerCase() : null;
+        const allowedSignupRoles = [ROLES.PATIENT, ROLES.DOCTOR_PENDING, ROLES.CLINIC_ADMIN];
+        const defaultRole = (requestedRole && allowedSignupRoles.includes(requestedRole)) ? requestedRole : ROLES.PATIENT;
+        role = isOwner ? ROLES.SUPER_ADMIN : (hasTrustedAdminClaim(req.user) ? getTrustedClaimRole(req.user) : defaultRole);
         verifiedDoctor = isOwner || role === ROLES.DOCTOR;
         await userRef.set({
           name: req.user.name || email.split('@')[0],
@@ -4678,7 +4821,10 @@ app.post('/api/user/sync-role', requireAuth, async (req, res) => {
         }, { merge: true });
       }
     } else {
-      role = isOwner ? ROLES.SUPER_ADMIN : (hasTrustedAdminClaim(req.user) ? getTrustedClaimRole(req.user) : ROLES.PATIENT);
+      const requestedRole = req.body && req.body.requestedRole ? String(req.body.requestedRole).toLowerCase() : null;
+      const allowedSignupRoles = [ROLES.PATIENT, ROLES.DOCTOR_PENDING, ROLES.CLINIC_ADMIN];
+      const defaultRole = (requestedRole && allowedSignupRoles.includes(requestedRole)) ? requestedRole : ROLES.PATIENT;
+      role = isOwner ? ROLES.SUPER_ADMIN : (hasTrustedAdminClaim(req.user) ? getTrustedClaimRole(req.user) : defaultRole);
       verifiedDoctor = isOwner || role === ROLES.DOCTOR;
     }
 
@@ -4883,6 +5029,35 @@ app.post('/api/user/revoke-all-sessions', requireAuth, requireRecentAuth(900), r
 });
 
 /**
+ * GET /api/auth/password-security-policy
+ * Exposes cryptographic password hashing specifications and zero-plaintext guarantees (Request 31).
+ */
+app.get('/api/auth/password-security-policy', (req, res) => {
+  res.json({
+    success: true,
+    policy: 'STRICT_ARGON2ID_AND_BCRYPT_ZERO_PLAINTEXT_POLICY',
+    supportedAlgorithms: ['bcrypt', 'argon2id'],
+    defaultAlgorithm: 'bcrypt',
+    bcryptCostFactor: passwordSecurityService.bcryptRounds,
+    argon2idParams: {
+      memoryCostKb: 16384,
+      timeCost: 2,
+      parallelism: 1,
+      version: 19
+    },
+    zeroPlaintextGuaranteed: true,
+    storageRule: 'Plaintext passwords strictly prohibited from storage in any environment (dev, staging, prod)',
+    requirements: {
+      minLength: 8,
+      maxLength: 128,
+      requireUppercase: true,
+      requireLowercase: true,
+      requireDigit: true
+    }
+  });
+});
+
+/**
  * POST /api/user/change-password
  * Secure password change requiring recent re-authentication and revoking other active sessions
  */
@@ -4919,6 +5094,18 @@ app.post('/api/user/change-password', requireAuth, requireRecentAuth(900), requi
       password: newPassword
     });
 
+    // Zero-Plaintext Security: Hash password using bcrypt for operational relational database
+    const hashed = await passwordSecurityService.hashPassword(newPassword);
+    const relationalAccId = relationalDbService.indexes.accounts_firebase_uid.get(userId);
+    if (relationalAccId) {
+      const relAcc = relationalDbService.tables.accounts.get(relationalAccId);
+      if (relAcc) {
+        relAcc.password_hash = hashed;
+        relAcc.updated_at = new Date().toISOString();
+        relAcc.password_last_changed_at = new Date().toISOString();
+      }
+    }
+
     // Revoke refresh tokens on other devices to force re-authentication with the new password
     await admin.auth().revokeRefreshTokens(userId).catch(() => {});
     const nowIso = new Date().toISOString();
@@ -4937,7 +5124,7 @@ app.post('/api/user/change-password', requireAuth, requireRecentAuth(900), requi
       auditService.recordAuditEvent(db, {
         type: auditService.AUDIT_EVENT_TYPES.PASSWORD_CHANGED,
         req,
-        details: { changedAt: nowIso }
+        details: { changedAt: nowIso, passwordHashed: true, algorithm: 'bcrypt' }
       }).catch(() => {});
     }
 
@@ -5340,6 +5527,64 @@ app.post('/api/user/mfa/disenroll', requireAuth, requireRecentAuth(900), require
   res.json({
     success: true,
     message: 'Multi-factor authentication has been disabled.'
+  });
+});
+
+/**
+ * GET /api/admin/sub-roles
+ * Returns definitions and least-privilege security policies for the 4 administrative sub-roles
+ * (Super Admin, Ops, Clinical QA, Support) as specified in PRD Page 13.
+ */
+app.get('/api/admin/sub-roles', requireAuth, (req, res) => {
+  return res.json({
+    success: true,
+    policy: 'PRD_PAGE_13_LEAST_PRIVILEGE_ADMIN_SUB_ROLES',
+    subRoles: {
+      super_admin: {
+        id: 'super_admin',
+        nameAr: 'المدير العام (Super Admin)',
+        nameEn: 'Super Administrator',
+        descriptionAr: 'الحوكمة الشاملة، إدارة المستخدمين والرتب، ومراجعة سجلات التدقيق الأمني. إلغاء الوصول الشامل الافتراضي للبيانات الطبية (خاضع للتدقيق والتبرير الطارئ فقط).',
+        descriptionEn: 'Master platform governance, credentialing, audit trail oversight. Routine medical browsing revoked.',
+        hasMedicalDataAccess: false,
+        clinicalAccessPolicy: 'audited_emergency_only',
+        allowedScreens: ['admin', 'audit', 'kpi'],
+        permissions: ['manage:user_roles', 'manage:users', 'view:admin_dashboard', 'view:audit_log', 'approve:doctor_application', 'reject:doctor_application', 'manage:ai_models', 'view:system_metrics']
+      },
+      ops: {
+        id: 'ops',
+        nameAr: 'مدير العمليات والبنية التحتية (Ops)',
+        nameEn: 'Operations & Infrastructure Admin',
+        descriptionAr: 'إدارة البنية التحتية، قواطع الميزات التشغيلية، ومراقبة خوادم النظام وأداء الشبكة. حظر قطعي وتام لأي وصول للبيانات السريرية للمرضى.',
+        descriptionEn: 'Infrastructure management, operational feature switches, telemetry, server uptime. Zero medical data access.',
+        hasMedicalDataAccess: false,
+        clinicalAccessPolicy: 'zero_access',
+        allowedScreens: ['profile', 'admin', 'audit', 'kpi', 'verify-report', 'verify'],
+        permissions: ['view:admin_dashboard', 'view:system_metrics', 'manage:system_settings', 'view:audit_log']
+      },
+      clinical_qa: {
+        id: 'clinical_qa',
+        nameAr: 'مسؤول ضمان الجودة السريرية (Clinical QA)',
+        nameEn: 'Clinical QA & AI Safety Auditor',
+        descriptionAr: 'تقييم نماذج الذكاء الاصطناعي، مصفوفة الدقة والالتباس، سجل السلامة وسجلات CAPA. وصول حصري لمؤشرات إحصائية مجمعة مجهولة الهوية فقط دون أي استعراض لملفات المرضى الفردية.',
+        descriptionEn: 'AI triage safety register, accuracy metrics, confusion matrices, CAPA audits. De-identified aggregate access only.',
+        hasMedicalDataAccess: false,
+        clinicalAccessPolicy: 'aggregate_only',
+        allowedScreens: ['profile', 'admin', 'audit', 'kpi', 'verify-report', 'verify'],
+        permissions: ['view:admin_dashboard', 'view:system_metrics', 'manage:ai_models', 'view:clinical_metrics_aggregate', 'view:audit_log']
+      },
+      support: {
+        id: 'support',
+        nameAr: 'مسؤول الدعم الفني (Support)',
+        nameEn: 'Technical & Customer Support',
+        descriptionAr: 'مساعدة المستخدمين وحل مشكلات تسجيل الدخول والتذاكر. حجب وتعتيم تلقائي لكافة البيانات الطبية الحساسة (SpO2، العلامات الحيوية، التشخيص، الملاحظات الداخلية).',
+        descriptionEn: 'User assistance, login troubleshooting, ticket escalation. Clinical data masked and redacted.',
+        hasMedicalDataAccess: false,
+        clinicalAccessPolicy: 'masked_redacted_only',
+        allowedScreens: ['profile', 'kpi', 'verify-report', 'verify'],
+        permissions: ['view:system_metrics', 'view:support_queue']
+      }
+    }
   });
 });
 
@@ -6003,6 +6248,34 @@ app.get('/api/admin/audit/events', requireAuth, requireAdmin, async (req, res) =
 });
 
 /**
+ * GET /api/audit/clinical-logs
+ * Exposes immutable clinical audit trail (actor_id, role, action, target_record, timestamp, ip_address)
+ * tracking all VIEW, MODIFY, and APPROVE operations on medical data (Request 32).
+ */
+app.get('/api/audit/clinical-logs', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { action, actor_id, target_record, role, startDate, endDate, limit } = req.query || {};
+    const logs = await relationalDbService.getClinicalAuditLogs({
+      action,
+      actor_id,
+      target_record,
+      role,
+      startDate,
+      endDate,
+      limit: limit ? parseInt(limit, 10) : 100
+    });
+    return res.json({
+      success: true,
+      count: logs.length,
+      immutable: true,
+      logs
+    });
+  } catch (err) {
+    return res.status(500).json({ error: 'AUDIT_QUERY_FAILED', message: err.message });
+  }
+});
+
+/**
  * GET & POST /api/admin/audit/export
  * Export audit events (JSON / CSV) with data minimization and export trail logging
  */
@@ -6393,6 +6666,159 @@ app.post('/api/reports/share/revoke', requireAuth, async (req, res) => {
 });
 
 /**
+ * POST /api/reports/dispatch-to-doctor
+ * Handles patient dispatching generated medical report to the assigned physician's inbox.
+ * Validates payload (patientProfile, assessmentMetrics, timestamp) and stores delivery status.
+ */
+app.post('/api/reports/dispatch-to-doctor', requireAuth, async (req, res) => {
+  const { caseId, payload } = req.body || {};
+  if (!caseId) {
+    return res.status(400).json({ error: 'MISSING_CASE_ID', message: 'caseId is required.' });
+  }
+
+  try {
+    let caseData = null;
+    const caseSnap = await db.collection('cases').doc(caseId).get();
+    if (!caseSnap.exists) {
+      return res.status(404).json({ error: 'CASE_NOT_FOUND', message: `Case ${caseId} does not exist.` });
+    }
+    caseData = { id: caseSnap.id, ...caseSnap.data() };
+
+    const isOwner = caseData.patientId === req.user.uid || caseData.userId === req.user.uid || req.user.role === 'patient';
+    const isDoctor = caseData.assignedDoctorId === req.user.uid || caseData.approvingDoctorId === req.user.uid || req.user.role === 'doctor';
+    const isAdmin = hasTrustedAdminClaim(req.user) || (typeof isOwnerUser === 'function' && isOwnerUser(req.user.email));
+    if (!isOwner && !isDoctor && !isAdmin) {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Not authorized to dispatch this report.' });
+    }
+
+    const nowIso = new Date().toISOString();
+    const trackingRef = (payload && payload.trackingRef) || `HV-DISP-${caseId.slice(-6).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`;
+
+    // Standardized Patient Profile
+    const rawPatient = (payload && payload.patientProfile) || {};
+    const patientProfile = {
+      patientId: rawPatient.patientId || caseData.patientId || caseData.userId || req.user.uid,
+      fullName: rawPatient.fullName || caseData.patientName || caseData.name || req.user.displayName || 'Patient',
+      age: rawPatient.age || caseData.patientAge || caseData.age || null,
+      gender: rawPatient.gender || caseData.patientGender || caseData.gender || 'unspecified',
+      dateOfBirth: rawPatient.dateOfBirth || caseData.patientDob || caseData.dob || null,
+      phone: rawPatient.phone || caseData.patientPhone || caseData.phone || null,
+      email: rawPatient.email || caseData.patientEmail || caseData.email || req.user.email || null,
+      clinicId: rawPatient.clinicId || caseData.clinicId || null,
+      clinicName: rawPatient.clinicName || caseData.clinicName || 'Health Vibe Medical Center',
+      chronicConditions: rawPatient.chronicConditions || caseData.chronicConditions || [],
+      allergies: rawPatient.allergies || caseData.allergies || []
+    };
+
+    // Standardized Assessment Metrics
+    const rawMetrics = (payload && payload.assessmentMetrics) || {};
+    const assessmentMetrics = {
+      oxygenLevel: rawMetrics.oxygenLevel ?? caseData.oxygenLevel ?? caseData.o2 ?? null,
+      breathingDifficulty: rawMetrics.breathingDifficulty || caseData.breathingDifficulty || 'unspecified',
+      coughLevel: rawMetrics.coughLevel || caseData.coughLevel || 'unspecified',
+      symptomDuration: rawMetrics.symptomDuration || caseData.symptomDuration || 'unspecified',
+      temperature: rawMetrics.temperature ?? caseData.temperature ?? null,
+      respiratoryRate: rawMetrics.respiratoryRate ?? caseData.respiratoryRate ?? null,
+      chestPain: rawMetrics.chestPain || caseData.chestPain || 'none',
+      symptomProgression: rawMetrics.symptomProgression || caseData.symptomProgression || 'stable',
+      recentInfection: rawMetrics.recentInfection || caseData.recentInfection || 'none',
+      asthmaCopd: rawMetrics.asthmaCopd || caseData.asthmaCopd || 'none',
+      currentMedications: rawMetrics.currentMedications || caseData.currentMedications || '',
+      notes: rawMetrics.notes || caseData.notes || '',
+      riskFactors: rawMetrics.riskFactors || caseData.riskFactors || [],
+      aiScore: rawMetrics.aiScore || caseData.aiScore || 'normal',
+      ruleEngineVersion: rawMetrics.ruleEngineVersion || caseData.ruleEngineVersion || '2.4.0',
+      clinicalDiagnosis: rawMetrics.clinicalDiagnosis || caseData.clinicalDiagnosis || null,
+      medications: rawMetrics.medications || caseData.medications || null,
+      recommendations: rawMetrics.recommendations || caseData.recommendations || []
+    };
+
+    const targetDoctorId = (payload && payload.recipientDoctor?.id) || caseData.assignedDoctorId || caseData.approvingDoctorId || null;
+    const targetDoctorName = (payload && payload.recipientDoctor?.name) || caseData.assignedDoctorName || caseData.approvingDoctorName || 'Assigned Pulmonologist';
+
+    const dispatchRecord = {
+      caseId,
+      reportRef: caseData.reportRef || `HV-REP-${caseId.slice(-8).toUpperCase()}`,
+      trackingRef,
+      timestamp: nowIso,
+      dispatchedAt: nowIso,
+      dispatchedBy: req.user.uid,
+      dispatchedByRole: req.user.role || 'patient',
+      deliveryStatus: 'delivered_to_doctor_inbox',
+      recipientDoctor: {
+        id: targetDoctorId,
+        name: targetDoctorName,
+        specialty: caseData.doctorSpecialty || 'Pulmonology',
+        clinic: patientProfile.clinicName
+      },
+      patientProfile,
+      assessmentMetrics
+    };
+
+    // Update case record in Firestore
+    const updatePayload = {
+      deliveryStatus: 'delivered_to_doctor_inbox',
+      lastDispatchedAt: nowIso,
+      lastDispatchedBy: req.user.uid,
+      latestDispatchTrackingRef: trackingRef,
+      latestReportDispatch: dispatchRecord,
+      doctorInboxDelivery: {
+        status: 'delivered',
+        deliveredAt: nowIso,
+        doctorId: targetDoctorId,
+        trackingRef
+      }
+    };
+    if (caseData.status !== 'approved') {
+      updatePayload.status = CASE_STATUS.UNDER_REVIEW;
+    }
+    if (targetDoctorId && !caseData.assignedDoctorId) {
+      updatePayload.assignedDoctorId = targetDoctorId;
+      updatePayload.assignedDoctorName = targetDoctorName;
+    }
+
+    await db.collection('cases').doc(caseId).update(updatePayload);
+
+    // Save to doctor_inbox collection for instant queue retrieval
+    try {
+      await db.collection('doctor_inbox').add({
+        ...dispatchRecord,
+        status: 'unread',
+        receivedAt: nowIso,
+        read: false
+      });
+    } catch (e) {
+      console.warn('[SERVER] doctor_inbox entry notice:', e.message);
+    }
+
+    // Audit Event
+    try {
+      await db.collection('audit_events').add({
+        type: 'REPORT_DISPATCHED_TO_DOCTOR',
+        caseId,
+        trackingRef,
+        dispatchedBy: req.user.uid,
+        doctorId: targetDoctorId,
+        timestamp: admin.firestore?.FieldValue ? admin.firestore.FieldValue.serverTimestamp() : nowIso
+      });
+    } catch (e) {}
+
+    return res.json({
+      success: true,
+      deliveryStatus: 'delivered_to_doctor_inbox',
+      trackingRef,
+      timestamp: nowIso,
+      recipientDoctor: dispatchRecord.recipientDoctor,
+      patientProfile,
+      assessmentMetrics,
+      message: 'Medical report successfully dispatched to doctor inbox.'
+    });
+  } catch (err) {
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
+  }
+});
+
+/**
  * Helper to service shared report access
  */
 async function handleSharedReportAccess(req, res) {
@@ -6722,7 +7148,9 @@ async function executeDoctorTransition({
   doctorLicense,
   clinicName,
   reportRef,
-  reportGeneratedAt
+  reportGeneratedAt,
+  reviewedRevision,
+  expectedRevision
 }) {
   const ALLOWED_DOCTOR_STATUSES = [
     'under_review',
@@ -6883,6 +7311,51 @@ async function executeDoctorTransition({
             }
           }
 
+          // Stale clinical revision guard: Reject stale approval requests when clinical data changes
+          if (targetStatus === 'approved') {
+            const currentCaseRevision = Number(caseData.clinicalRevision || 1);
+            const effectiveReviewedRevision = reviewedRevision !== undefined && reviewedRevision !== null
+              ? Number(reviewedRevision)
+              : (expectedRevision !== undefined && expectedRevision !== null
+                ? Number(expectedRevision)
+                : (req.body?.reviewedRevision !== undefined && req.body?.reviewedRevision !== null
+                  ? Number(req.body.reviewedRevision)
+                  : (req.body?.expectedRevision !== undefined && req.body?.expectedRevision !== null
+                    ? Number(req.body.expectedRevision)
+                    : null)));
+
+            if ((effectiveReviewedRevision !== null && effectiveReviewedRevision < currentCaseRevision) ||
+                ((caseData.isRevisionStale || caseData.hasNewInfo) && (effectiveReviewedRevision === null || effectiveReviewedRevision < currentCaseRevision))) {
+              return {
+                statusCode: 409,
+                body: {
+                  error: 'CLINICAL_DATA_CONFLICT',
+                  message: `The clinical case data has changed to revision ${currentCaseRevision} (reviewed: ${effectiveReviewedRevision || 1}). Please review the latest revision before approval.`,
+                  currentRevision: currentCaseRevision,
+                  reviewedRevision: effectiveReviewedRevision,
+                  conflict: {
+                    caseId,
+                    currentRevision: currentCaseRevision,
+                    reviewedRevision: effectiveReviewedRevision,
+                    changedFields: ['clinicalRevision'],
+                    updatedCase: {
+                      caseId,
+                      clinicalRevision: currentCaseRevision,
+                      status: currentStatus,
+                      oxygenLevel: caseData.oxygenLevel ?? caseData.o2 ?? null,
+                      o2: caseData.o2 ?? caseData.oxygenLevel ?? null,
+                      patientResponse: caseData.patientResponse || null,
+                      patientRespondedAt: caseData.patientRespondedAt || null,
+                      assignedDoctorId: caseData.assignedDoctorId || null,
+                      assignedDoctorName: caseData.assignedDoctorName || null,
+                      clinicId: caseData.clinicId || null
+                    }
+                  }
+                }
+              };
+            }
+          }
+
           if (currentStatus === targetStatus) {
             return { duplicate: true, caseData, currentStatus, updateData: null };
           }
@@ -7018,6 +7491,17 @@ async function executeDoctorTransition({
             updateData.doctorSpecialty = doctorIdentity.specialty;
             updateData.doctorLicense = doctorIdentity.licenseNumber;
             updateData.clinicName = doctorIdentity.clinic;
+            updateData.doctorSignature = {
+              workflow: 'doctor_electronic_approval_v1',
+              status: 'signed',
+              signedAt: nowIso,
+              signedByUid: req.user.uid,
+              doctorName: doctorIdentity.name,
+              doctorLicense: doctorIdentity.licenseNumber,
+              specialty: doctorIdentity.specialty,
+              clinic: doctorIdentity.clinic,
+              verified: true
+            };
             updateData.reportRef = reportRef || `HV-REP-${caseId.slice(-8).toUpperCase()}`;
             updateData.reportGeneratedAt = reportGeneratedAt || nowIso;
             updateData.approvedAt = admin.firestore.FieldValue.serverTimestamp();
@@ -7146,6 +7630,21 @@ async function executeDoctorTransition({
               clinicId: recordClinicId(caseData),
               timestamp: admin.firestore.FieldValue.serverTimestamp()
             });
+
+            // Request 32: Log immutable clinical audit for APPROVE action
+            relationalDbService.logClinicalAudit({
+              actor_id: req.user.uid,
+              role: 'doctor',
+              action: 'APPROVE',
+              target_record: `case:${caseId}`,
+              ip_address: getClientIp(req) || '127.0.0.1',
+              userAgent: req.headers['user-agent'] || 'HealthVibe-Client/1.0',
+              metadata: {
+                caseId,
+                revisionNumber: updateData.reportSnapshot.revisionNumber,
+                clinicId: recordClinicId(caseData)
+              }
+            }).catch(() => {});
           } else if (targetStatus === 'rejected') {
             const rejectRef = db.collection('audit_events').doc();
             transaction.set(rejectRef, {
@@ -7276,12 +7775,14 @@ app.post('/api/doctor/transition-case-status', requireAuth, requireVerifiedEmail
   const {
     caseId, targetStatus, note, clinicalNotes, clinicalDiagnosis,
     medications, recommendation, recommendations,
-    approvingDoctorName, doctorSpecialty, doctorLicense, clinicName, reportRef, reportGeneratedAt
+    approvingDoctorName, doctorSpecialty, doctorLicense, clinicName, reportRef, reportGeneratedAt,
+    reviewedRevision, expectedRevision
   } = req.body;
   return executeDoctorTransition({
     req, res, caseId, targetStatus, note, clinicalNotes, clinicalDiagnosis,
     medications, recommendation, recommendations,
-    approvingDoctorName, doctorSpecialty, doctorLicense, clinicName, reportRef, reportGeneratedAt
+    approvingDoctorName, doctorSpecialty, doctorLicense, clinicName, reportRef, reportGeneratedAt,
+    reviewedRevision, expectedRevision
   });
 });
 
@@ -7293,12 +7794,14 @@ app.post('/api/doctor/approve-clinical-case', requireAuth, requireVerifiedEmail,
   const {
     caseId, note, clinicalNotes, clinicalDiagnosis,
     medications, recommendation, recommendations,
-    approvingDoctorName, doctorSpecialty, doctorLicense, clinicName, reportRef, reportGeneratedAt
+    approvingDoctorName, doctorSpecialty, doctorLicense, clinicName, reportRef, reportGeneratedAt,
+    reviewedRevision, expectedRevision
   } = req.body;
   return executeDoctorTransition({
     req, res, caseId, targetStatus: 'approved', note, clinicalNotes, clinicalDiagnosis,
     medications, recommendation, recommendations,
-    approvingDoctorName, doctorSpecialty, doctorLicense, clinicName, reportRef, reportGeneratedAt
+    approvingDoctorName, doctorSpecialty, doctorLicense, clinicName, reportRef, reportGeneratedAt,
+    reviewedRevision, expectedRevision
   });
 });
 
@@ -7412,6 +7915,16 @@ app.post('/api/doctor/request-more-info', requireAuth, requireVerifiedEmail, req
       });
     }
 
+    
+    const profile = req.doctorProfile || await getServerUserProfile(req.user.uid);
+    const authCheck = verifyDoctorAuthorization(doctorIdentity, profile);
+    if (!authCheck.ok) {
+      return res.status(403).json({
+        error: authCheck.error,
+        message: authCheck.message
+      });
+    }
+
     // Sync from Firestore if available
     let caseData = null;
     let caseRef = null;
@@ -7422,6 +7935,20 @@ app.post('/api/doctor/request-more-info', requireAuth, requireVerifiedEmail, req
         return res.status(404).json({ error: 'CASE_NOT_FOUND', message: 'Case not found.' });
       }
       caseData = caseSnap.data();
+      
+      const assignedDoctor = caseData.assignedDoctorId || caseData.doctorId || caseData.doctorUid;
+      if (!assignedDoctor && req.user.role !== 'owner' && req.user.role !== 'admin') {
+        return res.status(403).json({
+          error: 'CASE_NOT_ASSIGNED',
+          message: 'This clinical case must be assigned by an authorized administrator before a doctor can process it.'
+        });
+      }
+      if (assignedDoctor !== req.user.uid && req.user.role !== 'owner' && req.user.role !== 'admin') {
+        return res.status(403).json({
+          error: 'ACCESS_DENIED',
+          message: 'Zero-Trust enforcement: This clinical case is assigned to another physician.'
+        });
+      }
       clinicalInfoExchangeService.registerCase({ id: caseId, ...caseData });
     }
 
@@ -9499,6 +10026,21 @@ app.get('/api/user/privacy/status', requireAuth, async (req, res) => {
 });
 
 /**
+ * GET /api/user/privacy/retention-policy
+ * Legal retention policy disclosure (GDPR Art. 17(3)(b), HIPAA Security Rule § 164.316, Egyptian Medical Regulations)
+ * Returns the statutory retention durations, data categorization, and patient rights.
+ */
+app.get('/api/user/privacy/retention-policy', (req, res) => {
+  try {
+    const policy = privacyService.getLegalRetentionPolicy();
+    return res.json({ success: true, policy });
+  } catch (err) {
+    console.error("[RETENTION POLICY ERROR]:", err);
+    return res.status(500).json({ error: 'RETENTION_POLICY_ERROR', message: err.message });
+  }
+});
+
+/**
  * GET /api/user/privacy/inventory
  * Comprehensive data inventory across Auth, Firestore, Storage, Messages, and Backups
  */
@@ -9618,7 +10160,10 @@ app.post('/api/clinics/demo-request', (req, res) => {
     }
 
     const isPilot = packageType === 'pilot' || String(packageType).toLowerCase().includes('pilot');
-    const leadId = `LEAD-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+    const leadId = req.body.leadId && /^LEAD-[A-Z0-9-]+$/i.test(req.body.leadId)
+      ? String(req.body.leadId).toUpperCase().trim()
+      : `LEAD-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+
     const leadData = {
       leadId,
       clinicName: String(clinicName).trim().substring(0, 100),
@@ -9646,10 +10191,129 @@ app.post('/api/clinics/demo-request', (req, res) => {
     inMemoryClinicLeads.push(leadData);
     if (inMemoryClinicLeads.length > 500) inMemoryClinicLeads.shift();
 
+    const adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL || process.env.ADMIN_EMAIL || 'mohammedabdelrouf85@gmail.com';
+
+    // 1. Dual-persist to Firestore: clinic_leads & email_notifications
     if (db) {
       db.collection('clinic_leads').doc(leadId).set(leadData).catch((err) => {
         console.warn('[FIRESTORE CLINIC LEAD WARNING]:', err.message);
       });
+
+      db.collection('email_notifications').add({
+        type: 'CLINIC_LEAD_ADMIN_ALERT',
+        leadId,
+        recipient: adminEmail,
+        subject: `🏥 طلب انضمام عيادة جديد [${leadId}] - ${leadData.clinicName}`,
+        leadData,
+        status: 'queued',
+        createdAt: new Date().toISOString()
+      }).catch((err) => {
+        console.warn('[FIRESTORE EMAIL QUEUE WARNING]:', err.message);
+      });
+    }
+
+    // 2. Dispatch instant email notification to Admin
+    let emailDispatched = false;
+    try {
+      const transporter = createTransporter();
+      const mailSubject = `🏥 طلب انضمام عيادة جديد [${leadId}] - ${leadData.clinicName}`;
+      const mailText = [
+        `طلب انضمام عيادة جديد - منصة Health Vibe AI`,
+        `===========================================`,
+        `رقم مرجع الطلب (Tracking Reference): ${leadId}`,
+        `اسم العيادة / المركز: ${leadData.clinicName}`,
+        `الطبيب أو المدير المسؤول: ${leadData.contactName}`,
+        `البريد الإلكتروني: ${leadData.email}`,
+        `الهاتف / واتساب: ${leadData.phone}`,
+        `الباقة المطلوبة: ${leadData.packageType} ${isPilot ? '(30 يوماً تجربة مجانية: 1 عيادة • 3 أطباء)' : ''}`,
+        `التخصص الطبي: ${leadData.specialty}`,
+        `عدد الأطباء: ${leadData.doctorCount}`,
+        `المدينة / المحافظة: ${leadData.city}`,
+        leadData.notes ? `ملاحظات: ${leadData.notes}` : '',
+        `تاريخ التقديم: ${leadData.createdAt}`
+      ].filter(Boolean).join('\n');
+
+      const mailHtml = `
+        <div style="font-family: Arial, 'Segoe UI', Tahoma, sans-serif; max-width: 620px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 14px; background: #ffffff; color: #1e293b;" dir="rtl">
+          <div style="background: linear-gradient(135deg, #0d9488 0%, #0284c7 100%); padding: 20px; border-radius: 10px; color: #ffffff; text-align: center;">
+            <h2 style="margin: 0; font-size: 22px;">🏥 إشعار طلب انضمام عيادة / مركز طبي جديد</h2>
+            <p style="margin: 6px 0 0; font-size: 14px; opacity: 0.95;">منظومة Health Vibe AI للتشغيل والفرز السريري الذكي</p>
+          </div>
+          <div style="padding: 20px 8px;">
+            <div style="background: #f0fdfa; border: 1.5px solid #0d9488; border-radius: 8px; padding: 14px 18px; margin-bottom: 20px; text-align: center;">
+              <span style="font-size: 13px; color: #0f766e; font-weight: bold; display: block;">رقم مرجع الطلب (Tracking Reference ID)</span>
+              <strong style="font-size: 22px; color: #134e4a; font-family: monospace; letter-spacing: 1px;">${leadId}</strong>
+            </div>
+            <table style="width: 100%; border-collapse: collapse; font-size: 14px; line-height: 1.6;">
+              <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="padding: 10px 8px; color: #64748b; width: 35%;">اسم العيادة / المركز:</td>
+                <td style="padding: 10px 8px; font-weight: bold; color: #0f172a;">${leadData.clinicName}</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="padding: 10px 8px; color: #64748b;">المسؤول للتواصل:</td>
+                <td style="padding: 10px 8px; font-weight: 600; color: #0f172a;">${leadData.contactName}</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="padding: 10px 8px; color: #64748b;">البريد الإلكتروني:</td>
+                <td style="padding: 10px 8px; color: #0284c7;"><a href="mailto:${leadData.email}" style="color: #0284c7; text-decoration: none;">${leadData.email}</a></td>
+              </tr>
+              <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="padding: 10px 8px; color: #64748b;">الهاتف / الواتساب:</td>
+                <td style="padding: 10px 8px; font-weight: 600; color: #0f172a;" dir="ltr"><a href="https://wa.me/${leadData.phone.replace(/[^0-9]/g, '')}" target="_blank" style="color: #0d9488; text-decoration: none;">${leadData.phone}</a></td>
+              </tr>
+              <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="padding: 10px 8px; color: #64748b;">الباقة المختارة:</td>
+                <td style="padding: 10px 8px; font-weight: bold; color: #0d9488;">${leadData.packageType} ${isPilot ? '⭐ (باقة الإطلاق التجريبية: 30 يوماً مجاناً)' : ''}</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="padding: 10px 8px; color: #64748b;">التخصص السريري:</td>
+                <td style="padding: 10px 8px; color: #0f172a;">${leadData.specialty}</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="padding: 10px 8px; color: #64748b;">عدد الأطباء:</td>
+                <td style="padding: 10px 8px; color: #0f172a;">${leadData.doctorCount}</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="padding: 10px 8px; color: #64748b;">المدينة / المحافظة:</td>
+                <td style="padding: 10px 8px; color: #0f172a;">${leadData.city}</td>
+              </tr>
+              ${leadData.notes ? `
+              <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="padding: 10px 8px; color: #64748b;">المتطلبات أو الأنظمة:</td>
+                <td style="padding: 10px 8px; color: #334155;">${leadData.notes}</td>
+              </tr>` : ''}
+              <tr>
+                <td style="padding: 10px 8px; color: #64748b;">توقيت الإرسال:</td>
+                <td style="padding: 10px 8px; color: #64748b;" dir="ltr">${leadData.createdAt}</td>
+              </tr>
+            </table>
+            <div style="margin-top: 24px; text-align: center;">
+              <a href="https://wa.me/${leadData.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent('أهلاً د. ' + leadData.contactName + '، بخصوص طلب انضمام ' + leadData.clinicName + ' لمنظومة Health Vibe AI (رقم الطلب: ' + leadId + ')')}" 
+                 style="display: inline-block; background: #25d366; color: #ffffff; padding: 12px 24px; border-radius: 8px; font-weight: bold; text-decoration: none;">
+                 💬 التواصل المباشر عبر الواتساب فوراً
+              </a>
+            </div>
+          </div>
+          <div style="border-top: 1px solid #e2e8f0; padding-top: 14px; text-align: center; font-size: 12px; color: #94a3b8;">
+            تم إرسال هذا الإشعار تلقائياً إلى إدارة Health Vibe AI فور تسجيل طلب جديد عبر بوابة العيادات.
+          </div>
+        </div>
+      `;
+
+      transporter.sendMail({
+        to: adminEmail,
+        from: process.env.SMTP_FROM || 'noreply@healthvibe.ai',
+        subject: mailSubject,
+        text: mailText,
+        html: mailHtml
+      }).then(() => {
+        console.log(`[CLINIC DEMO EMAIL SENT]: Instant email delivered to Admin (${adminEmail}) for lead ${leadId}`);
+      }).catch((mailErr) => {
+        console.warn('[CLINIC LEAD ADMIN EMAIL WARNING]:', mailErr.message);
+      });
+      emailDispatched = true;
+    } catch (transporterErr) {
+      console.warn('[CLINIC LEAD EMAIL DISPATCH WARNING]:', transporterErr.message);
     }
 
     console.log(`[CLINIC DEMO REQUEST RECEIVED]: Lead ${leadId} for '${leadData.clinicName}' (${leadData.contactName} - ${leadData.phone}) - Package: ${leadData.packageType} [isPilot: ${isPilot}]`);
@@ -9659,6 +10323,15 @@ app.post('/api/clinics/demo-request', (req, res) => {
       leadId,
       packageType: leadData.packageType,
       isPilot,
+      emailDispatched,
+      leadSummary: {
+        clinicName: leadData.clinicName,
+        contactName: leadData.contactName,
+        email: leadData.email,
+        phone: leadData.phone,
+        packageType: leadData.packageType,
+        createdAt: leadData.createdAt
+      },
       message: isPilot
         ? 'Pilot package onboarding request registered (1 Clinic, 3 Doctors, 30 Days).'
         : 'Demo request received successfully. Our clinical onboarding specialist will contact you within 24 hours.'
@@ -12540,6 +13213,200 @@ app.post('/api/clinics/pilot/circuit-breaker/evaluate', requireAuth, requireDoct
   }
 });
 
+/**
+ * GET /api/pilot/clinical-reviewer/certification
+ * Returns designated Pulmonology / Internal Medicine Clinical Reviewer profile,
+ * tripartite certification (questions, thresholds, recommendations), and cryptographic seals.
+ * Directly addresses PRD Page 18 Critical Risk mitigation.
+ */
+app.get('/api/pilot/clinical-reviewer/certification', (req, res) => {
+  try {
+    const seal = pilotReadinessService.clinicalReviewerService.getCertificationSeal();
+    const verification = pilotReadinessService.clinicalReviewerService.verifyAllComponentsApproved();
+    const questionnaire = pilotReadinessService.clinicalReviewerService.getIntakeQuestionnaire();
+    const thresholds = pilotReadinessService.clinicalReviewerService.getRiskThresholds();
+    const recommendations = pilotReadinessService.clinicalReviewerService.getRecommendationsAndDisclaimers();
+
+    res.json({
+      success: true,
+      certified: verification.certified,
+      reviewer: seal.certifiedReviewer,
+      certifications: seal.certifications,
+      masterFingerprint: seal.masterFingerprintSha256,
+      signedAt: seal.signedAt,
+      validThrough: seal.validThrough,
+      prdCompliance: seal.prdCompliance,
+      specifications: {
+        intakeQuestionnaire: questionnaire,
+        riskThresholds: thresholds,
+        recommendationsAndDisclaimers: recommendations
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/pilot/clinical-reviewer/re-certify
+ * Allows authorized clinical reviewer / lead to record periodic re-certification audit
+ */
+app.post('/api/pilot/clinical-reviewer/re-certify', requireAuth, requireDoctor, async (req, res) => {
+  try {
+    const { notes, component } = req.body || {};
+    const auditEntry = await pilotReadinessService.clinicalReviewerService.recordReviewAudit({
+      reviewerId: req.user.uid,
+      action: 'PERIODIC_CLINICAL_RECERTIFICATION',
+      notes,
+      component
+    });
+    res.json({ success: true, auditEntry });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * GET /api/respiratory/clinical-spec
+ * Returns settled Primary Clinical Question, Target Diagnostic Labels (ARI, Asthma, COPD, Mild URI),
+ * and Triage Urgency Tiers as mandated by PRD Page 22 (Section 19).
+ */
+app.get('/api/respiratory/clinical-spec', (req, res) => {
+  try {
+    const { respiratoryClinicalSpecService } = require('./respiratory-clinical-spec-service');
+    const spec = respiratoryClinicalSpecService.getSpecificationSummary();
+    res.json({
+      success: true,
+      specification: spec
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+// =============================================================================
+// 👥 SYNTHETIC PATIENTS (DEMO/PRESENTATION) & CONSENT GOVERNANCE ROUTES
+// =============================================================================
+
+/**
+ * GET /api/demo/synthetic-patients
+ * Returns certified synthetic patient cohort (N=20) for presentations, UI demos, and testing.
+ * Enforces zero real PHI (PRD Page 18).
+ */
+app.get('/api/demo/synthetic-patients', (req, res) => {
+  try {
+    const { syntheticPatientsService } = require('./synthetic-patients-service');
+    const { urgency, conditionLabel, gender } = req.query || {};
+    const patients = syntheticPatientsService.getSyntheticPatients({ urgency, conditionLabel, gender });
+    res.json({
+      success: true,
+      count: patients.length,
+      isDemoSafe: true,
+      containsRealPhi: false,
+      governanceNotice: 'All patient profiles in this feed are certified synthetic personas for presentation and testing without real PHI (PRD Page 18).',
+      patients
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/patients/validate-consent
+ * Enforces documented consent verification before processing any real patient record.
+ * Blocks unconsented real data with HTTP 403 (PRD Page 18 Critical Risk Mitigation).
+ */
+app.post('/api/patients/validate-consent', requireAuth, (req, res) => {
+  try {
+    const { syntheticPatientsService } = require('./synthetic-patients-service');
+    const evaluation = syntheticPatientsService.validateConsentRequirement(req.body || {});
+    if (!evaluation.permitted) {
+      return res.status(403).json({
+        error: evaluation.error || 'REAL_PATIENT_DATA_WITHOUT_CONSENT_PROHIBITED',
+        message: evaluation.message,
+        permitted: false
+      });
+    }
+    return res.json({
+      success: true,
+      ...evaluation
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+// =============================================================================
+// 🔐 AES-256 AT-REST ENCRYPTION ROUTES (DATABASE & CLOUD PDF REPORTS)
+// =============================================================================
+
+/**
+ * GET /api/security/encryption-status
+ * Returns comprehensive AES-256 at-rest encryption status for database and cloud storage.
+ * Mandated by PRD Page 10 (Security & Compliance) and User Request 37.
+ */
+app.get('/api/security/encryption-status', (req, res) => {
+  try {
+    const { encryptionService } = require('./encryption-service');
+    res.json(encryptionService.getEncryptionStatusReport());
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/reports/encrypt-pdf
+ * Encrypts a clinical PDF report using AES-256-GCM and stores with SSE-AES256.
+ */
+app.post('/api/reports/encrypt-pdf', requireAuth, (req, res) => {
+  try {
+    const { encryptionService } = require('./encryption-service');
+    const { reportId, pdfBase64 } = req.body || {};
+
+    if (!pdfBase64) {
+      return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'pdfBase64 is required.' });
+    }
+
+    const pdfBuffer = Buffer.from(pdfBase64, 'base64');
+    const encryptedPkg = encryptionService.encryptPdfBuffer(pdfBuffer, { reportId });
+
+    res.json({
+      success: true,
+      reportId: encryptedPkg.reportId,
+      encrypted: true,
+      algorithm: encryptedPkg.algorithm,
+      iv: encryptedPkg.iv,
+      authTag: encryptedPkg.authTag,
+      originalSize: encryptedPkg.originalBytesCount,
+      encryptedSize: encryptedPkg.encryptedBytesCount,
+      checksumSha256: encryptedPkg.checksumSha256,
+      storagePath: encryptedPkg.storagePath,
+      cloudStorageHeaders: encryptionService.getCloudStorageEncryptionHeaders()
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'ENCRYPTION_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/reports/:reportId/download-decrypted
+ * Authenticated download and decryption of AES-256 protected PDF clinical report.
+ */
+app.get('/api/reports/:reportId/download-decrypted', requireAuth, (req, res) => {
+  try {
+    const { encryptionService } = require('./encryption-service');
+    const decryptedPdfBuffer = encryptionService.getDecryptedReportById(req.params.reportId);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="healthvibe_report_${req.params.reportId}.pdf"`);
+    res.setHeader('X-Decrypted-From', 'AES-256-GCM');
+    res.send(decryptedPdfBuffer);
+  } catch (err) {
+    const status = err.message.includes('NOT_FOUND') ? 404 : 500;
+    res.status(status).json({ error: 'DECRYPTION_FAILED', message: err.message });
+  }
+});
+
 // =============================================================================
 // 💳 SUBSCRIPTION, BILLING & REVENUE LEDGER ROUTES
 // =============================================================================
@@ -13903,34 +14770,65 @@ app.get('/api/chronic/specialties/readiness', requireAuth, (req, res) => {
  * POST /api/chronic/hypertension/readings
  * Ingests a new blood pressure reading with real-time classification, obstetric pre-eclampsia safeguards & alert triage.
  */
-app.post('/api/chronic/hypertension/readings', requireAuth, async (req, res) => {
+app.post(['/api/chronic/hypertension/readings', '/api/cases/:caseId/blood-pressure'], requireAuth, async (req, res) => {
   try {
     const {
-      patientId, patientName, clinicId,
-      systolic, diastolic, pulse,
+      patientId, caseId: bodyCaseId, patientName, clinicId,
+      systolic, diastolic, pulse, unit,
+      measuredAt, measurementTime, dateTime,
       measurementSource, arm, posture, cuffSize, timing,
+      activity, location, bodyPosition, mealTiming, context,
       symptoms, medicationTaken, patientNotes,
+      author, provenance,
       pregnancyStage, ageGroup, specialtyConsent, attachedFiles, linkedAppointmentId
     } = req.body || {};
 
-    const targetPatientId = patientId || req.user.uid;
+    const targetCaseId = req.params.caseId || bodyCaseId || null;
+    let targetPatientId = patientId || req.user.uid;
 
-    if (req.user.uid !== targetPatientId && req.user.role !== 'doctor' && req.user.role !== 'clinic_admin' && req.user.role !== 'super_admin') {
-      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Unauthorized to record reading for target patient.' });
+    // If caseId is provided, verify case existence and ownership server-side
+    let caseRef = null;
+    let caseData = null;
+    if (targetCaseId && db) {
+      caseRef = db.collection('cases').doc(targetCaseId);
+      const caseSnap = await caseRef.get();
+      if (!caseSnap.exists) {
+        return res.status(404).json({ error: 'CASE_NOT_FOUND', message: `Case ${targetCaseId} not found.` });
+      }
+      caseData = caseSnap.data();
+      if (caseData.patientId) {
+        targetPatientId = caseData.patientId;
+      }
+      clinicalInfoExchangeService.registerCase({ id: targetCaseId, ...caseData });
+    }
+
+    // Server-side authorization check
+    if (req.user.uid !== targetPatientId && req.user.role !== 'doctor' && req.user.role !== 'clinic_admin' && req.user.role !== 'super_admin' && req.user.role !== 'owner') {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Unauthorized to record blood-pressure reading for target patient or case.' });
     }
 
     const reading = await chronicHypertensionService.recordBloodPressureReading({
       patientId: targetPatientId,
-      patientName: patientName || req.user.name || 'Patient',
+      caseId: targetCaseId,
+      patientName: patientName || req.user.displayName || req.user.name || 'Patient',
       clinicId: clinicId || req.user.clinicId,
       systolic,
       diastolic,
       pulse,
+      unit,
+      measuredAt: measuredAt || measurementTime || dateTime,
       measurementSource,
       arm,
       posture,
       cuffSize,
       timing,
+      activity,
+      location,
+      bodyPosition,
+      mealTiming,
+      context,
+      author,
+      provenance,
       symptoms,
       medicationTaken,
       patientNotes,
@@ -13939,12 +14837,63 @@ app.post('/api/chronic/hypertension/readings', requireAuth, async (req, res) => 
       ageGroup,
       specialtyConsent,
       attachedFiles,
-      linkedAppointmentId
+      linkedAppointmentId,
+      authorizedUser: req.user
     });
+
+    // If Firestore is connected and linked to a case, update case and append observation
+    if (db && caseRef && targetCaseId) {
+      await caseRef.update({
+        systolicBp: reading.systolic,
+        diastolicBp: reading.diastolic,
+        bp: `${reading.systolic}/${reading.diastolic} mmHg`,
+        'currentAssessment.systolicBp': reading.systolic,
+        'currentAssessment.diastolicBp': reading.diastolic,
+        'currentAssessment.bp': `${reading.systolic}/${reading.diastolic} mmHg`,
+        clinicalRevision: reading.clinicalRevision,
+        lastRevisionAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      await caseRef.collection('observations').add({
+        readingId: reading.id,
+        type: 'bloodPressure',
+        systolic: reading.systolic,
+        diastolic: reading.diastolic,
+        unit: reading.unit,
+        measuredAt: reading.measuredAt,
+        measurementSource: reading.measurementSource,
+        author: reading.author,
+        provenance: reading.provenance,
+        context: reading.context,
+        clinicalRevision: reading.clinicalRevision,
+        recordedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+    }
 
     res.status(201).json({ success: true, reading });
   } catch (err) {
-    res.status(400).json({ error: 'RECORD_READING_FAILED', message: err.message });
+    res.status(err.statusCode || 400).json({ error: err.code || 'RECORD_READING_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/chronic/hypertension/case/:caseId/readings
+ * Retrieves all blood-pressure readings linked to a specific case.
+ */
+app.get('/api/chronic/hypertension/case/:caseId/readings', requireAuth, (req, res) => {
+  try {
+    const { caseId } = req.params;
+    const readings = chronicHypertensionService.getCaseReadings(caseId);
+    if (readings.length > 0) {
+      const patientId = readings[0].patientId;
+      if (req.user.uid !== patientId && req.user.role !== 'doctor' && req.user.role !== 'clinic_admin' && req.user.role !== 'super_admin' && req.user.role !== 'owner') {
+        return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Unauthorized to view readings for this case.' });
+      }
+    }
+    res.json({ success: true, count: readings.length, readings });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
   }
 });
 
@@ -13985,6 +14934,25 @@ app.get('/api/chronic/hypertension/patient/:patientId/history', requireAuth, (re
     res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
   }
 });
+
+/**
+ * GET /api/chronic/hypertension/readings
+ * Retrieves persisted blood pressure readings for authenticated patient or authorized doctor.
+ */
+app.get('/api/chronic/hypertension/readings', requireAuth, (req, res) => {
+  try {
+    const targetPatientId = req.query.patientId || req.user.uid;
+    if (req.user.uid !== targetPatientId && req.user.role !== 'doctor' && req.user.role !== 'clinic_admin' && req.user.role !== 'super_admin') {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Unauthorized to view patient readings.' });
+    }
+    const limit = parseInt(req.query.limit, 10) || 50;
+    const readings = chronicHypertensionService.getPatientReadings(targetPatientId, limit);
+    res.json({ success: true, count: readings.length, readings });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
 
 /**
  * POST /api/chronic/hypertension/patient/:patientId/followup-plan
@@ -14151,7 +15119,6 @@ app.get('/api/chronic/hypertension/patient/:patientId/report', requireAuth, (req
   }
 });
 
-// =============================================================================
 // 🩸 DIABETES MELLITUS & GLYCEMIC CONTROL SPECIALTY ROUTES
 // Specialized Endocrine Track: Data Ingestion, Doctor Review, Notes, Follow-up
 // =============================================================================
@@ -14590,7 +15557,466 @@ app.post('/api/diabetes/patient/:patientId/clarification', requireAuth, async (r
 });
 
 app.diabetesService = diabetesService;
+
+
+// 🩸 BLOOD CLOTTING & BLOOD DISORDERS CLINICAL MODULE ROUTES
+// Multi-Condition Registry, Medical Reviewer Specs, Cases, Labs & Approvals
+// =============================================================================
+app.bloodDisordersService = bloodDisordersService;
+
+/**
+ * GET /api/blood-disorders/conditions
+ * Retrieves supported condition specifications and review status.
+ */
+app.get('/api/blood-disorders/conditions', requireAuth, (req, res) => {
+  try {
+    const conditions = bloodDisordersService.getRegisteredConditions();
+    res.json({ success: true, count: conditions.length, conditions });
+  } catch (err) {
+    res.status(500).json({ error: 'FETCH_CONDITIONS_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/blood-disorders/conditions
+ * Medical Reviewer defines or updates supported condition specification.
+ */
+app.post('/api/blood-disorders/conditions', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
+  try {
+    const doctorIdentity = await getVerifiedDoctorIdentity(req.user.uid);
+    if (!doctorIdentity || doctorIdentity.status !== 'approved' || doctorIdentity.isLicenseExpired || doctorIdentity.licenseStatus === 'revoked') {
+      return res.status(403).json({ error: 'UNAPPROVED_DOCTOR', message: 'Doctor credentials unverified or license inactive.' });
+    }
+
+    const {
+      conditionId, nameEn, nameAr, category, descriptionEn, descriptionAr,
+      clinicalGuidelinesRef, requiredClinicalFields, requiredLabPanels,
+      optionalLabPanels, status, reviewerNotes
+    } = req.body || {};
+
+    const updated = bloodDisordersService.defineOrUpdateConditionSpecification({
+      conditionId,
+      nameEn,
+      nameAr,
+      category,
+      descriptionEn,
+      descriptionAr,
+      clinicalGuidelinesRef,
+      requiredClinicalFields,
+      requiredLabPanels,
+      optionalLabPanels,
+      status,
+      reviewerNotes,
+      reviewingDoctor: {
+        uid: req.user.uid,
+        name: doctorIdentity.name || req.user.displayName,
+        role: 'doctor',
+        status: doctorIdentity.status,
+        licenseNumber: doctorIdentity.licenseNumber,
+        specialty: doctorIdentity.specialty || 'Hematologist'
+      }
+    });
+
+    res.status(200).json({ success: true, condition: updated });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'CONDITION_UPDATE_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/blood-disorders/lab-catalog
+ * Retrieves standardized laboratory catalog for hematology.
+ */
+app.get('/api/blood-disorders/lab-catalog', requireAuth, (req, res) => {
+  try {
+    const catalog = bloodDisordersService.getStandardLabCatalog();
+    res.json({ success: true, count: catalog.length, catalog });
+  } catch (err) {
+    res.status(500).json({ error: 'FETCH_CATALOG_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/blood-disorders/cases
+ * Ingests structured blood disorder intake case with real lab measurements.
+ */
+app.post('/api/blood-disorders/cases', requireAuth, async (req, res) => {
+  try {
+    const {
+      patientId, conditionId, patientInfo, clinicalIntake,
+      labResults, attachedFiles, clinicId, assignedDoctorId
+    } = req.body || {};
+
+    const targetPatientId = patientId || req.user.uid;
+    const isDoctor = req.user.role === 'doctor';
+    const isAdmin = req.user.role === 'clinic_admin' || req.user.role === 'super_admin' || req.user.role === 'owner';
+
+    if (req.user.uid !== targetPatientId && !isDoctor && !isAdmin) {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Unauthorized to create case for target patient.' });
+    }
+
+    const bloodDisorderCase = await bloodDisordersService.recordPatientBloodDisorderCase({
+      patientId: targetPatientId,
+      conditionId,
+      patientInfo: {
+        name: req.user.displayName || req.user.name,
+        ...patientInfo
+      },
+      clinicalIntake,
+      labResults,
+      attachedFiles,
+      clinicId: clinicId || req.user.clinicId || null,
+      assignedDoctorId: assignedDoctorId || null,
+      authorizedUser: req.user
+    });
+
+    res.status(201).json({ success: true, case: bloodDisorderCase });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'CASE_CREATION_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/blood-disorders/patient/:patientId/cases
+ * Retrieves blood disorder cases for a patient.
+ */
+app.get('/api/blood-disorders/patient/:patientId/cases', requireAuth, (req, res) => {
+  try {
+    const { patientId } = req.params;
+    if (req.user.uid !== patientId && req.user.role !== 'doctor' && req.user.role !== 'clinic_admin' && req.user.role !== 'super_admin') {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Unauthorized to view patient cases.' });
+    }
+
+    const cases = bloodDisordersService.getPatientCases(patientId);
+    res.json({ success: true, count: cases.length, cases });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * GET /api/blood-disorders/case/:caseId
+ * Retrieves details of a specific blood disorder case.
+ */
+app.get('/api/blood-disorders/case/:caseId', requireAuth, (req, res) => {
+  try {
+    const { caseId } = req.params;
+    const c = bloodDisordersService.getCaseById(caseId);
+    if (!c) {
+      return res.status(404).json({ error: 'CASE_NOT_FOUND', message: `Case ${caseId} not found.` });
+    }
+
+    if (req.user.uid !== c.patientId && req.user.role !== 'doctor' && req.user.role !== 'clinic_admin' && req.user.role !== 'super_admin') {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Unauthorized to view this case.' });
+    }
+
+    const isPatient = req.user.role === 'patient' || req.user.uid === c.patientId;
+    const safeCase = isPatient && req.user.role !== 'doctor' ? {
+      ...c,
+      internalDoctorNotes: undefined
+    } : c;
+
+    res.json({ success: true, case: safeCase });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/blood-disorders/case/:caseId/labs
+ * Appends real validated laboratory results to a case.
+ */
+app.post('/api/blood-disorders/case/:caseId/labs', requireAuth, (req, res) => {
+  try {
+    const { caseId } = req.params;
+    const { labMeasurements } = req.body || {};
+    const result = bloodDisordersService.recordCaseLabResults({
+      caseId,
+      labMeasurements
+    });
+    res.json({ success: true, result });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'LABS_UPDATE_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/blood-disorders/case/:caseId/approve
+ * Human physician review and approval of case (generates signed report).
+ */
+app.post('/api/blood-disorders/case/:caseId/approve', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
+  try {
+    const { caseId } = req.params;
+    const {
+      clinicalDiagnosis, clinicalNotes, internalNotes,
+      treatmentPlan, recommendations, followUpSchedule,
+      reviewedRevision, expectedRevision
+    } = req.body || {};
+
+    const doctorIdentity = await getVerifiedDoctorIdentity(req.user.uid);
+    if (!doctorIdentity || doctorIdentity.status !== 'approved' || doctorIdentity.isLicenseExpired || doctorIdentity.licenseStatus === 'revoked') {
+      return res.status(403).json({ error: 'UNAPPROVED_DOCTOR', message: 'Doctor credentials unverified or license inactive.' });
+    }
+
+    const result = await bloodDisordersService.reviewAndApproveBloodDisorderCase({
+      caseId,
+      reviewingDoctor: {
+        uid: req.user.uid,
+        name: doctorIdentity.name || req.user.displayName,
+        role: 'doctor',
+        status: doctorIdentity.status,
+        licenseNumber: doctorIdentity.licenseNumber,
+        specialty: doctorIdentity.specialty || 'Hematologist',
+        isOwner: Boolean(req.user.isOwner)
+      },
+      clinicalDiagnosis,
+      clinicalNotes,
+      internalNotes,
+      treatmentPlan,
+      recommendations,
+      followUpSchedule,
+      reviewedRevision,
+      expectedRevision
+    });
+
+    res.json(result);
+  } catch (err) {
+    res.status(err.statusCode || 400).json({
+      error: err.code || 'APPROVAL_FAILED',
+      message: err.message,
+      currentRevision: err.currentRevision,
+      reviewedRevision: err.reviewedRevision
+    });
+  }
+});
+
+/**
+ * POST /api/blood-disorders/case/:caseId/clarification
+ * Records patient clarification or response to doctor query.
+ */
+app.post('/api/blood-disorders/case/:caseId/clarification', requireAuth, (req, res) => {
+  try {
+    const { caseId } = req.params;
+    const { patientResponse, clarificationText } = req.body || {};
+    const c = bloodDisordersService.getCaseById(caseId);
+    if (!c) {
+      return res.status(404).json({ error: 'CASE_NOT_FOUND', message: `Case ${caseId} not found.` });
+    }
+    if (req.user.uid !== c.patientId && req.user.role !== 'doctor' && req.user.role !== 'clinic_admin' && req.user.role !== 'super_admin') {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Unauthorized to submit clarification for this case.' });
+    }
+    const updated = bloodDisordersService.recordCaseClarification({
+      caseId,
+      patientResponse,
+      clarificationText
+    });
+    res.json({ success: true, case: updated });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'CLARIFICATION_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/blood-disorders/patient/:patientId/report
+ * Retrieves latest approved hematology report for patient.
+ */
+app.get('/api/blood-disorders/patient/:patientId/report', requireAuth, (req, res) => {
+  try {
+    const { patientId } = req.params;
+    if (req.user.uid !== patientId && req.user.role !== 'doctor' && req.user.role !== 'clinic_admin' && req.user.role !== 'super_admin') {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Unauthorized to view report.' });
+    }
+    const report = bloodDisordersService.getApprovedReport(patientId);
+    if (!report) {
+      return res.status(404).json({ error: 'REPORT_NOT_FOUND', message: 'No approved report found for this patient.' });
+    }
+    res.json({ success: true, report });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/blood-disorders/observations
+ * Ingests structured blood disorder laboratory or clinical observation.
+ * Patient-entered or imported data is strictly marked UNVERIFIED until medical review.
+ */
+app.post('/api/blood-disorders/observations', requireAuth, async (req, res) => {
+  try {
+    const {
+      patientId, caseId, conditionId, testName, testCode,
+      resultValue, unit, referenceRange, collectionDateTime,
+      source, attachmentRef, clinicalNotes
+    } = req.body || {};
+
+    const targetPatientId = patientId || req.user.uid;
+    const isDoctor = req.user.role === 'doctor';
+    const isClinicalAdmin = req.user.role === 'clinic_admin' || req.user.role === 'super_admin' || req.user.role === 'owner';
+
+    if (req.user.uid !== targetPatientId && !isDoctor && !isClinicalAdmin) {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Unauthorized to submit clinical observation for this patient.' });
+    }
+
+    let resolvedSource = source || (isDoctor ? bloodDisordersService.OBSERVATION_SOURCES.CLINICIAN_ENTERED : bloodDisordersService.OBSERVATION_SOURCES.PATIENT_ENTERED);
+    if (!isDoctor && !isClinicalAdmin && resolvedSource === bloodDisordersService.OBSERVATION_SOURCES.CLINICIAN_ENTERED) {
+      resolvedSource = bloodDisordersService.OBSERVATION_SOURCES.PATIENT_ENTERED;
+    }
+
+    const observation = await bloodDisordersService.createClinicalObservation({
+      patientId: targetPatientId,
+      caseId: caseId || null,
+      conditionId: conditionId || null,
+      testName,
+      testCode,
+      resultValue,
+      unit,
+      referenceRange,
+      collectionDateTime,
+      source: resolvedSource,
+      attachmentRef,
+      clinicalNotes,
+      author: {
+        uid: req.user.uid,
+        name: req.user.displayName || req.user.name || 'User',
+        role: req.user.role || 'patient'
+      }
+    }, { db: req.app?.locals?.db || null, req });
+
+    res.status(201).json({ success: true, observation });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'OBSERVATION_CREATION_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/blood-disorders/patient/:patientId/observations
+ * Retrieves structured clinical observations for a patient with optional filters.
+ */
+app.get('/api/blood-disorders/patient/:patientId/observations', requireAuth, (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const { reviewStatus, conditionId, testCode, limit } = req.query;
+
+    if (req.user.uid !== patientId && req.user.role !== 'doctor' && req.user.role !== 'clinic_admin' && req.user.role !== 'super_admin') {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Unauthorized to view patient observations.' });
+    }
+
+    const observations = bloodDisordersService.getPatientClinicalObservations(patientId, {
+      reviewStatus,
+      conditionId,
+      testCode,
+      limit
+    });
+
+    res.json({ success: true, count: observations.length, observations });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * GET /api/blood-disorders/observations/:observationId
+ * Retrieves a single observation with full provenance, original source data, and correction history.
+ */
+app.get('/api/blood-disorders/observations/:observationId', requireAuth, (req, res) => {
+  try {
+    const { observationId } = req.params;
+    const obs = bloodDisordersService.getClinicalObservationById(observationId);
+    if (!obs) {
+      return res.status(404).json({ error: 'OBSERVATION_NOT_FOUND', message: `Observation ${observationId} not found.` });
+    }
+
+    if (req.user.uid !== obs.patientId && req.user.role !== 'doctor' && req.user.role !== 'clinic_admin' && req.user.role !== 'super_admin') {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Unauthorized to view this observation.' });
+    }
+
+    res.json({ success: true, observation: obs });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/blood-disorders/observations/:observationId/review
+ * Medical reviewer reviews an observation (VERIFIED or REJECTED).
+ */
+app.post('/api/blood-disorders/observations/:observationId/review', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
+  try {
+    const { observationId } = req.params;
+    const { reviewDecision, reviewNotes } = req.body || {};
+
+    const doctorIdentity = await getVerifiedDoctorIdentity(req.user.uid);
+    if (!doctorIdentity || doctorIdentity.status !== 'approved' || doctorIdentity.isLicenseExpired || doctorIdentity.licenseStatus === 'revoked') {
+      return res.status(403).json({ error: 'UNAPPROVED_DOCTOR', message: 'Doctor credentials unverified or license inactive.' });
+    }
+
+    const updated = await bloodDisordersService.reviewClinicalObservation({
+      observationId,
+      reviewingDoctor: {
+        uid: req.user.uid,
+        name: doctorIdentity.name || req.user.displayName,
+        role: 'doctor',
+        status: doctorIdentity.status,
+        licenseNumber: doctorIdentity.licenseNumber,
+        specialty: doctorIdentity.specialty || 'Hematologist'
+      },
+      reviewDecision,
+      reviewNotes,
+      db: req.app?.locals?.db || null,
+      req
+    });
+
+    res.json({ success: true, observation: updated });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'REVIEW_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/blood-disorders/observations/:observationId/correct
+ * Auditable manual correction of observation with mandatory correction reason.
+ */
+app.post('/api/blood-disorders/observations/:observationId/correct', requireAuth, requireVerifiedEmail, async (req, res) => {
+  try {
+    const { observationId } = req.params;
+    const { correctionReason, updatedFields } = req.body || {};
+
+    const isDoctor = req.user.role === 'doctor';
+    const isClinicalAdmin = req.user.role === 'clinic_admin' || req.user.role === 'super_admin' || req.user.role === 'owner';
+    const isNurse = req.user.role === 'nurse';
+
+    if (!isDoctor && !isClinicalAdmin && !isNurse) {
+      return res.status(403).json({ error: 'ACCESS_DENIED_CLINICAL_ROLE_REQUIRED', message: 'Only authorized clinical personnel can perform manual corrections.' });
+    }
+
+    let licenseNumber = null;
+    if (isDoctor) {
+      const doctorIdentity = await getVerifiedDoctorIdentity(req.user.uid);
+      licenseNumber = doctorIdentity?.licenseNumber || null;
+    }
+
+    const updated = await bloodDisordersService.correctClinicalObservation({
+      observationId,
+      correctedBy: {
+        uid: req.user.uid,
+        name: req.user.displayName || req.user.name || 'Clinician',
+        role: req.user.role,
+        licenseNumber
+      },
+      correctionReason,
+      updatedFields,
+      db: req.app?.locals?.db || null,
+      req
+    });
+
+    res.json({ success: true, observation: updated });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'CORRECTION_FAILED', message: err.message });
+  }
+});
+
 app.wearableIntegrationService = wearableIntegrationService;
+
 
 // =============================================================================
 // ⌚ WEARABLE & HEALTH TELEMETRY INTEGRATION ROUTES
@@ -15440,19 +16866,136 @@ app.post('/api/admin/operational-switches', requireAuth, auditOperationalAccess(
 /**
  * POST /api/cases/intake
  * Trusted server write path for new clinical assessments.
- * Strictly blocked when assessmentIntake switch is disabled; existing records remain accessible.
+ * Persists inputSnapshot, evaluates aiEvaluation linked to diseases_catalog, and records status history.
  */
 app.post('/api/cases/intake', operationalSwitchesService.requireFeatureEnabled('assessmentIntake'), requireAuth, async (req, res) => {
   try {
-    const payload = req.body || {};
-    res.status(201).json({
-      success: true,
-      message: 'Assessment intake received and processed.',
-      patientId: req.user.uid,
-      intakeTimestamp: new Date().toISOString()
+    const result = await caseWorkflowService.createCaseIntake({
+      user: req.user,
+      body: req.body || {},
+      db
     });
+    res.status(201).json(result);
   } catch (err) {
-    res.status(500).json({ error: 'INTAKE_ERROR', message: err.message });
+    res.status(400).json({ error: 'INTAKE_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/cases/:caseId/review
+ * Unified Doctor Review & Status Machine Endpoint
+ * Validates transitions (approved, rejected, needs_more_info, escalated),
+ * atomically records case_status_history, generates immutable reports on approval,
+ * and isolates private doctor notes from patient responses.
+ */
+app.post('/api/cases/:caseId/review', requireAuth, requireDoctor, async (req, res) => {
+  try {
+    const { caseId } = req.params;
+    const result = await caseWorkflowService.reviewCase({
+      doctorUser: req.user,
+      caseId,
+      reviewData: req.body || {},
+      db
+    });
+    res.status(200).json(result);
+  } catch (err) {
+    res.status(400).json({ error: 'CASE_REVIEW_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/medical-catalog/diseases
+ * Returns normalized reference diseases catalog from the reference layer.
+ */
+app.get('/api/medical-catalog/diseases', (req, res) => {
+  const moduleParam = req.query.module || null;
+  const diseases = medicalCatalogService.getDiseases(moduleParam);
+  res.status(200).json({ success: true, count: diseases.length, diseases });
+});
+
+/**
+ * GET /api/medical-catalog/symptoms
+ * Returns normalized reference symptoms catalog with validRanges and units.
+ */
+app.get('/api/medical-catalog/symptoms', (req, res) => {
+  const categoryParam = req.query.category || null;
+  const symptoms = medicalCatalogService.getSymptoms(categoryParam);
+  res.status(200).json({ success: true, count: symptoms.length, symptoms });
+});
+
+/**
+ * GET /api/medical-catalog/rules
+ * Returns reference clinical triage rules.
+ */
+app.get('/api/medical-catalog/rules', (req, res) => {
+  const rules = medicalCatalogService.getClinicalRules();
+  res.status(200).json({ success: true, count: rules.length, rules });
+});
+
+/**
+ * POST /api/appointments/book
+ * Books an appointment using atomic transaction semantics on doctor slotId.
+ */
+app.post('/api/appointments/book', requireAuth, async (req, res) => {
+  try {
+    const result = await caseWorkflowService.bookAppointment({
+      user: req.user,
+      body: req.body || {},
+      db
+    });
+    res.status(201).json(result);
+  } catch (err) {
+    res.status(400).json({ error: 'APPOINTMENT_BOOKING_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/appointments/:appointmentId/cancel
+ * Cancels appointment and releases slot.
+ */
+app.post('/api/appointments/:appointmentId/cancel', requireAuth, async (req, res) => {
+  try {
+    const { appointmentId } = req.params;
+    const result = await caseWorkflowService.cancelAppointment({
+      user: req.user,
+      appointmentId,
+      reason: req.body?.reason,
+      db
+    });
+    res.status(200).json(result);
+  } catch (err) {
+    res.status(400).json({ error: 'APPOINTMENT_CANCELLATION_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/clinics/onboard
+ * Saves real clinic onboarding request to clinics collection and notifies admins.
+ */
+app.post('/api/clinics/onboard', async (req, res) => {
+  try {
+    const result = await caseWorkflowService.onboardClinic({
+      user: req.user || null,
+      body: req.body || {},
+      db
+    });
+    res.status(201).json(result);
+  } catch (err) {
+    res.status(400).json({ error: 'CLINIC_ONBOARDING_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/admin/email-queue/process
+ * Triggers batch processing of pending transactional emails.
+ */
+app.post('/api/admin/email-queue/process', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const limit = Number(req.query.limit || 10);
+    const result = await caseWorkflowService.processEmailQueue(db, limit);
+    res.status(200).json({ success: true, ...result });
+  } catch (err) {
+    res.status(500).json({ error: 'EMAIL_QUEUE_PROCESS_FAILED', message: err.message });
   }
 });
 
@@ -15673,7 +17216,6 @@ app.post('/api/cases/:caseId/claim', requireAuth, requireVerifiedEmail, requireD
   }
 });
 
-// =============================================================================
 // 🫀 HYPERTENSION CLINICAL MODULE API ENDPOINTS
 // =============================================================================
 
@@ -15891,10 +17433,1235 @@ app.post('/api/hypertension/clarification/reply', requireAuth, (req, res) => {
   }
 });
 
+// =============================================================================
+// ⚖️ OBESITY & METABOLIC HEALTH CLINICAL MODULE ENDPOINTS
+// =============================================================================
+
+/**
+ * POST /api/obesity/measurements
+ * Ingests structured anthropometric measurement for a patient.
+ * Strictly calculates BMI only from valid height and weight.
+ * Preserves historical measurements.
+ */
+app.post('/api/obesity/measurements', requireAuth, async (req, res) => {
+  try {
+    const {
+      patientId,
+      height,
+      heightUnit,
+      heightCm,
+      weight,
+      weightUnit,
+      weightKg,
+      measuredAt,
+      measurementTimestamp,
+      measurementSource,
+      useExistingMeasurements,
+      lifestyle,
+      notes
+    } = req.body || {};
+    const targetPatientId = patientId || req.user.uid;
+
+    diseaseAuthorizationService.authorizeDiseaseAccess({
+      user: req.user,
+      diseaseId: 'obesity',
+      action: 'create:record',
+      targetPatientId
+    });
+
+    const recorded = obesityService.recordObesityMeasurement({
+      patientId: targetPatientId,
+      height,
+      heightUnit,
+      heightCm,
+      weight,
+      weightUnit,
+      weightKg,
+      measuredAt,
+      measurementTimestamp,
+      measurementSource,
+      useExistingMeasurements: useExistingMeasurements !== false,
+      lifestyle,
+      notes,
+      author: { uid: req.user.uid, role: req.user.role, name: req.user.displayName || req.user.email || 'User' }
+    });
+
+    res.status(201).json({ success: true, measurement: recorded });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'MEASUREMENT_RECORD_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/obesity/patient/:patientId/measurements
+ * Retrieves chronological historical measurements for a patient.
+ */
+app.get('/api/obesity/patient/:patientId/measurements', requireAuth, (req, res) => {
+  try {
+    const { patientId } = req.params;
+    diseaseAuthorizationService.authorizeDiseaseAccess({
+      user: req.user,
+      diseaseId: 'obesity',
+      action: 'read:records',
+      targetPatientId: patientId
+    });
+
+    const history = obesityService.getPatientMeasurementHistory(patientId);
+    res.json({ success: true, count: history.length, measurements: history });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.code || 'MEASUREMENTS_FETCH_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/obesity/cases
+ * Creates an obesity clinical assessment case.
+ */
+app.post('/api/obesity/cases', requireAuth, async (req, res) => {
+  try {
+    const { patientId, patientProfile, initialMeasurement, lifestyle, chiefComplaint, patientNotes } = req.body || {};
+    const targetPatientId = patientId || req.user.uid;
+
+    diseaseAuthorizationService.authorizeDiseaseAccess({
+      user: req.user,
+      diseaseId: 'obesity',
+      action: 'create:case',
+      targetPatientId
+    });
+
+    const c = obesityService.createObesityCase({
+      patientId: targetPatientId,
+      patientProfile: patientProfile || { name: req.user.displayName || req.user.name },
+      initialMeasurement,
+      lifestyle,
+      chiefComplaint,
+      patientNotes
+    });
+
+    res.status(201).json({ success: true, case: c });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'CASE_CREATION_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/obesity/patient/:patientId/cases
+ * Retrieves obesity cases for a patient.
+ */
+app.get('/api/obesity/patient/:patientId/cases', requireAuth, (req, res) => {
+  try {
+    const { patientId } = req.params;
+    diseaseAuthorizationService.authorizeDiseaseAccess({
+      user: req.user,
+      diseaseId: 'obesity',
+      action: 'read:case',
+      targetPatientId: patientId
+    });
+
+    const cases = obesityService.getPatientObesityCases(patientId);
+    res.json({ success: true, count: cases.length, cases });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.code || 'CASES_FETCH_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/obesity/case/:caseId
+ * Retrieves specific obesity case details.
+ */
+app.get('/api/obesity/case/:caseId', requireAuth, (req, res) => {
+  try {
+    const { caseId } = req.params;
+    const c = obesityService.getObesityCase(caseId);
+    if (!c) {
+      return res.status(404).json({ error: 'CASE_NOT_FOUND', message: 'Obesity case not found.' });
+    }
+
+    diseaseAuthorizationService.authorizeDiseaseAccess({
+      user: req.user,
+      diseaseId: 'obesity',
+      action: 'read:case',
+      record: c
+    });
+
+    res.json({ success: true, case: c });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.code || 'CASE_FETCH_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/obesity/case/:caseId/approve
+ * Doctor review and formal approval.
+ * Enforces explicit physician diagnosis and revision gating.
+ */
+app.post('/api/obesity/case/:caseId/approve', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
+  try {
+    const { caseId } = req.params;
+    const { clinicalDiagnosis, managementPlan, doctorNotes, internalDoctorNotes, followUpPlan, reviewedRevision, expectedRevision } = req.body || {};
+
+    const c = obesityService.getObesityCase(caseId);
+    if (!c) {
+      return res.status(404).json({ error: 'CASE_NOT_FOUND', message: 'Obesity case not found.' });
+    }
+
+    diseaseAuthorizationService.authorizeDiseaseAccess({
+      user: req.user,
+      diseaseId: 'obesity',
+      action: 'approve:case',
+      record: c
+    });
+
+    const doctorIdentity = await getVerifiedDoctorIdentity(req.user.uid);
+    const reviewingDoctor = {
+      uid: req.user.uid,
+      name: doctorIdentity?.name || req.user.displayName || req.user.email,
+      licenseNumber: doctorIdentity?.licenseNumber || 'LIC-VERIFIED',
+      specialty: doctorIdentity?.specialty || 'Obesity Medicine / Endocrinology',
+      status: doctorIdentity?.status || 'approved',
+      licenseStatus: doctorIdentity?.licenseStatus || 'active',
+      isLicenseExpired: Boolean(doctorIdentity?.isLicenseExpired)
+    };
+
+    const result = obesityService.reviewAndApproveObesityCase({
+      caseId,
+      reviewingDoctor,
+      clinicalDiagnosis,
+      managementPlan,
+      doctorNotes,
+      internalDoctorNotes,
+      followUpPlan,
+      reviewedRevision,
+      expectedRevision
+    });
+
+    res.json(result);
+  } catch (err) {
+    if (err.code === 'STALE_CLINICAL_REVISION') {
+      return res.status(409).json({
+        error: err.code,
+        message: err.message,
+        currentRevision: err.currentRevision,
+        attemptedRevision: err.attemptedRevision
+      });
+    }
+    res.status(err.statusCode || 400).json({ error: err.code || 'APPROVAL_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/obesity/patient/:patientId/report
+ * Retrieves approved certified report for a patient.
+ */
+app.get('/api/obesity/patient/:patientId/report', requireAuth, (req, res) => {
+  try {
+    const { patientId } = req.params;
+    diseaseAuthorizationService.authorizeDiseaseAccess({
+      user: req.user,
+      diseaseId: 'obesity',
+      action: 'read:report',
+      targetPatientId: patientId
+    });
+
+    const report = obesityService.getPatientApprovedReport(patientId);
+    if (!report) {
+      return res.status(404).json({ error: 'REPORT_NOT_FOUND', message: 'No approved obesity report found.' });
+    }
+
+    res.json({ success: true, report });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.code || 'REPORT_FETCH_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/obesity/patient/:patientId/followup
+ * Retrieves approved follow-up protocol for a patient.
+ */
+app.get('/api/obesity/patient/:patientId/followup', requireAuth, (req, res) => {
+  try {
+    const { patientId } = req.params;
+    diseaseAuthorizationService.authorizeDiseaseAccess({
+      user: req.user,
+      diseaseId: 'obesity',
+      action: 'read:case',
+      targetPatientId: patientId
+    });
+
+    const followUp = obesityService.getPatientFollowUp(patientId);
+    if (!followUp) {
+      return res.status(404).json({ error: 'FOLLOWUP_NOT_FOUND', message: 'No approved follow-up plan found.' });
+    }
+
+    res.json({ success: true, followUp });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.code || 'FOLLOWUP_FETCH_FAILED', message: err.message });
+  }
+});
+
+// =============================================================================
+// 🩸 DIABETES MELLITUS & GLYCEMIC MANAGEMENT CLINICAL MODULE ENDPOINTS
+// =============================================================================
+
+/**
+ * POST /api/diabetes/measurements
+ * Ingests structured blood glucose or HbA1c measurement.
+ */
+app.post('/api/diabetes/measurements', requireAuth, async (req, res) => {
+  try {
+    const {
+      patientId,
+      measurementType,
+      value,
+      unit,
+      measuredAt,
+      measurementSource,
+      notes
+    } = req.body || {};
+    const targetPatientId = patientId || req.user.uid;
+
+    diseaseAuthorizationService.authorizeDiseaseAccess({
+      user: req.user,
+      diseaseId: 'diabetes',
+      action: 'create:record',
+      targetPatientId
+    });
+
+    const recorded = diabetesService.recordGlucoseMeasurement({
+      patientId: targetPatientId,
+      measurementType,
+      value,
+      unit,
+      measuredAt,
+      measurementSource,
+      notes,
+      author: { uid: req.user.uid, role: req.user.role, name: req.user.displayName || req.user.email || 'User' }
+    });
+
+    res.status(201).json({ success: true, measurement: recorded });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'MEASUREMENT_RECORD_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/diabetes/patient/:patientId/measurements
+ * Retrieves chronological historical glycemic measurements.
+ */
+app.get('/api/diabetes/patient/:patientId/measurements', requireAuth, (req, res) => {
+  try {
+    const { patientId } = req.params;
+    diseaseAuthorizationService.authorizeDiseaseAccess({
+      user: req.user,
+      diseaseId: 'diabetes',
+      action: 'read:records',
+      targetPatientId: patientId
+    });
+
+    const measurements = diabetesService.getPatientMeasurements(patientId);
+    res.json({ success: true, count: measurements.length, measurements });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.code || 'MEASUREMENTS_FETCH_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/diabetes/cases
+ * Creates a diabetes clinical case.
+ */
+app.post('/api/diabetes/cases', requireAuth, async (req, res) => {
+  try {
+    const { patientId, patientProfile, initialMeasurement, lifestyle, chiefComplaint, patientNotes } = req.body || {};
+    const targetPatientId = patientId || req.user.uid;
+
+    diseaseAuthorizationService.authorizeDiseaseAccess({
+      user: req.user,
+      diseaseId: 'diabetes',
+      action: 'create:case',
+      targetPatientId
+    });
+
+    const c = diabetesService.createDiabetesCase({
+      patientId: targetPatientId,
+      patientProfile: patientProfile || { name: req.user.displayName || req.user.name },
+      initialMeasurement,
+      lifestyle,
+      chiefComplaint,
+      patientNotes
+    });
+
+    res.status(201).json({ success: true, case: c });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'CASE_CREATION_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/diabetes/patient/:patientId/cases
+ * Retrieves diabetes cases for a patient.
+ */
+app.get('/api/diabetes/patient/:patientId/cases', requireAuth, (req, res) => {
+  try {
+    const { patientId } = req.params;
+    diseaseAuthorizationService.authorizeDiseaseAccess({
+      user: req.user,
+      diseaseId: 'diabetes',
+      action: 'read:case',
+      targetPatientId: patientId
+    });
+
+    const cases = diabetesService.getPatientCases(patientId);
+    res.json({ success: true, count: cases.length, cases });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.code || 'CASES_FETCH_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/diabetes/case/:caseId
+ * Retrieves specific diabetes case details.
+ */
+app.get('/api/diabetes/case/:caseId', requireAuth, (req, res) => {
+  try {
+    const { caseId } = req.params;
+    const c = diabetesService.getDiabetesCase(caseId);
+    if (!c) {
+      return res.status(404).json({ error: 'CASE_NOT_FOUND', message: 'Diabetes case not found.' });
+    }
+
+    diseaseAuthorizationService.authorizeDiseaseAccess({
+      user: req.user,
+      diseaseId: 'diabetes',
+      action: 'read:case',
+      record: c
+    });
+
+    res.json({ success: true, case: c });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.code || 'CASE_FETCH_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/diabetes/case/:caseId/approve
+ * Physician review and approval for diabetes case.
+ */
+app.post('/api/diabetes/case/:caseId/approve', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
+  try {
+    const { caseId } = req.params;
+    const { clinicalDiagnosis, glycemicTarget, managementPlan, doctorNotes, internalDoctorNotes, followUpPlan, reviewedRevision, expectedRevision } = req.body || {};
+
+    const c = diabetesService.getDiabetesCase(caseId);
+    if (!c) {
+      return res.status(404).json({ error: 'CASE_NOT_FOUND', message: 'Diabetes case not found.' });
+    }
+
+    diseaseAuthorizationService.authorizeDiseaseAccess({
+      user: req.user,
+      diseaseId: 'diabetes',
+      action: 'approve:case',
+      record: c
+    });
+
+    const doctorIdentity = await getVerifiedDoctorIdentity(req.user.uid);
+    const reviewingDoctor = {
+      uid: req.user.uid,
+      name: doctorIdentity?.name || req.user.displayName || req.user.email,
+      licenseNumber: doctorIdentity?.licenseNumber || 'LIC-VERIFIED',
+      specialty: doctorIdentity?.specialty || 'Endocrinology & Diabetology',
+      status: doctorIdentity?.status || 'approved',
+      licenseStatus: doctorIdentity?.licenseStatus || 'active',
+      isLicenseExpired: Boolean(doctorIdentity?.isLicenseExpired)
+    };
+
+    const result = diabetesService.reviewAndApproveDiabetesCase({
+      caseId,
+      reviewingDoctor,
+      clinicalDiagnosis,
+      glycemicTarget,
+      managementPlan,
+      doctorNotes,
+      internalDoctorNotes,
+      followUpPlan,
+      reviewedRevision,
+      expectedRevision
+    });
+
+    res.json(result);
+  } catch (err) {
+    if (err.code === 'STALE_CLINICAL_REVISION') {
+      return res.status(409).json({
+        error: err.code,
+        message: err.message,
+        currentRevision: err.currentRevision,
+        attemptedRevision: err.attemptedRevision
+      });
+    }
+    res.status(err.statusCode || 400).json({ error: err.code || 'APPROVAL_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/diabetes/patient/:patientId/report
+ * Retrieves approved diabetes clinical report.
+ */
+app.get('/api/diabetes/patient/:patientId/report', requireAuth, (req, res) => {
+  try {
+    const { patientId } = req.params;
+    diseaseAuthorizationService.authorizeDiseaseAccess({
+      user: req.user,
+      diseaseId: 'diabetes',
+      action: 'read:report',
+      targetPatientId: patientId
+    });
+
+    const report = diabetesService.getPatientApprovedReport(patientId);
+    if (!report) {
+      return res.status(404).json({ error: 'REPORT_NOT_FOUND', message: 'No approved diabetes report found.' });
+    }
+
+    res.json({ success: true, report });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.code || 'REPORT_FETCH_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/diabetes/patient/:patientId/followup
+ * Retrieves approved follow-up protocol for diabetes.
+ */
+app.get('/api/diabetes/patient/:patientId/followup', requireAuth, (req, res) => {
+  try {
+    const { patientId } = req.params;
+    diseaseAuthorizationService.authorizeDiseaseAccess({
+      user: req.user,
+      diseaseId: 'diabetes',
+      action: 'read:case',
+      targetPatientId: patientId
+    });
+
+    const followUp = diabetesService.getPatientFollowUp(patientId);
+    if (!followUp) {
+      return res.status(404).json({ error: 'FOLLOWUP_NOT_FOUND', message: 'No approved follow-up plan found.' });
+    }
+
+    res.json({ success: true, followUp });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.code || 'FOLLOWUP_FETCH_FAILED', message: err.message });
+  }
+});
+
+// =============================================================================
+// 🫀 CHRONIC HYPERTENSION & BLOOD PRESSURE CLINICAL MODULE ENDPOINTS
+// =============================================================================
+
+/**
+ * POST /api/chronic/hypertension/readings
+ * Records structured blood pressure reading.
+ */
+app.post('/api/chronic/hypertension/readings', requireAuth, async (req, res) => {
+  try {
+    const { patientId, systolic, diastolic, pulse, arm, posture, cuffSize, timing, symptomFlags, notes, measurementSource } = req.body || {};
+    const targetPatientId = patientId || req.user.uid;
+
+    diseaseAuthorizationService.authorizeDiseaseAccess({
+      user: req.user,
+      diseaseId: 'hypertension',
+      action: 'create:record',
+      targetPatientId
+    });
+
+    const recorded = chronicHypertensionService.recordBloodPressureReading({
+      patientId: targetPatientId,
+      systolic,
+      diastolic,
+      pulse,
+      arm,
+      posture,
+      cuffSize,
+      timing,
+      symptomFlags,
+      notes,
+      measurementSource: measurementSource || chronicHypertensionService.MEASUREMENT_SOURCES.PATIENT_SELF_REPORT,
+      author: { uid: req.user.uid, role: req.user.role, name: req.user.displayName || req.user.email || 'User' }
+    });
+
+    res.status(201).json({ success: true, reading: recorded });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'READING_RECORD_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/chronic/hypertension/patient/:patientId/readings
+ * Retrieves historical blood pressure readings.
+ */
+app.get('/api/chronic/hypertension/patient/:patientId/readings', requireAuth, (req, res) => {
+  try {
+    const { patientId } = req.params;
+    diseaseAuthorizationService.authorizeDiseaseAccess({
+      user: req.user,
+      diseaseId: 'hypertension',
+      action: 'read:records',
+      targetPatientId: patientId
+    });
+
+    const readings = chronicHypertensionService.getPatientReadings(patientId);
+    res.json({ success: true, count: readings.length, readings });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.code || 'READINGS_FETCH_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/chronic/hypertension/patient/:patientId/dashboard
+ * Retrieves hemodynamic analytics and BP dashboard.
+ */
+app.get('/api/chronic/hypertension/patient/:patientId/dashboard', requireAuth, (req, res) => {
+  try {
+    const { patientId } = req.params;
+    diseaseAuthorizationService.authorizeDiseaseAccess({
+      user: req.user,
+      diseaseId: 'hypertension',
+      action: 'read:records',
+      targetPatientId: patientId
+    });
+
+    const dashboard = chronicHypertensionService.calculateHypertensionDashboard(patientId);
+    res.json({ success: true, dashboard });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.code || 'DASHBOARD_FETCH_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/chronic/hypertension/patient/:patientId/certify
+ * Physician certifies hypertension assessment report.
+ */
+app.post('/api/chronic/hypertension/patient/:patientId/certify', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const { clinicalNotes, managementPlan, targetGoals } = req.body || {};
+
+    const doctorIdentity = await getVerifiedDoctorIdentity(req.user.uid);
+    const reviewingDoctor = {
+      uid: req.user.uid,
+      name: doctorIdentity?.name || req.user.displayName || req.user.email,
+      licenseNumber: doctorIdentity?.licenseNumber || 'LIC-VERIFIED',
+      specialty: doctorIdentity?.specialty || 'Cardiology / Hypertension',
+      status: doctorIdentity?.status || 'approved',
+      licenseStatus: doctorIdentity?.licenseStatus || 'active',
+      isLicenseExpired: Boolean(doctorIdentity?.isLicenseExpired),
+      clinicId: req.user.clinicId || null
+    };
+
+    diseaseAuthorizationService.authorizeDiseaseAccess({
+      user: req.user,
+      diseaseId: 'hypertension',
+      action: 'approve:case',
+      targetPatientId: patientId
+    });
+
+    const report = chronicHypertensionService.certifyChronicHypertensionReport({
+      patientId,
+      doctorIdentity: reviewingDoctor,
+      clinicalNotes,
+      managementPlan,
+      targetGoals
+    });
+
+    res.json({ success: true, report });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'CERTIFY_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/chronic/hypertension/patient/:patientId/report
+ * Retrieves latest certified report.
+ */
+app.get('/api/chronic/hypertension/patient/:patientId/report', requireAuth, (req, res) => {
+  try {
+    const { patientId } = req.params;
+    diseaseAuthorizationService.authorizeDiseaseAccess({
+      user: req.user,
+      diseaseId: 'hypertension',
+      action: 'read:report',
+      targetPatientId: patientId
+    });
+
+    const report = chronicHypertensionService.getLatestCertifiedReport(patientId);
+    if (!report) {
+      return res.status(404).json({ error: 'REPORT_NOT_FOUND', message: 'No certified hypertension report found.' });
+    }
+
+    res.json({ success: true, report });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.code || 'REPORT_FETCH_FAILED', message: err.message });
+  }
+});
+
+// =============================================================================
+// 🩸 BLOOD CLOTTING / BLOOD DISORDERS CLINICAL MODULE ENDPOINTS
+// =============================================================================
+
+/**
+ * POST /api/blood-disorders/observations
+ * Ingests structured blood disorder observation.
+ */
+app.post('/api/blood-disorders/observations', requireAuth, async (req, res) => {
+  try {
+    const { patientId, testCode, conditionId, rawValue, numericValue, unit, measurementSource, clinicalContext, attachments } = req.body || {};
+    const targetPatientId = patientId || req.user.uid;
+
+    diseaseAuthorizationService.authorizeDiseaseAccess({
+      user: req.user,
+      diseaseId: 'blood-disorders',
+      action: 'create:record',
+      targetPatientId
+    });
+
+    const obs = bloodDisordersService.createClinicalObservation({
+      patientId: targetPatientId,
+      testCode,
+      conditionId,
+      rawValue,
+      numericValue,
+      unit,
+      measurementSource: measurementSource || bloodDisordersService.OBSERVATION_SOURCES.PATIENT_SELF_REPORT,
+      clinicalContext,
+      attachments,
+      reportedBy: { uid: req.user.uid, role: req.user.role, name: req.user.displayName || req.user.email || 'User' }
+    });
+
+    res.status(201).json({ success: true, observation: obs });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'OBSERVATION_RECORD_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/blood-disorders/patient/:patientId/observations
+ * Retrieves patient observations.
+ */
+app.get('/api/blood-disorders/patient/:patientId/observations', requireAuth, (req, res) => {
+  try {
+    const { patientId } = req.params;
+    diseaseAuthorizationService.authorizeDiseaseAccess({
+      user: req.user,
+      diseaseId: 'blood-disorders',
+      action: 'read:records',
+      targetPatientId: patientId
+    });
+
+    const observations = bloodDisordersService.getPatientClinicalObservations(patientId, req.query || {});
+    res.json({ success: true, count: observations.length, observations });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.code || 'OBSERVATIONS_FETCH_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/blood-disorders/observations/:observationId
+ * Retrieves specific observation with provenance.
+ */
+app.get('/api/blood-disorders/observations/:observationId', requireAuth, (req, res) => {
+  try {
+    const { observationId } = req.params;
+    const obs = bloodDisordersService.getClinicalObservationById(observationId);
+    if (!obs) {
+      return res.status(404).json({ error: 'OBSERVATION_NOT_FOUND', message: 'Clinical observation not found.' });
+    }
+
+    diseaseAuthorizationService.authorizeDiseaseAccess({
+      user: req.user,
+      diseaseId: 'blood-disorders',
+      action: 'read:records',
+      record: obs
+    });
+
+    res.json({ success: true, observation: obs });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.code || 'OBSERVATION_FETCH_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/blood-disorders/cases
+ * Creates a blood disorder clinical case.
+ */
+app.post('/api/blood-disorders/cases', requireAuth, async (req, res) => {
+  try {
+    const { patientId, patientProfile, conditionId, chiefComplaint, bleedingRiskScore, observationIds, attachments, notes } = req.body || {};
+    const targetPatientId = patientId || req.user.uid;
+
+    diseaseAuthorizationService.authorizeDiseaseAccess({
+      user: req.user,
+      diseaseId: 'blood-disorders',
+      action: 'create:case',
+      targetPatientId
+    });
+
+    const c = bloodDisordersService.recordPatientBloodDisorderCase({
+      patientId: targetPatientId,
+      patientProfile: patientProfile || { name: req.user.displayName || req.user.name },
+      conditionId,
+      chiefComplaint,
+      bleedingRiskScore,
+      observationIds,
+      attachments,
+      notes
+    });
+
+    res.status(201).json({ success: true, case: c });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'CASE_CREATION_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/blood-disorders/patient/:patientId/cases
+ * Retrieves blood disorder cases for a patient.
+ */
+app.get('/api/blood-disorders/patient/:patientId/cases', requireAuth, (req, res) => {
+  try {
+    const { patientId } = req.params;
+    diseaseAuthorizationService.authorizeDiseaseAccess({
+      user: req.user,
+      diseaseId: 'blood-disorders',
+      action: 'read:case',
+      targetPatientId: patientId
+    });
+
+    const cases = bloodDisordersService.getPatientCases(patientId);
+    res.json({ success: true, count: cases.length, cases });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.code || 'CASES_FETCH_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/blood-disorders/case/:caseId
+ * Retrieves specific blood disorder case.
+ */
+app.get('/api/blood-disorders/case/:caseId', requireAuth, (req, res) => {
+  try {
+    const { caseId } = req.params;
+    const c = bloodDisordersService.getCaseById(caseId);
+    if (!c) {
+      return res.status(404).json({ error: 'CASE_NOT_FOUND', message: 'Blood disorder case not found.' });
+    }
+
+    diseaseAuthorizationService.authorizeDiseaseAccess({
+      user: req.user,
+      diseaseId: 'blood-disorders',
+      action: 'read:case',
+      record: c
+    });
+
+    res.json({ success: true, case: c });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.code || 'CASE_FETCH_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/blood-disorders/case/:caseId/approve
+ * Hematologist reviews and approves case.
+ */
+app.post('/api/blood-disorders/case/:caseId/approve', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
+  try {
+    const { caseId } = req.params;
+    const { clinicalDiagnosis, managementPlan, doctorNotes, internalDoctorNotes, followUpPlan, reviewedRevision, expectedRevision } = req.body || {};
+
+    const c = bloodDisordersService.getCaseById(caseId);
+    if (!c) {
+      return res.status(404).json({ error: 'CASE_NOT_FOUND', message: 'Blood disorder case not found.' });
+    }
+
+    diseaseAuthorizationService.authorizeDiseaseAccess({
+      user: req.user,
+      diseaseId: 'blood-disorders',
+      action: 'approve:case',
+      record: c
+    });
+
+    const doctorIdentity = await getVerifiedDoctorIdentity(req.user.uid);
+    const reviewingDoctor = {
+      uid: req.user.uid,
+      name: doctorIdentity?.name || req.user.displayName || req.user.email,
+      licenseNumber: doctorIdentity?.licenseNumber || 'LIC-VERIFIED',
+      specialty: doctorIdentity?.specialty || 'Hematology & Thrombosis',
+      status: doctorIdentity?.status || 'approved',
+      licenseStatus: doctorIdentity?.licenseStatus || 'active',
+      isLicenseExpired: Boolean(doctorIdentity?.isLicenseExpired)
+    };
+
+    const result = bloodDisordersService.reviewAndApproveBloodDisorderCase({
+      caseId,
+      reviewingDoctor,
+      clinicalDiagnosis,
+      managementPlan,
+      doctorNotes,
+      internalDoctorNotes,
+      followUpPlan,
+      reviewedRevision,
+      expectedRevision
+    });
+
+    res.json(result);
+  } catch (err) {
+    if (err.code === 'STALE_CLINICAL_REVISION') {
+      return res.status(409).json({
+        error: err.code,
+        message: err.message,
+        currentRevision: err.currentRevision,
+        attemptedRevision: err.attemptedRevision
+      });
+    }
+    res.status(err.statusCode || 400).json({ error: err.code || 'APPROVAL_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/blood-disorders/patient/:patientId/report
+ * Retrieves approved certified report for a patient.
+ */
+app.get('/api/blood-disorders/patient/:patientId/report', requireAuth, (req, res) => {
+  try {
+    const { patientId } = req.params;
+    diseaseAuthorizationService.authorizeDiseaseAccess({
+      user: req.user,
+      diseaseId: 'blood-disorders',
+      action: 'read:report',
+      targetPatientId: patientId
+    });
+
+    const report = bloodDisordersService.getApprovedReport(patientId);
+    if (!report) {
+      return res.status(404).json({ error: 'REPORT_NOT_FOUND', message: 'No approved blood disorder report found.' });
+    }
+
+    res.json({ success: true, report });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.code || 'REPORT_FETCH_FAILED', message: err.message });
+  }
+});
+
+// =============================================================================
+// 🌐 UNIFIED DISEASE AUTHORIZATION & ACCESS ROUTER
+// Covers: Diabetes, Hypertension, Blood Disorders, and Obesity under a single unified API surface.
+// =============================================================================
+
+/**
+ * POST /api/diseases/:diseaseId/records
+ * Unified route to record a structured measurement or observation across any disease.
+ */
+app.post('/api/diseases/:diseaseId/records', requireAuth, async (req, res) => {
+  try {
+    const canonicalDisease = diseaseAuthorizationService.normalizeDiseaseId(req.params.diseaseId);
+    const targetPatientId = req.body?.patientId || req.user.uid;
+
+    diseaseAuthorizationService.authorizeDiseaseAccess({
+      user: req.user,
+      diseaseId: canonicalDisease,
+      action: 'create:record',
+      targetPatientId
+    });
+
+    let result = null;
+    if (canonicalDisease === 'obesity') {
+      result = obesityService.recordObesityMeasurement({
+        ...req.body,
+        patientId: targetPatientId,
+        author: { uid: req.user.uid, role: req.user.role, name: req.user.displayName || req.user.email || 'User' }
+      });
+    } else if (canonicalDisease === 'diabetes') {
+      result = diabetesService.recordGlucoseMeasurement({
+        ...req.body,
+        patientId: targetPatientId,
+        author: { uid: req.user.uid, role: req.user.role, name: req.user.displayName || req.user.email || 'User' }
+      });
+    } else if (canonicalDisease === 'hypertension') {
+      result = chronicHypertensionService.recordBloodPressureReading({
+        ...req.body,
+        patientId: targetPatientId,
+        author: { uid: req.user.uid, role: req.user.role, name: req.user.displayName || req.user.email || 'User' }
+      });
+    } else if (canonicalDisease === 'blood-disorders') {
+      result = bloodDisordersService.createClinicalObservation({
+        ...req.body,
+        patientId: targetPatientId,
+        reportedBy: { uid: req.user.uid, role: req.user.role, name: req.user.displayName || req.user.email || 'User' }
+      });
+    }
+
+    res.status(201).json({ success: true, diseaseId: canonicalDisease, record: result });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'RECORD_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/diseases/:diseaseId/patient/:patientId/records
+ * Unified route to read patient records across any disease.
+ */
+app.get('/api/diseases/:diseaseId/patient/:patientId/records', requireAuth, (req, res) => {
+  try {
+    const canonicalDisease = diseaseAuthorizationService.normalizeDiseaseId(req.params.diseaseId);
+    const { patientId } = req.params;
+
+    diseaseAuthorizationService.authorizeDiseaseAccess({
+      user: req.user,
+      diseaseId: canonicalDisease,
+      action: 'read:records',
+      targetPatientId: patientId
+    });
+
+    let records = [];
+    if (canonicalDisease === 'obesity') {
+      records = obesityService.getPatientMeasurementHistory(patientId);
+    } else if (canonicalDisease === 'diabetes') {
+      records = diabetesService.getPatientMeasurements(patientId);
+    } else if (canonicalDisease === 'hypertension') {
+      records = chronicHypertensionService.getPatientReadings(patientId);
+    } else if (canonicalDisease === 'blood-disorders') {
+      records = bloodDisordersService.getPatientClinicalObservations(patientId, req.query || {});
+    }
+
+    res.json({ success: true, diseaseId: canonicalDisease, count: records.length, records });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.code || 'RECORDS_FETCH_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/diseases/:diseaseId/cases
+ * Unified route to create a clinical case for any disease.
+ */
+app.post('/api/diseases/:diseaseId/cases', requireAuth, async (req, res) => {
+  try {
+    const canonicalDisease = diseaseAuthorizationService.normalizeDiseaseId(req.params.diseaseId);
+    const targetPatientId = req.body?.patientId || req.user.uid;
+
+    diseaseAuthorizationService.authorizeDiseaseAccess({
+      user: req.user,
+      diseaseId: canonicalDisease,
+      action: 'create:case',
+      targetPatientId
+    });
+
+    let createdCase = null;
+    if (canonicalDisease === 'obesity') {
+      createdCase = obesityService.createObesityCase({ ...req.body, patientId: targetPatientId });
+    } else if (canonicalDisease === 'diabetes') {
+      createdCase = diabetesService.createDiabetesCase({ ...req.body, patientId: targetPatientId });
+    } else if (canonicalDisease === 'blood-disorders') {
+      createdCase = bloodDisordersService.recordPatientBloodDisorderCase({ ...req.body, patientId: targetPatientId });
+    } else if (canonicalDisease === 'hypertension') {
+      // In hypertension, case readings are registered or certified
+      createdCase = { caseId: `case_htn_${targetPatientId}_${Date.now()}`, patientId: targetPatientId, disease: 'hypertension' };
+    }
+
+    res.status(201).json({ success: true, diseaseId: canonicalDisease, case: createdCase });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'CASE_CREATE_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/diseases/:diseaseId/patient/:patientId/cases
+ * Unified route to read patient cases for any disease.
+ */
+app.get('/api/diseases/:diseaseId/patient/:patientId/cases', requireAuth, (req, res) => {
+  try {
+    const canonicalDisease = diseaseAuthorizationService.normalizeDiseaseId(req.params.diseaseId);
+    const { patientId } = req.params;
+
+    diseaseAuthorizationService.authorizeDiseaseAccess({
+      user: req.user,
+      diseaseId: canonicalDisease,
+      action: 'read:case',
+      targetPatientId: patientId
+    });
+
+    let cases = [];
+    if (canonicalDisease === 'obesity') {
+      cases = obesityService.getPatientObesityCases(patientId);
+    } else if (canonicalDisease === 'diabetes') {
+      cases = diabetesService.getPatientCases(patientId);
+    } else if (canonicalDisease === 'blood-disorders') {
+      cases = bloodDisordersService.getPatientCases(patientId);
+    } else if (canonicalDisease === 'hypertension') {
+      const readings = chronicHypertensionService.getPatientReadings(patientId);
+      cases = readings.length > 0 ? [{ patientId, disease: 'hypertension', readingsCount: readings.length }] : [];
+    }
+
+    res.json({ success: true, diseaseId: canonicalDisease, count: cases.length, cases });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.code || 'CASES_FETCH_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/diseases/:diseaseId/case/:caseId
+ * Unified route to get case details for any disease.
+ */
+app.get('/api/diseases/:diseaseId/case/:caseId', requireAuth, (req, res) => {
+  try {
+    const canonicalDisease = diseaseAuthorizationService.normalizeDiseaseId(req.params.diseaseId);
+    const { caseId } = req.params;
+
+    let caseObj = null;
+    if (canonicalDisease === 'obesity') {
+      caseObj = obesityService.getObesityCase(caseId);
+    } else if (canonicalDisease === 'diabetes') {
+      caseObj = diabetesService.getDiabetesCase(caseId);
+    } else if (canonicalDisease === 'blood-disorders') {
+      caseObj = bloodDisordersService.getCaseById(caseId);
+    }
+
+    if (!caseObj) {
+      return res.status(404).json({ error: 'CASE_NOT_FOUND', message: `Case not found for disease '${canonicalDisease}'.` });
+    }
+
+    diseaseAuthorizationService.authorizeDiseaseAccess({
+      user: req.user,
+      diseaseId: canonicalDisease,
+      action: 'read:case',
+      record: caseObj
+    });
+
+    res.json({ success: true, diseaseId: canonicalDisease, case: caseObj });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.code || 'CASE_FETCH_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/diseases/:diseaseId/case/:caseId/approve
+ * Unified route for doctor review and approval across all diseases.
+ */
+app.post('/api/diseases/:diseaseId/case/:caseId/approve', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
+  try {
+    const canonicalDisease = diseaseAuthorizationService.normalizeDiseaseId(req.params.diseaseId);
+    const { caseId } = req.params;
+
+    let caseObj = null;
+    if (canonicalDisease === 'obesity') {
+      caseObj = obesityService.getObesityCase(caseId);
+    } else if (canonicalDisease === 'diabetes') {
+      caseObj = diabetesService.getDiabetesCase(caseId);
+    } else if (canonicalDisease === 'blood-disorders') {
+      caseObj = bloodDisordersService.getCaseById(caseId);
+    }
+
+    if (!caseObj) {
+      return res.status(404).json({ error: 'CASE_NOT_FOUND', message: `Case not found for disease '${canonicalDisease}'.` });
+    }
+
+    diseaseAuthorizationService.authorizeDiseaseAccess({
+      user: req.user,
+      diseaseId: canonicalDisease,
+      action: 'approve:case',
+      record: caseObj
+    });
+
+    const doctorIdentity = await getVerifiedDoctorIdentity(req.user.uid);
+    const reviewingDoctor = {
+      uid: req.user.uid,
+      name: doctorIdentity?.name || req.user.displayName || req.user.email,
+      licenseNumber: doctorIdentity?.licenseNumber || 'LIC-VERIFIED',
+      specialty: doctorIdentity?.specialty || 'General / Specialist Medicine',
+      status: doctorIdentity?.status || 'approved',
+      licenseStatus: doctorIdentity?.licenseStatus || 'active',
+      isLicenseExpired: Boolean(doctorIdentity?.isLicenseExpired)
+    };
+
+    let result = null;
+    if (canonicalDisease === 'obesity') {
+      result = obesityService.reviewAndApproveObesityCase({ ...req.body, caseId, reviewingDoctor });
+    } else if (canonicalDisease === 'diabetes') {
+      result = diabetesService.reviewAndApproveDiabetesCase({ ...req.body, caseId, reviewingDoctor });
+    } else if (canonicalDisease === 'blood-disorders') {
+      result = bloodDisordersService.reviewAndApproveBloodDisorderCase({ ...req.body, caseId, reviewingDoctor });
+    }
+
+    res.json(result);
+  } catch (err) {
+    if (err.code === 'STALE_CLINICAL_REVISION') {
+      return res.status(409).json({
+        error: err.code,
+        message: err.message,
+        currentRevision: err.currentRevision,
+        attemptedRevision: err.attemptedRevision
+      });
+    }
+    res.status(err.statusCode || 400).json({ error: err.code || 'APPROVAL_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/diseases/:diseaseId/patient/:patientId/report
+ * Unified route to read approved certified report for any disease.
+ */
+app.get('/api/diseases/:diseaseId/patient/:patientId/report', requireAuth, (req, res) => {
+  try {
+    const canonicalDisease = diseaseAuthorizationService.normalizeDiseaseId(req.params.diseaseId);
+    const { patientId } = req.params;
+
+    diseaseAuthorizationService.authorizeDiseaseAccess({
+      user: req.user,
+      diseaseId: canonicalDisease,
+      action: 'read:report',
+      targetPatientId: patientId
+    });
+
+    let report = null;
+    if (canonicalDisease === 'obesity') {
+      report = obesityService.getPatientApprovedReport(patientId);
+    } else if (canonicalDisease === 'diabetes') {
+      report = diabetesService.getPatientApprovedReport(patientId);
+    } else if (canonicalDisease === 'hypertension') {
+      report = chronicHypertensionService.getLatestCertifiedReport(patientId);
+    } else if (canonicalDisease === 'blood-disorders') {
+      report = bloodDisordersService.getApprovedReport(patientId);
+    }
+
+    if (!report) {
+      return res.status(404).json({ error: 'REPORT_NOT_FOUND', message: `No approved report found for ${canonicalDisease}.` });
+    }
+
+    res.json({ success: true, diseaseId: canonicalDisease, report });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.code || 'REPORT_FETCH_FAILED', message: err.message });
+  }
+});
+
+// Attach clinical services and unified authorization engine to app instance
+app.chronicHypertensionService = chronicHypertensionService;
+app.bloodDisordersService = bloodDisordersService;
+app.obesityService = obesityService;
+app.diabetesService = diabetesService;
+app.diseaseAuthorizationService = diseaseAuthorizationService;
+app.relationalDbService = relationalDbService;
+app.kaggleTrainingService = kaggleTrainingService;
 app.userDisplayPreferencesService = userDisplayPreferencesService;
 app.familyProfilesService = familyProfilesService;
 app._inMemoryFamilyStore = _inMemoryFamilyStore;
 app.faqService = faqService;
 app._inMemoryFaqFeedbackStore = _inMemoryFaqFeedbackStore;
-module.exports = app;
 
+/**
+ * GET /api/config/relational-db-status
+ * Exposes health, schema version, and PRD Page 16 Kaggle separation metrics.
+ */
+app.get('/api/config/relational-db-status', (req, res) => {
+  res.json({
+    success: true,
+    relationalDb: relationalDbService.getHealthStatus(),
+    kaggleIsolation: kaggleTrainingService.getArchitecturalSeparationReport()
+  });
+});
+
+module.exports = app;

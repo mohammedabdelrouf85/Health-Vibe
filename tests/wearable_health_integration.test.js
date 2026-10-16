@@ -343,23 +343,29 @@ console.log('==================================================================\
   {
     // Seed 14 days of realistic blood pressure data for trend calculation
     const readingsBatch = [];
-    const baseTime = Date.now();
+    const midnight = new Date();
+    midnight.setHours(0, 0, 0, 0);
 
     for (let day = 0; day < 10; day++) {
-      const dayOffsetMs = day * 24 * 3600 * 1000;
+      const dayDate = new Date(midnight.getTime() - day * 24 * 3600 * 1000);
+      const mornDate = new Date(dayDate);
+      mornDate.setHours(8, 0, 0, 0);
+      const eveDate = new Date(dayDate);
+      eveDate.setHours(20, 0, 0, 0);
+
       // Morning reading (8:00 AM)
       readingsBatch.push({
         sourceSyncId: `trend_bp_morn_${day}`,
         metricType: 'blood_pressure',
         value: { systolic: 125 + (day % 3), diastolic: 80 + (day % 2), pulse: 70 },
-        deviceTimestamp: new Date(baseTime - dayOffsetMs - 16 * 3600 * 1000).toISOString()
+        deviceTimestamp: mornDate.toISOString()
       });
       // Evening reading (8:00 PM)
       readingsBatch.push({
         sourceSyncId: `trend_bp_eve_${day}`,
         metricType: 'blood_pressure',
         value: { systolic: 122 + (day % 2), diastolic: 78, pulse: 68 },
-        deviceTimestamp: new Date(baseTime - dayOffsetMs - 4 * 3600 * 1000).toISOString()
+        deviceTimestamp: eveDate.toISOString()
       });
     }
 

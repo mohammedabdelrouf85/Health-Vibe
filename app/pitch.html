@@ -4,28 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://apis.google.com https://www.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://www.gstatic.com https://*.googleusercontent.com; media-src 'self' data: blob:; connect-src 'self' https://healthvibes.app https://*.healthvibes.app https://healthvibe.ai https://*.healthvibe.ai https://*.firebaseio.com https://*.googleapis.com; frame-src 'self' https://healthvibes.app https://*.healthvibes.app; object-src 'none'; base-uri 'self'; form-action 'self';" />
-  <title>Health Vibe AI — Pitch Deck (العرض التقديمي) | نظام الفرز والتشغيل السريري الذكي</title>
-  <meta name="description" content="العرض التقديمي التنفيذي لمنظومة Health Vibe AI للفرز والتشغيل السريري الذكي لعيادات ومراكز الصدر والباطنة: مضاعفة الطاقة الاستيعابية وخفض وقت التوثيق بنسبة 70%." />
-  <link rel="canonical" href="https://healthvibe.ai/app/pitch.html" />
+  <title>Health Vibe AI — Pitch Deck (العرض التقديمي)</title>
+  <meta name="description" content="العرض التقديمي التنفيذي لمنظومة هيلث فايب للذكاء الاصطناعي السريري لعيادات الصدر والباطنة" />
   <meta name="robots" content="noindex, nofollow, noarchive" />
-  <meta property="og:title" content="Health Vibe AI — Pitch Deck | نظام الفرز والتشغيل السريري الذكي" />
-  <meta property="og:description" content="منظومة Health Vibe AI للفرز والتشغيل السريري الذكي لعيادات ومراكز الصدر والباطنة: مضاعفة الطاقة الاستيعابية وخفض وقت التوثيق بنسبة 70%." />
-  <meta property="og:type" content="website" />
-  <meta property="og:url" content="https://healthvibe.ai/app/pitch.html" />
-  <meta property="og:image" content="https://healthvibe.ai/app/logo-dark.webp" />
-  <meta property="og:image:secure_url" content="https://healthvibe.ai/app/logo-dark.webp" />
-  <meta property="og:image:type" content="image/webp" />
-  <meta property="og:image:width" content="1200" />
-  <meta property="og:image:height" content="630" />
-  <meta property="og:image:alt" content="Health Vibe AI - نظام الفرز والتشغيل السريري الذكي" />
-  <meta property="og:site_name" content="Health Vibe AI" />
-  <meta property="og:locale" content="ar_EG" />
-  <meta property="og:locale:alternate" content="en_US" />
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Health Vibe AI — Pitch Deck | نظام الفرز والتشغيل السريري الذكي" />
-  <meta name="twitter:description" content="منظومة Health Vibe AI للفرز والتشغيل السريري الذكي لعيادات ومراكز الصدر والباطنة: مضاعفة الطاقة الاستيعابية وخفض وقت التوثيق بنسبة 70%." />
-  <meta name="twitter:image" content="https://healthvibe.ai/app/logo-dark.webp" />
-  <meta name="twitter:image:alt" content="Health Vibe AI - نظام الفرز والتشغيل السريري الذكي" />
   <link rel="icon" type="image/webp" href="./logo-dark-mark.webp" />
   <link rel="alternate icon" type="image/png" href="./logo-dark-mark.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -48,6 +29,16 @@
       box-sizing: border-box;
       margin: 0;
       padding: 0;
+      font-family: 'Cairo', 'Tajawal', 'Plus Jakarta Sans', system-ui, sans-serif;
+    }
+
+    html[lang="en"] body,
+    html[lang="en"] * {
+      font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    html[lang="ar"] body,
+    html[lang="ar"] * {
       font-family: 'Cairo', 'Tajawal', 'Plus Jakarta Sans', system-ui, sans-serif;
     }
 
@@ -235,42 +226,6 @@
       font-weight: 900;
       color: var(--primary-light);
       margin-bottom: 4px;
-      direction: ltr;
-      unicode-bidi: isolate;
-      display: inline-block;
-      text-align: start;
-    }
-
-    bdi,
-    .bidi-isolate,
-    .stat-val {
-      direction: ltr;
-      unicode-bidi: isolate;
-      display: inline-block;
-      text-align: start;
-    }
-
-    [dir="rtl"] .stat-number,
-    [dir="rtl"] bdi,
-    [dir="rtl"] .bidi-isolate {
-      direction: ltr !important;
-      unicode-bidi: isolate !important;
-    }
-
-    /* HIGH-CONTRAST KEYBOARD ACCESSIBILITY */
-    :focus-visible {
-      outline: 2px solid #38bdf8 !important;
-      outline-offset: 2px !important;
-    }
-    button:focus-visible,
-    a:focus-visible,
-    .slide-dot:focus-visible,
-    .nav-arrow-btn:focus-visible,
-    .btn-header-outline:focus-visible,
-    .btn-header-solid:focus-visible {
-      outline: 2px solid #38bdf8 !important;
-      outline-offset: 2px !important;
-      box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.4) !important;
     }
 
     /* FOOTER CONTROLS */
@@ -419,9 +374,9 @@
     </a>
 
     <div class="deck-actions">
-      <button class="action-btn" onclick="toggleDeckLang()" id="btnLangToggle" title="Switch language" aria-label="تبديل اللغة / Switch language">English</button>
-      <button class="action-btn" onclick="toggleFullscreen()" title="ملء الشاشة" aria-label="ملء الشاشة / Toggle fullscreen">⛶ Fullscreen</button>
-      <a href="./clinics.html" class="action-btn" id="headerClinicPortal" style="background: var(--primary); color: #061515;" aria-label="بوابة العيادات / Clinic Portal">🏥 بوابة العيادات</a>
+      <button class="action-btn" onclick="toggleDeckLang()" id="btnLangToggle" title="Switch language">English</button>
+      <button class="action-btn" onclick="toggleFullscreen()" id="headerFullscreenBtn" title="ملء الشاشة">⛶ Fullscreen</button>
+      <a href="./clinics.html" class="action-btn" id="headerClinicPortal" style="background: var(--primary); color: #061515;">🏥 بوابة العيادات</a>
     </div>
   </header>
 
@@ -522,7 +477,7 @@
         </div>
         <div class="info-card">
           <h4>💾 استعادة الكوارث (DR)</h4>
-          <p>نسخ احتياطي دوري بشهادات تجزئة SHA-256 وزمن استعادة <bdi class="bidi-isolate">RPO &lt; 15</bdi> دقيقة مع تشفير متكامل في الإرسال والتخزين.</p>
+          <p>نسخ احتياطي دوري بشهادات تجزئة SHA-256 وزمن استعادة RPO &lt; 15 دقيقة مع تشفير متكامل في الإرسال والتخزين.</p>
         </div>
       </div>
       <div class="info-card" style="margin-top: 16px; background: rgba(9, 184, 182, 0.08); border-color: rgba(9, 184, 182, 0.4);">
@@ -539,22 +494,22 @@
       <p class="slide-subtitle">نتائج مثبتة ميدانياً في تشغيل عيادات ومراكز الرعاية التنفسية</p>
       <div class="grid-4">
         <div class="info-card" style="text-align: center;">
-          <div class="stat-number"><bdi>70%</bdi></div>
+          <div class="stat-number">70%</div>
           <h4 style="justify-content: center;">تسريع الفرز السريري</h4>
           <p>اختصار وقت أخذ التاريخ المرضي من 15 إلى 4 دقائق.</p>
         </div>
         <div class="info-card" style="text-align: center;">
-          <div class="stat-number"><bdi>&lt; 4%</bdi></div>
+          <div class="stat-number">&lt; 4%</div>
           <h4 style="justify-content: center;">تخلف المرضى (No-Show)</h4>
           <p>انخفاض حاد مقارنة بمتوسط السوق (18%) عبر تنبيهات الواتساب.</p>
         </div>
         <div class="info-card" style="text-align: center;">
-          <div class="stat-number"><bdi>12 min</bdi></div>
+          <div class="stat-number">12 min</div>
           <h4 style="justify-content: center;">سرعة اعتماد التقرير</h4>
           <p>متوسط وقت إنجاز وفحص المريض وتسليمه تقرير الـ QR.</p>
         </div>
         <div class="info-card" style="text-align: center;">
-          <div class="stat-number"><bdi>100+</bdi></div>
+          <div class="stat-number">100+</div>
           <h4 style="justify-content: center;">ساعة موفرة شهرياً</h4>
           <p>ساعات توثيق يدوي يستعيدها طاقم العيادة شهرياً.</p>
         </div>
@@ -568,17 +523,17 @@
       <p class="slide-subtitle">التحول الرقمي للعيادات التخصصية في مصر والشرق الأوسط</p>
       <div class="grid-3">
         <div class="info-card" style="border-color: rgba(9, 184, 182, 0.4);">
-          <div class="stat-number" style="font-size: 30px;"><bdi>$4.2B</bdi></div>
+          <div class="stat-number" style="font-size: 30px;">$4.2B</div>
           <h4>TAM (السوق الكلي المتاح)</h4>
           <p>حجم سوق برمجيات الرعاية الصحية والعيادات الخارجية في منطقة الشرق الأوسط وشمال أفريقيا بحلول 2028.</p>
         </div>
         <div class="info-card" style="border-color: rgba(56, 189, 248, 0.4);">
-          <div class="stat-number" style="font-size: 30px;"><bdi>25,000+</bdi></div>
+          <div class="stat-number" style="font-size: 30px;">25,000+</div>
           <h4>SAM (السوق القابل للخدمة)</h4>
           <p>عيادة ومراكز أمراض صدرية وباطنة وطوارئ خاصة في مصر والمملكة العربية السعودية والإمارات.</p>
         </div>
         <div class="info-card" style="border-color: rgba(45, 212, 191, 0.6);">
-          <div class="stat-number" style="font-size: 30px;"><bdi>1,500</bdi></div>
+          <div class="stat-number" style="font-size: 30px;">1,500</div>
           <h4>SOM (المستهدف 3 سنوات)</h4>
           <p>عيادة ومركز طبي نشط بعائد سنوي متكرر مستهدف يتجاوز <strong>18 مليون جنيه مصري (ARR)</strong>.</p>
         </div>
@@ -594,18 +549,18 @@
         <div class="info-card" style="border: 1.5px solid var(--primary); background: rgba(9, 184, 182, 0.1);">
           <span style="font-size: 11px; font-weight: 800; color: var(--primary-light); background: rgba(9, 184, 182, 0.2); padding: 2px 8px; border-radius: 4px;">🎯 الخطاف المجاني (HOOK)</span>
           <h4 style="margin-top: 8px;">باقة الـ Pilot التجريبية</h4>
-          <div class="stat-number" style="font-size: 26px;"><bdi>0 ج.م</bdi></div>
+          <div class="stat-number" style="font-size: 26px;">0 ج.م</div>
           <p><strong>عيادة واحدة • 3 أطباء • 30 يوماً</strong><br />تجربة كاملة مجاناً بدون بطاقة بنكية، مع نسبة تحويل مستهدفة 45%+.</p>
         </div>
         <div class="info-card">
           <h4>العيادة الفردية (Solo)</h4>
-          <div class="stat-number" style="font-size: 26px;"><bdi>1,250</bdi> <span style="font-size: 13px; color: #94a3b8;">ج.م/شهر</span></div>
+          <div class="stat-number" style="font-size: 26px;">1,250 <span style="font-size: 13px; color: #94a3b8;">ج.م/شهر</span></div>
           <p>طبيب استشاري واحد + مساعد، حتى 200 تقرير شهرياً، تقارير QR.</p>
         </div>
         <div class="info-card" style="border-color: rgba(56, 189, 248, 0.5);">
           <span style="font-size: 11px; font-weight: 800; color: #38bdf8;">⭐ الأكثر طلباً</span>
           <h4 style="margin-top: 8px;">المركز الطبي (Center)</h4>
-          <div class="stat-number" style="font-size: 26px;"><bdi>2,950</bdi> <span style="font-size: 13px; color: #94a3b8;">ج.م/شهر</span></div>
+          <div class="stat-number" style="font-size: 26px;">2,950 <span style="font-size: 13px; color: #94a3b8;">ج.م/شهر</span></div>
           <p>حتى 5 أطباء، واتساب بوت، تقييمات غير محدودة، لوحة تحليلات KPIs كاملة.</p>
         </div>
       </div>
@@ -715,17 +670,17 @@
 
     <!-- VISUAL PROGRESS & DIRECT JUMP DOTS (1..11) -->
     <div class="slide-dots" id="slideDotsContainer" role="navigation" aria-label="شرائح العرض التقديمي">
-      <button type="button" class="slide-dot active" data-goto="1" title="الشريحة 1: الرؤية والرسالة" aria-label="الشريحة 1: الرؤية والرسالة / Slide 1">1</button>
-      <button type="button" class="slide-dot" data-goto="2" title="الشريحة 2: المشكلة السريرية" aria-label="الشريحة 2: المشكلة السريرية / Slide 2">2</button>
-      <button type="button" class="slide-dot" data-goto="3" title="الشريحة 3: الحل المتكامل" aria-label="الشريحة 3: الحل المتكامل / Slide 3">3</button>
-      <button type="button" class="slide-dot" data-goto="4" title="الشريحة 4: كيف تعمل المنظومة" aria-label="الشريحة 4: كيف تعمل المنظومة / Slide 4">4</button>
-      <button type="button" class="slide-dot" data-goto="5" title="الشريحة 5: نموذج الذكاء السريري" aria-label="الشريحة 5: نموذج الذكاء السريري / Slide 5">5</button>
-      <button type="button" class="slide-dot" data-goto="6" title="الشريحة 6: حجم السوق" aria-label="الشريحة 6: حجم السوق / Slide 6">6</button>
-      <button type="button" class="slide-dot" data-goto="7" title="الشريحة 7: نموذج العمل والتسعير" aria-label="الشريحة 7: نموذج العمل والتسعير / Slide 7">7</button>
-      <button type="button" class="slide-dot" data-goto="8" title="الشريحة 8: الميزة التنافسية" aria-label="الشريحة 8: الميزة التنافسية / Slide 8">8</button>
-      <button type="button" class="slide-dot" data-goto="9" title="الشريحة 9: فريق العمل" aria-label="الشريحة 9: فريق العمل / Slide 9">9</button>
-      <button type="button" class="slide-dot" data-goto="10" title="الشريحة 10: الجاهزية والاختبارات" aria-label="الشريحة 10: الجاهزية والاختبارات / Slide 10">10</button>
-      <button type="button" class="slide-dot" data-goto="11" title="الشريحة 11: الرؤية والطلب الاستثماري" aria-label="الشريحة 11: الرؤية والطلب الاستثماري / Slide 11">11</button>
+      <button type="button" class="slide-dot active" data-goto="1" title="الشريحة 1: الرؤية والرسالة">1</button>
+      <button type="button" class="slide-dot" data-goto="2" title="الشريحة 2: المشكلة السريرية">2</button>
+      <button type="button" class="slide-dot" data-goto="3" title="الشريحة 3: الحل المتكامل">3</button>
+      <button type="button" class="slide-dot" data-goto="4" title="الشريحة 4: كيف تعمل المنظومة">4</button>
+      <button type="button" class="slide-dot" data-goto="5" title="الشريحة 5: نموذج الذكاء السريري">5</button>
+      <button type="button" class="slide-dot" data-goto="6" title="الشريحة 6: حجم السوق">6</button>
+      <button type="button" class="slide-dot" data-goto="7" title="الشريحة 7: نموذج العمل والتسعير">7</button>
+      <button type="button" class="slide-dot" data-goto="8" title="الشريحة 8: الميزة التنافسية">8</button>
+      <button type="button" class="slide-dot" data-goto="9" title="الشريحة 9: فريق العمل">9</button>
+      <button type="button" class="slide-dot" data-goto="10" title="الشريحة 10: الجاهزية والاختبارات">10</button>
+      <button type="button" class="slide-dot" data-goto="11" title="الشريحة 11: الرؤية والطلب الاستثماري">11</button>
     </div>
 
     <div class="progress-bar-wrap">
@@ -733,12 +688,11 @@
     </div>
 
     <div class="nav-arrows">
-      <button class="nav-arrow-btn" id="btnPrevSlide" onclick="prevSlide()" title="الشريحة السابقة (السهم الأيمن)" aria-label="الشريحة السابقة / Previous slide">→</button>
-      <button class="nav-arrow-btn" id="btnNextSlide" onclick="nextSlide()" title="الشريحة التالية (السهم الأيسر)" aria-label="الشريحة التالية / Next slide">←</button>
+      <button class="nav-arrow-btn" id="btnPrevSlide" title="الشريحة السابقة (السهم الأيمن)">→</button>
+      <button class="nav-arrow-btn" id="btnNextSlide" title="الشريحة التالية (السهم الأيسر)">←</button>
     </div>
   </footer>
 
-  <script src="./network-resilience.js?v=1.0"></script>
   <script>
     let currentSlide = 1;
     const totalSlides = 11;
@@ -1079,7 +1033,7 @@
           <div class="grid-4">
             ${data.metrics.map(m => `
               <div class="info-card" style="text-align: center;">
-                <div class="stat-number"><bdi>${m.val}</bdi></div>
+                <div class="stat-number">${m.val}</div>
                 <h4 style="justify-content: center;">${m.title}</h4>
                 <p>${m.desc}</p>
               </div>
@@ -1095,17 +1049,17 @@
           <p class="slide-subtitle">${data.subtitle}</p>
           <div class="grid-3">
             <div class="info-card" style="border-color: rgba(9, 184, 182, 0.4);">
-              <div class="stat-number" style="font-size: 30px;"><bdi>${data.cards[0].val}</bdi></div>
+              <div class="stat-number" style="font-size: 30px;">${data.cards[0].val}</div>
               <h4>${data.cards[0].title}</h4>
               <p>${data.cards[0].desc}</p>
             </div>
             <div class="info-card" style="border-color: rgba(56, 189, 248, 0.4);">
-              <div class="stat-number" style="font-size: 30px;"><bdi>${data.cards[1].val}</bdi></div>
+              <div class="stat-number" style="font-size: 30px;">${data.cards[1].val}</div>
               <h4>${data.cards[1].title}</h4>
               <p>${data.cards[1].desc}</p>
             </div>
             <div class="info-card" style="border-color: rgba(45, 212, 191, 0.6);">
-              <div class="stat-number" style="font-size: 30px;"><bdi>${data.cards[2].val}</bdi></div>
+              <div class="stat-number" style="font-size: 30px;">${data.cards[2].val}</div>
               <h4>${data.cards[2].title}</h4>
               <p>${data.cards[2].desc}</p>
             </div>
@@ -1122,18 +1076,18 @@
             <div class="info-card" style="border: 1.5px solid var(--primary); background: rgba(9, 184, 182, 0.1);">
               <span style="font-size: 11px; font-weight: 800; color: var(--primary-light); background: rgba(9, 184, 182, 0.2); padding: 2px 8px; border-radius: 4px;">${data.plans[0].badge}</span>
               <h4 style="margin-top: 8px;">${data.plans[0].title}</h4>
-              <div class="stat-number" style="font-size: 26px;"><bdi>${data.plans[0].val}</bdi></div>
+              <div class="stat-number" style="font-size: 26px;">${data.plans[0].val}</div>
               <p>${data.plans[0].desc}</p>
             </div>
             <div class="info-card">
               <h4>${data.plans[1].title}</h4>
-              <div class="stat-number" style="font-size: 26px;"><bdi>${data.plans[1].val}</bdi> <span style="font-size: 13px; color: #94a3b8;">${data.plans[1].period}</span></div>
+              <div class="stat-number" style="font-size: 26px;">${data.plans[1].val} <span style="font-size: 13px; color: #94a3b8;">${data.plans[1].period}</span></div>
               <p>${data.plans[1].desc}</p>
             </div>
             <div class="info-card" style="border-color: rgba(56, 189, 248, 0.5);">
               <span style="font-size: 11px; font-weight: 800; color: #38bdf8;">${data.plans[2].badge}</span>
               <h4 style="margin-top: 8px;">${data.plans[2].title}</h4>
-              <div class="stat-number" style="font-size: 26px;"><bdi>${data.plans[2].val}</bdi> <span style="font-size: 13px; color: #94a3b8;">${data.plans[2].period}</span></div>
+              <div class="stat-number" style="font-size: 26px;">${data.plans[2].val} <span style="font-size: 13px; color: #94a3b8;">${data.plans[2].period}</span></div>
               <p>${data.plans[2].desc}</p>
             </div>
           </div>
@@ -1168,6 +1122,17 @@
         renderSlideContent(i, lang);
       }
       const t = deckTranslations[lang];
+
+      document.title = lang === "en"
+        ? "Health Vibe AI — Pitch Deck (Executive Presentation)"
+        : "Health Vibe AI — Pitch Deck (العرض التقديمي)";
+      const metaDesc = document.querySelector('meta[name="description"]');
+      if (metaDesc) {
+        metaDesc.setAttribute("content", lang === "en"
+          ? "Executive clinical pitch deck for Health Vibe AI smart triage and respiratory clinical operating system."
+          : "العرض التقديمي التنفيذي لمنظومة هيلث فايب للذكاء الاصطناعي السريري لعيادات الصدر والباطنة");
+      }
+
       const headerSubtitle = document.getElementById("headerDeckSubtitle");
       if (headerSubtitle) headerSubtitle.textContent = t.deckSubtitle;
 
@@ -1179,7 +1144,16 @@
       }
 
       const portalBtn = document.getElementById("headerClinicPortal");
-      if (portalBtn) portalBtn.textContent = t.clinicPortalBtn;
+      if (portalBtn) {
+        portalBtn.textContent = t.clinicPortalBtn;
+        portalBtn.title = lang === "en" ? "Go to B2B Clinic Portal" : "الانتقال إلى بوابة العيادات";
+      }
+
+      const fsBtn = document.getElementById("headerFullscreenBtn");
+      if (fsBtn) {
+        fsBtn.textContent = t.fullscreenBtn;
+        fsBtn.title = lang === "en" ? "Toggle fullscreen" : "ملء الشاشة";
+      }
 
       const indicator = document.querySelector(".slide-indicator");
       if (indicator) {
@@ -1188,15 +1162,25 @@
 
       const prevBtn = document.getElementById("btnPrevSlide");
       const nextBtn = document.getElementById("btnNextSlide");
-      if (prevBtn) document.getElementById("btnPrevSlide").textContent = lang === "en" ? "←" : "→";
-      if (nextBtn) document.getElementById("btnNextSlide").textContent = lang === "en" ? "→" : "←";
+      if (prevBtn) {
+        document.getElementById("btnPrevSlide").textContent = lang === "en" ? "←" : "→";
+        prevBtn.title = lang === "en" ? "Previous slide (Left Arrow)" : "الشريحة السابقة (السهم الأيمن)";
+        prevBtn.setAttribute("aria-label", lang === "en" ? "Previous slide" : "الشريحة السابقة");
+      }
+      if (nextBtn) {
+        document.getElementById("btnNextSlide").textContent = lang === "en" ? "→" : "←";
+        nextBtn.title = lang === "en" ? "Next slide (Right Arrow)" : "الشريحة التالية (السهم الأيسر)";
+        nextBtn.setAttribute("aria-label", lang === "en" ? "Next slide" : "الشريحة التالية");
+      }
 
       const slideDotsNav = document.getElementById("slideDotsContainer");
       if (slideDotsNav) {
-        slideDotsNav.setAttribute("aria-label", lang === "en" ? "Presentation slides" : "شرائح العرض التقديمي");
+        slideDotsNav.setAttribute("aria-label", lang === "en" ? "Presentation slides navigation" : "شرائح العرض التقديمي");
         document.querySelectorAll(".slide-dot").forEach((dot) => {
-          const num = dot.getAttribute("data-goto");
-          dot.title = lang === "en" ? `Slide ${num}` : `الشريحة ${num}`;
+          const num = parseInt(dot.getAttribute("data-goto"), 10);
+          const sTitle = (deckTranslations[lang] && deckTranslations[lang].slides[num]) ? deckTranslations[lang].slides[num].title : "";
+          dot.title = lang === "en" ? `Slide ${num}: ${sTitle}` : `الشريحة ${num}: ${sTitle}`;
+          dot.setAttribute("aria-label", lang === "en" ? `Slide ${num}` : `الشريحة ${num}`);
         });
       }
     }
@@ -1214,8 +1198,10 @@
         localStorage.setItem("hv_deck_lang", lang);
       } catch (e) {}
 
+      // Preserve active slide index consistently
+      const preservedSlide = (currentSlide >= 1 && currentSlide <= totalSlides) ? currentSlide : 1;
       renderAllSlides(lang);
-      showSlide(currentSlide);
+      showSlide(preservedSlide);
     }
 
     function toggleDeckLang() {
@@ -1239,6 +1225,12 @@
             const navLang = (typeof navigator !== "undefined" && (navigator.language || (navigator.languages && navigator.languages[0])) || "").toLowerCase().trim();
             lang = navLang.startsWith("ar") ? "ar" : "en";
           }
+        }
+
+        // Support direct slide deep link e.g. ?slide=4 or #4
+        const urlSlide = parseInt(urlParams.get("slide") || window.location.hash.replace("#", "").replace("slide-", ""), 10);
+        if (!isNaN(urlSlide) && urlSlide >= 1 && urlSlide <= totalSlides) {
+          currentSlide = urlSlide;
         }
       } catch (e) {
         lang = "ar";

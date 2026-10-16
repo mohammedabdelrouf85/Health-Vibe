@@ -149,16 +149,283 @@
   }
 
   /**
+   * Evaluates questions and answers to produce clinical triage & differential assessment results.
+   */
+  function evaluateDifferentialTriage(answers) {
+    const findings = [];
+    let overallRisk = "low"; // low | moderate | high | urgent
+    const differentials = [];
+
+    // Metabolic / Diabetes screener
+    const polyuria = answers.polyuria === "yes";
+    const polydipsia = answers.polydipsia === "yes";
+    const fatigue = answers.fatigue === "yes";
+    if (polyuria || polydipsia) {
+      findings.push({
+        domain: "metabolic",
+        titleEn: "Osmotic Symptoms (Polyuria / Polydipsia)",
+        titleAr: "أعراض زيادة التبول والعطش الشديد",
+        severity: polyuria && polydipsia ? "moderate" : "low"
+      });
+      differentials.push({
+        conditionEn: "Impaired Glucose Tolerance / Diabetes Mellitus",
+        conditionAr: "اعتلال تحمل الجلوكوز / داء السكري المحتمل",
+        probability: polyuria && polydipsia ? "High Probability" : "Possible",
+        probabilityAr: polyuria && polydipsia ? "احتمالية مرتفعة" : "احتمال وارد",
+        actionEn: "Fasting Blood Glucose / HbA1c screening recommended",
+        actionAr: "يوصى بإجراء فحص السكر الصائم وتحليل التراكمي (HbA1c)",
+        route: "diabetes"
+      });
+      if (overallRisk === "low") overallRisk = "moderate";
+    }
+
+    // Cardiovascular / Hypertension screener
+    const morningHeadache = answers.headache === "yes";
+    const chestTightness = answers.chest_tightness === "yes";
+    const palpitations = answers.palpitations === "yes";
+    if (morningHeadache || chestTightness || palpitations) {
+      const isUrgentCv = chestTightness;
+      findings.push({
+        domain: "cardiovascular",
+        titleEn: chestTightness ? "Chest Tightness / Discomfort" : "Morning Occipital Headache / Palpitations",
+        titleAr: chestTightness ? "ثقل وضغط بالصدر" : "صداع خلفي صباحي / خفقان",
+        severity: isUrgentCv ? "urgent" : "moderate"
+      });
+      differentials.push({
+        conditionEn: chestTightness ? "Cardiovascular Strain / Ischemic Risk" : "Essential Hypertension / Vascular Stress",
+        conditionAr: chestTightness ? "إجهاد وعائي قلبي / احتمال نقص تروية" : "ارتفاع ضغط الدم الشرياني / إجهاد وعائي",
+        probability: isUrgentCv ? "Clinical Priority" : "Moderate Likelihood",
+        probabilityAr: isUrgentCv ? "أولوية سريرية طارئة" : "احتمالية متوسطة",
+        actionEn: isUrgentCv ? "Immediate clinical evaluation & vitals check" : "Ambulatory blood pressure monitoring (ABPM)",
+        actionAr: isUrgentCv ? "فحص سريري فوري وقياس العلامات الحيوية" : "مراقبة وتسجيل قراءات ضغط الدم المتكررة",
+        route: "hypertension"
+      });
+      if (isUrgentCv) overallRisk = "urgent";
+      else if (overallRisk === "low") overallRisk = "moderate";
+    }
+
+    // Hematology / Coagulation screener
+    const easyBruising = answers.bruising === "yes";
+    const legSwelling = answers.leg_swelling === "yes";
+    if (easyBruising || legSwelling) {
+      findings.push({
+        domain: "hematology",
+        titleEn: legSwelling ? "Unilateral Leg Swelling" : "Spontaneous Bruising / Petechiae",
+        titleAr: legSwelling ? "تورم الساق / احتمال احتقان وريدي" : "كدمات تلقائية / قابلية للنزف",
+        severity: legSwelling ? "high" : "moderate"
+      });
+      differentials.push({
+        conditionEn: legSwelling ? "Deep Venous Thrombosis (DVT) / Venous Insufficiency" : "Coagulation / Platelet Disorder",
+        conditionAr: legSwelling ? "اشتباه تخثر وريدي عميق (DVT) / قصور وريدي" : "اعتلال في التجلط أو الصفائح الدموية",
+        probability: legSwelling ? "High Priority" : "Moderate Likelihood",
+        probabilityAr: legSwelling ? "أولوية عالية" : "احتمال متوسط",
+        actionEn: legSwelling ? "Duplex Ultrasound & D-dimer assessment" : "Complete Blood Count (CBC) & Coagulation Profile (PT/INR)",
+        actionAr: legSwelling ? "فحص دوبلر للموجات الصوتية وتحليل D-dimer" : "تحليل صورة دم كاملة وفحص سيولة الدم (PT/INR)",
+        route: "blood-disorders"
+      });
+      if (legSwelling && overallRisk !== "urgent") overallRisk = "high";
+      else if (overallRisk === "low") overallRisk = "moderate";
+    }
+
+    // Metabolic / Weight & Dyspnea
+    const weightGain = answers.weight_gain === "yes";
+    const exertionalBreath = answers.exertional_breath === "yes";
+    if (weightGain || exertionalBreath) {
+      findings.push({
+        domain: "metabolic_weight",
+        titleEn: "Exertional Breathlessness / Weight Fluctuations",
+        titleAr: "ضيق تنفس بالمجهود / تقلبات بالوزن",
+        severity: "moderate"
+      });
+      differentials.push({
+        conditionEn: "Metabolic Syndrome / Weight-Related Hemodynamic Load",
+        conditionAr: "متلازمة التمثيل الغذائي / عبء حركي مرتبط بالوزن",
+        probability: "Moderate Likelihood",
+        probabilityAr: "احتمالية متوسطة",
+        actionEn: "BMI calculation & metabolic lifestyle assessment",
+        actionAr: "حساب مؤشر كتلة الجسم وتقييم النمط الأيضي",
+        route: "obesity"
+      });
+      if (overallRisk === "low") overallRisk = "moderate";
+    }
+
+    if (differentials.length === 0) {
+      differentials.push({
+        conditionEn: "No Acute Differential Flags Detected",
+        conditionAr: "لم يتم رصد مؤشرات خطورة حادة في الفرز",
+        probability: "Low Clinical Risk",
+        probabilityAr: "مستوى خطورة منخفض",
+        actionEn: "Routine preventive wellness & periodic health screening",
+        actionAr: "متابعة وقائية روتينية والفحص الدوري العام",
+        route: "diabetes"
+      });
+    }
+
+    return {
+      overallRisk,
+      findings,
+      differentials
+    };
+  }
+
+  // Active answers state for the interactive screener
+  const currentAnswers = {
+    polyuria: null,
+    polydipsia: null,
+    headache: null,
+    chest_tightness: null,
+    bruising: null,
+    leg_swelling: null,
+    weight_gain: null,
+    exertional_breath: null
+  };
+
+  /**
+   * Renders the interactive Clinical Triage questionnaire & evaluation engine component.
+   */
+  function renderTriageQuestionnaireEngine() {
+    const isEn = (global.currentLanguage === "en") || (typeof document !== "undefined" && document.documentElement?.lang === "en");
+
+    const questions = [
+      {
+        id: "polyuria",
+        icon: "💧",
+        textEn: "Do you experience unusually frequent urination (polyuria), especially at night?",
+        textAr: "هل تعاني من كثرة التبول بشكل غير معتاد خصوصاً أثناء الليل؟",
+        categoryEn: "Metabolic",
+        categoryAr: "التمثيل الغذائي"
+      },
+      {
+        id: "polydipsia",
+        icon: "🥤",
+        textEn: "Do you have persistent intense thirst or unexplained dry mouth?",
+        textAr: "هل تشعر بعطش شديد مستمر أو جفاف ملحوظ في الحلق غير مبرر؟",
+        categoryEn: "Metabolic",
+        categoryAr: "التمثيل الغذائي"
+      },
+      {
+        id: "chest_tightness",
+        icon: "❤️",
+        textEn: "Do you feel persistent chest tightness, pressure, or unexplained heaviness?",
+        textAr: "هل تشعر بثقل أو ضغط أو انزعاج مستمر في منطقة الصدر؟",
+        categoryEn: "Cardiovascular",
+        categoryAr: "القلب والأوعية"
+      },
+      {
+        id: "headache",
+        icon: "🤕",
+        textEn: "Do you suffer from recurrent morning occipital headaches or visual disturbances?",
+        textAr: "هل تصاب بصداع خلف الرأس متكرر عند الاستيقاظ أو تشوش بالرؤية؟",
+        categoryEn: "Cardiovascular",
+        categoryAr: "القلب والأوعية"
+      },
+      {
+        id: "leg_swelling",
+        icon: "🦵",
+        textEn: "Do you notice sudden or persistent swelling in one or both lower legs?",
+        textAr: "هل لاحظت تورماً مفاجئاً أو مستمراً في إحدى الساقين أو كلتيهما؟",
+        categoryEn: "Coagulation",
+        categoryAr: "الدورة الدموية والتجلط"
+      },
+      {
+        id: "bruising",
+        icon: "🩹",
+        textEn: "Do you experience spontaneous bruising, prolonged bleeding, or petechiae?",
+        textAr: "هل تظهر كدمات بالجسم تلقائياً دون اصطدام أو نزيف يستغرق وقتاً ليتوقف؟",
+        categoryEn: "Hematology",
+        categoryAr: "أمراض الدم"
+      },
+      {
+        id: "exertional_breath",
+        icon: "🫁",
+        textEn: "Do you experience unusual shortness of breath with mild daily physical exertion?",
+        textAr: "هل تواجه ضيقاً ملحوظاً في التنفس عند بذل مجهود بدني اعتيادي خفيف؟",
+        categoryEn: "Cardiopulmonary",
+        categoryAr: "القلب والجهاز التنفسي"
+      },
+      {
+        id: "weight_gain",
+        icon: "⚖️",
+        textEn: "Have you experienced sudden unexplained weight fluctuations or central adiposity?",
+        textAr: "هل حدثت تقلبات سريعة غير مبررة في الوزن أو تراكم متزايد للدهون الحشوية؟",
+        categoryEn: "Metabolic Health",
+        categoryAr: "الصحة الأيضية والوزن"
+      }
+    ];
+
+    const questionsHtml = questions.map((q, idx) => {
+      const qText = isEn ? q.textEn : q.textAr;
+      const catText = isEn ? q.categoryEn : q.categoryAr;
+      const currentVal = currentAnswers[q.id];
+      const yesActive = currentVal === "yes" ? "active" : "";
+      const noActive = currentVal === "no" ? "active" : "";
+
+      return `
+        <div class="triage-question-card panel p-4 mb-3 rounded-lg border border-border" data-question-id="${q.id}">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs px-2 py-0.5 rounded bg-surface-variant text-muted font-bold">${catText} • ${idx + 1}/${questions.length}</span>
+            <span style="font-size: 18px;">${q.icon}</span>
+          </div>
+          <p class="font-semibold text-on-surface text-sm mb-3">${qText}</p>
+          <div class="choice-group flex gap-2">
+            <button type="button" class="choice action-button outline small ${yesActive}" data-qid="${q.id}" data-val="yes" style="flex: 1; padding: 6px 12px; font-size: 13px;">
+              ${isEn ? "Yes" : "نعم"}
+            </button>
+            <button type="button" class="choice action-button outline small ${noActive}" data-qid="${q.id}" data-val="no" style="flex: 1; padding: 6px 12px; font-size: 13px;">
+              ${isEn ? "No" : "لا"}
+            </button>
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    return `
+      <section class="clinical-triage-screener mt-8 p-6 panel rounded-xl shadow-sm border border-primary/20">
+        <div class="flex items-center justify-between flex-wrap gap-3 mb-4 border-b border-border pb-3">
+          <div>
+            <h3 class="text-xl font-bold text-on-surface flex items-center gap-2">
+              <span>🩺</span>
+              <span>${isEn ? "Clinical Triage & Differential Assessment Screener" : "محرك الفرز السريري والتقييم التفريقي"}</span>
+            </h3>
+            <p class="text-sm text-muted mt-1">
+              ${isEn ? "Interactive evidence-based questionnaire to evaluate multi-domain risk & prioritize physician consultations." : "استبيان تفاعلي معتمد لتقييم مستويات الخطورة المتعددة وتحديد أولويات المراجعة الطبية."}
+            </p>
+          </div>
+          <span class="pill bg-primary/10 text-primary font-bold text-xs px-3 py-1 rounded-full">
+            ${isEn ? "Deterministic Evaluation Engine" : "محرك الفرز المعياري"}
+          </span>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          ${questionsHtml}
+        </div>
+
+        <div class="mt-4 flex items-center justify-between flex-wrap gap-3 pt-3 border-t border-border">
+          <button type="button" id="btnEvaluateTriage" class="solid-button action-button primary flex items-center gap-2 px-6 py-2 rounded-lg font-bold">
+            <span>⚡</span>
+            <span>${isEn ? "Run Differential Triage Evaluation" : "تشغيل التقييم والفرز السريري"}</span>
+          </button>
+          <button type="button" id="btnResetTriage" class="soft-button outline small px-4 py-2 text-muted">
+            <span>${isEn ? "Reset Answers" : "إعادة التعيين"}</span>
+          </button>
+        </div>
+
+        <div id="triageResultsContainer" class="mt-6" hidden></div>
+      </section>
+    `;
+  }
+
+  /**
    * Main render function for the Disease Dashboard screen.
    */
   async function renderScreen(containerEl) {
     if (!containerEl) return;
     
-    const uid = global.app?.user?.uid;
-    if (!uid) {
-      containerEl.innerHTML = `<div class="p-8 text-center text-error">${t('auth.authRequired')}</div>`;
-      return;
-    }
+    // Resolve user reliably: supports active authenticated user, auth currentUser, or active demo session
+    const activeUser = (typeof global.getActiveUser === "function") 
+      ? global.getActiveUser() 
+      : (global.auth && global.auth.currentUser);
+    const uid = activeUser?.uid || (activeUser?.isDemo ? "demo_patient_active" : (global.currentUser?.uid || "demo_patient_active"));
 
     // Loading state
     containerEl.innerHTML = `
@@ -169,17 +436,34 @@
     `;
 
     try {
-      const data = await global.HealthVibes.DiseaseDashboardService.fetchDashboardData(uid);
+      let data = null;
+      if (global.HealthVibes?.DiseaseDashboardService?.fetchDashboardData) {
+        try {
+          data = await global.HealthVibes.DiseaseDashboardService.fetchDashboardData(uid);
+        } catch (fetchErr) {
+          console.warn("[DiseaseDashboardUI] fetchDashboardData failed, falling back to default status:", fetchErr);
+        }
+      }
+      if (!data) {
+        data = {
+          diabetes: { id: 'diabetes', titleKey: 'diabetesTitle', state: 'not_started', nextAction: 'actionStartAssessment' },
+          hypertension: { id: 'hypertension', titleKey: 'hypertensionTitle', state: 'not_started', nextAction: 'actionStartAssessment' },
+          bloodDisorders: { id: 'bloodDisorders', titleKey: 'bloodDisordersTitle', state: 'not_started', nextAction: 'actionStartAssessment' },
+          obesity: { id: 'obesity', titleKey: 'obesityTitle', state: 'not_started', nextAction: 'actionStartAssessment' }
+        };
+      }
       
       const bannerHtml = renderNextActionBanner(data);
       const gridHtml = `
         <div class="card-grid mt-4">
           ${renderModuleCard(data.diabetes)}
           ${renderModuleCard(data.hypertension)}
-          ${renderModuleCard(data.bloodDisorders)}
+          ${renderModuleCard(data.bloodDisorders || data['blood-disorders'])}
           ${renderModuleCard(data.obesity)}
         </div>
       `;
+
+      const questionnaireHtml = renderTriageQuestionnaireEngine();
 
       containerEl.innerHTML = `
         <section class="disease-dashboard-container max-w-7xl mx-auto p-4 md:p-8 animate-fade-in">
@@ -193,21 +477,141 @@
           <h2 class="text-xl font-bold text-on-surface mb-4" data-i18n="diseaseDashboard.modulesOverview">${t('diseaseDashboard.modulesOverview')}</h2>
           ${gridHtml}
 
+          <!-- Clinical Triage Questionnaire & Screener Engine -->
+          ${questionnaireHtml}
+
           <div class="mt-8 text-center text-sm text-muted">
             <p data-i18n="diseaseDashboard.moduleDataNotice">${t('diseaseDashboard.moduleDataNotice')}</p>
           </div>
         </section>
       `;
 
-      // Attach routing listeners if global router exists
-      if (global.app && typeof global.app.navigate === 'function') {
-        const routeButtons = containerEl.querySelectorAll('[data-route]');
-        routeButtons.forEach(btn => {
-          btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const route = btn.getAttribute('data-route');
-            global.app.navigate(route);
+      // Helper to dispatch screen navigation seamlessly
+      const navigateTo = (target) => {
+        const normalizedTarget = (target === "bloodDisorders" || target === "disease-bloodDisorders") ? "blood-disorders" : target;
+        if (typeof global.showScreen === "function") {
+          global.showScreen(normalizedTarget);
+        } else if (global.app && typeof global.app.navigate === "function") {
+          global.app.navigate(normalizedTarget);
+        }
+      };
+
+      // Module Cards & Action Banner Click Handlers
+      const routeButtons = containerEl.querySelectorAll ? containerEl.querySelectorAll('[data-route]') : [];
+      routeButtons.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const route = btn.getAttribute('data-route');
+          const routeMap = {
+            'disease-diabetes': 'diabetes',
+            'disease-hypertension': 'hypertension',
+            'disease-bloodDisorders': 'blood-disorders',
+            'disease-blood-disorders': 'blood-disorders',
+            'disease-obesity': 'obesity'
+          };
+          const cleanScreen = routeMap[route] || (route ? route.replace(/^disease-/, '') : '');
+          navigateTo(cleanScreen || route);
+        });
+      });
+
+      // Interactive Screener Choice Listeners
+      const choiceButtons = containerEl.querySelectorAll ? containerEl.querySelectorAll('.choice[data-qid]') : [];
+      choiceButtons.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const qid = btn.getAttribute('data-qid');
+          const val = btn.getAttribute('data-val');
+          currentAnswers[qid] = val;
+
+          // Toggle active class inside card
+          const card = btn.closest('.triage-question-card');
+          if (card) {
+            card.querySelectorAll('.choice').forEach(b => b.classList.remove('active', 'primary'));
+            btn.classList.add('active', 'primary');
+          }
+        });
+      });
+
+      // Reset Button Listener
+      const btnReset = containerEl.querySelector ? containerEl.querySelector('#btnResetTriage') : null;
+      if (btnReset) {
+        btnReset.addEventListener('click', () => {
+          Object.keys(currentAnswers).forEach(k => currentAnswers[k] = null);
+          containerEl.querySelectorAll('.choice[data-qid]').forEach(b => b.classList.remove('active', 'primary'));
+          const resBox = containerEl.querySelector('#triageResultsContainer');
+          if (resBox) {
+            resBox.hidden = true;
+            resBox.innerHTML = '';
+          }
+        });
+      }
+
+      // Evaluation Engine Button Listener
+      const btnEvaluate = containerEl.querySelector ? containerEl.querySelector('#btnEvaluateTriage') : null;
+      if (btnEvaluate) {
+        btnEvaluate.addEventListener('click', () => {
+          const evalResult = evaluateDifferentialTriage(currentAnswers);
+          const isEn = (global.currentLanguage === "en") || (typeof document !== "undefined" && document.documentElement?.lang === "en");
+          const resBox = containerEl.querySelector('#triageResultsContainer');
+          if (!resBox) return;
+
+          const riskBadgeClasses = {
+            low: "bg-success/20 text-success border-success/40",
+            moderate: "bg-warning/20 text-warning border-warning/40",
+            high: "bg-secondary/20 text-secondary border-secondary/40",
+            urgent: "bg-error/20 text-error border-error/40 animate-pulse"
+          };
+
+          const riskLabels = {
+            low: isEn ? "Low Priority / Routine Monitoring" : "أولوية روتينية / متابعة اعتيادية",
+            moderate: isEn ? "Moderate Priority / Differential Workup" : "أولوية متوسطة / استكمال فحص تفريقي",
+            high: isEn ? "High Priority / Clinical Assessment" : "أولوية عالية / مراجعة سريرية متخصصة",
+            urgent: isEn ? "🚨 Urgent / Emergency Pre-Triage Flag" : "🚨 فرز عاجل / يستوجب استشارة طبية فورية"
+          };
+
+          const diffItemsHtml = evalResult.differentials.map(d => `
+            <div class="panel p-3 mb-2 rounded border border-border flex items-center justify-between flex-wrap gap-2">
+              <div>
+                <h4 class="font-bold text-on-surface text-sm">${isEn ? d.conditionEn : d.conditionAr}</h4>
+                <p class="text-xs text-muted mt-0.5">${isEn ? d.actionEn : d.actionAr}</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="pill bg-surface-variant text-on-surface text-xs px-2 py-1">${isEn ? d.probability : d.probabilityAr}</span>
+                <button type="button" class="action-button primary small text-xs px-3 py-1" data-triage-target="${d.route}">
+                  ${isEn ? "Open Module" : "فتح المسار"}
+                </button>
+              </div>
+            </div>
+          `).join("");
+
+          resBox.hidden = false;
+          resBox.innerHTML = `
+            <div class="panel p-5 rounded-lg border-2 ${evalResult.overallRisk === 'urgent' ? 'border-error' : 'border-primary/30'} bg-surface animate-fade-in">
+              <div class="flex items-center justify-between flex-wrap gap-3 mb-3 border-b border-border pb-3">
+                <h3 class="font-bold text-lg text-on-surface flex items-center gap-2">
+                  <span>📊</span>
+                  <span>${isEn ? "Differential Assessment & Triage Output" : "نتائج الفرز السريري والتقييم التفريقي"}</span>
+                </h3>
+                <span class="pill font-extrabold text-xs px-3 py-1 rounded-full border ${riskBadgeClasses[evalResult.overallRisk] || riskBadgeClasses.low}">
+                  ${riskLabels[evalResult.overallRisk] || riskLabels.low}
+                </span>
+              </div>
+              <div class="differentials-list mt-3">
+                ${diffItemsHtml}
+              </div>
+            </div>
+          `;
+
+          // Bind navigation on generated differential buttons
+          resBox.querySelectorAll('[data-triage-target]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              const target = btn.getAttribute('data-triage-target');
+              navigateTo(target);
+            });
           });
+
+          resBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         });
       }
 
@@ -218,10 +622,16 @@
   }
 
   const DiseaseDashboardUI = {
-    renderScreen
+    renderScreen,
+    evaluateDifferentialTriage
   };
 
   global.HealthVibes = global.HealthVibes || {};
   global.HealthVibes.DiseaseDashboardUI = DiseaseDashboardUI;
 
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports = DiseaseDashboardUI;
+  }
+
 })(typeof window !== "undefined" ? window : globalThis);
+

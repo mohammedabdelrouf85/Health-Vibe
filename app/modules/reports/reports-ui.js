@@ -436,12 +436,222 @@
     }
   }
 
+  function safeEscape(str) {
+    if (str === null || str === undefined) return "";
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  /**
+   * Opens the Doctor Inbox Delivery Confirmation Modal with detailed tracking and payload breakdown.
+   * @param {object} dispatchResult
+   * @param {boolean} isEn
+   */
+  function openDoctorInboxDeliveryModal(dispatchResult, isEn = false) {
+    if (!dispatchResult || typeof document === "undefined") return;
+
+    const trackingRef = safeEscape(dispatchResult.trackingRef || `HV-DISP-${Date.now().toString(36).toUpperCase()}`);
+    const reportRef = safeEscape(dispatchResult.reportRef || (dispatchResult.caseId ? `HV-REP-${dispatchResult.caseId.slice(-8).toUpperCase()}` : ""));
+    const doctor = dispatchResult.recipientDoctor || {};
+    const patient = dispatchResult.patientProfile || {};
+    const metrics = dispatchResult.assessmentMetrics || {};
+    const o2Val = metrics.oxygenLevel ?? "--";
+    const dateFormatted = dispatchResult.timestamp ? new Date(dispatchResult.timestamp).toLocaleString(isEn ? "en-US" : "ar-EG") : new Date().toLocaleString(isEn ? "en-US" : "ar-EG");
+
+    let modal = document.getElementById("doctorInboxDeliveryModal");
+    if (!modal) {
+      modal = document.createElement("div");
+      modal.id = "doctorInboxDeliveryModal";
+      modal.className = "modal-overlay";
+      modal.setAttribute("role", "dialog");
+      modal.setAttribute("aria-modal", "true");
+      modal.style.cssText = "position: fixed; inset: 0; background: rgba(0,0,0,0.65); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 10000; padding: 20px;";
+      document.body.appendChild(modal);
+    }
+
+    modal.innerHTML = `
+      <div class="modal-card panel" style="width: 100%; max-width: 560px; background: var(--surface); border-radius: 18px; border: 1.5px solid var(--teal); padding: 24px; box-shadow: 0 24px 48px rgba(0,0,0,0.3); text-align: ${isEn ? 'left' : 'right'}; max-height: 90vh; overflow-y: auto;">
+        
+        <!-- Header Banner with Success Badge -->
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="width: 44px; height: 44px; border-radius: 50%; background: rgba(16, 185, 129, 0.12); border: 2px solid #10b981; display: flex; align-items: center; justify-content: center; font-size: 22px;">
+              ✓
+            </div>
+            <div>
+              <h3 style="margin: 0; font-size: 17px; color: var(--teal); font-weight: 800;">
+                ${isEn ? "Medical Report Delivered to Doctor" : "تم تسليم التقرير الطبي لصندوق وارد الطبيب بنجاح"}
+              </h3>
+              <span class="pill ok" style="font-size: 11px; margin-top: 4px; display: inline-flex; align-items: center; gap: 4px;">
+                <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #10b981;"></span>
+                ${isEn ? "Delivered to Doctor Inbox ✓" : "تم التسليم إلى صندوق الوارد وقائمة الانتظار ✓"}
+              </span>
+            </div>
+          </div>
+          <button type="button" class="icon-button" onclick="document.getElementById('doctorInboxDeliveryModal').style.display='none'" style="font-size: 20px; border: none; background: none; cursor: pointer; color: var(--muted);">&times;</button>
+        </div>
+
+        <p style="font-size: 13px; color: var(--muted); line-height: 1.5; margin-bottom: 16px;">
+          ${isEn
+            ? "Your generated clinical report, vital metrics, and patient profile have been formatted according to clinical governance standards and placed into the attending physician's active review queue."
+            : "تم تشكيل وتنسيق ملف المريض وتقرير التقييم السريري وقياسات الأكسجين وإرسالها مباشرة إلى صندوق وارد الطبيب المعالج للمراجعة والاعتماد السريري."}
+        </p>
+
+        <!-- Tracking Reference & Timestamp Bar -->
+        <div style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+          <div>
+            <span style="font-size: 11px; color: var(--muted); display: block;">${isEn ? "Dispatch Tracking Reference:" : "الرقم المرجعي لتسليم التقرير:"}</span>
+            <strong style="font-family: monospace; font-size: 13.5px; color: var(--ink);">${trackingRef}</strong>
+          </div>
+          <div style="text-align: ${isEn ? 'right' : 'left'};">
+            <span style="font-size: 11px; color: var(--muted); display: block;">${isEn ? "Delivery Timestamp:" : "وقت وتاريخ التسليم:"}</span>
+            <span style="font-size: 12px; font-weight: 600; color: var(--teal);">${dateFormatted}</span>
+          </div>
+        </div>
+
+        <!-- Recipient Doctor Card -->
+        <div style="background: rgba(14, 165, 164, 0.05); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 16px;">
+          <strong style="font-size: 12.5px; color: var(--teal); display: block; margin-bottom: 8px;">
+            🩺 ${isEn ? "Recipient Attending Physician:" : "الطبيب المعالج المستلم (صندوق الوارد):"}
+          </strong>
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 13px;">
+            <div>
+              <strong style="color: var(--ink); font-size: 14px;">${safeEscape(doctor.name || (isEn ? "Assigned Pulmonologist" : "طبيب الرعاية المسند"))}</strong>
+              <div style="color: var(--muted); font-size: 12px; margin-top: 2px;">${safeEscape(doctor.specialty || "Pulmonology & Respiratory Care")}</div>
+            </div>
+            <span class="pill pending" style="font-size: 11px;">${safeEscape(doctor.clinic || "Health Vibe Medical Center")}</span>
+          </div>
+        </div>
+
+        <!-- Dispatched Payload Summary (Patient Profile & Assessment Metrics) -->
+        <div style="border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 16px;">
+          <strong style="font-size: 12.5px; color: var(--ink); display: block; margin-bottom: 8px;">
+            📑 ${isEn ? "Dispatched Payload Summary:" : "ملخص حزمة البيانات المرسلة للطبيب:"}
+          </strong>
+          
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; font-size: 12px; margin-bottom: 10px;">
+            <div style="background: var(--surface-2); padding: 8px 10px; border-radius: 8px;">
+              <span style="color: var(--muted); display: block;">${isEn ? "Patient Name" : "اسم المريض"}</span>
+              <strong style="color: var(--ink);">${safeEscape(patient.fullName || "Patient")}</strong>
+            </div>
+            <div style="background: var(--surface-2); padding: 8px 10px; border-radius: 8px;">
+              <span style="color: var(--muted); display: block;">${isEn ? "Oxygen Saturation" : "نسبة الأكسجين SpO2"}</span>
+              <strong style="color: #10b981; font-size: 13px;">${o2Val}%</strong>
+            </div>
+            <div style="background: var(--surface-2); padding: 8px 10px; border-radius: 8px;">
+              <span style="color: var(--muted); display: block;">${isEn ? "Breathing Difficulty" : "ضيق التنفس"}</span>
+              <strong style="color: var(--ink);">${safeEscape(metrics.breathingDifficulty || "--")}</strong>
+            </div>
+            <div style="background: var(--surface-2); padding: 8px 10px; border-radius: 8px;">
+              <span style="color: var(--muted); display: block;">${isEn ? "Symptom Duration" : "مدة الأعراض"}</span>
+              <strong style="color: var(--ink);">${safeEscape(metrics.symptomDuration || "--")}</strong>
+            </div>
+          </div>
+
+          ${metrics.temperature ? `
+            <div style="font-size: 11.5px; color: var(--muted); margin-bottom: 4px;">
+              🌡️ ${isEn ? "Recorded Temperature:" : "درجة الحرارة المسجلة:"} <strong>${safeEscape(metrics.temperature)} ${safeEscape(metrics.temperatureUnit || '°C')}</strong>
+              ${metrics.respiratoryRate ? ` • 🫁 ${isEn ? "Resp Rate:" : "معدل التنفس:"} <strong>${safeEscape(metrics.respiratoryRate)}</strong>` : ''}
+            </div>
+          ` : ''}
+        </div>
+
+        <!-- 3-Stage Progress Tracker -->
+        <div style="background: var(--surface-2); border-radius: 12px; padding: 12px 14px; margin-bottom: 20px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; position: relative;">
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 4px; z-index: 1;">
+              <div style="width: 22px; height: 22px; border-radius: 50%; background: #10b981; color: #fff; font-size: 11px; display: flex; align-items: center; justify-content: center; font-weight: 800;">✓</div>
+              <span style="font-size: 10.5px; font-weight: 700; color: var(--ink);">${isEn ? "1. Report Built" : "1. تجهيز التقرير"}</span>
+            </div>
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 4px; z-index: 1;">
+              <div style="width: 22px; height: 22px; border-radius: 50%; background: #10b981; color: #fff; font-size: 11px; display: flex; align-items: center; justify-content: center; font-weight: 800;">✓</div>
+              <span style="font-size: 10.5px; font-weight: 700; color: #10b981;">${isEn ? "2. In Doctor Inbox" : "2. بصندوق الوارد"}</span>
+            </div>
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 4px; z-index: 1;">
+              <div style="width: 22px; height: 22px; border-radius: 50%; background: #f59e0b; color: #fff; font-size: 11px; display: flex; align-items: center; justify-content: center; font-weight: 800;">⏳</div>
+              <span style="font-size: 10.5px; font-weight: 700; color: #d97706;">${isEn ? "3. Doctor Review" : "3. الفحص والاعتماد"}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div style="display: flex; justify-content: flex-end; gap: 10px;">
+          <button type="button" class="outline-button" onclick="document.getElementById('doctorInboxDeliveryModal').style.display='none'" style="font-size: 13px; padding: 8px 18px;">
+            ${isEn ? "Back to Medical Report" : "العودة للتقرير الطبي"}
+          </button>
+          <button type="button" class="solid-button" onclick="document.getElementById('doctorInboxDeliveryModal').style.display='none'; if(typeof showScreen==='function') showScreen('patient');" style="background: var(--teal); font-size: 13px; padding: 8px 18px;">
+            <span>🏠</span> ${isEn ? "Patient Dashboard" : "لوحة متابعة الحالة"}
+          </button>
+        </div>
+
+      </div>
+    `;
+
+    modal.style.display = "flex";
+  }
+
+  /**
+   * Renders a live Doctor Inbox Delivery Status Badge / Banner for the report view.
+   * Provides immediate visual feedback that the report is in the doctor's queue.
+   * @param {object} caseData
+   * @param {boolean} isEn
+   * @returns {string}
+   */
+  function renderDoctorInboxDeliveryStatusBadge(caseData, isEn = false) {
+    if (!caseData) return "";
+    const delivery = (global.HealthVibes?.ReportsService?.getDoctorInboxDeliveryStatus)
+      ? global.HealthVibes.ReportsService.getDoctorInboxDeliveryStatus(caseData.id, caseData)
+      : (caseData.latestReportDispatch || (caseData.deliveryStatus === "delivered_to_doctor_inbox" ? caseData : null));
+
+    if (!delivery) return "";
+
+    const trackingRef = safeEscape(delivery.trackingRef || (caseData.doctorInboxDelivery?.trackingRef) || `HV-DISP-${caseData.id.slice(-6).toUpperCase()}`);
+    const doctorName = safeEscape(delivery.recipientDoctor?.name || caseData.assignedDoctorName || caseData.approvingDoctorName || (isEn ? "Assigned Pulmonologist" : "طبيب الرعاية المعالج"));
+    const dateFormatted = delivery.timestamp ? new Date(delivery.timestamp).toLocaleString(isEn ? "en-US" : "ar-EG") : "";
+
+    return `
+      <div class="doctor-inbox-delivery-banner no-print" style="margin-bottom: 20px; background: rgba(16, 185, 129, 0.08); border: 1.5px solid #10b981; border-radius: 14px; padding: 14px 18px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <div style="width: 38px; height: 38px; border-radius: 50%; background: #10b981; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 800;">
+            ✓
+          </div>
+          <div>
+            <strong style="color: #065f46; font-size: 14px; display: flex; align-items: center; gap: 6px;">
+              <span>📨</span> ${isEn ? "Dispatched to Doctor Inbox — Delivered" : "تم تسليم التقرير بنجاح إلى صندوق وارد الطبيب المعالج"}
+            </strong>
+            <span style="font-size: 12.5px; color: var(--ink); display: block; margin-top: 2px;">
+              ${isEn
+                ? `Delivered to <strong>${doctorName}</strong> • Tracking Ref: <code style="font-family:monospace; background:rgba(0,0,0,0.06); padding:2px 6px; border-radius:4px;">${trackingRef}</code>`
+                : `تم التسليم إلى: <strong>${doctorName}</strong> • الرقم المرجعي: <code style="font-family:monospace; background:rgba(0,0,0,0.06); padding:2px 6px; border-radius:4px;">${trackingRef}</code>`}
+              ${dateFormatted ? ` • <small style="color:var(--muted);">${dateFormatted}</small>` : ''}
+            </span>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <span class="pill ok" style="font-size: 11px;">
+            ${isEn ? "In Review Queue" : "في قائمة انتظار الطبيب"}
+          </span>
+          <button type="button" class="soft-button" style="padding: 5px 12px; font-size: 12px;" onclick="if(window.HealthVibes?.ReportsUI?.openDoctorInboxDeliveryModal){window.HealthVibes.ReportsUI.openDoctorInboxDeliveryModal(window._currentViewingCase?.latestReportDispatch || {trackingRef:'${trackingRef}', caseId:'${caseData.id}'}, ${isEn});}">
+            <span>ℹ️</span> ${isEn ? "View Delivery Details" : "تفاصيل التسليم"}
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
   const ReportsUI = {
     triggerPrintReport,
     exportReportToPdf,
     renderReportSecurityBadge,
     openShareReportModal,
-    renderVerificationView
+    renderVerificationView,
+    openDoctorInboxDeliveryModal,
+    renderDoctorInboxDeliveryStatusBadge
   };
 
   global.HealthVibes = global.HealthVibes || {};

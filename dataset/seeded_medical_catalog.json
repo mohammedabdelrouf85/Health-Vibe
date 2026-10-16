@@ -1,0 +1,703 @@
+{
+  "metadata": {
+    "generator": "backend/scripts/seed_medical_catalog.js",
+    "seededAt": "2026-10-14T20:36:52.960Z",
+    "ruleVersion": "1.0.0",
+    "totalDiseases": 8,
+    "totalSymptoms": 10,
+    "totalRules": 3
+  },
+  "diseases": [
+    {
+      "diseaseId": "DIS-RESP-001",
+      "code": "J20.9",
+      "icd10Codes": [
+        "J20.9",
+        "J22",
+        "J18.9"
+      ],
+      "nameEn": "Acute Lower Respiratory Infection (LRTI / Acute Bronchitis / Suspected Pneumonia)",
+      "nameAr": "عدوى الجهاز التنفسي السفلي الحادة (التهاب الشعب الهوائية الحاد / اشتباه الالتهاب الرئوي)",
+      "module": "respiratory",
+      "associatedSymptoms": [
+        {
+          "symptomKey": "coughSeverity",
+          "weight": 0.35,
+          "severity": "moderate-to-severe",
+          "isCardinal": true
+        },
+        {
+          "symptomKey": "fever",
+          "weight": 0.25,
+          "severity": "mild-to-high",
+          "isCardinal": true
+        },
+        {
+          "symptomKey": "symptomDurationDays",
+          "weight": 0.2,
+          "severity": "<= 14 days",
+          "isCardinal": false
+        },
+        {
+          "symptomKey": "shortnessOfBreathScale",
+          "weight": 0.2,
+          "severity": "variable",
+          "isCardinal": false
+        }
+      ],
+      "redFlags": [
+        {
+          "key": "severe_hypoxemia",
+          "threshold": "SpO2 < 90%",
+          "descriptionEn": "Severe hypoxemia requiring immediate oxygen & ER dispatch",
+          "descriptionAr": "نقص حاد بالأكسجين يستلزم نقلاً فورياً للطوارئ",
+          "emergencyTier": "urgent"
+        },
+        {
+          "key": "tachypnea",
+          "threshold": "RR > 30 breaths/min",
+          "descriptionEn": "Severe respiratory distress with tachypnea",
+          "descriptionAr": "تسارع حاد في التنفس",
+          "emergencyTier": "urgent"
+        }
+      ],
+      "spo2Thresholds": {
+        "emergency": "< 90%",
+        "cautionary": "90-92%",
+        "normal": ">= 93%"
+      },
+      "recommendedLabs": [
+        "Chest X-Ray (Posteroanterior & Lateral)",
+        "Complete Blood Count (CBC with differential)",
+        "C-Reactive Protein (CRP) / Procalcitonin",
+        "Pulse Oximetry continuous monitoring",
+        "Sputum Gram stain & culture (if productive cough)"
+      ],
+      "clinicalGuidelinesRef": "NICE LRTI Guidelines 2026 / WHO Guidelines for Community-Acquired Pneumonia",
+      "ruleVersion": "1.0.0",
+      "updatedAt": "2026-10-14T20:36:52.785Z"
+    },
+    {
+      "diseaseId": "DIS-RESP-002",
+      "code": "J45.901",
+      "icd10Codes": [
+        "J45.901",
+        "J45.41"
+      ],
+      "nameEn": "Bronchial Asthma Exacerbation",
+      "nameAr": "تفاقم / نوبة الربو الشعبي الحادة",
+      "module": "respiratory",
+      "associatedSymptoms": [
+        {
+          "symptomKey": "shortnessOfBreathScale",
+          "weight": 0.35,
+          "severity": "severe",
+          "isCardinal": true
+        },
+        {
+          "symptomKey": "wheezing",
+          "weight": 0.3,
+          "severity": "prominent expiratory wheeze",
+          "isCardinal": true
+        },
+        {
+          "symptomKey": "asthmaCopdHistory",
+          "weight": 0.25,
+          "severity": "known asthma history",
+          "isCardinal": true
+        },
+        {
+          "symptomKey": "coughSeverity",
+          "weight": 0.1,
+          "severity": "spasmodic dry cough",
+          "isCardinal": false
+        }
+      ],
+      "redFlags": [
+        {
+          "key": "silent_chest",
+          "threshold": "Severe dyspnea with absent wheezing",
+          "descriptionEn": "Impending respiratory arrest (silent chest)",
+          "descriptionAr": "غياب أصوات التنفس لانسداد حرج بالقصبات (Silent Chest)",
+          "emergencyTier": "urgent"
+        },
+        {
+          "key": "inability_to_speak",
+          "threshold": "Inability to complete sentences in one breath",
+          "descriptionEn": "Acute severe asthma attack",
+          "descriptionAr": "عجز عن إكمال جملة في نفس واحد",
+          "emergencyTier": "urgent"
+        }
+      ],
+      "spo2Thresholds": {
+        "emergency": "< 90%",
+        "cautionary": "90-92%",
+        "normal": ">= 93%"
+      },
+      "recommendedLabs": [
+        "Peak Expiratory Flow (PEF) / Spirometry",
+        "Pulse Oximetry continuous monitoring",
+        "Arterial Blood Gas (ABG if SpO2 < 92%)",
+        "Serum Electrolytes (Potassium monitoring post-SABA)"
+      ],
+      "clinicalGuidelinesRef": "GINA 2026 (Global Initiative for Asthma)",
+      "ruleVersion": "1.0.0",
+      "updatedAt": "2026-10-14T20:36:52.794Z"
+    },
+    {
+      "diseaseId": "DIS-RESP-003",
+      "code": "J44.1",
+      "icd10Codes": [
+        "J44.1",
+        "J44.0"
+      ],
+      "nameEn": "Chronic Obstructive Pulmonary Disease (COPD) Exacerbation",
+      "nameAr": "تفاقم مرض السدة الرئوية المزمنة (COPD Exacerbation)",
+      "module": "respiratory",
+      "associatedSymptoms": [
+        {
+          "symptomKey": "shortnessOfBreathScale",
+          "weight": 0.35,
+          "severity": "baseline worsening",
+          "isCardinal": true
+        },
+        {
+          "symptomKey": "coughSeverity",
+          "weight": 0.25,
+          "severity": "chronic productive cough",
+          "isCardinal": true
+        },
+        {
+          "symptomKey": "sputumProduction",
+          "weight": 0.2,
+          "severity": "increased volume or purulence",
+          "isCardinal": true
+        },
+        {
+          "symptomKey": "smokingStatus",
+          "weight": 0.2,
+          "severity": "long-term smoking history",
+          "isCardinal": false
+        }
+      ],
+      "redFlags": [
+        {
+          "key": "hypercapnic_coma",
+          "threshold": "SpO2 < 88% with drowsiness",
+          "descriptionEn": "Risk of acute hypercapnic respiratory failure",
+          "descriptionAr": "اشتباه فشل تنفسي مع احتباس ثاني أكسيد الكربون",
+          "emergencyTier": "urgent"
+        },
+        {
+          "key": "peripheral_edema",
+          "threshold": "New ankle swelling",
+          "descriptionEn": "Cor pulmonale decompensation",
+          "descriptionAr": "علامات فشل الجانب الأيمن للقلب (Cor Pulmonale)",
+          "emergencyTier": "urgent"
+        }
+      ],
+      "spo2Thresholds": {
+        "emergency": "< 88%",
+        "cautionary": "88-92% (Target 88-92% in chronic CO2 retainers)",
+        "normal": ">= 93%"
+      },
+      "recommendedLabs": [
+        "Arterial Blood Gas (ABG to check PaCO2 & pH)",
+        "Chest Radiograph (PA view)",
+        "Electrocardiogram (ECG - evaluate right ventricular strain)",
+        "Complete Blood Count (CBC - secondary polycythemia or leukocytosis)"
+      ],
+      "clinicalGuidelinesRef": "GOLD 2026 (Global Initiative for Chronic Obstructive Lung Disease)",
+      "ruleVersion": "1.0.0",
+      "updatedAt": "2026-10-14T20:36:52.794Z"
+    },
+    {
+      "diseaseId": "DIS-RESP-004",
+      "code": "J00",
+      "icd10Codes": [
+        "J00",
+        "J06.9"
+      ],
+      "nameEn": "Mild Upper Respiratory Tract Infection (Common Cold / Viral URI)",
+      "nameAr": "عدوى الجهاز التنفسي العلوي الخفيفة (النزلة البردية / احتقان الحلق الفيروسي)",
+      "module": "respiratory",
+      "associatedSymptoms": [
+        {
+          "symptomKey": "coughSeverity",
+          "weight": 0.3,
+          "severity": "mild ticklish cough",
+          "isCardinal": false
+        },
+        {
+          "symptomKey": "shortnessOfBreathScale",
+          "weight": 0.1,
+          "severity": "absent (scale 0-1)",
+          "isCardinal": false
+        },
+        {
+          "symptomKey": "symptomDurationDays",
+          "weight": 0.3,
+          "severity": "2-7 days",
+          "isCardinal": false
+        }
+      ],
+      "redFlags": [],
+      "spo2Thresholds": {
+        "emergency": "< 90%",
+        "cautionary": "90-92%",
+        "normal": ">= 95%"
+      },
+      "recommendedLabs": [
+        "Conservative outpatient monitoring",
+        "Optional Rapid Influenza / SARS-CoV-2 Antigen (if epidemiological risk)"
+      ],
+      "clinicalGuidelinesRef": "CDC / WHO Viral URI Clinical Management",
+      "ruleVersion": "1.0.0",
+      "updatedAt": "2026-10-14T20:36:52.794Z"
+    },
+    {
+      "diseaseId": "DIS-CHRON-001",
+      "code": "I10",
+      "icd10Codes": [
+        "I10",
+        "I15.9"
+      ],
+      "nameEn": "Essential Hypertension",
+      "nameAr": "ارتفاع ضغط الدم الأساسي المزمن",
+      "module": "cardiovascular",
+      "associatedSymptoms": [
+        {
+          "symptomKey": "systolicBP",
+          "weight": 0.5,
+          "severity": ">= 140 mmHg",
+          "isCardinal": true
+        },
+        {
+          "symptomKey": "diastolicBP",
+          "weight": 0.3,
+          "severity": ">= 90 mmHg",
+          "isCardinal": true
+        },
+        {
+          "symptomKey": "headache",
+          "weight": 0.2,
+          "severity": "occipital morning headache",
+          "isCardinal": false
+        }
+      ],
+      "redFlags": [
+        {
+          "key": "hypertensive_crisis",
+          "threshold": "BP > 180/120 with chest pain or neurological deficits",
+          "descriptionEn": "Hypertensive emergency with end-organ damage",
+          "descriptionAr": "أزمة فرط ضغط الدم الحادة مع اشتباه تضرر أعضاء حيوية",
+          "emergencyTier": "urgent"
+        }
+      ],
+      "spo2Thresholds": {
+        "normal": ">= 95%"
+      },
+      "recommendedLabs": [
+        "Lipid Profile",
+        "Serum Creatinine & eGFR",
+        "Urinary Albumin-to-Creatinine Ratio",
+        "12-lead ECG"
+      ],
+      "clinicalGuidelinesRef": "ACC/AHA 2026 Hypertension Guidelines / ESC 2026",
+      "ruleVersion": "1.0.0",
+      "updatedAt": "2026-10-14T20:36:52.794Z"
+    },
+    {
+      "diseaseId": "DIS-CHRON-002",
+      "code": "E11",
+      "icd10Codes": [
+        "E11.9",
+        "E11.65"
+      ],
+      "nameEn": "Type 2 Diabetes Mellitus",
+      "nameAr": "مرض السكري من النوع الثاني",
+      "module": "endocrinology",
+      "associatedSymptoms": [
+        {
+          "symptomKey": "fastingGlucose",
+          "weight": 0.4,
+          "severity": ">= 126 mg/dL",
+          "isCardinal": true
+        },
+        {
+          "symptomKey": "hba1c",
+          "weight": 0.4,
+          "severity": ">= 6.5%",
+          "isCardinal": true
+        },
+        {
+          "symptomKey": "polyuria_polydipsia",
+          "weight": 0.2,
+          "severity": "increased thirst and urination",
+          "isCardinal": false
+        }
+      ],
+      "redFlags": [
+        {
+          "key": "diabetic_ketoacidosis_or_hhs",
+          "threshold": "Glucose > 300 mg/dL with confusion, Kussmaul breathing or ketones",
+          "descriptionEn": "Severe hyperglycemia / Hyperosmolar Hyperglycemic State",
+          "descriptionAr": "غيبوبة فرط السكر أو الحماض الكيتوني",
+          "emergencyTier": "urgent"
+        }
+      ],
+      "spo2Thresholds": {
+        "normal": ">= 95%"
+      },
+      "recommendedLabs": [
+        "HbA1c",
+        "Fasting Plasma Glucose",
+        "Comprehensive Metabolic Panel",
+        "Urine Microalbumin"
+      ],
+      "clinicalGuidelinesRef": "ADA 2026 Standards of Medical Care in Diabetes",
+      "ruleVersion": "1.0.0",
+      "updatedAt": "2026-10-14T20:36:52.794Z"
+    },
+    {
+      "diseaseId": "DIS-CHRON-003",
+      "code": "E66",
+      "icd10Codes": [
+        "E66.0",
+        "E66.9"
+      ],
+      "nameEn": "Overweight and Clinical Obesity",
+      "nameAr": "زيادة الوزن والسمنة السريرية",
+      "module": "metabolic",
+      "associatedSymptoms": [
+        {
+          "symptomKey": "bmi",
+          "weight": 0.6,
+          "severity": ">= 30.0 kg/m2",
+          "isCardinal": true
+        },
+        {
+          "symptomKey": "waistCircumference",
+          "weight": 0.4,
+          "severity": "> 102cm (M) / > 88cm (F)",
+          "isCardinal": false
+        }
+      ],
+      "redFlags": [],
+      "spo2Thresholds": {
+        "normal": ">= 95%"
+      },
+      "recommendedLabs": [
+        "Fasting Lipid Panel",
+        "Fasting Blood Glucose / HbA1c",
+        "Liver Function Tests (ALT/AST for NAFLD)"
+      ],
+      "clinicalGuidelinesRef": "WHO Obesity Guidelines / Endocrine Society 2026",
+      "ruleVersion": "1.0.0",
+      "updatedAt": "2026-10-14T20:36:52.794Z"
+    },
+    {
+      "diseaseId": "DIS-CHRON-004",
+      "code": "D50.9",
+      "icd10Codes": [
+        "D50.9",
+        "D50.0"
+      ],
+      "nameEn": "Iron Deficiency Anemia",
+      "nameAr": "أنيميا نقص الحديد",
+      "module": "hematology",
+      "associatedSymptoms": [
+        {
+          "symptomKey": "hemoglobin",
+          "weight": 0.5,
+          "severity": "< 13 g/dL (M) / < 12 g/dL (F)",
+          "isCardinal": true
+        },
+        {
+          "symptomKey": "serumFerritin",
+          "weight": 0.3,
+          "severity": "< 30 ng/mL",
+          "isCardinal": true
+        },
+        {
+          "symptomKey": "fatiguePica",
+          "weight": 0.2,
+          "severity": "generalized weakness and pallor",
+          "isCardinal": false
+        }
+      ],
+      "redFlags": [
+        {
+          "key": "severe_anemia_hemodynamic",
+          "threshold": "Hb < 7.0 g/dL with resting tachycardia or syncope",
+          "descriptionEn": "Severe decompensated anemia requiring urgent transfusion",
+          "descriptionAr": "أنيميا حادة متقدمة مع هبوط دوري بالدورة الدموية",
+          "emergencyTier": "urgent"
+        }
+      ],
+      "spo2Thresholds": {
+        "normal": ">= 95%"
+      },
+      "recommendedLabs": [
+        "Complete Blood Count (CBC with RBC indices MCV, MCH)",
+        "Serum Ferritin",
+        "Total Iron Binding Capacity (TIBC) / Transferrin Saturation"
+      ],
+      "clinicalGuidelinesRef": "British Society of Gastroenterology (BSG) / WHO Iron Deficiency Guidelines",
+      "ruleVersion": "1.0.0",
+      "updatedAt": "2026-10-14T20:36:52.794Z"
+    }
+  ],
+  "symptoms": [
+    {
+      "symptomId": "SYM-VITAL-001",
+      "key": "oxygenLevel",
+      "labelEn": "Blood Oxygen Saturation (SpO2)",
+      "labelAr": "نسبة تشبع الأكسجين في الدم (SpO2)",
+      "category": "vitals",
+      "inputType": "numeric",
+      "unit": "%",
+      "validRange": {
+        "min": 50,
+        "max": 100,
+        "rejectEmpty": true,
+        "rejectNegative": true,
+        "rejectOverMax": true
+      },
+      "criticalThresholds": {
+        "urgent": 90,
+        "high": 93,
+        "normal": 93
+      },
+      "descriptionEn": "Pulse oximeter reading measuring the percentage of oxygen-saturated hemoglobin.",
+      "descriptionAr": "قراءة جهاز قياس نبضات القلب ونسبة الأكسجين المشبع في الدم."
+    },
+    {
+      "symptomId": "SYM-RESP-001",
+      "key": "shortnessOfBreathScale",
+      "labelEn": "Shortness of Breath / Dyspnea Severity",
+      "labelAr": "شدة ضيق التنفس وصعوبة التنفس",
+      "category": "respiratory",
+      "inputType": "scale_1_10",
+      "unit": "score_1_10",
+      "validRange": {
+        "min": 1,
+        "max": 10,
+        "rejectEmpty": false
+      },
+      "criticalThresholds": {
+        "urgent": 8,
+        "high": 5
+      },
+      "descriptionEn": "Validated 1-to-10 numerical rating scale of dyspnea at rest or on minimal exertion.",
+      "descriptionAr": "مقياس عددي من 1 إلى 10 لتقييم صعوبة التنفس أثناء الراحة أو بذل أقل مجهود."
+    },
+    {
+      "symptomId": "SYM-RESP-002",
+      "key": "coughSeverity",
+      "labelEn": "Cough Severity",
+      "labelAr": "شدة السعال / الكحة",
+      "category": "respiratory",
+      "inputType": "enum",
+      "allowedValues": [
+        "none",
+        "mild",
+        "moderate",
+        "severe"
+      ],
+      "unit": "categorical",
+      "validRange": {
+        "allowedValues": [
+          "none",
+          "mild",
+          "moderate",
+          "severe"
+        ]
+      },
+      "descriptionEn": "Clinical cough classification: none, mild (occasional), moderate (disturbing daily tasks), severe (persistent, paroxysmal, or disrupting sleep).",
+      "descriptionAr": "تصنيف السعال السريري: بدون، خفيف، متوسط، أو شديد يعيق النوم والأنشطة اليومية."
+    },
+    {
+      "symptomId": "SYM-GEN-001",
+      "key": "symptomDurationDays",
+      "labelEn": "Symptom Duration (Days)",
+      "labelAr": "مدة استمرار الأعراض (بالأيام)",
+      "category": "duration",
+      "inputType": "duration",
+      "unit": "days",
+      "validRange": {
+        "min": 1,
+        "max": 365,
+        "rejectEmpty": true
+      },
+      "descriptionEn": "Total elapsed days since onset of acute respiratory or systemic symptoms.",
+      "descriptionAr": "عدد الأيام المنقضية منذ بدء ظهور الأعراض التنفسية أو العامة."
+    },
+    {
+      "symptomId": "SYM-VITAL-002",
+      "key": "respiratoryRate",
+      "labelEn": "Respiratory Rate",
+      "labelAr": "معدل التنفس (نفس في الدقيقة)",
+      "category": "vitals",
+      "inputType": "numeric",
+      "unit": "breaths/min",
+      "validRange": {
+        "min": 5,
+        "max": 60,
+        "rejectEmpty": false
+      },
+      "criticalThresholds": {
+        "urgentHigh": 30,
+        "urgentLow": 8
+      },
+      "descriptionEn": "Number of breaths taken per minute.",
+      "descriptionAr": "عدد مرات التنفس في الدقيقة الواحدة."
+    },
+    {
+      "symptomId": "SYM-VITAL-003",
+      "key": "temperature",
+      "labelEn": "Body Temperature",
+      "labelAr": "درجة حرارة الجسم",
+      "category": "vitals",
+      "inputType": "numeric",
+      "unit": "°C",
+      "validRange": {
+        "min": 34,
+        "max": 43,
+        "rejectEmpty": false
+      },
+      "criticalThresholds": {
+        "urgentFever": 39.5,
+        "urgentHypothermia": 35
+      },
+      "descriptionEn": "Body temperature measured in degrees Celsius.",
+      "descriptionAr": "درجة حرارة الجسم بالدرجات المئوية."
+    },
+    {
+      "symptomId": "SYM-RESP-003",
+      "key": "chestPain",
+      "labelEn": "Chest Pain or Discomfort",
+      "labelAr": "ألم أو انزعاج في منطقة الصدر",
+      "category": "respiratory",
+      "inputType": "boolean",
+      "unit": "boolean",
+      "validRange": {
+        "allowedValues": [
+          true,
+          false,
+          "yes",
+          "no",
+          "unknown"
+        ]
+      },
+      "descriptionEn": "Presence of pleuritic, pressure-like, or stabbing chest pain.",
+      "descriptionAr": "وجود ألم صدري حاد، ضاغط، أو مصاحب للتنفس العميق."
+    },
+    {
+      "symptomId": "SYM-HIST-001",
+      "key": "asthmaCopdHistory",
+      "labelEn": "Known History of Asthma or COPD",
+      "labelAr": "تاريخ مرضي سابق بالربو الشعبي أو السدة الرئوية",
+      "category": "history",
+      "inputType": "boolean",
+      "unit": "boolean",
+      "validRange": {
+        "allowedValues": [
+          true,
+          false,
+          "yes",
+          "no",
+          "unknown"
+        ]
+      },
+      "descriptionEn": "Documented physician diagnosis of bronchial asthma or COPD.",
+      "descriptionAr": "تشخيص طبي موثق سابق للإصابة بالربو الشعبي أو السدة الرئوية المزمنة."
+    },
+    {
+      "symptomId": "SYM-HIST-002",
+      "key": "recentInfection",
+      "labelEn": "Recent Viral or Bacterial Upper Respiratory Infection",
+      "labelAr": "عدوى فيروسية أو بكتيرية حديثة بالجهاز التنفسي",
+      "category": "history",
+      "inputType": "boolean",
+      "unit": "boolean",
+      "validRange": {
+        "allowedValues": [
+          true,
+          false,
+          "yes",
+          "no",
+          "unknown"
+        ]
+      },
+      "descriptionEn": "History of flu, cold, or sinus infection within the preceding 14 days.",
+      "descriptionAr": "تاريخ مرضي لإنفلونزا أو نزلة برد خلال الأسبوعين الماضيين."
+    },
+    {
+      "symptomId": "SYM-PROG-001",
+      "key": "symptomProgression",
+      "labelEn": "Symptom Progression over 24-48 hours",
+      "labelAr": "مسار تطور الأعراض خلال 24-48 ساعة",
+      "category": "progression",
+      "inputType": "enum",
+      "allowedValues": [
+        "improving",
+        "stable",
+        "worsening",
+        "unknown"
+      ],
+      "unit": "categorical",
+      "validRange": {
+        "allowedValues": [
+          "improving",
+          "stable",
+          "worsening",
+          "unknown"
+        ]
+      },
+      "descriptionEn": "Direction of clinical trajectory: improving, stable, or acute worsening.",
+      "descriptionAr": "اتجاه الحالة السريرية: تحسن، استقرار، أو تدهور سريع."
+    }
+  ],
+  "clinicalRules": [
+    {
+      "ruleId": "RULE-RESP-EMERGENCY-01",
+      "nameEn": "Severe Hypoxemia Emergency Escalation",
+      "nameAr": "قاعدة طوارئ نقص الأكسجين الحاد (SpO2 < 90%)",
+      "condition": "oxygenLevel < 90",
+      "riskClass": "urgent",
+      "baseScore": 10,
+      "isEmergencyRedFlag": true,
+      "actionEn": "Immediate ambulance / ER referral (Call 123) with continuous supplemental oxygen.",
+      "actionAr": "إحالة فورية لطوارئ المستشفى (اتصل بالإسعاف 123) مع تزويد فوري بالأكسجين.",
+      "guidelineRef": "WHO Emergency Triage Assessment and Treatment (ETAT) / BTS Guidelines",
+      "ruleVersion": "1.0.0"
+    },
+    {
+      "ruleId": "RULE-RESP-HIGH-02",
+      "nameEn": "Moderate Hypoxemia or Severe Dyspnea",
+      "nameAr": "قاعدة الأولوية العالية لنقص الأكسجين المعتدل أو ضيق التنفس الشديد",
+      "condition": "(oxygenLevel >= 90 && oxygenLevel < 93) || shortnessOfBreathScale >= 8",
+      "riskClass": "high",
+      "baseScore": 6,
+      "isEmergencyRedFlag": false,
+      "actionEn": "Urgent physician consultation within 2 to 4 hours with vital sign reassessment.",
+      "actionAr": "استشارة طبيب عاجلة خلال ساعتين إلى 4 ساعات مع إعادة تقييم المؤشرات الحيوية.",
+      "guidelineRef": "GOLD / GINA Moderate Exacerbation Protocols",
+      "ruleVersion": "1.0.0"
+    },
+    {
+      "ruleId": "RULE-RESP-ROUTINE-03",
+      "nameEn": "Mild Symptoms Outpatient Pathway",
+      "nameAr": "قاعدة الفحص الروتيني للعيادات الخارجية (SpO2 >= 93% وبدون علامات خطر)",
+      "condition": "oxygenLevel >= 93 && shortnessOfBreathScale < 8 && !chestPain",
+      "riskClass": "normal",
+      "baseScore": 2,
+      "isEmergencyRedFlag": false,
+      "actionEn": "Routine outpatient evaluation within 24 to 48 hours.",
+      "actionAr": "متابعة روتينية بالعيادات الخارجية خلال 24 إلى 48 ساعة.",
+      "guidelineRef": "Primary Care Respiratory Clinical Care Pathway",
+      "ruleVersion": "1.0.0"
+    }
+  ]
+}

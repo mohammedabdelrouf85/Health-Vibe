@@ -74,11 +74,19 @@
 
     if (db) {
       try {
+        const assignedRole = options.role || "patient";
+        const assignedStatus = assignedRole === "doctor_pending" ? "pending_verification" : "active";
         await db.collection("users").doc(user.uid).set({
           name: name,
           email: user.email,
-          role: "patient",
-          status: "active",
+          role: assignedRole,
+          status: assignedStatus,
+          privacyConsent: {
+            accepted: true,
+            version: "2.0.0",
+            acceptedAt: new Date().toISOString(),
+            purpose: "PRD Section 10: Explicit consent for clinical data processing, physician review, and verified reports."
+          },
           createdAt: global.firebase?.firestore?.FieldValue?.serverTimestamp() || new Date()
         }, { merge: true });
       } catch (err) {
@@ -131,6 +139,35 @@
       await auth.signOut();
     }
     clearActiveSession();
+    try {
+      if (global.localStorage) {
+        global.localStorage.setItem("hv_explicit_logout", "true");
+      }
+      if (global.sessionStorage) {
+        global.sessionStorage.setItem("hv_explicit_logout", "true");
+      }
+    } catch (e) {}
+  }
+
+  /**
+   * Stores active session record in storage.
+   * @param {object} user
+   * @param {string} role
+   */
+  function getSessionStorage() {
+    try {
+      if (typeof sessionStorage !== "undefined") return sessionStorage;
+      if (global.sessionStorage) return global.sessionStorage;
+    } catch (e) {}
+    return null;
+  }
+
+  function getLocalStorage() {
+    try {
+      if (typeof localStorage !== "undefined") return localStorage;
+      if (global.localStorage) return global.localStorage;
+    } catch (e) {}
+    return null;
   }
 
   /**
@@ -148,16 +185,37 @@
         role: role || "patient",
         savedAt: Date.now()
       };
-      sessionStorage.setItem(STORAGE_KEYS.SESSION, JSON.stringify(payload));
+      const ss = getSessionStorage();
+      if (ss) ss.setItem(STORAGE_KEYS.SESSION, JSON.stringify(payload));
+      const ls = getLocalStorage();
+      if (ls) ls.removeItem("hv_explicit_logout");
+      if (ss) ss.removeItem("hv_explicit_logout");
     } catch (e) {}
   }
 
   /**
-   * Clears active session record.
+   * Clears active session record and cached credentials.
    */
   function clearActiveSession() {
     try {
-      sessionStorage.removeItem(STORAGE_KEYS.SESSION);
+      const ss = getSessionStorage();
+      if (ss) {
+        ss.removeItem(STORAGE_KEYS.SESSION);
+        ss.removeItem(STORAGE_KEYS.ROLE);
+        ss.removeItem(STORAGE_KEYS.REMEMBER);
+        ss.removeItem("hv_active_user");
+        ss.removeItem("hv_auth_token");
+        ss.removeItem("hv_token");
+      }
+      const ls = getLocalStorage();
+      if (ls) {
+        ls.removeItem(STORAGE_KEYS.SESSION);
+        ls.removeItem(STORAGE_KEYS.ROLE);
+        ls.removeItem(STORAGE_KEYS.REMEMBER);
+        ls.removeItem("hv_active_user");
+        ls.removeItem("hv_auth_token");
+        ls.removeItem("hv_token");
+      }
     } catch (e) {}
   }
 
@@ -167,7 +225,12 @@
    */
   function getActiveSession() {
     try {
-      const raw = sessionStorage.getItem(STORAGE_KEYS.SESSION);
+      const ls = getLocalStorage();
+      if (ls && ls.getItem("hv_explicit_logout") === "true") {
+        return null;
+      }
+      const ss = getSessionStorage();
+      const raw = ss ? ss.getItem(STORAGE_KEYS.SESSION) : null;
       return raw ? JSON.parse(raw) : null;
     } catch (e) {
       return null;

@@ -45,12 +45,15 @@
   </script>
   <link rel="icon" type="image/webp" href="./app/logo-dark-mark.webp">
   <link rel="alternate icon" type="image/png" href="./app/logo-dark-mark.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       background: #07191b;
       color: #e2f1f0;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-family: "Cairo", "Tajawal", "IBM Plex Sans Arabic", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -133,6 +136,9 @@
 <body>
   <div class="launcher-card" id="launcherCard">
     <div class="badge">بيئة التشغيل / Environment Notice</div>
+    <div style="display: flex; justify-content: center; margin-bottom: 16px;">
+      <img src="./app/logo-dark-mark.webp" alt="Health Vibe AI logo" class="launcher-logo" width="64" height="46" style="aspect-ratio: 64 / 46; object-fit: contain;" decoding="async" />
+    </div>
     <h1>Health Vibe AI</h1>
     <p>
       تم فتح الصفحة كملف محلي (<code>file://</code>). يتطلب تسجيل الدخول عبر Firebase تشغيل التطبيق من خلال السيرفر المحلي.

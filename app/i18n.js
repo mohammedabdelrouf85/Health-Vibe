@@ -88,7 +88,7 @@
       nav: {
         home: "الرئيسية",
         patient: "الرئيسية",
-        diseaseDashboard: "لوحة الأمراض",
+        diseaseDashboard: "الفرز السريري والتقييم التفريقي",
         consent: "الموافقة والخصوصية",
         profile: "الملف الطبي",
         assessment: "تقييم التنفس",
@@ -105,16 +105,44 @@
         audit: "سجل التدقيق",
         kpi: "لوحة المؤشرات",
         clinicsSales: "حلول العيادات (Sales)",
+        forClinics: "للعيادات",
+        forClinicsFull: "للأطباء والمراكز الطبية",
         publicLanding: "الموقع التعريفي الرئيسي",
         signOut: "تسجيل الخروج",
         switchAccount: "تبديل الحساب",
         deleteAccount: "حذف الحساب",
         menu: "المزيد",
-        disease: "الأمراض",
+        disease: "الفرز السريري والتقييم التفريقي",
         diabetes: "داء السكري",
         hypertension: "ارتفاع ضغط الدم",
         bloodDisorders: "تجلط الدم / اضطرابات الدم",
-        obesity: "السمنة"
+        obesity: "السمنة",
+        workflow: "المسار",
+        accounts: "الحسابات",
+        safety: "الأمان"
+      },
+      hero: {
+        tourPrompt: "كيف يراجع الطبيب هذه الحالة؟ (اضغط للجولة)"
+      },
+      doctorTour: {
+        badge: "جولة المراجعة السريرية • Clinical Walkthrough",
+        title: "كيف يراجع الطبيب حالة التقييم التنفسي (SpO2 = 95%) قبل فك القفل؟",
+        subtitle: "جولة تفاعلية من 4 خطوات توضح معايير الأمان والفرز الطبي لحماية المريض قبل إصدار التقرير النهائي.",
+        tab1: "الفرز",
+        tab2: "فحص الـ AI",
+        tab3: "القرار",
+        tab4: "فك القفل",
+        patientVitals: "بيانات الحالة المُسجلة:",
+        triagePriority: "تصنيف الفرز في طابور الطبيب:",
+        slaNotice: "الهدف الزمني للاستجابة السريرية (SLA): مراجعة خلال 15 دقيقة لمنع تفاقم نقص الأكسجين.",
+        whyLockedDesc: "وفقاً لقواعد السلامة السريرية الصارمة (PRD Section 7.1)، لا يجوز عرض أي نتائج أو احتمالات للمريض دون تدقيق الطبيب البشري، منعاً لإثارة الهلع أو أخذ أدوية غير مناسبة.",
+        aiDifferentialTitle: "🤖 مصفوفة التحليل الاحتمالي للذكاء الاصطناعي (AI Differential Classifier):",
+        lockedStatus: "🔒 قيد المراجعة الطبية (Locked)",
+        btnUnlock: "محاكاة اعتماد الطبيب وفك القفل الآن",
+        unlockSuccess: "تم فك القفل بنجاح! يمكن للمريض الآن قراءة التوصيات وتنزيل التقرير الرسمي.",
+        btnPrev: "السابق",
+        btnNext: "الخطوة التالية",
+        stepIndicator: "خطوة 1 من 4"
       },
       roles: {
         patient: "حساب مريض",
@@ -144,16 +172,35 @@
         workstationShared: "محطة مشتركة (مؤقت)",
         forgotPassword: "نسيت كلمة المرور؟",
         continueWithGoogle: "المتابعة بحساب جوجل",
+        googleDemoNotice: "تسجيل الدخول عبر Google مخصص للنسخة الحية المرتبطة بنطاق معتمد. في بيئة العرض (Demo)، يرجى استخدام المعاينة التفاعلية أو البريد التجريبي.",
+        googleDemoBadge: "وضع العرض (Demo)",
         accountRole: "دور الحساب",
+        accountType: "نوع الحساب",
+        rolePatient: "👤 مريض (Patient)",
+        roleDoctor: "🩺 طبيب ممارس (Doctor)",
+        roleClinic: "🏥 عيادة / مركز طبي (Clinic)",
+        roleHintPatient: "الوصول للتقييم السريري، التقارير المعتمدة، وحجز المواعيد.",
+        roleHintDoctor: "مراجعة الحالات وفرز الأولويات واعتماد التقارير الطبية.",
+        roleHintClinic: "إدارة الأطباء، المواعيد، ولوحة التحكم السريرية للمركز.",
+        medicalConsentText: "أوافق صراحة على معالجة بياناتي الطبية السريرية وقياسات الأكسجين والأعراض، ومراجعتها من قبل الطبيب البشري المختص وفقاً لـ",
+        consentRequiredError: "موافقة الخصوصية الطبية مطلوبة لإنشاء الحساب وبدء جمع أي بيانات سريرية.",
+        passwordRulesTitle: "متطلبات كلمة المرور لإنشاء الحساب:",
+        ruleLength: "8 أحرف على الأقل",
+        ruleUpper: "حرف كبير (A-Z)",
+        ruleNumber: "رقم (0-9)",
+        ruleSymbol: "رمز خاص (!@#$)",
         emailVerificationNeeded: "تأكيد البريد الإلكتروني مطلوب",
         emailVerificationDesc: "يرجى تأكيد بريدك الإلكتروني لحماية حسابك والوصول إلى كافة الميزات السريرية.",
         resendVerification: "إعادة إرسال الرابط",
         checkStatus: "تحقق الآن",
         whatsappVerify: "تفعيل عبر بوت الواتساب",
         resetPassword: "استعادة كلمة المرور",
+        resetPasswordDesc: "أدخل عنوان بريدك الإلكتروني المسجل وسنرسل لك رابطاً رسمياً وآمناً لإعادة تعيين كلمة المرور.",
         sendResetLink: "إرسال رابط الاستعادة",
         resetLinkSent: "تم إرسال رابط استعادة كلمة المرور إلى {email}! يرجى فحص صندوق الوارد ومجلد Spam.",
         resetWaitCooldown: "يرجى الانتظار {seconds} ثانية قبل طلب رابط استعادة جديد.",
+        resetSuccessTitle: "تم إرسال رابط الاستعادة بنجاح!",
+        resetSuccessDesc: "يرجى فحص صندوق الوارد (Inbox) ومجلد الرسائل غير المرغوب فيها (Spam/Junk) للعثور على بريد الاستعادة من Health Vibe AI.",
         backToSignIn: "العودة لتسجيل الدخول",
         authRequired: "يجب تسجيل الدخول أولاً.",
         welcomeUser: "مرحباً، {name}!",
@@ -444,6 +491,22 @@
         termsBtn: "📜 شروط الاستخدام",
         disclaimerBtn: "🚨 إخلاء المسؤولية"
       },
+      legal: {
+        modalTitle: "المعايير القانونية والطبية",
+        closeBtn: "فهمت ذلك وإغلاق",
+        tabPrivacy: "🔒 سياسة الخصوصية",
+        tabTerms: "📜 شروط الاستخدام",
+        tabDisclaimer: "🚨 إخلاء المسؤولية الطبي",
+        privacyTitle: "سياسة الخصوصية وحماية البيانات السريرية",
+        termsTitle: "شروط الاستخدام والخدمة",
+        disclaimerTitle: "إخلاء المسؤولية الطبي وتنبيهات الطوارئ",
+        prdDisclaimerTitle: "تنبيه وإخلاء مسؤولية طبي معتمد (PRD)",
+        prdDisclaimerBody: "المعلومات والنتائج المقدمة عبر HealthVibe AI هي لأغراض التوعية ودعم القرار الطبي فقط، ولا تُعد تشخيصاً طبياً مستقلاً أو بديلاً عن تقييم طبيب مؤهل. يجب مراجعة النتائج مع طبيب قبل اتخاذ أي قرار علاجي. في حالات الطوارئ أو الأعراض الشديدة، يجب طلب الرعاية الطبية العاجلة من الجهات المختصة فوراً.",
+        emergencyBadge: "🚨 تنبيه طوارئ حرج",
+        emergencyWarning: "لا تستخدم هذا التطبيق في حالات الطوارئ الطبية المهددة للحياة",
+        emergencyText: "إذا كنت تعاني من نسبة أكسجين أقل من 90%، أو ألم حاد ومفاجئ في الصدر، أو صعوبة بالغة في التنفس، أو زرقة بالوجه، اتصل فوراً بالإسعاف (123 في مصر) أو توجه لأقرب قسم طوارئ في مستشفى ولا تنتظر الرد الإلكتروني.",
+        emergencyCallBtn: "📞 طلب الإسعاف فوراً (123)"
+      },
       profile: {
         title: "الملف الطبي والتاريخ الصحي",
         personalInfo: "البيانات الأساسية",
@@ -591,7 +654,12 @@
         lockedTitle: "التقرير الطبي قيد المراجعة والاعتماد السريري",
         lockedDesc: "حفاظاً على سلامتك، لن يظهر التشخيص النهائي إلا بعد مراجعة واعتماد الطبيب المعالج.",
         emptyReportTitle: "لا يوجد تقرير طبي متاح حتى الآن",
-        emptyReportDesc: "للحصول على تقرير طبي معتمد، يرجى إتمام تقييم التنفس أولاً ليتم إرساله ومراجعته واعتماده من قبل الطبيب المعالج."
+        emptyReportDesc: "للحصول على تقرير طبي معتمد، يرجى إتمام تقييم التنفس أولاً ليتم إرساله ومراجعته واعتماده من قبل الطبيب المعالج.",
+        dispatchToDoctor: "إرسال التقرير للطبيب (صندوق الوارد)",
+        dispatchedBadge: "تم التسليم إلى صندوق وارد الطبيب المعالج",
+        dispatchSuccessTitle: "تم تسليم التقرير الطبي لصندوق وارد الطبيب بنجاح",
+        trackingRefLabel: "الرقم المرجعي للتسليم",
+        doctorInboxStatus: "حالة صندوق الوارد"
       },
       doctor: {
         dashboardTitle: "مراجعة الحالات والفرز السريري",
@@ -1048,10 +1116,10 @@
         diagnosis: "التشخيص السريري المعتمد"
       },
       diseaseDashboard: {
-        title: "لوحة الأمراض والتقييم السريري الموحد",
-        subtitle: "متابعة شاملة عبر أربعة مسارات سريرية للأمراض استناداً لسجلاتك الموثقة.",
+        title: "الفرز السريري والتقييم التفريقي",
+        subtitle: "محرك فرز متعدد المسارات وتقييم سريري شامل عبر مسارات الأمراض استناداً لسجلاتك الموثقة.",
         nextRequiredActionHeader: "الإجراء التالي المطلوب",
-        modulesOverview: "نظرة عامة على مسارات الأمراض الأربعة",
+        modulesOverview: "نظرة عامة على مسارات التقييم السريري الأربعة",
         stateNotStarted: "لم يبدأ",
         stateInfoRequested: "مطلوب معلومات",
         stateAwaitingReview: "قيد الانتظار",
@@ -1138,6 +1206,18 @@
         sectionSymptoms: "الأعراض المسجلة",
         sectionMedications: "الأدوية الحالية",
         sectionComplications: "المضاعفات السريرية"
+      },
+      workflow: {
+        eyebrow: "المسار",
+        title: "مسار واضح من البيانات إلى التقرير الطبي المعتمد",
+        step1Title: "بيانات المريض",
+        step1Desc: "أعراض، قياسات حيوية، سجل طبي، وموافقة خصوصية واضحة ومستنيرة.",
+        step2Title: "تحليل الذكاء الاصطناعي",
+        step2Desc: "نموذج يدمج Validated Machine Learning Model + Clinical Rules (تعلم آلي مدقق ومختبر مدمج مع قواعد الفرز السريري) لتصنيف موضوعي للمخاطر وتحديد أولوية الفرز السريري وفق متطلبات PRD (القسم 7.1).",
+        step3Title: "مراجعة الطبيب",
+        step3Desc: "طبيب مرخص يعتمد الحالة، يرفضها، أو يطلب متابعة سريرية إضافية.",
+        step4Title: "تقرير معتمد",
+        step4Desc: "نتائج مدققة وتوصيات طبية وتنبيهات أمان مسجلة وموثقة بأمان."
       }
     },
 
@@ -1209,7 +1289,7 @@
       nav: {
         home: "Home",
         patient: "Home",
-        diseaseDashboard: "Disease Dashboard",
+        diseaseDashboard: "Clinical Triage & Differential Assessment",
         consent: "Consent & Privacy",
         profile: "Medical Profile",
         assessment: "Breathing Assessment",
@@ -1226,16 +1306,44 @@
         audit: "Audit Log",
         kpi: "KPI Dashboard",
         clinicsSales: "Clinic Solutions (Sales)",
+        forClinics: "For Clinics",
+        forClinicsFull: "For Doctors & Medical Clinics",
         publicLanding: "Public Website / Landing",
         signOut: "Sign out",
         switchAccount: "Switch account",
         deleteAccount: "Delete account",
         menu: "Menu",
-        disease: "Disease",
+        disease: "Clinical Triage & Differential Assessment",
         diabetes: "Diabetes",
         hypertension: "Hypertension",
         bloodDisorders: "Blood Clotting / Blood Disorders",
-        obesity: "Obesity"
+        obesity: "Obesity",
+        workflow: "Workflow",
+        accounts: "Accounts",
+        safety: "Safety"
+      },
+      hero: {
+        tourPrompt: "How does the doctor review this case? (Click for tour)"
+      },
+      doctorTour: {
+        badge: "Clinical Walkthrough • Safety Triage",
+        title: "How does the doctor review Respiratory Assessment (SpO2 = 95%) before unlock?",
+        subtitle: "An interactive 4-step walkthrough demonstrating clinical safety guardrails and triage before report release.",
+        tab1: "Triage",
+        tab2: "AI Review",
+        tab3: "Decision",
+        tab4: "Unlock",
+        patientVitals: "Recorded Case Vitals:",
+        triagePriority: "Triage Priority in Doctor Queue:",
+        slaNotice: "Clinical Response SLA: Review within 15 minutes to prevent hypoxia escalation.",
+        whyLockedDesc: "Under strict clinical safety rules (PRD Section 7.1), probabilistic AI results cannot be shown to patients without human physician verification to prevent panic and improper medication.",
+        aiDifferentialTitle: "🤖 AI Differential Classifier Probability Matrix:",
+        lockedStatus: "🔒 Under Clinical Review (Locked)",
+        btnUnlock: "Simulate Doctor Approval & Unlock Now",
+        unlockSuccess: "Unlocked successfully! The patient can now view clinical recommendations and download the certified report.",
+        btnPrev: "Previous",
+        btnNext: "Next Step",
+        stepIndicator: "Step 1 of 4"
       },
       roles: {
         patient: "Patient account",
@@ -1265,16 +1373,35 @@
         workstationShared: "Shared Station (Session-only)",
         forgotPassword: "Forgot password?",
         continueWithGoogle: "Continue with Google",
+        googleDemoNotice: "Google Sign-In is configured for live environments linked to authorized domains. In this Demo environment, please use interactive preview or demo credentials.",
+        googleDemoBadge: "Demo Mode",
         accountRole: "Account role",
+        accountType: "Account Type",
+        rolePatient: "👤 Patient",
+        roleDoctor: "🩺 Practicing Doctor",
+        roleClinic: "🏥 Clinic / Medical Center",
+        roleHintPatient: "Access medical evaluations, verified reports, and appointments.",
+        roleHintDoctor: "Review clinical queue, triage priority, and approve medical reports.",
+        roleHintClinic: "Manage clinic practitioners, appointments, and center KPI dashboard.",
+        medicalConsentText: "I explicitly consent to the processing of my clinical respiratory data, symptoms, and SpO2 measurements, and review by licensed physicians in accordance with the",
+        consentRequiredError: "Explicit medical consent is required to create an account and begin clinical data processing.",
+        passwordRulesTitle: "Requirements for account creation:",
+        ruleLength: "8+ characters",
+        ruleUpper: "Uppercase letter (A-Z)",
+        ruleNumber: "Number (0-9)",
+        ruleSymbol: "Special symbol (!@#$)",
         emailVerificationNeeded: "Email verification needed",
         emailVerificationDesc: "Please verify your email address to secure your account and access all clinical features.",
         resendVerification: "Resend Verification",
         checkStatus: "Check Status",
         whatsappVerify: "Verify via WhatsApp Bot",
         resetPassword: "Reset Password",
+        resetPasswordDesc: "Enter your account email and we will send you an official password reset link.",
         sendResetLink: "Send Reset Link",
         resetLinkSent: "Password reset link sent to {email}! Please check your Inbox and Spam folder.",
         resetWaitCooldown: "Please wait {seconds}s before requesting another reset link.",
+        resetSuccessTitle: "Reset link sent!",
+        resetSuccessDesc: "Please check your Inbox and Spam/Junk folder for the password reset email from Health Vibe AI.",
         backToSignIn: "Back to Sign In",
         authRequired: "Authentication required.",
         welcomeUser: "Welcome, {name}!",
@@ -1565,6 +1692,22 @@
         termsBtn: "📜 Terms of Use",
         disclaimerBtn: "🚨 Clinical Disclaimer"
       },
+      legal: {
+        modalTitle: "Legal & Clinical Standards",
+        closeBtn: "Understood & Close",
+        tabPrivacy: "🔒 Privacy Policy",
+        tabTerms: "📜 Terms of Use",
+        tabDisclaimer: "🚨 Medical Disclaimer",
+        privacyTitle: "Privacy Policy & Clinical Data Protection",
+        termsTitle: "Terms of Service",
+        disclaimerTitle: "Clinical & Medical Disclaimer",
+        prdDisclaimerTitle: "Approved Medical Disclaimer (PRD)",
+        prdDisclaimerBody: "HealthVibe AI provides informational and clinical decision-support outputs only. It does not provide an independent medical diagnosis and is not a substitute for evaluation by a qualified healthcare professional. Results should be reviewed by a clinician before treatment decisions are made. In an emergency or with severe symptoms, seek urgent medical care immediately.",
+        emergencyBadge: "🚨 Critical Emergency Alert",
+        emergencyWarning: "Do not use this app for life-threatening medical emergencies",
+        emergencyText: "If your oxygen saturation is below 90%, or you experience acute chest pain, severe shortness of breath, or facial cyanosis, call emergency services immediately (123 in Egypt) or visit the nearest emergency department. Do not wait for digital triage.",
+        emergencyCallBtn: "📞 Call Emergency Services Immediately (123)"
+      },
       profile: {
         title: "Medical Profile & Clinical Baseline",
         personalInfo: "Personal Information",
@@ -1712,7 +1855,12 @@
         lockedTitle: "Clinical Report Awaiting Doctor Approval",
         lockedDesc: "For your safety, the final diagnosis will not be displayed until reviewed and approved by your attending physician.",
         emptyReportTitle: "No Clinical Reports Available",
-        emptyReportDesc: "To generate a certified medical report, please complete a breathing assessment first. Your evaluation will be reviewed and approved by a physician."
+        emptyReportDesc: "To generate a certified medical report, please complete a breathing assessment first. Your evaluation will be reviewed and approved by a physician.",
+        dispatchToDoctor: "Send Report to Doctor Inbox",
+        dispatchedBadge: "Delivered to Doctor Inbox",
+        dispatchSuccessTitle: "Medical Report Delivered to Doctor",
+        trackingRefLabel: "Dispatch Tracking Reference",
+        doctorInboxStatus: "Doctor Inbox Status"
       },
       doctor: {
         dashboardTitle: "Doctor Review & Clinical Triage",
@@ -2169,10 +2317,10 @@
         diagnosis: "Certified Clinical Diagnosis"
       },
       diseaseDashboard: {
-        title: "Unified Disease & Clinical Assessment Dashboard",
-        subtitle: "Comprehensive monitoring across four disease modules based strictly on your real documented records.",
+        title: "Clinical Triage & Differential Assessment",
+        subtitle: "Multi-domain triage engine and unified clinical differential assessment based strictly on your documented records.",
         nextRequiredActionHeader: "Next Required Action",
-        modulesOverview: "Four Clinical Disease Modules Overview",
+        modulesOverview: "Four Clinical Evaluation Pathways Overview",
         stateNotStarted: "Not started",
         stateInfoRequested: "Information requested",
         stateAwaitingReview: "Awaiting review",
@@ -2259,6 +2407,18 @@
         sectionSymptoms: "Reported Symptoms",
         sectionMedications: "Current Medications",
         sectionComplications: "Complications"
+      },
+      workflow: {
+        eyebrow: "Workflow",
+        title: "A Clear Pathway From Data to Certified Report",
+        step1Title: "Patient Data",
+        step1Desc: "Symptoms, vitals, medical history, and transparent privacy consent.",
+        step2Title: "AI Analysis",
+        step2Desc: "Validated Machine Learning Model + Clinical Rules for objective risk classification and triage prioritization (PRD 7.1).",
+        step3Title: "Doctor Review",
+        step3Desc: "Licensed physician approves, rejects, or requests supplementary follow-up.",
+        step4Title: "Certified Report",
+        step4Desc: "Validated results, medical recommendations, and safety alerts recorded securely."
       }
     }
   };
@@ -2373,18 +2533,44 @@
       this.catalog = translations;
       this.listeners = [];
 
-      // Determine initial language
-      let initialLang = this.defaultLanguage;
+      // Determine initial language: URL query (?lang=) -> stored preference -> device language (navigator.language) -> default
+      let initialLang = null;
       try {
-        if (typeof localStorage !== "undefined") {
-          const stored = localStorage.getItem(STORAGE_KEY);
-          if (stored && this.supportedLanguages.includes(stored)) {
-            initialLang = stored;
+        if (typeof window !== "undefined" && window.location && window.location.search) {
+          const urlParams = new URLSearchParams(window.location.search);
+          const qLang = (urlParams.get("lang") || "").toLowerCase().trim();
+          if (this.supportedLanguages.includes(qLang)) {
+            initialLang = qLang;
           }
         }
       } catch (e) {}
 
-      this.currentLanguage = initialLang;
+      if (!initialLang) {
+        try {
+          if (typeof localStorage !== "undefined") {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            if (stored && this.supportedLanguages.includes(stored)) {
+              initialLang = stored;
+            }
+          }
+        } catch (e) {}
+      }
+
+      // Auto-detect from user device language (navigator.language / navigator.languages) if first visit
+      if (!initialLang) {
+        try {
+          const navLang = (typeof navigator !== "undefined" && (navigator.language || (navigator.languages && navigator.languages[0])) || "").toLowerCase().trim();
+          if (navLang.startsWith("ar")) {
+            initialLang = "ar";
+          } else {
+            initialLang = "en";
+          }
+        } catch (e) {
+          initialLang = this.defaultLanguage;
+        }
+      }
+
+      this.currentLanguage = initialLang || this.defaultLanguage;
     }
 
     getLanguage() {
@@ -2524,10 +2710,16 @@
         }
       } catch (e) {}
 
-      // Update HTML root attributes
-      if (typeof document !== "undefined" && document.documentElement) {
-        document.documentElement.lang = lang;
-        document.documentElement.dir = this.getDirection(lang);
+      // Update HTML root and body attributes explicitly to prevent layout inversion and icon overlapping
+      const targetDir = this.getDirection(lang);
+      if (typeof document !== "undefined") {
+        if (document.documentElement) {
+          document.documentElement.lang = lang;
+          document.documentElement.dir = targetDir;
+        }
+        if (document.body) {
+          document.body.dir = targetDir;
+        }
       }
 
       // Translate DOM declaratively if requested

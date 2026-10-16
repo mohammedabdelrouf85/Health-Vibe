@@ -62,3 +62,41 @@
 - **على مستوى الـ Backend:** تم تطبيق Middleware `requireVerifiedEmail` الذي يفحص الرمز المشفر ويمنع العمليات الإدارية والطبية الحساسة بحظر `403 EMAIL_NOT_VERIFIED`.
 - **على مستوى واجهة العميل (UX):** تم تطبيق دالة `enforceEmailVerification` مع نافذة حوار تفاعلية (`verifyRequiredModal`) تقوم بتحديث فوري لحالة الحساب (`user.reload()`) وتوفير خيارات التحقق وإعادة الإرسال الفوري.
 
+---
+
+### 5. نظام الصلاحيات الصارم والفصل التام بين مسارات Patient و Doctor و Admin (RBAC 3-Tier Strict Separation):
+
+| البند / الدور | مسار المريض (Patient) | مسار الطبيب (Doctor) | مسار الإدارة (Admin) |
+| :--- | :--- | :--- | :--- |
+| **واجهة العمل الأساسية** | `#patient` (لوحة المتابعة الشخصية) | `#doctor` (طابور المراجعة السريرية) | `#admin` (مركز العمليات والإحصائيات) |
+| **الشاشات المصرح بها** | `assessment`, `pending`, `result`, `history`, `appointments`, `report`, `profile` | `doctor`, `verification`, `history`, `report`, `appointments`, `profile`, `kpi` | `admin`, `audit`, `kpi`, `profile`, `feedback` |
+| **حظر الروابط المتقاطعة** | 🚫 **محظور تماماً:** لا يمكن فتح شاشات الطبيب (`doctor`) أو الإدارة (`admin`, `audit`) | 🚫 **محظور تماماً:** لا يمكن فتح شاشات الإدارة (`admin`, `audit`) أو تعديل صلاحيات المستخدمين | 🚫 **محظور تماماً:** لا يمكن للأدمن اعتماد الحالات الطبية (الاعتماد محصور بالأطباء المرخصين فقط) |
+| **عزل البيانات (Data Isolation)** | يرى بياناته وحالاته وتقاريره المعتمدة فقط (`auth.uid == patientId`) | يرى الحالات المسندة إليه أو لعيادته فقط؛ لا يمكنه الاطلاع على مرضى عيادات أخرى | لا يمكنه رؤية تفاصيل تشخيصية سريرية خاصة للمرضى خارج أغراض التدقيق والتشغيل (Least Privilege) |
+| **حراس المسارات (Route Guards)** | دالة `applyRouteGuards` تحظر محاولات التسلل عبر الـ Hash (`#doctor`, `#admin`) وتعيد التوجيه فوراً | اعتراض وتدقيق الخادم الإلزامي `requireDoctor` | اعتراض وتدقيق الخادم الإلزامي `requireAdmin` و `requireSuperAdmin` |
+| **التحكم بالواجهة (Navigation)** | دالة `updateNavVisibility` تخفي أزرار وروابط الأدوار الأخرى كلياً من القائمة والشريط السفلي | إخفاء روابط الإدارة نهائياً | إخفاء مسار التقييم الاسترشادي للمرضى |
+
+---
+
+### 6. حصر استعلامات الطبيب على المرضى المعينين له فقط (Assigned Patients Only Doctor Queries):
+
+1. **على مستوى قواعد أمان فايربيس (Firestore Security Rules):**
+   - في وثائق الحالات السريرية `/cases/{caseId}`: يسمح للطبيب بالقراءة فقط إذا كان هو الطبيب المسند للحالة (`resource.data.assignedDoctorId == request.auth.uid` أو `doctorId` أو `approvingDoctorId`).
+   - في وثائق المرفقات الطبية `/case_files/{fileId}`: دالة `isAssignedDoctorForCaseId` تمنع الطبيب من تحميل أي تحاليل أو صور أشعة لحالات غير مسندة إليه.
+   - في التقارير السريرية `/clinical_reports/{reportId}`: قراءة التقارير محصورة بالطبيب المعتمد والموقع للحالة.
+
+2. **على مستوى استعلامات الواجهة والعميل (Client Firestore Queries):**
+   - مستمع طابور الحالات المباشر `renderDoctorQueue` يطبق قسراً عامل تصفية `.where("assignedDoctorId", "==", user.uid)`.
+   - دالة `getCases` تطبق استعلام `.where("assignedDoctorId", "==", user.uid)`.
+   - دالة `renderDoctorQueueItems` و `selectDoctorCase` تعزل الذاكرة الحية عبر `isCaseAssignedToCurrentDoctor(c)` بحيث لا يتم رسم أي حالة لمريض تابع لطبيب آخر.
+
+3. **على مستوى خادم الـ Backend والـ APIs:**
+   - مسار الملف الطبي السريري `GET /api/patient/medical-profile`: يرفض طلب الطبيب استعراض بيانات أي مريض غير مسند إليه برمز خطأ `403 PATIENT_NOT_ASSIGNED_TO_DOCTOR`.
+   - مسار الخط الزمني الموحد `GET /api/patient/timeline`: دالة `verifyTimelineAccess` في `timeline-service.js` تفحص ارتباط الطبيب بالمريض وترفض الاستعلام برمز `403 PATIENT_NOT_ASSIGNED_TO_DOCTOR` إذا لم يكن الطبيب مسنداً لأي فحص أو موعد مع المريض.
+
+4. **على مستوى قاعدة البيانات العلائقية (PostgreSQL / Supabase RLS):**
+   - سياسة RLS `doctor_assigned_patients_only` على جدول `patients`: تحصر استعلام `SELECT` بالمرضى المسندين للطبيب فقط.
+   - سياسة RLS `doctor_assigned_cases_only` على جدول `clinical_cases`: تمنع استعراض أو تعديل الحالات التابعة لأطباء آخرين.
+   - سياسة RLS `doctor_patient_history_access` على جدول `patient_history`: تمنع الطبيب من استعراض التاريخ الطبي لمرضى خارج عيادته واختصاصه.
+
+
+

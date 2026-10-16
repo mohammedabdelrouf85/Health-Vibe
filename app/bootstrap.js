@@ -13,6 +13,20 @@
       document.documentElement.classList.remove("hv-theme-light");
       document.documentElement.classList.add("hv-theme-dark");
     }
+
+    // Early language and direction sync (PRD 5.1)
+    var initialLang = localStorage.getItem("hv_lang");
+    if (!initialLang) {
+      var navLang = (navigator.language || (navigator.languages && navigator.languages[0]) || "").toLowerCase();
+      initialLang = navLang.indexOf("ar") === 0 ? "ar" : "en";
+    }
+    if (initialLang === "ar") {
+      document.documentElement.lang = "ar";
+      document.documentElement.dir = "rtl";
+    } else {
+      document.documentElement.lang = "en";
+      document.documentElement.dir = "ltr";
+    }
     var hasSession = false;
     if (!hasSession) {
       for (var i = 0; i < localStorage.length; i++) {
@@ -45,6 +59,28 @@
     }
   }
 
+  function dismissLoader(immediate) {
+    if (typeof window.dismissLoader === "function" && window.dismissLoader !== dismissLoader) {
+      return window.dismissLoader(immediate);
+    }
+    var loader = document.getElementById("loader");
+    if (!loader) return;
+    loader.classList.add("is-done");
+    loader.style.setProperty("display", "none", "important");
+    loader.style.setProperty("pointer-events", "none", "important");
+    loader.style.setProperty("opacity", "0", "important");
+    loader.style.setProperty("visibility", "hidden", "important");
+    loader.setAttribute("aria-hidden", "true");
+    if (typeof loader.remove === "function" && loader.parentNode) {
+      loader.remove();
+    }
+  }
+
   window.showAuth = showAuth;
   window.hideAuth = hideAuth;
+  window.dismissLoader = dismissLoader;
+
+  window.addEventListener("load", function() {
+    window.dismissLoader();
+  }, { once: true });
 })();

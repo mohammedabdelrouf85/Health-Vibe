@@ -111,7 +111,7 @@
   function renderHeader(container) {
     const role = global.currentUserRole || "patient";
     const title = t("hypertension.moduleTitle") || "Hypertension Clinical Module";
-    const category = t("nav.disease") || "Disease";
+    const category = t("nav.disease") || "Clinical Triage & Differential Assessment";
     const statusText = activeBundle?.profileRecord?.isDocumented
       ? (t("hypertension.activeMonitoring") || "Active Monitoring")
       : (t("hypertension.underPrep") || "Under Preparation");

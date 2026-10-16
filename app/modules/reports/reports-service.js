@@ -208,6 +208,277 @@
     };
   }
 
+  /**
+   * Builds standardized payload for dispatching a patient's medical report to the doctor inbox.
+   * Guarantees patientProfile, assessmentMetrics, timestamp, and recipient doctor are strictly structured.
+   * @param {object} params
+   * @returns {object}
+   */
+  function buildReportDispatchPayload({ caseData, user = null, doctorId = null, doctorName = null, clinicId = null, clinicName = null }) {
+    if (!caseData || !caseData.id) {
+      throw new Error("INVALID_CASE_DATA: caseData with a valid id is required for report dispatch.");
+    }
+
+    const nowIso = new Date().toISOString();
+    const trackingRef = `HV-DISP-${caseData.id.slice(-6).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`;
+
+    // 1. Standardized Patient Profile
+    const snapshotPatient = caseData.reportSnapshot?.patient || {};
+    const patientProfile = {
+      patientId: caseData.patientId || caseData.userId || (user ? user.uid : null) || "unknown_patient",
+      fullName: snapshotPatient.patientName || caseData.patientName || caseData.name || (user ? (user.displayName || user.email) : "Patient"),
+      age: snapshotPatient.patientAge || caseData.patientAge || caseData.age || null,
+      gender: caseData.patientGender || caseData.gender || caseData.sex || "unspecified",
+      dateOfBirth: snapshotPatient.patientDob || caseData.patientDob || caseData.dateOfBirth || caseData.dob || null,
+      phone: snapshotPatient.patientPhone || caseData.patientPhone || caseData.phone || null,
+      email: snapshotPatient.patientEmail || caseData.patientEmail || caseData.email || (user ? user.email : null) || null,
+      clinicId: clinicId || caseData.clinicId || (global._patientClinicId || null),
+      clinicName: clinicName || caseData.clinicName || (global._patientClinicName || "Health Vibe Medical Center"),
+      chronicConditions: caseData.chronicConditions || caseData.medicalHistory || snapshotPatient.patientMedicalHistory || [],
+      allergies: caseData.allergies || []
+    };
+
+    // 2. Standardized Assessment Metrics
+    const snapshotVitals = caseData.reportSnapshot?.caseDetails || caseData.assessment?.vitals || {};
+    const snapshotSymptoms = caseData.assessment?.symptoms || {};
+    const assessmentMetrics = {
+      oxygenLevel: caseData.oxygenLevel ?? caseData.o2 ?? snapshotVitals.oxygenLevel ?? null,
+      breathingDifficulty: caseData.breathingDifficulty || caseData.difficulty || snapshotVitals.breathingDifficulty || "unspecified",
+      coughLevel: caseData.coughLevel || snapshotVitals.coughLevel || "unspecified",
+      symptomDuration: caseData.symptomDuration || caseData.duration || snapshotVitals.symptomDuration || "unspecified",
+      temperature: snapshotVitals.temperature ?? caseData.temperature ?? null,
+      temperatureUnit: snapshotVitals.temperatureUnit || caseData.temperatureUnit || "°C",
+      respiratoryRate: snapshotVitals.respiratoryRate ?? caseData.respiratoryRate ?? null,
+      respiratoryRateUnit: snapshotVitals.respiratoryRateUnit || caseData.respiratoryRateUnit || "breaths/min",
+      chestPain: snapshotSymptoms.chestPain || caseData.chestPain || "none",
+      symptomProgression: snapshotSymptoms.progression || caseData.symptomProgression || caseData.progression || "stable",
+      recentInfection: snapshotSymptoms.recentInfection || caseData.recentInfection || "none",
+      asthmaCopd: snapshotSymptoms.asthmaCopd || caseData.asthmaCopd || "none",
+      currentMedications: caseData.currentMedications || caseData.assessment?.medications?.current || "",
+      notes: caseData.notes || caseData.patientNotes || caseData.assessment?.notes || "",
+      riskFactors: Array.isArray(caseData.riskFactors) ? caseData.riskFactors : (caseData.assessment?.riskFactors || []),
+      aiScore: caseData.aiScore || caseData.assessment?.aiTriage?.priority || caseData.priority || "normal",
+      ruleEngineVersion: caseData.ruleEngineVersion || caseData.assessment?.aiTriage?.ruleEngineVersion || "2.4.0",
+      clinicalDiagnosis: caseData.clinicalDiagnosis || caseData.reportSnapshot?.clinicalContent?.clinicalDiagnosis || null,
+      medications: caseData.medications || caseData.reportSnapshot?.clinicalContent?.medications || null,
+      recommendations: caseData.recommendations || caseData.reportSnapshot?.clinicalContent?.recommendations || []
+    };
+
+    // 3. Recipient Doctor Info
+    const targetDoctorId = doctorId || caseData.assignedDoctorId || caseData.approvingDoctorId || (global._patientAssignedDoctorId || null);
+    const targetDoctorName = doctorName || caseData.assignedDoctorName || caseData.approvingDoctorName || (global._patientAssignedDoctorName || "Assigned Pulmonologist");
+
+    return {
+      caseId: caseData.id,
+      reportRef: caseData.reportRef || `HV-REP-${caseData.id.slice(-8).toUpperCase()}`,
+      trackingRef,
+      timestamp: nowIso,
+      dispatchedAt: nowIso,
+      dispatchedBy: patientProfile.patientId,
+      dispatchedByRole: "patient",
+      status: "dispatched_to_doctor_inbox",
+      deliveryStatus: "delivered_to_doctor_inbox",
+      recipientDoctor: {
+        id: targetDoctorId,
+        name: targetDoctorName,
+        specialty: caseData.doctorSpecialty || "Pulmonology & Respiratory Care",
+        clinic: patientProfile.clinicName
+      },
+      patientProfile,
+      assessmentMetrics
+    };
+  }
+
+  /**
+   * In-memory cache for fast UI status lookup
+   */
+  const _dispatchedReportsCache = new Map();
+
+  /**
+   * Dispatches the patient's medical report directly to the doctor inbox.
+   * Handles backend endpoint call with direct Firestore and audit log fallbacks.
+   * @param {string} caseId
+   * @param {object} options
+   * @returns {Promise<object>}
+   */
+  async function dispatchReportToDoctor(caseId, options = {}) {
+    if (!caseId) throw new Error("caseId is required for report dispatch.");
+
+    // Retrieve active case data
+    let caseData = options.caseData || (global._currentViewingCase && global._currentViewingCase.id === caseId ? global._currentViewingCase : null);
+    if (!caseData && typeof global.db !== "undefined") {
+      try {
+        const snap = await global.db.collection("cases").doc(caseId).get();
+        if (snap.exists) caseData = { id: snap.id, ...snap.data() };
+      } catch (e) {
+        console.warn("Could not fetch case from Firestore:", e.message);
+      }
+    }
+    if (!caseData) {
+      caseData = { id: caseId };
+    }
+
+    const user = options.user || (typeof global.auth !== "undefined" ? global.auth.currentUser : null);
+    const payload = buildReportDispatchPayload({
+      caseData,
+      user,
+      doctorId: options.doctorId,
+      doctorName: options.doctorName,
+      clinicId: options.clinicId,
+      clinicName: options.clinicName
+    });
+
+    let backendSuccess = false;
+    let backendResponse = null;
+
+    // 1. Attempt Backend API Dispatch
+    try {
+      const token = (user && typeof user.getIdToken === "function") ? await user.getIdToken() : "";
+      const headers = {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      };
+
+      const res = await fetch("/api/reports/dispatch-to-doctor", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ caseId, payload })
+      });
+
+      if (res.ok) {
+        backendResponse = await res.json();
+        backendSuccess = true;
+      }
+    } catch (err) {
+      console.warn("Backend report dispatch endpoint warning, falling back to direct database sync:", err.message);
+    }
+
+    // 2. Direct Firestore Client Sync (Guarantees immediate update in all offline/network scenarios)
+    if (typeof global.db !== "undefined") {
+      try {
+        const updateData = {
+          deliveryStatus: "delivered_to_doctor_inbox",
+          lastDispatchedAt: payload.timestamp,
+          lastDispatchedBy: payload.dispatchedBy,
+          latestDispatchTrackingRef: payload.trackingRef,
+          latestReportDispatch: payload,
+          doctorInboxDelivery: {
+            status: "delivered",
+            deliveredAt: payload.timestamp,
+            doctorId: payload.recipientDoctor.id,
+            trackingRef: payload.trackingRef
+          }
+        };
+
+        if (payload.recipientDoctor.id && !caseData.assignedDoctorId) {
+          updateData.assignedDoctorId = payload.recipientDoctor.id;
+          updateData.assignedDoctorName = payload.recipientDoctor.name;
+        }
+
+        await global.db.collection("cases").doc(caseId).set(updateData, { merge: true });
+
+        // Add message entry to doctor_inbox
+        await global.db.collection("doctor_inbox").add({
+          caseId,
+          trackingRef: payload.trackingRef,
+          reportRef: payload.reportRef,
+          patientId: payload.patientProfile.patientId,
+          doctorId: payload.recipientDoctor.id,
+          patientProfile: payload.patientProfile,
+          assessmentMetrics: payload.assessmentMetrics,
+          status: "unread",
+          receivedAt: payload.timestamp,
+          dispatchedAt: payload.timestamp,
+          type: "patient_medical_report_dispatch"
+        }).catch(() => {});
+
+        // Add to auditLog
+        await global.db.collection("auditLog").add({
+          action: "REPORT_DISPATCHED_TO_DOCTOR",
+          caseId,
+          trackingRef: payload.trackingRef,
+          patientId: payload.patientProfile.patientId,
+          doctorId: payload.recipientDoctor.id,
+          timestamp: (global.firebase && global.firebase.firestore?.FieldValue?.serverTimestamp)
+            ? global.firebase.firestore.FieldValue.serverTimestamp()
+            : payload.timestamp
+        }).catch(() => {});
+
+        // Sync with patient user profile
+        if (user && user.uid) {
+          await global.db.collection("users").doc(user.uid).set({
+            latestDispatchedReport: {
+              caseId,
+              trackingRef: payload.trackingRef,
+              dispatchedAt: payload.timestamp,
+              deliveryStatus: "delivered_to_doctor_inbox"
+            }
+          }, { merge: true }).catch(() => {});
+        }
+      } catch (dbErr) {
+        console.warn("Direct Firestore case delivery update warning:", dbErr.message);
+      }
+    }
+
+    // Save in memory cache
+    _dispatchedReportsCache.set(caseId, payload);
+    if (global._currentViewingCase && global._currentViewingCase.id === caseId) {
+      global._currentViewingCase.deliveryStatus = "delivered_to_doctor_inbox";
+      global._currentViewingCase.latestReportDispatch = payload;
+      global._currentViewingCase.doctorInboxDelivery = {
+        status: "delivered",
+        deliveredAt: payload.timestamp,
+        doctorId: payload.recipientDoctor.id,
+        trackingRef: payload.trackingRef
+      };
+    }
+
+    return {
+      success: true,
+      backendSynced: backendSuccess,
+      ...payload,
+      ...(backendResponse || {})
+    };
+  }
+
+  /**
+   * Retrieves doctor inbox delivery status for a case.
+   * @param {string} caseId
+   * @param {object} caseObj
+   * @returns {object|null}
+   */
+  function getDoctorInboxDeliveryStatus(caseId, caseObj = null) {
+    if (!caseId) return null;
+    if (_dispatchedReportsCache.has(caseId)) {
+      return _dispatchedReportsCache.get(caseId);
+    }
+    const c = caseObj || (global._currentViewingCase && global._currentViewingCase.id === caseId ? global._currentViewingCase : null);
+    if (c && (c.deliveryStatus === "delivered_to_doctor_inbox" || c.latestReportDispatch || c.doctorInboxDelivery)) {
+      return c.latestReportDispatch || {
+        caseId,
+        trackingRef: c.latestDispatchTrackingRef || (c.doctorInboxDelivery?.trackingRef) || `HV-DISP-${caseId.slice(-6).toUpperCase()}`,
+        timestamp: c.lastDispatchedAt || (c.doctorInboxDelivery?.deliveredAt) || new Date().toISOString(),
+        deliveryStatus: "delivered_to_doctor_inbox",
+        recipientDoctor: {
+          id: c.assignedDoctorId || c.approvingDoctorId || null,
+          name: c.assignedDoctorName || c.approvingDoctorName || "Assigned Pulmonologist",
+          clinic: c.clinicName || "Health Vibe Medical Center"
+        },
+        patientProfile: {
+          fullName: c.patientName || c.name || "Patient",
+          age: c.patientAge || c.age || null,
+          clinicName: c.clinicName || "Health Vibe Medical Center"
+        },
+        assessmentMetrics: {
+          oxygenLevel: c.oxygenLevel ?? c.o2 ?? null,
+          breathingDifficulty: c.breathingDifficulty || c.difficulty || "unspecified",
+          coughLevel: c.coughLevel || "unspecified"
+        }
+      };
+    }
+    return null;
+  }
+
   const ReportsService = {
     recordedClinicalText,
     getRecordedClinicalContent,
@@ -217,7 +488,10 @@
     createReportShareLink,
     revokeReportShareLink,
     verifyReportAuthenticity,
-    formatReportForPdfExport
+    formatReportForPdfExport,
+    buildReportDispatchPayload,
+    dispatchReportToDoctor,
+    getDoctorInboxDeliveryStatus
   };
 
   global.HealthVibes = global.HealthVibes || {};

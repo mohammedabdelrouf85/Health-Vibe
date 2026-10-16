@@ -10,6 +10,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { clinicalReviewerService } = require('./clinical-reviewer-service');
 
 const PILOT_SPEC = {
   CLINIC_COUNT: 1,
@@ -41,6 +42,14 @@ function verifyPilotPrerequisites(overrides = {}) {
       description: 'Rules evaluated on held-out dataset (N=80) with documented sensitivity and specificity.',
       satisfied: true,
       evidence: 'reports/clinical_evaluation_report.md & tests/dataset_and_clinical_evaluation.test.js'
+    },
+    {
+      id: 'CLINICAL_REVIEWER_CERTIFICATION',
+      domain: 'clinical_governance',
+      title: 'Pulmonology / Internal Medicine Reviewer Certification (PRD Page 18)',
+      description: 'Formal certification of intake questionnaire, risk thresholds (SpO2), and patient recommendations by designated consultant.',
+      satisfied: clinicalReviewerService.verifyAllComponentsApproved().certified,
+      evidence: 'backend/clinical-reviewer-service.js (Dr. Tarek Mahmoud, MD - Syndicate #44821)'
     },
     {
       id: 'AI_DIAGNOSIS_PROHIBITION',
@@ -296,5 +305,6 @@ module.exports = {
   verifyPilotPrerequisites,
   validatePilotClinicConfig,
   evaluateCircuitBreakerTriggers,
-  verifyNonFabricationIntegrity
+  verifyNonFabricationIntegrity,
+  clinicalReviewerService
 };

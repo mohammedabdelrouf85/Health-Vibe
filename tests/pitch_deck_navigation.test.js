@@ -168,7 +168,7 @@ assert.ok(pitchContent.includes("function renderSlideContent(slideNum, lang)"), 
 assert.ok(pitchContent.includes("function renderAllSlides(lang)"), "renderAllSlides must exist");
 assert.ok(pitchContent.includes("function applyDeckLang(lang)"), "applyDeckLang must exist");
 assert.ok(pitchContent.includes("renderAllSlides(lang);"), "applyDeckLang must call renderAllSlides");
-assert.ok(pitchContent.includes("showSlide(currentSlide);"), "applyDeckLang must re-render current slide index");
+assert.ok(pitchContent.includes("showSlide(currentSlide);") || pitchContent.includes("showSlide(preservedSlide);"), "applyDeckLang must re-render current slide index");
 
 // Verify that all 11 slides have translations defined
 for (let i = 1; i <= 11; i++) {
