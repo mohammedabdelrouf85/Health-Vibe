@@ -1790,9 +1790,109 @@ function setDialogAccessibility(dialog, isOpen) {
   }
 }
 
+// =============================================================================
+// 🪟 UNIVERSAL MODAL & DIALOG BACKDROP DISMISSAL (Click Outside to Close)
+// =============================================================================
+function closeAnyOpenModal(targetModal) {
+  if (!targetModal) return;
+
+  // Specific close handlers by ID
+  if (targetModal.id === "authScreen") {
+    if (typeof hideAuth === "function") hideAuth();
+    return;
+  }
+  if (targetModal.id === "feedbackModal") {
+    if (typeof closeFeedbackModal === "function") closeFeedbackModal();
+    return;
+  }
+  if (targetModal.id === "verifyRequiredModal") {
+    if (typeof closeVerifyRequiredModal === "function") closeVerifyRequiredModal();
+    return;
+  }
+  if (targetModal.id === "emergencyGuideModal") {
+    if (typeof closeEmergencyGuideModal === "function") closeEmergencyGuideModal();
+    return;
+  }
+  if (targetModal.id === "emergencySubmitModal") {
+    if (typeof closeEmergencySubmitModal === "function") closeEmergencySubmitModal();
+    return;
+  }
+  if (targetModal.id === "confirmAssessmentModal") {
+    if (typeof closeConfirmAssessmentModal === "function") closeConfirmAssessmentModal();
+    return;
+  }
+  if (targetModal.id === "rulesGovernanceModal") {
+    if (typeof closeRulesGovernanceModal === "function") closeRulesGovernanceModal();
+    return;
+  }
+  if (targetModal.id === "legalModal") {
+    if (typeof closeLegalModal === "function") closeLegalModal();
+    return;
+  }
+  if (targetModal.id === "confirmModal") {
+    if (typeof closeApprovalModal === "function") closeApprovalModal();
+    return;
+  }
+  if (targetModal.id === "deleteAccountModal") {
+    if (typeof closeDeleteAccountModal === "function") closeDeleteAccountModal();
+    return;
+  }
+  if (targetModal.id === "retentionPolicyModal") {
+    if (typeof closeRetentionPolicyModal === "function") closeRetentionPolicyModal();
+    return;
+  }
+  if (targetModal.id === "privacyDataModal") {
+    if (typeof closePrivacyDataModal === "function") closePrivacyDataModal();
+    return;
+  }
+  if (targetModal.id === "patientLogBpModal") {
+    if (typeof closeLogBpModal === "function") closeLogBpModal();
+    return;
+  }
+  if (targetModal.id === "doctorTourModal") {
+    if (typeof closeDoctorTourModal === "function") closeDoctorTourModal();
+    return;
+  }
+  if (targetModal.id === "centralErrorModal") {
+    if (typeof window.closeCentralErrorModal === "function") {
+      window.closeCentralErrorModal();
+      return;
+    }
+  }
+
+  // Universal close button click fallback if present inside the modal
+  const closeBtn = targetModal.querySelector(".close-button, [data-modal-close], .btn-close, .modal-close-btn, button[onclick*='close'], button[onclick*='hide'], button[aria-label*='إغلاق'], button[aria-label*='Close']");
+  if (closeBtn && typeof closeBtn.click === "function") {
+    closeBtn.click();
+    return;
+  }
+
+  // Generic fallback teardown
+  targetModal.classList.remove("open");
+  targetModal.setAttribute("aria-hidden", "true");
+  if (targetModal.style.display && targetModal.style.display !== "none") {
+    targetModal.style.display = "none";
+  }
+  setDialogAccessibility(targetModal, false);
+}
+
+window.closeAnyOpenModal = closeAnyOpenModal;
+
 function initializeDialogAccessibility() {
-  const dialogs = document.querySelectorAll(".confirm-modal, .modal-overlay, .auth-screen");
+  const dialogs = document.querySelectorAll(".confirm-modal, .modal-overlay, .auth-screen, [role='dialog'], [role='alertdialog']");
   dialogs.forEach((dialog) => {
+    // Backdrop click listener to close modal when clicking on the empty area outside content
+    if (!dialog._hasBackdropListener) {
+      dialog._hasBackdropListener = true;
+      dialog.addEventListener("click", (e) => {
+        if (dialog.id === "idleLockScreen") return; // HIPAA security lock requires password/auth
+        const innerCard = e.target.closest(".confirm-card, .auth-card, .modal-card, .modal-content, .card, .dialog-box, [role='document']");
+        if (!innerCard || e.target === dialog) {
+          closeAnyOpenModal(dialog);
+        }
+      });
+    }
+
     setDialogAccessibility(dialog, dialog.classList.contains("open") || dialog.style.display === "grid" || dialog.style.display === "flex");
     const observer = new MutationObserver(() => {
       const isOpen = dialog.classList.contains("open") || dialog.style.display === "grid" || dialog.style.display === "flex";
@@ -1800,6 +1900,32 @@ function initializeDialogAccessibility() {
     });
     observer.observe(dialog, { attributes: true, attributeFilter: ["class", "style"] });
   });
+
+  // Global escape key handler to close topmost open dialog
+  if (!window._hasGlobalDialogEscapeListener) {
+    window._hasGlobalDialogEscapeListener = true;
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" || e.key === "Esc") {
+        const openModals = Array.from(document.querySelectorAll(".confirm-modal.open, .modal-overlay, .auth-screen.open, [role='dialog'][aria-hidden='false'], [role='alertdialog'][aria-hidden='false']"))
+          .filter(m => m.id !== "idleLockScreen" && (m.classList.contains("open") || (m.style.display && m.style.display !== "none")));
+        if (openModals.length > 0) {
+          const topModal = openModals[openModals.length - 1];
+          closeAnyOpenModal(topModal);
+        }
+      }
+    });
+
+    // Global document-level click listener as an extra safeguard for dynamically created modals
+    document.addEventListener("click", (e) => {
+      const openModal = e.target.closest(".confirm-modal.open, .modal-overlay, .auth-screen.open, [role='dialog'][aria-hidden='false'], [role='alertdialog'][aria-hidden='false']");
+      if (openModal && openModal.id !== "idleLockScreen") {
+        const innerCard = e.target.closest(".confirm-card, .auth-card, .modal-card, .modal-content, .card, .dialog-box, [role='document']");
+        if (!innerCard || e.target === openModal) {
+          closeAnyOpenModal(openModal);
+        }
+      }
+    });
+  }
 }
 
 function getApiBaseUrl() {
