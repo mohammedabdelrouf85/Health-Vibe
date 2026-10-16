@@ -188,6 +188,7 @@
   global.HealthVibes = global.HealthVibes || {};
   global.HealthVibes.ExternalGatewayClient = ExternalGatewayClient;
   global.ExternalApiGateway = ExternalGatewayClient;
+  global.ExternalGatewayClient = ExternalGatewayClient;
 
   if (typeof module !== "undefined" && module.exports) {
     module.exports = ExternalGatewayClient;

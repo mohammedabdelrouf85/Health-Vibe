@@ -20079,19 +20079,45 @@ async function handleSendChatMessage() {
       : `👨‍⚕️ <strong>بيانات الطبيب المعتمد للتقرير:</strong><br><br>• <strong>الطبيب:</strong> ${docName}<br>• <strong>رقم ترخيص النقابة:</strong> <code>${docLicense}</code><br>• <strong>الحالة:</strong> تقرير طبي معتمد وموقع رقمياً`;
     botResponse += makeSourceLink("Doctor Identity & Credentials", "بيانات واعتماد الطبيب وترخيص النقابة");
   } else {
-    const shortRecs = recs.slice(0, 2).map((rec, i) => `${i + 1}. ${rec}`).join("<br>");
-    botResponse = isEn
-      ? `📋 <strong>Summary of Certified Report (#${rId} by ${docName}):</strong><br><br>` +
-        `🩺 <strong>Doctor's Diagnosis:</strong> ${diag}<br><br>` +
-        `💊 <strong>Doctor's Prescription:</strong><br>${meds.replace(/\n/g, '<br>')}<br><br>` +
-        `💡 <strong>Key Instructions:</strong><br>${shortRecs}<br><br>` +
-        `<em>You may ask to explain terminology, clarify specific items, or prepare questions for your doctor.</em>`
-      : `📋 <strong>ملخص تقريرك الطبي المعتمد (#${rId} بواسطة ${docName}):</strong><br><br>` +
-        `🩺 <strong>تشخيص الطبيب المعتمد:</strong> ${diag}<br><br>` +
-        `💊 <strong>العلاج المعتمد من الطبيب:</strong><br>${meds.replace(/\n/g, '<br>')}<br><br>` +
-        `💡 <strong>أهم التعليمات:</strong><br>${shortRecs}<br><br>` +
-        `<em>يمكنك سؤالي لشرح المصطلحات الطبية، أو توضيح أي نقطة في التقرير، أو تجهيز أسئلة لمناقشتها مع الطبيب.</em>`;
-    botResponse += makeSourceLink("Full Certified Report", "السجل الطبي المعتمد بالكامل");
+    let gatewayProcessed = false;
+    if (typeof window !== "undefined" && window.ExternalGatewayClient && typeof window.ExternalGatewayClient.askChatbot === "function") {
+      try {
+        const gwResult = await window.ExternalGatewayClient.askChatbot({
+          query,
+          language: isEn ? "en" : "ar",
+          certifiedReport: {
+            clinicalDiagnosis: diag,
+            medications: meds,
+            doctorName: docName,
+            reportId: rId
+          }
+        });
+        if (gwResult && gwResult.text) {
+          botResponse = gwResult.text.replace(/\n/g, '<br>');
+          if (gwResult.fallbackExecuted) {
+            botResponse += `<div style="margin-top: 8px; font-size: 11px; opacity: 0.8; color: #0284c7;">ℹ️ ${isEn ? "Resilient Fallback Mode Active (Req 57 Rate Limit Protection)" : "وضع الأمان البديل مفعّل (حماية حدود الاستخدام Req 57)"}</div>`;
+          }
+          gatewayProcessed = true;
+        }
+      } catch (gwErr) {
+        console.warn("[Assistant] ExternalGatewayClient error, using certified summary fallback:", gwErr);
+      }
+    }
+    if (!gatewayProcessed) {
+      const shortRecs = recs.slice(0, 2).map((rec, i) => `${i + 1}. ${rec}`).join("<br>");
+      botResponse = isEn
+        ? `📋 <strong>Summary of Certified Report (#${rId} by ${docName}):</strong><br><br>` +
+          `🩺 <strong>Doctor's Diagnosis:</strong> ${diag}<br><br>` +
+          `💊 <strong>Doctor's Prescription:</strong><br>${meds.replace(/\n/g, '<br>')}<br><br>` +
+          `💡 <strong>Key Instructions:</strong><br>${shortRecs}<br><br>` +
+          `<em>You may ask to explain terminology, clarify specific items, or prepare questions for your doctor.</em>`
+        : `📋 <strong>ملخص تقريرك الطبي المعتمد (#${rId} بواسطة ${docName}):</strong><br><br>` +
+          `🩺 <strong>تشخيص الطبيب المعتمد:</strong> ${diag}<br><br>` +
+          `💊 <strong>العلاج المعتمد من الطبيب:</strong><br>${meds.replace(/\n/g, '<br>')}<br><br>` +
+          `💡 <strong>أهم التعليمات:</strong><br>${shortRecs}<br><br>` +
+          `<em>يمكنك سؤالي لشرح المصطلحات الطبية، أو توضيح أي نقطة في التقرير، أو تجهيز أسئلة لمناقشتها مع الطبيب.</em>`;
+      botResponse += makeSourceLink("Full Certified Report", "السجل الطبي المعتمد بالكامل");
+    }
   }
 
   botResponse += disclaimerHtml;
