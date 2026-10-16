@@ -614,5 +614,27 @@
     "version": "1.0.0",
     "status": "deployed",
     "deployedAt": "2026-10-16T23:11:59.292Z"
+  },
+  {
+    "releaseId": "rel_production_1792192920149",
+    "timestamp": "2026-10-16T23:22:00.149Z",
+    "environment": "production",
+    "projectId": "health-vibes-a4b3b",
+    "gitCommit": "64760ca07ddf2f59ce5f498f43235c177ffec1af",
+    "gitBranch": "main",
+    "version": "1.0.0",
+    "status": "failed",
+    "error": "Command failed: node \"D:\\MY PC\\Coding\\Health Vibe Ai\\node_modules\\firebase-tools\\lib\\bin\\firebase.js\" deploy --project health-vibes-a4b3b --only hosting,firestore:rules --non-interactive"
+  },
+  {
+    "releaseId": "rel_production_1792192962648",
+    "timestamp": "2026-10-16T23:22:42.648Z",
+    "environment": "production",
+    "projectId": "health-vibes-a4b3b",
+    "gitCommit": "64760ca07ddf2f59ce5f498f43235c177ffec1af",
+    "gitBranch": "main",
+    "version": "1.0.0",
+    "status": "deployed",
+    "deployedAt": "2026-10-16T23:22:57.036Z"
   }
 ]
