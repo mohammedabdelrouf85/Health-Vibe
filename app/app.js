@@ -17517,15 +17517,21 @@ window.updateDoctorMiniKpiBar = updateDoctorMiniKpiBar;
 // ==========================================================================
 
 function toggleSidebarDrawer(forceState) {
-  if (typeof forceState === "boolean") {
-    document.body.classList.toggle("sidebar-open", forceState);
-  } else {
-    document.body.classList.toggle("sidebar-open");
-  }
+  const isOpen = (typeof forceState === "boolean")
+    ? document.body.classList.toggle("sidebar-open", forceState)
+    : document.body.classList.toggle("sidebar-open");
+  const menuBtn = document.getElementById("menuToggle");
+  if (menuBtn) menuBtn.setAttribute("aria-expanded", isOpen ? "true" : "false");
+  const mobileNavMenuBtn = document.getElementById("mobileNavMenuBtn");
+  if (mobileNavMenuBtn) mobileNavMenuBtn.setAttribute("aria-expanded", isOpen ? "true" : "false");
 }
 
 function closeSidebarDrawer() {
   document.body.classList.remove("sidebar-open");
+  const menuBtn = document.getElementById("menuToggle");
+  if (menuBtn) menuBtn.setAttribute("aria-expanded", "false");
+  const mobileNavMenuBtn = document.getElementById("mobileNavMenuBtn");
+  if (mobileNavMenuBtn) mobileNavMenuBtn.setAttribute("aria-expanded", "false");
 }
 
 function updateMobileBottomNav() {
@@ -17580,17 +17586,18 @@ function updateMobileBottomNav() {
 
   navContainer.innerHTML = items.map(item => {
     if (item.isMenu) {
+      const isDrawerOpen = document.body && document.body.classList.contains("sidebar-open");
       return `
-        <button type="button" class="mobile-nav-btn" id="mobileNavMenuBtn" onclick="toggleSidebarDrawer()" aria-label="${item.label}">
-          <span class="mobile-nav-icon">${item.icon}</span>
+        <button type="button" class="mobile-nav-btn" id="mobileNavMenuBtn" onclick="toggleSidebarDrawer()" aria-label="${item.label}" aria-expanded="${isDrawerOpen ? 'true' : 'false'}" aria-controls="appSidebar">
+          <span class="mobile-nav-icon" aria-hidden="true">${item.icon}</span>
           <span class="mobile-nav-label">${item.label}</span>
         </button>
       `;
     }
     const isActive = activeScreenName === item.screen;
     return `
-      <button type="button" class="mobile-nav-btn ${isActive ? 'active' : ''}" data-mobile-screen="${item.screen}" onclick="showScreen('${item.screen}')" aria-label="${item.label}">
-        <span class="mobile-nav-icon">${item.icon}</span>
+      <button type="button" class="mobile-nav-btn ${isActive ? 'active' : ''}" data-mobile-screen="${item.screen}" onclick="showScreen('${item.screen}')" aria-label="${item.label}" aria-current="${isActive ? 'page' : 'false'}">
+        <span class="mobile-nav-icon" aria-hidden="true">${item.icon}</span>
         <span class="mobile-nav-label">${item.label}</span>
       </button>
     `;

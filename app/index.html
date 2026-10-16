@@ -378,7 +378,7 @@
     <!-- Mobile Drawer Backdrop Overlay -->
     <div id="sidebarBackdrop" class="sidebar-backdrop" onclick="closeSidebarDrawer()" aria-hidden="true"></div>
 
-    <aside class="sidebar" aria-label="التنقل داخل التطبيق">
+    <aside class="sidebar" id="appSidebar" aria-label="التنقل داخل التطبيق">
       <div class="brand">
         <img src="./logo-dark-mark.webp" alt="Health Vibe AI" class="brand-logo" data-logo-mark loading="lazy" decoding="async" />
         <div>
@@ -474,7 +474,7 @@
 
     <section class="workspace" aria-labelledby="screenTitle">
       <header class="topbar">
-        <button id="menuToggle" class="icon-button" aria-label="Toggle menu">☰</button>
+        <button id="menuToggle" class="icon-button" aria-label="تبديل القائمة / Toggle menu" aria-expanded="false" aria-controls="appSidebar">☰</button>
         <div>
           <p>Health Vibe AI</p>
           <h2 id="screenTitle">Home</h2>
