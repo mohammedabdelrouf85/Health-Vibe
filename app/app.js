@@ -15395,6 +15395,16 @@ async function renderAdminAppointmentAnalytics(serverAnalytics = null) {
     setText("adminApptCancellationCount", isEn
       ? `${summary.totalCancelled || 0} cancelled`
       : `${summary.totalCancelled || 0} إلغاء`);
+
+    setText("adminDoctorScheduleUpdatesCount", String(summary.scheduleUpdateCount || 0));
+    setText("adminDoctorAvgDuration", isEn
+      ? `Avg Duration: ${summary.averageSlotDurationMinutes || 30} mins`
+      : `متوسط مدة الكشف: ${summary.averageSlotDurationMinutes || 30} دقيقة`);
+
+    setText("adminDoctorLeavesCount", String(summary.leaveRequestsCount || 0));
+    setText("adminDoctorBranchCoverage", isEn
+      ? `Branch Coverage: ${summary.branchCoverageRate || 0}% active`
+      : `تغطية الفروع: ${summary.branchCoverageRate || 0}% فروع نشطة`);
   } catch (err) {
     console.error("renderAdminAppointmentAnalytics error:", err);
   }

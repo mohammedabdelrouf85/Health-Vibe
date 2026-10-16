@@ -56,7 +56,9 @@ const EVENT_TYPES = Object.freeze({
   // 🏥 Doctor Schedule & Branch Manager Telemetry
   DOCTOR_SCHEDULE_UPDATED: 'doctor_schedule_updated',
   DOCTOR_LEAVE_REQUESTED: 'doctor_leave_requested',
-  DOCTOR_LEAVE_CANCELLED: 'doctor_leave_cancelled'
+  DOCTOR_LEAVE_CANCELLED: 'doctor_leave_cancelled',
+  DOCTOR_SCHEDULE_VIEWED: 'doctor_schedule_viewed',
+  DOCTOR_SLOTS_ACCESSED: 'doctor_slots_accessed'
 });
 
 const FORBIDDEN_MEDICAL_KEYS = Object.freeze([
@@ -149,7 +151,9 @@ function sanitizeAndValidatePayload(eventType, payload = {}) {
     'timeOfDay', 'slotId', 'date', 'weekOffset', 'action', 'reason', 'errorCode', 'failureReason',
     'price', 'currency', 'hasAttachedReport', 'hasAttachedDossier', 'isDoctorReview', 'isPostBookingLinkage', 'actorRole',
     // Doctor Schedule & Branch Manager metadata
-    'branchId', 'bufferBetweenSlotsMinutes', 'leaveType', 'emergencyOverride', 'startDate', 'endDate', 'leaveId'
+    'branchId', 'bufferBetweenSlotsMinutes', 'slotDurationMinutes', 'leaveType', 'reasonType',
+    'emergencyOverride', 'startDate', 'endDate', 'leaveId', 'conflictingAppointmentsCount',
+    'conflictingCount', 'slotsCount', 'workingDaysCount', 'isPrivileged', 'actorUid'
   ];
 
   for (const [k, v] of Object.entries(payload)) {
@@ -942,6 +946,54 @@ function calculateAppointmentKpis(events = inMemoryEvents, options = {}) {
 
   const selfRate = totalBookings > 0 ? Number(((selfCount / totalBookings) * 100).toFixed(1)) : null;
 
+  // 🗓️ Doctor Schedule & Branch Manager Analytics (TabeebHub Model)
+  const scheduleUpdates = apptEvents.filter(e => matchType(e, EVENT_TYPES.DOCTOR_SCHEDULE_UPDATED));
+  const leaveRequests = apptEvents.filter(e => matchType(e, EVENT_TYPES.DOCTOR_LEAVE_REQUESTED));
+  const leaveCancellations = apptEvents.filter(e => matchType(e, EVENT_TYPES.DOCTOR_LEAVE_CANCELLED));
+
+  const scheduleUpdateCount = scheduleUpdates.length;
+  const leaveRequestsCount = leaveRequests.length;
+  const leaveCancellationsCount = leaveCancellations.length;
+
+  let totalSlotDuration = 0;
+  let durationCount = 0;
+  const branchScheduleBreakdown = {
+    cairo_nasr_city: 0,
+    cairo_maadi: 0,
+    giza_dokki: 0,
+    alex_smouha: 0
+  };
+
+  scheduleUpdates.forEach(e => {
+    const p = e.payload || e.properties || {};
+    if (p.slotDurationMinutes) {
+      totalSlotDuration += Number(p.slotDurationMinutes);
+      durationCount++;
+    }
+    const b = p.branchId || '';
+    if (b === 'all') {
+      branchScheduleBreakdown.cairo_nasr_city++;
+      branchScheduleBreakdown.cairo_maadi++;
+      branchScheduleBreakdown.giza_dokki++;
+      branchScheduleBreakdown.alex_smouha++;
+    } else if (branchScheduleBreakdown[b] !== undefined) {
+      branchScheduleBreakdown[b]++;
+    }
+  });
+
+  const averageSlotDurationMinutes = durationCount > 0
+    ? Math.round(totalSlotDuration / durationCount)
+    : 30;
+
+  let totalConflictedBookings = 0;
+  leaveRequests.forEach(e => {
+    const p = e.payload || e.properties || {};
+    totalConflictedBookings += Number(p.conflictingAppointmentsCount || p.conflictingCount || 0);
+  });
+
+  const configuredBranchesCount = Object.values(branchScheduleBreakdown).filter(c => c > 0).length;
+  const branchCoverageRate = Number(((configuredBranchesCount / 4) * 100).toFixed(1));
+
   return {
     timePeriod: periodLabel,
     views,
@@ -963,10 +1015,18 @@ function calculateAppointmentKpis(events = inMemoryEvents, options = {}) {
       morningCount,
       eveningCount,
       selfCount,
-      dependentCount
+      dependentCount,
+      branchScheduleBreakdown
     },
     doctorUtilization: docUtilizationMap,
     doctorBreakdown,
+    scheduleUpdateCount,
+    leaveRequestsCount,
+    leaveCancellationsCount,
+    averageSlotDurationMinutes,
+    branchCoverageRate,
+    branchScheduleBreakdown,
+    totalConflictedBookings,
     summary: {
       totalAttempts,
       totalBookings,
@@ -993,7 +1053,15 @@ function calculateAppointmentKpis(events = inMemoryEvents, options = {}) {
       totalWithDossier: effectiveDossierBookings,
       dossierAttachmentRate: dossierAttachmentRate.rate,
       doctorPrevisitReviews: doctorDossierReviews,
-      previsitDoctorReviewRate: previsitDoctorReviewRate.rate
+      previsitDoctorReviewRate: previsitDoctorReviewRate.rate,
+      // Doctor Schedule Manager summary keys
+      scheduleUpdateCount,
+      leaveRequestsCount,
+      leaveCancellationsCount,
+      averageSlotDurationMinutes,
+      branchCoverageRate,
+      branchScheduleBreakdown,
+      totalConflictedBookings
     },
     bookingSuccessRate,
     telehealthRatio,

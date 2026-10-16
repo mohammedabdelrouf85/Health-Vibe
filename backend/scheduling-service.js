@@ -3087,7 +3087,18 @@ async function getAppointmentAnalytics(db, options = {}) {
       totalWithDossier: filteredDbAppointments.filter(a => Boolean(a.hasAttachedReport || a.linkedCaseId)).length,
       dossierAttachmentRate: totalDb > 0 ? Number(((filteredDbAppointments.filter(a => Boolean(a.hasAttachedReport || a.linkedCaseId)).length / totalDb) * 100).toFixed(1)) : null,
       doctorPrevisitReviews: telemetryKpis?.summary?.doctorPrevisitReviews || 0,
-      previsitDoctorReviewRate: telemetryKpis?.summary?.previsitDoctorReviewRate !== undefined ? telemetryKpis.summary.previsitDoctorReviewRate : null
+      previsitDoctorReviewRate: telemetryKpis?.summary?.previsitDoctorReviewRate !== undefined ? telemetryKpis.summary.previsitDoctorReviewRate : null,
+      scheduleUpdateCount: telemetryKpis?.summary?.scheduleUpdateCount || 0,
+      leaveRequestsCount: telemetryKpis?.summary?.leaveRequestsCount || 0,
+      leaveCancellationsCount: telemetryKpis?.summary?.leaveCancellationsCount || 0,
+      averageSlotDurationMinutes: telemetryKpis?.summary?.averageSlotDurationMinutes || 30,
+      branchCoverageRate: telemetryKpis?.summary?.branchCoverageRate || 0,
+      branchScheduleBreakdown: telemetryKpis?.summary?.branchScheduleBreakdown || {
+        cairo_nasr_city: 0,
+        cairo_maadi: 0,
+        giza_dokki: 0,
+        alex_smouha: 0
+      }
     };
   }
 
@@ -3107,7 +3118,11 @@ async function getAppointmentAnalytics(db, options = {}) {
       inClinic: filteredDbAppointments.filter(a => !a.isOnlineConsultation && a.consultationType !== 'video').length,
       video: filteredDbAppointments.filter(a => a.consultationType === 'video').length,
       followup: filteredDbAppointments.filter(a => a.consultationType === 'followup').length,
-      commuteRelief: filteredDbAppointments.filter(a => Boolean(a.commuteReliefActive || a.consultationType === 'video' || a.consultationType === 'followup')).length
+      commuteRelief: filteredDbAppointments.filter(a => Boolean(a.commuteReliefActive || a.consultationType === 'video' || a.consultationType === 'followup')).length,
+      scheduleUpdateCount: telemetryKpis?.scheduleUpdateCount || 0,
+      leaveRequestsCount: telemetryKpis?.leaveRequestsCount || 0,
+      averageSlotDurationMinutes: telemetryKpis?.averageSlotDurationMinutes || 30,
+      branchCoverageRate: telemetryKpis?.branchCoverageRate || 0
     }
   };
 }

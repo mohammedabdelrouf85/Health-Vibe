@@ -856,7 +856,12 @@
         minDurationGuardrail: "مدة الكشف لا يمكن أن تقل عن 15 دقيقة لضمان الفحص السريري الدقيق",
         shiftExceedsLimit: "وردية العمل المتصلة لا يمكن أن تتجاوز 12 ساعة لتفادي إجهاد الطبيب",
         doctorOnLeaveBookingBlocked: "عذراً، الطبيب في إجازة معتمدة بهذا التاريخ، يرجى اختيار تاريخ بديل",
-        branchSpecificLeave: "إجازة خاصة بهذا الفرع فقط"
+        branchSpecificLeave: "إجازة خاصة بهذا الفرع فقط",
+        scheduleUpdatesTitle: "تحديثات جدول الطبيب",
+        leaveRequestsTitle: "الإجازات والاستثناءات الطارئة",
+        avgSlotDurationTitle: "متوسط مدة الكشف",
+        branchCoverageTitle: "تغطية الفروع النشطة",
+        branchScheduleBreakdownTitle: "توزيع جداول العمل على الفروع المصرية"
       },
       feedback: {
         title: "التقييم والآراء السريرية",
@@ -2163,7 +2168,12 @@
         minDurationGuardrail: "Consultation duration cannot be less than 15 minutes to guarantee thorough clinical examination.",
         shiftExceedsLimit: "Continuous shift cannot exceed 12 hours to prevent clinician cognitive fatigue.",
         doctorOnLeaveBookingBlocked: "Doctor is on approved leave on this date. Please select an alternative date.",
-        branchSpecificLeave: "Leave applies specifically to this branch only"
+        branchSpecificLeave: "Leave applies specifically to this branch only",
+        scheduleUpdatesTitle: "Doctor Schedule Updates",
+        leaveRequestsTitle: "Emergency Leaves & Exceptions",
+        avgSlotDurationTitle: "Average Slot Duration",
+        branchCoverageTitle: "Active Branch Coverage",
+        branchScheduleBreakdownTitle: "Working Schedule Distribution across Egyptian Branches"
       },
       feedback: {
         title: "Clinical Feedback & Rating",

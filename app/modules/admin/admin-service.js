@@ -370,6 +370,11 @@
     CONSULTATION_TYPE_SELECTED: 'consultation_type_selected',
     COMMUTE_RELIEF_VIEWED: 'commute_relief_viewed',
     CONSULTATION_MODE_SWITCHED: 'consultation_mode_switched',
+    DOCTOR_SCHEDULE_UPDATED: 'doctor_schedule_updated',
+    DOCTOR_LEAVE_REQUESTED: 'doctor_leave_requested',
+    DOCTOR_LEAVE_CANCELLED: 'doctor_leave_cancelled',
+    DOCTOR_SCHEDULE_VIEWED: 'doctor_schedule_viewed',
+    DOCTOR_SLOTS_ACCESSED: 'doctor_slots_accessed',
     VIEW: 'appointment_view',
     SLOT_SELECTED: 'appointment_slot_selected',
     BOOK_ATTEMPT: 'appointment_book_attempt',
@@ -513,6 +518,57 @@
       docUtilizationMap[docId] = { bookings: count, doctorId: docId };
     });
 
+    // 🗓️ Doctor Schedule & Branch Manager Analytics
+    const scheduleUpdates = events.filter(e => {
+      const t = (e.eventType || e.type || '').toLowerCase();
+      return t === 'doctor_schedule_updated';
+    });
+    const leaveRequests = events.filter(e => {
+      const t = (e.eventType || e.type || '').toLowerCase();
+      return t === 'doctor_leave_requested';
+    });
+    const leaveCancellations = events.filter(e => {
+      const t = (e.eventType || e.type || '').toLowerCase();
+      return t === 'doctor_leave_cancelled';
+    });
+
+    const scheduleUpdateCount = scheduleUpdates.length;
+    const leaveRequestsCount = leaveRequests.length;
+    const leaveCancellationsCount = leaveCancellations.length;
+
+    let totalSlotDuration = 0;
+    let durationCount = 0;
+    const branchScheduleBreakdown = {
+      cairo_nasr_city: 0,
+      cairo_maadi: 0,
+      giza_dokki: 0,
+      alex_smouha: 0
+    };
+
+    scheduleUpdates.forEach(e => {
+      const p = e.payload || e.properties || {};
+      if (p.slotDurationMinutes) {
+        totalSlotDuration += Number(p.slotDurationMinutes);
+        durationCount++;
+      }
+      const b = p.branchId || '';
+      if (b === 'all') {
+        branchScheduleBreakdown.cairo_nasr_city++;
+        branchScheduleBreakdown.cairo_maadi++;
+        branchScheduleBreakdown.giza_dokki++;
+        branchScheduleBreakdown.alex_smouha++;
+      } else if (branchScheduleBreakdown[b] !== undefined) {
+        branchScheduleBreakdown[b]++;
+      }
+    });
+
+    const averageSlotDurationMinutes = durationCount > 0
+      ? Math.round(totalSlotDuration / durationCount)
+      : 30;
+
+    const configuredBranchesCount = Object.values(branchScheduleBreakdown).filter(c => c > 0).length;
+    const branchCoverageRate = Number(((configuredBranchesCount / 4) * 100).toFixed(1));
+
     const naText = isEn ? 'Unavailable' : 'غير متاح';
 
     return {
@@ -537,7 +593,14 @@
         morningPreferenceRate,
         familyDependentRate,
         selfBookingRate,
-        emergencyRedirects: emergencyIntercepts
+        emergencyRedirects: emergencyIntercepts,
+        // Doctor Schedule metrics
+        scheduleUpdateCount,
+        leaveRequestsCount,
+        leaveCancellationsCount,
+        averageSlotDurationMinutes,
+        branchCoverageRate,
+        branchScheduleBreakdown
       },
       total,
       confirmed,
@@ -573,6 +636,16 @@
       eveningPreferenceRateDisplay: eveningPreferenceRate !== null ? `${eveningPreferenceRate}%` : naText,
       eveningPreferenceRateDisplayAr: eveningPreferenceRate !== null ? `${eveningPreferenceRate}%` : 'غير متاح',
       familyDependentRate,
+      scheduleUpdateCount,
+      scheduleUpdateCountDisplay: `${scheduleUpdateCount}`,
+      leaveRequestsCount,
+      leaveRequestsCountDisplay: `${leaveRequestsCount}`,
+      leaveCancellationsCount,
+      averageSlotDurationMinutes,
+      averageSlotDurationDisplay: isEn ? `${averageSlotDurationMinutes} mins avg` : `${averageSlotDurationMinutes} دقيقة متوسط`,
+      branchCoverageRate,
+      branchCoverageDisplay: isEn ? `${branchCoverageRate}% branches active` : `${branchCoverageRate}% فروع نشطة`,
+      branchScheduleBreakdown,
       familyDependentRateDisplay: familyDependentRate !== null ? `${familyDependentRate}%` : naText,
       familyDependentRateDisplayAr: familyDependentRate !== null ? `${familyDependentRate}%` : 'غير متاح',
       cancellationRate,
