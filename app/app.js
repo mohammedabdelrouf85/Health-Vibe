@@ -7083,8 +7083,17 @@ async function handleEmailAuth(e) {
   }
 
   setAuthLoading(true);
+  try {
+    localStorage.removeItem("hv_explicit_logout");
+    sessionStorage.removeItem("hv_explicit_logout");
+  } catch (e) {}
 
   try {
+    const activeAuth = (typeof auth !== "undefined" && auth) || (typeof firebase !== "undefined" && firebase.auth ? firebase.auth() : null);
+    if (!activeAuth) {
+      throw new Error(isEn ? "Authentication service is loading. Please try again." : "جاري تشغيل خدمة المصادقة، يرجى المحاولة بعد لحظات.");
+    }
+
     try {
       await Promise.race([
         applyAuthPersistence(remember),
@@ -7096,7 +7105,7 @@ async function handleEmailAuth(e) {
 
     const cleanEmail = email.toLowerCase().trim();
     if (authMode === "signup") {
-      const cred = await auth.createUserWithEmailAndPassword(cleanEmail, password);
+      const cred = await activeAuth.createUserWithEmailAndPassword(cleanEmail, password);
       const user = cred.user;
       const displayName = name || cleanEmail.split("@")[0];
       try {
@@ -7160,13 +7169,19 @@ async function handleEmailAuth(e) {
       const targetScreen = (selectedRole === ROLES.PATIENT || selectedRole === "patient") ? "complete-medical-profile" : undefined;
       transitionToApp(user, { targetScreen, isNewSignup: true });
     } else {
-      const cred = await auth.signInWithEmailAndPassword(cleanEmail, password);
-      const user = cred.user || auth.currentUser;
+      const cred = await activeAuth.signInWithEmailAndPassword(cleanEmail, password);
+      const user = cred.user || activeAuth.currentUser;
 
       // Authoritatively resolve user role and cached profile from Firestore before UI transition
       try {
-        const userDoc = await db.collection("users").doc(user.uid).get();
-        if (userDoc.exists) {
+        const userDocPromise = (typeof db !== "undefined" && db && typeof db.collection === "function")
+          ? db.collection("users").doc(user.uid).get()
+          : Promise.resolve(null);
+        const userDoc = await Promise.race([
+          userDocPromise,
+          new Promise((_, rej) => setTimeout(() => rej(new Error("firestore_timeout")), 4000))
+        ]);
+        if (userDoc && userDoc.exists) {
           const udata = userDoc.data();
           window._cachedUserDoc = udata;
           const isOwner = isOwnerUser(user.email);
@@ -7556,6 +7571,16 @@ async function enterApp(source = "google") {
                              (typeof googleProvider !== "undefined" ? googleProvider : null) ||
                              (typeof firebase !== "undefined" && firebase.auth && firebase.auth.GoogleAuthProvider ? new firebase.auth.GoogleAuthProvider() : null);
 
+      if (activeProvider) {
+        if (typeof activeProvider.addScope === "function") {
+          activeProvider.addScope("email");
+          activeProvider.addScope("profile");
+        }
+        if (typeof activeProvider.setCustomParameters === "function") {
+          activeProvider.setCustomParameters({ prompt: "select_account" });
+        }
+      }
+
       const activeAuth = (typeof auth !== "undefined" && auth) || (typeof firebase !== "undefined" && firebase.auth ? firebase.auth() : null);
 
       // 3. Initiate Google OAuth flow with mobile-friendly redirect & popup fail-safes
@@ -7577,7 +7602,7 @@ async function enterApp(source = "google") {
           const errCode = String(popupErr.code || "").toLowerCase();
 
           // If popup was blocked or closed prematurely by mobile browser, fallback to seamless redirect
-          if ((errCode === "auth/popup-blocked" || errCode === "auth/cancelled-popup-request" || errCode === "auth/popup-closed-by-user" && isMobileDevice) && typeof activeAuth.signInWithRedirect === "function") {
+          if ((errCode === "auth/popup-blocked" || errCode === "auth/cancelled-popup-request" || (errCode === "auth/popup-closed-by-user" && isMobileDevice)) && typeof activeAuth.signInWithRedirect === "function") {
             console.warn("[Health Vibe] Google popup interrupted. Falling back to redirect sign-in flow...");
             try {
               await activeAuth.signInWithRedirect(activeProvider);
@@ -7597,12 +7622,22 @@ async function enterApp(source = "google") {
                 category: isEn ? "Domain Security" : "أمان النطاق والتسجيل",
                 title: isEn ? "Domain Awaiting Firebase Authorization" : "النطاق بانتظار الاعتماد في Firebase",
                 message: isEn
-                  ? `The domain "${currentHost}" is not yet registered in Firebase Console (Authentication > Settings > Authorized Domains).`
-                  : `النطاق "${currentHost}" يحتاج إلى إضافته في قائمة النطاقات المعتمدة (Authorized Domains) في إعدادات Firebase Authentication.`,
+                  ? `The domain "${currentHost}" is awaiting authorization in Firebase Console. You can sign in right now using Email & Password, or click to sign in with Google directly through the authorized primary domain.`
+                  : `النطاق "${currentHost}" بانتظار الاعتماد في Firebase Console. يمكنك تسجيل الدخول بالبريد الإلكتروني فوراً، أو الضغط بالأسفل للدخول عبر جوجل من الرابط المعتمد.`,
                 action: isEn
                   ? `You can sign in right now using Email & Password, or sign in with Google directly through: ${primaryDomain}`
                   : `يمكنك تسجيل الدخول الآن باستخدام البريد الإلكتروني وكلمة المرور أدناه، أو تسجيل الدخول عبر جوجل من الرابط المعتمد: ${primaryDomain}`
               });
+            }
+            if (currentHost !== "health-vibes-a4b3b.web.app") {
+              const shouldRedirect = confirm(isEn
+                ? `Domain "${currentHost}" is awaiting Google OAuth authorization.\n\nWould you like to sign in with Google via the authorized primary domain (${primaryDomain})?`
+                : `النطاق "${currentHost}" بانتظار تفعيل Google OAuth في Firebase Console.\n\nهل ترغب في تسجيل الدخول عبر جوجل فوراً من النطاق الأساسي المعتمد (${primaryDomain})؟`
+              );
+              if (shouldRedirect) {
+                window.location.href = `${primaryDomain}/index.html?action=google-signin`;
+                return;
+              }
             }
           }
 
@@ -19491,12 +19526,39 @@ function initHVAuthListener() {
 
   // Process redirect result if browser redirected after Google sign-in
   if (typeof auth !== "undefined" && auth && typeof auth.getRedirectResult === "function") {
-    auth.getRedirectResult().then((result) => {
+    auth.getRedirectResult().then(async (result) => {
       if (result && result.user) {
         try {
           localStorage.removeItem("hv_explicit_logout");
           sessionStorage.removeItem("hv_explicit_logout");
         } catch (e) {}
+        const user = result.user;
+        const isOwner = isOwnerUser(user.email);
+        let userRole = isOwner ? ROLES.SUPER_ADMIN : ROLES.PATIENT;
+        try {
+          if (typeof db !== "undefined" && db && typeof db.collection === "function") {
+            const userDocPromise = db.collection("users").doc(user.uid).get();
+            const userDoc = await Promise.race([
+              userDocPromise,
+              new Promise((_, rej) => setTimeout(() => rej(new Error("firestore_timeout")), 4000))
+            ]);
+            if (!userDoc || !userDoc.exists) {
+              await db.collection("users").doc(user.uid).set({
+                name: user.displayName || user.email.split('@')[0],
+                email: user.email,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+              });
+            } else if (userDoc.data().role && VALID_ROLES.includes(userDoc.data().role)) {
+              userRole = userDoc.data().role;
+            }
+          }
+        } catch (dbErr) {
+          console.warn("[Health Vibe] Redirect result firestore note:", dbErr);
+        }
+        selectedRole = userRole;
+        saveActiveSession(user, selectedRole);
+        transitionToApp(user, { navigate: true });
+        showToast(currentLanguage === "en" ? "Signed in with Google" : "تم تسجيل الدخول بحساب جوجل");
       }
     }).catch((redirectErr) => {
       console.warn("[Health Vibe] Redirect result error:", redirectErr);
@@ -19507,6 +19569,18 @@ function initHVAuthListener() {
       }
     });
   }
+
+  // Handle cross-domain one-click Google Sign-in action
+  try {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get("action") === "google-signin") {
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState({}, document.title, cleanUrl);
+      setTimeout(() => {
+        if (typeof enterApp === "function") enterApp("google");
+      }, 500);
+    }
+  } catch (e) {}
 
   auth.onAuthStateChanged(async (user) => {
     window.clearTimeout(loaderSafetyTimer);
