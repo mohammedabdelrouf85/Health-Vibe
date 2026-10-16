@@ -6166,19 +6166,35 @@ async function selectDoctorCase(id) {
     </div>
   `;
 
-  reviewPanel.innerHTML = `
-    ${mobileNavBarHtml}
-    ${persistentHeaderHtml}
-    ${staleRevisionBannerHtml}
-    ${topActionsToolbarHtml}
-    ${reviewTabsHtml}
-    <div id="doctorReviewAriaLive" aria-live="polite" class="sr-only" style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0;"></div>
-    ${inputsSectionHtml}
-    ${clarificationsSectionHtml}
-    ${notesSectionHtml}
-    ${timelineSectionHtml}
-    ${dockedActionsToolbarHtml}
-  `;
+  if (window.HealthVibes?.DoctorReviewCockpit?.renderRologyCockpit) {
+    reviewPanel.innerHTML = `
+      ${mobileNavBarHtml}
+      ${staleRevisionBannerHtml}
+      <div id="doctorReviewAriaLive" aria-live="polite" class="sr-only" style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0;"></div>
+      ${window.HealthVibes.DoctorReviewCockpit.renderRologyCockpit(c, isEn, { doctorName: currentDocName, doctorLicense: currentDocLic })}
+      <!-- Backward compatibility hidden form fields for draft preservation & legacy approval -->
+      <div style="display: none;" aria-hidden="true">
+        <input type="hidden" id="doctorNoteInput" value="${escapeHtml(existingDoctorNote)}" />
+        <textarea id="doctorDiagnosisInput">${escapeHtml(existingDoctorNote)}</textarea>
+        <textarea id="doctorMedicationsInput">${escapeHtml(existingMedications)}</textarea>
+        <textarea id="doctorRecommendationsInput">${escapeHtml(existingRecommendations)}</textarea>
+      </div>
+    `;
+  } else {
+    reviewPanel.innerHTML = `
+      ${mobileNavBarHtml}
+      ${persistentHeaderHtml}
+      ${staleRevisionBannerHtml}
+      ${topActionsToolbarHtml}
+      ${reviewTabsHtml}
+      <div id="doctorReviewAriaLive" aria-live="polite" class="sr-only" style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0;"></div>
+      ${inputsSectionHtml}
+      ${clarificationsSectionHtml}
+      ${notesSectionHtml}
+      ${timelineSectionHtml}
+      ${dockedActionsToolbarHtml}
+    `;
+  }
 
   // Highlight active button in queue
   const queueList = document.getElementById("doctorQueueList");
