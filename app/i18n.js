@@ -838,7 +838,19 @@
         sameSlotSelectedError: "الموعد البديل المختار مطابق تماماً للموعد الحالي.",
         doctorUnavailableError: "الطبيب غير متاح في هذا التاريخ أو اليوم عطلة رسمية للعيادة.",
         emergencyEscalationAlert: "تم رصد مؤشرات حيوية حرجة تتطلب تدخلاً إسعافياً عاجلاً (اتصل بـ 123).",
-        botMutationProhibited: "إجراءات تعديل وإلغاء المواعيد تتطلب تأكيداً بشرياً مباشراً ولا يُسمح للروبوتات الآلية بتنفيذها."
+        botMutationProhibited: "إجراءات تعديل وإلغاء المواعيد تتطلب تأكيداً بشرياً مباشراً ولا يُسمح للروبوتات الآلية بتنفيذها.",
+        // ⚡ Okadoc Analytics & Logging Titles & Labels
+        rescheduleRate: "معدل إعادة الجدولة",
+        rescheduleSuccessRate: "نسبة نجاح إعادة الجدولة",
+        cancellationSuccessRate: "نسبة نجاح الإلغاء",
+        reciprocalAlertDispatchRate: "معدل وصول الإشعارات التبادلية الفورية",
+        oneClickRebookRate: "معدل إعادة الحجز الفوري",
+        rescheduleReasonsBreakdownTitle: "تحليل أسباب إعادة الجدولة",
+        cancellationReasonsBreakdownTitle: "تحليل أسباب الإلغاء",
+        initiatorBreakdownTitle: "تحليل الجهة المبادرة بالتعديل",
+        initiatorPatient: "المرضى",
+        initiatorClinic: "إدارة العيادة",
+        initiatorDoctor: "الأطباء"
       },
       doctorSchedule: {
         title: "جدول الطبيب وإدارة الفروع",
@@ -2179,7 +2191,19 @@
         sameSlotSelectedError: "The selected alternative slot is identical to the current appointment.",
         doctorUnavailableError: "Doctor is unavailable on this date or it is an official clinic closing day.",
         emergencyEscalationAlert: "Critical emergency indicators detected requiring immediate ambulance triage (Call 123).",
-        botMutationProhibited: "Appointment modifications require human confirmation and cannot be executed autonomously by AI chatbots."
+        botMutationProhibited: "Appointment modifications require human confirmation and cannot be executed autonomously by AI chatbots.",
+        // ⚡ Okadoc Analytics & Logging Titles & Labels
+        rescheduleRate: "Reschedule Rate",
+        rescheduleSuccessRate: "Reschedule Success Rate",
+        cancellationSuccessRate: "Cancellation Success Rate",
+        reciprocalAlertDispatchRate: "Instant Reciprocal Notification Rate",
+        oneClickRebookRate: "1-Click Rebooking Rate",
+        rescheduleReasonsBreakdownTitle: "Reschedule Reasons Breakdown",
+        cancellationReasonsBreakdownTitle: "Cancellation Reasons Breakdown",
+        initiatorBreakdownTitle: "Modification Initiator Breakdown",
+        initiatorPatient: "Patients",
+        initiatorClinic: "Clinic Administration",
+        initiatorDoctor: "Doctors"
       },
       doctorSchedule: {
         title: "Doctor Schedule & Branch Manager",

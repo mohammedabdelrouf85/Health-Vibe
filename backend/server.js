@@ -4166,7 +4166,7 @@ app.get('/api/admin/metrics', requireAuth, requireAdmin, async (req, res) => {
  * time of day preference (morning vs evening), safety emergency dropouts,
  * cancellation rate, and doctor utilization.
  */
-app.get('/api/admin/appointments/analytics', requireAuth, requireAdmin, async (req, res) => {
+app.get(['/api/admin/appointments/analytics', '/api/appointments/analytics'], requireAuth, requireAdmin, async (req, res) => {
   try {
     const scope = await resolveRequesterClinic(req);
     const requestedClinic = (req.query.clinicId || req.query.clinic || '').trim();

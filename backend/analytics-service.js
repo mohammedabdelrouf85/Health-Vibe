@@ -58,7 +58,19 @@ const EVENT_TYPES = Object.freeze({
   DOCTOR_LEAVE_REQUESTED: 'doctor_leave_requested',
   DOCTOR_LEAVE_CANCELLED: 'doctor_leave_cancelled',
   DOCTOR_SCHEDULE_VIEWED: 'doctor_schedule_viewed',
-  DOCTOR_SLOTS_ACCESSED: 'doctor_slots_accessed'
+  DOCTOR_SLOTS_ACCESSED: 'doctor_slots_accessed',
+
+  // ⚡ 1-Click Reschedule, Cancellation & Reciprocal Alerts Telemetry (Okadoc Model)
+  APPOINTMENT_RESCHEDULE_ATTEMPT: 'appointment_reschedule_attempt',
+  APPOINTMENT_RESCHEDULE_SUCCESS: 'appointment_reschedule_success',
+  APPOINTMENT_RESCHEDULE_FAILURE: 'appointment_reschedule_failure',
+  APPOINTMENT_CANCEL_ATTEMPT: 'appointment_cancel_attempt',
+  APPOINTMENT_CANCEL_SUCCESS: 'appointment_cancel_success',
+  APPOINTMENT_CANCEL_FAILURE: 'appointment_cancel_failure',
+  RECIPROCAL_NOTIFICATION_DISPATCHED: 'reciprocal_notification_dispatched',
+  ONE_CLICK_REBOOK_CLICKED: 'one_click_rebook_clicked',
+  ONE_CLICK_REBOOK_SUCCESS: 'one_click_rebook_success',
+  CALENDAR_ICS_DOWNLOADED: 'calendar_ics_downloaded'
 });
 
 const FORBIDDEN_MEDICAL_KEYS = Object.freeze([
@@ -738,10 +750,92 @@ function calculateAppointmentKpis(events = inMemoryEvents, options = {}) {
   const attempts = apptEvents.filter(e => matchType(e, EVENT_TYPES.APPOINTMENT_BOOK_ATTEMPT)).length;
   const successes = apptEvents.filter(e => matchType(e, EVENT_TYPES.APPOINTMENT_BOOK_SUCCESS));
   const failures = apptEvents.filter(e => matchType(e, EVENT_TYPES.APPOINTMENT_BOOK_FAILURE)).length;
-  const cancellations = apptEvents.filter(e => matchType(e, EVENT_TYPES.APPOINTMENT_CANCEL)).length;
-  const reschedules = apptEvents.filter(e => matchType(e, EVENT_TYPES.APPOINTMENT_RESCHEDULE)).length;
+  const cancellations = apptEvents.filter(e => matchType(e, EVENT_TYPES.APPOINTMENT_CANCEL) || matchType(e, EVENT_TYPES.APPOINTMENT_CANCEL_SUCCESS)).length;
+  const reschedules = apptEvents.filter(e => matchType(e, EVENT_TYPES.APPOINTMENT_RESCHEDULE) || matchType(e, EVENT_TYPES.APPOINTMENT_RESCHEDULE_SUCCESS)).length;
   const completions = apptEvents.filter(e => matchType(e, EVENT_TYPES.APPOINTMENT_COMPLETE)).length;
   const emergencyIntercepts = apptEvents.filter(e => matchType(e, EVENT_TYPES.APPOINTMENT_EMERGENCY_REDIRECT)).length;
+
+  // ⚡ Okadoc Reschedule, Cancel, and Reciprocal Notification Telemetry Breakdown
+  const rescheduleAttemptEvents = apptEvents.filter(e => matchType(e, EVENT_TYPES.APPOINTMENT_RESCHEDULE_ATTEMPT));
+  const rescheduleSuccessEvents = apptEvents.filter(e => matchType(e, EVENT_TYPES.APPOINTMENT_RESCHEDULE_SUCCESS) || matchType(e, EVENT_TYPES.APPOINTMENT_RESCHEDULE));
+  const rescheduleFailureEvents = apptEvents.filter(e => matchType(e, EVENT_TYPES.APPOINTMENT_RESCHEDULE_FAILURE));
+
+  const rescheduleAttempts = rescheduleAttemptEvents.length;
+  const rescheduleSuccesses = rescheduleSuccessEvents.length;
+  const rescheduleFailures = rescheduleFailureEvents.length;
+  const effectiveRescheduleAttempts = rescheduleAttempts > 0 ? rescheduleAttempts : (rescheduleSuccesses + rescheduleFailures);
+
+  const cancelAttemptEvents = apptEvents.filter(e => matchType(e, EVENT_TYPES.APPOINTMENT_CANCEL_ATTEMPT));
+  const cancelSuccessEvents = apptEvents.filter(e => matchType(e, EVENT_TYPES.APPOINTMENT_CANCEL_SUCCESS) || matchType(e, EVENT_TYPES.APPOINTMENT_CANCEL));
+  const cancelFailureEvents = apptEvents.filter(e => matchType(e, EVENT_TYPES.APPOINTMENT_CANCEL_FAILURE));
+
+  const cancelAttempts = cancelAttemptEvents.length;
+  const cancelSuccesses = cancelSuccessEvents.length;
+  const cancelFailures = cancelFailureEvents.length;
+  const effectiveCancelAttempts = cancelAttempts > 0 ? cancelAttempts : (cancelSuccesses + cancelFailures);
+
+  const reciprocalDispatches = apptEvents.filter(e => matchType(e, EVENT_TYPES.RECIPROCAL_NOTIFICATION_DISPATCHED)).length;
+  const totalModifications = rescheduleSuccesses + cancelSuccesses;
+
+  const rebookClicks = apptEvents.filter(e => matchType(e, EVENT_TYPES.ONE_CLICK_REBOOK_CLICKED)).length;
+  const rebookSuccesses = apptEvents.filter(e => matchType(e, EVENT_TYPES.ONE_CLICK_REBOOK_SUCCESS)).length;
+  const icsDownloads = apptEvents.filter(e => matchType(e, EVENT_TYPES.CALENDAR_ICS_DOWNLOADED)).length;
+
+  // Breakdown of reschedule reasons, cancellation reasons, and initiators
+  const rescheduleReasonsBreakdown = {
+    conflict: 0,
+    emergency: 0,
+    recovered: 0,
+    commute: 0,
+    doctor_request: 0,
+    other: 0
+  };
+  const cancellationReasonsBreakdown = {
+    conflict: 0,
+    emergency: 0,
+    recovered: 0,
+    commute: 0,
+    doctor_request: 0,
+    other: 0
+  };
+
+  const initiatorBreakdown = {
+    patientCount: 0,
+    clinicCount: 0,
+    doctorCount: 0
+  };
+
+  function categorizeModificationReason(raw) {
+    if (!raw) return 'other';
+    const str = String(raw).toLowerCase();
+    if (str.includes('conflict') || str.includes('تعارض') || str.includes('ميعاد') || str.includes('مواعيد') || str.includes('schedule') || str.includes('busy')) return 'conflict';
+    if (str.includes('emergency') || str.includes('طوارئ') || str.includes('طارئ') || str.includes('urgent')) return 'emergency';
+    if (str.includes('recover') || str.includes('تحسن') || str.includes('شفاء') || str.includes('better') || str.includes('healed')) return 'recovered';
+    if (str.includes('commute') || str.includes('traffic') || str.includes('زحام') || str.includes('مواصلات') || str.includes('طريق') || str.includes('distance')) return 'commute';
+    if (str.includes('doctor') || str.includes('clinic') || str.includes('طبيب') || str.includes('عيادة') || str.includes('hospital')) return 'doctor_request';
+    return 'other';
+  }
+
+  function tallyInitiator(role) {
+    const r = String(role || 'patient').toLowerCase();
+    if (r === 'doctor') initiatorBreakdown.doctorCount++;
+    else if (r === 'clinic_admin' || r === 'clinic' || r === 'admin' || r === 'super_admin') initiatorBreakdown.clinicCount++;
+    else initiatorBreakdown.patientCount++;
+  }
+
+  rescheduleSuccessEvents.forEach(e => {
+    const p = e.payload || e.properties || {};
+    const cat = categorizeModificationReason(p.reason || p.rescheduleReason);
+    rescheduleReasonsBreakdown[cat] = (rescheduleReasonsBreakdown[cat] || 0) + 1;
+    tallyInitiator(p.initiatorRole || p.actorRole || p.role || p.rescheduledByRole);
+  });
+
+  cancelSuccessEvents.forEach(e => {
+    const p = e.payload || e.properties || {};
+    const cat = categorizeModificationReason(p.reason || p.cancelReason || p.cancellationReason);
+    cancellationReasonsBreakdown[cat] = (cancellationReasonsBreakdown[cat] || 0) + 1;
+    tallyInitiator(p.initiatorRole || p.actorRole || p.role || p.cancelledByRole);
+  });
 
   const totalBookings = successes.length;
   const totalAttempts = attempts > 0 ? attempts : (totalBookings + failures);
@@ -899,6 +993,64 @@ function calculateAppointmentKpis(events = inMemoryEvents, options = {}) {
     isEn
   });
 
+  // ⚡ Okadoc KPI Metrics
+  const rescheduleRate = buildKpiMetric({
+    name: 'Appointment Reschedule Rate',
+    timePeriod: periodLabel,
+    numeratorName: 'Rescheduled Appointments',
+    numeratorValue: reschedules,
+    denominatorName: 'Total Confirmed Bookings',
+    denominatorValue: totalBookings,
+    unit: '%',
+    isEn
+  });
+
+  const rescheduleSuccessRate = buildKpiMetric({
+    name: 'Appointment Reschedule Success Rate',
+    timePeriod: periodLabel,
+    numeratorName: 'Successful Reschedules',
+    numeratorValue: rescheduleSuccesses,
+    denominatorName: 'Total Reschedule Attempts',
+    denominatorValue: effectiveRescheduleAttempts,
+    unit: '%',
+    isEn
+  });
+
+  const cancellationSuccessRate = buildKpiMetric({
+    name: 'Appointment Cancellation Success Rate',
+    timePeriod: periodLabel,
+    numeratorName: 'Successful Cancellations',
+    numeratorValue: cancelSuccesses,
+    denominatorName: 'Total Cancellation Attempts',
+    denominatorValue: effectiveCancelAttempts,
+    unit: '%',
+    isEn
+  });
+
+  const reciprocalAlertDispatchRate = buildKpiMetric({
+    name: 'Instant Reciprocal Notification Rate',
+    timePeriod: periodLabel,
+    numeratorName: 'Dispatched Reciprocal Notifications',
+    numeratorValue: reciprocalDispatches,
+    denominatorName: 'Total Modifications (Reschedules + Cancellations)',
+    denominatorValue: totalModifications,
+    unit: '%',
+    isEn
+  });
+
+  const clinicInitiatedCancellations = cancellationReasonsBreakdown.doctor_request + initiatorBreakdown.clinicCount;
+  const rebookDenominator = rebookClicks > 0 ? rebookClicks : (clinicInitiatedCancellations > 0 ? clinicInitiatedCancellations : (rebookSuccesses > 0 ? rebookSuccesses : 0));
+  const oneClickRebookRate = buildKpiMetric({
+    name: '1-Click Rebooking Rate',
+    timePeriod: periodLabel,
+    numeratorName: 'Successful 1-Click Rebookings',
+    numeratorValue: rebookSuccesses,
+    denominatorName: 'Clinic Cancellations or Rebook Clicks',
+    denominatorValue: rebookDenominator,
+    unit: '%',
+    isEn
+  });
+
   // Pre-Visit Medical Dossier Metrics (Doctolib Standard)
   const dossierAttachments = apptEvents.filter(e => matchType(e, EVENT_TYPES.DOSSIER_ATTACHED_TO_APPOINTMENT)).length;
   const dossierAccesses = apptEvents.filter(e => matchType(e, EVENT_TYPES.PREVISIT_DOSSIER_ACCESSED));
@@ -1027,13 +1179,32 @@ function calculateAppointmentKpis(events = inMemoryEvents, options = {}) {
     branchCoverageRate,
     branchScheduleBreakdown,
     totalConflictedBookings,
+    rescheduleAttempts,
+    rescheduleSuccesses,
+    rescheduleFailures,
+    cancelAttempts,
+    cancelSuccesses,
+    cancelFailures,
+    reciprocalDispatches,
+    rebookClicks,
+    rebookSuccesses,
+    icsDownloads,
+    rescheduleReasonsBreakdown,
+    cancellationReasonsBreakdown,
+    initiatorBreakdown,
     summary: {
       totalAttempts,
       totalBookings,
       totalCompleted: completions,
       totalCancelled: cancellations,
+      totalRescheduled: reschedules,
       bookingSuccessRate: bookingSuccessRate.rate,
       cancellationRate: cancellationRate.rate,
+      rescheduleRate: rescheduleRate.rate,
+      rescheduleSuccessRate: rescheduleSuccessRate.rate,
+      cancellationSuccessRate: cancellationSuccessRate.rate,
+      reciprocalAlertDispatchRate: reciprocalAlertDispatchRate.rate,
+      oneClickRebookRate: oneClickRebookRate.rate,
       telehealthRatio: telehealthRatio.rate,
       inClinicRatio: inClinicRatio.rate,
       commuteReliefCount,
@@ -1061,7 +1232,21 @@ function calculateAppointmentKpis(events = inMemoryEvents, options = {}) {
       averageSlotDurationMinutes,
       branchCoverageRate,
       branchScheduleBreakdown,
-      totalConflictedBookings
+      totalConflictedBookings,
+      // Okadoc summary keys
+      rescheduleAttempts,
+      rescheduleSuccesses,
+      rescheduleFailures,
+      cancelAttempts,
+      cancelSuccesses,
+      cancelFailures,
+      reciprocalDispatches,
+      rebookClicks,
+      rebookSuccesses,
+      icsDownloads,
+      rescheduleReasonsBreakdown,
+      cancellationReasonsBreakdown,
+      initiatorBreakdown
     },
     bookingSuccessRate,
     telehealthRatio,
@@ -1073,6 +1258,11 @@ function calculateAppointmentKpis(events = inMemoryEvents, options = {}) {
     morningPreferenceRate,
     familyDependentRate,
     cancellationRate,
+    rescheduleRate,
+    rescheduleSuccessRate,
+    cancellationSuccessRate,
+    reciprocalAlertDispatchRate,
+    oneClickRebookRate,
     kpis: {
       bookingSuccessRate,
       telehealthRatio,
@@ -1082,6 +1272,11 @@ function calculateAppointmentKpis(events = inMemoryEvents, options = {}) {
       morningPreferenceRate,
       familyDependentRate,
       cancellationRate,
+      rescheduleRate,
+      rescheduleSuccessRate,
+      cancellationSuccessRate,
+      reciprocalAlertDispatchRate,
+      oneClickRebookRate,
       dossierAttachmentRate,
       previsitDoctorReviewRate
     }

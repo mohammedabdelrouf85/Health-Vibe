@@ -375,6 +375,17 @@
     DOCTOR_LEAVE_CANCELLED: 'doctor_leave_cancelled',
     DOCTOR_SCHEDULE_VIEWED: 'doctor_schedule_viewed',
     DOCTOR_SLOTS_ACCESSED: 'doctor_slots_accessed',
+    // ⚡ Okadoc 1-Click Telemetry Events
+    APPOINTMENT_RESCHEDULE_ATTEMPT: 'appointment_reschedule_attempt',
+    APPOINTMENT_RESCHEDULE_SUCCESS: 'appointment_reschedule_success',
+    APPOINTMENT_RESCHEDULE_FAILURE: 'appointment_reschedule_failure',
+    APPOINTMENT_CANCEL_ATTEMPT: 'appointment_cancel_attempt',
+    APPOINTMENT_CANCEL_SUCCESS: 'appointment_cancel_success',
+    APPOINTMENT_CANCEL_FAILURE: 'appointment_cancel_failure',
+    RECIPROCAL_NOTIFICATION_DISPATCHED: 'reciprocal_notification_dispatched',
+    ONE_CLICK_REBOOK_CLICKED: 'one_click_rebook_clicked',
+    ONE_CLICK_REBOOK_SUCCESS: 'one_click_rebook_success',
+    CALENDAR_ICS_DOWNLOADED: 'calendar_ics_downloaded',
     VIEW: 'appointment_view',
     SLOT_SELECTED: 'appointment_slot_selected',
     BOOK_ATTEMPT: 'appointment_book_attempt',
@@ -383,7 +394,11 @@
     CANCEL: 'appointment_cancel',
     RESCHEDULE: 'appointment_reschedule',
     COMPLETE: 'appointment_complete',
-    EMERGENCY_REDIRECT: 'appointment_emergency_redirect'
+    EMERGENCY_REDIRECT: 'appointment_emergency_redirect',
+    RESCHEDULE_ATTEMPT: 'appointment_reschedule_attempt',
+    RESCHEDULE_SUCCESS: 'appointment_reschedule_success',
+    CANCEL_ATTEMPT: 'appointment_cancel_attempt',
+    CANCEL_SUCCESS: 'appointment_cancel_success'
   });
 
   function calculateAppointmentKpis(appointments = [], options = {}) {
@@ -485,6 +500,110 @@
       return t === 'appointment_emergency_redirect';
     }).length;
 
+    // ⚡ Okadoc Events Telemetry Extraction
+    const matchEvt = (e, target) => {
+      const t = (e.eventType || e.type || '').toLowerCase();
+      return t === target.toLowerCase();
+    };
+
+    const reschedAttempts = events.filter(e => matchEvt(e, 'appointment_reschedule_attempt')).length;
+    const reschedSuccesses = events.filter(e => matchEvt(e, 'appointment_reschedule_success') || matchEvt(e, 'appointment_reschedule')).length;
+    const reschedFailures = events.filter(e => matchEvt(e, 'appointment_reschedule_failure')).length;
+
+    const cancelAttempts = events.filter(e => matchEvt(e, 'appointment_cancel_attempt')).length;
+    const cancelSuccesses = events.filter(e => matchEvt(e, 'appointment_cancel_success') || matchEvt(e, 'appointment_cancel')).length;
+    const cancelFailures = events.filter(e => matchEvt(e, 'appointment_cancel_failure')).length;
+
+    const reciprocalDispatches = events.filter(e => matchEvt(e, 'reciprocal_notification_dispatched')).length;
+    const rebookClicks = events.filter(e => matchEvt(e, 'one_click_rebook_clicked')).length;
+    const rebookSuccesses = events.filter(e => matchEvt(e, 'one_click_rebook_success')).length;
+    const icsDownloads = events.filter(e => matchEvt(e, 'calendar_ics_downloaded')).length;
+
+    const rescheduleReasonsBreakdown = {
+      conflict: 0,
+      emergency: 0,
+      recovered: 0,
+      commute: 0,
+      doctor_request: 0,
+      other: 0
+    };
+    const cancellationReasonsBreakdown = {
+      conflict: 0,
+      emergency: 0,
+      recovered: 0,
+      commute: 0,
+      doctor_request: 0,
+      other: 0
+    };
+    const initiatorBreakdown = {
+      patientCount: 0,
+      clinicCount: 0,
+      doctorCount: 0
+    };
+
+    function categorizeReason(raw) {
+      if (!raw) return 'other';
+      const str = String(raw).toLowerCase();
+      if (str.includes('conflict') || str.includes('تعارض') || str.includes('ميعاد') || str.includes('مواعيد') || str.includes('schedule') || str.includes('busy')) return 'conflict';
+      if (str.includes('emergency') || str.includes('طوارئ') || str.includes('طارئ') || str.includes('urgent')) return 'emergency';
+      if (str.includes('recover') || str.includes('تحسن') || str.includes('شفاء') || str.includes('better') || str.includes('healed')) return 'recovered';
+      if (str.includes('commute') || str.includes('traffic') || str.includes('زحام') || str.includes('مواصلات') || str.includes('طريق') || str.includes('distance')) return 'commute';
+      if (str.includes('doctor') || str.includes('clinic') || str.includes('طبيب') || str.includes('عيادة') || str.includes('hospital')) return 'doctor_request';
+      return 'other';
+    }
+
+    function tallyInitiator(role) {
+      const r = String(role || 'patient').toLowerCase();
+      if (r === 'doctor') initiatorBreakdown.doctorCount++;
+      else if (r === 'clinic_admin' || r === 'clinic' || r === 'admin' || r === 'super_admin') initiatorBreakdown.clinicCount++;
+      else initiatorBreakdown.patientCount++;
+    }
+
+    filteredAppts.forEach(a => {
+      if (a.status === 'rescheduled' || a.rescheduledAt || (Array.isArray(a.history) && a.history.some(h => h.action === 'RESCHEDULED'))) {
+        const lastResched = Array.isArray(a.history) ? [...a.history].reverse().find(h => h.action === 'RESCHEDULED') : null;
+        const cat = categorizeReason(lastResched?.reason || lastResched?.details?.reason || a.rescheduleReason);
+        rescheduleReasonsBreakdown[cat] = (rescheduleReasonsBreakdown[cat] || 0) + 1;
+        tallyInitiator(lastResched?.actorRole || a.rescheduledByRole || a.rescheduledBy);
+      }
+      if (a.status === 'cancelled' || a.cancelledAt || (Array.isArray(a.history) && a.history.some(h => h.action === 'CANCELLED'))) {
+        const lastCancel = Array.isArray(a.history) ? [...a.history].reverse().find(h => h.action === 'CANCELLED') : null;
+        const cat = categorizeReason(lastCancel?.reason || lastCancel?.details?.reason || a.cancelReason || a.cancellationReason);
+        cancellationReasonsBreakdown[cat] = (cancellationReasonsBreakdown[cat] || 0) + 1;
+        tallyInitiator(lastCancel?.actorRole || a.cancelledByRole || a.cancelledBy);
+      }
+    });
+
+    events.forEach(e => {
+      const p = e.payload || e.properties || {};
+      if (matchEvt(e, 'appointment_reschedule_success') || matchEvt(e, 'appointment_reschedule')) {
+        const cat = categorizeReason(p.reason || p.rescheduleReason);
+        rescheduleReasonsBreakdown[cat] = (rescheduleReasonsBreakdown[cat] || 0) + 1;
+        tallyInitiator(p.initiatorRole || p.actorRole || p.role);
+      }
+      if (matchEvt(e, 'appointment_cancel_success') || matchEvt(e, 'appointment_cancel')) {
+        const cat = categorizeReason(p.reason || p.cancelReason || p.cancellationReason);
+        cancellationReasonsBreakdown[cat] = (cancellationReasonsBreakdown[cat] || 0) + 1;
+        tallyInitiator(p.initiatorRole || p.actorRole || p.role);
+      }
+    });
+
+    const effectiveReschedSuccesses = reschedSuccesses > 0 ? reschedSuccesses : rescheduled;
+    const effectiveReschedAttempts = reschedAttempts > 0 ? reschedAttempts : (effectiveReschedSuccesses + reschedFailures);
+    const rescheduleRate = total > 0 ? Number(((effectiveReschedSuccesses / total) * 100).toFixed(1)) : null;
+    const rescheduleSuccessRate = effectiveReschedAttempts > 0 ? Number(((effectiveReschedSuccesses / effectiveReschedAttempts) * 100).toFixed(1)) : null;
+
+    const effectiveCancelSuccesses = cancelSuccesses > 0 ? cancelSuccesses : cancelled;
+    const effectiveCancelAttempts = cancelAttempts > 0 ? cancelAttempts : (effectiveCancelSuccesses + cancelFailures);
+    const cancellationSuccessRate = effectiveCancelAttempts > 0 ? Number(((effectiveCancelSuccesses / effectiveCancelAttempts) * 100).toFixed(1)) : null;
+
+    const totalModifications = effectiveReschedSuccesses + effectiveCancelSuccesses;
+    const reciprocalAlertDispatchRate = totalModifications > 0 ? Number(((reciprocalDispatches / totalModifications) * 100).toFixed(1)) : (reciprocalDispatches > 0 ? 100.0 : null);
+
+    const clinicInitiatedCancels = cancellationReasonsBreakdown.doctor_request + initiatorBreakdown.clinicCount;
+    const rebookDenom = rebookClicks > 0 ? rebookClicks : (clinicInitiatedCancels > 0 ? clinicInitiatedCancels : (rebookSuccesses > 0 ? rebookSuccesses : 0));
+    const oneClickRebookRate = rebookDenom > 0 ? Number(((rebookSuccesses / rebookDenom) * 100).toFixed(1)) : null;
+
     const denominatorSuccess = attempts > 0 ? attempts : (total > 0 ? total : null);
     const numeratorSuccess = successes > 0 ? successes : (confirmed + completed);
     const bookingSuccessRate = denominatorSuccess && denominatorSuccess > 0
@@ -576,8 +695,14 @@
         totalBookings: total,
         totalCompleted: completed,
         totalCancelled: cancelled,
+        totalRescheduled: rescheduled,
         bookingSuccessRate,
         cancellationRate,
+        rescheduleRate,
+        rescheduleSuccessRate,
+        cancellationSuccessRate,
+        reciprocalAlertDispatchRate,
+        oneClickRebookRate,
         telehealthRatio,
         inClinicRatio,
         commuteReliefCount,
@@ -594,6 +719,18 @@
         familyDependentRate,
         selfBookingRate,
         emergencyRedirects: emergencyIntercepts,
+        // Okadoc summary fields
+        reschedAttempts,
+        reschedSuccesses: effectiveReschedSuccesses,
+        cancelAttempts,
+        cancelSuccesses: effectiveCancelSuccesses,
+        reciprocalDispatches,
+        rebookClicks,
+        rebookSuccesses,
+        icsDownloads,
+        rescheduleReasonsBreakdown,
+        cancellationReasonsBreakdown,
+        initiatorBreakdown,
         // Doctor Schedule metrics
         scheduleUpdateCount,
         leaveRequestsCount,
@@ -651,6 +788,25 @@
       cancellationRate,
       cancellationRateDisplay: cancellationRate !== null ? `${cancellationRate}%` : naText,
       cancellationRateDisplayAr: cancellationRate !== null ? `${cancellationRate}%` : 'غير متاح',
+      // ⚡ Okadoc Displays
+      rescheduleRate,
+      rescheduleRateDisplay: rescheduleRate !== null ? `${rescheduleRate}%` : naText,
+      rescheduleRateDisplayAr: rescheduleRate !== null ? `${rescheduleRate}%` : 'غير متاح',
+      rescheduleSuccessRate,
+      rescheduleSuccessRateDisplay: rescheduleSuccessRate !== null ? `${rescheduleSuccessRate}%` : naText,
+      rescheduleSuccessRateDisplayAr: rescheduleSuccessRate !== null ? `${rescheduleSuccessRate}%` : 'غير متاح',
+      cancellationSuccessRate,
+      cancellationSuccessRateDisplay: cancellationSuccessRate !== null ? `${cancellationSuccessRate}%` : naText,
+      cancellationSuccessRateDisplayAr: cancellationSuccessRate !== null ? `${cancellationSuccessRate}%` : 'غير متاح',
+      reciprocalAlertDispatchRate,
+      reciprocalAlertDispatchRateDisplay: reciprocalAlertDispatchRate !== null ? `${reciprocalAlertDispatchRate}%` : naText,
+      reciprocalAlertDispatchRateDisplayAr: reciprocalAlertDispatchRate !== null ? `${reciprocalAlertDispatchRate}%` : 'غير متاح',
+      oneClickRebookRate,
+      oneClickRebookRateDisplay: oneClickRebookRate !== null ? `${oneClickRebookRate}%` : naText,
+      oneClickRebookRateDisplayAr: oneClickRebookRate !== null ? `${oneClickRebookRate}%` : 'غير متاح',
+      rescheduleReasonsBreakdown,
+      cancellationReasonsBreakdown,
+      initiatorBreakdown,
       doctorUtilization: docUtilizationMap,
       doctorUtilizationList: Array.from(docUtilization.entries()).map(([doctorId, count]) => ({ doctorId, count }))
     };

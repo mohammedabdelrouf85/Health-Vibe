@@ -1771,6 +1771,25 @@ async function rescheduleAppointmentTransaction(db, payload, actorUser) {
     throw err;
   }
 
+  // Telemetry: Record appointment reschedule attempt
+  try {
+    analyticsService.recordEvent({
+      eventType: analyticsService.EVENT_TYPES.APPOINTMENT_RESCHEDULE_ATTEMPT,
+      userId: actorUser?.uid || null,
+      clinicId: payload?.clinicId || null,
+      payload: {
+        appointmentId,
+        newDate,
+        newSlotId,
+        initiatorRole: actorUser?.role || 'patient',
+        reason: reason || 'Patient requested reschedule'
+      }
+    });
+  } catch (attErr) {}
+
+  let appointment = null;
+  try {
+
   if (!db || typeof db.collection !== 'function') {
     const err = new Error('Appointment storage is unavailable. Please retry shortly.');
     err.code = 'APPOINTMENT_STORAGE_UNAVAILABLE';
@@ -1787,7 +1806,7 @@ async function rescheduleAppointmentTransaction(db, payload, actorUser) {
     throw err;
   }
 
-  const appointment = snap.data() || {};
+  appointment = snap.data() || {};
 
   // 1. Enforce RBAC permissions
   verifyAppointmentActorPermission(appointment, actorUser, 'reschedule');
@@ -2196,7 +2215,25 @@ async function rescheduleAppointmentTransaction(db, payload, actorUser) {
         clinicId: updatedAppointment.clinicId,
         payload: {
           appointmentId: updatedAppointment.id,
-          doctorId: updatedAppointment.doctorId
+          doctorId: updatedAppointment.doctorId,
+          date: updatedAppointment.date,
+          slotId: updatedAppointment.slotId,
+          initiatorRole: actorUser?.role || 'patient',
+          reason: reason || 'Patient requested reschedule'
+        }
+      });
+
+      analyticsService.recordEvent({
+        eventType: analyticsService.EVENT_TYPES.APPOINTMENT_RESCHEDULE_SUCCESS,
+        userId: actorUser.uid,
+        clinicId: updatedAppointment.clinicId,
+        payload: {
+          appointmentId: updatedAppointment.id,
+          doctorId: updatedAppointment.doctorId,
+          date: updatedAppointment.date,
+          slotId: updatedAppointment.slotId,
+          initiatorRole: actorUser?.role || 'patient',
+          reason: reason || 'Patient requested reschedule'
         }
       });
     } catch (resyncErr) {}
@@ -2208,6 +2245,19 @@ async function rescheduleAppointmentTransaction(db, payload, actorUser) {
         reason,
         initiatorRole: actorUser?.role || 'patient'
       });
+      if (notificationResult && (notificationResult.success || notificationResult.delivered)) {
+        analyticsService.recordEvent({
+          eventType: analyticsService.EVENT_TYPES.RECIPROCAL_NOTIFICATION_DISPATCHED,
+          userId: actorUser.uid,
+          clinicId: updatedAppointment.clinicId,
+          payload: {
+            appointmentId: updatedAppointment.id,
+            action: 'rescheduled',
+            channels: ['sms', 'email'],
+            initiatorRole: actorUser?.role || 'patient'
+          }
+        });
+      }
     } catch (notifErr) {
       console.warn('[RESCHEDULE NOTIFICATION WARNING]:', notifErr.message);
     }
@@ -2218,8 +2268,24 @@ async function rescheduleAppointmentTransaction(db, payload, actorUser) {
       appointment: updatedAppointment,
       notificationResult
     };
-  } finally {
-    releaseLock();
+    } finally {
+      releaseLock();
+    }
+  } catch (err) {
+    try {
+      analyticsService.recordEvent({
+        eventType: analyticsService.EVENT_TYPES.APPOINTMENT_RESCHEDULE_FAILURE,
+        userId: actorUser?.uid || null,
+        clinicId: appointment?.clinicId || payload?.clinicId || null,
+        payload: {
+          appointmentId,
+          errorCode: err.code || 'RESCHEDULE_FAILED',
+          errorMessage: err.message,
+          initiatorRole: actorUser?.role || 'patient'
+        }
+      });
+    } catch (anFailErr) {}
+    throw err;
   }
 }
 
@@ -2246,6 +2312,23 @@ async function cancelAppointmentTransaction(db, targetAppt, actorUser, options =
     throw err;
   }
 
+  // Telemetry: Record appointment cancellation attempt
+  try {
+    analyticsService.recordEvent({
+      eventType: analyticsService.EVENT_TYPES.APPOINTMENT_CANCEL_ATTEMPT,
+      userId: actorUser?.uid || null,
+      clinicId: null,
+      payload: {
+        appointmentId,
+        initiatorRole: actorUser?.role || 'patient',
+        reason: opts.reason || 'User requested cancellation'
+      }
+    });
+  } catch (attErr) {}
+
+  let appt = null;
+  try {
+
   // Enforce physician primacy and protect against autonomous AI bot mutation on cancellation
   appointmentSafetyService.validateAppointmentMutationSafety(opts, actorUser, 'cancel');
 
@@ -2265,7 +2348,7 @@ async function cancelAppointmentTransaction(db, targetAppt, actorUser, options =
     throw err;
   }
 
-  const appt = snap.data() || {};
+  appt = snap.data() || {};
 
   // 1. RBAC Permission Check
   verifyAppointmentActorPermission(appt, actorUser, 'cancel');
@@ -2394,6 +2477,19 @@ async function cancelAppointmentTransaction(db, targetAppt, actorUser, options =
       payload: {
         appointmentId: appt.id || appointmentId,
         doctorId: appt.doctorId,
+        initiatorRole: actorUser?.role || 'patient',
+        reason: opts.reason || 'patient_cancelled'
+      }
+    });
+
+    analyticsService.recordEvent({
+      eventType: analyticsService.EVENT_TYPES.APPOINTMENT_CANCEL_SUCCESS,
+      userId: actorUser.uid,
+      clinicId: appt.clinicId,
+      payload: {
+        appointmentId: appt.id || appointmentId,
+        doctorId: appt.doctorId,
+        initiatorRole: actorUser?.role || 'patient',
         reason: opts.reason || 'patient_cancelled'
       }
     });
@@ -2406,6 +2502,19 @@ async function cancelAppointmentTransaction(db, targetAppt, actorUser, options =
       reason: opts.reason,
       initiatorRole: actorUser?.role || 'patient'
     });
+    if (notificationResult && (notificationResult.success || notificationResult.delivered)) {
+      analyticsService.recordEvent({
+        eventType: analyticsService.EVENT_TYPES.RECIPROCAL_NOTIFICATION_DISPATCHED,
+        userId: actorUser.uid,
+        clinicId: appt.clinicId,
+        payload: {
+          appointmentId: appt.id || appointmentId,
+          action: 'cancelled',
+          channels: ['sms', 'email'],
+          initiatorRole: actorUser?.role || 'patient'
+        }
+      });
+    }
   } catch (notifErr) {
     console.warn('[CANCEL NOTIFICATION WARNING]:', notifErr.message);
   }
@@ -2417,6 +2526,22 @@ async function cancelAppointmentTransaction(db, targetAppt, actorUser, options =
     appointment: finalCancelledAppt,
     notificationResult
   };
+  } catch (err) {
+    try {
+      analyticsService.recordEvent({
+        eventType: analyticsService.EVENT_TYPES.APPOINTMENT_CANCEL_FAILURE,
+        userId: actorUser?.uid || null,
+        clinicId: appt?.clinicId || null,
+        payload: {
+          appointmentId,
+          errorCode: err.code || 'CANCEL_FAILED',
+          errorMessage: err.message,
+          initiatorRole: actorUser?.role || 'patient'
+        }
+      });
+    } catch (failEvtErr) {}
+    throw err;
+  }
 }
 
 // ============================================================================
@@ -3169,11 +3294,98 @@ async function getAppointmentAnalytics(db, options = {}) {
 
     const totalSlots = morningCount + eveningCount;
 
+    const rescheduledAppts = filteredDbAppointments.filter(a =>
+      a.status === APPOINTMENT_STATUSES.RESCHEDULED ||
+      a.status === 'rescheduled' ||
+      Boolean(a.rescheduledAt) ||
+      (Array.isArray(a.history) && a.history.some(h => h.action === 'RESCHEDULED'))
+    );
+    const totalRescheduled = rescheduledAppts.length;
+    const rescheduleRate = totalDb > 0 ? Number(((totalRescheduled / totalDb) * 100).toFixed(1)) : null;
+
+    // Reschedule & cancellation reasons breakdown from database records
+    const rescheduleReasonsBreakdown = {
+      conflict: 0,
+      emergency: 0,
+      recovered: 0,
+      commute: 0,
+      doctor_request: 0,
+      other: 0
+    };
+    const cancellationReasonsBreakdown = {
+      conflict: 0,
+      emergency: 0,
+      recovered: 0,
+      commute: 0,
+      doctor_request: 0,
+      other: 0
+    };
+    const initiatorBreakdown = {
+      patientCount: 0,
+      clinicCount: 0,
+      doctorCount: 0
+    };
+
+    function categorizeReason(raw) {
+      if (!raw) return 'other';
+      const str = String(raw).toLowerCase();
+      if (str.includes('conflict') || str.includes('تعارض') || str.includes('ميعاد') || str.includes('مواعيد') || str.includes('schedule') || str.includes('busy')) return 'conflict';
+      if (str.includes('emergency') || str.includes('طوارئ') || str.includes('طارئ') || str.includes('urgent')) return 'emergency';
+      if (str.includes('recover') || str.includes('تحسن') || str.includes('شفاء') || str.includes('better') || str.includes('healed')) return 'recovered';
+      if (str.includes('commute') || str.includes('traffic') || str.includes('زحام') || str.includes('مواصلات') || str.includes('طريق') || str.includes('distance')) return 'commute';
+      if (str.includes('doctor') || str.includes('clinic') || str.includes('طبيب') || str.includes('عيادة') || str.includes('hospital')) return 'doctor_request';
+      return 'other';
+    }
+
+    function tallyInitiator(role) {
+      const r = String(role || 'patient').toLowerCase();
+      if (r === 'doctor') initiatorBreakdown.doctorCount++;
+      else if (r === 'clinic_admin' || r === 'clinic' || r === 'admin' || r === 'super_admin') initiatorBreakdown.clinicCount++;
+      else initiatorBreakdown.patientCount++;
+    }
+
+    rescheduledAppts.forEach(a => {
+      const lastResched = Array.isArray(a.history) ? [...a.history].reverse().find(h => h.action === 'RESCHEDULED') : null;
+      const cat = categorizeReason(lastResched?.reason || lastResched?.details?.reason || a.rescheduleReason);
+      rescheduleReasonsBreakdown[cat] = (rescheduleReasonsBreakdown[cat] || 0) + 1;
+      tallyInitiator(lastResched?.actorRole || a.rescheduledByRole || a.rescheduledBy);
+    });
+
+    const cancelledAppts = filteredDbAppointments.filter(a => a.status === APPOINTMENT_STATUSES.CANCELLED || a.status === 'cancelled');
+    cancelledAppts.forEach(a => {
+      const lastCancel = Array.isArray(a.history) ? [...a.history].reverse().find(h => h.action === 'CANCELLED') : null;
+      const cat = categorizeReason(lastCancel?.reason || lastCancel?.details?.reason || a.cancelReason || a.cancellationReason);
+      cancellationReasonsBreakdown[cat] = (cancellationReasonsBreakdown[cat] || 0) + 1;
+      tallyInitiator(lastCancel?.actorRole || a.cancelledByRole || a.cancelledBy);
+    });
+
+    const rescheduleSuccessRate = telemetryKpis?.summary?.rescheduleSuccessRate !== undefined
+      ? telemetryKpis.summary.rescheduleSuccessRate
+      : (totalRescheduled > 0 ? 100.0 : null);
+
+    const cancellationSuccessRate = telemetryKpis?.summary?.cancellationSuccessRate !== undefined
+      ? telemetryKpis.summary.cancellationSuccessRate
+      : (totalCancelled > 0 ? 100.0 : null);
+
+    const reciprocalAlertDispatchRate = telemetryKpis?.summary?.reciprocalAlertDispatchRate !== undefined
+      ? telemetryKpis.summary.reciprocalAlertDispatchRate
+      : ((totalRescheduled + totalCancelled) > 0 ? 100.0 : null);
+
+    const oneClickRebookRate = telemetryKpis?.summary?.oneClickRebookRate !== undefined
+      ? telemetryKpis.summary.oneClickRebookRate
+      : null;
+
     summary = {
       totalBookings: totalDb,
       totalCompleted,
       totalCancelled,
+      totalRescheduled,
       cancellationRate: totalDb > 0 ? Number(((totalCancelled / totalDb) * 100).toFixed(1)) : null,
+      rescheduleRate,
+      rescheduleSuccessRate,
+      cancellationSuccessRate,
+      reciprocalAlertDispatchRate,
+      oneClickRebookRate,
       telehealthRatio: totalDb > 0 ? Number(((totalTelehealth / totalDb) * 100).toFixed(1)) : null,
       inClinicRatio: totalDb > 0 ? Number(((totalInClinic / totalDb) * 100).toFixed(1)) : null,
       commuteReliefCount: totalCommuteRelief,
@@ -3205,7 +3417,10 @@ async function getAppointmentAnalytics(db, options = {}) {
         cairo_maadi: 0,
         giza_dokki: 0,
         alex_smouha: 0
-      }
+      },
+      rescheduleReasonsBreakdown,
+      cancellationReasonsBreakdown,
+      initiatorBreakdown
     };
   }
 
@@ -3220,7 +3435,9 @@ async function getAppointmentAnalytics(db, options = {}) {
       confirmed: filteredDbAppointments.filter(a => a.status === APPOINTMENT_STATUSES.CONFIRMED).length,
       completed: filteredDbAppointments.filter(a => a.status === APPOINTMENT_STATUSES.COMPLETED).length,
       cancelled: filteredDbAppointments.filter(a => a.status === APPOINTMENT_STATUSES.CANCELLED).length,
-      rescheduled: filteredDbAppointments.filter(a => a.status === APPOINTMENT_STATUSES.RESCHEDULED).length,
+      rescheduled: filteredDbAppointments.filter(a => a.status === APPOINTMENT_STATUSES.RESCHEDULED || Boolean(a.rescheduledAt)).length,
+      rescheduleRate: summary.rescheduleRate || null,
+      cancellationRate: summary.cancellationRate || null,
       telehealth: filteredDbAppointments.filter(a => a.isOnlineConsultation || a.consultationType === 'video').length,
       inClinic: filteredDbAppointments.filter(a => !a.isOnlineConsultation && a.consultationType !== 'video').length,
       video: filteredDbAppointments.filter(a => a.consultationType === 'video').length,
