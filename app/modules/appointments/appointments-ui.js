@@ -22,7 +22,8 @@
     selectedBeneficiaryName: "",
     selectedQuickReason: "",
     activeDoctor: null,
-    isMonthPickerOpen: false
+    isMonthPickerOpen: false,
+    activeLinkedCase: null // Doctolib Pre-Visit Medical Dossier attachment
   };
 
   /**
@@ -581,6 +582,131 @@
     return days;
   }
 
+  /**
+   * Sets the active linked clinical case/assessment dossier for appointment booking (Doctolib Model)
+   */
+  function setLinkedCase(caseData = null) {
+    if (!caseData) {
+      state.activeLinkedCase = null;
+      return;
+    }
+    const spo2 = caseData.oxygenLevel != null
+      ? caseData.oxygenLevel
+      : (caseData.vitals?.oxygenSaturation || caseData.spo2 || null);
+
+    state.activeLinkedCase = {
+      caseId: caseData.caseId || caseData.id,
+      assessmentId: caseData.assessmentId || caseData.id,
+      patientName: caseData.patientName || null,
+      oxygenLevel: spo2 != null ? Number(spo2) : null,
+      diagnosis: caseData.diagnosis || caseData.recordedDiag || "تقييم تنفسي معتمد سريرياً",
+      status: caseData.status || "approved",
+      submittedAt: caseData.submittedAt || caseData.createdAt || new Date().toISOString(),
+      clinicalNotes: caseData.clinicalNotes || caseData.notes || "",
+      attached: true
+    };
+  }
+
+  /**
+   * Retrieves the current linked case dossier
+   */
+  function getLinkedCase() {
+    return state.activeLinkedCase;
+  }
+
+  /**
+   * Clears the active linked case dossier
+   */
+  function clearLinkedCase() {
+    state.activeLinkedCase = null;
+  }
+
+  /**
+   * Renders the Doctolib-style Attached Assessment Dossier card
+   */
+  function renderAttachedAssessmentDossier(containerId, isEn = false, onDetach = null) {
+    const el = document.getElementById(containerId);
+    if (!el) return;
+
+    const linked = state.activeLinkedCase;
+    if (!linked || !linked.attached) {
+      el.innerHTML = "";
+      el.style.display = "none";
+      return;
+    }
+
+    el.style.display = "block";
+    const spo2 = linked.oxygenLevel != null ? Number(linked.oxygenLevel) : null;
+    let o2Class = "ok";
+    if (spo2 != null) {
+      if (spo2 < 90) o2Class = "danger";
+      else if (spo2 <= 94) o2Class = "warn";
+    }
+
+    const diagnosisText = linked.diagnosis || (isEn ? "Clinically Certified Respiratory Assessment" : "تقييم تنفسي سريري معتمد");
+    const caseIdShort = linked.caseId ? String(linked.caseId).slice(-6) : "";
+
+    el.innerHTML = `
+      <div class="doctolib-attached-dossier-card" role="region" aria-label="${isEn ? "Attached Certified Medical Dossier" : "ملف التقييم الطبي المعتمد المرفق"}">
+        <div class="dossier-card-header">
+          <div class="dossier-badge-row">
+            <span class="dossier-badge-pill">
+              <span class="dossier-icon">📑</span>
+              <strong>${isEn ? "Pre-Visit Medical Dossier Attached" : "ملف التقييم الطبي المعتمد (مرفق تلقائياً)"}</strong>
+            </span>
+            <span class="dossier-verified-chip">
+              ✓ ${isEn ? "Physician Review Ready" : "جاهز لاطلاع الطبيب"}
+            </span>
+          </div>
+          <button type="button" class="dossier-detach-btn" id="btnDetachAssessmentDossier" title="${isEn ? "Detach Report" : "إلغاء إرفاق التقرير"}" aria-label="${isEn ? "Detach Report" : "إلغاء إرفاق التقرير"}">
+            ✕ <span class="desktop-only">${isEn ? "Detach" : "إلغاء الإرفاق"}</span>
+          </button>
+        </div>
+
+        <div class="dossier-card-body">
+          <div class="dossier-vitals-row">
+            ${spo2 != null ? `
+              <div class="dossier-vital-item">
+                <span class="dossier-vital-label">${isEn ? "Oxygen Saturation (SpO2):" : "نسبة تشبع الأكسجين:"}</span>
+                <span class="pill ${o2Class}" style="font-weight: 700; font-size: 13px;">${spo2}%</span>
+              </div>
+            ` : ""}
+            <div class="dossier-vital-item">
+              <span class="dossier-vital-label">${isEn ? "Case Reference:" : "مرجع الحالة:"}</span>
+              <span class="dossier-ref-code">#${caseIdShort || linked.caseId}</span>
+            </div>
+          </div>
+
+          <div class="dossier-diag-row">
+            <span class="dossier-diag-icon">🩺</span>
+            <span class="dossier-diag-text">${diagnosisText}</span>
+          </div>
+
+          <p class="dossier-notice">
+            ${isEn
+              ? "ℹ️ This certified evaluation dossier will be transmitted directly to the attending physician prior to the consultation so they can review your respiratory findings in advance."
+              : "ℹ️ سيتم إرفاق تقرير التقييم التنفسي المعتمد مباشرة بالموعد ليطلع عليه الطبيب المعالج ويدرس حالتك قبل بدء المقابلة السريرية."}
+          </p>
+        </div>
+
+        <div class="dossier-card-footer">
+          <button type="button" class="outline-button dossier-preview-btn" id="btnPreviewAttachedDossier" onclick="if (typeof openCaseReport === 'function') openCaseReport('${linked.caseId}')">
+            <span>📄</span> ${isEn ? "Review Full Medical Report" : "معاينة التقرير الطبي المعتمد"}
+          </button>
+        </div>
+      </div>
+    `;
+
+    const detachBtn = el.querySelector("#btnDetachAssessmentDossier");
+    if (detachBtn) {
+      detachBtn.onclick = () => {
+        state.activeLinkedCase = null;
+        renderAttachedAssessmentDossier(containerId, isEn, onDetach);
+        if (typeof onDetach === "function") onDetach();
+      };
+    }
+  }
+
   const AppointmentsUI = {
     state,
     buildGoogleCalendarUrl,
@@ -593,7 +719,11 @@
     renderGroupedSlots,
     renderBeneficiarySelector,
     openConfirmBookingModal,
-    closeConfirmBookingModal
+    closeConfirmBookingModal,
+    setLinkedCase,
+    getLinkedCase,
+    clearLinkedCase,
+    renderAttachedAssessmentDossier
   };
 
   global.HealthVibes = global.HealthVibes || {};

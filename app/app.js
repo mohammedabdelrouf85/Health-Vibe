@@ -9730,6 +9730,70 @@ window.openCaseReport = function(caseId) {
   window._adminReportView = "cases";
   showScreen("report");
 };
+window.bookAppointmentForCase = async function(caseId) {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  let caseData = null;
+
+  try {
+    if (typeof db !== "undefined" && db && caseId) {
+      const docSnap = await db.collection("cases").doc(caseId).get();
+      if (docSnap && docSnap.exists) {
+        caseData = { id: docSnap.id, ...docSnap.data() };
+      }
+    }
+  } catch (e) {
+    console.warn("Could not fetch case from Firestore:", e);
+  }
+
+  if (!caseData && typeof window.__latestApprovedResult !== "undefined" && window.__latestApprovedResult) {
+    caseData = window.__latestApprovedResult;
+  }
+  if (!caseData && typeof window._cachedCaseDoc !== "undefined" && window._cachedCaseDoc) {
+    caseData = window._cachedCaseDoc;
+  }
+  if (!caseData) {
+    caseData = { id: caseId, status: "approved" };
+  }
+
+  const spo2 = caseData.oxygenLevel != null
+    ? caseData.oxygenLevel
+    : (caseData.vitals?.oxygenSaturation || caseData.spo2 || null);
+
+  const payload = {
+    caseId: caseData.id || caseId,
+    assessmentId: caseData.assessmentId || caseData.id || caseId,
+    patientName: caseData.patientName || null,
+    oxygenLevel: spo2 != null ? Number(spo2) : null,
+    diagnosis: caseData.diagnosis || caseData.recordedDiag || (isEn ? "Clinically Certified Respiratory Assessment" : "تقييم تنفسي سريري معتمد"),
+    status: caseData.status || "approved",
+    submittedAt: caseData.submittedAt || caseData.createdAt || new Date().toISOString(),
+    clinicalNotes: caseData.clinicalNotes || caseData.notes || ""
+  };
+
+  if (window.HealthVibes?.AppointmentsUI?.setLinkedCase) {
+    window.HealthVibes.AppointmentsUI.setLinkedCase(payload);
+  } else if (window.AppointmentsUI?.setLinkedCase) {
+    window.AppointmentsUI.setLinkedCase(payload);
+  }
+
+  setTimeout(() => {
+    const notesInput = document.getElementById("apptNotesInput");
+    if (notesInput && !notesInput.value) {
+      notesInput.value = isEn
+        ? `Clinical follow-up on certified respiratory assessment #${caseId}`
+        : `متابعة سريرية استناداً إلى تقرير التقييم التنفسي المعتمد رقم #${caseId}`;
+    }
+  }, 100);
+
+  if (typeof showScreen === "function") {
+    showScreen("appointments");
+  }
+  if (typeof showToast === "function") {
+    showToast(isEn
+      ? "Certified assessment report successfully attached to your appointment booking."
+      : "تم إرفاق تقرير التقييم التنفسي المعتمد بنجاح مع حجز الموعد.");
+  }
+};
 
 window.openPatientHistoryRecord = async function(sourceCollection, recordId) {
   const isEn = currentLanguage === "en";
@@ -10971,6 +11035,9 @@ async function renderResultScreen() {
           <div class="safety-note">${isEn ? "Medical notice: Health Vibe supports clinical workflows and does not replace qualified emergency care." : "تنبيه طبي: Health Vibe يساعد في دعم القرار الطبي ولا يستبدل التقييم الطبي المؤهل أو رعاية الطوارئ."}</div>
           <button class="solid-button full" onclick="openCaseReport('${latest.id}')">
             <span>📄</span> ${isEn ? "View Certified Medical Report" : "عرض التقرير الطبي المعتمد"}
+          </button>
+          <button type="button" class="outline-button full doctolib-link-appointment-btn" style="margin-top: 10px; display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 700; border-color: var(--teal, #0d9488); color: var(--teal, #0d9488); min-height: 44px;" onclick="bookAppointmentForCase('${latest.id}')">
+            <span>📅</span> ${isEn ? "Book Appointment & Link Medical Dossier" : "حجز موعد وإرفاق ملف التقييم تلقائياً"}
           </button>
         </article>
       </div>
@@ -12302,6 +12369,16 @@ async function renderAppointmentsScreen() {
     apptSelectedSlot = availableSlots.length > 0 ? availableSlots[0] : null;
   }
 
+  // 0. Render Doctolib Pre-Visit Medical Dossier if attached
+  if (window.HealthVibes?.AppointmentsUI?.renderAttachedAssessmentDossier) {
+    window.HealthVibes.AppointmentsUI.renderAttachedAssessmentDossier("attachedAssessmentDossierMount", isEn, () => {
+      if (window.HealthVibes?.AppointmentsUI?.clearLinkedCase) {
+        window.HealthVibes.AppointmentsUI.clearLinkedCase();
+      }
+      renderAppointmentsScreen();
+    });
+  }
+
   // 1. Render Vezeeta Doctor Filter Tabs (Treating Doctor vs All Pulmonologists)
   if (window.HealthVibes?.AppointmentsUI?.renderDoctorFilterTabs) {
     window.HealthVibes.AppointmentsUI.renderDoctorFilterTabs("vezeetaDoctorTabsMount", window.HealthVibes.AppointmentsUI.state.currentDoctorFilter, (filterId) => {
@@ -12636,6 +12713,24 @@ async function confirmAppointmentBooking(forceDirect = false) {
       createdAt: new Date().toISOString()
     };
 
+    const linkedCase = window.HealthVibes?.AppointmentsUI?.getLinkedCase
+      ? window.HealthVibes.AppointmentsUI.getLinkedCase()
+      : (window.AppointmentsUI?.getLinkedCase ? window.AppointmentsUI.getLinkedCase() : null);
+
+    if (linkedCase && linkedCase.attached) {
+      apptData.linkedCaseId = linkedCase.caseId;
+      apptData.linkedAssessmentId = linkedCase.assessmentId;
+      apptData.hasAttachedReport = true;
+      apptData.attachedAssessment = {
+        caseId: linkedCase.caseId,
+        oxygenLevel: linkedCase.oxygenLevel,
+        diagnosis: linkedCase.diagnosis,
+        status: linkedCase.status,
+        submittedAt: linkedCase.submittedAt
+      };
+      apptData.reportAccessGranted = true;
+    }
+
     if (!user || user.isAnonymous) {
       throw new Error(isEn ? "Please sign in with a verified account before booking." : "يرجى تسجيل الدخول بحساب موثق قبل الحجز.");
     }
@@ -12765,6 +12860,18 @@ async function renderPatientAppointmentsList() {
             ${appt.clinicName || appt.doctorSpecialty}
           </span>
           ${appt.notes ? `<p style="margin: 6px 0 0; font-size: 12px; color: var(--ink); opacity: 0.85;">💬 ${appt.notes}</p>` : ""}
+          ${appt.linkedCaseId ? `
+            <div class="doctolib-card-attached-dossier">
+              <div class="dossier-mini-meta">
+                <span>📑</span>
+                <strong style="color: var(--teal, #0d9488);">${isEn ? "Linked Respiratory Assessment Dossier" : "ملف التقييم التنفسي المعتمد مرفق"}</strong>
+                ${appt.attachedAssessment?.oxygenLevel != null ? `<span class="pill ok" style="font-size: 10px; padding: 2px 6px;">SpO2: ${appt.attachedAssessment.oxygenLevel}%</span>` : ""}
+              </div>
+              <button type="button" class="outline-button dossier-mini-btn" onclick="openCaseReport('${appt.linkedCaseId}')">
+                🔍 ${isEn ? "Review Report" : "اطلاع على التقرير"}
+              </button>
+            </div>
+          ` : ""}
           ${appt.history && appt.history.length > 1 ? `
             <div style="margin-top: 6px; font-size: 11px; color: var(--muted);">
               📜 ${isEn ? "Audit changes:" : "سجل التعديلات:"} ${appt.history.length - 1} ${isEn ? "events" : "أحداث"}

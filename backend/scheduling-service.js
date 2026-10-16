@@ -979,6 +979,11 @@ async function bookAppointmentTransaction(db, payload, authUser) {
           statutoryMedicalDisclaimer: appointmentSafetyService.STATUTORY_MEDICAL_DISCLAIMER.ar,
           statutoryMedicalDisclaimerEn: appointmentSafetyService.STATUTORY_MEDICAL_DISCLAIMER.en,
           physicianPrimacyGuaranteed: true,
+          linkedCaseId: payload.linkedCaseId || null,
+          linkedAssessmentId: payload.linkedAssessmentId || null,
+          hasAttachedReport: Boolean(payload.linkedCaseId || payload.hasAttachedReport),
+          attachedAssessment: payload.attachedAssessment || null,
+          reportAccessGranted: Boolean(payload.reportAccessGranted || payload.linkedCaseId),
           history: [initialHistoryEntry],
           createdAt: nowIso,
           confirmedAt: nowIso,
@@ -1047,6 +1052,11 @@ async function bookAppointmentTransaction(db, payload, authUser) {
         statutoryMedicalDisclaimer: appointmentSafetyService.STATUTORY_MEDICAL_DISCLAIMER.ar,
         statutoryMedicalDisclaimerEn: appointmentSafetyService.STATUTORY_MEDICAL_DISCLAIMER.en,
         physicianPrimacyGuaranteed: true,
+        linkedCaseId: payload.linkedCaseId || null,
+        linkedAssessmentId: payload.linkedAssessmentId || null,
+        hasAttachedReport: Boolean(payload.linkedCaseId || payload.hasAttachedReport),
+        attachedAssessment: payload.attachedAssessment || null,
+        reportAccessGranted: Boolean(payload.reportAccessGranted || payload.linkedCaseId),
         history: [{
           action: 'BOOKED',
           actorUid: authUser.uid,
@@ -1909,7 +1919,12 @@ async function getDoctorCalendar(db, { doctorId, startDate, endDate }, actorUser
         isBooked: Boolean(booking),
         appointmentId: booking ? booking.id : null,
         patientName: booking ? booking.patientName : null,
-        patientId: booking ? booking.patientId : null
+        patientId: booking ? booking.patientId : null,
+        linkedCaseId: booking ? (booking.linkedCaseId || null) : null,
+        linkedAssessmentId: booking ? (booking.linkedAssessmentId || null) : null,
+        hasAttachedReport: booking ? Boolean(booking.hasAttachedReport || booking.linkedCaseId) : false,
+        attachedAssessment: booking ? (booking.attachedAssessment || null) : null,
+        reportAccessGranted: booking ? Boolean(booking.reportAccessGranted || booking.linkedCaseId) : false
       };
       return appointmentSafetyService.sanitizeCalendarSlotForPrivacy(rawSlot, actorUser, doctor.doctorId);
     });
