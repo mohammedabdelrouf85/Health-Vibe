@@ -4,8 +4,9 @@
  */
 
 #screen-report {
-  max-width: 850px;
+  max-width: 880px;
   margin: 0 auto;
+  width: 100%;
 }
 
 .report-card {
@@ -14,6 +15,26 @@
   border-radius: var(--radius-lg, 16px);
   padding: 32px 28px;
   box-shadow: 0 4px 25px rgba(0, 0, 0, 0.08);
+}
+
+/* Mobile Phones (< 640px) */
+@media (max-width: 639.98px) {
+  .report-card {
+    padding: 18px 14px;
+    border-radius: var(--radius-md, 12px);
+  }
+  .report-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+}
+
+/* Tablets (640px - 1023.98px) */
+@media (min-width: 640px) and (max-width: 1023.98px) {
+  .report-card {
+    padding: 24px 20px;
+  }
 }
 
 .report-header {

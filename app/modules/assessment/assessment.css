@@ -9,9 +9,34 @@
   gap: 20px;
 }
 
-@media (max-width: 900px) {
+/* Wide Desktops (>= 1280px) */
+@media (min-width: 1280px) {
+  #screen-assessment .form-layout {
+    grid-template-columns: 1.2fr 380px;
+    gap: 28px;
+  }
+}
+
+/* Tablets (768px - 1023.98px) */
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  #screen-assessment .form-layout {
+    grid-template-columns: 1fr 280px;
+    gap: 16px;
+  }
+  .form-panel {
+    padding: 18px;
+  }
+}
+
+/* Mobile Phones (< 768px) */
+@media (max-width: 767.98px) {
   #screen-assessment .form-layout {
     grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  .form-panel {
+    padding: 16px;
+    border-radius: var(--radius-md, 12px);
   }
 }
 

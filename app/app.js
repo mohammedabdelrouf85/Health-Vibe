@@ -4541,6 +4541,9 @@ async function renderDoctorQueue() {
       const cases = await getCases({ includeTest: true });
       state.doctorQueue = cases;
       renderDoctorQueueItems(cases);
+      if (window.responsiveLayout && typeof window.responsiveLayout.adaptDoctorCockpit === "function") {
+        window.responsiveLayout.adaptDoctorCockpit(activeCaseId);
+      }
     } catch(e) {
       renderDoctorQueueError(e);
     }
@@ -5175,6 +5178,11 @@ async function selectDoctorCase(id) {
   // Attach auto-save listeners to draft textareas to preserve doctor notes
   if (window.HealthVibes?.DoctorUI?.attachDraftPreservationListeners) {
     window.HealthVibes.DoctorUI.attachDraftPreservationListeners(id);
+  }
+
+  // Responsive layout adaptation for mobile vs tablet vs desktop doctor cockpit
+  if (window.responsiveLayout && typeof window.responsiveLayout.adaptDoctorCockpit === "function") {
+    window.responsiveLayout.adaptDoctorCockpit(id);
   }
 }
 

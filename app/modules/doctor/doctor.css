@@ -3,16 +3,69 @@
  * Scoped styles for doctor queue, patient case cards, clinical triage indicators, and diagnostic actions.
  */
 
+/* Responsive Doctor Clinical Workstation (Doctolib Standard) */
 #screen-doctor .doctor-layout {
   display: grid;
-  grid-template-columns: 360px 1fr;
+  grid-template-columns: 360px minmax(0, 1fr);
   gap: 20px;
   align-items: start;
 }
 
-@media (max-width: 992px) {
+/* Wide Clinical Workstations (>= 1280px) */
+@media (min-width: 1280px) {
+  #screen-doctor .doctor-layout {
+    grid-template-columns: 400px minmax(0, 1fr);
+    gap: 24px;
+  }
+  .queue {
+    max-height: calc(100vh - 220px);
+  }
+}
+
+/* High-Resolution Displays (>= 1536px) */
+@media (min-width: 1536px) {
+  #screen-doctor .doctor-layout {
+    grid-template-columns: 440px minmax(0, 1fr);
+    gap: 28px;
+  }
+}
+
+/* Tablets (768px - 1023.98px) */
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  #screen-doctor .doctor-layout {
+    grid-template-columns: 320px minmax(0, 1fr);
+    gap: 16px;
+  }
+  .doctor-queue-panel,
+  .doctor-review-panel {
+    padding: 16px;
+  }
+}
+
+/* Mobile Smartphones (< 768px) */
+@media (max-width: 767.98px) {
   #screen-doctor .doctor-layout {
     grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  .doctor-queue-panel.mobile-hidden,
+  .doctor-review-panel.mobile-hidden {
+    display: none !important;
+  }
+  .mobile-back-to-queue-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 10px 14px;
+    margin-bottom: 14px;
+    background: rgba(9, 184, 182, 0.12);
+    border: 1px solid var(--teal, #09b8b6);
+    color: var(--teal-2, #5dd6d4);
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 13.5px;
+    cursor: pointer;
   }
 }
 

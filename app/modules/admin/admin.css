@@ -10,6 +10,35 @@
   margin-bottom: 24px;
 }
 
+/* Wide Clinical Workstations (>= 1280px) */
+@media (min-width: 1280px) {
+  #screen-admin .admin-grid {
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 20px;
+  }
+}
+
+/* Tablets (640px - 1023.98px) */
+@media (min-width: 640px) and (max-width: 1023.98px) {
+  #screen-admin .admin-grid {
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 14px;
+  }
+}
+
+/* Mobile Phones (< 640px) */
+@media (max-width: 639.98px) {
+  #screen-admin .admin-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .admin-table th,
+  .admin-table td {
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+}
+
 .admin-table-container {
   overflow-x: auto;
   border-radius: var(--radius-md, 12px);
