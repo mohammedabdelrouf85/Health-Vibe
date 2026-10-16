@@ -87,6 +87,7 @@ const _inMemoryFaqInquiryStore = [];
 const _inMemoryOnboardingStore = new Map();
 const _inMemoryConditionStore = new Map();
 const _inMemoryThemeStore = new Map();
+const _inMemoryLiteModeStore = new Map();
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -3418,6 +3419,57 @@ app.put('/api/patient/preferences/theme', (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to update theme preference.' });
+  }
+});
+
+/**
+ * GET /api/patient/preferences/lite-mode
+ * Retrieves lite mode preference for budget smartphone optimization (مرجع: Vezeeta)
+ */
+app.get('/api/patient/preferences/lite-mode', (req, res) => {
+  try {
+    const uid = (req.user && req.user.uid) || req.query.userId || 'guest';
+    const enabled = _inMemoryLiteModeStore.get(uid) || false;
+    res.json({
+      success: true,
+      userId: uid,
+      enabled
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to retrieve lite mode preference.' });
+  }
+});
+
+/**
+ * PUT /api/patient/preferences/lite-mode
+ * Updates user lite mode preference with audit trail
+ */
+app.put('/api/patient/preferences/lite-mode', (req, res) => {
+  try {
+    const uid = (req.user && req.user.uid) || req.body.userId || 'guest';
+    const enabled = Boolean(req.body.enabled);
+
+    _inMemoryLiteModeStore.set(uid, enabled);
+
+    if (auditService && typeof auditService.logSecurityEvent === 'function') {
+      auditService.logSecurityEvent({
+        type: 'PATIENT_LITE_MODE_TOGGLED',
+        actorUid: uid,
+        actorRole: (req.user && req.user.role) || 'patient',
+        targetUserId: uid,
+        outcome: 'SUCCESS',
+        metadata: { enabled, updatedAt: new Date().toISOString() }
+      });
+    }
+
+    res.json({
+      success: true,
+      userId: uid,
+      enabled,
+      updatedAt: new Date().toISOString()
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Failed to update lite mode preference.' });
   }
 });
 

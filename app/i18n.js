@@ -402,6 +402,21 @@
         modeTitle: "المظهر وعرض الشاشة",
         modeDesc: "اختر المظهر المريح لعينيك أثناء متابعة الفحوصات الطبية"
       },
+      liteMode: {
+        title: "النسخة الخفيفة (Lite Mode)",
+        desc: "تقليل المؤثرات الحركية وإلغاء الشفافيات لتسريع الاستجابة على الهواتف الاقتصادية",
+        enableBtn: "تفعيل الوضع الخفيف",
+        disableBtn: "تعطيل الوضع الخفيف",
+        activeBadge: "خفيف",
+        inactiveBadge: "عادي",
+        enableAria: "تفعيل النسخة الخفيفة للأجهزة الاقتصادية",
+        disableAria: "تعطيل النسخة الخفيفة والعودة للوضع الكامل",
+        activeTooltip: "النسخة الخفيفة مفعلة لتسريع الأداء وتقليل استهلاك البطارية",
+        inactiveTooltip: "الوضع العادي مع المؤثرات الحركية الكاملة",
+        enabledToast: "تم تفعيل النسخة الخفيفة لتسريع التصفح والاستجابة",
+        disabledToast: "تم العودة إلى وضع العرض العادي مع المؤثرات الحركية",
+        autoDetectedNotice: "تم تفعيل النسخة الخفيفة تلقائياً لتناسب مواصفات هاتفك وتوفير تجربة سريعة وسلسة"
+      },
       consent: {
         title: "الموافقة الطبية وسياسة الخصوصية",
         badgeRequired: "مطلوبة قبل الفحص",
@@ -1507,6 +1522,21 @@
         flickerFreeNotice: "Theme applied instantaneously without flicker for eye protection",
         modeTitle: "Theme & Display Appearance",
         modeDesc: "Select the display theme most comfortable for reading medical charts"
+      },
+      liteMode: {
+        title: "Lite Mode for Low-End Devices",
+        desc: "Reduces heavy animations and disables backdrop filters for smooth performance on budget smartphones",
+        enableBtn: "Enable Lite Mode",
+        disableBtn: "Disable Lite Mode",
+        activeBadge: "Lite",
+        inactiveBadge: "Normal",
+        enableAria: "Enable Lite Mode for budget phones",
+        disableAria: "Disable Lite Mode and restore full animations",
+        activeTooltip: "Lite Mode active: maximum speed and battery saving",
+        inactiveTooltip: "Normal display mode with rich animations",
+        enabledToast: "Lite Mode enabled for ultra-fast responsiveness",
+        disabledToast: "Restored to normal display mode",
+        autoDetectedNotice: "Lite Mode was automatically enabled to ensure 60fps responsiveness on your device"
       },
       consent: {
         title: "Medical Consent & Privacy Policy",

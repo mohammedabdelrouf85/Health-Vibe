@@ -1,0 +1,108 @@
+/**
+ * Health Vibe AI - Lite Mode for Low-End Devices (مرجع: Vezeeta)
+ * Strips heavy animations, disables GPU-taxing backdrop filters, and streamlines
+ * rendering pipeline for budget smartphones with <= 2GB RAM / <= 4 CPU cores.
+ */
+
+:root {
+  --lite-surface: #ffffff;
+  --lite-text: #0f172a;
+  --lite-border: #cbd5e1;
+}
+
+body.dark-mode.hv-lite-mode,
+[data-theme="dark"].hv-lite-mode,
+body.dark.hv-lite-mode,
+html.hv-lite-mode body.dark {
+  --lite-surface: #1e293b;
+  --lite-text: #f8fafc;
+  --lite-border: #334155;
+}
+
+/* Global Lite Mode Overrides */
+html.hv-lite-mode *,
+body.hv-lite-mode * {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  text-shadow: none !important;
+  box-shadow: none !important;
+}
+
+/* Retain clean, accessible subtle borders instead of shadows */
+body.hv-lite-mode .panel,
+body.hv-lite-mode .report-card,
+body.hv-lite-mode .modal-card,
+body.hv-lite-mode .quick-share-modal,
+body.hv-lite-mode .condition-tailored-hero,
+body.hv-lite-mode .faq-accordion-item {
+  box-shadow: none !important;
+  border: 1px solid var(--lite-border) !important;
+  will-change: auto !important;
+}
+
+/* Disable infinite spinning SVG graphics in idle states */
+body.hv-lite-mode .idle-pulse,
+body.hv-lite-mode .glow-effect {
+  animation: none !important;
+  filter: none !important;
+}
+
+/* Lite Mode Indicator Badge & Toggle in Topbar */
+.lite-mode-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  min-height: 44px; /* WCAG 2.5.5 */
+  border-radius: 8px;
+  border: 1px solid var(--line, #cbd5e1);
+  background: transparent;
+  color: var(--ink, #0f172a);
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: none !important;
+}
+
+.lite-mode-toggle-btn.active {
+  background: #10b981;
+  color: #ffffff;
+  border-color: #10b981;
+}
+
+.lite-mode-toggle-btn:focus-visible {
+  outline: 2px solid #10b981;
+  outline-offset: 2px;
+}
+
+/* Banner alert notifying auto-detection on budget phone */
+.lite-mode-auto-banner {
+  background: #f0fdf4;
+  border: 1px solid #86efac;
+  color: #166534;
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-size: 0.82rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+body.dark .lite-mode-auto-banner {
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.3);
+  color: #6ee7b7;
+}
+
+/* Touch responsiveness for low-end mobile devices */
+@media (max-width: 640px) {
+  body.hv-lite-mode {
+    font-size: 15px;
+  }
+}
