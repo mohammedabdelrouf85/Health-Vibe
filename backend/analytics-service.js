@@ -75,8 +75,12 @@ const EVENT_TYPES = Object.freeze({
   // ⏰ Doctolib Automated No-Show Reminders & Attendance Confirmation Telemetry
   NO_SHOW_REMINDER_SCHEDULED: 'no_show_reminder_scheduled',
   NO_SHOW_REMINDER_SENT: 'no_show_reminder_sent',
+  NO_SHOW_REMINDER_DISPATCHED: 'no_show_reminder_dispatched',
+  NO_SHOW_REMINDER_FAILED: 'no_show_reminder_failed',
   APPOINTMENT_ATTENDANCE_CONFIRMED: 'appointment_attendance_confirmed',
   APPOINTMENT_ATTENDANCE_CONFIRMATION_ATTEMPT: 'appointment_attendance_confirmation_attempt',
+  APPOINTMENT_ATTENDANCE_CONFIRMED_VIA_WHATSAPP: 'appointment_attendance_confirmed_via_whatsapp',
+  APPOINTMENT_ATTENDANCE_CONFIRMED_VIA_SMS: 'appointment_attendance_confirmed_via_sms',
   REMINDER_PREFERENCES_UPDATED: 'reminder_preferences_updated'
 });
 

@@ -2751,12 +2751,13 @@ async function confirmAppointmentAttendance(db, appointmentId, actorUser, option
     throw err;
   }
 
-  // Verify actor permission (patient who booked, doctor, clinic_admin, super_admin)
+  // Verify actor permission (patient who booked, doctor, clinic_admin, super_admin, or valid token bearer)
   const userRole = actorUser?.role || 'patient';
+  const isTokenActor = Boolean(options.isTokenActor || actorUser?.isTokenActor || actorUser?.role === 'token_bearer');
   const isPatientOwner = actorUser && (actorUser.uid === appt.patientId || actorUser.uid === appt.userId);
   const isStaff = userRole === 'doctor' || userRole === 'clinic_admin' || userRole === 'clinic' || userRole === 'super_admin';
 
-  if (!isPatientOwner && !isStaff) {
+  if (!isPatientOwner && !isStaff && !isTokenActor) {
     const err = new Error('Access denied. You can only confirm attendance for your own appointments.');
     err.code = 'ACCESS_DENIED';
     err.statusCode = 403;
@@ -2792,6 +2793,7 @@ async function confirmAppointmentAttendance(db, appointmentId, actorUser, option
     attendanceConfirmedBy: actorUser?.uid || 'patient',
     attendanceConfirmedRole: userRole,
     attendanceConfirmedChannel: options.channel || 'web_app',
+    confirmationChannel: options.channel || 'web_app',
     status: APPOINTMENT_STATUSES.CONFIRMED,
     history
   };
@@ -2800,8 +2802,9 @@ async function confirmAppointmentAttendance(db, appointmentId, actorUser, option
 
   const updatedAppointment = { ...appt, ...updatePayload };
 
-  if (db && Array.isArray(db.telemetryEvents)) {
-    db.telemetryEvents.push({
+  if (db && (Array.isArray(db.telemetryEvents) || Array.isArray(db._events))) {
+    const evList = Array.isArray(db.telemetryEvents) ? db.telemetryEvents : db._events;
+    evList.push({
       eventType: 'APPOINTMENT_ATTENDANCE_CONFIRMED',
       appointmentId: appt.id || appointmentId,
       patientId: appt.patientId,

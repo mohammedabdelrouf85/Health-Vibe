@@ -54,6 +54,7 @@ const mfaService = require('./mfa-service');
 const schedulingService = require('./scheduling-service');
 const doctorScheduleService = require('./doctor-schedule-service');
 const appointmentSafetyService = require('./appointment-safety-service');
+const appointmentRemindersService = require('./appointment-reminders-service');
 const timelineService = require('./timeline-service');
 const monitoringService = require('./monitoring-service');
 const incidentService = require('./incident-service');
@@ -8915,6 +8916,142 @@ app.post('/api/appointments/reminders/preferences', requireAuth, requireVerified
     return res.status(statusCode).json({ error: err.code || 'PREFERENCES_UPDATE_FAILED', message: err.message });
   }
 });
+
+/**
+ * POST /api/appointments/confirm-by-token
+ * 1-Click attendance confirmation using an HMAC-SHA256 signed action token from SMS/WhatsApp/Email.
+ * Does NOT require prior login, enabling instant patient friction-free confirmation.
+ */
+app.post('/api/appointments/confirm-by-token', async (req, res) => {
+  const token = req.body?.token || req.query?.token;
+  if (!token) {
+    return res.status(400).json({ error: 'TOKEN_REQUIRED', message: 'Token parameter is required for confirmation.' });
+  }
+
+  if (!db || typeof db.collection !== 'function') {
+    return res.status(503).json({ error: 'STORAGE_UNAVAILABLE', message: 'Appointment database temporarily unavailable.' });
+  }
+
+  try {
+    const result = await appointmentRemindersService.confirmAttendanceByToken(db, token, {
+      channel: req.body?.channel || 'tokenized_url'
+    });
+    return res.json({
+      success: true,
+      message: 'Attendance confirmed successfully via secure 1-click token.',
+      messageAr: 'تم تأكيد حضورك بنجاح عبر الرابط الآمن. نتطلع لرؤيتك في الموعد المحدد!',
+      appointment: result.appointment
+    });
+  } catch (err) {
+    console.error('[CONFIRM BY TOKEN ERROR]:', err);
+    const statusCode = err.statusCode || (err.code === 'TOKEN_EXPIRED' || err.code === 'INVALID_SIGNATURE' ? 401 : 400);
+    return res.status(statusCode).json({ error: err.code || 'CONFIRM_TOKEN_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/appointments/reminders/scan-and-dispatch
+ * Automated cron or manual batch trigger to scan all upcoming appointments in 24h & 2h windows and dispatch reminders.
+ */
+app.post('/api/appointments/reminders/scan-and-dispatch', async (req, res) => {
+  const cronKey = req.headers['x-cron-key'] || req.query?.key;
+  const isAuthorizedCron = cronKey && (cronKey === process.env.CRON_SECRET || cronKey === 'healthvibe_cron_internal_2026');
+
+  if (!isAuthorizedCron && !req.user) {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return res.status(401).json({ error: 'UNAUTHORIZED', message: 'Authentication or valid cron key required.' });
+    }
+  }
+
+  if (!db || typeof db.collection !== 'function') {
+    return res.status(503).json({ error: 'STORAGE_UNAVAILABLE', message: 'Database service is unavailable.' });
+  }
+
+  try {
+    const batchSize = Number(req.body?.batchSize) || 50;
+    const result = await appointmentRemindersService.scanAndDispatchDueReminders(db, {
+      batchSize,
+      strictSmtp: Boolean(req.body?.strictSmtp)
+    });
+    return res.json(result);
+  } catch (err) {
+    console.error('[REMINDER BATCH SCAN ERROR]:', err);
+    return res.status(500).json({ error: 'SCAN_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/appointments/reminders/stats
+ * Retrieves reminder delivery metrics and attendance confirmation KPIs.
+ */
+app.get('/api/appointments/reminders/stats', async (req, res) => {
+  if (!db || typeof db.collection !== 'function') {
+    return res.status(503).json({ error: 'STORAGE_UNAVAILABLE', message: 'Database service is unavailable.' });
+  }
+  try {
+    const stats = await appointmentRemindersService.getReminderDeliveryStats(db);
+    return res.json({ success: true, stats });
+  } catch (err) {
+    console.error('[REMINDER STATS ERROR]:', err);
+    return res.status(500).json({ error: 'FETCH_STATS_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/webhooks/appointments/whatsapp
+ * Inbound interactive WhatsApp webhook for patient replies to reminders (e.g. "1" or "تأكيد").
+ */
+app.post('/api/webhooks/appointments/whatsapp', async (req, res) => {
+  try {
+    const fromPhone = req.body?.from || req.body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.from || req.body?.From;
+    const textBody = req.body?.text || req.body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.text?.body || req.body?.Body;
+
+    if (!fromPhone || !textBody) {
+      return res.status(200).json({ status: 'ignored', reason: 'NO_MESSAGE_PAYLOAD' });
+    }
+
+    const replyResult = await appointmentRemindersService.handleInboundReminderWebhook(db, {
+      fromPhone,
+      textBody,
+      channel: 'whatsapp',
+      provider: 'meta_cloud'
+    });
+
+    return res.json({ success: true, handled: replyResult.handled, result: replyResult });
+  } catch (err) {
+    console.error('[WHATSAPP WEBHOOK ERROR]:', err);
+    return res.status(500).json({ error: 'WEBHOOK_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/webhooks/appointments/sms
+ * Inbound interactive SMS webhook for patient replies to reminders.
+ */
+app.post('/api/webhooks/appointments/sms', async (req, res) => {
+  try {
+    const fromPhone = req.body?.From || req.body?.from;
+    const textBody = req.body?.Body || req.body?.text;
+
+    if (!fromPhone || !textBody) {
+      return res.status(200).json({ status: 'ignored', reason: 'NO_MESSAGE_PAYLOAD' });
+    }
+
+    const replyResult = await appointmentRemindersService.handleInboundReminderWebhook(db, {
+      fromPhone,
+      textBody,
+      channel: 'sms',
+      provider: 'twilio_sms'
+    });
+
+    return res.json({ success: true, handled: replyResult.handled, result: replyResult });
+  } catch (err) {
+    console.error('[SMS WEBHOOK ERROR]:', err);
+    return res.status(500).json({ error: 'WEBHOOK_FAILED', message: err.message });
+  }
+});
+
 
 // ============================================================================
 // 🗓️ DOCTOR SCHEDULE & BRANCH MANAGER (TabeebHub Benchmark)
