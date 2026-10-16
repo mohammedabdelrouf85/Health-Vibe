@@ -3924,6 +3924,168 @@ body.dark .emergency-alert-card.invalid-reading {
 }
 
 /* ==========================================================================
+   Instant Critical Symptoms Screener & Emergency Red-Flag Triage
+   ========================================================================== */
+.critical-screener-card {
+  background: var(--surface-2, rgba(255, 255, 255, 0.03));
+  border: 1.5px solid rgba(239, 68, 68, 0.35);
+  border-radius: 16px;
+  padding: 16px 18px;
+  margin: 12px 0 18px;
+  transition: all 0.25s ease;
+  box-shadow: 0 4px 16px rgba(239, 68, 68, 0.06);
+}
+
+body.dark .critical-screener-card {
+  background: rgba(30, 20, 22, 0.6);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.critical-screener-card:hover {
+  border-color: rgba(239, 68, 68, 0.6);
+  box-shadow: 0 6px 20px rgba(239, 68, 68, 0.12);
+}
+
+.critical-screener-head {
+  margin-bottom: 12px;
+}
+
+.critical-screener-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(239, 68, 68, 0.12);
+  color: #dc2626;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 800;
+  margin-bottom: 6px;
+}
+
+body.dark .critical-screener-badge {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.critical-screener-desc {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.critical-symptoms-chips {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.critical-symptom-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1.5px solid var(--line);
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  text-align: start;
+  user-select: none;
+}
+
+.critical-symptom-chip:hover {
+  background: var(--surface-2);
+  border-color: rgba(239, 68, 68, 0.5);
+  transform: translateY(-1px);
+}
+
+.critical-symptom-chip .chip-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.critical-symptom-chip .chip-label {
+  flex: 1;
+}
+
+.critical-symptom-chip.active {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  border-color: #b91c1c;
+  color: #ffffff !important;
+  box-shadow: 0 4px 14px rgba(220, 38, 38, 0.4);
+  transform: scale(1.02);
+}
+
+.critical-symptom-chip.active .chip-icon {
+  animation: pulseRedGlow 1.8s infinite ease-in-out;
+}
+
+/* Critical Emergency Banner */
+.critical-emergency-banner {
+  border-radius: 16px;
+  padding: 18px 20px;
+  margin-bottom: 20px;
+  animation: pulseEmergencyCard 2s infinite ease-in-out;
+}
+
+.critical-emergency-banner.is-active {
+  display: block !important;
+}
+
+.critical-detected-items {
+  margin: 12px 0 16px;
+}
+
+.critical-detected-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #991b1b;
+  margin-bottom: 6px;
+  line-height: 1.45;
+}
+
+body.dark .critical-detected-item {
+  color: #fca5a5;
+}
+
+.critical-detected-item:last-child {
+  margin-bottom: 0;
+}
+
+.critical-detected-item .item-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  background: #ef4444;
+  color: #fff;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+/* Patient Emergency Quickbar */
+.patient-emergency-quickbar {
+  transition: all 0.25s ease;
+}
+
+.patient-emergency-quickbar:hover {
+  box-shadow: 0 6px 20px rgba(239, 68, 68, 0.18);
+  border-color: rgba(239, 68, 68, 0.55);
+}
+
+
+/* ==========================================================================
    Screen-Pending Emergency Banner
    ========================================================================== */
 .emergency-pending-banner {

@@ -16907,6 +16907,9 @@ function updateOxygenWarning() {
   const parsedOxygen = parseStrictOxygenInput(readOxygenRawValue());
   const oxygen = parsedOxygen.value;
   if (field) field.style.borderColor = "";
+  if (typeof window.updateCriticalSymptomsCheck === "function") {
+    window.updateCriticalSymptomsCheck();
+  }
 
   if (parsedOxygen.reason === "format" || parsedOxygen.reason === "empty") {
     if (parsedOxygen.reason === "empty") {
@@ -17047,12 +17050,223 @@ window.closeEmergencyGuideModal = function() {
   }
 };
 
+/* ==========================================================================
+   Real-Time Critical Symptoms Screener (SpO2 < 90%, Cyanosis, Chest Pain, Hemoptysis)
+   ========================================================================== */
+window._activeCriticalSymptoms = [];
+window._selectedCriticalChips = new Set();
+window._modalCriticalChips = new Set();
+
+window.toggleCriticalSymptom = function(symptomKey) {
+  if (window._selectedCriticalChips.has(symptomKey)) {
+    window._selectedCriticalChips.delete(symptomKey);
+  } else {
+    window._selectedCriticalChips.add(symptomKey);
+  }
+
+  const chipMap = {
+    cyanosis: "chipCyanosis",
+    acuteChestPain: "chipChestPain",
+    hemoptysis: "chipHemoptysis",
+    severeDyspnea: "chipSevereDyspnea"
+  };
+  const elId = chipMap[symptomKey];
+  const el = document.getElementById(elId);
+  if (el) {
+    const isActive = window._selectedCriticalChips.has(symptomKey);
+    el.classList.toggle("active", isActive);
+    el.setAttribute("aria-pressed", isActive ? "true" : "false");
+  }
+
+  // Also sync with chestPainChoices if chest pain is selected
+  if (symptomKey === "acuteChestPain") {
+    const isChestPainActive = window._selectedCriticalChips.has("acuteChestPain");
+    if (isChestPainActive) {
+      document.querySelectorAll("#chestPainChoices .choice").forEach(btn => {
+        btn.classList.toggle("active", btn.textContent.trim() === "نعم" || btn.textContent.trim() === "Yes");
+      });
+    }
+  }
+
+  window.updateCriticalSymptomsCheck();
+};
+
+window.updateCriticalSymptomsCheck = function() {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  const detected = [];
+
+  // 1. SpO2 < 90%
+  const parsedOxygen = parseStrictOxygenInput(readOxygenRawValue());
+  if (parsedOxygen.ok && parsedOxygen.value < 90 && parsedOxygen.value >= 50) {
+    detected.push({
+      key: "spo2Low",
+      icon: "🫁",
+      label: isEn ? `Severe Hypoxemia: SpO2 ${parsedOxygen.value}%` : `نقص حاد بالأكسجين: نسبة الأكسجين ${parsedOxygen.value}%`,
+      desc: isEn ? "Dangerously low blood oxygen (< 90%). Immediate clinical hazard." : "نسبة الأكسجين بالدم أقل من 90%، مما يستدعي تدخلاً إسعافياً عاجلاً وفورياً دون أي تأخير."
+    });
+  }
+
+  // 2. Cyanosis (Blue lips/face)
+  if (window._selectedCriticalChips.has("cyanosis")) {
+    detected.push({
+      key: "cyanosis",
+      icon: "👄",
+      label: isEn ? "Cyanosis: Blue lips, face, or fingernails" : "زرقة الشفاه أو الوجه / الأطراف",
+      desc: isEn ? "Severe central or peripheral cyanosis indicating critical hypoxia." : "زرقة ظاهرة حول الشفاه أو الأطراف تدل على عجز تنفسي ونقص حاد في تروية الأنسجة."
+    });
+  }
+
+  // 3. Acute Chest Pain
+  if (window._selectedCriticalChips.has("acuteChestPain")) {
+    detected.push({
+      key: "acuteChestPain",
+      icon: "💔",
+      label: isEn ? "Acute Severe Chest Pain" : "ألم صدر حاد ومفاجئ",
+      desc: isEn ? "Severe crushing or sharp chest pain (Risk of acute cardiac or pulmonary event)." : "ألم حاد أو ضغط شديد بالصدر (اشتباه جلطة قلبية أو انصمام رئوي حاد)."
+    });
+  }
+
+  // 4. Hemoptysis (Coughing blood)
+  if (window._selectedCriticalChips.has("hemoptysis")) {
+    detected.push({
+      key: "hemoptysis",
+      icon: "🩸",
+      label: isEn ? "Hemoptysis: Coughing up blood" : "سعال مدمم (خروج دم مع الكحة)",
+      desc: isEn ? "Active respiratory tract bleeding requiring immediate ER evaluation." : "خروج دم أو بلغم مدمم مع الكحة، علامة نزيف حاد بالجهاز التنفسي تتطلب فحصاً فورياً."
+    });
+  }
+
+  // 5. Severe Dyspnea / Gasping
+  if (window._selectedCriticalChips.has("severeDyspnea")) {
+    detected.push({
+      key: "severeDyspnea",
+      icon: "🫁",
+      label: isEn ? "Extreme Respiratory Distress" : "صعوبة بالغة في التنفس وعجز عن الكلام",
+      desc: isEn ? "Inability to speak sentences due to air hunger (Acute respiratory compromise)." : "عجز المريض عن التحدث أو إكمال جملة بسبب ضيق التنفس الحاد."
+    });
+  }
+
+  window._activeCriticalSymptoms = detected;
+
+  // Real-time UI Update of Emergency Red Alert Banner
+  const banner = document.getElementById("criticalEmergencyBanner");
+  const listEl = document.getElementById("criticalDetectedList");
+
+  if (banner) {
+    if (detected.length > 0) {
+      banner.style.display = "block";
+      banner.classList.add("is-active");
+      if (listEl) {
+        listEl.innerHTML = detected.map(item => `
+          <div class="critical-detected-item">
+            <span class="item-badge">${item.icon} ${isEn ? "CRITICAL" : "أعراض حرجة"}</span>
+            <div>
+              <strong>${item.label}</strong> — <span style="font-weight: 500;">${item.desc}</span>
+            </div>
+          </div>
+        `).join("");
+      }
+    } else {
+      banner.style.display = "none";
+      banner.classList.remove("is-active");
+      if (listEl) listEl.innerHTML = "";
+    }
+  }
+
+  return detected;
+};
+
+/* Standalone Modal Handlers */
+window.openInstantCriticalCheckModal = function() {
+  const modal = document.getElementById("instantCriticalCheckModal");
+  if (modal) {
+    modal.classList.add("open");
+    modal.setAttribute("aria-hidden", "false");
+    window.updateModalCriticalAlertBox();
+  }
+};
+
+window.closeInstantCriticalCheckModal = function() {
+  const modal = document.getElementById("instantCriticalCheckModal");
+  if (modal) {
+    modal.classList.remove("open");
+    modal.setAttribute("aria-hidden", "true");
+  }
+};
+
+window.toggleModalCriticalSymptom = function(symptomKey) {
+  if (window._modalCriticalChips.has(symptomKey)) {
+    window._modalCriticalChips.delete(symptomKey);
+  } else {
+    window._modalCriticalChips.add(symptomKey);
+  }
+
+  const el = document.getElementById(
+    symptomKey === "modalO2" ? "modalChipO2" :
+    symptomKey === "modalCyanosis" ? "modalChipCyanosis" :
+    symptomKey === "modalChestPain" ? "modalChipChestPain" : "modalChipHemoptysis"
+  );
+  if (el) {
+    el.classList.toggle("active", window._modalCriticalChips.has(symptomKey));
+  }
+
+  window.updateModalCriticalAlertBox();
+};
+
+window.updateModalCriticalAlertBox = function() {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  const alertBox = document.getElementById("modalCriticalAlertBox");
+  const safeBox = document.getElementById("modalSafeNoticeBox");
+  const listEl = document.getElementById("modalDetectedSymptomsList");
+
+  const symptoms = [];
+  if (window._modalCriticalChips.has("modalO2")) {
+    symptoms.push(isEn ? "• 🫁 Blood Oxygen SpO2 < 90% (Severe Hypoxemia)" : "• 🫁 نسبة الأكسجين SpO2 أقل من 90% (نقص أكسجين حاد)");
+  }
+  if (window._modalCriticalChips.has("modalCyanosis")) {
+    symptoms.push(isEn ? "• 👄 Cyanosis: Blue lips or face" : "• 👄 زرقة الشفاه أو الوجه / الأطراف");
+  }
+  if (window._modalCriticalChips.has("modalChestPain")) {
+    symptoms.push(isEn ? "• 💔 Acute Severe Chest Pain / Pressure" : "• 💔 ألم صدر حاد ومفاجئ");
+  }
+  if (window._modalCriticalChips.has("modalHemoptysis")) {
+    symptoms.push(isEn ? "• 🩸 Coughing up blood (Hemoptysis)" : "• 🩸 سعال مدمم / خروج دم مع الكحة");
+  }
+
+  if (symptoms.length > 0) {
+    if (alertBox) alertBox.style.display = "block";
+    if (safeBox) safeBox.style.display = "none";
+    if (listEl) listEl.innerHTML = symptoms.join("<br>");
+  } else {
+    if (alertBox) alertBox.style.display = "none";
+    if (safeBox) safeBox.style.display = "block";
+    if (listEl) listEl.innerHTML = "";
+  }
+};
+
 let _emergencySubmitCallback = null;
-window.openEmergencySubmitModal = function(o2, onProceed) {
+window.openEmergencySubmitModal = function(o2, onProceed, detectedList) {
   _emergencySubmitCallback = onProceed;
   const modal = document.getElementById("emergencySubmitModal");
   const valEl = document.getElementById("emergencyModalO2Val");
-  if (valEl) valEl.textContent = `${o2}%`;
+  if (valEl) valEl.textContent = o2 ? `${o2}%` : "--%";
+
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  const detectedBox = document.getElementById("emergencySubmitDetectedBox");
+  const detectedListEl = document.getElementById("emergencySubmitDetectedList");
+
+  const activeDetected = detectedList || window._activeCriticalSymptoms || [];
+  if (detectedBox && detectedListEl) {
+    if (activeDetected.length > 0) {
+      detectedBox.style.display = "block";
+      detectedListEl.innerHTML = activeDetected.map(item =>
+        `<div style="margin-bottom: 4px;">🚨 <strong>${item.label || item}</strong></div>`
+      ).join("");
+    } else {
+      detectedBox.style.display = "none";
+    }
+  }
+
   if (modal) {
     modal.classList.add("open");
     modal.setAttribute("aria-hidden", "false");
@@ -18492,13 +18706,18 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
     const oxygenLevel = parseStrictOxygenInput(oxygenRaw).value;
 
     // ── اعتراض الحالات الحرجة جداً للتأكد من التوجه للطوارئ ─────────
-    if (oxygenLevel > 0 && oxygenLevel < 90 && !window._emergencySubmissionConfirmed) {
+    const criticalSigns = (typeof window.updateCriticalSymptomsCheck === "function")
+      ? window.updateCriticalSymptomsCheck()
+      : (window._activeCriticalSymptoms || []);
+    const isCritical = (oxygenLevel > 0 && oxygenLevel < 90) || (criticalSigns && criticalSigns.length > 0);
+
+    if (isCritical && !window._emergencySubmissionConfirmed) {
       submitBtn.disabled = false;
       submitBtn.textContent = isEn ? "Send to Doctor" : "إرسال للطبيب";
       openEmergencySubmitModal(oxygenLevel, () => {
         window._emergencySubmissionConfirmed = true;
         document.getElementById("submitAssessment").click();
-      });
+      }, criticalSigns);
       return;
     }
     window._emergencySubmissionConfirmed = false;
@@ -18509,7 +18728,7 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
     const clinicName = window._patientClinicName || "";
 
     // حساب الأولوية المتوقعة
-    const priority = oxygenLevel > 0 && oxygenLevel < 90 ? "urgent" : (oxygenLevel > 0 && oxygenLevel < 93 ? "high" : "normal");
+    const priority = isCritical ? "urgent" : (oxygenLevel > 0 && oxygenLevel < 93 ? "high" : "normal");
     const priorityAr = { urgent: "🚨 عاجل", high: "⚠️ عالية", normal: "✔️ عادية" };
 
     // ── فتح نافذة تأكيد الإرسال (Confirmation Step Before Submission) ──

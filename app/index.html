@@ -642,6 +642,26 @@
           </button>
         </div>
 
+        <!-- PRD Red Flag Emergency Quickbar: Immediate Triage for SpO2 < 90%, Blue Lips, Chest Pain, Hemoptysis -->
+        <div class="patient-emergency-quickbar" style="background: linear-gradient(135deg, rgba(239, 68, 68, 0.12), rgba(185, 28, 28, 0.05)); border: 1.5px solid rgba(239, 68, 68, 0.35); border-radius: 14px; padding: 12px 18px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+          <div style="display: flex; align-items: center; gap: 12px; max-width: 720px;">
+            <span style="font-size: 26px; animation: pulseRedGlow 2s infinite ease-in-out; border-radius: 50%;">🚨</span>
+            <div>
+              <strong style="color: #ef4444; font-size: 14px;" data-i18n="assessment.quickEmergencyTitle">فحص فوري للأعراض الحرجة جداً (SpO2 &lt; 90%، زرقة الشفاه، ألم صدر حاد، سعال مدمم)</strong>
+              <p style="margin: 2px 0 0; font-size: 12px; color: var(--ink); opacity: 0.9;" data-i18n="assessment.quickEmergencySubtitle">تنبيه أحمر فوري للتوجه لأقرب طوارئ أو الاتصال بالإسعاف 123 في حالات الخطر القصوى.</p>
+            </div>
+          </div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button type="button" class="solid-button" onclick="openInstantCriticalCheckModal()" style="padding: 8px 16px; font-size: 13px; font-weight: 800; background: #dc2626; border-color: #dc2626; color: #fff;" data-i18n="assessment.btnRunEmergencyCheck">
+              ⚡ بدء فحص الطوارئ الفوري
+            </button>
+            <a href="tel:123" class="outline-button" style="padding: 8px 14px; font-size: 13px; font-weight: 800; border-color: #ef4444; color: #ef4444; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">
+              <span>📞</span>
+              <span>123</span>
+            </a>
+          </div>
+        </div>
+
         <div class="hero-panel app-hero">
           <div>
             <span class="eyebrow" id="patientHeroTitle" data-i18n="patient.welcome">Welcome</span>
@@ -1725,6 +1745,62 @@
                 <button type="button" id="btnDiscardAssessmentDraft" class="outline-button" style="padding:7px 12px;font-size:12px;" data-i18n="assessment.discardDraft">بدء جديد</button>
               </div>
             </div>
+
+            <!-- Immediate Red Emergency Alert Banner (Shown instantaneously if SpO2 < 90% or any critical symptom is selected) -->
+            <div id="criticalEmergencyBanner" class="emergency-alert-card critical-oxygen critical-emergency-banner" style="display: none;" role="alert" aria-live="assertive">
+              <div class="emergency-header">
+                <span class="emergency-pulsing-badge">🚨 <span data-i18n="assessment.criticalAlertTitle">تنبيه طوارئ أحمر فوري — أولوية قصوى</span></span>
+                <h4 style="color: #dc2626; margin: 0; font-size: 16.5px;" data-i18n="assessment.criticalAlertSubtitle">
+                  تم رصد أعراض حرجة جداً تستدعي التوجه لأقرب طوارئ أو الاتصال بالإسعاف 123 فوراً!
+                </h4>
+              </div>
+              <p class="emergency-lead" style="color: #991b1b; margin: 8px 0 6px;" data-i18n="assessment.criticalAlertLead">
+                هذه الأعراض تمثل حالة طوارئ طبية محتملة تهدد الحياة ولا يجوز الانتظار أو الاعتماد على المراجعة المؤجلة:
+              </p>
+              <div id="criticalDetectedList" class="critical-detected-items"></div>
+              <div class="emergency-action-buttons" style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px;">
+                <a href="tel:123" class="emergency-call-btn" style="background: #dc2626; text-decoration: none; padding: 12px 18px; font-size: 15px; font-weight: 800; border-radius: 12px; box-shadow: 0 4px 14px rgba(220, 38, 38, 0.45);">
+                  <span>📞</span>
+                  <span data-i18n="assessment.criticalCallAmbulance">اتصال فوري بالإسعاف (123)</span>
+                </a>
+                <button type="button" class="emergency-guide-trigger-btn" onclick="openEmergencyGuideModal()" style="padding: 10px 14px; border-radius: 12px;">
+                  <span>📋</span>
+                  <span data-i18n="assessment.firstAidTitle">إرشادات الإسعافات الأولية</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Instant Critical Symptoms Screener Card (SpO2 < 90%, Cyanosis, Acute Chest Pain, Hemoptysis) -->
+            <div id="criticalScreenerCard" class="critical-screener-card">
+              <div class="critical-screener-head">
+                <div class="critical-screener-badge">
+                  <span>⚡</span>
+                  <span data-i18n="assessment.criticalScreenerTitle">فحص فوري للأعراض الحرجة جداً (Red-Flag Triage)</span>
+                </div>
+                <p class="critical-screener-desc" data-i18n="assessment.criticalScreenerDesc">
+                  حدد فوراً إذا كان المريض يعاني حالياً من أي من علامات الخطر القصوى التالية (يُظهر تنبيهاً أحمر فورياً):
+                </p>
+              </div>
+              <div class="critical-symptoms-chips" role="group" aria-label="الأعراض الحرجة">
+                <button type="button" class="critical-symptom-chip" id="chipCyanosis" data-symptom="cyanosis" aria-pressed="false" onclick="toggleCriticalSymptom('cyanosis')">
+                  <span class="chip-icon">👄</span>
+                  <span class="chip-label" data-i18n="assessment.criticalCyanosis">زرقة الشفاه أو الوجه / الأطراف</span>
+                </button>
+                <button type="button" class="critical-symptom-chip" id="chipChestPain" data-symptom="acuteChestPain" aria-pressed="false" onclick="toggleCriticalSymptom('acuteChestPain')">
+                  <span class="chip-icon">💔</span>
+                  <span class="chip-label" data-i18n="assessment.criticalChestPain">ألم صدر حاد ومفاجئ</span>
+                </button>
+                <button type="button" class="critical-symptom-chip" id="chipHemoptysis" data-symptom="hemoptysis" aria-pressed="false" onclick="toggleCriticalSymptom('hemoptysis')">
+                  <span class="chip-icon">🩸</span>
+                  <span class="chip-label" data-i18n="assessment.criticalHemoptysis">سعال مدمم (خروج دم مع الكحة)</span>
+                </button>
+                <button type="button" class="critical-symptom-chip" id="chipSevereDyspnea" data-symptom="severeDyspnea" aria-pressed="false" onclick="toggleCriticalSymptom('severeDyspnea')">
+                  <span class="chip-icon">🫁</span>
+                  <span class="chip-label" data-i18n="assessment.criticalSevereDyspnea">صعوبة بالغة في التنفس أو عجز عن الكلام</span>
+                </button>
+              </div>
+            </div>
+
             <label data-i18n="assessment.shortnessOfBreath">هل يوجد ضيق تنفس؟</label>
             <div id="breathingChoices" class="choice-row">
               <button class="choice active">نعم</button>
@@ -3797,33 +3873,101 @@
     </div>
   </div>
 
+  <!-- Standalone Instant Critical Check Modal (Quick Triage Dialog) -->
+  <div id="instantCriticalCheckModal" class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="instantCheckModalTitle" aria-hidden="true">
+    <div class="confirm-card emergency-alert-card critical-oxygen" style="width: min(520px, 100%); text-align: start; padding: 22px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid rgba(239, 68, 68, 0.25); padding-bottom: 10px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 22px;">🚨</span>
+          <h3 id="instantCheckModalTitle" style="margin: 0; color: #dc2626; font-size: 17px;" data-i18n="assessment.emergencyModalTitle">فحص الطوارئ والأعراض الحرجة الفوري</h3>
+        </div>
+        <button type="button" class="outline-button" onclick="closeInstantCriticalCheckModal()" style="padding: 4px 10px; font-size: 12px; border-radius: 8px;">✕</button>
+      </div>
+      <p style="margin: 0 0 12px; font-size: 13px; color: var(--ink); line-height: 1.5;" data-i18n="assessment.emergencyModalDesc">
+        اختر أي أعراض يعاني منها المريض حالياً للحصول على توجيه إسعافي مباشر وفحص فوري:
+      </p>
+
+      <div class="critical-symptoms-chips" style="margin-bottom: 14px;">
+        <button type="button" class="critical-symptom-chip" id="modalChipO2" data-symptom="modalO2" onclick="toggleModalCriticalSymptom('modalO2')">
+          <span class="chip-icon">🫁</span>
+          <span class="chip-label" data-i18n="assessment.criticalSpO2Low">نقص حاد بالأكسجين (SpO2 &lt; 90%)</span>
+        </button>
+        <button type="button" class="critical-symptom-chip" id="modalChipCyanosis" data-symptom="modalCyanosis" onclick="toggleModalCriticalSymptom('modalCyanosis')">
+          <span class="chip-icon">👄</span>
+          <span class="chip-label" data-i18n="assessment.criticalCyanosis">زرقة الشفاه أو الوجه / الأطراف</span>
+        </button>
+        <button type="button" class="critical-symptom-chip" id="modalChipChestPain" data-symptom="modalChestPain" onclick="toggleModalCriticalSymptom('modalChestPain')">
+          <span class="chip-icon">💔</span>
+          <span class="chip-label" data-i18n="assessment.criticalChestPain">ألم صدر حاد ومفاجئ</span>
+        </button>
+        <button type="button" class="critical-symptom-chip" id="modalChipHemoptysis" data-symptom="modalHemoptysis" onclick="toggleModalCriticalSymptom('modalHemoptysis')">
+          <span class="chip-icon">🩸</span>
+          <span class="chip-label" data-i18n="assessment.criticalHemoptysis">سعال مدمم (خروج دم مع الكحة)</span>
+        </button>
+      </div>
+
+      <div id="modalCriticalAlertBox" style="background: rgba(220, 38, 38, 0.1); border: 1.5px solid #ef4444; border-radius: 12px; padding: 12px 14px; margin-bottom: 16px; display: none;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+          <span class="emergency-pulsing-badge">🚨 تنبيه أحمر عاجل</span>
+          <strong style="color: #dc2626; font-size: 14px;">تم رصد أعراض حرجة جداً!</strong>
+        </div>
+        <p style="margin: 0 0 10px; font-size: 12.8px; color: var(--ink); line-height: 1.5;">
+          هذه الأعراض تستدعي التوجه فوراً لأقرب قسم طوارئ أو الاتصال بالإسعاف 123 دون أي تأخير.
+        </p>
+        <div id="modalDetectedSymptomsList" style="font-size: 12.5px; font-weight: 700; color: #991b1b; margin-bottom: 10px;"></div>
+        <a href="tel:123" class="emergency-call-btn" style="background: #dc2626; text-decoration: none; padding: 10px 16px; font-size: 14.5px; font-weight: 800; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; width: 100%; box-sizing: border-box;">
+          <span>📞</span>
+          <span data-i18n="assessment.criticalCallAmbulance">اتصال فوري بالإسعاف (123)</span>
+        </a>
+      </div>
+
+      <div id="modalSafeNoticeBox" style="background: rgba(22, 163, 74, 0.08); border: 1px solid rgba(22, 163, 74, 0.25); border-radius: 10px; padding: 10px 12px; margin-bottom: 14px; font-size: 12.5px; color: var(--ink);">
+        <span style="color: #16a34a; font-weight: 700;">✓</span>
+        <span data-i18n="assessment.emergencySafeNotice">لم يتم اختيار أي أعراض حرجة قصوى. يمكنك متابعة التقييم السريري المعتاد بأمان.</span>
+      </div>
+
+      <div style="display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap;">
+        <button type="button" class="solid-button" onclick="closeInstantCriticalCheckModal(); showScreen('assessment');" style="padding: 8px 16px; font-size: 13px;">
+          متابعة التقييم التنفسي الكامل ➔
+        </button>
+        <button type="button" class="outline-button" onclick="closeInstantCriticalCheckModal()" style="padding: 8px 14px; font-size: 13px;">
+          إغلاق
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Emergency Submission Safety Interception Modal -->
   <div id="emergencySubmitModal" class="confirm-modal" role="alertdialog" aria-modal="true" aria-labelledby="emergencySubmitTitle" aria-describedby="emergencySubmitText emergencySubmitGuidance" aria-hidden="true">
-    <div class="confirm-card emergency-alert-card critical-oxygen" style="width: min(480px, 100%); text-align: right; padding: 24px;">
+    <div class="confirm-card emergency-alert-card critical-oxygen" style="width: min(500px, 100%); text-align: start; padding: 24px;">
       <div class="emergency-header" style="justify-content: flex-start;">
-        <span class="emergency-pulsing-badge">🚨 تنبيه طوارئ فوري</span>
-        <h3 id="emergencySubmitTitle" style="margin: 0; color: #dc2626; font-size: 19px;">نقص أكسجين حاد — لا تنتظر مراجعة التطبيق</h3>
+        <span class="emergency-pulsing-badge">🚨 تنبيه طوارئ أحمر فوري</span>
+        <h3 id="emergencySubmitTitle" style="margin: 0; color: #dc2626; font-size: 18.5px;">أعراض حرجة جداً — لا تنتظر مراجعة التطبيق</h3>
       </div>
       <p id="emergencySubmitText" style="color: var(--ink); font-size: 14px; line-height: 1.6; margin: 12px 0 16px;">
-        نسبة الأكسجين المدخلة (<strong id="emergencyModalO2Val" style="color:#dc2626;">--%</strong>) حرجة للغاية وتشير إلى نقص أكسجين يستدعي رعاية طبية طارئة ومباشرة فوراً.
+        البيانات المسجلة (<strong id="emergencyModalO2Val" style="color:#dc2626;">--%</strong>) تتضمن أعراضاً حرجة للغاية تستدعي التوجه فوراً لأقرب طوارئ أو الاتصال بالإسعاف (123).
       </p>
+      <div id="emergencySubmitDetectedBox" style="display: none; background: rgba(220, 38, 38, 0.08); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; border: 1px dashed #ef4444;">
+        <strong style="color: #b91c1c; font-size: 13px; display: block; margin-bottom: 4px;">الأعراض الحرجة المرصودة:</strong>
+        <div id="emergencySubmitDetectedList" style="font-size: 12.5px; color: var(--ink); line-height: 1.5;"></div>
+      </div>
       <div id="emergencySubmitGuidance" style="background: rgba(220, 38, 38, 0.08); border-radius: 12px; padding: 12px 14px; margin-bottom: 16px; border: 1px dashed #ef4444;">
         <strong style="color: #b91c1c; display: block; margin-bottom: 4px; font-size: 13.5px;">⚠️ إرشادات السلامة الفورية:</strong>
         <ul style="margin: 0; padding-inline-start: 18px; font-size: 12.8px; line-height: 1.55; color: var(--ink);">
-          <li>التوجه فوراً لأقرب قسم طوارئ أو استدعاء الإسعاف (123).</li>
+          <li>التوجه فوراً لأقرب قسم طوارئ في مستشفى أو استدعاء الإسعاف (123).</li>
           <li>الجلوس في وضع قائم وعدم الاستلقاء مسطحاً على الظهر.</li>
           <li>لا تعتمد على المراجعة الإلكترونية المؤجلة في الحالات الطارئة.</li>
         </ul>
       </div>
       <div class="doctor-actions" style="flex-direction: column; gap: 10px; margin-top: 10px;">
-        <a href="tel:123" class="emergency-call-btn" style="width: 100%; justify-content: center; text-decoration: none; padding: 12px; font-size: 15px;">
+        <a href="tel:123" class="emergency-call-btn" style="width: 100%; justify-content: center; text-decoration: none; padding: 12px; font-size: 15px; box-sizing: border-box;">
           📞 طلب الإسعاف فوراً (123)
         </a>
         <button id="emergencySubmitProceedBtn" class="solid-button" style="width: 100%; background: #991b1b; border-color: #991b1b; font-size: 13.5px;">
           أنا في طريقي للطوارئ / في أمان — متابعة إرسال الحالة للطبيب
         </button>
         <button id="emergencySubmitCancelBtn" class="outline-button" style="width: 100%; font-size: 13px;">
-          تعديل نسبة الأكسجين (إعادة القياس)
+          تعديل البيانات وإعادة الفحص
         </button>
       </div>
     </div>
