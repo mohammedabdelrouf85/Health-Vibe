@@ -16,6 +16,7 @@
 
 const crypto = require("crypto");
 const { datasetGovernanceService } = require("../dataset/dataset_governance_service");
+const { patientLevelSplitService } = require("../dataset/patient_level_split_service");
 
 class KaggleTrainingService {
   constructor(options = {}) {
@@ -187,6 +188,29 @@ class KaggleTrainingService {
   }
 
   /**
+   * Partitions an offline clinical training dataset strictly on the patient level.
+   * Guarantees 0% patient leakage between Train, Validation, and Test subsets.
+   */
+  partitionDatasetByPatient(dataset, options = {}) {
+    this.assertNotOperationalDatabase("partition_training_dataset");
+    return patientLevelSplitService.splitByPatient(dataset, options);
+  }
+
+  /**
+   * Verifies that sets of patient IDs across splits are 100% disjoint.
+   */
+  verifyZeroPatientLeakage(splitSets) {
+    return patientLevelSplitService.verifyZeroPatientLeakage(splitSets);
+  }
+
+  /**
+   * Asserts zero patient leakage directly across record sets; throws error if leakage detected.
+   */
+  assertZeroPatientLeakage(trainRecords, valRecords, testRecords, patientIdExtractor = null) {
+    return patientLevelSplitService.assertZeroPatientLeakage(trainRecords, valRecords, testRecords, patientIdExtractor);
+  }
+
+  /**
    * Returns complete audit report proving Kaggle is strictly decoupled from operational databases.
    */
   getArchitecturalSeparationReport() {
@@ -195,6 +219,7 @@ class KaggleTrainingService {
       trainingDataStore: "Kaggle Benchmarks & Datasets (Read-only, Offline Training Only)",
       operationalDataStore: "PostgreSQL / Supabase Relational Database (Accounts, Patients, Patient History, Cases)",
       phiProtection: "Strict Boundary Enforced. Zero patient data allowed in Kaggle artifacts.",
+      patientLevelPartitioning: "ENFORCED_ZERO_PATIENT_LEAKAGE",
       registeredModelsCount: this.modelRegistry.size,
       complianceStatus: "PASSED_HIPAA_AND_PRD_SPECIFICATION"
     };

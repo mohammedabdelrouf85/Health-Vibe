@@ -1,0 +1,58 @@
+{
+  "protocol": "HV-PATIENT-SPLIT-GMLP-2026",
+  "methodology": "STRATIFIED_GROUP_PATIENT_LEVEL_PARTITION",
+  "specification": "PRD Requirement 52 Compliance: Zero Patient Leakage",
+  "timestamp": "2026-10-16T13:35:29.542Z",
+  "ratios": {
+    "target": {
+      "train": 0.7,
+      "validation": 0.15,
+      "test": 0.15
+    },
+    "achievedPatientLevel": {
+      "train": 0.7,
+      "validation": 0.1563,
+      "test": 0.1437
+    },
+    "achievedRecordLevel": {
+      "train": 0.7,
+      "validation": 0.1563,
+      "test": 0.1437
+    }
+  },
+  "counts": {
+    "totalDistinctPatients": 160,
+    "totalRecords": 160,
+    "train": {
+      "patients": 112,
+      "records": 112,
+      "classDistribution": {
+        "urgent": 53,
+        "normal": 38,
+        "high": 21
+      }
+    },
+    "validation": {
+      "patients": 25,
+      "records": 25,
+      "classDistribution": {
+        "urgent": 12,
+        "normal": 8,
+        "high": 5
+      }
+    },
+    "test": {
+      "patients": 23,
+      "records": 23,
+      "classDistribution": {
+        "urgent": 11,
+        "normal": 8,
+        "high": 4
+      }
+    }
+  },
+  "zeroPatientLeakageCertified": true,
+  "overlapCount": 0,
+  "randomSeed": 42,
+  "manifestSha256": "7e45fe50f9d510e1b1369e8640ba58740955a90cfc1a126d68916973eadf3d96"
+}

@@ -1,0 +1,877 @@
+[
+  {
+    "subjectId": "HV-EVAL-058",
+    "demographics": {
+      "age": 50,
+      "ageGroup": "middle_aged",
+      "sex": "female"
+    },
+    "vitals": {
+      "oxygenLevel": 86,
+      "respiratoryRate": 33,
+      "temperature": 37.8,
+      "heartRate": 102
+    },
+    "symptoms": {
+      "breathingDifficulty": true,
+      "coughLevel": "severe",
+      "symptomDurationDays": 9,
+      "chestPain": false,
+      "symptomProgression": "worsening"
+    },
+    "comorbidities": {
+      "asthma": false,
+      "copd": false,
+      "smoking": false,
+      "pregnancy": false,
+      "cardiovascular": false,
+      "diabetes": false
+    },
+    "deidentifiedAt": "2026-09-28T09:00:00.000Z",
+    "groundTruth": {
+      "triage": "urgent",
+      "critical": 1
+    },
+    "splitAssignment": "validation"
+  },
+  {
+    "subjectId": "HV-DEV-005",
+    "demographics": {
+      "age": 24,
+      "ageGroup": "young_adult",
+      "sex": "female"
+    },
+    "vitals": {
+      "oxygenLevel": 86,
+      "respiratoryRate": 31,
+      "temperature": 37.7,
+      "heartRate": 116
+    },
+    "symptoms": {
+      "breathingDifficulty": true,
+      "coughLevel": "severe",
+      "symptomDurationDays": 2,
+      "chestPain": true,
+      "symptomProgression": "worsening"
+    },
+    "comorbidities": {
+      "asthma": false,
+      "copd": false,
+      "smoking": false,
+      "pregnancy": false,
+      "cardiovascular": false,
+      "diabetes": false
+    },
+    "deidentifiedAt": "2026-09-28T09:00:00.000Z",
+    "groundTruth": {
+      "triage": "urgent",
+      "critical": 1
+    },
+    "splitAssignment": "validation"
+  },
+  {
+    "subjectId": "HV-EVAL-026",
+    "demographics": {
+      "age": 4,
+      "ageGroup": "pediatric",
+      "sex": "male"
+    },
+    "vitals": {
+      "oxygenLevel": 91,
+      "respiratoryRate": 22,
+      "temperature": 37.8,
+      "heartRate": 97
+    },
+    "symptoms": {
+      "breathingDifficulty": true,
+      "coughLevel": "mild",
+      "symptomDurationDays": 20,
+      "chestPain": false,
+      "symptomProgression": "stable"
+    },
+    "comorbidities": {
+      "asthma": false,
+      "copd": false,
+      "smoking": false,
+      "pregnancy": false,
+      "cardiovascular": false,
+      "diabetes": false
+    },
+    "deidentifiedAt": "2026-09-28T09:00:00.000Z",
+    "groundTruth": {
+      "triage": "urgent",
+      "critical": 1
+    },
+    "splitAssignment": "validation"
+  },
+  {
+    "subjectId": "HV-DEV-062",
+    "demographics": {
+      "age": 32,
+      "ageGroup": "young_adult",
+      "sex": "male"
+    },
+    "vitals": {
+      "oxygenLevel": 91,
+      "respiratoryRate": 24,
+      "temperature": 39.1,
+      "heartRate": 100
+    },
+    "symptoms": {
+      "breathingDifficulty": true,
+      "coughLevel": "moderate",
+      "symptomDurationDays": 9,
+      "chestPain": true,
+      "symptomProgression": "worsening"
+    },
+    "comorbidities": {
+      "asthma": false,
+      "copd": false,
+      "smoking": true,
+      "pregnancy": false,
+      "cardiovascular": false,
+      "diabetes": false
+    },
+    "deidentifiedAt": "2026-09-28T09:00:00.000Z",
+    "groundTruth": {
+      "triage": "urgent",
+      "critical": 1
+    },
+    "splitAssignment": "validation"
+  },
+  {
+    "subjectId": "HV-DEV-001",
+    "demographics": {
+      "age": 78,
+      "ageGroup": "geriatric",
+      "sex": "male"
+    },
+    "vitals": {
+      "oxygenLevel": 92,
+      "respiratoryRate": 22,
+      "temperature": 37.6,
+      "heartRate": 93
+    },
+    "symptoms": {
+      "breathingDifficulty": true,
+      "coughLevel": "mild",
+      "symptomDurationDays": 5,
+      "chestPain": false,
+      "symptomProgression": "stable"
+    },
+    "comorbidities": {
+      "asthma": false,
+      "copd": false,
+      "smoking": false,
+      "pregnancy": false,
+      "cardiovascular": true,
+      "diabetes": true
+    },
+    "deidentifiedAt": "2026-09-28T09:00:00.000Z",
+    "groundTruth": {
+      "triage": "urgent",
+      "critical": 1
+    },
+    "splitAssignment": "validation"
+  },
+  {
+    "subjectId": "HV-EVAL-007",
+    "demographics": {
+      "age": 22,
+      "ageGroup": "young_adult",
+      "sex": "female"
+    },
+    "vitals": {
+      "oxygenLevel": 90,
+      "respiratoryRate": 35,
+      "temperature": 38.1,
+      "heartRate": 96
+    },
+    "symptoms": {
+      "breathingDifficulty": true,
+      "coughLevel": "severe",
+      "symptomDurationDays": 8,
+      "chestPain": false,
+      "symptomProgression": "worsening"
+    },
+    "comorbidities": {
+      "asthma": true,
+      "copd": false,
+      "smoking": false,
+      "pregnancy": false,
+      "cardiovascular": false,
+      "diabetes": false
+    },
+    "deidentifiedAt": "2026-09-28T09:00:00.000Z",
+    "groundTruth": {
+      "triage": "urgent",
+      "critical": 1
+    },
+    "splitAssignment": "validation"
+  },
+  {
+    "subjectId": "HV-EVAL-015",
+    "demographics": {
+      "age": 24,
+      "ageGroup": "young_adult",
+      "sex": "male"
+    },
+    "vitals": {
+      "oxygenLevel": 85,
+      "respiratoryRate": 28,
+      "temperature": 37.7,
+      "heartRate": 115
+    },
+    "symptoms": {
+      "breathingDifficulty": true,
+      "coughLevel": "severe",
+      "symptomDurationDays": 8,
+      "chestPain": true,
+      "symptomProgression": "worsening"
+    },
+    "comorbidities": {
+      "asthma": false,
+      "copd": false,
+      "smoking": true,
+      "pregnancy": false,
+      "cardiovascular": false,
+      "diabetes": false
+    },
+    "deidentifiedAt": "2026-09-28T09:00:00.000Z",
+    "groundTruth": {
+      "triage": "urgent",
+      "critical": 1
+    },
+    "splitAssignment": "validation"
+  },
+  {
+    "subjectId": "HV-DEV-067",
+    "demographics": {
+      "age": 51,
+      "ageGroup": "middle_aged",
+      "sex": "female"
+    },
+    "vitals": {
+      "oxygenLevel": 87,
+      "respiratoryRate": 27,
+      "temperature": 38.3,
+      "heartRate": 123
+    },
+    "symptoms": {
+      "breathingDifficulty": true,
+      "coughLevel": "severe",
+      "symptomDurationDays": 7,
+      "chestPain": true,
+      "symptomProgression": "worsening"
+    },
+    "comorbidities": {
+      "asthma": false,
+      "copd": false,
+      "smoking": false,
+      "pregnancy": false,
+      "cardiovascular": false,
+      "diabetes": false
+    },
+    "deidentifiedAt": "2026-09-28T09:00:00.000Z",
+    "groundTruth": {
+      "triage": "urgent",
+      "critical": 1
+    },
+    "splitAssignment": "validation"
+  },
+  {
+    "subjectId": "HV-EVAL-073",
+    "demographics": {
+      "age": 64,
+      "ageGroup": "middle_aged",
+      "sex": "male"
+    },
+    "vitals": {
+      "oxygenLevel": 88,
+      "respiratoryRate": 29,
+      "temperature": 38.2,
+      "heartRate": 120
+    },
+    "symptoms": {
+      "breathingDifficulty": true,
+      "coughLevel": "severe",
+      "symptomDurationDays": 6,
+      "chestPain": true,
+      "symptomProgression": "worsening"
+    },
+    "comorbidities": {
+      "asthma": false,
+      "copd": false,
+      "smoking": true,
+      "pregnancy": false,
+      "cardiovascular": false,
+      "diabetes": false
+    },
+    "deidentifiedAt": "2026-09-28T09:00:00.000Z",
+    "groundTruth": {
+      "triage": "urgent",
+      "critical": 1
+    },
+    "splitAssignment": "validation"
+  },
+  {
+    "subjectId": "HV-EVAL-067",
+    "demographics": {
+      "age": 8,
+      "ageGroup": "pediatric",
+      "sex": "male"
+    },
+    "vitals": {
+      "oxygenLevel": 91,
+      "respiratoryRate": 18,
+      "temperature": 37.7,
+      "heartRate": 80
+    },
+    "symptoms": {
+      "breathingDifficulty": true,
+      "coughLevel": "mild",
+      "symptomDurationDays": 3,
+      "chestPain": false,
+      "symptomProgression": "stable"
+    },
+    "comorbidities": {
+      "asthma": true,
+      "copd": false,
+      "smoking": false,
+      "pregnancy": false,
+      "cardiovascular": false,
+      "diabetes": false
+    },
+    "deidentifiedAt": "2026-09-28T09:00:00.000Z",
+    "groundTruth": {
+      "triage": "urgent",
+      "critical": 1
+    },
+    "splitAssignment": "validation"
+  },
+  {
+    "subjectId": "HV-EVAL-027",
+    "demographics": {
+      "age": 67,
+      "ageGroup": "geriatric",
+      "sex": "male"
+    },
+    "vitals": {
+      "oxygenLevel": 87,
+      "respiratoryRate": 25,
+      "temperature": 37.7,
+      "heartRate": 111
+    },
+    "symptoms": {
+      "breathingDifficulty": true,
+      "coughLevel": "severe",
+      "symptomDurationDays": 3,
+      "chestPain": false,
+      "symptomProgression": "worsening"
+    },
+    "comorbidities": {
+      "asthma": false,
+      "copd": false,
+      "smoking": true,
+      "pregnancy": false,
+      "cardiovascular": false,
+      "diabetes": false
+    },
+    "deidentifiedAt": "2026-09-28T09:00:00.000Z",
+    "groundTruth": {
+      "triage": "urgent",
+      "critical": 1
+    },
+    "splitAssignment": "validation"
+  },
+  {
+    "subjectId": "HV-EVAL-043",
+    "demographics": {
+      "age": 66,
+      "ageGroup": "geriatric",
+      "sex": "male"
+    },
+    "vitals": {
+      "oxygenLevel": 89,
+      "respiratoryRate": 33,
+      "temperature": 37.5,
+      "heartRate": 126
+    },
+    "symptoms": {
+      "breathingDifficulty": true,
+      "coughLevel": "moderate",
+      "symptomDurationDays": 6,
+      "chestPain": true,
+      "symptomProgression": "worsening"
+    },
+    "comorbidities": {
+      "asthma": true,
+      "copd": false,
+      "smoking": false,
+      "pregnancy": false,
+      "cardiovascular": false,
+      "diabetes": true
+    },
+    "deidentifiedAt": "2026-09-28T09:00:00.000Z",
+    "groundTruth": {
+      "triage": "urgent",
+      "critical": 1
+    },
+    "splitAssignment": "validation"
+  },
+  {
+    "subjectId": "HV-EVAL-069",
+    "demographics": {
+      "age": 13,
+      "ageGroup": "pediatric",
+      "sex": "female"
+    },
+    "vitals": {
+      "oxygenLevel": 99,
+      "respiratoryRate": 15,
+      "temperature": 37.2,
+      "heartRate": 66
+    },
+    "symptoms": {
+      "breathingDifficulty": false,
+      "coughLevel": "mild",
+      "symptomDurationDays": 10,
+      "chestPain": false,
+      "symptomProgression": "improving"
+    },
+    "comorbidities": {
+      "asthma": false,
+      "copd": false,
+      "smoking": false,
+      "pregnancy": false,
+      "cardiovascular": false,
+      "diabetes": false
+    },
+    "deidentifiedAt": "2026-09-28T09:00:00.000Z",
+    "groundTruth": {
+      "triage": "normal",
+      "critical": 0
+    },
+    "splitAssignment": "validation"
+  },
+  {
+    "subjectId": "HV-EVAL-022",
+    "demographics": {
+      "age": 15,
+      "ageGroup": "pediatric",
+      "sex": "male"
+    },
+    "vitals": {
+      "oxygenLevel": 97,
+      "respiratoryRate": 17,
+      "temperature": 37.1,
+      "heartRate": 77
+    },
+    "symptoms": {
+      "breathingDifficulty": false,
+      "coughLevel": "none",
+      "symptomDurationDays": 3,
+      "chestPain": false,
+      "symptomProgression": "improving"
+    },
+    "comorbidities": {
+      "asthma": false,
+      "copd": false,
+      "smoking": false,
+      "pregnancy": false,
+      "cardiovascular": false,
+      "diabetes": false
+    },
+    "deidentifiedAt": "2026-09-28T09:00:00.000Z",
+    "groundTruth": {
+      "triage": "normal",
+      "critical": 0
+    },
+    "splitAssignment": "validation"
+  },
+  {
+    "subjectId": "HV-EVAL-045",
+    "demographics": {
+      "age": 30,
+      "ageGroup": "young_adult",
+      "sex": "male"
+    },
+    "vitals": {
+      "oxygenLevel": 94,
+      "respiratoryRate": 19,
+      "temperature": 38.2,
+      "heartRate": 93
+    },
+    "symptoms": {
+      "breathingDifficulty": false,
+      "coughLevel": "moderate",
+      "symptomDurationDays": 16,
+      "chestPain": false,
+      "symptomProgression": "stable"
+    },
+    "comorbidities": {
+      "asthma": false,
+      "copd": false,
+      "smoking": false,
+      "pregnancy": false,
+      "cardiovascular": false,
+      "diabetes": false
+    },
+    "deidentifiedAt": "2026-09-28T09:00:00.000Z",
+    "groundTruth": {
+      "triage": "normal",
+      "critical": 0
+    },
+    "splitAssignment": "validation"
+  },
+  {
+    "subjectId": "HV-EVAL-076",
+    "demographics": {
+      "age": 19,
+      "ageGroup": "young_adult",
+      "sex": "female"
+    },
+    "vitals": {
+      "oxygenLevel": 99,
+      "respiratoryRate": 15,
+      "temperature": 36.6,
+      "heartRate": 78
+    },
+    "symptoms": {
+      "breathingDifficulty": false,
+      "coughLevel": "mild",
+      "symptomDurationDays": 8,
+      "chestPain": false,
+      "symptomProgression": "improving"
+    },
+    "comorbidities": {
+      "asthma": true,
+      "copd": false,
+      "smoking": false,
+      "pregnancy": false,
+      "cardiovascular": false,
+      "diabetes": false
+    },
+    "deidentifiedAt": "2026-09-28T09:00:00.000Z",
+    "groundTruth": {
+      "triage": "normal",
+      "critical": 0
+    },
+    "splitAssignment": "validation"
+  },
+  {
+    "subjectId": "HV-EVAL-024",
+    "demographics": {
+      "age": 52,
+      "ageGroup": "middle_aged",
+      "sex": "male"
+    },
+    "vitals": {
+      "oxygenLevel": 94,
+      "respiratoryRate": 23,
+      "temperature": 38.1,
+      "heartRate": 98
+    },
+    "symptoms": {
+      "breathingDifficulty": false,
+      "coughLevel": "moderate",
+      "symptomDurationDays": 17,
+      "chestPain": false,
+      "symptomProgression": "stable"
+    },
+    "comorbidities": {
+      "asthma": false,
+      "copd": false,
+      "smoking": true,
+      "pregnancy": false,
+      "cardiovascular": false,
+      "diabetes": false
+    },
+    "deidentifiedAt": "2026-09-28T09:00:00.000Z",
+    "groundTruth": {
+      "triage": "normal",
+      "critical": 0
+    },
+    "splitAssignment": "validation"
+  },
+  {
+    "subjectId": "HV-DEV-039",
+    "demographics": {
+      "age": 5,
+      "ageGroup": "pediatric",
+      "sex": "male"
+    },
+    "vitals": {
+      "oxygenLevel": 97,
+      "respiratoryRate": 15,
+      "temperature": 36.8,
+      "heartRate": 75
+    },
+    "symptoms": {
+      "breathingDifficulty": false,
+      "coughLevel": "mild",
+      "symptomDurationDays": 4,
+      "chestPain": false,
+      "symptomProgression": "improving"
+    },
+    "comorbidities": {
+      "asthma": false,
+      "copd": false,
+      "smoking": false,
+      "pregnancy": false,
+      "cardiovascular": false,
+      "diabetes": false
+    },
+    "deidentifiedAt": "2026-09-28T09:00:00.000Z",
+    "groundTruth": {
+      "triage": "normal",
+      "critical": 0
+    },
+    "splitAssignment": "validation"
+  },
+  {
+    "subjectId": "HV-DEV-028",
+    "demographics": {
+      "age": 45,
+      "ageGroup": "middle_aged",
+      "sex": "male"
+    },
+    "vitals": {
+      "oxygenLevel": 96,
+      "respiratoryRate": 15,
+      "temperature": 37.2,
+      "heartRate": 78
+    },
+    "symptoms": {
+      "breathingDifficulty": false,
+      "coughLevel": "none",
+      "symptomDurationDays": 9,
+      "chestPain": false,
+      "symptomProgression": "improving"
+    },
+    "comorbidities": {
+      "asthma": false,
+      "copd": true,
+      "smoking": false,
+      "pregnancy": false,
+      "cardiovascular": false,
+      "diabetes": false
+    },
+    "deidentifiedAt": "2026-09-28T09:00:00.000Z",
+    "groundTruth": {
+      "triage": "normal",
+      "critical": 0
+    },
+    "splitAssignment": "validation"
+  },
+  {
+    "subjectId": "HV-EVAL-016",
+    "demographics": {
+      "age": 16,
+      "ageGroup": "pediatric",
+      "sex": "male"
+    },
+    "vitals": {
+      "oxygenLevel": 96,
+      "respiratoryRate": 14,
+      "temperature": 36.8,
+      "heartRate": 67
+    },
+    "symptoms": {
+      "breathingDifficulty": false,
+      "coughLevel": "mild",
+      "symptomDurationDays": 2,
+      "chestPain": false,
+      "symptomProgression": "improving"
+    },
+    "comorbidities": {
+      "asthma": true,
+      "copd": false,
+      "smoking": false,
+      "pregnancy": false,
+      "cardiovascular": false,
+      "diabetes": false
+    },
+    "deidentifiedAt": "2026-09-28T09:00:00.000Z",
+    "groundTruth": {
+      "triage": "normal",
+      "critical": 0
+    },
+    "splitAssignment": "validation"
+  },
+  {
+    "subjectId": "HV-DEV-048",
+    "demographics": {
+      "age": 27,
+      "ageGroup": "young_adult",
+      "sex": "male"
+    },
+    "vitals": {
+      "oxygenLevel": 91,
+      "respiratoryRate": 22,
+      "temperature": 37.3,
+      "heartRate": 87
+    },
+    "symptoms": {
+      "breathingDifficulty": false,
+      "coughLevel": "mild",
+      "symptomDurationDays": 5,
+      "chestPain": false,
+      "symptomProgression": "stable"
+    },
+    "comorbidities": {
+      "asthma": false,
+      "copd": false,
+      "smoking": false,
+      "pregnancy": false,
+      "cardiovascular": false,
+      "diabetes": false
+    },
+    "deidentifiedAt": "2026-09-28T09:00:00.000Z",
+    "groundTruth": {
+      "triage": "high",
+      "critical": 0
+    },
+    "splitAssignment": "validation"
+  },
+  {
+    "subjectId": "HV-DEV-014",
+    "demographics": {
+      "age": 21,
+      "ageGroup": "young_adult",
+      "sex": "female"
+    },
+    "vitals": {
+      "oxygenLevel": 94,
+      "respiratoryRate": 21,
+      "temperature": 37.9,
+      "heartRate": 90
+    },
+    "symptoms": {
+      "breathingDifficulty": false,
+      "coughLevel": "mild",
+      "symptomDurationDays": 4,
+      "chestPain": false,
+      "symptomProgression": "stable"
+    },
+    "comorbidities": {
+      "asthma": true,
+      "copd": false,
+      "smoking": true,
+      "pregnancy": false,
+      "cardiovascular": false,
+      "diabetes": false
+    },
+    "deidentifiedAt": "2026-09-28T09:00:00.000Z",
+    "groundTruth": {
+      "triage": "high",
+      "critical": 0
+    },
+    "splitAssignment": "validation"
+  },
+  {
+    "subjectId": "HV-DEV-059",
+    "demographics": {
+      "age": 52,
+      "ageGroup": "middle_aged",
+      "sex": "female"
+    },
+    "vitals": {
+      "oxygenLevel": 93,
+      "respiratoryRate": 19,
+      "temperature": 36.9,
+      "heartRate": 97
+    },
+    "symptoms": {
+      "breathingDifficulty": true,
+      "coughLevel": "mild",
+      "symptomDurationDays": 18,
+      "chestPain": false,
+      "symptomProgression": "stable"
+    },
+    "comorbidities": {
+      "asthma": false,
+      "copd": false,
+      "smoking": true,
+      "pregnancy": false,
+      "cardiovascular": false,
+      "diabetes": false
+    },
+    "deidentifiedAt": "2026-09-28T09:00:00.000Z",
+    "groundTruth": {
+      "triage": "high",
+      "critical": 0
+    },
+    "splitAssignment": "validation"
+  },
+  {
+    "subjectId": "HV-DEV-051",
+    "demographics": {
+      "age": 47,
+      "ageGroup": "middle_aged",
+      "sex": "male"
+    },
+    "vitals": {
+      "oxygenLevel": 94,
+      "respiratoryRate": 19,
+      "temperature": 37.2,
+      "heartRate": 97
+    },
+    "symptoms": {
+      "breathingDifficulty": false,
+      "coughLevel": "mild",
+      "symptomDurationDays": 15,
+      "chestPain": false,
+      "symptomProgression": "stable"
+    },
+    "comorbidities": {
+      "asthma": true,
+      "copd": false,
+      "smoking": false,
+      "pregnancy": false,
+      "cardiovascular": false,
+      "diabetes": false
+    },
+    "deidentifiedAt": "2026-09-28T09:00:00.000Z",
+    "groundTruth": {
+      "triage": "high",
+      "critical": 0
+    },
+    "splitAssignment": "validation"
+  },
+  {
+    "subjectId": "HV-DEV-054",
+    "demographics": {
+      "age": 17,
+      "ageGroup": "pediatric",
+      "sex": "female"
+    },
+    "vitals": {
+      "oxygenLevel": 92,
+      "respiratoryRate": 21,
+      "temperature": 37.3,
+      "heartRate": 85
+    },
+    "symptoms": {
+      "breathingDifficulty": false,
+      "coughLevel": "mild",
+      "symptomDurationDays": 14,
+      "chestPain": false,
+      "symptomProgression": "stable"
+    },
+    "comorbidities": {
+      "asthma": false,
+      "copd": false,
+      "smoking": false,
+      "pregnancy": false,
+      "cardiovascular": false,
+      "diabetes": false
+    },
+    "deidentifiedAt": "2026-09-28T09:00:00.000Z",
+    "groundTruth": {
+      "triage": "high",
+      "critical": 0
+    },
+    "splitAssignment": "validation"
+  }
+]

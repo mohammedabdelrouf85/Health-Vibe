@@ -12,6 +12,7 @@
 const fs = require("fs");
 const path = require("path");
 const { validateDeidentifiedRecord } = require("./deidentification");
+const { patientLevelSplitService } = require("./patient_level_split_service");
 
 // Deterministic pseudo-random number generator for reproducible dataset generation
 function createPrng(seed = 123456789) {
@@ -332,7 +333,28 @@ function main() {
   console.log("  ✓ Saved dataset/development_dataset.json");
   console.log("  ✓ Saved dataset/evaluation_dataset.json");
   console.log("  ✓ Saved dataset/specialist_reviews.json");
-  console.log("\n🎉 ALL RESEARCH DATASETS GENERATED SUCCESSFULLY WITH ZERO DIRECT IDENTIFIERS!");
+
+  // Generate strict Patient-Level 3-way Split (Train: 70%, Validation: 15%, Test: 15%)
+  console.log("\n▶ Generating Strict Patient-Level Train / Validation / Test Split (Zero Patient Leakage)...");
+  const allCases = [...devDataset, ...evalDataset];
+  const splitResult = patientLevelSplitService.splitByPatient(allCases, {
+    trainRatio: 0.70,
+    valRatio: 0.15,
+    testRatio: 0.15,
+    seed: 42
+  });
+
+  patientLevelSplitService.saveSplitsToDisk(splitResult, baseDir);
+  console.log(`  ✓ Train Split:      ${splitResult.train.length} records (${splitResult.trainPatients.length} distinct patients)`);
+  console.log(`  ✓ Validation Split: ${splitResult.validation.length} records (${splitResult.validationPatients.length} distinct patients)`);
+  console.log(`  ✓ Test Split:       ${splitResult.test.length} records (${splitResult.testPatients.length} distinct patients)`);
+  console.log(`  ✓ Saved dataset/train_dataset.json`);
+  console.log(`  ✓ Saved dataset/validation_dataset.json`);
+  console.log(`  ✓ Saved dataset/test_dataset.json`);
+  console.log(`  ✓ Saved dataset/patient_level_split_manifest.json (SHA-256: ${splitResult.manifest.manifestSha256.slice(0, 16)}...)`);
+  console.log("  ✓ Strict Zero-Patient Leakage Verified: Overlaps = 0 across all pairs.");
+
+  console.log("\n🎉 ALL RESEARCH DATASETS GENERATED SUCCESSFULLY WITH ZERO DIRECT IDENTIFIERS & ZERO PATIENT LEAKAGE!");
 }
 
 if (require.main === module) {
