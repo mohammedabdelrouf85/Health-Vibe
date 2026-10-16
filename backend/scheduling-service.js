@@ -918,7 +918,16 @@ async function bookAppointmentTransaction(db, payload, authUser) {
           throw err;
         }
 
-        const spo2 = cData.oxygenLevel != null ? Number(cData.oxygenLevel) : (cData.vitals?.oxygenSaturation || cData.spo2 || null);
+        function parseSpo2Number(val) {
+          if (val == null) return null;
+          if (typeof val === 'number') return isNaN(val) ? null : val;
+          if (typeof val === 'string') {
+            const num = parseFloat(val.replace(/[^0-9.]/g, ''));
+            return isNaN(num) ? null : num;
+          }
+          return null;
+        }
+        const spo2 = parseSpo2Number(cData.oxygenLevel != null ? cData.oxygenLevel : (cData.vitals?.oxygenSaturation || cData.spo2 || null));
         verifiedLinkedCase = {
           caseId: payload.linkedCaseId,
           assessmentId: cData.assessmentId || cData.id || payload.linkedCaseId,
@@ -981,7 +990,7 @@ async function bookAppointmentTransaction(db, payload, authUser) {
       verifiedLinkedCase = {
         caseId: payload.linkedCaseId,
         assessmentId: payload.linkedAssessmentId || payload.linkedCaseId,
-        oxygenLevel: payload.attachedAssessment.oxygenLevel != null ? Number(payload.attachedAssessment.oxygenLevel) : null,
+        oxygenLevel: parseSpo2Number(payload.attachedAssessment.oxygenLevel != null ? payload.attachedAssessment.oxygenLevel : (payload.attachedAssessment.vitals?.oxygenSaturation || payload.attachedAssessment.spo2 || null)),
         diagnosis: payload.attachedAssessment.diagnosis || 'Certified Respiratory Assessment',
         status: payload.attachedAssessment.status || 'pending_review',
         submittedAt: payload.attachedAssessment.submittedAt || new Date().toISOString(),
@@ -1621,6 +1630,21 @@ async function rescheduleAppointmentTransaction(db, payload, actorUser) {
       console.warn('[GCAL RESCHEDULE SYNC WARNING]:', gcalErr.message);
     }
 
+    // Bidirectional Lifecycle Sync: Update linked case appointmentRef upon rescheduling
+    if (appointment.linkedCaseId) {
+      try {
+        const caseRef = db.collection('cases').doc(appointment.linkedCaseId);
+        if (typeof caseRef.update === 'function') {
+          await caseRef.update({
+            'appointmentRef.date': newDate,
+            'appointmentRef.slotId': newSlotId,
+            'appointmentRef.timeSlot': newSlot.timeAr,
+            'appointmentRef.rescheduledAt': nowIso
+          });
+        }
+      } catch (cReschedErr) {}
+    }
+
     // Offer the newly-freed old slot to the waiting list!
     try {
       await waitingListService.processAvailableSlotForWaitingList(db, {
@@ -1773,6 +1797,20 @@ async function cancelAppointmentTransaction(db, targetAppt, actorUser, options =
     await googleCalendarService.syncAppointmentCancelled(db, appt, opts.reason);
   } catch (gcalErr) {
     console.warn('[GCAL CANCEL SYNC WARNING]:', gcalErr.message);
+  }
+
+  // Bidirectional Lifecycle Sync: Update linked case appointmentRef upon cancellation
+  if (appt.linkedCaseId) {
+    try {
+      const caseRef = db.collection('cases').doc(appt.linkedCaseId);
+      if (typeof caseRef.update === 'function') {
+        await caseRef.update({
+          'appointmentRef.status': 'cancelled',
+          'appointmentRef.cancelledAt': nowIso,
+          'appointmentRef.cancelReason': opts.reason || 'User cancelled'
+        });
+      }
+    } catch (cCancelErr) {}
   }
 
   // Offer the newly-freed slot to the waiting list!
@@ -2762,7 +2800,16 @@ async function linkAppointmentCaseDossier(db, payload = {}, actorUser) {
   }
 
   const nowIso = new Date().toISOString();
-  const spo2 = caseData.oxygenLevel != null ? Number(caseData.oxygenLevel) : (caseData.vitals?.oxygenSaturation || caseData.spo2 || null);
+  function parseSpo2Number(val) {
+    if (val == null) return null;
+    if (typeof val === 'number') return isNaN(val) ? null : val;
+    if (typeof val === 'string') {
+      const num = parseFloat(val.replace(/[^0-9.]/g, ''));
+      return isNaN(num) ? null : num;
+    }
+    return null;
+  }
+  const spo2 = parseSpo2Number(caseData.oxygenLevel != null ? caseData.oxygenLevel : (caseData.vitals?.oxygenSaturation || caseData.spo2 || null));
 
   const attachedSnapshot = {
     caseId,

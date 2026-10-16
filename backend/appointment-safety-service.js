@@ -126,16 +126,28 @@ function evaluateAppointmentEmergencyRisk(payload = {}) {
     .join(' ')
     .toLowerCase();
 
+  function parseSpo2(val) {
+    if (val == null) return null;
+    if (typeof val === 'number') return isNaN(val) ? null : val;
+    if (typeof val === 'string') {
+      const num = parseFloat(val.replace(/[^0-9.]/g, ''));
+      return isNaN(num) ? null : num;
+    }
+    return null;
+  }
+
   const rawSpo2 = payload.spo2 != null
     ? payload.spo2
     : (payload.vitals?.spo2 ?? (attachedAssessment.oxygenLevel != null
         ? attachedAssessment.oxygenLevel
         : (attachedAssessment.spo2 != null
           ? attachedAssessment.spo2
-          : (payload.oxygenLevel != null ? payload.oxygenLevel : null))));
+          : (attachedAssessment.vitals?.oxygenSaturation != null
+            ? attachedAssessment.vitals.oxygenSaturation
+            : (payload.oxygenLevel != null ? payload.oxygenLevel : null)))));
 
   const vitals = {
-    spo2: (rawSpo2 != null && !isNaN(Number(rawSpo2))) ? Number(rawSpo2) : null,
+    spo2: parseSpo2(rawSpo2),
     heartRate: typeof payload.heartRate === 'number'
       ? payload.heartRate
       : (payload.vitals?.heartRate ?? attachedAssessment.heartRate ?? null),
@@ -508,19 +520,33 @@ function validatePrevisitDossierSafety({ payload = {}, caseRecord = null, actorU
   }
 
   // 2. Emergency Red-Flag Screening on dossier vitals & symptoms
+  function parseSpo2(val) {
+    if (val == null) return null;
+    if (typeof val === 'number') return isNaN(val) ? null : val;
+    if (typeof val === 'string') {
+      const num = parseFloat(val.replace(/[^0-9.]/g, ''));
+      return isNaN(num) ? null : num;
+    }
+    return null;
+  }
+
   const rawSpo2 = caseRecord?.oxygenLevel != null
     ? caseRecord.oxygenLevel
     : (caseRecord?.spo2 != null
       ? caseRecord.spo2
-      : (payload.attachedAssessment?.oxygenLevel != null
-        ? payload.attachedAssessment.oxygenLevel
-        : (payload.attachedAssessment?.spo2 != null
-          ? payload.attachedAssessment.spo2
-          : (payload.spo2 != null ? payload.spo2 : (payload.oxygenLevel != null ? payload.oxygenLevel : null)))));
+      : (caseRecord?.vitals?.oxygenSaturation != null
+        ? caseRecord.vitals.oxygenSaturation
+        : (payload.attachedAssessment?.oxygenLevel != null
+          ? payload.attachedAssessment.oxygenLevel
+          : (payload.attachedAssessment?.spo2 != null
+            ? payload.attachedAssessment.spo2
+            : (payload.attachedAssessment?.vitals?.oxygenSaturation != null
+              ? payload.attachedAssessment.vitals.oxygenSaturation
+              : (payload.spo2 != null ? payload.spo2 : (payload.oxygenLevel != null ? payload.oxygenLevel : null)))))));
 
   const combinedPayload = {
     ...payload,
-    spo2: rawSpo2 != null && !isNaN(Number(rawSpo2)) ? Number(rawSpo2) : null,
+    spo2: parseSpo2(rawSpo2),
     symptoms: [
       payload.symptoms,
       caseRecord?.symptoms,
