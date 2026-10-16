@@ -2116,13 +2116,16 @@ function formatRescheduleMessage(appointment = {}, options = {}) {
       : `إشعار من العيادة: تعديل موعدك الطبي مع د. ${docName} ليوم ${date} - Health-Vibe`;
   }
 
+  const statutoryNoteEn = '\n\nStatutory Medical Notice: Clinical consultations require evaluation by a licensed human physician. In acute medical emergencies, call 123.';
+  const statutoryNoteAr = '\n\nتنبيه طبي قانوني: الاستشارات والتقييمات تخضع للفحص المباشر من الطبيب البشري المعالج. في الحالات الطارئة اتصل بالإسعاف (123).';
+
   const body = isEn
     ? (isClinicInitiated && recipientType === 'patient'
-      ? `Dear ${patientName},\nPlease note that your appointment with Dr. ${docName} has been rescheduled by the clinic to ${date} at ${slotId}.\n${reason ? 'Reason: ' + reason + '\n' : ''}Modality: ${modalityEn}.\nIf this time is not convenient, you can easily reschedule in 1-click via your portal.\nThank you,\nHealth-Vibe Clinic`
-      : `Dear ${patientName},\nYour appointment has been successfully rescheduled with Dr. ${docName} for ${date} at ${slotId}.\nModality: ${modalityEn}.\n${reason ? 'Reason: ' + reason + '\n' : ''}\nThank you,\nHealth-Vibe Clinic`)
+      ? `Dear ${patientName},\nPlease note that your appointment with Dr. ${docName} has been rescheduled by the clinic to ${date} at ${slotId}.\n${reason ? 'Reason: ' + reason + '\n' : ''}Modality: ${modalityEn}.\nIf this time is not convenient, you can easily reschedule in 1-click via your portal.\nThank you,\nHealth-Vibe Clinic${statutoryNoteEn}`
+      : `Dear ${patientName},\nYour appointment has been successfully rescheduled with Dr. ${docName} for ${date} at ${slotId}.\nModality: ${modalityEn}.\n${reason ? 'Reason: ' + reason + '\n' : ''}\nThank you,\nHealth-Vibe Clinic${statutoryNoteEn}`)
     : (isClinicInitiated && recipientType === 'patient'
-      ? `عزيزي المريض ${patientName}،\nنود إحاطتكم بأنه تم تعديل موعد استشارتكم الطبية مع د. ${docName} من قِبل العيادة ليصبح يوم ${date} في تمام (${slotId}).\n${reason ? 'السبب: ' + reason + '\n' : ''}نوع الاستشارة: ${modalityAr}.\nفي حال عدم ملاءمة هذا الموعد، يمكنكم اختيار موعد بديل بضغطة زر عبر المنصة.\nمع تحيات إدارة العيادة،\nمنصة Health-Vibe`
-      : `عزيزي المريض ${patientName}،\nتم تحديث موعد استشارتك مع د. ${docName} بنجاح إلى يوم ${date} في تمام (${slotId}).\nنوع الاستشارة: ${modalityAr}.\n${reason ? 'السبب: ' + reason + '\n' : ''}\nمع تمنياتنا لك بالشفاء العاجل،\nمنصة Health-Vibe`);
+      ? `عزيزي المريض ${patientName}،\nنود إحاطتكم بأنه تم تعديل موعد استشارتكم الطبية مع د. ${docName} من قِبل العيادة ليصبح يوم ${date} في تمام (${slotId}).\n${reason ? 'السبب: ' + reason + '\n' : ''}نوع الاستشارة: ${modalityAr}.\nفي حال عدم ملاءمة هذا الموعد، يمكنكم اختيار موعد بديل بضغطة زر عبر المنصة.\nمع تحيات إدارة العيادة،\nمنصة Health-Vibe${statutoryNoteAr}`
+      : `عزيزي المريض ${patientName}،\nتم تحديث موعد استشارتك مع د. ${docName} بنجاح إلى يوم ${date} في تمام (${slotId}).\nنوع الاستشارة: ${modalityAr}.\n${reason ? 'السبب: ' + reason + '\n' : ''}\nمع تمنياتنا لك بالشفاء العاجل،\nمنصة Health-Vibe${statutoryNoteAr}`);
 
   return { subject, body, text: body, html: `<p>${body.replace(/\n/g, '<br>')}</p>` };
 }
@@ -2162,13 +2165,16 @@ function formatCancelMessage(appointment = {}, options = {}) {
       : `إشعار من العيادة: إلغاء موعدك الطبي مع د. ${docName} - Health-Vibe`;
   }
 
+  const statutoryNoteEn = '\n\nStatutory Medical Notice: Clinical consultations require evaluation by a licensed human physician. In acute medical emergencies, call 123.';
+  const statutoryNoteAr = '\n\nتنبيه طبي قانوني: الاستشارات والتقييمات تخضع للفحص المباشر من الطبيب البشري المعالج. في الحالات الطارئة اتصل بالإسعاف (123).';
+
   const body = isEn
     ? (isClinicInitiated && recipientType === 'patient'
-      ? `Dear ${patientName},\nWe regret to inform you that your appointment with Dr. ${docName} on ${date} has been cancelled by the clinic.\n${reason ? 'Reason: ' + reason + '\n' : ''}\nYou can immediately choose a replacement slot on the portal.\nWe apologize for any inconvenience.\nHealth-Vibe Clinic`
-      : `Dear ${patientName},\nYour appointment scheduled with Dr. ${docName} on ${date} has been successfully cancelled.\n${reason ? 'Reason: ' + reason + '\n' : ''}\nYou can book a new slot anytime through Health-Vibe.`)
+      ? `Dear ${patientName},\nWe regret to inform you that your appointment with Dr. ${docName} on ${date} has been cancelled by the clinic.\n${reason ? 'Reason: ' + reason + '\n' : ''}\nYou can immediately choose a replacement slot on the portal.\nWe apologize for any inconvenience.\nHealth-Vibe Clinic${statutoryNoteEn}`
+      : `Dear ${patientName},\nYour appointment scheduled with Dr. ${docName} on ${date} has been successfully cancelled.\n${reason ? 'Reason: ' + reason + '\n' : ''}\nYou can book a new slot anytime through Health-Vibe.${statutoryNoteEn}`)
     : (isClinicInitiated && recipientType === 'patient'
-      ? `عزيزي المريض ${patientName}،\nنأسف لإبلاغكم بأنه تم إلغاء موعدكم الطبي مع د. ${docName} بتاريخ ${date} من قِبل العيادة.\n${reason ? 'السبب: ' + reason + '\n' : ''}\nيمكنكم حجز موعد بديل فوراً عبر المنصة مع احتفاظكم بالأولوية.\nمع اعتذارنا عن أي إزعاج،\nمنصة Health-Vibe`
-      : `عزيزي المريض ${patientName}،\nتم تأكيد إلغاء موعدك الطبي مع د. ${docName} بتاريخ ${date}.\n${reason ? 'السبب: ' + reason + '\n' : ''}\nيمكنك حجز موعد جديد في أي وقت عبر منصة Health-Vibe.`);
+      ? `عزيزي المريض ${patientName}،\nنأسف لإبلاغكم بأنه تم إلغاء موعدكم الطبي مع د. ${docName} بتاريخ ${date} من قِبل العيادة.\n${reason ? 'السبب: ' + reason + '\n' : ''}\nيمكنكم حجز موعد بديل فوراً عبر المنصة مع احتفاظكم بالأولوية.\nمع اعتذارنا عن أي إزعاج،\nمنصة Health-Vibe${statutoryNoteAr}`
+      : `عزيزي المريض ${patientName}،\nتم تأكيد إلغاء موعدك الطبي مع د. ${docName} بتاريخ ${date}.\n${reason ? 'السبب: ' + reason + '\n' : ''}\nيمكنك حجز موعد جديد في أي وقت عبر منصة Health-Vibe.${statutoryNoteAr}`);
 
   return { subject, body, text: body, html: `<p>${body.replace(/\n/g, '<br>')}</p>` };
 }

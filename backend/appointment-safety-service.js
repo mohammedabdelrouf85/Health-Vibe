@@ -1041,12 +1041,59 @@ function validateDoctorScheduleClinicalGuardrails(params = {}) {
   return true;
 }
 
+/**
+ * Enforces safety, emergency screening, and anti-circumvention of the human physician for appointment mutations (reschedule & cancel).
+ * Guarantees:
+ * 1. AI chatbots or autonomous background bots cannot autonomously cancel or reschedule
+ *    an appointment without explicit authenticated human authorization (patient or physician).
+ * 2. Non-physicians cannot inject diagnoses, prescriptions, ICD-10 codes, or treatment plans.
+ * 3. Emergency red flags during rescheduling are screened and escalated.
+ */
+function validateAppointmentMutationSafety(payload = {}, actorUser = null, operation = 'reschedule') {
+  if (!actorUser) {
+    const err = new Error('Authentication required for appointment operations.');
+    err.code = 'AUTHENTICATION_REQUIRED';
+    err.statusCode = 401;
+    throw err;
+  }
+
+  // Prevent autonomous AI bots or unapproved chatbots from unilaterally mutating appointments
+  if (actorUser.role === 'ai_assistant' || actorUser.role === 'system_bot' || actorUser.isAutonomousAi) {
+    const err = new Error(
+      'Physician Primacy Violation: Autonomous AI chatbots cannot modify or cancel appointments without explicit human confirmation.'
+    );
+    err.code = 'AUTONOMOUS_AI_MUTATION_PROHIBITED';
+    err.statusCode = 403;
+    throw err;
+  }
+
+  // Enforce physician role boundaries (no self-diagnoses / prescriptions)
+  enforcePhysicianRoleBoundaries(payload, actorUser);
+
+  // If rescheduling, evaluate emergency red flags
+  if (operation === 'reschedule') {
+    const triage = evaluateAppointmentEmergencyRisk(payload);
+    if (triage.isEmergency && !payload.emergencyDisclaimerAcknowledged && !triage.isDisclaimerAcknowledged) {
+      const err = new Error(
+        `حالة طوارئ طبية محتملة: ${triage.emergencyActionAr} | ${triage.emergencyActionEn}`
+      );
+      err.code = 'EMERGENCY_TRIAGE_ESCALATION_REQUIRED';
+      err.statusCode = 422;
+      err.details = triage;
+      throw err;
+    }
+  }
+
+  return { valid: true, physicianPrimacyGuaranteed: true };
+}
+
 module.exports = {
   STATUTORY_MEDICAL_DISCLAIMER,
   EMERGENCY_CONTACTS,
   EMERGENCY_RED_FLAGS,
   evaluateAppointmentEmergencyRisk,
   enforcePhysicianRoleBoundaries,
+  validateAppointmentMutationSafety,
   recordDoctorClinicalEvaluation,
   sanitizeCalendarSlotForPrivacy,
   validateFamilyBeneficiaryAccess,

@@ -1761,8 +1761,8 @@ async function bookAppointmentTransaction(db, payload, authUser) {
 async function rescheduleAppointmentTransaction(db, payload, actorUser) {
   const { appointmentId, newDate, newSlotId, reason } = payload || {};
 
-  // Enforce physician role boundaries on any potential clinical input
-  appointmentSafetyService.enforcePhysicianRoleBoundaries(payload, actorUser);
+  // Enforce physician primacy, emergency triage screening & AI bot circumvention boundaries
+  appointmentSafetyService.validateAppointmentMutationSafety(payload, actorUser, 'reschedule');
 
   if (!appointmentId || !newDate || !newSlotId) {
     const err = new Error('appointmentId, newDate, and newSlotId are required.');
@@ -2009,6 +2009,10 @@ async function rescheduleAppointmentTransaction(db, payload, actorUser) {
           branchLocation: branchLocationResched,
           arrivalGuidance: arrivalGuidanceResched,
           followupScope: followupScopeResched,
+          physicianPrimacyGuaranteed: true,
+          clinicalEvaluationRequired: true,
+          statutoryMedicalDisclaimer: appointmentSafetyService.STATUTORY_MEDICAL_DISCLAIMER.ar,
+          statutoryMedicalDisclaimerEn: appointmentSafetyService.STATUTORY_MEDICAL_DISCLAIMER.en,
           rescheduledAt: nowIso,
           rescheduledBy: actorUser.uid,
           rescheduleReason: reason || null,
@@ -2236,6 +2240,9 @@ async function cancelAppointmentTransaction(db, targetAppt, actorUser, options =
     err.statusCode = 400;
     throw err;
   }
+
+  // Enforce physician primacy and protect against autonomous AI bot mutation on cancellation
+  appointmentSafetyService.validateAppointmentMutationSafety(opts, actorUser, 'cancel');
 
   if (!db || typeof db.collection !== 'function') {
     const err = new Error('Appointment storage is unavailable. Please retry shortly.');
@@ -3576,7 +3583,12 @@ function buildIcsContent(appt = {}) {
   const rawDate = appt.date || appt.dateStr || new Date().toISOString().split('T')[0];
   const docName = appt.doctorName || 'Treating Physician';
   const clinicName = appt.branch || appt.clinicName || (appt.type === 'video' || appt.consultationType === 'video' ? 'Health Vibe Telehealth Room' : 'Specialized Chest Clinic');
-  const notes = appt.notes || 'Medical Appointment';
+  
+  // Privacy & Data Minimization: Avoid leaking detailed clinical PHI, diagnoses, or SpO2 into public/shared calendars
+  let rawNotes = appt.notes || 'Medical Appointment';
+  let sanitizedNotes = String(rawNotes)
+    .replace(/(?:تشخيص|diagnosis|مرض|سرطان|سل|درن|spo2|أكسجين):[^\n,;]+/gi, '')
+    .trim() || 'Medical Appointment';
   const apptType = appt.typeLabel || appt.type || (appt.isOnlineConsultation ? 'Video Consultation' : 'In-Clinic Visit');
 
   let hour = 10;
@@ -3606,6 +3618,8 @@ function buildIcsContent(appt = {}) {
   const uid = `${appt.id || Date.now()}@healthvibe.com`;
   const safeLocation = String(clinicName).replace(/,/g, '\\,');
 
+  const statutoryNotice = 'Notice: Medical appointment requires direct clinical evaluation by a licensed human physician. In emergency\\, call 123.';
+
   return [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
@@ -3618,7 +3632,7 @@ function buildIcsContent(appt = {}) {
     `DTSTART:${startIso}`,
     `DTEND:${endIso}`,
     `SUMMARY:Medical Appointment with ${docName}`,
-    `DESCRIPTION:Appointment with ${docName}\\nType: ${apptType}\\nLocation: ${safeLocation}\\nNotes: ${notes}`,
+    `DESCRIPTION:Appointment with ${docName}\\nType: ${apptType}\\nLocation: ${safeLocation}\\nNotes: ${sanitizedNotes}\\n${statutoryNotice}`,
     `LOCATION:${safeLocation}`,
     'STATUS:CONFIRMED',
     'BEGIN:VALARM',
@@ -3685,6 +3699,7 @@ module.exports = {
   validateFamilyBeneficiaryAccess: appointmentSafetyService.validateFamilyBeneficiaryAccess,
   sanitizeCalendarSlotForPrivacy: appointmentSafetyService.sanitizeCalendarSlotForPrivacy,
   STATUTORY_MEDICAL_DISCLAIMER: appointmentSafetyService.STATUTORY_MEDICAL_DISCLAIMER,
+  validateAppointmentMutationSafety: appointmentSafetyService.validateAppointmentMutationSafety,
   buildIcsContent,
   sendRescheduleNotification,
   sendCancelNotification
