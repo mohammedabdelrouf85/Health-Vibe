@@ -746,13 +746,13 @@
     const card = document.createElement("div");
     card.className = `friendly-error-card ${options.className || ""} severity-${friendly.severity} level-${guidanceLevel}`;
     card.setAttribute("role", "alert");
-    card.setAttribute("aria-live", "polite");
+    card.setAttribute("aria-live", options.ariaLive || "polite");
     card.setAttribute("dir", isEn ? "ltr" : "rtl");
     card.setAttribute("lang", isEn ? "en" : "ar");
 
     const badgeClass = friendly.severity === "warning" ? "pill warning" : "pill danger";
     const howToFixText = getI18nText("errors.howToFix", isEn ? "How to fix:" : "كيفية التصحيح:", isEn);
-    const closeLabel = isEn ? "Close" : "إغلاق";
+    const closeLabel = options.closeAriaLabel || (isEn ? "Close" : "إغلاق");
 
     const msgHtml = isolateBidiNumbers(friendly.message);
     const actionHtml = isolateBidiNumbers(friendly.action);
@@ -768,7 +768,7 @@
           <h4 class="friendly-error-title">${friendly.title}</h4>
         </div>
         ${options.dismissible !== false ? `
-          <button type="button" class="friendly-close-btn" aria-label="${closeLabel}">&times;</button>
+          <button type="button" class="friendly-close-btn" aria-label="${closeLabel}" title="${closeLabel}">&times;</button>
         ` : ""}
       </div>
       <div class="friendly-error-message">${msgHtml}</div>

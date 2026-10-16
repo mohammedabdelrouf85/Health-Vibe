@@ -7200,11 +7200,18 @@ bdi.bidi-isolate {
   margin-inline-start: auto;
 }
 
-.friendly-close-btn:hover,
-.friendly-close-btn:focus-visible {
+.friendly-close-btn:hover {
   color: var(--ink, #e2f0ee);
   background: rgba(255, 255, 255, 0.08);
-  outline: none;
+}
+
+.friendly-close-btn:focus-visible,
+.friendly-retry-btn:focus-visible,
+.friendly-primary-action-btn:focus-visible {
+  color: var(--ink, #e2f0ee);
+  background: rgba(255, 255, 255, 0.12);
+  outline: 2px solid var(--teal, #09b8b6) !important;
+  outline-offset: 2px !important;
 }
 
 .friendly-error-message {
@@ -7439,6 +7446,28 @@ body.light .friendly-error-guidance .guidance-content strong,
 html.hv-theme-light body .friendly-field-guide,
 body.light .friendly-field-guide {
   color: #0f766e;
+}
+
+html.hv-theme-light body .friendly-close-btn,
+body.light .friendly-close-btn {
+  color: #475569;
+}
+
+html.hv-theme-light body .friendly-close-btn:hover,
+body.light .friendly-close-btn:hover {
+  color: #0f172a;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+html.hv-theme-light body .friendly-close-btn:focus-visible,
+body.light .friendly-close-btn:focus-visible,
+html.hv-theme-light body .friendly-retry-btn:focus-visible,
+body.light .friendly-retry-btn:focus-visible,
+html.hv-theme-light body .friendly-primary-action-btn:focus-visible,
+body.light .friendly-primary-action-btn:focus-visible {
+  color: #0f172a;
+  outline: 2px solid #0f766e !important;
+  outline-offset: 2px !important;
 }
 
 
