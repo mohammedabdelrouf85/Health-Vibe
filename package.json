@@ -13,6 +13,7 @@
     "test:critical-symptoms": "node tests/critical_symptoms_emergency_check.test.js",
     "test:patient-level-split": "node tests/strict_patient_level_split.test.js",
     "test:fn-tuning": "node tests/false_negative_analysis_and_threshold_tuning.test.js",
+    "test:ml-processing": "node tests/ml_processing_indicator_and_double_submission.test.js",
     "test:auth-loading": "node tests/auth_loading_and_forms.test.js",
     "test:auth-validation": "node tests/auth_strict_validation.test.js",
     "test:auth-root-cause": "node tests/strict_auth_google_and_email_root_cause.test.js",

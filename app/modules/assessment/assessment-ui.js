@@ -40,11 +40,25 @@
     }
   }
 
+  function showAssessmentProcessingOverlay(step = 1) {
+    if (typeof global.showAssessmentProcessingOverlay === "function") {
+      return global.showAssessmentProcessingOverlay(step);
+    }
+  }
+
+  function hideAssessmentProcessingOverlay() {
+    if (typeof global.hideAssessmentProcessingOverlay === "function") {
+      return global.hideAssessmentProcessingOverlay();
+    }
+  }
+
   const AssessmentUI = {
     openEmergencyGuideModal,
     closeEmergencyGuideModal,
     closeEmergencySubmitModal,
-    closeConfirmAssessmentModal
+    closeConfirmAssessmentModal,
+    showAssessmentProcessingOverlay,
+    hideAssessmentProcessingOverlay
   };
 
   global.HealthVibes = global.HealthVibes || {};

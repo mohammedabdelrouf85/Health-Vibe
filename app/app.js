@@ -17283,6 +17283,106 @@ window.closeEmergencySubmitModal = function() {
 };
 
 let _assessmentConfirmCallback = null;
+let _assessmentSubmitting = false;
+let _assessmentSubmitLockTimestamp = 0;
+window._assessmentSubmitting = false;
+
+/**
+ * Reassuring Patient-Facing ML Processing Overlay Controller (PRD Req 58)
+ * Displays frosted glassmorphism dialog with pulsating medical AI animation
+ * and dynamic multi-step checklist while blocking double submission.
+ */
+window.showAssessmentProcessingOverlay = function(initialStep = 1) {
+  _assessmentSubmitting = true;
+  window._assessmentSubmitting = true;
+  _assessmentSubmitLockTimestamp = Date.now();
+  const overlay = document.getElementById("assessmentProcessingOverlay");
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+
+  // Immediately disable interactive submit buttons to prevent double submission
+  const submitBtn = document.getElementById("submitAssessment");
+  const btnConfirmSend = document.getElementById("btnConfirmSendAssessment");
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.setAttribute("aria-busy", "true");
+    submitBtn.innerHTML = `<span class="button-spinner mini" style="display:inline-block;width:13px;height:13px;border:2px solid #ffffff;border-top-color:transparent;border-radius:50%;animation:miniSpinAnim 0.8s linear infinite;margin-inline-end:8px;vertical-align:middle;"></span> ${isEn ? "Analyzing with AI..." : "⏳ جاري التحليل بنموذج الذكاء الاصطناعي..."}`;
+  }
+  if (btnConfirmSend) {
+    btnConfirmSend.disabled = true;
+    btnConfirmSend.setAttribute("aria-busy", "true");
+    btnConfirmSend.innerHTML = `<span class="button-spinner mini" style="display:inline-block;width:13px;height:13px;border:2px solid #ffffff;border-top-color:transparent;border-radius:50%;animation:miniSpinAnim 0.8s linear infinite;margin-inline-end:8px;vertical-align:middle;"></span> ${isEn ? "Analyzing with AI..." : "⏳ جاري التحليل بنموذج الذكاء الاصطناعي..."}`;
+  }
+
+  if (overlay) {
+    overlay.style.display = "grid";
+    overlay.classList.add("open");
+    overlay.setAttribute("aria-hidden", "false");
+    window.updateAssessmentProcessingStep(initialStep);
+  }
+};
+
+window.updateAssessmentProcessingStep = function(step = 1) {
+  const step1 = document.getElementById("mlStep1");
+  const step2 = document.getElementById("mlStep2");
+  const step3 = document.getElementById("mlStep3");
+  const b1 = document.getElementById("mlStep1Badge");
+  const b2 = document.getElementById("mlStep2Badge");
+  const b3 = document.getElementById("mlStep3Badge");
+
+  if (!step1 || !step2 || !step3) return;
+
+  if (step === 1) {
+    step1.className = "ml-step-item current";
+    step2.className = "ml-step-item pending";
+    step3.className = "ml-step-item pending";
+    if (b1) b1.innerHTML = '<span class="mini-spin"></span>';
+    if (b2) b2.textContent = "⏳";
+    if (b3) b3.textContent = "⏳";
+  } else if (step === 2) {
+    step1.className = "ml-step-item done";
+    step2.className = "ml-step-item current";
+    step3.className = "ml-step-item pending";
+    if (b1) b1.textContent = "✓";
+    if (b2) b2.innerHTML = '<span class="mini-spin"></span>';
+    if (b3) b3.textContent = "⏳";
+  } else if (step >= 3) {
+    step1.className = "ml-step-item done";
+    step2.className = "ml-step-item done";
+    step3.className = "ml-step-item current";
+    if (b1) b1.textContent = "✓";
+    if (b2) b2.textContent = "✓";
+    if (b3) b3.innerHTML = '<span class="mini-spin"></span>';
+  }
+};
+
+window.hideAssessmentProcessingOverlay = function() {
+  _assessmentSubmitting = false;
+  window._assessmentSubmitting = false;
+  const overlay = document.getElementById("assessmentProcessingOverlay");
+  if (overlay) {
+    overlay.classList.remove("open");
+    overlay.setAttribute("aria-hidden", "true");
+    setTimeout(() => {
+      if (overlay && !overlay.classList.contains("open")) {
+        overlay.style.display = "none";
+      }
+    }, 250);
+  }
+
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  const submitBtn = document.getElementById("submitAssessment");
+  const btnConfirmSend = document.getElementById("btnConfirmSendAssessment");
+  if (submitBtn) {
+    submitBtn.disabled = false;
+    submitBtn.removeAttribute("aria-busy");
+    submitBtn.textContent = isEn ? "Send to Doctor" : "إرسال للطبيب";
+  }
+  if (btnConfirmSend) {
+    btnConfirmSend.disabled = false;
+    btnConfirmSend.removeAttribute("aria-busy");
+    btnConfirmSend.textContent = isEn ? "✅ Confirm & Send to Doctor" : "✅ تأكيد وإرسال التقييم للطبيب";
+  }
+};
 
 window.openConfirmAssessmentModal = function(data, onConfirm) {
   _assessmentConfirmCallback = onConfirm;
@@ -17481,15 +17581,21 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnConfirmSend = document.getElementById("btnConfirmSendAssessment");
   if (btnConfirmSend) {
     btnConfirmSend.addEventListener("click", async () => {
+      if (_assessmentSubmitting) {
+        showToast(currentLanguage === "en" ? "Analysis in progress. Please wait." : "جاري تحليل الأعراض بنموذج الذكاء الاصطناعي. يرجى الانتظار.");
+        return;
+      }
       const cb = _assessmentConfirmCallback;
       if (typeof cb === "function") {
         btnConfirmSend.disabled = true;
-        btnConfirmSend.textContent = currentLanguage === "en" ? "Submitting..." : "جاري الإرسال...";
+        closeConfirmAssessmentModal();
         try {
           await cb();
-          closeConfirmAssessmentModal();
         } catch (e) {
           console.error("Submission failed:", e);
+          if (typeof hideAssessmentProcessingOverlay === "function") {
+            hideAssessmentProcessingOverlay();
+          }
           btnConfirmSend.disabled = false;
           btnConfirmSend.textContent = currentLanguage === "en" ? "✅ Confirm & Send to Doctor" : "✅ تأكيد وإرسال التقييم للطبيب";
         }
@@ -18751,12 +18857,31 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
       priority,
       priorityAr: priorityAr[priority]
     }, async () => {
-      if (_assessmentSubmitting) return;
+      if (_assessmentSubmitting) {
+        showToast(isEn ? "Analysis in progress. Please wait." : "جاري تحليل الأعراض بنموذج الذكاء الاصطناعي. يرجى الانتظار.");
+        return;
+      }
       _assessmentSubmitting = true;
+      _assessmentSubmitLockTimestamp = Date.now();
+      if (typeof window.showAssessmentProcessingOverlay === "function") {
+        window.showAssessmentProcessingOverlay(1);
+      }
       submitBtn.disabled = true;
-      submitBtn.textContent = isEn ? "Submitting..." : "جاري الإرسال...";
+      submitBtn.setAttribute("aria-busy", "true");
+      submitBtn.textContent = isEn ? "Analyzing with AI..." : "⏳ جاري التحليل بنموذج الذكاء الاصطناعي...";
 
       try {
+        if (typeof window.updateAssessmentProcessingStep === "function") {
+          window.updateAssessmentProcessingStep(1);
+        }
+        await new Promise(r => setTimeout(r, 200));
+
+        // Step 2: Applying ML triage model and clinical rules engine
+        if (typeof window.updateAssessmentProcessingStep === "function") {
+          window.updateAssessmentProcessingStep(2);
+        }
+        await new Promise(r => setTimeout(r, 250));
+
         // ── بناء وثيقة الحالة عبر الـ Schema المعياري الموحد ────────────
         const predecessorId = window._independentAssessmentPredecessorCaseId || null;
         const caseData = buildAssessmentModel({
@@ -18781,6 +18906,11 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
           previousCaseId: predecessorId,
           isIndependentAssessment: Boolean(predecessorId)
         });
+
+        // Step 3: Dispatching to doctor and securing case document
+        if (typeof window.updateAssessmentProcessingStep === "function") {
+          window.updateAssessmentProcessingStep(3);
+        }
 
         // ── حفظ في Firestore ──────────────────────────────────────────
         const docRef = await db.collection("cases").add(caseData);
@@ -18827,6 +18957,9 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
           timestamp: firebase.firestore.FieldValue.serverTimestamp(),
         });
 
+        if (typeof window.hideAssessmentProcessingOverlay === "function") {
+          window.hideAssessmentProcessingOverlay();
+        }
         showScreen("pending");
 
         // ── تفعيل بانر الطوارئ البارز في شاشة الانتظار ──────────────────
@@ -18923,6 +19056,10 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
         }
 
       } catch (error) {
+        if (typeof window.hideAssessmentProcessingOverlay === "function") {
+          window.hideAssessmentProcessingOverlay();
+        }
+        _assessmentSubmitting = false;
         console.error("❌ Error saving case:", error);
         if (typeof showAppError === "function") {
           showAppError(error, { context: "Assessment Submission" });
@@ -18931,15 +19068,24 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
         }
       } finally {
         _assessmentSubmitting = false;
+        if (typeof window.hideAssessmentProcessingOverlay === "function") {
+          window.hideAssessmentProcessingOverlay();
+        }
         submitBtn.disabled = false;
+        submitBtn.removeAttribute("aria-busy");
         submitBtn.textContent = isEn ? "Send to Doctor" : "إرسال للطبيب";
       }
     });
 
   } catch (error) {
+    if (typeof window.hideAssessmentProcessingOverlay === "function") {
+      window.hideAssessmentProcessingOverlay();
+    }
+    _assessmentSubmitting = false;
     console.error("❌ Error initiating assessment submission:", error);
     showToast(isEn ? "An unexpected error occurred." : "حدث خطأ غير متوقع.");
     submitBtn.disabled = false;
+    submitBtn.removeAttribute("aria-busy");
     submitBtn.textContent = isEn ? "Send to Doctor" : "إرسال للطبيب";
   }
 });

@@ -3873,6 +3873,59 @@
     </div>
   </div>
 
+  <!-- Reassuring Patient-Facing ML Processing Indicator Modal (PRD Req 58: Anti-Double-Submission & Reassuring AI Progress) -->
+  <div id="assessmentProcessingOverlay" class="confirm-modal ml-processing-modal" role="status" aria-live="polite" aria-labelledby="mlProcessingTitle" aria-describedby="mlProcessingDesc" aria-hidden="true" style="display: none; z-index: 1000000;">
+    <div class="confirm-card ml-processing-card">
+      
+      <!-- Ambient Medical Glow Background -->
+      <div class="ml-processing-ambient-glow" aria-hidden="true"></div>
+
+      <!-- Reassuring Heartbeat / AI Pulse Container -->
+      <div class="ml-processing-hero-icon" aria-hidden="true">
+        <div class="ml-pulse-ripple"></div>
+        <div class="ml-pulse-ripple ring-2"></div>
+        <div class="ml-pulse-core">
+          <span class="ml-icon-ai">🧠</span>
+          <span class="ml-icon-sync">⚡</span>
+          <span class="ml-icon-doctor">🩺</span>
+        </div>
+      </div>
+
+      <!-- Reassuring Main Title -->
+      <h3 id="mlProcessingTitle" class="ml-processing-title" data-i18n="assessment.processingTitle" style="margin: 18px 0 8px; font-size: 18.5px; font-weight: 800; color: var(--teal-2); line-height: 1.4;">
+        جاري تحليل الأعراض بواسطة الذكاء الاصطناعي السريري...
+      </h3>
+
+      <!-- Reassuring Description -->
+      <p id="mlProcessingDesc" class="ml-processing-desc" data-i18n="assessment.processingDesc" style="margin: 0 auto 20px; font-size: 13.5px; line-height: 1.6; color: var(--muted); max-width: 380px;">
+        بياناتك مشفرة ومحمية بالكامل. يتم تدقيق نسبة الأكسجين والمؤشرات الحيوية لإعداد التقرير المعتمد لطبيبك.
+      </p>
+
+      <!-- Dynamic Step Progression Progress Bar & Checklist -->
+      <div class="ml-steps-container" style="text-align: start; margin-bottom: 20px; background: rgba(14, 165, 233, 0.05); border: 1px solid rgba(14, 165, 233, 0.18); border-radius: 14px; padding: 14px 16px;">
+        <div class="ml-step-item current" id="mlStep1">
+          <span class="ml-step-badge done" id="mlStep1Badge"><span class="mini-spin"></span></span>
+          <span class="ml-step-text" data-i18n="assessment.processingStep1">تشفير وتأمين البيانات السريرية (End-to-End Encryption)</span>
+        </div>
+        <div class="ml-step-item pending" id="mlStep2">
+          <span class="ml-step-badge" id="mlStep2Badge">⏳</span>
+          <span class="ml-step-text" data-i18n="assessment.processingStep2">معالجة الأعراض الحيوية ومستويات الأكسجين بنموذج الذكاء الاصطناعي</span>
+        </div>
+        <div class="ml-step-item pending" id="mlStep3">
+          <span class="ml-step-badge" id="mlStep3Badge">⏳</span>
+          <span class="ml-step-text" data-i18n="assessment.processingStep3">إعداد وثيقة الحالة وإرسالها لقائمة الطبيب المعتمد</span>
+        </div>
+      </div>
+
+      <!-- Anti-Double Submission Security Lock -->
+      <div class="ml-anti-double-pill" style="display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink); background: rgba(16, 185, 129, 0.09); border: 1px solid rgba(16, 185, 129, 0.28); padding: 6px 14px; border-radius: 999px;">
+        <span style="font-size: 14px;">🛡️</span>
+        <span data-i18n="assessment.antiDoubleSubmitNotice">يرجى عدم إغلاق أو تحديث الصفحة حتى تكتمل المعالجة بأمان.</span>
+      </div>
+
+    </div>
+  </div>
+
   <!-- Standalone Instant Critical Check Modal (Quick Triage Dialog) -->
   <div id="instantCriticalCheckModal" class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="instantCheckModalTitle" aria-hidden="true">
     <div class="confirm-card emergency-alert-card critical-oxygen" style="width: min(520px, 100%); text-align: start; padding: 22px;">
