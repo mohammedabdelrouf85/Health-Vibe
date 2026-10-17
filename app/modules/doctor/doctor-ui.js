@@ -4628,6 +4628,14 @@
     const userNote = textarea ? textarea.value.trim() : "";
     const currentDocName = (global.auth?.currentUser?.displayName) || (isEn ? "Dr. Tarek Mahmoud, MD" : "د. طارق محمود");
 
+    // Dynamic bidirectional direction detection: if userNote has Arabic chars, set RTL; otherwise LTR
+    const hasArabicChars = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(userNote);
+    const resolvedDir = userNote ? (hasArabicChars ? "rtl" : "ltr") : (isEn ? "ltr" : "rtl");
+    previewBody.setAttribute("dir", resolvedDir);
+    if (textarea) {
+      textarea.setAttribute("dir", userNote ? (hasArabicChars ? "rtl" : "ltr") : "auto");
+    }
+
     if (activeRejectReentryMode === "definitive_reject") {
       previewBody.innerHTML = isEn
         ? `<strong>Health Vibe Advisory:</strong> Your submitted assessment intake has been formally closed/rejected by ${currentDocName}. Rationale: “${escapeHtml(userNote || 'Intake does not meet clinical criteria.')}”`
@@ -4951,6 +4959,7 @@
     toggleReentryField,
     setReentryChipsLang,
     applyReentryInstructionChip,
+    updateReentryNotificationPreview,
     submitRejectReentry,
     renderReentryStatusAlertBanner
   };
