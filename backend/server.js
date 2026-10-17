@@ -17026,7 +17026,8 @@ app.post('/api/cases/:caseId/review', requireAuth, requireDoctor, async (req, re
     });
     res.status(200).json(result);
   } catch (err) {
-    res.status(400).json({ error: 'CASE_REVIEW_FAILED', message: err.message });
+    const status = err.statusCode || 400;
+    res.status(status).json({ error: err.code || 'CASE_REVIEW_FAILED', message: err.message });
   }
 });
 

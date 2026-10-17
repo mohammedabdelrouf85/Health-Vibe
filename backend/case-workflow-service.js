@@ -231,6 +231,15 @@ class CaseWorkflowService {
     }
 
     const oldStatus = currentCase ? currentCase.status : 'pending_doctor_review';
+    if (currentCase) {
+      const assignedDoctor = currentCase.assignedDoctorId || currentCase.doctorId || currentCase.doctorUid;
+      if (assignedDoctor && assignedDoctor !== doctorUser.uid && !doctorUser.isOwner && doctorUser.role !== 'owner' && doctorUser.role !== 'super_admin') {
+        const err = new Error('Zero-Trust enforcement: This clinical case is assigned to another physician.');
+        err.code = 'ACCESS_DENIED';
+        err.statusCode = 403;
+        throw err;
+      }
+    }
     const patientId = currentCase ? currentCase.patientId : reviewData.patientId;
     const patientEmail = currentCase ? currentCase.patientEmail : (reviewData.patientEmail || '');
     const patientName = currentCase ? currentCase.patientName : (reviewData.patientName || 'Patient');
