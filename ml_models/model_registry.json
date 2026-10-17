@@ -1,0 +1,102 @@
+{
+  "active_production_version": "resp_rf_v1.0.2",
+  "candidate_version": "resp_rf_v1.0.3",
+  "models": {
+    "resp_rf_v1.0.2": {
+      "model_id": "resp_rf_v1.0.2",
+      "model_type": "RandomForestClassifier",
+      "specialty": "Pulmonology / Respiratory Triage",
+      "release_date": "2026-09-15T00:00:00Z",
+      "clinical_certification": {
+        "certified_by": "Dr. Tarek Mansour, MD, FCCP",
+        "license_number": "EGY-MED-44912",
+        "verification_hash": "e8c3a59f104d49a37e8c3a59f104d49a37e8c3a59f104d49a37e8c3a59f104d4"
+      },
+      "hyperparameters": {
+        "n_estimators": 100,
+        "max_depth": 12,
+        "min_samples_split": 4,
+        "min_samples_leaf": 2,
+        "class_weight": "balanced_subsample",
+        "random_state": 42
+      },
+      "validation_metrics": {
+        "sensitivity": 0.962,
+        "specificity": 0.948,
+        "auroc": 0.974,
+        "f1_score": 0.955,
+        "false_negative_rate_critical": 0.008
+      },
+      "features": [
+        "age",
+        "oxygen_saturation",
+        "respiratory_rate",
+        "systolic_bp",
+        "diastolic_bp",
+        "temperature_c",
+        "dyspnea_severity",
+        "cough_duration_days",
+        "hemoptysis_flag",
+        "chest_pain_flag",
+        "smoking_pack_years",
+        "chronic_asthma_history",
+        "chronic_copd_history",
+        "allergy_history"
+      ],
+      "risk_classes": [
+        "LOW_RISK",
+        "MODERATE_RISK",
+        "HIGH_RISK",
+        "EMERGENCY"
+      ],
+      "sha256": "4b92b67812c3498e7df5692019b8849c3029177a667b2d589e4726f98276f55e"
+    },
+    "resp_rf_v1.0.3": {
+      "model_id": "resp_rf_v1.0.3",
+      "model_type": "RandomForestClassifier_Calibrated",
+      "specialty": "Pulmonology / Multi-Specialty Staging",
+      "release_date": "2026-10-15T00:00:00Z",
+      "status": "staging_evaluation",
+      "hyperparameters": {
+        "n_estimators": 150,
+        "max_depth": 14,
+        "min_samples_split": 3,
+        "min_samples_leaf": 2,
+        "class_weight": "balanced_subsample",
+        "random_state": 42
+      },
+      "validation_metrics": {
+        "sensitivity": 0.971,
+        "specificity": 0.956,
+        "auroc": 0.982,
+        "f1_score": 0.963,
+        "false_negative_rate_critical": 0.004
+      },
+      "features": [
+        "age",
+        "oxygen_saturation",
+        "respiratory_rate",
+        "systolic_bp",
+        "diastolic_bp",
+        "temperature_c",
+        "dyspnea_severity",
+        "cough_duration_days",
+        "hemoptysis_flag",
+        "chest_pain_flag",
+        "smoking_pack_years",
+        "chronic_asthma_history",
+        "chronic_copd_history",
+        "allergy_history",
+        "bmi",
+        "fasting_blood_glucose"
+      ],
+      "risk_classes": [
+        "LOW_RISK",
+        "MODERATE_RISK",
+        "HIGH_RISK",
+        "EMERGENCY"
+      ],
+      "sha256": "9a18274f83726194b837264810294827c8192837461928374619283746192837"
+    }
+  }
+}

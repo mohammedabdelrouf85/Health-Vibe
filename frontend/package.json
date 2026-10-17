@@ -1,0 +1,22 @@
+{
+  "name": "@healthvibe/frontend",
+  "version": "1.0.0",
+  "description": "HealthVibe AI - Client Web & Mobile Application Suite",
+  "main": "web/index.js",
+  "scripts": {
+    "audit:a11y": "node ../scripts/a11y-audit.js",
+    "test:theme": "node ../tests/theme_system.test.js",
+    "test:i18n": "node ../tests/i18n_system.test.js",
+    "test:mobile": "node ../tests/mobile_ux.test.js"
+  },
+  "keywords": [
+    "healthvibe",
+    "frontend",
+    "telehealth",
+    "accessibility",
+    "wcag",
+    "bilingual"
+  ],
+  "author": "HealthVibe Engineering Team",
+  "license": "ISC"
+}

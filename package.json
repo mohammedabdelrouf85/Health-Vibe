@@ -7,6 +7,7 @@
     "test:critical-flows": "node tests/critical_flows_patient_to_pdf_report.test.js",
     "test:permission-penetration": "node tests/permission_penetration_test.test.js",
     "test:malicious-input": "node tests/malicious_input_and_physiological_check.test.js",
+    "test:repo-structure": "node tests/repository_structure_and_governance.test.js",
     "test:clinics-bilingual": "node tests/clinics_bilingual_language_switching.test.js",
     "test:theme-light": "node tests/theme_light_mode_wcag.test.js",
     "test:theme-medical-tricolor": "node tests/light_dark_theme_medical_tricolor.test.js",
