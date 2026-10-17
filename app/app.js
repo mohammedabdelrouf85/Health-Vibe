@@ -20843,6 +20843,40 @@ const LEGAL_MODAL_DATA = {
 
       <h4>3. قياسات الأكسجين المنزلية</h4>
       <p>أجهزة قياس الأكسجين المنزلية قد تتأثر ببرودة الأطراف أو الحركة. في حال الشك بأي قراءة أو ظهور أعراض غير معتادة، يجب استشارة طبيب أو التوجه لمركز طبي فوراً.</p>
+
+      <div class="limitations-callout-card" style="margin-top: 14px; padding: 12px; background: rgba(245, 158, 11, 0.08); border: 1.5px solid rgba(245, 158, 11, 0.4); border-radius: 8px;">
+        <strong style="color: #d97706; font-size: 13px;">⚠️ حدود ومخاطر النموذج السريري (معايير Ada Health):</strong>
+        <p style="font-size: 12px; margin: 4px 0 0; color: var(--ink); line-height: 1.5;">
+          المنظومة أداة دعم قرار سريري (Clinical Decision Support) وليست بديلاً عن الفحص السريري المباشر أو الأشعة المقطعية للصدر (Chest CT Scan).
+        </p>
+      </div>
+    `,
+    limitations: `
+      <div class="limitations-callout-card" style="margin-bottom: 16px; padding: 14px; background: rgba(245, 158, 11, 0.08); border: 1.5px solid rgba(245, 158, 11, 0.4); border-radius: 10px;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+          <span style="font-size: 18px;">⚠️</span>
+          <strong style="color: #d97706; font-size: 14px;">إفصاح القيود والمخاطر السريرية (معايير Ada Health)</strong>
+        </div>
+        <p style="font-size: 13px; margin: 0; color: var(--ink); line-height: 1.6;">
+          منظومة HealthVibe AI هي <strong>أداة دعم قرار سريري (Clinical Decision Support - CDSS)</strong> مخصصة لمساعدة الأطباء في فرز الأولويات، وليست بأي حال من الأحوال بديلاً عن <strong>الفحص السريري المباشر</strong> أو الفحوصات الإشعاعية مثل <strong>الأشعة المقطعية للصدر (Chest CT Scan)</strong>.
+        </p>
+      </div>
+
+      <h4>1. طبيعة الأداة: دعم قرار سريري وليس تشخيصاً مستقلاً</h4>
+      <p>بناءً على المعايير التنظيمية الدولية للأجهزة الطبية البرمجية (SaMD Class I/II) المعتمدة لدى Ada Health والهيئات الصحية العالمية، تُصنف HealthVibe AI كأداة فرز وتوجيه سريري استرشادي. لا تصدر المنظومة أي تشخيص طبي قاطع أو خطة علاجية مستقلة دون اعتماد بشري مباشر من طبيب مرخص ومسجل بنقابة الأطباء.</p>
+
+      <h4>2. لا غنى عن الفحص السريري المباشر (Clinical Physical Examination)</h4>
+      <p>التقييم الخوارزمي يعتمد على استبيان الأعراض المبلغة ذاتياً والقراءات الحيوية المنزلية؛ وهو <strong>لا يغني مطلقاً عن الفحص السريري المباشر</strong> الذي يجريه الطبيب المختص بالسماعة الطبية (Auscultation) لسماع أصوات الرئة والقلب، وفحص الحلق والرقبة، وجس البطن، ومتابعة تمدد القفص الصدري ومعدل الجهد التنفسي.</p>
+
+      <h4>3. لا غنى عن الأشعة المقطعية والتصوير الإشعاعي (Chest CT & X-Ray)</h4>
+      <p>المنظومة البرمجية <strong>ليست بديلاً عن التصوير الطبي بالأشعة المقطعية (Chest CT Scan) أو الأشعة السينية (Chest X-Ray) أو وظائف الرئة (Spirometry)</strong>. الأمراض الصدرية المعقدة كالتليف الرئوي، الجلطة الرئوية الحادة، تمدد الشعب الهوائية، أو الأورام والكتل الرئوية تتطلب حصراً تأكيداً إشعاعياً ونسيجياً ومخبرياً كاملاً لا يمكن للذكاء الاصطناعي تعويضه.</p>
+
+      <h4>4. حدود النموذج الفني الحالي (Model resp_rf_v1.0.2 Limitations)</h4>
+      <ul>
+        <li><strong>بيانات الفرز فقط:</strong> النموذج مُدرّب على تصنيف مخاطر الأعراض التنفسية الشائعة (الربو الشعبي، السدة الرئوية المزمنة، التهاب الشعب الهوائية، والاشتباه في الالتهاب الرئوي).</li>
+        <li><strong>محددات الأجهزة المنزلية:</strong> قراءات مقياس الأكسجين النبضي (Pulse Oximeter) قد تتأثر ببرودة الأطراف، طلاء الأظافر، أو ضعف التروية الدموية.</li>
+        <li><strong>بروتوكول الطوارئ الحاد:</strong> لا يجوز استخدام المنظومة في حالات الطوارئ الحادة كنزيف الشعب الهوائية الغزير (Hemoptysis)، ألم الذبحة الصدرية الحاد، أو انخفاض الأكسجين الحاد دون 90%، ويجب التوجه فوراً لأقرب قسم طوارئ أو الاتصال بالإسعاف (123).</li>
+      </ul>
     `,
     egyptRegulations: `
       <h4>1. الامتثال لقانون حماية البيانات الشخصية المصري رقم 151 لسنة 2020</h4>
@@ -20929,6 +20963,40 @@ const LEGAL_MODAL_DATA = {
 
       <h4>3. Home Pulse Oximeter Variability</h4>
       <p>Home pulse oximeters can be affected by cold extremities, motion artifacts, or skin temperature. If you doubt any reading or experience unusual symptoms, consult a doctor or visit a medical facility immediately.</p>
+
+      <div class="limitations-callout-card" style="margin-top: 14px; padding: 12px; background: rgba(245, 158, 11, 0.08); border: 1.5px solid rgba(245, 158, 11, 0.4); border-radius: 8px;">
+        <strong style="color: #d97706; font-size: 13px;">⚠️ Clinical Model Limitations & Risk Disclosure (Ada Health Standards):</strong>
+        <p style="font-size: 12px; margin: 4px 0 0; color: var(--ink); line-height: 1.5;">
+          This platform is strictly an advisory Clinical Decision Support System (CDSS) and is NOT a substitute for direct clinical physical examination or a Chest CT Scan.
+        </p>
+      </div>
+    `,
+    limitations: `
+      <div class="limitations-callout-card" style="margin-bottom: 16px; padding: 14px; background: rgba(245, 158, 11, 0.08); border: 1.5px solid rgba(245, 158, 11, 0.4); border-radius: 10px;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+          <span style="font-size: 18px;">⚠️</span>
+          <strong style="color: #d97706; font-size: 14px;">Clinical Model Limitations Disclosure (Ada Health Standards)</strong>
+        </div>
+        <p style="font-size: 13px; margin: 0; color: var(--ink); line-height: 1.6;">
+          HealthVibe AI is strictly a <strong>Clinical Decision Support System (CDSS)</strong> intended to assist licensed physicians in triage prioritization. It is <strong>NEVER a substitute for direct clinical physical examination</strong> or radiological imaging such as a <strong>Chest CT Scan</strong> or Chest X-Ray.
+        </p>
+      </div>
+
+      <h4>1. Advisory Nature: Decision Support, Not Autonomous Diagnosis</h4>
+      <p>In accordance with global Software-as-a-Medical-Device (SaMD Class I/II) regulatory frameworks pioneered by Ada Health and international health authorities, HealthVibe AI functions as an advisory triage decision-support tool. It does not generate autonomous clinical diagnoses or prescribe therapeutic regimens without verified clinician sign-off.</p>
+
+      <h4>2. No Substitute for Direct Clinical Physical Examination</h4>
+      <p>Algorithmic calculations are based on self-reported patient questionnaires and home vitals telemetry. They <strong>never replace an in-person clinical physical examination</strong> by a qualified physician using a stethoscope (auscultation of lung sounds, wheezing, crackles), percussion, chest wall inspection, and physiological vital sign verification.</p>
+
+      <h4>3. No Substitute for Chest CT Scans or Radiological Diagnostics</h4>
+      <p>The platform is <strong>NOT a replacement for diagnostic radiological imaging such as High-Resolution Chest CT Scans, Chest Radiographs (X-Ray), or Pulmonary Function Tests (Spirometry)</strong>. Complex pulmonary conditions—such as pulmonary embolism, interstitial lung disease, bronchiectasis, or thoracic neoplasms—mandate comprehensive radiologic, laboratory, and histopathologic confirmation.</p>
+
+      <h4>4. Current Model Boundaries (resp_rf_v1.0.2 Limitations)</h4>
+      <ul>
+        <li><strong>Triage Scope:</strong> The model is calibrated for acute and chronic respiratory symptom risk ranking (Asthma, COPD, Acute Bronchitis, suspected Pneumonia).</li>
+        <li><strong>Home Sensor Variability:</strong> Peripheral pulse oximeter readings are subject to motion artifacts, nail polish interference, and peripheral vasoconstriction.</li>
+        <li><strong>Emergency Escalation:</strong> Red-flag presentations (severe hemoptysis, crushing substernal chest pain, SpO2 &lt; 90%) strictly prohibit digital waiting and mandate immediate 123 ambulance dispatch or emergency department transfer.</li>
+      </ul>
     `,
     egyptRegulations: `
       <h4>1. Egyptian Personal Data Protection Law No. 151 of 2020 Compliance</h4>
@@ -20962,7 +21030,7 @@ window.renderLegalModalContent = function() {
   const langKey = isEn ? "en" : "ar";
   const contentMap = LEGAL_MODAL_DATA[langKey] || LEGAL_MODAL_DATA.ar;
 
-  ["privacy", "terms", "disclaimer", "egypt-regulations"].forEach(tab => {
+  ["privacy", "terms", "disclaimer", "limitations", "egypt-regulations"].forEach(tab => {
     const section = document.getElementById(`legal-section-${tab}`);
     const key = tab === "egypt-regulations" ? "egyptRegulations" : tab;
     if (section && contentMap[key]) {
@@ -20978,12 +21046,14 @@ window.renderLegalModalContent = function() {
   const tabPrivacy = document.querySelector('.legal-tab-btn[data-legal-tab="privacy"]');
   const tabTerms = document.querySelector('.legal-tab-btn[data-legal-tab="terms"]');
   const tabDisclaimer = document.querySelector('.legal-tab-btn[data-legal-tab="disclaimer"]');
+  const tabLimitations = document.querySelector('.legal-tab-btn[data-legal-tab="limitations"]');
   const tabEgypt = document.querySelector('.legal-tab-btn[data-legal-tab="egypt-regulations"]');
   const closeBtn = document.getElementById("legalModalCloseBtn");
 
   if (tabPrivacy) tabPrivacy.textContent = isEn ? "🔒 Privacy Policy" : "🔒 سياسة الخصوصية";
   if (tabTerms) tabTerms.textContent = isEn ? "📜 Terms of Service" : "📜 شروط الاستخدام";
   if (tabDisclaimer) tabDisclaimer.textContent = isEn ? "🚨 Medical Disclaimer" : "🚨 إخلاء المسؤولية الطبي";
+  if (tabLimitations) tabLimitations.textContent = isEn ? "⚠️ Model Limitations" : "⚠️ حدود ومخاطر النموذج";
   if (tabEgypt) tabEgypt.textContent = isEn ? "🇪🇬 Egyptian Law & Telehealth" : "🇪🇬 القانون المصري ونقابة الأطباء";
   if (closeBtn) closeBtn.textContent = isEn ? "Understood & Close" : "فهمت ذلك وإغلاق";
 };
@@ -21028,6 +21098,7 @@ window.switchLegalTab = function(tab = "privacy") {
     if (tab === "privacy") title.textContent = isEn ? "Privacy Policy & Clinical Data Protection" : "سياسة الخصوصية وحماية البيانات السريرية";
     else if (tab === "terms") title.textContent = isEn ? "Terms of Service" : "شروط الاستخدام والخدمة";
     else if (tab === "disclaimer") title.textContent = isEn ? "Clinical & Medical Disclaimer" : "إخلاء المسؤولية الطبي وتنبيهات الطوارئ";
+    else if (tab === "limitations") title.textContent = isEn ? "Model Limitations & Ada Health Standards" : "حدود النموذج السريري ومعايير Ada Health";
     else if (tab === "egypt-regulations") title.textContent = isEn ? "Egyptian Law 151/2020 & Medical Syndicate Ethics" : "قانون 151 لسنة 2020 وضوابط نقابة أطباء مصر";
   }
 
