@@ -22,6 +22,7 @@
     "test:model-version": "node tests/model_version_and_audit_logging.test.js",
     "test:external-api-gateway": "node tests/external_api_abstraction_and_rate_limits.test.js",
     "test:auth-loading": "node tests/auth_loading_and_forms.test.js",
+    "test:auth-lockout": "node tests/auth_lockout_and_security_monitoring.test.js",
     "test:auth-validation": "node tests/auth_strict_validation.test.js",
     "test:auth-root-cause": "node tests/strict_auth_google_and_email_root_cause.test.js",
     "test:db-architecture": "node tests/strict_full_database_architecture_and_integration.test.js",

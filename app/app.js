@@ -7061,6 +7061,19 @@ function toFriendlyAppError(err, context = "") {
     };
   }
 
+  if (code.includes("account_locked") || code.includes("account-locked") || code.includes("brute-force")) {
+    return {
+      icon: "🔒",
+      category: isEn ? "Security Lockout" : "أمان الحساب",
+      title: isEn ? "Account Temporarily Locked (15 Minutes)" : "تم قفل الحساب مؤقتاً (15 دقيقة)",
+      message: isEn
+        ? "Access has been temporarily blocked for 15 minutes due to 5 consecutive failed login attempts."
+        : "تم تعليق الوصول مؤقتاً لمدة 15 دقيقة بعد تكرار 5 محاولات تسجيل دخول خاطئة متتالية لحماية الحساب.",
+      action: isEn ? "Please wait for the 15-minute lockout timer to expire, or contact Super Admin to unlock." : "يرجى الانتظار لحين انتهاء مهلة الـ 15 دقيقة، أو التواصل مع مسؤول النظام (Super Admin).",
+      ref: code || "auth/account-locked"
+    };
+  }
+
   if (code.includes("too-many-requests")) {
     return {
       icon: "⏳",

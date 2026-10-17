@@ -94,6 +94,7 @@ const { caseWorkflowService } = require('./case-workflow-service');
 const { externalApiGateway, SERVICE_DOMAINS, CIRCUIT_STATE, PROVIDER_TIER } = require('./external-api-gateway');
 const { DoctorAssignmentService } = require('./doctor-assignment-service');
 const inputSnapshotService = require('./input-snapshot-service');
+const authLockoutService = require('./auth-lockout-service');
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -630,6 +631,123 @@ function clearOtpLockout(key) {
 }
 
 // =============================================================================
+// 🔒 AUTHENTICATION BRUTE-FORCE DEFENSE & SECURITY MONITORING ENGINE (Req 74)
+// =============================================================================
+
+/**
+ * GET /api/auth/lockout-status
+ * Checks if a user email or client IP is temporarily locked out.
+ */
+app.get('/api/auth/lockout-status', (req, res) => {
+  try {
+    const email = req.query.email || '';
+    const clientIp = getClientIp(req);
+    const status = authLockoutService.checkLockout(email, clientIp);
+    res.json({
+      success: true,
+      status
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'LOCKOUT_STATUS_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/auth/record-attempt
+ * Records login attempt outcome. On 5 consecutive failures, activates 15-minute lockout
+ * and registers an entry in the Security Monitoring Log.
+ */
+app.post('/api/auth/record-attempt', async (req, res) => {
+  try {
+    const { email, success, reason, userAgent } = req.body || {};
+    const clientIp = getClientIp(req);
+    const effectiveAgent = userAgent || req.headers['user-agent'] || 'unknown';
+
+    if (success) {
+      const resetResult = authLockoutService.recordSuccessfulLogin({
+        email,
+        ip: clientIp,
+        req
+      });
+      return res.json({ success: true, ...resetResult });
+    }
+
+    const result = await authLockoutService.recordFailedAttempt({
+      email,
+      ip: clientIp,
+      reason: reason || 'invalid_credentials',
+      userAgent: effectiveAgent,
+      req,
+      db
+    });
+
+    if (result.locked) {
+      res.setHeader('Retry-After', result.waitSec);
+      return res.status(429).json({
+        success: false,
+        error: 'ACCOUNT_LOCKED',
+        message: `تم قفل الحساب مؤقتاً بسبب تكرار 5 محاولات تسجيل دخول خاطئة متتالية. يرجى الانتظار ${result.waitSec} ثانية قبل إعادة المحاولة.`,
+        retryAfterSeconds: result.waitSec,
+        consecutiveAttempts: result.attempts,
+        lockedUntil: new Date(result.lockedUntil).toISOString(),
+        logEventId: result.logEntry?.eventId
+      });
+    }
+
+    return res.json({
+      success: true,
+      locked: false,
+      attempts: result.attempts,
+      remainingAttempts: result.remainingAttempts,
+      message: `محاولة غير صحيحة. متبقي ${result.remainingAttempts} محاولات قبل تطبيق قفل مؤقت لمدة 15 دقيقة.`
+    });
+  } catch (err) {
+    console.error('[AUTH LOCKOUT API ERROR]:', err);
+    res.status(500).json({ error: 'LOCKOUT_TRACKING_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/auth/admin/unlock
+ * Administrative endpoint allowing Super Admin to release temporary account locks.
+ */
+app.post('/api/auth/admin/unlock', async (req, res) => {
+  try {
+    const { target, adminUid } = req.body || {};
+    if (!target) {
+      return res.status(400).json({ error: 'MISSING_TARGET', message: 'Target email or IP is required.' });
+    }
+    const result = await authLockoutService.clearLockout(target, adminUid || 'super_admin', db);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(500).json({ error: 'ADMIN_UNLOCK_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/auth/security-monitoring-logs
+ * Retrieves security monitoring log entries for audits and SIEM review.
+ */
+app.get('/api/auth/security-monitoring-logs', (req, res) => {
+  try {
+    const { type, severity, emailMasked, limit } = req.query;
+    const logs = authLockoutService.getSecurityMonitoringLogs({
+      type,
+      severity,
+      emailMasked,
+      limit: limit ? parseInt(limit, 10) : 50
+    });
+    res.json({
+      success: true,
+      count: logs.length,
+      logs
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'SECURITY_LOGS_QUERY_FAILED', message: err.message });
+  }
+});
+
+// =============================================================================
 // 🛡️ FIREBASE APP CHECK ATTESTATION ENGINE (Anti-Abuse & Bot Mitigation)
 // =============================================================================
 const ENFORCE_APP_CHECK = isProduction || process.env.ENFORCE_APP_CHECK === 'true';
@@ -638,7 +756,11 @@ const APP_CHECK_PUBLIC_API_PATHS = new Set([
   '/api/app-check/status',
   '/api/clinical/rules/versions',
   '/api/bot/status',
-  '/api/bot/webhook'
+  '/api/bot/webhook',
+  '/api/auth/lockout-status',
+  '/api/auth/record-attempt',
+  '/api/auth/admin/unlock',
+  '/api/auth/security-monitoring-logs'
 ]);
 
 function shouldVerifyAppCheckForApi(req) {
@@ -18894,5 +19016,7 @@ app.get('/api/clinical-governance/safety-policy', (req, res) => {
 });
 
 app.inputSnapshotService = inputSnapshotService;
+app.authLockoutService = authLockoutService;
 
 module.exports = app;
+
