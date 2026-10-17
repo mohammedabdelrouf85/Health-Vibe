@@ -2028,6 +2028,14 @@ function validatePatientMedicalProfile(raw = {}) {
         clean.calculatedAge = calculatedAge;
       }
     }
+  } else if ((raw.age !== undefined && raw.age !== null && raw.age !== '') || (raw.patientAge !== undefined && raw.patientAge !== null && raw.patientAge !== '')) {
+    const rawVal = raw.age !== undefined && raw.age !== null && raw.age !== '' ? raw.age : raw.patientAge;
+    const a = Number(rawVal);
+    if (isNaN(a) || a < 0 || a > 130) {
+      errors.push('Age must be a valid number between 0 and 130 years.');
+    } else {
+      clean.calculatedAge = Math.floor(a);
+    }
   }
 
   // 4. Emergency Contact Details
@@ -13275,6 +13283,7 @@ app.requireMfaIfEnrolled = requireMfaIfEnrolled;
 app.validateNationalIdCollection = validateNationalIdCollection;
 app.verifyDoctorAuthorization = verifyDoctorAuthorization;
 app.isDoctorApprovedMemberOfClinic = isDoctorApprovedMemberOfClinic;
+app.validatePatientMedicalProfile = validatePatientMedicalProfile;
 app.getVerifiedDoctorIdentity = getVerifiedDoctorIdentity;
 app.calculateAge = calculateAge;
 app.calculateBmi = calculateBmi;

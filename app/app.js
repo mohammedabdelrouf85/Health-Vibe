@@ -17132,6 +17132,26 @@ function parseStrictOxygenInput(value) {
   return { ok: true, value: parsed, reason: null };
 }
 
+function parseStrictAgeInput(value) {
+  const raw = String(value ?? "").trim();
+  const normalized = normalizeArabicIndicDigits(raw).trim();
+  if (!normalized) {
+    return { ok: false, value: null, reason: "empty" };
+  }
+  const match = normalized.match(/^(-?\d{1,4})$/);
+  if (!match) {
+    return { ok: false, value: null, reason: "format" };
+  }
+  const parsed = Number.parseInt(match[1], 10);
+  if (!Number.isInteger(parsed)) {
+    return { ok: false, value: null, reason: "format" };
+  }
+  if (parsed < 0 || parsed > 130) {
+    return { ok: false, value: parsed, reason: parsed > 130 ? "above-range" : "below-range" };
+  }
+  return { ok: true, value: parsed, reason: null };
+}
+
 function parseStrictSymptomDurationInput(value) {
   const raw = String(value ?? "").trim();
   const normalized = normalizeArabicIndicDigits(raw).trim();
