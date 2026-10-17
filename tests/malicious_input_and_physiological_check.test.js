@@ -33,6 +33,7 @@ const {
   validateOxygen,
   validateAge,
   validateDateOfBirth,
+  validateDuration,
   validateRespiratoryRate,
   validateTemperature,
   validateBloodPressure,
@@ -40,6 +41,7 @@ const {
   validateBiometrics
 } = require('../backend/input-sanitization-service');
 
+const inputSnapshotService = require('../backend/input-snapshot-service');
 const { buildResultReadyEmail, buildMoreInfoEmail } = require('../backend/notification-service');
 const { validatePatientMedicalProfile } = require('../backend/server');
 
@@ -379,6 +381,62 @@ async function runMaliciousInputTestSuite() {
   assert.strictEqual(normalBio.isValid, true);
   assert.strictEqual(normalBio.bmi, 22.9);
   console.log('    ✓ Rejected impossible heights/weights. Accepted 175cm / 70kg (BMI: 22.9).');
+  passedAssertions++;
+
+  // 3.8 Symptom Duration (1 - 365 days, Egyptian colloquial phrasing, Arabic Indic numerals)
+  console.log('\n  [Category 3.8] Testing Symptom Duration (Valid: 1 - 365 days, colloquial support):');
+  assert.strictEqual(validateDuration(0).isValid, false);
+  assert.strictEqual(validateDuration(-3).isValid, false);
+  assert.strictEqual(validateDuration(400).isValid, false);
+  assert.strictEqual(validateDuration('أسبوع').days, 7);
+  assert.strictEqual(validateDuration('يومين').days, 2);
+  assert.strictEqual(validateDuration('اليوم').days, 1);
+  assert.strictEqual(validateDuration('شهر').days, 30);
+  assert.strictEqual(validateDuration('٥ أيام').days, 5);
+
+  // Client parsing tests
+  assert.strictEqual(clientContext.parseStrictSymptomDurationInput('النهاردة').value, 1);
+  assert.strictEqual(clientContext.parseStrictSymptomDurationInput('أسبوعين').value, 14);
+  assert.strictEqual(clientContext.parseStrictSymptomDurationInput('٣ أيام').value, 3);
+  assert.strictEqual(clientContext.parseStrictSymptomDurationInput('500').ok, false);
+  console.log('    ✓ Validated duration bounds, Egyptian colloquial phrasing, and Arabic numerals.');
+  passedAssertions++;
+
+  // 3.9 Immutable Input Snapshot & Tamper Detection (K Health benchmark)
+  console.log('\n  [Category 3.9] Testing Immutable Assessment Input Snapshot (K Health standard):');
+  const user = { uid: 'patient-test-1', email: 'patient@healthvibe.test', role: 'patient' };
+  const mockBody = {
+    spo2: 96,
+    symptomDurationDays: 3,
+    coughSeverity: 'moderate',
+    fever: true,
+    patientAge: 32,
+    patientGender: 'female',
+    patientNotes: 'Experiencing cough and slight fever for 3 days.'
+  };
+
+  const snapshot = inputSnapshotService.captureInputSnapshot({ user, body: mockBody, capturedAt: '2026-10-17T12:00:00Z' });
+  assert.ok(snapshot.inputSnapshotHash, 'Snapshot must include cryptographic SHA-256 hash');
+  assert.strictEqual(snapshot.spo2, 96);
+  assert.strictEqual(snapshot.symptomDurationDays, 3);
+
+  // Verify integrity check
+  const integrityResult = inputSnapshotService.verifyInputSnapshotIntegrity(snapshot);
+  assert.strictEqual(integrityResult.isValid, true, 'Original snapshot must be valid');
+
+  // Verify tamper detection
+  const tamperedSnapshot = { ...snapshot, spo2: 100 };
+  const tamperResult = inputSnapshotService.verifyInputSnapshotIntegrity(tamperedSnapshot);
+  assert.strictEqual(tamperResult.isValid, false, 'Tampered snapshot must be detected');
+
+  // Verify immutability assertion throws on alteration
+  assert.throws(() => {
+    inputSnapshotService.assertSnapshotImmutability(
+      { inputSnapshot: snapshot, inputSnapshotHash: snapshot.inputSnapshotHash },
+      { inputSnapshot: tamperedSnapshot, inputSnapshotHash: 'fake-tampered-hash' }
+    );
+  }, /IMMUTABLE_INPUT_SNAPSHOT_MODIFICATION_PROHIBITED/);
+  console.log('    ✓ Verified SHA-256 cryptographic snapshot creation, tamper detection, and immutability guard.');
   passedAssertions++;
 
   console.log('\n==================================================================');

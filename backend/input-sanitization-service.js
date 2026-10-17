@@ -202,6 +202,52 @@ function validateDateOfBirth(dateOfBirth, referenceDate = new Date()) {
 }
 
 /**
+ * Validates Symptom Duration (in days) with support for Egyptian colloquial phrasing and Arabic Indic numerals.
+ * e.g., "اليوم" -> 1, "يومين" -> 2, "أسبوع" -> 7, "٣ أيام" -> 3.
+ * @param {any} value
+ * @returns {{ isValid: boolean, days: number|null, text: string, error: string|null }}
+ */
+function validateDuration(value) {
+  if (value === null || value === undefined || value === '') {
+    return { isValid: false, days: null, text: '', error: 'DURATION_EMPTY' };
+  }
+  const raw = String(value).trim();
+  const normalized = normalizeDigits(raw).toLowerCase().trim();
+  if (!normalized || normalized === 'غير محدد') {
+    return { isValid: false, days: null, text: raw, error: 'DURATION_EMPTY' };
+  }
+
+  // Handle common Egyptian colloquial duration expressions
+  if (normalized === 'اليوم' || normalized === 'النهاردة' || normalized === 'النهارده' || normalized === 'today' || normalized === 'يوم' || normalized === '1 day') {
+    return { isValid: true, days: 1, text: raw, error: null };
+  }
+  if (normalized === 'يومين' || normalized === 'يومان' || normalized === '2 days') {
+    return { isValid: true, days: 2, text: raw, error: null };
+  }
+  if (normalized === 'أسبوع' || normalized === 'اسبوع' || normalized === 'أسبوع واحد' || normalized === 'اسبوع واحد' || normalized === '1 week' || normalized === 'week') {
+    return { isValid: true, days: 7, text: raw, error: null };
+  }
+  if (normalized === 'أسبوعين' || normalized === 'اسبوعين' || normalized === 'اسبوعان' || normalized === '2 weeks') {
+    return { isValid: true, days: 14, text: raw, error: null };
+  }
+  if (normalized === 'شهر' || normalized === 'شهر واحد' || normalized === '1 month' || normalized === 'month') {
+    return { isValid: true, days: 30, text: raw, error: null };
+  }
+
+  const match = normalized.match(/^(\d{1,3})\s*(?:days?|day|d|يوم|أيام|ايام|يوما|يوماً)?$/i);
+  if (!match) {
+    return { isValid: false, days: null, text: raw, error: 'DURATION_INVALID_FORMAT' };
+  }
+
+  const days = Number.parseInt(match[1], 10);
+  if (!Number.isInteger(days) || days < 1 || days > 365) {
+    return { isValid: false, days, text: raw, error: days > 365 ? 'DURATION_ABOVE_MAXIMUM' : 'DURATION_BELOW_MINIMUM' };
+  }
+
+  return { isValid: true, days, text: raw, error: null };
+}
+
+/**
  * Validates Respiratory Rate (RR in breaths/minute).
  * Physiological range: 5 - 60 breaths/min.
  * @param {any} value
@@ -329,6 +375,7 @@ module.exports = {
   validateOxygen,
   validateAge,
   validateDateOfBirth,
+  validateDuration,
   validateRespiratoryRate,
   validateTemperature,
   validateBloodPressure,

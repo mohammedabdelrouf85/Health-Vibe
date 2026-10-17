@@ -93,6 +93,7 @@ const { medicalCatalogService } = require('./medical-catalog-service');
 const { caseWorkflowService } = require('./case-workflow-service');
 const { externalApiGateway, SERVICE_DOMAINS, CIRCUIT_STATE, PROVIDER_TIER } = require('./external-api-gateway');
 const { DoctorAssignmentService } = require('./doctor-assignment-service');
+const inputSnapshotService = require('./input-snapshot-service');
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -7022,7 +7023,9 @@ function buildApprovedReportSnapshot({ caseId, caseData, updateData, doctorIdent
       withdrawnAt: null,
       withdrawnBy: null,
       reason: null
-    }
+    },
+    inputSnapshot: caseData.inputSnapshot || caseData.assessmentInputSnapshot || null,
+    inputSnapshotHash: caseData.inputSnapshotHash || caseData.inputSnapshot?.inputSnapshotHash || null
   };
 }
 
@@ -18889,5 +18892,7 @@ app.get('/api/clinical-governance/safety-policy', (req, res) => {
     policy: falseNegativeAnalyzer.getClinicalSafetyOperatingPolicy()
   });
 });
+
+app.inputSnapshotService = inputSnapshotService;
 
 module.exports = app;

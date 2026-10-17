@@ -14,6 +14,7 @@
 
 const crypto = require('crypto');
 const { medicalCatalogService } = require('./medical-catalog-service');
+const inputSnapshotService = require('./input-snapshot-service');
 
 class CaseWorkflowService {
   constructor(options = {}) {
@@ -72,25 +73,27 @@ class CaseWorkflowService {
     const symptomProgression = String(body.symptomProgression ?? 'stable');
     const patientNotes = String(body.patientNotes ?? body.notes ?? '').trim().slice(0, 1000);
 
-    // 2. Build Immutable inputSnapshot
-    const inputSnapshot = {
-      spo2,
-      oxygenLevel: spo2,
-      symptomDurationDays: durationDays,
-      shortnessOfBreathScale,
-      coughSeverity,
-      fever,
-      chestPain,
-      respiratoryRate,
-      riskFactors,
-      asthmaCopdHistory,
-      recentInfection,
-      symptomProgression,
-      patientNotes,
-      patientAge: body.patientAge || body.age || null,
-      patientGender: body.patientGender || body.gender || null,
-      submittedAt: nowIso
-    };
+    // 2. Build Immutable inputSnapshot using K Health benchmark standard
+    const inputSnapshot = inputSnapshotService.captureInputSnapshot({
+      user,
+      body: {
+        ...body,
+        spo2,
+        oxygenLevel: spo2,
+        symptomDurationDays: durationDays,
+        shortnessOfBreathScale,
+        coughSeverity,
+        fever,
+        chestPain,
+        respiratoryRate,
+        riskFactors,
+        asthmaCopdHistory,
+        recentInfection,
+        symptomProgression,
+        patientNotes
+      },
+      capturedAt: nowIso
+    });
 
     // 3. Compute aiEvaluation linked to diseases_catalog and clinical_rules
     const aiEvaluation = medicalCatalogService.evaluateAssessment(inputSnapshot);
@@ -116,6 +119,8 @@ class CaseWorkflowService {
       status,
       priority: aiEvaluation.riskClass,
       inputSnapshot,
+      inputSnapshotHash: inputSnapshot.inputSnapshotHash,
+      assessmentInputSnapshot: inputSnapshot,
       aiEvaluation,
       doctorReview: null,
       submittedAt: nowIso,
@@ -359,6 +364,8 @@ class CaseWorkflowService {
                 legalName: doctorLegalName,
                 syndicateNumber: doctorSyndicateNumber
               },
+              inputSnapshot: currentCase?.inputSnapshot || null,
+              inputSnapshotHash: currentCase?.inputSnapshotHash || currentCase?.inputSnapshot?.inputSnapshotHash || null,
               medicalDisclaimer: 'Health Vibe AI provides physician-verified clinical decision support. This report is signed by a licensed practitioner.',
               modelVersion: currentCase?.modelVersion || 'HealthVibe-Rules-v1.1',
               ruleVersion: currentCase?.ruleVersion || '1.0.0'
@@ -638,11 +645,18 @@ class CaseWorkflowService {
 
     return { processedCount, sentCount };
   }
+  /**
+   * Asserts that an update to an existing case does not tamper with its inputSnapshot.
+   */
+  assertSnapshotImmutability(existingCase, updatedCase) {
+    return inputSnapshotService.assertSnapshotImmutability(existingCase, updatedCase);
+  }
 }
 
 const caseWorkflowService = new CaseWorkflowService();
 
 module.exports = {
   CaseWorkflowService,
-  caseWorkflowService
+  caseWorkflowService,
+  inputSnapshotService
 };

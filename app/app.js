@@ -17161,10 +17161,28 @@ function parseStrictAgeInput(value) {
 
 function parseStrictSymptomDurationInput(value) {
   const raw = String(value ?? "").trim();
-  const normalized = normalizeArabicIndicDigits(raw).trim();
+  const normalized = normalizeArabicIndicDigits(raw).toLowerCase().trim();
   if (!normalized || normalized === "غير محدد") {
     return { ok: false, value: null, text: raw, reason: "empty" };
   }
+
+  // Support common Egyptian colloquial duration expressions (Vezeeta non-tech usability)
+  if (normalized === "اليوم" || normalized === "النهاردة" || normalized === "النهارده" || normalized === "today" || normalized === "يوم" || normalized === "1 day") {
+    return { ok: true, value: 1, text: raw, reason: null };
+  }
+  if (normalized === "يومين" || normalized === "يومان" || normalized === "2 days") {
+    return { ok: true, value: 2, text: raw, reason: null };
+  }
+  if (normalized === "أسبوع" || normalized === "اسبوع" || normalized === "أسبوع واحد" || normalized === "اسبوع واحد" || normalized === "1 week" || normalized === "week") {
+    return { ok: true, value: 7, text: raw, reason: null };
+  }
+  if (normalized === "أسبوعين" || normalized === "اسبوعين" || normalized === "اسبوعان" || normalized === "2 weeks") {
+    return { ok: true, value: 14, text: raw, reason: null };
+  }
+  if (normalized === "شهر" || normalized === "شهر واحد" || normalized === "1 month" || normalized === "month") {
+    return { ok: true, value: 30, text: raw, reason: null };
+  }
+
   const match = normalized.match(/^(\d{1,3})\s*(?:days?|day|d|يوم|أيام|ايام|يوما|يوماً)?$/i);
   if (!match) {
     return { ok: false, value: null, text: raw, reason: "format" };
