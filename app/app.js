@@ -4604,8 +4604,8 @@ async function selectDoctorCase(id) {
         <button type="button" class="btn-clinical escalate" onclick="escalateCase('${c.id}')">
           <span>🚨</span> ${isEn ? 'Escalate (Emergency)' : 'تصعيد الحالة'}
         </button>
-        <button type="button" class="btn-clinical reject" onclick="HealthVibes?.DoctorUI?.openRejectReentryModal('${c.id}', 'reentry')" title="${isEn ? 'Reject intake & request patient re-entry' : 'رفض التقييم المبدئي وطلب إعادة قياس'}">
-          <span>❌</span> ${isEn ? 'Reject / Re-entry' : 'رفض وإعادة قياس'}
+        <button type="button" class="btn-clinical reject" onclick="HealthVibes?.DoctorUI?.openRejectReentryModal('${c.id}', 'reentry')" title="${isEn ? 'Reject intake & request patient re-entry (Alt+R)' : 'رفض التقييم المبدئي وطلب إعادة قياس (Alt+R)'}">
+          <span>❌</span> ${isEn ? 'Reject / Re-entry' : 'رفض وإعادة قياس'} <kbd class="toolbar-shortcut-tag" style="font-size: 10px; opacity: 0.85; margin-inline-start: 4px; padding: 1px 4px; background: rgba(0,0,0,0.2); border-radius: 4px;">Alt+R</kbd>
         </button>
         <button type="button" class="btn-clinical close" onclick="closeCase('${c.id}')">
           <span>🔒</span> ${isEn ? 'Close Case' : 'إغلاق الحالة'}
@@ -4833,8 +4833,8 @@ async function selectDoctorCase(id) {
   const topActionsToolbarHtml = `
     <div class="doctor-top-actions">
       ${approveButtonHtml}
-      <button type="button" class="btn-clinical reject-reentry-top-btn" style="background: rgba(234, 88, 12, 0.15); border: 1.5px solid #ea580c; color: #fb923c; font-weight: 700;" onclick="HealthVibes?.DoctorUI?.openRejectReentryModal('${c.id}', 'reentry')" title="${isEn ? 'Reject invalid intake & request patient re-entry' : 'رفض التقييم المبدئي وطلب إعادة إدخال القياسات'}">
-        <span>⚠️</span> ${isEn ? 'Reject / Re-entry' : 'رفض وطلب إعادة قياس'}
+      <button type="button" class="btn-clinical reject-reentry-top-btn" style="background: rgba(234, 88, 12, 0.15); border: 1.5px solid #ea580c; color: #fb923c; font-weight: 700;" onclick="HealthVibes?.DoctorUI?.openRejectReentryModal('${c.id}', 'reentry')" title="${isEn ? 'Reject invalid intake & request patient re-entry (Alt+R)' : 'رفض التقييم المبدئي وطلب إعادة إدخال القياسات (Alt+R)'}">
+        <span>⚠️</span> ${isEn ? 'Reject / Re-entry' : 'رفض وطلب إعادة قياس'} <kbd class="toolbar-shortcut-tag" style="font-size: 10px; opacity: 0.85; margin-inline-start: 4px; padding: 1px 4px; background: rgba(234, 88, 12, 0.25); border: 1px solid rgba(234, 88, 12, 0.4); border-radius: 4px;">Alt+R</kbd>
       </button>
       <button type="button" class="btn-clinical" style="background: rgba(14, 165, 233, 0.15); border: 1.5px solid #0284c7; color: #38bdf8;" onclick="HealthVibes?.DoctorUI?.openOverrideRiskModal('${c.id}')" title="${isEn ? 'Override advisory risk level' : 'تعديل درجة الخطورة السريرية'}">
         <span>⚖️</span> ${isEn ? 'Override Risk' : 'تعديل الخطورة'}

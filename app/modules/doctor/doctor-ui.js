@@ -4212,7 +4212,7 @@
                     <span class="mode-card-icon">🔄</span>
                     <span class="pill ok" style="font-size: 10px; padding: 2px 7px;">${isEn ? 'Recommended' : 'موصى به'}</span>
                   </div>
-                  <strong class="mode-card-title">${isEn ? 'Reject & Request Re-entry' : 'رفض التقييم وطلب إعادة القياس'}</strong>
+                  <strong class="mode-card-title">${isEn ? 'Reject & Request Re-entry' : 'رفض التقييم وطلب إعادة القياس'} <kbd class="mode-card-shortcut">[1]</kbd></strong>
                   <p class="mode-card-desc">
                     ${isEn
                       ? 'Rejects initial intake for incomplete or contradictory values and immediately alerts the patient to re-measure flagged items.'
@@ -4225,7 +4225,7 @@
                     <span class="mode-card-icon">🚫</span>
                     <span class="pill danger" style="font-size: 10px; padding: 2px 7px;">${isEn ? 'Terminal' : 'نهائي'}</span>
                   </div>
-                  <strong class="mode-card-title">${isEn ? 'Definitive Rejection' : 'رفض سريري نهائي'}</strong>
+                  <strong class="mode-card-title">${isEn ? 'Definitive Rejection' : 'رفض سريري نهائي'} <kbd class="mode-card-shortcut">[2]</kbd></strong>
                   <p class="mode-card-desc">
                     ${isEn
                       ? 'Permanently terminates intake for non-medical submissions, duplicate cases, or out-of-scope complaints without re-entry.'
@@ -4347,6 +4347,13 @@
             </div>
           </div>
 
+          <!-- Modal Shortcuts Legend -->
+          <div class="override-shortcuts-legend" style="display: flex; gap: 14px; align-items: center; justify-content: flex-end; padding: 6px 18px; font-size: 11px; color: var(--muted); border-top: 1px dashed var(--line); flex-wrap: wrap;">
+            <span><kbd style="background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; font-weight: 700;">1</kbd>/<kbd style="background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; font-weight: 700;">2</kbd> ${isEn ? 'Switch Mode' : 'تبديل المسار'}</span>
+            <span><kbd style="background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; font-weight: 700;">Esc</kbd> ${isEn ? 'Cancel' : 'إلغاء'}</span>
+            <span><kbd style="background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; font-weight: 700;">Ctrl</kbd>+<kbd style="background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; font-weight: 700;">Enter</kbd> ${isEn ? 'Confirm' : 'تأكيد'}</span>
+          </div>
+
           <!-- Modal Footer Actions -->
           <footer class="override-modal-footer">
             <button type="button" class="outline-button btn-cancel-override" onclick="HealthVibes.DoctorUI.closeRejectReentryModal()">
@@ -4387,8 +4394,9 @@
       }
     }
 
-    lastRejectModalOpener = document.activeElement;
+    const previousOpener = document.activeElement;
     closeRejectReentryModal();
+    lastRejectModalOpener = previousOpener;
 
     activeRejectReentryMode = initialMode === "definitive_reject" ? "definitive_reject" : "reentry";
     selectedReentryFields = new Set(["spo2"]);
@@ -4461,6 +4469,18 @@
       if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
         e.preventDefault();
         submitRejectReentry(activeCase.id);
+        return;
+      }
+      // Mode switching shortcuts: 1 for reentry, 2 for definitive_reject (when not typing in textarea/input, or with Alt)
+      const isInputFocused = document.activeElement && (document.activeElement.tagName === "TEXTAREA" || document.activeElement.tagName === "INPUT");
+      if ((e.altKey && (e.key === "1" || e.code === "Digit1")) || (!isInputFocused && (e.key === "1" || e.code === "Digit1"))) {
+        e.preventDefault();
+        setRejectReentryMode("reentry");
+        return;
+      }
+      if ((e.altKey && (e.key === "2" || e.code === "Digit2")) || (!isInputFocused && (e.key === "2" || e.code === "Digit2"))) {
+        e.preventDefault();
+        setRejectReentryMode("definitive_reject");
         return;
       }
       // Accessible Tab Trap
@@ -4868,6 +4888,26 @@
         if (activeCaseId) {
           e.preventDefault();
           openOverrideRiskModal(activeCaseId);
+        }
+      }
+
+      // Global Alt + R / Alt + J / Alt + X opens Reject & Re-entry Modal for active case
+      if (e.altKey && (e.key === "r" || e.key === "R" || e.key === "j" || e.key === "J" || e.key === "x" || e.key === "X" || e.code === "KeyR" || e.code === "KeyJ" || e.code === "KeyX")) {
+        if (document.getElementById("doctorRejectReentryModal") || document.getElementById("doctorOverrideRiskModal")) {
+          return;
+        }
+
+        const activeCard = document.getElementById("doctorRiskOverrideSection");
+        const activeCaseId = activeCard?.getAttribute("data-case-id") ||
+                             global.activeDoctorCaseId ||
+                             global.state?.activeDoctorCaseId ||
+                             global.state?.activeCaseId ||
+                             (global.cases && global.cases[0] ? global.cases[0].id : null) ||
+                             (global.state?.doctorQueue && global.state.doctorQueue[0] ? global.state.doctorQueue[0].id : null);
+
+        if (activeCaseId) {
+          e.preventDefault();
+          openRejectReentryModal(activeCaseId, "reentry");
         }
       }
     });
