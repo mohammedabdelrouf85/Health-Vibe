@@ -4776,7 +4776,7 @@
       return "";
     }
 
-    const catKey = c.rejectionCategory || "INCOMPLETE_MEASUREMENTS";
+    const catKey = c.rejectionCategory || c.reentryCategory || "INCOMPLETE_MEASUREMENTS";
     const catMeta = REJECTION_REENTRY_META[catKey] || { ar: "نقص القياسات أو المؤشرات الحيوية", en: "Incomplete Vital Measurements" };
     const catLabel = isEn ? catMeta.en : catMeta.ar;
     const reasonText = c.rejectionReason || c.doctorNote || (isEn ? "Intake rejected pending patient correction." : "تم رفض التقييم المبدئي لحين تصحيح القياسات.");
@@ -4786,7 +4786,7 @@
     REENTRY_REQUEST_FIELDS.forEach(f => { fieldMetaMap[f.id] = f; });
 
     return `
-      <div class="doctor-reentry-alert-card" id="reentryAlertBanner_${c.id}" role="alert">
+      <div class="doctor-reentry-alert-card reentry-status-alert-banner" id="reentryAlertBanner_${c.id}" role="alert">
         <div class="reentry-alert-top">
           <div class="reentry-alert-title-wrap">
             <span class="reentry-alert-icon" aria-hidden="true">⚠️</span>
