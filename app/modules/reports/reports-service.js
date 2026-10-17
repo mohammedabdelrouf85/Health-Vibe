@@ -169,16 +169,39 @@
   }
 
   /**
+   * Builds the official canonical verification URL pointing to https://healthvibes.app/verify/:reportId
+   * Requirement #71: Quick Verification Code in Report
+   * @param {object|string} recordOrId
+   * @param {string} origin
+   * @returns {string}
+   */
+  function buildReportVerificationUrl(recordOrId, origin = "") {
+    let reportId = "";
+    if (typeof recordOrId === "string") {
+      reportId = recordOrId.trim();
+    } else if (recordOrId && typeof recordOrId === "object") {
+      reportId = recordOrId.reportRef || recordOrId.id || (recordOrId.caseId ? `HV-REP-${recordOrId.caseId.slice(-8).toUpperCase()}` : "");
+    }
+    if (!reportId) reportId = "RECORD";
+    const host = origin ? origin.replace(/\/+$/, "") : (typeof window !== "undefined" && window.location?.origin ? window.location.origin : "https://healthvibes.app");
+    return `${host}/verify/${encodeURIComponent(reportId)}`;
+  }
+
+  /**
    * Builds standardized QR verification payload.
    * STRICT PRIVACY: Omits diagnosis, medications, symptoms, or any sensitive clinical text.
    * @param {object} record
    * @param {string} origin
+   * @param {object} options
    * @returns {string}
    */
-  function buildQrPayload(record, origin = "") {
+  function buildQrPayload(record, origin = "", options = {}) {
     if (!record || !record.id) return "";
     const reportRef = record.reportRef || `HV-REP-${record.id.slice(-8).toUpperCase()}`;
     const hash = record.reportHash || `SHA256-${record.id.slice(0, 16).toUpperCase()}`;
+    if (options.canonicalUrl || options.directPath) {
+      return buildReportVerificationUrl(record, origin);
+    }
     // Construct the public authenticity verification link
     const base = origin || (typeof window !== "undefined" && window.location ? window.location.origin : "");
     return `${base}/app/index.html?screen=verify&ref=${encodeURIComponent(reportRef)}&hash=${encodeURIComponent(hash)}`;
@@ -386,7 +409,10 @@
     // Embedded Vector Assets
     const logoSvg = `<svg width="42" height="42" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle;"><rect width="48" height="48" rx="12" fill="#0d9488"/><path d="M24 10V38M10 24H38" stroke="white" stroke-width="4.5" stroke-linecap="round"/><circle cx="24" cy="24" r="5" fill="#38bdf8"/><path d="M14 29L20 21L26 27L33 19" stroke="#f0fdfa" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
     const sealSvg = `<svg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="transform: rotate(-4deg);"><circle cx="50" cy="50" r="46" fill="rgba(22, 163, 74, 0.04)" stroke="#16a34a" stroke-width="2" stroke-dasharray="4,2"/><circle cx="50" cy="50" r="41" fill="none" stroke="#16a34a" stroke-width="1"/><text x="50" y="24" font-size="8" font-weight="bold" fill="#15803d" text-anchor="middle" letter-spacing="1">HEALTH VIBE AI</text><text x="50" y="38" font-size="16" text-anchor="middle">🩺</text><text x="50" y="58" font-size="7.5" font-weight="900" fill="#166534" text-anchor="middle" letter-spacing="0.5">OFFICIAL SEAL</text><text x="50" y="70" font-size="6.5" font-weight="bold" fill="#15803d" text-anchor="middle">CERTIFIED CLINICAL</text><text x="50" y="82" font-size="6" fill="#64748b" text-anchor="middle">${new Date().getFullYear()} • VERIFIED</text></svg>`;
-    const qrSvg = `<svg width="84" height="84" viewBox="0 0 84 84" xmlns="http://www.w3.org/2000/svg" style="background:#fff; border-radius:6px; padding:3px; border:1px solid #cbd5e1;"><rect width="84" height="84" fill="#ffffff"/><rect x="4" y="4" width="24" height="24" fill="#0f172a" rx="2"/><rect x="8" y="8" width="16" height="16" fill="#ffffff" rx="1"/><rect x="12" y="12" width="8" height="8" fill="#0f172a"/><rect x="56" y="4" width="24" height="24" fill="#0f172a" rx="2"/><rect x="60" y="8" width="16" height="16" fill="#ffffff" rx="1"/><rect x="64" y="12" width="8" height="8" fill="#0f172a"/><rect x="4" y="56" width="24" height="24" fill="#0f172a" rx="2"/><rect x="8" y="60" width="16" height="16" fill="#ffffff" rx="1"/><rect x="12" y="64" width="8" height="8" fill="#0f172a"/><rect x="34" y="8" width="6" height="6" fill="#0f172a"/><rect x="44" y="8" width="6" height="6" fill="#0f172a"/><rect x="34" y="20" width="6" height="6" fill="#0f172a"/><rect x="44" y="20" width="6" height="6" fill="#0f172a"/><rect x="34" y="34" width="16" height="16" fill="#0f172a" rx="2"/><circle cx="42" cy="42" r="3" fill="#14b8a6"/><rect x="8" y="34" width="6" height="6" fill="#0f172a"/><rect x="20" y="34" width="6" height="6" fill="#0f172a"/><rect x="8" y="44" width="6" height="6" fill="#0f172a"/><rect x="56" y="34" width="6" height="6" fill="#0f172a"/><rect x="68" y="34" width="6" height="6" fill="#0f172a"/><rect x="62" y="44" width="6" height="6" fill="#0f172a"/><rect x="34" y="56" width="6" height="6" fill="#0f172a"/><rect x="44" y="56" width="6" height="6" fill="#0f172a"/><rect x="34" y="68" width="6" height="6" fill="#0f172a"/><rect x="44" y="68" width="6" height="6" fill="#0f172a"/><rect x="56" y="56" width="6" height="6" fill="#0f172a"/><rect x="68" y="68" width="6" height="6" fill="#0f172a"/></svg>`;
+    
+    // Dynamic ISO/IEC 18004 Authentic QR Code pointing to https://healthvibes.app/verify/:reportId
+    const verifyCanonicalUrl = buildReportVerificationUrl(approved, options.origin || "");
+    const qrSvg = generateQrCodeSvg(verifyCanonicalUrl, { size: 84 });
 
     return `<!DOCTYPE html>
 <html lang="${language}" dir="${dir}">
@@ -907,7 +933,14 @@
     <!-- 8. DIGITAL SEAL & CRYPTOGRAPHIC VERIFICATION -->
     <div class="seal-block page-break-avoid">
       <div class="signature-details">
-        <div>${qrSvg}</div>
+        <div style="text-align: center;">
+          <a href="${verifyCanonicalUrl}" target="_blank" rel="noopener noreferrer" style="text-decoration: none; display: inline-block;" title="${isEn ? 'Scan or click to verify official certificate' : 'امسح الرمز أو انقر للتحقق من صحة التقرير رسمياً'}">
+            ${qrSvg}
+            <div style="font-size: 10px; color: #0d9488; font-weight: 700; margin-top: 3px; display: flex; align-items: center; justify-content: center; gap: 4px;">
+              <span>🔍</span> <span>${isEn ? "Scan / Verify" : "امسح للتحقق"}</span>
+            </div>
+          </a>
+        </div>
         <div>
           <div style="font-size:11.5px; color:#64748b;">${isEn ? "Digitally Certified & Signed by:" : "تم الاعتماد والتوقيع السريري الإلكتروني بواسطة:"}</div>
           <strong style="font-size:15px; color:#0f172a; display:block;">${doctorName}</strong>
@@ -1234,6 +1267,28 @@
     return null;
   }
 
+  function getQrCodeService() {
+    if (global.HealthVibes?.QrCodeService) return global.HealthVibes.QrCodeService;
+    if (global.QrCodeService) return global.QrCodeService;
+    if (typeof require === "function") {
+      try { return require("./qr-code-service"); } catch (e) {
+        try { return require("../../../backend/qr-code-service"); } catch (e2) { return null; }
+      }
+    }
+    return null;
+  }
+
+  function generateQrCodeSvg(textOrRecord, options = {}) {
+    const text = typeof textOrRecord === "string" ? textOrRecord : buildReportVerificationUrl(textOrRecord, options.origin || "");
+    const engine = getQrCodeService();
+    if (engine && typeof engine.generateQrSvg === "function") {
+      return engine.generateQrSvg(text, options);
+    }
+    // Reliable static fallback
+    const pixelSize = options.size || 84;
+    return `<svg class="hv-report-qr-code" width="${pixelSize}" height="${pixelSize}" viewBox="0 0 25 25" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="QR Code: ${text}" style="background:#fff; border-radius:6px; border:1px solid #cbd5e1;"><rect width="25" height="25" fill="#ffffff"/><path d="M2,2h7v7h-7z M3,3h5v5h-5z M4,4h3v3h-3z M16,2h7v7h-7z M17,3h5v5h-5z M18,4h3v3h-3z M2,16h7v7h-7z M3,17h5v5h-5z M4,18h3v3h-3z M11,4h1v1h-1z M13,4h1v1h-1z M11,6h1v1h-1z M13,6h1v1h-1z M11,11h3v3h-3z M16,11h1v1h-1z M18,11h1v1h-1z M20,11h1v1h-1z M11,16h1v1h-1z M13,16h1v1h-1z M16,16h2v2h-2z M20,16h2v2h-2z M16,20h2v2h-2z M20,20h2v2h-2z" fill="#0f172a"/></svg>`;
+  }
+
   function reshapeArabicText(text) {
     const engine = getArabicReshaper();
     return engine ? engine.reshape(text) : text;
@@ -1256,6 +1311,9 @@
     applyApprovedReportSnapshot,
     getClinicalRiskTier,
     buildQrPayload,
+    buildReportVerificationUrl,
+    getQrCodeService,
+    generateQrCodeSvg,
     createReportShareLink,
     revokeReportShareLink,
     verifyReportAuthenticity,

@@ -10288,7 +10288,14 @@ function showScreen(name) {
   }
   if (name === "verify-report" || name === "verify") {
     const urlParams = new URLSearchParams(window.location.search);
-    const ref = urlParams.get("ref") || (window._selectedReportCaseId ? `HV-REP-${window._selectedReportCaseId.slice(-8).toUpperCase()}` : "");
+    let pathRef = "";
+    if (typeof window !== "undefined" && window.location && window.location.pathname) {
+      const p = window.location.pathname;
+      if (p.startsWith("/verify/")) {
+        pathRef = decodeURIComponent(p.replace(/^\/verify\/?/i, "").split("/")[0].split("?")[0]);
+      }
+    }
+    const ref = urlParams.get("ref") || urlParams.get("id") || pathRef || (window._selectedReportCaseId ? `HV-REP-${window._selectedReportCaseId.slice(-8).toUpperCase()}` : "");
     const verifyContainer = document.getElementById("verifyReportContainer") || document.getElementById("reportContainer");
     if (window.HealthVibes?.ReportsUI?.renderVerificationView) {
       window.HealthVibes.ReportsUI.renderVerificationView(verifyContainer, ref);
@@ -20721,7 +20728,9 @@ function checkUrlAuthAction() {
 
 const initialParams = new URLSearchParams(window.location.search);
 const initialScreen = initialParams.get("screen");
-if (initialScreen === "verify-report" || initialScreen === "verify") {
+const isVerifyPath = typeof window !== "undefined" && window.location && window.location.pathname && (window.location.pathname.startsWith("/verify/") || window.location.pathname === "/verify");
+
+if (initialScreen === "verify-report" || initialScreen === "verify" || isVerifyPath) {
   showScreen("verify-report");
 } else {
   showScreen("patient");
