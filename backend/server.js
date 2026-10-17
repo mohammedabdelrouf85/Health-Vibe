@@ -13543,6 +13543,57 @@ app.get('/api/reports/:reportId/download-decrypted', requireAuth, (req, res) => 
   }
 });
 
+/**
+ * POST /api/reports/html-to-pdf
+ * Generates an A4 clinical PDF report from HTML using Headless Chromium
+ * with embedded Arabic typography and HarfBuzz OpenType shaping.
+ */
+app.post('/api/reports/html-to-pdf', async (req, res) => {
+  try {
+    const { html, reportId, language } = req.body || {};
+    if (!html) {
+      return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'html content is required.' });
+    }
+
+    const chromiumPdfService = require('./chromium-pdf-service');
+    const pdfBuffer = await chromiumPdfService.generatePdfFromHtml(html);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="healthvibe_report_${reportId || 'certified'}_${language || 'ar'}.pdf"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    res.send(pdfBuffer);
+  } catch (err) {
+    res.status(500).json({ error: 'PDF_GENERATION_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/reports/reshape-arabic
+ * Shapes Arabic text and applies BiDi reordering for non-RTL PDF generators.
+ */
+app.post('/api/reports/reshape-arabic', (req, res) => {
+  try {
+    const { text } = req.body || {};
+    if (typeof text !== 'string') {
+      return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'text string is required.' });
+    }
+
+    const arabicReshaper = require('./arabic-reshaper-service');
+    const reshaped = arabicReshaper.reshape(text);
+    const bidi = arabicReshaper.processArabic(text);
+
+    res.json({
+      success: true,
+      original: text,
+      isArabic: arabicReshaper.isArabic(text),
+      reshaped,
+      bidi
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'RESHAPING_FAILED', message: err.message });
+  }
+});
+
 // =============================================================================
 // 💳 SUBSCRIPTION, BILLING & REVENUE LEDGER ROUTES
 // =============================================================================

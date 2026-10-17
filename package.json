@@ -87,6 +87,8 @@
     "test:patient-history": "node tests/strict_patient_history_and_pdf_export.test.js",
     "test:pdf-engine": "node tests/strict_certified_report_pdf_engine.test.js",
     "test:pdf-share-verify": "node tests/report_pdf_share_verification.test.js",
+    "test:arabic-pdf": "node tests/arabic_pdf_reshaper_and_chromium.test.js",
+    "test:malicious-input": "node tests/malicious_input_and_physiological_check.test.js",
     "test:assistant": "node tests/assistant_governance_and_guardrails.test.js",
     "test:rules": "node tests/run_rules_emulator.js",
     "test:modules": "node tests/modular_architecture.test.js",

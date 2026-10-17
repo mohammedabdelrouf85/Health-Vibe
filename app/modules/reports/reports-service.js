@@ -395,7 +395,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${isEn ? "Certified Medical Report" : "تقرير طبي معتمد"} - ${reportRef}</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Tajawal:wght@400;500;700;800&family=Inter:wght@400;500;600;700&display=swap');
     
     @page {
       size: A4;
@@ -409,13 +409,18 @@
     }
     
     body {
-      font-family: ${isEn ? "'Inter', 'Segoe UI', Roboto, sans-serif" : "'Cairo', 'Segoe UI', Tahoma, sans-serif"};
+      font-family: ${isEn ? "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Arial', sans-serif" : "'Cairo', 'Tajawal', -apple-system, BlinkMacSystemFont, 'Segoe UI', Tahoma, 'Arial', sans-serif"};
       background: #f8fafc;
       color: #0f172a;
       line-height: 1.5;
       font-size: 13.5px;
       padding: 20px;
       -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+      font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "ccmp" 1;
+      direction: ${dir};
+      text-align: ${isEn ? "left" : "right"};
+      unicode-bidi: isolate;
     }
     
     .screen-toolbar {
@@ -674,6 +679,11 @@
         background: #ffffff !important;
         padding: 0 !important;
         color: #000000 !important;
+        direction: ${dir} !important;
+        text-align: ${isEn ? "left" : "right"} !important;
+        font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "ccmp" 1 !important;
+        text-rendering: optimizeLegibility !important;
+        -webkit-font-smoothing: antialiased !important;
       }
       .no-print, .screen-toolbar {
         display: none !important;
@@ -684,7 +694,7 @@
         padding: 0 !important;
         max-width: 100% !important;
       }
-      .page-break-avoid, .seal-block, .clinical-box, .rx-box {
+      .page-break-avoid, .seal-block, .clinical-box, .rx-box, .disclaimer-box {
         break-inside: avoid !important;
         page-break-inside: avoid !important;
       }
@@ -702,6 +712,9 @@
     <div style="display:flex; gap:8px;">
       <button type="button" class="btn-print" onclick="window.print()">
         🖨️ ${isEn ? "Print / Save PDF" : "طباعة / حفظ كملف PDF"}
+      </button>
+      <button type="button" class="btn-print" style="background:#0284c7;" onclick="window.downloadCertifiedPdf ? window.downloadCertifiedPdf('${approved.id}', '${language}') : window.print()">
+        📥 ${isEn ? "Download PDF" : "تنزيل PDF معتمد"}
       </button>
       <button type="button" class="btn-lang" onclick="window.openCertifiedReportLang ? window.openCertifiedReportLang('${isEn ? 'ar' : 'en'}') : window.location.search = '?lang=${isEn ? 'ar' : 'en'}'">
         🌐 ${isEn ? "العربية" : "English"}
@@ -1211,6 +1224,31 @@
     return null;
   }
 
+  function getArabicReshaper() {
+    if (global.HealthVibes?.ArabicReshaper) return global.HealthVibes.ArabicReshaper;
+    if (typeof require === "function") {
+      try { return require("./arabic-reshaper-service"); } catch (e) {
+        try { return require("../../../backend/arabic-reshaper-service"); } catch (e2) { return null; }
+      }
+    }
+    return null;
+  }
+
+  function reshapeArabicText(text) {
+    const engine = getArabicReshaper();
+    return engine ? engine.reshape(text) : text;
+  }
+
+  function bidiReorder(text) {
+    const engine = getArabicReshaper();
+    return engine ? engine.bidi(text) : text;
+  }
+
+  function processArabicForPdf(text) {
+    const engine = getArabicReshaper();
+    return engine ? engine.processArabic(text) : text;
+  }
+
   const ReportsService = {
     recordedClinicalText,
     getRecordedClinicalContent,
@@ -1225,13 +1263,19 @@
     generateCertifiedReportPdfHtml,
     buildReportDispatchPayload,
     dispatchReportToDoctor,
-    getDoctorInboxDeliveryStatus
+    getDoctorInboxDeliveryStatus,
+    getArabicReshaper,
+    reshapeArabicText,
+    bidiReorder,
+    processArabicForPdf
   };
 
   global.HealthVibes = global.HealthVibes || {};
   global.HealthVibes.ReportsService = ReportsService;
   global.generateCertifiedReportPdfHtml = generateCertifiedReportPdfHtml;
   global.getClinicalRiskTier = getClinicalRiskTier;
+  global.reshapeArabicText = reshapeArabicText;
+  global.processArabicForPdf = processArabicForPdf;
 
   if (typeof module !== "undefined" && module.exports) {
     module.exports = ReportsService;

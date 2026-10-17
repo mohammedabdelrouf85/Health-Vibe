@@ -73,6 +73,9 @@
         <div style="background:#0f172a; color:#fff; padding:12px 20px; display:flex; justify-content:space-between; align-items:center;">
           <strong style="font-size:15px;">📄 ${isEn ? "Certified Medical Report PDF Preview" : "معاينة التقرير الطبي المعتمد"}</strong>
           <div style="display:flex; gap:10px;">
+            <button type="button" class="solid-button" style="padding:6px 14px; font-size:13px; background:#0284c7; color:#fff; border:none; border-radius:6px; font-weight:700; cursor:pointer;" onclick="window.downloadCertifiedPdf ? window.downloadCertifiedPdf('${record.id}', '${language}') : (function(){ const f = document.getElementById('certifiedPdfIframe'); if(f && f.contentWindow) f.contentWindow.print(); else window.print(); })()">
+              📥 ${isEn ? "Download PDF" : "تحميل PDF"}
+            </button>
             <button type="button" class="solid-button" style="padding:6px 14px; font-size:13px; background:#10b981; color:#fff; border:none; border-radius:6px; font-weight:700; cursor:pointer;" onclick="const f = document.getElementById('certifiedPdfIframe'); if(f && f.contentWindow) f.contentWindow.print(); else window.print();">
               🖨️ ${isEn ? "Print / Save PDF" : "طباعة / حفظ PDF"}
             </button>
@@ -723,10 +726,63 @@
     `;
   }
 
+  /**
+   * Directly downloads the certified report as a PDF file,
+   * leveraging backend Chromium HTML-to-PDF if available, or print-to-PDF fallback.
+   */
+  async function downloadCertifiedPdfReport(recordOrId, language = "ar") {
+    let record = recordOrId;
+    if (typeof recordOrId === "string") {
+      record = (global._currentViewingCase && global._currentViewingCase.id === recordOrId)
+        ? global._currentViewingCase
+        : (global.__selectedHistoryRecord && global.__selectedHistoryRecord.id === recordOrId)
+          ? global.__selectedHistoryRecord
+          : (global._patientHistoryCache && global._patientHistoryCache[recordOrId])
+            ? global._patientHistoryCache[recordOrId]
+            : { id: recordOrId };
+    }
+    const reportService = global.HealthVibes?.ReportsService;
+    if (!reportService || typeof reportService.generateCertifiedReportPdfHtml !== "function") {
+      return openCertifiedPdfReport(record, language);
+    }
+
+    const html = reportService.generateCertifiedReportPdfHtml(record, language);
+    if (typeof fetch === "function") {
+      try {
+        const resp = await fetch("/api/reports/html-to-pdf", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ html, reportId: record.id || record.caseId, language })
+        });
+        if (resp.ok) {
+          const blob = await resp.blob();
+          if (typeof window !== "undefined" && window.URL && document.createElement) {
+            const blobUrl = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = blobUrl;
+            a.download = `HealthVibe_Report_${record.reportRef || record.id || "Certified"}_${language}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => {
+              if (a.parentNode) a.parentNode.removeChild(a);
+              window.URL.revokeObjectURL(blobUrl);
+            }, 1000);
+            return true;
+          }
+        }
+      } catch (e) {
+        console.warn("[ReportsUI] Backend Chromium PDF generation skipped, falling back to client print.", e);
+      }
+    }
+
+    return openCertifiedPdfReport(record, language);
+  }
+
   const ReportsUI = {
     triggerPrintReport,
     exportReportToPdf,
     openCertifiedPdfReport,
+    downloadCertifiedPdfReport,
     renderReportSecurityBadge,
     openShareReportModal,
     renderVerificationView,
@@ -737,6 +793,7 @@
   global.HealthVibes = global.HealthVibes || {};
   global.HealthVibes.ReportsUI = ReportsUI;
   global.openCertifiedPdfReport = openCertifiedPdfReport;
+  global.downloadCertifiedPdf = downloadCertifiedPdfReport;
 
   if (typeof module !== "undefined" && module.exports) {
     module.exports = ReportsUI;
