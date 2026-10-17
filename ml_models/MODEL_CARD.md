@@ -4,6 +4,9 @@
 - **Model Identifier:** `resp_rf_v1.0.2`
 - **Developer:** HealthVibe AI Clinical Engineering & Data Science Team
 - **Model Architecture:** Calibrated Random Forest Ensemble (100 Estimators)
+- **Random Seed:** `42` (Strictly pinned across Python training and JS runtime)
+- **Dependency Lock:** `requirements.txt` (Exact `==` equality pinning)
+- **Reproducibility Spec:** [MODEL_REPRODUCIBILITY_AND_DETERMINISM_SPEC.md](../docs/clinical/MODEL_REPRODUCIBILITY_AND_DETERMINISM_SPEC.md)
 - **Clinical Specialty:** Pulmonology / Respiratory Triage & Risk Stratification
 - **Release Date:** September 2026
 - **Status:** Active Production Model

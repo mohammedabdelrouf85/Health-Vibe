@@ -1,0 +1,33 @@
+# ==============================================================================
+# HealthVibe AI — Clinical ML Models Subsystem Requirements
+# ==============================================================================
+# PRD Requirement #77: Model Output Reproducibility & Determinism
+# Model ID: resp_rf_v1.0.2
+# Random Seed: 42
+# Target Runtime: Python >= 3.10, < 3.12
+#
+# POLICY: All packages MUST use strict equality pinning (==).
+# Any change to these versions requires clinical re-validation by a certified
+# medical reviewer and regeneration of model_registry.json checksums.
+# ==============================================================================
+
+# Core Numerical & Linear Algebra
+numpy==1.26.4
+
+# Scientific Computing & Statistical Distributions
+scipy==1.13.1
+
+# Machine Learning & Ensemble Algorithms
+scikit-learn==1.4.2
+
+# Data Processing & Clinical Cohort Manipulation
+pandas==2.2.2
+
+# Model Persistence & Pipeline Serialization
+joblib==1.4.0
+
+# Thread Pool Control for Single-Threaded Deterministic Execution
+threadpoolctl==3.5.0
+
+# Testing & Reproducibility Verification Harness
+pytest==8.1.1

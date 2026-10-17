@@ -1,0 +1,36 @@
+# ==============================================================================
+# HealthVibe AI — Clinical Machine Learning Requirements & Dependency Lock
+# ==============================================================================
+# PRD Requirement #77: Model Output Reproducibility & Determinism
+# Clinical Specialty: Pulmonology & Respiratory Triage Decision Support
+# Active Model Version: resp_rf_v1.0.2
+# Random Seed: 42
+# Target Runtime: Python >= 3.10, < 3.12
+#
+# POLICY: All packages MUST use strict equality pinning (==).
+# RATIONALE: In clinical decision support systems, dependency updates can alter
+# floating-point math, matrix operations, or tree-splitting heuristics.
+# Strict version pinning guarantees bit-for-bit reproducibility of model training,
+# validation AUROC, sensitivity, specificity, and cross-validation splits.
+# ==============================================================================
+
+# Core Numerical & Linear Algebra
+numpy==1.26.4
+
+# Scientific Computing & Statistical Distributions
+scipy==1.13.1
+
+# Machine Learning & Ensemble Algorithms
+scikit-learn==1.4.2
+
+# Data Processing & Clinical Cohort Manipulation
+pandas==2.2.2
+
+# Model Persistence & Pipeline Serialization
+joblib==1.4.0
+
+# Thread Pool Control for Single-Threaded Deterministic Execution
+threadpoolctl==3.5.0
+
+# Testing & Reproducibility Verification Harness
+pytest==8.1.1

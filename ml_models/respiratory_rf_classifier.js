@@ -5,19 +5,38 @@
  * Implements ensemble decision voting with clinical calibration,
  * safety boundary overrides (SpO2 < 90% or Severe Dyspnea),
  * and differential risk stratification across 4 triage tiers.
+ *
+ * Reproducibility Policy (PRD Req #77):
+ * - Locked RANDOM_SEED = 42
+ * - Deterministic IEEE-754 math with exact precision rounding
+ * - Cryptographic feature fingerprinting (SHA-256)
+ * - Identical patient input guaranteed to output identical triage tier and confidence.
  */
 
 'use strict';
 
+const crypto = require('crypto');
 const { extractFeatures } = require('./feature_extractor');
 const registry = require('./model_registry.json');
 
-const MODEL_VERSION = registry.active_production_version;
+const MODEL_VERSION = registry.active_production_version || 'resp_rf_v1.0.2';
+const RANDOM_SEED = registry.reproducibility?.random_seed || 42;
 
 class RespiratoryRFClassifier {
   constructor(version = MODEL_VERSION) {
     this.version = version;
     this.meta = registry.models[version] || registry.models[MODEL_VERSION];
+    this.randomSeed = this.meta?.reproducibility?.random_seed || RANDOM_SEED;
+  }
+
+  /**
+   * Generates a deterministic SHA-256 fingerprint from the standardized numerical vector.
+   * @param {Array<number>} vector
+   * @returns {string} Hexadecimal SHA-256 string
+   */
+  computeFingerprint(vector) {
+    const raw = vector.map(n => Number(n).toFixed(4)).join('|');
+    return crypto.createHash('sha256').update(raw).digest('hex');
   }
 
   /**
@@ -44,6 +63,8 @@ class RespiratoryRFClassifier {
       allergyHistory
     ] = vector;
 
+    const featureFingerprint = this.computeFingerprint(vector);
+
     // 1. Mandatory Clinical Safety Overrides (Hard Triaging Rules)
     const isHypoxemicEmergency = spo2 < 90;
     const isCriticalTachypnea = rr >= 32;
@@ -52,6 +73,7 @@ class RespiratoryRFClassifier {
     if (isHypoxemicEmergency || isCriticalTachypnea || isHemoptysisEmergency) {
       return {
         model_version: this.version,
+        random_seed: this.randomSeed,
         triage_category: 'EMERGENCY',
         urgency_code: 'RED_FLAG',
         confidence: 0.99,
@@ -68,7 +90,12 @@ class RespiratoryRFClassifier {
           ...(isCriticalTachypnea ? [`Severe tachypnea detected (RR: ${rr} bpm)`] : []),
           ...(isHemoptysisEmergency ? ['Hemoptysis accompanied by respiratory distress'] : [])
         ],
-        override_applied: true
+        override_applied: true,
+        reproducibility: {
+          random_seed: this.randomSeed,
+          deterministic: true,
+          feature_fingerprint: featureFingerprint
+        }
       };
     }
 
@@ -127,7 +154,7 @@ class RespiratoryRFClassifier {
     const modProb = Math.min(Math.max((50 - Math.abs(riskScore - 40)) / 100, 0.15), 0.60);
     const lowProb = Math.max(1 - (emergencyProb + highProb + modProb), 0.05);
 
-    // Normalize probabilities to sum to 1.0
+    // Normalize probabilities to sum to 1.0 with strict deterministic precision
     const sum = lowProb + modProb + highProb + emergencyProb;
     const probabilities = {
       LOW_RISK: Number((lowProb / sum).toFixed(3)),
@@ -138,6 +165,7 @@ class RespiratoryRFClassifier {
 
     return {
       model_version: this.version,
+      random_seed: this.randomSeed,
       triage_category: triageCategory,
       urgency_code: urgencyCode,
       confidence: 0.94,
@@ -150,12 +178,18 @@ class RespiratoryRFClassifier {
         `Respiratory Rate: ${rr} bpm`,
         `Dyspnea grade: ${dyspnea}/3`
       ],
-      override_applied: false
+      override_applied: false,
+      reproducibility: {
+        random_seed: this.randomSeed,
+        deterministic: true,
+        feature_fingerprint: featureFingerprint
+      }
     };
   }
 }
 
 module.exports = {
   RespiratoryRFClassifier,
-  MODEL_VERSION
+  MODEL_VERSION,
+  RANDOM_SEED
 };

@@ -1,6 +1,6 @@
 # HealthVibe AI — Machine Learning Models (`ml_models/`)
 
-This directory houses the clinical machine learning models, inference engines, feature extraction pipelines, model registries, and evaluation suites for **HealthVibe AI**.
+This directory houses the clinical machine learning models, inference engines, feature extraction pipelines, model registries, reproducibility verification engines, and evaluation suites for **HealthVibe AI**.
 
 ---
 
@@ -8,13 +8,15 @@ This directory houses the clinical machine learning models, inference engines, f
 
 ```
 ml_models/
+├── requirements.txt                 # Strictly pinned Python ML dependencies (== only)
 ├── MODEL_CARD.md                    # FDA/WHO-aligned clinical model card for resp_rf_v1.0.2
 ├── README.md                        # Architectural documentation and usage guide
-├── model_registry.json              # Version catalog, hyperparameters, and validation hashes
+├── model_registry.json              # Version catalog, hyperparameters, validation hashes & seed
+├── reproducibility_service.js       # Output determinism verification & requirements auditor
 ├── feature_extractor.js             # Standardized feature normalization & boundary clamping
 ├── respiratory_rf_classifier.js     # Random Forest clinical inference engine & safety rules
-├── training_pipeline.py             # Python training script (Scikit-Learn / Cross-validation)
-└── evaluate_models.js               # Clinical benchmark runner verifying metrics
+├── training_pipeline.py             # Python training script (Deterministic RANDOM_SEED = 42)
+└── evaluate_models.js               # Clinical benchmark & reproducibility runner
 ```
 
 ---
@@ -26,6 +28,8 @@ ml_models/
 | **Model ID** | `resp_rf_v1.0.2` |
 | **Algorithm** | Calibrated Random Forest Ensemble (100 Trees) |
 | **Clinical Specialty** | Pulmonology Triage & Urgency Stratification |
+| **Random Seed** | `42` (Strictly pinned across Python & Node.js) |
+| **Reproducibility Guarantee** | Zero variance ($s = 0.000$) on identical inputs |
 | **Sensitivity** | **96.2%** (Severe / Emergency presentations) |
 | **Specificity** | **94.8%** |
 | **AUROC** | **0.974** |
@@ -54,28 +58,35 @@ console.log('Triage Category:', assessment.triage_category); // 'HIGH_RISK'
 console.log('Urgency Code:', assessment.urgency_code);       // 'ORANGE'
 console.log('Risk Score:', assessment.risk_score);           // 75/100
 console.log('Probabilities:', assessment.probabilities);
+console.log('Reproducibility Fingerprint:', assessment.reproducibility.feature_fingerprint);
 ```
 
 ---
 
-## 🔬 Training Pipeline (Python)
+## 🔬 Deterministic Training Pipeline (Python)
 
-To retrain or validate with updated clinical datasets:
+To retrain or validate with strictly pinned clinical dependencies and deterministic RNG:
 
 ```bash
-# Ensure Python 3.10+ and requirements
-pip install scikit-learn numpy pandas joblib
+# 1. Install strictly locked dependencies (PRD Req #77)
+pip install -r ml_models/requirements.txt
 
-# Run training pipeline
-python ml_models/training_pipeline.py --dataset dataset/train_dataset.json --output ml_models/artifacts/
+# 2. Run deterministic training pipeline with fixed seed (42)
+python ml_models/training_pipeline.py --dataset dataset/train_dataset.json --output ml_models/artifacts/ --seed 42
 ```
 
 ---
 
-## 🧪 Model Evaluation
+## 🧪 Model Evaluation & Reproducibility Verification
 
-Run the automated JavaScript evaluation harness:
+Run the automated JavaScript evaluation harness verifying both clinical thresholds and 50-run determinism:
 
 ```bash
 node ml_models/evaluate_models.js
+```
+
+Or run the full reproducibility suite:
+
+```bash
+npm run test:reproducibility
 ```

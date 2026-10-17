@@ -20,6 +20,7 @@
     "test:fn-tuning": "node tests/false_negative_analysis_and_threshold_tuning.test.js",
     "test:ml-processing": "node tests/ml_processing_indicator_and_double_submission.test.js",
     "test:model-version": "node tests/model_version_and_audit_logging.test.js",
+    "test:reproducibility": "node tests/model_reproducibility.test.js",
     "test:external-api-gateway": "node tests/external_api_abstraction_and_rate_limits.test.js",
     "test:auth-loading": "node tests/auth_loading_and_forms.test.js",
     "test:auth-lockout": "node tests/auth_lockout_and_security_monitoring.test.js",

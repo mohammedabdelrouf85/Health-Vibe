@@ -1,6 +1,20 @@
 {
   "active_production_version": "resp_rf_v1.0.2",
   "candidate_version": "resp_rf_v1.0.3",
+  "reproducibility": {
+    "random_seed": 42,
+    "lock_file": "requirements.txt",
+    "determinism_policy": "Strict zero-variance output across repeated patient evaluations",
+    "pinned_libraries": {
+      "numpy": "1.26.4",
+      "scipy": "1.13.1",
+      "scikit-learn": "1.4.2",
+      "pandas": "2.2.2",
+      "joblib": "1.4.0",
+      "threadpoolctl": "3.5.0",
+      "pytest": "8.1.1"
+    }
+  },
   "models": {
     "resp_rf_v1.0.2": {
       "model_id": "resp_rf_v1.0.2",
@@ -11,6 +25,11 @@
         "certified_by": "Dr. Tarek Mansour, MD, FCCP",
         "license_number": "EGY-MED-44912",
         "verification_hash": "e8c3a59f104d49a37e8c3a59f104d49a37e8c3a59f104d49a37e8c3a59f104d4"
+      },
+      "reproducibility": {
+        "random_seed": 42,
+        "is_deterministic": true,
+        "feature_digest_algorithm": "SHA-256"
       },
       "hyperparameters": {
         "n_estimators": 100,
@@ -57,6 +76,11 @@
       "specialty": "Pulmonology / Multi-Specialty Staging",
       "release_date": "2026-10-15T00:00:00Z",
       "status": "staging_evaluation",
+      "reproducibility": {
+        "random_seed": 42,
+        "is_deterministic": true,
+        "feature_digest_algorithm": "SHA-256"
+      },
       "hyperparameters": {
         "n_estimators": 150,
         "max_depth": 14,
