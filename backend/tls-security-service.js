@@ -21,6 +21,7 @@ const ENFORCED_DOMAINS = Object.freeze([
   'api.healthvibes.app',
   'app.healthvibes.app',
   'staging.healthvibes.app',
+  'demo.healthvibes.app',
   'healthvibe.ai',
   'health-vibes-a4b3b.web.app',
   'health-vibes-a4b3b.firebaseapp.com'

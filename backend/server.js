@@ -199,8 +199,8 @@ const allowedOrigins = isDevelopment
   : (configuredOrigins.length > 0
     ? configuredOrigins
     : (isStaging
-        ? ['https://staging.healthvibe.ai', 'https://health-vibes-staging.web.app', 'https://health-vibes-staging.firebaseapp.com']
-        : ['https://healthvibes.app', 'https://www.healthvibes.app', 'https://healthvibe.ai', 'https://app.healthvibe.ai', 'https://health-vibes-a4b3b.web.app', 'https://health-vibes-a4b3b.firebaseapp.com']));
+        ? ['https://staging.healthvibe.ai', 'https://demo.healthvibes.app', 'https://health-vibes-staging.web.app', 'https://health-vibes-staging.firebaseapp.com']
+        : ['https://healthvibes.app', 'https://www.healthvibes.app', 'https://demo.healthvibes.app', 'https://healthvibe.ai', 'https://app.healthvibe.ai', 'https://health-vibes-a4b3b.web.app', 'https://health-vibes-a4b3b.firebaseapp.com']));
 
 // =============================================================================
 // 🛡️ SECURITY HARDENING & OWASP COMPLIANCE
@@ -627,8 +627,131 @@ function recordOtpFailure(key) {
 }
 
 function clearOtpLockout(key) {
-  otpLockouts.delete(key);
+// =============================================================================
+// 🧪 DEMO SANDBOX & STAGING/PRODUCTION ISOLATION ENGINE (Req 76)
+// =============================================================================
+
+/**
+ * Checks if the request is executing within an authorized demo/sandbox context.
+ * Strictly PROHIBITED on production domains (healthvibes.app, www.healthvibes.app).
+ */
+function isDemoEnvironmentAllowed(req) {
+  const host = (req.headers.host || '').toLowerCase();
+  const origin = (req.headers.origin || '').toLowerCase();
+  
+  // Explicitly prohibited on live production hosts
+  if (host === 'healthvibes.app' || host === 'www.healthvibes.app' || origin.includes('//healthvibes.app') || origin.includes('//www.healthvibes.app')) {
+    return false;
+  }
+  
+  // Allowed on demo subdomains, staging, dev, or local test requests
+  if (host.includes('demo.healthvibes.app') || host.includes('demo.healthvibe.ai') || host.includes('staging') || host.includes('localhost') || host.includes('127.0.0.1')) {
+    return true;
+  }
+  
+  return !isProduction;
 }
+
+const DEIDENTIFIED_VIRTUAL_CASES = [
+  {
+    id: "DEMO-CASE-101",
+    isDemo: true,
+    environment: "demo",
+    patientName: "Anonymous Subject #412",
+    age: 48,
+    gender: "male",
+    chiefComplaint: "Chronic productive cough and exertional dyspnea",
+    duration: "3 weeks",
+    smokingHistory: "Former smoker (15 pack-years)",
+    oxygenLevel: 94,
+    respiratoryRate: 22,
+    temperature: 37.2,
+    heartRate: 88,
+    bloodPressure: "128/82",
+    triageLevel: "moderate",
+    riskScore: "moderate",
+    priority: "high",
+    status: "submitted",
+    submittedAt: new Date(Date.now() - 86400000 * 2).toISOString(),
+    assignedDoctorName: "Dr. Tarek Mansour (Pulmonologist)",
+    aiDifferential: ["COPD Exacerbation", "Post-Viral Bronchial Hyperreactivity"]
+  },
+  {
+    id: "DEMO-CASE-102",
+    isDemo: true,
+    environment: "demo",
+    patientName: "Anonymous Subject #588",
+    age: 34,
+    gender: "female",
+    chiefComplaint: "Nocturnal wheezing and post-viral dry cough",
+    duration: "10 days",
+    smokingHistory: "Non-smoker",
+    oxygenLevel: 97,
+    respiratoryRate: 18,
+    temperature: 36.8,
+    heartRate: 76,
+    bloodPressure: "116/74",
+    triageLevel: "low",
+    riskScore: "low",
+    priority: "normal",
+    status: "completed",
+    submittedAt: new Date(Date.now() - 86400000 * 5).toISOString(),
+    assignedDoctorName: "Dr. Sarah Kamel (Internal Medicine)",
+    aiDifferential: ["Cough-Variant Asthma", "Acute Bronchitis"]
+  }
+];
+
+/**
+ * GET /api/demo/status
+ * Returns whether demo mode is available for the requesting client.
+ */
+app.get('/api/demo/status', (req, res) => {
+  const allowed = isDemoEnvironmentAllowed(req);
+  res.json({
+    success: true,
+    demoAllowed: allowed,
+    environment: allowed ? 'demo' : 'production',
+    demoDomain: 'demo.healthvibes.app',
+    productionDomain: 'healthvibes.app'
+  });
+});
+
+/**
+ * GET /api/demo/cases
+ * Returns curated virtual de-identified cases for instant interactive testing.
+ */
+app.get('/api/demo/cases', (req, res) => {
+  if (!isDemoEnvironmentAllowed(req)) {
+    return res.status(403).json({
+      error: 'DEMO_DATA_PROHIBITED_ON_PRODUCTION',
+      message: 'Demo and virtual mock data are strictly prohibited on the production environment (healthvibes.app). Use demo.healthvibes.app instead.'
+    });
+  }
+  res.json({
+    success: true,
+    isDemo: true,
+    count: DEIDENTIFIED_VIRTUAL_CASES.length,
+    cases: DEIDENTIFIED_VIRTUAL_CASES
+  });
+});
+
+/**
+ * POST /api/demo/reset
+ * Resets simulated demo state back to default synthetic baseline.
+ */
+app.post('/api/demo/reset', (req, res) => {
+  if (!isDemoEnvironmentAllowed(req)) {
+    return res.status(403).json({
+      error: 'DEMO_RESET_PROHIBITED_ON_PRODUCTION',
+      message: 'Resetting demo data is strictly prohibited on production (healthvibes.app).'
+    });
+  }
+  res.json({
+    success: true,
+    message: 'Demo environment reset to baseline synthetic cases.',
+    casesCount: DEIDENTIFIED_VIRTUAL_CASES.length
+  });
+});
 
 // =============================================================================
 // 🔒 AUTHENTICATION BRUTE-FORCE DEFENSE & SECURITY MONITORING ENGINE (Req 74)
@@ -760,7 +883,10 @@ const APP_CHECK_PUBLIC_API_PATHS = new Set([
   '/api/auth/lockout-status',
   '/api/auth/record-attempt',
   '/api/auth/admin/unlock',
-  '/api/auth/security-monitoring-logs'
+  '/api/auth/security-monitoring-logs',
+  '/api/demo/status',
+  '/api/demo/cases',
+  '/api/demo/reset'
 ]);
 
 function shouldVerifyAppCheckForApi(req) {

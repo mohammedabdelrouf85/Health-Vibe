@@ -141,6 +141,7 @@
     "test:patient-profile": "node tests/patient_profile_provenance.test.js",
     "test:timeline": "node tests/patient_timeline.test.js",
     "test:staging": "node tests/staging_deployment_and_rollback.test.js",
+    "test:demo-isolation": "node tests/staging_vs_production_data_isolation.test.js",
     "test:observability": "node tests/observability_and_alerting.test.js",
     "test:incident": "node tests/security_assessment.test.js",
     "test:load": "node tests/load_and_recovery.test.js",

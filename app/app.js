@@ -6762,6 +6762,13 @@ function showAuth(mode) {
   if (typeof renderSavedAccountsSwitcher === "function") {
     renderSavedAccountsSwitcher();
   }
+  const demoSandboxOpts = document.getElementById("demoAuthSandboxOptions");
+  if (demoSandboxOpts) {
+    const isDemoAllowed = window.HEALTH_VIBE_CONFIG && (window.HEALTH_VIBE_CONFIG.isDemo?.() || window.HEALTH_VIBE_CONFIG.allowDemoSeed || window.HEALTH_VIBE_CONFIG.isDemoEnvironment);
+    const host = ((typeof window !== "undefined" && window.location && window.location.hostname) || "").toLowerCase();
+    const isStrictProd = (host === "healthvibes.app" || host === "www.healthvibes.app");
+    demoSandboxOpts.style.display = (isDemoAllowed && !isStrictProd) ? "block" : "none";
+  }
 }
 
 function hideAuth() {
@@ -8160,9 +8167,122 @@ window.handleGoogleAuth = () => enterApp("google");
 window.enterApp = enterApp;
 
 /**
- * 🧪 PRD Interactive Demo Mode: Launches interactive preview with de-identified patient data
+ * 🧪 PRD Interactive Demo & Sandbox Engine (Requirement 76)
+ * Strict separation of demo.healthvibes.app (instant sandbox) vs healthvibes.app (secure production)
  */
+
+function isDemoEnvironmentProhibited() {
+  const host = ((typeof window !== "undefined" && window.location && window.location.hostname) || "").toLowerCase();
+  const isProdConfig = window.HEALTH_VIBE_CONFIG && typeof window.HEALTH_VIBE_CONFIG.isProduction === "function" && window.HEALTH_VIBE_CONFIG.isProduction();
+  return isProdConfig && (host === "healthvibes.app" || host === "www.healthvibes.app");
+}
+
+function getDeidentifiedDemoRecords(isEn) {
+  return [
+    {
+      id: "DEMO-CASE-101",
+      isDemo: true,
+      environment: "demo",
+      patientName: isEn ? "Anonymous Subject #412" : "حالة مجهولة الهوية رقم 412",
+      age: 48,
+      gender: "male",
+      chiefComplaint: isEn ? "Chronic productive cough and exertional dyspnea" : "سعال مزمن مع بلغم وضيق تنفس عند المجهود",
+      duration: "3 weeks",
+      smokingHistory: "Former smoker (15 pack-years)",
+      oxygenLevel: "94",
+      o2: "94",
+      respiratoryRate: "22",
+      temperature: "37.2",
+      heartRate: "88",
+      bloodPressure: "128/82",
+      riskScore: "moderate",
+      triageLevel: "moderate",
+      priority: "high",
+      status: "submitted",
+      submittedAt: new Date(Date.now() - 86400000 * 2).toISOString(),
+      assignedDoctorName: isEn ? "Dr. Tarek Mansour (Pulmonologist)" : "د. طارق منصور (استشاري صدر)",
+      diagnosis: isEn ? "Moderate Chronic Obstructive Pulmonary Disease (COPD) Exacerbation" : "تفاقم متوسط لمرض السدة الرئوية المزمنة (COPD)",
+      medications: isEn ? "Tiotropium 18mcg Inhalation Once Daily\nSalbutamol MDI 100mcg as needed" : "تيوتروبيوم 18 مكجم استنشاق مرة يومياً\nسالبوتامول بخاخ 100 مكجم عند اللزوم",
+      recommendations: isEn ? "Avoid cold air exposure\nDaily peak-flow monitoring\nFollow-up in 2 weeks" : "تجنب الهواء البارد\nقياس وظائف التنفس يومياً\nمراجعة بعد أسبوعين"
+    },
+    {
+      id: "DEMO-CASE-102",
+      isDemo: true,
+      environment: "demo",
+      patientName: isEn ? "Anonymous Subject #588" : "حالة مجهولة الهوية رقم 588",
+      age: 34,
+      gender: "female",
+      chiefComplaint: isEn ? "Nocturnal wheezing and post-viral dry cough" : "أزيز صدري ليلي وسعال جاف بعد نزلة برد",
+      duration: "10 days",
+      smokingHistory: "Non-smoker",
+      oxygenLevel: "97",
+      o2: "97",
+      respiratoryRate: "18",
+      temperature: "36.8",
+      heartRate: "76",
+      bloodPressure: "116/74",
+      riskScore: "low",
+      triageLevel: "low",
+      priority: "normal",
+      status: "completed",
+      submittedAt: new Date(Date.now() - 86400000 * 5).toISOString(),
+      assignedDoctorName: isEn ? "Dr. Sarah Kamel (Internal Medicine)" : "د. سارة كامل (استشاري باطنة)",
+      diagnosis: isEn ? "Cough-Variant Bronchial Asthma (Post-Infectious)" : "ربو شعبي تحسسي مصحوب بسعال (بعد عدوى فيروسية)",
+      medications: isEn ? "Budesonide/Formoterol 160/4.5mcg Inhaler 1 puff twice daily" : "بوديزونيد/فورموتيرول 160/4.5 مكجم بخة مرتين يومياً",
+      recommendations: isEn ? "Keep bedroom dust-free\nStay well hydrated\nReview inhaler technique" : "الابتعاد عن الأتربة والغبار\nالإكثار من السوائل الدافئة\nالتأكد من طريقة الاستنشاق الصحيحة"
+    }
+  ];
+}
+
+function renderDemoSandboxBanner(activePersona = "patient") {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  let demoBanner = document.getElementById("hvDemoModeBanner");
+  if (!demoBanner) {
+    demoBanner = document.createElement("div");
+    demoBanner.id = "hvDemoModeBanner";
+    demoBanner.style.cssText = "position:sticky;top:0;z-index:9999;background:linear-gradient(90deg, #0f766e 0%, #0369a1 100%);color:#f8fafc;font-weight:700;font-size:12px;padding:8px 16px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;box-shadow:0 3px 12px rgba(0,0,0,0.3);gap:8px;";
+    if (app) app.insertBefore(demoBanner, app.firstChild);
+  }
+  
+  demoBanner.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      <span style="font-size:16px;">🧪</span>
+      <span style="font-weight:800;letter-spacing:0.5px;color:#38bdf8;">demo.healthvibes.app</span>
+      <span style="opacity:0.85;">|</span>
+      <span>${isEn ? "Interactive Demo Sandbox (100% Virtual Data)" : "بيئة العرض التجريبية (بيانات افتراضية 100% للتجربة الفورية)"}</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+      <button type="button" onclick="enterDemoMode()" style="background:${activePersona === 'patient' ? '#38bdf8' : 'rgba(255,255,255,0.15)'};color:${activePersona === 'patient' ? '#0f172a' : '#ffffff'};border:none;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:800;cursor:pointer;">
+        👤 ${isEn ? "Patient" : "مريض"}
+      </button>
+      <button type="button" onclick="enterDemoDoctorMode()" style="background:${activePersona === 'doctor' ? '#38bdf8' : 'rgba(255,255,255,0.15)'};color:${activePersona === 'doctor' ? '#0f172a' : '#ffffff'};border:none;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:800;cursor:pointer;">
+        🩺 ${isEn ? "Doctor" : "طبيب"}
+      </button>
+      <button type="button" onclick="enterDemoAdminMode()" style="background:${activePersona === 'admin' ? '#38bdf8' : 'rgba(255,255,255,0.15)'};color:${activePersona === 'admin' ? '#0f172a' : '#ffffff'};border:none;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:800;cursor:pointer;">
+        🛡️ ${isEn ? "Admin" : "مسؤول"}
+      </button>
+      <button type="button" onclick="resetDemoSandbox()" style="background:rgba(255,255,255,0.15);color:#ffffff;border:1px solid rgba(255,255,255,0.3);padding:4px 8px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;" title="${isEn ? 'Reset Virtual Data' : 'إعادة تعيين البيانات'}">
+        🔄 ${isEn ? "Reset" : "تعيين"}
+      </button>
+      <button type="button" onclick="leaveApp(event)" style="background:rgba(239,68,68,0.25);border:1px solid rgba(239,68,68,0.4);color:#fca5a5;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:800;cursor:pointer;">
+        ${isEn ? "Exit" : "خروج"}
+      </button>
+    </div>
+  `;
+  demoBanner.style.display = "flex";
+}
+
 function enterDemoMode() {
+  if (isDemoEnvironmentProhibited()) {
+    const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+    const msg = isEn 
+      ? "Interactive demo mode is strictly prohibited on production (healthvibes.app). Please visit https://demo.healthvibes.app to test with virtual data."
+      : "وضع المعاينة التجريبية محظور في بيئة الإنتاج الآمنة (healthvibes.app). يرجى زيارة https://demo.healthvibes.app للتجربة الفورية بالبيانات الافتراضية.";
+    if (typeof showToast === "function") showToast(msg);
+    else alert(msg);
+    return;
+  }
+
   const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
   try {
     localStorage.removeItem("hv_explicit_logout");
@@ -8172,7 +8292,7 @@ function enterDemoMode() {
   const demoUser = {
     uid: "demo_patient_sandbox_001",
     email: "demo.patient@healthvibes.app",
-    displayName: isEn ? "Demo Patient (Interactive)" : "مريض تجريبي (معاينة)",
+    displayName: isEn ? "Demo Patient (Sarah Mansour)" : "مريضة تجريبية (سارة منصور)",
     isDemo: true,
     emailVerified: true,
     getIdToken: async () => "mock-demo-token-sandbox-123456789",
@@ -8187,87 +8307,136 @@ function enterDemoMode() {
   window._isUserVerified = true;
   window._isDemoSession = true;
 
-  // Render or update sticky demo notification banner
-  let demoBanner = document.getElementById("hvDemoModeBanner");
-  if (!demoBanner) {
-    demoBanner = document.createElement("div");
-    demoBanner.id = "hvDemoModeBanner";
-    demoBanner.style.cssText = "position:sticky;top:0;z-index:9999;background:linear-gradient(90deg, #09b8b6 0%, #0284c7 100%);color:#061515;font-weight:700;font-size:12.5px;padding:8px 16px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 10px rgba(0,0,0,0.25);";
-    demoBanner.innerHTML = `
-      <div style="display:flex;align-items:center;gap:8px;">
-        <span style="font-size:16px;">🧪</span>
-        <span id="hvDemoBannerText">${isEn ? "Interactive Demo Sandbox (De-identified Patient Data)" : "وضع المعاينة التفاعلية (بيانات مرضى افتراضية منزوعة الهوية)"}</span>
-      </div>
-      <button type="button" onclick="leaveApp(event)" style="background:rgba(6,21,21,0.2);border:1px solid rgba(6,21,21,0.4);color:#061515;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:800;cursor:pointer;">
-        ${isEn ? "Exit Demo" : "إنهاء المعاينة"}
-      </button>
-    `;
-    if (app) app.insertBefore(demoBanner, app.firstChild);
-  } else {
-    demoBanner.style.display = "flex";
-  }
+  renderDemoSandboxBanner("patient");
 
-  // Seed rich de-identified clinical records for the demo session if not already populated
+  // Seed demo cases in local sandbox
   try {
     const demoCasesKey = "hv_cases_demo_patient_sandbox_001";
     if (!localStorage.getItem(demoCasesKey)) {
-      const deidentifiedDemoRecords = [
-        {
-          id: "DEMO-CASE-101",
-          patientName: isEn ? "Anonymous Subject #412" : "حالة مجهولة الهوية رقم 412",
-          age: 48,
-          gender: "male",
-          chiefComplaint: isEn ? "Chronic productive cough and exertional dyspnea" : "سعال مزمن مع بلغم وضيق تنفس عند المجهود",
-          duration: "3 weeks",
-          smokingHistory: "Former smoker (15 pack-years)",
-          oxygenLevel: "94",
-          o2: "94",
-          respiratoryRate: "22",
-          temperature: "37.2",
-          heartRate: "88",
-          bloodPressure: "128/82",
-          riskScore: "moderate",
-          priority: "high",
-          status: "completed",
-          submittedAt: new Date(Date.now() - 86400000 * 2).toISOString(),
-          assignedDoctorName: isEn ? "Dr. Tarek Mansour (Pulmonologist)" : "د. طارق منصور (استشاري صدر)",
-          diagnosis: isEn ? "Moderate Chronic Obstructive Pulmonary Disease (COPD) Exacerbation" : "تفاقم متوسط لمرض السدة الرئوية المزمنة (COPD)",
-          medications: isEn ? "Tiotropium 18mcg Inhalation Once Daily\nSalbutamol MDI 100mcg as needed" : "تيوتروبيوم 18 مكجم استنشاق مرة يومياً\nسالبوتامول بخاخ 100 مكجم عند اللزوم",
-          recommendations: isEn ? "Avoid cold air exposure\nDaily peak-flow monitoring\nFollow-up in 2 weeks" : "تجنب الهواء البارد\nقياس وظائف التنفس يومياً\nمراجعة بعد أسبوعين"
-        },
-        {
-          id: "DEMO-CASE-102",
-          patientName: isEn ? "Anonymous Subject #588" : "حالة مجهولة الهوية رقم 588",
-          age: 34,
-          gender: "female",
-          chiefComplaint: isEn ? "Nocturnal wheezing and post-viral dry cough" : "أزيز صدري ليلي وسعال جاف بعد نزلة برد",
-          duration: "10 days",
-          smokingHistory: "Non-smoker",
-          oxygenLevel: "97",
-          o2: "97",
-          respiratoryRate: "18",
-          temperature: "36.8",
-          heartRate: "76",
-          bloodPressure: "116/74",
-          riskScore: "low",
-          priority: "normal",
-          status: "completed",
-          submittedAt: new Date(Date.now() - 86400000 * 5).toISOString(),
-          assignedDoctorName: isEn ? "Dr. Sarah Kamel (Internal Medicine)" : "د. سارة كامل (استشاري باطنة)",
-          diagnosis: isEn ? "Cough-Variant Bronchial Asthma (Post-Infectious)" : "ربو شعبي تحسسي مصحوب بسعال (بعد عدوى فيروسية)",
-          medications: isEn ? "Budesonide/Formoterol 160/4.5mcg Inhaler 1 puff twice daily" : "بوديزونيد/فورموتيرول 160/4.5 مكجم بخة مرتين يومياً",
-          recommendations: isEn ? "Keep bedroom dust-free\nStay well hydrated\nReview inhaler technique" : "الابتعاد عن الأتربة والغبار\nالإكثار من السوائل الدافئة\nالتأكد من طريقة الاستنشاق الصحيحة"
-        }
-      ];
-      localStorage.setItem(demoCasesKey, JSON.stringify(deidentifiedDemoRecords));
+      localStorage.setItem(demoCasesKey, JSON.stringify(getDeidentifiedDemoRecords(isEn)));
     }
   } catch (e) {}
 
   saveActiveSession(demoUser, "patient");
   transitionToApp(demoUser, { navigate: true });
-  showToast(isEn ? "Welcome to the Interactive Demo Sandbox!" : "مرحباً بك في وضع المعاينة التفاعلية للمنظومة!");
+  showToast(isEn ? "Welcome to the Interactive Demo Sandbox (Patient Persona)!" : "مرحباً بك في بيئة العرض التجريبية (تجربة المريض)!");
 }
+
+function enterDemoDoctorMode() {
+  if (isDemoEnvironmentProhibited()) {
+    const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+    const msg = isEn 
+      ? "Interactive demo mode is strictly prohibited on production (healthvibes.app). Please visit https://demo.healthvibes.app to test with virtual data."
+      : "وضع المعاينة التجريبية محظور في بيئة الإنتاج الآمنة (healthvibes.app). يرجى زيارة https://demo.healthvibes.app للتجربة الفورية بالبيانات الافتراضية.";
+    if (typeof showToast === "function") showToast(msg);
+    else alert(msg);
+    return;
+  }
+
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  try {
+    localStorage.removeItem("hv_explicit_logout");
+    sessionStorage.removeItem("hv_explicit_logout");
+  } catch (e) {}
+
+  const demoDoctor = {
+    uid: "demo_doctor_sandbox_001",
+    email: "demo.doctor@healthvibes.app",
+    displayName: isEn ? "Dr. Tarek Mansour (Pulmonologist)" : "د. طارق منصور (استشاري أمراض صدرية)",
+    role: "doctor",
+    licenseNumber: "EGY-MED-DEMO-9912",
+    isVerified: true,
+    isDemo: true,
+    emailVerified: true,
+    getIdToken: async () => "mock-demo-doctor-token-sandbox",
+    getIdTokenResult: async () => ({
+      token: "mock-demo-doctor-token-sandbox",
+      claims: { role: "doctor", verifiedDoctor: true }
+    })
+  };
+
+  selectedRole = "doctor";
+  window._activeUser = demoDoctor;
+  window._isUserVerified = true;
+  window._isDemoSession = true;
+
+  renderDemoSandboxBanner("doctor");
+
+  try {
+    const demoCasesKey = "hv_cases_demo_patient_sandbox_001";
+    if (!localStorage.getItem(demoCasesKey)) {
+      localStorage.setItem(demoCasesKey, JSON.stringify(getDeidentifiedDemoRecords(isEn)));
+    }
+  } catch (e) {}
+
+  saveActiveSession(demoDoctor, "doctor");
+  transitionToApp(demoDoctor, { navigate: true });
+  if (typeof showScreen === "function") showScreen("doctor-workspace-screen");
+  showToast(isEn ? "Logged in as Demo Doctor (Dr. Tarek Mansour)" : "تم الدخول كطبيب تجريبي (د. طارق منصور)");
+}
+
+function enterDemoAdminMode() {
+  if (isDemoEnvironmentProhibited()) {
+    const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+    const msg = isEn 
+      ? "Interactive demo mode is strictly prohibited on production (healthvibes.app). Please visit https://demo.healthvibes.app to test with virtual data."
+      : "وضع المعاينة التجريبية محظور في بيئة الإنتاج الآمنة (healthvibes.app). يرجى زيارة https://demo.healthvibes.app للتجربة الفورية بالبيانات الافتراضية.";
+    if (typeof showToast === "function") showToast(msg);
+    else alert(msg);
+    return;
+  }
+
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  try {
+    localStorage.removeItem("hv_explicit_logout");
+    sessionStorage.removeItem("hv_explicit_logout");
+  } catch (e) {}
+
+  const demoAdmin = {
+    uid: "demo_admin_sandbox_001",
+    email: "demo.admin@healthvibes.app",
+    displayName: isEn ? "System Administrator (Demo Sandbox)" : "مسؤول النظام (بيئة العرض التجريبية)",
+    role: "admin",
+    isOwner: true,
+    isDemo: true,
+    emailVerified: true,
+    getIdToken: async () => "mock-demo-admin-token-sandbox",
+    getIdTokenResult: async () => ({
+      token: "mock-demo-admin-token-sandbox",
+      claims: { role: "admin", owner: true }
+    })
+  };
+
+  selectedRole = "admin";
+  window._activeUser = demoAdmin;
+  window._isUserVerified = true;
+  window._isDemoSession = true;
+
+  renderDemoSandboxBanner("admin");
+
+  saveActiveSession(demoAdmin, "admin");
+  transitionToApp(demoAdmin, { navigate: true });
+  if (typeof showScreen === "function") showScreen("admin-workspace-screen");
+  showToast(isEn ? "Logged in as Demo System Admin (Governance & KPIs)" : "تم الدخول كمسؤول النظام التجريبي (الحوكمة والتحليلات)");
+}
+
+function resetDemoSandbox() {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  try {
+    localStorage.removeItem("hv_cases_demo_patient_sandbox_001");
+    localStorage.setItem("hv_cases_demo_patient_sandbox_001", JSON.stringify(getDeidentifiedDemoRecords(isEn)));
+    showToast(isEn ? "Demo sandbox reset to default synthetic scenarios." : "تم إعادة تعيين بيانات بيئة العرض للحالة الافتراضية.");
+    if (typeof loadCases === "function") loadCases();
+  } catch (e) {
+    console.error("Failed to reset demo sandbox data:", e);
+  }
+}
+
 window.enterDemoMode = enterDemoMode;
+window.enterDemoDoctorMode = enterDemoDoctorMode;
+window.enterDemoAdminMode = enterDemoAdminMode;
+window.resetDemoSandbox = resetDemoSandbox;
+window.renderDemoSandboxBanner = renderDemoSandboxBanner;
 
 function showSignedOutUI() {
   try {
@@ -23202,9 +23371,15 @@ if (document.readyState === "loading") {
     initAsyncContextProtections();
     initMobileTouchGestures();
     updateMobileBottomNav();
+    if (window.HEALTH_VIBE_CONFIG && (window.HEALTH_VIBE_CONFIG.isDemo?.() || window.HEALTH_VIBE_CONFIG.isDemoEnvironment)) {
+      renderDemoSandboxBanner("patient");
+    }
   });
 } else {
   initAsyncContextProtections();
   initMobileTouchGestures();
   updateMobileBottomNav();
+  if (window.HEALTH_VIBE_CONFIG && (window.HEALTH_VIBE_CONFIG.isDemo?.() || window.HEALTH_VIBE_CONFIG.isDemoEnvironment)) {
+    renderDemoSandboxBanner("patient");
+  }
 }

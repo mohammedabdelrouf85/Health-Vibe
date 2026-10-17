@@ -16,7 +16,11 @@
     "health-vibes-a4b3b.web.app",
     "health-vibes-a4b3b.firebaseapp.com"
   ];
-  const STAGING_HOSTS = ["staging.healthvibe.ai", "health-vibes-staging.web.app", "health-vibes-staging.firebaseapp.com"];
+  const DEMO_HOSTS = [
+    "demo.healthvibes.app",
+    "demo.healthvibe.ai"
+  ];
+  const STAGING_HOSTS = ["staging.healthvibe.ai", "staging.healthvibes.app", "health-vibes-staging.web.app", "health-vibes-staging.firebaseapp.com"];
 
   // Enforce HTTPS upgrade immediately for any non-localhost connection (PRD Page 10 / Request 36)
   if (typeof window !== "undefined" && window.location && window.location.protocol === "http:") {
@@ -99,6 +103,24 @@
       },
       firebase: STAGING_FIREBASE
     },
+    demo: {
+      name: "demo",
+      label: "Demo Sandbox (بيئة العرض والتجربة الفورية)",
+      badge: "🧪 DEMO SANDBOX",
+      apiBaseUrl: "",
+      allowDemoSeed: true,
+      isDemoEnvironment: true,
+      debug: true,
+      emulators: {
+        enabled: false
+      },
+      appCheck: {
+        provider: "recaptcha-v3",
+        siteKey: "6LcHealthVibesProductionSiteKeyConfigured",
+        isTokenAutoRefreshEnabled: true
+      },
+      firebase: PROD_FIREBASE
+    },
     production: {
       name: "production",
       label: "Production (البيئة التشغيلية)",
@@ -124,9 +146,11 @@
 
     const hostname = ((window.location && window.location.hostname) || "").toLowerCase();
     const isLocalHost = LOCAL_HOSTS.includes(hostname) || hostname.endsWith(".local");
+    const isDemoHost = DEMO_HOSTS.includes(hostname);
     const isProductionHost = PRODUCTION_HOSTS.includes(hostname);
     const isStagingHost = STAGING_HOSTS.includes(hostname);
 
+    if (isDemoHost) return "demo";
     if (isProductionHost) return "production";
     if (isStagingHost) return "staging";
 
@@ -134,6 +158,7 @@
     try {
       const urlParams = new URLSearchParams(window.location.search);
       const queryEnv = (urlParams.get("env") || "").toLowerCase().trim();
+      if (queryEnv === "demo" || queryEnv === "sandbox") return "demo";
       if (queryEnv === "development" || queryEnv === "dev") return "development";
       if (queryEnv === "staging" || queryEnv === "stage") return "staging";
       if (queryEnv === "production" || queryEnv === "prod") return "production";
@@ -141,7 +166,7 @@
 
     try {
       const stored = (localStorage.getItem("HV_ENVIRONMENT") || "").toLowerCase().trim();
-      if (stored === "development" || stored === "staging" || stored === "production") return stored;
+      if (stored === "demo" || stored === "development" || stored === "staging" || stored === "production") return stored;
     } catch (e) {}
 
     if (isLocalHost) return "development";
@@ -159,6 +184,7 @@
     const expected = {
       development: DEV_PROJECT_ID,
       staging: STAGING_PROJECT_ID,
+      demo: PROD_PROJECT_ID,
       production: PROD_PROJECT_ID
     }[env];
     const appCheck = config.appCheck || {};
@@ -184,6 +210,11 @@
     }
     if (env === "staging" && projectId !== STAGING_PROJECT_ID) {
       throw new Error(`[Health Vibe AI] Staging must use Firebase project ${STAGING_PROJECT_ID}; got ${projectId}.`);
+    }
+    if (env === "demo") {
+      if (config.allowDemoSeed !== true) {
+        throw new Error("[Health Vibe AI] Demo environment must allow demo seeding.");
+      }
     }
     if (env === "production") {
       if (projectId !== PROD_PROJECT_ID) {
@@ -233,6 +264,7 @@
     environment: activeConfig.name,
     apiBaseUrl: activeConfig.apiBaseUrl,
     allowDemoSeed: activeConfig.allowDemoSeed,
+    isDemoEnvironment: Boolean(activeConfig.isDemoEnvironment),
     debug: activeConfig.debug,
     emulators: activeConfig.emulators,
     appCheck: activeConfig.appCheck,
@@ -247,12 +279,13 @@
     // Environment helpers
     isDevelopment: () => CONFIG.environment === "development",
     isStaging: () => CONFIG.environment === "staging",
+    isDemo: () => CONFIG.environment === "demo",
     isProduction: () => CONFIG.environment === "production",
 
     // Environment Switchers
     setEnvironment(envName) {
-      if (!["development", "staging", "production"].includes(envName)) {
-        throw new Error("Invalid environment: must be 'development', 'staging', or 'production'");
+      if (!["development", "staging", "demo", "production"].includes(envName)) {
+        throw new Error("Invalid environment: must be 'development', 'staging', 'demo', or 'production'");
       }
       try {
         const host = ((window.location && window.location.hostname) || "").toLowerCase();

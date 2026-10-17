@@ -428,6 +428,28 @@
           <span class="google-g">G</span>
           <span data-i18n="auth.continueWithGoogle">Continue with Google</span>
         </button>
+
+        <!-- Requirement 76: Instant Demo Sandbox Quick Trial (Visible on demo.healthvibes.app or demo mode) -->
+        <div id="demoAuthSandboxOptions" style="display:none; margin-top: 14px; padding: 12px; border-radius: 10px; background: rgba(56, 189, 248, 0.08); border: 1px dashed rgba(56, 189, 248, 0.4);">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 8px;">
+            <span style="font-size: 11.5px; font-weight: 800; color: var(--teal); display: flex; align-items: center; gap: 4px;">
+              <span>🧪</span>
+              <span data-i18n="auth.instantDemoSandbox">تجربة فورية ببيانات افتراضية (Demo Sandbox)</span>
+            </span>
+            <span style="font-size: 10.5px; padding: 2px 6px; border-radius: 4px; background: rgba(56, 189, 248, 0.2); color: var(--teal); font-weight: 700;">demo.healthvibes.app</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px;">
+            <button type="button" class="soft-button" onclick="enterDemoMode(); if(typeof closeAuthModal==='function') closeAuthModal();" style="padding: 6px 4px; font-size: 11px; font-weight: 700; text-align: center; justify-content: center;">
+              👤 مريض
+            </button>
+            <button type="button" class="soft-button" onclick="enterDemoDoctorMode(); if(typeof closeAuthModal==='function') closeAuthModal();" style="padding: 6px 4px; font-size: 11px; font-weight: 700; text-align: center; justify-content: center;">
+              🩺 طبيب
+            </button>
+            <button type="button" class="soft-button" onclick="enterDemoAdminMode(); if(typeof closeAuthModal==='function') closeAuthModal();" style="padding: 6px 4px; font-size: 11px; font-weight: 700; text-align: center; justify-content: center;">
+              🛡️ مسؤول
+            </button>
+          </div>
+        </div>
       </div>
 
       <!-- DEDICATED FORGOT PASSWORD VIEW -->
