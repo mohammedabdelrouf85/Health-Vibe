@@ -15355,6 +15355,60 @@ app.post('/api/lab-upload/:fileId/link-case', requireAuth, async (req, res) => {
 });
 
 /**
+ * POST /api/lab-upload/:fileId/link-appointment
+ * Links a lab report to a booked clinical appointment.
+ */
+app.post('/api/lab-upload/:fileId/link-appointment', requireAuth, async (req, res) => {
+  try {
+    const { fileId } = req.params;
+    const { appointmentId } = req.body || {};
+
+    if (!appointmentId) {
+      return res.status(400).json({ error: 'MISSING_APPOINTMENT_ID', message: 'appointmentId is required.' });
+    }
+
+    const result = await labUploadService.linkLabReportToAppointment(db, {
+      fileId,
+      appointmentId
+    }, req.user);
+
+    res.json(result);
+  } catch (err) {
+    res.status(err.statusCode || 400).json({
+      error: err.code || 'APPOINTMENT_LINK_FAILED',
+      message: err.message
+    });
+  }
+});
+
+/**
+ * GET /api/lab-upload/chatbot-context/:patientId
+ * Provides non-diagnostic, panic-aware laboratory context for the AI Chatbot.
+ */
+app.get('/api/lab-upload/chatbot-context/:patientId', requireAuth, async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const { lang } = req.query || {};
+
+    // Authorization check
+    const isOwner = req.user.uid === patientId;
+    const isClinician = req.user.role === 'doctor' || req.user.role === 'clinic_admin' || req.user.role === 'super_admin';
+    if (!isOwner && !isClinician) {
+      return res.status(403).json({ error: 'FORBIDDEN', message: 'Unauthorized.' });
+    }
+
+    const contextData = await labUploadService.generateChatbotLabContext(db, patientId, { lang: lang || 'ar' });
+    res.json({ success: true, ...contextData });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({
+      error: err.code || 'CHATBOT_CONTEXT_FAILED',
+      message: err.message
+    });
+  }
+});
+
+
+/**
  * GET /api/lab-upload/:fileId
  * Retrieves a single lab report by ID with PHI access audit logging and zero-access enforcement
  * for non-clinical admin sub-roles (Support, Ops, Clinical QA).

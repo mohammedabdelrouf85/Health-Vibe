@@ -411,22 +411,32 @@ function normalizeAttachment(fileData, fileId) {
   const dateStr = String(ts).slice(0, 10);
   const fileName = fileData.fileName || fileData.name || 'ملف فحص طبي';
   const sizeFormatted = formatBytes(fileData.fileSize || fileData.size);
+  const isLab = Boolean(fileData.labCategory);
+  const catAr = fileData.labCategoryLabelAr || 'تحليل معملي';
+  const catEn = fileData.labCategoryLabelEn || 'Lab Report';
+
+  const titleAr = isLab ? `🧪 فحص معملي (${catAr}): ${fileName}` : `مستند مرفق: ${fileName}`;
+  const titleEn = isLab ? `🧪 Laboratory Test (${catEn}): ${fileName}` : `Medical Attachment: ${fileName}`;
 
   return {
     id: `attachment_${fileId}`,
     type: TIMELINE_TYPES.ATTACHMENT,
-    title: `مستند مرفق: ${fileName}`,
-    titleEn: `Medical Attachment: ${fileName}`,
+    title: titleAr,
+    titleEn: titleEn,
     timestamp: ts,
     date: dateStr,
     status: fileData.scanStatus || 'available',
-    category: 'attachment',
-    summary: `${fileName} (${sizeFormatted}) • ${fileData.fileType || 'مستند طبي'}`,
-    summaryEn: `${fileName} (${sizeFormatted}) • ${fileData.fileType || 'Medical document'}`,
+    category: isLab ? 'lab_report' : 'attachment',
+    summary: `${fileName} (${sizeFormatted}) • ${isLab ? catAr : (fileData.fileType || 'مستند طبي')}`,
+    summaryEn: `${fileName} (${sizeFormatted}) • ${isLab ? catEn : (fileData.fileType || 'Medical document')}`,
     details: {
       fileId,
       caseId: fileData.caseId || null,
       fileName,
+      labCategory: fileData.labCategory || null,
+      reviewStatus: fileData.reviewStatus || 'pending_doctor_review',
+      doctorApproved: Boolean(fileData.doctorApproved),
+      isPanicValue: Boolean(fileData.isPanicValue),
       fileType: fileData.fileType || fileData.contentType || null,
       fileSize: fileData.fileSize || null,
       fileSizeFormatted: sizeFormatted,

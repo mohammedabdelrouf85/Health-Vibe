@@ -1205,6 +1205,146 @@ async function getPatientLabReports(db, { patientId, labCategory = null, limit =
   return reports.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)).slice(0, limit);
 }
 
+/**
+ * Links a lab report to a booked clinical appointment (pre-consultation package).
+ */
+async function linkLabReportToAppointment(db, { fileId, appointmentId } = {}, actorUser = {}) {
+  if (!fileId || !appointmentId) {
+    const err = new Error('fileId and appointmentId are required.');
+    err.code = 'INVALID_ARGUMENTS';
+    err.statusCode = 400;
+    throw err;
+  }
+
+  assertClinicalAccess(actorUser);
+
+  let fileRecord = inMemoryLabReports.get(fileId);
+  if (!fileRecord && db && typeof db.collection === 'function') {
+    try {
+      const snap = await db.collection('case_files').doc(fileId).get();
+      if (snap && snap.exists) fileRecord = snap.data();
+    } catch (_) {}
+  }
+
+  if (!fileRecord) {
+    const err = new Error('Lab report file not found.');
+    err.code = 'FILE_NOT_FOUND';
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const nowIso = new Date().toISOString();
+  fileRecord.appointmentId = appointmentId;
+  fileRecord.linkedToAppointmentAt = nowIso;
+  fileRecord.updatedAt = nowIso;
+
+  if (db && typeof db.collection === 'function') {
+    try {
+      await db.collection('case_files').doc(fileId).update({
+        appointmentId,
+        linkedToAppointmentAt: nowIso,
+        updatedAt: nowIso
+      });
+
+      const apptRef = db.collection('appointments').doc(appointmentId);
+      const apptSnap = await apptRef.get();
+      if (apptSnap && apptSnap.exists) {
+        const apptData = apptSnap.data() || {};
+        const labIds = Array.isArray(apptData.attachedLabReportIds) ? [...apptData.attachedLabReportIds] : [];
+        if (!labIds.includes(fileId)) {
+          labIds.push(fileId);
+          await apptRef.update({ attachedLabReportIds: labIds, updatedAt: nowIso });
+        }
+      }
+    } catch (err) {
+      console.warn('[APPOINTMENT LAB LINK WARNING]:', err.message);
+    }
+  }
+
+  inMemoryLabReports.set(fileId, fileRecord);
+  return { success: true, fileId, appointmentId };
+}
+
+/**
+ * Retrieves all lab reports linked to a clinical appointment for pre-consultation review.
+ */
+async function getLabReportsForAppointment(db, appointmentId, requestingUser = {}) {
+  if (!appointmentId) {
+    const err = new Error('appointmentId is required.');
+    err.code = 'MISSING_APPOINTMENT_ID';
+    err.statusCode = 400;
+    throw err;
+  }
+
+  assertClinicalAccess(requestingUser);
+
+  let reports = [];
+  if (db && typeof db.collection === 'function') {
+    try {
+      const snap = await db.collection('case_files').where('appointmentId', '==', appointmentId).get();
+      if (snap && snap.docs) {
+        reports = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      }
+    } catch (_) {}
+  }
+
+  if (reports.length === 0) {
+    for (const r of inMemoryLabReports.values()) {
+      if (r.appointmentId === appointmentId && r.availability !== AVAILABILITY.DELETED) {
+        reports.push(r);
+      }
+    }
+  }
+
+  return reports;
+}
+
+/**
+ * Generates sanitized, non-diagnostic clinical context for the AI Chatbot.
+ * Provides safe overview of uploaded labs, highlights panic values if present,
+ * and enforces strict physician non-replacement.
+ */
+async function generateChatbotLabContext(db, patientId, { lang = 'ar' } = {}) {
+  if (!patientId) return null;
+
+  const reports = await getPatientLabReports(db, { patientId, limit: 5 }, { uid: patientId, role: 'patient' });
+  const hasReports = reports && reports.length > 0;
+
+  let hasPanicValue = false;
+  const labSummaries = [];
+
+  for (const r of reports) {
+    if (r.isPanicValue) hasPanicValue = true;
+    const catLabel = lang === 'ar' ? (r.labCategoryLabelAr || r.labCategory) : (r.labCategoryLabelEn || r.labCategory);
+    const statusLabel = r.reviewStatus === REVIEW_STATUS.DOCTOR_REVIEWED
+      ? (lang === 'ar' ? 'تمت مراجعة الطبيب واعتمادها' : 'Doctor Reviewed & Certified')
+      : (lang === 'ar' ? 'بانتظار مراجعة الطبيب' : 'Pending Doctor Review');
+    labSummaries.push(`- ${r.fileName} (${catLabel}): ${statusLabel}`);
+  }
+
+  const disclaimer = lang === 'ar' ? CLINICAL_DISCLAIMERS.ar : CLINICAL_DISCLAIMERS.en;
+
+  const contextAr = hasReports
+    ? `ملخص التحاليل المرفوعة للمريض:\n${labSummaries.join('\n')}\n\nتوجيه الذكاء الاصطناعي: ${CLINICAL_DISCLAIMERS.ar} ${hasPanicValue ? '⚠️ توجد مؤشرات حرجة تتطلب التوجيه الفوري للطوارئ.' : ''}`
+    : 'لا توجد تحاليل معملية مرفوعة حتى الآن.';
+
+  const contextEn = hasReports
+    ? `Uploaded Lab Reports Summary:\n${labSummaries.join('\n')}\n\nAI Directive: ${CLINICAL_DISCLAIMERS.en} ${hasPanicValue ? '⚠️ Panic values detected, emergency triage required.' : ''}`
+    : 'No lab reports uploaded yet.';
+
+
+  return {
+    hasReports,
+    count: reports.length,
+    hasPanicValue,
+    disclaimer,
+    context: lang === 'ar' ? contextAr : contextEn,
+    contextAr,
+    contextEn,
+    reports
+  };
+}
+
 module.exports = {
   LAB_CATEGORIES,
   REVIEW_STATUS,
@@ -1224,6 +1364,9 @@ module.exports = {
   registerLabFileUpload,
   linkLabReportToPatientProfile,
   linkLabReportToCase,
+  linkLabReportToAppointment,
+  getLabReportsForAppointment,
+  generateChatbotLabContext,
   processLabScanResult,
   certifyLabReportByDoctor,
   rejectLabReportByDoctor,
@@ -1232,3 +1375,4 @@ module.exports = {
   notifyDoctorLabReportReceived,
   getPatientLabReports
 };
+
