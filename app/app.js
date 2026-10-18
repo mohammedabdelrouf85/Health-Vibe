@@ -14069,10 +14069,10 @@ async function uploadDoctorApplicationDocument({ user, appId, file }) {
   };
 }
 
-const MEDICAL_FILE_ALLOWED_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
-const MEDICAL_FILE_ALLOWED_EXTENSIONS = [".pdf", ".jpg", ".jpeg", ".png", ".webp"];
+const MEDICAL_FILE_ALLOWED_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp", "application/dicom", "application/octet-stream"];
+const MEDICAL_FILE_ALLOWED_EXTENSIONS = [".pdf", ".jpg", ".jpeg", ".png", ".webp", ".dcm", ".dicom"];
 const MEDICAL_FILE_BLOCKED_EXECUTABLE_EXTENSIONS = DOCTOR_APP_BLOCKED_EXECUTABLE_EXTENSIONS;
-const MEDICAL_FILE_MAX_SIZE = 10 * 1024 * 1024;
+const MEDICAL_FILE_MAX_SIZE = 15 * 1024 * 1024; // 15MB for high-resolution radiology & lab files
 const pendingMedicalFileUploads = [];
 const activeMedicalUploadTasks = new Map();
 
@@ -14110,6 +14110,14 @@ const LAB_CATEGORIES = {
     labelEn: "Urinalysis & Cultures",
     hintAr: "تحليل بول كامل، مزرعة وحساسية بول، أملاح والتهابات",
     hintEn: "Complete urine analysis, urine culture & sensitivity"
+  },
+  chest_xray: {
+    key: "chest_xray",
+    icon: "🩻",
+    labelAr: "أشعة سينية ومقطعية على الصدر (CXR / CT)",
+    labelEn: "Chest X-Ray & CT Thorax Scans",
+    hintAr: "أفلام الأشعة السينية العادية والمقطعية للرئتين والقفص الصدري لمراجعة الاستشاري (Rology)",
+    hintEn: "Chest radiography & CT Thorax scans for human radiologist review"
   },
   other: {
     key: "other",

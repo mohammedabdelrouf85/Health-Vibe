@@ -1399,6 +1399,7 @@ function calculateLabUploadKpis(events = inMemoryEvents, options = {}) {
     sputum_culture: 0,
     abg_gas: 0,
     urinalysis: 0,
+    chest_xray: 0,
     other: 0
   };
 

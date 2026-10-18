@@ -525,6 +525,7 @@
       <nav class="nav-list" aria-label="Navigation">
         <button class="nav-item active" data-screen="patient" data-i18n-title="nav.home"><span class="nav-icon">🏠</span><span class="nav-label" data-i18n="nav.home">Home</span></button>
         <button class="nav-item" data-screen="profile" data-i18n-title="nav.profile"><span class="nav-icon">👤</span><span class="nav-label" data-i18n="nav.profile">Medical Profile</span></button>
+        <button class="nav-item" type="button" onclick="openChestRadiologyStudio()" data-i18n-title="radiologyUpload.title"><span class="nav-icon">🩻</span><span class="nav-label" data-i18n="radiologyUpload.title">الأشعة الصدرية (X-Ray / CT)</span></button>
         <button class="nav-item" data-screen="consent" data-i18n-title="nav.consent"><span class="nav-icon">🔒</span><span class="nav-label" data-i18n="nav.consent">Consent & Privacy</span></button>
         <button class="nav-item" data-screen="assessment" data-i18n-title="nav.assessment"><span class="nav-icon">🫁</span><span class="nav-label" data-i18n="nav.assessment">Breathing Assessment</span></button>
 
@@ -1364,6 +1365,147 @@
               </div>
               <button type="button" class="soft-button" id="btnViewCaseLabLink" onclick="syncPatientLabProfileLink()" style="font-size: 12px; padding: 6px 14px; white-space: nowrap;">
                 <span data-i18n="labUpload.syncStatusBtn">تحديث الربط بالملف 🔄</span>
+              </button>
+            </div>
+          </article>
+
+          <!-- =========================================================================
+               🫁 CHEST RADIOLOGY & CT STUDIO (P2 Feature - Rology Benchmark)
+               Chest X-Ray / CT Upload for Human Doctor Review (Strict MVP No Autonomous AI)
+               ========================================================================= -->
+          <article class="panel chest-radiology-panel" id="chestRadiologyPanel">
+            <div class="panel-head">
+              <div>
+                <h3 style="display: flex; align-items: center; gap: 8px;">
+                  <span>🩻</span> <span data-i18n="radiologyUpload.title">رفع وفحص صور الأشعة الصدرية (Chest X-Ray / CT Studio)</span>
+                </h3>
+                <p style="margin: 4px 0 0; font-size: 13px; color: var(--muted);" data-i18n="radiologyUpload.subtitle">
+                  ارفع أو صوّر أفلام أشعة الصدر العادية (X-Ray) أو المقطعية (CT) لنقلها ومراجعتها بواسطة استشاريي الأشعة والأمراض الصدرية المعتمدين.
+                </p>
+              </div>
+              <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+                <span class="pill info" data-i18n="radiologyUpload.rologyBadge">⚡ منصة الأشعة عن بُعد Rology Standard</span>
+                <span class="pill success" data-i18n="radiologyUpload.secureBadge">🔒 مشفر ومحمي HIPAA & DICOM</span>
+                <span class="pill ok" data-i18n="radiologyUpload.humanReviewBadge">👨‍⚕️ مراجعة استشاري بشري 100%</span>
+              </div>
+            </div>
+
+            <!-- 🚨 CRITICAL CLINICAL & REGULATORY SAFETY BANNER (MVP Stage Non-Autonomous AI Notice) -->
+            <div class="prd-medical-disclaimer-box" id="radiologySafetyDisclaimer" style="margin: 14px 0; padding: 14px 18px; border-radius: 14px; background: rgba(239, 68, 68, 0.07); border: 1.5px solid rgba(239, 68, 68, 0.35); display: flex; align-items: flex-start; gap: 12px;">
+              <span style="font-size: 26px; line-height: 1; flex-shrink: 0;">⚠️</span>
+              <div>
+                <strong style="color: #b91c1c; font-size: 13.5px; display: block; margin-bottom: 4px;" data-i18n="radiologyUpload.mvpDisclaimerTitle">
+                  إشعار هام لسلامة المريض والعيادة (مرحلة الـ MVP)
+                </strong>
+                <p style="margin: 0; font-size: 12.5px; color: var(--ink); line-height: 1.55;" data-i18n="radiologyUpload.mvpDisclaimerBody">
+                  تتيح منصة Health-Vibe في مرحلة الـ MVP الحالية رفع وتوثيق صور وفحوصات الأشعة الصدرية (X-Ray / CT) لنقلها وعرضها على أطباء واستشاريي الأشعة والأمراض الصدرية البشريين لمراجعتها وكتابة التقرير السريري المعتمد. المنصة في هذه المرحلة لا تدعي أو تقدم تحليلاً آلياً للأشعة بالذكاء الاصطناعي، ولا تستبدل بأي شكل تقرير وفحص الطبيب البشري المختص.
+                </p>
+              </div>
+            </div>
+
+            <!-- Modality Selector -->
+            <div style="margin: 14px 0 10px;">
+              <span style="display: block; font-size: 13px; font-weight: 700; margin-bottom: 8px; color: var(--ink);" data-i18n="radiologyUpload.selectModality">
+                اختر نوع الفحص الإشعاعي (Modality):
+              </span>
+              <div class="rad-modality-grid" id="radModalitySelector">
+                <div class="rad-modality-card active" data-modality="cxr_pa_lat" onclick="selectRadiologyModality('cxr_pa_lat')" role="radio" aria-checked="true" tabindex="0">
+                  <div class="mod-head">
+                    <span class="mod-title">🩻 <span data-i18n="radiologyUpload.modCxrPaLat">أشعة سينية عادية على الصدر (CXR PA & Lateral)</span></span>
+                    <span class="pill info" style="font-size: 10px;">LOINC 36643-5</span>
+                  </div>
+                  <span class="mod-desc" data-i18n="radiologyUpload.modCxrPaLatDesc">تصوير أمامي خلفي وجانبي للرئتين والقفص الصدري وحجم القلب - LOINC 36643-5</span>
+                </div>
+                <div class="rad-modality-card" data-modality="ct_thorax_plain" onclick="selectRadiologyModality('ct_thorax_plain')" role="radio" aria-checked="false" tabindex="0">
+                  <div class="mod-head">
+                    <span class="mod-title">🫁 <span data-i18n="radiologyUpload.modCtThoraxPlain">أشعة مقطعية على الصدر بدون صبغة (CT Plain)</span></span>
+                    <span class="pill info" style="font-size: 10px;">LOINC 24627-2</span>
+                  </div>
+                  <span class="mod-desc" data-i18n="radiologyUpload.modCtThoraxPlainDesc">فحص مقطعي عالي الدقة لنسيج الرئة والشعب الهوائية وتقييم التليف - LOINC 24627-2</span>
+                </div>
+                <div class="rad-modality-card" data-modality="ct_thorax_contrast" onclick="selectRadiologyModality('ct_thorax_contrast')" role="radio" aria-checked="false" tabindex="0">
+                  <div class="mod-head">
+                    <span class="mod-title">💉 <span data-i18n="radiologyUpload.modCtThoraxContrast">أشعة مقطعية على الصدر بالصبغة (CT with Contrast)</span></span>
+                    <span class="pill ok" style="font-size: 10px;">CTPA Ready</span>
+                  </div>
+                  <span class="mod-desc" data-i18n="radiologyUpload.modCtThoraxContrastDesc">دراسة الشرايين الرئوية واستبعاد الجلطة الرئوية الحادة (CTPA)</span>
+                </div>
+                <div class="rad-modality-card" data-modality="other_imaging" onclick="selectRadiologyModality('other_imaging')" role="radio" aria-checked="false" tabindex="0">
+                  <div class="mod-head">
+                    <span class="mod-title">📑 <span data-i18n="radiologyUpload.modOtherImaging">تصوير ورنين مغناطيسي آخر (Other Imaging / MRI)</span></span>
+                    <span class="pill" style="font-size: 10px;">MRI / US</span>
+                  </div>
+                  <span class="mod-desc" data-i18n="radiologyUpload.modOtherImagingDesc">رنين مغناطيسي، موجات فوق صوتية على الصدر، أو تقارير مراكز الأشعة</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Clinical Indications & History -->
+            <div style="margin: 12px 0 14px;">
+              <span style="display: block; font-size: 13px; font-weight: 700; margin-bottom: 6px; color: var(--ink);" data-i18n="radiologyUpload.clinicalIndicationsTitle">
+                دواعي الفحص السريرية وتاريخ الحالة (Indications):
+              </span>
+              <div class="rad-indications-wrap" id="radIndicationsSelector">
+                <button type="button" class="rad-ind-chip" data-indication="ind_cough" onclick="toggleRadiologyIndication('ind_cough')" aria-pressed="false">
+                  <span>🗣️</span> <span data-i18n="radiologyUpload.indCough">كحة مستمرة > ٣ أسابيع</span>
+                </button>
+                <button type="button" class="rad-ind-chip active" data-indication="ind_dyspnea" onclick="toggleRadiologyIndication('ind_dyspnea')" aria-pressed="true">
+                  <span>🫁</span> <span data-i18n="radiologyUpload.indDyspnea">ضيق تنفس ونقص أكسجين</span>
+                </button>
+                <button type="button" class="rad-ind-chip" data-indication="ind_pneumonia" onclick="toggleRadiologyIndication('ind_pneumonia')" aria-pressed="false">
+                  <span>🦠</span> <span data-i18n="radiologyUpload.indPneumonia">اشتباه التهاب رئوي أو درن</span>
+                </button>
+                <button type="button" class="rad-ind-chip" data-indication="ind_chest_pain" onclick="toggleRadiologyIndication('ind_chest_pain')" aria-pressed="false">
+                  <span>⚡</span> <span data-i18n="radiologyUpload.indChestPain">ألم حاد بالصدر أو الضلوع</span>
+                </button>
+                <button type="button" class="rad-ind-chip" data-indication="ind_hemoptysis" onclick="toggleRadiologyIndication('ind_hemoptysis')" aria-pressed="false">
+                  <span>🩸</span> <span data-i18n="radiologyUpload.indHemoptysis">بصاق مدمم (Hemoptysis)</span>
+                </button>
+                <button type="button" class="rad-ind-chip" data-indication="ind_fibrosis" onclick="toggleRadiologyIndication('ind_fibrosis')" aria-pressed="false">
+                  <span>🩺</span> <span data-i18n="radiologyUpload.indFibrosis">متابعة ما بعد كوفيد / تليف رئوي</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Mobile-Optimized Action Buttons Bar -->
+            <div style="display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap;">
+              <button type="button" class="solid-button" id="btnRadCamera" onclick="triggerRadiologyCamera()" style="flex: 1; min-width: 170px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 16px; min-height: 48px;">
+                <span style="font-size: 20px;">📷</span> <strong data-i18n="radiologyUpload.cameraBtn">تصوير فيلم الأشعة بالكاميرا</strong>
+              </button>
+              <button type="button" class="soft-button" id="btnRadBrowse" onclick="triggerRadiologyBrowse()" style="flex: 1; min-width: 170px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 16px; min-height: 48px;">
+                <span style="font-size: 20px;">📁</span> <strong data-i18n="radiologyUpload.browseBtn">اختيار ملفات الأشعة (DICOM / PDF / صور)</strong>
+              </button>
+              <button type="button" class="outline-button" id="btnOpenLightboxStudio" onclick="openChestRadiologyStudio()" style="min-width: 160px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 12px 16px; min-height: 48px; border-color: var(--teal); color: var(--teal);">
+                <span>🔍</span> <strong>أداة فحص الأفلام (Lightbox)</strong>
+              </button>
+              <input id="radCameraInput" type="file" accept="image/*" capture="environment" style="display: none;" onchange="handleRadiologyFileSelected(this)">
+              <input id="radBrowseInput" type="file" multiple accept=".dcm,.dicom,.png,.jpg,.jpeg,.webp,.pdf,application/pdf,image/*" style="display: none;" onchange="handleRadiologyFileSelected(this)">
+            </div>
+
+            <div style="font-size: 12px; color: var(--muted); margin-bottom: 12px; background: rgba(14, 165, 164, 0.05); padding: 8px 12px; border-radius: 8px; border: 1px dashed rgba(14, 165, 164, 0.3);">
+              <span data-i18n="radiologyUpload.cameraHint">💡 نصيحة تصوير: وجّه الكاميرا نحو فيلم الأشعة أمام شباك مضيء بنور النهار أو شاشة بيضاء لضمان وضوح المعالم.</span>
+            </div>
+
+            <!-- Staged & Uploaded Radiology Scans List -->
+            <div id="radStagedFilesList" style="margin-top: 12px;"></div>
+
+            <!-- Rology-Style Real-Time Teleradiology Pipeline Status -->
+            <div style="margin-top: 16px; padding: 14px 18px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <span style="font-size: 26px;">🩺</span>
+                <div>
+                  <strong style="color: var(--teal); font-size: 13.5px;">مسار القراءة والاعتماد السريري للأشعة (Rology Workflow)</strong>
+                  <div style="display: flex; gap: 12px; margin-top: 4px; font-size: 12px; color: var(--muted); flex-wrap: wrap;">
+                    <span>🛡️ 1. رفع مشفر في الحجر</span>
+                    <span>➔</span>
+                    <span style="color: #f59e0b; font-weight: 700;">⏳ 2. قراءة استشاري الأشعة</span>
+                    <span>➔</span>
+                    <span style="color: #10b981; font-weight: 700;">📜 3. تقرير استشاري معتمد</span>
+                  </div>
+                </div>
+              </div>
+              <button type="button" class="solid-button" onclick="bookRadiologyPulmonologyConsult()" style="font-size: 12.5px; padding: 8px 16px; white-space: nowrap;">
+                <span data-i18n="radiologyUpload.bookConsultationBtn">📅 حجز موعد مع استشاري الأمراض الصدرية</span>
               </button>
             </div>
           </article>
@@ -4072,6 +4214,114 @@
     </div>
   </div>
 
+  <!-- =========================================================================
+       🩻 CHEST RADIOLOGY & FILM LIGHTBOX STUDIO MODAL
+       Dedicated Mobile-Optimized Diagnostic Viewer & Upload Studio
+       ========================================================================= -->
+  <div id="chestRadiologyModal" class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="chestRadiologyModalTitle" aria-hidden="true" style="display: none; position: fixed; inset: 0; z-index: 100000; background: rgba(3, 18, 20, 0.88); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); align-items: center; justify-content: center; padding: 16px;">
+    <div class="confirm-card" style="background: var(--surface); border: 1.5px solid var(--line); border-radius: 24px; width: 100%; max-width: 820px; max-height: 92vh; overflow-y: auto; padding: 0; box-shadow: 0 25px 80px rgba(0, 0, 0, 0.6); position: relative; display: flex; flex-direction: column;">
+      
+      <!-- Modal Header -->
+      <div style="padding: 18px 24px 14px; border-bottom: 1px solid var(--line); background: var(--surface-2); display: flex; align-items: flex-start; justify-content: space-between; gap: 14px;">
+        <div>
+          <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 4px; flex-wrap: wrap;">
+            <span class="pill info" style="font-size: 10.5px;">⚡ Rology Standard</span>
+            <span class="pill ok" style="font-size: 10.5px;">🔒 HIPAA Quarantined</span>
+            <span class="pill" style="font-size: 10.5px; background: rgba(14, 165, 164, 0.15); color: var(--teal);">👨‍⚕️ Human Radiologist Review</span>
+          </div>
+          <h3 id="chestRadiologyModalTitle" style="margin: 0; font-size: 18px; color: var(--ink); display: flex; align-items: center; gap: 8px;">
+            <span>🩻</span> <span data-i18n="radiologyUpload.viewerTitle">أداة استعراض وفحص أفلام الأشعة التفاعلية (Film Lightbox Studio)</span>
+          </h3>
+          <p style="margin: 3px 0 0; font-size: 12.5px; color: var(--muted);" data-i18n="radiologyUpload.viewerHint">
+            استخدم أدوات التباين وعكس الرمادي لفحص عتامات الرئة وزوايا الحجاب الحاجز بدقة على شاشة الهاتف.
+          </p>
+        </div>
+        <button type="button" onclick="closeChestRadiologyStudio()" aria-label="Close" style="width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); font-size: 18px; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;">&times;</button>
+      </div>
+
+      <!-- Modal Body -->
+      <div style="padding: 20px 24px; flex: 1;">
+        
+        <!-- Interactive Lightbox Film Container -->
+        <div class="rad-lightbox-card" id="radViewerCard">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+            <div id="radViewerMeta" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <span class="pill info" style="font-size: 11px;">CXR PA & Lateral</span>
+              <strong style="font-size: 13px;">Film Inspection Canvas</strong>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="pill" id="radZoomBadge" style="background: rgba(255, 255, 255, 0.15); color: #f9fafb; font-size: 11px;">100%</span>
+            </div>
+          </div>
+
+          <!-- Viewport with Real-time Filters -->
+          <div class="rad-lightbox-viewport" id="radViewport">
+            <img id="radViewerImage" alt="Radiology Film" style="display: none;">
+            <div id="radViewerPlaceholder" style="display: flex; flex-direction: column; align-items: center; justify-content: center; color: #64748b; text-align: center; padding: 20px;">
+              <span style="font-size: 42px; margin-bottom: 8px;">🩻</span>
+              <strong style="font-size: 14px; color: #cbd5e1;">معاينة فيلم الأشعة الرقمي</strong>
+              <p style="margin: 4px 0 0; font-size: 12px; color: #94a3b8; max-width: 320px;">
+                التقط صورة لفيلم الأشعة أو ارفع ملفاً لبدء الفحص والتحكم في الإضاءة والتباين.
+              </p>
+            </div>
+          </div>
+
+          <!-- Viewer Control Toolbar -->
+          <div class="rad-viewer-controls">
+            <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+              <button type="button" class="solid-button" id="btnRadInvert" onclick="toggleRadiologyInvert()" style="padding: 8px 14px; font-size: 12px; background: #1e293b; color: #f8fafc; border: 1px solid #334155;">
+                <span data-i18n="radiologyUpload.btnInvert">🌓 عكس درجات الرمادي (Invert Film)</span>
+              </button>
+              <button type="button" class="outline-button" onclick="zoomRadiologyViewer(0.2)" style="padding: 8px 12px; font-size: 12px; color: #f8fafc; border-color: #334155;">
+                <span data-i18n="radiologyUpload.btnZoomIn">🔍+ تكبير</span>
+              </button>
+              <button type="button" class="outline-button" onclick="zoomRadiologyViewer(-0.2)" style="padding: 8px 12px; font-size: 12px; color: #f8fafc; border-color: #334155;">
+                <span data-i18n="radiologyUpload.btnZoomOut">🔍- تصغير</span>
+              </button>
+              <button type="button" class="outline-button" onclick="resetRadiologyViewer()" style="padding: 8px 12px; font-size: 12px; color: #94a3b8; border-color: #334155;">
+                <span data-i18n="radiologyUpload.btnReset">🔄 إعادة ضبط</span>
+              </button>
+            </div>
+
+            <div style="display: flex; gap: 16px; flex-wrap: wrap; align-items: center;">
+              <div class="rad-viewer-slider-group">
+                <label for="radBrightnessRange" data-i18n="radiologyUpload.labelBrightness">السطوع:</label>
+                <input type="range" id="radBrightnessRange" min="50" max="200" value="100" oninput="setRadiologyBrightness(this.value)">
+              </div>
+              <div class="rad-viewer-slider-group">
+                <label for="radContrastRange" data-i18n="radiologyUpload.labelContrast">التباين:</label>
+                <input type="range" id="radContrastRange" min="50" max="220" value="100" oninput="setRadiologyContrast(this.value)">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 🚨 Strict Non-Autonomous Disclaimer Reminder in Studio -->
+        <div style="padding: 12px 16px; background: rgba(239, 68, 68, 0.06); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 12px; font-size: 12px; line-height: 1.5; color: var(--ink); margin-bottom: 14px;">
+          <strong style="color: #b91c1c;">👨‍⚕️ مراجعة بشرية مؤكدة:</strong>
+          تُعرض هذه الصور على الطبيب البشري المختص لمناظرتها سريرياً. منصة Health-Vibe في مرحلة الـ MVP لا تقدم أي تشخيص آلي للأشعة، وتؤكد على دور استشاري الأشعة الصدرية البشري.
+        </div>
+
+        <!-- Staged files inside modal -->
+        <div>
+          <strong style="display: block; font-size: 13px; margin-bottom: 8px; color: var(--ink);">الملفات المرفوعة للفحص:</strong>
+          <div id="radModalStagedFiles"></div>
+        </div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div style="padding: 14px 24px; border-top: 1px solid var(--line); background: var(--surface-2); display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+        <button type="button" class="outline-button" onclick="closeChestRadiologyStudio()" style="padding: 8px 18px; font-size: 13px;">
+          <span data-i18n="radiologyUpload.modalClose">إغلاق نافذة الأشعة</span>
+        </button>
+        <button type="button" class="solid-button" onclick="bookRadiologyPulmonologyConsult()" style="padding: 8px 20px; font-size: 13px; display: inline-flex; align-items: center; gap: 8px;">
+          <span>📅</span> <span data-i18n="radiologyUpload.bookConsultationBtn">حجز موعد لمناقشة الأشعة مع الاستشاري</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
   <script src="./i18n.js?v=4.6"></script>
   <!-- Modular Architecture: Core, Auth, Permissions, Patient, Assessment, Doctor, Reports, Appointments, Admin, Notifications -->
   <script defer src="./modules/core/template-loader.js?v=1.0"></script>
@@ -4086,6 +4336,7 @@
   <script defer src="./modules/auth/auth-ui.js?v=1.0"></script>
   <script defer src="./modules/patient/patient-service.js?v=1.0"></script>
   <script defer src="./modules/patient/patient-ui.js?v=1.0"></script>
+  <script defer src="./modules/patient/chest-radiology-ui.js?v=1.0"></script>
   <script defer src="./modules/patient/family-service.js?v=1.0"></script>
   <script defer src="./modules/patient/family-ui.js?v=1.0"></script>
   <script defer src="./modules/patient/onboarding-service.js?v=1.0"></script>

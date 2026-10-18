@@ -86,6 +86,13 @@ const LAB_CATEGORIES = {
     labelEn: 'Urinalysis & Cultures',
     clinicalFocus: 'Routine urinalysis, microscopic exam, urine culture'
   },
+  chest_xray: {
+    key: 'chest_xray',
+    icon: '🩻',
+    labelAr: 'أشعة سينية ومقطعية على الصدر (CXR / CT)',
+    labelEn: 'Chest X-Ray & CT Thorax Scans',
+    clinicalFocus: 'Chest X-Ray PA & Lateral, CT Thorax with/without contrast, pulmonary angiography'
+  },
   other: {
     key: 'other',
     icon: '📑',
@@ -110,17 +117,21 @@ const ALLOWED_MIME_TYPES = new Set([
   'application/pdf',
   'image/jpeg',
   'image/png',
-  'image/webp'
+  'image/webp',
+  'application/dicom',
+  'application/octet-stream'
 ]);
 
-const ALLOWED_EXTENSIONS = new Set(['.pdf', '.jpg', '.jpeg', '.png', '.webp']);
+const ALLOWED_EXTENSIONS = new Set(['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.dcm', '.dicom']);
 
 const BLOCKED_EXECUTABLE_EXTENSIONS = new Set([
   '.exe', '.bat', '.cmd', '.sh', '.bin', '.app', '.msi', '.scr',
   '.vbs', '.pif', '.jar', '.js', '.mjs', '.php', '.py', '.com'
 ]);
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+const STANDARD_MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+const RADIOLOGY_MAX_FILE_SIZE = 15 * 1024 * 1024; // 15 MB for radiology & DICOM
+const MAX_FILE_SIZE = STANDARD_MAX_FILE_SIZE;
 
 const SCAN_STATUS = {
   UPLOAD_PENDING: 'upload_pending',
@@ -200,7 +211,10 @@ function validateLabFileUpload({ fileName, contentType, size }) {
     throw err;
   }
 
-  if (numSize > MAX_FILE_SIZE) {
+  const isRadiologyExt = ext === '.dcm' || ext === '.dicom';
+  const effectiveLimit = isRadiologyExt ? RADIOLOGY_MAX_FILE_SIZE : STANDARD_MAX_FILE_SIZE;
+
+  if (numSize > effectiveLimit) {
     const err = new Error(`File size (${(numSize / (1024 * 1024)).toFixed(1)}MB) exceeds maximum limit of 10MB.`);
     err.code = 'FILE_TOO_LARGE';
     err.statusCode = 400;
