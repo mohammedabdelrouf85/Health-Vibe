@@ -3098,6 +3098,100 @@
                 </div>
               </article>
             </div>
+
+            <!-- Model Governance & Instant Rollback Mechanism (Task #84) -->
+            <article class="panel" id="adminModelGovernanceCard" style="margin-top: 24px; border: 1px solid rgba(239, 68, 68, 0.3); background: rgba(239, 68, 68, 0.03);">
+              <div class="panel-head" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                <div>
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <h4 style="margin: 0; font-size: 16px;">حوكمة النماذج والتراجع السريع (Model Governance &amp; Rollback)</h4>
+                    <span id="adminActiveModelPill" class="pill ok" style="font-family: monospace;">resp_rf_v1.0.2 [نشط]</span>
+                  </div>
+                  <p style="margin: 4px 0 0; font-size: 13px; color: var(--muted);">آلية أمان سريرية تتيح العودة الفورية لإصدار معتمد ومستقر عند انخفاض الدقة أو اعتراضات الأطباء</p>
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                  <button type="button" class="danger-button" id="btnModelRollback" onclick="openModelRollbackModal()" style="display: inline-flex; align-items: center; gap: 6px; font-weight: 700; padding: 7px 14px; background: #dc2626; color: #fff; border-radius: 8px; border: none; cursor: pointer;">
+                    <span>⏪</span> تراجع فوري عن النموذج (Model Rollback)
+                  </button>
+                  <button type="button" class="outline-button" onclick="loadAdminModelGovernance()" style="padding: 7px 12px; font-size: 12px;">
+                    <span>🔄</span> تحديث
+                  </button>
+                </div>
+              </div>
+
+              <!-- Alert Banner if Doctor Objections exist -->
+              <div id="adminModelObjectionAlert" style="display: none; margin-top: 14px; padding: 10px 14px; border-radius: 8px; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.4); color: #fbbf24; font-size: 13px;">
+                ⚠️ <strong>تنبيه سريري:</strong> تم تسجيل اعتراضات من أطباء معتمدين على النموذج الحالي. يُرجى مراجعة الملاحظات السريرية والتراجع إن لزم الأمر.
+              </div>
+
+              <!-- Key Model Vitals Grid -->
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-top: 16px;">
+                <div class="kpi-mini-card" style="padding: 12px; background: rgba(255,255,255,0.03); border: 1px solid var(--line); border-radius: 10px;">
+                  <div style="font-size: 12px; color: var(--muted);">النموذج النشط حالياً</div>
+                  <div id="govCurrentModelName" style="font-weight: 700; font-size: 14px; margin-top: 4px; color: var(--text);">Random Forest Pre-Triage</div>
+                  <small id="govCurrentModelVersion" style="font-family: monospace; color: var(--teal); font-size: 11px;">resp_rf_v1.0.2</small>
+                </div>
+
+                <div class="kpi-mini-card" style="padding: 12px; background: rgba(255,255,255,0.03); border: 1px solid var(--line); border-radius: 10px;">
+                  <div style="font-size: 12px; color: var(--muted);">الإصدار الاحتياطي المستقر (Rollback Target)</div>
+                  <div id="govPreviousModelName" style="font-weight: 700; font-size: 14px; margin-top: 4px; color: var(--text);">Gold Standard Baseline</div>
+                  <small id="govPreviousModelVersion" style="font-family: monospace; color: #10b981; font-size: 11px;">resp_rf_v1.0.1</small>
+                </div>
+
+                <div class="kpi-mini-card" style="padding: 12px; background: rgba(255,255,255,0.03); border: 1px solid var(--line); border-radius: 10px;">
+                  <div style="font-size: 12px; color: var(--muted);">اعتراضات الأطباء المسجلة</div>
+                  <div id="govDoctorObjectionsCount" style="font-weight: 800; font-size: 20px; margin-top: 2px; color: #f59e0b;">0</div>
+                  <small style="color: var(--muted); font-size: 11px;">اعتراضات الفرز السريري</small>
+                </div>
+
+                <div class="kpi-mini-card" style="padding: 12px; background: rgba(255,255,255,0.03); border: 1px solid var(--line); border-radius: 10px;">
+                  <div style="font-size: 12px; color: var(--muted);">زمن التراجع المضمون</div>
+                  <div style="font-weight: 800; font-size: 20px; margin-top: 2px; color: #10b981;">&lt; 50 ms</div>
+                  <small style="color: var(--muted); font-size: 11px;">استجابة فورية بدون توقف</small>
+                </div>
+              </div>
+
+              <!-- Model Registry Versions Table -->
+              <div style="margin-top: 18px; overflow-x: auto;">
+                <table class="data-table" style="width: 100%; border-collapse: collapse; text-align: right; font-size: 13px;">
+                  <thead>
+                    <tr style="border-bottom: 1px solid var(--line); color: var(--muted);">
+                      <th style="padding: 8px;">إصدار النموذج</th>
+                      <th style="padding: 8px;">الاسم والوصف</th>
+                      <th style="padding: 8px;">الدقة (Accuracy)</th>
+                      <th style="padding: 8px;">F1-Score</th>
+                      <th style="padding: 8px;">الحالة التشغيلية</th>
+                    </tr>
+                  </thead>
+                  <tbody id="adminModelRegistryTableBody">
+                    <tr>
+                      <td colspan="5" style="text-align: center; color: var(--muted); padding: 12px;">جاري تحميل سجل النماذج السريرية...</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- Recent Rollback Audit Trail -->
+              <div style="margin-top: 18px; border-top: 1px solid var(--line); padding-top: 14px;">
+                <h5 style="margin: 0 0 8px; font-size: 14px;">سجل حوكمة وتراجعات النماذج (Model Audit &amp; Rollback Log)</h5>
+                <div style="max-height: 180px; overflow-y: auto;">
+                  <table class="data-table" style="width: 100%; border-collapse: collapse; text-align: right; font-size: 12px;">
+                    <thead>
+                      <tr style="border-bottom: 1px solid var(--line); color: var(--muted);">
+                        <th style="padding: 6px;">الوقت</th>
+                        <th style="padding: 6px;">العملية</th>
+                        <th style="padding: 6px;">من &larr; إلى</th>
+                        <th style="padding: 6px;">المعتمد</th>
+                        <th style="padding: 6px;">السبب الموثق</th>
+                      </tr>
+                    </thead>
+                    <tbody id="adminModelAuditTableBody">
+                      <tr><td colspan="5" style="text-align: center; color: var(--muted); padding: 8px;">لا توجد تراجعات مسجلة</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </article>
           </article>
         </div>
 
@@ -4192,6 +4286,51 @@
       </div>
     </div>
   </div>
+
+  <!-- Model Rollback Confirmation Modal (Task #84) -->
+  <div id="modelRollbackModal" class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="modelRollbackModalTitle" aria-hidden="true" style="display: none; position: fixed; inset: 0; background: rgba(11, 19, 43, 0.85); backdrop-filter: blur(10px); z-index: 999995; align-items: center; justify-content: center; padding: 16px;">
+    <div class="confirm-card" style="max-width: 540px; width: 100%; background: var(--surface-1, #132238); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 14px; padding: 22px; box-shadow: 0 20px 40px rgba(0,0,0,0.45); color: var(--text);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; border-bottom: 1px solid var(--line); padding-bottom: 10px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 26px;">⚠️</span>
+          <div>
+            <h3 id="modelRollbackModalTitle" style="margin: 0; font-size: 17px; color: #ef4444;">التراجع الفوري عن نموذج الذكاء الاصطناعي (Model Rollback)</h3>
+            <small style="color: var(--muted); font-size: 12px;">إلغاء تنشيط النموذج الحالي والعودة الفورية للإصدار المستقر</small>
+          </div>
+        </div>
+        <button type="button" id="btnCancelModelRollbackX" onclick="closeModelRollbackModal()" class="outline-button" style="padding: 4px 10px; font-size: 12px;">✕</button>
+      </div>
+
+      <div style="background: rgba(239, 68, 68, 0.08); border-right: 4px solid #ef4444; padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; font-size: 13px;">
+        <strong>تحذير طبي:</strong> سيؤدي هذا الإجراء فوراً إلى توجيه جميع تقييمات الفرز السريري الجديدة إلى الإصدار المحدد، وتوثيق سبب التراجع في السجل السريري غير القابل للتعديل.
+      </div>
+
+      <div style="margin-bottom: 14px;">
+        <label for="modelRollbackTargetSelect" style="display: block; font-size: 13px; font-weight: 700; margin-bottom: 6px;">الإصدار المستهدف للرجوع إليه:</label>
+        <select id="modelRollbackTargetSelect" class="search-input" style="width: 100%; padding: 8px 12px; font-size: 13.5px; font-family: monospace; border-radius: 8px;">
+          <!-- Populated dynamically -->
+        </select>
+      </div>
+
+      <div style="margin-bottom: 14px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <label for="modelRollbackReasonInput" style="font-size: 13px; font-weight: 700;">سبب التراجع الإلزامي (Clinical Justification):</label>
+          <span id="modelRollbackCharCounter" style="font-size: 11.5px; color: var(--muted);">0 / 10 أحرف كحد أدنى</span>
+        </div>
+        <textarea id="modelRollbackReasonInput" rows="3" class="search-input" style="width: 100%; padding: 10px; font-size: 13px; border-radius: 8px; resize: vertical;" placeholder="مثال: رصد انخفاض في دقة اكتشاف حالات الأزيز عند كبار السن مع تسجيل 3 اعتراضات من أطباء الطوارئ..."></textarea>
+      </div>
+
+      <div id="modelRollbackErrorAlert" style="display: none; padding: 8px 12px; border-radius: 6px; background: rgba(239,68,68,0.2); color: #fca5a5; font-size: 12.5px; margin-bottom: 14px;"></div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 10px; align-items: center; border-top: 1px solid var(--line); padding-top: 14px;">
+        <button type="button" id="btnCancelModelRollback" onclick="closeModelRollbackModal()" class="outline-button" style="padding: 8px 16px; font-size: 13px;">إلغاء</button>
+        <button type="button" id="btnConfirmModelRollback" onclick="executeModelRollback()" style="padding: 8px 18px; font-size: 13px; background: #dc2626; color: #fff; font-weight: 700; border: none; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
+          <span>⏪</span> تأكيد التراجع الفوري
+        </button>
+      </div>
+    </div>
+  </div>
+
 
 
 

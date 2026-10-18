@@ -95,6 +95,8 @@ const { externalApiGateway, SERVICE_DOMAINS, CIRCUIT_STATE, PROVIDER_TIER } = re
 const { DoctorAssignmentService } = require('./doctor-assignment-service');
 const inputSnapshotService = require('./input-snapshot-service');
 const authLockoutService = require('./auth-lockout-service');
+const { defaultInstance: modelGovernanceService } = require('./model-governance-service');
+
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -1800,7 +1802,9 @@ function isTrustedOwnerEmail(email) {
 }
 
 const REPORT_VERSION = '1.0.0';
+const getActiveModelVersion = () => (modelGovernanceService && modelGovernanceService.activeVersion) ? modelGovernanceService.activeVersion : 'resp_rf_v1.0.2';
 const MODEL_VERSION = 'resp_rf_v1.0.2';
+
 const ROLES = {
   PATIENT: 'patient',
   DOCTOR_PENDING: 'doctor_pending',
@@ -3871,6 +3875,109 @@ app.post('/api/governance/safety-register/capa', requireAuth, requireDoctor, asy
 });
 
 /**
+ * =============================================================================
+ * 🤖 ML MODEL GOVERNANCE & ROLLBACK ENGINE (Task #84)
+ * P0 - حرج جداً | Backend / Security | آلية التراجع عن تحديث النموذج (Model Rollback)
+ * =============================================================================
+ */
+
+/**
+ * GET /api/admin/model/registry
+ * Returns ML model registry status, active model, rollback candidates, and doctor objections
+ */
+app.get('/api/admin/model/registry', requireAuth, (req, res) => {
+  try {
+    const data = modelGovernanceService.getModelRegistry();
+    res.json({ success: true, data });
+  } catch (err) {
+    res.status(500).json({ error: 'REGISTRY_FETCH_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/admin/model/rollback
+ * Authoritative rollback to a previous approved/baseline model version with documented clinical reason
+ */
+app.post('/api/admin/model/rollback', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { targetVersion, rollbackReason } = req.body || {};
+    const actor = req.user ? (req.user.name || req.user.displayName || req.user.email || req.user.uid) : 'Admin User';
+    const role = (req.user && req.user.admin) ? 'admin' : 'clinical_admin';
+
+    const result = modelGovernanceService.rollbackModelVersion({
+      targetVersion,
+      rollbackReason,
+      authorizedBy: actor,
+      role
+    });
+
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: 'MODEL_ROLLBACK_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/admin/model/activate
+ * Promotes / activates a specific candidate model version
+ */
+app.post('/api/admin/model/activate', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { version, reason } = req.body || {};
+    const actor = req.user ? (req.user.name || req.user.displayName || req.user.email || req.user.uid) : 'Admin User';
+
+    const result = modelGovernanceService.activateModelVersion({
+      version,
+      reason,
+      authorizedBy: actor
+    });
+
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: 'MODEL_ACTIVATE_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/doctor/model-objection
+ * Doctor logs clinical objection / override telemetry against a model version
+ */
+app.post('/api/doctor/model-objection', requireAuth, requireDoctor, async (req, res) => {
+  try {
+    const { modelVersion, reason, caseId, severity } = req.body || {};
+    const doctorId = req.user.uid;
+    const doctorName = req.user.name || req.user.displayName || req.user.email || 'دكتور سريري';
+
+    const result = modelGovernanceService.recordDoctorObjection({
+      doctorId,
+      doctorName,
+      modelVersion,
+      reason,
+      caseId,
+      severity
+    });
+
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: 'OBJECTION_RECORDING_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/admin/model/audit-log
+ * Immutable audit trail of model activations, objections, and rollbacks
+ */
+app.get('/api/admin/model/audit-log', requireAuth, requireAdmin, (req, res) => {
+  try {
+    const auditLog = modelGovernanceService.getAuditLog(100);
+    res.json({ success: true, data: auditLog });
+  } catch (err) {
+    res.status(500).json({ error: 'AUDIT_LOG_FETCH_FAILED', message: err.message });
+  }
+});
+
+/**
+
  * GET /api/admin/metrics
  * Server-authoritative admin metrics that cannot be derived safely from frontend-only Firestore reads.
  * Covers 9 authoritative counters: users, verified doctors, clinics, cases, appointments,
@@ -7269,8 +7376,8 @@ function buildApprovedReportSnapshot({ caseId, caseData, updateData, doctorIdent
     },
     versions: {
       reportVersion: REPORT_VERSION,
-      modelVersion: caseData.modelVersion || caseData.model_version || MODEL_VERSION,
-      model_version: caseData.model_version || caseData.modelVersion || MODEL_VERSION,
+      modelVersion: caseData.modelVersion || caseData.model_version || getActiveModelVersion(),
+      model_version: caseData.model_version || caseData.modelVersion || getActiveModelVersion(),
       ruleEngineVersion: caseData.assessment?.aiTriage?.ruleEngineVersion || caseData.ruleEngineVersion || null
     },
     dates: {
@@ -7707,8 +7814,8 @@ async function executeDoctorTransition({
             updateData.reportGeneratedAt = reportGeneratedAt || nowIso;
             updateData.approvedAt = admin.firestore.FieldValue.serverTimestamp();
             updateData.reportVersion = REPORT_VERSION;
-            updateData.modelVersion = caseData.modelVersion || caseData.model_version || MODEL_VERSION;
-            updateData.model_version = caseData.model_version || caseData.modelVersion || MODEL_VERSION;
+            updateData.modelVersion = caseData.modelVersion || caseData.model_version || getActiveModelVersion();
+            updateData.model_version = caseData.model_version || caseData.modelVersion || getActiveModelVersion();
             updateData.modelRunAt = caseData.modelRunAt || caseData.model_run_at || caseData.assessment?.aiTriage?.modelRunAt || caseData.assessment?.aiTriage?.model_run_at || nowIso;
             updateData.model_run_at = caseData.model_run_at || caseData.modelRunAt || caseData.assessment?.aiTriage?.model_run_at || caseData.assessment?.aiTriage?.modelRunAt || nowIso;
             updateData.clinicalDiagnosis = typeof clinicalDiagnosis === 'string' ? clinicalDiagnosis.trim() : '';
