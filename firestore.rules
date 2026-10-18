@@ -548,6 +548,39 @@ service cloud.firestore {
                       (resource.data.patientId == request.auth.uid || isOwner() || tokenClinicAdminFor(resource.data));
     }
 
+    match /lab_reports/{fileId} {
+      allow read: if isAuthenticated() &&
+                    !isNonClinicalAdminSubRole() &&
+                    (resource.data.patientId == request.auth.uid ||
+                     isAssignedDoctorForCaseId(resource.data.caseId) ||
+                     (('role' in request.auth.token && request.auth.token.role == 'doctor') &&
+                      ('verifiedDoctor' in request.auth.token && request.auth.token.verifiedDoctor == true)) ||
+                     isOwner() ||
+                     tokenClinicAdminFor(resource.data));
+
+      allow create: if isAuthenticated() &&
+                      request.auth.token.role == 'patient' &&
+                      isEmailVerified() &&
+                      request.resource.data.patientId == request.auth.uid &&
+                      request.resource.data.reviewStatus == 'pending_doctor_review' &&
+                      request.resource.data.doctorApproved == false &&
+                      request.resource.data.scanStatus in ['upload_pending', 'pending', 'quarantined'] &&
+                      request.resource.data.availability == 'quarantined';
+
+      allow update: if isAuthenticated() &&
+                      !isNonClinicalAdminSubRole() &&
+                      ((('role' in request.auth.token && request.auth.token.role == 'doctor') &&
+                        ('verifiedDoctor' in request.auth.token && request.auth.token.verifiedDoctor == true)) ||
+                       isOwner() ||
+                       (resource.data.patientId == request.auth.uid &&
+                        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                          'availability', 'uploadStatus', 'deletedAt', 'updatedAt'
+                        ])));
+
+      allow delete: if isOwner() || isPlatformAdmin() || (isAuthenticated() && resource.data.patientId == request.auth.uid);
+    }
+
+
     match /assessments/{assessmentId} {
       allow read: if isAuthenticated() &&
                     !isNonClinicalAdminSubRole() &&

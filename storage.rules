@@ -210,6 +210,13 @@ service firebase.storage {
       allow write: if isPlatformAdmin();
     }
 
+    match /users/{userId}/lab_reports/{fileName} {
+      allow read: if !isSuspended() && (isOwner(userId) || isPlatformAdmin());
+      allow create, update: if isOwner(userId) && !isSuspended() && isAllowedCaseFile(fileName);
+      allow delete: if isOwner(userId) || isPlatformAdmin();
+    }
+
+
     match /{allPaths=**} {
       allow read, write: if false;
     }

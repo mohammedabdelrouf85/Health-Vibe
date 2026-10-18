@@ -15354,6 +15354,147 @@ app.post('/api/lab-upload/:fileId/link-case', requireAuth, async (req, res) => {
   }
 });
 
+/**
+ * GET /api/lab-upload/:fileId
+ * Retrieves a single lab report by ID with PHI access audit logging and zero-access enforcement
+ * for non-clinical admin sub-roles (Support, Ops, Clinical QA).
+ */
+app.get('/api/lab-upload/:fileId', requireAuth, async (req, res) => {
+  try {
+    const { fileId } = req.params;
+    const report = await labUploadService.getLabReportById(db, fileId, req.user);
+    res.json({ success: true, report });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({
+      error: err.code || 'GET_LAB_REPORT_FAILED',
+      message: err.message
+    });
+  }
+});
+
+/**
+ * POST /api/lab-upload/:fileId/doctor-review
+ * Formally signs and certifies a lab report by a verified human physician.
+ * Strict Non-Replacement Guard: Blocks unauthorized non-doctor actors.
+ */
+app.post('/api/lab-upload/:fileId/doctor-review', requireAuth, async (req, res) => {
+  try {
+    const { fileId } = req.params;
+    const { clinicalNotes, interpretationRecommendation, urgencyLevel } = req.body || {};
+
+    const result = await labUploadService.certifyLabReportByDoctor(db, {
+      fileId,
+      clinicalNotes,
+      interpretationRecommendation,
+      urgencyLevel
+    }, req.user);
+
+    res.json(result);
+  } catch (err) {
+    res.status(err.statusCode || 400).json({
+      error: err.code || 'DOCTOR_REVIEW_FAILED',
+      message: err.message
+    });
+  }
+});
+
+/**
+ * POST /api/lab-upload/:fileId/doctor-reject
+ * Rejects an illegible, blurred, or mismatched lab report by a doctor.
+ */
+app.post('/api/lab-upload/:fileId/doctor-reject', requireAuth, async (req, res) => {
+  try {
+    const { fileId } = req.params;
+    const { rejectionReason } = req.body || {};
+
+    const result = await labUploadService.rejectLabReportByDoctor(db, {
+      fileId,
+      rejectionReason
+    }, req.user);
+
+    res.json(result);
+  } catch (err) {
+    res.status(err.statusCode || 400).json({
+      error: err.code || 'DOCTOR_REJECT_FAILED',
+      message: err.message
+    });
+  }
+});
+
+/**
+ * POST /api/lab-upload/safety-evaluation
+ * Evaluates clinical safety, panic/critical lab thresholds, applies false reassurance prevention,
+ * and appends certified disclaimers.
+ */
+app.post('/api/lab-upload/safety-evaluation', requireAuth, (req, res) => {
+  try {
+    const { labCategory, extractedValues, notes, interpretationText, isDoctorReviewed } = req.body || {};
+
+    const safetyResult = labUploadService.evaluateLabSafetyAndPanicValues({
+      labCategory,
+      extractedValues,
+      notes
+    });
+
+    let guardrailResult = null;
+    if (interpretationText) {
+      guardrailResult = labUploadService.enforceAiClinicalGuardrails(interpretationText, {
+        isDoctorReviewed: Boolean(isDoctorReviewed),
+        isPanicValue: safetyResult.isPanicValue
+      });
+    }
+
+    res.json({
+      success: true,
+      safety: safetyResult,
+      guardrails: guardrailResult,
+      disclaimers: labUploadService.CLINICAL_DISCLAIMERS
+    });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({
+      error: err.code || 'SAFETY_EVAL_FAILED',
+      message: err.message
+    });
+  }
+});
+
+/**
+ * GET /api/lab-upload/:fileId/disclaimer
+ * Returns clinical disclaimer & legal non-replacement disclosure.
+ */
+app.get('/api/lab-upload/:fileId/disclaimer', requireAuth, (req, res) => {
+  res.json({
+    success: true,
+    fileId: req.params.fileId,
+    disclaimers: labUploadService.CLINICAL_DISCLAIMERS
+  });
+});
+
+/**
+ * DELETE /api/lab-upload/:fileId
+ * Patient Right to be Forgotten (GDPR / HIPAA Compliant Deletion).
+ * Soft-deletes the record from active view while retaining an immutable audit trail.
+ */
+app.delete('/api/lab-upload/:fileId', requireAuth, async (req, res) => {
+  try {
+    const { fileId } = req.params;
+    const { reason } = req.body || {};
+
+    const result = await labUploadService.deleteLabReport(db, {
+      fileId,
+      reason
+    }, req.user);
+
+    res.json(result);
+  } catch (err) {
+    res.status(err.statusCode || 400).json({
+      error: err.code || 'LAB_REPORT_DELETE_FAILED',
+      message: err.message
+    });
+  }
+});
+
+
 // =============================================================================
 // 🚨 UNUSUAL ACCESS & ANOMALY MONITORING ENDPOINTS
 // =============================================================================

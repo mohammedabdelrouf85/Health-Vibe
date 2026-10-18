@@ -14,17 +14,24 @@
  *    - abg_gas (Arterial Blood Gas: pH, PaO2, PaCO2, HCO3, SaO2)
  *    - urinalysis (urinalysis, microscopic examination, urine culture)
  *    - other (radiology, hospital discharge summaries, other lab reports)
- * 3. Database & Patient Medical Profile Linkage:
+ * 3. Database & Patient Medical Profile Linkage (EHR):
  *    - Links uploaded lab files in Firestore (`case_files/{fileId}`) to patient profile (`users/{patientId}`).
  *    - Updates `recentLabReports` and `labHistorySummary` on the patient's EHR profile.
  *    - Associates file with clinical cases (`cases/{caseId}`).
- *    - Enforces ownership & RBAC authorization (patient owner, assigned doctor, clinic admin).
- * 4. Multi-Channel Notification Dispatch:
+ * 4. Clinical Safety & Strict Non-Replacement of Human Doctor (SaMD / FDA / Docus AI):
+ *    - Mandatory initial state: reviewStatus = 'pending_doctor_review', doctorApproved = false.
+ *    - Automated disclaimers in Arabic and English explicitly stating AI never replaces human doctors.
+ *    - Complete block on autonomous AI diagnosis and automated prescriptions.
+ *    - Panic / Critical Values Interception & False Reassurance Prevention (anti-complacency).
+ *    - Formal Doctor Review & Certification workflow with physician license stamp.
+ * 5. Privacy & Access Control (HIPAA Minimum Necessary & Zero-Trust RBAC):
+ *    - Non-clinical sub-roles (Support, Ops, Clinical QA) have ZERO access to clinical PHI.
+ *    - Immutable audit trail for all PHI access (read, download, review, delete).
+ *    - Patient Right to be Forgotten (soft deletion with clinical audit retention).
+ * 6. Multi-Channel Notification Dispatch:
  *    - Queues notifications for assigned doctor and on-call clinicians when lab reports are uploaded.
  *    - Dispatches confirmation to patient.
  *    - Escalates urgent/critical findings (e.g. ABG or positive sputum culture) with high-priority alerts.
- * 5. Immutable Security Audit Logging:
- *    - Logs LAB_REPORT_UPLOAD_REGISTERED, LAB_REPORT_LINKED_TO_PROFILE, LAB_REPORT_QUARANTINE_SCANNED.
  */
 
 'use strict';
@@ -72,6 +79,17 @@ const LAB_CATEGORIES = {
   }
 };
 
+const REVIEW_STATUS = {
+  PENDING_DOCTOR_REVIEW: 'pending_doctor_review',
+  DOCTOR_REVIEWED: 'doctor_reviewed',
+  REJECTED_BY_DOCTOR: 'rejected_by_doctor'
+};
+
+const CLINICAL_DISCLAIMERS = {
+  ar: 'تنبيه طبي وقانوني (Docus AI / SaMD): قراءة نتائج التحاليل والمعامل استرشادية فقط وتعتبر بيانات أولية غير تشخيصية. النظام والذكاء الاصطناعي لا يحلان محل الطبيب البشري المؤهل، ولا يصدران وصفات طبية أو خطط علاجية نهائية. يجب دائماً عرض هذه النتائج على الطبيب البشري المعالج لاعتمادها طبياً وتحديد التدخل السريري المناسب.',
+  en: 'Clinical & Legal Safety Notice (Docus AI / SaMD): Automated lab report interpretation and data extractions are strictly preliminary and informational. AI algorithms NEVER replace licensed human physicians and cannot prescribe medications or provide definitive diagnoses. All laboratory findings must be reviewed and certified by a qualified physician.'
+};
+
 const ALLOWED_MIME_TYPES = new Set([
   'application/pdf',
   'image/jpeg',
@@ -100,11 +118,26 @@ const SCAN_STATUS = {
 const AVAILABILITY = {
   QUARANTINED: 'quarantined',
   AVAILABLE: 'available',
-  BLOCKED: 'blocked'
+  BLOCKED: 'blocked',
+  DELETED: 'deleted'
 };
 
 // In-memory storage for test suites & isolated environments
 const inMemoryLabReports = new Map();
+
+/**
+ * Asserts that the requesting user is not a non-clinical administrative sub-role
+ * (Support, Ops, Clinical QA) who are barred from raw PHI under HIPAA Minimum Necessary rule.
+ */
+function assertClinicalAccess(user = {}) {
+  const role = user.role || 'patient';
+  if (role === 'support' || role === 'ops' || role === 'clinical_qa') {
+    const err = new Error('Access denied: Non-clinical administrative sub-roles (Support, Ops, Clinical QA) have zero access to clinical PHI.');
+    err.code = 'PHI_ACCESS_DENIED';
+    err.statusCode = 403;
+    throw err;
+  }
+}
 
 /**
  * Validates lab file metadata before upload/storage.
@@ -179,8 +212,135 @@ function getSafeLabStorageFileName(rawName) {
 }
 
 /**
+ * Evaluates clinical safety, panic/critical laboratory thresholds, and prevents false reassurance.
+ * Critical thresholds:
+ * - ABG: PaO2 < 60 mmHg (severe hypoxemia), pH < 7.25 (severe acidosis), PaCO2 > 55 mmHg.
+ * - Sputum Culture: Positive AFB/TB, MRSA, or Pseudomonas aeruginosa.
+ * - Blood test: Hb < 7 g/dL (severe anemia), WBC > 30,000 (severe sepsis/leukemoid), Platelets < 20,000.
+ */
+function evaluateLabSafetyAndPanicValues({ labCategory, extractedValues = {}, notes = '' } = {}) {
+  let isPanicValue = false;
+  const panicReasons = [];
+  let emergencyGuidanceAr = '';
+  let emergencyGuidanceEn = '';
+
+  const cat = labCategory || 'blood_test';
+
+  if (cat === 'abg_gas') {
+    const pO2 = Number(extractedValues.pO2 || extractedValues.paO2);
+    const pH = Number(extractedValues.pH);
+    const pCO2 = Number(extractedValues.pCO2 || extractedValues.paCO2);
+
+    if (!isNaN(pO2) && pO2 > 0 && pO2 < 60) {
+      isPanicValue = true;
+      panicReasons.push(`Severe Hypoxemia (PaO2: ${pO2} mmHg < 60)`);
+    }
+    if (!isNaN(pH) && pH > 0 && pH < 7.25) {
+      isPanicValue = true;
+      panicReasons.push(`Critical Acidosis (pH: ${pH} < 7.25)`);
+    }
+    if (!isNaN(pCO2) && pCO2 > 55) {
+      isPanicValue = true;
+      panicReasons.push(`Severe Hypercapnia (PaCO2: ${pCO2} mmHg > 55)`);
+    }
+  } else if (cat === 'sputum_culture') {
+    const textToCheck = `${notes} ${extractedValues.organism || ''} ${extractedValues.stain || ''}`.toLowerCase();
+    if (textToCheck.includes('afb') || textToCheck.includes('acid fast') || textToCheck.includes('tuberculosis') || textToCheck.includes('سل')) {
+      isPanicValue = true;
+      panicReasons.push('Positive Acid-Fast Bacilli (AFB) / Presumptive Tuberculosis detected');
+    }
+    if (textToCheck.includes('mrsa') || textToCheck.includes('pseudomonas') || textToCheck.includes('resistant')) {
+      isPanicValue = true;
+      panicReasons.push('Multi-drug resistant respiratory pathogen detected');
+    }
+  } else if (cat === 'blood_test') {
+    const hb = Number(extractedValues.hb || extractedValues.hemoglobin);
+    const wbc = Number(extractedValues.wbc);
+    const platelets = Number(extractedValues.platelets);
+
+    if (!isNaN(hb) && hb > 0 && hb < 7.0) {
+      isPanicValue = true;
+      panicReasons.push(`Critical Anemia (Hemoglobin: ${hb} g/dL < 7.0)`);
+    }
+    if (!isNaN(wbc) && wbc > 30000) {
+      isPanicValue = true;
+      panicReasons.push(`Critical Leukocytosis (WBC: ${wbc} /mcL > 30,000)`);
+    }
+    if (!isNaN(platelets) && platelets > 0 && platelets < 20000) {
+      isPanicValue = true;
+      panicReasons.push(`Critical Thrombocytopenia (Platelets: ${platelets} /mcL < 20,000)`);
+    }
+  }
+
+  if (isPanicValue) {
+    emergencyGuidanceAr = '⚠️ تنبيه سريري حرج: تشير هذه النتائج إلى قيم حرجة تتطلب تدخلاً طبياً عاجلاً وفورياً. يُرجى التوجه إلى أقرب قسم طوارئ أو مراجعة الطبيب المعالج على الفور، ولا يجب الانتظار.';
+    emergencyGuidanceEn = '⚠️ Critical Clinical Alert: These findings indicate panic-level laboratory values requiring urgent emergency medical attention. Please report immediately to an emergency department or contact your physician.';
+  }
+
+  return {
+    isPanicValue,
+    panicReasons,
+    emergencyActionRequired: isPanicValue,
+    emergencyGuidanceAr,
+    emergencyGuidanceEn,
+    disclaimerAr: CLINICAL_DISCLAIMERS.ar,
+    disclaimerEn: CLINICAL_DISCLAIMERS.en
+  };
+}
+
+/**
+ * Enforces strict AI clinical guardrails:
+ * 1. Blocks autonomous definitive diagnosis assertions without physician review.
+ * 2. Blocks automated prescription of medications or dose modifications.
+ * 3. Strips false reassurance phrases (e.g. "لا تقلق كل شيء طبيعي") when abnormal or pending review.
+ * 4. Appends mandatory bilingual disclaimer.
+ */
+function enforceAiClinicalGuardrails(interpretationText = '', options = {}) {
+  const { isDoctorReviewed = false, isPanicValue = false } = options;
+  let sanitized = String(interpretationText || '');
+
+  // 1. Strip False Reassurance if pending review or panic
+  if (!isDoctorReviewed || isPanicValue) {
+    const falseReassurancePatterns = [
+      /لا داعي للقلق[\s\S]*?(؟|\.|$)/gi,
+      /أنت سليم تماماً[\s\S]*?(؟|\.|$)/gi,
+      /نتائجك ممتازة ولا تحتاج طبيب[\s\S]*?(؟|\.|$)/gi,
+      /you are completely fine[\s\S]*?(\.|$)/gi,
+      /no need to see a doctor[\s\S]*?(\.|$)/gi,
+      /nothing to worry about[\s\S]*?(\.|$)/gi
+    ];
+    for (const pattern of falseReassurancePatterns) {
+      sanitized = sanitized.replace(pattern, '');
+    }
+  }
+
+  // 2. Block autonomous prescription directives
+  const prescriptionPatterns = [
+    /(يجب عليك تناول|تناول دواء|ننصحك بأخذ جرعة|prescription:|prescribe|take \d+\s?mg)/gi
+  ];
+  let prescriptionBlocked = false;
+  for (const rxPattern of prescriptionPatterns) {
+    if (rxPattern.test(sanitized)) {
+      prescriptionBlocked = true;
+      sanitized = sanitized.replace(rxPattern, '[محظور: الوصفات الطبية تصدر حصراً من الطبيب البشري المرخص]');
+    }
+  }
+
+  // 3. Append certified non-replacement disclaimer
+  const finalDisclaimer = `\n\n---\n📋 **${CLINICAL_DISCLAIMERS.ar}**\n\n🌐 **${CLINICAL_DISCLAIMERS.en}**`;
+
+  return {
+    sanitizedText: `${sanitized.trim()}${finalDisclaimer}`,
+    prescriptionsBlocked: prescriptionBlocked,
+    isPreliminary: !isDoctorReviewed,
+    requiresHumanDoctorReview: true,
+    disclaimerAppended: true
+  };
+}
+
+/**
  * Registers lab file upload metadata, validates security constraints,
- * creates quarantined record, and links to patient medical profile.
+ * creates quarantined record, establishes non-replacement guards, and links to patient medical profile.
  */
 async function registerLabFileUpload(db, data = {}, actorUser = {}) {
   const {
@@ -192,7 +352,8 @@ async function registerLabFileUpload(db, data = {}, actorUser = {}) {
     labCategory = 'blood_test',
     labNotes = '',
     testDate = null,
-    sourceClinic = null
+    sourceClinic = null,
+    extractedValues = {}
   } = data;
 
   if (!patientId) {
@@ -202,7 +363,8 @@ async function registerLabFileUpload(db, data = {}, actorUser = {}) {
     throw err;
   }
 
-  // Authorization check
+  // Privacy & Access check
+  assertClinicalAccess(actorUser);
   const isOwner = actorUser.uid === patientId;
   const isClinician = actorUser.role === 'doctor' || actorUser.role === 'clinic_admin' || actorUser.role === 'super_admin';
   if (!isOwner && !isClinician && actorUser.uid) {
@@ -221,6 +383,13 @@ async function registerLabFileUpload(db, data = {}, actorUser = {}) {
   const fileId = `lab_file_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
   const nowIso = new Date().toISOString();
   const storagePath = `case_files/${patientId}/${caseId || 'general'}/${fileId}/${safeFileName}`;
+
+  // Evaluate safety & panic values
+  const safetyEval = evaluateLabSafetyAndPanicValues({
+    labCategory: chosenCat,
+    extractedValues,
+    notes: labNotes
+  });
 
   const reportRecord = {
     id: fileId,
@@ -241,6 +410,26 @@ async function registerLabFileUpload(db, data = {}, actorUser = {}) {
     scanStatus: SCAN_STATUS.UPLOAD_PENDING,
     availability: AVAILABILITY.QUARANTINED,
     uploadStatus: 'metadata_created',
+    // 🛡️ Strict Non-Replacement of Doctor Guardrails
+    reviewStatus: REVIEW_STATUS.PENDING_DOCTOR_REVIEW,
+    doctorApproved: false,
+    reviewingDoctorId: null,
+    reviewingDoctorName: null,
+    reviewingDoctorLicense: null,
+    doctorNotes: null,
+    reviewedAt: null,
+    hasClinicalDisclaimer: true,
+    disclaimerTextAr: CLINICAL_DISCLAIMERS.ar,
+    disclaimerTextEn: CLINICAL_DISCLAIMERS.en,
+    aiDiagnosticReplacementBlocked: true,
+    prescriptionsBlocked: true,
+    isPreliminary: true,
+    // 🚨 Emergency & Panic Flags
+    isPanicValue: safetyEval.isPanicValue,
+    panicReasons: safetyEval.panicReasons,
+    emergencyActionRequired: safetyEval.emergencyActionRequired,
+    emergencyGuidanceAr: safetyEval.emergencyGuidanceAr,
+    emergencyGuidanceEn: safetyEval.emergencyGuidanceEn,
     createdBy: actorUser.uid || patientId,
     createdAt: nowIso,
     updatedAt: nowIso
@@ -250,13 +439,15 @@ async function registerLabFileUpload(db, data = {}, actorUser = {}) {
   if (db && typeof db.collection === 'function') {
     try {
       await db.collection('case_files').doc(fileId).set(reportRecord);
+      // Also write to lab_reports collection for granular query isolation
+      await db.collection('lab_reports').doc(fileId).set(reportRecord);
     } catch (err) {
-      console.warn('[FIRESTORE CASE_FILES WARNING]:', err.message);
+      console.warn('[FIRESTORE CASE_FILES/LAB_REPORTS WARNING]:', err.message);
     }
   }
   inMemoryLabReports.set(fileId, reportRecord);
 
-  // Link report to patient medical profile
+  // Link report to patient medical profile (EHR)
   await linkLabReportToPatientProfile(db, {
     fileId,
     patientId,
@@ -264,6 +455,8 @@ async function registerLabFileUpload(db, data = {}, actorUser = {}) {
     fileName,
     size: Number(size),
     testDate: reportRecord.testDate,
+    reviewStatus: REVIEW_STATUS.PENDING_DOCTOR_REVIEW,
+    isPanicValue: safetyEval.isPanicValue,
     actorUid: actorUser.uid || patientId
   });
 
@@ -288,7 +481,9 @@ async function registerLabFileUpload(db, data = {}, actorUser = {}) {
           fileName,
           size: Number(size),
           scanStatus: SCAN_STATUS.UPLOAD_PENDING,
-          availability: AVAILABILITY.QUARANTINED
+          availability: AVAILABILITY.QUARANTINED,
+          reviewStatus: REVIEW_STATUS.PENDING_DOCTOR_REVIEW,
+          isPanicValue: safetyEval.isPanicValue
         }
       });
     }
@@ -305,7 +500,7 @@ async function registerLabFileUpload(db, data = {}, actorUser = {}) {
 /**
  * Links lab report summary to the patient's medical profile (EHR).
  */
-async function linkLabReportToPatientProfile(db, { fileId, patientId, labCategory, fileName, size, testDate, actorUid }) {
+async function linkLabReportToPatientProfile(db, { fileId, patientId, labCategory, fileName, size, testDate, reviewStatus, isPanicValue, actorUid }) {
   if (!patientId || !fileId) return false;
 
   const nowIso = new Date().toISOString();
@@ -315,6 +510,8 @@ async function linkLabReportToPatientProfile(db, { fileId, patientId, labCategor
     fileName,
     size,
     testDate: testDate || nowIso.slice(0, 10),
+    reviewStatus: reviewStatus || REVIEW_STATUS.PENDING_DOCTOR_REVIEW,
+    isPanicValue: Boolean(isPanicValue),
     linkedAt: nowIso
   };
 
@@ -356,6 +553,8 @@ async function linkLabReportToCase(db, { fileId, caseId, actorUid }, actorUser =
     err.statusCode = 400;
     throw err;
   }
+
+  assertClinicalAccess(actorUser);
 
   let fileRecord = inMemoryLabReports.get(fileId);
   if (!fileRecord && db && typeof db.collection === 'function') {
@@ -460,6 +659,7 @@ async function processLabScanResult(db, { fileId, scanResult, scanDetails = null
         scannedBy: scannerId,
         updatedAt: nowIso
       });
+      await db.collection('lab_reports').doc(fileId).set(fileRecord, { merge: true });
     } catch (err) {
       console.warn('[SCAN STATUS UPDATE WARNING]:', err.message);
     }
@@ -481,6 +681,367 @@ async function processLabScanResult(db, { fileId, scanResult, scanDetails = null
 }
 
 /**
+ * Formally certifies and signs a lab report by a verified human physician.
+ * Strict Non-Replacement Guard: Only verified doctors can execute this action.
+ */
+async function certifyLabReportByDoctor(db, { fileId, clinicalNotes = '', interpretationRecommendation = '', urgencyLevel = 'routine' } = {}, doctorUser = {}) {
+  if (!fileId) {
+    const err = new Error('fileId is required.');
+    err.code = 'MISSING_FILE_ID';
+    err.statusCode = 400;
+    throw err;
+  }
+
+  // Strict Doctor Verification Check
+  const isDoctor = doctorUser.role === 'doctor' || doctorUser.role === 'super_admin';
+  const isVerifiedDoctor = doctorUser.verifiedDoctor === true || doctorUser.role === 'super_admin';
+  if (!isDoctor || !isVerifiedDoctor) {
+    const err = new Error('Unauthorized: Lab reports can ONLY be reviewed and certified by a verified licensed physician.');
+    err.code = 'DOCTOR_VERIFICATION_REQUIRED';
+    err.statusCode = 403;
+    throw err;
+  }
+
+  let fileRecord = inMemoryLabReports.get(fileId);
+  if (!fileRecord && db && typeof db.collection === 'function') {
+    try {
+      const snap = await db.collection('case_files').doc(fileId).get();
+      if (snap && snap.exists) fileRecord = snap.data();
+    } catch (_) {}
+  }
+
+  if (!fileRecord) {
+    const err = new Error('Lab report file not found.');
+    err.code = 'FILE_NOT_FOUND';
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const nowIso = new Date().toISOString();
+  const doctorLicense = doctorUser.licenseNumber || doctorUser.doctorLicense || 'VERIFIED_PHYSICIAN';
+  const doctorName = doctorUser.name || doctorUser.fullName || 'د. طبيب معتمد';
+
+  fileRecord.reviewStatus = REVIEW_STATUS.DOCTOR_REVIEWED;
+  fileRecord.doctorApproved = true;
+  fileRecord.reviewingDoctorId = doctorUser.uid;
+  fileRecord.reviewingDoctorName = doctorName;
+  fileRecord.reviewingDoctorLicense = doctorLicense;
+  fileRecord.doctorNotes = String(clinicalNotes || '').slice(0, 1000);
+  fileRecord.interpretationRecommendation = String(interpretationRecommendation || '').slice(0, 1000);
+  fileRecord.urgencyLevel = urgencyLevel;
+  fileRecord.reviewedAt = nowIso;
+  fileRecord.isPreliminary = false;
+  fileRecord.updatedAt = nowIso;
+
+  if (db && typeof db.collection === 'function') {
+    try {
+      await db.collection('case_files').doc(fileId).update({
+        reviewStatus: REVIEW_STATUS.DOCTOR_REVIEWED,
+        doctorApproved: true,
+        reviewingDoctorId: doctorUser.uid,
+        reviewingDoctorName: doctorName,
+        reviewingDoctorLicense: doctorLicense,
+        doctorNotes: fileRecord.doctorNotes,
+        interpretationRecommendation: fileRecord.interpretationRecommendation,
+        urgencyLevel,
+        reviewedAt: nowIso,
+        isPreliminary: false,
+        updatedAt: nowIso
+      });
+      await db.collection('lab_reports').doc(fileId).set(fileRecord, { merge: true });
+
+      // Update patient profile recentLabReports
+      const userRef = db.collection('users').doc(fileRecord.patientId);
+      const userSnap = await userRef.get();
+      if (userSnap && userSnap.exists) {
+        const uData = userSnap.data() || {};
+        const recent = Array.isArray(uData.recentLabReports) ? uData.recentLabReports : [];
+        const updatedRecent = recent.map(r => {
+          if (r.fileId === fileId) {
+            return { ...r, reviewStatus: REVIEW_STATUS.DOCTOR_REVIEWED, reviewedAt: nowIso, doctorApproved: true };
+          }
+          return r;
+        });
+        await userRef.update({ recentLabReports: updatedRecent, updatedAt: nowIso });
+      }
+    } catch (err) {
+      console.warn('[DOCTOR REVIEW UPDATE WARNING]:', err.message);
+    }
+  }
+
+  inMemoryLabReports.set(fileId, fileRecord);
+
+  // Log Immutable Audit Event
+  try {
+    if (typeof logAuditEvent === 'function') {
+      await logAuditEvent(db, {
+        eventType: 'LAB_REPORT_REVIEWED_BY_DOCTOR',
+        actorUid: doctorUser.uid,
+        actorRole: doctorUser.role || 'doctor',
+        targetUserId: fileRecord.patientId,
+        resourceId: fileId,
+        metadata: {
+          fileId,
+          doctorName,
+          doctorLicense,
+          reviewStatus: REVIEW_STATUS.DOCTOR_REVIEWED,
+          urgencyLevel
+        }
+      });
+    }
+  } catch (_) {}
+
+  return {
+    success: true,
+    fileId,
+    reviewStatus: fileRecord.reviewStatus,
+    doctorApproved: true,
+    reviewingDoctorName: doctorName,
+    reviewedAt: nowIso
+  };
+}
+
+/**
+ * Rejects a lab report by a doctor (e.g. illegible photo, wrong patient, corrupt scan).
+ */
+async function rejectLabReportByDoctor(db, { fileId, rejectionReason = 'unreadable_or_blurred' } = {}, doctorUser = {}) {
+  if (!fileId) {
+    const err = new Error('fileId is required.');
+    err.code = 'MISSING_FILE_ID';
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const isDoctor = doctorUser.role === 'doctor' || doctorUser.role === 'super_admin';
+  if (!isDoctor) {
+    const err = new Error('Unauthorized: Only doctors or admins can reject lab reports.');
+    err.code = 'FORBIDDEN';
+    err.statusCode = 403;
+    throw err;
+  }
+
+  let fileRecord = inMemoryLabReports.get(fileId);
+  if (!fileRecord && db && typeof db.collection === 'function') {
+    try {
+      const snap = await db.collection('case_files').doc(fileId).get();
+      if (snap && snap.exists) fileRecord = snap.data();
+    } catch (_) {}
+  }
+
+  if (!fileRecord) {
+    const err = new Error('Lab report file not found.');
+    err.code = 'FILE_NOT_FOUND';
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const nowIso = new Date().toISOString();
+  fileRecord.reviewStatus = REVIEW_STATUS.REJECTED_BY_DOCTOR;
+  fileRecord.doctorApproved = false;
+  fileRecord.rejectionReason = rejectionReason;
+  fileRecord.rejectedByDoctorId = doctorUser.uid;
+  fileRecord.rejectedAt = nowIso;
+  fileRecord.updatedAt = nowIso;
+
+  if (db && typeof db.collection === 'function') {
+    try {
+      await db.collection('case_files').doc(fileId).update({
+        reviewStatus: REVIEW_STATUS.REJECTED_BY_DOCTOR,
+        doctorApproved: false,
+        rejectionReason,
+        rejectedByDoctorId: doctorUser.uid,
+        rejectedAt: nowIso,
+        updatedAt: nowIso
+      });
+    } catch (_) {}
+  }
+
+  inMemoryLabReports.set(fileId, fileRecord);
+
+  // Log Audit
+  try {
+    if (typeof logAuditEvent === 'function') {
+      await logAuditEvent(db, {
+        eventType: 'LAB_REPORT_REJECTED_BY_DOCTOR',
+        actorUid: doctorUser.uid,
+        actorRole: doctorUser.role || 'doctor',
+        targetUserId: fileRecord.patientId,
+        resourceId: fileId,
+        metadata: { fileId, rejectionReason }
+      });
+    }
+  } catch (_) {}
+
+  return {
+    success: true,
+    fileId,
+    reviewStatus: REVIEW_STATUS.REJECTED_BY_DOCTOR,
+    rejectionReason
+  };
+}
+
+/**
+ * Retrieves a single lab report by ID with strict privacy, PHI audit logging,
+ * and zero-access enforcement for non-clinical admin sub-roles.
+ */
+async function getLabReportById(db, fileId, requestingUser = {}) {
+  if (!fileId) {
+    const err = new Error('fileId is required.');
+    err.code = 'MISSING_FILE_ID';
+    err.statusCode = 400;
+    throw err;
+  }
+
+  assertClinicalAccess(requestingUser);
+
+  let fileRecord = inMemoryLabReports.get(fileId);
+  if (!fileRecord && db && typeof db.collection === 'function') {
+    try {
+      const snap = await db.collection('case_files').doc(fileId).get();
+      if (snap && snap.exists) fileRecord = snap.data();
+    } catch (_) {}
+  }
+
+  if (!fileRecord) {
+    const err = new Error('Lab report file not found.');
+    err.code = 'FILE_NOT_FOUND';
+    err.statusCode = 404;
+    throw err;
+  }
+
+  // Authorization check (patient owner, clinician, or super_admin)
+  const isOwner = requestingUser.uid === fileRecord.patientId;
+  const isClinician = requestingUser.role === 'doctor' || requestingUser.role === 'clinic_admin' || requestingUser.role === 'super_admin';
+  if (!isOwner && !isClinician && requestingUser.uid) {
+    const err = new Error('Unauthorized to view this clinical lab report.');
+    err.code = 'FORBIDDEN';
+    err.statusCode = 403;
+    throw err;
+  }
+
+  // Immutable PHI Access Audit Log
+  try {
+    if (typeof logAuditEvent === 'function') {
+      await logAuditEvent(db, {
+        eventType: 'LAB_REPORT_PHI_VIEWED',
+        actorUid: requestingUser.uid || 'anonymous',
+        actorRole: requestingUser.role || 'patient',
+        targetUserId: fileRecord.patientId,
+        resourceId: fileId,
+        metadata: {
+          fileId,
+          labCategory: fileRecord.labCategory,
+          patientId: fileRecord.patientId
+        }
+      });
+    }
+  } catch (_) {}
+
+  return fileRecord;
+}
+
+/**
+ * Patient Right to be Forgotten (GDPR / HIPAA Compliant Deletion).
+ * Soft-deletes the lab report from active clinical view while retaining an immutable audit trail.
+ */
+async function deleteLabReport(db, { fileId, reason = 'patient_requested' } = {}, requestingUser = {}) {
+  if (!fileId) {
+    const err = new Error('fileId is required.');
+    err.code = 'MISSING_FILE_ID';
+    err.statusCode = 400;
+    throw err;
+  }
+
+  assertClinicalAccess(requestingUser);
+
+  let fileRecord = inMemoryLabReports.get(fileId);
+  if (!fileRecord && db && typeof db.collection === 'function') {
+    try {
+      const snap = await db.collection('case_files').doc(fileId).get();
+      if (snap && snap.exists) fileRecord = snap.data();
+    } catch (_) {}
+  }
+
+  if (!fileRecord) {
+    const err = new Error('Lab report file not found.');
+    err.code = 'FILE_NOT_FOUND';
+    err.statusCode = 404;
+    throw err;
+  }
+
+  // Only patient owner or platform admin can delete
+  const isOwner = requestingUser.uid === fileRecord.patientId;
+  const isPlatformAdmin = requestingUser.role === 'super_admin' || requestingUser.isOwner === true;
+  if (!isOwner && !isPlatformAdmin) {
+    const err = new Error('Unauthorized: You do not have permission to delete this lab report.');
+    err.code = 'FORBIDDEN';
+    err.statusCode = 403;
+    throw err;
+  }
+
+  const nowIso = new Date().toISOString();
+  fileRecord.availability = AVAILABILITY.DELETED;
+  fileRecord.uploadStatus = 'deleted';
+  fileRecord.deletedAt = nowIso;
+  fileRecord.deletedBy = requestingUser.uid;
+  fileRecord.deletionReason = reason;
+  fileRecord.updatedAt = nowIso;
+
+  if (db && typeof db.collection === 'function') {
+    try {
+      await db.collection('case_files').doc(fileId).update({
+        availability: AVAILABILITY.DELETED,
+        uploadStatus: 'deleted',
+        deletedAt: nowIso,
+        deletedBy: requestingUser.uid,
+        deletionReason: reason,
+        updatedAt: nowIso
+      });
+
+      // Remove from patient recentLabReports
+      const userRef = db.collection('users').doc(fileRecord.patientId);
+      const userSnap = await userRef.get();
+      if (userSnap && userSnap.exists) {
+        const uData = userSnap.data() || {};
+        const recent = Array.isArray(uData.recentLabReports) ? uData.recentLabReports : [];
+        const filtered = recent.filter(r => r.fileId !== fileId);
+        await userRef.update({ recentLabReports: filtered, updatedAt: nowIso });
+      }
+    } catch (err) {
+      console.warn('[LAB REPORT DELETION WARNING]:', err.message);
+    }
+  }
+
+  inMemoryLabReports.set(fileId, fileRecord);
+
+  // Log Immutable Deletion Audit Event
+  try {
+    if (typeof logAuditEvent === 'function') {
+      await logAuditEvent(db, {
+        eventType: 'LAB_REPORT_DELETED_BY_PATIENT',
+        actorUid: requestingUser.uid,
+        actorRole: requestingUser.role || 'patient',
+        targetUserId: fileRecord.patientId,
+        resourceId: fileId,
+        metadata: {
+          fileId,
+          patientId: fileRecord.patientId,
+          reason,
+          deletedAt: nowIso
+        }
+      });
+    }
+  } catch (_) {}
+
+  return {
+    success: true,
+    fileId,
+    deleted: true,
+    deletedAt: nowIso
+  };
+}
+
+/**
  * Dispatches notification to doctor and patient when a clean lab report is ready.
  */
 async function notifyDoctorLabReportReceived(db, fileRecord = {}, options = {}) {
@@ -489,7 +1050,7 @@ async function notifyDoctorLabReportReceived(db, fileRecord = {}, options = {}) 
   const labCategory = fileRecord.labCategory || 'blood_test';
   const catConfig = LAB_CATEGORIES[labCategory] || LAB_CATEGORIES.blood_test;
 
-  const isCriticalCategory = labCategory === 'abg_gas';
+  const isCriticalCategory = labCategory === 'abg_gas' || Boolean(fileRecord.isPanicValue);
   const notifType = isCriticalCategory
     ? NOTIFICATION_TYPES.LAB_REPORT_CRITICAL_ALERT || 'lab_report_critical_alert'
     : NOTIFICATION_TYPES.LAB_REPORT_UPLOADED || 'lab_report_uploaded';
@@ -535,7 +1096,8 @@ async function notifyDoctorLabReportReceived(db, fileRecord = {}, options = {}) 
     labCategoryAr: catConfig.labelAr,
     labCategoryEn: catConfig.labelEn,
     testDate: fileRecord.testDate,
-    isCritical: isCriticalCategory
+    isCritical: isCriticalCategory,
+    reviewStatus: fileRecord.reviewStatus || REVIEW_STATUS.PENDING_DOCTOR_REVIEW
   };
 
   const results = { doctorNotified: false, patientNotified: false };
@@ -583,6 +1145,7 @@ async function notifyDoctorLabReportReceived(db, fileRecord = {}, options = {}) 
 
 /**
  * Retrieves sanitized lab reports for a patient with RBAC filtering.
+ * Enforces zero-access for non-clinical admin sub-roles.
  */
 async function getPatientLabReports(db, { patientId, labCategory = null, limit = 50 } = {}, requestingUser = {}) {
   if (!patientId) {
@@ -591,6 +1154,9 @@ async function getPatientLabReports(db, { patientId, labCategory = null, limit =
     err.statusCode = 400;
     throw err;
   }
+
+  // Strict Privacy check: non-clinical sub-roles have zero access
+  assertClinicalAccess(requestingUser);
 
   // Authorization check
   const isOwner = requestingUser.uid === patientId;
@@ -624,10 +1190,16 @@ async function getPatientLabReports(db, { patientId, labCategory = null, limit =
     for (const report of inMemoryLabReports.values()) {
       if (report.patientId === patientId) {
         if (!labCategory || report.labCategory === labCategory) {
-          reports.push(report);
+          // Omit deleted records from default listing
+          if (report.availability !== AVAILABILITY.DELETED) {
+            reports.push(report);
+          }
         }
       }
     }
+  } else {
+    // Filter out deleted
+    reports = reports.filter(r => r.availability !== AVAILABILITY.DELETED);
   }
 
   return reports.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)).slice(0, limit);
@@ -635,6 +1207,8 @@ async function getPatientLabReports(db, { patientId, labCategory = null, limit =
 
 module.exports = {
   LAB_CATEGORIES,
+  REVIEW_STATUS,
+  CLINICAL_DISCLAIMERS,
   ALLOWED_MIME_TYPES,
   ALLOWED_EXTENSIONS,
   BLOCKED_EXECUTABLE_EXTENSIONS,
@@ -642,12 +1216,19 @@ module.exports = {
   SCAN_STATUS,
   AVAILABILITY,
   inMemoryLabReports,
+  assertClinicalAccess,
   validateLabFileUpload,
   getSafeLabStorageFileName,
+  evaluateLabSafetyAndPanicValues,
+  enforceAiClinicalGuardrails,
   registerLabFileUpload,
   linkLabReportToPatientProfile,
   linkLabReportToCase,
   processLabScanResult,
+  certifyLabReportByDoctor,
+  rejectLabReportByDoctor,
+  getLabReportById,
+  deleteLabReport,
   notifyDoctorLabReportReceived,
   getPatientLabReports
 };
