@@ -73,6 +73,8 @@
     "test:waiting-list": "node tests/waiting_list_no_shows_and_google_calendar_governance.test.js",
     "test:push-notifications": "node tests/push_notifications_and_account_switching_governance.test.js",
     "test:whatsapp-otp": "node tests/otp_whatsapp_and_messaging_governance.test.js",
+    "test:clinido-otp": "node tests/clinido_otp_and_egyptian_phone_verification.test.js",
+    "test:buoy-emergency": "node tests/buoy_persistent_emergency_banner.test.js",
     "test:doctor-profile": "node tests/doctor_public_profile_and_booking_governance.test.js",
     "test:seo": "node tests/seo_metadata_and_content_governance.test.js",
     "test:expansion": "node tests/pilot_expansion_and_retention.test.js",
