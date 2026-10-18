@@ -84,7 +84,20 @@ const EVENT_TYPES = Object.freeze({
   REMINDER_PREFERENCES_UPDATED: 'reminder_preferences_updated',
   APPOINTMENT_NO_SHOW_RECORDED: 'appointment_no_show_recorded',
   APPOINTMENT_REMINDER_ANALYTICS_VIEWED: 'appointment_reminder_analytics_viewed',
-  APPOINTMENT_REMINDER_CHANNEL_OPT_OUT: 'appointment_reminder_channel_opt_out'
+  APPOINTMENT_REMINDER_CHANNEL_OPT_OUT: 'appointment_reminder_channel_opt_out',
+
+  // 🧪 Lab Upload & Medical Diagnostics Telemetry (Docus AI Benchmark)
+  LAB_UPLOAD_ATTEMPT: 'lab_upload_attempt',
+  LAB_UPLOAD_SUCCESS: 'lab_upload_success',
+  LAB_UPLOAD_FAILURE: 'lab_upload_failure',
+  LAB_SCAN_CLEAN: 'lab_scan_clean',
+  LAB_SCAN_BLOCKED: 'lab_scan_blocked',
+  LAB_PANIC_ALERT_TRIGGERED: 'lab_panic_alert_triggered',
+  LAB_DOCTOR_REVIEW_COMPLETED: 'lab_doctor_review_completed',
+  LAB_DOCTOR_REJECTED: 'lab_doctor_rejected',
+  LAB_REPORT_LINKED_TO_CASE: 'lab_report_linked_to_case',
+  LAB_REPORT_LINKED_TO_APPOINTMENT: 'lab_report_linked_to_appointment',
+  LAB_REPORT_DELETED: 'lab_report_deleted'
 });
 
 const FORBIDDEN_MEDICAL_KEYS = Object.freeze([
@@ -179,7 +192,9 @@ function sanitizeAndValidatePayload(eventType, payload = {}) {
     // Doctor Schedule & Branch Manager metadata
     'branchId', 'bufferBetweenSlotsMinutes', 'slotDurationMinutes', 'leaveType', 'reasonType',
     'emergencyOverride', 'startDate', 'endDate', 'leaveId', 'conflictingAppointmentsCount',
-    'conflictingCount', 'slotsCount', 'workingDaysCount', 'isPrivileged', 'actorUid'
+    'conflictingCount', 'slotsCount', 'workingDaysCount', 'isPrivileged', 'actorUid',
+    // Lab Upload operational metadata (Docus AI Benchmark)
+    'fileId', 'labCategory', 'format', 'size', 'urgencyLevel', 'scanStatus', 'rejectionReason'
   ];
 
   for (const [k, v] of Object.entries(payload)) {
@@ -240,7 +255,7 @@ function recordEvent(eventData = {}) {
   }
 
   // Debounce rapid identical events within 3000ms (e.g. double clicks)
-  const targetEntity = cleanPayload.assessmentId || cleanPayload.caseId || cleanPayload.appointmentId || '';
+  const targetEntity = cleanPayload.fileId || cleanPayload.assessmentId || cleanPayload.caseId || cleanPayload.appointmentId || '';
   const compositeKey = `${eventType}:${userId || 'anon'}:${targetEntity}`;
   const lastEventTs = recentDebounceMap.get(compositeKey);
   if (typeof lastEventTs === 'number' && Math.abs(ts - lastEventTs) < 3000) {
@@ -1298,6 +1313,216 @@ function calculateAppointmentKpis(events = inMemoryEvents, options = {}) {
 }
 
 /**
+ * Computes administrative KPIs and utilization metrics for Lab Upload feature.
+ */
+function calculateLabUploadKpis(events = inMemoryEvents, options = {}) {
+  const timePeriod = options.timePeriod || 'all';
+  const clinicFilter = options.clinicId ? String(options.clinicId).toLowerCase() : null;
+
+  const now = Date.now();
+  let minTs = 0;
+  let maxTs = Infinity;
+
+  if (options.startDate) {
+    minTs = Date.parse(options.startDate);
+  }
+  if (options.endDate) {
+    const endP = Date.parse(options.endDate);
+    maxTs = typeof options.endDate === 'string' && options.endDate.length === 10 ? endP + 86399999 : endP;
+  }
+  if (!options.startDate && !options.endDate) {
+    if (timePeriod === 'last_24h') minTs = now - 24 * 3600 * 1000;
+    else if (timePeriod === 'last_7d') minTs = now - 7 * 24 * 3600 * 1000;
+    else if (timePeriod === 'last_30d') minTs = now - 30 * 24 * 3600 * 1000;
+    else minTs = 0;
+  }
+
+  const periodLabel = options.startDate && options.endDate
+    ? `${options.startDate} to ${options.endDate}`
+    : timePeriod;
+
+  // Filter events within window and clinic
+  const filteredEvents = events.filter(e => {
+    const ts = e.timestamp || 0;
+    if (minTs > 0 && ts < minTs) return false;
+    if (maxTs < Infinity && ts > maxTs) return false;
+    if (clinicFilter && clinicFilter !== 'all') {
+      const cId = String(e.clinicId || e.payload?.clinicId || '').toLowerCase();
+      if (cId && cId !== clinicFilter) return false;
+    }
+    return true;
+  });
+
+  // 1. Upload Counts
+  const uploadAttempts = filteredEvents.filter(e => e.eventType === EVENT_TYPES.LAB_UPLOAD_ATTEMPT).length;
+  const uploadSuccesses = filteredEvents.filter(e => e.eventType === EVENT_TYPES.LAB_UPLOAD_SUCCESS).length;
+  const uploadFailures = filteredEvents.filter(e => e.eventType === EVENT_TYPES.LAB_UPLOAD_FAILURE).length;
+  const totalUploadEvents = uploadAttempts > 0 ? uploadAttempts : (uploadSuccesses + uploadFailures);
+
+  // 2. Quarantine & Scan Outcomes
+  const scansClean = filteredEvents.filter(e => e.eventType === EVENT_TYPES.LAB_SCAN_CLEAN).length;
+  const scansBlocked = filteredEvents.filter(e => e.eventType === EVENT_TYPES.LAB_SCAN_BLOCKED).length;
+  const totalScans = scansClean + scansBlocked;
+
+  // 3. Clinical Reviews & Turnaround
+  const doctorReviews = filteredEvents.filter(e => e.eventType === EVENT_TYPES.LAB_DOCTOR_REVIEW_COMPLETED).length;
+  const doctorRejections = filteredEvents.filter(e => e.eventType === EVENT_TYPES.LAB_DOCTOR_REJECTED).length;
+  const panicAlerts = filteredEvents.filter(e => e.eventType === EVENT_TYPES.LAB_PANIC_ALERT_TRIGGERED).length;
+
+  // Turnaround times
+  const reviewDurations = [];
+  const uploadTimes = new Map();
+  filteredEvents
+    .filter(e => e.eventType === EVENT_TYPES.LAB_UPLOAD_SUCCESS)
+    .forEach(e => {
+      const fId = e.payload?.fileId;
+      if (fId) uploadTimes.set(fId, e.timestamp);
+    });
+
+  filteredEvents
+    .filter(e => e.eventType === EVENT_TYPES.LAB_DOCTOR_REVIEW_COMPLETED)
+    .forEach(e => {
+      const fId = e.payload?.fileId;
+      const upTs = uploadTimes.get(fId);
+      if (upTs && e.timestamp >= upTs) {
+        reviewDurations.push((e.timestamp - upTs) / (3600 * 1000)); // hours
+      }
+    });
+
+  const avgReviewTurnaroundHours = reviewDurations.length > 0
+    ? Number((reviewDurations.reduce((a, b) => a + b, 0) / reviewDurations.length).toFixed(1))
+    : null;
+
+  // 4. Category Breakdown
+  const categoryCounts = {
+    blood_test: 0,
+    sputum_culture: 0,
+    abg_gas: 0,
+    urinalysis: 0,
+    other: 0
+  };
+
+  filteredEvents
+    .filter(e => e.eventType === EVENT_TYPES.LAB_UPLOAD_SUCCESS)
+    .forEach(e => {
+      const cat = e.payload?.labCategory;
+      if (cat && categoryCounts[cat] !== undefined) {
+        categoryCounts[cat]++;
+      } else if (cat) {
+        categoryCounts.other++;
+      }
+    });
+
+  // 5. Case & Appointment Linkages
+  const linkedToCase = filteredEvents.filter(e => e.eventType === EVENT_TYPES.LAB_REPORT_LINKED_TO_CASE).length;
+  const linkedToAppt = filteredEvents.filter(e => e.eventType === EVENT_TYPES.LAB_REPORT_LINKED_TO_APPOINTMENT).length;
+  const deletions = filteredEvents.filter(e => e.eventType === EVENT_TYPES.LAB_REPORT_DELETED).length;
+
+  // Metrics using buildKpiMetric
+  const uploadSuccessRate = buildKpiMetric({
+    name: 'Lab Upload Success Rate',
+    timePeriod: periodLabel,
+    numeratorName: 'Successful Lab Uploads',
+    numeratorValue: uploadSuccesses,
+    denominatorName: 'Total Lab Upload Attempts',
+    denominatorValue: totalUploadEvents,
+    unit: '%'
+  });
+
+  const quarantineCleanRate = buildKpiMetric({
+    name: 'Quarantine Clean Scan Rate',
+    timePeriod: periodLabel,
+    numeratorName: 'Clean Antivirus Scans',
+    numeratorValue: scansClean,
+    denominatorName: 'Total Quarantined Scans',
+    denominatorValue: totalScans,
+    unit: '%'
+  });
+
+  const doctorReviewRate = buildKpiMetric({
+    name: 'Doctor Review Completion Rate',
+    timePeriod: periodLabel,
+    numeratorName: 'Doctor Reviewed Lab Reports',
+    numeratorValue: doctorReviews,
+    denominatorName: 'Successful Clean Lab Uploads',
+    denominatorValue: uploadSuccesses,
+    unit: '%'
+  });
+
+  const doctorRejectionRate = buildKpiMetric({
+    name: 'Doctor Rejection Rate (Illegible/Corrupt)',
+    timePeriod: periodLabel,
+    numeratorName: 'Doctor Rejected Lab Reports',
+    numeratorValue: doctorRejections,
+    denominatorName: 'Total Reviewed Reports (Approved + Rejected)',
+    denominatorValue: doctorReviews + doctorRejections,
+    unit: '%'
+  });
+
+  const panicAlertRate = buildKpiMetric({
+    name: 'Panic / Critical Values Alert Rate',
+    timePeriod: periodLabel,
+    numeratorName: 'Critical Lab Panic Alerts Triggered',
+    numeratorValue: panicAlerts,
+    denominatorName: 'Successful Clean Lab Uploads',
+    denominatorValue: uploadSuccesses,
+    unit: '%'
+  });
+
+  const caseLinkageRate = buildKpiMetric({
+    name: 'Clinical Case Linkage Rate',
+    timePeriod: periodLabel,
+    numeratorName: 'Lab Reports Linked to Cases',
+    numeratorValue: linkedToCase,
+    denominatorName: 'Successful Clean Lab Uploads',
+    denominatorValue: uploadSuccesses,
+    unit: '%'
+  });
+
+  const appointmentLinkageRate = buildKpiMetric({
+    name: 'Appointment Pre-Visit Linkage Rate',
+    timePeriod: periodLabel,
+    numeratorName: 'Lab Reports Linked to Appointments',
+    numeratorValue: linkedToAppt,
+    denominatorName: 'Successful Clean Lab Uploads',
+    denominatorValue: uploadSuccesses,
+    unit: '%'
+  });
+
+  return {
+    success: true,
+    timePeriod: periodLabel,
+    clinicId: clinicFilter || 'all',
+    summary: {
+      totalUploadEvents,
+      uploadAttempts,
+      uploadSuccesses,
+      uploadFailures,
+      scansClean,
+      scansBlocked,
+      doctorReviews,
+      doctorRejections,
+      panicAlerts,
+      linkedToCase,
+      linkedToAppt,
+      deletions,
+      avgReviewTurnaroundHours
+    },
+    categoryDistribution: categoryCounts,
+    kpis: {
+      uploadSuccessRate,
+      quarantineCleanRate,
+      doctorReviewRate,
+      doctorRejectionRate,
+      panicAlertRate,
+      caseLinkageRate,
+      appointmentLinkageRate
+    }
+  };
+}
+
+
+/**
  * Resets the in-memory analytics state (useful for clean testing).
  */
 function resetAnalyticsState() {
@@ -1345,6 +1570,7 @@ module.exports = {
   logTelemetryEvent,
   calculateProductKpis,
   calculateAppointmentKpis,
+  calculateLabUploadKpis,
   sanitizeAndValidatePayload,
   sanitizeProperties: (props) => sanitizeAndValidatePayload(EVENT_TYPES.APPOINTMENT_BOOK_ATTEMPT, props).cleanPayload,
   buildKpiMetric,

@@ -40,6 +40,22 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { NOTIFICATION_TYPES, enqueueNotification } = require('./notification-service');
 const { AUDIT_EVENT_TYPES, logAuditEvent } = require('./audit-service');
+const analyticsService = require('./analytics-service');
+
+/**
+ * Emits lab upload telemetry events safely without throwing.
+ */
+function trackLabTelemetry(db, eventType, data = {}) {
+  try {
+    if (analyticsService && typeof analyticsService.logTelemetryEvent === 'function') {
+      analyticsService.logTelemetryEvent(db, {
+        eventType,
+        ...data
+      });
+    }
+  } catch (_) {}
+}
+
 
 const LAB_CATEGORIES = {
   blood_test: {
@@ -378,6 +394,14 @@ async function registerLabFileUpload(db, data = {}, actorUser = {}) {
   validateLabFileUpload({ fileName, contentType, size });
 
   const chosenCat = LAB_CATEGORIES[labCategory] ? labCategory : 'blood_test';
+
+  // Telemetry: Track Upload Attempt
+  trackLabTelemetry(db, analyticsService.EVENT_TYPES.LAB_UPLOAD_ATTEMPT, {
+    userId: patientId,
+    clinicId: sourceClinic,
+    payload: { labCategory: chosenCat, size: Number(size) }
+  });
+
   const catConfig = LAB_CATEGORIES[chosenCat];
   const safeFileName = getSafeLabStorageFileName(fileName);
   const fileId = `lab_file_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
@@ -460,9 +484,24 @@ async function registerLabFileUpload(db, data = {}, actorUser = {}) {
     actorUid: actorUser.uid || patientId
   });
 
-  // If a caseId was provided, also link to the clinical case
+    // If a caseId was provided, also link to the clinical case
   if (caseId) {
     await linkLabReportToCase(db, { fileId, caseId, actorUid: actorUser.uid || patientId }, actorUser);
+  }
+
+  // Telemetry: Track Upload Success & Panic Alerts
+  trackLabTelemetry(db, analyticsService.EVENT_TYPES.LAB_UPLOAD_SUCCESS, {
+    userId: patientId,
+    clinicId: sourceClinic,
+    payload: { fileId, labCategory: chosenCat, size: Number(size), format: path.extname(fileName).slice(1).toLowerCase() }
+  });
+
+  if (safetyEval.isPanicValue) {
+    trackLabTelemetry(db, analyticsService.EVENT_TYPES.LAB_PANIC_ALERT_TRIGGERED, {
+      userId: patientId,
+      clinicId: sourceClinic,
+      payload: { fileId, labCategory: chosenCat }
+    });
   }
 
   // Log Security Audit Event
@@ -602,6 +641,11 @@ async function linkLabReportToCase(db, { fileId, caseId, actorUid }, actorUser =
 
   inMemoryLabReports.set(fileId, fileRecord);
 
+  // Telemetry: Track Case Link
+  trackLabTelemetry(db, analyticsService.EVENT_TYPES.LAB_REPORT_LINKED_TO_CASE, {
+    payload: { fileId, caseId }
+  });
+
   // If scan is clean or available, notify assigned doctor
   if (fileRecord.scanStatus === SCAN_STATUS.CLEAN || fileRecord.availability === AVAILABILITY.AVAILABLE) {
     await notifyDoctorLabReportReceived(db, fileRecord);
@@ -666,6 +710,11 @@ async function processLabScanResult(db, { fileId, scanResult, scanDetails = null
   }
 
   inMemoryLabReports.set(fileId, fileRecord);
+
+  // Telemetry: Track Scan Outcome
+  trackLabTelemetry(db, isClean ? analyticsService.EVENT_TYPES.LAB_SCAN_CLEAN : analyticsService.EVENT_TYPES.LAB_SCAN_BLOCKED, {
+    payload: { fileId, scanStatus: fileRecord.scanStatus }
+  });
 
   // If clean and linked to a case or patient, dispatch notifications
   if (isClean) {
@@ -771,6 +820,12 @@ async function certifyLabReportByDoctor(db, { fileId, clinicalNotes = '', interp
 
   inMemoryLabReports.set(fileId, fileRecord);
 
+  // Telemetry: Track Doctor Review
+  trackLabTelemetry(db, analyticsService.EVENT_TYPES.LAB_DOCTOR_REVIEW_COMPLETED, {
+    doctorId: doctorUser.uid,
+    payload: { fileId, urgencyLevel }
+  });
+
   // Log Immutable Audit Event
   try {
     if (typeof logAuditEvent === 'function') {
@@ -857,6 +912,12 @@ async function rejectLabReportByDoctor(db, { fileId, rejectionReason = 'unreadab
   }
 
   inMemoryLabReports.set(fileId, fileRecord);
+
+  // Telemetry: Track Doctor Rejection
+  trackLabTelemetry(db, analyticsService.EVENT_TYPES.LAB_DOCTOR_REJECTED, {
+    doctorId: doctorUser.uid,
+    payload: { fileId, rejectionReason }
+  });
 
   // Log Audit
   try {
@@ -1013,6 +1074,12 @@ async function deleteLabReport(db, { fileId, reason = 'patient_requested' } = {}
   }
 
   inMemoryLabReports.set(fileId, fileRecord);
+
+  // Telemetry: Track Deletion
+  trackLabTelemetry(db, analyticsService.EVENT_TYPES.LAB_REPORT_DELETED, {
+    userId: requestingUser.uid,
+    payload: { fileId, reason }
+  });
 
   // Log Immutable Deletion Audit Event
   try {
@@ -1262,6 +1329,12 @@ async function linkLabReportToAppointment(db, { fileId, appointmentId } = {}, ac
   }
 
   inMemoryLabReports.set(fileId, fileRecord);
+
+  // Telemetry: Track Appointment Link
+  trackLabTelemetry(db, analyticsService.EVENT_TYPES.LAB_REPORT_LINKED_TO_APPOINTMENT, {
+    payload: { fileId, appointmentId }
+  });
+
   return { success: true, fileId, appointmentId };
 }
 

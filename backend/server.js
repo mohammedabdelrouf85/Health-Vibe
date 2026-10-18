@@ -15548,6 +15548,41 @@ app.delete('/api/lab-upload/:fileId', requireAuth, async (req, res) => {
   }
 });
 
+/**
+ * GET /api/lab-upload/analytics/kpis
+ * Administrative KPI Dashboard & Utilization Analytics for Lab Upload feature.
+ * Provides upload success rates, quarantine pass rates, doctor review turnaround,
+ * category distributions, and panic alert frequencies.
+ */
+app.get('/api/lab-upload/analytics/kpis', requireAuth, async (req, res) => {
+  try {
+    const isAuthorized = req.user.role === 'super_admin' || req.user.role === 'clinic_admin' || req.user.isOwner === true;
+    if (!isAuthorized) {
+      return res.status(403).json({ error: 'FORBIDDEN', message: 'Unauthorized: Only platform and clinic administrators can access KPI telemetry.' });
+    }
+
+    const { timePeriod, clinicId, startDate, endDate } = req.query || {};
+    const analyticsService = require('./analytics-service');
+
+    const effectiveClinic = req.user.role === 'clinic_admin' ? req.user.clinicId : clinicId;
+
+    const kpiData = analyticsService.calculateLabUploadKpis(analyticsService.getInMemoryEvents(), {
+      timePeriod: timePeriod || 'all',
+      clinicId: effectiveClinic,
+      startDate,
+      endDate
+    });
+
+    res.json(kpiData);
+  } catch (err) {
+    res.status(500).json({
+      error: 'LAB_ANALYTICS_FAILED',
+      message: err.message
+    });
+  }
+});
+
+
 
 // =============================================================================
 // 🚨 UNUSUAL ACCESS & ANOMALY MONITORING ENDPOINTS
