@@ -14076,6 +14076,51 @@ const MEDICAL_FILE_MAX_SIZE = 10 * 1024 * 1024;
 const pendingMedicalFileUploads = [];
 const activeMedicalUploadTasks = new Map();
 
+let currentSelectedLabCategory = "blood_test";
+
+const LAB_CATEGORIES = {
+  blood_test: {
+    key: "blood_test",
+    icon: "🩸",
+    labelAr: "تحاليل الدم (CBC / كيمياء / سكر)",
+    labelEn: "Blood Tests (CBC / Chemistry / Glucose)",
+    hintAr: "صورة دم كاملة، وظائف كبد وكلى، سكر صائم وتراكمي، دهون ثلاثية",
+    hintEn: "Complete Blood Count (CBC), LFTs, KFTs, Fasting/HbA1c, Lipids"
+  },
+  sputum_culture: {
+    key: "sputum_culture",
+    icon: "🧫",
+    labelAr: "مزرعة بلغم ومسحة تنفسية",
+    labelEn: "Sputum Culture & Respiratory Smear",
+    hintAr: "مزرعة وحساسية بلغم، فحص الدرن والميكروبات التنفسية ومسحات الحلق",
+    hintEn: "Sputum Culture & Sensitivity, TB smear, respiratory pathogens"
+  },
+  abg_gas: {
+    key: "abg_gas",
+    icon: "🫁",
+    labelAr: "غازات دم شرياني (ABG)",
+    labelEn: "Arterial Blood Gas (ABG)",
+    hintAr: "غازات الدم الشرياني، كفاءة تبادل الأكسجين وحموضة الدم pH",
+    hintEn: "Arterial blood gases, oxygenation index, PaO2, PaCO2, blood pH"
+  },
+  urinalysis: {
+    key: "urinalysis",
+    icon: "🧪",
+    labelAr: "تحليل بول ومزارع حيوية",
+    labelEn: "Urinalysis & Cultures",
+    hintAr: "تحليل بول كامل، مزرعة وحساسية بول، أملاح والتهابات",
+    hintEn: "Complete urine analysis, urine culture & sensitivity"
+  },
+  other: {
+    key: "other",
+    icon: "📑",
+    labelAr: "تقارير وأشعة أخرى",
+    labelEn: "Other Lab & Radiology Reports",
+    hintAr: "أشعة سينية، رنين، مقطعية، تقرير خروج مستشفى",
+    hintEn: "X-Rays, CT/MRI scans, hospital discharge summaries"
+  }
+};
+
 function getSafeMedicalFileName(fileName) {
   const cleaned = getSafeStorageFileName(fileName || "medical-file")
     .replace(/^\.+/, "")
@@ -14124,26 +14169,52 @@ function renderMedicalFileItem(fileState) {
   const scan = fileState.scanStatus || "quarantined";
   const isAvailable = scan === "clean" && fileState.availability === "available";
   const safeName = escapeHtml(fileState.fileName || fileState.safeFileName || "Medical file");
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  const catKey = fileState.labCategory || currentSelectedLabCategory || "blood_test";
+  const catConfig = LAB_CATEGORIES[catKey] || LAB_CATEGORIES.blood_test;
+  const catBadgeText = `${catConfig.icon} ${isEn ? catConfig.labelEn : catConfig.labelAr}`;
   const meta = `${escapeHtml(fileState.contentType || "")} • ${formatMedicalFileSize(fileState.size)} • ${escapeHtml(status)} • ${escapeHtml(scan)}`;
+
+  const isPdf = (fileState.contentType || "").includes("pdf") || safeName.toLowerCase().endsWith(".pdf");
+  const thumbHtml = fileState.previewUrl
+    ? `<img src="${escapeHtmlAttr(fileState.previewUrl)}" alt="Thumbnail" class="medical-file-thumb">`
+    : `<div class="medical-file-doc-icon ${isPdf ? "pdf" : "img"}">${isPdf ? "PDF" : "IMG"}</div>`;
+
   item.innerHTML = `
-    <strong>${safeName}</strong>
-    <span class="medical-file-meta">${meta}</span>
+    <div class="medical-file-header-row" style="display: flex; gap: 12px; align-items: center; width: 100%;">
+      ${thumbHtml}
+      <div class="medical-file-info" style="flex: 1; min-width: 0;">
+        <div class="medical-file-title-wrap" style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+          <span class="lab-file-badge" style="font-size: 11px; padding: 2px 8px; border-radius: 999px; background: rgba(14, 165, 164, 0.12); color: var(--teal); font-weight: 700;">${catBadgeText}</span>
+          <strong style="font-size: 13.5px; word-break: break-word;">${safeName}</strong>
+        </div>
+        <span class="medical-file-meta" style="display: block; margin-top: 4px; font-size: 12px; color: var(--muted);">${meta}</span>
+      </div>
+    </div>
     <div class="medical-file-progress" aria-label="Upload progress"><span style="width:${pct}%"></span></div>
     <div class="medical-file-actions">
-      ${isAvailable ? `<button type="button" onclick="previewMedicalCaseFile('${escapeHtmlAttr(fileState.id)}')">${currentLanguage === "en" ? "Preview" : "معاينة"}</button>` : ""}
+      ${isAvailable ? `<button type="button" class="btn-file-preview" onclick="previewMedicalCaseFile('${escapeHtmlAttr(fileState.id)}')">${currentLanguage === "en" ? "Preview" : "معاينة"}</button>` : ""}
       ${isAvailable ? `<button type="button" class="btn-ocr-extract" onclick="openMedicalOcrModal('${escapeHtmlAttr(fileState.id)}')">${currentLanguage === "en" ? "🔍 OCR Data (Draft)" : "🔍 استخراج الفحوصات (OCR)"}</button>` : ""}
-      ${fileState.id ? `<button type="button" onclick="deleteMedicalCaseFile('${escapeHtmlAttr(fileState.id)}')">${currentLanguage === "en" ? "Delete" : "حذف"}</button>` : ""}
-      ${status === "uploading" ? `<button type="button" onclick="cancelMedicalCaseUpload('${escapeHtmlAttr(fileState.id || fileState.localId)}')">${currentLanguage === "en" ? "Cancel" : "إلغاء"}</button>` : ""}
+      ${fileState.id ? `<button type="button" class="btn-file-delete" onclick="deleteMedicalCaseFile('${escapeHtmlAttr(fileState.id)}')">${currentLanguage === "en" ? "Delete" : "حذف"}</button>` : ""}
+      ${status === "uploading" ? `<button type="button" class="btn-file-cancel" onclick="cancelMedicalCaseUpload('${escapeHtmlAttr(fileState.id || fileState.localId)}')">${currentLanguage === "en" ? "Cancel" : "إلغاء"}</button>` : ""}
     </div>
   `;
   return item;
 }
 
-function stageMedicalCaseFiles(fileList) {
+function stageMedicalCaseFiles(fileList, optionalCategory = null) {
   const files = Array.from(fileList || []);
   let stagedCount = 0;
+  const chosenCat = optionalCategory || currentSelectedLabCategory || "blood_test";
+  const catConfig = LAB_CATEGORIES[chosenCat] || LAB_CATEGORIES.blood_test;
   files.forEach((file) => {
     validateMedicalCaseFile(file);
+    let previewUrl = null;
+    if (file && file.type && file.type.startsWith("image/") && typeof URL !== "undefined" && typeof URL.createObjectURL === "function") {
+      try {
+        previewUrl = URL.createObjectURL(file);
+      } catch (_) {}
+    }
     const state = {
       localId: `local_${Date.now()}_${Math.random().toString(36).slice(2)}`,
       file,
@@ -14154,7 +14225,11 @@ function stageMedicalCaseFiles(fileList) {
       progress: 0,
       status: "staged",
       scanStatus: "quarantined",
-      availability: "quarantined"
+      availability: "quarantined",
+      labCategory: chosenCat,
+      labCategoryLabelAr: catConfig.labelAr,
+      labCategoryLabelEn: catConfig.labelEn,
+      previewUrl
     };
     pendingMedicalFileUploads.push(state);
     renderMedicalFileItem(state);
@@ -14187,6 +14262,8 @@ async function uploadMedicalCaseFile({ user, caseId, state }) {
   const fileDocRef = db.collection("case_files").doc();
   const fileId = fileDocRef.id;
   const storagePath = `case_files/${user.uid}/${caseId}/${fileId}/${state.safeFileName}`;
+  const catKey = state.labCategory || currentSelectedLabCategory || "blood_test";
+  const catConfig = LAB_CATEGORIES[catKey] || LAB_CATEGORIES.blood_test;
   const metadata = {
     patientId: user.uid,
     caseId,
@@ -14198,6 +14275,9 @@ async function uploadMedicalCaseFile({ user, caseId, state }) {
     scanStatus: "upload_pending",
     availability: "quarantined",
     uploadStatus: "metadata_created",
+    labCategory: catKey,
+    labCategoryLabelAr: catConfig.labelAr,
+    labCategoryLabelEn: catConfig.labelEn,
     createdBy: user.uid,
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -14215,7 +14295,8 @@ async function uploadMedicalCaseFile({ user, caseId, state }) {
       caseId,
       fileId,
       scanStatus: "upload_pending",
-      availability: "quarantined"
+      availability: "quarantined",
+      labCategory: catKey
     }
   });
   activeMedicalUploadTasks.set(fileId, uploadTask);
@@ -14328,6 +14409,92 @@ window.deleteMedicalCaseFile = async function(fileId) {
     showToast(error.message || (currentLanguage === "en" ? "Could not delete file." : "تعذر حذف الملف."));
   }
   return false;
+};
+
+window.selectLabCategory = function(catKey) {
+  if (LAB_CATEGORIES[catKey]) {
+    currentSelectedLabCategory = catKey;
+    document.querySelectorAll(".lab-cat-chip").forEach((chip) => {
+      if (chip.getAttribute("data-category") === catKey) {
+        chip.classList.add("active");
+        chip.setAttribute("aria-pressed", "true");
+      } else {
+        chip.classList.remove("active");
+        chip.setAttribute("aria-pressed", "false");
+      }
+    });
+    const isEn = (typeof currentLanguage !== "undefined" ? currentLanguage : "ar") === "en";
+    const label = isEn ? LAB_CATEGORIES[catKey].labelEn : LAB_CATEGORIES[catKey].labelAr;
+    if (typeof showToast === "function") {
+      showToast(isEn ? `Selected category: ${label}` : `نوع التحليل المحدد: ${label}`);
+    }
+  }
+};
+
+window.triggerLabCameraCapture = function() {
+  const camInput = document.getElementById("cameraLabUpload");
+  if (camInput) {
+    camInput.click();
+  }
+};
+
+window.triggerLabFileBrowse = function() {
+  const fileInput = document.getElementById("fileUpload");
+  if (fileInput) {
+    fileInput.click();
+  }
+};
+
+window.handleLabCameraSelected = async function(input) {
+  if (!input || !input.files || input.files.length === 0) return;
+  if (typeof enforceEmailVerification === "function") {
+    if (!(await enforceEmailVerification("تصوير ورفع تقرير المعمل", "capturing and uploading lab reports"))) {
+      input.value = "";
+      return;
+    }
+  }
+  try {
+    stageMedicalCaseFiles(input.files, currentSelectedLabCategory);
+    const user = typeof auth !== "undefined" ? auth.currentUser : null;
+    const latestCaseId = await getLatestPatientCaseId(user);
+    if (latestCaseId) {
+      await uploadPendingMedicalFilesForCase(latestCaseId);
+    }
+  } catch (err) {
+    if (typeof showToast === "function") {
+      showToast(err.message || ((typeof currentLanguage !== "undefined" && currentLanguage === "en") ? "Could not stage camera image." : "تعذر تجهيز صورة التقرير."));
+    }
+  } finally {
+    input.value = "";
+  }
+};
+
+window.syncPatientLabProfileLink = async function() {
+  const user = typeof auth !== "undefined" ? auth.currentUser : null;
+  const isEn = (typeof currentLanguage !== "undefined" ? currentLanguage : "ar") === "en";
+  if (!user) {
+    if (typeof showToast === "function") {
+      showToast(isEn ? "Please sign in to link your lab files." : "يرجى تسجيل الدخول لربط تقارير المعمل بالملف الطبي.");
+    }
+    return;
+  }
+  try {
+    const latestCaseId = await getLatestPatientCaseId(user);
+    if (latestCaseId) {
+      await uploadPendingMedicalFilesForCase(latestCaseId);
+      if (typeof showToast === "function") {
+        showToast(isEn ? "Lab reports successfully linked to your medical profile!" : "تم ربط تقارير التحاليل بنجاح بملفك الطبي وحالتك الحالية!");
+      }
+    } else {
+      if (typeof showToast === "function") {
+        showToast(isEn ? "Files staged and ready to link upon clinical assessment." : "الملفات جاهزة ومحفوظة وستُربط فور بدء التقييم السريري.");
+      }
+    }
+  } catch (err) {
+    if (typeof showToast === "function") {
+      showToast(err.message || (isEn ? "Sync failed." : "تعذر تحديث الربط."));
+    }
+  }
 };
 
 // =============================================================================
@@ -18194,7 +18361,7 @@ if (fileUploadInput) {
       return;
     }
     try {
-      stageMedicalCaseFiles(event.target.files);
+      stageMedicalCaseFiles(event.target.files, currentSelectedLabCategory);
       const user = auth.currentUser;
       const latestCaseId = await getLatestPatientCaseId(user);
       if (latestCaseId) {
@@ -18204,6 +18371,47 @@ if (fileUploadInput) {
       showToast(error.message || (currentLanguage === "en" ? "Could not stage this file." : "تعذر تجهيز الملف."));
     } finally {
       event.target.value = "";
+    }
+  });
+}
+
+const cameraLabUploadInput = document.getElementById("cameraLabUpload");
+if (cameraLabUploadInput) {
+  cameraLabUploadInput.addEventListener("change", (e) => handleLabCameraSelected(e.target));
+}
+
+const uploadDropZone = document.getElementById("uploadZone");
+if (uploadDropZone) {
+  ["dragenter", "dragover"].forEach((evtName) => {
+    uploadDropZone.addEventListener(evtName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      uploadDropZone.classList.add("dragover");
+    });
+  });
+  ["dragleave", "drop"].forEach((evtName) => {
+    uploadDropZone.addEventListener(evtName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      uploadDropZone.classList.remove("dragover");
+    });
+  });
+  uploadDropZone.addEventListener("drop", async (e) => {
+    const droppedFiles = e.dataTransfer ? e.dataTransfer.files : null;
+    if (droppedFiles && droppedFiles.length) {
+      if (typeof enforceEmailVerification === "function") {
+        if (!(await enforceEmailVerification("رفع ملفات طبية", "uploading medical files"))) return;
+      }
+      try {
+        stageMedicalCaseFiles(droppedFiles, currentSelectedLabCategory);
+        const user = auth.currentUser;
+        const latestCaseId = await getLatestPatientCaseId(user);
+        if (latestCaseId) {
+          await uploadPendingMedicalFilesForCase(latestCaseId);
+        }
+      } catch (err) {
+        showToast(err.message || (currentLanguage === "en" ? "Could not stage this file." : "تعذر تجهيز الملف."));
+      }
     }
   });
 }

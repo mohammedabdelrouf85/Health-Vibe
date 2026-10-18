@@ -1279,16 +1279,92 @@
               </button>
             </div>
           </article>
-          <article class="panel">
-            <div class="panel-head"><h3>ملفات طبية</h3><span class="pill info">اختياري</span></div>
-            <div class="upload-zone" id="uploadZone">
-              <label for="fileUpload" style="cursor: pointer; display: block;">
-                <strong>رفع تحليل أو أشعة أو صورة دواء</strong>
-                <span>يتم رفع الملفات بأمان وربطها بالحالة، وتبقى في الحجر حتى اكتمال الفحص الأمني.</span>
+          <article class="panel lab-upload-panel" id="labUploadPanel">
+            <div class="panel-head">
+              <div>
+                <h3 style="display: flex; align-items: center; gap: 8px;">
+                  <span>🧪</span> <span data-i18n="labUpload.title">رفع وتوثيق التحاليل المعملية والتقارير الطبية</span>
+                </h3>
+                <p style="margin: 4px 0 0; font-size: 13px; color: var(--muted);" data-i18n="labUpload.subtitle">
+                  صوّر أو ارفع نتائج تحاليل الدم (CBC / السكر / وظائف الأعضاء) أو مزرعة البلغم ومسحات الصدر بصيغة PDF أو JPG لربطها بملفك الطبي.
+                </p>
+              </div>
+              <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+                <span class="pill info" data-i18n="labUpload.docusBadge">⚡ ذكاء معملي Docus AI</span>
+                <span class="pill success" data-i18n="labUpload.secureBadge">🔒 مشفر HIPAA</span>
+              </div>
+            </div>
+
+            <!-- Lab Category Quick Filter / Chips -->
+            <div class="lab-category-selector" id="labCategorySelector" style="margin: 14px 0 10px;">
+              <span class="lab-category-label" style="display: block; font-size: 13px; font-weight: 700; margin-bottom: 8px; color: var(--ink);" data-i18n="labUpload.selectCategory">
+                اختر نوع التحليل لضبط الاستخراج والربط السريري:
+              </span>
+              <div class="lab-category-chips" id="labCategoryChips" style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button type="button" class="lab-cat-chip active" data-category="blood_test" onclick="selectLabCategory('blood_test')" aria-pressed="true">
+                  🩸 <span data-i18n="labUpload.catBlood">تحاليل الدم (CBC / كيمياء / سكر)</span>
+                </button>
+                <button type="button" class="lab-cat-chip" data-category="sputum_culture" onclick="selectLabCategory('sputum_culture')" aria-pressed="false">
+                  🧫 <span data-i18n="labUpload.catSputum">مزرعة بلغم ومسحة تنفسية</span>
+                </button>
+                <button type="button" class="lab-cat-chip" data-category="abg_gas" onclick="selectLabCategory('abg_gas')" aria-pressed="false">
+                  🫁 <span data-i18n="labUpload.catAbg">غازات دم شرياني (ABG)</span>
+                </button>
+                <button type="button" class="lab-cat-chip" data-category="urinalysis" onclick="selectLabCategory('urinalysis')" aria-pressed="false">
+                  🧪 <span data-i18n="labUpload.catUrine">تحليل بول ومزارع حيوية</span>
+                </button>
+                <button type="button" class="lab-cat-chip" data-category="other" onclick="selectLabCategory('other')" aria-pressed="false">
+                  📑 <span data-i18n="labUpload.catOther">تقارير وأشعة أخرى</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Mobile-Optimized Action Buttons Bar -->
+            <div class="lab-actions-bar" style="display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap;">
+              <button type="button" class="solid-button lab-camera-btn" id="btnLabCamera" onclick="triggerLabCameraCapture()" style="flex: 1; min-width: 170px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 16px;">
+                <span style="font-size: 18px;">📷</span> <strong data-i18n="labUpload.cameraBtn">تصوير التقرير بالكاميرا</strong>
+              </button>
+              <button type="button" class="soft-button lab-browse-btn" id="btnLabBrowse" onclick="triggerLabFileBrowse()" style="flex: 1; min-width: 170px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 16px;">
+                <span style="font-size: 18px;">📁</span> <strong data-i18n="labUpload.browseBtn">اختيار ملف (PDF / صورة)</strong>
+              </button>
+              <input id="cameraLabUpload" type="file" accept="image/*" capture="environment" style="display: none;" onchange="handleLabCameraSelected(this)">
+            </div>
+
+            <!-- Upload Zone with Drag & Drop & standard #fileUpload for backwards compatibility -->
+            <div class="upload-zone lab-drop-zone" id="uploadZone" role="region" aria-label="منطقة رفع التحاليل والتقارير">
+              <label for="fileUpload" style="cursor: pointer; display: block; width: 100%;">
+                <div class="upload-zone-icon" style="font-size: 32px; margin-bottom: 6px;">📄</div>
+                <strong data-i18n="labUpload.dropTitle">رفع تحليل أو أشعة أو صورة دواء</strong>
+                <span data-i18n="labUpload.dropSubtitle">اسحب وأفلت تقرير المعمل هنا، أو انقر للاختيار. يتم تشفير الملفات ووضعها في الحجر حتى اكتمال الفحص الأمني.</span>
+                <div class="upload-meta-pills" style="display: flex; gap: 6px; justify-content: center; margin-top: 10px; flex-wrap: wrap;">
+                  <span class="file-type-pill">PDF</span>
+                  <span class="file-type-pill">JPG</span>
+                  <span class="file-type-pill">PNG</span>
+                  <span class="file-type-pill">WEBP</span>
+                  <span class="file-size-pill">10 MB Max</span>
+                  <span class="file-secure-pill">🛡️ مسار فحص معزول</span>
+                </div>
               </label>
               <input id="fileUpload" type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp">
             </div>
-            <div id="fileList" class="file-list">
+
+            <!-- Staged & Uploaded Files List -->
+            <div id="fileList" class="file-list lab-file-list" aria-live="polite"></div>
+
+            <!-- Lab Upload Assistant Guidance & Clinical Link Status -->
+            <div id="labLinkAssistantCard" class="lab-link-card" style="margin-top: 14px; padding: 12px 16px; border-radius: 12px; background: rgba(14, 165, 164, 0.05); border: 1px solid rgba(14, 165, 164, 0.2); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 22px;">🩺</span>
+                <div>
+                  <strong style="color: var(--teal); font-size: 13.5px;" data-i18n="labUpload.autoLinkTitle">الربط التلقائي بالملف الطبي والتقييم السريري</strong>
+                  <p style="margin: 2px 0 0; font-size: 12px; color: var(--muted);" data-i18n="labUpload.autoLinkDesc">
+                    تُربط التحاليل تلقائياً بالحالة الحالية أو بملفك الصحي لإتاحة استخراج المؤشرات المعملية عبر OCR وتزويد الطبيب بها.
+                  </p>
+                </div>
+              </div>
+              <button type="button" class="soft-button" id="btnViewCaseLabLink" onclick="syncPatientLabProfileLink()" style="font-size: 12px; padding: 6px 14px; white-space: nowrap;">
+                <span data-i18n="labUpload.syncStatusBtn">تحديث الربط بالملف 🔄</span>
+              </button>
             </div>
           </article>
           <article class="panel" id="doctorApplyCard" style="grid-column: 1 / -1; margin-top: 14px; border: 1px dashed var(--teal); background: rgba(14, 165, 164, 0.04);">

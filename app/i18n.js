@@ -1406,6 +1406,32 @@
         step3Desc: "طبيب مرخص يعتمد الحالة، يرفضها، أو يطلب متابعة سريرية إضافية.",
         step4Title: "تقرير معتمد",
         step4Desc: "نتائج مدققة وتوصيات طبية وتنبيهات أمان مسجلة وموثقة بأمان."
+      },
+      labUpload: {
+        title: "رفع وتوثيق التحاليل المعملية والتقارير الطبية",
+        subtitle: "صوّر أو ارفع نتائج تحاليل الدم (CBC / السكر / وظائف الأعضاء) أو مزرعة البلغم ومسحات الصدر بصيغة PDF أو JPG لربطها بملفك الطبي.",
+        docusBadge: "⚡ ذكاء معملي Docus AI",
+        secureBadge: "🔒 مشفر HIPAA",
+        selectCategory: "اختر نوع التحليل لضبط الاستخراج والربط السريري:",
+        catBlood: "تحاليل الدم (CBC / كيمياء / سكر)",
+        catSputum: "مزرعة بلغم ومسحة تنفسية",
+        catAbg: "غازات دم شرياني (ABG)",
+        catUrine: "تحليل بول ومزارع حيوية",
+        catOther: "تقارير وأشعة أخرى",
+        cameraBtn: "تصوير التقرير بالكاميرا",
+        browseBtn: "اختيار ملف (PDF / صورة)",
+        dropTitle: "رفع تحليل أو أشعة أو صورة دواء",
+        dropSubtitle: "اسحب وأفلت تقرير المعمل هنا، أو انقر للاختيار. يتم تشفير الملفات ووضعها في الحجر حتى اكتمال الفحص الأمني.",
+        autoLinkTitle: "الربط التلقائي بالملف الطبي والتقييم السريري",
+        autoLinkDesc: "تُربط التحاليل تلقائياً بالحالة الحالية أو بملفك الصحي لإتاحة استخراج المؤشرات المعملية عبر OCR وتزويد الطبيب بها.",
+        syncStatusBtn: "تحديث الربط بالملف 🔄",
+        stagedReady: "تم تجهيز الملف وسيتم رفعه وربطه بالحالة الطبية.",
+        linkedSuccess: "تم ربط تقارير التحاليل بنجاح بملفك الطبي وحالتك الحالية!",
+        previewAvailable: "معاينة",
+        ocrExtractDraft: "🔍 استخراج الفحوصات (OCR)",
+        deleteFile: "حذف",
+        cancelUpload: "إلغاء",
+        cameraCaptureAction: "تصوير ورفع تقرير المعمل"
       }
     },
 
@@ -2795,6 +2821,32 @@
         step3Desc: "Licensed physician approves, rejects, or requests supplementary follow-up.",
         step4Title: "Certified Report",
         step4Desc: "Validated results, medical recommendations, and safety alerts recorded securely."
+      },
+      labUpload: {
+        title: "Lab Upload & Medical Records Documentation",
+        subtitle: "Capture or upload blood test results (CBC / Chemistry / Glucose) or sputum cultures and respiratory smears in PDF/JPG to link to your medical record.",
+        docusBadge: "⚡ Docus AI Smart Lab",
+        secureBadge: "🔒 HIPAA Encrypted",
+        selectCategory: "Select report category for clinical extraction & linking:",
+        catBlood: "Blood Tests (CBC / Chemistry / Glucose)",
+        catSputum: "Sputum Culture & Respiratory Smear",
+        catAbg: "Arterial Blood Gas (ABG)",
+        catUrine: "Urinalysis & Cultures",
+        catOther: "Other Lab & Radiology Reports",
+        cameraBtn: "Capture with Camera",
+        browseBtn: "Browse Documents (PDF / Image)",
+        dropTitle: "Upload lab test, radiology, or medication report",
+        dropSubtitle: "Drag and drop your lab report here, or click to browse. Files are encrypted and quarantined until security scan completes.",
+        autoLinkTitle: "Automatic Linkage to Medical Profile & Assessment",
+        autoLinkDesc: "Lab tests are automatically linked to your clinical case for OCR biomarker extraction and certified doctor review.",
+        syncStatusBtn: "Sync Record Linkage 🔄",
+        stagedReady: "File staged. It will upload and link to your medical case.",
+        linkedSuccess: "Lab reports successfully linked to your medical profile!",
+        previewAvailable: "Preview",
+        ocrExtractDraft: "🔍 OCR Biomarkers (Draft)",
+        deleteFile: "Delete",
+        cancelUpload: "Cancel",
+        cameraCaptureAction: "capturing and uploading lab reports"
       }
     }
   };
