@@ -103,6 +103,7 @@ const { kaggleTrainingService } = require('./kaggle-training-service');
 const { passwordSecurityService } = require('./password-security-service');
 const { medicalCatalogService } = require('./medical-catalog-service');
 const { caseWorkflowService } = require('./case-workflow-service');
+const labUploadService = require('./lab-upload-service');
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -15218,6 +15219,136 @@ app.post('/api/ocr/drafts/:draftId/reject', requireAuth, async (req, res) => {
   } catch (err) {
     res.status(err.statusCode || 400).json({
       error: err.code || 'REJECTION_FAILED',
+      message: err.message
+    });
+  }
+});
+
+// =============================================================================
+// 🧪 LAB UPLOAD & MEDICAL RECORDS LINKING ENDPOINTS (DOCUS AI BENCHMARK)
+// =============================================================================
+
+/**
+ * GET /api/lab-upload/categories
+ * Returns official clinical lab categories (blood tests, sputum culture, ABG, urinalysis, other).
+ */
+app.get('/api/lab-upload/categories', (req, res) => {
+  res.json({
+    success: true,
+    categories: Object.values(labUploadService.LAB_CATEGORIES)
+  });
+});
+
+/**
+ * POST /api/lab-upload/register
+ * Registers lab upload metadata, validates file security constraints, enforces quarantine,
+ * and links to patient medical profile (EHR).
+ */
+app.post('/api/lab-upload/register', requireAuth, async (req, res) => {
+  try {
+    const { patientId, caseId, fileName, contentType, size, labCategory, labNotes, testDate, sourceClinic } = req.body || {};
+
+    const targetPatientId = patientId || req.user.uid;
+    const result = await labUploadService.registerLabFileUpload(db, {
+      patientId: targetPatientId,
+      caseId,
+      fileName,
+      contentType,
+      size,
+      labCategory,
+      labNotes,
+      testDate,
+      sourceClinic
+    }, req.user);
+
+    res.status(201).json(result);
+  } catch (err) {
+    res.status(err.statusCode || 400).json({
+      error: err.code || 'LAB_UPLOAD_REGISTRATION_FAILED',
+      message: err.message
+    });
+  }
+});
+
+/**
+ * GET /api/lab-upload/patient/:patientId
+ * Retrieves linked lab reports for a patient with optional category filtering and RBAC checks.
+ */
+app.get('/api/lab-upload/patient/:patientId', requireAuth, async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const { labCategory, limit } = req.query || {};
+
+    const reports = await labUploadService.getPatientLabReports(db, {
+      patientId,
+      labCategory: labCategory || null,
+      limit: parseInt(limit, 10) || 50
+    }, req.user);
+
+    res.json({ success: true, count: reports.length, reports });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({
+      error: err.code || 'GET_LAB_REPORTS_FAILED',
+      message: err.message
+    });
+  }
+});
+
+/**
+ * POST /api/lab-upload/:fileId/scan-result
+ * Webhook / internal worker endpoint to update antivirus and quarantine scan result.
+ * Transitions availability to available upon clean scan and notifies doctor.
+ */
+app.post('/api/lab-upload/:fileId/scan-result', requireAuth, async (req, res) => {
+  try {
+    const { fileId } = req.params;
+    const { scanResult, scanDetails, scannerId } = req.body || {};
+
+    // Only clinician or system worker can submit scan results
+    const isAuthorized = req.user.role === 'super_admin' || req.user.role === 'clinic_admin' || req.user.role === 'system_worker' || req.user.role === 'backend_system';
+    if (!isAuthorized && req.user.role !== 'doctor') {
+      return res.status(403).json({ error: 'FORBIDDEN', message: 'Unauthorized to submit scan results.' });
+    }
+
+    const result = await labUploadService.processLabScanResult(db, {
+      fileId,
+      scanResult: scanResult || 'clean',
+      scanDetails,
+      scannerId: scannerId || req.user.uid
+    });
+
+    res.json(result);
+  } catch (err) {
+    res.status(err.statusCode || 400).json({
+      error: err.code || 'SCAN_UPDATE_FAILED',
+      message: err.message
+    });
+  }
+});
+
+/**
+ * POST /api/lab-upload/:fileId/link-case
+ * Links an existing lab report to a clinical case.
+ */
+app.post('/api/lab-upload/:fileId/link-case', requireAuth, async (req, res) => {
+  try {
+    const { fileId } = req.params;
+    const { caseId } = req.body || {};
+
+    if (!caseId) {
+      return res.status(400).json({ error: 'MISSING_CASE_ID', message: 'caseId is required.' });
+    }
+
+    const result = await labUploadService.linkLabReportToCase(db, {
+      fileId,
+      caseId,
+      actorUid: req.user.uid
+    }, req.user);
+
+    res.json(result);
+  } catch (err) {
+    res.status(err.statusCode || 400).json({
+      error: err.code || 'CASE_LINK_FAILED',
       message: err.message
     });
   }

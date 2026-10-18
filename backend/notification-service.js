@@ -57,7 +57,9 @@ const NOTIFICATION_TYPES = {
   APPOINTMENT_REMINDER: 'appointment_reminder',
   VERIFICATION: 'verification',
   DOCTOR_SCHEDULE_UPDATED: 'doctor_schedule_updated',
-  DOCTOR_LEAVE_EXCEPTION: 'doctor_leave_exception'
+  DOCTOR_LEAVE_EXCEPTION: 'doctor_leave_exception',
+  LAB_REPORT_UPLOADED: 'lab_report_uploaded',
+  LAB_REPORT_CRITICAL_ALERT: 'lab_report_critical_alert'
 };
 
 function escapeHtml(value) {
@@ -670,6 +672,163 @@ ${code}
 }
 
 /**
+ * 7. Lab Report Uploaded Email Template (Docus AI Benchmark)
+ */
+function buildLabReportUploadedEmail(payload = {}) {
+  const {
+    patientName,
+    doctorName,
+    fileName,
+    labCategory,
+    labCategoryAr,
+    labCategoryEn,
+    testDate,
+    recipientRole = 'doctor',
+    fileId,
+    caseId
+  } = payload;
+
+  const safePatient = escapeHtml(patientName || 'المريض');
+  const safeDoctor = escapeHtml(doctorName || 'الطبيب المعالج');
+  const safeFile = escapeHtml(fileName || 'تقرير معملي');
+  const safeCat = escapeHtml(labCategoryAr || labCategory || 'تحاليل معملية');
+  const safeDate = escapeHtml(testDate || new Date().toISOString().slice(0, 10));
+  const isDoctor = recipientRole !== 'patient';
+
+  const subject = isDoctor
+    ? `🧪 تقرير معملي جديد تم رفعه: ${safeCat} - المريض ${safePatient}`
+    : `✅ تم استلام وربط تقرير المعمل الخاص بك (${safeCat}) بنجاح`;
+
+  const html = `
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="utf-8">
+  <title>${subject}</title>
+</head>
+<body style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8fafc; margin: 0; padding: 24px; color: #1e293b; direction: rtl; text-align: right;">
+  <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+    <div style="background: linear-gradient(135deg, #0d9488 0%, #0891b2 100%); padding: 28px 24px; color: #ffffff;">
+      <div style="display: flex; align-items: center; justify-content: space-between;">
+        <h1 style="margin: 0; font-size: 20px; font-weight: 700;">Health Vibe AI</h1>
+        <span style="background: rgba(255,255,255,0.25); padding: 4px 12px; border-radius: 999px; font-size: 12px;">تقرير معملي 🧪</span>
+      </div>
+      <p style="margin: 8px 0 0; font-size: 14px; opacity: 0.95;">
+        ${isDoctor ? 'إشعار رفع تقرير معملي للمراجعة والتدقيق السريري' : 'تأكيد استلام وربط نتائج التحاليل الطبية بالملف الصحي'}
+      </p>
+    </div>
+    <div style="padding: 28px 24px;">
+      <p style="font-size: 16px; font-weight: 600; margin-top: 0;">
+        ${isDoctor ? `عزيزي د. / ${safeDoctor}،` : `عزيزي المريض / ${safePatient}،`}
+      </p>
+      <p style="font-size: 14px; line-height: 1.6; color: #475569;">
+        ${isDoctor 
+          ? `قام المريض <strong>${safePatient}</strong> برفع نتائج تحاليل معملية جديدة وتم ربطها بملفه الطبي والحالة السريرية.` 
+          : `تم استلام تقرير التحاليل الخاص بك وحفظه بأمان في مسار مشفر ومعزول وفق معايير HIPAA، وتم إخطار الفريق الطبي لمراجعته.`}
+      </p>
+
+      <div style="background: #f0fdfa; border: 1px solid #ccfbf1; border-radius: 12px; padding: 18px; margin: 18px 0;">
+        <div style="margin-bottom: 8px; font-size: 14px;"><strong>نوع التحليل:</strong> ${safeCat}</div>
+        <div style="margin-bottom: 8px; font-size: 14px;"><strong>اسم الملف:</strong> ${safeFile}</div>
+        <div style="margin-bottom: 8px; font-size: 14px;"><strong>تاريخ الفحص:</strong> ${safeDate}</div>
+        <div style="font-size: 14px;"><strong>حالة الأمان:</strong> تم الفحص الأمني ومتاح للمعاينة واستخراج المؤشرات (OCR) ✓</div>
+      </div>
+
+      <div style="text-align: center; margin: 24px 0;">
+        <a href="https://app.healthvibe.ai" style="display: inline-block; background: #0d9488; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-weight: 600; font-size: 14px;">
+          ${isDoctor ? 'فتح الحالة ومراجعة التقرير السريري' : 'عرض الملف الطبي والتقارير'}
+        </a>
+      </div>
+
+      <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 12px; color: #94a3b8; text-align: center;">
+        منصة Health Vibe AI للرعاية الصحية المدعومة بالذكاء الاصطناعي وتحت إشراف طبي معتمد.
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  const text = `Health Vibe AI - إشعار تقرير معملي
+${isDoctor ? `د. ${safeDoctor}` : `المريض: ${safePatient}`}
+نوع التحليل: ${safeCat}
+الملف: ${safeFile}
+التاريخ: ${safeDate}
+https://app.healthvibe.ai`;
+
+  return { subject, html, text };
+}
+
+/**
+ * 8. Lab Report Critical Alert Email Template (e.g. ABG / Critical Biomarkers)
+ */
+function buildLabReportCriticalAlertEmail(payload = {}) {
+  const {
+    patientName,
+    doctorName,
+    fileName,
+    labCategory,
+    labCategoryAr,
+    testDate,
+    alertReason
+  } = payload;
+
+  const safePatient = escapeHtml(patientName || 'المريض');
+  const safeDoctor = escapeHtml(doctorName || 'طبيب الطوارئ / الصدر');
+  const safeCat = escapeHtml(labCategoryAr || labCategory || 'غازات دم شرياني ABG');
+  const safeFile = escapeHtml(fileName || 'تقرير معملي حرج');
+  const safeReason = escapeHtml(alertReason || 'مؤشرات حرجة تتطلب تدقيقاً سريرياً عاجلاً');
+
+  const subject = `🚨 تنبيه حرج: تقرير معملي عاجل (${safeCat}) - المريض ${safePatient}`;
+
+  const html = `
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="utf-8">
+  <title>${subject}</title>
+</head>
+<body style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #fef2f2; margin: 0; padding: 24px; color: #1e293b; direction: rtl; text-align: right;">
+  <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 16px; border: 1px solid #fecaca; overflow: hidden; box-shadow: 0 4px 16px rgba(220,38,38,0.1);">
+    <div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); padding: 28px 24px; color: #ffffff;">
+      <div style="display: flex; align-items: center; justify-content: space-between;">
+        <h1 style="margin: 0; font-size: 20px; font-weight: 700;">Health Vibe AI — أولوية حرجة</h1>
+        <span style="background: rgba(255,255,255,0.25); padding: 4px 12px; border-radius: 999px; font-size: 12px;">CRITICAL ALERT 🚨</span>
+      </div>
+      <p style="margin: 8px 0 0; font-size: 14px; opacity: 0.95;">تقرير معملي عاجل يتطلب مراجعة سريرية فورية</p>
+    </div>
+    <div style="padding: 28px 24px;">
+      <p style="font-size: 16px; font-weight: 600; margin-top: 0;">عناية د. / ${safeDoctor}،</p>
+      <p style="font-size: 14px; line-height: 1.6; color: #475569;">
+        تم رفع تقرير معملي عاجل (${safeCat}) للمريض <strong>${safePatient}</strong>، ويتطلب تدخلاً سريرياً عاجلاً وفق بروتوكول الرعاية التنفسية.
+      </p>
+
+      <div style="background: #fff1f2; border: 1px solid #fecdd3; border-radius: 12px; padding: 18px; margin: 18px 0;">
+        <div style="margin-bottom: 8px; font-size: 14px;"><strong>الفحص:</strong> ${safeCat}</div>
+        <div style="margin-bottom: 8px; font-size: 14px;"><strong>سبب التنبيه:</strong> <span style="color: #dc2626; font-weight: 700;">${safeReason}</span></div>
+        <div style="margin-bottom: 8px; font-size: 14px;"><strong>الملف:</strong> ${safeFile}</div>
+      </div>
+
+      <div style="text-align: center; margin: 24px 0;">
+        <a href="https://app.healthvibe.ai" style="display: inline-block; background: #dc2626; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-weight: 700; font-size: 14px;">
+          مراجعة التقرير والتدخل السريري الفوري
+        </a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  const text = `Health Vibe AI - تنبيه سريري حرج
+المريض: ${safePatient}
+الفحص: ${safeCat}
+التنبيه: ${safeReason}
+الملف: ${safeFile}
+https://app.healthvibe.ai`;
+
+  return { subject, html, text };
+}
+
+/**
  * Universal template resolver supporting all 6 categories
  */
 function buildNotificationEmailTemplate(type, payload = {}) {
@@ -704,6 +863,12 @@ function buildNotificationEmailTemplate(type, payload = {}) {
 
     case NOTIFICATION_TYPES.VERIFICATION:
       return buildVerificationEmail(payload);
+
+    case NOTIFICATION_TYPES.LAB_REPORT_UPLOADED:
+      return buildLabReportUploadedEmail(payload);
+
+    case NOTIFICATION_TYPES.LAB_REPORT_CRITICAL_ALERT:
+      return buildLabReportCriticalAlertEmail(payload);
 
     default:
       // Fallback
@@ -1531,7 +1696,7 @@ async function scheduleAppointmentReminder(db, appointment, { hoursBefore = 24, 
     scheduledReminder = new Date(now.getTime() + 60 * 1000);
   }
 
-  const idempotencyKey = appointment.reminderIdempotencyKey || `appt_reminder_${appointment.id}_${hoursBefore}h`;
+  const idempotencyKey = appointment.reminderIdempotencyKey || `appt_reminder_${appointment.id}`;
 
   return enqueueNotification(db, {
     type: NOTIFICATION_TYPES.APPOINTMENT_REMINDER,
