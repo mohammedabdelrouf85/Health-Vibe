@@ -17129,6 +17129,279 @@ async function executeModelRollback() {
 }
 window.executeModelRollback = executeModelRollback;
 
+// =============================================================================
+// 📖 SIMPLIFIED EGYPTIAN MEDICAL DICTIONARY (Task #85)
+// Altibbi Patient-Centric Standard for Respiratory Symptoms
+// =============================================================================
+
+const BUILTIN_EGYPTIAN_RESPIRATORY_DICTIONARY = [
+  {
+    termId: 'DICT-RESP-001',
+    clinicalTermAr: 'ضيق التنفس وصعوبة التنفس (Dyspnea)',
+    clinicalTermEn: 'Shortness of Breath / Dyspnea',
+    egyptianTerm: 'نهجان / كرشة نفس',
+    egyptianSynonyms: ['نهجان', 'كرشة نفس', 'صعوبة في سحب النفس', 'الهوا مش مكفي', 'خنقة بالصدر'],
+    simplifiedMeaningAr: 'إحساس بعدم كفاية الهواء عند أخذ النفس، أو الحاجة لبذل مجهود مضاعف لملء الرئتين سواء أثناء الجلوس أو المشي.',
+    simplifiedMeaningEn: 'Sensation of difficult or uncomfortable breathing, feeling like you cannot get enough air into your lungs.',
+    whenToSeeDoctorAr: 'إذا كان النهجان يمنعك من إكمال جملة واحدة دون توقف، أو يحدث فجأة، أو مصحوباً بزرقة بالشفاه أو ألم بالصدر.',
+    redFlagsAr: ['نهجان حاد ومفاجئ', 'زرقة بالوجه أو الشفاه', 'عجز عن التحدث في جمل كاملة'],
+    category: 'dyspnea',
+    icd10: 'R06.0'
+  },
+  {
+    termId: 'DICT-RESP-002',
+    clinicalTermAr: 'ضيق التنفس الجهدي (Dyspnea on Exertion)',
+    clinicalTermEn: 'Dyspnea on Exertion (DOE)',
+    egyptianTerm: 'نهجان عند المجهود أو المشي',
+    egyptianSynonyms: ['نهجان مع المشي', 'نهجان طلوع السلم', 'كرشة نفس مع الحركة', 'نهجان شغل البيت', 'بينهج من أقل حركة'],
+    simplifiedMeaningAr: 'ظهور نهجان وسرعة تنفس ملحوظة فور بذل مجهود بدني بسيط كالمشي أو صعود درجات من السلم، ويخف بالراحة.',
+    simplifiedMeaningEn: 'Shortness of breath triggered by physical activity such as walking or climbing stairs, relieved by rest.',
+    whenToSeeDoctorAr: 'إذا بدأ النهجان يظهر مع مجهودات كانت سهلة سابقاً، أو كان مصحوباً بتورم في القدمين أو ثقل ضاغط بالصدر.',
+    redFlagsAr: ['تدهور سريع في القدرة على بذل المجهود', 'ألم عاصر بالصدر يمتد للذراع'],
+    category: 'dyspnea',
+    icd10: 'R06.02'
+  },
+  {
+    termId: 'DICT-RESP-003',
+    clinicalTermAr: 'السعال الجاف (Dry / Non-productive Cough)',
+    clinicalTermEn: 'Dry / Non-Productive Cough',
+    egyptianTerm: 'كحة جافة (ناشفة بدون بلغم)',
+    egyptianSynonyms: ['كحة ناشفة', 'كحة جافة', 'شرقة مستمرة', 'حرقان ودغدغة بالزور مع كحة', 'كحة نوبات بالليل'],
+    simplifiedMeaningAr: 'كحة مجهدة ومزعجة بدون خروج أي مخاط أو إفرازات من الصدر، وغالباً تسبب شعوراً بالخدش أو الحكة بالحلق.',
+    simplifiedMeaningEn: 'A tickling, irritating cough that produces no phlegm or mucus, often paroxysmal or nocturnal.',
+    whenToSeeDoctorAr: 'إذا استمرت الكحة لأكثر من أسبوعين، أو كانت تمنع النوم تماماً، أو سببت قيئاً وألماً حاداً بالقفص الصدري.',
+    redFlagsAr: ['كحة جافة مع سخونية شديدة ورعشة', 'نقص تشبع الأكسجين عن 93%'],
+    category: 'cough',
+    icd10: 'R05.1'
+  },
+  {
+    termId: 'DICT-RESP-004',
+    clinicalTermAr: 'السعال الرطب المصحوب ببلغم (Productive Cough)',
+    clinicalTermEn: 'Productive / Wet Cough with Sputum',
+    egyptianTerm: 'كحة ببلغم (كحة رطبة)',
+    egyptianSynonyms: ['كحة ببلغم', 'كحة رطبة', 'بلغم على الصدر', 'صدر محتقن ببلغم', 'كحة بتطلع إفرازات'],
+    simplifiedMeaningAr: 'كحة يخرج معها بلغم أو مخاط من مجرى التنفس، وقد يكون لون البلغم شفافاً أو أبيض أو مائلاً للصفرة أو الخضرة.',
+    simplifiedMeaningEn: 'A wet cough that brings up mucus or phlegm from the lungs and bronchial airways.',
+    whenToSeeDoctorAr: 'إذا تحول لون البلغم للأخضر الداكن أو البني، أو كان مصحوباً بحرارة عالية ورعشة، أو استمر لأكثر من 10 أيام.',
+    redFlagsAr: ['بلغم صديدي مصحوب بحرارة تتجاوز 39 مئوية', 'صعوبة بالغة في التنفس'],
+    category: 'cough',
+    icd10: 'R05.2'
+  },
+  {
+    termId: 'DICT-RESP-005',
+    clinicalTermAr: 'الأزيز والصفير الصدري (Wheezing)',
+    clinicalTermEn: 'Wheezing / Bronchospasm',
+    egyptianTerm: 'صفير بالصدر وتزييق (خروشة مسموعة)',
+    egyptianSynonyms: ['صفير بالصدر', 'تزييق الصدر', 'صوت صفارة مع النفس', 'خروشة بالصدر', 'تزييقة الشعب'],
+    simplifiedMeaningAr: 'صوت صفير أو تزييق موسيقي يُسمع من الصدر خصوصاً أثناء إخراج النفس (الزفير) نتيجة ضيق الشعب الهوائية.',
+    simplifiedMeaningEn: 'High-pitched whistling sound produced during breathing when airways become narrowed or constricted.',
+    whenToSeeDoctorAr: 'عند تكرار نوبات الصفير، أو عدم الاستجابة لبخاخات التوسيع الإسعافية، أو ظهور صعوبة في التنفس.',
+    redFlagsAr: ['اختفاء صوت الصفير فجأة مع صعوبة تنفس بالغة (Silent Chest)', 'عجز عن التحدث'],
+    category: 'sounds',
+    icd10: 'R06.2'
+  },
+  {
+    termId: 'DICT-RESP-006',
+    clinicalTermAr: 'نفث الدم / السعال المدمم (Hemoptysis)',
+    clinicalTermEn: 'Hemoptysis / Blood in Sputum',
+    egyptianTerm: 'سعال مدمم (خروج دم أو عروق دم مع الكحة)',
+    egyptianSynonyms: ['كحة فيها دم', 'دم مع البلغم', 'عروق دم مع الكحة', 'بصق دم', 'نزيف مع الكحة'],
+    simplifiedMeaningAr: 'خروج دم أحمر أو خيوط وعروق دموية مختلطة بالبلغم عند السعال، وهو عرض يستوجب دائماً تقييماً طبياً عاجلاً.',
+    simplifiedMeaningEn: 'Coughing up blood or blood-stained mucus from the respiratory tract, requiring urgent clinical evaluation.',
+    whenToSeeDoctorAr: 'فوراً ودون أي تأخير، حتى لو كانت مجرد عروق دم بسيطة، لاستبعاد العدوى الحادة أو النزيف الرئوي.',
+    redFlagsAr: ['كمية دم صريحة تتجاوز ملعقة طعام', 'سعال مدمم مصحوب بهبوط بالضغط أو دوار'],
+    category: 'emergency',
+    icd10: 'R04.2'
+  },
+  {
+    termId: 'DICT-RESP-007',
+    clinicalTermAr: 'الألم الصدري الجنبي والموضعي (Chest Pain)',
+    clinicalTermEn: 'Chest Pain / Discomfort',
+    egyptianTerm: 'ألم أو نغزة أو ثقل في الصدر',
+    egyptianSynonyms: ['نغزة في الصدر', 'شكة مع النفس', 'حجر على الصدر', 'وجع في القفص الصدري', 'ثقل عاصر'],
+    simplifiedMeaningAr: 'وجع أو إحساس بنغزة وشكة تزيد غالباً مع أخذ نفس عميق أو الكحة، أو إحساس بضغط وثقل عاصر على القفص الصدري.',
+    simplifiedMeaningEn: 'Pleuritic, sharp, or pressure-like pain in the chest that may worsen with deep breathing or coughing.',
+    whenToSeeDoctorAr: 'فوراً إذا كان الألم حاداً ومفاجئاً أو ممتداً للكتف أو الفك أو مصحوباً بعرق بارد وغثيان (طوارئ 123).',
+    redFlagsAr: ['ألم عاصر في منتصف الصدر يمتد للذراع الأيسر أو الفك', 'ألم حاد ومفاجئ مع نهجان'],
+    category: 'chest_pain',
+    icd10: 'R07.9'
+  },
+  {
+    termId: 'DICT-RESP-008',
+    clinicalTermAr: 'نقص تشبع الأكسجين الشرياني (Hypoxia / Hypoxemia)',
+    clinicalTermEn: 'Arterial Oxygen Desaturation (SpO2 < 93%)',
+    egyptianTerm: 'نقص نسبة الأكسجين في الدم',
+    egyptianSynonyms: ['نقص الأكسجين', 'الأكسجين نازل', 'جهاز الأكسجين قاري قليل', 'أقل من 90'],
+    simplifiedMeaningAr: 'انخفاض كمية الأكسجين التي يحملها الدم للأعضاء، ويقاس عبر مشبك الإصبع الصغير (Pulse Oximeter). الطبيعي 95% فأكثر.',
+    simplifiedMeaningEn: 'Low level of oxygen in the blood measured by a pulse oximeter, normal is >= 95%.',
+    whenToSeeDoctorAr: 'إذا كانت القراءة بين 90% و 92%، وفوراً لطوارئ المستشفى أو الاتصال بالإسعاف (123) إذا كانت أقل من 90%.',
+    redFlagsAr: ['نسبة الأكسجين أقل من 90%', 'زرقة بالشفتين أو أطراف الأصابع'],
+    category: 'emergency',
+    icd10: 'R09.02'
+  },
+  {
+    termId: 'DICT-RESP-009',
+    clinicalTermAr: 'تسارع معدل التنفس (Tachypnea)',
+    clinicalTermEn: 'Tachypnea / Rapid Breathing',
+    egyptianTerm: 'سرعة التنفس ولهثان الصدر',
+    egyptianSynonyms: ['سرعة التنفس', 'تنفس سريع', 'لهثان', 'نفسه ورا بعضه بسرعة', 'بينهج وقاعد'],
+    simplifiedMeaningAr: 'تنفس أكثر من 20-25 مرة في الدقيقة عند الشخص البالغ وهو مرتاح، بحيث يبدو وكأنه يلهث دون بذل مجهود.',
+    simplifiedMeaningEn: 'Abnormally rapid breathing rate, exceeding 20-25 breaths per minute in a resting adult.',
+    whenToSeeDoctorAr: 'إذا كان معدل التنفس أكثر من 24 في الدقيقة أو مصحوباً بإجهاد بعضلات الرقبة والقفص الصدري.',
+    redFlagsAr: ['معدل تنفس أكثر من 30 في الدقيقة', 'استخدام عضلات مساعدة للتنفس وانكماش الأضلاع'],
+    category: 'dyspnea',
+    icd10: 'R06.82'
+  },
+  {
+    termId: 'DICT-RESP-010',
+    clinicalTermAr: 'الربو الشعبي ونوبات حساسية الصدر (Bronchial Asthma)',
+    clinicalTermEn: 'Bronchial Asthma / Reactive Airway Disease',
+    egyptianTerm: 'حساسية الصدر والربو',
+    egyptianSynonyms: ['حساسية صدر', 'أزمة ربو', 'نوبة ضيق شعب', 'الصدر بيقفل', 'حساسية موسمية'],
+    simplifiedMeaningAr: 'التهاب مزمن وتضيق مؤقت في الشعب الهوائية يسبب نوبات متكررة من ضيق النفس والصفير والكحة خاصة بالليل أو مع التراب وتغير الجو.',
+    simplifiedMeaningEn: 'Chronic inflammatory disorder of the airways causing recurrent episodes of wheezing, breathlessness, and cough.',
+    whenToSeeDoctorAr: 'إذا لم تستجب النوبة لبخاخ الطوارئ، أو عند تكرار النوبات أكثر من مرتين أسبوعياً.',
+    redFlagsAr: ['عجز عن إكمال جملة في نفس واحد', 'عدم استجابة لبخاخ الفنتولين أو موسع الشعب الإسعافي'],
+    category: 'sounds',
+    icd10: 'J45.9'
+  }
+];
+
+let _activeMedicalDictCategory = 'all';
+let _medicalDictSearchQuery = '';
+
+function openSimplifiedMedicalDictionaryModal(initialQuery = '') {
+  const modal = document.getElementById("simplifiedMedicalDictionaryModal");
+  if (!modal) return;
+
+  const searchInput = document.getElementById("medicalDictionarySearchInput");
+  if (searchInput) {
+    searchInput.value = initialQuery || '';
+    _medicalDictSearchQuery = initialQuery || '';
+  }
+
+  modal.style.display = "flex";
+  modal.setAttribute("aria-hidden", "false");
+  renderMedicalDictionaryItems();
+  if (searchInput) searchInput.focus();
+}
+window.openSimplifiedMedicalDictionaryModal = openSimplifiedMedicalDictionaryModal;
+
+function closeSimplifiedMedicalDictionaryModal() {
+  const modal = document.getElementById("simplifiedMedicalDictionaryModal");
+  if (modal) {
+    modal.style.display = "none";
+    modal.setAttribute("aria-hidden", "true");
+  }
+}
+window.closeSimplifiedMedicalDictionaryModal = closeSimplifiedMedicalDictionaryModal;
+
+function setMedicalDictCategoryFilter(cat, btnEl) {
+  _activeMedicalDictCategory = cat;
+  if (btnEl && btnEl.parentElement) {
+    btnEl.parentElement.querySelectorAll(".soft-button").forEach(b => b.classList.remove("active"));
+    btnEl.classList.add("active");
+  }
+  renderMedicalDictionaryItems();
+}
+window.setMedicalDictCategoryFilter = setMedicalDictCategoryFilter;
+
+function filterMedicalDictionaryUI(query) {
+  _medicalDictSearchQuery = String(query || '').trim();
+  renderMedicalDictionaryItems();
+}
+window.filterMedicalDictionaryUI = filterMedicalDictionaryUI;
+
+function renderMedicalDictionaryItems() {
+  const container = document.getElementById("medicalDictionaryItemsContainer");
+  if (!container) return;
+
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  const q = _medicalDictSearchQuery.toLowerCase();
+
+  const filtered = BUILTIN_EGYPTIAN_RESPIRATORY_DICTIONARY.filter(item => {
+    // 1. Category filter
+    if (_activeMedicalDictCategory !== 'all') {
+      if (_activeMedicalDictCategory === 'emergency') {
+        if (!item.redFlagsAr || item.redFlagsAr.length === 0) return false;
+      } else if (item.category !== _activeMedicalDictCategory) {
+        return false;
+      }
+    }
+
+    // 2. Query filter
+    if (!q) return true;
+    const matchAr = item.clinicalTermAr.toLowerCase().includes(q) ||
+                    item.egyptianTerm.toLowerCase().includes(q) ||
+                    item.simplifiedMeaningAr.toLowerCase().includes(q);
+    const matchEn = item.clinicalTermEn.toLowerCase().includes(q) ||
+                    (item.simplifiedMeaningEn && item.simplifiedMeaningEn.toLowerCase().includes(q));
+    const matchSynonyms = Array.isArray(item.egyptianSynonyms) &&
+                          item.egyptianSynonyms.some(s => s.toLowerCase().includes(q));
+    const matchIcd = item.icd10 && item.icd10.toLowerCase().includes(q);
+    return matchAr || matchEn || matchSynonyms || matchIcd;
+  });
+
+  if (filtered.length === 0) {
+    container.innerHTML = `
+      <div style="text-align: center; padding: 30px; color: var(--muted);">
+        <span style="font-size: 32px; display: block; margin-bottom: 8px;">🔍</span>
+        <div>${isEn ? "No matching symptoms found for your query." : "لم يتم العثور على أي عرض يطابق بحثك."}</div>
+        <small style="color: var(--teal); cursor: pointer; display: inline-block; margin-top: 6px;" onclick="filterMedicalDictionaryUI(''); document.getElementById('medicalDictionarySearchInput').value='';">
+          ${isEn ? "Reset search to view all symptoms" : "إعادة ضبط البحث لعرض كافة الأعراض"}
+        </small>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = filtered.map(item => {
+    const isEmergency = item.category === 'emergency';
+    const borderStyle = isEmergency ? 'border-right: 4px solid #ef4444;' : 'border-right: 4px solid var(--teal);';
+    const synonymsHtml = Array.isArray(item.egyptianSynonyms)
+      ? item.egyptianSynonyms.map(s => `<span class="pill" style="font-size: 11px; background: rgba(14, 165, 164, 0.12); color: var(--teal); padding: 2px 7px;">${s}</span>`).join(' ')
+      : '';
+    const redFlagsHtml = Array.isArray(item.redFlagsAr)
+      ? item.redFlagsAr.map(rf => `<li style="margin-bottom: 2px;">⚠️ ${rf}</li>`).join('')
+      : '';
+
+    return `
+      <div style="background: rgba(255,255,255,0.025); border: 1px solid var(--line); border-radius: 12px; padding: 14px; ${borderStyle}">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; flex-wrap: wrap;">
+          <div>
+            <span style="font-size: 16px; font-weight: 800; color: ${isEmergency ? '#f87171' : 'var(--teal-2)'};">${item.egyptianTerm}</span>
+            <span style="font-size: 12.5px; color: var(--muted); margin-right: 8px; font-family: monospace;">(${item.clinicalTermEn})</span>
+          </div>
+          <span class="pill info" style="font-size: 10.5px; font-family: monospace;">ICD-10: ${item.icd10}</span>
+        </div>
+
+        <div style="margin-top: 6px; font-size: 13px; line-height: 1.5; color: var(--text);">
+          <strong>المعنى المبسط:</strong> ${item.simplifiedMeaningAr}
+        </div>
+
+        <div style="margin-top: 8px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+          <span style="font-size: 11.5px; color: var(--muted);">المسميات الشعبية:</span>
+          ${synonymsHtml}
+        </div>
+
+        <div style="margin-top: 10px; padding: 8px 10px; background: rgba(245, 158, 11, 0.08); border-radius: 8px; font-size: 12px; color: #fbbf24;">
+          <strong>متى تستشير الطبيب؟</strong> ${item.whenToSeeDoctorAr}
+        </div>
+
+        ${item.redFlagsAr && item.redFlagsAr.length > 0 ? `
+          <div style="margin-top: 8px; padding: 8px 10px; background: rgba(239, 68, 68, 0.1); border-radius: 8px; font-size: 11.5px; color: #fca5a5;">
+            <strong style="color: #ef4444;">علامات الخطر القصوى (Red Flags):</strong>
+            <ul style="margin: 4px 0 0; padding-right: 18px;">
+              ${redFlagsHtml}
+            </ul>
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }).join('');
+}
+window.renderMedicalDictionaryItems = renderMedicalDictionaryItems;
+
 
 async function approveDoctorApplication(appId, userId, doctorName) {
   const isEn = currentLanguage === "en";

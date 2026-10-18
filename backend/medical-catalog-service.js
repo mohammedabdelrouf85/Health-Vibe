@@ -251,6 +251,9 @@ const REFERENCE_SYMPTOMS_CATALOG = [
     key: 'shortnessOfBreathScale',
     labelEn: 'Shortness of Breath / Dyspnea Severity',
     labelAr: 'شدة ضيق التنفس وصعوبة التنفس',
+    labelArSimplified: 'نهجان وضيق في النفس (كرشة نفس)',
+    egyptianColloquial: 'نهجان، كرشة نفس، صعوبة في سحب النفس، مش قادر ياخد نفسه',
+    patientExplanationAr: 'الشعور بأن الهواء غير كافٍ أو الحاجة لبذل جهد مضاعف للتنفس، سواء أثناء الراحة أو بذل أي حركة بسيطة.',
     category: 'respiratory',
     inputType: 'scale_1_10',
     unit: 'score_1_10',
@@ -264,6 +267,9 @@ const REFERENCE_SYMPTOMS_CATALOG = [
     key: 'coughSeverity',
     labelEn: 'Cough Severity',
     labelAr: 'شدة السعال / الكحة',
+    labelArSimplified: 'درجة ونوع الكحة (كحة ناشفة أو ببلغم)',
+    egyptianColloquial: 'كحة ناشفة، كحة جافة، كحة ببلغم، شرقة مستمرة، كحة تحرق الزور',
+    patientExplanationAr: 'تقييم شدة السعال ومدى تأثيره على النوم والأنشطة اليومية، سواء كانت كحة جافة ناشفة أو مصحوبة بإفرازات ومخاط.',
     category: 'respiratory',
     inputType: 'enum',
     allowedValues: ['none', 'mild', 'moderate', 'severe'],
@@ -273,10 +279,75 @@ const REFERENCE_SYMPTOMS_CATALOG = [
     descriptionAr: 'تصنيف السعال السريري: بدون، خفيف، متوسط، أو شديد يعيق النوم والأنشطة اليومية.'
   },
   {
+    symptomId: 'SYM-RESP-004',
+    key: 'wheezing',
+    labelEn: 'Wheezing / Chest Whistling',
+    labelAr: 'أزيز وصفير الصدر',
+    labelArSimplified: 'صفير وتزييق بالصدر (خروشة مسموعة مع النفس)',
+    egyptianColloquial: 'صفير في الصدر، تزييق، خروشة صدر تسمعها مع الزفير، صوت صفارة',
+    patientExplanationAr: 'صوت صفير أو تزييق موسيقي يصدر من الصدر خصوصاً أثناء إخراج النفس (الزفير) نتيجة ضيق الشعب الهوائية وتجمع الإفرازات.',
+    category: 'respiratory',
+    inputType: 'boolean',
+    unit: 'boolean',
+    validRange: { allowedValues: [true, false, 'yes', 'no', 'unknown'] },
+    descriptionEn: 'High-pitched whistling sound produced in the airways during breathing, prominent on expiration.',
+    descriptionAr: 'صوت صفير حاد ومستمر صادر من الشعب الهوائية الضيقة.'
+  },
+  {
+    symptomId: 'SYM-RESP-005',
+    key: 'dyspneaOnExertion',
+    labelEn: 'Dyspnea on Exertion',
+    labelAr: 'ضيق التنفس الجهدي',
+    labelArSimplified: 'نهجان عند المجهود أو المشي',
+    egyptianColloquial: 'نهجان مع المشي، طلوع السلم، شغل البيت، الحركة البسيطة',
+    patientExplanationAr: 'ظهور نهجان وسرعة تنفس ملحوظة فور بذل مجهود بسيط كالمشي أو صعود بضع درجات من السلم، ويخف فور الاستراحة.',
+    category: 'respiratory',
+    inputType: 'boolean',
+    unit: 'boolean',
+    validRange: { allowedValues: [true, false, 'yes', 'no', 'unknown'] },
+    descriptionEn: 'Disproportionate breathlessness triggered by mild or moderate physical exertion.',
+    descriptionAr: 'ضيق تنفس ملحوظ يظهر مع أقل نشاط بدني.'
+  },
+  {
+    symptomId: 'SYM-RESP-006',
+    key: 'coughType',
+    labelEn: 'Cough Type (Dry vs Productive)',
+    labelAr: 'طبيعة السعال (جاف أو رطب ببلغم)',
+    labelArSimplified: 'نوع الكحة (كحة جافة ناشفة أو كحة ببلغم)',
+    egyptianColloquial: 'كحة ناشفة، كحة ببلغم، كحة تطلع مخاط، شرقة جافة',
+    patientExplanationAr: 'التمييز بين الكحة الناشفة المهيجة للحلق وبين الكحة الرطبة التي تخرج إفرازات ومخاط من الصدر.',
+    category: 'respiratory',
+    inputType: 'enum',
+    allowedValues: ['dry', 'productive', 'none', 'unknown'],
+    unit: 'categorical',
+    validRange: { allowedValues: ['dry', 'productive', 'none', 'unknown'] },
+    descriptionEn: 'Differentiation between dry irritative cough and wet productive sputum cough.',
+    descriptionAr: 'التمييز السريري بين الكحة الجافة المهيجة والكحة الرطبة المصحوبة ببلغم.'
+  },
+  {
+    symptomId: 'SYM-RESP-007',
+    key: 'hemoptysis',
+    labelEn: 'Hemoptysis (Coughing up Blood)',
+    labelAr: 'نفث الدم / سعال مدمم',
+    labelArSimplified: 'سعال مدمم (خروج دم أو عروق دم مع الكحة)',
+    egyptianColloquial: 'كحة فيها دم، بلغم مدمم، عروق دم مع البصاق، دم طالع من الصدر',
+    patientExplanationAr: 'خروج دم أحمر أو خيوط دموية مع السعال أو البلغم، ويعد علامة خطر حمراء تستوجب فحصاً طبياً فورياً.',
+    category: 'respiratory',
+    inputType: 'boolean',
+    unit: 'boolean',
+    validRange: { allowedValues: [true, false, 'yes', 'no', 'unknown'] },
+    criticalThresholds: { urgent: true },
+    descriptionEn: 'Expectoration of blood or blood-stained sputum from the bronchi, larynx, trachea, or lungs.',
+    descriptionAr: 'خروج دم أحمر صريح أو بلغم مدمم من الجهاز التنفسي.'
+  },
+  {
     symptomId: 'SYM-GEN-001',
     key: 'symptomDurationDays',
     labelEn: 'Symptom Duration (Days)',
     labelAr: 'مدة استمرار الأعراض (بالأيام)',
+    labelArSimplified: 'بقالك كام يوم بتعاني من الأعراض دي؟',
+    egyptianColloquial: 'مدة التعب، بقالها كام يوم، بدأت من إمتى',
+    patientExplanationAr: 'عدد الأيام التي مرت منذ بداية شعورك بالكحة أو النهجان أو السخونية.',
     category: 'duration',
     inputType: 'duration',
     unit: 'days',
@@ -289,6 +360,9 @@ const REFERENCE_SYMPTOMS_CATALOG = [
     key: 'respiratoryRate',
     labelEn: 'Respiratory Rate',
     labelAr: 'معدل التنفس (نفس في الدقيقة)',
+    labelArSimplified: 'سرعة التنفس ولهثان الصدر',
+    egyptianColloquial: 'سرعة النفس، لهثان، النفس سريع ورا بعضه',
+    patientExplanationAr: 'عدد مرات الشهيق والزفير في الدقيقة الواحدة أثناء راحة المريض تماماً.',
     category: 'vitals',
     inputType: 'numeric',
     unit: 'breaths/min',
@@ -302,6 +376,9 @@ const REFERENCE_SYMPTOMS_CATALOG = [
     key: 'temperature',
     labelEn: 'Body Temperature',
     labelAr: 'درجة حرارة الجسم',
+    labelArSimplified: 'السخونية ودرجة حرارة الجسم',
+    egyptianColloquial: 'سخونية، حرارة عالية، حرقان، مصدع ومسخن',
+    patientExplanationAr: 'قياس حرارة الجسم بمقياس الحرارة (الترمومتر)، والحرارة الطبيعية حوالي 37 مئوية.',
     category: 'vitals',
     inputType: 'numeric',
     unit: '°C',
@@ -315,6 +392,9 @@ const REFERENCE_SYMPTOMS_CATALOG = [
     key: 'chestPain',
     labelEn: 'Chest Pain or Discomfort',
     labelAr: 'ألم أو انزعاج في منطقة الصدر',
+    labelArSimplified: 'ألم أو نغزة أو ثقل في الصدر',
+    egyptianColloquial: 'نغزة في الصدر، شكة مع النفس، حجر على الصدر، وجع بالقفص الصدري',
+    patientExplanationAr: 'وجع أو إحساس بنغزة وشكة تزيد غالباً مع أخذ نفس عميق أو الكحة، أو إحساس بضغط وثقل عاصر.',
     category: 'respiratory',
     inputType: 'boolean',
     unit: 'boolean',
@@ -327,6 +407,9 @@ const REFERENCE_SYMPTOMS_CATALOG = [
     key: 'asthmaCopdHistory',
     labelEn: 'Known History of Asthma or COPD',
     labelAr: 'تاريخ مرضي سابق بالربو الشعبي أو السدة الرئوية',
+    labelArSimplified: 'حساسية صدر (ربو) أو سدة رئوية مزمنة',
+    egyptianColloquial: 'عنده حساسية صدر، أزمة ربو، الصدر بيقفل، سدة رئوية من السجاير',
+    patientExplanationAr: 'تشخيص طبي سابق من دكتور صدر بحساسية الشعب الهوائية أو أزمات الربو أو السدة الرئوية المزمنة.',
     category: 'history',
     inputType: 'boolean',
     unit: 'boolean',
@@ -339,6 +422,9 @@ const REFERENCE_SYMPTOMS_CATALOG = [
     key: 'recentInfection',
     labelEn: 'Recent Viral or Bacterial Upper Respiratory Infection',
     labelAr: 'عدوى فيروسية أو بكتيرية حديثة بالجهاز التنفسي',
+    labelArSimplified: 'نزلة برد أو دور إنفلونزا حديث',
+    egyptianColloquial: 'دور برد قريب، إنفلونزا الأيام اللي فاتت، احتقان زور',
+    patientExplanationAr: 'إصابة حديثة بنزلة برد أو زكام أو التهاب بالحلق خلال الأسبوعين الماضيين.',
     category: 'history',
     inputType: 'boolean',
     unit: 'boolean',
@@ -351,6 +437,9 @@ const REFERENCE_SYMPTOMS_CATALOG = [
     key: 'symptomProgression',
     labelEn: 'Symptom Progression over 24-48 hours',
     labelAr: 'مسار تطور الأعراض خلال 24-48 ساعة',
+    labelArSimplified: 'التعب بيزيد ولا بيتحسن ولا زي ما هو؟',
+    egyptianColloquial: 'حالتك بتتحسن، ثابتة، ولا بتسوء وبتتدهور؟',
+    patientExplanationAr: 'ملاحظة مسار حالتك الصحية في اليومين الأخيرين للمساعدة في تحديد سرعة التطور.',
     category: 'progression',
     inputType: 'enum',
     allowedValues: ['improving', 'stable', 'worsening', 'unknown'],
@@ -406,6 +495,143 @@ const REFERENCE_CLINICAL_RULES = [
   }
 ];
 
+// =============================================================================
+// 4. SIMPLIFIED EGYPTIAN MEDICAL DICTIONARY (Altibbi Patient-Centric Standard)
+// Task #85: مراجعة القاموس الطبي العربي المبسط للأعراض التنفسية للمواطن المصري
+// =============================================================================
+const SIMPLIFIED_EGYPTIAN_RESPIRATORY_DICTIONARY = [
+  {
+    termId: 'DICT-RESP-001',
+    clinicalTermAr: 'ضيق التنفس وصعوبة التنفس (Dyspnea)',
+    clinicalTermEn: 'Shortness of Breath / Dyspnea',
+    egyptianTerm: 'نهجان / كرشة نفس',
+    egyptianSynonyms: ['نهجان', 'كرشة نفس', 'صعوبة في سحب النفس', 'الهوا مش مكفي', 'خنقة بالصدر'],
+    simplifiedMeaningAr: 'إحساس بعدم كفاية الهواء عند أخذ النفس، أو الحاجة لبذل مجهود مضاعف لملء الرئتين سواء أثناء الجلوس أو المشي.',
+    simplifiedMeaningEn: 'Sensation of difficult or uncomfortable breathing, feeling like you cannot get enough air into your lungs.',
+    whenToSeeDoctorAr: 'إذا كان النهجان يمنعك من إكمال جملة واحدة دون توقف، أو يحدث فجأة، أو مصحوباً بزرقة بالشفاه أو ألم بالصدر.',
+    redFlagsAr: ['نهجان حاد ومفاجئ', 'زرقة بالوجه أو الشفاه', 'عجز عن التحدث في جمل كاملة'],
+    category: 'dyspnea',
+    icd10: 'R06.0'
+  },
+  {
+    termId: 'DICT-RESP-002',
+    clinicalTermAr: 'ضيق التنفس الجهدي (Dyspnea on Exertion)',
+    clinicalTermEn: 'Dyspnea on Exertion (DOE)',
+    egyptianTerm: 'نهجان عند المجهود أو المشي',
+    egyptianSynonyms: ['نهجان مع المشي', 'نهجان طلوع السلم', 'كرشة نفس مع الحركة', 'نهجان شغل البيت', 'بينهج من أقل حركة'],
+    simplifiedMeaningAr: 'ظهور نهجان وسرعة تنفس ملحوظة فور بذل مجهود بدني بسيط كالمشي أو صعود درجات من السلم، ويخف بالراحة.',
+    simplifiedMeaningEn: 'Shortness of breath triggered by physical activity such as walking or climbing stairs, relieved by rest.',
+    whenToSeeDoctorAr: 'إذا بدأ النهجان يظهر مع مجهودات كانت سهلة سابقاً، أو كان مصحوباً بتورم في القدمين أو ثقل ضاغط بالصدر.',
+    redFlagsAr: ['تدهور سريع في القدرة على بذل المجهود', 'ألم عاصر بالصدر يمتد للذراع'],
+    category: 'dyspnea',
+    icd10: 'R06.02'
+  },
+  {
+    termId: 'DICT-RESP-003',
+    clinicalTermAr: 'السعال الجاف (Dry / Non-productive Cough)',
+    clinicalTermEn: 'Dry / Non-Productive Cough',
+    egyptianTerm: 'كحة جافة (ناشفة بدون بلغم)',
+    egyptianSynonyms: ['كحة ناشفة', 'كحة جافة', 'شرقة مستمرة', 'حرقان ودغدغة بالزور مع كحة', 'كحة نوبات بالليل'],
+    simplifiedMeaningAr: 'كحة مجهدة ومزعجة بدون خروج أي مخاط أو إفرازات من الصدر، وغالباً تسبب شعوراً بالخدش أو الحكة بالحلق.',
+    simplifiedMeaningEn: 'A tickling, irritating cough that produces no phlegm or mucus, often paroxysmal or nocturnal.',
+    whenToSeeDoctorAr: 'إذا استمرت الكحة لأكثر من أسبوعين، أو كانت تمنع النوم تماماً، أو سببت قيئاً وألماً حاداً بالقفص الصدري.',
+    redFlagsAr: ['كحة جافة مع سخونية شديدة ورعشة', 'نقص تشبع الأكسجين عن 93%'],
+    category: 'cough',
+    icd10: 'R05.1'
+  },
+  {
+    termId: 'DICT-RESP-004',
+    clinicalTermAr: 'السعال الرطب المصحوب ببلغم (Productive Cough)',
+    clinicalTermEn: 'Productive / Wet Cough with Sputum',
+    egyptianTerm: 'كحة ببلغم (كحة رطبة)',
+    egyptianSynonyms: ['كحة ببلغم', 'كحة رطبة', 'بلغم على الصدر', 'صدر محتقن ببلغم', 'كحة بتطلع إفرازات'],
+    simplifiedMeaningAr: 'كحة يخرج معها بلغم أو مخاط من مجرى التنفس، وقد يكون لون البلغم شفافاً أو أبيض أو مائلاً للصفرة أو الخضرة.',
+    simplifiedMeaningEn: 'A wet cough that brings up mucus or phlegm from the lungs and bronchial airways.',
+    whenToSeeDoctorAr: 'إذا تحول لون البلغم للأخضر الداكن أو البني، أو كان مصحوباً بحرارة عالية ورعشة، أو استمر لأكثر من 10 أيام.',
+    redFlagsAr: ['بلغم صديدي مصحوب بحرارة تتجاوز 39 مئوية', 'صعوبة بالغة في التنفس'],
+    category: 'cough',
+    icd10: 'R05.2'
+  },
+  {
+    termId: 'DICT-RESP-005',
+    clinicalTermAr: 'الأزيز والصفير الصدري (Wheezing)',
+    clinicalTermEn: 'Wheezing / Bronchospasm',
+    egyptianTerm: 'صفير بالصدر وتزييق (خروشة مسموعة)',
+    egyptianSynonyms: ['صفير بالصدر', 'تزييق الصدر', 'صوت صفارة مع النفس', 'خروشة بالصدر', 'تزييقة الشعب'],
+    simplifiedMeaningAr: 'صوت صفير أو تزييق موسيقي يُسمع من الصدر خصوصاً أثناء إخراج النفس (الزفير) نتيجة ضيق الشعب الهوائية.',
+    simplifiedMeaningEn: 'High-pitched whistling sound produced during breathing when airways become narrowed or constricted.',
+    whenToSeeDoctorAr: 'عند تكرار نوبات الصفير، أو عدم الاستجابة لبخاخات التوسيع الإسعافية، أو ظهور صعوبة في التنفس.',
+    redFlagsAr: ['اختفاء صوت الصفير فجأة مع صعوبة تنفس بالغة (Silent Chest)', 'عجز عن التحدث'],
+    category: 'sounds',
+    icd10: 'R06.2'
+  },
+  {
+    termId: 'DICT-RESP-006',
+    clinicalTermAr: 'نفث الدم / السعال المدمم (Hemoptysis)',
+    clinicalTermEn: 'Hemoptysis / Blood in Sputum',
+    egyptianTerm: 'سعال مدمم (خروج دم أو عروق دم مع الكحة)',
+    egyptianSynonyms: ['كحة فيها دم', 'دم مع البلغم', 'عروق دم مع الكحة', 'بصق دم', 'نزيف مع الكحة'],
+    simplifiedMeaningAr: 'خروج دم أحمر أو خيوط وعروق دموية مختلطة بالبلغم عند السعال، وهو عرض يستوجب دائماً تقييماً طبياً عاجلاً.',
+    simplifiedMeaningEn: 'Coughing up blood or blood-stained mucus from the respiratory tract, requiring urgent clinical evaluation.',
+    whenToSeeDoctorAr: 'فوراً ودون أي تأخير، حتى لو كانت مجرد عروق دم بسيطة، لاستبعاد العدوى الحادة أو النزيف الرئوي.',
+    redFlagsAr: ['كمية دم صريحة تتجاوز ملعقة طعام', 'سعال مدمم مصحوب بهبوط بالضغط أو دوار'],
+    category: 'emergency',
+    icd10: 'R04.2'
+  },
+  {
+    termId: 'DICT-RESP-007',
+    clinicalTermAr: 'الألم الصدري الجنبي والموضعي (Chest Pain)',
+    clinicalTermEn: 'Chest Pain / Discomfort',
+    egyptianTerm: 'ألم أو نغزة أو ثقل في الصدر',
+    egyptianSynonyms: ['نغزة في الصدر', 'شكة مع النفس', 'حجر على الصدر', 'وجع في القفص الصدري', 'ثقل عاصر'],
+    simplifiedMeaningAr: 'وجع أو إحساس بنغزة وشكة تزيد غالباً مع أخذ نفس عميق أو الكحة، أو إحساس بضغط وثقل عاصر على القفص الصدري.',
+    simplifiedMeaningEn: 'Pleuritic, sharp, or pressure-like pain in the chest that may worsen with deep breathing or coughing.',
+    whenToSeeDoctorAr: 'فوراً إذا كان الألم حاداً ومفاجئاً أو ممتداً للكتف أو الفك أو مصحوباً بعرق بارد وغثيان (طوارئ 123).',
+    redFlagsAr: ['ألم عاصر في منتصف الصدر يمتد للذراع الأيسر أو الفك', 'ألم حاد ومفاجئ مع نهجان'],
+    category: 'chest_pain',
+    icd10: 'R07.9'
+  },
+  {
+    termId: 'DICT-RESP-008',
+    clinicalTermAr: 'نقص تشبع الأكسجين الشرياني (Hypoxia / Hypoxemia)',
+    clinicalTermEn: 'Arterial Oxygen Desaturation (SpO2 < 93%)',
+    egyptianTerm: 'نقص نسبة الأكسجين في الدم',
+    egyptianSynonyms: ['نقص الأكسجين', 'الأكسجين نازل', 'جهاز الأكسجين قاري قليل', 'أقل من 90'],
+    simplifiedMeaningAr: 'انخفاض كمية الأكسجين التي يحملها الدم للأعضاء، ويقاس عبر مشبك الإصبع الصغير (Pulse Oximeter). الطبيعي 95% فأكثر.',
+    simplifiedMeaningEn: 'Low level of oxygen in the blood measured by a pulse oximeter, normal is >= 95%.',
+    whenToSeeDoctorAr: 'إذا كانت القراءة بين 90% و 92%، وفوراً لطوارئ المستشفى أو الاتصال بالإسعاف (123) إذا كانت أقل من 90%.',
+    redFlagsAr: ['نسبة الأكسجين أقل من 90%', 'زرقة بالشفتين أو أطراف الأصابع'],
+    category: 'emergency',
+    icd10: 'R09.02'
+  },
+  {
+    termId: 'DICT-RESP-009',
+    clinicalTermAr: 'تسارع معدل التنفس (Tachypnea)',
+    clinicalTermEn: 'Tachypnea / Rapid Breathing',
+    egyptianTerm: 'سرعة التنفس ولهثان الصدر',
+    egyptianSynonyms: ['سرعة التنفس', 'تنفس سريع', 'لهثان', 'نفسه ورا بعضه بسرعة', 'بينهج وقاعد'],
+    simplifiedMeaningAr: 'تنفس أكثر من 20-25 مرة في الدقيقة عند الشخص البالغ وهو مرتاح، بحيث يبدو وكأنه يلهث دون بذل مجهود.',
+    simplifiedMeaningEn: 'Abnormally rapid breathing rate, exceeding 20-25 breaths per minute in a resting adult.',
+    whenToSeeDoctorAr: 'إذا كان معدل التنفس أكثر من 24 في الدقيقة أو مصحوباً بإجهاد بعضلات الرقبة والقفص الصدري.',
+    redFlagsAr: ['معدل تنفس أكثر من 30 في الدقيقة', 'استخدام عضلات مساعدة للتنفس وانكماش الأضلاع'],
+    category: 'dyspnea',
+    icd10: 'R06.82'
+  },
+  {
+    termId: 'DICT-RESP-010',
+    clinicalTermAr: 'الربو الشعبي ونوبات حساسية الصدر (Bronchial Asthma)',
+    clinicalTermEn: 'Bronchial Asthma / Reactive Airway Disease',
+    egyptianTerm: 'حساسية الصدر والربو',
+    egyptianSynonyms: ['حساسية صدر', 'أزمة ربو', 'نوبة ضيق شعب', 'الصدر بيقفل', 'حساسية موسمية'],
+    simplifiedMeaningAr: 'التهاب مزمن وتضيق مؤقت في الشعب الهوائية يسبب نوبات متكررة من ضيق النفس والصفير والكحة خاصة بالليل أو مع التراب وتغير الجو.',
+    simplifiedMeaningEn: 'Chronic inflammatory disorder of the airways causing recurrent episodes of wheezing, breathlessness, and cough.',
+    whenToSeeDoctorAr: 'إذا لم تستجب النوبة لبخاخ الطوارئ، أو عند تكرار النوبات أكثر من مرتين أسبوعياً.',
+    redFlagsAr: ['عجز عن إكمال جملة في نفس واحد', 'عدم استجابة لبخاخ الفنتولين أو موسع الشعب الإسعافي'],
+    category: 'sounds',
+    icd10: 'J45.9'
+  }
+];
+
 class MedicalCatalogService {
   constructor() {
     this.diseases = new Map();
@@ -418,6 +644,30 @@ class MedicalCatalogService {
     REFERENCE_DISEASES_CATALOG.forEach(d => this.diseases.set(d.diseaseId, d));
     REFERENCE_SYMPTOMS_CATALOG.forEach(s => this.symptoms.set(s.key, s));
     REFERENCE_CLINICAL_RULES.forEach(r => this.rules.set(r.ruleId, r));
+  }
+
+  getSimplifiedMedicalDictionary(category = null) {
+    if (category) {
+      return SIMPLIFIED_EGYPTIAN_RESPIRATORY_DICTIONARY.filter(item => item.category === category);
+    }
+    return SIMPLIFIED_EGYPTIAN_RESPIRATORY_DICTIONARY;
+  }
+
+  searchMedicalDictionary(query = '') {
+    const q = String(query || '').trim().toLowerCase();
+    if (!q) return SIMPLIFIED_EGYPTIAN_RESPIRATORY_DICTIONARY;
+
+    return SIMPLIFIED_EGYPTIAN_RESPIRATORY_DICTIONARY.filter(item => {
+      const matchAr = (item.clinicalTermAr && item.clinicalTermAr.toLowerCase().includes(q)) ||
+                      (item.egyptianTerm && item.egyptianTerm.toLowerCase().includes(q)) ||
+                      (item.simplifiedMeaningAr && item.simplifiedMeaningAr.toLowerCase().includes(q));
+      const matchEn = (item.clinicalTermEn && item.clinicalTermEn.toLowerCase().includes(q)) ||
+                      (item.simplifiedMeaningEn && item.simplifiedMeaningEn.toLowerCase().includes(q));
+      const matchSynonyms = Array.isArray(item.egyptianSynonyms) &&
+                            item.egyptianSynonyms.some(s => s.toLowerCase().includes(q));
+      const matchIcd = item.icd10 && item.icd10.toLowerCase().includes(q);
+      return matchAr || matchEn || matchSynonyms || matchIcd;
+    });
   }
 
   getDiseases(module = null) {
@@ -539,5 +789,6 @@ module.exports = {
   medicalCatalogService,
   REFERENCE_DISEASES_CATALOG,
   REFERENCE_SYMPTOMS_CATALOG,
-  REFERENCE_CLINICAL_RULES
+  REFERENCE_CLINICAL_RULES,
+  SIMPLIFIED_EGYPTIAN_RESPIRATORY_DICTIONARY
 };

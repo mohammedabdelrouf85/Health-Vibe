@@ -1857,12 +1857,21 @@
               </div>
             </div>
 
-            <label data-i18n="assessment.shortnessOfBreath">هل يوجد ضيق تنفس؟</label>
+            <div style="margin: 14px 0 10px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+              <span style="font-size: 13px; font-weight: 700; color: var(--text);">الأعراض والقياسات الحالية:</span>
+              <button type="button" class="soft-button" id="btnOpenSimplifiedMedicalDictionary" onclick="openSimplifiedMedicalDictionaryModal()" style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 4px 10px; background: rgba(14, 165, 164, 0.12); border: 1px solid var(--teal); color: var(--teal); border-radius: 6px; cursor: pointer;">
+                <span>📖</span> <span data-i18n="medicalDictionary.openDictionaryBtn">القاموس الطبي المبسط (شرح الأعراض للمواطن المصري)</span>
+              </button>
+            </div>
+
+            <label data-i18n="assessment.shortnessOfBreath">هل يوجد ضيق تنفس أو نهجان؟</label>
+            <small class="field-hint" style="color: var(--muted); font-size: 12px; display: block; margin: -2px 0 6px;" data-i18n="assessment.shortnessOfBreathHelp">نهجان، كرشة نفس، أو صعوبة في سحب النفس (سواء مع المجهود أو أثناء الراحة)</small>
             <div id="breathingChoices" class="choice-row">
               <button class="choice active">نعم</button>
               <button class="choice">لا</button>
             </div>
-            <label data-i18n="assessment.coughLabel">درجة الكحة</label>
+            <label data-i18n="assessment.coughLabel">طبيعة ودرجة الكحة (السعال)</label>
+            <small class="field-hint" style="color: var(--muted); font-size: 12px; display: block; margin: -2px 0 6px;" data-i18n="assessment.coughHelp">كحة جافة (ناشفة بدون بلغم) أو كحة مصحوبة ببلغم</small>
             <div id="coughChoices" class="choice-row four">
               <button class="choice">خفيفة</button>
               <button class="choice active">متوسطة</button>
@@ -1872,32 +1881,35 @@
             <label data-i18n="assessment.o2Label">نسبة الأكسجين (50% - 100%)</label>
             <input id="oxygenInput" type="number" min="50" max="100" value="95" aria-label="نسبة الأكسجين" placeholder="95">
             <div id="oxygenWarning" class="field-warning" hidden></div>
-            <label data-i18n="assessment.tempLabel">درجة الحرارة (اختياري)</label>
+            <label data-i18n="assessment.tempLabel">درجة الحرارة (السخونية)</label>
             <input id="temperatureInput" inputmode="decimal" aria-label="درجة الحرارة" placeholder="37.0 °C أو unknown">
-            <label data-i18n="assessment.respiratoryRateLabel">معدل التنفس (اختياري)</label>
+            <label data-i18n="assessment.respiratoryRateLabel">معدل وسرعة التنفس (اختياري)</label>
             <input id="respiratoryRateInput" type="number" min="5" max="60" aria-label="معدل التنفس في الدقيقة" placeholder="مثال: 18">
-            <label data-i18n="assessment.chestPainLabel">ألم بالصدر</label>
+            <label data-i18n="assessment.chestPainLabel">ألم أو نغزة أو ثقل في الصدر</label>
+            <small class="field-hint" style="color: var(--muted); font-size: 12px; display: block; margin: -2px 0 6px;" data-i18n="assessment.chestPainHelp">نغزة، شكة مع النفس، أو ثقل ضاغط على القفص الصدري</small>
             <div id="chestPainChoices" class="choice-row three">
               <button class="choice">نعم</button>
               <button class="choice active">لا</button>
               <button class="choice">غير معروف</button>
             </div>
-            <label data-i18n="assessment.symptomDurationLabel">مدة الأعراض</label>
+            <label data-i18n="assessment.symptomDurationLabel">مدة الأعراض (بقالك كام يوم؟)</label>
             <input id="symptomDuration" value="3 أيام" aria-label="مدة الأعراض">
-            <label data-i18n="assessment.symptomProgressionLabel">تطور الأعراض</label>
+            <label data-i18n="assessment.symptomProgressionLabel">تطور الأعراض (بتتحسن ولا بتزيد؟)</label>
             <div id="symptomProgressionChoices" class="choice-row three">
               <button class="choice">تتحسن</button>
               <button class="choice active">ثابتة</button>
               <button class="choice">تسوء</button>
               <button class="choice">غير معروف</button>
             </div>
-            <label data-i18n="assessment.recentInfectionLabel">عدوى حديثة</label>
+            <label data-i18n="assessment.recentInfectionLabel">دور برد أو إنفلونزا حديث</label>
+            <small class="field-hint" style="color: var(--muted); font-size: 12px; display: block; margin: -2px 0 6px;" data-i18n="assessment.recentInfectionHelp">إصابة بنزلة برد أو احتقان زور خلال الأسبوعين الماضيين</small>
             <div id="recentInfectionChoices" class="choice-row three">
               <button class="choice">نعم</button>
               <button class="choice active">لا</button>
               <button class="choice">غير معروف</button>
             </div>
-            <label data-i18n="assessment.asthmaCopdLabel">ربو أو COPD</label>
+            <label data-i18n="assessment.asthmaCopdLabel">حساسية صدر (ربو) أو سدة رئوية</label>
+            <small class="field-hint" style="color: var(--muted); font-size: 12px; display: block; margin: -2px 0 6px;" data-i18n="assessment.asthmaCopdHelp">تاريخ مرضي بحساسية الصدر أو أزمات الربو أو السدة الرئوية المزمنة من التدخين</small>
             <div id="asthmaCopdChoices" class="choice-row three">
               <button class="choice">نعم</button>
               <button class="choice active">لا</button>
@@ -4327,6 +4339,47 @@
         <button type="button" id="btnConfirmModelRollback" onclick="executeModelRollback()" style="padding: 8px 18px; font-size: 13px; background: #dc2626; color: #fff; font-weight: 700; border: none; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
           <span>⏪</span> تأكيد التراجع الفوري
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Simplified Egyptian Medical Dictionary Modal (Task #85) -->
+  <div id="simplifiedMedicalDictionaryModal" class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="simplifiedMedicalDictTitle" aria-hidden="true" style="display: none; position: fixed; inset: 0; background: rgba(11, 19, 43, 0.88); backdrop-filter: blur(12px); z-index: 999996; align-items: center; justify-content: center; padding: 16px;">
+    <div class="confirm-card" style="max-width: 680px; width: 100%; max-height: 90vh; display: flex; flex-direction: column; background: var(--surface-1, #132238); border: 1px solid var(--teal); border-radius: 16px; padding: 22px; box-shadow: 0 25px 50px rgba(0,0,0,0.5); color: var(--text);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid var(--line); padding-bottom: 10px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 26px;">📖</span>
+          <div>
+            <h3 id="simplifiedMedicalDictTitle" style="margin: 0; font-size: 17px; color: var(--teal-2);" data-i18n="medicalDictionary.modalTitle">القاموس الطبي العربي المبسط (دليل الأعراض للمواطن المصري)</h3>
+            <small style="color: var(--muted); font-size: 11.5px;" data-i18n="medicalDictionary.modalSubtitle">شرح مبسط وموثوق للأعراض التنفسية ومصطلحات الصدر باللهجة واللغة اليومية المفهومة للجميع</small>
+          </div>
+        </div>
+        <button type="button" id="btnCloseMedicalDictionaryX" onclick="closeSimplifiedMedicalDictionaryModal()" class="outline-button" style="padding: 4px 10px; font-size: 12px;">✕</button>
+      </div>
+
+      <!-- Search Input -->
+      <div style="margin-bottom: 12px; position: relative;">
+        <input type="text" id="medicalDictionarySearchInput" oninput="filterMedicalDictionaryUI(this.value)" class="search-input" style="width: 100%; padding: 10px 14px; font-size: 13.5px; border-radius: 10px;" placeholder="ابحث عن أي عرض (مثل: نهجان، كحة ناشفة، بلغم، صفير بالصدر، نغزة...)" aria-label="البحث في القاموس الطبي المبسط">
+      </div>
+
+      <!-- Category Filter Chips -->
+      <div style="display: flex; gap: 6px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 12px;" role="tablist">
+        <button type="button" class="soft-button active" onclick="setMedicalDictCategoryFilter('all', this)" style="padding: 4px 10px; font-size: 11.5px; border-radius: 20px;">الكل</button>
+        <button type="button" class="soft-button" onclick="setMedicalDictCategoryFilter('dyspnea', this)" style="padding: 4px 10px; font-size: 11.5px; border-radius: 20px;">النهجان والتنفس</button>
+        <button type="button" class="soft-button" onclick="setMedicalDictCategoryFilter('cough', this)" style="padding: 4px 10px; font-size: 11.5px; border-radius: 20px;">الكحة والسعال</button>
+        <button type="button" class="soft-button" onclick="setMedicalDictCategoryFilter('sounds', this)" style="padding: 4px 10px; font-size: 11.5px; border-radius: 20px;">صفير وتزييق الصدر</button>
+        <button type="button" class="soft-button" onclick="setMedicalDictCategoryFilter('chest_pain', this)" style="padding: 4px 10px; font-size: 11.5px; border-radius: 20px;">آلام ونغزات الصدر</button>
+        <button type="button" class="soft-button" onclick="setMedicalDictCategoryFilter('emergency', this)" style="padding: 4px 10px; font-size: 11.5px; border-radius: 20px; color: #ef4444;">علامات الطوارئ</button>
+      </div>
+
+      <!-- Dynamic Items Container -->
+      <div id="medicalDictionaryItemsContainer" style="flex: 1; overflow-y: auto; padding-right: 4px; display: flex; flex-direction: column; gap: 10px;">
+        <!-- Injected via JavaScript -->
+      </div>
+
+      <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--line); padding-top: 12px; margin-top: 12px;">
+        <span style="font-size: 11.5px; color: var(--muted);">معتمد سريرياً بالتعاون مع استشاريي الأمراض الصدرية • مطابق لمعايير الطبي Altibbi</span>
+        <button type="button" onclick="closeSimplifiedMedicalDictionaryModal()" class="outline-button" style="padding: 6px 14px; font-size: 12.5px;" data-i18n="medicalDictionary.closeBtn">إغلاق</button>
       </div>
     </div>
   </div>

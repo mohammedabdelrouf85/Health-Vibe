@@ -10,6 +10,8 @@ backend/.env
 # Build outputs
 dist/
 build/
+.firebase/
+
 
 # OS files
 .DS_Store

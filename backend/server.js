@@ -17578,6 +17578,27 @@ app.get('/api/medical-catalog/rules', (req, res) => {
 });
 
 /**
+ * GET /api/medical-catalog/simplified-dictionary
+ * Task #85: Returns simplified Egyptian medical dictionary for patient-friendly comprehension (Altibbi standard).
+ */
+app.get('/api/medical-catalog/simplified-dictionary', (req, res) => {
+  const categoryParam = req.query.category || null;
+  const dictionary = medicalCatalogService.getSimplifiedMedicalDictionary(categoryParam);
+  res.status(200).json({ success: true, count: dictionary.length, dictionary });
+});
+
+/**
+ * GET /api/medical-catalog/simplified-dictionary/search
+ * Task #85: Searches simplified medical dictionary by Egyptian colloquial terms or clinical symptoms.
+ */
+app.get('/api/medical-catalog/simplified-dictionary/search', (req, res) => {
+  const query = req.query.q || req.query.query || '';
+  const results = medicalCatalogService.searchMedicalDictionary(query);
+  res.status(200).json({ success: true, count: results.length, query, results });
+});
+
+
+/**
  * POST /api/appointments/book
  * Books an appointment using atomic transaction semantics on doctor slotId.
  */
