@@ -627,6 +627,9 @@ function recordOtpFailure(key) {
 }
 
 function clearOtpLockout(key) {
+  otpLockouts.delete(key);
+}
+
 // =============================================================================
 // 🧪 DEMO SANDBOX & STAGING/PRODUCTION ISOLATION ENGINE (Req 76)
 // =============================================================================
@@ -2591,6 +2594,18 @@ async function recordUserSession(req, userId, userEmail) {
  * Validates cryptographically signed JWT header: "Authorization: Bearer <ID_TOKEN>"
  */
 async function requireAuth(req, res, next) {
+  // Mock / Dev emulator bypass for testing environments (strictly forbidden in production)
+  if (!isProduction && req.headers['x-test-uid']) {
+    req.user = {
+      uid: req.headers['x-test-uid'],
+      email: req.headers['x-test-email'] || 'test@example.com',
+      role: req.headers['x-test-role'] || 'patient',
+      email_verified: req.headers['x-test-email-verified'] === 'true',
+      auth_time: Math.floor(Date.now() / 1000)
+    };
+    return next();
+  }
+
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({
@@ -10275,6 +10290,90 @@ app.post('/api/bot/webhook', (req, res) => {
   }
   whatsappBot.handleInboundWebhook(req.body);
   res.sendStatus(200);
+});
+
+// =============================================================================
+// 📧 & 📱 CLINIDO-GRADE CONTACT VERIFICATION & EGYPTIAN PHONE ENGINE (#81)
+// =============================================================================
+function maskEmailAddress(email) {
+  if (!email || !email.includes('@')) return '***@***.com';
+  const [user, domain] = email.split('@');
+  if (user.length <= 2) return `${user[0]}*@${domain}`;
+  return `${user[0]}***${user.slice(-1)}@${domain}`;
+}
+
+/**
+ * POST /api/auth/phone/validate
+ * Validates Egyptian Mobile Number (010/011/012/015) and returns carrier metadata.
+ */
+app.post('/api/auth/phone/validate', (req, res) => {
+  const { phoneNumber } = req.body || {};
+  const validation = whatsappBot.validateEgyptianMobile(phoneNumber);
+  res.json({
+    success: validation.isValid,
+    ...validation
+  });
+});
+
+/**
+ * POST /api/auth/email/request-otp
+ * Alias endpoint for requesting email OTP verification code.
+ */
+app.post('/api/auth/email/request-otp', requireAuth, (req, res, next) => {
+  req.url = '/api/auth/send-verification-email';
+  return app._router.handle(req, res, next);
+});
+
+/**
+ * POST /api/auth/email/verify-otp
+ * Alias endpoint for verifying email OTP code.
+ */
+app.post('/api/auth/email/verify-otp', requireAuth, (req, res, next) => {
+  req.url = '/api/auth/verify-email-otp';
+  return app._router.handle(req, res, next);
+});
+
+/**
+ * GET /api/reports/contact-verification-status
+ * Returns verified status of patient's communication channels for report delivery (CliniDo standard).
+ */
+app.get('/api/reports/contact-verification-status', requireAuth, async (req, res) => {
+  const userId = req.user.uid;
+  let phoneVerified = false;
+  let emailVerified = Boolean(req.user.email_verified || req.user.emailVerified);
+  let rawPhone = null;
+  let userEmail = req.user.email || null;
+
+  if (db && userId) {
+    try {
+      const getDocPromise = db.collection('users').doc(userId).get();
+      const doc = await Promise.race([
+        getDocPromise,
+        new Promise((resolve) => setTimeout(() => resolve(null), 1200))
+      ]);
+      if (doc && doc.exists) {
+        const data = doc.data();
+        if (data.phoneVerified) phoneVerified = true;
+        if (data.emailVerified) emailVerified = true;
+        rawPhone = data.phoneNumber || null;
+        if (data.email) userEmail = data.email;
+      }
+    } catch (_) {}
+  }
+
+  const canReceiveReports = phoneVerified || emailVerified;
+  res.json({
+    success: true,
+    canReceiveReports,
+    phoneVerified,
+    emailVerified,
+    maskedPhone: rawPhone ? whatsappBot.maskPhoneNumber(rawPhone) : null,
+    maskedEmail: userEmail ? maskEmailAddress(userEmail) : null,
+    carrierInfo: rawPhone ? whatsappBot.validateEgyptianMobile(rawPhone) : null,
+    message: canReceiveReports
+      ? 'بيانات التواصل معتمدة ومؤكدة لاستلام التقارير الطبية بأمان.'
+      : 'يرجى تأكيد رقم الهاتف (010/011/012/015) أو البريد الإلكتروني لتأمين استلام التقارير الطبية وإشعارات المتابعة السريرية.'
+  });
 });
 
 const PRIVACY_CONSENT_VERSION = 'HealthVibe-Privacy-v1.0';

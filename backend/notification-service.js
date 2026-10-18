@@ -998,13 +998,22 @@ async function sendClinicalNotificationEmail(options = {}) {
         };
 
         const col = db.collection('email_notifications');
-        if (typeof col.add === 'function') {
-          const docRef = await col.add(notifDoc);
-          notificationDocId = docRef?.id || null;
-        } else if (typeof col.doc === 'function') {
-          notificationDocId = `notif_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-          await col.doc(notificationDocId).set(notifDoc);
-        }
+        const writePromise = (async () => {
+          if (typeof col.add === 'function') {
+            const docRef = await col.add(notifDoc);
+            return docRef?.id || null;
+          } else if (typeof col.doc === 'function') {
+            const docId = `notif_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+            await col.doc(docId).set(notifDoc);
+            return docId;
+          }
+          return null;
+        })();
+
+        notificationDocId = await Promise.race([
+          writePromise,
+          new Promise((resolve) => setTimeout(() => resolve(null), 1200))
+        ]);
       } catch (dbErr) {
         console.warn('[NOTIFICATION WARNING] Failed to persist email_notification:', dbErr.message);
       }

@@ -8689,7 +8689,7 @@ function isUserVerified(user) {
   if (isOwnerUser(user)) return true;
   if (user.emailVerified) return true;
   if (window._isUserVerified) return true;
-  if (window._cachedUserDoc && (window._cachedUserDoc.emailVerified === true || window._cachedUserDoc.isVerified === true)) {
+  if (window._cachedUserDoc && (window._cachedUserDoc.emailVerified === true || window._cachedUserDoc.isVerified === true || window._cachedUserDoc.phoneVerified === true)) {
     return true;
   }
   return false;
@@ -8748,15 +8748,83 @@ function updateEmailVerificationUI(user) {
   const checkText = document.getElementById("checkVerificationBtn")?.querySelector("span");
   const phoneVerifyText = document.getElementById("bannerPhoneVerifyText");
 
-  if (title) title.textContent = isEn ? "Account verification needed" : "تأكيد وتوثيق الحساب مطلوب";
+  if (title) title.textContent = isEn ? "Account Verification Needed (CliniDo Standard)" : "تأكيد بيانات التواصل وتوثيق الحساب (معيار كلينيدو)";
   if (desc) desc.textContent = isEn
-    ? `WhatsApp and email activation are coming soon.`
-    : `تفعيل الواتساب والبريد الإلكتروني قريبًا.`;
+    ? `Verify your Egyptian mobile number (010/011/012/015) or email address via OTP to ensure secure delivery of certified medical reports.`
+    : `يرجى تأكيد رقم هاتفك المحمول (010/011/012/015) أو بريدك الإلكتروني عبر رمز OTP لضمان صحة بيانات التواصل عند إرسال واستلام التقارير الطبية.`;
   if (resendText && !resendCooldown) {
-    resendText.textContent = isEn ? "Soon" : "قريبًا";
+    resendText.textContent = isEn ? "Resend Link" : "إعادة إرسال الرابط";
   }
-  if (checkText) checkText.textContent = isEn ? "Soon" : "قريبًا";
-  if (phoneVerifyText) phoneVerifyText.textContent = isEn ? "Activation Soon" : "التفعيل قريبًا";
+  if (checkText) checkText.textContent = isEn ? "Check Verification" : "تحقق الآن";
+  if (phoneVerifyText) phoneVerifyText.textContent = isEn ? "Verify Phone (OTP)" : "تأكيد الهاتف (OTP)";
+}
+
+/**
+ * Validates Egyptian Mobile Number on the client side (010, 011, 012, 015).
+ * Matches CliniDo / Egyptian Telecom Regulatory Authority (NTRA) standards.
+ */
+function validateEgyptianMobileClient(phoneNumber) {
+  if (!phoneNumber) {
+    return {
+      isValid: false,
+      reason: 'EMPTY_PHONE',
+      message: (typeof currentLanguage !== 'undefined' && currentLanguage === 'en')
+        ? 'Egyptian mobile number is required.'
+        : 'رقم الموبايل المصري مطلوب.'
+    };
+  }
+
+  const clean = String(phoneNumber).trim().replace(/[^\d]/g, '');
+  let local11 = '';
+  let intl12 = '';
+
+  if (clean.startsWith('20') && clean.length === 12) {
+    intl12 = clean;
+    local11 = '0' + clean.slice(2);
+  } else if (clean.startsWith('0020') && clean.length === 14) {
+    intl12 = clean.slice(2);
+    local11 = '0' + clean.slice(4);
+  } else if (clean.startsWith('01') && clean.length === 11) {
+    local11 = clean;
+    intl12 = '20' + clean.slice(1);
+  } else {
+    return {
+      isValid: false,
+      reason: 'INVALID_FORMAT',
+      message: (typeof currentLanguage !== 'undefined' && currentLanguage === 'en')
+        ? 'Egyptian mobile number must consist of 11 digits starting with 010, 011, 012, or 015.'
+        : 'يجب أن يتكون رقم الموبايل المصري من 11 رقماً ويبدأ بـ 010 أو 011 أو 012 أو 015.'
+    };
+  }
+
+  const prefix = local11.slice(0, 3);
+  const carriers = {
+    '010': { operator: 'Vodafone', operatorAr: 'فودافون مصر', badge: '🔴 فودافون مصر' },
+    '011': { operator: 'Etisalat', operatorAr: 'إي آند مصر (اتصالات)', badge: '🟢 اتصالات مصر (e&)' },
+    '012': { operator: 'Orange', operatorAr: 'أورنج مصر', badge: '🟠 أورنج مصر' },
+    '015': { operator: 'WE', operatorAr: 'المصرية للاتصالات (WE)', badge: '🟣 وي (WE)' }
+  };
+
+  if (!carriers[prefix]) {
+    return {
+      isValid: false,
+      reason: 'INVALID_OPERATOR',
+      message: (typeof currentLanguage !== 'undefined' && currentLanguage === 'en')
+        ? `Carrier prefix (${prefix}) is not an accredited Egyptian mobile operator. Valid prefixes are 010, 011, 012, 015.`
+        : `بادئة الموبايل (${prefix}) غير معتمدة. شبكات المحمول المصرية المعتمدة هي 010 (فودافون)، 011 (اتصالات)، 012 (أورنج)، أو 015 (وي).`
+    };
+  }
+
+  return {
+    isValid: true,
+    operator: carriers[prefix].operator,
+    operatorAr: carriers[prefix].operatorAr,
+    carrierBadge: carriers[prefix].badge,
+    carrierCode: prefix,
+    localNumber: local11,
+    normalizedNumber: intl12,
+    internationalNumber: `+${intl12}`
+  };
 }
 
 function switchVerifyModalTab(tabName) {
@@ -8796,64 +8864,41 @@ function switchVerifyModalTab(tabName) {
     if (secOtp) secOtp.style.display = "none";
     if (secEmail) secEmail.style.display = "block";
   }
-  updateVerificationSoonState();
-}
-
-function updateVerificationSoonState() {
-  const isEn = currentLanguage === "en";
-  const soonText = isEn ? "Soon" : "قريبًا";
-  const whatsAppLabel = document.getElementById("tabOtpMethodLabel");
-  const emailLabel = document.getElementById("tabEmailMethodLabel");
-  const requestBotBtn = document.getElementById("requestBotCodeBtn");
-  const requestBotText = document.getElementById("requestBotBtnText");
-  const confirmOtpBtn = document.getElementById("confirmOtpBtn");
-  const emailCheckBtn = document.getElementById("verifyModalCheckBtn");
-  const emailResendBtn = document.getElementById("verifyModalResendBtn");
-  const emailNote = document.getElementById("verifyModalEmailNote");
-  const otpNote = document.getElementById("otpDigitsLabel");
-  const phoneInput = document.getElementById("verifyPhoneInput");
-
-  if (whatsAppLabel) whatsAppLabel.textContent = isEn ? `WhatsApp Bot (${soonText})` : `بوت الواتساب (${soonText})`;
-  if (emailLabel) emailLabel.textContent = isEn ? `Email Link (${soonText})` : `رابط البريد (${soonText})`;
-  if (requestBotText) requestBotText.textContent = isEn ? `WhatsApp verification coming soon` : `تفعيل الواتساب قريبًا`;
-  if (confirmOtpBtn) confirmOtpBtn.textContent = isEn ? `Code confirmation coming soon` : `تأكيد الكود قريبًا`;
-  if (emailCheckBtn) emailCheckBtn.textContent = soonText;
-  if (emailResendBtn) emailResendBtn.textContent = soonText;
-  if (emailNote) {
-    emailNote.textContent = isEn
-      ? "Email verification is coming soon. Please use the app without this activation step until it is enabled."
-      : "تفعيل البريد الإلكتروني قريبًا. يمكنك استخدام التطبيق بدون خطوة التفعيل حتى يتم تشغيلها.";
-  }
-  if (otpNote) {
-    otpNote.textContent = isEn
-      ? "WhatsApp code activation is coming soon."
-      : "تفعيل كود الواتساب قريبًا.";
-  }
-
-  [requestBotBtn, confirmOtpBtn, emailCheckBtn, emailResendBtn].forEach((btn) => {
-    if (!btn) return;
-    btn.disabled = true;
-    btn.setAttribute("aria-disabled", "true");
-    btn.style.opacity = "0.62";
-    btn.style.cursor = "not-allowed";
-  });
-  if (phoneInput) phoneInput.disabled = true;
 }
 
 /**
- * Request automated secret OTP code via WhatsApp Bot
+ * Request automated secret OTP code via WhatsApp Bot with Egyptian Carrier Verification (010/011/012/015)
  * The generated code is NEVER revealed on screen to maintain full confidentiality.
  */
 async function requestBotOtpCode() {
-  const isEn = currentLanguage === "en";
-  showToast(isEn ? "WhatsApp verification is coming soon." : "تفعيل الواتساب قريبًا.");
-  updateVerificationSoonState();
-  return;
+  const isEn = (typeof currentLanguage !== "undefined" && currentLanguage === "en");
   const requestBtn = document.getElementById("requestBotCodeBtn");
   const requestBtnText = document.getElementById("requestBotBtnText");
   const statusNotice = document.getElementById("botStatusNotice");
   const phoneInput = document.getElementById("verifyPhoneInput");
-  const phoneNumber = normalizePhoneNumberInput(phoneInput?.value || "");
+  const rawPhone = phoneInput?.value || "";
+
+  if (otpCooldownSeconds > 0) {
+    showToast(isEn ? `Please wait ${otpCooldownSeconds}s before requesting a new code.` : `يرجى الانتظار ${otpCooldownSeconds} ثانية قبل طلب كود جديد.`);
+    return;
+  }
+
+  // CliniDo-standard Egyptian Mobile Validation
+  const validation = validateEgyptianMobileClient(rawPhone);
+  if (!validation.isValid) {
+    showToast(`⚠️ ${validation.message}`);
+    if (phoneInput) {
+      phoneInput.focus();
+      phoneInput.style.borderColor = "#dc2626";
+    }
+    return;
+  }
+
+  if (phoneInput) {
+    phoneInput.style.borderColor = "var(--line)";
+    phoneInput.value = validation.internationalNumber;
+  }
+  const phoneNumber = validation.normalizedNumber;
 
   if (otpCooldownSeconds > 0) {
     showToast(isEn ? `Please wait ${otpCooldownSeconds}s before requesting a new code.` : `يرجى الانتظار ${otpCooldownSeconds} ثانية قبل طلب كود جديد.`);
@@ -8956,10 +9001,7 @@ async function requestBotOtpCode() {
 }
 
 async function verifyPhoneOtp() {
-  const isEn = currentLanguage === "en";
-  showToast(isEn ? "WhatsApp verification is coming soon." : "تفعيل الواتساب قريبًا.");
-  updateVerificationSoonState();
-  return;
+  const isEn = (typeof currentLanguage !== "undefined" && currentLanguage === "en");
   const otpInput = document.getElementById("verifyOtpCodeInput");
   const enteredCode = (otpInput?.value || "").trim().replace(/\D/g, "");
 
@@ -12008,6 +12050,27 @@ window.dispatchReportToDoctor = async function(caseId) {
   if (btn) {
     btn.disabled = true;
     btn.innerHTML = `<span>⏳</span> ${isEn ? "Dispatching to Doctor Inbox..." : "جاري الإرسال للطبيب..."}`;
+  }
+
+  // Verify patient contact info (CliniDo standard)
+  const user = auth ? auth.currentUser : null;
+  const isVerified = (typeof isUserVerified === "function") && isUserVerified(user);
+  if (!isVerified && !isOwnerUser(user)) {
+    if (typeof openVerifyRequiredModal === "function") {
+      showToast(isEn
+        ? "⚠️ CliniDo Security: Please verify your Egyptian mobile (010/011/012/015) or email via OTP before dispatching reports."
+        : "⚠️ معيار أمان كلينيدو: يرجى تأكيد رقم الموبايل المصري (010/011/012/015) أو بريدك الإلكتروني عبر رمز OTP لضمان صحة بيانات التواصل عند إرسال التقارير.");
+      openVerifyRequiredModal(
+        isEn ? "Medical Report Dispatch" : "إرسال التقرير الطبي",
+        isEn ? "Medical Report Dispatch" : "إرسال التقرير الطبي",
+        "otp"
+      );
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = `<span>📨</span> ${isEn ? "Verify Contact & Dispatch" : "تأكيد بيانات التواصل والإرسال"}`;
+      }
+      return;
+    }
   }
 
   try {

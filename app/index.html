@@ -615,6 +615,11 @@
           </div>
         </div>
         <div class="top-actions">
+          <a href="tel:123" id="topbarEmergencyBtn" class="topbar-emergency-btn" aria-label="اتصال فوري بالإسعاف 123" data-i18n-title="assessment.topbarEmergencyTitle" title="طوارئ طبية عاجلة (123) — اتصال فوري بالإسعاف">
+            <span class="pulse-dot"></span>
+            <span style="font-size: 13px;">🚨</span>
+            <span class="topbar-emergency-label" data-i18n="assessment.topbarEmergencyAmbulance">إسعاف 123</span>
+          </a>
           <button id="topbarThemeToggle" type="button" class="theme-toggle" aria-label="Toggle theme" title="Toggle theme"><span class="theme-icon">🌙</span></button>
           <a href="./clinics.html" target="_blank" rel="noopener" class="soft-button" style="text-decoration:none; padding:6px 12px; font-size:12px; font-weight:700; display:inline-flex; align-items:center; gap:6px; border-radius:8px; border:1px solid rgba(9, 184, 182, 0.4); color:var(--teal); background:rgba(9, 184, 182, 0.08);" data-i18n-title="nav.clinicsSales">
             <span>🏥</span>
@@ -1763,6 +1768,27 @@
 
       <section id="screen-assessment" class="screen">
         <div class="form-layout">
+          <!-- Persistent Top Emergency Warning Bar (Buoy Health Benchmark #80) -->
+          <aside id="assessmentPersistentEmergencyBar" class="buoy-emergency-sticky-bar" role="alert" aria-label="تنبيه الطوارئ السريري الفوري">
+            <div class="buoy-emergency-content">
+              <div class="buoy-emergency-text">
+                <div class="buoy-emergency-badge">
+                  <span class="pulsing-siren">🚨</span>
+                  <strong data-i18n="assessment.persistentEmergencyTitle">⚠️ حالة طوارئ محتملة؟ اتصل بالإسعاف (123)</strong>
+                </div>
+                <p data-i18n="assessment.persistentEmergencyNotice">
+                  إذا كنت تشعر باختناق حاد، صعوبة مفاجئة وبالغة في التنفس، أو ألم عاصر في الصدر — لا تنتظر مراجعة الطبيب ولا تستكمل هذا التقييم. اتصل فوراً بالإسعاف المصري (123) أو توجه لأقرب قسم طوارئ.
+                </p>
+              </div>
+              <div class="buoy-emergency-actions">
+                <a href="tel:123" class="hv-btn hv-btn-danger hv-btn-md emergency-direct-call-btn" aria-label="اتصل بالإسعاف 123 فوراً">
+                  <span class="call-icon">📞</span>
+                  <span data-i18n="assessment.callAmbulanceImmediateShort">اتصل بالإسعاف (123)</span>
+                </a>
+              </div>
+            </div>
+          </aside>
+
           <article class="panel form-panel">
             <div class="panel-head"><h3 data-i18n="assessment.title">تقييم التنفس</h3><span id="assessmentProgressLabel" class="pill info">الخطوة 2 من 4</span></div>
             <div class="progress" aria-label="Assessment completion progress"><span id="assessmentProgressBar" style="width:0%"></span></div>

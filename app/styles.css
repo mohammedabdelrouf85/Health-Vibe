@@ -4341,6 +4341,148 @@ body.dark .critical-detected-item {
   border-color: rgba(239, 68, 68, 0.55);
 }
 
+/* ==========================================================================
+   BUOY HEALTH BENCHMARK: PERSISTENT EMERGENCY TOP BAR & QUICK ACTIONS (#80)
+   ========================================================================== */
+.buoy-emergency-sticky-bar {
+  width: 100%;
+  margin: 0 0 18px 0;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(254, 242, 242, 0.95), rgba(254, 226, 226, 0.85));
+  border: 2px solid #ef4444;
+  box-shadow: 0 8px 24px rgba(239, 68, 68, 0.16);
+  padding: 14px 18px;
+  position: relative;
+  z-index: 10;
+  animation: pulseEmergencyCard 3.5s infinite ease-in-out;
+}
+
+body.dark .buoy-emergency-sticky-bar,
+html.hv-theme-dark .buoy-emergency-sticky-bar {
+  background: linear-gradient(135deg, rgba(43, 18, 22, 0.95), rgba(30, 11, 13, 0.90));
+  border-color: #f87171;
+  box-shadow: 0 8px 26px rgba(239, 68, 68, 0.28);
+}
+
+.buoy-emergency-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.buoy-emergency-text {
+  flex: 1 1 320px;
+}
+
+.buoy-emergency-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.buoy-emergency-badge strong {
+  font-size: 15px;
+  font-weight: 800;
+  color: #b91c1c;
+}
+
+body.dark .buoy-emergency-badge strong,
+html.hv-theme-dark .buoy-emergency-badge strong {
+  color: #fca5a5;
+}
+
+.buoy-emergency-text p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #7f1d1d;
+  font-weight: 600;
+}
+
+body.dark .buoy-emergency-text p,
+html.hv-theme-dark .buoy-emergency-text p {
+  color: #fecaca;
+}
+
+.buoy-emergency-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.buoy-emergency-actions .emergency-direct-call-btn {
+  background: #dc2626;
+  color: #ffffff !important;
+  font-weight: 800;
+  font-size: 14px;
+  padding: 10px 18px;
+  border-radius: 12px;
+  box-shadow: 0 4px 14px rgba(220, 38, 38, 0.4);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.buoy-emergency-actions .emergency-direct-call-btn:hover {
+  background: #b91c1c;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(220, 38, 38, 0.55);
+}
+
+/* Persistent Topbar Emergency Quick Button (Across All Screens) */
+.topbar-emergency-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 10px;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1.5px solid rgba(239, 68, 68, 0.45);
+  color: #dc2626 !important;
+  font-size: 13px;
+  font-weight: 800;
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+body.dark .topbar-emergency-btn,
+html.hv-theme-dark .topbar-emergency-btn {
+  background: rgba(239, 68, 68, 0.22);
+  border-color: #f87171;
+  color: #fca5a5 !important;
+}
+
+.topbar-emergency-btn:hover {
+  background: #dc2626;
+  color: #ffffff !important;
+  border-color: #dc2626;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.35);
+}
+
+.topbar-emergency-btn .pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #dc2626;
+  box-shadow: 0 0 8px #dc2626;
+  animation: pulseRedGlow 1.8s infinite ease-in-out;
+}
+
+body.dark .topbar-emergency-btn .pulse-dot {
+  background: #f87171;
+  box-shadow: 0 0 8px #f87171;
+}
+
 
 /* ==========================================================================
    Screen-Pending Emergency Banner
@@ -6331,11 +6473,210 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-:where(.solid-button, .outline-button, .soft-button, .danger-button, .google-button, .auth-submit-btn, .banner-btn, .filter-tab, .status-filter-tab, .kpi-pill-btn, .legal-tab-btn, .verify-tab, .emergency-call-btn, .emergency-big-call-btn, .emergency-banner-guide-btn, .emergency-guide-trigger-btn, .timeline-filter-btn, .btn-clinical, .slot-list button, .mobile-nav-btn, .icon-button) {
+:where(.solid-button, .outline-button, .soft-button, .danger-button, .google-button, .auth-submit-btn, .banner-btn, .filter-tab, .status-filter-tab, .kpi-pill-btn, .legal-tab-btn, .verify-tab, .emergency-call-btn, .emergency-big-call-btn, .emergency-banner-guide-btn, .emergency-guide-trigger-btn, .timeline-filter-btn, .btn-clinical, .slot-list button, .mobile-nav-btn, .icon-button, .hv-btn) {
   border-radius: var(--radius-sm);
   font-weight: 800;
   letter-spacing: 0;
   transition: background-color .18s ease, border-color .18s ease, color .18s ease, box-shadow .18s ease, transform .18s ease, opacity .18s ease;
+}
+
+/* ==========================================================================
+   DOCTOLIB-GRADE MEDICAL DESIGN SYSTEM: UNIFIED BUTTONS & BADGES (#78)
+   ========================================================================== */
+.hv-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 18px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  font-family: var(--font-sans);
+  font-size: 14.5px;
+  font-weight: 700;
+  line-height: 1;
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+  transition: all .2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.hv-btn:focus-visible {
+  outline: 3px solid #ffffff;
+  outline-offset: 3px;
+  box-shadow: 0 0 0 6px var(--teal);
+}
+
+/* Primary CTA: Medical Teal */
+.hv-btn-primary {
+  color: #ffffff !important;
+  background: linear-gradient(135deg, var(--teal), #004d4f);
+  box-shadow: 0 6px 16px rgba(0, 109, 111, 0.24);
+  border-color: transparent;
+}
+.hv-btn-primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(0, 109, 111, 0.32);
+}
+.hv-btn-primary:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 4px 10px rgba(0, 109, 111, 0.2);
+}
+
+/* Secondary CTA: Medical Blue for Telehealth & Scheduling */
+.hv-btn-secondary {
+  color: #ffffff !important;
+  background: var(--blue, #2b7de9);
+  box-shadow: 0 6px 16px rgba(43, 125, 233, 0.24);
+  border-color: transparent;
+}
+.hv-btn-secondary:hover:not(:disabled) {
+  background: #1e67c9;
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(43, 125, 233, 0.32);
+}
+.hv-btn-secondary:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+/* Outline CTA: Neutral Bordered */
+.hv-btn-outline {
+  color: var(--ink);
+  background: var(--surface);
+  border-color: var(--line);
+}
+.hv-btn-outline:hover:not(:disabled) {
+  background: var(--surface-hover);
+  border-color: var(--teal);
+  color: var(--teal);
+  transform: translateY(-1px);
+}
+
+/* Soft CTA: Tinted Cyan */
+.hv-btn-soft {
+  color: var(--teal);
+  background: var(--cyan);
+  border-color: color-mix(in srgb, var(--teal) 18%, transparent);
+}
+.hv-btn-soft:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--cyan) 85%, var(--teal));
+  border-color: var(--teal);
+  transform: translateY(-1px);
+}
+
+/* Danger / Emergency CTA */
+.hv-btn-danger {
+  color: var(--red);
+  background: rgba(239, 68, 68, 0.12);
+  border-color: color-mix(in srgb, var(--red) 35%, transparent);
+}
+.hv-btn-danger:hover:not(:disabled) {
+  background: var(--red);
+  color: #ffffff !important;
+  border-color: transparent;
+  box-shadow: 0 6px 18px rgba(220, 38, 38, 0.28);
+}
+
+/* Button Size Modifiers */
+.hv-btn-sm {
+  min-height: 36px;
+  min-width: 36px;
+  padding: 0 12px;
+  font-size: 13px;
+  border-radius: 10px;
+}
+.hv-btn-md {
+  min-height: 44px;
+  padding: 0 18px;
+  font-size: 14.5px;
+  border-radius: 12px;
+}
+.hv-btn-lg {
+  min-height: 52px;
+  padding: 0 24px;
+  font-size: 16px;
+  border-radius: 14px;
+}
+.hv-btn-block {
+  width: 100%;
+  display: flex;
+}
+
+/* Universal Clinical Badges & Status Chips */
+.hv-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.hv-badge-success {
+  background: var(--triage-green-bg, rgba(34, 197, 94, 0.14));
+  color: var(--triage-green-text, #16a34a);
+  border: 1px solid var(--triage-green-border, rgba(34, 197, 94, 0.35));
+}
+.hv-badge-warning {
+  background: var(--triage-amber-bg, rgba(245, 158, 11, 0.14));
+  color: var(--triage-amber-text, #d97706);
+  border: 1px solid var(--triage-amber-border, rgba(245, 158, 11, 0.35));
+}
+.hv-badge-danger {
+  background: var(--triage-red-bg, rgba(239, 68, 68, 0.14));
+  color: var(--triage-red-text, #dc2626);
+  border: 1px solid var(--triage-red-border, rgba(239, 68, 68, 0.35));
+}
+.hv-badge-info {
+  background: rgba(43, 125, 233, 0.14);
+  color: #2b7de9;
+  border: 1px solid rgba(43, 125, 233, 0.35);
+}
+
+/* Typography Hierarchy Utility Classes */
+.hv-text-hero {
+  font-size: clamp(28px, 4.5vw, 44px);
+  font-weight: 800;
+  line-height: 1.15;
+  color: var(--ink);
+}
+.hv-text-title {
+  font-size: clamp(22px, 3.2vw, 26px);
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--ink);
+}
+.hv-text-subtitle {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--ink);
+}
+.hv-text-body {
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.6;
+  color: var(--ink);
+}
+.hv-text-caption {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--muted);
+}
+.hv-text-disclaimer {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--muted);
 }
 
 :where(.solid-button, .auth-submit-btn, .banner-btn.primary):hover:not(:disabled) {

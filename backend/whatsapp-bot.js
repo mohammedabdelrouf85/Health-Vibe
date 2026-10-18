@@ -198,13 +198,93 @@ class WhatsAppBotService {
     
     // Egyptian local format conversion: 010..., 011..., 012..., 015... -> 2010...
     if (clean.startsWith('01') && clean.length === 11) {
-      clean = '20' + clean.slice(1);
+      const prefix = clean.slice(0, 3);
+      if (['010', '011', '012', '015'].includes(prefix)) {
+        return '20' + clean.slice(1);
+      }
+      return null;
+    }
+
+    if (clean.startsWith('201') && clean.length === 12) {
+      const sub = clean.slice(2, 4);
+      if (['0', '1', '2', '5'].includes(sub[0])) {
+        return clean;
+      }
     }
 
     if (clean.length < 10 || clean.length > 15) {
       return null;
     }
     return clean;
+  }
+
+  /**
+   * Validates Egyptian Mobile Number strictly against accredited carriers:
+   * - 010: Vodafone Egypt
+   * - 011: Etisalat (e&) Egypt
+   * - 012: Orange Egypt
+   * - 015: WE (Telecom Egypt)
+   * 
+   * @param {string} phoneNumber 
+   * @returns {object} Validation result and carrier metadata
+   */
+  validateEgyptianMobile(phoneNumber) {
+    if (!phoneNumber) {
+      return {
+        isValid: false,
+        reason: 'EMPTY_PHONE_NUMBER',
+        message: 'رقم الهاتف مطلوب.'
+      };
+    }
+
+    const digitsOnly = String(phoneNumber).trim().replace(/[^\d]/g, '');
+
+    let local11 = '';
+    let international12 = '';
+
+    if (digitsOnly.startsWith('20') && digitsOnly.length === 12) {
+      international12 = digitsOnly;
+      local11 = '0' + digitsOnly.slice(2);
+    } else if (digitsOnly.startsWith('0020') && digitsOnly.length === 14) {
+      international12 = digitsOnly.slice(2);
+      local11 = '0' + digitsOnly.slice(4);
+    } else if (digitsOnly.startsWith('01') && digitsOnly.length === 11) {
+      local11 = digitsOnly;
+      international12 = '20' + digitsOnly.slice(1);
+    } else {
+      return {
+        isValid: false,
+        reason: 'INVALID_EGYPTIAN_FORMAT',
+        message: 'يجب أن يتكون رقم الموبايل المصري من 11 رقماً ويبدأ بـ 010 أو 011 أو 012 أو 015.'
+      };
+    }
+
+    const prefix = local11.slice(0, 3);
+    const carrierDirectory = {
+      '010': { operator: 'Vodafone', operatorAr: 'فودافون مصر' },
+      '011': { operator: 'Etisalat', operatorAr: 'إي آند مصر (اتصالات)' },
+      '012': { operator: 'Orange', operatorAr: 'أورنج مصر' },
+      '015': { operator: 'WE', operatorAr: 'وي (المصرية للاتصالات)' }
+    };
+
+    if (!carrierDirectory[prefix]) {
+      return {
+        isValid: false,
+        reason: 'INVALID_EGYPTIAN_OPERATOR',
+        prefix,
+        message: `بادئة الموبايل (${prefix}) غير صالحة. البادئات المصرية المعتمدة هي 010 (فودافون)، 011 (اتصالات)، 012 (أورنج)، أو 015 (وي).`
+      };
+    }
+
+    return {
+      isValid: true,
+      operator: carrierDirectory[prefix].operator,
+      operatorAr: carrierDirectory[prefix].operatorAr,
+      carrierCode: prefix,
+      localNumber: local11,
+      normalizedNumber: international12,
+      internationalNumber: `+${international12}`
+    };
   }
 
   maskPhoneNumber(phoneNumber) {
@@ -732,9 +812,15 @@ class WhatsAppBotService {
     const cleanPhone = this.normalizePhoneNumber(phoneNumber);
 
     if (!cleanPhone) {
-      const err = new Error('A valid WhatsApp phone number with country code is required.');
+      const rawStr = String(phoneNumber || '').trim();
+      const isEgAttempt = rawStr.startsWith('01') || rawStr.startsWith('+20') || rawStr.startsWith('20');
+      let msg = 'A valid WhatsApp phone number with country code is required.';
+      if (isEgAttempt) {
+        msg = 'رقم الموبايل المصري غير صالح. يجب أن يبدأ بأحد مشغلي الخدمة المعتمدين (010 فودافون، 011 اتصالات، 012 أورنج، 015 وي) ويتكون من 11 رقماً.';
+      }
+      const err = new Error(msg);
       err.statusCode = 400;
-      err.code = 'PHONE_REQUIRED';
+      err.code = isEgAttempt ? 'INVALID_EGYPTIAN_MOBILE' : 'PHONE_REQUIRED';
       throw err;
     }
 

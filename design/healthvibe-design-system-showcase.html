@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" class="hv-theme-light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Health Vibe AI — Visual Design System Showcase (#78)</title>
+  <link rel="icon" type="image/webp" href="../app/logo-dark-mark.webp">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=Tajawal:wght@400;500;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../app/styles.css">
+  <style>
+    body {
+      padding: 32px 20px 80px;
+      max-width: 1140px;
+      margin: 0 auto;
+      font-family: var(--font-sans, "Cairo", sans-serif);
+      background: var(--bg);
+      color: var(--ink);
+    }
+    .ds-header {
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 24px;
+      margin-bottom: 36px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .ds-badge-ticket {
+      background: var(--cyan);
+      color: var(--teal);
+      border: 1px solid color-mix(in srgb, var(--teal) 30%, transparent);
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-weight: 800;
+      font-size: 13.5px;
+    }
+    .ds-section {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 28px;
+      margin-bottom: 32px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+    }
+    .ds-section h2 {
+      margin-top: 0;
+      margin-bottom: 18px;
+      color: var(--teal);
+      border-bottom: 1px dashed var(--line);
+      padding-bottom: 12px;
+      font-size: 20px;
+    }
+    .color-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 16px;
+      margin-top: 16px;
+    }
+    .color-card {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      overflow: hidden;
+      background: var(--surface-2);
+    }
+    .color-swatch {
+      height: 72px;
+      width: 100%;
+    }
+    .color-info {
+      padding: 12px 14px;
+      font-size: 13px;
+    }
+    .color-name { font-weight: 800; font-size: 14px; margin-bottom: 4px; }
+    .color-hex { font-family: monospace; opacity: 0.8; }
+    .btn-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    .type-row {
+      padding: 12px 0;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .type-meta {
+      font-size: 12.5px;
+      color: var(--muted);
+      direction: ltr;
+      font-family: monospace;
+    }
+  </style>
+</head>
+<body class="light">
+
+  <header class="ds-header">
+    <div>
+      <span class="ds-badge-ticket">Task #78 | P0 - حرج جداً | المعيار: Doctolib</span>
+      <h1 class="hv-text-hero" style="margin: 8px 0 4px; color: var(--teal);">دليل الهوية البصرية ونظام التصميم الموحد</h1>
+      <p class="hv-text-caption" style="margin: 0;">Health Vibe AI Design System — Unified Clinical Tokens & Components</p>
+    </div>
+    <div>
+      <button type="button" class="hv-btn hv-btn-outline hv-btn-sm" onclick="toggleThemeDemo()">
+        🌓 تبديل المظهر (نهاري / ليلي)
+      </button>
+    </div>
+  </header>
+
+  <!-- Color Palette -->
+  <section class="ds-section">
+    <h2>🎨 1. لوحة الألوان الطبية المعتمدة (Clinical Color Tokens)</h2>
+    <div class="color-grid">
+      <div class="color-card">
+        <div class="color-swatch" style="background: #006D6F;"></div>
+        <div class="color-info">
+          <div class="color-name">Medical Teal (الأساسي)</div>
+          <div class="color-hex">#006D6F | var(--teal)</div>
+          <div>CTAs رئيسية، هوية المنظومة، الثقة</div>
+        </div>
+      </div>
+      <div class="color-card">
+        <div class="color-swatch" style="background: #2B7DE9;"></div>
+        <div class="color-info">
+          <div class="color-name">Medical Blue (الأزرق الطبي)</div>
+          <div class="color-hex">#2B7DE9 | var(--blue)</div>
+          <div>حجز العيادات، استشارات الفيديو</div>
+        </div>
+      </div>
+      <div class="color-card">
+        <div class="color-swatch" style="background: #E7F7F7; border: 1px solid #c9eceb;"></div>
+        <div class="color-info">
+          <div class="color-name">Soft Cyan (السماوي المطمئن)</div>
+          <div class="color-hex">#E7F7F7 | var(--cyan)</div>
+          <div>خلفيات ناعمة، بطاقات التقييم، أزرار Soft</div>
+        </div>
+      </div>
+      <div class="color-card">
+        <div class="color-swatch" style="background: #18A058;"></div>
+        <div class="color-info">
+          <div class="color-name">Clinical Green (الأخضر السريري)</div>
+          <div class="color-hex">#18A058 | var(--green)</div>
+          <div>حالات منخفضة الخطورة، نتائج معتمدة</div>
+        </div>
+      </div>
+      <div class="color-card">
+        <div class="color-swatch" style="background: #D99A16;"></div>
+        <div class="color-info">
+          <div class="color-name">Clinical Amber (الكهرماني الطبي)</div>
+          <div class="color-hex">#D99A16 | var(--amber)</div>
+          <div>يحتاج متابعة، بانتظار الطبيب</div>
+        </div>
+      </div>
+      <div class="color-card">
+        <div class="color-swatch" style="background: #DC2626;"></div>
+        <div class="color-info">
+          <div class="color-name">Clinical Red (الأحمر السريري)</div>
+          <div class="color-hex">#DC2626 | var(--red)</div>
+          <div>طوارئ طبية عاجلة، إلغاء نهائي</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Button System -->
+  <section class="ds-section">
+    <h2>🔘 2. نظام الأزرار الموحد (Doctolib Button Matrix)</h2>
+    <p class="hv-text-body" style="margin-bottom: 20px;">
+      جميع الأزرار تخضع لشرط الـ <strong>44px كحد أدنى لمنطقة اللمس (WCAG AA Touch Target)</strong> مع تركيز مريح للعين وحالات تفاعلية متناسقة.
+    </p>
+
+    <h3 class="hv-text-subtitle" style="font-size: 15px; margin-bottom: 10px;">أ) أنواع الأزرار (Variants)</h3>
+    <div class="btn-row">
+      <button type="button" class="hv-btn hv-btn-primary">
+        <span>🩺</span> زر أساسي (Primary Teal)
+      </button>
+      <button type="button" class="hv-btn hv-btn-secondary">
+        <span>📅</span> حجز عيادة (Medical Blue)
+      </button>
+      <button type="button" class="hv-btn hv-btn-outline">
+        <span>⚙️</span> زر تفاصيل (Outline)
+      </button>
+      <button type="button" class="hv-btn hv-btn-soft">
+        <span>🏷️</span> فلتر هادئ (Soft Cyan)
+      </button>
+      <button type="button" class="hv-btn hv-btn-danger">
+        <span>🚨</span> طوارئ (Clinical Red)
+      </button>
+    </div>
+
+    <h3 class="hv-text-subtitle" style="font-size: 15px; margin-bottom: 10px; margin-top: 24px;">ب) أحجام الأزرار القياسية (Sizes)</h3>
+    <div class="btn-row">
+      <button type="button" class="hv-btn hv-btn-primary hv-btn-lg">
+        حجم كبير (Large 52px) — CTA رئيسي
+      </button>
+      <button type="button" class="hv-btn hv-btn-primary hv-btn-md">
+        حجم قياسي (Medium 44px) — الافتراضي
+      </button>
+      <button type="button" class="hv-btn hv-btn-primary hv-btn-sm">
+        حجم مدمج (Small 36px) — جداول الأطباء
+      </button>
+    </div>
+
+    <h3 class="hv-text-subtitle" style="font-size: 15px; margin-bottom: 10px; margin-top: 24px;">ج) الحالات التفاعلية والآمنة (States)</h3>
+    <div class="btn-row">
+      <button type="button" class="hv-btn hv-btn-primary" disabled>
+        زر معطل (Disabled)
+      </button>
+      <button type="button" class="hv-btn hv-btn-primary is-loading" aria-busy="true">
+        جاري المعالجة
+      </button>
+    </div>
+  </section>
+
+  <!-- Clinical Status Badges -->
+  <section class="ds-section">
+    <h2>🏷️ 3. شارات الحالة السريرية (Clinical Status Badges)</h2>
+    <div class="btn-row">
+      <span class="hv-badge hv-badge-success">
+        <span>🟢</span> نتيجة معتمدة ومطمئنة (Low Risk)
+      </span>
+      <span class="hv-badge hv-badge-warning">
+        <span>🟡</span> بانتظار مراجعة الطبيب (Pending Review)
+      </span>
+      <span class="hv-badge hv-badge-danger">
+        <span>🔴</span> يحتاج رعاية عاجلة (Urgent Care)
+      </span>
+      <span class="hv-badge hv-badge-info">
+        <span>🔵</span> استشارة مرئية موثقة (Telehealth)
+      </span>
+    </div>
+  </section>
+
+  <!-- Typography Scale -->
+  <section class="ds-section">
+    <h2>✍️ 4. مقياس الخطوط العربي والإنجليزي (Typography Scale)</h2>
+    <div class="type-row">
+      <div class="hv-text-hero">عنوان بارز رئيسي (Hero Headline)</div>
+      <div class="type-meta">.hv-text-hero | Cairo 800 | 28px-44px</div>
+    </div>
+    <div class="type-row">
+      <div class="hv-text-title">عنوان الشاشة الرئيسي (Screen Title H1)</div>
+      <div class="type-meta">.hv-text-title | Cairo 700 | 22px-26px</div>
+    </div>
+    <div class="type-row">
+      <div class="hv-text-subtitle">عنوان القسم الفرعي (Section Subtitle H2)</div>
+      <div class="type-meta">.hv-text-subtitle | Cairo 700 | 18px</div>
+    </div>
+    <div class="type-row">
+      <div class="hv-text-body">نص الفقرة الأساسية: منصة Health Vibe AI تقدم تجربة فرز سريري استرشادية واضحة وموثوقة.</div>
+      <div class="type-meta">.hv-text-body | Cairo 400 | 15px</div>
+    </div>
+    <div class="type-row">
+      <div class="hv-text-caption">نص تعريفي وتسميات توضيحية خفيفة (Caption & Timestamps)</div>
+      <div class="type-meta">.hv-text-caption | Cairo 500 | 13px</div>
+    </div>
+    <div class="type-row">
+      <div class="hv-text-disclaimer">تنبيه طبي: النتائج استرشادية ولا تغني عن استشارة الطبيب المختص أو الفحص السريري المباشر.</div>
+      <div class="type-meta">.hv-text-disclaimer | Cairo 400 | 12px</div>
+    </div>
+  </section>
+
+  <script>
+    function toggleThemeDemo() {
+      const html = document.documentElement;
+      const isDark = html.classList.contains('hv-theme-dark');
+      if (isDark) {
+        html.classList.remove('hv-theme-dark');
+        html.classList.add('hv-theme-light');
+        document.body.classList.remove('dark');
+        document.body.classList.add('light');
+      } else {
+        html.classList.remove('hv-theme-light');
+        html.classList.add('hv-theme-dark');
+        document.body.classList.remove('light');
+        document.body.classList.add('dark');
+      }
+    }
+  </script>
+</body>
+</html>
