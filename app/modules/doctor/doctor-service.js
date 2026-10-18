@@ -696,6 +696,362 @@
     };
   }
 
+  // ===========================================================================
+  // DIAGNOSTIC INVESTIGATIONS & RADIOLOGY CATALOG (VEZEETA PATTERN)
+  // ===========================================================================
+
+  const INVESTIGATION_CATEGORIES = {
+    LAB: "LAB",
+    RADIOLOGY: "RADIOLOGY"
+  };
+
+  const INVESTIGATION_URGENCIES = {
+    ROUTINE: "routine",
+    STAT: "stat"
+  };
+
+  const DIAGNOSTIC_INVESTIGATIONS_CATALOG = [
+    // --- High-Yield Laboratory Tests ---
+    {
+      code: "CBC",
+      loinc: "58410-2",
+      category: "LAB",
+      nameAr: "صورة دم كاملة (CBC)",
+      nameEn: "Complete Blood Count (CBC)",
+      descAr: "فحص كريات الدم البيضاء والحمراء والصفائح لتقييم العدوى والأنيميا.",
+      descEn: "Leukocytes, platelets & hemoglobin to assess infection & anemia.",
+      highYield: true,
+      fastingHours: 0,
+      sampleTypeAr: "عينة دم وريدي (EDTA)",
+      sampleTypeEn: "Venous Blood (EDTA)"
+    },
+    {
+      code: "CRP",
+      loinc: "1988-5",
+      category: "LAB",
+      nameAr: "بروتين سي التفاعلي كمي (CRP)",
+      nameEn: "C-Reactive Protein - Quantitative (CRP)",
+      descAr: "مؤشر حيوي لشدة الالتهاب الحاد والاستجابة المناعية.",
+      descEn: "Acute phase reactant biomarker measuring inflammation severity.",
+      highYield: true,
+      fastingHours: 0,
+      sampleTypeAr: "عينة مصل دم",
+      sampleTypeEn: "Serum"
+    },
+    {
+      code: "D_DIMER",
+      loinc: "48065-7",
+      category: "LAB",
+      nameAr: "دي-دايمر كمي (D-Dimer)",
+      nameEn: "D-Dimer Quantitative",
+      descAr: "استبعاد الجلطة الرئوية والتخثر المنتشر داخل الأوعية.",
+      descEn: "Evaluation of pulmonary embolism, DVT & hypercoagulability.",
+      highYield: true,
+      fastingHours: 0,
+      sampleTypeAr: "بلازما سيترات",
+      sampleTypeEn: "Citrated Plasma"
+    },
+    {
+      code: "SERUM_FERRITIN",
+      loinc: "2276-4",
+      category: "LAB",
+      nameAr: "فيريتين المصل (Serum Ferritin)",
+      nameEn: "Serum Ferritin",
+      descAr: "تقييم العاصفة الالتهابية ومخزون الحديد في الدم.",
+      descEn: "Hyperferritinemic inflammatory response & iron stores.",
+      highYield: true,
+      fastingHours: 0,
+      sampleTypeAr: "مصل دم",
+      sampleTypeEn: "Serum"
+    },
+    {
+      code: "KIDNEY_PANEL",
+      loinc: "2160-0",
+      category: "LAB",
+      nameAr: "وظائف كلى (Creatinine & Urea)",
+      nameEn: "Kidney Function Panel (Creatinine & BUN)",
+      descAr: "تقييم وظائف الكلى قبل وصف الأدوية أو الصبغة.",
+      descEn: "Renal clearance evaluation prior to therapeutics or contrast.",
+      highYield: true,
+      fastingHours: 0,
+      sampleTypeAr: "مصل دم",
+      sampleTypeEn: "Serum"
+    },
+    {
+      code: "LIVER_PANEL",
+      loinc: "1751-7",
+      category: "LAB",
+      nameAr: "وظائف كبد (ALT, AST & Bilirubin)",
+      nameEn: "Liver Enzymes Panel (ALT, AST, Bilirubin)",
+      descAr: "تقييم كفاءة الكبد وسلامة الإنزيمات الحيوية.",
+      descEn: "Hepatic transaminases and metabolic function.",
+      highYield: false,
+      fastingHours: 0,
+      sampleTypeAr: "مصل دم",
+      sampleTypeEn: "Serum"
+    },
+    {
+      code: "HBA1C",
+      loinc: "4548-4",
+      category: "LAB",
+      nameAr: "سكر تراكمي (HbA1c)",
+      nameEn: "Glycated Hemoglobin (HbA1c)",
+      descAr: "معدل السكر التراكمي خلال آخر 3 أشهر.",
+      descEn: "Long-term glycemic control over past 90 days.",
+      highYield: false,
+      fastingHours: 0,
+      sampleTypeAr: "دم كامل",
+      sampleTypeEn: "Whole Blood"
+    },
+    {
+      code: "ABG",
+      loinc: "1994-3",
+      category: "LAB",
+      nameAr: "غازات الدم الشرياني (ABG)",
+      nameEn: "Arterial Blood Gases (ABG)",
+      descAr: "تقييم حموضة الدم PaO2 و PaCO2 في حالات نقص الأكسجين الحاد.",
+      descEn: "Direct arterial PaO2, PaCO2 & pH for acute hypoxemic distress.",
+      highYield: true,
+      fastingHours: 0,
+      sampleTypeAr: "دم شرياني مسحوب بالهيبارين",
+      sampleTypeEn: "Heparinized Arterial Blood"
+    },
+    {
+      code: "SPUTUM_CULTURE",
+      loinc: "6460-0",
+      category: "LAB",
+      nameAr: "مزرعة وحساسية بصاق (Sputum C&S)",
+      nameEn: "Sputum Culture & Sensitivity",
+      descAr: "عزل الميكروب المسبب وتحديد المضاد الحيوي الحساس.",
+      descEn: "Pathogen identification & targeted antibiotic susceptibility.",
+      highYield: false,
+      fastingHours: 0,
+      sampleTypeAr: "عينة بصاق صباحية عميقة",
+      sampleTypeEn: "Deep Early Morning Sputum"
+    },
+    {
+      code: "ESR",
+      loinc: "30341-2",
+      category: "LAB",
+      nameAr: "سرعة الترسيب (ESR)",
+      nameEn: "Erythrocyte Sedimentation Rate (ESR)",
+      descAr: "معدل سرعة ترسيب كرات الدم الحمراء للالتهابات المزمنة.",
+      descEn: "Erythrocyte sedimentation velocity for chronic inflammation.",
+      highYield: false,
+      fastingHours: 0,
+      sampleTypeAr: "دم كامل",
+      sampleTypeEn: "Whole Blood (Citrate)"
+    },
+    {
+      code: "SERUM_ELECTROLYTES",
+      loinc: "2823-3",
+      category: "LAB",
+      nameAr: "أملاح ومعادن الدم (Na+, K+, Cl-)",
+      nameEn: "Serum Electrolytes (Na+, K+, Cl-)",
+      descAr: "توازن الكهارل والأملاح لدعم استقرار الدورة الدموية.",
+      descEn: "Electrolyte balance for cardiac & hemodynamic stability.",
+      highYield: false,
+      fastingHours: 0,
+      sampleTypeAr: "مصل دم",
+      sampleTypeEn: "Serum"
+    },
+    {
+      code: "TROPONIN_I",
+      loinc: "10839-9",
+      category: "LAB",
+      nameAr: "تروبونين قلبي عالي الحساسية (Troponin-I)",
+      nameEn: "High-Sensitivity Cardiac Troponin-I",
+      descAr: "استبعاد احتشاء عضلة القلب الحاد ومتلازمة الشريان التاجي.",
+      descEn: "Rule out acute myocardial infarction & myocarditis.",
+      highYield: false,
+      fastingHours: 0,
+      sampleTypeAr: "مصل دم",
+      sampleTypeEn: "Serum"
+    },
+
+    // --- High-Yield Radiology & Medical Imaging ---
+    {
+      code: "CHEST_XRAY",
+      loinc: "36643-5",
+      category: "RADIOLOGY",
+      nameAr: "أشعة عادية على الصدر (Chest X-Ray PA/Lat)",
+      nameEn: "Chest X-Ray Frontal & Lateral (PA/Lat)",
+      descAr: "فحص الصدر لاستبعاد الارتشاح الرئوي والتجمع الهوائي والالتهاب.",
+      descEn: "Radiographic evaluation for consolidation, pneumothorax & effusion.",
+      highYield: true,
+      modality: "CR / DX",
+      instructionsAr: "نزع أي مجوهرات أو سلاسل معدنية قبل التصوير.",
+      instructionsEn: "Remove metallic accessories and jewelry before exposure."
+    },
+    {
+      code: "HRCT_CHEST",
+      loinc: "24627-2",
+      category: "RADIOLOGY",
+      nameAr: "أشعة مقطعية عالية الدقة على الصدر (HRCT Chest)",
+      nameEn: "High-Resolution CT Chest (HRCT)",
+      descAr: "تصوير مقطعي دقيق لنسيج الرئة وعلامات التليف والتعتيم الزجاجي.",
+      descEn: "Sub-millimeter thoracic scan for ground-glass opacities & interstitial disease.",
+      highYield: true,
+      modality: "CT without IV Contrast",
+      instructionsAr: "حبس النفس أثناء التصوير حسب توجيهات فني الأشعة.",
+      instructionsEn: "Follow technician breathing commands during scan acquisition."
+    },
+    {
+      code: "CTPA",
+      loinc: "CTPA",
+      category: "RADIOLOGY",
+      nameAr: "مقطعية بالصبغة على الشرايين الرئوية (CTPA)",
+      nameEn: "CT Pulmonary Angiogram (CTPA)",
+      descAr: "الفحص المعياري لتأكيد أو نفي الجلطة الرئوية الحادة.",
+      descEn: "Gold standard contrast-enhanced imaging for pulmonary embolism.",
+      highYield: false,
+      modality: "CT with IV Contrast",
+      instructionsAr: "صيام 4-6 ساعات ووظائف كلى حديثة قبل حقن الصبغة.",
+      instructionsEn: "4-6 hours fasting and recent serum creatinine required."
+    },
+    {
+      code: "CHEST_US",
+      loinc: "CHEST_US",
+      category: "RADIOLOGY",
+      nameAr: "موجات صوتية وسونار على الصدر (Chest Ultrasound)",
+      nameEn: "Chest Ultrasound / Pleural POCUS",
+      descAr: "كشف الارتشاح البلوري وتحديد خطوط B السريرية للرئة.",
+      descEn: "Bedside ultrasound for pleural effusion & B-line artifact quantification.",
+      highYield: false,
+      modality: "Ultrasound",
+      instructionsAr: "لا يتطلب تحضيراً خاصاً.",
+      instructionsEn: "No special preparation required."
+    },
+    {
+      code: "ECG_12LEAD",
+      loinc: "11524-6",
+      category: "RADIOLOGY",
+      nameAr: "تخطيط كهربية القلب (12-Lead ECG)",
+      nameEn: "12-Lead Electrocardiogram (ECG)",
+      descAr: "رسم قلب فوري لتقييم نظم القلب واستبعاد الإجهاد القلبي.",
+      descEn: "Electrocardiographic rhythm & acute myocardial strain assessment.",
+      highYield: true,
+      modality: "ECG",
+      instructionsAr: "الاستلقاء والاسترخاء التام أثناء التسجيل.",
+      instructionsEn: "Remain completely relaxed and still during trace recording."
+    }
+  ];
+
+  const INVESTIGATION_PRESETS = {
+    respiratory_infection: {
+      key: "respiratory_infection",
+      ar: "باقة التهاب شعبي وتنفسي",
+      en: "Respiratory Infection Workup",
+      icon: "🫁",
+      codes: ["CBC", "CRP", "CHEST_XRAY"],
+      rationaleAr: "تقييم شدة العدوى التنفسية واستبعاد الالتهاب الرئوي.",
+      rationaleEn: "Assess infection severity and exclude pneumonic consolidation."
+    },
+    acute_dyspnea_pe: {
+      key: "acute_dyspnea_pe",
+      ar: "باقة ضيق تنفس حاد واشتباه جلطة",
+      en: "Acute Dyspnea & PE Workup",
+      icon: "⚠️",
+      codes: ["D_DIMER", "ABG", "CHEST_XRAY", "ECG_12LEAD"],
+      rationaleAr: "استبعاد الانسداد الرئوي واضطراب الأكسجة الحاد.",
+      rationaleEn: "Rule out acute pulmonary embolism and severe hypoxemic gas exchange failure."
+    },
+    viral_pneumonia: {
+      key: "viral_pneumonia",
+      ar: "باقة اشتباه التهاب رئوي فيروسي",
+      en: "Viral Pneumonia Workup",
+      icon: "🦠",
+      codes: ["CBC", "CRP", "SERUM_FERRITIN", "D_DIMER", "HRCT_CHEST"],
+      rationaleAr: "متابعة العاصفة الالتهابية وفحص التعتيم الزجاجي في نسيج الرئة.",
+      rationaleEn: "Monitor inflammatory cascade and ground-glass pulmonary involvement."
+    },
+    cardiopulmonary_workup: {
+      key: "cardiopulmonary_workup",
+      ar: "باقة فحص صدري وقلبي شامل",
+      en: "Cardiopulmonary Comprehensive",
+      icon: "❤️",
+      codes: ["CBC", "KIDNEY_PANEL", "CHEST_XRAY", "ECG_12LEAD", "TROPONIN_I"],
+      rationaleAr: "تقييم التفاعل القلبي الرئوي ووظائف الأعضاء الحيوية.",
+      rationaleEn: "Holistic evaluation of cardiopulmonary interaction and biomarker clearance."
+    }
+  };
+
+  function getDiagnosticCatalog() {
+    return DIAGNOSTIC_INVESTIGATIONS_CATALOG.map(item => ({ ...item }));
+  }
+
+  function getInvestigationPresets() {
+    return { ...INVESTIGATION_PRESETS };
+  }
+
+  function getInvestigationByCode(code) {
+    if (!code) return null;
+    const clean = String(code).trim().toUpperCase();
+    return DIAGNOSTIC_INVESTIGATIONS_CATALOG.find(i => i.code.toUpperCase() === clean || i.loinc === clean) || null;
+  }
+
+  function filterDiagnosticCatalog({ category = "ALL", search = "", highYieldOnly = false } = {}) {
+    let list = DIAGNOSTIC_INVESTIGATIONS_CATALOG;
+
+    if (category && category !== "ALL") {
+      const catUpper = String(category).toUpperCase();
+      list = list.filter(i => i.category === catUpper);
+    }
+
+    if (highYieldOnly) {
+      list = list.filter(i => Boolean(i.highYield));
+    }
+
+    if (search && String(search).trim()) {
+      const q = String(search).trim().toLowerCase();
+      list = list.filter(i =>
+        i.code.toLowerCase().includes(q) ||
+        (i.loinc && i.loinc.toLowerCase().includes(q)) ||
+        (i.nameAr && i.nameAr.toLowerCase().includes(q)) ||
+        (i.nameEn && i.nameEn.toLowerCase().includes(q)) ||
+        (i.descAr && i.descAr.toLowerCase().includes(q)) ||
+        (i.descEn && i.descEn.toLowerCase().includes(q))
+      );
+    }
+
+    return list.map(item => ({ ...item }));
+  }
+
+  function formatInvestigationUrgency(urgency, isEn = false) {
+    const isStat = String(urgency).toLowerCase() === "stat";
+    return {
+      key: isStat ? "stat" : "routine",
+      label: isStat ? (isEn ? "STAT (Urgent)" : "عاجل / طارئ STAT") : (isEn ? "Routine" : "عادي / روتيني"),
+      badgeClass: isStat ? "danger" : "ok",
+      color: isStat ? "#ef4444" : "#10b981",
+      icon: isStat ? "⚡" : "📋"
+    };
+  }
+
+  function validateOrderedInvestigations(items) {
+    if (!Array.isArray(items)) return [];
+    return items.filter(item => {
+      if (!item) return false;
+      const code = typeof item === "string" ? item : (item.code || item.id);
+      return Boolean(code && String(code).trim());
+    }).map(item => {
+      const rawCode = String(typeof item === "string" ? item : (item.code || item.id)).trim().toUpperCase();
+      const catalogMeta = getInvestigationByCode(rawCode);
+      const isObj = typeof item === "object" && item !== null;
+      return {
+        code: rawCode,
+        loinc: (isObj && item.loinc) || catalogMeta?.loinc || null,
+        category: ((isObj && item.category) || catalogMeta?.category || "LAB").toUpperCase(),
+        nameAr: (isObj && item.nameAr) || catalogMeta?.nameAr || rawCode,
+        nameEn: (isObj && item.nameEn) || catalogMeta?.nameEn || rawCode,
+        urgency: String((isObj && item.urgency) || "routine").toLowerCase() === "stat" ? "stat" : "routine",
+        clinicalIndication: String((isObj && (item.clinicalIndication || item.reason)) || "").trim(),
+        instructions: String((isObj && (item.instructions || item.patientPrep)) || catalogMeta?.instructionsAr || "").trim(),
+        custom: Boolean((isObj && item.custom) || !catalogMeta)
+      };
+    });
+  }
+
   const DoctorService = {
     VALID_OVERRIDE_PRIORITIES,
     VALID_OVERRIDE_CATEGORIES,
@@ -733,7 +1089,18 @@
     getReentryCategoryMeta,
     validateRejectReentryPayload,
     rejectOrRequestReentry,
-    getCaseRejectReentryStatus
+    getCaseRejectReentryStatus,
+    // Diagnostic Investigations & Radiology (Vezeeta Pattern)
+    INVESTIGATION_CATEGORIES,
+    INVESTIGATION_URGENCIES,
+    DIAGNOSTIC_INVESTIGATIONS_CATALOG,
+    INVESTIGATION_PRESETS,
+    getDiagnosticCatalog,
+    getInvestigationPresets,
+    getInvestigationByCode,
+    filterDiagnosticCatalog,
+    formatInvestigationUrgency,
+    validateOrderedInvestigations
   };
 
   global.HealthVibes = global.HealthVibes || {};

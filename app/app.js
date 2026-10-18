@@ -3853,6 +3853,10 @@ window.previewCaseReport = async function(id) {
   const medications = medInput ? medInput.value.trim() : (c.medications || "");
   const recommendations = parseDoctorRecommendations(recInput ? recInput.value : (c.recommendation || ""));
 
+  const orderedInvestigations = window.HealthVibes?.DoctorUI?.getCaseInvestigations
+    ? window.HealthVibes.DoctorUI.getCaseInvestigations(id)
+    : (c.investigations || c.orderedInvestigations || []);
+
   window.__doctorPreviewCase = {
     ...c,
     clinicalDiagnosis,
@@ -3861,6 +3865,8 @@ window.previewCaseReport = async function(id) {
     medications,
     recommendations,
     recommendation: recommendations.join("\n"),
+    investigations: orderedInvestigations,
+    orderedInvestigations,
     doctorIdentity,
     approvingDoctorId: auth.currentUser.uid,
     reportGeneratedAt: new Date().toISOString(),
@@ -3895,6 +3901,10 @@ window.generateAndApproveReport = async function(id) {
     return;
   }
 
+  const orderedInvestigations = window.HealthVibes?.DoctorUI?.getCaseInvestigations
+    ? window.HealthVibes.DoctorUI.getCaseInvestigations(id)
+    : (targetCase?.investigations || targetCase?.orderedInvestigations || []);
+
   const reportRef = `HV-REP-${id.slice(-8).toUpperCase()}`;
   const currentCaseRevision = window.HealthVibes?.DoctorUI?.getCaseRevisionNumber
     ? window.HealthVibes.DoctorUI.getCaseRevisionNumber(targetCase)
@@ -3907,6 +3917,8 @@ window.generateAndApproveReport = async function(id) {
     medications,
     recommendations,
     recommendation: recommendations.join("\n"),
+    investigations: orderedInvestigations,
+    orderedInvestigations,
     reportRef,
     reportGeneratedAt: new Date().toISOString(),
     reviewedRevision: currentCaseRevision,
@@ -4988,6 +5000,13 @@ async function selectDoctorCase(id) {
             ${isEn ? '3. Clinical Recommendations & Care Plan' : '3. التوصيات الطبية وخطة المتابعة'}
           </label>
           <textarea id="doctorRecommendationsInput" ${isClosed ? 'disabled' : ''} placeholder="${isEn ? 'Add one recommendation per line.' : 'أضف كل توصية في سطر منفصل.'}" style="width: 100%; min-height: 85px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 10px; font-family: inherit; font-size: 13px;">${escapeHtml(existingRecommendations)}</textarea>
+        </div>
+
+        <!-- 4. DIAGNOSTIC INVESTIGATIONS & RADIOLOGY (VEZEETA PATTERN) -->
+        <div style="margin-bottom: 14px;">
+          ${(window.HealthVibes?.DoctorUI?.renderOrderInvestigationsStationHtml)
+            ? window.HealthVibes.DoctorUI.renderOrderInvestigationsStationHtml(c, isEn)
+            : ''}
         </div>
 
         <!-- Doctor Identity & Credentials Box -->
@@ -8630,6 +8649,121 @@ async function renderReportScreen(targetCaseId = null) {
               : `<li style="font-size: 13.5px; color: var(--ink); line-height: 1.5;">${doctorRecommendations}</li>`)}
           </ul>
         </div>
+
+        <!-- DIAGNOSTIC INVESTIGATIONS & RADIOLOGY REQUISITION (VEZEETA PATTERN) -->
+        ${(() => {
+          const orderedList = Array.isArray(caseData.investigations) && caseData.investigations.length > 0
+            ? caseData.investigations
+            : (Array.isArray(caseData.orderedInvestigations) && caseData.orderedInvestigations.length > 0 ? caseData.orderedInvestigations : []);
+
+          if (orderedList.length === 0) {
+            return '';
+          }
+
+          const labTests = orderedList.filter(i => String(i.category).toUpperCase() === 'LAB');
+          const radTests = orderedList.filter(i => String(i.category).toUpperCase() === 'RADIOLOGY');
+
+          return `
+            <div class="report-investigations-section" style="background: var(--surface); border: 1.5px solid rgba(20, 184, 166, 0.4); border-radius: 14px; padding: 20px; margin-bottom: 22px; box-shadow: 0 4px 16px rgba(0,0,0,0.03);">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
+                <h3 style="font-size: 15.5px; margin: 0; color: var(--teal-2); display: flex; align-items: center; gap: 8px;">
+                  <span>🔬</span> ${isEn ? "Complementary Diagnostic Tests & Radiology Requisition" : "الفحوصات الطبية والأشعة التكميلية المطلوبة"}
+                </h3>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <span class="pill ok" style="font-size: 11px;">${isEn ? 'Official E-Referral' : 'إذن فحص سريري معتمد'}</span>
+                  <span style="font-size: 11px; font-family: monospace; color: var(--muted); background: var(--surface-2); padding: 2px 8px; border-radius: 6px; border: 1px solid var(--line);">
+                    REF: #${caseData.id.slice(-6).toUpperCase()}-DIAG
+                  </span>
+                </div>
+              </div>
+
+              <p style="margin: 0 0 16px; font-size: 12.5px; color: var(--muted); line-height: 1.5;">
+                ${isEn
+                  ? "The following laboratory examinations and diagnostic imaging studies have been prescribed by the attending physician for definitive clinical staging. Please present this certified requisition to accredited diagnostic partner centers."
+                  : "تم اعتماد الفحوصات والتحاليل والأشعة التوضيحية التالية من قِبل الطبيب المعالج لاستكمال التقييم السريري. يُرجى تقديم هذا الإذن المعتمد لأي معمل أو مركز أشعة معتمد."}
+              </p>
+
+              <!-- LAB TESTS GROUP -->
+              ${labTests.length > 0 ? `
+                <div style="margin-bottom: 14px;">
+                  <strong style="font-size: 13px; color: var(--ink); display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
+                    <span>🧪</span> ${isEn ? "Prescribed Laboratory Tests" : "التحاليل والفحوصات المعملية:"} (${labTests.length})
+                  </strong>
+                  <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px;">
+                    ${labTests.map(t => {
+                      const isStat = String(t.urgency).toLowerCase() === 'stat';
+                      const title = isEn ? (t.nameEn || t.nameAr || t.code) : (t.nameAr || t.nameEn || t.code);
+                      return `
+                        <div style="background: var(--surface-2); border: 1px solid ${isStat ? 'rgba(239, 68, 68, 0.4)' : 'var(--line)'}; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 6px;">
+                          <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
+                            <strong style="font-size: 13.5px; color: var(--ink);">${escapeHtml(title)}</strong>
+                            <span class="pill ${isStat ? 'danger' : 'info'}" style="font-size: 10px; padding: 1px 6px;">
+                              ${isStat ? (isEn ? '⚡ STAT' : '⚡ عاجل') : (isEn ? 'Routine' : 'عادي')}
+                            </span>
+                          </div>
+                          <div style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); font-family: monospace;">
+                            <span>CODE: ${escapeHtml(t.code)}</span>
+                            ${t.loinc ? `<span>• LOINC: ${escapeHtml(t.loinc)}</span>` : ''}
+                          </div>
+                          ${t.clinicalIndication ? `
+                            <div style="font-size: 11.5px; color: var(--ink); background: var(--surface); padding: 4px 8px; border-radius: 6px; border: 1px dashed var(--line);">
+                              <span style="color: var(--muted);">${isEn ? 'Indication:' : 'دواعي الفحص:'}</span> ${escapeHtml(t.clinicalIndication)}
+                            </div>
+                          ` : ''}
+                        </div>
+                      `;
+                    }).join('')}
+                  </div>
+                </div>
+              ` : ''}
+
+              <!-- RADIOLOGY & IMAGING GROUP -->
+              ${radTests.length > 0 ? `
+                <div style="margin-bottom: 14px;">
+                  <strong style="font-size: 13px; color: var(--ink); display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
+                    <span>🩻</span> ${isEn ? "Diagnostic Radiology & Imaging Studies" : "الأشعة والتصوير الطبي التكميلي:"} (${radTests.length})
+                  </strong>
+                  <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px;">
+                    ${radTests.map(t => {
+                      const isStat = String(t.urgency).toLowerCase() === 'stat';
+                      const title = isEn ? (t.nameEn || t.nameAr || t.code) : (t.nameAr || t.nameEn || t.code);
+                      return `
+                        <div style="background: var(--surface-2); border: 1px solid ${isStat ? 'rgba(239, 68, 68, 0.4)' : 'var(--line)'}; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 6px;">
+                          <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
+                            <strong style="font-size: 13.5px; color: var(--ink);">${escapeHtml(title)}</strong>
+                            <span class="pill ${isStat ? 'danger' : 'info'}" style="font-size: 10px; padding: 1px 6px;">
+                              ${isStat ? (isEn ? '⚡ STAT' : '⚡ عاجل') : (isEn ? 'Routine' : 'عادي')}
+                            </span>
+                          </div>
+                          <div style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); font-family: monospace;">
+                            <span>CODE: ${escapeHtml(t.code)}</span>
+                            ${t.loinc ? `<span>• RADLEX: ${escapeHtml(t.loinc)}</span>` : ''}
+                          </div>
+                          ${t.clinicalIndication ? `
+                            <div style="font-size: 11.5px; color: var(--ink); background: var(--surface); padding: 4px 8px; border-radius: 6px; border: 1px dashed var(--line);">
+                              <span style="color: var(--muted);">${isEn ? 'Indication:' : 'دواعي الفحص:'}</span> ${escapeHtml(t.clinicalIndication)}
+                            </div>
+                          ` : ''}
+                        </div>
+                      `;
+                    }).join('')}
+                  </div>
+                </div>
+              ` : ''}
+
+              <!-- PATIENT PREPARATION INSTRUCTIONS -->
+              <div style="background: rgba(var(--teal-rgb, 14, 165, 233), 0.06); border: 1px dashed rgba(var(--teal-rgb, 14, 165, 233), 0.35); border-radius: 10px; padding: 10px 14px; font-size: 12px; color: var(--ink); display: flex; align-items: center; gap: 8px;">
+                <span>📋</span>
+                <span>
+                  <strong>${isEn ? 'Patient Instructions: ' : 'إرشادات المريض: '}</strong>
+                  ${isEn
+                    ? 'Please attend accredited laboratory/radiology centers with this certified requisition. For blood chemistry requiring fasting, fast 8-12 hours prior to collection.'
+                    : 'يُرجى التوجه إلى معامل التحاليل ومراكز الأشعة المعتمدة مع إظهار هذا التقرير. في حال الفحوصات التي تتطلب صياماً، يُرجى الصيام لمدة 8 إلى 12 ساعة مع شرب الماء فقط.'}
+                </span>
+              </div>
+            </div>
+          `;
+        })()}
 
         <!-- DIGITAL SEAL & CRYPTOGRAPHIC VERIFICATION BLOCK -->
         <div class="report-signature-block" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 18px; padding: 18px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px; margin-bottom: 20px;">

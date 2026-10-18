@@ -8285,6 +8285,666 @@ body.dark .thread-direct-action-card {
   }
 }
 
+/* ========================================================================= */
+/* VEZEETA CLINIC WORKSTATION: ORDER LABS & CHEST X-RAY REQUISITION          */
+/* ========================================================================= */
 
+.vezeeta-investigations-card {
+  border: 1.5px solid rgba(20, 184, 166, 0.35) !important;
+  border-radius: 16px;
+  background: var(--surface);
+  padding: 18px;
+  margin: 18px 0;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+  transition: border-color 0.25s ease;
+}
 
+.vezeeta-investigations-card:focus-within {
+  border-color: var(--teal) !important;
+}
 
+.vezeeta-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.vezeeta-header-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  max-width: 780px;
+}
+
+.vezeeta-icon-wrap {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(20, 184, 166, 0.18), rgba(79, 70, 229, 0.18));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(20, 184, 166, 0.12);
+}
+
+.vezeeta-brand-icon {
+  font-size: 22px;
+}
+
+.vezeeta-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.vezeeta-heading {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--teal);
+  letter-spacing: -0.2px;
+}
+
+.vezeeta-subheading {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+/* Presets Bar */
+.vezeeta-presets-bar {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.vezeeta-presets-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.vezeeta-presets-scroll {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: thin;
+}
+
+.vezeeta-bundle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 5px 11px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.vezeeta-bundle-btn:hover {
+  border-color: var(--teal);
+  background: rgba(20, 184, 166, 0.08);
+  color: var(--teal);
+  transform: translateY(-1px);
+}
+
+/* Workstation Layout */
+.vezeeta-workstation-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
+/* Picker Panel */
+.vezeeta-picker-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.vezeeta-controls-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.vezeeta-search-wrapper {
+  position: relative;
+  flex: 1;
+}
+
+.vezeeta-search-icon {
+  position: absolute;
+  top: 50%;
+  inset-inline-start: 10px;
+  transform: translateY(-50%);
+  font-size: 14px;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.vezeeta-search-input {
+  width: 100%;
+  padding: 8px 10px;
+  padding-inline-start: 32px;
+  font-size: 12.5px;
+  font-family: inherit;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--ink);
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.vezeeta-search-input:focus {
+  border-color: var(--teal);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.15);
+}
+
+.vezeeta-custom-add-btn {
+  font-size: 12px;
+  padding: 8px 12px;
+  white-space: nowrap;
+}
+
+/* Category Pills */
+.vezeeta-category-pills {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.vezeeta-cat-pill {
+  padding: 5px 12px;
+  font-size: 11.5px;
+  font-weight: 700;
+  border-radius: 20px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.vezeeta-cat-pill:hover {
+  color: var(--ink);
+  border-color: var(--muted);
+}
+
+.vezeeta-cat-pill.is-active {
+  background: var(--teal);
+  color: #ffffff;
+  border-color: var(--teal);
+  box-shadow: 0 2px 8px rgba(20, 184, 166, 0.25);
+}
+
+/* Catalog Scroll & Grid */
+.vezeeta-catalog-scroll-area {
+  max-height: 480px;
+  overflow-y: auto;
+  padding-inline-end: 4px;
+  scrollbar-width: thin;
+}
+
+.vezeeta-catalog-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.vezeeta-catalog-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-2);
+  padding: 10px 12px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.vezeeta-catalog-card:hover {
+  border-color: var(--teal);
+  transform: translateY(-1px);
+}
+
+.vezeeta-catalog-card.is-selected {
+  border-color: var(--teal);
+  background: rgba(20, 184, 166, 0.08);
+}
+
+.catalog-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.catalog-card-icon-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.catalog-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.catalog-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  display: block;
+}
+
+.catalog-badges {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  flex-wrap: wrap;
+}
+
+.vezeeta-code-tag {
+  font-size: 10px;
+  font-family: monospace;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+
+.vezeeta-star-tag {
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(245, 158, 11, 0.15);
+  color: #b45309;
+}
+
+.vezeeta-fasting-tag {
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(239, 68, 68, 0.12);
+  color: #dc2626;
+}
+
+.catalog-toggle-btn {
+  padding: 6px 12px;
+  font-size: 11.5px;
+  font-weight: 700;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.catalog-toggle-btn:hover {
+  border-color: var(--teal);
+  color: var(--teal);
+}
+
+.catalog-toggle-btn.is-selected {
+  background: var(--teal);
+  color: #ffffff;
+  border-color: var(--teal);
+}
+
+.catalog-desc {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.vezeeta-catalog-empty {
+  text-align: center;
+  padding: 30px 10px;
+  color: var(--muted);
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Manifest Panel */
+.vezeeta-manifest-panel {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.manifest-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.manifest-header-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink);
+}
+
+.manifest-icon {
+  font-size: 16px;
+}
+
+.manifest-clear-all-btn {
+  background: transparent;
+  border: none;
+  font-size: 11.5px;
+  color: #ef4444;
+  cursor: pointer;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.manifest-clear-all-btn:hover {
+  text-decoration: underline;
+}
+
+.manifest-scroll-area {
+  max-height: 420px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.vezeeta-manifest-empty {
+  text-align: center;
+  padding: 40px 16px;
+  color: var(--muted);
+}
+
+.manifest-empty-icon {
+  font-size: 32px;
+  display: block;
+  margin-bottom: 8px;
+  opacity: 0.7;
+}
+
+.vezeeta-manifest-cards-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.vezeeta-manifest-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.vezeeta-manifest-card.is-stat-urgent {
+  border-color: #ef4444 !important;
+  background: rgba(239, 68, 68, 0.04);
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.15);
+}
+
+.manifest-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.manifest-card-identity {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.manifest-index-badge {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  font-size: 10.5px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.manifest-test-name {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: var(--ink);
+  line-height: 1.3;
+}
+
+.manifest-test-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+  flex-wrap: wrap;
+}
+
+.vezeeta-type-tag {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.vezeeta-type-tag.lab {
+  background: rgba(20, 184, 166, 0.12);
+  color: var(--teal);
+}
+
+.vezeeta-type-tag.rad {
+  background: rgba(79, 70, 229, 0.12);
+  color: #4f46e5;
+}
+
+.vezeeta-loinc-tag {
+  font-size: 9.5px;
+  font-family: monospace;
+  color: var(--muted);
+}
+
+.manifest-remove-btn {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.manifest-remove-btn:hover {
+  background: rgba(239, 68, 68, 0.15);
+  color: #dc2626;
+  border-color: #ef4444;
+}
+
+.manifest-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.manifest-urgency-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.manifest-field-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.manifest-urgency-toggle {
+  display: flex;
+  gap: 4px;
+}
+
+.urgency-pill-btn {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.2s ease;
+}
+
+.urgency-pill-btn.active {
+  background: var(--surface);
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.urgency-pill-btn.stat-btn.active {
+  background: #ef4444;
+  border-color: #ef4444;
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(239, 68, 68, 0.3);
+}
+
+.manifest-indication-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.vezeeta-indication-input {
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-family: inherit;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--ink);
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.vezeeta-indication-input:focus {
+  border-color: var(--teal);
+  background: var(--surface);
+}
+
+.vezeeta-manifest-footer {
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+}
+
+.manifest-footer-tip {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+/* Responsive Overrides: Mobile & Tablet */
+@media (max-width: 992px) {
+  .vezeeta-workstation-layout {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  .vezeeta-catalog-scroll-area {
+    max-height: 340px;
+  }
+}
+
+@media (max-width: 600px) {
+  .vezeeta-investigations-card {
+    padding: 12px;
+    border-radius: 12px;
+  }
+  .vezeeta-header-main {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .vezeeta-icon-wrap {
+    width: 36px;
+    height: 36px;
+  }
+  .catalog-toggle-btn {
+    min-height: 44px;
+    min-width: 72px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .vezeeta-bundle-btn {
+    min-height: 44px;
+  }
+  .vezeeta-cat-pill {
+    min-height: 38px;
+  }
+}

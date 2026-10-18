@@ -15,7 +15,8 @@
   "use strict";
 
   // In-memory stores
-  const doctorDraftNotesStore = new Map();       // caseId -> { diagnosis, medications, recommendations, savedAt }
+  const doctorDraftNotesStore = new Map();       // caseId -> { diagnosis, medications, recommendations, investigations, savedAt }
+  const caseInvestigationsStore = new Map();     // caseId -> Array of investigation items
   const acknowledgedRevisionsStore = new Map();  // caseId -> number (last acknowledged revision)
   let lastActiveModalOpener = null;              // Tracks button that opened modal for focus return
   let modalKeydownHandler = null;                // Reference to bound keydown handler for focus trap
@@ -80,9 +81,13 @@
       diagnosis: notes.diagnosis !== undefined ? notes.diagnosis : (existing.diagnosis || ""),
       medications: notes.medications !== undefined ? notes.medications : (existing.medications || ""),
       recommendations: notes.recommendations !== undefined ? notes.recommendations : (existing.recommendations || ""),
+      investigations: notes.investigations !== undefined ? notes.investigations : (existing.investigations || caseInvestigationsStore.get(caseId) || []),
       savedAt: Date.now()
     };
     doctorDraftNotesStore.set(caseId, updated);
+    if (notes.investigations !== undefined) {
+      caseInvestigationsStore.set(caseId, notes.investigations);
+    }
     try {
       if (typeof localStorage !== "undefined") {
         localStorage.setItem(`hv_draft_doc_${caseId}`, JSON.stringify(updated));
@@ -106,10 +111,16 @@
         if (item) {
           const parsed = JSON.parse(item);
           doctorDraftNotesStore.set(caseId, parsed);
+          if (Array.isArray(parsed.investigations)) {
+            caseInvestigationsStore.set(caseId, parsed.investigations);
+          }
           return parsed;
         }
       }
     } catch (e) {}
+    if (caseInvestigationsStore.has(caseId) && caseInvestigationsStore.get(caseId).length > 0) {
+      return { investigations: caseInvestigationsStore.get(caseId) };
+    }
     return null;
   }
 
@@ -119,13 +130,15 @@
     return Boolean(
       (draft.diagnosis && draft.diagnosis.trim()) ||
       (draft.medications && draft.medications.trim()) ||
-      (draft.recommendations && draft.recommendations.trim())
+      (draft.recommendations && draft.recommendations.trim()) ||
+      (Array.isArray(draft.investigations) && draft.investigations.length > 0)
     );
   }
 
   function clearDraftNotes(caseId) {
     if (!caseId) return;
     doctorDraftNotesStore.delete(caseId);
+    caseInvestigationsStore.delete(caseId);
     try {
       if (typeof localStorage !== "undefined") {
         localStorage.removeItem(`hv_draft_doc_${caseId}`);
@@ -4910,11 +4923,519 @@
           openRejectReentryModal(activeCaseId, "reentry");
         }
       }
+
+      // Global Alt + L: Focus Vezeeta Lab & Radiology search input
+      if (e.altKey && (e.key === "l" || e.key === "L" || e.code === "KeyL" || e.key === "م")) {
+        const searchInput = document.getElementById("searchInvestigationInput");
+        if (searchInput) {
+          e.preventDefault();
+          searchInput.focus();
+          searchInput.select();
+        }
+      }
     });
   }
 
   // ===========================================================================
-  // 10. EXPORTS & ATTACHMENT TO HEALTHVIBES GLOBAL
+  // 10. DIAGNOSTIC INVESTIGATIONS & RADIOLOGY ORDERING (VEZEETA PATTERN)
+  // ===========================================================================
+
+  let activeInvestigationCategoryFilter = "ALL"; // 'ALL' | 'LAB' | 'RADIOLOGY' | 'HIGH_YIELD'
+  let currentInvestigationSearchQuery = "";
+
+  function getCaseInvestigations(caseId) {
+    if (!caseId) return [];
+    if (caseInvestigationsStore.has(caseId)) {
+      return [...caseInvestigationsStore.get(caseId)];
+    }
+    const draft = getDraftNotes(caseId);
+    if (draft && Array.isArray(draft.investigations)) {
+      caseInvestigationsStore.set(caseId, [...draft.investigations]);
+      return [...draft.investigations];
+    }
+    const target = (typeof global.cases !== "undefined" && Array.isArray(global.cases) ? global.cases : (global.state?.doctorQueue || [])).find(item => item.id === caseId);
+    if (target && Array.isArray(target.investigations || target.orderedInvestigations)) {
+      const items = [...(target.investigations || target.orderedInvestigations)];
+      caseInvestigationsStore.set(caseId, items);
+      return items;
+    }
+    return [];
+  }
+
+  function setCaseInvestigations(caseId, items) {
+    if (!caseId) return;
+    const validated = (global.HealthVibes?.DoctorService?.validateOrderedInvestigations)
+      ? global.HealthVibes.DoctorService.validateOrderedInvestigations(items)
+      : (Array.isArray(items) ? items : []);
+    caseInvestigationsStore.set(caseId, validated);
+    saveDraftNotes(caseId, { investigations: validated });
+    updateInvestigationManifestDOM(caseId);
+    updateInvestigationCatalogDOM(caseId, (global.currentLanguage || "ar") === "en");
+    updateInvestigationPillCounter(caseId);
+  }
+
+  function addInvestigationToCase(caseId, itemOrCode) {
+    if (!caseId) return;
+    const current = getCaseInvestigations(caseId);
+    const code = typeof itemOrCode === "string" ? itemOrCode.trim().toUpperCase() : (itemOrCode.code || itemOrCode.id || "").trim().toUpperCase();
+    if (!code) return;
+
+    if (current.some(i => i.code.toUpperCase() === code)) {
+      const isEn = (global.currentLanguage || "ar") === "en";
+      if (typeof global.showToast === "function") {
+        global.showToast(isEn ? `Test ${code} is already added` : `الفحص ${code} مضاف بالفعل إلى القائمة`);
+      }
+      return;
+    }
+
+    let newItem;
+    if (typeof itemOrCode === "object" && itemOrCode !== null && (itemOrCode.nameAr || itemOrCode.nameEn)) {
+      newItem = {
+        code,
+        loinc: itemOrCode.loinc || null,
+        category: (itemOrCode.category || "LAB").toUpperCase(),
+        nameAr: itemOrCode.nameAr || code,
+        nameEn: itemOrCode.nameEn || code,
+        urgency: itemOrCode.urgency || "routine",
+        clinicalIndication: itemOrCode.clinicalIndication || "",
+        instructions: itemOrCode.instructions || "",
+        custom: Boolean(itemOrCode.custom)
+      };
+    } else {
+      const catalogItem = (global.HealthVibes?.DoctorService?.getInvestigationByCode)
+        ? global.HealthVibes.DoctorService.getInvestigationByCode(code)
+        : null;
+      newItem = {
+        code,
+        loinc: catalogItem?.loinc || null,
+        category: (catalogItem?.category || "LAB").toUpperCase(),
+        nameAr: catalogItem?.nameAr || code,
+        nameEn: catalogItem?.nameEn || code,
+        urgency: "routine",
+        clinicalIndication: "",
+        instructions: catalogItem?.instructionsAr || "",
+        custom: !catalogItem
+      };
+    }
+
+    current.push(newItem);
+    setCaseInvestigations(caseId, current);
+
+    const isEn = (global.currentLanguage || "ar") === "en";
+    if (typeof global.showToast === "function") {
+      const name = isEn ? newItem.nameEn : newItem.nameAr;
+      global.showToast(isEn ? `Added "${name}" to orders` : `تمت إضافة "${name}" إلى الفحوصات المطلوبة`);
+    }
+  }
+
+  function removeInvestigationFromCase(caseId, code) {
+    if (!caseId || !code) return;
+    const targetCode = String(code).trim().toUpperCase();
+    const current = getCaseInvestigations(caseId);
+    const filtered = current.filter(i => i.code.toUpperCase() !== targetCode);
+    setCaseInvestigations(caseId, filtered);
+  }
+
+  function toggleInvestigationInCase(caseId, code) {
+    if (!caseId || !code) return;
+    const targetCode = String(code).trim().toUpperCase();
+    const current = getCaseInvestigations(caseId);
+    const existingIndex = current.findIndex(i => i.code.toUpperCase() === targetCode);
+    if (existingIndex >= 0) {
+      removeInvestigationFromCase(caseId, targetCode);
+    } else {
+      addInvestigationToCase(caseId, targetCode);
+    }
+  }
+
+  function updateInvestigationField(caseId, code, field, value) {
+    if (!caseId || !code) return;
+    const targetCode = String(code).trim().toUpperCase();
+    const current = getCaseInvestigations(caseId);
+    const item = current.find(i => i.code.toUpperCase() === targetCode);
+    if (item) {
+      item[field] = value;
+      setCaseInvestigations(caseId, current);
+    }
+  }
+
+  function applyInvestigationPreset(caseId, presetKey) {
+    if (!caseId || !presetKey) return;
+    const presets = (global.HealthVibes?.DoctorService?.getInvestigationPresets)
+      ? global.HealthVibes.DoctorService.getInvestigationPresets()
+      : {};
+    const preset = presets[presetKey];
+    if (!preset || !Array.isArray(preset.codes)) return;
+
+    const current = getCaseInvestigations(caseId);
+    const isEn = (global.currentLanguage || "ar") === "en";
+
+    preset.codes.forEach(code => {
+      const codeUpper = code.toUpperCase();
+      if (!current.some(i => i.code.toUpperCase() === codeUpper)) {
+        const catalogItem = (global.HealthVibes?.DoctorService?.getInvestigationByCode)
+          ? global.HealthVibes.DoctorService.getInvestigationByCode(codeUpper)
+          : null;
+        current.push({
+          code: codeUpper,
+          loinc: catalogItem?.loinc || null,
+          category: (catalogItem?.category || "LAB").toUpperCase(),
+          nameAr: catalogItem?.nameAr || codeUpper,
+          nameEn: catalogItem?.nameEn || codeUpper,
+          urgency: "routine",
+          clinicalIndication: isEn ? preset.rationaleEn : preset.rationaleAr,
+          instructions: catalogItem?.instructionsAr || "",
+          custom: false
+        });
+      }
+    });
+
+    setCaseInvestigations(caseId, current);
+    if (typeof global.showToast === "function") {
+      const title = isEn ? preset.en : preset.ar;
+      global.showToast(isEn ? `Applied preset: ${title}` : `تم تطبيق باقة: ${title}`);
+    }
+  }
+
+  function addCustomInvestigationPrompt(caseId) {
+    const isEn = (global.currentLanguage || "ar") === "en";
+    const titlePrompt = isEn
+      ? "Enter Custom Investigation Name (e.g. Total IgE, Serum Procalcitonin):"
+      : "أدخل اسم الفحص أو التحليل المخصص (مثال: Procalcitonin، Total IgE، رسم عضلات):";
+    const testName = (typeof window !== "undefined" && window.prompt) ? window.prompt(titlePrompt) : null;
+    if (!testName || !testName.trim()) return;
+
+    const isImaging = (typeof window !== "undefined" && window.confirm)
+      ? window.confirm(isEn ? "Is this an Imaging / Radiology order? (Click Cancel for Laboratory test)" : "هل هذا فحص أشعة / تصوير طبي؟ (انقر إلغاء إذا كان تحليلاً مخبرياً)")
+      : false;
+
+    const code = `CUSTOM_${Date.now().toString(36).toUpperCase()}`;
+    addInvestigationToCase(caseId, {
+      code,
+      nameAr: testName.trim(),
+      nameEn: testName.trim(),
+      category: isImaging ? "RADIOLOGY" : "LAB",
+      urgency: "routine",
+      clinicalIndication: "",
+      instructions: "",
+      custom: true
+    });
+  }
+
+  function setInvestigationCategoryFilter(filterKey, caseId) {
+    activeInvestigationCategoryFilter = filterKey;
+    const isEn = (global.currentLanguage || "ar") === "en";
+    updateInvestigationCatalogDOM(caseId, isEn);
+  }
+
+  function handleInvestigationSearchInput(val, caseId) {
+    currentInvestigationSearchQuery = String(val || "").trim();
+    const isEn = (global.currentLanguage || "ar") === "en";
+    updateInvestigationCatalogDOM(caseId, isEn);
+  }
+
+  function updateInvestigationManifestDOM(caseId) {
+    if (typeof document === "undefined") return;
+    const manifestContainer = document.getElementById("selectedInvestigationsManifest");
+    if (!manifestContainer) return;
+    const isEn = (global.currentLanguage || "ar") === "en";
+    const selected = getCaseInvestigations(caseId);
+    manifestContainer.innerHTML = renderSelectedInvestigationsListHtml(selected, caseId, isEn);
+  }
+
+  function updateInvestigationCatalogDOM(caseId, isEn = false) {
+    if (typeof document === "undefined") return;
+    const catalogContainer = document.getElementById("investigationsCatalogGrid");
+    if (!catalogContainer) return;
+    const selected = getCaseInvestigations(caseId);
+    catalogContainer.innerHTML = renderInvestigationCatalogGridHtml(selected, caseId, isEn);
+
+    const tabs = document.querySelectorAll(".vezeeta-cat-pill");
+    tabs.forEach(btn => {
+      const cat = btn.getAttribute("data-cat");
+      if (cat === activeInvestigationCategoryFilter) {
+        btn.classList.add("is-active");
+      } else {
+        btn.classList.remove("is-active");
+      }
+    });
+  }
+
+  function updateInvestigationPillCounter(caseId) {
+    if (typeof document === "undefined") return;
+    const countBadge = document.getElementById("orderedInvestigationsCountBadge");
+    const countMobileBadge = document.getElementById("mobileInvestigationsCountBadge");
+    const selected = getCaseInvestigations(caseId);
+    const count = selected.length;
+    const isEn = (global.currentLanguage || "ar") === "en";
+    const label = count === 1
+      ? (isEn ? "1 test selected" : "فحص واحد محدد")
+      : (count === 2 ? (isEn ? "2 tests selected" : "فحصان محددان") : (isEn ? `${count} tests selected` : `${count} فحوصات محددة`));
+
+    if (countBadge) {
+      countBadge.textContent = count > 0 ? label : (isEn ? "No tests selected" : "لم يتم تحديد فحوصات");
+      countBadge.className = count > 0 ? "pill ok" : "pill pending";
+    }
+    if (countMobileBadge) {
+      countMobileBadge.textContent = count;
+      countMobileBadge.style.display = count > 0 ? "inline-flex" : "none";
+    }
+  }
+
+  function renderSelectedInvestigationsListHtml(selectedItems = [], caseId, isEn = false) {
+    if (!Array.isArray(selectedItems) || selectedItems.length === 0) {
+      return `
+        <div class="vezeeta-manifest-empty">
+          <span class="manifest-empty-icon">🧪</span>
+          <strong>${isEn ? 'No diagnostic tests requested yet' : 'لم يتم تحديد فحوصات أو تحاليل بعد'}</strong>
+          <p>${isEn ? 'Select from quick clinical presets above or search the catalog to include in the certified medical report.' : 'اختر من الباقات السريعة بالأعلى أو ابحث في الدليل لإدراج الفحوصات في التقرير الطبي المعتمد.'}</p>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="vezeeta-manifest-cards-list">
+        ${selectedItems.map((item, index) => {
+          const isStat = String(item.urgency).toLowerCase() === "stat";
+          const isLab = String(item.category).toUpperCase() === "LAB";
+          const categoryBadge = isLab
+            ? `<span class="vezeeta-type-tag lab">🧪 ${isEn ? 'Laboratory' : 'تحليل معملي'}</span>`
+            : `<span class="vezeeta-type-tag rad">🩻 ${isEn ? 'Radiology' : 'أشعة وتصوير'}</span>`;
+
+          const testName = isEn ? (item.nameEn || item.nameAr || item.code) : (item.nameAr || item.nameEn || item.code);
+          const escapedIndication = escapeHtml(item.clinicalIndication || "");
+          const codeSafe = escapeHtml(item.code);
+
+          return `
+            <div class="vezeeta-manifest-card ${isStat ? 'is-stat-urgent' : ''}" data-code="${codeSafe}">
+              <div class="manifest-card-header">
+                <div class="manifest-card-identity">
+                  <span class="manifest-index-badge">${index + 1}</span>
+                  <div>
+                    <strong class="manifest-test-name">${escapeHtml(testName)}</strong>
+                    <div class="manifest-test-meta">
+                      ${categoryBadge}
+                      <span class="vezeeta-code-tag">${codeSafe}</span>
+                      ${item.loinc ? `<span class="vezeeta-loinc-tag">LOINC ${escapeHtml(item.loinc)}</span>` : ''}
+                    </div>
+                  </div>
+                </div>
+                <button type="button" class="manifest-remove-btn" onclick="HealthVibes.DoctorUI.removeInvestigationFromCase('${caseId}', '${codeSafe}')" title="${isEn ? 'Remove test' : 'حذف الفحص'}">
+                  ✕
+                </button>
+              </div>
+
+              <!-- Controls: Urgency Switcher & Clinical Indication -->
+              <div class="manifest-card-body">
+                <div class="manifest-urgency-row">
+                  <span class="manifest-field-label">${isEn ? 'Priority:' : 'الأولوية:'}</span>
+                  <div class="manifest-urgency-toggle" role="radiogroup">
+                    <button type="button" class="urgency-pill-btn ${!isStat ? 'active' : ''}" onclick="HealthVibes.DoctorUI.updateInvestigationField('${caseId}', '${codeSafe}', 'urgency', 'routine')">
+                      <span>📋</span> ${isEn ? 'Routine' : 'عادي'}
+                    </button>
+                    <button type="button" class="urgency-pill-btn stat-btn ${isStat ? 'active' : ''}" onclick="HealthVibes.DoctorUI.updateInvestigationField('${caseId}', '${codeSafe}', 'urgency', 'stat')">
+                      <span>⚡</span> ${isEn ? 'STAT (Urgent)' : 'عاجل STAT'}
+                    </button>
+                  </div>
+                </div>
+
+                <div class="manifest-indication-row">
+                  <label for="ind_${codeSafe}" class="manifest-field-label">${isEn ? 'Clinical Indication / Reason:' : 'دواعي الفحص والهدف السريري:'}</label>
+                  <input type="text" id="ind_${codeSafe}" class="vezeeta-indication-input" value="${escapedIndication}" placeholder="${isEn ? 'e.g. Exclude pneumonic consolidation, assess leukocytosis...' : 'مثال: استبعاد ارتشاح رئوي، متابعة مؤشرات الالتهاب...'}" onchange="HealthVibes.DoctorUI.updateInvestigationField('${caseId}', '${codeSafe}', 'clinicalIndication', this.value)" />
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+  }
+
+  function renderInvestigationCatalogGridHtml(selectedItems = [], caseId, isEn = false) {
+    const catalog = (global.HealthVibes?.DoctorService?.filterDiagnosticCatalog)
+      ? global.HealthVibes.DoctorService.filterDiagnosticCatalog({
+          category: activeInvestigationCategoryFilter === "HIGH_YIELD" ? "ALL" : activeInvestigationCategoryFilter,
+          search: currentInvestigationSearchQuery,
+          highYieldOnly: activeInvestigationCategoryFilter === "HIGH_YIELD"
+        })
+      : [];
+
+    const selectedCodes = new Set(selectedItems.map(i => i.code.toUpperCase()));
+
+    if (catalog.length === 0) {
+      return `
+        <div class="vezeeta-catalog-empty">
+          <span>🔍</span>
+          <strong>${isEn ? 'No tests matching your filter' : 'لا توجد فحوصات مطابقة لخيارات البحث'}</strong>
+          <button type="button" class="soft-button" style="margin-top: 8px; font-size: 12px;" onclick="HealthVibes.DoctorUI.addCustomInvestigationPrompt('${caseId}')">
+            <span>+</span> ${isEn ? 'Add Custom Investigation' : 'إضافة هذا الفحص كطلب مخصص'}
+          </button>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="vezeeta-catalog-grid">
+        ${catalog.map(item => {
+          const isSelected = selectedCodes.has(item.code.toUpperCase());
+          const isLab = item.category === "LAB";
+          const title = isEn ? item.nameEn : item.nameAr;
+          const desc = isEn ? item.descEn : item.descAr;
+          const codeSafe = escapeHtml(item.code);
+
+          return `
+            <div class="vezeeta-catalog-card ${isSelected ? 'is-selected' : ''}" data-code="${codeSafe}">
+              <div class="catalog-card-top">
+                <div class="catalog-card-icon-title">
+                  <span class="catalog-icon">${isLab ? '🧪' : '🩻'}</span>
+                  <div>
+                    <strong class="catalog-title">${escapeHtml(title)}</strong>
+                    <div class="catalog-badges">
+                      <span class="vezeeta-code-tag">${codeSafe}</span>
+                      ${item.highYield ? `<span class="vezeeta-star-tag">⭐ ${isEn ? 'Top Pick' : 'شائع'}</span>` : ''}
+                      ${item.fastingHours > 0 ? `<span class="vezeeta-fasting-tag">⚠️ ${isEn ? 'Fasting' : 'صيام'}</span>` : ''}
+                    </div>
+                  </div>
+                </div>
+                <button type="button" class="catalog-toggle-btn ${isSelected ? 'is-selected' : ''}" onclick="HealthVibes.DoctorUI.toggleInvestigationInCase('${caseId}', '${codeSafe}')" aria-label="${isSelected ? (isEn ? 'Remove' : 'حذف') : (isEn ? 'Add' : 'إضافة')}">
+                  ${isSelected ? (isEn ? '✓ Selected' : '✓ تم الاختيار') : (isEn ? '+ Order' : '+ إضافة')}
+                </button>
+              </div>
+              <p class="catalog-desc">${escapeHtml(desc)}</p>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+  }
+
+  function renderOrderInvestigationsStationHtml(caseRecord, isEn = false) {
+    if (!caseRecord) return "";
+    const caseId = caseRecord.id;
+    const selected = getCaseInvestigations(caseId);
+    const count = selected.length;
+
+    return `
+      <!-- ========================================================================= -->
+      <!-- VEZEETA WORKSTATION: ORDER LABS & CHEST X-RAY REQUISITION                 -->
+      <!-- ========================================================================= -->
+      <section class="clinical-group-card vezeeta-investigations-card" id="vezeetaInvestigationsWorkstation" data-case-id="${escapeHtml(caseId)}" role="region" aria-label="${isEn ? 'Order Diagnostic Labs & Imaging' : 'طلب الفحوصات والتحاليل والأشعة التكميلية'}">
+        <div class="vezeeta-card-header">
+          <div class="vezeeta-header-main">
+            <div class="vezeeta-icon-wrap" aria-hidden="true">
+              <span class="vezeeta-brand-icon">🔬</span>
+            </div>
+            <div>
+              <div class="vezeeta-title-row">
+                <h4 class="vezeeta-heading">${isEn ? '4. Diagnostic Investigations & Radiology (Vezeeta E-Referral)' : '4. طلب الفحوصات والتحاليل والأشعة التكميلية (إذن فحص رسمي)'}</h4>
+                <kbd class="toolbar-shortcut-tag" title="Alt+L shortcut">Alt+L</kbd>
+              </div>
+              <p class="vezeeta-subheading">
+                ${isEn
+                  ? 'Request complementary clinical labs (CBC, CRP, D-Dimer) or medical imaging (Chest X-Ray, HRCT) printed directly on the certified report.'
+                  : 'تمكين الطبيب من تحديد فحوصات مطلوبة (صورة دم كاملة CBC، بروتين تفاعلي CRP، أشعة عادية على الصدر) لتظهر رسمياً في التقرير الطبي وخطة العلاج.'}
+              </p>
+            </div>
+          </div>
+          <div class="vezeeta-header-actions">
+            <span id="orderedInvestigationsCountBadge" class="${count > 0 ? 'pill ok' : 'pill pending'}" style="font-size: 11.5px; font-weight: 700;">
+              ${count > 0 ? (isEn ? `${count} tests selected` : `${count} فحوصات محددة`) : (isEn ? 'No tests selected' : 'لم يتم تحديد فحوصات')}
+            </span>
+          </div>
+        </div>
+
+        <!-- QUICK CLINICAL BUNDLES (ONE-CLICK PRESETS) -->
+        <div class="vezeeta-presets-bar">
+          <span class="vezeeta-presets-label">
+            <span>⚡</span> ${isEn ? 'Clinical Workup Bundles:' : 'باقات الفحص السريري المباشر:'}
+          </span>
+          <div class="vezeeta-presets-scroll">
+            <button type="button" class="vezeeta-bundle-btn" onclick="HealthVibes.DoctorUI.applyInvestigationPreset('${caseId}', 'respiratory_infection')">
+              <span>🫁</span> ${isEn ? 'Respiratory Infection (CBC + CRP + X-Ray)' : 'التهاب تنفسي (صورة دم + بروتين + أشعة صدر)'}
+            </button>
+            <button type="button" class="vezeeta-bundle-btn" onclick="HealthVibes.DoctorUI.applyInvestigationPreset('${caseId}', 'acute_dyspnea_pe')">
+              <span>⚠️</span> ${isEn ? 'Acute Dyspnea / PE (D-Dimer + ABG + X-Ray + ECG)' : 'ضيق تنفس واشتباه جلطة (دي دايمر + غازات + أشعة + رسم قلب)'}
+            </button>
+            <button type="button" class="vezeeta-bundle-btn" onclick="HealthVibes.DoctorUI.applyInvestigationPreset('${caseId}', 'viral_pneumonia')">
+              <span>🦠</span> ${isEn ? 'Viral Pneumonia (Ferritin + CRP + D-Dimer + HRCT)' : 'التهاب فيروسي ورئوي (فيريتين + بروتين + دي دايمر + مقطعية)'}
+            </button>
+            <button type="button" class="vezeeta-bundle-btn" onclick="HealthVibes.DoctorUI.applyInvestigationPreset('${caseId}', 'cardiopulmonary_workup')">
+              <span>❤️</span> ${isEn ? 'Cardiopulmonary Panel (CBC + Renal + X-Ray + ECG + Troponin)' : 'فحص صدري وقلبي شامل'}
+            </button>
+          </div>
+        </div>
+
+        <!-- WORKSTATION BODY: SPLIT VIEW FOR TABLET/DESKTOP, STACKED ON MOBILE -->
+        <div class="vezeeta-workstation-layout">
+          <!-- LEFT / TOP PANEL: CATALOG PICKER -->
+          <div class="vezeeta-picker-panel">
+            <!-- Search & Filter Controls -->
+            <div class="vezeeta-controls-row">
+              <div class="vezeeta-search-wrapper">
+                <span class="vezeeta-search-icon" aria-hidden="true">🔍</span>
+                <input type="search" id="searchInvestigationInput" class="vezeeta-search-input" placeholder="${isEn ? 'Search tests by name or code (CBC, CRP, X-Ray)...' : 'ابحث عن فحص أو تحليل أو أشعة (CBC, CRP, X-Ray)...'}" oninput="HealthVibes.DoctorUI.handleInvestigationSearchInput(this.value, '${caseId}')" />
+              </div>
+              <button type="button" class="soft-button vezeeta-custom-add-btn" onclick="HealthVibes.DoctorUI.addCustomInvestigationPrompt('${caseId}')" title="${isEn ? 'Add unlisted test' : 'إضافة فحص غير مدرج بالقائمة'}">
+                <span>+</span> ${isEn ? 'Custom Test' : 'فحص مخصص'}
+              </button>
+            </div>
+
+            <!-- Category Filter Pills -->
+            <div class="vezeeta-category-pills" role="tablist">
+              <button type="button" class="vezeeta-cat-pill ${activeInvestigationCategoryFilter === 'ALL' ? 'is-active' : ''}" data-cat="ALL" onclick="HealthVibes.DoctorUI.setInvestigationCategoryFilter('ALL', '${caseId}')">
+                ${isEn ? 'All Tests' : 'جميع الفحوصات'}
+              </button>
+              <button type="button" class="vezeeta-cat-pill ${activeInvestigationCategoryFilter === 'LAB' ? 'is-active' : ''}" data-cat="LAB" onclick="HealthVibes.DoctorUI.setInvestigationCategoryFilter('LAB', '${caseId}')">
+                🧪 ${isEn ? 'Lab Tests' : 'تحاليل مخبرية'}
+              </button>
+              <button type="button" class="vezeeta-cat-pill ${activeInvestigationCategoryFilter === 'RADIOLOGY' ? 'is-active' : ''}" data-cat="RADIOLOGY" onclick="HealthVibes.DoctorUI.setInvestigationCategoryFilter('RADIOLOGY', '${caseId}')">
+                🩻 ${isEn ? 'Radiology & Imaging' : 'أشعة وتصوير'}
+              </button>
+              <button type="button" class="vezeeta-cat-pill ${activeInvestigationCategoryFilter === 'HIGH_YIELD' ? 'is-active' : ''}" data-cat="HIGH_YIELD" onclick="HealthVibes.DoctorUI.setInvestigationCategoryFilter('HIGH_YIELD', '${caseId}')">
+                ⭐ ${isEn ? 'High-Yield Clinic' : 'الأكثر طلباً'}
+              </button>
+            </div>
+
+            <!-- Filtered Catalog Grid -->
+            <div id="investigationsCatalogGrid" class="vezeeta-catalog-scroll-area">
+              ${renderInvestigationCatalogGridHtml(selected, caseId, isEn)}
+            </div>
+          </div>
+
+          <!-- RIGHT / BOTTOM PANEL: SELECTED ORDERS MANIFEST -->
+          <div class="vezeeta-manifest-panel">
+            <div class="manifest-header">
+              <div class="manifest-header-title">
+                <span class="manifest-icon">📋</span>
+                <strong style="font-size: 13.5px;">${isEn ? 'Requested Diagnostic Orders' : 'قائمة الفحوصات المطلوبة للتقرير'}</strong>
+              </div>
+              ${count > 0 ? `
+                <button type="button" class="manifest-clear-all-btn" onclick="HealthVibes.DoctorUI.setCaseInvestigations('${caseId}', [])">
+                  ${isEn ? 'Clear All' : 'إفراغ القائمة'}
+                </button>
+              ` : ''}
+            </div>
+
+            <!-- Manifest Content List -->
+            <div id="selectedInvestigationsManifest" class="manifest-scroll-area">
+              ${renderSelectedInvestigationsListHtml(selected, caseId, isEn)}
+            </div>
+
+            <!-- Patient Preparation & Lab Requisition Summary Footer -->
+            <div class="vezeeta-manifest-footer">
+              <div class="manifest-footer-tip">
+                <span>💡</span>
+                <small>${isEn ? 'Ordered tests automatically appear on the certified medical report with LOINC/RADLEX codes for partnered laboratories.' : 'تظهر الفحوصات المطلوبة تلقائياً في التقرير الطبي المعتمد مع أكواد LOINC الدولية لمعامل التحاليل ومراكز الأشعة المعتمدة.'}</small>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    `;
+  }
+
+  // ===========================================================================
+  // 11. EXPORTS & ATTACHMENT TO HEALTHVIBES GLOBAL
   // ===========================================================================
 
   const DoctorUI = {
@@ -5001,7 +5522,23 @@
     applyReentryInstructionChip,
     updateReentryNotificationPreview,
     submitRejectReentry,
-    renderReentryStatusAlertBanner
+    renderReentryStatusAlertBanner,
+    // Diagnostic Investigations & Radiology Ordering (Vezeeta Pattern)
+    INVESTIGATION_CATEGORIES: (global.HealthVibes?.DoctorService?.INVESTIGATION_CATEGORIES) || { LAB: "LAB", RADIOLOGY: "RADIOLOGY" },
+    INVESTIGATION_URGENCIES: (global.HealthVibes?.DoctorService?.INVESTIGATION_URGENCIES) || { ROUTINE: "routine", STAT: "stat" },
+    getCaseInvestigations,
+    setCaseInvestigations,
+    addInvestigationToCase,
+    removeInvestigationFromCase,
+    toggleInvestigationInCase,
+    updateInvestigationField,
+    applyInvestigationPreset,
+    addCustomInvestigationPrompt,
+    setInvestigationCategoryFilter,
+    handleInvestigationSearchInput,
+    renderSelectedInvestigationsListHtml,
+    renderInvestigationCatalogGridHtml,
+    renderOrderInvestigationsStationHtml
   };
 
   global.HealthVibes = global.HealthVibes || {};
