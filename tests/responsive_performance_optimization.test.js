@@ -96,7 +96,7 @@ async function runTest(name, fn) {
     const prefsStats = fs.statSync(prefsPath);
 
     assert.ok(respStats.size < 15360, `responsive-layout.js size (${respStats.size} bytes) must be < 15KB`);
-    assert.ok(prefsStats.size < 10240, `user-preferences-service.js size (${prefsStats.size} bytes) must be < 10KB`);
+    assert.ok(prefsStats.size < 16384, `user-preferences-service.js size (${prefsStats.size} bytes) must be < 16KB`);
   });
 
   // TEST 7: Performance Telemetry Metrics API

@@ -386,6 +386,12 @@
     ONE_CLICK_REBOOK_CLICKED: 'one_click_rebook_clicked',
     ONE_CLICK_REBOOK_SUCCESS: 'one_click_rebook_success',
     CALENDAR_ICS_DOWNLOADED: 'calendar_ics_downloaded',
+    // 🔔 Doctolib Automated Reminders & No-Show Telemetry
+    APPOINTMENT_REMINDER_SENT: 'appointment_reminder_sent',
+    APPOINTMENT_REMINDER_DELIVERED: 'appointment_reminder_delivered',
+    APPOINTMENT_ATTENDANCE_CONFIRMED: 'appointment_attendance_confirmed',
+    APPOINTMENT_NO_SHOW_RECORDED: 'appointment_no_show_recorded',
+    REMINDER_PREFERENCES_UPDATED: 'reminder_preferences_updated',
     VIEW: 'appointment_view',
     SLOT_SELECTED: 'appointment_slot_selected',
     BOOK_ATTEMPT: 'appointment_book_attempt',
@@ -419,6 +425,8 @@
     const completed = filteredAppts.filter(a => a.status === 'completed').length;
     const cancelled = filteredAppts.filter(a => a.status === 'cancelled').length;
     const rescheduled = filteredAppts.filter(a => a.status === 'rescheduled').length;
+    const noShow = filteredAppts.filter(a => a.status === 'no_show').length;
+    const attendanceConfirmedAppts = filteredAppts.filter(a => Boolean(a.attendanceConfirmed)).length;
 
     let telehealthCount = 0;
     let videoCount = 0;
@@ -518,6 +526,41 @@
     const rebookClicks = events.filter(e => matchEvt(e, 'one_click_rebook_clicked')).length;
     const rebookSuccesses = events.filter(e => matchEvt(e, 'one_click_rebook_success')).length;
     const icsDownloads = events.filter(e => matchEvt(e, 'calendar_ics_downloaded')).length;
+
+    // 🔔 Doctolib Automated Reminders & Attendance Confirmation Telemetry
+    const reminderSentEvents = events.filter(e => matchEvt(e, 'appointment_reminder_sent'));
+    const remindersSentTotal = reminderSentEvents.length;
+    const reminders24hSent = reminderSentEvents.filter(e => {
+      const p = e.payload || e.properties || {};
+      return p.window === '24h' || p.reminderWindow === '24h';
+    }).length;
+    const reminders2hSent = reminderSentEvents.filter(e => {
+      const p = e.payload || e.properties || {};
+      return p.window === '2h' || p.reminderWindow === '2h';
+    }).length;
+
+    const reminderChannelBreakdown = {
+      in_app: 0,
+      email: 0,
+      sms: 0,
+      whatsapp: 0
+    };
+    reminderSentEvents.forEach(e => {
+      const p = e.payload || e.properties || {};
+      const ch = p.channel || p.channels;
+      if (Array.isArray(ch)) {
+        ch.forEach(c => {
+          if (reminderChannelBreakdown[c] !== undefined) reminderChannelBreakdown[c]++;
+        });
+      } else if (typeof ch === 'string') {
+        if (reminderChannelBreakdown[ch] !== undefined) reminderChannelBreakdown[ch]++;
+      }
+    });
+
+    const attendanceConfirmEvents = events.filter(e => matchEvt(e, 'appointment_attendance_confirmed')).length;
+    const effectiveAttendanceConfirmed = Math.max(attendanceConfirmedAppts, attendanceConfirmEvents);
+    const attendanceConfirmationRate = total > 0 ? Number(((effectiveAttendanceConfirmed / total) * 100).toFixed(1)) : null;
+    const noShowRate = total > 0 ? Number(((noShow / total) * 100).toFixed(1)) : null;
 
     const rescheduleReasonsBreakdown = {
       conflict: 0,
@@ -731,6 +774,16 @@
         rescheduleReasonsBreakdown,
         cancellationReasonsBreakdown,
         initiatorBreakdown,
+        // Doctolib Reminders & Attendance fields
+        remindersSentTotal,
+        reminders24hSent,
+        reminders2hSent,
+        reminderChannelBreakdown,
+        attendanceConfirmEvents,
+        effectiveAttendanceConfirmed,
+        attendanceConfirmationRate,
+        noShow,
+        noShowRate,
         // Doctor Schedule metrics
         scheduleUpdateCount,
         leaveRequestsCount,
@@ -744,6 +797,17 @@
       completed,
       cancelled,
       rescheduled,
+      noShow,
+      noShowRate,
+      noShowRateDisplay: noShowRate !== null ? `${noShowRate}%` : naText,
+      noShowRateDisplayAr: noShowRate !== null ? `${noShowRate}%` : 'غير متاح',
+      attendanceConfirmationRate,
+      attendanceConfirmationRateDisplay: attendanceConfirmationRate !== null ? `${attendanceConfirmationRate}%` : naText,
+      attendanceConfirmationRateDisplayAr: attendanceConfirmationRate !== null ? `${attendanceConfirmationRate}%` : 'غير متاح',
+      remindersSentTotal,
+      reminders24hSent,
+      reminders2hSent,
+      reminderChannelBreakdown,
       telehealthCount,
       videoCount,
       followupCount,

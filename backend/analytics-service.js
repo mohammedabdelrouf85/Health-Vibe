@@ -81,7 +81,10 @@ const EVENT_TYPES = Object.freeze({
   APPOINTMENT_ATTENDANCE_CONFIRMATION_ATTEMPT: 'appointment_attendance_confirmation_attempt',
   APPOINTMENT_ATTENDANCE_CONFIRMED_VIA_WHATSAPP: 'appointment_attendance_confirmed_via_whatsapp',
   APPOINTMENT_ATTENDANCE_CONFIRMED_VIA_SMS: 'appointment_attendance_confirmed_via_sms',
-  REMINDER_PREFERENCES_UPDATED: 'reminder_preferences_updated'
+  REMINDER_PREFERENCES_UPDATED: 'reminder_preferences_updated',
+  APPOINTMENT_NO_SHOW_RECORDED: 'appointment_no_show_recorded',
+  APPOINTMENT_REMINDER_ANALYTICS_VIEWED: 'appointment_reminder_analytics_viewed',
+  APPOINTMENT_REMINDER_CHANNEL_OPT_OUT: 'appointment_reminder_channel_opt_out'
 });
 
 const FORBIDDEN_MEDICAL_KEYS = Object.freeze([
