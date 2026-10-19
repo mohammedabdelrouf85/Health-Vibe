@@ -82,6 +82,8 @@
       medications: notes.medications !== undefined ? notes.medications : (existing.medications || ""),
       recommendations: notes.recommendations !== undefined ? notes.recommendations : (existing.recommendations || ""),
       investigations: notes.investigations !== undefined ? notes.investigations : (existing.investigations || caseInvestigationsStore.get(caseId) || []),
+      privateNotes: notes.privateNotes !== undefined ? notes.privateNotes : (existing.privateNotes || ""),
+      includePrivateNotesInReport: notes.includePrivateNotesInReport !== undefined ? Boolean(notes.includePrivateNotesInReport) : Boolean(existing.includePrivateNotesInReport),
       savedAt: Date.now()
     };
     doctorDraftNotesStore.set(caseId, updated);
@@ -131,6 +133,7 @@
       (draft.diagnosis && draft.diagnosis.trim()) ||
       (draft.medications && draft.medications.trim()) ||
       (draft.recommendations && draft.recommendations.trim()) ||
+      (draft.privateNotes && draft.privateNotes.trim()) ||
       (Array.isArray(draft.investigations) && draft.investigations.length > 0)
     );
   }
@@ -172,12 +175,16 @@
     const diagInput = document.getElementById("doctorDiagnosisInput");
     const medsInput = document.getElementById("doctorMedicationsInput");
     const recsInput = document.getElementById("doctorRecommendationsInput");
+    const privateNotesInput = document.getElementById("doctorPrivateNotesInput");
+    const includePrivateCheck = document.getElementById("includePrivateNotesInReport");
 
     const onInput = () => {
       saveDraftNotes(caseId, {
         diagnosis: diagInput ? diagInput.value : "",
         medications: medsInput ? medsInput.value : "",
-        recommendations: recsInput ? recsInput.value : ""
+        recommendations: recsInput ? recsInput.value : "",
+        privateNotes: privateNotesInput ? privateNotesInput.value : "",
+        includePrivateNotesInReport: includePrivateCheck ? includePrivateCheck.checked : false
       });
     };
 
@@ -195,6 +202,15 @@
       recsInput.removeEventListener("input", onInput);
       recsInput.addEventListener("input", onInput);
       recsInput.addEventListener("change", onInput);
+    }
+    if (privateNotesInput) {
+      privateNotesInput.removeEventListener("input", onInput);
+      privateNotesInput.addEventListener("input", onInput);
+      privateNotesInput.addEventListener("change", onInput);
+    }
+    if (includePrivateCheck) {
+      includePrivateCheck.removeEventListener("change", onInput);
+      includePrivateCheck.addEventListener("change", onInput);
     }
 
     updateDraftBadgeVisibility(caseId);
@@ -1032,11 +1048,15 @@
       const diagInput = document.getElementById("doctorDiagnosisInput");
       const medsInput = document.getElementById("doctorMedicationsInput");
       const recsInput = document.getElementById("doctorRecommendationsInput");
-      if (diagInput || medsInput || recsInput) {
+      const privateNotesInput = document.getElementById("doctorPrivateNotesInput");
+      const includePrivateCheck = document.getElementById("includePrivateNotesInReport");
+      if (diagInput || medsInput || recsInput || privateNotesInput) {
         saveDraftNotes(activeCaseId, {
           diagnosis: diagInput?.value || "",
           medications: medsInput?.value || "",
-          recommendations: recsInput?.value || ""
+          recommendations: recsInput?.value || "",
+          privateNotes: privateNotesInput?.value || "",
+          includePrivateNotesInReport: includePrivateCheck ? includePrivateCheck.checked : false
         });
       }
     }
@@ -2218,12 +2238,21 @@
   function scrubInternalNotesForPatient(caseData) {
     if (!caseData) return caseData;
     const sanitized = { ...caseData };
+    const shouldInclude = Boolean(sanitized.includePrivateNotesInReport || sanitized.sharePrivateNotesWithPatient);
+    if (!shouldInclude) {
+      delete sanitized.privateNotes;
+      delete sanitized.doctorPrivateNotes;
+    }
     delete sanitized.internalDoctorNotes;
     delete sanitized.internalNotes;
     delete sanitized.clinicianQuarantineNotes;
     delete sanitized.privatePhysicianNotes;
     if (sanitized.reportSnapshot) {
       const rs = { ...sanitized.reportSnapshot };
+      if (!shouldInclude) {
+        delete rs.privateNotes;
+        delete rs.doctorPrivateNotes;
+      }
       delete rs.internalDoctorNotes;
       delete rs.internalNotes;
       delete rs.clinicianQuarantineNotes;
@@ -5435,7 +5464,176 @@
   }
 
   // ===========================================================================
-  // 11. EXPORTS & ATTACHMENT TO HEALTHVIBES GLOBAL
+  // 11. DOCTOR PRIVATE NOTES (CONFIDENTIAL CLINICAL QUARANTINE)
+  // ===========================================================================
+
+  function getCasePrivateNotes(caseId) {
+    if (!caseId) return { privateNotes: "", includePrivateNotesInReport: false };
+    const draft = getDraftNotes(caseId);
+    if (draft && draft.privateNotes !== undefined) {
+      return {
+        privateNotes: draft.privateNotes || "",
+        includePrivateNotesInReport: Boolean(draft.includePrivateNotesInReport)
+      };
+    }
+    const target = (Array.isArray(global.cases) ? global.cases.find(x => x.id === caseId) : null) ||
+                   (global._currentViewingCase && global._currentViewingCase.id === caseId ? global._currentViewingCase : null);
+    if (target) {
+      return {
+        privateNotes: target.privateNotes || target.doctorPrivateNotes || "",
+        includePrivateNotesInReport: Boolean(target.includePrivateNotesInReport)
+      };
+    }
+    return { privateNotes: "", includePrivateNotesInReport: false };
+  }
+
+  function isPrivateNotesIncludedInReport(caseId) {
+    return getCasePrivateNotes(caseId).includePrivateNotesInReport;
+  }
+
+  function setCasePrivateNotes(caseId, notes = "", includeInReport = false) {
+    if (!caseId) return;
+    saveDraftNotes(caseId, {
+      privateNotes: String(notes || ""),
+      includePrivateNotesInReport: Boolean(includeInReport)
+    });
+  }
+
+  function handlePrivateNotesShareToggle(isChecked, caseId) {
+    if (!caseId) return;
+    const isEn = (global.currentLanguage || "ar") === "en";
+    const badge = document.getElementById("privateNotesSecurityBadge");
+    const station = document.getElementById("doctorPrivateNotesStation");
+    const textarea = document.getElementById("doctorPrivateNotesInput");
+    const shareControl = document.querySelector(".private-notes-share-control");
+    const shareHint = document.querySelector(".private-notes-share-hint");
+    const iconSpan = document.querySelector(".private-notes-icon");
+
+    if (badge) {
+      badge.className = `pill ${isChecked ? 'ok' : 'danger'}`;
+      badge.textContent = isChecked
+        ? (isEn ? '🌐 Included in Report' : '🌐 مضافة لتقرير المريض')
+        : (isEn ? '🔒 Quarantined / Private' : '🔒 سرية ومحجوبة عن المريض');
+    }
+
+    if (station) {
+      station.classList.toggle("is-shared-with-patient", isChecked);
+      station.classList.toggle("is-quarantined", !isChecked);
+    }
+    if (textarea) {
+      textarea.classList.toggle("shared-mode", isChecked);
+      textarea.classList.toggle("quarantined-mode", !isChecked);
+    }
+    if (iconSpan) {
+      iconSpan.textContent = isChecked ? '📝' : '🔒';
+    }
+    if (shareControl) {
+      shareControl.classList.toggle("is-active", isChecked);
+    }
+    if (shareHint) {
+      shareHint.textContent = isChecked
+        ? (isEn ? '⚠️ Overrides quarantine: This note will be visible on the printable report and in the patient portal.' : '⚠️ تم إلغاء الحجب: ستظهر هذه الملاحظة رسمياً في تقرير المريض المطبوع وبوابة المريض.')
+        : (isEn ? '🔒 Recommended default: Kept strictly internal in the clinical case file and hidden from the patient.' : '🔒 الوضع الافتراضي الموصى به: تظل الملاحظات داخلية في ملف الحالة وتُحجب بالكامل عن المريض.');
+    }
+
+    const currentNotes = textarea ? textarea.value : "";
+    saveDraftNotes(caseId, {
+      privateNotes: currentNotes,
+      includePrivateNotesInReport: isChecked
+    });
+
+    if (typeof global.showToast === "function") {
+      global.showToast(isChecked
+        ? (isEn ? "Private notes will be included in the patient report." : "سيتم إدراج الملاحظات في تقرير المريض.")
+        : (isEn ? "Private notes quarantined (hidden from patient)." : "تم حجب الملاحظات الخاصة عن تقرير المريض."));
+    }
+  }
+
+  function handlePrivateNotesInput(text, caseId) {
+    if (!caseId) return;
+    const check = document.getElementById("includePrivateNotesInReport");
+    saveDraftNotes(caseId, {
+      privateNotes: text,
+      includePrivateNotesInReport: check ? check.checked : false
+    });
+  }
+
+  function renderPrivateNotesStationHtml(caseRecord, isEn = false) {
+    if (!caseRecord) return "";
+    const caseId = caseRecord.id;
+    const { privateNotes, includePrivateNotesInReport } = getCasePrivateNotes(caseId);
+    const isIncluded = Boolean(includePrivateNotesInReport);
+
+    return `
+      <!-- ========================================================================= -->
+      <!-- DOCTOR PRIVATE NOTES: CLINICAL QUARANTINE VS REPORT INCLUSION             -->
+      <!-- ========================================================================= -->
+      <section class="clinical-group-card doctor-private-notes-station ${isIncluded ? 'is-shared-with-patient' : 'is-quarantined'}" id="doctorPrivateNotesStation" data-case-id="${escapeHtml(caseId)}" role="region" aria-label="${isEn ? 'Doctor Private Notes' : 'ملاحظات الطبيب السريرية الخاصة'}">
+        <div class="private-notes-header">
+          <div class="private-notes-header-main">
+            <div class="private-notes-icon-wrap" aria-hidden="true">
+              <span class="private-notes-icon">${isIncluded ? '📝' : '🔒'}</span>
+            </div>
+            <div>
+              <div class="private-notes-title-row">
+                <h4 class="private-notes-heading">${isEn ? '5. Doctor Private Notes (Clinical Quarantine)' : '5. الملاحظات السريرية الخاصة بالطبيب (محجوبة عن المريض افتراضياً)'}</h4>
+                <span id="privateNotesSecurityBadge" class="pill ${isIncluded ? 'ok' : 'danger'}" style="font-size: 11px; font-weight: 700;">
+                  ${isIncluded ? (isEn ? '🌐 Included in Report' : '🌐 مضافة لتقرير المريض') : (isEn ? '🔒 Quarantined / Private' : '🔒 سرية ومحجوبة عن المريض')}
+                </span>
+              </div>
+              <p class="private-notes-subheading">
+                ${isEn
+                  ? 'Record confidential clinical hypotheses, differential diagnosis notes, or sensitive observations. These notes are saved securely to the case record and strictly quarantined from the patient unless explicitly enabled below.'
+                  : 'تدوين ملاحظات تشخيصية تفريقية، فرضيات سريرية، أو تنبيهات متابعة داخلية. تُحفظ بأمان في ملف الحالة وتُحجب تماماً عن تقرير المريض إلا إذا قمت بتفعيل خيار الإدراج أدناه.'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Textarea Input with dir="auto" -->
+        <div class="private-notes-input-wrapper">
+          <label for="doctorPrivateNotesInput" class="visually-hidden">
+            ${isEn ? 'Doctor Private Notes' : 'ملاحظات الطبيب الخاصة'}
+          </label>
+          <textarea
+            id="doctorPrivateNotesInput"
+            name="doctorPrivateNotes"
+            class="doctor-private-notes-textarea ${isIncluded ? 'shared-mode' : 'quarantined-mode'}"
+            dir="auto"
+            rows="3"
+            placeholder="${isEn
+              ? 'Enter confidential clinical notes (e.g., differential diagnoses, compliance doubts, sensitive family history). Strictly hidden from the patient report by default...'
+              : 'أدخل الملاحظات السريرية الخاصة بالطبيب (مثل: تشخيصات تفريقية، شكوك التزام دوائي، تنبيهات متابعة). تظل سرية ومحجوبة تماماً عن تقرير المريض افتراضياً...'}"
+            oninput="HealthVibes.DoctorUI.handlePrivateNotesInput(this.value, '${escapeHtml(caseId)}')"
+          >${escapeHtml(privateNotes)}</textarea>
+        </div>
+
+        <!-- Consent / Inclusion in Patient Report Toggle -->
+        <div class="private-notes-share-control ${isIncluded ? 'is-active' : ''}">
+          <label class="private-notes-share-label">
+            <input
+              type="checkbox"
+              id="includePrivateNotesInReport"
+              class="private-notes-checkbox"
+              ${isIncluded ? 'checked' : ''}
+              onchange="HealthVibes.DoctorUI.handlePrivateNotesShareToggle(this.checked, '${escapeHtml(caseId)}')"
+            />
+            <span class="private-notes-share-text">
+              <strong>${isEn ? 'Include these clinical notes in the patient\'s certified medical report' : 'إدراج هذه الملاحظات في تقرير المريض الطبي المعتمد'}</strong>
+              <small class="private-notes-share-hint">
+                ${isIncluded
+                  ? (isEn ? '⚠️ Overrides quarantine: This note will be visible on the printable report and in the patient portal.' : '⚠️ تم إلغاء الحجب: ستظهر هذه الملاحظة رسمياً في تقرير المريض المطبوع وبوابة المريض.')
+                  : (isEn ? '🔒 Recommended default: Kept strictly internal in the clinical case file and hidden from the patient.' : '🔒 الوضع الافتراضي الموصى به: تظل الملاحظات داخلية في ملف الحالة وتُحجب بالكامل عن المريض.')}
+              </small>
+            </span>
+          </label>
+        </div>
+      </section>
+    `;
+  }
+
+  // ===========================================================================
+  // 12. EXPORTS & ATTACHMENT TO HEALTHVIBES GLOBAL
   // ===========================================================================
 
   const DoctorUI = {
@@ -5538,7 +5736,14 @@
     handleInvestigationSearchInput,
     renderSelectedInvestigationsListHtml,
     renderInvestigationCatalogGridHtml,
-    renderOrderInvestigationsStationHtml
+    renderOrderInvestigationsStationHtml,
+    // Doctor Private Notes (Clinical Quarantine)
+    getCasePrivateNotes,
+    isPrivateNotesIncludedInReport,
+    setCasePrivateNotes,
+    handlePrivateNotesShareToggle,
+    handlePrivateNotesInput,
+    renderPrivateNotesStationHtml
   };
 
   global.HealthVibes = global.HealthVibes || {};

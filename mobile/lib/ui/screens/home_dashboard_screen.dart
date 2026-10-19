@@ -105,7 +105,6 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     final displayName = _user?.displayName.isNotEmpty == true
         ? _user!.displayName
         : (l10n.isRtl ? 'المستخدم السريري' : 'Clinical User');
-    final role = _user?.role ?? 'patient';
     final isDoc = _user?.isDoctor == true;
 
     return Scaffold(
@@ -166,7 +165,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                 borderRadius: BorderRadius.circular(18),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.primary.withOpacity(0.25),
+                    color: AppColors.primary.withValues(alpha: 0.25),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),
@@ -178,7 +177,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   Row(
                     children: [
                       CircleAvatar(
-                        backgroundColor: Colors.white.withOpacity(0.2),
+                        backgroundColor: Colors.white.withValues(alpha: 0.2),
                         radius: 24,
                         child: Icon(
                           isDoc ? Icons.medical_services : Icons.person,
@@ -203,7 +202,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                             Text(
                               _user?.email ?? '',
                               style: TextStyle(
-                                color: Colors.white.withOpacity(0.85),
+                                color: Colors.white.withValues(alpha: 0.85),
                                 fontSize: 13,
                               ),
                             ),
@@ -213,7 +212,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
+                          color: Colors.white.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
@@ -235,10 +234,10 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppColors.secondary.withOpacity(0.3)),
+                  border: Border.all(color: AppColors.secondary.withValues(alpha: 0.3)),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.02),
+                      color: Colors.black.withValues(alpha: 0.02),
                       blurRadius: 6,
                       offset: const Offset(0, 2),
                     ),
@@ -249,7 +248,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: AppColors.secondary.withOpacity(0.12),
+                        color: AppColors.secondary.withValues(alpha: 0.12),
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(Icons.notifications_active_outlined, color: AppColors.secondary, size: 24),
@@ -425,7 +424,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
           border: Border.all(color: AppColors.cardBorder),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.02),
+              color: Colors.black.withValues(alpha: 0.02),
               blurRadius: 6,
               offset: const Offset(0, 2),
             ),
@@ -436,7 +435,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: iconColor.withOpacity(0.12),
+                color: iconColor.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(14),
               ),
               child: Icon(icon, color: iconColor, size: 28),

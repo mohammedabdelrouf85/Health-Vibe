@@ -29,7 +29,7 @@ class _AssessmentFlowScreenState extends State<AssessmentFlowScreen> {
   String _coughSeverity = 'mild';
   String _chestPain = 'no';
   String _symptomProgression = 'stable';
-  int _durationDays = 2;
+  final int _durationDays = 2;
 
   // History & Notes State
   String _asthmaCopd = 'unknown';
@@ -220,9 +220,9 @@ class _AssessmentFlowScreenState extends State<AssessmentFlowScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppColors.triageCritical.withOpacity(0.08),
+                color: AppColors.triageCritical.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.triageCritical.withOpacity(0.3)),
+                border: Border.all(color: AppColors.triageCritical.withValues(alpha: 0.3)),
               ),
               child: Text(
                 l10n.translate('emergency_hotline'),
