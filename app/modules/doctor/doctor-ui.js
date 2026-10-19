@@ -5000,7 +5000,7 @@
       }
 
       // 5. Global Alt + 1 / Alt + 2 / Alt + 3: Quick Investigation Workup Presets
-      if (e.altKey && (e.key === "1" || e.code === "Digit1" || e.code === "Numpad1")) {
+      if (e.altKey && !e.shiftKey && (e.key === "1" || e.code === "Digit1" || e.code === "Numpad1")) {
         const activeCaseId = getActiveDoctorCaseId();
         if (activeCaseId) {
           e.preventDefault();
@@ -5008,7 +5008,7 @@
           return;
         }
       }
-      if (e.altKey && (e.key === "2" || e.code === "Digit2" || e.code === "Numpad2")) {
+      if (e.altKey && !e.shiftKey && (e.key === "2" || e.code === "Digit2" || e.code === "Numpad2")) {
         const activeCaseId = getActiveDoctorCaseId();
         if (activeCaseId) {
           e.preventDefault();
@@ -5016,7 +5016,7 @@
           return;
         }
       }
-      if (e.altKey && (e.key === "3" || e.code === "Digit3" || e.code === "Numpad3")) {
+      if (e.altKey && !e.shiftKey && (e.key === "3" || e.code === "Digit3" || e.code === "Numpad3")) {
         const activeCaseId = getActiveDoctorCaseId();
         if (activeCaseId) {
           e.preventDefault();
@@ -5070,7 +5070,7 @@
       }
 
       // 10. Global Alt + F: Focus Doctolib Follow-up Window station
-      if (e.altKey && (e.key === "f" || e.key === "F" || e.code === "KeyF" || e.key === "ب")) {
+      if (e.altKey && !e.shiftKey && (e.key === "f" || e.key === "F" || e.code === "KeyF" || e.key === "ب")) {
         const station = document.getElementById("doctolibFollowUpStation");
         if (station) {
           e.preventDefault();
@@ -5082,7 +5082,51 @@
         return;
       }
 
-      // 11. Escape key closes shortcuts modal
+      // 11. Global Alt + B (or Arabic Alt + ل / Alt + لا): 1-Click Sync & Book in Calendar (Doctolib)
+      if (e.altKey && !e.shiftKey && (e.key === "b" || e.key === "B" || e.code === "KeyB" || e.key === "ل" || e.key === "لا")) {
+        const activeCaseId = getActiveDoctorCaseId();
+        if (activeCaseId) {
+          e.preventDefault();
+          linkToAppointmentBooking(activeCaseId);
+          return;
+        }
+      }
+
+      // 12. Global Alt + Shift + 1 / 2 / 3 / 4: Rapid Follow-up Window Selection
+      if (e.altKey && e.shiftKey && (e.key === "1" || e.code === "Digit1" || e.code === "Numpad1" || e.key === "!")) {
+        const activeCaseId = getActiveDoctorCaseId();
+        if (activeCaseId) {
+          e.preventDefault();
+          selectFollowUpWindow(activeCaseId, "within_24h");
+          return;
+        }
+      }
+      if (e.altKey && e.shiftKey && (e.key === "2" || e.code === "Digit2" || e.code === "Numpad2" || e.key === "@")) {
+        const activeCaseId = getActiveDoctorCaseId();
+        if (activeCaseId) {
+          e.preventDefault();
+          selectFollowUpWindow(activeCaseId, "within_3d");
+          return;
+        }
+      }
+      if (e.altKey && e.shiftKey && (e.key === "3" || e.code === "Digit3" || e.code === "Numpad3" || e.key === "#")) {
+        const activeCaseId = getActiveDoctorCaseId();
+        if (activeCaseId) {
+          e.preventDefault();
+          selectFollowUpWindow(activeCaseId, "within_1w");
+          return;
+        }
+      }
+      if (e.altKey && e.shiftKey && (e.key === "4" || e.code === "Digit4" || e.code === "Numpad4" || e.key === "$")) {
+        const activeCaseId = getActiveDoctorCaseId();
+        if (activeCaseId) {
+          e.preventDefault();
+          selectFollowUpWindow(activeCaseId, "within_1m");
+          return;
+        }
+      }
+
+      // 13. Escape key closes shortcuts modal
       if (e.key === "Escape") {
         const shortcutsModal = document.getElementById("doctorShortcutsModal");
         if (shortcutsModal && shortcutsModal.style.display !== "none") {
@@ -5171,6 +5215,24 @@
           <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--surface-2, #0f172a); border-radius: 8px;">
             <span>${isEn ? "Reject Intake & Request Re-entry" : "رفض التقييم وطلب إعادة قياس"}</span>
             <kbd style="padding: 2px 7px; background: var(--surface, #1e293b); border: 1px solid var(--line, #334155); border-radius: 4px; font-family: monospace; font-weight: 700;">Alt + R</kbd>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--surface-2, #0f172a); border-radius: 8px;">
+            <span>${isEn ? "Focus Doctolib Follow-up Station" : "الانتقال لمحطة موعد المتابعة (Doctolib)"}</span>
+            <div style="display: flex; gap: 4px;">
+              <kbd style="padding: 2px 7px; background: var(--surface, #1e293b); border: 1px solid var(--line, #334155); border-radius: 4px; font-family: monospace; font-weight: 700;">Alt + F</kbd>
+              <kbd style="padding: 2px 7px; background: var(--surface, #1e293b); border: 1px solid var(--line, #334155); border-radius: 4px; font-family: monospace; font-weight: 700;">Alt + ب</kbd>
+            </div>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--surface-2, #0f172a); border-radius: 8px;">
+            <span>${isEn ? "1-Click Sync & Book in Calendar" : "حجز وربط الموعد بالتقويم بنقرة واحدة"}</span>
+            <div style="display: flex; gap: 4px;">
+              <kbd style="padding: 2px 7px; background: var(--surface, #1e293b); border: 1px solid var(--line, #334155); border-radius: 4px; font-family: monospace; font-weight: 700; color: #38bdf8;">Alt + B</kbd>
+              <kbd style="padding: 2px 7px; background: var(--surface, #1e293b); border: 1px solid var(--line, #334155); border-radius: 4px; font-family: monospace; font-weight: 700; color: #38bdf8;">Alt + ل</kbd>
+            </div>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--surface-2, #0f172a); border-radius: 8px;">
+            <span>${isEn ? "Quick Follow-up Preset (24h / 3d / 1w / 1m)" : "اختيار سريع لفترة المتابعة (24س / 3أيام / أسبوع / شهر)"}</span>
+            <kbd style="padding: 2px 7px; background: var(--surface, #1e293b); border: 1px solid var(--line, #334155); border-radius: 4px; font-family: monospace; font-weight: 700;">Alt + Shift + 1..4</kbd>
           </div>
           <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--surface-2, #0f172a); border-radius: 8px;">
             <span>${isEn ? "Close Dialog / Modal" : "إغلاق النافذة الحالية"}</span>
@@ -6541,7 +6603,7 @@
             onclick="HealthVibes.DoctorUI.linkToAppointmentBooking('${escapeHtml(caseId)}')"
             title="${isEn ? 'One-click link to appointment scheduler with pre-filled date & clinical notes' : 'ربط موعد المتابعة تلقائياً بجدول المواعيد مع تجهيز التاريخ والملاحظات'}"
           >
-            <span>📅</span> ${isEn ? 'Sync & Book in Calendar' : 'ربط وحجز الموعد بالتقويم'}
+            <span>📅</span> ${isEn ? 'Sync & Book in Calendar' : 'ربط وحجز الموعد بالتقويم'} <kbd class="toolbar-shortcut-tag" style="background: rgba(255,255,255,0.22); color:#fff; border-color: rgba(255,255,255,0.35); font-size: 10.5px; padding: 1px 5px; margin-inline-start: 4px;">Alt+B</kbd>
           </button>
         </div>
       </section>
