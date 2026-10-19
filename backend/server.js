@@ -80,6 +80,7 @@ const diabetesService = require('./diabetes-service');
 const diseaseAuthorizationService = require('./disease-authorization-service');
 const triageOverrideService = require('./triage-override-service');
 const rejectReentryService = require('./reject-reentry-service');
+const doctorInvestigationsService = require('./doctor-investigations-service');
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -2958,6 +2959,124 @@ app.get('/api/cases/:caseId/reject-reentry', requireAuth, requireDoctor, async (
 app.get('/api/doctor/cases/:caseId/reject-reentry', requireAuth, requireDoctor, async (req, res) => {
   req.url = `/api/cases/${encodeURIComponent(req.params.caseId)}/reject-reentry`;
   app.handle(req, res);
+});
+
+/**
+ * Helper to process ordering diagnostic investigations and radiology (Vezeeta Pattern)
+ */
+async function handleOrderInvestigations(req, res) {
+  try {
+    const doctorProfile = req.doctorProfile || await getServerUserProfile(req.user.uid);
+    const doctorIdentity = req.doctorIdentity || await getVerifiedDoctorIdentity(req.user.uid);
+    const caseId = req.params?.caseId || req.body?.caseId;
+
+    const result = await doctorInvestigationsService.processOrderInvestigations({
+      caseId,
+      investigations: req.body?.investigations || [],
+      notes: req.body?.notes || req.body?.clinicalIndication || '',
+      presetId: req.body?.presetId || req.body?.preset,
+      user: req.user,
+      doctorProfile,
+      doctorIdentity,
+      db,
+      metadata: {
+        ip: req.ip || req.connection?.remoteAddress || '127.0.0.1',
+        userAgent: req.headers['user-agent'] || '',
+        lang: req.headers['accept-language']?.includes('ar') ? 'ar' : 'en'
+      }
+    });
+
+    res.json(result);
+  } catch (err) {
+    if (err.statusCode && err.statusCode < 500) {
+      return res.status(err.statusCode).json({ error: err.code || 'BAD_REQUEST', message: err.message });
+    }
+    console.error('[ORDER INVESTIGATIONS ERROR]:', err);
+    res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
+  }
+}
+
+/**
+ * GET /api/doctor/investigations/catalog
+ * Retrieve complete diagnostic investigations catalog and workup presets
+ */
+app.get('/api/doctor/investigations/catalog', (req, res) => {
+  try {
+    const catalogData = doctorInvestigationsService.getCatalog();
+    res.json({ success: true, ...catalogData });
+  } catch (err) {
+    console.error('[GET INVESTIGATIONS CATALOG ERROR]:', err);
+    res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/cases/:caseId/investigations
+ * Order diagnostic labs and radiology for a case (Requires Verified Doctor)
+ */
+app.post('/api/cases/:caseId/investigations', requireAuth, requireVerifiedEmail, requireDoctor, handleOrderInvestigations);
+
+/**
+ * POST /api/doctor/cases/:caseId/investigations (Alias)
+ */
+app.post('/api/doctor/cases/:caseId/investigations', requireAuth, requireVerifiedEmail, requireDoctor, handleOrderInvestigations);
+
+/**
+ * GET /api/cases/:caseId/investigations
+ * Retrieve ordered diagnostic investigations for a case
+ */
+app.get('/api/cases/:caseId/investigations', requireAuth, async (req, res) => {
+  try {
+    const doctorProfile = req.doctorProfile || await getServerUserProfile(req.user.uid);
+    const result = await doctorInvestigationsService.getCaseInvestigations(req.params.caseId, {
+      db,
+      user: req.user,
+      doctorProfile
+    });
+    res.json(result);
+  } catch (err) {
+    if (err.statusCode && err.statusCode < 500) {
+      return res.status(err.statusCode).json({ error: err.code || 'BAD_REQUEST', message: err.message });
+    }
+    console.error('[GET INVESTIGATIONS ERROR]:', err);
+    res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
+  }
+});
+
+/**
+ * GET /api/doctor/cases/:caseId/investigations (Alias)
+ */
+app.get('/api/doctor/cases/:caseId/investigations', requireAuth, async (req, res) => {
+  req.url = `/api/cases/${encodeURIComponent(req.params.caseId)}/investigations`;
+  app.handle(req, res);
+});
+
+/**
+ * DELETE /api/cases/:caseId/investigations/:testCode
+ * Remove an investigation from a case
+ */
+app.delete('/api/cases/:caseId/investigations/:testCode', requireAuth, requireVerifiedEmail, requireDoctor, async (req, res) => {
+  try {
+    const doctorProfile = req.doctorProfile || await getServerUserProfile(req.user.uid);
+    const doctorIdentity = req.doctorIdentity || await getVerifiedDoctorIdentity(req.user.uid);
+    const result = await doctorInvestigationsService.removeCaseInvestigation(req.params.caseId, req.params.testCode, {
+      db,
+      user: req.user,
+      doctorProfile,
+      doctorIdentity,
+      metadata: {
+        ip: req.ip || req.connection?.remoteAddress || '127.0.0.1',
+        userAgent: req.headers['user-agent'] || ''
+      }
+    });
+    res.json(result);
+  } catch (err) {
+    if (err.statusCode && err.statusCode < 500) {
+      return res.status(err.statusCode).json({ error: err.code || 'BAD_REQUEST', message: err.message });
+    }
+    console.error('[REMOVE INVESTIGATION ERROR]:', err);
+    res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
+  }
 });
 
 
