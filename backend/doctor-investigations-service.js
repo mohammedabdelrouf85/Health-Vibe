@@ -30,62 +30,62 @@ const INVESTIGATION_CATALOG = [
     code: 'CBC',
     loinc: '58410-2',
     category: INVESTIGATION_CATEGORIES.LAB,
-    nameAr: 'صورة دم كاملة (CBC with Differential)',
-    nameEn: 'Complete Blood Count (CBC with Diff)',
-    descAr: 'كشف العدوى، كرات الدم البيضاء، الأنيميا، والصفائح الدموية.',
-    descEn: 'Evaluates leukocytosis, anemia, and platelet count for infection and bleeding.',
+    nameAr: 'صورة دم كاملة (Complete Blood Count)',
+    nameEn: 'Complete Blood Count (CBC)',
+    descAr: 'فحص كريات الدم البيضاء والحمراء والصفائح لتقييم العدوى والأنيميا.',
+    descEn: 'Leukocytes, platelets & hemoglobin to assess infection & anemia.',
     highYield: true,
     fastingHours: 0,
-    sampleTypeAr: 'دم كامل (EDTA)',
-    sampleTypeEn: 'Whole Blood (EDTA)'
+    sampleTypeAr: 'عينة دم وريدي (EDTA)',
+    sampleTypeEn: 'Venous Blood (EDTA)'
   },
   {
     code: 'CRP',
     loinc: '1988-5',
     category: INVESTIGATION_CATEGORIES.LAB,
-    nameAr: 'بروتين سي التفاعلي الكمي (CRP Quantitative)',
-    nameEn: 'C-Reactive Protein (CRP Quantitative)',
-    descAr: 'مؤشر حاد للالتهاب والعدوى البكتيرية والتفاقم التنفسي.',
-    descEn: 'Quantitative acute-phase inflammatory marker for bacterial vs viral triage.',
+    nameAr: 'بروتين سي التفاعلي كمي (CRP)',
+    nameEn: 'C-Reactive Protein - Quantitative (CRP)',
+    descAr: 'مؤشر حيوي لشدة الالتهاب الحاد والاستجابة المناعية.',
+    descEn: 'Acute phase reactant biomarker measuring inflammation severity.',
     highYield: true,
     fastingHours: 0,
-    sampleTypeAr: 'مصل دم',
+    sampleTypeAr: 'عينة مصل دم',
     sampleTypeEn: 'Serum'
   },
   {
     code: 'D_DIMER',
     loinc: '48065-7',
     category: INVESTIGATION_CATEGORIES.LAB,
-    nameAr: 'تحليل دي دايمر النوعي (D-Dimer Quantitative)',
-    nameEn: 'D-Dimer Quantitative (FEU)',
-    descAr: 'استبعاد وتأكيد الجلطات الرئوية وتخثر الأوردة العميقة (VTE/PE).',
-    descEn: 'High-sensitivity biomarker to rule out pulmonary embolism and thrombosis.',
+    nameAr: 'دي-دايمر كمي (D-Dimer)',
+    nameEn: 'D-Dimer Quantitative',
+    descAr: 'استبعاد الجلطة الرئوية والتخثر المنتشر داخل الأوعية.',
+    descEn: 'Evaluation of pulmonary embolism, DVT & hypercoagulability.',
     highYield: true,
     fastingHours: 0,
     sampleTypeAr: 'بلازما سيترات',
     sampleTypeEn: 'Citrated Plasma'
   },
   {
-    code: 'FERRITIN',
+    code: 'SERUM_FERRITIN',
     loinc: '2276-4',
     category: INVESTIGATION_CATEGORIES.LAB,
-    nameAr: 'فيريتين مصل الدم (Serum Ferritin)',
+    nameAr: 'فيريتين المصل (Serum Ferritin)',
     nameEn: 'Serum Ferritin',
-    descAr: 'مؤشر التهابي ومخزون الحديد لتشخيص عواصف السيتوكين والالتهاب الرئوي.',
-    descEn: 'Severe inflammatory hyperferritinemia marker and iron store staging.',
+    descAr: 'تقييم العاصفة الالتهابية ومخزون الحديد في الدم.',
+    descEn: 'Hyperferritinemic inflammatory response & iron stores.',
     highYield: true,
     fastingHours: 0,
     sampleTypeAr: 'مصل دم',
     sampleTypeEn: 'Serum'
   },
   {
-    code: 'RENAL_PANEL',
-    loinc: '24362-6',
+    code: 'KIDNEY_PANEL',
+    loinc: '2160-0',
     category: INVESTIGATION_CATEGORIES.LAB,
-    nameAr: 'وظائف كلى كاملة (Creatinine, Urea, eGFR)',
-    nameEn: 'Renal Function Panel (Creatinine, Urea, eGFR)',
-    descAr: 'تقييم كفاءة الكلى قبل بدء المضادات الحيوية وحقن صبغات الأشعة.',
-    descEn: 'Renal clearance baseline prior to nephrotoxic antibiotics or IV contrast.',
+    nameAr: 'وظائف كلى (Creatinine & Urea)',
+    nameEn: 'Kidney Function Panel (Creatinine & BUN)',
+    descAr: 'تقييم وظائف الكلى قبل وصف الأدوية أو الصبغة.',
+    descEn: 'Renal clearance evaluation prior to therapeutics or contrast.',
     highYield: true,
     fastingHours: 0,
     sampleTypeAr: 'مصل دم',
@@ -93,25 +93,38 @@ const INVESTIGATION_CATALOG = [
   },
   {
     code: 'LIVER_PANEL',
-    loinc: '24363-4',
+    loinc: '1751-7',
     category: INVESTIGATION_CATEGORIES.LAB,
-    nameAr: 'إنزيمات ووظائف كبد (ALT, AST, Total Bilirubin)',
-    nameEn: 'Liver Function Panel (ALT, AST, Bilirubin)',
-    descAr: 'تقييم الإنزيمات وسلامة الكبد للأدوية والالتهابات الجهازية.',
-    descEn: 'Hepatic transaminases to monitor drug tolerance and systemic involvement.',
+    nameAr: 'وظائف كبد (ALT, AST & Bilirubin)',
+    nameEn: 'Liver Enzymes Panel (ALT, AST, Bilirubin)',
+    descAr: 'تقييم كفاءة الكبد وسلامة الإنزيمات الحيوية.',
+    descEn: 'Hepatic transaminases and metabolic function.',
     highYield: false,
-    fastingHours: 4,
+    fastingHours: 0,
     sampleTypeAr: 'مصل دم',
     sampleTypeEn: 'Serum'
   },
   {
-    code: 'ABG',
-    loinc: '2708-6',
+    code: 'HBA1C',
+    loinc: '4548-4',
     category: INVESTIGATION_CATEGORIES.LAB,
-    nameAr: 'غازات الدم الشرياني (Arterial Blood Gases - ABG)',
-    nameEn: 'Arterial Blood Gas Analysis (ABG)',
-    descAr: 'تقييم دقيق للحموضة وتوازن الأكسجين وثاني أكسيد الكربون.',
-    descEn: 'Critical evaluation of PaO2, PaCO2, and pH for acute respiratory failure.',
+    nameAr: 'سكر تراكمي (HbA1c)',
+    nameEn: 'Glycated Hemoglobin (HbA1c)',
+    descAr: 'معدل السكر التراكمي خلال آخر 3 أشهر.',
+    descEn: 'Long-term glycemic control over past 90 days.',
+    highYield: false,
+    fastingHours: 0,
+    sampleTypeAr: 'دم كامل',
+    sampleTypeEn: 'Whole Blood'
+  },
+  {
+    code: 'ABG',
+    loinc: '1994-3',
+    category: INVESTIGATION_CATEGORIES.LAB,
+    nameAr: 'غازات الدم الشرياني (ABG)',
+    nameEn: 'Arterial Blood Gases (ABG)',
+    descAr: 'تقييم حموضة الدم PaO2 و PaCO2 في حالات نقص الأكسجين الحاد.',
+    descEn: 'Direct arterial PaO2, PaCO2 & pH for acute hypoxemic distress.',
     highYield: true,
     fastingHours: 0,
     sampleTypeAr: 'دم شرياني مسحوب بالهيبارين',
@@ -119,15 +132,15 @@ const INVESTIGATION_CATALOG = [
   },
   {
     code: 'SPUTUM_CULTURE',
-    loinc: '624-7',
+    loinc: '6460-0',
     category: INVESTIGATION_CATEGORIES.LAB,
-    nameAr: 'مزرعة بلغم وحساسية ميكروبية (Sputum Culture & Sensitivity)',
-    nameEn: 'Sputum Bacterial Culture & Antibiotic Sensitivity',
-    descAr: 'تحديد الميكروب المسبب للعدوى التنفسية والمضاد الحيوي الأنسب.',
-    descEn: 'Isolates respiratory bacterial pathogens and guides targeted antimicrobial therapy.',
+    nameAr: 'مزرعة وحساسية بصاق (Sputum C&S)',
+    nameEn: 'Sputum Culture & Sensitivity',
+    descAr: 'عزل الميكروب المسبب وتحديد المضاد الحيوي الحساس.',
+    descEn: 'Pathogen identification & targeted antibiotic susceptibility.',
     highYield: false,
     fastingHours: 0,
-    sampleTypeAr: 'بلغم صباحي عميق',
+    sampleTypeAr: 'عينة بصاق صباحية عميقة',
     sampleTypeEn: 'Deep Early Morning Sputum'
   },
   {
@@ -220,10 +233,28 @@ const INVESTIGATION_CATALOG = [
     descEn: 'Bedside ultrasound for pleural effusion & B-line artifact quantification.',
     highYield: false,
     modality: 'Ultrasound',
-    instructionsAr: 'لا يتطلب صياماً مسبقاً.',
-    instructionsEn: 'No prior preparation required.'
+    instructionsAr: 'لا يتطلب تحضيراً خاصاً.',
+    instructionsEn: 'No special preparation required.'
+  },
+  {
+    code: 'ECG_12LEAD',
+    loinc: '11524-6',
+    category: INVESTIGATION_CATEGORIES.RADIOLOGY,
+    nameAr: 'تخطيط كهربية القلب (12-Lead ECG)',
+    nameEn: '12-Lead Electrocardiogram (ECG)',
+    descAr: 'رسم قلب فوري لتقييم نظم القلب واستبعاد الإجهاد القلبي.',
+    descEn: 'Electrocardiographic rhythm & acute myocardial strain assessment.',
+    highYield: true,
+    modality: 'ECG',
+    instructionsAr: 'الاستلقاء والاسترخاء التام أثناء التسجيل.',
+    instructionsEn: 'Remain completely relaxed and still during trace recording.'
   }
 ];
+
+const CODE_ALIASES = {
+  FERRITIN: 'SERUM_FERRITIN',
+  RENAL_PANEL: 'KIDNEY_PANEL'
+};
 
 const WORKUP_PRESETS = {
   RESPIRATORY_INFECTION: {
@@ -250,7 +281,7 @@ const WORKUP_PRESETS = {
     titleEn: 'Viral Pneumonia & Cytokine Staging Workup',
     descriptionAr: 'صورة دم + بروتين سي التفاعلي + فيريتين + أشعة مقطعية عالية الدقة',
     descriptionEn: 'CBC + CRP + Serum Ferritin + HRCT Chest',
-    testCodes: ['CBC', 'CRP', 'FERRITIN', 'HRCT_CHEST'],
+    testCodes: ['CBC', 'CRP', 'SERUM_FERRITIN', 'HRCT_CHEST'],
     defaultUrgency: INVESTIGATION_URGENCIES.ROUTINE
   },
   CARDIOPULMONARY_WORKUP: {
@@ -259,7 +290,7 @@ const WORKUP_PRESETS = {
     titleEn: 'Comprehensive Cardiopulmonary Evaluation Bundle',
     descriptionAr: 'أشعة عادية على الصدر + صورة دم كاملة + وظائف كلى',
     descriptionEn: 'Chest X-Ray + CBC + Renal Function Panel',
-    testCodes: ['CHEST_XRAY', 'CBC', 'RENAL_PANEL'],
+    testCodes: ['CHEST_XRAY', 'CBC', 'KIDNEY_PANEL'],
     defaultUrgency: INVESTIGATION_URGENCIES.ROUTINE
   }
 };
@@ -281,8 +312,9 @@ function sanitizeText(text) {
 function validateInvestigationItem(item) {
   if (!item || typeof item !== 'object') return null;
 
-  const code = sanitizeText(item.code || item.id || '').toUpperCase();
-  if (!code) return null;
+  const rawCode = sanitizeText(item.code || item.id || '').toUpperCase();
+  if (!rawCode) return null;
+  const code = CODE_ALIASES[rawCode] || rawCode;
 
   const catalogEntry = INVESTIGATION_CATALOG.find(c => c.code === code);
 
