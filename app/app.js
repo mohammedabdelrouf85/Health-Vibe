@@ -4469,13 +4469,24 @@ async function selectDoctorCase(id) {
     }
   }
 
+  const perfStart = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
   activeCaseId = id;
+  if (typeof window !== "undefined") {
+    window.activeDoctorCaseId = id;
+    window.activeCaseId = id;
+  }
   if (window.asyncContextManager) {
     window.asyncContextManager.switchCase(id);
   }
   const caseContextSnapshot = window.asyncContextManager ? window.asyncContextManager.captureContext() : null;
 
-  const cases = await getCases({ includeTest: true });
+  // SUB-SECOND FAST LOOKUP: Check in-memory doctor queue first to avoid slow wire fetch
+  let cases = (state?.doctorQueue && state.doctorQueue.length > 0) ? state.doctorQueue : [];
+  let c = cases.find(item => item.id === id);
+  if (!c) {
+    cases = await getCases({ includeTest: true });
+    c = cases.find(item => item.id === id);
+  }
 
   // Guard rapid case switching: if user clicked another case while fetching, discard this result
   if (window.asyncContextManager && caseContextSnapshot) {
@@ -4486,7 +4497,6 @@ async function selectDoctorCase(id) {
     }
   }
 
-  const c = cases.find(c => c.id === id);
   const reviewPanel = document.getElementById("doctorReviewPanel");
   if (!c || !reviewPanel || (selectedRole === ROLES.DOCTOR && !isTestOrDemoRecord(c) && !isCaseAssignedToCurrentDoctor(c))) {
     if (reviewPanel) {
@@ -4604,8 +4614,8 @@ async function selectDoctorCase(id) {
       </button>
     `
     : `
-      <button type="button" class="btn-clinical approve" onclick="generateAndApproveReport('${c.id}')" title="${isEn ? 'Approve and generate official certified report' : 'اعتماد سريري وتوليد التقرير الطبي المعتمد'}">
-        <span>✨</span> ${isEn ? 'Generate & Approve Report' : 'توليد واعتماد التقرير'}
+      <button type="button" class="btn-clinical approve" onclick="generateAndApproveReport('${c.id}')" title="${isEn ? 'Approve and generate official certified report (Ctrl+Enter / Alt+A)' : 'اعتماد سريري وتوليد التقرير الطبي المعتمد (Ctrl+Enter / Alt+A)'}">
+        <span>✨</span> ${isEn ? 'Generate & Approve Report' : 'توليد واعتماد التقرير'} <kbd class="toolbar-shortcut-tag" style="font-size: 10px; opacity: 0.9; margin-inline-start: 6px; padding: 1.5px 5px; background: rgba(0,0,0,0.25); border-radius: 4px; font-family: monospace;">Ctrl+Enter</kbd>
       </button>
     `;
 
@@ -4624,8 +4634,8 @@ async function selectDoctorCase(id) {
         <button type="button" class="btn-clinical" style="background: rgba(14, 165, 233, 0.15); border: 1.5px solid #0284c7; color: #38bdf8;" onclick="HealthVibes?.DoctorUI?.openOverrideRiskModal('${c.id}')" title="${isEn ? 'Override advisory risk level' : 'تعديل درجة الخطورة السريرية'}">
           <span>⚖️</span> ${isEn ? 'Override Risk' : 'تعديل الخطورة'}
         </button>
-        <button type="button" class="btn-clinical resume" onclick="previewCaseReport('${c.id}')" title="${isEn ? 'Preview report before final approval' : 'معاينة شكل التقرير الطبي قبل الاعتماد'}">
-          <span>👁️</span> ${isEn ? 'Preview Report' : 'معاينة التقرير'}
+        <button type="button" class="btn-clinical resume" onclick="previewCaseReport('${c.id}')" title="${isEn ? 'Preview report before final approval (Alt+P)' : 'معاينة شكل التقرير الطبي قبل الاعتماد (Alt+P)'}">
+          <span>👁️</span> ${isEn ? 'Preview Report' : 'معاينة التقرير'} <kbd class="toolbar-shortcut-tag" style="font-size: 10px; opacity: 0.85; margin-inline-start: 4px; padding: 1.5px 4px; background: rgba(0,0,0,0.2); border-radius: 4px; font-family: monospace;">Alt+P</kbd>
         </button>
         <button type="button" class="btn-clinical request-info" onclick="requestMoreInfo('${c.id}')">
           <span>❓</span> ${isEn ? 'Request More Info' : 'طلب بيانات إضافية'}
@@ -4868,17 +4878,21 @@ async function selectDoctorCase(id) {
       <button type="button" class="btn-clinical" style="background: rgba(14, 165, 233, 0.15); border: 1.5px solid #0284c7; color: #38bdf8;" onclick="HealthVibes?.DoctorUI?.openOverrideRiskModal('${c.id}')" title="${isEn ? 'Override advisory risk level' : 'تعديل درجة الخطورة السريرية'}">
         <span>⚖️</span> ${isEn ? 'Override Risk' : 'تعديل الخطورة'}
       </button>
-      <button type="button" class="btn-clinical resume" onclick="previewCaseReport('${c.id}')" title="${isEn ? 'Preview report before final approval' : 'معاينة شكل التقرير الطبي قبل الاعتماد'}">
-        <span>👁️</span> ${isEn ? 'Preview Report' : 'معاينة التقرير'}
+      <button type="button" class="btn-clinical resume" onclick="previewCaseReport('${c.id}')" title="${isEn ? 'Preview report before final approval (Alt+P)' : 'معاينة شكل التقرير الطبي قبل الاعتماد (Alt+P)'}">
+        <span>👁️</span> ${isEn ? 'Preview Report' : 'معاينة التقرير'} <kbd class="toolbar-shortcut-tag" style="font-size: 10px; opacity: 0.85; margin-inline-start: 4px; padding: 1px 4px; background: rgba(0,0,0,0.2); border-radius: 4px; font-family: monospace;">Alt+P</kbd>
       </button>
-      <button type="button" class="soft-button" onclick="HealthVibes?.DoctorUI?.switchReviewTab('notes')" title="${isEn ? 'Jump to notes' : 'الانتقال للتشخيص والروشتة'}">
-        <span>✏️</span> ${isEn ? 'Write Diagnosis' : 'كتابة التشخيص'}
+      <button type="button" class="soft-button" onclick="HealthVibes?.DoctorUI?.switchReviewTab('notes')" title="${isEn ? 'Jump to notes & diagnosis (Alt+N)' : 'الانتقال للتشخيص والروشتة (Alt+N)'}">
+        <span>✏️</span> ${isEn ? 'Write Diagnosis' : 'كتابة التشخيص'} <kbd class="toolbar-shortcut-tag" style="font-size: 10px; opacity: 0.85; margin-inline-start: 4px; padding: 1px 4px; background: rgba(0,0,0,0.15); border-radius: 4px; font-family: monospace;">Alt+N</kbd>
       </button>
     </div>
   `;
 
   const riskOverrideHtml = (window.HealthVibes?.DoctorUI?.renderRiskOverrideSection)
     ? window.HealthVibes.DoctorUI.renderRiskOverrideSection(c, isEn)
+    : '';
+
+  const patientMedicalHistoryCardHtml = (window.HealthVibes?.DoctorUI?.renderPatientMedicalHistoryCard)
+    ? window.HealthVibes.DoctorUI.renderPatientMedicalHistoryCard(c, isEn)
     : '';
 
   const bpHistoryHtml = (window.HealthVibes?.DoctorUI?.renderHypertensionBpHistorySection)
@@ -4918,6 +4932,7 @@ async function selectDoctorCase(id) {
       ${demoCaseBanner}
       ${emergencyDoctorBanner}
       ${riskOverrideHtml}
+      ${patientMedicalHistoryCardHtml}
       <div class="summary-list">
         <div><span>${isEn ? 'Rules-based suggestion' : 'اقتراح مبني على قواعد'}</span><strong>${(isEn ? c.aiScoreEn : c.aiScore) || (isEn ? 'Not clinically validated' : 'غير مدقق سريرياً')}${isDemoCase ? ' (Demo Data)' : ''}</strong></div>
         <div><span>${isEn ? 'Rule score' : 'مؤشر القواعد'}</span><strong>${(isEn ? c.ruleScoreLabelEn : c.ruleScoreLabelAr) || c.ruleScore || (isEn ? 'No validated confidence value' : 'لا توجد قيمة ثقة معتمدة')}</strong></div>
@@ -5117,6 +5132,16 @@ async function selectDoctorCase(id) {
   // Attach auto-save listeners to draft textareas to preserve doctor notes
   if (window.HealthVibes?.DoctorUI?.attachDraftPreservationListeners) {
     window.HealthVibes.DoctorUI.attachDraftPreservationListeners(id);
+  }
+
+  // Record and display sub-second case load metric
+  const loadDuration = Math.round(((typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now()) - perfStart);
+  const perfMetricEl = document.getElementById("perfLoadMetric");
+  if (perfMetricEl) {
+    perfMetricEl.textContent = isEn ? `${loadDuration}ms` : `${loadDuration} مللي ثانية`;
+  }
+  if (window.HealthVibes?.DoctorUI?.recordCaseLoadMetric) {
+    window.HealthVibes.DoctorUI.recordCaseLoadMetric(id, loadDuration);
   }
 }
 

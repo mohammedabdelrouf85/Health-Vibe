@@ -62,7 +62,14 @@ class MockElement {
 }
 
 const elementRegistry = new Map();
+const bodyEl = new MockElement("body", "body");
+bodyEl.appendChild = (el) => {
+  elementRegistry.set(el.id, el);
+  return el;
+};
+
 global.document = {
+  body: bodyEl,
   getElementById: (id) => elementRegistry.get(id) || null,
   createElement: (tag) => {
     const el = new MockElement(`dyn_${Math.random()}`, tag);
@@ -74,13 +81,17 @@ global.document = {
     if (!global.document._listeners.has(event)) global.document._listeners.set(event, []);
     global.document._listeners.get(event).push(handler);
   },
-  removeEventListener: () => {}
+  removeEventListener: () => {},
+  querySelectorAll: () => []
 };
 
 // Load modules
 const DoctorService = require('../app/modules/doctor/doctor-service');
 const DoctorUI = require('../app/modules/doctor/doctor-ui');
 const doctorInvestigationsService = require('../backend/doctor-investigations-service');
+
+global.HealthVibes = global.HealthVibes || {};
+global.HealthVibes.DoctorService = DoctorService;
 
 console.log('================================================================================');
 console.log('⚡ HEALTH VIBE AI: DOCTOR INVESTIGATIONS PERFORMANCE & SHORTCUTS TEST SUITE');
@@ -318,6 +329,184 @@ async function runTest(name, fn) {
       const c2 = mockDb.cases.get(`case_doc2_${i}`);
       assert.strictEqual(c2.investigations.length, 0, "Unassigned case must remain completely pristine");
     }
+  });
+
+  // -----------------------------------------------------------------------------
+  // Test 6: Ctrl+Enter & Alt+A Rapid Report Approval Shortcuts
+  // -----------------------------------------------------------------------------
+  await runTest("Ctrl+Enter and Alt+A / Alt+ش trigger rapid clinical approval", () => {
+    let approvedCaseId = null;
+    global.generateAndApproveReport = (id) => { approvedCaseId = id; };
+    global.activeDoctorCaseId = "case_rapid_approve_999";
+
+    const keydownHandlers = global.document._listeners?.get("keydown") || [];
+    assert.ok(keydownHandlers.length > 0);
+
+    // Test Ctrl + Enter
+    approvedCaseId = null;
+    let prevented = false;
+    keydownHandlers.forEach(h => h({
+      ctrlKey: true,
+      key: "Enter",
+      preventDefault: () => { prevented = true; }
+    }));
+    assert.strictEqual(prevented, true, "Ctrl+Enter should preventDefault");
+    assert.strictEqual(approvedCaseId, "case_rapid_approve_999", "Ctrl+Enter must trigger generateAndApproveReport");
+
+    // Test Alt + A
+    approvedCaseId = null;
+    prevented = false;
+    keydownHandlers.forEach(h => h({
+      altKey: true,
+      key: "a",
+      code: "KeyA",
+      preventDefault: () => { prevented = true; }
+    }));
+    assert.strictEqual(prevented, true, "Alt+A should preventDefault");
+    assert.strictEqual(approvedCaseId, "case_rapid_approve_999", "Alt+A must trigger generateAndApproveReport");
+
+    // Test Alt + ش (Arabic layout)
+    approvedCaseId = null;
+    prevented = false;
+    keydownHandlers.forEach(h => h({
+      altKey: true,
+      key: "ش",
+      code: "KeyA",
+      preventDefault: () => { prevented = true; }
+    }));
+    assert.strictEqual(prevented, true, "Alt+ش should preventDefault");
+    assert.strictEqual(approvedCaseId, "case_rapid_approve_999", "Alt+ش must trigger generateAndApproveReport");
+  });
+
+  // -----------------------------------------------------------------------------
+  // Test 7: Alt+P (Preview) & Alt+N (Jump to Notes) Shortcuts
+  // -----------------------------------------------------------------------------
+  await runTest("Alt+P triggers report preview and Alt+N switches to notes tab with diagnosis focus", () => {
+    let previewedCaseId = null;
+    global.previewCaseReport = (id) => { previewedCaseId = id; };
+    global.activeDoctorCaseId = "case_shortcuts_test_01";
+
+    const diagInput = new MockElement("doctorDiagnosisInput", "textarea");
+    elementRegistry.set("doctorDiagnosisInput", diagInput);
+
+    const keydownHandlers = global.document._listeners?.get("keydown") || [];
+
+    // Trigger Alt + P
+    let prevented = false;
+    keydownHandlers.forEach(h => h({
+      altKey: true,
+      key: "p",
+      code: "KeyP",
+      preventDefault: () => { prevented = true; }
+    }));
+    assert.strictEqual(prevented, true);
+    assert.strictEqual(previewedCaseId, "case_shortcuts_test_01");
+
+    // Trigger Alt + N
+    prevented = false;
+    diagInput.focused = false;
+    keydownHandlers.forEach(h => h({
+      altKey: true,
+      key: "n",
+      code: "KeyN",
+      preventDefault: () => { prevented = true; }
+    }));
+    assert.strictEqual(prevented, true);
+    assert.strictEqual(DoctorUI.getActiveReviewTab(), "notes");
+    assert.strictEqual(diagInput.focused, true, "Alt+N must focus diagnosis textarea");
+  });
+
+  // -----------------------------------------------------------------------------
+  // Test 8: Alt+1, Alt+2, Alt+3 Workup Preset Assembly Shortcuts
+  // -----------------------------------------------------------------------------
+  await runTest("Alt+1, Alt+2, Alt+3 keyboard shortcuts assemble acute workup presets instantaneously", () => {
+    const caseId = "case_preset_shortcuts_77";
+    elementRegistry.delete("doctorRiskOverrideSection");
+    elementRegistry.delete("doctorCaseIdentityHeader");
+    global.activeDoctorCaseId = caseId;
+    DoctorUI.setCaseInvestigations(caseId, []);
+
+    const keydownHandlers = global.document._listeners?.get("keydown") || [];
+
+    // Trigger Alt + 1 -> Acute Dyspnea (CBC, CRP, CHEST_XRAY, D_DIMER)
+    keydownHandlers.forEach(h => h({
+      altKey: true,
+      key: "1",
+      code: "Digit1",
+      preventDefault: () => {}
+    }));
+    let items = DoctorUI.getCaseInvestigations(caseId);
+    assert.strictEqual(items.length, 4, "Alt+1 should assemble Acute Dyspnea 4-test workup");
+    assert.ok(items.some(i => i.code === "D_DIMER") && items.some(i => i.code === "CHEST_XRAY"));
+
+    // Reset and Trigger Alt + 2 -> Respiratory Infection (CBC, CRP, CHEST_XRAY)
+    DoctorUI.setCaseInvestigations(caseId, []);
+    keydownHandlers.forEach(h => h({
+      altKey: true,
+      key: "2",
+      code: "Digit2",
+      preventDefault: () => {}
+    }));
+    items = DoctorUI.getCaseInvestigations(caseId);
+    assert.strictEqual(items.length, 3, "Alt+2 should assemble Respiratory Infection 3-test workup");
+    assert.ok(items.some(i => i.code === "CHEST_XRAY") && items.some(i => i.code === "CRP"));
+  });
+
+  // -----------------------------------------------------------------------------
+  // Test 9: F1 & Alt+/ Shortcuts Cheat Sheet Modal & Esc Dismissal
+  // -----------------------------------------------------------------------------
+  await runTest("F1 or Alt+/ toggles Doctor Shortcuts Modal and Escape dismisses it", () => {
+    const keydownHandlers = global.document._listeners?.get("keydown") || [];
+
+    // Trigger F1
+    keydownHandlers.forEach(h => h({
+      key: "F1",
+      preventDefault: () => {}
+    }));
+    const modal = document.getElementById("doctorShortcutsModal");
+    assert.ok(modal, "Modal element must exist");
+    assert.strictEqual(modal.style.display, "flex", "Shortcuts modal must be open");
+    assert.ok(modal.innerHTML.includes("Ctrl + Enter") && modal.innerHTML.includes("Alt + A"));
+
+    // Trigger Escape to dismiss
+    keydownHandlers.forEach(h => h({
+      key: "Escape",
+      preventDefault: () => {}
+    }));
+    assert.strictEqual(modal.style.display, "none", "Escape must dismiss shortcuts modal");
+  });
+
+  // -----------------------------------------------------------------------------
+  // Test 10: Patient Medical History Dossier & Sub-Second SLA Rendering
+  // -----------------------------------------------------------------------------
+  await runTest("renderPatientMedicalHistoryCard renders comprehensive dossier with sub-second SLA badge", () => {
+    DoctorUI.recordCaseLoadMetric("test_case_dossier", 42);
+    assert.strictEqual(DoctorUI.getLastCaseLoadDuration(), 42);
+
+    const testCase = {
+      id: "test_case_dossier",
+      patientName: "أحمد عبد الله",
+      chronicDiseases: ["ربو شعبي وحساسية صدر", "ارتفاع ضغط الدم"],
+      allergies: "حساسية بنسلين شديدة",
+      baselineSpO2: 96,
+      smokingStatus: "غير مدخن",
+      priorInvestigations: [
+        { code: "CBC", nameAr: "صورة دم كاملة", result: "WBC 11,200", date: "2026-09-15" },
+        { code: "CHEST_XRAY", nameAr: "أشعة عادية على الصدر", result: "No active infiltration", date: "2026-08-10" }
+      ]
+    };
+
+    const arabicHtml = DoctorUI.renderPatientMedicalHistoryCard(testCase, false);
+    assert.ok(arabicHtml.includes("السجل الطبي والتاريخ المرضي الشامل للمريض"));
+    assert.ok(arabicHtml.includes("42ms"));
+    assert.ok(arabicHtml.includes("ربو شعبي وحساسية صدر"));
+    assert.ok(arabicHtml.includes("حساسية بنسلين شديدة"));
+    assert.ok(arabicHtml.includes("صورة دم كاملة"));
+
+    const englishHtml = DoctorUI.renderPatientMedicalHistoryCard(testCase, true);
+    assert.ok(englishHtml.includes("Comprehensive Patient Medical Dossier & History"));
+    assert.ok(englishHtml.includes("Loaded in 42ms (< 1s SLA)"));
+    assert.ok(englishHtml.includes("Prior Diagnostic Tests"));
   });
 
   console.log("\n================================================================================");
