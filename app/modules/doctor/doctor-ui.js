@@ -4969,6 +4969,52 @@
   // 10. DIAGNOSTIC INVESTIGATIONS & RADIOLOGY ORDERING (VEZEETA PATTERN)
   // ===========================================================================
 
+  const QUICK_INVESTIGATION_INDICATION_CHIPS = [
+    {
+      ar: "استبعاد ارتشاح رئوي والتهاب بكتيري",
+      en: "Rule out consolidation & bacterial pneumonia"
+    },
+    {
+      ar: "تقييم مؤشرات الالتهاب الحاد والعدوى",
+      en: "Evaluate acute inflammatory markers & WBC count"
+    },
+    {
+      ar: "استبعاد جلطة رئوية مع ضيق تنفس حاد",
+      en: "Exclude pulmonary embolism in acute dyspnea"
+    },
+    {
+      ar: "متابعة اعتلال النسيج الرئوي والتعتيم الزجاجي",
+      en: "Assess ground-glass opacities & interstitial disease"
+    },
+    {
+      ar: "فحص قصور قلبي وتفاعل كبدي كلوي",
+      en: "Evaluate cardiopulmonary congestion & organ perfusion"
+    }
+  ];
+
+  const QUICK_PATIENT_RECOMMENDATION_CHIPS = [
+    {
+      ar: "الراحة التامة والإكثار من تناول السوائل الدافئة والماء",
+      en: "Strict rest and adequate oral warm fluid hydration"
+    },
+    {
+      ar: "التوجه فوراً لقسم الطوارئ في حال انخفاض الأكسجين عن 92%",
+      en: "Immediate ER visit if SpO2 saturation drops below 92%"
+    },
+    {
+      ar: "إجراء الفحوصات والأشعة المطلوبة بأسرع وقت ومراجعة الطبيب بالنتائج",
+      en: "Complete ordered lab tests & imaging promptly and report back"
+    },
+    {
+      ar: "الالتزام التام بالجرعات ومواعيد البخاخات الموسعة للشعب الهوائية",
+      en: "Strict adherence to prescribed bronchodilator inhaler timing"
+    },
+    {
+      ar: "مراجعة العيادة لإعادة التقييم السريري بعد 48 إلى 72 ساعة",
+      en: "Follow-up clinic visit for re-assessment in 48-72 hours"
+    }
+  ];
+
   let activeInvestigationCategoryFilter = "ALL"; // 'ALL' | 'LAB' | 'RADIOLOGY' | 'HIGH_YIELD'
   let currentInvestigationSearchQuery = "";
 
@@ -5085,6 +5131,67 @@
     if (item) {
       item[field] = value;
       setCaseInvestigations(caseId, current);
+    }
+  }
+
+  function applyInvestigationIndicationChip(caseId, code, chipText) {
+    if (!caseId || !code) return;
+    updateInvestigationField(caseId, code, "clinicalIndication", chipText);
+    if (typeof document !== "undefined") {
+      const inputEl = document.getElementById(`ind_${code}`);
+      if (inputEl) {
+        inputEl.value = chipText;
+        inputEl.focus();
+      }
+    }
+  }
+
+  function applyPatientRecommendationChip(chipText) {
+    if (typeof document === "undefined") return;
+    const recsInput = document.getElementById("doctorRecommendationsInput");
+    if (!recsInput) return;
+    const current = recsInput.value.trim();
+    if (!current) {
+      recsInput.value = chipText;
+    } else {
+      recsInput.value = `${current}\n${chipText}`;
+    }
+    recsInput.focus();
+    if (typeof recsInput.dispatchEvent === "function") {
+      recsInput.dispatchEvent(new Event("change"));
+    }
+  }
+
+  function getPatientRecommendationChipsHtml(isEn = false) {
+    return QUICK_PATIENT_RECOMMENDATION_CHIPS.map(chip => {
+      const text = isEn ? chip.en : chip.ar;
+      return `
+        <button type="button" class="soft-button" style="font-size: 11px; padding: 3px 8px;" onclick="HealthVibes.DoctorUI.applyPatientRecommendationChip('${escapeHtml(text)}')">
+          + ${escapeHtml(text)}
+        </button>
+      `;
+    }).join('');
+  }
+
+  function setPatientRecommendationChipsLang(lang) {
+    if (typeof document === "undefined") return;
+    const isTargetEn = lang === "en";
+    const container = document.getElementById("patientRecommendationsChipsContainer");
+    const btnEn = document.getElementById("btnRecsLangEn");
+    const btnAr = document.getElementById("btnRecsLangAr");
+
+    if (btnEn && btnAr) {
+      if (isTargetEn) {
+        btnEn.classList.add("is-active");
+        btnAr.classList.remove("is-active");
+      } else {
+        btnAr.classList.add("is-active");
+        btnEn.classList.remove("is-active");
+      }
+    }
+
+    if (container) {
+      container.innerHTML = getPatientRecommendationChipsHtml(isTargetEn);
     }
   }
 
@@ -5269,8 +5376,18 @@
                 </div>
 
                 <div class="manifest-indication-row">
-                  <label for="ind_${codeSafe}" class="manifest-field-label">${isEn ? 'Clinical Indication / Reason:' : 'دواعي الفحص والهدف السريري:'}</label>
-                  <input type="text" id="ind_${codeSafe}" class="vezeeta-indication-input" value="${escapedIndication}" placeholder="${isEn ? 'e.g. Exclude pneumonic consolidation, assess leukocytosis...' : 'مثال: استبعاد ارتشاح رئوي، متابعة مؤشرات الالتهاب...'}" onchange="HealthVibes.DoctorUI.updateInvestigationField('${caseId}', '${codeSafe}', 'clinicalIndication', this.value)" />
+                  <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 4px; margin-bottom: 3px;">
+                    <label for="ind_${codeSafe}" class="manifest-field-label">${isEn ? 'Clinical Indication / Reason:' : 'دواعي الفحص والهدف السريري:'}</label>
+                    <span style="font-size: 10px; color: var(--muted);">${isEn ? 'EN / AR auto-direction' : 'يدعم العربية والإنجليزية'}</span>
+                  </div>
+                  <input type="text" id="ind_${codeSafe}" class="vezeeta-indication-input" dir="auto" value="${escapedIndication}" placeholder="${isEn ? 'e.g. Exclude pneumonic consolidation, assess leukocytosis...' : 'مثال: استبعاد ارتشاح رئوي، متابعة مؤشرات الالتهاب...'}" onchange="HealthVibes.DoctorUI.updateInvestigationField('${caseId}', '${codeSafe}', 'clinicalIndication', this.value)" />
+                  <div class="indication-chips-quick" style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px;">
+                    ${QUICK_INVESTIGATION_INDICATION_CHIPS.slice(0, 3).map(chip => `
+                      <button type="button" class="indication-chip-btn" style="font-size: 10px; padding: 2px 6px; border-radius: 4px; border: 1px dashed var(--line); background: var(--surface); color: var(--muted); cursor: pointer;" onclick="HealthVibes.DoctorUI.applyInvestigationIndicationChip('${caseId}', '${codeSafe}', '${escapeHtml(isEn ? chip.en : chip.ar)}')">
+                        + ${isEn ? chip.en : chip.ar}
+                      </button>
+                    `).join('')}
+                  </div>
                 </div>
               </div>
             </div>
@@ -5737,6 +5854,12 @@
     renderSelectedInvestigationsListHtml,
     renderInvestigationCatalogGridHtml,
     renderOrderInvestigationsStationHtml,
+    QUICK_INVESTIGATION_INDICATION_CHIPS,
+    QUICK_PATIENT_RECOMMENDATION_CHIPS,
+    applyInvestigationIndicationChip,
+    applyPatientRecommendationChip,
+    getPatientRecommendationChipsHtml,
+    setPatientRecommendationChipsLang,
     // Doctor Private Notes (Clinical Quarantine)
     getCasePrivateNotes,
     isPrivateNotesIncludedInReport,

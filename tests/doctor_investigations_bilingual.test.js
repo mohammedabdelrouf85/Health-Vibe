@@ -253,6 +253,99 @@ runTest("ReportsService extracts and preserves ordered investigations for biling
   assert.strictEqual(pdfExportEn.investigations.length, 2);
 });
 
+// -----------------------------------------------------------------------------
+// Test 7: Bidirectional Auto-Direction (dir="auto") on Clinical Inputs
+// -----------------------------------------------------------------------------
+runTest("Investigation indications and doctor recommendations render dir='auto' for bidirectional writing", () => {
+  const mockCase = { id: "case_bi_dir_01", patientName: "عمر فاروق", status: "in_review" };
+  DoctorUI.setCaseInvestigations(mockCase.id, ["CBC"]);
+
+  const html = DoctorUI.renderSelectedInvestigationsListHtml(
+    DoctorUI.getCaseInvestigations(mockCase.id),
+    mockCase.id,
+    true
+  );
+
+  assert.ok(html.includes('class="vezeeta-indication-input" dir="auto"'), "Indication input must specify dir='auto'");
+  assert.ok(html.includes('indication-chips-quick'), "Must include quick indication chips container");
+});
+
+// -----------------------------------------------------------------------------
+// Test 8: Clinical Indication Preset Application (English & Arabic)
+// -----------------------------------------------------------------------------
+runTest("applyInvestigationIndicationChip sets clinical indication and updates case state", () => {
+  const caseId = "case_bi_chip_01";
+  DoctorUI.setCaseInvestigations(caseId, ["CHEST_XRAY"]);
+
+  // Create mock DOM input
+  const inputEl = createMockElement("ind_CHEST_XRAY", "input");
+
+  // Apply English indication chip
+  const enRationale = "Rule out consolidation & bacterial pneumonia";
+  DoctorUI.applyInvestigationIndicationChip(caseId, "CHEST_XRAY", enRationale);
+
+  let items = DoctorUI.getCaseInvestigations(caseId);
+  assert.strictEqual(items[0].clinicalIndication, enRationale);
+  assert.strictEqual(inputEl.value, enRationale);
+
+  // Apply Arabic indication chip
+  const arRationale = "استبعاد ارتشاح رئوي والتهاب بكتيري";
+  DoctorUI.applyInvestigationIndicationChip(caseId, "CHEST_XRAY", arRationale);
+
+  items = DoctorUI.getCaseInvestigations(caseId);
+  assert.strictEqual(items[0].clinicalIndication, arRationale);
+  assert.strictEqual(inputEl.value, arRationale);
+});
+
+// -----------------------------------------------------------------------------
+// Test 9: Patient Recommendations Presets & Language Toggle
+// -----------------------------------------------------------------------------
+runTest("Patient recommendations support bilingual preset chips and language toggling", () => {
+  const container = createMockElement("patientRecommendationsChipsContainer");
+  const btnEn = createMockElement("btnRecsLangEn");
+  const btnAr = createMockElement("btnRecsLangAr");
+  const recsInput = createMockElement("doctorRecommendationsInput", "textarea");
+
+  // 1. Toggle to English chips
+  DoctorUI.setPatientRecommendationChipsLang("en");
+  assert.ok(btnEn.classList.contains("is-active"));
+  assert.ok(!btnAr.classList.contains("is-active"));
+  assert.ok(container.innerHTML.includes("oral warm fluid hydration"));
+
+  // 2. Toggle to Arabic chips
+  DoctorUI.setPatientRecommendationChipsLang("ar");
+  assert.ok(btnAr.classList.contains("is-active"));
+  assert.ok(!btnEn.classList.contains("is-active"));
+  assert.ok(container.innerHTML.includes("الراحة التامة"));
+
+  // 3. Apply recommendation chip preserves existing text
+  recsInput.value = "Initial recommendation 1";
+  DoctorUI.applyPatientRecommendationChip("Immediate ER visit if SpO2 saturation drops below 92%");
+  assert.strictEqual(
+    recsInput.value,
+    "Initial recommendation 1\nImmediate ER visit if SpO2 saturation drops below 92%"
+  );
+});
+
+// -----------------------------------------------------------------------------
+// Test 10: Multilingual Recommendation Formatting & Clinical Character Preservation
+// -----------------------------------------------------------------------------
+runTest("Multilingual recommendations cleanly parse and format mixed Arabic and English lines", () => {
+  const mixedRecommendations = `
+    الراحة التامة في الفراش وتجنب التيارات الهوائية
+    Prescribed Ventolin inhaler 2 puffs bid PRN
+    متابعة نسبة الأكسجين SpO2 مرتين يومياً (صباحاً ومساءً)
+    Review in clinic immediately if SpO2 < 92% or dyspnea worsens
+  `.trim();
+
+  const parsed = DoctorService.parseDoctorRecommendations(mixedRecommendations);
+  assert.strictEqual(parsed.length, 4, "Must parse all 4 distinct multilingual recommendations");
+  assert.ok(parsed[0].includes("الراحة التامة"));
+  assert.ok(parsed[1].includes("Ventolin inhaler"));
+  assert.ok(parsed[2].includes("نسبة الأكسجين SpO2"));
+  assert.ok(parsed[3].includes("SpO2 < 92%"));
+});
+
 console.log("\n================================================================================");
 console.log(`RESULTS: ${passed}/${total} TESTS PASSED (100% SUCCESS)`);
 console.log("================================================================================\n");

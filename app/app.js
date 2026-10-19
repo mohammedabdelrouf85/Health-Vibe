@@ -4999,7 +4999,7 @@ async function selectDoctorCase(id) {
           <label for="doctorDiagnosisInput" style="font-weight: 800; font-size: 13px; display: block; margin-bottom: 4px;">
             ${isEn ? '1. Physician Clinical Diagnosis & Assessment *' : '1. التشخيص الطبي السريري المعتمد *'}
           </label>
-          <textarea id="doctorDiagnosisInput" ${isClosed ? 'disabled' : ''} placeholder="${isEn ? 'Manually enter the physician diagnosis and clinical notes. Do not rely on rule suggestions as a diagnosis.' : 'أدخل التشخيص والملاحظات السريرية يدوياً. لا تعتمد اقتراحات القواعد كتشخيص.'}" style="width: 100%; min-height: 75px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 10px; font-family: inherit; font-size: 13px;">${escapeHtml(existingDoctorNote)}</textarea>
+          <textarea id="doctorDiagnosisInput" dir="auto" ${isClosed ? 'disabled' : ''} placeholder="${isEn ? 'Manually enter the physician diagnosis and clinical notes in English or Arabic...' : 'أدخل التشخيص والملاحظات السريرية يدوياً بالعربية أو الإنجليزية...'}" style="width: 100%; min-height: 75px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 10px; font-family: inherit; font-size: 13px;">${escapeHtml(existingDoctorNote)}</textarea>
           <input type="hidden" id="doctorNoteInput" value="${escapeHtml(existingDoctorNote)}" />
         </div>
 
@@ -5008,15 +5008,28 @@ async function selectDoctorCase(id) {
           <label for="doctorMedicationsInput" style="font-weight: 800; font-size: 13px; display: block; margin-bottom: 4px;">
             ${isEn ? '2. Prescription & Treatment Regimen (Rx)' : '2. الخطة العلاجية والروشتة الدوائية (Rx)'}
           </label>
-          <textarea id="doctorMedicationsInput" ${isClosed ? 'disabled' : ''} placeholder="${isEn ? 'List prescribed medications, dosage and instructions...' : 'أدخل أسماء الأدوية، الجرعات، وطريقة الاستخدام...'}" style="width: 100%; min-height: 80px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 10px; font-family: inherit; font-size: 13px;">${escapeHtml(existingMedications)}</textarea>
+          <textarea id="doctorMedicationsInput" dir="auto" ${isClosed ? 'disabled' : ''} placeholder="${isEn ? 'List prescribed medications, dosage and instructions (e.g. Ventolin inhaler 2 puffs bid)...' : 'أدخل أسماء الأدوية، الجرعات، وطريقة الاستخدام...'}" style="width: 100%; min-height: 80px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 10px; font-family: inherit; font-size: 13px;">${escapeHtml(existingMedications)}</textarea>
         </div>
 
         <!-- Care Plan & Recommendations -->
         <div style="margin-bottom: 14px;">
-          <label for="doctorRecommendationsInput" style="font-weight: 800; font-size: 13px; display: block; margin-bottom: 4px;">
-            ${isEn ? '3. Clinical Recommendations & Care Plan' : '3. التوصيات الطبية وخطة المتابعة'}
-          </label>
-          <textarea id="doctorRecommendationsInput" ${isClosed ? 'disabled' : ''} placeholder="${isEn ? 'Add one recommendation per line.' : 'أضف كل توصية في سطر منفصل.'}" style="width: 100%; min-height: 85px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 10px; font-family: inherit; font-size: 13px;">${escapeHtml(existingRecommendations)}</textarea>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 6px;">
+            <label for="doctorRecommendationsInput" style="font-weight: 800; font-size: 13px; margin: 0;">
+              ${isEn ? '3. Clinical Recommendations & Care Plan' : '3. التوصيات الطبية وخطة المتابعة'}
+            </label>
+            <div class="chips-lang-toggle" role="group" aria-label="${isEn ? 'Recommendations Language' : 'لغة التوصيات'}">
+              <button type="button" class="btn-chips-lang ${isEn ? 'is-active' : ''}" id="btnRecsLangEn" onclick="HealthVibes.DoctorUI.setPatientRecommendationChipsLang('en')" style="font-size: 10.5px; padding: 2px 8px;">
+                EN
+              </button>
+              <button type="button" class="btn-chips-lang ${!isEn ? 'is-active' : ''}" id="btnRecsLangAr" onclick="HealthVibes.DoctorUI.setPatientRecommendationChipsLang('ar')" style="font-size: 10.5px; padding: 2px 8px;">
+                عربي
+              </button>
+            </div>
+          </div>
+          <div id="patientRecommendationsChipsContainer" style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px;">
+            ${(window.HealthVibes?.DoctorUI?.getPatientRecommendationChipsHtml ? window.HealthVibes.DoctorUI.getPatientRecommendationChipsHtml(isEn) : '')}
+          </div>
+          <textarea id="doctorRecommendationsInput" dir="auto" ${isClosed ? 'disabled' : ''} placeholder="${isEn ? 'Add one recommendation per line in English or Arabic (e.g. Maintain hydration, review in clinic if SpO2 < 93%)...' : 'أضف كل توصية في سطر منفصل بالعربية أو الإنجليزية (مثل: الراحة التامة، متابعة نسبة الأكسجين)...'}" style="width: 100%; min-height: 85px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 10px; font-family: inherit; font-size: 13px;">${escapeHtml(existingRecommendations)}</textarea>
         </div>
 
         <!-- 4. DIAGNOSTIC INVESTIGATIONS & RADIOLOGY (VEZEETA PATTERN) -->
