@@ -561,9 +561,9 @@ async function getCaseFollowUp(caseId, { db, user, doctorProfile = null } = {}) 
   if (!isSuperAdmin && !isCasePatient) {
     const accessCheck = verifyDoctorCaseAccess(caseData, user, doctorProfile);
     if (!accessCheck.isAllowed) {
-      const err = new Error('Access denied: Unauthorized to view case follow-up plan.');
-      err.code = 'ACCESS_DENIED';
-      err.statusCode = 403;
+      const err = new Error(accessCheck.message || 'Access denied: Unauthorized to view case follow-up plan.');
+      err.code = accessCheck.code || 'ACCESS_DENIED';
+      err.statusCode = accessCheck.statusCode || 403;
       throw err;
     }
   }
@@ -586,6 +586,15 @@ async function syncFollowUpWithCalendar(caseId, bookingData = {}, { db, user, do
     throw err;
   }
 
+  // 1. Verify Doctor Authorization Guard
+  const authCheck = verifyDoctorAuthorization(user, doctorProfile, doctorIdentity);
+  if (!authCheck.isAuthorized) {
+    const err = new Error(authCheck.message);
+    err.code = authCheck.code;
+    err.statusCode = authCheck.statusCode || 403;
+    throw err;
+  }
+
   if (!db) {
     throw new Error('Database connection required.');
   }
@@ -600,6 +609,23 @@ async function syncFollowUpWithCalendar(caseId, bookingData = {}, { db, user, do
   }
 
   const caseData = caseDoc.data() || {};
+
+  if (caseData.status === 'closed') {
+    const err = new Error('Cannot schedule follow-up appointments for a closed or archived case.');
+    err.code = 'CASE_CLOSED';
+    err.statusCode = 400;
+    throw err;
+  }
+
+  // 2. Doctor Assignment & Clinic Boundary Guard
+  const accessCheck = verifyDoctorCaseAccess(caseData, user, doctorProfile);
+  if (!accessCheck.isAllowed) {
+    const err = new Error(accessCheck.message);
+    err.code = accessCheck.code;
+    err.statusCode = accessCheck.statusCode || 403;
+    throw err;
+  }
+
   const plan = caseData.followUpPlan;
 
   if (!plan || !plan.window) {
@@ -615,18 +641,22 @@ async function syncFollowUpWithCalendar(caseId, bookingData = {}, { db, user, do
   const targetDate = bookingData.targetDate || plan.targetDate || calculateFollowUpTargetDate(plan.window).dateStr;
   const mode = bookingData.mode || plan.mode || 'clinic';
 
+  // Sanitize notes and prevent script injection
+  const rawNotes = bookingData.notes || `[Doctolib Follow-up Sync] Window: ${plan.window}. Directives: ${plan.instructions || 'Routine re-assessment.'}`;
+  const sanitizedNotes = sanitizeText(rawNotes);
+
   const appointmentPayload = {
     caseId,
     patientId,
     patientName: caseData.patientName || caseData.name || 'Patient',
     doctorId,
-    doctorName: plan.recommendedBy?.name || 'Assigned Clinician',
+    doctorName: plan.recommendedBy?.name || authCheck.doctorName || 'Assigned Clinician',
     clinicId: caseData.clinicId || 'clinic_cairo_main',
     date: targetDate,
     slotId: bookingData.slotId || 'slot_morning_followup',
     type: mode,
     status: 'confirmed',
-    notes: bookingData.notes || `[Doctolib Follow-up Sync] Window: ${plan.window}. Directives: ${plan.instructions || 'Routine re-assessment.'}`,
+    notes: sanitizedNotes,
     source: 'DOCTOLIB_FOLLOWUP_SYNC',
     createdAt: nowIso,
     updatedAt: nowIso

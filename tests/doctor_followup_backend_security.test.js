@@ -418,7 +418,7 @@ async function runSuite() {
         user: unassignedDoctorUser,
         doctorProfile: unassignedDoctorProfile
       }),
-      { code: 'ACCESS_DENIED', statusCode: 403 }
+      { code: 'UNASSIGNED_DOCTOR_ACCESS_DENIED', statusCode: 403 }
     );
 
     // 4. Super Admin can read for oversight
