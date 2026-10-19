@@ -81,6 +81,7 @@ const diseaseAuthorizationService = require('./disease-authorization-service');
 const triageOverrideService = require('./triage-override-service');
 const rejectReentryService = require('./reject-reentry-service');
 const doctorInvestigationsService = require('./doctor-investigations-service');
+const doctorFollowUpService = require('./doctor-followup-service');
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -3075,6 +3076,123 @@ app.delete('/api/cases/:caseId/investigations/:testCode', requireAuth, requireVe
       return res.status(err.statusCode).json({ error: err.code || 'BAD_REQUEST', message: err.message });
     }
     console.error('[REMOVE INVESTIGATION ERROR]:', err);
+    res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
+  }
+});
+
+/**
+ * GET /api/doctor/follow-up/windows
+ * Retrieve available follow-up preset windows and consultation modes
+ */
+app.get('/api/doctor/follow-up/windows', (req, res) => {
+  try {
+    res.json({
+      success: true,
+      windows: Object.values(doctorFollowUpService.FOLLOW_UP_WINDOWS),
+      modes: Object.values(doctorFollowUpService.FOLLOW_UP_MODES)
+    });
+  } catch (err) {
+    console.error('[GET FOLLOW-UP WINDOWS ERROR]:', err);
+    res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
+  }
+});
+
+/**
+ * Handler for recommending or updating clinical follow-up window on a case
+ */
+async function handleRecommendFollowUp(req, res) {
+  try {
+    const doctorProfile = req.doctorProfile || await getServerUserProfile(req.user.uid);
+    const doctorIdentity = req.doctorIdentity || await getVerifiedDoctorIdentity(req.user.uid);
+
+    const result = await doctorFollowUpService.recommendCaseFollowUp(req.params.caseId, req.body, {
+      db,
+      user: req.user,
+      doctorProfile,
+      doctorIdentity,
+      metadata: {
+        ip: req.ip || req.connection?.remoteAddress || '127.0.0.1',
+        userAgent: req.headers['user-agent'] || ''
+      }
+    });
+
+    res.json(result);
+  } catch (err) {
+    if (err.statusCode && err.statusCode < 500) {
+      return res.status(err.statusCode).json({ error: err.code || 'BAD_REQUEST', message: err.message });
+    }
+    console.error('[RECOMMEND FOLLOW-UP ERROR]:', err);
+    res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
+  }
+}
+
+/**
+ * POST /api/cases/:caseId/follow-up
+ * Recommend follow-up window for a case (Requires Verified Doctor)
+ */
+app.post('/api/cases/:caseId/follow-up', requireAuth, requireVerifiedEmail, requireDoctor, handleRecommendFollowUp);
+
+/**
+ * POST /api/doctor/cases/:caseId/follow-up (Alias)
+ */
+app.post('/api/doctor/cases/:caseId/follow-up', requireAuth, requireVerifiedEmail, requireDoctor, handleRecommendFollowUp);
+
+/**
+ * GET /api/cases/:caseId/follow-up
+ * Retrieve follow-up plan for a case
+ */
+app.get('/api/cases/:caseId/follow-up', requireAuth, async (req, res) => {
+  try {
+    const doctorProfile = req.doctorProfile || await getServerUserProfile(req.user.uid);
+    const result = await doctorFollowUpService.getCaseFollowUp(req.params.caseId, {
+      db,
+      user: req.user,
+      doctorProfile
+    });
+    res.json(result);
+  } catch (err) {
+    if (err.statusCode && err.statusCode < 500) {
+      return res.status(err.statusCode).json({ error: err.code || 'BAD_REQUEST', message: err.message });
+    }
+    console.error('[GET FOLLOW-UP ERROR]:', err);
+    res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
+  }
+});
+
+/**
+ * GET /api/doctor/cases/:caseId/follow-up (Alias)
+ */
+app.get('/api/doctor/cases/:caseId/follow-up', requireAuth, async (req, res) => {
+  req.url = `/api/cases/${encodeURIComponent(req.params.caseId)}/follow-up`;
+  app.handle(req, res);
+});
+
+/**
+ * POST /api/cases/:caseId/follow-up/sync-calendar
+ * Synchronize and book follow-up appointment in calendar (Doctolib integration)
+ */
+app.post('/api/cases/:caseId/follow-up/sync-calendar', requireAuth, async (req, res) => {
+  try {
+    const doctorProfile = req.doctorProfile || await getServerUserProfile(req.user.uid);
+    const doctorIdentity = req.doctorIdentity || await getVerifiedDoctorIdentity(req.user.uid);
+
+    const result = await doctorFollowUpService.syncFollowUpWithCalendar(req.params.caseId, req.body, {
+      db,
+      user: req.user,
+      doctorProfile,
+      doctorIdentity,
+      metadata: {
+        ip: req.ip || req.connection?.remoteAddress || '127.0.0.1',
+        userAgent: req.headers['user-agent'] || ''
+      }
+    });
+
+    res.json(result);
+  } catch (err) {
+    if (err.statusCode && err.statusCode < 500) {
+      return res.status(err.statusCode).json({ error: err.code || 'BAD_REQUEST', message: err.message });
+    }
+    console.error('[SYNC FOLLOW-UP CALENDAR ERROR]:', err);
     res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
   }
 });
