@@ -3874,6 +3874,10 @@ window.previewCaseReport = async function(id) {
     ? window.HealthVibes.DoctorUI.getCaseInvestigations(id)
     : (c.investigations || c.orderedInvestigations || []);
 
+  const followUpPlan = window.HealthVibes?.DoctorUI?.getCaseFollowUpPlan
+    ? window.HealthVibes.DoctorUI.getCaseFollowUpPlan(id)
+    : (c.followUpPlan || null);
+
   window.__doctorPreviewCase = {
     ...c,
     clinicalDiagnosis,
@@ -3884,6 +3888,7 @@ window.previewCaseReport = async function(id) {
     recommendation: recommendations.join("\n"),
     investigations: orderedInvestigations,
     orderedInvestigations,
+    followUpPlan,
     doctorIdentity,
     approvingDoctorId: auth.currentUser.uid,
     reportGeneratedAt: new Date().toISOString(),
@@ -3922,6 +3927,10 @@ window.generateAndApproveReport = async function(id) {
     ? window.HealthVibes.DoctorUI.getCaseInvestigations(id)
     : (targetCase?.investigations || targetCase?.orderedInvestigations || []);
 
+  const followUpPlan = window.HealthVibes?.DoctorUI?.getCaseFollowUpPlan
+    ? window.HealthVibes.DoctorUI.getCaseFollowUpPlan(id)
+    : (targetCase?.followUpPlan || null);
+
   const reportRef = `HV-REP-${id.slice(-8).toUpperCase()}`;
   const currentCaseRevision = window.HealthVibes?.DoctorUI?.getCaseRevisionNumber
     ? window.HealthVibes.DoctorUI.getCaseRevisionNumber(targetCase)
@@ -3936,6 +3945,7 @@ window.generateAndApproveReport = async function(id) {
     recommendation: recommendations.join("\n"),
     investigations: orderedInvestigations,
     orderedInvestigations,
+    followUpPlan,
     reportRef,
     reportGeneratedAt: new Date().toISOString(),
     reviewedRevision: currentCaseRevision,
@@ -5051,6 +5061,13 @@ async function selectDoctorCase(id) {
         <div style="margin-bottom: 14px;">
           ${(window.HealthVibes?.DoctorUI?.renderOrderInvestigationsStationHtml)
             ? window.HealthVibes.DoctorUI.renderOrderInvestigationsStationHtml(c, isEn)
+            : ''}
+        </div>
+
+        <!-- 5. RECOMMEND FOLLOW-UP WINDOW & CALENDAR BOOKING (DOCTOLIB PATTERN) -->
+        <div style="margin-bottom: 14px;">
+          ${(window.HealthVibes?.DoctorUI?.renderFollowUpSchedulingStationHtml)
+            ? window.HealthVibes.DoctorUI.renderFollowUpSchedulingStationHtml(c, isEn)
             : ''}
         </div>
 
@@ -8815,6 +8832,98 @@ async function renderReportScreen(targetCaseId = null) {
                     ? 'Please attend accredited laboratory/radiology centers with this certified requisition. For blood chemistry requiring fasting, fast 8-12 hours prior to collection.'
                     : 'يُرجى التوجه إلى معامل التحاليل ومراكز الأشعة المعتمدة مع إظهار هذا التقرير. في حال الفحوصات التي تتطلب صياماً، يُرجى الصيام لمدة 8 إلى 12 ساعة مع شرب الماء فقط.'}
                 </span>
+              </div>
+            </div>
+          `;
+        })()}
+
+        <!-- RECOMMEND FOLLOW-UP WINDOW & APPOINTMENT SYNC (DOCTOLIB PATTERN) -->
+        ${(() => {
+          const followUp = caseData.followUpPlan || (caseData.reportSnapshot && caseData.reportSnapshot.clinicalContent?.followUpPlan);
+          if (!followUp || !followUp.window) return '';
+
+          const windowKey = followUp.window;
+          const windowsCatalog = window.HealthVibes?.DoctorUI?.FOLLOW_UP_WINDOWS || [];
+          const windowDef = windowsCatalog.find(w => w.id === windowKey) || {
+            labelEn: windowKey,
+            labelAr: windowKey,
+            badgeClass: 'info',
+            icon: '📅'
+          };
+
+          const targetDateDisplay = isEn
+            ? (followUp.targetDateFormattedEn || followUp.targetDate || "PRN")
+            : (followUp.targetDateFormattedAr || followUp.targetDate || "عند اللزوم");
+
+          const modeLabels = {
+            clinic: isEn ? "In-Clinic Visit 🏥" : "زيارة بالعيادة 🏥",
+            video: isEn ? "Video Consultation 📹" : "استشارة عن بعد (فيديو) 📹",
+            phone: isEn ? "Phone Follow-up 📞" : "متابعة هاتفية 📞"
+          };
+          const modeDisplay = modeLabels[followUp.mode] || (isEn ? "In-Clinic Visit 🏥" : "زيارة بالعيادة 🏥");
+
+          return `
+            <div class="report-followup-section" style="background: var(--surface); border: 1.5px solid rgba(14, 165, 233, 0.4); border-radius: 14px; padding: 20px; margin-bottom: 22px; box-shadow: 0 4px 16px rgba(0,0,0,0.03);">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                <h3 style="font-size: 15.5px; margin: 0; color: var(--teal-2); display: flex; align-items: center; gap: 8px;">
+                  <span>📅</span> ${isEn ? "Recommended Follow-up Window (Doctolib Consultation)" : "توصية بموعد متابعة محدد (استشارة طبية - Doctolib)"}
+                </h3>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <span class="pill ${windowDef.badgeClass || 'info'}" style="font-size: 11px;">
+                    ${isEn ? (windowDef.labelEn || windowKey) : (windowDef.labelAr || windowKey)}
+                  </span>
+                </div>
+              </div>
+
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 14px;">
+                <div style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 12px;">
+                  <span style="font-size: 11px; color: var(--muted); display: block; margin-bottom: 4px;">
+                    ${isEn ? "Recommended Timeframe" : "النافذة الزمنية الموصى بها"}
+                  </span>
+                  <strong style="font-size: 14px; color: var(--ink); display: flex; align-items: center; gap: 6px;">
+                    <span>${windowDef.icon || '🗓️'}</span> ${isEn ? windowDef.labelEn : windowDef.labelAr}
+                  </strong>
+                </div>
+
+                <div style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 12px;">
+                  <span style="font-size: 11px; color: var(--muted); display: block; margin-bottom: 4px;">
+                    ${isEn ? "Estimated Target Date" : "التاريخ المقترح"}
+                  </span>
+                  <strong style="font-size: 14px; color: var(--teal); display: block;">
+                    ${escapeHtml(targetDateDisplay)}
+                  </strong>
+                </div>
+
+                <div style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 12px;">
+                  <span style="font-size: 11px; color: var(--muted); display: block; margin-bottom: 4px;">
+                    ${isEn ? "Consultation Mode" : "نوع الزيارة"}
+                  </span>
+                  <strong style="font-size: 14px; color: var(--ink); display: block;">
+                    ${escapeHtml(modeDisplay)}
+                  </strong>
+                </div>
+              </div>
+
+              ${followUp.instructions ? `
+                <div style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 14px;">
+                  <strong style="font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px;">
+                    ${isEn ? "Doctor's Clinical Directives for Follow-up:" : "توجيهات الطبيب المعالج لزيارة المتابعة:"}
+                  </strong>
+                  <p style="margin: 0; font-size: 13.5px; color: var(--ink); line-height: 1.5;">
+                    ${escapeHtml(followUp.instructions)}
+                  </p>
+                </div>
+              ` : ''}
+
+              <div class="no-print" style="display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-top: 10px;">
+                <button
+                  type="button"
+                  class="solid-button"
+                  style="background: var(--teal); padding: 8px 16px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px;"
+                  onclick="HealthVibes.DoctorUI.linkToAppointmentBooking('${escapeHtml(caseData.id)}')"
+                >
+                  <span>📅</span> ${isEn ? "Book Follow-up Appointment Now" : "احجز موعد المتابعة الآن في التقويم"}
+                </button>
               </div>
             </div>
           `;

@@ -17,6 +17,7 @@
   // In-memory stores
   const doctorDraftNotesStore = new Map();       // caseId -> { diagnosis, medications, recommendations, investigations, savedAt }
   const caseInvestigationsStore = new Map();     // caseId -> Array of investigation items
+  const caseFollowUpStore = new Map();           // caseId -> Follow-up plan object (Doctolib)
   const acknowledgedRevisionsStore = new Map();  // caseId -> number (last acknowledged revision)
   let lastActiveModalOpener = null;              // Tracks button that opened modal for focus return
   let modalKeydownHandler = null;                // Reference to bound keydown handler for focus trap
@@ -82,6 +83,7 @@
       medications: notes.medications !== undefined ? notes.medications : (existing.medications || ""),
       recommendations: notes.recommendations !== undefined ? notes.recommendations : (existing.recommendations || ""),
       investigations: notes.investigations !== undefined ? notes.investigations : (existing.investigations || caseInvestigationsStore.get(caseId) || []),
+      followUpPlan: notes.followUpPlan !== undefined ? notes.followUpPlan : (existing.followUpPlan || caseFollowUpStore.get(caseId) || null),
       privateNotes: notes.privateNotes !== undefined ? notes.privateNotes : (existing.privateNotes || ""),
       includePrivateNotesInReport: notes.includePrivateNotesInReport !== undefined ? Boolean(notes.includePrivateNotesInReport) : Boolean(existing.includePrivateNotesInReport),
       savedAt: Date.now()
@@ -89,6 +91,9 @@
     doctorDraftNotesStore.set(caseId, updated);
     if (notes.investigations !== undefined) {
       caseInvestigationsStore.set(caseId, notes.investigations);
+    }
+    if (notes.followUpPlan !== undefined) {
+      caseFollowUpStore.set(caseId, notes.followUpPlan);
     }
     try {
       if (typeof localStorage !== "undefined") {
@@ -116,6 +121,9 @@
           if (Array.isArray(parsed.investigations)) {
             caseInvestigationsStore.set(caseId, parsed.investigations);
           }
+          if (parsed.followUpPlan) {
+            caseFollowUpStore.set(caseId, parsed.followUpPlan);
+          }
           return parsed;
         }
       }
@@ -134,6 +142,7 @@
       (draft.medications && draft.medications.trim()) ||
       (draft.recommendations && draft.recommendations.trim()) ||
       (draft.privateNotes && draft.privateNotes.trim()) ||
+      (draft.followUpPlan && draft.followUpPlan.window) ||
       (Array.isArray(draft.investigations) && draft.investigations.length > 0)
     );
   }
@@ -142,6 +151,7 @@
     if (!caseId) return;
     doctorDraftNotesStore.delete(caseId);
     caseInvestigationsStore.delete(caseId);
+    caseFollowUpStore.delete(caseId);
     try {
       if (typeof localStorage !== "undefined") {
         localStorage.removeItem(`hv_draft_doc_${caseId}`);
@@ -5059,7 +5069,20 @@
         return;
       }
 
-      // 10. Escape key closes shortcuts modal
+      // 10. Global Alt + F: Focus Doctolib Follow-up Window station
+      if (e.altKey && (e.key === "f" || e.key === "F" || e.code === "KeyF" || e.key === "ب")) {
+        const station = document.getElementById("doctolibFollowUpStation");
+        if (station) {
+          e.preventDefault();
+          switchReviewTab("notes");
+          station.scrollIntoView({ behavior: "smooth", block: "center" });
+          const firstBtn = station.querySelector(".followup-card-btn");
+          if (firstBtn) firstBtn.focus();
+        }
+        return;
+      }
+
+      // 11. Escape key closes shortcuts modal
       if (e.key === "Escape") {
         const shortcutsModal = document.getElementById("doctorShortcutsModal");
         if (shortcutsModal && shortcutsModal.style.display !== "none") {
@@ -6056,7 +6079,477 @@
   }
 
   // ===========================================================================
-  // 12. EXPORTS & ATTACHMENT TO HEALTHVIBES GLOBAL
+  // 12. RECOMMEND FOLLOW-UP WINDOW & CALENDAR BOOKING (DOCTOLIB PATTERN)
+  // ===========================================================================
+
+  const FOLLOW_UP_WINDOWS = [
+    {
+      id: "within_24h",
+      days: 1,
+      urgency: "urgent",
+      badgeClass: "danger",
+      icon: "🚨",
+      labelEn: "Within 24 Hours",
+      labelAr: "خلال 24 ساعة",
+      taglineEn: "Emergency / Acute Check",
+      taglineAr: "متابعة طارئة ومستعجلة",
+      descriptionEn: "Urgent review for unstable respiratory vitals, SpO2 borderline, or severe wheezing.",
+      descriptionAr: "متابعة فورية ومستعجلة للحالات الحادة، تذبذب الأكسجين، أو تفاقم الأزمة الصدرية."
+    },
+    {
+      id: "within_3d",
+      days: 3,
+      urgency: "high",
+      badgeClass: "pending",
+      icon: "⏱️",
+      labelEn: "Within 3 Days",
+      labelAr: "خلال 3 أيام",
+      taglineEn: "Antibiotic / Treatment Response",
+      taglineAr: "تقييم الاستجابة للعلاج والمضاد",
+      descriptionEn: "Assess early clinical response to prescribed antibiotics, inhalers, and symptom evolution.",
+      descriptionAr: "فحص الاستجابة الأولية للمضادات الحيوية والبخاخات وتقييم هدوء السعال وضيق التنفس."
+    },
+    {
+      id: "within_1w",
+      days: 7,
+      urgency: "routine",
+      badgeClass: "ok",
+      icon: "🗓️",
+      labelEn: "Within 1 Week",
+      labelAr: "خلال أسبوع",
+      taglineEn: "Course Completion & Lab Review",
+      taglineAr: "إتمام الكورس ومراجعة الفحوصات",
+      descriptionEn: "Follow-up after completion of medication regimen, clearance of infection, and lab review.",
+      descriptionAr: "فحص روتيني بعد إتمام كورس العلاج الدوائي، التأكد من زوال العدوى، والاطلاع على الفحوصات."
+    },
+    {
+      id: "within_1m",
+      days: 30,
+      urgency: "maintenance",
+      badgeClass: "info",
+      icon: "🫁",
+      labelEn: "Within 1 Month",
+      labelAr: "خلال شهر",
+      taglineEn: "Chronic Maintenance & Prevention",
+      taglineAr: "متابعة وقائية للأمراض المزمنة",
+      descriptionEn: "Routine follow-up for chronic respiratory conditions (Asthma controller step-down, COPD baseline).",
+      descriptionAr: "متابعة دورية مستقرة لأمراض الصدر المزمنة (تعديل جرعات بخاخات الوقاية، تقييم وظائف التنفس)."
+    },
+    {
+      id: "custom",
+      days: 0,
+      urgency: "custom",
+      badgeClass: "info",
+      icon: "📅",
+      labelEn: "Custom Date",
+      labelAr: "تاريخ مخصص",
+      taglineEn: "Specific Appointment Date",
+      taglineAr: "تحديد موعد استشارة محدد",
+      descriptionEn: "Pick an exact calendar day tailored to clinic consultation schedule.",
+      descriptionAr: "اختيار يوم محدد بالتقويم بالتنسيق مع جدول ومواعيد العيادة."
+    },
+    {
+      id: "as_needed",
+      days: 0,
+      urgency: "prn",
+      badgeClass: "muted",
+      icon: "🛡️",
+      labelEn: "As Needed (PRN)",
+      labelAr: "عند اللزوم (PRN)",
+      taglineEn: "Conditional Re-evaluation",
+      taglineAr: "المراجعة عند تجدد الأعراض",
+      descriptionEn: "Return to clinic only if red flag symptoms appear or breathing deteriorates.",
+      descriptionAr: "مراجعة العيادة فقط في حال تجدد ضيق التنفس أو ظهور علامات التحذير الحرجة."
+    }
+  ];
+
+  const FOLLOW_UP_MODES = [
+    { id: "clinic", labelEn: "In-Clinic Visit", labelAr: "زيارة بالعيادة", icon: "🏥" },
+    { id: "video", labelEn: "Video Consultation", labelAr: "استشارة عن بعد (فيديو)", icon: "📹" },
+    { id: "phone", labelEn: "Phone Follow-up", labelAr: "متابعة هاتفية", icon: "📞" }
+  ];
+
+  function calculateFollowUpTargetDate(windowKey, baseDate = new Date(), customDateStr = null) {
+    const arDays = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
+    const enDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const arMonths = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
+    const enMonths = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+    if (windowKey === "as_needed") {
+      return {
+        dateStr: "",
+        formattedAr: "عند ظهور الأعراض أو اللزوم",
+        formattedEn: "PRN / When Symptoms Recur",
+        daysFromNow: 0
+      };
+    }
+
+    let targetDate = new Date(baseDate);
+    let daysAdded = 0;
+
+    if (windowKey === "custom" && customDateStr) {
+      targetDate = new Date(customDateStr);
+      if (isNaN(targetDate.getTime())) {
+        targetDate = new Date(baseDate);
+        targetDate.setDate(targetDate.getDate() + 3);
+      }
+      const now = new Date(baseDate);
+      now.setHours(0, 0, 0, 0);
+      const targetZero = new Date(targetDate);
+      targetZero.setHours(0, 0, 0, 0);
+      daysAdded = Math.max(0, Math.round((targetZero - now) / (1000 * 60 * 60 * 24)));
+    } else {
+      const def = FOLLOW_UP_WINDOWS.find(w => w.id === windowKey) || FOLLOW_UP_WINDOWS[1];
+      daysAdded = def.days || 3;
+      targetDate.setDate(targetDate.getDate() + daysAdded);
+    }
+
+    const yyyy = targetDate.getFullYear();
+    const mm = String(targetDate.getMonth() + 1).padStart(2, "0");
+    const dd = String(targetDate.getDate()).padStart(2, "0");
+    const dateStr = `${yyyy}-${mm}-${dd}`;
+
+    const dayOfWeek = targetDate.getDay();
+    const monthIdx = targetDate.getMonth();
+    const dayNum = targetDate.getDate();
+
+    return {
+      dateStr,
+      daysFromNow: daysAdded,
+      formattedAr: `${arDays[dayOfWeek]}، ${dayNum} ${arMonths[monthIdx]} ${yyyy}`,
+      formattedEn: `${enDays[dayOfWeek]}, ${dayNum} ${enMonths[monthIdx]} ${yyyy}`
+    };
+  }
+
+  function getCaseFollowUpPlan(caseId) {
+    if (!caseId) return null;
+    if (caseFollowUpStore.has(caseId)) {
+      return caseFollowUpStore.get(caseId);
+    }
+    const draft = getDraftNotes(caseId);
+    if (draft && draft.followUpPlan) {
+      caseFollowUpStore.set(caseId, draft.followUpPlan);
+      return draft.followUpPlan;
+    }
+    const target = (typeof global.cases !== "undefined" && Array.isArray(global.cases) ? global.cases : (global.state?.doctorQueue || [])).find(item => item.id === caseId);
+    if (target && target.followUpPlan) {
+      caseFollowUpStore.set(caseId, target.followUpPlan);
+      return target.followUpPlan;
+    }
+
+    // Default recommendation: Within 3 days, clinic visit
+    const defaultTarget = calculateFollowUpTargetDate("within_3d");
+    const initialPlan = {
+      window: "within_3d",
+      targetDate: defaultTarget.dateStr,
+      targetDateFormattedAr: defaultTarget.formattedAr,
+      targetDateFormattedEn: defaultTarget.formattedEn,
+      daysFromNow: defaultTarget.daysFromNow,
+      mode: "clinic",
+      instructions: "",
+      urgency: "high",
+      status: "RECOMMENDED",
+      updatedAt: new Date().toISOString()
+    };
+    caseFollowUpStore.set(caseId, initialPlan);
+    return initialPlan;
+  }
+
+  function setCaseFollowUpPlan(caseId, plan) {
+    if (!caseId) return;
+    const current = getCaseFollowUpPlan(caseId) || {};
+    const merged = {
+      ...current,
+      ...plan,
+      updatedAt: new Date().toISOString()
+    };
+    caseFollowUpStore.set(caseId, merged);
+    saveDraftNotes(caseId, { followUpPlan: merged });
+    updateFollowUpStationDOM(caseId);
+    return merged;
+  }
+
+  function selectFollowUpWindow(caseId, windowKey, customDateStr = null) {
+    if (!caseId || !windowKey) return;
+    const target = calculateFollowUpTargetDate(windowKey, new Date(), customDateStr);
+    const windowDef = FOLLOW_UP_WINDOWS.find(w => w.id === windowKey) || FOLLOW_UP_WINDOWS[1];
+    return setCaseFollowUpPlan(caseId, {
+      window: windowKey,
+      targetDate: target.dateStr,
+      targetDateFormattedAr: target.formattedAr,
+      targetDateFormattedEn: target.formattedEn,
+      daysFromNow: target.daysFromNow,
+      urgency: windowDef.urgency
+    });
+  }
+
+  function setFollowUpMode(caseId, mode) {
+    if (!caseId || !mode) return;
+    return setCaseFollowUpPlan(caseId, { mode });
+  }
+
+  function setFollowUpInstructions(caseId, instructions) {
+    if (!caseId) return;
+    return setCaseFollowUpPlan(caseId, { instructions });
+  }
+
+  function linkToAppointmentBooking(caseId) {
+    const isEn = (global.currentLanguage || "ar") === "en";
+    const plan = getCaseFollowUpPlan(caseId);
+    if (!plan) return;
+
+    // Transition to appointment booking
+    if (typeof global.showScreen === "function") {
+      global.showScreen("appointments");
+    }
+
+    // Ensure target date is selectable in the calendar days list
+    if (plan.targetDate && typeof global.selectAppointmentDate === "function") {
+      if (Array.isArray(global.apptDaysList) && !global.apptDaysList.some(d => d.dateStr === plan.targetDate)) {
+        const targetDateObj = new Date(plan.targetDate);
+        const arDays = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
+        const enDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        const arMonths = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
+        const enMonths = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        const dayOfWeek = targetDateObj.getDay();
+        global.apptDaysList.push({
+          dateStr: plan.targetDate,
+          dayNumber: targetDateObj.getDate(),
+          dayOfWeek: dayOfWeek,
+          labelAr: arDays[dayOfWeek],
+          labelEn: enDays[dayOfWeek],
+          fullLabelAr: `${arDays[dayOfWeek]} ${targetDateObj.getDate()} ${arMonths[targetDateObj.getMonth()]}`,
+          fullLabelEn: `${enDays[dayOfWeek]}, ${targetDateObj.getDate()} ${enMonths[targetDateObj.getMonth()]}`
+        });
+      }
+      global.selectAppointmentDate(plan.targetDate);
+    }
+
+    if (typeof global.setAppointmentType === "function") {
+      global.setAppointmentType(plan.mode || "clinic");
+    } else if (typeof global.apptSelectedType !== "undefined") {
+      global.apptSelectedType = plan.mode || "clinic";
+    }
+
+    // Pre-fill notes in appointment view
+    const windowDef = FOLLOW_UP_WINDOWS.find(w => w.id === plan.window);
+    const windowLabel = isEn ? (windowDef?.labelEn || plan.window) : (windowDef?.labelAr || plan.window);
+    const targetDateDisplay = isEn ? (plan.targetDateFormattedEn || plan.targetDate) : (plan.targetDateFormattedAr || plan.targetDate);
+    const instructionsText = plan.instructions ? `\n${isEn ? 'Physician Directives:' : 'تعليمات الطبيب المعالج:'} ${plan.instructions}` : "";
+    const prefilledNote = isEn
+      ? `[Recommended Follow-up Window (Doctolib)]\nWindow: ${windowLabel}\nTarget Date: ${targetDateDisplay}\nConsultation Mode: ${plan.mode}\nCase Ref: #${caseId.slice(-6).toUpperCase()}${instructionsText}`
+      : `[موعد متابعة سريري موصى به - Doctolib]\nالنافذة الموصى بها: ${windowLabel}\nالتاريخ المقترح: ${targetDateDisplay}\nنوع الاستشارة: ${plan.mode === 'clinic' ? 'عيادة' : (plan.mode === 'video' ? 'فيديو' : 'هاتف')}\nمرجع الحالة: #${caseId.slice(-6).toUpperCase()}${instructionsText}`;
+
+    const notesInput = (typeof document !== "undefined") ? document.getElementById("apptNotesInput") : null;
+    if (notesInput) {
+      notesInput.value = prefilledNote;
+    }
+    global.__prefilledApptNotes = prefilledNote;
+
+    if (typeof global.showToast === "function") {
+      global.showToast(isEn
+        ? "Follow-up synced with appointment calendar (Doctolib integration)."
+        : "تم ربط موعد المتابعة تلقائياً بجدول حجز المواعيد (Doctolib).");
+    }
+  }
+
+  function updateFollowUpStationDOM(caseId) {
+    if (typeof document === "undefined") return;
+    const isEn = (global.currentLanguage || "ar") === "en";
+    const plan = getCaseFollowUpPlan(caseId);
+    if (!plan) return;
+
+    // Update active state on window buttons
+    const windowBtns = document.querySelectorAll(`[data-followup-case="${caseId}"][data-window-btn]`);
+    windowBtns.forEach(btn => {
+      const wId = btn.getAttribute("data-window-btn");
+      const isSelected = wId === plan.window;
+      btn.classList.toggle("is-active", isSelected);
+      btn.setAttribute("aria-checked", isSelected ? "true" : "false");
+      const checkIndicator = btn.querySelector(".followup-check-indicator");
+      if (checkIndicator) {
+        checkIndicator.textContent = isSelected ? "✓" : "";
+      }
+    });
+
+    // Update custom date picker visibility
+    const customPickerWrap = document.getElementById(`customDatePickerWrap_${caseId}`);
+    if (customPickerWrap) {
+      customPickerWrap.style.display = plan.window === "custom" ? "block" : "none";
+    }
+
+    // Update mode buttons
+    const modeBtns = document.querySelectorAll(`[data-followup-case="${caseId}"][data-mode-btn]`);
+    modeBtns.forEach(btn => {
+      const mId = btn.getAttribute("data-mode-btn");
+      const isSelected = mId === plan.mode;
+      btn.classList.toggle("is-active", isSelected);
+      btn.setAttribute("aria-checked", isSelected ? "true" : "false");
+    });
+
+    // Update target date display element
+    const targetDateEl = document.getElementById(`followUpTargetDateDisplay_${caseId}`);
+    if (targetDateEl) {
+      targetDateEl.textContent = isEn
+        ? (plan.targetDateFormattedEn || plan.targetDate || "PRN")
+        : (plan.targetDateFormattedAr || plan.targetDate || "عند اللزوم");
+    }
+
+    // Update status badge
+    const badgeEl = document.getElementById(`followUpWindowBadge_${caseId}`);
+    if (badgeEl) {
+      const windowDef = FOLLOW_UP_WINDOWS.find(w => w.id === plan.window);
+      badgeEl.className = `pill ${windowDef?.badgeClass || 'info'}`;
+      badgeEl.textContent = isEn ? (windowDef?.labelEn || plan.window) : (windowDef?.labelAr || plan.window);
+    }
+  }
+
+  function renderFollowUpSchedulingStationHtml(caseRecord, isEn = false) {
+    if (!caseRecord) return "";
+    const caseId = caseRecord.id;
+    const plan = getCaseFollowUpPlan(caseId);
+    const activeWindow = plan ? plan.window : "within_3d";
+    const activeMode = plan ? plan.mode : "clinic";
+    const activeInstructions = plan ? (plan.instructions || "") : "";
+    const targetDateDisplay = plan
+      ? (isEn ? (plan.targetDateFormattedEn || plan.targetDate) : (plan.targetDateFormattedAr || plan.targetDate))
+      : "";
+    const currentWindowDef = FOLLOW_UP_WINDOWS.find(w => w.id === activeWindow) || FOLLOW_UP_WINDOWS[1];
+
+    return `
+      <!-- ========================================================================= -->
+      <!-- DOCTOLIB WORKSTATION: RECOMMEND FOLLOW-UP WINDOW & APPOINTMENT SYNC       -->
+      <!-- ========================================================================= -->
+      <section class="clinical-group-card doc-followup-station" id="doctolibFollowUpStation" data-case-id="${escapeHtml(caseId)}" role="region" aria-label="${isEn ? 'Recommend Follow-up Window & Calendar Booking' : 'توصية بموعد متابعة محدد والربط بتقويم المواعيد'}">
+        <div class="followup-station-header">
+          <div class="followup-header-main">
+            <div class="followup-icon-wrap" aria-hidden="true">
+              <span class="followup-brand-icon">📅</span>
+            </div>
+            <div>
+              <div class="followup-title-row">
+                <h4 class="followup-heading">${isEn ? '5. Recommend Follow-up Window (Doctolib Scheduling)' : '5. توصية بموعد متابعة محدد والربط بجدول المواعيد (Doctolib)'}</h4>
+                <kbd class="toolbar-shortcut-tag" title="Alt+F shortcut">Alt+F</kbd>
+              </div>
+              <p class="followup-subheading">
+                ${isEn
+                  ? 'Select the clinically recommended follow-up interval (24 hours, 3 days, 1 week, or 1 month) and seamlessly link to the appointment calendar for the patient.'
+                  : 'اختيار موعد المتابعة السريرية الموصى به (خلال 24 ساعة، 3 أيام، أسبوع، أو شهر) مع الربط التلقائي بجدول حجز المواعيد وتسهيل زيارة المريض.'}
+              </p>
+            </div>
+          </div>
+          <div class="followup-header-actions">
+            <span id="followUpWindowBadge_${escapeHtml(caseId)}" class="pill ${currentWindowDef.badgeClass}" style="font-size: 11.5px; font-weight: 700;">
+              ${isEn ? currentWindowDef.labelEn : currentWindowDef.labelAr}
+            </span>
+          </div>
+        </div>
+
+        <!-- PRESET WINDOWS GRID: RESPONSIVE MOBILE, TABLET & DESKTOP -->
+        <div class="doc-followup-grid" role="radiogroup" aria-label="${isEn ? 'Follow-up Window Options' : 'خيارات نافذة المتابعة'}">
+          ${FOLLOW_UP_WINDOWS.map(w => {
+            const isSelected = w.id === activeWindow;
+            return `
+              <button
+                type="button"
+                class="followup-card-btn ${isSelected ? 'is-active' : ''} urgency-${w.urgency}"
+                data-followup-case="${escapeHtml(caseId)}"
+                data-window-btn="${escapeHtml(w.id)}"
+                role="radio"
+                aria-checked="${isSelected ? 'true' : 'false'}"
+                onclick="HealthVibes.DoctorUI.selectFollowUpWindow('${escapeHtml(caseId)}', '${escapeHtml(w.id)}')"
+              >
+                <div class="followup-card-top">
+                  <span class="followup-card-icon" aria-hidden="true">${w.icon}</span>
+                  <span class="followup-card-title">${isEn ? w.labelEn : w.labelAr}</span>
+                  <span class="followup-check-indicator" aria-hidden="true">${isSelected ? '✓' : ''}</span>
+                </div>
+                <div class="followup-card-tagline">${isEn ? w.taglineEn : w.taglineAr}</div>
+                <div class="followup-card-desc">${isEn ? w.descriptionEn : w.descriptionAr}</div>
+              </button>
+            `;
+          }).join('')}
+        </div>
+
+        <!-- CUSTOM DATE PICKER (COLLAPSIBLE / ACCESSIBLE) -->
+        <div id="customDatePickerWrap_${escapeHtml(caseId)}" class="custom-date-picker-wrap" style="display: ${activeWindow === 'custom' ? 'block' : 'none'}; margin-top: 12px;">
+          <label for="customFollowUpInput_${escapeHtml(caseId)}" style="font-size: 12px; font-weight: 700; color: var(--ink); display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+            <span>🗓️</span> ${isEn ? 'Select exact follow-up date:' : 'حدد تاريخ موعد المتابعة بالتقويم:'}
+          </label>
+          <input
+            type="date"
+            id="customFollowUpInput_${escapeHtml(caseId)}"
+            class="followup-custom-date-input"
+            value="${escapeHtml(plan?.targetDate || '')}"
+            min="${new Date().toISOString().split('T')[0]}"
+            onchange="HealthVibes.DoctorUI.selectFollowUpWindow('${escapeHtml(caseId)}', 'custom', this.value)"
+          />
+        </div>
+
+        <!-- CONSULTATION MODE SELECTOR (SEGMENTED CONTROL) -->
+        <div class="followup-mode-section" style="margin-top: 14px;">
+          <label style="font-size: 12px; font-weight: 700; color: var(--muted); display: block; margin-bottom: 6px;">
+            ${isEn ? 'Preferred Consultation Mode:' : 'نوع زيارة أو استشارة المتابعة المفضلة:'}
+          </label>
+          <div class="followup-mode-chips" role="group" aria-label="${isEn ? 'Consultation Mode' : 'نوع الاستشارة'}">
+            ${FOLLOW_UP_MODES.map(m => {
+              const isSelected = m.id === activeMode;
+              return `
+                <button
+                  type="button"
+                  class="followup-mode-btn ${isSelected ? 'is-active' : ''}"
+                  data-followup-case="${escapeHtml(caseId)}"
+                  data-mode-btn="${escapeHtml(m.id)}"
+                  role="radio"
+                  aria-checked="${isSelected ? 'true' : 'false'}"
+                  onclick="HealthVibes.DoctorUI.setFollowUpMode('${escapeHtml(caseId)}', '${escapeHtml(m.id)}')"
+                >
+                  <span>${m.icon}</span> ${isEn ? m.labelEn : m.labelAr}
+                </button>
+              `;
+            }).join('')}
+          </div>
+        </div>
+
+        <!-- CLINICAL INSTRUCTIONS & OBJECTIVES -->
+        <div class="followup-instructions-section" style="margin-top: 14px;">
+          <label for="followUpInstructions_${escapeHtml(caseId)}" style="font-size: 12px; font-weight: 700; color: var(--muted); display: block; margin-bottom: 6px;">
+            ${isEn ? 'Follow-up Clinical Objectives & Instructions (Printed on certified report):' : 'تعليمات وأهداف زيارة المتابعة (تظهر في التقرير الطبي المعتمد):'}
+          </label>
+          <textarea
+            id="followUpInstructions_${escapeHtml(caseId)}"
+            class="followup-instructions-textarea"
+            dir="auto"
+            rows="2"
+            placeholder="${isEn ? 'Enter clinical objectives for follow-up (e.g. Auscultate chest after antibiotic course, review CBC and CRP lab results, assess SpO2 stability)...' : 'سجّل سبب وأهداف المتابعة (مثل: إعادة الفحص بالسماعة بعد انتهاء كورس المضاد، مراجعة صورة الدم وبروتين CRP، التأكد من استقرار الأكسجين)...'}"
+            oninput="HealthVibes.DoctorUI.setFollowUpInstructions('${escapeHtml(caseId)}', this.value)"
+          >${escapeHtml(activeInstructions)}</textarea>
+        </div>
+
+        <!-- DOCTOLIB CALENDAR SYNC DOCKED ACTION BAR -->
+        <div class="followup-sync-bar" style="margin-top: 14px;">
+          <div class="followup-target-info">
+            <span class="target-label">${isEn ? 'Estimated Target Date:' : 'تاريخ المتابعة المقترح:'}</span>
+            <strong id="followUpTargetDateDisplay_${escapeHtml(caseId)}" class="target-value">
+              ${escapeHtml(targetDateDisplay || (isEn ? 'Within 3 Days' : 'خلال 3 أيام'))}
+            </strong>
+          </div>
+          <button
+            type="button"
+            class="btn-book-calendar-sync"
+            id="btnSyncAppointmentCalendar_${escapeHtml(caseId)}"
+            onclick="HealthVibes.DoctorUI.linkToAppointmentBooking('${escapeHtml(caseId)}')"
+            title="${isEn ? 'One-click link to appointment scheduler with pre-filled date & clinical notes' : 'ربط موعد المتابعة تلقائياً بجدول المواعيد مع تجهيز التاريخ والملاحظات'}"
+          >
+            <span>📅</span> ${isEn ? 'Sync & Book in Calendar' : 'ربط وحجز الموعد بالتقويم'}
+          </button>
+        </div>
+      </section>
+    `;
+  }
+
+  // ===========================================================================
+  // 13. EXPORTS & ATTACHMENT TO HEALTHVIBES GLOBAL
   // ===========================================================================
 
   const DoctorUI = {
@@ -6173,6 +6666,18 @@
     handlePrivateNotesShareToggle,
     handlePrivateNotesInput,
     renderPrivateNotesStationHtml,
+    // Recommend Follow-up Window & Calendar Booking (Doctolib Pattern)
+    FOLLOW_UP_WINDOWS,
+    FOLLOW_UP_MODES,
+    calculateFollowUpTargetDate,
+    getCaseFollowUpPlan,
+    setCaseFollowUpPlan,
+    selectFollowUpWindow,
+    setFollowUpMode,
+    setFollowUpInstructions,
+    linkToAppointmentBooking,
+    updateFollowUpStationDOM,
+    renderFollowUpSchedulingStationHtml,
     // Performance & Keyboard Shortcuts (Sub-second SLA & Rapid Approval)
     openDoctorShortcutsModal,
     closeDoctorShortcutsModal,

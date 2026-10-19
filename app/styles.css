@@ -8948,3 +8948,396 @@ body.dark .thread-direct-action-card {
     min-height: 38px;
   }
 }
+
+/* ========================================================================== */
+/* DOCTOLIB CLINICAL WORKSTATION: RECOMMEND FOLLOW-UP WINDOW & CALENDAR SYNC  */
+/* ========================================================================== */
+
+.doc-followup-station {
+  background: var(--surface);
+  border: 1.5px solid rgba(14, 165, 233, 0.3);
+  border-radius: 14px;
+  padding: 18px;
+  margin: 16px 0;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.03);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.doc-followup-station:hover {
+  border-color: rgba(14, 165, 233, 0.5);
+  box-shadow: 0 6px 24px rgba(14, 165, 233, 0.08);
+}
+
+.followup-station-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.followup-header-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex: 1;
+  min-width: 260px;
+}
+
+.followup-icon-wrap {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  background: rgba(14, 165, 233, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.followup-brand-icon {
+  font-size: 20px;
+}
+
+.followup-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.followup-heading {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.followup-subheading {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.followup-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Preset Cards Grid (Responsive Doctolib Style) */
+.doc-followup-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.followup-card-btn {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  text-align: inherit;
+  background: var(--surface-2);
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--ink);
+  transition: all 0.18s ease;
+  min-height: 88px;
+  position: relative;
+  overflow: hidden;
+}
+
+.followup-card-btn:hover {
+  background: var(--surface);
+  border-color: rgba(14, 165, 233, 0.45);
+  transform: translateY(-1.5px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
+}
+
+.followup-card-btn:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
+}
+
+.followup-card-btn.is-active {
+  background: rgba(14, 165, 233, 0.07);
+  border-color: var(--teal);
+  box-shadow: 0 0 0 1px var(--teal), 0 4px 16px rgba(14, 165, 164, 0.15);
+}
+
+.followup-card-btn.is-active.urgency-urgent {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: #ef4444;
+  box-shadow: 0 0 0 1px #ef4444, 0 4px 16px rgba(239, 68, 68, 0.15);
+}
+
+.followup-card-btn.is-active.urgency-high {
+  background: rgba(245, 158, 11, 0.08);
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 1px #f59e0b, 0 4px 16px rgba(245, 158, 11, 0.15);
+}
+
+.followup-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.followup-card-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.followup-card-title {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: var(--ink);
+  flex: 1;
+}
+
+.followup-check-indicator {
+  font-size: 14px;
+  font-weight: 900;
+  color: var(--teal);
+  min-width: 16px;
+  text-align: center;
+}
+
+.followup-card-btn.urgency-urgent .followup-check-indicator {
+  color: #ef4444;
+}
+
+.followup-card-btn.urgency-high .followup-check-indicator {
+  color: #f59e0b;
+}
+
+.followup-card-tagline {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--teal);
+  margin-bottom: 4px;
+}
+
+.followup-card-btn.urgency-urgent .followup-card-tagline {
+  color: #dc2626;
+}
+
+.followup-card-btn.urgency-high .followup-card-tagline {
+  color: #d97706;
+}
+
+.followup-card-desc {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+/* Custom Date Picker */
+.custom-date-picker-wrap {
+  background: var(--surface-2);
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+
+.followup-custom-date-input {
+  width: 100%;
+  max-width: 280px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-family: inherit;
+  border-radius: 8px;
+  border: 1.5px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.followup-custom-date-input:focus {
+  border-color: var(--teal);
+}
+
+/* Consultation Mode Segmented Chips */
+.followup-mode-chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.followup-mode-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s ease;
+  min-height: 38px;
+}
+
+.followup-mode-btn:hover {
+  background: var(--surface);
+  border-color: var(--teal);
+}
+
+.followup-mode-btn.is-active {
+  background: var(--teal);
+  color: #ffffff;
+  border-color: var(--teal);
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(14, 165, 164, 0.25);
+}
+
+/* Instructions Textarea */
+.followup-instructions-textarea {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--ink);
+  padding: 10px 12px;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  outline: none;
+  transition: border-color 0.2s ease, background 0.2s ease;
+  resize: vertical;
+}
+
+.followup-instructions-textarea:focus {
+  border-color: var(--teal);
+  background: var(--surface);
+}
+
+/* Doctolib Calendar Sync Docked Action Bar */
+.followup-sync-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 16px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.followup-target-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.followup-target-info .target-label {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.followup-target-info .target-value {
+  font-size: 13.5px;
+  color: var(--teal);
+  font-weight: 800;
+}
+
+.btn-book-calendar-sync {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #0284c7 0%, #0ea5e9 100%);
+  color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  font-family: inherit;
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.3);
+  transition: all 0.18s ease;
+  min-height: 44px;
+}
+
+.btn-book-calendar-sync:hover {
+  background: linear-gradient(135deg, #0369a1 0%, #0284c7 100%);
+  transform: translateY(-1.5px);
+  box-shadow: 0 6px 16px rgba(2, 132, 199, 0.4);
+}
+
+.btn-book-calendar-sync:active {
+  transform: translateY(0);
+}
+
+/* ========================================================================== */
+/* RESPONSIVE DESIGN: MOBILE & TABLET LAYOUTS                                 */
+/* ========================================================================== */
+
+@media (max-width: 992px) {
+  .doc-followup-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .doc-followup-station {
+    padding: 14px;
+    border-radius: 12px;
+  }
+
+  .followup-station-header {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .doc-followup-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .followup-card-btn {
+    min-height: 72px;
+    padding: 10px 12px;
+  }
+
+  .followup-mode-chips {
+    flex-direction: column;
+  }
+
+  .followup-mode-btn {
+    width: 100%;
+    justify-content: center;
+    min-height: 44px;
+  }
+
+  .followup-sync-bar {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+  }
+
+  .followup-target-info {
+    justify-content: center;
+  }
+
+  .btn-book-calendar-sync {
+    width: 100%;
+    justify-content: center;
+    min-height: 48px;
+    font-size: 14px;
+  }
+}
+

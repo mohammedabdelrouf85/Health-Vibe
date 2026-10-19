@@ -37,11 +37,13 @@
         : (Array.isArray(record?.investigations)
           ? record.investigations
           : (Array.isArray(record?.orderedInvestigations) ? record.orderedInvestigations : [])));
+    const followUp = c.followUpPlan || record?.followUpPlan || null;
     return {
       diag: recordedClinicalText(c.clinicalDiagnosis, isEn),
       meds: recordedClinicalText(c.medications, isEn),
       recs: saved.length ? saved : [recordedClinicalText(null, isEn)],
-      investigations: inv
+      investigations: inv,
+      followUpPlan: followUp
     };
   }
 
@@ -79,6 +81,10 @@
       || record.investigations
       || record.orderedInvestigations
       || [];
+    const followUp = snapshot.clinicalContent?.followUpPlan
+      || snapshot.followUpPlan
+      || record.followUpPlan
+      || null;
     return {
       ...record,
       ...(snapshot.patient || {}),
@@ -86,6 +92,7 @@
       ...(snapshot.clinicalContent || {}),
       investigations: inv,
       orderedInvestigations: inv,
+      followUpPlan: followUp,
       doctorIdentity: snapshot.doctorIdentity || record.doctorIdentity,
       reportVersion: snapshot.versions?.reportVersion || record.reportVersion,
       modelVersion: snapshot.versions?.modelVersion || record.modelVersion,
@@ -196,7 +203,15 @@
    * @param {object} params { record: object, language: 'ar' | 'en' }
    * @returns {object}
    */
-  function formatReportForPdfExport({ record, language = "ar" }) {
+  function formatReportForPdfExport(paramsOrRecord, langFallback = "ar") {
+    let record, language;
+    if (paramsOrRecord && typeof paramsOrRecord === "object" && paramsOrRecord.record) {
+      record = paramsOrRecord.record;
+      language = paramsOrRecord.language || "ar";
+    } else {
+      record = paramsOrRecord;
+      language = typeof langFallback === "string" ? langFallback : "ar";
+    }
     if (!record) return null;
     const isEn = language === "en";
     const approved = applyApprovedReportSnapshot(record);
@@ -220,6 +235,7 @@
       dates,
       clinical,
       investigations: clinical.investigations || [],
+      followUpPlan: clinical.followUpPlan || approved.followUpPlan || null,
       doctor,
       isWithdrawn: Boolean(approved.reportWithdrawal && approved.reportWithdrawal.status === "withdrawn"),
       withdrawal: approved.reportWithdrawal || null
