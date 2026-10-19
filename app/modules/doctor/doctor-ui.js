@@ -6366,7 +6366,7 @@
       const isSelected = wId === plan.window;
       btn.classList.toggle("is-active", isSelected);
       btn.setAttribute("aria-checked", isSelected ? "true" : "false");
-      const checkIndicator = btn.querySelector(".followup-check-indicator");
+      const checkIndicator = typeof btn.querySelector === "function" ? btn.querySelector(".followup-check-indicator") : null;
       if (checkIndicator) {
         checkIndicator.textContent = isSelected ? "✓" : "";
       }

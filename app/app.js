@@ -8909,7 +8909,7 @@ async function renderReportScreen(targetCaseId = null) {
                   <strong style="font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px;">
                     ${isEn ? "Doctor's Clinical Directives for Follow-up:" : "توجيهات الطبيب المعالج لزيارة المتابعة:"}
                   </strong>
-                  <p style="margin: 0; font-size: 13.5px; color: var(--ink); line-height: 1.5;">
+                  <p dir="auto" style="margin: 0; font-size: 13.5px; color: var(--ink); line-height: 1.5; text-align: start; unicode-bidi: plaintext;">
                     ${escapeHtml(followUp.instructions)}
                   </p>
                 </div>
