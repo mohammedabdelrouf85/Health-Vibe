@@ -30,10 +30,18 @@
     const saved = Array.isArray(c.recommendations)
       ? c.recommendations.filter(value => typeof value === "string" && value.trim()).map(value => value.trim())
       : parseRecs(c.recommendation);
+    const inv = Array.isArray(c.investigations)
+      ? c.investigations
+      : (Array.isArray(c.orderedInvestigations)
+        ? c.orderedInvestigations
+        : (Array.isArray(record?.investigations)
+          ? record.investigations
+          : (Array.isArray(record?.orderedInvestigations) ? record.orderedInvestigations : [])));
     return {
       diag: recordedClinicalText(c.clinicalDiagnosis, isEn),
       meds: recordedClinicalText(c.medications, isEn),
-      recs: saved.length ? saved : [recordedClinicalText(null, isEn)]
+      recs: saved.length ? saved : [recordedClinicalText(null, isEn)],
+      investigations: inv
     };
   }
 
@@ -64,11 +72,20 @@
   function applyApprovedReportSnapshot(record) {
     const snapshot = record && record.reportSnapshot;
     if (!snapshot) return record;
+    const inv = snapshot.clinicalContent?.investigations
+      || snapshot.clinicalContent?.orderedInvestigations
+      || snapshot.investigations
+      || snapshot.orderedInvestigations
+      || record.investigations
+      || record.orderedInvestigations
+      || [];
     return {
       ...record,
       ...(snapshot.patient || {}),
       ...(snapshot.caseDetails || {}),
       ...(snapshot.clinicalContent || {}),
+      investigations: inv,
+      orderedInvestigations: inv,
       doctorIdentity: snapshot.doctorIdentity || record.doctorIdentity,
       reportVersion: snapshot.versions?.reportVersion || record.reportVersion,
       modelVersion: snapshot.versions?.modelVersion || record.modelVersion,
@@ -202,6 +219,7 @@
       revisionNumber: approved.reportRevisionNumber || 1,
       dates,
       clinical,
+      investigations: clinical.investigations || [],
       doctor,
       isWithdrawn: Boolean(approved.reportWithdrawal && approved.reportWithdrawal.status === "withdrawn"),
       withdrawal: approved.reportWithdrawal || null

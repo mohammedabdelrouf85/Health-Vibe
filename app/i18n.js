@@ -438,7 +438,20 @@
         reentryNotificationPreviewTitle: "معاينة الإشعار والرسالة التي ستصل للمريض",
         reentrySendBtn: "إرسال طلب إعادة القياس للمريض",
         reentryDefinitiveBtn: "تأكيد الرفض النهائي",
-        reentryStatusPendingBanner: "بانتظار إعادة إدخال المريض للقياسات (K Health)"
+        reentryStatusPendingBanner: "بانتظار إعادة إدخال المريض للقياسات (K Health)",
+        orderInvestigationsTitle: "طلب الفحوصات والتحاليل والأشعة التكميلية (إذن فحص رسمي)",
+        orderInvestigationsSubtitle: "تمكين الطبيب من تحديد فحوصات مطلوبة (صورة دم كاملة CBC، بروتين تفاعلي CRP، أشعة عادية على الصدر) لتظهر رسمياً في التقرير الطبي وخطة العلاج.",
+        investigationsPresetsTitle: "باقات الفحص السريري المباشر:",
+        investigationsSearchPlaceholder: "ابحث بالاسم العربي، الإنجليزي أو الكود (مثل: CBC, CRP, Chest X-Ray)...",
+        investigationsCountZero: "لم يتم تحديد فحوصات",
+        investigationsCountSelected: "فحوصات محددة",
+        investigationsUrgencyStat: "⚡ عاجل (STAT)",
+        investigationsUrgencyRoutine: "عادي (Routine)",
+        investigationsCustomTitle: "طلب فحص أو أشعة تخصصية غير مدرجة بالقائمة",
+        investigationsReportSectionTitle: "الفحوصات الطبية والأشعة التكميلية المطلوبة",
+        investigationsOfficialReferralBadge: "إذن فحص سريري معتمد",
+        investigationsPatientInstructions: "يُرجى تقديم هذا الإذن المعتمد لأي معمل أو مركز أشعة معتمد. لفحوصات الدم التي تتطلب صيام، يرجى الصيام لمدة 8-12 ساعة قبل سحب العينة.",
+        investigationsQuarantineNotice: "هذه الحالة مسندة لطبيب آخر. نافذة طلب الفحوصات والأشعة محصورة على الطبيب المكلف بالحالة فقط."
       },
       history: {
         title: "السجل الطبي الموحد",
@@ -936,7 +949,20 @@
         reentryNotificationPreviewTitle: "Patient In-App Push & SMS Preview",
         reentrySendBtn: "Send Re-entry Request to Patient",
         reentryDefinitiveBtn: "Confirm Definitive Rejection",
-        reentryStatusPendingBanner: "Pending Patient Intake Re-entry (K Health)"
+        reentryStatusPendingBanner: "Pending Patient Intake Re-entry (K Health)",
+        orderInvestigationsTitle: "Diagnostic Investigations & Radiology (Vezeeta E-Referral)",
+        orderInvestigationsSubtitle: "Request complementary clinical labs (CBC, CRP, D-Dimer) or medical imaging (Chest X-Ray, HRCT) printed directly on the certified report.",
+        investigationsPresetsTitle: "Clinical Workup Bundles:",
+        investigationsSearchPlaceholder: "Search test name, Arabic, LOINC, or Code (e.g., CBC, CRP, Chest X-Ray)...",
+        investigationsCountZero: "No tests selected",
+        investigationsCountSelected: "tests selected",
+        investigationsUrgencyStat: "⚡ STAT",
+        investigationsUrgencyRoutine: "Routine",
+        investigationsCustomTitle: "Order Custom / Unlisted Diagnostic Test",
+        investigationsReportSectionTitle: "Complementary Diagnostic Tests & Radiology Requisition",
+        investigationsOfficialReferralBadge: "Official E-Referral",
+        investigationsPatientInstructions: "Please present this certified requisition to accredited diagnostic partner centers. For blood chemistry requiring fasting, fast 8-12 hours prior to collection.",
+        investigationsQuarantineNotice: "This clinical case is assigned to another attending physician. Diagnostic requisition is restricted exclusively to the assigned doctor."
       },
       history: {
         title: "Unified Medical History",
