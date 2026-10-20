@@ -4959,6 +4959,17 @@
     }
   }
 
+  function normalizeSearchText(text) {
+    if (text === null || text === undefined) return "";
+    return String(text)
+      .replace(/[أإآ]/g, "ا")
+      .replace(/ة/g, "ه")
+      .replace(/ى/g, "ي")
+      .replace(/[\u064B-\u065F]/g, "")
+      .toLowerCase()
+      .trim();
+  }
+
   function filterAndSortDoctorCases(caseList = [], options = {}) {
     const {
       search = "",
@@ -5024,8 +5035,8 @@
       }
     }
 
-    // 4. Multi-Field Deep Search
-    const term = String(search || "").trim().toLowerCase();
+    // 4. Multi-Field Deep Search (with Arabic diacritics & letter variant normalization)
+    const term = normalizeSearchText(search);
     if (term) {
       result = result.filter(c => {
         const savedPrivateNotes = getCasePrivateNotes(c.id).privateNotes;
@@ -5042,7 +5053,7 @@
           c.moreInfoNote, c.privateDoctorNotes, c.privateNotes, savedPrivateNotes,
           c.assessment?.chiefComplaint, c.chiefComplaint
         ];
-        const text = fields.filter(Boolean).map(v => String(v).toLowerCase()).join(" ");
+        const text = fields.filter(Boolean).map(v => normalizeSearchText(v)).join(" ");
         return text.includes(term);
       });
     }

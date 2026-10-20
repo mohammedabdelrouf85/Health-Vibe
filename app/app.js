@@ -4190,6 +4190,17 @@ window.resumeReview = async function(id) {
   }
 };
 
+function normalizeSearchText(text) {
+  if (text === null || text === undefined) return "";
+  return String(text)
+    .replace(/[أإآ]/g, "ا")
+    .replace(/ة/g, "ه")
+    .replace(/ى/g, "ي")
+    .replace(/[\u064B-\u065F]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
 function renderDoctorQuickChips(realCases, isEn) {
   const chipsContainer = document.getElementById("practoQuickChipsRow");
   if (!chipsContainer) return;
@@ -4343,8 +4354,9 @@ function renderDoctorQueueItems(allCases) {
     }
   }
 
-  // 🔍 البحث المتعمق في جميع حقول المريض (Practo Multi-field Search)
+  // 🔍 البحث المتعمق في جميع حقول المريض (Practo Multi-field Search with Arabic Normalization)
   if (!isSandbox && currentDoctorQueueSearch) {
+    const normSearch = normalizeSearchText(currentDoctorQueueSearch);
     cases = cases.filter(c => {
       const memory = window.HealthVibes?.DoctorUI?.getCasePrivateNotes ? window.HealthVibes.DoctorUI.getCasePrivateNotes(c.id)?.privateNotes : '';
       const fields = [
@@ -4360,8 +4372,8 @@ function renderDoctorQueueItems(allCases) {
         c.moreInfoNote, c.privateDoctorNotes, c.privateNotes, memory,
         c.assessment?.chiefComplaint, c.chiefComplaint
       ];
-      const haystack = fields.filter(Boolean).map(v => String(v).toLowerCase()).join(" ");
-      return haystack.includes(currentDoctorQueueSearch);
+      const haystack = fields.filter(Boolean).map(v => normalizeSearchText(v)).join(" ");
+      return haystack.includes(normSearch);
     });
   }
 

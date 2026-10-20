@@ -47,6 +47,20 @@ function isTestOrMockCase(c) {
 }
 
 /**
+ * Normalizes text for bilingual search, including Arabic variants (أ/إ/آ -> ا, ة -> ه, ى -> ي) and diacritics removal.
+ */
+function normalizeSearchText(text) {
+  if (text === null || text === undefined) return "";
+  return String(text)
+    .replace(/[أإآ]/g, "ا")
+    .replace(/ة/g, "ه")
+    .replace(/ى/g, "ي")
+    .replace(/[\u064B-\u065F]/g, "") // remove arabic diacritics
+    .toLowerCase()
+    .trim();
+}
+
+/**
  * Pure function: Filters, triages, sorts, and paginates cases for the authorized doctor.
  */
 function filterAndSortAssignedPatients(caseRecords = [], options = {}) {
@@ -159,8 +173,8 @@ function filterAndSortAssignedPatients(caseRecords = [], options = {}) {
     }
   }
 
-  // 5. Deep Multi-Field Search
-  const queryTerm = String(search || "").trim().toLowerCase();
+  // 5. Deep Multi-Field Search (with Arabic diacritics & letter variant normalization)
+  const queryTerm = normalizeSearchText(search);
   if (queryTerm) {
     pool = pool.filter(c => {
       const fields = [
@@ -176,7 +190,7 @@ function filterAndSortAssignedPatients(caseRecords = [], options = {}) {
         c.moreInfoNote, c.privateDoctorNotes, c.privateNotes,
         c.assessment?.chiefComplaint, c.chiefComplaint
       ];
-      const haystack = fields.filter(Boolean).map(v => String(v).toLowerCase()).join(" ");
+      const haystack = fields.filter(Boolean).map(v => normalizeSearchText(v)).join(" ");
       return haystack.includes(queryTerm);
     });
   }
@@ -336,6 +350,7 @@ module.exports = {
   getCaseOxygen,
   getNormalizedPriority,
   isTestOrMockCase,
+  normalizeSearchText,
   filterAndSortAssignedPatients,
   fetchAssignedPatients,
   recordDirectoryAudit
