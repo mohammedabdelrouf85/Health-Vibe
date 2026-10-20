@@ -80,7 +80,7 @@
 
     const caseId = (record && (record.id || record.caseId)) || "HV-REPORT";
     const doctorUid = activeSource.uid || approvedDoctorId || "DOC-001";
-    const sigHash = activeSource.signatureHash || `SIG-SHA256-${String(doctorUid).slice(-6).toUpperCase()}-${String(caseId).slice(-6).toUpperCase()}`;
+    const sigHash = activeSource.signatureHash || activeSource.digitalSignature?.hash || (record && record.signatureHash) || `SIG-SHA256-${String(doctorUid).slice(-6).toUpperCase()}-${String(caseId).slice(-6).toUpperCase()}`;
     const badgeText = isStrictlyVerified ? (isEn ? "Certified & Verified Physician" : "طبيب معتمد وموثق رسمي") : "";
 
     return {
@@ -93,15 +93,16 @@
       verificationBadge: badgeText,
       digitalSignature: {
         hash: sigHash,
-        algorithm: "HMAC-SHA256",
-        signedAt: record && (record.approvedAt || record.signedAt || record.reportGeneratedAt || new Date().toISOString()),
+        algorithm: activeSource.digitalSignature?.algorithm || "HMAC-SHA256",
+        signedAt: activeSource.digitalSignature?.signedAt || (record && (record.approvedAt || record.signedAt || record.reportGeneratedAt)) || new Date().toISOString(),
+        style: activeSource.digitalSignature?.style || (record && record.signatureStyle) || "calligraphy",
         status: isStrictlyVerified ? "VERIFIED_CREDENTIAL" : "PROVISIONAL"
       },
       professionalStamp: {
-        sealNumber: `HV-SEAL-${String(caseId).slice(-6).toUpperCase()}`,
-        governance: isEn ? "HEALTH VIBE AI • CLINICAL GOVERNANCE" : "هيلث فايب • حوكمة سريرية معتمدة",
-        jurisdiction: isEn ? "OFFICIAL MEDICAL SEAL" : "الختم المهني الرسمي المعتمد",
-        year: new Date((record && (record.approvedAt || record.reportGeneratedAt)) || Date.now()).getFullYear()
+        sealNumber: activeSource.professionalStamp?.sealNumber || `HV-SEAL-${String(caseId).slice(-6).toUpperCase()}`,
+        governance: activeSource.professionalStamp?.governance || (isEn ? "HEALTH VIBE AI • CLINICAL GOVERNANCE" : "هيلث فايب • حوكمة سريرية معتمدة"),
+        jurisdiction: activeSource.professionalStamp?.jurisdiction || (isEn ? "OFFICIAL MEDICAL SEAL" : "الختم المهني الرسمي المعتمد"),
+        year: activeSource.professionalStamp?.year || new Date((record && (record.approvedAt || record.reportGeneratedAt)) || Date.now()).getFullYear()
       }
     };
   }
@@ -239,6 +240,33 @@
   }
 
   /**
+   * Fetches the authoritative Docus AI certified PDF footer metadata for an approved case.
+   * @param {string} caseId
+   * @returns {Promise<object>}
+   */
+  async function getReportFooterCertification(caseId) {
+    if (!caseId) throw new Error("caseId is required");
+    const res = await fetch(`/api/reports/${encodeURIComponent(caseId)}/footer-certification`);
+    const data = await res.json();
+    return { ok: res.ok, status: res.status, ...data };
+  }
+
+  /**
+   * Verifies cryptographic authenticity of doctor digital signature & official stamp.
+   * @param {{ reportRef?: string, signatureHash?: string, caseId?: string }} params
+   * @returns {Promise<object>}
+   */
+  async function verifyReportSignature({ reportRef, signatureHash, caseId } = {}) {
+    const res = await fetch("/api/reports/verify-signature", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reportRef, signatureHash, caseId })
+    });
+    const data = await res.json();
+    return { ok: res.ok, status: res.status, ...data };
+  }
+
+  /**
    * Formats report for bilingual PDF export matching the approved version.
    * @param {object} params { record: object, language: 'ar' | 'en' }
    * @returns {object}
@@ -303,6 +331,8 @@
     createReportShareLink,
     revokeReportShareLink,
     verifyReportAuthenticity,
+    getReportFooterCertification,
+    verifyReportSignature,
     formatReportForPdfExport
   };
 

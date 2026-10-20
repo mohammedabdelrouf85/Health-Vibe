@@ -5126,7 +5126,23 @@
         }
       }
 
-      // 13. Escape key closes shortcuts modal
+      // 13. Global Alt + S / Alt + s / Arabic Alt + س: Cycle Digital Signature Style (Docus AI)
+      if (e.altKey && !e.shiftKey && (e.key === "s" || e.key === "S" || e.code === "KeyS" || e.key === "س")) {
+        e.preventDefault();
+        const activeCaseId = getActiveDoctorCaseId() || "";
+        cycleDoctorSignatureStyle(activeCaseId);
+        return;
+      }
+
+      // 14. Global Alt + V / Alt + v / Arabic Alt + ر: Toggle Live Patient PDF Footer Preview (Docus AI)
+      if (e.altKey && !e.shiftKey && (e.key === "v" || e.key === "V" || e.code === "KeyV" || e.key === "ر")) {
+        e.preventDefault();
+        const activeCaseId = getActiveDoctorCaseId() || "";
+        togglePatientPdfFooterPreview(activeCaseId);
+        return;
+      }
+
+      // 15. Escape key closes shortcuts modal
       if (e.key === "Escape") {
         const shortcutsModal = document.getElementById("doctorShortcutsModal");
         if (shortcutsModal && shortcutsModal.style.display !== "none") {
@@ -5235,6 +5251,20 @@
             <kbd style="padding: 2px 7px; background: var(--surface, #1e293b); border: 1px solid var(--line, #334155); border-radius: 4px; font-family: monospace; font-weight: 700;">Alt + Shift + 1..4</kbd>
           </div>
           <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--surface-2, #0f172a); border-radius: 8px;">
+            <span>${isEn ? "Cycle Digital Signature Style (Calligraphy/Classic/Executive)" : "تبديل نمط التوقيع الرقمي (كاليغرافي / كلاسيكي / تنفيذي)"}</span>
+            <div style="display: flex; gap: 4px;">
+              <kbd style="padding: 2px 7px; background: var(--surface, #1e293b); border: 1px solid var(--line, #334155); border-radius: 4px; font-family: monospace; font-weight: 700; color: #38bdf8;">Alt + S</kbd>
+              <kbd style="padding: 2px 7px; background: var(--surface, #1e293b); border: 1px solid var(--line, #334155); border-radius: 4px; font-family: monospace; font-weight: 700; color: #38bdf8;">Alt + س</kbd>
+            </div>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--surface-2, #0f172a); border-radius: 8px;">
+            <span>${isEn ? "Toggle Live Patient PDF Footer Preview" : "معاينة حية لتذييل تقرير الـ PDF الصادر للمريض"}</span>
+            <div style="display: flex; gap: 4px;">
+              <kbd style="padding: 2px 7px; background: var(--surface, #1e293b); border: 1px solid var(--line, #334155); border-radius: 4px; font-family: monospace; font-weight: 700; color: #38bdf8;">Alt + V</kbd>
+              <kbd style="padding: 2px 7px; background: var(--surface, #1e293b); border: 1px solid var(--line, #334155); border-radius: 4px; font-family: monospace; font-weight: 700; color: #38bdf8;">Alt + ر</kbd>
+            </div>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--surface-2, #0f172a); border-radius: 8px;">
             <span>${isEn ? "Close Dialog / Modal" : "إغلاق النافذة الحالية"}</span>
             <kbd style="padding: 2px 7px; background: var(--surface, #1e293b); border: 1px solid var(--line, #334155); border-radius: 4px; font-family: monospace; font-weight: 700;">Esc</kbd>
           </div>
@@ -5337,13 +5367,18 @@
           </div>
           ${priorInvestigations.length > 0 ? `
             <ul style="margin: 0; padding-inline-start: 18px;">
-              ${priorInvestigations.map(inv => `
-                <li style="margin-bottom: 4px;">
-                  <strong>${isEn ? (inv.nameEn || inv.code) : (inv.nameAr || inv.code)}:</strong>
-                  <span>${inv.result || (isEn ? 'Completed' : 'تم إجراؤه')}</span>
-                  <small style="color: var(--muted); margin-inline-start: 6px;">(${inv.date || (isEn ? 'Prior visit' : 'زيارة سابقة')})</small>
-                </li>
-              `).join('')}
+              ${priorInvestigations.map(inv => {
+                const name = typeof inv === "string" ? inv : (isEn ? (inv.nameEn || inv.name || inv.code) : (inv.nameAr || inv.name || inv.code));
+                const result = typeof inv === "object" && inv.result ? `<span>${inv.result}</span>` : '';
+                const date = typeof inv === "object" && inv.date ? `<small style="color: var(--muted); margin-inline-start: 6px;">(${inv.date})</small>` : '';
+                return `
+                  <li style="margin-bottom: 4px;">
+                    <strong>${name}</strong>
+                    ${result}
+                    ${date}
+                  </li>
+                `;
+              }).join('')}
             </ul>
           ` : `
             <div style="color: var(--muted); font-size: 11.5px;">
@@ -5583,6 +5618,51 @@
     if (container) {
       container.innerHTML = getPatientRecommendationChipsHtml(isTargetEn);
     }
+  }
+
+  let activeDiagnosticPresetsLang = null;
+
+  /**
+   * Switches the active language for clinical diagnostic presets (EN/AR).
+   * Enables physicians working in English UI to insert Arabic patient advice or vice-versa.
+   * @param {'en'|'ar'} lang
+   */
+  function setDiagnosticPresetsLang(lang) {
+    activeDiagnosticPresetsLang = lang;
+    if (typeof window !== "undefined") {
+      window._diagnosticPresetsLang = lang;
+    }
+    const isTargetEn = (lang === "en");
+    if (typeof document !== "undefined") {
+      const btnEn = document.getElementById("btnPresetLangEn");
+      const btnAr = document.getElementById("btnPresetLangAr");
+      if (btnEn && btnAr) {
+        if (isTargetEn) {
+          btnEn.classList.add("is-active");
+          btnAr.classList.remove("is-active");
+        } else {
+          btnAr.classList.add("is-active");
+          btnEn.classList.remove("is-active");
+        }
+      }
+    }
+    if (typeof global.showToast === "function") {
+      global.showToast(isTargetEn ? "Presets switched to Clinical English" : "تم تحويل لغة القوالب التشخيصية إلى العربية");
+    }
+  }
+
+  /**
+   * Retrieves the current diagnostic presets language preference.
+   * @returns {'en'|'ar'}
+   */
+  function getDiagnosticPresetsLang() {
+    if (activeDiagnosticPresetsLang) {
+      return activeDiagnosticPresetsLang;
+    }
+    if (typeof window !== "undefined" && window._diagnosticPresetsLang) {
+      return window._diagnosticPresetsLang;
+    }
+    return (global.currentLanguage === "en") ? "en" : "ar";
   }
 
   function applyInvestigationPreset(caseId, presetKey) {
@@ -6064,6 +6144,100 @@
       privateNotes: text,
       includePrivateNotesInReport: check ? check.checked : false
     });
+    if (typeof document !== "undefined") {
+      const charCounter = document.getElementById("privateNotesCharCount");
+      if (charCounter) {
+        const isEn = (global.currentLanguage === "en");
+        charCounter.textContent = `${(text || '').length} ${isEn ? 'chars' : 'حرف'}`;
+      }
+    }
+  }
+
+  function appendPrivateNotesTag(caseId, tag) {
+    if (typeof document === "undefined") return;
+    const input = document.getElementById("doctorPrivateNotesInput");
+    if (!input) return;
+    const cur = input.value.trim();
+    input.value = cur ? `${cur}\n${tag}` : tag;
+    input.focus();
+    handlePrivateNotesInput(input.value, caseId);
+  }
+
+  let activePrivateNotesTagsLang = null;
+
+  /**
+   * Switches the language of confidential clinical tags (EN vs عربي).
+   * @param {'en'|'ar'} lang
+   * @param {string} caseId
+   */
+  function setPrivateNotesTagsLang(lang = "en", caseId = "") {
+    activePrivateNotesTagsLang = lang;
+    if (typeof window !== "undefined") {
+      window._privateNotesTagsLang = lang;
+    }
+    const isTargetEn = (lang === "en");
+    if (typeof document !== "undefined") {
+      const container = document.getElementById("privateNotesQuickTagsContainer");
+      if (container) {
+        container.innerHTML = renderPrivateNotesTagChips(lang, caseId);
+      }
+      const btnEn = document.getElementById("btnPrivateNotesTagLangEn");
+      const btnAr = document.getElementById("btnPrivateNotesTagLangAr");
+      if (btnEn && btnAr) {
+        if (isTargetEn) {
+          btnEn.classList.add("is-active");
+          btnAr.classList.remove("is-active");
+        } else {
+          btnAr.classList.add("is-active");
+          btnEn.classList.remove("is-active");
+        }
+      }
+    }
+    if (typeof global.showToast === "function") {
+      global.showToast(isTargetEn ? "Clinical tags switched to English" : "تم تحويل التوسيمات السريرية إلى العربية");
+    }
+  }
+
+  /**
+   * Retrieves current private notes tags language.
+   * @param {boolean|null} fallbackEn
+   * @returns {'en'|'ar'}
+   */
+  function getPrivateNotesTagsLang(fallbackEn = null) {
+    if (activePrivateNotesTagsLang) {
+      return activePrivateNotesTagsLang;
+    }
+    if (fallbackEn !== null) {
+      return fallbackEn ? "en" : "ar";
+    }
+    if (typeof window !== "undefined" && window._privateNotesTagsLang) {
+      return window._privateNotesTagsLang;
+    }
+    return (global.currentLanguage === "en") ? "en" : "ar";
+  }
+
+  /**
+   * Renders the quick clinical tags chip buttons based on selected language.
+   * @param {'en'|'ar'} lang
+   * @param {string} caseId
+   */
+  function renderPrivateNotesTagChips(lang = "en", caseId = "") {
+    const isEn = (lang === "en");
+    const safeCaseId = escapeHtml(caseId);
+    return `
+      <button type="button" class="soft-button mini-tag-btn" onclick="HealthVibes.DoctorUI.appendPrivateNotesTag('${safeCaseId}', '${isEn ? '[Differential Diagnosis]: ' : '[تشخيص تفريقي]: '}')" style="font-size: 11px; padding: 2px 7px;">
+        🔬 ${isEn ? 'Differential' : 'تشخيص تفريقي'}
+      </button>
+      <button type="button" class="soft-button mini-tag-btn" onclick="HealthVibes.DoctorUI.appendPrivateNotesTag('${safeCaseId}', '${isEn ? '[Treatment Compliance]: ' : '[التزام دوائي]: '}')" style="font-size: 11px; padding: 2px 7px;">
+        💊 ${isEn ? 'Compliance' : 'التزام دوائي'}
+      </button>
+      <button type="button" class="soft-button mini-tag-btn" onclick="HealthVibes.DoctorUI.appendPrivateNotesTag('${safeCaseId}', '${isEn ? '[Supervision Flag]: ' : '[متابعة إشرافية]: '}')" style="font-size: 11px; padding: 2px 7px;">
+        🚩 ${isEn ? 'Supervision' : 'متابعة إشرافية'}
+      </button>
+      <button type="button" class="soft-button mini-tag-btn" onclick="HealthVibes.DoctorUI.appendPrivateNotesTag('${safeCaseId}', '${isEn ? '[Sensitive Prognosis]: ' : '[مآل سريري خاص]: '}')" style="font-size: 11px; padding: 2px 7px;">
+        ⚠️ ${isEn ? 'Sensitive' : 'مآل خاص'}
+      </button>
+    `;
   }
 
   function renderPrivateNotesStationHtml(caseRecord, isEn = false) {
@@ -6071,20 +6245,21 @@
     const caseId = caseRecord.id;
     const { privateNotes, includePrivateNotesInReport } = getCasePrivateNotes(caseId);
     const isIncluded = Boolean(includePrivateNotesInReport);
+    const tagLang = activePrivateNotesTagsLang || (isEn ? "en" : "ar");
 
     return `
       <!-- ========================================================================= -->
       <!-- DOCTOR PRIVATE NOTES: CLINICAL QUARANTINE VS REPORT INCLUSION             -->
       <!-- ========================================================================= -->
-      <section class="clinical-group-card doctor-private-notes-station ${isIncluded ? 'is-shared-with-patient' : 'is-quarantined'}" id="doctorPrivateNotesStation" data-case-id="${escapeHtml(caseId)}" role="region" aria-label="${isEn ? 'Doctor Private Notes' : 'ملاحظات الطبيب السريرية الخاصة'}">
+      <section class="clinical-group-card doctor-private-notes-station ${isIncluded ? 'is-shared-with-patient' : 'is-quarantined'}" id="doctorPrivateNotesStation" data-case-id="${escapeHtml(caseId)}" dir="${isEn ? 'ltr' : 'rtl'}" role="region" aria-label="${isEn ? 'Doctor Private Notes' : 'ملاحظات الطبيب السريرية الخاصة'}">
         <div class="private-notes-header">
           <div class="private-notes-header-main">
             <div class="private-notes-icon-wrap" aria-hidden="true">
               <span class="private-notes-icon">${isIncluded ? '📝' : '🔒'}</span>
             </div>
-            <div>
+            <div class="private-notes-title-group">
               <div class="private-notes-title-row">
-                <h4 class="private-notes-heading">${isEn ? '5. Doctor Private Notes (Clinical Quarantine)' : '5. الملاحظات السريرية الخاصة بالطبيب (محجوبة عن المريض افتراضياً)'}</h4>
+                <h4 class="private-notes-heading">${isEn ? 'Doctor Private Notes (Clinical Quarantine)' : 'الملاحظات السريرية الخاصة بالطبيب (محجوبة عن المريض افتراضياً)'}</h4>
                 <span id="privateNotesSecurityBadge" class="pill ${isIncluded ? 'ok' : 'danger'}" style="font-size: 11px; font-weight: 700;">
                   ${isIncluded ? (isEn ? '🌐 Included in Report' : '🌐 مضافة لتقرير المريض') : (isEn ? '🔒 Quarantined / Private' : '🔒 سرية ومحجوبة عن المريض')}
                 </span>
@@ -6095,6 +6270,38 @@
                   : 'تدوين ملاحظات تشخيصية تفريقية، فرضيات سريرية، أو تنبيهات متابعة داخلية. تُحفظ بأمان في ملف الحالة وتُحجب تماماً عن تقرير المريض إلا إذا قمت بتفعيل خيار الإدراج أدناه.'}
               </p>
             </div>
+          </div>
+        </div>
+
+        <!-- Quick Clinical Tags Bar with Bilingual Switcher -->
+        <div class="private-notes-quick-tags" style="display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 6px; align-items: center;">
+          <span style="font-size: 11px; font-weight: 700; color: var(--muted); align-self: center;">
+            ${isEn ? 'Confidential Clinical Tags:' : 'توسيمات سريرية سريعة:'}
+          </span>
+          <div class="chips-lang-toggle" role="group" aria-label="${isEn ? 'Tag Language' : 'لغة التوسيم'}" style="display: inline-flex; gap: 2px; margin-inline-end: 4px;">
+            <button
+              type="button"
+              id="btnPrivateNotesTagLangEn"
+              class="btn-chips-lang ${tagLang === 'en' ? 'is-active' : ''}"
+              onclick="HealthVibes.DoctorUI.setPrivateNotesTagsLang('en', '${escapeHtml(caseId)}')"
+              title="English Tags"
+              style="padding: 1px 6px; font-size: 10px; border-radius: 4px;"
+            >
+              EN
+            </button>
+            <button
+              type="button"
+              id="btnPrivateNotesTagLangAr"
+              class="btn-chips-lang ${tagLang === 'ar' ? 'is-active' : ''}"
+              onclick="HealthVibes.DoctorUI.setPrivateNotesTagsLang('ar', '${escapeHtml(caseId)}')"
+              title="توسيمات بالعربية"
+              style="padding: 1px 6px; font-size: 10px; border-radius: 4px;"
+            >
+              عربي
+            </button>
+          </div>
+          <div id="privateNotesQuickTagsContainer" style="display: inline-flex; gap: 6px; flex-wrap: wrap;">
+            ${renderPrivateNotesTagChips(tagLang, caseId)}
           </div>
         </div>
 
@@ -6114,6 +6321,12 @@
               : 'أدخل الملاحظات السريرية الخاصة بالطبيب (مثل: تشخيصات تفريقية، شكوك التزام دوائي، تنبيهات متابعة). تظل سرية ومحجوبة تماماً عن تقرير المريض افتراضياً...'}"
             oninput="HealthVibes.DoctorUI.handlePrivateNotesInput(this.value, '${escapeHtml(caseId)}')"
           >${escapeHtml(privateNotes)}</textarea>
+        </div>
+
+        <!-- Status row: Auto-saved indicator and character counter -->
+        <div class="private-notes-status-row" style="display: flex; justify-content: space-between; align-items: center; margin: 4px 0 10px; font-size: 11px; color: var(--muted);">
+          <span id="privateNotesSavedIndicator">💾 ${isEn ? 'Auto-saved to clinical case record' : 'محفوظ تلقائياً في سجل الحالة'}</span>
+          <span id="privateNotesCharCount">${(privateNotes || '').length} ${isEn ? 'chars' : 'حرف'}</span>
         </div>
 
         <!-- Consent / Inclusion in Patient Report Toggle -->
@@ -6621,12 +6834,42 @@
    * @param {object} options
    * @returns {string} SVG markup
    */
+  /**
+   * Generates a tamper-proof SVG vector digital signature for the attending physician.
+   * Supports distinct clinic signature styles: 'calligraphy' (default), 'classic', 'executive'.
+   * @param {string} doctorName
+   * @param {boolean} isEn
+   * @param {object} options
+   * @returns {string} SVG markup
+   */
   function generateDigitalSignatureSvg(doctorName = "Attending Physician", isEn = false, options = {}) {
     const displayName = doctorName || (isEn ? "Attending Physician" : "طبيب معتمد");
     const width = options.width || 280;
     const height = options.height || 75;
     const strokeColor = options.strokeColor || "#0f766e";
     const inkColor = options.inkColor || "#1e293b";
+    const style = options.style || options.signatureStyle || "calligraphy";
+    const gradId = `sigGrad_${Math.abs(displayName.split("").reduce((a, c) => a + c.charCodeAt(0), 0))}_${style}`;
+
+    let fontFam = "'Dancing Script', 'Brush Script MT', 'Great Vibes', 'Caveat', 'Segoe Script', cursive";
+    let flourishPath = `
+      <path d="M 22,54 Q 75,66 145,52 T 255,56" fill="none" stroke="${strokeColor}" stroke-width="1.8" stroke-linecap="round" opacity="0.8"/>
+      <path d="M 190,53 Q 225,40 248,54" fill="none" stroke="${strokeColor}" stroke-width="1.2" stroke-linecap="round" opacity="0.6"/>
+    `;
+
+    if (style === "classic") {
+      fontFam = "'Caveat', 'Brush Script MT', 'Great Vibes', cursive";
+      flourishPath = `
+        <path d="M 18,56 Q 90,68 180,48 T 262,50" fill="none" stroke="${strokeColor}" stroke-width="2" stroke-linecap="round" opacity="0.85"/>
+        <path d="M 200,38 L 225,62 M 225,38 L 200,62" fill="none" stroke="${strokeColor}" stroke-width="1.4" stroke-linecap="round" opacity="0.7"/>
+      `;
+    } else if (style === "executive") {
+      fontFam = "'Segoe Script', 'Great Vibes', 'Caveat', cursive";
+      flourishPath = `
+        <path d="M 24,52 L 120,52 Q 190,44 258,54" fill="none" stroke="${strokeColor}" stroke-width="2.2" stroke-linecap="round" opacity="0.9"/>
+        <circle cx="262" cy="53" r="2.5" fill="${strokeColor}" opacity="0.85"/>
+      `;
+    }
 
     return `
       <svg
@@ -6640,8 +6883,8 @@
       >
         <title>${isEn ? 'Digital Signature: ' + displayName : 'التوقيع الرقمي: ' + displayName}</title>
         <defs>
-          <linearGradient id="sigGradient_${Math.abs(displayName.split('').reduce((a,c)=>a+c.charCodeAt(0),0))}" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stop-color="${strokeColor}" stop-opacity="0.85"/>
+          <linearGradient id="${gradId}" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="${strokeColor}" stop-opacity="0.9"/>
             <stop offset="50%" stop-color="${inkColor}" stop-opacity="1"/>
             <stop offset="100%" stop-color="${strokeColor}" stop-opacity="0.9"/>
           </linearGradient>
@@ -6652,41 +6895,26 @@
         <text
           x="28"
           y="44"
-          font-family="'Dancing Script', 'Brush Script MT', 'Great Vibes', 'Caveat', 'Segoe Script', cursive"
+          font-family="${fontFam}"
           font-size="28"
           font-weight="600"
           font-style="italic"
-          fill="${strokeColor}"
+          fill="url(#${gradId})"
           letter-spacing="0.5"
         >${escapeHtml(displayName)}</text>
-        <!-- Fountain pen flourish stroke -->
-        <path
-          d="M 22,54 Q 75,66 145,52 T 255,56"
-          fill="none"
-          stroke="${strokeColor}"
-          stroke-width="1.8"
-          stroke-linecap="round"
-          opacity="0.8"
-        />
-        <path
-          d="M 190,53 Q 225,40 248,54"
-          fill="none"
-          stroke="${strokeColor}"
-          stroke-width="1.2"
-          stroke-linecap="round"
-          opacity="0.6"
-        />
-        <!-- Micro-hash label -->
+        <!-- Distinctive style ink flourish -->
+        ${flourishPath}
+        <!-- Micro-hash security label -->
         <text
           x="265"
           y="68"
           text-anchor="end"
-          font-family="monospace, 'Courier New'"
+          font-family="monospace, 'Courier New', 'Cairo', sans-serif"
           font-size="7"
           font-weight="700"
-          fill="rgba(100, 116, 139, 0.7)"
+          fill="rgba(100, 116, 139, 0.75)"
           letter-spacing="0.8"
-        >SECURE DIGITAL SIGNATURE • VERIFIED</text>
+        >${isEn ? 'SECURE DIGITAL SIGNATURE • VERIFIED' : 'توقيع رقمي مشفر • معتمد رسمياً'}</text>
       </svg>
     `.trim();
   }
@@ -6701,9 +6929,10 @@
   function renderProfessionalStampHtml(doctorInfo = {}, isEn = false, options = {}) {
     const sealNumber = doctorInfo.sealNumber || doctorInfo.licenseNumber || "HV-SEAL-CERTIFIED";
     const year = doctorInfo.year || new Date().getFullYear();
-    const governance = isEn ? "CLINICAL GOVERNANCE" : "حوكمة سريرية";
-    const status = isEn ? "CERTIFIED REPORT" : "تقرير معتمد";
-    const jurisdiction = isEn ? "OFFICIAL MEDICAL SEAL" : "الختم المهني المعتمد";
+    const governance = doctorInfo.governance || (isEn ? "CLINICAL GOVERNANCE" : "حوكمة سريرية معتمدة");
+    const status = doctorInfo.status || (isEn ? "CERTIFIED REPORT" : "تقرير معتمد رسمياً");
+    const jurisdiction = doctorInfo.jurisdiction || (isEn ? "OFFICIAL MEDICAL SEAL" : "الختم المهني المعتمد");
+    const centerSymbol = options.centerSymbol || "🩺";
 
     return `
       <div
@@ -6713,7 +6942,7 @@
       >
         <div class="stamp-outer-ring">
           <div class="stamp-inner-ring">
-            <span class="stamp-icon">🩺</span>
+            <span class="stamp-icon">${centerSymbol}</span>
             <span class="stamp-governance">${escapeHtml(governance)}</span>
             <strong class="stamp-title">${escapeHtml(jurisdiction)}</strong>
             <span class="stamp-badge">${escapeHtml(status)}</span>
@@ -6729,13 +6958,14 @@
 
   /**
    * Renders the complete, responsive Docus AI digital signature, verified credential badge,
-   * and official circular professional seal station.
+   * and official circular professional seal station for Patient PDF report footer.
    * @param {object} doctorProfile
    * @param {object} caseRecord
    * @param {boolean} isEn
+   * @param {object} options
    * @returns {string} HTML markup
    */
-  function renderDoctorSignatureStampStationHtml(doctorProfile = {}, caseRecord = {}, isEn = false) {
+  function renderDoctorSignatureStampStationHtml(doctorProfile = {}, caseRecord = {}, isEn = false, options = {}) {
     const doc = doctorProfile || {};
     const c = caseRecord || {};
     const isDoctorEn = Boolean(isEn);
@@ -6750,6 +6980,7 @@
     const ruleEngineVersion = c.ruleEngineVersion || "v2.6";
     const sigHash = doc.digitalSignature?.hash || `SIG-SHA256-${(c.id || "REC").slice(-8).toUpperCase()}`;
     const signedAt = doc.digitalSignature?.signedAt || c.approvedAt || c.reportGeneratedAt || new Date().toISOString();
+    const sigStyle = options.style || options.signatureStyle || (typeof window !== "undefined" && window._activeDoctorSignatureStyle) || "calligraphy";
 
     let signedAtFormatted = "";
     try {
@@ -6774,7 +7005,7 @@
       </svg>
     `;
 
-    const sigSvg = generateDigitalSignatureSvg(doctorName, isDoctorEn);
+    const sigSvg = generateDigitalSignatureSvg(doctorName, isDoctorEn, { style: sigStyle });
     const stampHtml = renderProfessionalStampHtml({
       name: doctorName,
       specialty: doctorSpecialty,
@@ -6783,7 +7014,7 @@
     }, isDoctorEn);
 
     return `
-      <div class="doctor-signature-stamp-block" role="region" aria-label="${isDoctorEn ? 'Physician Digital Signature & Professional Stamp (Docus AI)' : 'التوقيع الرقمي والختم المهني المعتمد للطبيب (Docus AI)'}">
+      <div class="doctor-signature-stamp-block" dir="${isDoctorEn ? 'ltr' : 'rtl'}" role="region" aria-label="${isDoctorEn ? 'Physician Digital Signature & Professional Stamp (Docus AI)' : 'التوقيع الرقمي والختم المهني المعتمد للطبيب (Docus AI)'}">
         <!-- VERIFICATION & CREDENTIAL HEADER -->
         <div class="doc-verification-header">
           <div class="doc-verified-badge">
@@ -6842,7 +7073,7 @@
           <!-- DIGITAL SIGNATURE CALLIGRAPHY BOX -->
           <div class="physician-signature-box">
             <div class="sig-header-label">${isDoctorEn ? "Physician Digital Signature" : "التوقيع الرقمي للطبيب"}</div>
-            <div class="sig-svg-wrapper">
+            <div class="sig-svg-wrapper" id="pdfFooterSignatureSvgWrapper">
               ${sigSvg}
             </div>
             <div class="sig-verification-tag">
@@ -6867,6 +7098,318 @@
         </div>
       </div>
     `.trim();
+  }
+
+  /**
+   * Renders the interactive Doctor Signature & Professional Stamp Station for the Doctor Dashboard.
+   * Enables attending physicians to review credentials, pick signature calligraphy style,
+   * examine circular seal, and toggle live preview of the patient PDF footer before issuing.
+   * @param {object} doctorProfile
+   * @param {object} caseRecord
+   * @param {boolean} isEn
+   * @returns {string} HTML markup
+   */
+  function renderDoctorSignatureClinicStationHtml(doctorProfile = {}, caseRecord = {}, isEn = false) {
+    const doc = doctorProfile || {};
+    const c = caseRecord || {};
+    const isDoctorEn = Boolean(isEn);
+
+    const docName = doc.name || c.doctorName || (isDoctorEn ? "Dr. Attending Physician" : "د. الطبيب الاستشاري المعتمد");
+    const docSpec = doc.specialty || c.doctorSpecialty || (isDoctorEn ? "Consultant Specialist" : "استشاري الأمراض الصدرية والسريرية");
+    const docLic = doc.licenseNumber || c.doctorLicense || "EGY-MED-88421";
+    const docClinic = doc.clinic || c.clinicName || (isDoctorEn ? "Health Vibe Respiratory Center" : "مركز هيلث فايب للرعاية التنفسية");
+    const caseId = c.id || "preview";
+    const activeStyle = (typeof window !== "undefined" && window._activeDoctorSignatureStyle) || "calligraphy";
+
+    const currentSigSvg = generateDigitalSignatureSvg(docName, isDoctorEn, { style: activeStyle });
+    const currentStampHtml = renderProfessionalStampHtml({
+      name: docName,
+      specialty: docSpec,
+      sealNumber: docLic,
+      year: new Date().getFullYear()
+    }, isDoctorEn);
+
+    return `
+      <div class="doctor-signature-clinic-station" id="doctorSignatureClinicStation" dir="${isDoctorEn ? 'ltr' : 'rtl'}" role="region" aria-label="${isDoctorEn ? 'Physician Digital Signature & Professional Stamp Station' : 'محطة التوقيع الرقمي والختم المهني للطبيب المعتمد'}">
+        <!-- Station Header -->
+        <div class="clinic-station-header">
+          <div class="station-title-group">
+            <h5 class="station-main-title">
+              <span class="station-icon">🩺</span>
+              ${isDoctorEn ? "Physician Digital Signature & Professional Stamp" : "التوقيع الرقمي والختم المهني للطبيب المعتمد"}
+            </h5>
+            <span class="station-sub-title">
+              ${isDoctorEn ? "Docus AI Medical Standard • Tamper-proof Certified PDF Footer" : "معيار Docus AI السريري • تذييل معتمد رسمي لتقرير الـ PDF الصادر للمريض"}
+            </span>
+          </div>
+          <div class="station-badge-group">
+            <span class="pill ok docus-verified-pill" title="${isDoctorEn ? 'Syndicate Credential Verified' : 'ترخيص القيد النقابي موثق رسمي'}">
+              🛡️ ${isDoctorEn ? "Official Verification Badge" : "شارة التوثيق الرسمية المعتمدة"}
+            </span>
+          </div>
+        </div>
+
+        <!-- Doctor Credentials Input Grid -->
+        <div class="clinic-credentials-grid">
+          <div class="field-item">
+            <label for="doctorNameInput" class="field-label">${isDoctorEn ? "Doctor Name" : "اسم الطبيب المعتمد"}</label>
+            <input type="text" id="doctorNameInput" readonly value="${escapeHtml(docName)}" class="field-input" />
+          </div>
+          <div class="field-item">
+            <label for="doctorSpecialtyInput" class="field-label">${isDoctorEn ? "Specialty" : "التخصص السريري"}</label>
+            <input type="text" id="doctorSpecialtyInput" readonly value="${escapeHtml(docSpec)}" class="field-input" />
+          </div>
+          <div class="field-item">
+            <label for="doctorLicenseInput" class="field-label">${isDoctorEn ? "Syndicate License #" : "رقم القيد والترخيص النقابي"}</label>
+            <input type="text" id="doctorLicenseInput" readonly value="${escapeHtml(docLic)}" class="field-input monospace" />
+          </div>
+          <div class="field-item">
+            <label for="doctorClinicInput" class="field-label">${isDoctorEn ? "Clinic / Facility" : "العيادة / المستشفى"}</label>
+            <input type="text" id="doctorClinicInput" readonly value="${escapeHtml(docClinic)}" class="field-input" />
+          </div>
+        </div>
+
+        <!-- Interactive Signature & Seal Controls -->
+        <div class="clinic-station-workbench">
+          <!-- Signature Style Chooser & Preview -->
+          <div class="workbench-sig-column">
+            <div class="workbench-header-row">
+              <strong class="col-title">
+                ✒️ ${isDoctorEn ? "Physician Signature Style" : "أسلوب التوقيع الرقمي"}
+                <kbd style="font-size: 10px; font-weight: 700; opacity: 0.85; margin-inline-start: 4px; padding: 1px 5px; border-radius: 4px; background: rgba(14, 165, 233, 0.15); border: 1px solid rgba(14, 165, 233, 0.3); color: #38bdf8; font-family: monospace;">Alt+S</kbd>
+              </strong>
+              <div class="sig-style-picker" role="radiogroup" aria-label="${isDoctorEn ? 'Signature Style' : 'نمط التوقيع'}">
+                <button
+                  type="button"
+                  class="sig-style-chip ${activeStyle === 'calligraphy' ? 'is-active' : ''}"
+                  onclick="HealthVibes.DoctorUI.setDoctorSignatureStyle('calligraphy', '${escapeHtml(caseId)}')"
+                  title="${isDoctorEn ? 'Fountain Pen Calligraphy' : 'خط كاليغرافي فاخر'}"
+                >
+                  ✒️ ${isDoctorEn ? "Calligraphy" : "كاليغرافي"}
+                </button>
+                <button
+                  type="button"
+                  class="sig-style-chip ${activeStyle === 'classic' ? 'is-active' : ''}"
+                  onclick="HealthVibes.DoctorUI.setDoctorSignatureStyle('classic', '${escapeHtml(caseId)}')"
+                  title="${isDoctorEn ? 'Classic Medical Script' : 'خط سريري كلاسيكي'}"
+                >
+                  🖋️ ${isDoctorEn ? "Classic" : "كلاسيكي"}
+                </button>
+                <button
+                  type="button"
+                  class="sig-style-chip ${activeStyle === 'executive' ? 'is-active' : ''}"
+                  onclick="HealthVibes.DoctorUI.setDoctorSignatureStyle('executive', '${escapeHtml(caseId)}')"
+                  title="${isDoctorEn ? 'Executive Sign-off' : 'توقيع تنفيذي'}"
+                >
+                  ✍️ ${isDoctorEn ? "Executive" : "تنفيذي"}
+                </button>
+              </div>
+            </div>
+
+            <!-- Signature Live Box -->
+            <div class="clinic-sig-preview-box" id="clinicDoctorSigPreviewBox">
+              ${currentSigSvg}
+            </div>
+            <div class="clinic-sig-meta-row">
+              <span class="sig-status-text">🔒 ${isDoctorEn ? "Tamper-proof Cryptographic Ink Stroke" : "توقيع مشفر معتمد ضد التزوير ومحمي رقمياً"}</span>
+              <button
+                type="button"
+                class="soft-button mini-refresh-btn"
+                onclick="HealthVibes.DoctorUI.setDoctorSignatureStyle('${activeStyle}', '${escapeHtml(caseId)}')"
+                title="${isDoctorEn ? 'Refresh Signature Ink' : 'تحديث مسار الحبر'}"
+              >
+                🔄 ${isDoctorEn ? "Refresh" : "إعادة توليد"}
+              </button>
+            </div>
+          </div>
+
+          <!-- Official Circular Stamp Preview -->
+          <div class="workbench-stamp-column">
+            <strong class="col-title">🩺 ${isDoctorEn ? "Official Professional Stamp" : "الختم المهني السريري الرسمي"}</strong>
+            <div class="clinic-stamp-preview-container">
+              ${currentStampHtml}
+            </div>
+            <span class="stamp-meta-text">
+              🏛️ ${isDoctorEn ? "Jurisdiction: Ministry of Health & Medical Syndicate" : "اعتماد رسمي: نقابة الأطباء والحوكمة السريرية"}
+            </span>
+          </div>
+        </div>
+
+        <!-- Live Patient PDF Footer Preview Accordion -->
+        <div class="clinic-preview-toggle-bar">
+          <button
+            type="button"
+            class="outline-button preview-footer-btn"
+            id="btnTogglePatientPdfFooterPreview"
+            onclick="HealthVibes.DoctorUI.togglePatientPdfFooterPreview('${escapeHtml(caseId)}')"
+            aria-expanded="false"
+          >
+            <span>👁️</span>
+            <span id="labelTogglePatientPdfFooterPreview">
+              ${isDoctorEn ? "Live Preview: Patient PDF Report Footer" : "معاينة حية: تذييل تقرير الـ PDF الصادر للمريض"}
+            </span>
+            <kbd style="font-size: 10px; font-weight: 700; opacity: 0.85; margin-inline-start: 6px; padding: 1px 5px; border-radius: 4px; background: rgba(0,0,0,0.1); border: 1px solid var(--line); font-family: monospace;">Alt+V</kbd>
+          </button>
+        </div>
+
+        <!-- Expandable 1:1 PDF Footer Container -->
+        <div class="clinic-pdf-footer-live-preview" id="clinicPdfFooterLivePreview" style="display: none;">
+          <div class="preview-info-banner">
+            <small>
+              ℹ️ ${isDoctorEn 
+                ? "This 1:1 responsive preview demonstrates how doctor name, specialty, verification badge, digital signature, and professional stamp appear in the patient report and printed PDF."
+                : "هذه معاينة مطابقة 1:1 توضح كيف يظهر اسم الطبيب المعتمد، تخصصه، شارة التوثيق، التوقيع الرقمي والختم المهني في تذييل التقرير الصادر للمريض وملف الـ PDF."}
+            </small>
+          </div>
+          <div id="clinicPdfFooterLiveContent">
+            ${renderDoctorSignatureStampStationHtml(doc, c, isDoctorEn, { style: activeStyle })}
+          </div>
+        </div>
+      </div>
+    `.trim();
+  }
+
+  let activeDoctorSignatureStyle = "calligraphy";
+
+  /**
+   * Retrieves current active signature style selected by attending physician.
+   * @returns {'calligraphy'|'classic'|'executive'}
+   */
+  function getDoctorSignatureStyle() {
+    if (typeof window !== "undefined" && window._activeDoctorSignatureStyle) {
+      return window._activeDoctorSignatureStyle;
+    }
+    return activeDoctorSignatureStyle || "calligraphy";
+  }
+
+  /**
+   * Switches the active signature style in the clinic workbench.
+   * @param {'calligraphy'|'classic'|'executive'} style
+   * @param {string} caseId
+   */
+  function setDoctorSignatureStyle(style = "calligraphy", caseId = "") {
+    activeDoctorSignatureStyle = style;
+    if (typeof window !== "undefined") {
+      window._activeDoctorSignatureStyle = style;
+    }
+
+    if (typeof document === "undefined") return;
+
+    const docNameInput = document.getElementById("doctorNameInput");
+    const docName = docNameInput ? docNameInput.value : "Attending Physician";
+    const isEn = (global.currentLanguage === "en");
+
+    // Update clinic workbench signature SVG
+    const previewBox = document.getElementById("clinicDoctorSigPreviewBox");
+    if (previewBox) {
+      previewBox.innerHTML = generateDigitalSignatureSvg(docName, isEn, { style });
+    }
+
+    // Update chip active classes
+    const container = document.getElementById("doctorSignatureClinicStation");
+    if (container) {
+      const chips = container.querySelectorAll(".sig-style-chip");
+      chips.forEach(chip => {
+        const text = chip.textContent.toLowerCase();
+        if ((style === "calligraphy" && (text.includes("calligraphy") || text.includes("كاليغرافي"))) ||
+            (style === "classic" && (text.includes("classic") || text.includes("كلاسيكي"))) ||
+            (style === "executive" && (text.includes("executive") || text.includes("تنفيذي")))) {
+          chip.classList.add("is-active");
+        } else {
+          chip.classList.remove("is-active");
+        }
+      });
+    }
+
+    // Also update expanded live preview if open
+    const liveContent = document.getElementById("clinicPdfFooterLiveContent");
+    if (liveContent && typeof selectDoctorCase === "function") {
+      const docSpecInput = document.getElementById("doctorSpecialtyInput");
+      const docLicInput = document.getElementById("doctorLicenseInput");
+      const docClinicInput = document.getElementById("doctorClinicInput");
+      liveContent.innerHTML = renderDoctorSignatureStampStationHtml({
+        name: docName,
+        specialty: docSpecInput ? docSpecInput.value : "",
+        licenseNumber: docLicInput ? docLicInput.value : "",
+        clinic: docClinicInput ? docClinicInput.value : ""
+      }, { id: caseId }, isEn, { style });
+    }
+
+    // Also update report screen signature if present in DOM
+    const pdfSigBox = document.getElementById("pdfFooterSignatureSvgWrapper");
+    if (pdfSigBox) {
+      pdfSigBox.innerHTML = generateDigitalSignatureSvg(docName, isEn, { style });
+    }
+  }
+
+  const SIGNATURE_STYLES = ['calligraphy', 'classic', 'executive'];
+
+  /**
+   * Rapidly cycles through available signature calligraphy styles via keyboard shortcut.
+   * @param {string} caseId
+   * @returns {string} newly selected style
+   */
+  function cycleDoctorSignatureStyle(caseId = "") {
+    const current = getDoctorSignatureStyle();
+    const idx = SIGNATURE_STYLES.indexOf(current);
+    const nextStyle = SIGNATURE_STYLES[(idx + 1) % SIGNATURE_STYLES.length];
+    setDoctorSignatureStyle(nextStyle, caseId);
+    if (typeof global.showToast === "function") {
+      const isEn = (global.currentLanguage === "en");
+      const names = {
+        calligraphy: isEn ? "Calligraphy ✒️" : "كاليغرافي ✒️",
+        classic: isEn ? "Classic 🖋️" : "كلاسيكي 🖋️",
+        executive: isEn ? "Executive ✍️" : "تنفيذي ✍️"
+      };
+      global.showToast(isEn ? `Signature style: ${names[nextStyle]}` : `تم اختيار نمط التوقيع: ${names[nextStyle]}`);
+    }
+    return nextStyle;
+  }
+
+  /**
+   * Toggles the live 1:1 preview of the Patient PDF report footer in doctor dashboard.
+   * @param {string} caseId
+   */
+  function togglePatientPdfFooterPreview(caseId = "") {
+    const previewEl = document.getElementById("clinicPdfFooterLivePreview");
+    const btn = document.getElementById("btnTogglePatientPdfFooterPreview");
+    const label = document.getElementById("labelTogglePatientPdfFooterPreview");
+    if (!previewEl || !btn) return;
+
+    const isEn = (global.currentLanguage === "en");
+    const isCurrentlyHidden = previewEl.style.display === "none";
+
+    if (isCurrentlyHidden) {
+      previewEl.style.display = "block";
+      btn.setAttribute("aria-expanded", "true");
+      btn.classList.add("is-expanded");
+      if (label) {
+        label.textContent = isEn ? "Hide Patient PDF Report Footer Preview" : "إخفاء معاينة تذييل تقرير الـ PDF";
+      }
+
+      // Refresh content
+      const liveContent = document.getElementById("clinicPdfFooterLiveContent");
+      if (liveContent) {
+        const docNameInput = document.getElementById("doctorNameInput");
+        const docSpecInput = document.getElementById("doctorSpecialtyInput");
+        const docLicInput = document.getElementById("doctorLicenseInput");
+        const docClinicInput = document.getElementById("doctorClinicInput");
+        const style = window._activeDoctorSignatureStyle || "calligraphy";
+        liveContent.innerHTML = renderDoctorSignatureStampStationHtml({
+          name: docNameInput ? docNameInput.value : "",
+          specialty: docSpecInput ? docSpecInput.value : "",
+          licenseNumber: docLicInput ? docLicInput.value : "",
+          clinic: docClinicInput ? docClinicInput.value : ""
+        }, { id: caseId }, isEn, { style });
+      }
+    } else {
+      previewEl.style.display = "none";
+      btn.setAttribute("aria-expanded", "false");
+      btn.classList.remove("is-expanded");
+      if (label) {
+        label.textContent = isEn ? "Live Preview: Patient PDF Report Footer" : "معاينة حية: تذييل تقرير الـ PDF الصادر للمريض";
+      }
+    }
   }
 
   // ===========================================================================
@@ -6980,12 +7523,18 @@
     applyPatientRecommendationChip,
     getPatientRecommendationChipsHtml,
     setPatientRecommendationChipsLang,
+    setDiagnosticPresetsLang,
+    getDiagnosticPresetsLang,
     // Doctor Private Notes (Clinical Quarantine)
     getCasePrivateNotes,
     isPrivateNotesIncludedInReport,
     setCasePrivateNotes,
     handlePrivateNotesShareToggle,
     handlePrivateNotesInput,
+    appendPrivateNotesTag,
+    setPrivateNotesTagsLang,
+    getPrivateNotesTagsLang,
+    renderPrivateNotesTagChips,
     renderPrivateNotesStationHtml,
     // Recommend Follow-up Window & Calendar Booking (Doctolib Pattern)
     FOLLOW_UP_WINDOWS,
@@ -7009,7 +7558,12 @@
     // Doctor Digital Signature & Professional Stamp (Docus AI Benchmark)
     generateDigitalSignatureSvg,
     renderProfessionalStampHtml,
-    renderDoctorSignatureStampStationHtml
+    renderDoctorSignatureStampStationHtml,
+    renderDoctorSignatureClinicStationHtml,
+    getDoctorSignatureStyle,
+    setDoctorSignatureStyle,
+    cycleDoctorSignatureStyle,
+    togglePatientPdfFooterPreview
   };
 
   global.HealthVibes = global.HealthVibes || {};

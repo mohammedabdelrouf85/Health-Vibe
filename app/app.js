@@ -3210,8 +3210,14 @@ function isCaseApprovedForPatient(c) {
 }
 
 function maskUnapprovedPatientCase(c) {
-  if (!c || isCaseApprovedForPatient(c)) return c;
+  if (!c) return c;
   const masked = { ...c };
+  if (!masked.includePrivateNotesInReport) {
+    masked.privateDoctorNotes = null;
+    masked.privateNotes = null;
+    masked.doctorPrivateNotes = null;
+  }
+  if (isCaseApprovedForPatient(c)) return masked;
   [
     "result",
     "risk",
@@ -3518,7 +3524,8 @@ async function updateCaseStatus(id, newStatus, note, extraFields = {}) {
         clinicName: extraFields.clinicName || "",
         reportRef: extraFields.reportRef || "",
         reviewedRevision: extraFields.reviewedRevision !== undefined ? extraFields.reviewedRevision : null,
-        expectedRevision: extraFields.expectedRevision !== undefined ? extraFields.expectedRevision : null
+        expectedRevision: extraFields.expectedRevision !== undefined ? extraFields.expectedRevision : null,
+        signatureStyle: extraFields.signatureStyle || (window.HealthVibes?.DoctorUI?.getDoctorSignatureStyle ? window.HealthVibes.DoctorUI.getDoctorSignatureStyle() : (window._activeDoctorSignatureStyle || "calligraphy"))
       })
     });
     if (!res || res.success !== true || res.saved !== true) {
@@ -3802,8 +3809,9 @@ window.setDoctorQueueSearch = function(value) {
   renderDoctorQueueItems(state.doctorQueue || []);
 };
 
-window.applyDiagPreset = function(presetKey) {
-  const isEn = currentLanguage === "en";
+window.applyDiagPreset = function(presetKey, explicitLang = null) {
+  const targetLang = explicitLang || window._diagnosticPresetsLang || currentLanguage;
+  const isEn = (targetLang === "en");
   const diagInput = document.getElementById("doctorDiagnosisInput");
   const medInput = document.getElementById("doctorMedicationsInput");
   const recInput = document.getElementById("doctorRecommendationsInput");
@@ -3894,7 +3902,13 @@ window.previewCaseReport = async function(id) {
     reportGeneratedAt: new Date().toISOString(),
     approvedAt: new Date().toISOString(),
     isDoctorPreview: true,
-    doctorApproved: true
+    doctorApproved: true,
+    signatureStyle: (window.HealthVibes?.DoctorUI?.getDoctorSignatureStyle
+      ? window.HealthVibes.DoctorUI.getDoctorSignatureStyle()
+      : (window._activeDoctorSignatureStyle || "calligraphy")),
+    privateDoctorNotes: (window.HealthVibes?.DoctorUI?.getCasePrivateNotes ? window.HealthVibes.DoctorUI.getCasePrivateNotes(id).privateNotes : ""),
+    privateNotes: (window.HealthVibes?.DoctorUI?.getCasePrivateNotes ? window.HealthVibes.DoctorUI.getCasePrivateNotes(id).privateNotes : ""),
+    includePrivateNotesInReport: Boolean(window.HealthVibes?.DoctorUI?.getCasePrivateNotes ? window.HealthVibes.DoctorUI.getCasePrivateNotes(id).includePrivateNotesInReport : false)
   };
 
   showScreen("report");
@@ -3936,6 +3950,14 @@ window.generateAndApproveReport = async function(id) {
     ? window.HealthVibes.DoctorUI.getCaseRevisionNumber(targetCase)
     : (targetCase ? (targetCase.clinicalRevision || 1) : 1);
 
+  const activeSigStyle = window.HealthVibes?.DoctorUI?.getDoctorSignatureStyle
+    ? window.HealthVibes.DoctorUI.getDoctorSignatureStyle()
+    : (window._activeDoctorSignatureStyle || "calligraphy");
+
+  const privateNotesData = window.HealthVibes?.DoctorUI?.getCasePrivateNotes
+    ? window.HealthVibes.DoctorUI.getCasePrivateNotes(id)
+    : { privateNotes: "", includePrivateNotesInReport: false };
+
   const payload = {
     clinicalDiagnosis,
     clinicalNotes: clinicalDiagnosis,
@@ -3949,7 +3971,11 @@ window.generateAndApproveReport = async function(id) {
     reportRef,
     reportGeneratedAt: new Date().toISOString(),
     reviewedRevision: currentCaseRevision,
-    expectedRevision: currentCaseRevision
+    expectedRevision: currentCaseRevision,
+    signatureStyle: activeSigStyle,
+    privateDoctorNotes: privateNotesData.privateNotes || "",
+    privateNotes: privateNotesData.privateNotes || "",
+    includePrivateNotesInReport: Boolean(privateNotesData.includePrivateNotesInReport)
   };
 
   const success = await updateCaseStatus(id, CASE_STATUS.APPROVED, clinicalDiagnosis, payload);
@@ -5008,9 +5034,19 @@ async function selectDoctorCase(id) {
 
         <!-- Quick Diagnostic Presets -->
         <div style="margin-bottom: 12px;">
-          <label style="font-size: 12px; font-weight: 700; color: var(--muted); display: block; margin-bottom: 6px;">
-            ${isEn ? 'Manual diagnosis shortcuts:' : 'اختصارات إدخال التشخيص اليدوي:'}
-          </label>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 6px;">
+            <label style="font-size: 12px; font-weight: 700; color: var(--muted); margin: 0;">
+              ${isEn ? 'Manual diagnosis shortcuts:' : 'اختصارات إدخال التشخيص اليدوي:'}
+            </label>
+            <div class="preset-lang-toggle" role="group" aria-label="${isEn ? 'Preset Language' : 'لغة القوالب السريرية'}">
+              <button type="button" class="btn-chips-lang ${isEn ? 'is-active' : ''}" id="btnPresetLangEn" onclick="HealthVibes.DoctorUI.setDiagnosticPresetsLang('en')" style="font-size: 10px; padding: 2px 7px;">
+                EN
+              </button>
+              <button type="button" class="btn-chips-lang ${!isEn ? 'is-active' : ''}" id="btnPresetLangAr" onclick="HealthVibes.DoctorUI.setDiagnosticPresetsLang('ar')" style="font-size: 10px; padding: 2px 7px;">
+                عربي
+              </button>
+            </div>
+          </div>
           <div style="display: flex; gap: 6px; flex-wrap: wrap;">
             <button type="button" class="soft-button" style="font-size: 11.5px; padding: 4px 10px;" onclick="applyDiagPreset('asthma')">🫁 ${isEn ? 'Asthma Flare' : 'حساسية صدرية وربو'}</button>
             <button type="button" class="soft-button" style="font-size: 11.5px; padding: 4px 10px;" onclick="applyDiagPreset('bronchitis')">🌡️ ${isEn ? 'Acute Bronchitis' : 'التهاب شعبي حاد'}</button>
@@ -5057,6 +5093,13 @@ async function selectDoctorCase(id) {
           <textarea id="doctorRecommendationsInput" dir="auto" ${isClosed ? 'disabled' : ''} placeholder="${isEn ? 'Add one recommendation per line in English or Arabic (e.g. Maintain hydration, review in clinic if SpO2 < 93%)...' : 'أضف كل توصية في سطر منفصل بالعربية أو الإنجليزية (مثل: الراحة التامة، متابعة نسبة الأكسجين)...'}" style="width: 100%; min-height: 85px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 10px; font-family: inherit; font-size: 13px;">${escapeHtml(existingRecommendations)}</textarea>
         </div>
 
+        <!-- DOCTOR PRIVATE NOTES (CONFIDENTIAL CLINICAL QUARANTINE) -->
+        <div style="margin-bottom: 14px;">
+          ${(window.HealthVibes?.DoctorUI?.renderPrivateNotesStationHtml)
+            ? window.HealthVibes.DoctorUI.renderPrivateNotesStationHtml(c, isEn)
+            : ''}
+        </div>
+
         <!-- 4. DIAGNOSTIC INVESTIGATIONS & RADIOLOGY (VEZEETA PATTERN) -->
         <div style="margin-bottom: 14px;">
           ${(window.HealthVibes?.DoctorUI?.renderOrderInvestigationsStationHtml)
@@ -5071,29 +5114,41 @@ async function selectDoctorCase(id) {
             : ''}
         </div>
 
-        <!-- Doctor Identity & Credentials Box -->
-        <div style="background: rgba(var(--teal-rgb, 14, 165, 233), 0.05); border: 1px dashed var(--line); border-radius: 10px; padding: 12px;">
-          <span style="font-size: 12px; font-weight: 800; color: var(--teal); display: block; margin-bottom: 8px;">
-            🪪 ${isEn ? 'Doctor Credentials & Seal (Printed on report):' : 'بيانات الطبيب المعتمد والختم الرسمي (تظهر بالتقرير):'}
-          </span>
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px;">
-            <div>
-              <label style="font-size: 11px; color: var(--muted);">${isEn ? 'Doctor Name' : 'اسم الطبيب'}</label>
-              <input type="text" id="doctorNameInput" readonly value="${escapeHtml(currentDocName)}" style="width: 100%; padding: 6px 10px; font-size: 12.5px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);" />
-            </div>
-            <div>
-              <label style="font-size: 11px; color: var(--muted);">${isEn ? 'Specialty' : 'التخصص'}</label>
-              <input type="text" id="doctorSpecialtyInput" readonly value="${escapeHtml(currentDocSpec)}" style="width: 100%; padding: 6px 10px; font-size: 12.5px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);" />
-            </div>
-            <div>
-              <label style="font-size: 11px; color: var(--muted);">${isEn ? 'Syndicate License #' : 'ترخيص النقابة'}</label>
-              <input type="text" id="doctorLicenseInput" readonly value="${escapeHtml(currentDocLic)}" style="width: 100%; padding: 6px 10px; font-size: 12.5px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);" />
-            </div>
-            <div>
-              <label style="font-size: 11px; color: var(--muted);">${isEn ? 'Clinic / Hospital' : 'العيادة / المستشفى'}</label>
-              <input type="text" id="doctorClinicInput" readonly value="${escapeHtml(currentDocClinic)}" style="width: 100%; padding: 6px 10px; font-size: 12.5px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);" />
-            </div>
-          </div>
+        <!-- 6. DOCTOR DIGITAL SIGNATURE & PROFESSIONAL STAMP STATION (DOCUS AI BENCHMARK) -->
+        <div style="margin-top: 14px;">
+          ${(window.HealthVibes?.DoctorUI?.renderDoctorSignatureClinicStationHtml)
+            ? window.HealthVibes.DoctorUI.renderDoctorSignatureClinicStationHtml({
+                name: currentDocName,
+                specialty: currentDocSpec,
+                licenseNumber: currentDocLic,
+                clinic: currentDocClinic,
+                isVerified: true
+              }, c, isEn)
+            : `
+              <div style="background: rgba(var(--teal-rgb, 14, 165, 233), 0.05); border: 1px dashed var(--line); border-radius: 10px; padding: 12px;">
+                <span style="font-size: 12px; font-weight: 800; color: var(--teal); display: block; margin-bottom: 8px;">
+                  🪪 ${isEn ? 'Doctor Credentials & Seal (Printed on report):' : 'بيانات الطبيب المعتمد والختم الرسمي (تظهر بالتقرير):'}
+                </span>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px;">
+                  <div>
+                    <label style="font-size: 11px; color: var(--muted);">${isEn ? 'Doctor Name' : 'اسم الطبيب'}</label>
+                    <input type="text" id="doctorNameInput" readonly value="${escapeHtml(currentDocName)}" style="width: 100%; padding: 6px 10px; font-size: 12.5px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);" />
+                  </div>
+                  <div>
+                    <label style="font-size: 11px; color: var(--muted);">${isEn ? 'Specialty' : 'التخصص'}</label>
+                    <input type="text" id="doctorSpecialtyInput" readonly value="${escapeHtml(currentDocSpec)}" style="width: 100%; padding: 6px 10px; font-size: 12.5px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);" />
+                  </div>
+                  <div>
+                    <label style="font-size: 11px; color: var(--muted);">${isEn ? 'Syndicate License #' : 'ترخيص النقابة'}</label>
+                    <input type="text" id="doctorLicenseInput" readonly value="${escapeHtml(currentDocLic)}" style="width: 100%; padding: 6px 10px; font-size: 12.5px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);" />
+                  </div>
+                  <div>
+                    <label style="font-size: 11px; color: var(--muted);">${isEn ? 'Clinic / Hospital' : 'العيادة / المستشفى'}</label>
+                    <input type="text" id="doctorClinicInput" readonly value="${escapeHtml(currentDocClinic)}" style="width: 100%; padding: 6px 10px; font-size: 12.5px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);" />
+                  </div>
+                </div>
+              </div>
+            `}
         </div>
       </div>
     </section>
@@ -8037,9 +8092,13 @@ async function renderReportScreen(targetCaseId = null) {
         const docSnap = await db.collection("cases").doc(caseId).get();
         if (docSnap.exists) {
           const d = docSnap.data();
-          if (d.patientId === user.uid || normalizeRole(selectedRole) === ROLES.DOCTOR || isAdminRole(selectedRole) || isSupportRole(selectedRole)) {
+          const isPatientOwner = (d.patientId === user.uid);
+          const isAssignedOrApprovingDoctor = (normalizeRole(selectedRole) === ROLES.DOCTOR && (isCaseAssignedToCurrentDoctor(d) || d.approvingDoctorId === user.uid));
+          const isAdminOrOwner = isAdminRole(selectedRole) || isOwnerUser(user?.email);
+
+          if (isPatientOwner || isAssignedOrApprovingDoctor || isAdminOrOwner) {
             caseData = { id: docSnap.id, ...d };
-            if (d.patientId === user.uid && normalizeRole(selectedRole) === ROLES.PATIENT) {
+            if (isPatientOwner && normalizeRole(selectedRole) === ROLES.PATIENT) {
               caseData = maskUnapprovedPatientCase(caseData);
             }
             if (typeof auditRecordViewed === "function" && caseId) {
@@ -8722,6 +8781,21 @@ async function renderReportScreen(targetCaseId = null) {
           </ul>
         </div>
 
+        <!-- INCLUDED DOCTOR CLINICAL OBSERVATIONS (IF EXPLICITLY INCLUDED BY PHYSICIAN) -->
+        ${(caseData.includePrivateNotesInReport && (caseData.privateDoctorNotes || caseData.privateNotes)) ? `
+          <div class="report-private-notes-section" style="background: rgba(14, 165, 233, 0.05); border: 1.5px solid rgba(14, 165, 233, 0.35); border-radius: 14px; padding: 18px; margin-bottom: 22px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+              <h3 style="margin: 0; font-size: 15.5px; color: var(--teal); display: flex; align-items: center; gap: 8px;">
+                <span>📝</span> ${isEn ? "Physician's Additional Clinical Observations" : "ملاحظات وتوجيهات سريرية إضافية مصرح بها من الطبيب"}
+              </h3>
+              <span class="pill ok" style="font-size: 11px;">${isEn ? "Disclosed by Doctor" : "مصرح به من الطبيب"}</span>
+            </div>
+            <p dir="auto" style="margin: 0; font-size: 13.5px; line-height: 1.7; color: var(--ink); white-space: pre-line; unicode-bidi: plaintext; text-align: start;">
+              ${escapeHtml(caseData.privateDoctorNotes || caseData.privateNotes)}
+            </p>
+          </div>
+        ` : ''}
+
         <!-- DIAGNOSTIC INVESTIGATIONS & RADIOLOGY REQUISITION (VEZEETA PATTERN) -->
         ${(() => {
           const orderedList = Array.isArray(caseData.investigations) && caseData.investigations.length > 0
@@ -8929,38 +9003,65 @@ async function renderReportScreen(targetCaseId = null) {
           `;
         })()}
 
-        <!-- DIGITAL SEAL & CRYPTOGRAPHIC VERIFICATION BLOCK -->
-        <div class="report-signature-block" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 18px; padding: 18px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px; margin-bottom: 20px;">
-          <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
-            <!-- QR CODE BOX -->
-            <div class="qr-verify-box" style="text-align: center;">
-              <a href="./index.html?screen=verify-report&ref=${encodeURIComponent(reportRef)}" target="_blank" rel="noopener" title="${isEn ? 'Verify Report Authenticity' : 'التحقق من صحة التقرير والاعتماد الرسمي'}" style="text-decoration: none; color: inherit; display: inline-block;">
-                ${qrSvg}
-                <small style="display: block; font-size: 9.5px; color: var(--teal); margin-top: 4px; font-family: monospace; font-weight: 700;">SCAN TO VERIFY</small>
-              </a>
-            </div>
-
-            <div>
-              <div style="font-size: 12.5px; color: var(--muted);">${isEn ? "Electronically Certified & Signed by:" : "تم الاعتماد والتوقيع الإلكتروني السريري بواسطة:"}</div>
-              <strong style="font-size: 16px; color: var(--ink); display: block; margin-top: 2px;">${doctorName}</strong>
-              <span style="font-size: 12px; color: var(--teal); font-weight: 600;">${doctorSpecialty} • ${doctorLicense}</span>
-              <div style="font-size: 11px; color: var(--muted); margin-top: 6px; font-family: monospace;">
-                Digital Hash: SHA256-${caseData.id.slice(0, 14).toUpperCase()}
+        <!-- DOCTOR DIGITAL SIGNATURE, PROFESSIONAL STAMP & VERIFICATION BADGE (DOCUS AI STANDARD) -->
+        ${(window.HealthVibes?.DoctorUI?.renderDoctorSignatureStampStationHtml)
+          ? window.HealthVibes.DoctorUI.renderDoctorSignatureStampStationHtml({
+              name: caseData.reportSnapshot?.doctorIdentity?.name || doctorName,
+              specialty: caseData.reportSnapshot?.doctorIdentity?.specialty || doctorSpecialty,
+              licenseNumber: caseData.reportSnapshot?.doctorIdentity?.licenseNumber || doctorLicense,
+              clinic: caseData.reportSnapshot?.doctorIdentity?.clinic || clinicName || (isEn ? "Health Vibe Medical Center" : "مركز هيلث فايب الطبي"),
+              isVerified: (caseData.isDoctorVerified !== undefined) ? caseData.isDoctorVerified : true,
+              verificationBadge: caseData.reportSnapshot?.doctorIdentity?.verificationBadge || caseData.doctorVerificationBadge || (isEn ? "Certified & Verified Physician" : "طبيب معتمد وموثق رسمي"),
+              digitalSignature: caseData.reportSnapshot?.doctorIdentity?.digitalSignature || caseData.digitalSignature || {
+                hash: caseData.signatureHash || `SIG-SHA256-${caseData.id.slice(0, 14).toUpperCase()}`,
+                signedAt: caseData.approvedAt || caseData.reportGeneratedAt || new Date().toISOString(),
+                style: caseData.reportSnapshot?.signature?.signatureStyle || caseData.signatureStyle || (window._activeDoctorSignatureStyle || "calligraphy")
+              },
+              professionalStamp: caseData.reportSnapshot?.doctorIdentity?.professionalStamp || caseData.professionalStamp || {
+                sealNumber: `HV-SEAL-${caseData.id.slice(-6).toUpperCase()}`,
+                governance: isEn ? "HEALTH VIBE AI • CLINICAL GOVERNANCE" : "هيلث فايب • حوكمة سريرية معتمدة",
+                jurisdiction: isEn ? "OFFICIAL MEDICAL SEAL" : "الختم المهني الرسمي المعتمد",
+                year: new Date(caseData.approvedAt || Date.now()).getFullYear()
+              }
+            }, {
+              ...caseData,
+              reportRef,
+              reportVersion,
+              reportRevisionLabel,
+              ruleEngineVersion,
+              qrSvg
+            }, isEn, {
+              style: caseData.reportSnapshot?.signature?.signatureStyle || caseData.signatureStyle || (window._activeDoctorSignatureStyle || "calligraphy")
+            })
+          : `
+            <div class="report-signature-block" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 18px; padding: 18px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px; margin-bottom: 20px;">
+              <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
+                <div class="qr-verify-box" style="text-align: center;">
+                  <a href="./index.html?screen=verify-report&ref=${encodeURIComponent(reportRef)}" target="_blank" rel="noopener" title="${isEn ? 'Verify Report Authenticity' : 'التحقق من صحة التقرير والاعتماد الرسمي'}" style="text-decoration: none; color: inherit; display: inline-block;">
+                    ${qrSvg}
+                    <small style="display: block; font-size: 9.5px; color: var(--teal); margin-top: 4px; font-family: monospace; font-weight: 700;">SCAN TO VERIFY</small>
+                  </a>
+                </div>
+                <div>
+                  <div style="font-size: 12.5px; color: var(--muted);">${isEn ? "Electronically Certified & Signed by:" : "تم الاعتماد والتوقيع الإلكتروني السريري بواسطة:"}</div>
+                  <strong style="font-size: 16px; color: var(--ink); display: block; margin-top: 2px;">${doctorName}</strong>
+                  <span style="font-size: 12px; color: var(--teal); font-weight: 600;">${doctorSpecialty} • ${doctorLicense}</span>
+                  <div style="font-size: 11px; color: var(--muted); margin-top: 6px; font-family: monospace;">
+                    Digital Hash: SHA256-${caseData.id.slice(0, 14).toUpperCase()}
+                  </div>
+                  <div style="font-size: 11px; color: var(--muted); font-family: monospace;">
+                    Audit Ref: ${reportRef} | Ver: ${reportVersion} | Revision: ${reportRevisionLabel} | Rules: ${ruleEngineVersion}
+                  </div>
+                </div>
               </div>
-              <div style="font-size: 11px; color: var(--muted); font-family: monospace;">
-                Audit Ref: ${reportRef} | Ver: ${reportVersion} | Revision: ${reportRevisionLabel} | Rules: ${ruleEngineVersion}
+              <div class="official-clinical-seal" style="text-align: center; border: 2.5px dashed #16a34a; border-radius: 50%; width: 105px; height: 105px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 6px; background: rgba(22, 163, 74, 0.05); transform: rotate(-5deg); box-shadow: 0 4px 12px rgba(22, 163, 74, 0.08);">
+                <span style="font-size: 22px;">🩺</span>
+                <strong style="font-size: 9px; color: #16a34a; text-transform: uppercase; letter-spacing: 0.6px; line-height: 1.1;">Health Vibe AI</strong>
+                <span style="font-size: 8px; color: #15803d; font-weight: 800; margin-top: 2px;">CERTIFIED REPORT</span>
+                <span style="font-size: 7px; color: var(--muted);">${new Date().getFullYear()} OFFICIAL</span>
               </div>
             </div>
-          </div>
-
-          <!-- OFFICIAL CLINICAL SEAL -->
-          <div class="official-clinical-seal" style="text-align: center; border: 2.5px dashed #16a34a; border-radius: 50%; width: 105px; height: 105px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 6px; background: rgba(22, 163, 74, 0.05); transform: rotate(-5deg); box-shadow: 0 4px 12px rgba(22, 163, 74, 0.08);">
-            <span style="font-size: 22px;">🩺</span>
-            <strong style="font-size: 9px; color: #16a34a; text-transform: uppercase; letter-spacing: 0.6px; line-height: 1.1;">Health Vibe AI</strong>
-            <span style="font-size: 8px; color: #15803d; font-weight: 800; margin-top: 2px;">CERTIFIED REPORT</span>
-            <span style="font-size: 7px; color: var(--muted);">${new Date().getFullYear()} OFFICIAL</span>
-          </div>
-        </div>
+          `}
 
         ${isWithdrawnReport ? `
           <div class="safety-note" style="font-size: 12px; line-height: 1.5; margin-bottom: 20px; padding: 12px 16px; background: rgba(239, 68, 68, 0.08); border-left: 4px solid #ef4444; border-radius: 8px;">
