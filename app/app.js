@@ -3904,6 +3904,129 @@ window.resetDoctorQueueFilters = function() {
   }
 };
 
+// ===========================================================================
+// ROLOGY REVIEWED CASES HISTORY & ARCHIVE CONTROLLERS
+// ===========================================================================
+
+let currentDoctorWorkspaceMode = 'worklist'; // 'worklist' | 'history'
+let currentDoctorArchiveSearch = '';
+let currentDoctorArchiveDateFilter = 'all';
+let currentDoctorArchivePriorityFilter = 'all';
+let currentDoctorArchiveSort = 'date_desc';
+
+window.setDoctorWorkspaceMode = function(mode) {
+  currentDoctorWorkspaceMode = mode === 'history' ? 'history' : 'worklist';
+  const worklistTab = document.getElementById("tabDoctorWorklist");
+  const historyTab = document.getElementById("tabDoctorReviewedHistory");
+  const worklistLayout = document.getElementById("doctorWorkspaceLayout");
+  const historySection = document.getElementById("doctorReviewedHistorySection");
+
+  if (worklistTab) {
+    worklistTab.classList.toggle("is-active", currentDoctorWorkspaceMode === 'worklist');
+    worklistTab.setAttribute("aria-selected", currentDoctorWorkspaceMode === 'worklist' ? "true" : "false");
+  }
+  if (historyTab) {
+    historyTab.classList.toggle("is-active", currentDoctorWorkspaceMode === 'history');
+    historyTab.setAttribute("aria-selected", currentDoctorWorkspaceMode === 'history' ? "true" : "false");
+  }
+
+  if (currentDoctorWorkspaceMode === 'history') {
+    if (worklistLayout) worklistLayout.style.display = "none";
+    if (historySection) {
+      historySection.style.display = "block";
+      renderDoctorReviewedHistory();
+    }
+  } else {
+    if (historySection) historySection.style.display = "none";
+    if (worklistLayout) worklistLayout.style.display = "grid";
+    renderDoctorQueue();
+  }
+};
+
+window.renderDoctorReviewedHistory = async function() {
+  const container = document.getElementById("doctorReviewedHistorySection");
+  if (!container) return;
+
+  const isEn = currentLanguage === "en";
+  let allCases = state.doctorQueue || [];
+  if (allCases.length === 0) {
+    try {
+      allCases = await getCases({ includeTest: true });
+      state.doctorQueue = allCases;
+    } catch (e) {
+      console.warn("Could not fetch cases for archive:", e.message);
+    }
+  }
+
+  const reviewedCases = (allCases || []).filter(c => {
+    if (!c) return false;
+    const isApproved = c.status === CASE_STATUS.APPROVED || String(c.status).toLowerCase() === "approved" || c.doctorApproved === true;
+    const hasApprovalHistory = Array.isArray(c.statusHistory) && c.statusHistory.some(h => String(h.status).toLowerCase() === "approved");
+    if (selectedRole === ROLES.DOCTOR && !isCaseAssignedToCurrentDoctor(c)) return false;
+    return isApproved || hasApprovalHistory;
+  });
+
+  const historyBadge = document.getElementById("doctorReviewedHistoryCount");
+  if (historyBadge) {
+    historyBadge.textContent = String(reviewedCases.length);
+  }
+
+  if (window.HealthVibes?.DoctorUI?.renderDoctorReviewedHistoryHtml) {
+    container.innerHTML = window.HealthVibes.DoctorUI.renderDoctorReviewedHistoryHtml({
+      cases: reviewedCases,
+      searchQuery: currentDoctorArchiveSearch,
+      dateFilter: currentDoctorArchiveDateFilter,
+      priorityFilter: currentDoctorArchivePriorityFilter,
+      sort: currentDoctorArchiveSort,
+      isEn
+    });
+  }
+};
+
+window.setDoctorArchiveSearch = function(val) {
+  currentDoctorArchiveSearch = String(val || "").trim().toLowerCase();
+  renderDoctorReviewedHistory();
+};
+
+window.setDoctorArchiveDateFilter = function(val) {
+  currentDoctorArchiveDateFilter = val || "all";
+  renderDoctorReviewedHistory();
+};
+
+window.setDoctorArchivePriorityFilter = function(val) {
+  currentDoctorArchivePriorityFilter = val || "all";
+  renderDoctorReviewedHistory();
+};
+
+window.setDoctorArchiveSort = function(val) {
+  currentDoctorArchiveSort = val || "date_desc";
+  renderDoctorReviewedHistory();
+};
+
+window.resetDoctorArchiveFilters = function() {
+  currentDoctorArchiveSearch = '';
+  currentDoctorArchiveDateFilter = 'all';
+  currentDoctorArchivePriorityFilter = 'all';
+  currentDoctorArchiveSort = 'date_desc';
+  renderDoctorReviewedHistory();
+};
+
+window.viewArchivedCaseReport = function(caseId) {
+  window._selectedReportCaseId = caseId;
+  showScreen("report");
+  if (typeof renderReportScreen === "function") {
+    renderReportScreen(caseId);
+  }
+};
+
+window.viewArchivedCasePdf = function(caseId) {
+  if (window.HealthVibes?.DoctorUI?.openArchivedCasePdfModal) {
+    window.HealthVibes.DoctorUI.openArchivedCasePdfModal(caseId);
+  } else {
+    window.exportReportToPdf(caseId, currentLanguage);
+  }
+};
+
 window.applyDiagPreset = function(presetKey, explicitLang = null) {
   const targetLang = explicitLang || window._diagnosticPresetsLang || currentLanguage;
   const isEn = (targetLang === "en");
@@ -4291,12 +4414,21 @@ function renderDoctorQueueItems(allCases) {
 
   const sandboxCases = (allCases || []).filter(c => c && isTestOrDemoRecord(c));
 
-  // 🔔 تحديث شارة عدد الحالات في قائمة الانتظار للمرضى الفعليين فقط
+  // 🔔 تحديث شارات أعداد الحالات النشطة والأرشيف المعتمد
+  const actionable = realCases.filter(c => [CASE_STATUS.ASSIGNED, CASE_STATUS.TRIAGED, CASE_STATUS.PENDING, CASE_STATUS.SUBMITTED, CASE_STATUS.UNDER_REVIEW].includes(c.status)).length;
   const queueCountBadge = document.getElementById("doctorQueueCount");
   if (queueCountBadge) {
-    const actionable = realCases.filter(c => [CASE_STATUS.ASSIGNED, CASE_STATUS.TRIAGED, CASE_STATUS.PENDING, CASE_STATUS.SUBMITTED, CASE_STATUS.UNDER_REVIEW].includes(c.status)).length;
     queueCountBadge.textContent = String(actionable);
     queueCountBadge.className = `pill ${actionable > 0 ? 'danger' : 'ok'}`;
+  }
+  const activeQueueBadge = document.getElementById("doctorActiveQueueCount");
+  if (activeQueueBadge) {
+    activeQueueBadge.textContent = String(actionable);
+  }
+  const reviewedBadge = document.getElementById("doctorReviewedHistoryCount");
+  if (reviewedBadge) {
+    const reviewedCount = (realCases || []).filter(c => c.status === CASE_STATUS.APPROVED || c.doctorApproved === true).length;
+    reviewedBadge.textContent = String(reviewedCount);
   }
 
   // ⚡ تحديث شريط مؤشرات أداء الطبيب المصغر

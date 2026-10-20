@@ -7943,7 +7943,569 @@
   }
 
   // ===========================================================================
-  // 13. EXPORTS & ATTACHMENT TO HEALTHVIBES GLOBAL
+  // 14. REVIEWED CASES HISTORY & ARCHIVE (ROLOGY BENCHMARK)
+  // ===========================================================================
+
+  function isCaseReviewedOrApproved(c) {
+    if (!c) return false;
+    const isApproved = c.status === "approved" || c.status === "APPROVED" || c.doctorApproved === true;
+    const hasApprovalHistory = Array.isArray(c.statusHistory) && c.statusHistory.some(h => String(h.status).toLowerCase() === "approved");
+    return Boolean(isApproved || hasApprovalHistory);
+  }
+
+  function filterDoctorReviewedHistory(caseList = [], options = {}) {
+    const {
+      search = "",
+      dateFilter = "all",
+      priority = "all",
+      sort = "date_desc",
+      isEn = false
+    } = options;
+
+    let result = (caseList || []).filter(isCaseReviewedOrApproved);
+
+    // 1. Date Filter
+    const now = Date.now();
+    if (dateFilter === "today") {
+      result = result.filter(c => {
+        const time = new Date(c.approvedAt || c.reportGeneratedAt || c.updatedAt || c.submittedAt || 0).getTime();
+        return (now - time) <= 86400000;
+      });
+    } else if (dateFilter === "week") {
+      result = result.filter(c => {
+        const time = new Date(c.approvedAt || c.reportGeneratedAt || c.updatedAt || c.submittedAt || 0).getTime();
+        return (now - time) <= (7 * 86400000);
+      });
+    } else if (dateFilter === "month") {
+      result = result.filter(c => {
+        const time = new Date(c.approvedAt || c.reportGeneratedAt || c.updatedAt || c.submittedAt || 0).getTime();
+        return (now - time) <= (30 * 86400000);
+      });
+    }
+
+    // 2. Priority Filter
+    if (priority && priority !== "all") {
+      result = result.filter(c => {
+        const p = String(c.priority || c.risk || "").toLowerCase();
+        if (priority === "urgent") return p.includes("urgent") || p.includes("عاجل") || (Number(c.o2) > 0 && Number(c.o2) < 90);
+        if (priority === "high") return p.includes("high") || p.includes("عالية");
+        if (priority === "normal") return p.includes("normal") || p.includes("عادية") || p.includes("routine");
+        return true;
+      });
+    }
+
+    // 3. Search Filter
+    if (search && search.trim()) {
+      const term = normalizeSearchText(search);
+      result = result.filter(c => {
+        const fields = [
+          c.id, c.reportRef, c.caseId,
+          c.patientId, c.patientUid,
+          c.patientName, c.patientNameEn, c.name, c.nameEn,
+          c.nationalId, c.civilId, c.patientNationalId,
+          c.fileNumber, c.patientFileNo, c.medicalRecordNumber, c.mrn,
+          c.clinicalDiagnosis, c.doctorNote, c.notes,
+          c.doctorDiagnosis, c.diagnosis,
+          c.symptoms, c.symptomsEn,
+          Array.isArray(c.medications) ? c.medications.join(" ") : c.medications,
+          Array.isArray(c.recommendations) ? c.recommendations.join(" ") : c.recommendations
+        ];
+        const text = fields.filter(Boolean).map(v => normalizeSearchText(v)).join(" ");
+        return text.includes(term);
+      });
+    }
+
+    // 4. Sorting
+    result.sort((a, b) => {
+      const timeA = new Date(a.approvedAt || a.reportGeneratedAt || a.updatedAt || a.submittedAt || 0).getTime();
+      const timeB = new Date(b.approvedAt || b.reportGeneratedAt || b.updatedAt || b.submittedAt || 0).getTime();
+      const nameA = String(a.name || a.patientName || a.nameEn || a.patientNameEn || "").trim();
+      const nameB = String(b.name || b.patientName || b.nameEn || b.patientNameEn || "").trim();
+      const o2A = Number(a.o2 ?? a.oxygenLevel ?? 999) || 999;
+      const o2B = Number(b.o2 ?? b.oxygenLevel ?? 999) || 999;
+
+      if (sort === "date_asc") return timeA - timeB;
+      if (sort === "name_asc") return nameA.localeCompare(nameB, isEn ? "en" : "ar", { sensitivity: "base" });
+      if (sort === "o2_asc") return o2A - o2B;
+      return timeB - timeA;
+    });
+
+    return result;
+  }
+
+  function renderArchivedCaseCardHtml(c, isEn = false) {
+    if (!c) return "";
+    const name = isEn ? (c.nameEn || c.patientNameEn || c.name || c.patientName || "Patient") : (c.name || c.patientName || c.nameEn || c.patientNameEn || "مريض");
+    const mrn = c.mrn || c.fileNumber || c.patientFileNo || `MRN-${c.id.slice(-6).toUpperCase()}`;
+    const o2Value = Number(c.o2 ?? c.oxygenLevel ?? 0) || 0;
+    const isCritO2 = o2Value > 0 && o2Value < 90;
+    const priority = String(c.priority || c.risk || "").toLowerCase();
+    const isUrgent = isCritO2 || priority.includes("urgent") || priority.includes("عاجل");
+
+    const approvedTime = c.approvedAt || c.reportGeneratedAt || c.updatedAt || c.submittedAt;
+    const dateFormatted = approvedTime
+      ? new Date(approvedTime).toLocaleString(isEn ? "en-US" : "ar-EG", { dateStyle: "medium", timeStyle: "short" })
+      : (isEn ? "Certified" : "معتمد");
+
+    const diag = c.clinicalDiagnosis || c.doctorDiagnosis || c.doctorNote || c.diagnosis || (isEn ? "Clinical evaluation complete" : "تم استكمال التقييم السريري واعتماد التقرير");
+    const seal = c.signatureSeal || `HV-SEAL-${c.id.slice(-6).toUpperCase()}`;
+    const docName = c.doctorName || c.approvingDoctorName || (isEn ? "Verified Physician" : "طبيب موثق");
+
+    const ageStr = c.age ? `${c.age} ${isEn ? "yrs" : "سنة"}` : "";
+    const genderStr = c.gender ? (isEn ? (String(c.gender).toLowerCase().startsWith("m") ? "Male" : "Female") : (String(c.gender).includes("ذكر") || String(c.gender).toLowerCase().startsWith("m") ? "ذكر" : "أنثى")) : "";
+    const demographics = [ageStr, genderStr].filter(Boolean).join(" • ");
+
+    return `
+      <article class="rology-archive-card ${isUrgent ? 'is-urgent-case' : ''}" data-case-id="${escapeHtml(c.id)}" id="archiveCard-${escapeHtml(c.id)}">
+        <header class="rology-card-header">
+          <div class="rology-card-status">
+            <span class="pill ok" style="font-weight: 700; font-size: 11px;">
+              <span>✅</span> ${isEn ? "Clinically Certified" : "معتمد سريرياً"}
+            </span>
+            ${isUrgent ? `<span class="pill danger" style="font-weight: 700; font-size: 11px;">🚨 ${isEn ? 'High Risk' : 'حالة حرجة'}</span>` : ''}
+          </div>
+          <time class="rology-card-time" datetime="${approvedTime || ''}" title="${isEn ? 'Date of approval' : 'تاريخ ووقت الاعتماد'}">
+            📅 ${escapeHtml(dateFormatted)}
+          </time>
+        </header>
+
+        <div class="rology-card-body">
+          <div class="rology-patient-identity-row">
+            <div class="rology-patient-avatar" aria-hidden="true">
+              ${(name || 'P').trim().charAt(0).toUpperCase()}
+            </div>
+            <div class="rology-patient-details">
+              <h4 class="rology-patient-name" title="${escapeHtml(name)}">${escapeHtml(name)}</h4>
+              <div class="rology-patient-meta">
+                <span class="rology-mrn-badge">📁 ${escapeHtml(mrn)}</span>
+                ${demographics ? `<span class="rology-demo-badge">${escapeHtml(demographics)}</span>` : ''}
+              </div>
+            </div>
+            <div class="rology-vitals-badge ${isCritO2 ? 'vital-danger' : 'vital-normal'}">
+              <span class="vital-label">SpO2</span>
+              <strong class="vital-val">${o2Value > 0 ? `${o2Value}%` : '--'}</strong>
+            </div>
+          </div>
+
+          <div class="rology-diagnosis-quote">
+            <small class="rology-diag-label">${isEn ? "Physician Diagnosis & Findings:" : "التشخيص الطبي المعتمد:"}</small>
+            <p class="rology-diag-text">${escapeHtml(diag)}</p>
+          </div>
+
+          <div class="rology-seal-strip">
+            <div class="seal-pill" title="${isEn ? 'Cryptographic seal & digital signature applied' : 'تم التوثيق الرقمي وختم التقرير رسميًا'}">
+              <span>🔐</span>
+              <strong>${escapeHtml(seal)}</strong>
+              <small>• ${isEn ? 'Verified' : 'موثق'}</small>
+            </div>
+            <span class="doctor-credit" title="${isEn ? 'Certifying Doctor' : 'الطبيب المعتمد'}">🩺 ${escapeHtml(docName)}</span>
+          </div>
+        </div>
+
+        <footer class="rology-card-actions">
+          <button type="button" class="btn-archive-action btn-view-report" onclick="viewArchivedCaseReport('${escapeHtml(c.id)}')" title="${isEn ? 'Open full clinical report view' : 'فتح واستعراض التقرير الطبي الكامل'}">
+            <span>📄</span> ${isEn ? "View Report" : "استعراض التقرير"}
+          </button>
+          <button type="button" class="btn-archive-action btn-view-pdf" onclick="viewArchivedCasePdf('${escapeHtml(c.id)}')" title="${isEn ? 'Preview and print certified PDF document' : 'استعراض وطباعة ملف الـ PDF المعتمد'}">
+            <span>📑</span> ${isEn ? "Certified PDF" : "استعراض الـ PDF"}
+          </button>
+          <button type="button" class="btn-archive-action btn-quick-inspect" onclick="HealthVibes.DoctorUI.openArchivedCaseQuickModal('${escapeHtml(c.id)}')" title="${isEn ? 'Quick clinical summary snapshot' : 'معاينة سريعة للحالة'}">
+            <span>👁️</span> ${isEn ? "Quick View" : "معاينة سريعة"}
+          </button>
+        </footer>
+      </article>
+    `;
+  }
+
+  function renderDoctorReviewedHistoryHtml(options = {}) {
+    const {
+      cases = [],
+      searchQuery = "",
+      dateFilter = "all",
+      priorityFilter = "all",
+      sort = "date_desc",
+      isEn = false
+    } = options;
+
+    const allApproved = (cases || []).filter(isCaseReviewedOrApproved);
+    const filteredCases = filterDoctorReviewedHistory(allApproved, {
+      search: searchQuery,
+      dateFilter,
+      priority: priorityFilter,
+      sort,
+      isEn
+    });
+
+    const totalCount = allApproved.length;
+    const now = Date.now();
+    const todayCount = allApproved.filter(c => {
+      const time = new Date(c.approvedAt || c.reportGeneratedAt || c.updatedAt || c.submittedAt || 0).getTime();
+      return (now - time) <= 86400000;
+    }).length;
+    const critCount = allApproved.filter(c => {
+      const o2 = Number(c.o2 ?? c.oxygenLevel ?? 0) || 0;
+      const p = String(c.priority || c.risk || "").toLowerCase();
+      return (o2 > 0 && o2 < 90) || p.includes("urgent") || p.includes("عاجل");
+    }).length;
+    const signedCount = allApproved.filter(c => Boolean(c.signatureSeal || c.digitalSignature || c.doctorApproved)).length;
+
+    return `
+      <div class="rology-archive-container">
+        <!-- 1. Archive Hero & Summary KPIs -->
+        <div class="rology-archive-header">
+          <div class="rology-header-titles">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span class="rology-header-icon">📚</span>
+              <h2 class="rology-header-title">
+                ${isEn ? "Reviewed Cases History & Certified Reports Archive" : "سجل الحالات المراجعة وأرشيف التقارير الطبية المعتمدة"}
+              </h2>
+            </div>
+            <p class="rology-header-subtitle">
+              ${isEn
+                ? "Official teleradiology & clinical archive of all assessments, certified reports, digital signatures, and printable PDFs."
+                : "أرشيف سريري معتمد لجميع التقييمات والتقارير الصادرة من الطبيب، مع إمكانية استعراض الـ PDF والفحص الفوري للختم والتوقيع الرقمي."}
+            </p>
+          </div>
+          <div class="rology-kpi-strip">
+            <div class="rology-kpi-chip">
+              <span class="kpi-icon">📁</span>
+              <div>
+                <strong>${totalCount}</strong>
+                <small>${isEn ? "Total Certified" : "إجمالي المعتمد"}</small>
+              </div>
+            </div>
+            <div class="rology-kpi-chip">
+              <span class="kpi-icon">⚡</span>
+              <div>
+                <strong style="color: #10b981;">${todayCount}</strong>
+                <small>${isEn ? "Today's Reports" : "معتمدة اليوم"}</small>
+              </div>
+            </div>
+            <div class="rology-kpi-chip">
+              <span class="kpi-icon">🫁</span>
+              <div>
+                <strong style="color: ${critCount > 0 ? '#ef4444' : 'var(--teal, #0ea5e9)'};">${critCount}</strong>
+                <small>${isEn ? "Critical Triage" : "حالات حرجة"}</small>
+              </div>
+            </div>
+            <div class="rology-kpi-chip">
+              <span class="kpi-icon">🔐</span>
+              <div>
+                <strong style="color: #0ea5e9;">100%</strong>
+                <small>${isEn ? "Digitally Sealed" : "مختومة رقمياً"}</small>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. Rology Archive Search & Multi-Dimension Filter Toolbar -->
+        <div class="rology-archive-toolbar">
+          <div class="rology-search-wrap">
+            <span class="search-icon" aria-hidden="true">🔍</span>
+            <input 
+              type="search" 
+              id="doctorArchiveSearchInput" 
+              class="rology-search-input" 
+              dir="auto" 
+              value="${escapeHtml(searchQuery)}" 
+              oninput="setDoctorArchiveSearch(this.value)" 
+              placeholder="${isEn ? 'Search by patient name, MRN, National ID, diagnosis, symptoms...' : 'ابحث باسم المريض، رقم الملف، الهوية الوطنية، التشخيص، الأعراض...'}" 
+              autocomplete="off" 
+              spellcheck="false" 
+              aria-label="${isEn ? 'Search reviewed cases archive' : 'البحث في أرشيف الحالات المعتمدة'}"
+            />
+            ${searchQuery ? `
+              <button type="button" class="rology-search-clear-btn" onclick="setDoctorArchiveSearch('')" title="${isEn ? 'Clear search' : 'مسح البحث'}" aria-label="${isEn ? 'Clear search' : 'مسح البحث'}">&times;</button>
+            ` : ''}
+          </div>
+
+          <div class="rology-filters-row">
+            <!-- Date Range Selector -->
+            <div class="rology-filter-field">
+              <label for="doctorArchiveDateSelect" class="filter-field-label">${isEn ? "Date Range:" : "الفترة الزمنية:"}</label>
+              <select id="doctorArchiveDateSelect" class="rology-filter-select" onchange="setDoctorArchiveDateFilter(this.value)" aria-label="${isEn ? 'Filter by date range' : 'تصفية حسب الفترة الزمنية'}">
+                <option value="all" ${dateFilter === "all" ? "selected" : ""}>${isEn ? "All Dates" : "جميع التواريخ"}</option>
+                <option value="today" ${dateFilter === "today" ? "selected" : ""}>${isEn ? "Today" : "اليوم"}</option>
+                <option value="week" ${dateFilter === "week" ? "selected" : ""}>${isEn ? "Past 7 Days" : "آخر 7 أيام"}</option>
+                <option value="month" ${dateFilter === "month" ? "selected" : ""}>${isEn ? "Past 30 Days" : "آخر 30 يوماً"}</option>
+              </select>
+            </div>
+
+            <!-- Priority Selector -->
+            <div class="rology-filter-field">
+              <label for="doctorArchivePrioritySelect" class="filter-field-label">${isEn ? "Clinical Risk:" : "درجة الخطورة:"}</label>
+              <select id="doctorArchivePrioritySelect" class="rology-filter-select" onchange="setDoctorArchivePriorityFilter(this.value)" aria-label="${isEn ? 'Filter by clinical risk' : 'تصفية حسب درجة الخطورة'}">
+                <option value="all" ${priorityFilter === "all" ? "selected" : ""}>${isEn ? "All Priorities" : "كل الأولويات"}</option>
+                <option value="urgent" ${priorityFilter === "urgent" ? "selected" : ""}>🚨 ${isEn ? "Urgent / Emergency" : "عاجل / طوارئ"}</option>
+                <option value="high" ${priorityFilter === "high" ? "selected" : ""}>⚠️ ${isEn ? "High Priority" : "أولوية عالية"}</option>
+                <option value="normal" ${priorityFilter === "normal" ? "selected" : ""}>🟢 ${isEn ? "Routine / Stable" : "عادية / مستقرة"}</option>
+              </select>
+            </div>
+
+            <!-- Sort Selector -->
+            <div class="rology-filter-field">
+              <label for="doctorArchiveSortSelect" class="filter-field-label">${isEn ? "Sort By:" : "الترتيب حسب:"}</label>
+              <select id="doctorArchiveSortSelect" class="rology-filter-select" onchange="setDoctorArchiveSort(this.value)" aria-label="${isEn ? 'Sort reviewed cases' : 'ترتيب الحالات المعتمدة'}">
+                <option value="date_desc" ${sort === "date_desc" ? "selected" : ""}>📅 ${isEn ? "Newest Certified First" : "الأحدث اعتماداً"}</option>
+                <option value="date_asc" ${sort === "date_asc" ? "selected" : ""}>⌛ ${isEn ? "Oldest Certified First" : "الأقدم اعتماداً"}</option>
+                <option value="name_asc" ${sort === "name_asc" ? "selected" : ""}>🔤 ${isEn ? "Patient Name (A-Z)" : "اسم المريض (أبجدياً)"}</option>
+                <option value="o2_asc" ${sort === "o2_asc" ? "selected" : ""}>🫁 ${isEn ? "Lowest SpO2" : "الأكسجين الأقل"}</option>
+              </select>
+            </div>
+
+            ${(searchQuery || dateFilter !== "all" || priorityFilter !== "all" || sort !== "date_desc") ? `
+              <button type="button" class="rology-reset-filters-btn" onclick="resetDoctorArchiveFilters()" title="${isEn ? 'Reset all archive filters' : 'إعادة ضبط جميع فلاتر الأرشيف'}">
+                <span>🔄</span> ${isEn ? "Reset" : "إعادة ضبط"}
+              </button>
+            ` : ''}
+          </div>
+        </div>
+
+        <!-- 3. Rology Archive Grid or Zero State -->
+        ${filteredCases.length > 0 ? `
+          <div class="rology-archive-grid" role="feed" aria-label="${isEn ? 'Archived patient reports list' : 'قائمة تقارير المرضى المؤرشفة'}">
+            ${filteredCases.map(c => renderArchivedCaseCardHtml(c, isEn)).join("")}
+          </div>
+        ` : `
+          <div class="rology-archive-empty">
+            <span class="empty-icon">📁</span>
+            <h3>${isEn ? "No Archived Reports Found" : "لم يتم العثور على تقارير مطابقة في الأرشيف"}</h3>
+            <p>
+              ${searchQuery
+                ? (isEn ? `No certified clinical records matched "${escapeHtml(searchQuery)}".` : `لا توجد تقارير معتمدة مطابقة لبحثك: "${escapeHtml(searchQuery)}".`)
+                : (isEn ? "You have not certified any cases matching the active filters yet." : "لم يتم اعتماد أي حالات مطابقة للفلاتر المحددة حتى الآن.")}
+            </p>
+            <button type="button" class="solid-button" onclick="resetDoctorArchiveFilters()" style="margin-top: 10px;">
+              <span>🔄</span> ${isEn ? "Reset Search & Filters" : "إعادة ضبط البحث والفلترة"}
+            </button>
+          </div>
+        `}
+      </div>
+    `;
+  }
+
+  function openArchivedCaseQuickModal(caseId) {
+    if (typeof document === "undefined" || !caseId) return;
+    const isEn = (global.currentLanguage === "en");
+    let c = (global.state?.doctorQueue || []).find(item => item.id === caseId);
+    if (!c && typeof global.getCases === "function") {
+      c = { id: caseId };
+    }
+    if (!c) return;
+
+    let modal = document.getElementById("rologyArchiveQuickModal");
+    if (!modal) {
+      modal = document.createElement("div");
+      modal.id = "rologyArchiveQuickModal";
+      modal.className = "rology-modal-backdrop";
+      modal.setAttribute("role", "dialog");
+      modal.setAttribute("aria-modal", "true");
+      modal.setAttribute("aria-labelledby", "archiveQuickModalTitle");
+      modal.onclick = (e) => {
+        if (e.target === modal) closeArchivedCaseQuickModal();
+      };
+      document.body.appendChild(modal);
+    }
+
+    const name = isEn ? (c.nameEn || c.patientNameEn || c.name || c.patientName || "Patient") : (c.name || c.patientName || c.nameEn || c.patientNameEn || "مريض");
+    const mrn = c.mrn || c.fileNumber || c.patientFileNo || `MRN-${caseId.slice(-6).toUpperCase()}`;
+    const o2 = Number(c.o2 ?? c.oxygenLevel ?? 0) || 0;
+    const diag = c.clinicalDiagnosis || c.doctorDiagnosis || c.doctorNote || c.diagnosis || "--";
+    const rx = Array.isArray(c.medications) ? c.medications.join("\n") : (c.medications || (isEn ? "None recorded" : "لا توجد أدوية مسجلة"));
+    const recs = Array.isArray(c.recommendations) ? c.recommendations.join("\n") : (c.recommendations || c.recommendation || (isEn ? "Routine follow-up" : "متابعة دورية"));
+    const seal = c.signatureSeal || `HV-SEAL-${caseId.slice(-6).toUpperCase()}`;
+    const approvedAt = c.approvedAt || c.reportGeneratedAt || c.updatedAt || new Date().toISOString();
+    const approvedFormatted = new Date(approvedAt).toLocaleString(isEn ? "en-US" : "ar-EG", { dateStyle: "long", timeStyle: "short" });
+
+    modal.innerHTML = `
+      <div class="rology-modal-dialog" style="text-align: ${isEn ? 'left' : 'right'};">
+        <header class="rology-modal-header">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 20px;">📋</span>
+            <h3 id="archiveQuickModalTitle" style="margin: 0; font-size: 16px; font-weight: 800; color: var(--teal, #0ea5e9);">
+              ${isEn ? "Certified Clinical Report Summary" : "ملخص التقرير السريري المعتمد"}
+            </h3>
+          </div>
+          <button type="button" class="rology-modal-close-btn" onclick="HealthVibes.DoctorUI.closeArchivedCaseQuickModal()" aria-label="${isEn ? 'Close' : 'إغلاق'}">&times;</button>
+        </header>
+
+        <div class="rology-modal-body">
+          <div class="rology-modal-patient-strip">
+            <div>
+              <strong style="font-size: 15px; color: var(--ink);">${escapeHtml(name)}</strong>
+              <div style="font-size: 12px; color: var(--muted); margin-top: 2px;">
+                <span>📁 ${escapeHtml(mrn)}</span> • <span>📅 ${escapeHtml(approvedFormatted)}</span>
+              </div>
+            </div>
+            <span class="pill ${o2 > 0 && o2 < 90 ? 'danger' : 'ok'}" style="font-size: 12px; font-weight: 700;">
+              🫁 SpO2 ${o2 > 0 ? `${o2}%` : '--'}
+            </span>
+          </div>
+
+          <div class="rology-modal-section">
+            <h4 class="section-title">🩺 ${isEn ? "Certified Diagnosis" : "التشخيص الطبي المعتمد"}</h4>
+            <div class="section-box">${escapeHtml(diag)}</div>
+          </div>
+
+          <div class="rology-modal-section">
+            <h4 class="section-title">💊 ${isEn ? "Prescription & Medication Regimen (Rx)" : "الخطة العلاجية والروشتة"}</h4>
+            <div class="section-box" style="white-space: pre-line;">${escapeHtml(rx)}</div>
+          </div>
+
+          <div class="rology-modal-section">
+            <h4 class="section-title">📝 ${isEn ? "Patient Directives & Follow-up" : "توصيات المريض والمتابعة"}</h4>
+            <div class="section-box" style="white-space: pre-line;">${escapeHtml(recs)}</div>
+          </div>
+
+          <div class="rology-modal-seal-badge">
+            <span>🔐 ${isEn ? "Official Seal:" : "الختم والتوثيق الرقمي:"} <strong>${escapeHtml(seal)}</strong></span>
+            <span class="pill ok" style="font-size: 10px;">✓ ${isEn ? 'Verified Doctor Signature' : 'توقيع طبيب معتمد'}</span>
+          </div>
+        </div>
+
+        <footer class="rology-modal-footer">
+          <button type="button" class="solid-button" onclick="viewArchivedCasePdf('${escapeHtml(caseId)}')" style="padding: 8px 16px; font-size: 13px;">
+            <span>📑</span> ${isEn ? "Open PDF Document" : "استعراض الـ PDF المعتمد"}
+          </button>
+          <button type="button" class="soft-button" onclick="viewArchivedCaseReport('${escapeHtml(caseId)}')" style="padding: 8px 16px; font-size: 13px;">
+            <span>📄</span> ${isEn ? "Full Report Screen" : "شاشة التقرير الكاملة"}
+          </button>
+          <button type="button" class="outline-button" onclick="HealthVibes.DoctorUI.closeArchivedCaseQuickModal()" style="padding: 8px 16px; font-size: 13px;">
+            ${isEn ? "Close" : "إغلاق"}
+          </button>
+        </footer>
+      </div>
+    `;
+    modal.style.display = "flex";
+  }
+
+  function closeArchivedCaseQuickModal() {
+    if (typeof document === "undefined") return;
+    const modal = document.getElementById("rologyArchiveQuickModal");
+    if (modal) modal.style.display = "none";
+  }
+
+  function openArchivedCasePdfModal(caseId) {
+    if (typeof document === "undefined" || !caseId) return;
+    const isEn = (global.currentLanguage === "en");
+    let c = (global.state?.doctorQueue || []).find(item => item.id === caseId);
+    if (!c && typeof global.getCases === "function") {
+      c = { id: caseId };
+    }
+    if (!c) return;
+
+    let modal = document.getElementById("rologyArchivePdfModal");
+    if (!modal) {
+      modal = document.createElement("div");
+      modal.id = "rologyArchivePdfModal";
+      modal.className = "rology-modal-backdrop";
+      modal.setAttribute("role", "dialog");
+      modal.setAttribute("aria-modal", "true");
+      modal.setAttribute("aria-labelledby", "archivePdfModalTitle");
+      modal.onclick = (e) => {
+        if (e.target === modal) closeArchivedCasePdfModal();
+      };
+      document.body.appendChild(modal);
+    }
+
+    const name = isEn ? (c.nameEn || c.patientNameEn || c.name || c.patientName || "Patient") : (c.name || c.patientName || c.nameEn || c.patientNameEn || "مريض");
+    const mrn = c.mrn || c.fileNumber || c.patientFileNo || `MRN-${caseId.slice(-6).toUpperCase()}`;
+    const reportRef = c.reportRef || `HV-REP-${caseId.slice(-8).toUpperCase()}`;
+    const o2 = Number(c.o2 ?? c.oxygenLevel ?? 0) || 0;
+    const diag = c.clinicalDiagnosis || c.doctorDiagnosis || c.doctorNote || c.diagnosis || "--";
+    const rx = Array.isArray(c.medications) ? c.medications.join("\n") : (c.medications || "--");
+    const recs = Array.isArray(c.recommendations) ? c.recommendations.join("\n") : (c.recommendations || c.recommendation || "--");
+    const seal = c.signatureSeal || `HV-SEAL-${caseId.slice(-6).toUpperCase()}`;
+    const docName = c.doctorName || c.approvingDoctorName || (isEn ? "Dr. Verified Physician" : "د. طبيب معتمد وموثق");
+    const approvedAt = c.approvedAt || c.reportGeneratedAt || c.updatedAt || new Date().toISOString();
+    const approvedFormatted = new Date(approvedAt).toLocaleString(isEn ? "en-US" : "ar-EG", { dateStyle: "long", timeStyle: "short" });
+
+    modal.innerHTML = `
+      <div class="rology-pdf-modal-dialog" style="text-align: ${isEn ? 'left' : 'right'};">
+        <header class="rology-pdf-modal-header no-print">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 20px;">📑</span>
+            <h3 id="archivePdfModalTitle" style="margin: 0; font-size: 16px; font-weight: 800;">
+              ${isEn ? "Certified Medical Report PDF Preview" : "معاينة التقرير الطبي المعتمد بصيغة PDF"}
+            </h3>
+          </div>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <button type="button" class="solid-button" onclick="HealthVibes.ReportsUI?.exportReportToPdf ? HealthVibes.ReportsUI.exportReportToPdf({ id: '${escapeHtml(caseId)}' }, '${isEn ? "en" : "ar"}') : window.print()" style="padding: 6px 14px; font-size: 12.5px;">
+              <span>🖨️</span> ${isEn ? "Print / Save PDF" : "طباعة / حفظ PDF"}
+            </button>
+            <button type="button" class="rology-modal-close-btn" onclick="HealthVibes.DoctorUI.closeArchivedCasePdfModal()" aria-label="${isEn ? 'Close' : 'إغلاق'}">&times;</button>
+          </div>
+        </header>
+
+        <div class="rology-pdf-document-sheet" id="printableCertifiedReportSheet">
+          <div class="pdf-clinical-header">
+            <div class="pdf-clinic-brand">
+              <span class="pdf-logo-symbol">🩺</span>
+              <div>
+                <h2 class="pdf-clinic-name">HealthVibes Telemedicine & Clinical Diagnostics</h2>
+                <small class="pdf-clinic-tagline">${isEn ? "Certified Pulmonary & Emergency Triage Network" : "الشبكة المعتمدة للرعاية التنفسية والتشخيص السريري"}</small>
+              </div>
+            </div>
+            <div class="pdf-meta-box">
+              <div><strong>Ref:</strong> ${escapeHtml(reportRef)}</div>
+              <div><strong>Date:</strong> ${escapeHtml(approvedFormatted)}</div>
+            </div>
+          </div>
+
+          <div class="pdf-patient-info-grid">
+            <div><small>${isEn ? "Patient Name:" : "اسم المريض:"}</small><strong>${escapeHtml(name)}</strong></div>
+            <div><small>${isEn ? "MRN / File #:" : "رقم الملف:"}</small><strong>${escapeHtml(mrn)}</strong></div>
+            <div><small>${isEn ? "SpO2 Saturation:" : "نسبة الأكسجين:"}</small><strong style="color: ${o2 > 0 && o2 < 90 ? '#ef4444' : '#10b981'};">${o2 > 0 ? `${o2}%` : '--'}</strong></div>
+            <div><small>${isEn ? "Workflow Stage:" : "الحالة السريرية:"}</small><strong>✅ ${isEn ? "Certified Approved" : "معتمد سريرياً"}</strong></div>
+          </div>
+
+          <div class="pdf-body-section">
+            <h4 class="pdf-section-heading">1. ${isEn ? "Clinical Diagnosis & Findings" : "التشخيص والتقييم الطبي المعتمد"}</h4>
+            <div class="pdf-text-content">${escapeHtml(diag)}</div>
+          </div>
+
+          <div class="pdf-body-section">
+            <h4 class="pdf-section-heading">2. ${isEn ? "Prescription & Medication Regimen (Rx)" : "الخطة العلاجية والروشتة الدوائية"}</h4>
+            <div class="pdf-text-content" style="white-space: pre-line;">${escapeHtml(rx)}</div>
+          </div>
+
+          <div class="pdf-body-section">
+            <h4 class="pdf-section-heading">3. ${isEn ? "Directives & Follow-up Plan" : "التوصيات الطبية وموعد المتابعة"}</h4>
+            <div class="pdf-text-content" style="white-space: pre-line;">${escapeHtml(recs)}</div>
+          </div>
+
+          <div class="pdf-official-footer">
+            <div class="pdf-stamp-area">
+              <div class="official-seal-badge">
+                <span style="font-size: 24px;">🏛️</span>
+                <div>
+                  <strong>${escapeHtml(seal)}</strong>
+                  <small style="display: block;">${isEn ? "Certified Medical Council Stamp" : "ختم الاعتماد الطبي الرقمي الموثق"}</small>
+                </div>
+              </div>
+            </div>
+            <div class="pdf-signature-area">
+              <small style="display: block; margin-bottom: 4px;">${isEn ? "Digitally Certified by:" : "اعتمد سريرياً بواسطة:"}</small>
+              <div class="signature-display">
+                <span class="doctor-title">🩺 ${escapeHtml(docName)}</span>
+                <span class="hash-tag">SIG-SHA256-${caseId.slice(-8).toUpperCase()}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+    modal.style.display = "flex";
+  }
+
+  function closeArchivedCasePdfModal() {
+    if (typeof document === "undefined") return;
+    const modal = document.getElementById("rologyArchivePdfModal");
+    if (modal) modal.style.display = "none";
+  }
+
+  // ===========================================================================
+  // 15. EXPORTS & ATTACHMENT TO HEALTHVIBES GLOBAL
   // ===========================================================================
 
   const DoctorUI = {
@@ -8101,7 +8663,16 @@
     navigateDoctorQueue,
     cachePatientMedicalHistory,
     getCachedPatientMedicalHistory,
-    clearPatientMedicalHistoryCache
+    clearPatientMedicalHistoryCache,
+    // Rology Reviewed Cases History & Certified Reports Archive
+    isCaseReviewedOrApproved,
+    filterDoctorReviewedHistory,
+    renderArchivedCaseCardHtml,
+    renderDoctorReviewedHistoryHtml,
+    openArchivedCaseQuickModal,
+    closeArchivedCaseQuickModal,
+    openArchivedCasePdfModal,
+    closeArchivedCasePdfModal
   };
 
   global.HealthVibes = global.HealthVibes || {};

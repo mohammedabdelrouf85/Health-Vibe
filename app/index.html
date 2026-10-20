@@ -1649,6 +1649,20 @@
           </button>
         </div>
 
+        <!-- Rology Workspace Mode Switcher: Worklist vs Reviewed Cases History -->
+        <div class="rology-workspace-nav-bar" id="doctorWorkspaceNavBar" role="tablist" aria-label="أنماط عرض عيادة الطبيب">
+          <button type="button" class="rology-nav-tab is-active" id="tabDoctorWorklist" onclick="setDoctorWorkspaceMode('worklist')" role="tab" aria-selected="true">
+            <span class="tab-icon">🩺</span>
+            <span class="tab-label" id="labelDoctorWorklist">الحالات الواردة والانتظار (Clinical Worklist)</span>
+            <span class="pill danger" id="doctorActiveQueueCount">0</span>
+          </button>
+          <button type="button" class="rology-nav-tab" id="tabDoctorReviewedHistory" onclick="setDoctorWorkspaceMode('history')" role="tab" aria-selected="false">
+            <span class="tab-icon">📚</span>
+            <span class="tab-label" id="labelDoctorReviewedHistory">سجل الحالات المراجعة (Reviewed Cases History)</span>
+            <span class="pill ok" id="doctorReviewedHistoryCount">0</span>
+          </button>
+        </div>
+
         <div class="doctor-layout" id="doctorWorkspaceLayout">
           <article class="panel doctor-queue-panel" id="doctorQueuePanel">
             <div class="panel-head"><h3>قائمة المرضى</h3><span class="pill ok">طبيب موثق</span></div>
@@ -1663,6 +1677,11 @@
             <!-- Rendered via JS -->
           </article>
         </div>
+
+        <!-- Rology Reviewed Cases History & Certified Reports Archive Section -->
+        <section class="rology-archive-section" id="doctorReviewedHistorySection" style="display: none;" aria-label="سجل الحالات المراجعة والأرشيف السريري">
+          <!-- Dynamically populated via renderDoctorReviewedHistory() -->
+        </section>
       </section>
 
       <section id="screen-admin" class="screen">

@@ -10760,19 +10760,867 @@ body.dark .thread-direct-action-card {
   animation: practoFocusPulse 1.2s ease-out;
 }
 
-/* Responsive Overrides for Mobile & Tablet */
-@media (max-width: 600px) {
-  .practo-search-input {
-    padding-inline-end: 32px !important;
-  }
+/* ==========================================================================
+   ROLOGY REVIEWED CASES HISTORY & ARCHIVE (RESPONSIVE CLINICAL UI/UX)
+   ========================================================================== */
 
-  .practo-kbd-shortcut {
-    display: none !important;
-  }
+.rology-workspace-nav-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  background: var(--surface-2, #0f172a);
+  padding: 6px;
+  border-radius: 12px;
+  border: 1px solid var(--line, #334155);
+}
 
-  .practo-controls-row {
-    grid-template-columns: 1fr;
+.rology-nav-tab {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 9px;
+  font-weight: 700;
+  font-size: 13.5px;
+  color: var(--muted, #94a3b8);
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  min-height: 44px;
+}
+
+.rology-nav-tab:hover {
+  color: var(--ink, #f8fafc);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.rology-nav-tab.is-active {
+  background: var(--surface, #1e293b);
+  color: var(--ink, #f8fafc);
+  border-color: var(--teal, #0ea5e9);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.rology-archive-section {
+  width: 100%;
+}
+
+.rology-archive-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.rology-archive-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+  background: var(--surface, #1e293b);
+  border: 1.5px solid var(--line, #334155);
+  border-radius: 14px;
+  padding: 18px 20px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.rology-header-titles {
+  flex: 1;
+  min-width: 280px;
+}
+
+.rology-header-icon {
+  font-size: 26px;
+}
+
+.rology-header-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--ink, #f8fafc);
+}
+
+.rology-header-subtitle {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  color: var(--muted, #94a3b8);
+  line-height: 1.5;
+}
+
+.rology-kpi-strip {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rology-kpi-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface-2, #0f172a);
+  border: 1px solid var(--line, #334155);
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 12px;
+}
+
+.rology-kpi-chip strong {
+  display: block;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--ink, #f8fafc);
+  line-height: 1.1;
+}
+
+.rology-kpi-chip small {
+  display: block;
+  color: var(--muted, #94a3b8);
+  font-size: 11px;
+}
+
+.rology-archive-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--surface, #1e293b);
+  border: 1.5px solid var(--line, #334155);
+  border-radius: 14px;
+  padding: 14px 16px;
+}
+
+.rology-search-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.rology-search-wrap .search-icon {
+  position: absolute;
+  inset-inline-start: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 14px;
+  color: var(--muted, #94a3b8);
+  pointer-events: none;
+}
+
+.rology-search-input {
+  width: 100%;
+  min-height: 42px;
+  padding: 8px 38px;
+  background: var(--surface-2, #0f172a);
+  border: 1.5px solid var(--line, #334155);
+  border-radius: 10px;
+  color: var(--ink, #f8fafc);
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  unicode-bidi: plaintext;
+  transition: all 0.2s ease;
+}
+
+.rology-search-input:focus {
+  border-color: var(--teal, #0ea5e9);
+  background: var(--surface, #1e293b);
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.25);
+}
+
+.rology-search-clear-btn {
+  position: absolute;
+  inset-inline-end: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--muted, #94a3b8);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.rology-filters-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.rology-filter-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+}
+
+.filter-field-label {
+  color: var(--muted, #94a3b8);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.rology-filter-select {
+  background: var(--surface-2, #0f172a);
+  border: 1.5px solid var(--line, #334155);
+  border-radius: 8px;
+  color: var(--ink, #f8fafc);
+  padding: 6px 12px;
+  font-size: 12.5px;
+  font-family: inherit;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.rology-filter-select:focus {
+  border-color: var(--teal, #0ea5e9);
+}
+
+.rology-reset-filters-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #f87171;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.rology-reset-filters-btn:hover {
+  background: rgba(239, 68, 68, 0.22);
+}
+
+.rology-archive-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 16px;
+}
+
+.rology-archive-card {
+  background: var(--surface, #1e293b);
+  border: 1.5px solid var(--line, #334155);
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.rology-archive-card:hover {
+  border-color: var(--teal, #0ea5e9);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 22px rgba(14, 165, 233, 0.18);
+}
+
+.rology-archive-card.is-urgent-case {
+  border-inline-start: 4px solid #ef4444;
+}
+
+.rology-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rology-card-time {
+  font-size: 11.5px;
+  color: var(--muted, #94a3b8);
+}
+
+.rology-patient-identity-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.rology-patient-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #0ea5e9, #3b82f6);
+  color: #fff;
+  font-weight: 800;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.rology-patient-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.rology-patient-name {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 800;
+  color: var(--ink, #f8fafc);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rology-patient-meta {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 3px;
+  flex-wrap: wrap;
+}
+
+.rology-mrn-badge {
+  font-family: monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: #38bdf8;
+  background: rgba(14, 165, 233, 0.12);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.rology-demo-badge {
+  font-size: 11.5px;
+  color: var(--muted, #94a3b8);
+}
+
+.rology-vitals-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  border-radius: 8px;
+  min-width: 54px;
+}
+
+.vital-danger {
+  background: rgba(239, 68, 68, 0.18);
+  border: 1px solid #ef4444;
+  color: #f87171;
+}
+
+.vital-normal {
+  background: rgba(16, 185, 129, 0.18);
+  border: 1px solid #10b981;
+  color: #34d399;
+}
+
+.vital-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.vital-val {
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.rology-diagnosis-quote {
+  background: var(--surface-2, #0f172a);
+  border-inline-start: 3px solid var(--teal, #0ea5e9);
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+
+.rology-diag-label {
+  display: block;
+  font-size: 11px;
+  color: var(--muted, #94a3b8);
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+.rology-diag-text {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ink, #f8fafc);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.rology-seal-strip {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11.5px;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.seal-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(14, 165, 233, 0.1);
+  border: 1px solid rgba(14, 165, 233, 0.3);
+  padding: 2px 7px;
+  border-radius: 6px;
+  color: #38bdf8;
+  font-family: monospace;
+}
+
+.doctor-credit {
+  color: var(--muted, #94a3b8);
+  font-size: 11.5px;
+}
+
+.rology-card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line, #334155);
+}
+
+.btn-archive-action {
+  flex: 1;
+  min-height: 38px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+}
+
+.btn-view-report {
+  background: rgba(14, 165, 233, 0.15);
+  color: #38bdf8;
+  border-color: rgba(14, 165, 233, 0.35);
+}
+
+.btn-view-report:hover {
+  background: rgba(14, 165, 233, 0.28);
+}
+
+.btn-view-pdf {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border-color: rgba(16, 185, 129, 0.35);
+}
+
+.btn-view-pdf:hover {
+  background: rgba(16, 185, 129, 0.28);
+}
+
+.btn-quick-inspect {
+  background: var(--surface-2, #0f172a);
+  color: var(--muted, #94a3b8);
+  border-color: var(--line, #334155);
+  flex: 0 0 auto;
+  padding: 0 12px;
+}
+
+.btn-quick-inspect:hover {
+  color: var(--ink, #f8fafc);
+  border-color: var(--teal, #0ea5e9);
+}
+
+.rology-archive-empty {
+  background: var(--surface, #1e293b);
+  border: 2px dashed var(--line, #334155);
+  border-radius: 14px;
+  padding: 40px 20px;
+  text-align: center;
+}
+
+.rology-archive-empty .empty-icon {
+  font-size: 42px;
+  display: block;
+  margin-bottom: 12px;
+}
+
+.rology-archive-empty h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--ink, #f8fafc);
+}
+
+.rology-archive-empty p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--muted, #94a3b8);
+}
+
+/* Modal Backdrops & Dialogs */
+.rology-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(6px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.rology-modal-dialog {
+  background: var(--surface, #1e293b);
+  border: 1px solid var(--line, #334155);
+  border-radius: 16px;
+  width: 100%;
+  max-width: 620px;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 22px;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.5);
+}
+
+.rology-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--line, #334155);
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+}
+
+.rology-modal-close-btn {
+  background: none;
+  border: none;
+  font-size: 22px;
+  color: var(--muted, #94a3b8);
+  cursor: pointer;
+  padding: 4px;
+}
+
+.rology-modal-patient-strip {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--surface-2, #0f172a);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+}
+
+.rology-modal-section {
+  margin-bottom: 12px;
+}
+
+.rology-modal-section .section-title {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--teal, #0ea5e9);
+}
+
+.rology-modal-section .section-box {
+  background: var(--surface-2, #0f172a);
+  border: 1px solid var(--line, #334155);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--ink, #f8fafc);
+  line-height: 1.5;
+}
+
+.rology-modal-seal-badge {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(14, 165, 233, 0.1);
+  border: 1px solid rgba(14, 165, 233, 0.25);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  margin-top: 14px;
+}
+
+.rology-modal-footer {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  border-top: 1px solid var(--line, #334155);
+  padding-top: 14px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+
+/* PDF Document Reader Modal */
+.rology-pdf-modal-dialog {
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 800px;
+  max-height: 92vh;
+  overflow-y: auto;
+  padding: 18px;
+}
+
+.rology-pdf-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+  color: #f8fafc;
+}
+
+.rology-pdf-document-sheet {
+  background: #ffffff;
+  color: #0f172a;
+  border-radius: 10px;
+  padding: 28px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+  font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+  line-height: 1.45;
+}
+
+.pdf-clinical-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 2px solid #0ea5e9;
+  padding-bottom: 14px;
+  margin-bottom: 16px;
+}
+
+.pdf-clinic-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pdf-logo-symbol {
+  font-size: 32px;
+}
+
+.pdf-clinic-name {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.pdf-clinic-tagline {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.pdf-meta-box {
+  text-align: end;
+  font-size: 12px;
+  color: #475569;
+}
+
+.pdf-patient-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+  background: #f1f5f9;
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+}
+
+.pdf-patient-info-grid small {
+  display: block;
+  color: #64748b;
+  font-size: 11px;
+}
+
+.pdf-patient-info-grid strong {
+  font-size: 13.5px;
+  color: #0f172a;
+}
+
+.pdf-body-section {
+  margin-bottom: 14px;
+}
+
+.pdf-section-heading {
+  margin: 0 0 6px;
+  font-size: 13.5px;
+  font-weight: 800;
+  color: #0284c7;
+}
+
+.pdf-text-content {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: #1e293b;
+}
+
+.pdf-official-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1.5px solid #cbd5e1;
+  padding-top: 14px;
+  margin-top: 20px;
+}
+
+.official-seal-badge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.official-seal-badge strong {
+  font-size: 13px;
+  color: #0284c7;
+}
+
+.official-seal-badge small {
+  color: #64748b;
+  font-size: 11px;
+}
+
+.signature-display {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.signature-display .doctor-title {
+  font-weight: 700;
+  font-size: 13px;
+  color: #0f172a;
+}
+
+.signature-display .hash-tag {
+  font-family: monospace;
+  font-size: 10.5px;
+  color: #64748b;
+}
+
+/* ==========================================================================
+   RESPONSIVE DESIGN RULES FOR MOBILE, TABLET & DESKTOP (ROLOGY BENCHMARK)
+   ========================================================================== */
+
+/* Tablet (768px to 1024px) */
+@media (max-width: 1024px) {
+  .rology-archive-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
+
+/* Mobile & Touch Devices (< 768px) */
+@media (max-width: 768px) {
+  .rology-workspace-nav-bar {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .rology-nav-tab {
+    width: 100%;
+    min-height: 48px;
+    font-size: 13px;
+  }
+
+  .rology-archive-header {
+    flex-direction: column;
+    padding: 14px;
+  }
+
+  .rology-kpi-strip {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .rology-archive-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .rology-filters-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .rology-filter-field {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .rology-filter-select {
+    width: 100%;
+    min-height: 42px;
+  }
+
+  .rology-card-actions {
+    flex-direction: column;
+  }
+
+  .btn-archive-action {
+    width: 100%;
+    min-height: 44px;
+    font-size: 13px;
+  }
+
+  .btn-quick-inspect {
+    width: 100%;
+  }
+
+  .rology-modal-dialog {
+    max-height: 96vh;
+    padding: 16px;
+    border-radius: 12px;
+  }
+
+  .rology-modal-footer {
+    flex-direction: column;
+  }
+
+  .rology-modal-footer button {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .rology-pdf-document-sheet {
+    padding: 16px;
+  }
+
+  .pdf-clinical-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .pdf-meta-box {
+    text-align: start;
+  }
+
+  .pdf-official-footer {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .signature-display {
+    align-items: flex-start;
+  }
+}
+
 
 
