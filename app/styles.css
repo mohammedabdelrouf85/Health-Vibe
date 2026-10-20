@@ -4514,6 +4514,16 @@ body.dark .clinic-sig-preview-box {
   box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.2);
 }
 
+@keyframes pulseHighlight {
+  0% { box-shadow: 0 0 0 0 rgba(14, 165, 233, 0.7); }
+  70% { box-shadow: 0 0 0 8px rgba(14, 165, 233, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(14, 165, 233, 0); }
+}
+
+.focus-pulse-highlight {
+  animation: pulseHighlight 1s ease-out;
+}
+
 /* Status & Auto-save Row */
 .private-notes-status-row {
   display: flex;

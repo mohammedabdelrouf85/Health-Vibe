@@ -4991,7 +4991,7 @@
       }
 
       // 4. Global Alt + N / Alt + n / Arabic Alt + ى: Jump to Notes & focus diagnosis
-      if (e.altKey && (e.key === "n" || e.key === "N" || e.code === "KeyN" || e.key === "ى")) {
+      if (e.altKey && !e.shiftKey && (e.key === "n" || e.key === "N" || e.code === "KeyN" || e.key === "ى")) {
         e.preventDefault();
         switchReviewTab("notes");
         const diagInput = document.getElementById("doctorDiagnosisInput");
@@ -4999,9 +4999,50 @@
         return;
       }
 
-      // 5. Global Alt + 1 / Alt + 2 / Alt + 3: Quick Investigation Workup Presets
+      // 4b. Global Alt + Q / Alt + Shift + N / Arabic Alt + ض: Jump directly to Doctor Private Notes (Clinical Quarantine)
+      if (e.altKey && (e.key === "q" || e.key === "Q" || e.code === "KeyQ" || e.key === "ض" || (e.shiftKey && (e.key === "n" || e.key === "N" || e.key === "ى")))) {
+        e.preventDefault();
+        switchReviewTab("notes");
+        const privateNotesInput = document.getElementById("doctorPrivateNotesInput");
+        const privateNotesStation = document.getElementById("doctorPrivateNotesStation");
+        if (privateNotesStation) {
+          privateNotesStation.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+        if (privateNotesInput) {
+          privateNotesInput.focus();
+          const valLen = privateNotesInput.value.length;
+          privateNotesInput.setSelectionRange(valLen, valLen);
+          privateNotesInput.classList.add("focus-pulse-highlight");
+          setTimeout(() => privateNotesInput.classList.remove("focus-pulse-highlight"), 1200);
+        }
+        if (typeof global.showToast === "function") {
+          const isEn = (global.currentLanguage === "en");
+          global.showToast(isEn ? "Focused Doctor Private Notes (Alt+Q)" : "تم التركيز على الملاحظات الخاصة بالطبيب (Alt+Q)");
+        }
+        return;
+      }
+
+      // 4c. Global Alt + T / Arabic Alt + ف: Toggle Doctor Private Notes Report Inclusion / Sharing
+      if (e.altKey && !e.shiftKey && (e.key === "t" || e.key === "T" || e.code === "KeyT" || e.key === "ف")) {
+        const check = document.getElementById("includePrivateNotesInReport");
+        const activeCaseId = getActiveDoctorCaseId();
+        if (check && activeCaseId) {
+          e.preventDefault();
+          check.checked = !check.checked;
+          handlePrivateNotesShareToggle(check.checked, activeCaseId);
+          return;
+        }
+      }
+
+      // 5. Global Alt + 1 / Alt + 2 / Alt + 3 / Alt + 4: Quick Investigation Workup Presets OR Clinical Tags in Private Notes
       if (e.altKey && !e.shiftKey && (e.key === "1" || e.code === "Digit1" || e.code === "Numpad1")) {
         const activeCaseId = getActiveDoctorCaseId();
+        if (document.activeElement && document.activeElement.id === "doctorPrivateNotesInput" && activeCaseId) {
+          e.preventDefault();
+          const tagLang = getPrivateNotesTagsLang();
+          appendPrivateNotesTag(activeCaseId, tagLang === "en" ? "[Differential Diagnosis]: " : "[تشخيص تفريقي]: ");
+          return;
+        }
         if (activeCaseId) {
           e.preventDefault();
           applyInvestigationPreset(activeCaseId, "acute_dyspnea");
@@ -5010,6 +5051,12 @@
       }
       if (e.altKey && !e.shiftKey && (e.key === "2" || e.code === "Digit2" || e.code === "Numpad2")) {
         const activeCaseId = getActiveDoctorCaseId();
+        if (document.activeElement && document.activeElement.id === "doctorPrivateNotesInput" && activeCaseId) {
+          e.preventDefault();
+          const tagLang = getPrivateNotesTagsLang();
+          appendPrivateNotesTag(activeCaseId, tagLang === "en" ? "[Treatment Compliance]: " : "[التزام دوائي]: ");
+          return;
+        }
         if (activeCaseId) {
           e.preventDefault();
           applyInvestigationPreset(activeCaseId, "respiratory_infection");
@@ -5018,9 +5065,24 @@
       }
       if (e.altKey && !e.shiftKey && (e.key === "3" || e.code === "Digit3" || e.code === "Numpad3")) {
         const activeCaseId = getActiveDoctorCaseId();
+        if (document.activeElement && document.activeElement.id === "doctorPrivateNotesInput" && activeCaseId) {
+          e.preventDefault();
+          const tagLang = getPrivateNotesTagsLang();
+          appendPrivateNotesTag(activeCaseId, tagLang === "en" ? "[Supervision Flag]: " : "[متابعة إشرافية]: ");
+          return;
+        }
         if (activeCaseId) {
           e.preventDefault();
           applyInvestigationPreset(activeCaseId, "cardiopulmonary");
+          return;
+        }
+      }
+      if (e.altKey && !e.shiftKey && (e.key === "4" || e.code === "Digit4" || e.code === "Numpad4")) {
+        const activeCaseId = getActiveDoctorCaseId();
+        if (document.activeElement && document.activeElement.id === "doctorPrivateNotesInput" && activeCaseId) {
+          e.preventDefault();
+          const tagLang = getPrivateNotesTagsLang();
+          appendPrivateNotesTag(activeCaseId, tagLang === "en" ? "[Sensitive Prognosis]: " : "[مآل سريري خاص]: ");
           return;
         }
       }
@@ -5223,6 +5285,24 @@
           <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--surface-2, #0f172a); border-radius: 8px;">
             <span>${isEn ? "Jump to Notes & Focus Diagnosis" : "الانتقال لمحرر التشخيص والروشتة"}</span>
             <kbd style="padding: 2px 7px; background: var(--surface, #1e293b); border: 1px solid var(--line, #334155); border-radius: 4px; font-family: monospace; font-weight: 700;">Alt + N</kbd>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--surface-2, #0f172a); border-radius: 8px;">
+            <span>${isEn ? "Focus Doctor Private Notes (Clinical Quarantine)" : "التركيز على الملاحظات الخاصة بالطبيب (الحجب السريري)"}</span>
+            <div style="display: flex; gap: 4px;">
+              <kbd style="padding: 2px 7px; background: var(--surface, #1e293b); border: 1px solid var(--line, #334155); border-radius: 4px; font-family: monospace; font-weight: 700; color: #38bdf8;">Alt + Q</kbd>
+              <kbd style="padding: 2px 7px; background: var(--surface, #1e293b); border: 1px solid var(--line, #334155); border-radius: 4px; font-family: monospace; font-weight: 700; color: #38bdf8;">Alt + ض</kbd>
+            </div>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--surface-2, #0f172a); border-radius: 8px;">
+            <span>${isEn ? "Toggle Private Notes Report Inclusion / Sharing" : "تفعيل / إلغاء إدراج الملاحظات الخاصة بتقرير المريض"}</span>
+            <div style="display: flex; gap: 4px;">
+              <kbd style="padding: 2px 7px; background: var(--surface, #1e293b); border: 1px solid var(--line, #334155); border-radius: 4px; font-family: monospace; font-weight: 700; color: #38bdf8;">Alt + T</kbd>
+              <kbd style="padding: 2px 7px; background: var(--surface, #1e293b); border: 1px solid var(--line, #334155); border-radius: 4px; font-family: monospace; font-weight: 700; color: #38bdf8;">Alt + ف</kbd>
+            </div>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--surface-2, #0f172a); border-radius: 8px;">
+            <span>${isEn ? "Insert Confidential Tags in Private Notes (Differential / Compliance / Supervision / Sensitive)" : "إدراج توسيمات سريرية سريعة داخل الملاحظات الخاصة"}</span>
+            <kbd style="padding: 2px 7px; background: var(--surface, #1e293b); border: 1px solid var(--line, #334155); border-radius: 4px; font-family: monospace; font-weight: 700;">Alt + 1..4</kbd>
           </div>
           <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--surface-2, #0f172a); border-radius: 8px;">
             <span>${isEn ? "Override Clinical Risk Score" : "تعديل درجة الخطورة السريرية"}</span>
@@ -6226,16 +6306,16 @@
     const safeCaseId = escapeHtml(caseId);
     return `
       <button type="button" class="soft-button mini-tag-btn" onclick="HealthVibes.DoctorUI.appendPrivateNotesTag('${safeCaseId}', '${isEn ? '[Differential Diagnosis]: ' : '[تشخيص تفريقي]: '}')" style="font-size: 11px; padding: 2px 7px;">
-        🔬 ${isEn ? 'Differential' : 'تشخيص تفريقي'}
+        🔬 ${isEn ? 'Differential' : 'تشخيص تفريقي'} <kbd class="mini-tag-num" style="font-size: 9px; opacity: 0.65; margin-inline-start: 2px;">1</kbd>
       </button>
       <button type="button" class="soft-button mini-tag-btn" onclick="HealthVibes.DoctorUI.appendPrivateNotesTag('${safeCaseId}', '${isEn ? '[Treatment Compliance]: ' : '[التزام دوائي]: '}')" style="font-size: 11px; padding: 2px 7px;">
-        💊 ${isEn ? 'Compliance' : 'التزام دوائي'}
+        💊 ${isEn ? 'Compliance' : 'التزام دوائي'} <kbd class="mini-tag-num" style="font-size: 9px; opacity: 0.65; margin-inline-start: 2px;">2</kbd>
       </button>
       <button type="button" class="soft-button mini-tag-btn" onclick="HealthVibes.DoctorUI.appendPrivateNotesTag('${safeCaseId}', '${isEn ? '[Supervision Flag]: ' : '[متابعة إشرافية]: '}')" style="font-size: 11px; padding: 2px 7px;">
-        🚩 ${isEn ? 'Supervision' : 'متابعة إشرافية'}
+        🚩 ${isEn ? 'Supervision' : 'متابعة إشرافية'} <kbd class="mini-tag-num" style="font-size: 9px; opacity: 0.65; margin-inline-start: 2px;">3</kbd>
       </button>
       <button type="button" class="soft-button mini-tag-btn" onclick="HealthVibes.DoctorUI.appendPrivateNotesTag('${safeCaseId}', '${isEn ? '[Sensitive Prognosis]: ' : '[مآل سريري خاص]: '}')" style="font-size: 11px; padding: 2px 7px;">
-        ⚠️ ${isEn ? 'Sensitive' : 'مآل خاص'}
+        ⚠️ ${isEn ? 'Sensitive' : 'مآل خاص'} <kbd class="mini-tag-num" style="font-size: 9px; opacity: 0.65; margin-inline-start: 2px;">4</kbd>
       </button>
     `;
   }
@@ -6259,7 +6339,10 @@
             </div>
             <div class="private-notes-title-group">
               <div class="private-notes-title-row">
-                <h4 class="private-notes-heading">${isEn ? 'Doctor Private Notes (Clinical Quarantine)' : 'الملاحظات السريرية الخاصة بالطبيب (محجوبة عن المريض افتراضياً)'}</h4>
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                  <h4 class="private-notes-heading" style="margin: 0;">${isEn ? 'Doctor Private Notes (Clinical Quarantine)' : 'الملاحظات السريرية الخاصة بالطبيب (محجوبة عن المريض افتراضياً)'}</h4>
+                  <kbd class="toolbar-shortcut-tag" title="${isEn ? 'Alt+Q to focus notes' : 'Alt+Q للتركيز على الملاحظات'}" style="font-size: 9.5px; opacity: 0.85; padding: 1.5px 5px; background: rgba(0,0,0,0.18); border-radius: 4px; font-family: monospace;">Alt+Q</kbd>
+                </div>
                 <span id="privateNotesSecurityBadge" class="pill ${isIncluded ? 'ok' : 'danger'}" style="font-size: 11px; font-weight: 700;">
                   ${isIncluded ? (isEn ? '🌐 Included in Report' : '🌐 مضافة لتقرير المريض') : (isEn ? '🔒 Quarantined / Private' : '🔒 سرية ومحجوبة عن المريض')}
                 </span>
@@ -6340,7 +6423,7 @@
               onchange="HealthVibes.DoctorUI.handlePrivateNotesShareToggle(this.checked, '${escapeHtml(caseId)}')"
             />
             <span class="private-notes-share-text">
-              <strong>${isEn ? 'Include these clinical notes in the patient\'s certified medical report' : 'إدراج هذه الملاحظات في تقرير المريض الطبي المعتمد'}</strong>
+              <strong>${isEn ? 'Include these clinical notes in the patient\'s certified medical report' : 'إدراج هذه الملاحظات في تقرير المريض الطبي المعتمد'} <kbd class="toolbar-shortcut-tag" style="font-size: 9.5px; opacity: 0.85; margin-inline-start: 6px; padding: 1.5px 5px; background: rgba(0,0,0,0.18); border-radius: 4px; font-family: monospace;" title="${isEn ? 'Alt+T to toggle' : 'Alt+T لتبديل الحالة'}">Alt+T</kbd></strong>
               <small class="private-notes-share-hint">
                 ${isIncluded
                   ? (isEn ? '⚠️ Overrides quarantine: This note will be visible on the printable report and in the patient portal.' : '⚠️ تم إلغاء الحجب: ستظهر هذه الملاحظة رسمياً في تقرير المريض المطبوع وبوابة المريض.')
