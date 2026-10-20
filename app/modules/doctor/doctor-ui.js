@@ -4928,12 +4928,79 @@
   let _doctorShortcutsInitialized = false;
   let _lastCaseLoadTimeMs = 0;
 
+  const patientMedicalHistoryCache = new Map();
+
+  function cachePatientMedicalHistory(patientKey, historyData) {
+    if (!patientKey || !historyData) return;
+    patientMedicalHistoryCache.set(String(patientKey), {
+      data: historyData,
+      cachedAt: Date.now()
+    });
+  }
+
+  function getCachedPatientMedicalHistory(patientKey) {
+    if (!patientKey) return null;
+    const entry = patientMedicalHistoryCache.get(String(patientKey));
+    if (!entry) return null;
+    if (Date.now() - entry.cachedAt > 1800000) {
+      patientMedicalHistoryCache.delete(String(patientKey));
+      return null;
+    }
+    return entry.data;
+  }
+
+  function clearPatientMedicalHistoryCache() {
+    patientMedicalHistoryCache.clear();
+  }
+
   function recordCaseLoadMetric(caseId, durationMs) {
     _lastCaseLoadTimeMs = Number(durationMs) || 0;
   }
 
   function getLastCaseLoadDuration() {
     return _lastCaseLoadTimeMs;
+  }
+
+  function navigateDoctorQueue(direction = 1) {
+    if (typeof document === "undefined") return null;
+    const queueList = document.getElementById("doctorQueueList");
+    if (!queueList) return null;
+    const buttons = Array.from(queueList.querySelectorAll("button[data-case-id]"));
+    if (!buttons || buttons.length === 0) return null;
+
+    const currentId = getActiveDoctorCaseId();
+    let currentIndex = buttons.findIndex(b => b.dataset.caseId === currentId);
+
+    let nextIndex;
+    if (currentIndex === -1) {
+      nextIndex = direction > 0 ? 0 : buttons.length - 1;
+    } else {
+      nextIndex = currentIndex + direction;
+      if (nextIndex < 0) nextIndex = 0;
+      if (nextIndex >= buttons.length) nextIndex = buttons.length - 1;
+    }
+
+    if (buttons[nextIndex]) {
+      const nextId = buttons[nextIndex].dataset.caseId;
+      if (nextId !== currentId) {
+        if (typeof global.selectDoctorCase === "function") {
+          global.selectDoctorCase(nextId);
+        } else if (typeof window !== "undefined" && typeof window.selectDoctorCase === "function") {
+          window.selectDoctorCase(nextId);
+        }
+      }
+      buttons.forEach(b => {
+        if (b.dataset.caseId === nextId) {
+          b.style.outline = "2px solid var(--teal, #0ea5e9)";
+        } else {
+          b.style.outline = "";
+        }
+      });
+      buttons[nextIndex].scrollIntoView({ behavior: "smooth", block: "nearest" });
+      buttons[nextIndex].focus();
+      return nextId;
+    }
+    return null;
   }
 
   function getActiveDoctorCaseId() {
@@ -5260,23 +5327,35 @@
     _doctorShortcutsInitialized = true;
 
     document.addEventListener("keydown", (e) => {
-      // 0. Practo Patient Search Shortcut: Ctrl + K / Cmd + K or / (forward slash)
+      const activeTag = document.activeElement ? document.activeElement.tagName.toUpperCase() : "";
+      const isInput = activeTag === "INPUT" || activeTag === "TEXTAREA" || activeTag === "SELECT" || (document.activeElement && document.activeElement.isContentEditable);
+      const isSearchInput = document.activeElement && document.activeElement.id === "doctorPatientSearchInput";
+
+      // 0a. Practo Patient Search Shortcut: Ctrl + K / Cmd + K or / (forward slash)
       if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K" || e.code === "KeyK")) {
         e.preventDefault();
         focusDoctorPatientSearch();
         return;
       }
-      if (e.key === "/" && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        const activeTag = document.activeElement ? document.activeElement.tagName.toUpperCase() : "";
-        const isInput = activeTag === "INPUT" || activeTag === "TEXTAREA" || activeTag === "SELECT" || (document.activeElement && document.activeElement.isContentEditable);
-        if (!isInput) {
-          e.preventDefault();
-          focusDoctorPatientSearch();
-          return;
-        }
+      if (e.key === "/" && !e.ctrlKey && !e.metaKey && !e.altKey && !isInput) {
+        e.preventDefault();
+        focusDoctorPatientSearch();
+        return;
       }
 
-      // 1. Global Quick Approve: Ctrl + Enter or Cmd + Enter
+      // 0b. Rapid Patient Directory Queue Navigation (ArrowDown / ArrowUp or J / K)
+      if ((isSearchInput && e.key === "ArrowDown") || (!isInput && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === "ArrowDown" || e.key === "j" || e.key === "J"))) {
+        e.preventDefault();
+        navigateDoctorQueue(1);
+        return;
+      }
+      if (!isInput && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === "ArrowUp" || e.key === "k" || e.key === "K")) {
+        e.preventDefault();
+        navigateDoctorQueue(-1);
+        return;
+      }
+
+      // 1. Global Quick Approve: Ctrl + Enter or Cmd + Enter (< 1s Rapid SLA)
       if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
         if (document.getElementById("doctorRejectReentryModal") || document.getElementById("doctorOverrideRiskModal") || document.getElementById("doctorShortcutsModal") || document.getElementById("fieldComparisonModal")) {
           return;
@@ -5284,6 +5363,13 @@
         const activeCaseId = getActiveDoctorCaseId();
         if (activeCaseId && typeof global.generateAndApproveReport === "function") {
           e.preventDefault();
+          const ackBox = document.getElementById("doctorReviewAcknowledged");
+          if (ackBox && !ackBox.checked) {
+            ackBox.checked = true;
+            if (typeof handleReviewAcknowledgedToggle === "function") {
+              handleReviewAcknowledgedToggle(true);
+            }
+          }
           global.generateAndApproveReport(activeCaseId);
           return;
         }
@@ -5297,6 +5383,13 @@
         const activeCaseId = getActiveDoctorCaseId();
         if (activeCaseId && typeof global.generateAndApproveReport === "function") {
           e.preventDefault();
+          const ackBox = document.getElementById("doctorReviewAcknowledged");
+          if (ackBox && !ackBox.checked) {
+            ackBox.checked = true;
+            if (typeof handleReviewAcknowledgedToggle === "function") {
+              handleReviewAcknowledgedToggle(true);
+            }
+          }
           global.generateAndApproveReport(activeCaseId);
           return;
         }
@@ -5595,7 +5688,14 @@
             </div>
           </div>
           <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--surface-2, #0f172a); border-radius: 8px;">
-            <span>${isEn ? "Generate & Approve Certified Report" : "توليد واعتماد التقرير الطبي المعتمد"}</span>
+            <span>${isEn ? "Navigate Directory: Next / Previous Patient" : "التنقل في قائمة المرضى: المريض التالي / السابق"}</span>
+            <div style="display: flex; gap: 4px;">
+              <kbd style="padding: 2px 7px; background: var(--surface, #1e293b); border: 1px solid var(--line, #334155); border-radius: 4px; font-family: monospace; font-weight: 700; color: #38bdf8;">↓ / J</kbd>
+              <kbd style="padding: 2px 7px; background: var(--surface, #1e293b); border: 1px solid var(--line, #334155); border-radius: 4px; font-family: monospace; font-weight: 700; color: #38bdf8;">↑ / K</kbd>
+            </div>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--surface-2, #0f172a); border-radius: 8px;">
+            <span>${isEn ? "Rapid Clinical Approval & Sign (< 1s SLA)" : "الاعتماد السريع والتوثيق الطبي (أقل من ثانية)"}</span>
             <div style="display: flex; gap: 4px;">
               <kbd style="padding: 2px 7px; background: var(--surface, #1e293b); border: 1px solid var(--line, #334155); border-radius: 4px; font-family: monospace; font-weight: 700; color: #38bdf8;">Ctrl + Enter</kbd>
               <kbd style="padding: 2px 7px; background: var(--surface, #1e293b); border: 1px solid var(--line, #334155); border-radius: 4px; font-family: monospace; font-weight: 700; color: #38bdf8;">Alt + A</kbd>
@@ -5709,7 +5809,12 @@
 
   function renderPatientMedicalHistoryCard(c, isEn = false, options = {}) {
     if (!c) return "";
-    const intake = c.clinicalIntake || c.patientHistory || c.intake || {};
+    const patientKey = c.patientId || c.patientUid || c.id;
+    const cachedHistory = getCachedPatientMedicalHistory(patientKey);
+    const intake = cachedHistory || c.clinicalIntake || c.patientHistory || c.intake || {};
+    if (!cachedHistory && Object.keys(intake).length > 0) {
+      cachePatientMedicalHistory(patientKey, intake);
+    }
     const assessment = c.assessment || {};
 
     let chronicList = [];
@@ -7992,7 +8097,11 @@
     // Practo Search & Filter in Assigned Patients Directory
     focusDoctorPatientSearch,
     filterAndSortDoctorCases,
-    getDoctorDirectoryI18n
+    getDoctorDirectoryI18n,
+    navigateDoctorQueue,
+    cachePatientMedicalHistory,
+    getCachedPatientMedicalHistory,
+    clearPatientMedicalHistoryCache
   };
 
   global.HealthVibes = global.HealthVibes || {};

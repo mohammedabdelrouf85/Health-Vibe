@@ -3805,13 +3805,34 @@ window.setDoctorQueueSort = function(sortKey) {
   renderDoctorQueueItems(state.doctorQueue || []);
 };
 
-window.setDoctorQueueSearch = function(value) {
+let _doctorSearchDebounceTimer = null;
+window.setDoctorQueueSearch = function(value, immediate = false) {
   currentDoctorQueueSearch = String(value || "").trim().toLowerCase();
   const clearBtn = document.getElementById("doctorPatientSearchClearBtn");
   if (clearBtn) {
     clearBtn.style.display = currentDoctorQueueSearch ? "inline-flex" : "none";
   }
-  renderDoctorQueueItems(state.doctorQueue || []);
+
+  if (immediate) {
+    if (_doctorSearchDebounceTimer) {
+      clearTimeout(_doctorSearchDebounceTimer);
+      _doctorSearchDebounceTimer = null;
+    }
+    renderDoctorQueueItems(state.doctorQueue || []);
+    return;
+  }
+
+  if (_doctorSearchDebounceTimer) clearTimeout(_doctorSearchDebounceTimer);
+  _doctorSearchDebounceTimer = setTimeout(() => {
+    _doctorSearchDebounceTimer = null;
+    renderDoctorQueueItems(state.doctorQueue || []);
+  }, 120);
+};
+
+window.navigateDoctorQueue = function(direction) {
+  if (window.HealthVibes?.DoctorUI?.navigateDoctorQueue) {
+    return window.HealthVibes.DoctorUI.navigateDoctorQueue(direction);
+  }
 };
 
 window.clearDoctorPatientSearch = function() {
@@ -4599,6 +4620,7 @@ async function renderDoctorQueue() {
             dir="auto"
             value="${escapeHtml(currentDoctorQueueSearch)}" 
             oninput="setDoctorQueueSearch(this.value)" 
+            onkeydown="if(event.key==='Enter'){event.preventDefault();setDoctorQueueSearch(this.value,true);}else if(event.key==='ArrowDown'){event.preventDefault();navigateDoctorQueue(1);}"
             placeholder="${i18n ? i18n.search.placeholder : (isEn ? 'Search by patient name, MRN, National ID, diagnosis, phone... (Ctrl+K)' : 'ابحث باسم المريض، رقم الملف، الهوية الوطنية، التشخيص، الهاتف... (Ctrl+K)')}" 
             autocomplete="off"
             spellcheck="false"
