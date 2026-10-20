@@ -4948,12 +4948,163 @@
            (global.state?.doctorQueue && global.state.doctorQueue[0] ? global.state.doctorQueue[0].id : null);
   }
 
+  function focusDoctorPatientSearch() {
+    if (typeof document === "undefined") return;
+    const searchInput = document.getElementById("doctorPatientSearchInput");
+    if (searchInput) {
+      searchInput.focus();
+      searchInput.select();
+      searchInput.classList.add("focus-pulse-highlight");
+      setTimeout(() => searchInput.classList.remove("focus-pulse-highlight"), 1200);
+    }
+  }
+
+  function filterAndSortDoctorCases(caseList = [], options = {}) {
+    const {
+      search = "",
+      status = "all",
+      priority = "all",
+      quickFilter = "all",
+      sort = "waiting_desc",
+      isEn = false
+    } = options;
+
+    let result = Array.isArray(caseList) ? [...caseList] : [];
+
+    // 1. Status Filter
+    if (status && status !== "all") {
+      if (status === "under_review") {
+        result = result.filter(c => c.status === "under_review" || c.status === "UNDER_REVIEW");
+      } else if (status === "assigned") {
+        result = result.filter(c => ["assigned", "triaged", "pending", "submitted", "ASSIGNED", "TRIAGED", "PENDING", "SUBMITTED"].includes(c.status));
+      } else if (status === "more_info_requested") {
+        result = result.filter(c => c.status === "more_info_requested" || c.status === "MORE_INFO_REQUESTED");
+      } else if (status === "approved") {
+        result = result.filter(c => c.status === "approved" || c.status === "APPROVED");
+      } else if (status === "closed_escalated") {
+        result = result.filter(c => ["closed", "escalated", "rejected", "CLOSED", "ESCALATED", "REJECTED"].includes(c.status));
+      }
+    }
+
+    // 2. Priority Filter
+    if (priority && priority !== "all") {
+      result = result.filter(c => {
+        const o2 = Number(c && (c.o2 ?? c.oxygenLevel ?? c.assessment?.oxygenLevel ?? c.assessment?.o2)) || 0;
+        const p = String(c?.priority || c?.risk || c?.assessment?.aiTriage?.priority || "").toLowerCase();
+        let key = "normal";
+        if (p.includes("urgent") || p.includes("emergency") || p.includes("عاجل") || (o2 > 0 && o2 < 90)) key = "urgent";
+        else if (p.includes("high") || p.includes("medium") || p.includes("عالية") || (o2 >= 90 && o2 < 93)) key = "high";
+        return key === priority;
+      });
+    }
+
+    // 3. Quick Triage Filter
+    if (quickFilter && quickFilter !== "all") {
+      if (quickFilter === "critical_spo2") {
+        result = result.filter(c => {
+          const o2 = Number(c && (c.o2 ?? c.oxygenLevel ?? c.assessment?.oxygenLevel ?? c.assessment?.o2)) || 0;
+          const p = String(c?.priority || c?.risk || "").toLowerCase();
+          return (o2 > 0 && o2 < 90) || p.includes("urgent") || p.includes("عاجل");
+        });
+      } else if (quickFilter === "awaiting_patient") {
+        result = result.filter(c => {
+          const s = String(c?.status || "").toLowerCase();
+          const hasReplied = Boolean(c.patientResponse || c.followUpResponse || c.moreInfoResponse);
+          return s.includes("more_info") && !hasReplied;
+        });
+      } else if (quickFilter === "patient_replied") {
+        result = result.filter(c => Boolean(c.patientResponse || c.followUpResponse || c.moreInfoResponse));
+      } else if (quickFilter === "with_private_notes") {
+        result = result.filter(c => {
+          const savedPrivateNotes = getCasePrivateNotes(c.id).privateNotes;
+          return Boolean(c.privateDoctorNotes || c.privateNotes || savedPrivateNotes);
+        });
+      } else if (quickFilter === "stale_revision") {
+        result = result.filter(c => isRevisionStale(c));
+      }
+    }
+
+    // 4. Multi-Field Deep Search
+    const term = String(search || "").trim().toLowerCase();
+    if (term) {
+      result = result.filter(c => {
+        const savedPrivateNotes = getCasePrivateNotes(c.id).privateNotes;
+        const fields = [
+          c.id, c.reportRef, c.caseId,
+          c.patientId, c.patientUid,
+          c.patientName, c.patientNameEn, c.name, c.nameEn,
+          c.nationalId, c.civilId, c.patientNationalId,
+          c.fileNumber, c.patientFileNo, c.medicalRecordNumber, c.mrn,
+          c.patientEmail, c.userEmail,
+          c.patientPhone, c.phone, c.mobile,
+          c.symptoms, c.symptomsEn,
+          c.clinicalDiagnosis, c.doctorNote, c.notes, c.patientNotes,
+          c.moreInfoNote, c.privateDoctorNotes, c.privateNotes, savedPrivateNotes,
+          c.assessment?.chiefComplaint, c.chiefComplaint
+        ];
+        const text = fields.filter(Boolean).map(v => String(v).toLowerCase()).join(" ");
+        return text.includes(term);
+      });
+    }
+
+    // 5. Smart Clinical Sorting
+    result.sort((a, b) => {
+      const o2A = Number(a && (a.o2 ?? a.oxygenLevel ?? a.assessment?.oxygenLevel)) || 999;
+      const o2B = Number(b && (b.o2 ?? b.oxygenLevel ?? b.assessment?.oxygenLevel)) || 999;
+
+      const pKeyA = (o2A < 90 || String(a?.priority || a?.risk || "").includes("urgent")) ? 3 : (String(a?.priority || "").includes("high") ? 2 : 1);
+      const pKeyB = (o2B < 90 || String(b?.priority || b?.risk || "").includes("urgent")) ? 3 : (String(b?.priority || "").includes("high") ? 2 : 1);
+
+      const timeA = new Date(a.submittedAt || a.createdAt || 0).getTime();
+      const timeB = new Date(b.submittedAt || b.createdAt || 0).getTime();
+
+      const nameA = String(a.name || a.patientName || a.nameEn || a.patientNameEn || "").trim();
+      const nameB = String(b.name || b.patientName || b.nameEn || b.patientNameEn || "").trim();
+
+      if (sort === "oxygen_asc") {
+        if (o2A !== o2B) return o2A - o2B;
+        return pKeyB - pKeyA;
+      }
+      if (sort === "patient_name_asc") {
+        return nameA.localeCompare(nameB, isEn ? "en" : "ar", { sensitivity: "base" });
+      }
+      if (sort === "priority_desc" && pKeyA !== pKeyB) {
+        return pKeyB - pKeyA;
+      }
+      if (sort === "waiting_desc") {
+        return timeA - timeB; // Older submitted date means waiting longer
+      }
+      if (sort === "newest") {
+        return timeB - timeA;
+      }
+      return 0;
+    });
+
+    return result;
+  }
+
   function initDoctorKeyboardShortcuts() {
     if (typeof document === "undefined" || typeof document.addEventListener !== "function") return;
     if (_doctorShortcutsInitialized) return;
     _doctorShortcutsInitialized = true;
 
     document.addEventListener("keydown", (e) => {
+      // 0. Practo Patient Search Shortcut: Ctrl + K / Cmd + K or / (forward slash)
+      if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K" || e.code === "KeyK")) {
+        e.preventDefault();
+        focusDoctorPatientSearch();
+        return;
+      }
+      if (e.key === "/" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const activeTag = document.activeElement ? document.activeElement.tagName.toUpperCase() : "";
+        const isInput = activeTag === "INPUT" || activeTag === "TEXTAREA" || activeTag === "SELECT" || (document.activeElement && document.activeElement.isContentEditable);
+        if (!isInput) {
+          e.preventDefault();
+          focusDoctorPatientSearch();
+          return;
+        }
+      }
+
       // 1. Global Quick Approve: Ctrl + Enter or Cmd + Enter
       if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
         if (document.getElementById("doctorRejectReentryModal") || document.getElementById("doctorOverrideRiskModal") || document.getElementById("doctorShortcutsModal") || document.getElementById("fieldComparisonModal")) {
@@ -5204,8 +5355,21 @@
         return;
       }
 
-      // 15. Escape key closes shortcuts modal
+      // 15. Escape key handling
       if (e.key === "Escape") {
+        const searchInput = document.getElementById("doctorPatientSearchInput");
+        if (document.activeElement === searchInput) {
+          if (searchInput.value) {
+            if (typeof global.clearDoctorPatientSearch === "function") {
+              global.clearDoctorPatientSearch();
+            } else {
+              searchInput.value = "";
+            }
+          } else {
+            searchInput.blur();
+          }
+          return;
+        }
         const shortcutsModal = document.getElementById("doctorShortcutsModal");
         if (shortcutsModal && shortcutsModal.style.display !== "none") {
           e.preventDefault();
@@ -5252,6 +5416,13 @@
           <button type="button" class="btn-close-modal" onclick="HealthVibes.DoctorUI.closeDoctorShortcutsModal()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: var(--muted, #94a3b8);">&times;</button>
         </div>
         <div class="shortcuts-grid" style="display: grid; gap: 9px; font-size: 13px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--surface-2, #0f172a); border-radius: 8px;">
+            <span>${isEn ? "Focus Patient Search (Practo Directory)" : "البحث السريع في قائمة المرضى المعينين"}</span>
+            <div style="display: flex; gap: 4px;">
+              <kbd style="padding: 2px 7px; background: var(--surface, #1e293b); border: 1px solid var(--line, #334155); border-radius: 4px; font-family: monospace; font-weight: 700; color: #38bdf8;">Ctrl + K</kbd>
+              <kbd style="padding: 2px 7px; background: var(--surface, #1e293b); border: 1px solid var(--line, #334155); border-radius: 4px; font-family: monospace; font-weight: 700; color: #38bdf8;">/</kbd>
+            </div>
+          </div>
           <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--surface-2, #0f172a); border-radius: 8px;">
             <span>${isEn ? "Generate & Approve Certified Report" : "توليد واعتماد التقرير الطبي المعتمد"}</span>
             <div style="display: flex; gap: 4px;">
@@ -7646,7 +7817,10 @@
     getDoctorSignatureStyle,
     setDoctorSignatureStyle,
     cycleDoctorSignatureStyle,
-    togglePatientPdfFooterPreview
+    togglePatientPdfFooterPreview,
+    // Practo Search & Filter in Assigned Patients Directory
+    focusDoctorPatientSearch,
+    filterAndSortDoctorCases
   };
 
   global.HealthVibes = global.HealthVibes || {};

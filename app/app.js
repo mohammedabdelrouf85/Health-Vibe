@@ -3574,6 +3574,7 @@ let currentDoctorQueueFilter = 'all';
 let currentDoctorPriorityFilter = 'all';
 let currentDoctorQueueSort = 'waiting_desc';
 let currentDoctorQueueSearch = '';
+let currentDoctorQuickFilter = 'all';
 
 // Missing approved fields remain missing; never synthesize clinical content.
 function recordedClinicalText(value, isEn) {
@@ -3806,7 +3807,80 @@ window.setDoctorQueueSort = function(sortKey) {
 
 window.setDoctorQueueSearch = function(value) {
   currentDoctorQueueSearch = String(value || "").trim().toLowerCase();
+  const clearBtn = document.getElementById("doctorPatientSearchClearBtn");
+  if (clearBtn) {
+    clearBtn.style.display = currentDoctorQueueSearch ? "inline-flex" : "none";
+  }
   renderDoctorQueueItems(state.doctorQueue || []);
+};
+
+window.clearDoctorPatientSearch = function() {
+  currentDoctorQueueSearch = '';
+  const searchInput = document.getElementById("doctorPatientSearchInput");
+  if (searchInput) {
+    searchInput.value = '';
+    searchInput.focus();
+  }
+  const clearBtn = document.getElementById("doctorPatientSearchClearBtn");
+  if (clearBtn) clearBtn.style.display = "none";
+  renderDoctorQueueItems(state.doctorQueue || []);
+};
+
+window.focusDoctorPatientSearch = function() {
+  const searchInput = document.getElementById("doctorPatientSearchInput");
+  if (searchInput) {
+    searchInput.focus();
+    searchInput.select();
+    searchInput.classList.add("focus-pulse-highlight");
+    setTimeout(() => searchInput.classList.remove("focus-pulse-highlight"), 1200);
+  }
+};
+
+window.setDoctorQuickFilter = function(quickKey) {
+  currentDoctorQuickFilter = quickKey || "all";
+  const filterTabsContainer = document.getElementById("doctorQueueFilterTabs");
+  if (filterTabsContainer) {
+    filterTabsContainer.querySelectorAll(".practo-chip-btn").forEach(btn => {
+      btn.classList.toggle("is-active", btn.dataset.quick === currentDoctorQuickFilter);
+    });
+  }
+  renderDoctorQueueItems(state.doctorQueue || []);
+};
+
+window.resetDoctorQueueFilters = function() {
+  currentDoctorQueueSearch = '';
+  currentDoctorQueueFilter = 'all';
+  currentDoctorPriorityFilter = 'all';
+  currentDoctorQuickFilter = 'all';
+  currentDoctorQueueSort = 'waiting_desc';
+
+  const searchInput = document.getElementById("doctorPatientSearchInput");
+  if (searchInput) searchInput.value = '';
+
+  const clearBtn = document.getElementById("doctorPatientSearchClearBtn");
+  if (clearBtn) clearBtn.style.display = "none";
+
+  const prioritySelect = document.getElementById("doctorPrioritySelect");
+  if (prioritySelect) prioritySelect.value = 'all';
+
+  const sortSelect = document.getElementById("doctorQueueSortSelect");
+  if (sortSelect) sortSelect.value = 'waiting_desc';
+
+  const filterTabsContainer = document.getElementById("doctorQueueFilterTabs");
+  if (filterTabsContainer) {
+    filterTabsContainer.querySelectorAll(".status-filter-tab").forEach(btn => {
+      btn.classList.toggle("active", btn.dataset.filter === "all");
+    });
+    filterTabsContainer.querySelectorAll(".practo-chip-btn").forEach(btn => {
+      btn.classList.toggle("is-active", btn.dataset.quick === "all");
+    });
+  }
+
+  renderDoctorQueueItems(state.doctorQueue || []);
+  if (typeof showToast === "function") {
+    const isEn = (currentLanguage === "en");
+    showToast(isEn ? "Search & filters reset" : "تمت إعادة ضبط خيارات البحث والتصفية");
+  }
 };
 
 window.applyDiagPreset = function(presetKey, explicitLang = null) {
@@ -4116,6 +4190,54 @@ window.resumeReview = async function(id) {
   }
 };
 
+function renderDoctorQuickChips(realCases, isEn) {
+  const chipsContainer = document.getElementById("practoQuickChipsRow");
+  if (!chipsContainer) return;
+
+  const totalReal = (realCases || []).length;
+  const critCount = (realCases || []).filter(c => {
+    const o2 = getCaseOxygenValue(c);
+    const p = String(c?.priority || c?.risk || "").toLowerCase();
+    return (o2 > 0 && o2 < 90) || p.includes("urgent") || p.includes("عاجل");
+  }).length;
+  const awaitingCount = (realCases || []).filter(c => {
+    const hasReplied = Boolean(c.patientResponse || c.followUpResponse || c.moreInfoResponse);
+    return c.status === CASE_STATUS.MORE_INFO_REQUESTED && !hasReplied;
+  }).length;
+  const repliedCount = (realCases || []).filter(c => Boolean(c.patientResponse || c.followUpResponse || c.moreInfoResponse)).length;
+  const privateNotesCount = (realCases || []).filter(c => {
+    const memory = window.HealthVibes?.DoctorUI?.getCasePrivateNotes ? window.HealthVibes.DoctorUI.getCasePrivateNotes(c.id)?.privateNotes : '';
+    return Boolean(c.privateDoctorNotes || c.privateNotes || memory);
+  }).length;
+  const staleCount = (realCases || []).filter(c => Boolean(window.HealthVibes?.DoctorUI?.isRevisionStale && window.HealthVibes.DoctorUI.isRevisionStale(c))).length;
+
+  const chips = [
+    { key: 'all', label: isEn ? 'All' : 'الكل', count: totalReal, icon: '👥' },
+    { key: 'critical_spo2', label: isEn ? 'Critical (O2<90%)' : 'أكسجين حرج', count: critCount, icon: '🚨', pill: critCount > 0 ? 'danger' : '' },
+    { key: 'patient_replied', label: isEn ? 'Patient Replied' : 'رد المريض', count: repliedCount, icon: '💬', pill: repliedCount > 0 ? 'ok' : '' },
+    { key: 'awaiting_patient', label: isEn ? 'Awaiting Patient' : 'بانتظار المريض', count: awaitingCount, icon: '⏳' },
+    { key: 'with_private_notes', label: isEn ? 'Private Notes' : 'ملاحظات سرية', count: privateNotesCount, icon: '📝' },
+    { key: 'stale_revision', label: isEn ? 'Stale Revision' : 'تحديث معلق', count: staleCount, icon: '⚠️', pill: staleCount > 0 ? 'pending' : '' }
+  ];
+
+  chipsContainer.innerHTML = chips.map(chip => {
+    const isActive = currentDoctorQuickFilter === chip.key;
+    return `
+      <button 
+        type="button" 
+        class="practo-chip-btn ${isActive ? 'is-active' : ''}" 
+        data-quick="${chip.key}" 
+        onclick="setDoctorQuickFilter('${chip.key}')"
+        title="${chip.label} (${chip.count})"
+      >
+        <span class="practo-chip-icon">${chip.icon}</span>
+        <span class="practo-chip-label">${chip.label}</span>
+        <span class="practo-chip-count ${chip.pill || ''}">${chip.count}</span>
+      </button>
+    `;
+  }).join('');
+}
+
 function renderDoctorQueueItems(allCases) {
   const queueList = document.getElementById("doctorQueueList");
   if (!queueList) return;
@@ -4146,6 +4268,15 @@ function renderDoctorQueueItems(allCases) {
   // ⚡ تحديث شريط مؤشرات أداء الطبيب المصغر
   if (typeof updateDoctorMiniKpiBar === "function") {
     updateDoctorMiniKpiBar(realCases.length > 0 ? realCases : allCases);
+  }
+
+  // 🏷️ تحديث شرائح الفرز السريع (Practo Quick Triage Chips) بأحدث الإحصاءات
+  renderDoctorQuickChips(realCases, isEn);
+
+  // 🔍 تحديث زر مسح البحث
+  const clearBtn = document.getElementById("doctorPatientSearchClearBtn");
+  if (clearBtn) {
+    clearBtn.style.display = currentDoctorQueueSearch ? "inline-flex" : "none";
   }
 
   queueList.innerHTML = '';
@@ -4182,18 +4313,54 @@ function renderDoctorQueueItems(allCases) {
     }
   }
 
+  // 🎯 تصفية حسب الأولوية السريرية
   if (!isSandbox && currentDoctorPriorityFilter !== "all") {
     cases = cases.filter(c => getCasePriorityKey(c) === currentDoctorPriorityFilter);
   }
 
+  // 🚀 تصفية الفرز السريع (Practo Quick Triage Filter)
+  if (!isSandbox && currentDoctorQuickFilter !== 'all') {
+    if (currentDoctorQuickFilter === 'critical_spo2') {
+      cases = cases.filter(c => {
+        const o2 = getCaseOxygenValue(c);
+        const p = String(c?.priority || c?.risk || "").toLowerCase();
+        return (o2 > 0 && o2 < 90) || p.includes("urgent") || p.includes("عاجل");
+      });
+    } else if (currentDoctorQuickFilter === 'awaiting_patient') {
+      cases = cases.filter(c => {
+        const hasReplied = Boolean(c.patientResponse || c.followUpResponse || c.moreInfoResponse);
+        return c.status === CASE_STATUS.MORE_INFO_REQUESTED && !hasReplied;
+      });
+    } else if (currentDoctorQuickFilter === 'patient_replied') {
+      cases = cases.filter(c => Boolean(c.patientResponse || c.followUpResponse || c.moreInfoResponse));
+    } else if (currentDoctorQuickFilter === 'with_private_notes') {
+      cases = cases.filter(c => {
+        const memory = window.HealthVibes?.DoctorUI?.getCasePrivateNotes ? window.HealthVibes.DoctorUI.getCasePrivateNotes(c.id)?.privateNotes : '';
+        return Boolean(c.privateDoctorNotes || c.privateNotes || memory);
+      });
+    } else if (currentDoctorQuickFilter === 'stale_revision') {
+      cases = cases.filter(c => Boolean(window.HealthVibes?.DoctorUI?.isRevisionStale && window.HealthVibes.DoctorUI.isRevisionStale(c)));
+    }
+  }
+
+  // 🔍 البحث المتعمق في جميع حقول المريض (Practo Multi-field Search)
   if (!isSandbox && currentDoctorQueueSearch) {
     cases = cases.filter(c => {
-      const haystack = [
-        c.id, c.patientId, c.patientName, c.patientNameEn, c.name, c.nameEn,
-        c.patientEmail, c.userEmail, c.patientPhone, c.phone,
-        c.symptoms, c.symptomsEn, c.notes, c.patientNotes, c.clinicalDiagnosis,
-        c.doctorNote, c.moreInfoNote
-      ].map(value => String(value || "").toLowerCase()).join(" ");
+      const memory = window.HealthVibes?.DoctorUI?.getCasePrivateNotes ? window.HealthVibes.DoctorUI.getCasePrivateNotes(c.id)?.privateNotes : '';
+      const fields = [
+        c.id, c.reportRef, c.caseId,
+        c.patientId, c.patientUid,
+        c.patientName, c.patientNameEn, c.name, c.nameEn,
+        c.nationalId, c.civilId, c.patientNationalId,
+        c.fileNumber, c.patientFileNo, c.medicalRecordNumber, c.mrn,
+        c.patientEmail, c.userEmail,
+        c.patientPhone, c.phone, c.mobile,
+        c.symptoms, c.symptomsEn,
+        c.clinicalDiagnosis, c.doctorNote, c.notes, c.patientNotes,
+        c.moreInfoNote, c.privateDoctorNotes, c.privateNotes, memory,
+        c.assessment?.chiefComplaint, c.chiefComplaint
+      ];
+      const haystack = fields.filter(Boolean).map(v => String(v).toLowerCase()).join(" ");
       return haystack.includes(currentDoctorQueueSearch);
     });
   }
@@ -4222,16 +4389,37 @@ function renderDoctorQueueItems(allCases) {
         </div>
       `;
     } else {
-      queueList.innerHTML = `
-        <div class="hv-state-card" style="margin: 16px 0;">
-          <span class="state-icon">📋</span>
-          <h4>${isEn ? 'No Cases in Queue' : 'لا توجد حالات في هذا التصنيف'}</h4>
-          <p>${isEn ? 'All patient assessments in this category have been attended to, or no new assessments have arrived yet.' : 'تم التعامل مع جميع التقييمات في هذا التصنيف، أو لم تصل تقييمات جديدة حتى الآن.'}</p>
-          <button type="button" class="outline-button" onclick="renderDoctorQueue()" style="font-size: 12.5px; padding: 6px 14px; margin-top: 4px;">
-            <span>🔄</span> ${isEn ? 'Refresh' : 'تحديث القائمة'}
-          </button>
-        </div>
-      `;
+      // 🏥 Practo Zero-Results State: Clear query readout & one-click reset action
+      const isFiltered = currentDoctorQueueSearch || currentDoctorQuickFilter !== 'all' || currentDoctorPriorityFilter !== 'all' || currentDoctorQueueFilter !== 'all';
+      if (isFiltered) {
+        queueList.innerHTML = `
+          <div class="practo-zero-results-card hv-state-card" style="margin: 16px 0; padding: 24px 16px; text-align: center; border-radius: 12px; background: var(--surface); border: 1.5px dashed var(--line);">
+            <div style="font-size: 32px; margin-bottom: 8px;">🔍</div>
+            <h4 style="margin: 0 0 6px 0; font-size: 15px; color: var(--ink);">
+              ${isEn ? 'No Matching Patients Found' : 'لم يتم العثور على مرضى مطابقين'}
+            </h4>
+            <p style="margin: 0 0 14px 0; font-size: 12.5px; color: var(--muted); line-height: 1.5;">
+              ${currentDoctorQueueSearch 
+                ? (isEn ? `No assigned patient records matched "${escapeHtml(currentDoctorQueueSearch)}".` : `لا توجد نتائج مطابقة لبحثك: "${escapeHtml(currentDoctorQueueSearch)}".`)
+                : (isEn ? 'No patient records meet the active filter and triage selection.' : 'لا توجد حالات تطابق شروط الفلترة أو الفرز السريع المحددة.')}
+            </p>
+            <button type="button" class="soft-button" onclick="resetDoctorQueueFilters()" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 18px; font-size: 13px; font-weight: 700; margin: 0 auto;">
+              <span>🔄</span> ${isEn ? 'Reset Search & Filters' : 'إعادة ضبط البحث والفلترة'}
+            </button>
+          </div>
+        `;
+      } else {
+        queueList.innerHTML = `
+          <div class="hv-state-card" style="margin: 16px 0;">
+            <span class="state-icon">📋</span>
+            <h4>${isEn ? 'No Cases in Queue' : 'لا توجد حالات في هذا التصنيف'}</h4>
+            <p>${isEn ? 'All patient assessments in this category have been attended to, or no new assessments have arrived yet.' : 'تم التعامل مع جميع التقييمات في هذا التصنيف، أو لم تصل تقييمات جديدة حتى الآن.'}</p>
+            <button type="button" class="outline-button" onclick="renderDoctorQueue()" style="font-size: 12.5px; padding: 6px 14px; margin-top: 4px;">
+              <span>🔄</span> ${isEn ? 'Refresh' : 'تحديث القائمة'}
+            </button>
+          </div>
+        `;
+      }
     }
     const reviewPanel = document.getElementById("doctorReviewPanel");
     if (reviewPanel) {
@@ -4266,6 +4454,18 @@ function renderDoctorQueueItems(allCases) {
     const priorityB = getPriorityMeta(getCasePriorityKey(b), isEn).weight;
     const waitA = getCaseWaitingMinutes(a);
     const waitB = getCaseWaitingMinutes(b);
+    const o2A = getCaseOxygenValue(a) || 999;
+    const o2B = getCaseOxygenValue(b) || 999;
+    const nameA = String(a.name || a.patientName || a.nameEn || a.patientNameEn || "").trim();
+    const nameB = String(b.name || b.patientName || b.nameEn || b.patientNameEn || "").trim();
+
+    if (currentDoctorQueueSort === "oxygen_asc") {
+      if (o2A !== o2B) return o2A - o2B;
+      return priorityB - priorityA;
+    }
+    if (currentDoctorQueueSort === "patient_name_asc") {
+      return nameA.localeCompare(nameB, isEn ? "en" : "ar", { sensitivity: "base" });
+    }
     if (currentDoctorQueueSort === "priority_desc" && priorityA !== priorityB) return priorityB - priorityA;
     if (currentDoctorQueueSort === "waiting_desc" && waitA !== waitB) return waitB - waitA;
     if (currentDoctorQueueSort === "newest") return getCaseSubmittedMillis(b) - getCaseSubmittedMillis(a);
@@ -4356,7 +4556,7 @@ async function renderDoctorQueue() {
 
   const isEn = currentLanguage === "en";
 
-  // Render filter tabs if container exists
+  // Render Practo Search & Filter Station if container exists
   if (filterTabsContainer) {
     const filters = [
       { key: 'all', ar: 'الكل (مرضى فعليين)', en: 'All Real Patients' },
@@ -4368,25 +4568,72 @@ async function renderDoctorQueue() {
       { key: 'test_sandbox', ar: '🧪 بيئة الاختبار (Sandbox)', en: '🧪 Test Sandbox' }
     ];
 
-    filterTabsContainer.innerHTML = filters.map(f => `
-      <button type="button" class="status-filter-tab ${currentDoctorQueueFilter === f.key ? 'active' : ''}" data-filter="${f.key}" onclick="setDoctorQueueFilter('${f.key}')">
-        ${isEn ? f.en : f.ar}
-      </button>
-    `).join('') + `
-      <div style="display:grid; grid-template-columns: minmax(160px, 1fr) minmax(130px, auto) minmax(150px, auto); gap:8px; width:100%; margin-top:10px;">
-        <input type="search" value="${escapeHtml(currentDoctorQueueSearch)}" oninput="setDoctorQueueSearch(this.value)" placeholder="${isEn ? 'Search patient, case, symptoms...' : 'بحث بالاسم أو الحالة أو الأعراض...'}" style="min-width:0; border:1px solid var(--line); border-radius:10px; padding:8px 10px; background:var(--surface); color:var(--ink); font-family:inherit; font-size:12.5px;" />
-        <select onchange="setDoctorPriorityFilter(this.value)" style="border:1px solid var(--line); border-radius:10px; padding:8px 10px; background:var(--surface); color:var(--ink); font-family:inherit; font-size:12.5px;">
-          <option value="all" ${currentDoctorPriorityFilter === "all" ? "selected" : ""}>${isEn ? "All priorities" : "كل الأولويات"}</option>
-          <option value="urgent" ${currentDoctorPriorityFilter === "urgent" ? "selected" : ""}>${isEn ? "Urgent" : "عاجل"}</option>
-          <option value="high" ${currentDoctorPriorityFilter === "high" ? "selected" : ""}>${isEn ? "High" : "عالية"}</option>
-          <option value="normal" ${currentDoctorPriorityFilter === "normal" ? "selected" : ""}>${isEn ? "Routine" : "عادية"}</option>
-        </select>
-        <select onchange="setDoctorQueueSort(this.value)" style="border:1px solid var(--line); border-radius:10px; padding:8px 10px; background:var(--surface); color:var(--ink); font-family:inherit; font-size:12.5px;">
-          <option value="waiting_desc" ${currentDoctorQueueSort === "waiting_desc" ? "selected" : ""}>${isEn ? "Longest waiting" : "الأطول انتظاراً"}</option>
-          <option value="priority_desc" ${currentDoctorQueueSort === "priority_desc" ? "selected" : ""}>${isEn ? "Highest priority" : "الأعلى أولوية"}</option>
-          <option value="status" ${currentDoctorQueueSort === "status" ? "selected" : ""}>${isEn ? "Workflow status" : "حالة سير العمل"}</option>
-          <option value="newest" ${currentDoctorQueueSort === "newest" ? "selected" : ""}>${isEn ? "Newest first" : "الأحدث أولاً"}</option>
-        </select>
+    filterTabsContainer.innerHTML = `
+      <div class="practo-filter-station">
+        <!-- 1. Search Bar with Clear & Shortcut Key Hint -->
+        <div class="practo-search-bar-wrap">
+          <span class="practo-search-icon" aria-hidden="true">🔍</span>
+          <input 
+            type="search" 
+            id="doctorPatientSearchInput" 
+            class="practo-search-input" 
+            value="${escapeHtml(currentDoctorQueueSearch)}" 
+            oninput="setDoctorQueueSearch(this.value)" 
+            placeholder="${isEn ? 'Search patient, file #, national ID, phone, symptoms... (Ctrl+K)' : 'ابحث باسم المريض، رقم الملف، الهوية، الهاتف، الأعراض... (Ctrl+K)'}" 
+            autocomplete="off"
+            spellcheck="false"
+            aria-label="${isEn ? 'Search patients' : 'البحث في قائمة المرضى'}"
+          />
+          <kbd class="practo-kbd-shortcut" title="${isEn ? 'Press Ctrl+K or / to search' : 'اضغط Ctrl+K أو / للبحث'}" onclick="focusDoctorPatientSearch()">Ctrl+K</kbd>
+          <button 
+            type="button" 
+            id="doctorPatientSearchClearBtn" 
+            class="practo-search-clear-btn" 
+            style="display: ${currentDoctorQueueSearch ? 'inline-flex' : 'none'};" 
+            onclick="clearDoctorPatientSearch()" 
+            title="${isEn ? 'Clear search' : 'مسح البحث'}"
+            aria-label="${isEn ? 'Clear search' : 'مسح البحث'}"
+          >&times;</button>
+        </div>
+
+        <!-- 2. Workflow Stage Filter Tabs -->
+        <div class="practo-status-tabs-row" role="tablist" aria-label="${isEn ? 'Filter by workflow status' : 'تصفية حسب حالة المراجعة'}">
+          ${filters.map(f => `
+            <button type="button" class="status-filter-tab ${currentDoctorQueueFilter === f.key ? 'active' : ''}" data-filter="${f.key}" onclick="setDoctorQueueFilter('${f.key}')">
+              ${isEn ? f.en : f.ar}
+            </button>
+          `).join('')}
+        </div>
+
+        <!-- 3. Multi-Dimension Filters: Clinical Priority & Smart Sorting -->
+        <div class="practo-controls-row">
+          <div class="practo-selector-field">
+            <label for="doctorPrioritySelect" class="practo-field-label">${isEn ? 'Risk / Priority' : 'درجة الخطورة'}:</label>
+            <select id="doctorPrioritySelect" class="practo-select" onchange="setDoctorPriorityFilter(this.value)" aria-label="${isEn ? 'Filter by clinical priority' : 'تصفية حسب الأولوية السريرية'}">
+              <option value="all" ${currentDoctorPriorityFilter === "all" ? "selected" : ""}>${isEn ? "All Priorities" : "كل الأولويات"}</option>
+              <option value="urgent" ${currentDoctorPriorityFilter === "urgent" ? "selected" : ""}>🚨 ${isEn ? "Urgent / Emergency" : "عاجل / طوارئ"}</option>
+              <option value="high" ${currentDoctorPriorityFilter === "high" ? "selected" : ""}>⚠️ ${isEn ? "High Priority" : "أولوية عالية"}</option>
+              <option value="normal" ${currentDoctorPriorityFilter === "normal" ? "selected" : ""}>🟢 ${isEn ? "Routine / Stable" : "عادية / مستقرة"}</option>
+            </select>
+          </div>
+
+          <div class="practo-selector-field">
+            <label for="doctorQueueSortSelect" class="practo-field-label">${isEn ? 'Sort By' : 'الترتيب حسب'}:</label>
+            <select id="doctorQueueSortSelect" class="practo-select" onchange="setDoctorQueueSort(this.value)" aria-label="${isEn ? 'Sort patient queue' : 'ترتيب قائمة المرضى'}">
+              <option value="waiting_desc" ${currentDoctorQueueSort === "waiting_desc" ? "selected" : ""}>⏳ ${isEn ? "Longest Waiting (SLA)" : "الأطول انتظاراً (SLA)"}</option>
+              <option value="oxygen_asc" ${currentDoctorQueueSort === "oxygen_asc" ? "selected" : ""}>🫁 ${isEn ? "Lowest SpO2 (Hypoxemia)" : "الأكسجين الأقل (نقص أكسجة)"}</option>
+              <option value="priority_desc" ${currentDoctorQueueSort === "priority_desc" ? "selected" : ""}>🚨 ${isEn ? "Highest Priority" : "الأعلى أولوية"}</option>
+              <option value="newest" ${currentDoctorQueueSort === "newest" ? "selected" : ""}>🆕 ${isEn ? "Newest First" : "الأحدث أولاً"}</option>
+              <option value="patient_name_asc" ${currentDoctorQueueSort === "patient_name_asc" ? "selected" : ""}>🔤 ${isEn ? "Patient Name (A-Z)" : "اسم المريض (أبجدياً)"}</option>
+              <option value="status" ${currentDoctorQueueSort === "status" ? "selected" : ""}>📋 ${isEn ? "Workflow Stage" : "مرحلة سير العمل"}</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- 4. Practo Quick Triage Filter Chips with Live Badges -->
+        <div class="practo-quick-chips-row" id="practoQuickChipsRow" role="region" aria-label="${isEn ? 'Quick Triage Filters' : 'تصنيفات الفرز السريع'}">
+          <!-- Dynamically populated via renderDoctorQuickChips -->
+        </div>
       </div>
     `;
   }
