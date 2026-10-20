@@ -5051,7 +5051,11 @@
           c.symptoms, c.symptomsEn,
           c.clinicalDiagnosis, c.doctorNote, c.notes, c.patientNotes,
           c.moreInfoNote, c.privateDoctorNotes, c.privateNotes, savedPrivateNotes,
-          c.assessment?.chiefComplaint, c.chiefComplaint
+          c.assessment?.chiefComplaint, c.chiefComplaint,
+          Array.isArray(c.recommendations) ? c.recommendations.join(" ") : c.recommendations,
+          Array.isArray(c.doctorRecommendations) ? c.doctorRecommendations.join(" ") : c.doctorRecommendations,
+          Array.isArray(c.medications) ? c.medications.join(" ") : c.medications,
+          c.doctorDiagnosis, c.diagnosis
         ];
         const text = fields.filter(Boolean).map(v => normalizeSearchText(v)).join(" ");
         return text.includes(term);
@@ -5092,6 +5096,162 @@
     });
 
     return result;
+  }
+
+  function getDoctorDirectoryI18n(isEn = false) {
+    if (isEn) {
+      return {
+        tabs: {
+          all: "All Real Patients",
+          under_review: "Under Review",
+          assigned: "Awaiting Doctor",
+          more_info_requested: "More Info Required",
+          approved: "Approved Clinically",
+          closed_escalated: "Closed & Escalated",
+          test_sandbox: "🧪 Test Sandbox"
+        },
+        priority: {
+          label: "Risk / Priority",
+          all: "All Priorities",
+          urgent: "🚨 Urgent / Emergency",
+          high: "⚠️ High Priority",
+          normal: "🟢 Routine / Stable"
+        },
+        sort: {
+          label: "Sort By",
+          waiting_desc: "⏳ Longest Waiting (SLA)",
+          oxygen_asc: "🫁 Lowest SpO2 (Hypoxemia)",
+          priority_desc: "🚨 Highest Priority",
+          newest: "🆕 Newest First",
+          patient_name_asc: "🔤 Patient Name (A-Z)",
+          status: "📋 Workflow Stage"
+        },
+        quick: {
+          all: "All",
+          critical_spo2: "Critical SpO2 (<90%)",
+          patient_replied: "Patient Responded",
+          awaiting_patient: "Awaiting Patient Reply",
+          with_private_notes: "Confidential Notes Quarantined",
+          stale_revision: "Stale Clinical Revision"
+        },
+        search: {
+          placeholder: "Search by patient name, MRN, National ID, diagnosis, phone... (Ctrl+K)",
+          ariaLabel: "Search assigned patients directory",
+          clearTitle: "Clear search query",
+          shortcutHint: "Press Ctrl+K or / to search",
+          filterRegionLabel: "Quick Triage Filters",
+          statusTabsLabel: "Filter by workflow status",
+          priorityAriaLabel: "Filter by clinical priority",
+          sortAriaLabel: "Sort patient queue"
+        },
+        zero: {
+          title: "No Matching Patients Found",
+          noQuery: "No patient records meet the active filter and triage selection.",
+          withQuery: (term) => `No assigned patient records matched "${term}".`,
+          resetBtn: "Reset Search & Filters",
+          emptyQueueTitle: "No Real Patient Cases in Queue",
+          emptyQueueDesc: "The doctor queue only displays authentic cases submitted by registered patients. Test and mock data are quarantined in the Sandbox tab.",
+          sandboxTitle: "Sandbox is Empty",
+          sandboxDesc: "No test, demo, or seed cases currently found in the system.",
+          noCategoryTitle: "No Cases in Queue",
+          noCategoryDesc: "All patient assessments in this category have been attended to, or no new assessments have arrived yet.",
+          refreshBtn: "Refresh Queue",
+          selectPromptTitle: "Select a Patient Case",
+          selectPromptDesc: "Select any patient from the queue on the left to inspect real-time SpO2, symptoms, and prepare certified reports."
+        },
+        recommendations: {
+          title: "3. Clinical Recommendations & Care Plan",
+          placeholder: "Add one recommendation per line in English or Arabic (e.g. Maintain hydration, review in clinic if SpO2 < 93%)...",
+          chipsAriaLabel: "Recommendations Language",
+          langEn: "EN",
+          langAr: "عربي"
+        },
+        diagnosis: {
+          title: "1. Physician Clinical Diagnosis & Assessment *",
+          placeholder: "Manually enter the physician diagnosis and clinical notes in English or Arabic..."
+        },
+        medications: {
+          title: "2. Prescription & Treatment Regimen (Rx)",
+          placeholder: "List prescribed medications, dosage and instructions (e.g. Ventolin inhaler 2 puffs bid)..."
+        }
+      };
+    }
+
+    return {
+      tabs: {
+        all: "الكل (مرضى فعليين)",
+        under_review: "قيد الفحص السريري",
+        assigned: "بانتظار الطبيب",
+        more_info_requested: "مطلوب بيانات",
+        approved: "معتمد سريرياً",
+        closed_escalated: "مغلق ومصعّد",
+        test_sandbox: "🧪 بيئة الاختبار (Sandbox)"
+      },
+      priority: {
+        label: "درجة الخطورة السريرية",
+        all: "كل الأولويات",
+        urgent: "🚨 عاجل / طوارئ",
+        high: "⚠️ أولوية عالية",
+        normal: "🟢 عادية / مستقرة"
+      },
+      sort: {
+        label: "الترتيب حسب",
+        waiting_desc: "⏳ الأطول انتظاراً (SLA)",
+        oxygen_asc: "🫁 الأكسجين الأقل (نقص أكسجة)",
+        priority_desc: "🚨 الأعلى أولوية",
+        newest: "🆕 الأحدث أولاً",
+        patient_name_asc: "🔤 اسم المريض (أبجدياً)",
+        status: "📋 مرحلة سير العمل"
+      },
+      quick: {
+        all: "الكل",
+        critical_spo2: "أكسجين حرج (<90%)",
+        patient_replied: "رد المريض متاح",
+        awaiting_patient: "بانتظار رد المريض",
+        with_private_notes: "ملاحظات سرية معزولة",
+        stale_revision: "تحديث سريري معلق"
+      },
+      search: {
+        placeholder: "ابحث باسم المريض، رقم الملف، الهوية الوطنية، التشخيص، الهاتف... (Ctrl+K)",
+        ariaLabel: "البحث في قائمة المرضى المعينين",
+        clearTitle: "مسح عبارة البحث",
+        shortcutHint: "اضغط Ctrl+K أو / للبحث",
+        filterRegionLabel: "تصنيفات الفرز السريع",
+        statusTabsLabel: "تصفية حسب حالة المراجعة",
+        priorityAriaLabel: "تصفية حسب الأولوية السريرية",
+        sortAriaLabel: "ترتيب قائمة المرضى"
+      },
+      zero: {
+        title: "لم يتم العثور على مرضى مطابقين",
+        noQuery: "لا توجد حالات تطابق شروط الفلترة أو الفرز السريع المحددة.",
+        withQuery: (term) => `لا توجد نتائج مطابقة لبحثك: "${term}".`,
+        resetBtn: "إعادة ضبط البحث والفلترة",
+        emptyQueueTitle: "لا توجد حالات سريرية حقيقية في قائمة الانتظار",
+        emptyQueueDesc: "قائمة انتظار الطبيب تعرض حصراً الحالات السريرية الحقيقية المُرسلة من المرضى. بيانات الاختبار معزولة في تبويب بيئة الاختبار.",
+        sandboxTitle: "بيئة الاختبار خالية",
+        sandboxDesc: "لا توجد أي حالات تجريبية أو بيانات محاكاة في بيئة الاختبار حالياً.",
+        noCategoryTitle: "لا توجد حالات في هذا التصنيف",
+        noCategoryDesc: "تم التعامل مع جميع التقييمات في هذا التصنيف، أو لم تصل تقييمات جديدة حتى الآن.",
+        refreshBtn: "تحديث القائمة",
+        selectPromptTitle: "اختر حالة لبدء التدقيق السريري",
+        selectPromptDesc: "اختر أي مريض من القائمة الجانبية لفحص نسبة الأكسجين والأعراض، وتوليد التقرير السريري المعتمد."
+      },
+      recommendations: {
+        title: "3. التوصيات الطبية وخطة المتابعة",
+        placeholder: "أضف كل توصية في سطر منفصل بالعربية أو الإنجليزية (مثل: الراحة التامة، متابعة نسبة الأكسجين)...",
+        chipsAriaLabel: "لغة التوصيات",
+        langEn: "EN",
+        langAr: "عربي"
+      },
+      diagnosis: {
+        title: "1. التشخيص الطبي السريري المعتمد *",
+        placeholder: "أدخل التشخيص والملاحظات السريرية يدوياً بالعربية أو الإنجليزية..."
+      },
+      medications: {
+        title: "2. الخطة العلاجية والروشتة الدوائية (Rx)",
+        placeholder: "أدخل أسماء الأدوية، الجرعات، وطريقة الاستخدام..."
+      }
+    };
   }
 
   function initDoctorKeyboardShortcuts() {
@@ -7831,7 +7991,8 @@
     togglePatientPdfFooterPreview,
     // Practo Search & Filter in Assigned Patients Directory
     focusDoctorPatientSearch,
-    filterAndSortDoctorCases
+    filterAndSortDoctorCases,
+    getDoctorDirectoryI18n
   };
 
   global.HealthVibes = global.HealthVibes || {};

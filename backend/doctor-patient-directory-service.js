@@ -188,7 +188,11 @@ function filterAndSortAssignedPatients(caseRecords = [], options = {}) {
         c.symptoms, c.symptomsEn,
         c.clinicalDiagnosis, c.doctorNote, c.notes, c.patientNotes,
         c.moreInfoNote, c.privateDoctorNotes, c.privateNotes,
-        c.assessment?.chiefComplaint, c.chiefComplaint
+        c.assessment?.chiefComplaint, c.chiefComplaint,
+        Array.isArray(c.recommendations) ? c.recommendations.join(" ") : c.recommendations,
+        Array.isArray(c.doctorRecommendations) ? c.doctorRecommendations.join(" ") : c.doctorRecommendations,
+        Array.isArray(c.medications) ? c.medications.join(" ") : c.medications,
+        c.doctorDiagnosis, c.diagnosis
       ];
       const haystack = fields.filter(Boolean).map(v => normalizeSearchText(v)).join(" ");
       return haystack.includes(queryTerm);
