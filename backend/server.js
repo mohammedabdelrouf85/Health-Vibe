@@ -82,6 +82,7 @@ const triageOverrideService = require('./triage-override-service');
 const rejectReentryService = require('./reject-reentry-service');
 const doctorInvestigationsService = require('./doctor-investigations-service');
 const doctorFollowUpService = require('./doctor-followup-service');
+const doctorPatientDirectoryService = require('./doctor-patient-directory-service');
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -7233,6 +7234,88 @@ app.patch('/api/cases/:caseId/private-notes', requireAuth, requireDoctor, handle
 app.put('/api/doctor/cases/:caseId/private-notes', requireAuth, requireDoctor, handleSaveDoctorPrivateNotes);
 app.get('/api/cases/:caseId/private-notes', requireAuth, requireDoctor, handleGetDoctorPrivateNotes);
 app.get('/api/doctor/cases/:caseId/private-notes', requireAuth, requireDoctor, handleGetDoctorPrivateNotes);
+
+/**
+ * GET /api/doctor/patients
+ * GET /api/doctor/assigned-patients
+ * GET /api/doctor/cases/search
+ * 
+ * Benchmark: Practo Clinical Patient Directory
+ * Enables verified doctors to search and filter their assigned patients with:
+ * - Multi-field search (q / search)
+ * - Workflow status (status)
+ * - Clinical risk / priority (priority / risk)
+ * - Quick triage filter (quickFilter: critical_spo2, awaiting_patient, patient_replied, with_private_notes, stale_revision)
+ * - Clinical sorting (sort: waiting_desc, oxygen_asc, priority_desc, newest, patient_name_asc, status)
+ * - Zero-trust data isolation (strictly restricted to authenticated doctor's assigned patients)
+ * - Enterprise Audit Trail logging (DOCTOR_PATIENT_DIRECTORY_SEARCHED / FILTERED)
+ */
+async function handleDoctorAssignedPatientsSearch(req, res) {
+  try {
+    const doctorId = req.user.uid;
+    const doctorEmail = req.user.email;
+    const isOwner = Boolean(req.user.isOwner || (req.user.customClaims && req.user.customClaims.isOwner) || req.user.role === 'super_admin');
+    const doctorIdentity = req.doctorIdentity || (typeof getVerifiedDoctorIdentity === 'function' ? await getVerifiedDoctorIdentity(doctorId) : {}) || {};
+
+    const {
+      q,
+      search,
+      status,
+      priority,
+      risk,
+      quickFilter,
+      sort,
+      isSandbox,
+      page,
+      limit
+    } = req.query;
+
+    const searchTerm = search !== undefined ? search : q;
+    const priorityFilter = priority !== undefined ? priority : risk;
+
+    const result = await doctorPatientDirectoryService.fetchAssignedPatients(db, {
+      doctorId,
+      doctorEmail,
+      isOwner,
+      search: searchTerm,
+      status: status || 'all',
+      priority: priorityFilter || 'all',
+      quickFilter: quickFilter || 'all',
+      sort: sort || 'waiting_desc',
+      isSandbox: isSandbox === 'true' || isSandbox === true,
+      page: Number(page) || 1,
+      limit: Number(limit) || 50
+    });
+
+    // Authoritative Enterprise Audit Log
+    if (db) {
+      await doctorPatientDirectoryService.recordDirectoryAudit(db, {
+        req,
+        doctorId,
+        doctorIdentity,
+        clinicId: (typeof recordClinicId === 'function' ? recordClinicId(req.doctorProfile) : null) || req.user.clinicId || null,
+        search: searchTerm,
+        filters: {
+          status: status || 'all',
+          priority: priorityFilter || 'all',
+          quickFilter: quickFilter || 'all',
+          sort: sort || 'waiting_desc',
+          isSandbox: isSandbox === 'true' || isSandbox === true
+        },
+        totalMatched: result.total
+      });
+    }
+
+    return res.json(result);
+  } catch (err) {
+    console.error('[DOCTOR PATIENT DIRECTORY SEARCH ERROR]:', err);
+    return res.status(500).json({ error: 'DIRECTORY_SEARCH_FAILED', message: err.message });
+  }
+}
+
+app.get('/api/doctor/patients', requireAuth, requireDoctor, handleDoctorAssignedPatientsSearch);
+app.get('/api/doctor/assigned-patients', requireAuth, requireDoctor, handleDoctorAssignedPatientsSearch);
+app.get('/api/doctor/cases/search', requireAuth, requireDoctor, handleDoctorAssignedPatientsSearch);
 
 app.post('/api/doctor/withdraw-clinical-report', requireAuth, requireVerifiedEmail, requireDoctor, requireMfaIfEnrolled, async (req, res) => {
   const { caseId, reason } = req.body || {};
