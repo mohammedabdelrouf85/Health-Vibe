@@ -33,7 +33,9 @@ class RelationalDatabaseService {
       patients: new Map(),
       clinical_cases: new Map(),
       patient_history: new Map(),
-      audit_logs: new Map()
+      audit_logs: new Map(),
+      medical_file_annotations: new Map(),
+      medical_viewer_audit_logs: new Map()
     };
 
     // Secondary Indexes for rapid lookup
@@ -43,7 +45,10 @@ class RelationalDatabaseService {
       patients_account_id: new Map(),
       doctor_syndicate: new Map(),
       patient_history_patient_id: new Map(), // patient_id -> Set of history IDs
-      cases_patient_id: new Map()
+      cases_patient_id: new Map(),
+      annotations_case_id: new Map(),
+      annotations_file_id: new Map(),
+      viewer_audit_case_id: new Map()
     };
 
     this.schemaVersion = "2.1.0-relational";
@@ -870,7 +875,122 @@ class RelationalDatabaseService {
   }
 
   // ───────────────────────────────────────────────────────────────────────────
-  // 7. HEALTH CHECK & METRICS
+  // 7. MEDICAL VIEWER ANNOTATIONS & AUDIT LOGS (Rology Standard)
+  // ───────────────────────────────────────────────────────────────────────────
+
+  async saveMedicalFileAnnotation(annotation) {
+    this._assertOperationalProvenance(annotation, "medical_file_annotations");
+
+    if (!annotation.caseId || !annotation.fileId) {
+      throw new Error("caseId and fileId are mandatory for medical file annotations.");
+    }
+
+    const id = annotation.id || `anno_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
+    const record = {
+      id,
+      caseId: annotation.caseId,
+      fileId: annotation.fileId,
+      fileName: annotation.fileName || "unknown_scan",
+      doctorId: annotation.doctorId || "anonymous_doc",
+      doctorName: annotation.doctorName || "Reviewing Physician",
+      clinicId: annotation.clinicId || "default_clinic",
+      findingText: String(annotation.findingText || "").trim(),
+      severity: annotation.severity || "normal", // ['normal', 'minor', 'abnormal', 'critical_alert']
+      windowPreset: annotation.windowPreset || "normal",
+      zoomLevel: Number(annotation.zoomLevel || 1.0),
+      coordinates: annotation.coordinates || null, // { x, y, width, height }
+      tags: Array.isArray(annotation.tags) ? annotation.tags : [],
+      status: "active",
+      createdAt: annotation.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    this.tables.medical_file_annotations.set(id, record);
+
+    // Index by caseId
+    if (!this.indexes.annotations_case_id.has(record.caseId)) {
+      this.indexes.annotations_case_id.set(record.caseId, new Set());
+    }
+    this.indexes.annotations_case_id.get(record.caseId).add(id);
+
+    // Index by fileId
+    if (!this.indexes.annotations_file_id.has(record.fileId)) {
+      this.indexes.annotations_file_id.set(record.fileId, new Set());
+    }
+    this.indexes.annotations_file_id.get(record.fileId).add(id);
+
+    return record;
+  }
+
+  getMedicalFileAnnotations(caseId, fileId = null) {
+    if (!caseId) return [];
+    const annotationIds = this.indexes.annotations_case_id.get(caseId);
+    if (!annotationIds) return [];
+
+    const results = [];
+    for (const id of annotationIds) {
+      const record = this.tables.medical_file_annotations.get(id);
+      if (record && record.status !== "deleted") {
+        if (!fileId || record.fileId === fileId) {
+          results.push(record);
+        }
+      }
+    }
+    return results.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  }
+
+  deleteMedicalFileAnnotation(annotationId) {
+    const record = this.tables.medical_file_annotations.get(annotationId);
+    if (!record) return false;
+    record.status = "deleted";
+    record.updatedAt = new Date().toISOString();
+    return true;
+  }
+
+  async recordMedicalViewerAudit(auditEntry) {
+    this._assertOperationalProvenance(auditEntry, "medical_viewer_audit_logs");
+
+    const id = auditEntry.id || `view_aud_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
+    const record = {
+      id,
+      caseId: auditEntry.caseId,
+      fileId: auditEntry.fileId,
+      fileName: auditEntry.fileName || "unknown_scan",
+      doctorId: auditEntry.doctorId,
+      doctorName: auditEntry.doctorName,
+      clinicId: auditEntry.clinicId || "default_clinic",
+      action: auditEntry.action || "VIEW_INSPECTED",
+      telemetry: auditEntry.telemetry || {},
+      timestamp: auditEntry.timestamp || new Date().toISOString()
+    };
+
+    this.tables.medical_viewer_audit_logs.set(id, record);
+
+    if (record.caseId) {
+      if (!this.indexes.viewer_audit_case_id.has(record.caseId)) {
+        this.indexes.viewer_audit_case_id.set(record.caseId, new Set());
+      }
+      this.indexes.viewer_audit_case_id.get(record.caseId).add(id);
+    }
+
+    return record;
+  }
+
+  getMedicalViewerAuditLogs(caseId) {
+    if (!caseId) return [];
+    const ids = this.indexes.viewer_audit_case_id.get(caseId);
+    if (!ids) return [];
+
+    const results = [];
+    for (const id of ids) {
+      const rec = this.tables.medical_viewer_audit_logs.get(id);
+      if (rec) results.push(rec);
+    }
+    return results.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // 8. HEALTH CHECK & METRICS
   // ───────────────────────────────────────────────────────────────────────────
 
   getHealthStatus() {
@@ -886,7 +1006,9 @@ class RelationalDatabaseService {
         doctorProfilesCount: this.tables.doctor_profiles.size,
         clinicalCasesCount: this.tables.clinical_cases.size,
         patientHistoryRecordsCount: this.tables.patient_history.size,
-        auditLogsCount: this.tables.audit_logs.size
+        auditLogsCount: this.tables.audit_logs.size,
+        medicalFileAnnotationsCount: this.tables.medical_file_annotations.size,
+        medicalViewerAuditLogsCount: this.tables.medical_viewer_audit_logs.size
       }
     };
   }

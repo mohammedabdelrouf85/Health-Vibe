@@ -5634,6 +5634,67 @@ async function selectDoctorCase(id) {
     </section>
   `;
 
+  // Altibbi Benchmark: Medication & Inhaler Photo Docket for Reviewing Doctor
+  function renderDoctorMedicationPhotosDocket(c, isEn) {
+    const staged = (window.MedicationCaptureUI && typeof window.MedicationCaptureUI.getState === "function")
+      ? window.MedicationCaptureUI.getState().stagedPhotos
+      : [];
+    const photos = Array.isArray(c?.medicationPhotos) && c.medicationPhotos.length > 0
+      ? c.medicationPhotos
+      : staged;
+
+    if (!photos || photos.length === 0) {
+      return `
+        <div style="background: rgba(14, 165, 233, 0.04); border: 1px dashed var(--line); border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+          <span style="font-size: 12px; color: var(--muted);">
+            <span>💊</span> ${isEn ? "No medicine box or inhaler photos attached by patient." : "لم يرفق المريض صوراً لعلب الأدوية أو البخاخات لهذه الحالة."}
+          </span>
+          <button type="button" class="soft-button" onclick="openMedicationCaptureStudio({ source: 'doctor' })" style="font-size: 11px; padding: 4px 10px;">
+            <span>📸</span> ${isEn ? "Capture / Upload Med Photo" : "التقاط أو فحص صورة دواء"}
+          </button>
+        </div>
+      `;
+    }
+
+    const itemsHtml = photos.map(p => {
+      const name = p.name || (isEn ? "Medication Photo" : "صورة الدواء");
+      const cat = p.categoryName || (isEn ? "Medicine Box" : "علبة دواء");
+      const freq = p.frequencyLabel || "";
+      const note = p.patientNote ? `<small style="display:block; color:var(--muted); font-size:11px;">${escapeHtml(p.patientNote)}</small>` : "";
+      return `
+        <div style="background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px; display: flex; gap: 8px; align-items: center;">
+          <div style="width: 50px; height: 50px; border-radius: 6px; overflow: hidden; background: #000; flex-shrink: 0; cursor: pointer;" onclick="MedicationCaptureUI?.openInspector?.('${p.id}')">
+            <img src="${escapeHtmlAttr(p.url)}" alt="${escapeHtmlAttr(name)}" style="width: 100%; height: 100%; object-fit: cover;">
+          </div>
+          <div style="flex: 1; overflow: hidden;">
+            <strong style="font-size: 12px; color: var(--ink); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(cat)}</strong>
+            <span style="font-size: 11px; color: #0ea5e9;">${escapeHtml(freq)}</span>
+            ${note}
+          </div>
+          <button type="button" class="soft-button" style="font-size: 11px; padding: 4px 8px; white-space: nowrap;" onclick="MedicationCaptureUI?.transcribePhotoToPrescription?.('${p.id}')" title="${isEn ? "Transcribe to Prescription" : "نقل لروشتة الطبيب"}">
+            ➕ ${isEn ? "Add to Rx" : "إضافة للروشتة"}
+          </button>
+        </div>
+      `;
+    }).join("");
+
+    return `
+      <div class="doctor-med-photos-card" style="background: rgba(14, 165, 233, 0.05); border: 1.5px solid rgba(14, 165, 233, 0.3); border-radius: 12px; padding: 12px 14px; margin-bottom: 14px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 6px;">
+          <strong style="color: #0ea5e9; font-size: 13px; display: flex; align-items: center; gap: 6px;">
+            <span>📸</span> ${isEn ? "Patient Uploaded Medication & Inhaler Photos (Altibbi Flow):" : "صور علب الأدوية وبخاخات الصدر المرفوعة من المريض:"}
+          </strong>
+          <span class="pill info" style="font-size: 10.5px;">${photos.length} ${isEn ? "Photos" : "صور متوفرة"}</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px;">
+          ${itemsHtml}
+        </div>
+      </div>
+    `;
+  }
+
+  const medPhotosDocketHtml = renderDoctorMedicationPhotosDocket(c, isEn);
+
   // 3. Grouped Doctor Notes, Prescriptions & Report Builder
   const notesSectionHtml = `
     <section class="clinical-group-card" id="docSection-notes" role="region" aria-label="${isEn ? 'Physician Diagnosis & Report Builder' : 'التشخيص الطبي السريري ومحرر التقرير'}">
@@ -5680,6 +5741,9 @@ async function selectDoctorCase(id) {
           <textarea id="doctorDiagnosisInput" ${isClosed ? 'disabled' : ''} placeholder="${isEn ? 'Manually enter the physician diagnosis and clinical notes. Do not rely on rule suggestions as a diagnosis.' : 'أدخل التشخيص والملاحظات السريرية يدوياً. لا تعتمد اقتراحات القواعد كتشخيص.'}" style="width: 100%; min-height: 75px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 10px; font-family: inherit; font-size: 13px;">${escapeHtml(existingDoctorNote)}</textarea>
           <input type="hidden" id="doctorNoteInput" value="${escapeHtml(existingDoctorNote)}" />
         </div>
+
+        <!-- Patient Uploaded Medication Photos Docket (Altibbi Benchmark) -->
+        ${medPhotosDocketHtml}
 
         <!-- Prescriptions & Medications -->
         <div style="margin-bottom: 12px;">
@@ -15643,6 +15707,8 @@ async function renderAdminMetrics() {
     const now = new Date();
     const timeStr = now.toLocaleTimeString(isEn ? "en-US" : "ar-EG", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
     await renderAdminAppointmentAnalytics(serverMetrics?.appointmentAnalytics);
+    await renderAdminMedicationAnalytics(serverMetrics?.medicationAnalytics);
+    await renderAdminMedicalViewerAnalytics(serverMetrics?.medicalViewer);
     setText("adminLastRefreshedAt", isEn ? `Last updated: ${timeStr}` : `آخر تحديث: ${timeStr}`);
   } catch (error) {
     console.error("renderAdminMetrics error:", error);
@@ -15764,6 +15830,263 @@ window.refreshAdminAppointmentAnalytics = async function() {
     console.error("refreshAdminAppointmentAnalytics error:", e);
   }
 };
+
+async function renderAdminMedicationAnalytics(serverAnalytics = null) {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  try {
+    let analyticsData = serverAnalytics;
+
+    if (!analyticsData) {
+      if (typeof callBackend === "function") {
+        try {
+          const res = await callBackend("/api/medication-capture/analytics/kpis");
+          if (res?.success) {
+            analyticsData = res;
+          }
+        } catch (_) {}
+      }
+
+      // Fallback: Compute from local staged photos if backend is in offline mode or during unit tests
+      if (!analyticsData && typeof MedicationCaptureUI !== "undefined" && typeof MedicationCaptureUI.getPhotos === "function") {
+        const localPhotos = MedicationCaptureUI.getPhotos() || [];
+        const boxCount = localPhotos.filter(p => p.categoryKey === "medicine_box").length;
+        const inhalerCount = localPhotos.filter(p => p.categoryKey === "chest_inhaler").length;
+        const rxCount = localPhotos.filter(p => p.categoryKey === "paper_prescription").length;
+        const syrupCount = localPhotos.filter(p => p.categoryKey === "syrup_drops").length;
+        const total = localPhotos.length;
+
+        analyticsData = {
+          success: true,
+          summary: {
+            totalUploadEvents: total,
+            uploadAttempts: total,
+            uploadSuccesses: total,
+            uploadFailures: 0,
+            transcriptions: 0,
+            inspections: 0,
+            linkedToAppt: 0,
+            cameraUploads: 0,
+            browseUploads: total
+          },
+          categoryDistribution: {
+            medicine_box: boxCount,
+            chest_inhaler: inhalerCount,
+            paper_prescription: rxCount,
+            syrup_drops: syrupCount,
+            other: 0
+          },
+          kpis: {
+            uploadSuccessRate: { value: total > 0 ? 100 : null, formatted: total > 0 ? "100%" : "Unavailable" },
+            doctorTranscriptionRate: { value: null, formatted: "Unavailable" },
+            cameraCaptureAdoptionRate: { value: 0, formatted: "0%" },
+            appointmentLinkageRate: { value: null, formatted: "Unavailable" }
+          }
+        };
+      }
+    }
+
+    if (!analyticsData) return;
+
+    const summary = analyticsData.summary || {};
+    const kpis = analyticsData.kpis || {};
+    const categories = analyticsData.categoryDistribution || {};
+    const naText = isEn ? "Unavailable" : "غير متاح";
+
+    // 1. Total Badge
+    setText("adminMedPhotoTotalBadge", `${summary.uploadSuccesses || 0} ${isEn ? "photos staged" : "صور أدوية"}`);
+
+    // 2. Upload Success Rate
+    const succRate = kpis.uploadSuccessRate;
+    setText("adminMedPhotoSuccessRate", (succRate && succRate.value !== null && succRate.value !== undefined)
+      ? `${succRate.value}%`
+      : (succRate?.formatted || naText));
+    setText("adminMedPhotoTotalUploads", isEn
+      ? `${summary.uploadSuccesses || 0} successful (${summary.uploadFailures || 0} failed)`
+      : `${summary.uploadSuccesses || 0} مكتمل (${summary.uploadFailures || 0} فشل)`);
+
+    // 3. Doctor Transcription Rate
+    const transRate = kpis.doctorTranscriptionRate;
+    setText("adminMedPhotoTranscribeRate", (transRate && transRate.value !== null && transRate.value !== undefined)
+      ? `${transRate.value}%`
+      : (transRate?.formatted || naText));
+    setText("adminMedPhotoTranscribedCount", isEn
+      ? `${summary.transcriptions || 0} transcribed to certified Rx`
+      : `${summary.transcriptions || 0} تم اعتمادها كروشتة`);
+
+    // 4. Camera Adoption Rate
+    const camRate = kpis.cameraCaptureAdoptionRate;
+    setText("adminMedPhotoCameraRate", (camRate && camRate.value !== null && camRate.value !== undefined)
+      ? `${camRate.value}%`
+      : (camRate?.formatted || naText));
+    setText("adminMedPhotoSourceBreakdown", isEn
+      ? `Camera: ${summary.cameraUploads || 0} | Gallery: ${summary.browseUploads || 0}`
+      : `كاميرا: ${summary.cameraUploads || 0} | معرض: ${summary.browseUploads || 0}`);
+
+    // 5. Appointment Linkage Rate
+    const linkRate = kpis.appointmentLinkageRate;
+    setText("adminMedPhotoLinkageRate", (linkRate && linkRate.value !== null && linkRate.value !== undefined)
+      ? `${linkRate.value}%`
+      : (linkRate?.formatted || naText));
+    setText("adminMedPhotoLinkedCount", isEn
+      ? `${summary.linkedToAppt || 0} linked to appointments`
+      : `${summary.linkedToAppt || 0} مرتبطة بموعد كشف`);
+
+    // 6. Fine-Print Zoom Inspections
+    setText("adminMedPhotoInspections", String(summary.inspections || 0));
+
+    // 7. Category Distribution
+    const boxCount = categories.medicine_box || 0;
+    const inhalerCount = categories.chest_inhaler || 0;
+    const rxCount = categories.paper_prescription || 0;
+    const syrupCount = categories.syrup_drops || 0;
+    const otherCount = categories.other || 0;
+    const totalCats = boxCount + inhalerCount + rxCount + syrupCount + otherCount;
+
+    const calcPct = (cnt) => totalCats > 0 ? `${Math.round((cnt / totalCats) * 100)}%` : "0%";
+
+    setText("adminMedPhotoBoxCount", String(boxCount));
+    setText("adminMedPhotoBoxPct", calcPct(boxCount));
+    setText("adminMedPhotoInhalerCount", String(inhalerCount));
+    setText("adminMedPhotoInhalerPct", calcPct(inhalerCount));
+    setText("adminMedPhotoPrescriptionCount", String(rxCount));
+    setText("adminMedPhotoPrescriptionPct", calcPct(rxCount));
+    setText("adminMedPhotoSyrupCount", String(syrupCount));
+    setText("adminMedPhotoSyrupPct", calcPct(syrupCount));
+    setText("adminMedPhotoOtherCount", String(otherCount));
+    setText("adminMedPhotoOtherPct", calcPct(otherCount));
+
+    setText("adminMedPhotoCategoriesSummary", isEn
+      ? `Boxes: ${boxCount} | Inhalers: ${inhalerCount} | Prescriptions: ${rxCount} | Syrups: ${syrupCount}`
+      : `علب: ${boxCount} | بخاخات: ${inhalerCount} | روشتات: ${rxCount} | شراب: ${syrupCount}`);
+
+  } catch (err) {
+    console.error("renderAdminMedicationAnalytics error:", err);
+  }
+}
+
+window.renderAdminMedicationAnalytics = renderAdminMedicationAnalytics;
+window.refreshAdminMedicationAnalytics = async function() {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  try {
+    if (typeof showToast === "function") {
+      showToast(isEn ? "Refreshing medication photo analytics..." : "جاري تحديث تحليلات صور الأدوية...");
+    }
+    await renderAdminMedicationAnalytics();
+    if (typeof showToast === "function") {
+      showToast(isEn ? "Medication photo analytics updated!" : "تم تحديث تحليلات صور الأدوية بنجاح!");
+    }
+  } catch (e) {
+    console.error("refreshAdminMedicationAnalytics error:", e);
+  }
+};
+
+async function renderAdminMedicalViewerAnalytics(serverAnalytics = null) {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  try {
+    let analyticsData = serverAnalytics;
+
+    if (!analyticsData) {
+      if (typeof callBackend === "function") {
+        try {
+          const res = await callBackend("/api/medical-viewer/analytics/kpis");
+          if (res?.success) {
+            analyticsData = res;
+          }
+        } catch (_) {}
+      }
+
+      // Fallback: Compute from AdminService if backend is offline or during testing
+      if (!analyticsData && typeof HealthVibes !== "undefined" && HealthVibes.AdminService && typeof HealthVibes.AdminService.calculateMedicalViewerKpis === "function") {
+        analyticsData = {
+          success: true,
+          ...HealthVibes.AdminService.calculateMedicalViewerKpis([], { isEn })
+        };
+      }
+    }
+
+    if (!analyticsData) return;
+
+    const summary = analyticsData.summary || {};
+    const kpis = analyticsData.kpis || {};
+    const tools = analyticsData.toolDistribution || {};
+    const naText = isEn ? "Unavailable" : "غير متاح";
+
+    // 1. Total Sessions Badge
+    setText("adminViewerTotalSessionsBadge", isEn
+      ? `${summary.totalViewerSessions || 0} viewer sessions`
+      : `${summary.totalViewerSessions || 0} جلسات فحص`);
+
+    // 2. Clinical Certification Success Rate
+    const certRate = kpis.certificationSuccessRate;
+    setText("adminViewerCertificationRate", (certRate && certRate.value !== null && certRate.value !== undefined)
+      ? `${certRate.value}%`
+      : (certRate?.formatted || naText));
+    setText("adminViewerCertifiedCount", isEn
+      ? `${summary.certifiedCount || 0} clinically certified scans (${summary.rejectedCount || 0} rejected)`
+      : `${summary.certifiedCount || 0} فحص معتمد سريرياً (${summary.rejectedCount || 0} مرفوض)`);
+
+    // 3. High-Zoom Utilization Rate
+    const zoomRate = kpis.highZoomUtilizationRate;
+    setText("adminViewerHighZoomRate", (zoomRate && zoomRate.value !== null && zoomRate.value !== undefined)
+      ? `${zoomRate.value}%`
+      : (zoomRate?.formatted || naText));
+    setText("adminViewerHighZoomCount", isEn
+      ? `${summary.highZoomSessionsCount || 0} deep-zoom inspections (≥2.0x)`
+      : `${summary.highZoomSessionsCount || 0} فحص تفصيلي عالي الدقة (≥2.0x)`);
+
+    // 4. Diagnostic Tool Adoption
+    const toolRate = kpis.diagnosticToolAdoptionRate;
+    setText("adminViewerToolAdoptionRate", (toolRate && toolRate.value !== null && toolRate.value !== undefined)
+      ? `${toolRate.value}%`
+      : (toolRate?.formatted || naText));
+    setText("adminViewerToolDistribution", isEn
+      ? `Loupe: ${tools.loupe || 0} | Bone: ${tools.bone_preset || 0} | Invert: ${tools.invert_negative || 0}`
+      : `عدسة: ${tools.loupe || 0} | عظام: ${tools.bone_preset || 0} | عكس ألوان: ${tools.invert_negative || 0}`);
+
+    // 5. Average Inspection Duration
+    setText("adminViewerAvgDuration", (summary.avgInspectionSeconds !== null && summary.avgInspectionSeconds !== undefined)
+      ? (isEn ? `${summary.avgInspectionSeconds}s` : `${summary.avgInspectionSeconds} ثانية`)
+      : naText);
+
+    // 6. Critical Alert Rate
+    const alertRate = kpis.criticalAlertRate;
+    setText("adminViewerCriticalAlertRate", (alertRate && alertRate.value !== null && alertRate.value !== undefined)
+      ? `${alertRate.value}%`
+      : (alertRate?.formatted || naText));
+    setText("adminViewerCriticalAlertsCount", isEn
+      ? `${summary.criticalAlertsCount || 0} emergency clinical alerts`
+      : `${summary.criticalAlertsCount || 0} إنذار عاجل مصعّد`);
+
+    // 7. Scan Quality Rejection Rate
+    const rejRate = kpis.scanRejectionRate;
+    setText("adminViewerRejectionRate", (rejRate && rejRate.value !== null && rejRate.value !== undefined)
+      ? `${rejRate.value}%`
+      : (rejRate?.formatted || naText));
+    setText("adminViewerRejectionsCount", isEn
+      ? `${summary.rejectedCount || 0} illegible/corrupt scans rejected`
+      : `${summary.rejectedCount || 0} صور غير واضحة أو تالفة مرفوضة`);
+
+  } catch (err) {
+    console.error("renderAdminMedicalViewerAnalytics error:", err);
+  }
+}
+
+window.renderAdminMedicalViewerAnalytics = renderAdminMedicalViewerAnalytics;
+window.refreshAdminMedicalViewerAnalytics = async function() {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  try {
+    if (typeof showToast === "function") {
+      showToast(isEn ? "Refreshing radiology viewer analytics..." : "جاري تحديث تحليلات عارض الأشعة...");
+    }
+    await renderAdminMedicalViewerAnalytics();
+    if (typeof showToast === "function") {
+      showToast(isEn ? "Radiology viewer analytics updated!" : "تم تحديث تحليلات عارض الأشعة بنجاح!");
+    }
+  } catch (e) {
+    console.error("refreshAdminMedicalViewerAnalytics error:", e);
+  }
+};
+
 
 
 window.refreshAdminDashboardLive = async function() {
@@ -18796,6 +19119,7 @@ async function renderAssistantScreen() {
         <button type="button" class="outline-button" style="font-size: 12px; padding: 4px 10px; border-radius: 20px;" onclick="sendAssistantQuickPrompt('${isEn ? "Doctor recommendations" : "تعليمات الطبيب"}')">💡 ${isEn ? "Instructions" : "تعليمات الطبيب"}</button>
         <button type="button" class="outline-button" style="font-size: 12px; padding: 4px 10px; border-radius: 20px;" onclick="sendAssistantQuickPrompt('${isEn ? "Explain medical terms in my report" : "شرح مصطلحات التقرير"}')">📖 ${isEn ? "Explain Terms" : "شرح المصطلحات"}</button>
         <button type="button" class="outline-button" style="font-size: 12px; padding: 4px 10px; border-radius: 20px;" onclick="sendAssistantQuickPrompt('${isEn ? "Help me prepare questions for my doctor" : "تجهيز أسئلة للطبيب"}')">📋 ${isEn ? "Doctor Questions" : "أسئلة للطبيب"}</button>
+        <button type="button" class="outline-button" style="font-size: 12px; padding: 4px 10px; border-radius: 20px; border-color: #0ea5e9; color: #0ea5e9;" onclick="openMedicationCaptureStudio({ source: 'chatbot' })">📸 ${isEn ? "Snap Med / Inhaler" : "تصوير دواء أو بخاخة"}</button>
         <button type="button" class="outline-button" style="font-size: 12px; padding: 4px 10px; border-radius: 20px; border-color: #ef4444; color: #ef4444;" onclick="sendAssistantQuickPrompt('${isEn ? "Approved emergency guidance and red flags" : "إرشادات الطوارئ وعلامات الخطر"}')">🚨 ${isEn ? "Emergency Guidance" : "إرشادات الطوارئ"}</button>
       `;
     }
@@ -19185,6 +19509,29 @@ async function handleSendChatMessage() {
     return;
   }
 
+  // Altibbi Benchmark: Medication & Inhaler Photo Guidance
+  const isMedPhotoQuery = /تصوير\s*(دواء|علبة|بخاخة|روشتة|علاج)|صورة\s*(الدواء|العلبة|البخاخة|الروشتة)|أصور|اصور|photo\s*(medicine|box|inhaler|prescription)|snap\s*(medicine|inhaler)/i.test(q);
+  if (isMedPhotoQuery) {
+    botResponse = isEn
+      ? `📸 <strong>Photographing Medication Boxes, Inhalers & Prescriptions:</strong><br><br>` +
+        `• <strong>Clear Lighting:</strong> Hold your medicine box or inhaler under bright daylight or a lamp.<br>` +
+        `• <strong>Legible Details:</strong> Make sure the brand name, strength (e.g. 100mcg, 5mg), and expiration date are clearly visible.<br>` +
+        `• <strong>Inhalers:</strong> Include the dose counter and canister color so your doctor can recognize the active ingredient immediately.<br><br>` +
+        `🛡️ <strong>Clinical Safety Reassurance:</strong> You do not need to memorize or spell difficult medical names. Your reviewing physician will inspect the photo directly.<br><br>` +
+        `<button type="button" class="solid-button" onclick="openMedicationCaptureStudio({ source: 'chatbot' })" style="font-size: 12.5px; padding: 8px 16px; display: inline-flex; align-items: center; gap: 8px;"><span>📸</span> Open Camera Studio</button>`
+      : `📸 <strong>إرشادات تصوير علب الأدوية وبخاخات الصدر والروشتات:</strong><br><br>` +
+        `• <strong>إضاءة جيدة:</strong> صوّر علبة الدواء أو البخاخة تحت إضاءة واضحة ومباشرة لتجنب الظلال.<br>` +
+        `• <strong>وضوح التركيز:</strong> تأكد من وضوح الاسم التجاري والتركيز بالملليغرام أو الميكروغرام (مثل 100mcg) وتاريخ الصلاحية.<br>` +
+        `• <strong>بخاخات الصدر:</strong> أظهر لون البخاخة والعداد الرقمي إن وُجد ليتعرف عليها الطبيب فوراً.<br><br>` +
+        `🛡️ <strong>طمأنينة وأمان سريري:</strong> لست بحاجة لكتابة أو حفظ الأسماء العلمية المعقدة، فالطبيب البشري المراجع سيتعرف على علبتك ويفحصها بنفسه.<br><br>` +
+        `<button type="button" class="solid-button" onclick="openMedicationCaptureStudio({ source: 'chatbot' })" style="font-size: 12.5px; padding: 8px 16px; display: inline-flex; align-items: center; gap: 8px;"><span>📸</span> فتح استوديو التصوير بالكاميرا</button>`;
+    botResponse += disclaimerHtml;
+    setTrustedHtml(thinkingBubble, botResponse);
+    saveHistory(botResponse);
+    if (messages.scrollTop !== undefined) messages.scrollTop = messages.scrollHeight;
+    return;
+  }
+
   const isMedQuery = /دواء|علاج|روشتة|جرعة|أدوية|بخاخ|مضاد|مسكن|medication|medicine|drug|prescription|dose|rx/i.test(q);
   const isRecQuery = /نصائح|تعليمات|ارشادات|توصيات|أعمل ايه|ماذا أفعل|advice|recommendation|instruction|tips/i.test(q);
   const isDiagQuery = /تشخيص|مرضي|حالتي|ماذا عندي|أعراض|diagnosis|condition|disease|what do i have/i.test(q);
@@ -19249,6 +19596,28 @@ window.sendAssistantQuickPrompt = function(promptText) {
     input.value = promptText;
     handleSendChatMessage();
   }
+};
+
+window.acknowledgeChatbotMedicationUpload = function(photo) {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  const messages = document.getElementById("chatMessages");
+  if (!messages) return;
+  const catName = photo.categoryName || (isEn ? "Medication" : "الدواء");
+  const freqName = photo.frequencyLabel || "";
+  const bubble = document.createElement("div");
+  bubble.className = "bot";
+  const content = isEn
+    ? `📸 <strong>Medication Photo Captured: ${escapeHtml(catName)}</strong><br><br>` +
+      `✅ Your photo has been safely stored and linked to your medical dossier.<br>` +
+      `👨‍⚕️ <strong>Next Step:</strong> Your attending physician will inspect this packaging during your clinical review to confirm dosage and active ingredients.<br>` +
+      `⚠️ <em>Please do not modify your current dosage independently.</em>`
+    : `📸 <strong>تم حفظ صورة ${escapeHtml(catName)} بنجاح!</strong><br><br>` +
+      `✅ تم ربط الصورة بملفك الطبي المشفر.<br>` +
+      `👨‍⚕️ <strong>الخطوة التالية:</strong> سيقوم الطبيب البشري المراجع بفحص الصورة وتأكيد الاسم العلمي والجرعة المناسبة لحالتك.<br>` +
+      `⚠️ <em>يُرجى عدم تغيير الجرعة بشكل مستقل حتى مراجعة الطبيب.</em>`;
+  setTrustedHtml(bubble, content);
+  messages.appendChild(bubble);
+  if (messages.scrollTop !== undefined) messages.scrollTop = messages.scrollHeight;
 };
 
 const sendChatBtn = document.getElementById("sendChat");

@@ -876,11 +876,149 @@
     };
   }
 
+
+  /**
+   * 🔬 Medical Viewer Analytics & Utilization KPIs (Rology Benchmark)
+   */
+  function calculateMedicalViewerKpis(events = [], options = {}) {
+    const isEn = Boolean(options.isEn);
+    const naText = isEn ? "Unavailable" : "غير متاح";
+    const naTextAr = "غير متاح";
+
+    const matchType = (e, target) => {
+      const t = String(e.eventType || e.type || '').toLowerCase();
+      return t === String(target).toLowerCase();
+    };
+
+    const sessionOpens = events.filter(e => matchType(e, 'medical_viewer_session_opened'));
+    const totalSessions = sessionOpens.length;
+
+    const filesSet = new Set();
+    const doctorsSet = new Set();
+
+    events.forEach(e => {
+      const fId = e.payload?.fileId || e.fileId;
+      if (fId) filesSet.add(fId);
+      const dId = e.payload?.doctorId || e.userId || e.doctorId;
+      if (dId && (String(e.eventType || '').includes('medical_viewer') || String(e.type || '').includes('medical_viewer'))) {
+        doctorsSet.add(dId);
+      }
+    });
+
+    const certifications = events.filter(e => matchType(e, 'medical_viewer_scan_certified'));
+    const certifiedCount = certifications.length;
+
+    const rejections = events.filter(e => matchType(e, 'medical_viewer_scan_rejected'));
+    const rejectedCount = rejections.length;
+    const reviewedTotal = certifiedCount + rejectedCount;
+
+    const findingsEvents = events.filter(e => matchType(e, 'medical_viewer_finding_recorded'));
+    const findingsRecordedCount = findingsEvents.length;
+
+    const explicitCriticalAlerts = events.filter(e => matchType(e, 'medical_viewer_critical_alert'));
+    const criticalFindings = events.filter(e => matchType(e, 'medical_viewer_finding_recorded') && (e.payload?.isCritical === true || e.payload?.severity === 'critical_alert'));
+    const criticalAlertsCount = explicitCriticalAlerts.length > 0 ? explicitCriticalAlerts.length : criticalFindings.length;
+
+    const zoomInteractions = events.filter(e =>
+      matchType(e, 'medical_viewer_zoom_pan_interaction') ||
+      (e.payload?.maxZoom && Number(e.payload?.maxZoom) >= 2.0)
+    );
+    const highZoomSessionsCount = zoomInteractions.length;
+
+    const toolEvents = events.filter(e => matchType(e, 'medical_viewer_tool_used'));
+    const toolDistribution = {
+      loupe: 0,
+      bone_preset: 0,
+      soft_tissue_preset: 0,
+      infiltrate_preset: 0,
+      invert_negative: 0,
+      rotation: 0,
+      high_zoom: highZoomSessionsCount
+    };
+
+    toolEvents.forEach(e => {
+      const tool = String(e.payload?.toolName || e.payload?.windowPreset || '').toLowerCase();
+      if (tool.includes('loupe') || e.payload?.loupeUsed) toolDistribution.loupe++;
+      else if (tool.includes('bone')) toolDistribution.bone_preset++;
+      else if (tool.includes('soft')) toolDistribution.soft_tissue_preset++;
+      else if (tool.includes('infiltrate')) toolDistribution.infiltrate_preset++;
+      else if (tool.includes('invert') || tool.includes('negative')) toolDistribution.invert_negative++;
+      else if (tool.includes('rotat') || (e.payload?.rotationAngle && e.payload?.rotationAngle > 0)) toolDistribution.rotation++;
+    });
+
+    const totalAdvancedToolsUsed = toolEvents.length + highZoomSessionsCount;
+
+    const durationsSec = [];
+    events.forEach(e => {
+      const dur = Number(e.payload?.durationSeconds || (e.payload?.durationMs ? e.payload.durationMs / 1000 : 0));
+      if (dur > 0 && dur < 7200) durationsSec.push(dur);
+    });
+
+    const avgInspectionSeconds = durationsSec.length > 0
+      ? Number((durationsSec.reduce((a, b) => a + b, 0) / durationsSec.length).toFixed(1))
+      : null;
+
+    const baseDenom = totalSessions > 0 ? totalSessions : reviewedTotal;
+
+    const certificationSuccessRate = (reviewedTotal > 0)
+      ? Number(((certifiedCount / reviewedTotal) * 100).toFixed(1))
+      : (baseDenom > 0 ? Number(((certifiedCount / baseDenom) * 100).toFixed(1)) : null);
+
+    const highZoomUtilizationRate = baseDenom > 0
+      ? Number(((highZoomSessionsCount / baseDenom) * 100).toFixed(1))
+      : null;
+
+    const diagnosticToolAdoptionRate = baseDenom > 0
+      ? Number(((Math.min(baseDenom, totalAdvancedToolsUsed) / baseDenom) * 100).toFixed(1))
+      : null;
+
+    const criticalAlertRate = baseDenom > 0
+      ? Number(((criticalAlertsCount / baseDenom) * 100).toFixed(1))
+      : null;
+
+    const scanRejectionRate = (reviewedTotal > 0)
+      ? Number(((rejectedCount / reviewedTotal) * 100).toFixed(1))
+      : (baseDenom > 0 ? Number(((rejectedCount / baseDenom) * 100).toFixed(1)) : null);
+
+    return {
+      totalSessions,
+      uniqueFilesInspected: filesSet.size,
+      activeDoctorsCount: doctorsSet.size,
+      certifiedCount,
+      rejectedCount,
+      reviewedTotal,
+      findingsRecordedCount,
+      criticalAlertsCount,
+      highZoomSessionsCount,
+      totalAdvancedToolsUsed,
+      avgInspectionSeconds,
+      avgInspectionDurationDisplay: avgInspectionSeconds !== null ? `${avgInspectionSeconds}s` : naText,
+      avgInspectionDurationDisplayAr: avgInspectionSeconds !== null ? `${avgInspectionSeconds} ثانية` : naTextAr,
+      certificationSuccessRate,
+      certificationSuccessRateDisplay: certificationSuccessRate !== null ? `${certificationSuccessRate}%` : naText,
+      certificationSuccessRateDisplayAr: certificationSuccessRate !== null ? `${certificationSuccessRate}%` : naTextAr,
+      highZoomUtilizationRate,
+      highZoomUtilizationRateDisplay: highZoomUtilizationRate !== null ? `${highZoomUtilizationRate}%` : naText,
+      highZoomUtilizationRateDisplayAr: highZoomUtilizationRate !== null ? `${highZoomUtilizationRate}%` : naTextAr,
+      diagnosticToolAdoptionRate,
+      diagnosticToolAdoptionRateDisplay: diagnosticToolAdoptionRate !== null ? `${diagnosticToolAdoptionRate}%` : naText,
+      diagnosticToolAdoptionRateDisplayAr: diagnosticToolAdoptionRate !== null ? `${diagnosticToolAdoptionRate}%` : naTextAr,
+      criticalAlertRate,
+      criticalAlertRateDisplay: criticalAlertRate !== null ? `${criticalAlertRate}%` : naText,
+      criticalAlertRateDisplayAr: criticalAlertRate !== null ? `${criticalAlertRate}%` : naTextAr,
+      scanRejectionRate,
+      scanRejectionRateDisplay: scanRejectionRate !== null ? `${scanRejectionRate}%` : naText,
+      scanRejectionRateDisplayAr: scanRejectionRate !== null ? `${scanRejectionRate}%` : naTextAr,
+      toolDistribution
+    };
+  }
+
   const AdminService = {
     parseKpiTimestamp,
     calculateKpiMetrics,
     calculateAssessmentJourneyMetrics,
     calculateAppointmentKpis,
+    calculateMedicalViewerKpis,
     EVENT_TYPES,
     APPOINTMENT_EVENT_TYPES,
     SUPPORT_TICKET_TYPES,

@@ -104,6 +104,8 @@ const { passwordSecurityService } = require('./password-security-service');
 const { medicalCatalogService } = require('./medical-catalog-service');
 const { caseWorkflowService } = require('./case-workflow-service');
 const labUploadService = require('./lab-upload-service');
+const { medicalViewerService, FINDING_SEVERITY } = require('./medical-viewer-service');
+const { radiologyService, URGENCY_LEVELS, STUDY_STATUS } = require('./radiology-service');
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -15582,7 +15584,103 @@ app.get('/api/lab-upload/analytics/kpis', requireAuth, async (req, res) => {
   }
 });
 
+/**
+ * 💊 Medication Box, Inhaler & Prescription Capture Telemetry & Admin KPIs (Altibbi Benchmark)
+ * GET /api/medication-capture/analytics/kpis
+ * GET /api/admin/medication-photos/analytics/kpis
+ */
+const handleMedicationCaptureKpis = async (req, res) => {
+  try {
+    const isAuthorized = req.user && (
+      req.user.role === 'super_admin' ||
+      req.user.role === 'admin' ||
+      req.user.role === 'clinic_admin' ||
+      req.user.isOwner === true
+    );
+    if (!isAuthorized) {
+      return res.status(403).json({
+        error: 'FORBIDDEN',
+        message: 'Unauthorized: Only platform and clinic administrators can access Medication Photo telemetry.'
+      });
+    }
 
+    const { timePeriod, clinicId, startDate, endDate } = req.query || {};
+    const analyticsService = require('./analytics-service');
+
+    const effectiveClinic = req.user.role === 'clinic_admin' ? req.user.clinicId : clinicId;
+
+    const kpiData = analyticsService.calculateMedicationCaptureKpis(analyticsService.getInMemoryEvents(), {
+      timePeriod: timePeriod || 'all',
+      clinicId: effectiveClinic,
+      startDate,
+      endDate
+    });
+
+    return res.json(kpiData);
+  } catch (err) {
+    return res.status(500).json({
+      error: 'MEDICATION_ANALYTICS_FAILED',
+      message: err.message
+    });
+  }
+};
+
+app.get('/api/medication-capture/analytics/kpis', requireAuth, handleMedicationCaptureKpis);
+app.get('/api/admin/medication-photos/analytics/kpis', requireAuth, handleMedicationCaptureKpis);
+
+/**
+ * POST /api/medication-capture/telemetry
+ * Ingests medication photo capture telemetry with zero medical PHI enforcement.
+ */
+app.post('/api/medication-capture/telemetry', requireAuth, (req, res) => {
+  try {
+    const { eventType, eventId, timestamp, clinicId, payload = {} } = req.body || {};
+    const analyticsService = require('./analytics-service');
+
+    const validMedicationEvents = [
+      analyticsService.EVENT_TYPES.MEDICATION_PHOTO_UPLOAD_ATTEMPT,
+      analyticsService.EVENT_TYPES.MEDICATION_PHOTO_UPLOAD_SUCCESS,
+      analyticsService.EVENT_TYPES.MEDICATION_PHOTO_UPLOAD_FAILURE,
+      analyticsService.EVENT_TYPES.MEDICATION_PHOTO_INSPECTED,
+      analyticsService.EVENT_TYPES.MEDICATION_PHOTO_TRANSCRIBED,
+      analyticsService.EVENT_TYPES.MEDICATION_PHOTO_LINKED_TO_APPT,
+      analyticsService.EVENT_TYPES.MEDICATION_PHOTO_DELETED
+    ];
+
+    if (!eventType || !validMedicationEvents.includes(eventType)) {
+      return res.status(400).json({
+        error: 'INVALID_EVENT_TYPE',
+        message: `Unauthorized or invalid medication capture event type: '${eventType}'`
+      });
+    }
+
+    const effectiveClinic = req.user?.clinicId || clinicId || null;
+    const recorded = analyticsService.recordEvent({
+      eventType,
+      eventId,
+      timestamp,
+      userId: req.user?.uid || 'anonymous',
+      clinicId: effectiveClinic,
+      payload
+    });
+
+    return res.json({
+      success: true,
+      message: 'Medication photo telemetry recorded successfully.',
+      eventId: recorded.eventId,
+      eventType: recorded.eventType
+    });
+  } catch (err) {
+    const isSecurityError = err.message && (
+      err.message.includes('MEDICAL_TEXT_PROHIBITED') ||
+      err.message.includes('INVALID_EVENT')
+    );
+    return res.status(isSecurityError ? 400 : 500).json({
+      error: isSecurityError ? 'TELEMETRY_VALIDATION_FAILED' : 'TELEMETRY_RECORD_FAILED',
+      message: err.message
+    });
+  }
+});
 
 // =============================================================================
 // 🚨 UNUSUAL ACCESS & ANOMALY MONITORING ENDPOINTS
@@ -19772,6 +19870,7 @@ app.familyProfilesService = familyProfilesService;
 app._inMemoryFamilyStore = _inMemoryFamilyStore;
 app.faqService = faqService;
 app._inMemoryFaqFeedbackStore = _inMemoryFaqFeedbackStore;
+app.medicalViewerService = medicalViewerService;
 
 /**
  * GET /api/config/relational-db-status
@@ -19785,4 +19884,487 @@ app.get('/api/config/relational-db-status', (req, res) => {
   });
 });
 
+/**
+ * =============================================================================
+ * 🔬 ROLOGY-STANDARD DOCTOR MEDICAL IMAGE & FILE VIEWER APIS
+ * =============================================================================
+ */
+
+/**
+ * POST /api/medical-viewer/tokens
+ * Issues a cryptographically signed (HMAC-SHA256) ephemeral access token for viewing medical scans.
+ */
+app.post('/api/medical-viewer/tokens', requireAuth, requireDoctor, async (req, res) => {
+  try {
+    const { caseId, fileId, fileName, ttlMinutes } = req.body || {};
+    const result = medicalViewerService.generateViewingToken({
+      doctorUser: req.user,
+      caseId,
+      fileId,
+      fileName,
+      ttlMinutes
+    });
+    res.status(200).json({ success: true, ...result });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.code || 'TOKEN_GENERATION_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/medical-viewer/files/:fileId/stream
+ * Secure authorized file stream/proxy enforcing strict anti-leak headers and token validity.
+ */
+app.get('/api/medical-viewer/files/:fileId/stream', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const token = req.query.token || (authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null);
+    const { fileId } = req.params;
+
+    const payload = medicalViewerService.verifyViewingToken(token, { expectedFileId: fileId });
+
+    // Enforce DICOMweb / Rology security headers
+    const headers = medicalViewerService.getSecurityHeaders();
+    Object.entries(headers).forEach(([k, v]) => res.setHeader(k, v));
+
+    res.status(200).json({
+      success: true,
+      fileId,
+      fileName: payload.fileName,
+      caseId: payload.caseId,
+      authorizedDoctorId: payload.doctorId,
+      expiresAt: new Date(payload.expiresAt).toISOString(),
+      streamSecured: true,
+      securityHeaders: headers
+    });
+  } catch (err) {
+    res.status(err.status || 401).json({ error: err.code || 'UNAUTHORIZED_FILE_ACCESS', message: err.message });
+  }
+});
+
+/**
+ * POST /api/medical-viewer/telemetry
+ * Records Zero-PHI inspection metrics (zoom, window preset, loupe, duration) and audit trail.
+ */
+app.post('/api/medical-viewer/telemetry', requireAuth, requireDoctor, async (req, res) => {
+  try {
+    const { caseId, fileId, fileName, telemetry } = req.body || {};
+    const result = await medicalViewerService.recordTelemetry({
+      doctorUser: req.user,
+      caseId,
+      fileId,
+      fileName,
+      telemetry,
+      req
+    });
+    res.status(200).json(result);
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.code || 'TELEMETRY_LOG_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/medical-viewer/cases/:caseId/findings
+ * Persists diagnostic findings & ROI annotations in Relational DB, triggering clinical alerts on critical severity.
+ */
+app.post('/api/medical-viewer/cases/:caseId/findings', requireAuth, requireDoctor, async (req, res) => {
+  try {
+    const { caseId } = req.params;
+    const {
+      fileId,
+      fileName,
+      findingText,
+      severity,
+      windowPreset,
+      zoomLevel,
+      coordinates,
+      tags,
+      notifyUrgent,
+      patientEmail,
+      patientName
+    } = req.body || {};
+
+    const result = await medicalViewerService.saveAnnotationAndFindings({
+      doctorUser: req.user,
+      caseId,
+      fileId,
+      fileName,
+      findingText,
+      severity,
+      windowPreset,
+      zoomLevel,
+      coordinates,
+      tags,
+      notifyUrgent,
+      patientEmail,
+      patientName,
+      db
+    });
+
+    res.status(201).json(result);
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.code || 'FINDING_SAVE_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/medical-viewer/cases/:caseId/findings
+ * Retrieves recorded diagnostic findings and annotations for a patient case.
+ */
+app.get('/api/medical-viewer/cases/:caseId/findings', requireAuth, requireDoctor, (req, res) => {
+  try {
+    const { caseId } = req.params;
+    const fileId = req.query.fileId || null;
+    const findings = medicalViewerService.getCaseAnnotations(caseId, fileId);
+    res.status(200).json({ success: true, caseId, count: findings.length, findings });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.code || 'FINDING_FETCH_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/medical-viewer/cases/:caseId/audit
+ * Retrieves file access and diagnostic inspection audit logs for regulatory compliance.
+ */
+app.get('/api/medical-viewer/cases/:caseId/audit', requireAuth, requireDoctor, (req, res) => {
+  try {
+    const { caseId } = req.params;
+    const auditLogs = medicalViewerService.getCaseViewerAuditLogs(caseId);
+    res.status(200).json({ success: true, caseId, count: auditLogs.length, auditLogs });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.code || 'AUDIT_FETCH_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/medical-viewer/cases/:caseId/files/:fileId/certify
+ * Strictly enforces Human-in-the-Loop: Licensed human doctor signs and certifies diagnostic findings.
+ */
+app.post('/api/medical-viewer/cases/:caseId/files/:fileId/certify', requireAuth, requireDoctor, async (req, res) => {
+  try {
+    const { caseId, fileId } = req.params;
+    const { fileName, clinicalImpression, findingsSummary, overrideAi } = req.body || {};
+
+    const result = await medicalViewerService.certifyScanByDoctor({
+      doctorUser: req.user,
+      caseId,
+      fileId,
+      fileName,
+      clinicalImpression,
+      findingsSummary,
+      overrideAi,
+      db
+    });
+
+    res.status(200).json(result);
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.code || 'CERTIFICATION_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/medical-viewer/cases/:caseId/files/:fileId/reject
+ * Licensed doctor rejects scan due to blurriness, corruption, or illegibility.
+ */
+app.post('/api/medical-viewer/cases/:caseId/files/:fileId/reject', requireAuth, requireDoctor, async (req, res) => {
+  try {
+    const { caseId, fileId } = req.params;
+    const { rejectionReason } = req.body || {};
+
+    const result = await medicalViewerService.rejectScanAsIllegible({
+      doctorUser: req.user,
+      caseId,
+      fileId,
+      rejectionReason,
+      db
+    });
+
+    res.status(200).json(result);
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.code || 'REJECTION_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/medical-viewer/disclaimer
+ * Returns mandatory clinical safety disclaimer and legal non-replacement notice.
+ */
+app.get('/api/medical-viewer/disclaimer', (req, res) => {
+  const lang = (req.query.lang || 'ar').toLowerCase();
+  res.status(200).json({
+    success: true,
+    disclaimer: medicalViewerService.getClinicalSafetyDisclaimer(lang),
+    framework: 'FDA SaMD & Egyptian Medical Syndicate Regulations',
+    nonReplacementPolicy: 'AI decision-support does not replace independent human physician diagnosis.'
+  });
+});
+
+/**
+ * GET /api/medical-viewer/watermark
+ * Generates dynamic anti-leak forensic watermark data for the active doctor viewing session.
+ */
+app.get('/api/medical-viewer/watermark', requireAuth, requireDoctor, (req, res) => {
+  try {
+    const { caseId = 'unspecified_case', fileId = 'unspecified_file' } = req.query;
+    const watermark = medicalViewerService.generateForensicWatermark({
+      doctorUser: req.user,
+      caseId,
+      fileId,
+      clinicId: req.user.clinicId || 'default_clinic'
+    });
+    res.status(200).json({ success: true, watermark });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.code || 'WATERMARK_GENERATION_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/medical-viewer/consent/revoke
+ * Patient right to revoke diagnostic image sharing consent at any time.
+ */
+app.post('/api/medical-viewer/consent/revoke', requireAuth, (req, res) => {
+  try {
+    const patientId = req.user.uid;
+    const { reason = 'patient_requested' } = req.body || {};
+    const result = medicalViewerService.revokePatientViewingConsent({ patientId, reason });
+    res.status(200).json({ success: true, consent: result });
+  } catch (err) {
+    res.status(400).json({ error: 'CONSENT_REVOCATION_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/medical-viewer/consent/grant
+ * Patient grants or renews diagnostic image sharing consent.
+ */
+app.post('/api/medical-viewer/consent/grant', requireAuth, (req, res) => {
+  try {
+    const patientId = req.user.uid;
+    const { validDays = 90, purpose = 'diagnostic_clinical_review' } = req.body || {};
+    const result = medicalViewerService.grantPatientViewingConsent({ patientId, purpose, validDays });
+    res.status(200).json({ success: true, consent: result });
+  } catch (err) {
+    res.status(400).json({ error: 'CONSENT_GRANT_FAILED', message: err.message });
+  }
+});
+
+/**
+ * DELETE /api/medical-viewer/files/:fileId/privacy-erase
+ * GDPR Art. 17 Right to Erasure / De-identification for diagnostic assets.
+ */
+app.delete('/api/medical-viewer/files/:fileId/privacy-erase', requireAuth, async (req, res) => {
+  try {
+    const { fileId } = req.params;
+    const { caseId = 'unknown_case', reason = 'gdpr_erasure_request' } = req.body || {};
+    const patientUid = req.user.uid;
+
+    const result = await medicalViewerService.eraseMedicalAssetForPrivacy({
+      patientUid,
+      caseId,
+      fileId,
+      reason,
+      db
+    });
+
+    res.status(200).json(result);
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.code || 'PRIVACY_ERASURE_FAILED', message: err.message });
+  }
+});
+
+/**
+ * 🔬 Doctor Medical File & Radiology Viewer Analytics & KPIs (Rology Benchmark)
+ * GET /api/medical-viewer/analytics/kpis
+ * GET /api/admin/medical-viewer/analytics/kpis
+ */
+const handleMedicalViewerKpis = async (req, res) => {
+  try {
+    const isAuthorized = req.user && (
+      req.user.role === 'super_admin' ||
+      req.user.role === 'admin' ||
+      req.user.role === 'clinic_admin' ||
+      req.user.role === 'doctor' ||
+      req.user.role === 'radiologist' ||
+      req.user.isOwner === true
+    );
+    if (!isAuthorized) {
+      return res.status(403).json({
+        error: 'FORBIDDEN',
+        message: 'Unauthorized: Privileged role required to inspect medical viewer analytics telemetry.'
+      });
+    }
+
+    const { timePeriod, clinicId, startDate, endDate, isEn } = req.query || {};
+    const analyticsService = require('./analytics-service');
+
+    const effectiveClinic = req.user.role === 'clinic_admin' ? req.user.clinicId : clinicId;
+
+    const kpiData = analyticsService.calculateMedicalViewerKpis(analyticsService.getInMemoryEvents(), {
+      timePeriod: timePeriod || 'all',
+      clinicId: effectiveClinic,
+      startDate,
+      endDate,
+      isEn: isEn === 'true' || isEn === true
+    });
+
+    res.json(kpiData);
+  } catch (err) {
+    res.status(500).json({
+      error: 'MEDICAL_VIEWER_ANALYTICS_FAILED',
+      message: err.message
+    });
+  }
+};
+
+app.get('/api/medical-viewer/analytics/kpis', requireAuth, handleMedicalViewerKpis);
+app.get('/api/admin/medical-viewer/analytics/kpis', requireAuth, handleMedicalViewerKpis);
+
+/**
+ * 🩻 ROLOGY-BENCHMARK CHEST RADIOLOGY & CT IMAGING APIS
+ */
+
+// POST /api/radiology/upload
+app.post('/api/radiology/upload', requireAuth, async (req, res) => {
+  try {
+    const {
+      patientId = req.user.uid,
+      clinicId = req.user.clinicId || 'cairo_chest_center',
+      modality = 'cxr_pa_lat',
+      indications = [],
+      urgency = 'routine',
+      clinicalNotes = '',
+      fileName,
+      fileSize,
+      mimeType,
+      dicomMetadata = {}
+    } = req.body || {};
+
+    const result = await radiologyService.uploadRadiologyStudy({
+      patientId,
+      clinicId,
+      modality,
+      indications,
+      urgency,
+      clinicalNotes,
+      fileName,
+      fileSize,
+      mimeType,
+      dicomMetadata
+    });
+
+    res.status(201).json(result);
+  } catch (err) {
+    res.status(400).json({ error: 'RADIOLOGY_UPLOAD_FAILED', message: err.message });
+  }
+});
+
+// GET /api/radiology/studies/:patientId
+app.get('/api/radiology/studies/:patientId', requireAuth, (req, res) => {
+  try {
+    const { patientId } = req.params;
+    // Patient can view own studies, doctors/admins can view any assigned
+    const canView = req.user.uid === patientId ||
+      ['doctor', 'radiologist', 'super_admin', 'clinic_admin'].includes(req.user.role);
+    if (!canView) {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Unauthorized to view patient imaging studies.' });
+    }
+
+    const studies = radiologyService.getPatientStudies(patientId);
+    res.status(200).json({ success: true, count: studies.length, studies });
+  } catch (err) {
+    res.status(500).json({ error: 'FETCH_STUDIES_FAILED', message: err.message });
+  }
+});
+
+// POST /api/radiology/studies/:studyId/certify
+app.post('/api/radiology/studies/:studyId/certify', requireAuth, requireDoctor, async (req, res) => {
+  try {
+    const { studyId } = req.params;
+    const { findings, clinicalImpression, isNormal } = req.body || {};
+    const result = await radiologyService.certifyStudyByRadiologist({
+      studyId,
+      doctorUser: req.user,
+      findings,
+      clinicalImpression,
+      isNormal
+    });
+    res.status(200).json(result);
+  } catch (err) {
+    res.status(400).json({ error: 'STUDY_CERTIFICATION_FAILED', message: err.message });
+  }
+});
+
+// POST /api/radiology/studies/:studyId/reject
+app.post('/api/radiology/studies/:studyId/reject', requireAuth, requireDoctor, async (req, res) => {
+  try {
+    const { studyId } = req.params;
+    const { rejectionReason } = req.body || {};
+    const result = await radiologyService.rejectStudyAsIllegible({
+      studyId,
+      doctorUser: req.user,
+      rejectionReason
+    });
+    res.status(200).json(result);
+  } catch (err) {
+    res.status(400).json({ error: 'STUDY_REJECTION_FAILED', message: err.message });
+  }
+});
+
+// GET /api/radiology/disclaimer
+app.get('/api/radiology/disclaimer', (req, res) => {
+  const lang = (req.query.lang || 'ar').toLowerCase();
+  res.status(200).json({
+    success: true,
+    disclaimer: radiologyService.getClinicalSafetyDisclaimer(lang),
+    nonAutonomousNotice: 'MVP AI makes NO automated diagnosis. 100% human certified radiologist review mandatory.',
+    framework: 'Rology Teleradiology & FDA SaMD Guidelines'
+  });
+});
+
+// GET /api/radiology/analytics/kpis
+app.get('/api/radiology/analytics/kpis', requireAuth, (req, res) => {
+  try {
+    const isAuthorized = req.user && (
+      req.user.role === 'super_admin' ||
+      req.user.role === 'admin' ||
+      req.user.role === 'clinic_admin' ||
+      req.user.role === 'doctor' ||
+      req.user.role === 'radiologist' ||
+      req.user.isOwner === true
+    );
+    if (!isAuthorized) {
+      return res.status(403).json({ error: 'FORBIDDEN', message: 'Privileged role required to inspect radiology telemetry.' });
+    }
+    const kpis = radiologyService.calculateRadiologyKpis();
+    res.status(200).json(kpis);
+  } catch (err) {
+    res.status(500).json({ error: 'RADIOLOGY_ANALYTICS_FAILED', message: err.message });
+  }
+});
+
+// POST /api/radiology/studies/:studyId/link-appointment
+app.post('/api/radiology/studies/:studyId/link-appointment', requireAuth, async (req, res) => {
+  try {
+    const { studyId } = req.params;
+    const { appointmentId } = req.body || {};
+    const result = await radiologyService.linkStudyToAppointment(db, { studyId, appointmentId }, req.user);
+    res.status(200).json(result);
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'LINK_FAILED', message: err.message });
+  }
+});
+
+// GET /api/radiology/chatbot-context/:patientId
+app.get('/api/radiology/chatbot-context/:patientId', requireAuth, async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const { lang } = req.query || {};
+    const result = await radiologyService.generateChatbotRadiologyContext(db, patientId, { lang: lang || 'ar' });
+    res.status(200).json({ success: true, ...result });
+  } catch (err) {
+    res.status(500).json({ error: 'CHATBOT_CONTEXT_FAILED', message: err.message });
+  }
+});
+
 module.exports = app;
+
+

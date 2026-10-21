@@ -97,7 +97,26 @@ const EVENT_TYPES = Object.freeze({
   LAB_DOCTOR_REJECTED: 'lab_doctor_rejected',
   LAB_REPORT_LINKED_TO_CASE: 'lab_report_linked_to_case',
   LAB_REPORT_LINKED_TO_APPOINTMENT: 'lab_report_linked_to_appointment',
-  LAB_REPORT_DELETED: 'lab_report_deleted'
+  LAB_REPORT_DELETED: 'lab_report_deleted',
+
+  // 💊 Medication Box, Inhaler & Prescription Capture Telemetry (Altibbi Benchmark)
+  MEDICATION_PHOTO_UPLOAD_ATTEMPT: 'medication_photo_upload_attempt',
+  MEDICATION_PHOTO_UPLOAD_SUCCESS: 'medication_photo_upload_success',
+  MEDICATION_PHOTO_UPLOAD_FAILURE: 'medication_photo_upload_failure',
+  MEDICATION_PHOTO_INSPECTED: 'medication_photo_inspected',
+  MEDICATION_PHOTO_TRANSCRIBED: 'medication_photo_transcribed',
+  MEDICATION_PHOTO_LINKED_TO_APPT: 'medication_photo_linked_to_appt',
+  MEDICATION_PHOTO_DELETED: 'medication_photo_deleted',
+
+  // 🔬 Doctor Medical File & Radiology Viewer Telemetry (Rology Benchmark)
+  MEDICAL_VIEWER_SESSION_OPENED: 'medical_viewer_session_opened',
+  MEDICAL_VIEWER_ZOOM_PAN_INTERACTION: 'medical_viewer_zoom_pan_interaction',
+  MEDICAL_VIEWER_TOOL_USED: 'medical_viewer_tool_used',
+  MEDICAL_VIEWER_FINDING_RECORDED: 'medical_viewer_finding_recorded',
+  MEDICAL_VIEWER_CRITICAL_ALERT: 'medical_viewer_critical_alert',
+  MEDICAL_VIEWER_SCAN_CERTIFIED: 'medical_viewer_scan_certified',
+  MEDICAL_VIEWER_SCAN_REJECTED: 'medical_viewer_scan_rejected',
+  MEDICAL_VIEWER_EXPORT_FINDINGS: 'medical_viewer_export_findings'
 });
 
 const FORBIDDEN_MEDICAL_KEYS = Object.freeze([
@@ -194,7 +213,15 @@ function sanitizeAndValidatePayload(eventType, payload = {}) {
     'emergencyOverride', 'startDate', 'endDate', 'leaveId', 'conflictingAppointmentsCount',
     'conflictingCount', 'slotsCount', 'workingDaysCount', 'isPrivileged', 'actorUid',
     // Lab Upload operational metadata (Docus AI Benchmark)
-    'fileId', 'labCategory', 'format', 'size', 'urgencyLevel', 'scanStatus', 'rejectionReason'
+    'fileId', 'labCategory', 'format', 'size', 'urgencyLevel', 'scanStatus', 'rejectionReason',
+    // Medication Box & Prescription Capture operational metadata (Altibbi Benchmark)
+    'photoId', 'categoryKey', 'category', 'captureSource', 'frequencyKey', 'sizeBytes',
+    'boxType', 'inhalerType', 'uploadMethod', 'transcriptionMethod', 'hasFinePrintZoom',
+    'deviceType', 'isCamera', 'zoomLevel', 'transcriptionStatus',
+    // Medical Viewer operational metadata (Rology Benchmark)
+    'fileName', 'maxZoom', 'minZoom', 'windowPreset', 'toolName', 'toolCategory',
+    'loupeUsed', 'rotationAngle', 'durationSeconds', 'isCertified', 'isCritical',
+    'severity', 'certificateId', 'tagsCount', 'coordinatesSupplied', 'findingLength'
   ];
 
   for (const [k, v] of Object.entries(payload)) {
@@ -256,7 +283,8 @@ function recordEvent(eventData = {}) {
 
   // Debounce rapid identical events within 3000ms (e.g. double clicks)
   const targetEntity = cleanPayload.fileId || cleanPayload.assessmentId || cleanPayload.caseId || cleanPayload.appointmentId || '';
-  const compositeKey = `${eventType}:${userId || 'anon'}:${targetEntity}`;
+  const toolOrAction = cleanPayload.toolName || cleanPayload.windowPreset || cleanPayload.action || '';
+  const compositeKey = `${eventType}:${userId || 'anon'}:${targetEntity}:${toolOrAction}`;
   const lastEventTs = recentDebounceMap.get(compositeKey);
   if (typeof lastEventTs === 'number' && Math.abs(ts - lastEventTs) < 3000) {
     return {
@@ -363,6 +391,8 @@ function buildKpiMetric({
     denominatorValue: typeof denominatorValue === 'number' ? denominatorValue : 0,
     rate,
     metricValue: rate,
+    value: rate,
+    formatted: display,
     display,
     displayAr,
     displayValue: isEn ? display : displayAr,
@@ -748,6 +778,13 @@ function calculateProductKpis(events = inMemoryEvents, options = {}) {
     appointments: calculateAppointmentKpis(filteredEvents, {
       timePeriod: periodLabel,
       clinicId: clinicFilter
+    }),
+
+    // 10. DOCTOR MEDICAL FILE & RADIOLOGY VIEWER UTILIZATION & SUCCESS (Rology Flow)
+    medicalViewer: calculateMedicalViewerKpis(filteredEvents, {
+      timePeriod: periodLabel,
+      clinicId: clinicFilter,
+      isEn: options.isEn
     })
   };
 }
@@ -1522,6 +1559,382 @@ function calculateLabUploadKpis(events = inMemoryEvents, options = {}) {
   };
 }
 
+/**
+ * 💊 Administrative KPI & Telemetry Engine for Medication Box, Inhaler & Prescription Capture
+ * Benchmark: Altibbi Telemedicine Platform
+ */
+function calculateMedicationCaptureKpis(events = inMemoryEvents, options = {}) {
+  const timePeriod = options.timePeriod || 'all';
+  const clinicFilter = options.clinicId ? String(options.clinicId).toLowerCase() : null;
+
+  const now = Date.now();
+  let minTs = 0;
+  let maxTs = Infinity;
+
+  if (options.startDate) {
+    minTs = Date.parse(options.startDate);
+  }
+  if (options.endDate) {
+    const endP = Date.parse(options.endDate);
+    maxTs = typeof options.endDate === 'string' && options.endDate.length === 10 ? endP + 86399999 : endP;
+  }
+  if (!options.startDate && !options.endDate) {
+    if (timePeriod === 'last_24h') minTs = now - 24 * 3600 * 1000;
+    else if (timePeriod === 'last_7d') minTs = now - 7 * 24 * 3600 * 1000;
+    else if (timePeriod === 'last_30d') minTs = now - 30 * 24 * 3600 * 1000;
+    else minTs = 0;
+  }
+
+  const periodLabel = options.startDate && options.endDate
+    ? `${options.startDate} to ${options.endDate}`
+    : timePeriod;
+
+  // Filter events within window and clinic
+  const filteredEvents = events.filter(e => {
+    const ts = e.timestamp || 0;
+    if (minTs > 0 && ts < minTs) return false;
+    if (maxTs < Infinity && ts > maxTs) return false;
+    if (clinicFilter && clinicFilter !== 'all') {
+      const cId = String(e.clinicId || e.payload?.clinicId || '').toLowerCase();
+      if (cId && cId !== clinicFilter) return false;
+    }
+    return true;
+  });
+
+  // 1. Upload Counts
+  const uploadAttempts = filteredEvents.filter(e => e.eventType === EVENT_TYPES.MEDICATION_PHOTO_UPLOAD_ATTEMPT).length;
+  const uploadSuccesses = filteredEvents.filter(e => e.eventType === EVENT_TYPES.MEDICATION_PHOTO_UPLOAD_SUCCESS).length;
+  const uploadFailures = filteredEvents.filter(e => e.eventType === EVENT_TYPES.MEDICATION_PHOTO_UPLOAD_FAILURE).length;
+  const totalUploadEvents = uploadAttempts > 0 ? uploadAttempts : (uploadSuccesses + uploadFailures);
+
+  // 2. Doctor Transcription into Certified Rx
+  const transcriptions = filteredEvents.filter(e => e.eventType === EVENT_TYPES.MEDICATION_PHOTO_TRANSCRIBED).length;
+
+  // 3. Fine-print Inspector Views
+  const inspections = filteredEvents.filter(e => e.eventType === EVENT_TYPES.MEDICATION_PHOTO_INSPECTED).length;
+
+  // 4. Appointment Linkages
+  const linkedToAppt = filteredEvents.filter(e => e.eventType === EVENT_TYPES.MEDICATION_PHOTO_LINKED_TO_APPT).length;
+  const deletions = filteredEvents.filter(e => e.eventType === EVENT_TYPES.MEDICATION_PHOTO_DELETED).length;
+
+  // 5. Capture Source Breakdown (Camera vs Browse/Gallery)
+  let cameraUploads = 0;
+  let browseUploads = 0;
+  const sourceEvents = uploadSuccesses > 0
+    ? filteredEvents.filter(e => e.eventType === EVENT_TYPES.MEDICATION_PHOTO_UPLOAD_SUCCESS)
+    : filteredEvents.filter(e => e.eventType === EVENT_TYPES.MEDICATION_PHOTO_UPLOAD_ATTEMPT);
+
+  sourceEvents.forEach(e => {
+    const src = String(e.payload?.captureSource || e.payload?.source || '').toLowerCase();
+    if (src.includes('camera')) {
+      cameraUploads++;
+    } else if (src.includes('browse') || src.includes('gallery')) {
+      browseUploads++;
+    }
+  });
+
+  const totalSourceEvents = cameraUploads + browseUploads;
+
+  // 6. Category Breakdown
+  const categoryCounts = {
+    medicine_box: 0,
+    chest_inhaler: 0,
+    paper_prescription: 0,
+    syrup_drops: 0,
+    other: 0
+  };
+
+  filteredEvents
+    .filter(e => e.eventType === EVENT_TYPES.MEDICATION_PHOTO_UPLOAD_SUCCESS)
+    .forEach(e => {
+      const cat = e.payload?.categoryKey || e.payload?.category;
+      if (cat && categoryCounts[cat] !== undefined) {
+        categoryCounts[cat]++;
+      } else if (cat) {
+        categoryCounts.other++;
+      }
+    });
+
+  // KPIs using buildKpiMetric
+  const uploadSuccessRate = buildKpiMetric({
+    name: 'Medication Photo Upload Success Rate',
+    timePeriod: periodLabel,
+    numeratorName: 'Successful Medication Photo Uploads',
+    numeratorValue: uploadSuccesses,
+    denominatorName: 'Total Medication Photo Upload Attempts',
+    denominatorValue: totalUploadEvents,
+    unit: '%'
+  });
+
+  const doctorTranscriptionRate = buildKpiMetric({
+    name: 'Doctor Rx Transcription Rate',
+    timePeriod: periodLabel,
+    numeratorName: 'Medication Photos Transcribed to Certified Rx',
+    numeratorValue: transcriptions,
+    denominatorName: 'Total Staged Medication Photos',
+    denominatorValue: uploadSuccesses,
+    unit: '%'
+  });
+
+  const cameraCaptureAdoptionRate = buildKpiMetric({
+    name: 'Camera Direct Capture Adoption Rate',
+    timePeriod: periodLabel,
+    numeratorName: 'Direct Camera Photo Captures',
+    numeratorValue: cameraUploads,
+    denominatorName: 'Total Categorized Upload Sources',
+    denominatorValue: totalSourceEvents,
+    unit: '%'
+  });
+
+  const appointmentLinkageRate = buildKpiMetric({
+    name: 'Appointment Linkage Rate',
+    timePeriod: periodLabel,
+    numeratorName: 'Photos Linked to Appointments',
+    numeratorValue: linkedToAppt,
+    denominatorName: 'Total Staged Medication Photos',
+    denominatorValue: uploadSuccesses,
+    unit: '%'
+  });
+
+  return {
+    success: true,
+    timePeriod: periodLabel,
+    clinicId: clinicFilter || 'all',
+    summary: {
+      totalUploadEvents,
+      uploadAttempts,
+      uploadSuccesses,
+      uploadFailures,
+      transcriptions,
+      inspections,
+      linkedToAppt,
+      deletions,
+      cameraUploads,
+      browseUploads
+    },
+    categoryDistribution: categoryCounts,
+    kpis: {
+      uploadSuccessRate,
+      doctorTranscriptionRate,
+      cameraCaptureAdoptionRate,
+      appointmentLinkageRate
+    }
+  };
+}
+
+/**
+ * 🔬 Doctor Medical File & Radiology Viewer Analytics & Success Metrics
+ * Benchmark: Rology Teleradiology Platform
+ */
+function calculateMedicalViewerKpis(events = inMemoryEvents, options = {}) {
+  const isEn = Boolean(options.isEn);
+  const timePeriod = options.timePeriod || 'all';
+  const clinicFilter = options.clinicId ? String(options.clinicId).toLowerCase() : null;
+
+  const now = Date.now();
+  let minTs = 0;
+  let maxTs = Infinity;
+
+  if (options.startDate) {
+    minTs = Date.parse(options.startDate);
+  }
+  if (options.endDate) {
+    const endP = Date.parse(options.endDate);
+    maxTs = typeof options.endDate === 'string' && options.endDate.length === 10 ? endP + 86399999 : endP;
+  }
+  if (!options.startDate && !options.endDate) {
+    if (timePeriod === 'last_24h') minTs = now - 24 * 3600 * 1000;
+    else if (timePeriod === 'last_7d') minTs = now - 7 * 24 * 3600 * 1000;
+    else if (timePeriod === 'last_30d') minTs = now - 30 * 24 * 3600 * 1000;
+    else minTs = 0;
+  }
+
+  const periodLabel = options.startDate && options.endDate
+    ? `${options.startDate} to ${options.endDate}`
+    : timePeriod;
+
+  function matchType(e, targetType) {
+    const raw = String(e.eventType || e.type || '').trim().toLowerCase();
+    const target = String(targetType).trim().toLowerCase();
+    return raw === target;
+  }
+
+  // Filter events within window and clinic
+  const filteredEvents = (events || []).filter(e => {
+    const ts = e.timestamp || 0;
+    if (minTs > 0 && ts < minTs) return false;
+    if (maxTs < Infinity && ts > maxTs) return false;
+    if (clinicFilter && clinicFilter !== 'all') {
+      const cId = String(e.clinicId || e.payload?.clinicId || '').toLowerCase();
+      if (cId && cId !== clinicFilter) return false;
+    }
+    return true;
+  });
+
+  // 1. Session Counts and Views
+  const sessionOpens = filteredEvents.filter(e => matchType(e, EVENT_TYPES.MEDICAL_VIEWER_SESSION_OPENED));
+  const totalViewerSessions = sessionOpens.length;
+
+  const filesSet = new Set();
+  const doctorsSet = new Set();
+
+  filteredEvents.forEach(e => {
+    const fId = e.payload?.fileId || e.fileId;
+    if (fId) filesSet.add(fId);
+    const dId = e.payload?.doctorId || e.userId || e.doctorId;
+    if (dId && (String(e.eventType || '').includes('medical_viewer') || String(e.type || '').includes('medical_viewer'))) {
+      doctorsSet.add(dId);
+    }
+  });
+
+  // 2. Clinical Certifications vs Rejections
+  const certifications = filteredEvents.filter(e => matchType(e, EVENT_TYPES.MEDICAL_VIEWER_SCAN_CERTIFIED));
+  const certifiedCount = certifications.length;
+
+  const rejections = filteredEvents.filter(e => matchType(e, EVENT_TYPES.MEDICAL_VIEWER_SCAN_REJECTED));
+  const rejectedCount = rejections.length;
+
+  const reviewedTotal = certifiedCount + rejectedCount;
+
+  // 3. Clinical Findings & Critical Alerts
+  const findingsEvents = filteredEvents.filter(e => matchType(e, EVENT_TYPES.MEDICAL_VIEWER_FINDING_RECORDED));
+  const findingsRecordedCount = findingsEvents.length;
+
+  const explicitCriticalAlerts = filteredEvents.filter(e => matchType(e, EVENT_TYPES.MEDICAL_VIEWER_CRITICAL_ALERT));
+  const criticalFindings = filteredEvents.filter(e => matchType(e, EVENT_TYPES.MEDICAL_VIEWER_FINDING_RECORDED) && (e.payload?.isCritical === true || e.payload?.severity === 'critical_alert'));
+  const criticalAlertsCount = explicitCriticalAlerts.length > 0 ? explicitCriticalAlerts.length : criticalFindings.length;
+
+  // 4. Diagnostic Tool & High-Zoom Interactions
+  const zoomInteractions = filteredEvents.filter(e =>
+    matchType(e, EVENT_TYPES.MEDICAL_VIEWER_ZOOM_PAN_INTERACTION) ||
+    (e.payload?.maxZoom && Number(e.payload?.maxZoom) >= 2.0)
+  );
+  const highZoomSessionsCount = zoomInteractions.length;
+
+  const toolEvents = filteredEvents.filter(e => matchType(e, EVENT_TYPES.MEDICAL_VIEWER_TOOL_USED));
+  const toolDistribution = {
+    loupe: 0,
+    bone_preset: 0,
+    soft_tissue_preset: 0,
+    infiltrate_preset: 0,
+    invert_negative: 0,
+    rotation: 0,
+    high_zoom: highZoomSessionsCount
+  };
+
+  toolEvents.forEach(e => {
+    const tool = String(e.payload?.toolName || e.payload?.windowPreset || '').toLowerCase();
+    if (tool.includes('loupe') || e.payload?.loupeUsed) toolDistribution.loupe++;
+    else if (tool.includes('bone')) toolDistribution.bone_preset++;
+    else if (tool.includes('soft')) toolDistribution.soft_tissue_preset++;
+    else if (tool.includes('infiltrate')) toolDistribution.infiltrate_preset++;
+    else if (tool.includes('invert') || tool.includes('negative')) toolDistribution.invert_negative++;
+    else if (tool.includes('rotat') || (e.payload?.rotationAngle && e.payload?.rotationAngle > 0)) toolDistribution.rotation++;
+  });
+
+  const totalAdvancedToolsUsed = toolEvents.length + highZoomSessionsCount;
+
+  // 5. Reading / Inspection Durations
+  const durationsSec = [];
+  filteredEvents.forEach(e => {
+    const dur = Number(e.payload?.durationSeconds || (e.payload?.durationMs ? e.payload.durationMs / 1000 : 0));
+    if (dur > 0 && dur < 7200) {
+      durationsSec.push(dur);
+    }
+  });
+
+  const avgInspectionSeconds = durationsSec.length > 0
+    ? Number((durationsSec.reduce((a, b) => a + b, 0) / durationsSec.length).toFixed(1))
+    : null;
+
+  // Denominator normalization
+  const baseSessionsDenominator = totalViewerSessions > 0 ? totalViewerSessions : reviewedTotal;
+
+  // 6. KPIs using buildKpiMetric
+  const certificationSuccessRate = buildKpiMetric({
+    name: 'Clinical Certification & Review Success Rate',
+    timePeriod: periodLabel,
+    numeratorName: 'Certified Scans by Human Physician',
+    numeratorValue: certifiedCount,
+    denominatorName: 'Total Reviewed Scans (Certified + Rejected)',
+    denominatorValue: reviewedTotal > 0 ? reviewedTotal : baseSessionsDenominator,
+    unit: '%',
+    isEn
+  });
+
+  const highZoomUtilizationRate = buildKpiMetric({
+    name: 'High-Zoom (>=2.0x) Utilization Rate',
+    timePeriod: periodLabel,
+    numeratorName: 'Sessions Utilizing High-Resolution Zoom',
+    numeratorValue: highZoomSessionsCount,
+    denominatorName: 'Total Medical Viewer Sessions',
+    denominatorValue: baseSessionsDenominator,
+    unit: '%',
+    isEn
+  });
+
+  const diagnosticToolAdoptionRate = buildKpiMetric({
+    name: 'Diagnostic Tools Adoption Rate',
+    timePeriod: periodLabel,
+    numeratorName: 'Sessions Engaging Advanced Tools (Loupe/Presets/Rotation)',
+    numeratorValue: Math.min(baseSessionsDenominator, totalAdvancedToolsUsed),
+    denominatorName: 'Total Medical Viewer Sessions',
+    denominatorValue: baseSessionsDenominator,
+    unit: '%',
+    isEn
+  });
+
+  const criticalAlertRate = buildKpiMetric({
+    name: 'Critical Radiological Alert Rate',
+    timePeriod: periodLabel,
+    numeratorName: 'Emergency Critical Findings Escalated',
+    numeratorValue: criticalAlertsCount,
+    denominatorName: 'Total Medical Viewer Sessions',
+    denominatorValue: baseSessionsDenominator,
+    unit: '%',
+    isEn
+  });
+
+  const scanRejectionRate = buildKpiMetric({
+    name: 'Scan Quality Rejection Rate (Illegible/Corrupt)',
+    timePeriod: periodLabel,
+    numeratorName: 'Rejected Blurry or Illegible Scans',
+    numeratorValue: rejectedCount,
+    denominatorName: 'Total Reviewed Scans',
+    denominatorValue: reviewedTotal > 0 ? reviewedTotal : baseSessionsDenominator,
+    unit: '%',
+    isEn
+  });
+
+  return {
+    success: true,
+    timePeriod: periodLabel,
+    clinicId: clinicFilter || 'all',
+    summary: {
+      totalViewerSessions,
+      uniqueFilesInspected: filesSet.size,
+      activeDoctorsCount: doctorsSet.size,
+      certifiedCount,
+      rejectedCount,
+      reviewedTotal,
+      findingsRecordedCount,
+      criticalAlertsCount,
+      highZoomSessionsCount,
+      totalAdvancedToolsUsed,
+      avgInspectionSeconds,
+      avgInspectionDurationDisplay: avgInspectionSeconds !== null ? `${avgInspectionSeconds}s` : 'Unavailable',
+      avgInspectionDurationDisplayAr: avgInspectionSeconds !== null ? `${avgInspectionSeconds} ثانية` : 'غير متاح'
+    },
+    toolDistribution,
+    kpis: {
+      certificationSuccessRate,
+      highZoomUtilizationRate,
+      diagnosticToolAdoptionRate,
+      criticalAlertRate,
+      scanRejectionRate
+    }
+  };
+}
 
 /**
  * Resets the in-memory analytics state (useful for clean testing).
@@ -1572,6 +1985,8 @@ module.exports = {
   calculateProductKpis,
   calculateAppointmentKpis,
   calculateLabUploadKpis,
+  calculateMedicationCaptureKpis,
+  calculateMedicalViewerKpis,
   sanitizeAndValidatePayload,
   sanitizeProperties: (props) => sanitizeAndValidatePayload(EVENT_TYPES.APPOINTMENT_BOOK_ATTEMPT, props).cleanPayload,
   buildKpiMetric,

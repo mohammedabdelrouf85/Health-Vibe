@@ -2118,9 +2118,25 @@
 
   function renderAttachmentsSection(c, isEn = false) {
     if (!c) return "";
-    const files = Array.isArray(c.attachments)
-      ? c.attachments
-      : (Array.isArray(c.files) ? c.files : (Array.isArray(c.attachedFiles) ? c.attachedFiles : (c.assessment?.attachments || c.assessment?.files || [])));
+
+    // Gather all medical files (attachments, radiology, labs, medication photos)
+    let files = [];
+    if (global.HealthVibes?.MedicalViewerUI?.extractCaseMedicalFiles) {
+      files = global.HealthVibes.MedicalViewerUI.extractCaseMedicalFiles(c);
+    } else {
+      const raw = Array.isArray(c.attachments)
+        ? c.attachments
+        : (Array.isArray(c.files) ? c.files : (Array.isArray(c.attachedFiles) ? c.attachedFiles : (c.assessment?.attachments || c.assessment?.files || [])));
+      files = raw.map((f, i) => ({
+        id: f.id || `f_${i}`,
+        name: f.name || f.fileName || (isEn ? "Medical Record File" : "ملف طبي مرفق"),
+        url: f.url || f.fileUrl || f.downloadUrl || "#",
+        size: f.size || f.fileSize || 0,
+        type: f.type || f.mimeType || "image/jpeg",
+        isImage: true,
+        categoryLabel: isEn ? "Medical Attachment" : "ملف طبي مرفق"
+      }));
+    }
 
     if (!files || files.length === 0) {
       return `
@@ -2142,48 +2158,72 @@
       const fn = String(fileName).toLowerCase();
       const m = String(mime).toLowerCase();
       if (fn.endsWith(".pdf") || m.includes("pdf")) return "📄";
-      if (fn.match(/\.(jpg|jpeg|png|webp|gif)$/) || m.includes("image")) return "🖼️";
+      if (fn.match(/\.(jpg|jpeg|png|webp|gif)$/) || m.includes("image")) return "🩻";
       if (fn.includes("ecg") || fn.includes("ekg")) return "📈";
       if (fn.includes("lab") || fn.includes("blood") || fn.includes("test")) return "🧪";
       return "📎";
     }
 
-    const fileListHtml = files.map(f => {
-      const name = f.name || f.fileName || f.originalName || (isEn ? "Medical Record File" : "ملف طبي مرفق");
-      const size = f.size || f.fileSize ? formatBytes(f.size || f.fileSize) : "";
-      const icon = getFileIcon(name, f.type || f.mimeType);
-      const dateStr = f.uploadedAt || f.createdAt ? new Date(f.uploadedAt || f.createdAt).toLocaleDateString(isEn ? "en-US" : "ar-EG") : "";
-      const url = f.url || f.fileUrl || f.downloadUrl || "#";
+    // Save case reference globally for viewer trigger
+    window._docCurrentReviewCase = c;
+
+    const fileListHtml = files.map((f, idx) => {
+      const name = f.name || (isEn ? "Medical Record File" : "ملف طبي مرفق");
+      const size = f.size ? formatBytes(f.size) : "";
+      const icon = getFileIcon(name, f.type);
+      const dateStr = f.uploadedAt ? new Date(f.uploadedAt).toLocaleDateString(isEn ? "en-US" : "ar-EG") : "";
+      const url = f.url || "#";
+      const isImg = f.isImage !== false && !String(f.type).includes("pdf");
 
       return `
-        <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; margin-bottom: 6px; font-size: 12.5px;">
-          <div style="display: flex; align-items: center; gap: 8px; overflow: hidden;">
-            <span style="font-size: 18px;">${icon}</span>
-            <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-              <strong style="color: var(--ink); font-size: 12.5px; display: block;">${escapeSafe(name)}</strong>
-              <small style="color: var(--muted); font-size: 11px;">${size ? size + " • " : ""}${dateStr || (isEn ? "Attached" : "مرفق")}</small>
+        <div class="doc-attachment-item-row" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 8px; font-size: 12.5px; gap: 10px; flex-wrap: wrap;">
+          <div style="display: flex; align-items: center; gap: 10px; overflow: hidden; flex: 1; min-width: 220px;">
+            ${isImg && url !== "#" ? `
+              <div onclick="HealthVibes.MedicalViewerUI.open({ caseData: window._docCurrentReviewCase, initialIndex: ${idx} })" style="width: 44px; height: 44px; border-radius: 8px; overflow: hidden; background: #000; flex-shrink: 0; cursor: pointer; border: 1.5px solid var(--teal);" title="${isEn ? 'Click to inspect in Rology Viewer' : 'انقر للفحص بتقريب عالي'}">
+                <img src="${escapeSafe(url)}" alt="${escapeSafe(name)}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='./logo-dark-mark.webp'" />
+              </div>
+            ` : `
+              <span style="font-size: 24px; flex-shrink: 0;">${icon}</span>
+            `}
+            <div style="overflow: hidden; text-overflow: ellipsis;">
+              <strong style="color: var(--ink); font-size: 13px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeSafe(name)}</strong>
+              <small style="color: var(--muted); font-size: 11px;">
+                <span class="pill info" style="font-size: 10px; padding: 1px 6px; margin-inline-end: 4px;">${escapeSafe(f.categoryLabel || 'Medical')}</span>
+                ${size ? size + " • " : ""}${dateStr || (isEn ? "Attached" : "مرفق")}
+              </small>
             </div>
           </div>
-          <div style="display: flex; gap: 6px; flex-shrink: 0;">
+          <div style="display: flex; gap: 8px; flex-shrink: 0; align-items: center;">
+            <button type="button" class="solid-button" onclick="HealthVibes.MedicalViewerUI.open({ caseData: window._docCurrentReviewCase, initialIndex: ${idx} })" style="padding: 6px 12px; font-size: 11.5px; display: inline-flex; align-items: center; gap: 5px; min-height: 38px; background: #0ea5e9; border-color: #0284c7;">
+              <span>🔬</span> <span>${isEn ? "High-Res Zoom & Inspect" : "فحص عالي الدقة (Rology)"}</span>
+            </button>
             ${url && url !== "#" ? `
-              <a href="${escapeSafe(url)}" target="_blank" rel="noopener noreferrer" class="soft-button" style="font-size: 11px; padding: 4px 8px; text-decoration: none;">
-                🔍 ${isEn ? "View" : "معاينة"}
+              <a href="${escapeSafe(url)}" target="_blank" rel="noopener noreferrer" class="soft-button" style="font-size: 11px; padding: 6px 10px; text-decoration: none; min-height: 38px; display: inline-flex; align-items: center;" title="${isEn ? 'Open Raw File' : 'فتح الملف الأصلي'}">
+                <span>🔗</span>
               </a>
-            ` : `
-              <span class="pill info" style="font-size: 10px; padding: 2px 6px;">${isEn ? "Attached" : "مرفق"}</span>
-            `}
+            ` : ""}
           </div>
         </div>
       `;
     }).join("");
 
     return `
-      <div class="attachments-section-card" style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin: 14px 0;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
-          <strong style="font-size: 14px; display: flex; align-items: center; gap: 6px; color: var(--teal);">
-            <span>📎</span> ${isEn ? "Patient Medical Attachments & Reports" : "الملفات والتقارير الطبية المرفقة"}
-          </strong>
-          <span class="pill ok" style="font-size: 11px;">${files.length} ${isEn ? "File(s)" : "ملفات"}</span>
+      <div class="attachments-section-card" id="doctorAttachmentsSectionCard" style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin: 14px 0;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px;">
+          <div>
+            <strong style="font-size: 14.5px; display: flex; align-items: center; gap: 6px; color: var(--teal);">
+              <span>🩻</span> ${isEn ? "Patient Medical Imaging, Labs & Files (Rology Viewer)" : "الملفات والصور والأشعة الطبية (عارض Rology)"}
+            </strong>
+            <small style="color: var(--muted); display: block; margin-top: 2px;">
+              ${isEn ? "High-resolution zoom, windowing presets, loupe & negative film inversion" : "تقريب عالي الدقة حتى 800%، سحب تفاعلي، عدسة مكبرة، وفلتر الأشعة السالبة"}
+            </small>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span class="pill ok" style="font-size: 11px;">${files.length} ${isEn ? "File(s)" : "ملفات مرفوعة"}</span>
+            <button type="button" class="solid-button" onclick="HealthVibes.MedicalViewerUI.open({ caseData: window._docCurrentReviewCase, initialIndex: 0 })" style="padding: 6px 14px; font-size: 12px; display: inline-flex; align-items: center; gap: 6px; min-height: 38px;">
+              <span>🔬</span> <span>${isEn ? "Open Medical Viewer" : "فتح العارض الطبي المدمج"}</span>
+            </button>
+          </div>
         </div>
         <div>
           ${fileListHtml}

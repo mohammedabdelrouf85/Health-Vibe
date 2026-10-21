@@ -526,6 +526,7 @@
         <button class="nav-item active" data-screen="patient" data-i18n-title="nav.home"><span class="nav-icon">🏠</span><span class="nav-label" data-i18n="nav.home">Home</span></button>
         <button class="nav-item" data-screen="profile" data-i18n-title="nav.profile"><span class="nav-icon">👤</span><span class="nav-label" data-i18n="nav.profile">Medical Profile</span></button>
         <button class="nav-item" type="button" onclick="openChestRadiologyStudio()" data-i18n-title="radiologyUpload.title"><span class="nav-icon">🩻</span><span class="nav-label" data-i18n="radiologyUpload.title">الأشعة الصدرية (X-Ray / CT)</span></button>
+        <button class="nav-item" type="button" onclick="openMedicationCaptureStudio()" data-i18n-title="medicationCapture.navTitle"><span class="nav-icon">💊</span><span class="nav-label" data-i18n="medicationCapture.navTitle">علب الأدوية والروشتات (Medication Photos)</span></button>
         <button class="nav-item" data-screen="consent" data-i18n-title="nav.consent"><span class="nav-icon">🔒</span><span class="nav-label" data-i18n="nav.consent">Consent & Privacy</span></button>
         <button class="nav-item" data-screen="assessment" data-i18n-title="nav.assessment"><span class="nav-icon">🫁</span><span class="nav-label" data-i18n="nav.assessment">Breathing Assessment</span></button>
 
@@ -1509,6 +1510,13 @@
               </button>
             </div>
           </article>
+
+          <!-- =========================================================================
+               💊 MEDICATION & INHALER PHOTO STUDIO (P2 Feature - Altibbi Benchmark)
+               Non-Technical Patient UX for Medicine Boxes, Inhalers & Paper Slips
+               ========================================================================= -->
+          <div id="medicationCapturePanelContainer"></div>
+
           <article class="panel" id="doctorApplyCard" style="grid-column: 1 / -1; margin-top: 14px; border: 1px dashed var(--teal); background: rgba(14, 165, 164, 0.04);">
             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
               <div>
@@ -1930,6 +1938,16 @@
               </label>
               <input type="text" id="apptNotesInput" class="form-control" style="width: 100%; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-size: 13px;" placeholder="مثال: متابعة بعد تقييم التنفس، كحة مستمرة، مراجعة الخطة العلاجية...">
             </div>
+
+            <!-- Current Medications & Inhalers Quick Photo Attachment (Altibbi Flow) -->
+            <div class="appt-med-photo-cta" style="margin-top: 10px; padding: 10px 14px; background: rgba(14, 165, 233, 0.06); border: 1px dashed rgba(14, 165, 233, 0.35); border-radius: 10px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+              <span style="font-size: 12.5px; color: var(--ink);">
+                <span>💊</span> <strong class="lang-ar">هل تستخدم بخاخة صدر أو أدوية حالياً؟</strong><strong class="lang-en">Using chest inhalers or current medications?</strong>
+              </span>
+              <button type="button" class="soft-button" onclick="openMedicationCaptureStudio({ source: 'appointment' })" style="font-size: 11.5px; padding: 5px 12px; display: inline-flex; align-items: center; gap: 6px;">
+                <span>📸</span> <span class="lang-ar">تصوير العلبة أو البخاخة للموعد</span><span class="lang-en">Snap Med or Inhaler Photo</span>
+              </button>
+            </div>
           </article>
 
           <!-- 2. Time Slots & Confirmation Panel -->
@@ -2296,6 +2314,7 @@
             </div>
             <div id="chatQuickChips" style="display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap;"></div>
             <div class="chat-compose">
+              <button type="button" class="chat-cam-btn" id="btnChatMedCapture" onclick="openMedicationCaptureStudio({ source: 'chatbot' })" title="تصوير علبة دواء أو بخاخة أو روشتة" aria-label="تصوير علبة دواء أو بخاخة أو روشتة">📷</button>
               <label for="chatInput" class="sr-only">اكتب استفسارك هنا حول تقريرك المعتمد / Ask assistant</label>
               <input id="chatInput" placeholder="اكتب استفسارك هنا حول تقريرك المعتمد..." autocomplete="off">
               <button id="sendChat" class="solid-button">إرسال</button>
@@ -2753,6 +2772,145 @@
               <div style="font-size: 12px; color: var(--muted);" data-i18n="doctorSchedule.leaveRequestsTitle">الإجازات والاستثناءات الطارئة</div>
               <div id="adminDoctorLeavesCount" style="font-size: 22px; font-weight: 800; color: #f97316; margin-top: 4px;">0</div>
               <div id="adminDoctorBranchCoverage" style="font-size: 11px; color: var(--muted); margin-top: 2px;">تغطية الفروع: فروع نشطة</div>
+            </div>
+          </div>
+        </article>
+
+        <!-- 31. MEDICATION PHOTO & PRESCRIPTION CAPTURE ANALYTICS (Altibbi Benchmark) -->
+        <article class="panel" id="adminMedicationAnalyticsPanel" style="margin-top: 24px;">
+          <div class="panel-head" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <h3 style="margin: 0; font-size: 19px;" data-i18n="appointments.medPhotoAnalyticsTitle">تحليلات ومراقبة رفع صور الأدوية والروشتات (Medication & Rx Photo Analytics)</h3>
+                <span class="pill ok" id="adminMedPhotoHealthBadge" style="font-size: 11px;">مباشر 🟢</span>
+              </div>
+              <p style="margin: 4px 0 0; font-size: 13px; color: var(--muted);" data-i18n="appointments.medPhotoAnalyticsSubtitle">
+                مراقبة معدلات نجاح التصوير والرفع، تحويل الروشتات إلى وصفات معتمدة، وتوزيع العلب والبخاخات (معيار الطبي Altibbi)
+              </p>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <span class="pill info" id="adminMedPhotoTotalBadge">0 صور أدوية</span>
+              <button type="button" class="soft-button" onclick="refreshAdminMedicationAnalytics()" style="padding: 6px 12px; font-size: 12.5px; display: inline-flex; align-items: center; gap: 5px;">
+                <span>🔄</span> تحديث التحليلات
+              </button>
+            </div>
+          </div>
+
+          <!-- Medication Photo KPI Hero Cards -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-top: 18px;">
+            <div class="kpi-mini-card" style="padding: 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color, rgba(255,255,255,0.06)); border-radius: 12px;">
+              <div style="font-size: 12px; color: var(--muted);" data-i18n="appointments.medPhotoSuccessRate">معدل نجاح رفع الصور</div>
+              <div id="adminMedPhotoSuccessRate" style="font-size: 22px; font-weight: 800; color: #10b981; margin-top: 4px;">--%</div>
+              <div id="adminMedPhotoTotalUploads" style="font-size: 11px; color: var(--muted); margin-top: 2px;">0 صور مكتملة</div>
+            </div>
+
+            <div class="kpi-mini-card" style="padding: 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color, rgba(255,255,255,0.06)); border-radius: 12px;">
+              <div style="font-size: 12px; color: var(--muted);" data-i18n="appointments.medPhotoTranscribeRate">معدل اعتماد الطبيب للروشتة</div>
+              <div id="adminMedPhotoTranscribeRate" style="font-size: 22px; font-weight: 800; color: #38bdf8; margin-top: 4px;">--%</div>
+              <div id="adminMedPhotoTranscribedCount" style="font-size: 11px; color: var(--muted); margin-top: 2px;">0 تم اعتمادها كروشتة</div>
+            </div>
+
+            <div class="kpi-mini-card" style="padding: 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color, rgba(255,255,255,0.06)); border-radius: 12px;">
+              <div style="font-size: 12px; color: var(--muted);" data-i18n="appointments.medPhotoCameraRate">نسبة التصوير المباشر بالكاميرا</div>
+              <div id="adminMedPhotoCameraRate" style="font-size: 22px; font-weight: 800; color: #06b6d4; margin-top: 4px;">--%</div>
+              <div id="adminMedPhotoSourceBreakdown" style="font-size: 11px; color: var(--muted); margin-top: 2px;">كاميرا: 0 | معرض: 0</div>
+            </div>
+
+            <div class="kpi-mini-card" style="padding: 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color, rgba(255,255,255,0.06)); border-radius: 12px;">
+              <div style="font-size: 12px; color: var(--muted);" data-i18n="appointments.medPhotoLinkageRate">نسبة الربط بمواعيد الكشف</div>
+              <div id="adminMedPhotoLinkageRate" style="font-size: 22px; font-weight: 800; color: #a855f7; margin-top: 4px;">--%</div>
+              <div id="adminMedPhotoLinkedCount" style="font-size: 11px; color: var(--muted); margin-top: 2px;">0 مرتبطة بموعد كشف</div>
+            </div>
+
+            <div class="kpi-mini-card" style="padding: 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color, rgba(255,255,255,0.06)); border-radius: 12px;">
+              <div style="font-size: 12px; color: var(--muted);" data-i18n="appointments.medPhotoInspections">فحص التفاصيل بالمكبر</div>
+              <div id="adminMedPhotoInspections" style="font-size: 22px; font-weight: 800; color: #f59e0b; margin-top: 4px;">0</div>
+              <div id="adminMedPhotoInspectionsSub" style="font-size: 11px; color: var(--muted); margin-top: 2px;">فحص الجرعات وتاريخ الصلاحية</div>
+            </div>
+          </div>
+
+          <!-- Category Breakdown Row -->
+          <div id="adminMedPhotoCategoryBreakdown" style="margin-top: 18px; padding: 14px; background: rgba(255,255,255,0.015); border: 1px solid var(--border-color, rgba(255,255,255,0.06)); border-radius: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+              <strong style="font-size: 13.5px; color: var(--ink);">توزيع أصناف الأدوية والمستلزمات المصورة (Altibbi Category Distribution):</strong>
+              <span id="adminMedPhotoCategoriesSummary" style="font-size: 12px; color: var(--muted);">علب: 0 | بخاخات: 0 | روشتات: 0 | شراب: 0</span>
+            </div>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+              <span class="pill" style="background: rgba(16,185,129,0.12); color: #10b981; border: 1px solid rgba(16,185,129,0.25); font-size: 12px;">
+                💊 <span data-i18n="appointments.medPhotoBoxes">علب الأدوية</span>: <strong id="adminMedPhotoBoxCount">0</strong> (<span id="adminMedPhotoBoxPct">0%</span>)
+              </span>
+              <span class="pill" style="background: rgba(56,189,248,0.12); color: #38bdf8; border: 1px solid rgba(56,189,248,0.25); font-size: 12px;">
+                🫁 <span data-i18n="appointments.medPhotoInhalers">بخاخات الصدر</span>: <strong id="adminMedPhotoInhalerCount">0</strong> (<span id="adminMedPhotoInhalerPct">0%</span>)
+              </span>
+              <span class="pill" style="background: rgba(168,85,247,0.12); color: #a855f7; border: 1px solid rgba(168,85,247,0.25); font-size: 12px;">
+                📄 <span data-i18n="appointments.medPhotoPrescriptions">الروشتات الورقية</span>: <strong id="adminMedPhotoPrescriptionCount">0</strong> (<span id="adminMedPhotoPrescriptionPct">0%</span>)
+              </span>
+              <span class="pill" style="background: rgba(245,158,11,0.12); color: #f59e0b; border: 1px solid rgba(245,158,11,0.25); font-size: 12px;">
+                💧 <span data-i18n="appointments.medPhotoSyrups">شراب وقطرات</span>: <strong id="adminMedPhotoSyrupCount">0</strong> (<span id="adminMedPhotoSyrupPct">0%</span>)
+              </span>
+              <span class="pill" style="background: rgba(148,163,184,0.12); color: #94a3b8; border: 1px solid rgba(148,163,184,0.25); font-size: 12px;">
+                📑 أخرى: <strong id="adminMedPhotoOtherCount">0</strong> (<span id="adminMedPhotoOtherPct">0%</span>)
+              </span>
+            </div>
+          </div>
+        </article>
+
+        <!-- 31. MEDICAL VIEWER & RADIOLOGY ANALYTICS (Rology Benchmark) -->
+        <article class="panel" id="adminMedicalViewerAnalyticsPanel" style="margin-top: 24px;">
+          <div class="panel-head" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <h3 style="margin: 0; font-size: 19px;" data-i18n="doctorMedicalViewer.analyticsTitle">تحليلات ومراقبة فحص الأشعة والملفات الطبية (Medical Viewer & Radiology Analytics)</h3>
+                <span class="pill ok" id="adminViewerHealthBadge" style="font-size: 11px;">Rology Engine 🟢</span>
+              </div>
+              <p style="margin: 4px 0 0; font-size: 13px; color: var(--muted);" data-i18n="doctorMedicalViewer.analyticsSubtitle">
+                رصد دقيق لمعدلات استخدام عارض الأشعة عالي الدقة، نسبة الاعتماد السريري، استخدام التكبير الفائق والأدوات، وزمن فحص الصور
+              </p>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <span class="pill info" id="adminViewerTotalSessionsBadge">0 جلسات فحص</span>
+              <button type="button" class="soft-button" onclick="refreshAdminMedicalViewerAnalytics()" style="padding: 6px 12px; font-size: 12.5px; display: inline-flex; align-items: center; gap: 5px;">
+                <span>🔄</span> <span data-i18n="doctorMedicalViewer.refreshAnalytics">تحديث التحليلات</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Medical Viewer KPI Hero Cards -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-top: 18px;">
+            <div class="kpi-mini-card" style="padding: 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color, rgba(255,255,255,0.06)); border-radius: 12px;">
+              <div style="font-size: 12px; color: var(--muted);" data-i18n="doctorMedicalViewer.certificationSuccessRate">معدل الاعتماد السريري</div>
+              <div id="adminViewerCertificationRate" style="font-size: 22px; font-weight: 800; color: #10b981; margin-top: 4px;">--%</div>
+              <div id="adminViewerCertifiedCount" style="font-size: 11px; color: var(--muted); margin-top: 2px;">0 فحص معتمد سريرياً</div>
+            </div>
+
+            <div class="kpi-mini-card" style="padding: 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color, rgba(255,255,255,0.06)); border-radius: 12px;">
+              <div style="font-size: 12px; color: var(--muted);" data-i18n="doctorMedicalViewer.highZoomUtilization">معدل التكبير الفائق (≥2.0x)</div>
+              <div id="adminViewerHighZoomRate" style="font-size: 22px; font-weight: 800; color: #38bdf8; margin-top: 4px;">--%</div>
+              <div id="adminViewerHighZoomCount" style="font-size: 11px; color: var(--muted); margin-top: 2px;">فحص تفصيلي عالي الدقة</div>
+            </div>
+
+            <div class="kpi-mini-card" style="padding: 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color, rgba(255,255,255,0.06)); border-radius: 12px;">
+              <div style="font-size: 12px; color: var(--muted);" data-i18n="doctorMedicalViewer.diagnosticToolAdoption">استخدام الأدوات المتقدمة</div>
+              <div id="adminViewerToolAdoptionRate" style="font-size: 22px; font-weight: 800; color: #a855f7; margin-top: 4px;">--%</div>
+              <div id="adminViewerToolDistribution" style="font-size: 10.5px; color: #94a3b8; margin-top: 2px;">عدسة مكبرة | فلاتر العظام | عكس الألوان</div>
+            </div>
+
+            <div class="kpi-mini-card" style="padding: 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color, rgba(255,255,255,0.06)); border-radius: 12px;">
+              <div style="font-size: 12px; color: var(--muted);" data-i18n="doctorMedicalViewer.avgInspectionTime">متوسط وقت قراءة الفحص</div>
+              <div id="adminViewerAvgDuration" style="font-size: 22px; font-weight: 800; color: var(--teal, #0d9488); margin-top: 4px;">-- ثانية</div>
+              <div style="font-size: 11px; color: var(--muted); margin-top: 2px;">زمن استعراض الأشعة لكل ملف</div>
+            </div>
+
+            <div class="kpi-mini-card" style="padding: 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color, rgba(255,255,255,0.06)); border-radius: 12px;">
+              <div style="font-size: 12px; color: var(--muted);" data-i18n="doctorMedicalViewer.criticalAlertRate">إنذارات الحالات الحرجة</div>
+              <div id="adminViewerCriticalAlertRate" style="font-size: 22px; font-weight: 800; color: #ef4444; margin-top: 4px;">--%</div>
+              <div id="adminViewerCriticalAlertsCount" style="font-size: 11px; color: var(--muted); margin-top: 2px;">0 إنذار عاجل مصعّد</div>
+            </div>
+
+            <div class="kpi-mini-card" style="padding: 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color, rgba(255,255,255,0.06)); border-radius: 12px;">
+              <div style="font-size: 12px; color: var(--muted);" data-i18n="doctorMedicalViewer.scanRejectionRate">معدل رفض الصور التالفة</div>
+              <div id="adminViewerRejectionRate" style="font-size: 22px; font-weight: 800; color: #f59e0b; margin-top: 4px;">--%</div>
+              <div id="adminViewerRejectionsCount" style="font-size: 11px; color: var(--muted); margin-top: 2px;">صور غير واضحة أو تالفة</div>
             </div>
           </div>
         </article>
@@ -4322,6 +4480,35 @@
     </div>
   </div>
 
+  <!-- =========================================================================
+       💊 MEDICATION CAPTURE MODAL (Altibbi Benchmark)
+       ========================================================================= -->
+  <div id="medicationCaptureModal" class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="medicationCaptureModalTitle" aria-hidden="true" style="display: none; position: fixed; inset: 0; z-index: 100001; background: rgba(3, 18, 20, 0.88); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); align-items: center; justify-content: center; padding: 16px;">
+    <div class="confirm-box" style="max-width: 620px; width: 100%; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);">
+      
+      <div style="padding: 16px 20px; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--surface-2);">
+        <h3 id="medicationCaptureModalTitle" style="margin: 0; font-size: 17px; color: var(--ink); display: flex; align-items: center; gap: 8px;">
+          <span>💊</span> <span>تصوير علبة الدواء أو البخاخة (Medication Capture)</span>
+        </h3>
+        <button type="button" onclick="closeMedicationCaptureStudio()" aria-label="Close" style="width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); font-size: 18px; display: flex; align-items: center; justify-content: center; cursor: pointer;">&times;</button>
+      </div>
+
+      <div id="medicationCaptureModalBody" style="padding: 18px 20px; overflow-y: auto; flex: 1;">
+        <!-- Dynamically rendered via MedicationCaptureUI.renderModalBody() -->
+      </div>
+
+      <div style="padding: 14px 20px; border-top: 1px solid var(--line); background: var(--surface-2); display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
+        <button type="button" class="outline-button" onclick="closeMedicationCaptureStudio()" style="padding: 8px 18px; font-size: 13px;">
+          <span>إغلاق النافذة</span>
+        </button>
+        <button type="button" class="solid-button" onclick="MedicationCaptureUI.linkMedicationsToAppointment()" style="padding: 8px 18px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px;">
+          <span>📅</span> <span>إرفاق بالموعد</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
   <script src="./i18n.js?v=4.6"></script>
   <!-- Modular Architecture: Core, Auth, Permissions, Patient, Assessment, Doctor, Reports, Appointments, Admin, Notifications -->
   <script defer src="./modules/core/template-loader.js?v=1.0"></script>
@@ -4337,6 +4524,7 @@
   <script defer src="./modules/patient/patient-service.js?v=1.0"></script>
   <script defer src="./modules/patient/patient-ui.js?v=1.0"></script>
   <script defer src="./modules/patient/chest-radiology-ui.js?v=1.0"></script>
+  <script defer src="./modules/patient/medication-capture-ui.js?v=1.0"></script>
   <script defer src="./modules/patient/family-service.js?v=1.0"></script>
   <script defer src="./modules/patient/family-ui.js?v=1.0"></script>
   <script defer src="./modules/patient/onboarding-service.js?v=1.0"></script>
@@ -4355,6 +4543,7 @@
   <script defer src="./modules/doctor/doctor-ui.js?v=1.0"></script>
   <script defer src="./modules/doctor/doctor-schedule-service.js?v=1.0"></script>
   <script defer src="./modules/doctor/doctor-schedule-ui.js?v=1.0"></script>
+  <script defer src="./modules/doctor/medical-viewer-ui.js?v=1.0"></script>
   <script defer src="./modules/reports/reports-service.js?v=1.0"></script>
   <script defer src="./modules/reports/reports-ui.js?v=1.0"></script>
   <script defer src="./modules/reports/quick-share-ui.js?v=1.0"></script>

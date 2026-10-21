@@ -392,4 +392,64 @@
           </div>
         </article>
 
+        <!-- 31. MEDICAL VIEWER & RADIOLOGY ANALYTICS (Rology Benchmark) -->
+        <article class="panel" id="adminMedicalViewerAnalyticsPanel" style="margin-top: 24px;">
+          <div class="panel-head" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <h3 style="margin: 0; font-size: 19px;" data-i18n="doctorMedicalViewer.analyticsTitle">تحليلات ومراقبة فحص الأشعة والملفات الطبية (Medical Viewer & Radiology Analytics)</h3>
+                <span class="pill ok" id="adminViewerHealthBadge" style="font-size: 11px;">Rology Engine 🟢</span>
+              </div>
+              <p style="margin: 4px 0 0; font-size: 13px; color: var(--muted);" data-i18n="doctorMedicalViewer.analyticsSubtitle">
+                رصد دقيق لمعدلات استخدام عارض الأشعة عالي الدقة، نسبة الاعتماد السريري، استخدام التكبير الفائق والأدوات، وزمن فحص الصور
+              </p>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <span class="pill info" id="adminViewerTotalSessionsBadge">0 جلسات فحص</span>
+              <button type="button" class="soft-button" onclick="refreshAdminMedicalViewerAnalytics()" style="padding: 6px 12px; font-size: 12.5px; display: inline-flex; align-items: center; gap: 5px;">
+                <span>🔄</span> <span data-i18n="doctorMedicalViewer.refreshAnalytics">تحديث التحليلات</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Medical Viewer KPI Hero Cards -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-top: 18px;">
+            <div class="kpi-mini-card" style="padding: 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color, rgba(255,255,255,0.06)); border-radius: 12px;">
+              <div style="font-size: 12px; color: var(--muted);" data-i18n="doctorMedicalViewer.certificationSuccessRate">معدل الاعتماد السريري</div>
+              <div id="adminViewerCertificationRate" style="font-size: 22px; font-weight: 800; color: #10b981; margin-top: 4px;">--%</div>
+              <div id="adminViewerCertifiedCount" style="font-size: 11px; color: var(--muted); margin-top: 2px;">0 فحص معتمد سريرياً</div>
+            </div>
+
+            <div class="kpi-mini-card" style="padding: 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color, rgba(255,255,255,0.06)); border-radius: 12px;">
+              <div style="font-size: 12px; color: var(--muted);" data-i18n="doctorMedicalViewer.highZoomUtilization">معدل التكبير الفائق (≥2.0x)</div>
+              <div id="adminViewerHighZoomRate" style="font-size: 22px; font-weight: 800; color: #38bdf8; margin-top: 4px;">--%</div>
+              <div id="adminViewerHighZoomCount" style="font-size: 11px; color: var(--muted); margin-top: 2px;">فحص تفصيلي عالي الدقة</div>
+            </div>
+
+            <div class="kpi-mini-card" style="padding: 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color, rgba(255,255,255,0.06)); border-radius: 12px;">
+              <div style="font-size: 12px; color: var(--muted);" data-i18n="doctorMedicalViewer.diagnosticToolAdoption">استخدام الأدوات المتقدمة</div>
+              <div id="adminViewerToolAdoptionRate" style="font-size: 22px; font-weight: 800; color: #a855f7; margin-top: 4px;">--%</div>
+              <div id="adminViewerToolDistribution" style="font-size: 10.5px; color: #94a3b8; margin-top: 2px;">عدسة مكبرة | فلاتر العظام | عكس الألوان</div>
+            </div>
+
+            <div class="kpi-mini-card" style="padding: 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color, rgba(255,255,255,0.06)); border-radius: 12px;">
+              <div style="font-size: 12px; color: var(--muted);" data-i18n="doctorMedicalViewer.avgInspectionTime">متوسط وقت قراءة الفحص</div>
+              <div id="adminViewerAvgDuration" style="font-size: 22px; font-weight: 800; color: var(--teal, #0d9488); margin-top: 4px;">-- ثانية</div>
+              <div style="font-size: 11px; color: var(--muted); margin-top: 2px;">زمن استعراض الأشعة لكل ملف</div>
+            </div>
+
+            <div class="kpi-mini-card" style="padding: 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color, rgba(255,255,255,0.06)); border-radius: 12px;">
+              <div style="font-size: 12px; color: var(--muted);" data-i18n="doctorMedicalViewer.criticalAlertRate">إنذارات الحالات الحرجة</div>
+              <div id="adminViewerCriticalAlertRate" style="font-size: 22px; font-weight: 800; color: #ef4444; margin-top: 4px;">--%</div>
+              <div id="adminViewerCriticalAlertsCount" style="font-size: 11px; color: var(--muted); margin-top: 2px;">0 إنذار عاجل مصعّد</div>
+            </div>
+
+            <div class="kpi-mini-card" style="padding: 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color, rgba(255,255,255,0.06)); border-radius: 12px;">
+              <div style="font-size: 12px; color: var(--muted);" data-i18n="doctorMedicalViewer.scanRejectionRate">معدل رفض الصور التالفة</div>
+              <div id="adminViewerRejectionRate" style="font-size: 22px; font-weight: 800; color: #f59e0b; margin-top: 4px;">--%</div>
+              <div id="adminViewerRejectionsCount" style="font-size: 11px; color: var(--muted); margin-top: 2px;">صور غير واضحة أو تالفة</div>
+            </div>
+          </div>
+        </article>
+
       </section>
