@@ -411,12 +411,19 @@ function normalizeAttachment(fileData, fileId) {
   const dateStr = String(ts).slice(0, 10);
   const fileName = fileData.fileName || fileData.name || 'ملف فحص طبي';
   const sizeFormatted = formatBytes(fileData.fileSize || fileData.size);
-  const isLab = Boolean(fileData.labCategory);
+  const isRadiology = Boolean(fileData.modality || fileData.category === 'chest_radiology' || fileData.isRadiology);
+  const isLab = !isRadiology && Boolean(fileData.labCategory);
   const catAr = fileData.labCategoryLabelAr || 'تحليل معملي';
   const catEn = fileData.labCategoryLabelEn || 'Lab Report';
+  const radAr = fileData.modalityNameAr || 'أشعة الصدر';
+  const radEn = fileData.modalityNameEn || 'Chest Radiology';
 
-  const titleAr = isLab ? `🧪 فحص معملي (${catAr}): ${fileName}` : `مستند مرفق: ${fileName}`;
-  const titleEn = isLab ? `🧪 Laboratory Test (${catEn}): ${fileName}` : `Medical Attachment: ${fileName}`;
+  const titleAr = isRadiology
+    ? `🩻 فحص أشعة صدرية (${radAr}): ${fileName}`
+    : (isLab ? `🧪 فحص معملي (${catAr}): ${fileName}` : `مستند مرفق: ${fileName}`);
+  const titleEn = isRadiology
+    ? `🩻 Chest Radiology Study (${radEn}): ${fileName}`
+    : (isLab ? `🧪 Laboratory Test (${catEn}): ${fileName}` : `Medical Attachment: ${fileName}`);
 
   return {
     id: `attachment_${fileId}`,
@@ -425,17 +432,23 @@ function normalizeAttachment(fileData, fileId) {
     titleEn: titleEn,
     timestamp: ts,
     date: dateStr,
-    status: fileData.scanStatus || 'available',
-    category: isLab ? 'lab_report' : 'attachment',
-    summary: `${fileName} (${sizeFormatted}) • ${isLab ? catAr : (fileData.fileType || 'مستند طبي')}`,
-    summaryEn: `${fileName} (${sizeFormatted}) • ${isLab ? catEn : (fileData.fileType || 'Medical document')}`,
+    status: fileData.scanStatus || fileData.status || 'available',
+    category: isRadiology ? 'chest_radiology' : (isLab ? 'lab_report' : 'attachment'),
+    summary: isRadiology
+      ? `${fileName} (${sizeFormatted}) • ${radAr} • ${fileData.urgency || 'routine'}`
+      : `${fileName} (${sizeFormatted}) • ${isLab ? catAr : (fileData.fileType || 'مستند طبي')}`,
+    summaryEn: isRadiology
+      ? `${fileName} (${sizeFormatted}) • ${radEn} • ${fileData.urgency || 'routine'}`
+      : `${fileName} (${sizeFormatted}) • ${isLab ? catEn : (fileData.fileType || 'Medical document')}`,
     details: {
       fileId,
       caseId: fileData.caseId || null,
       fileName,
+      modality: fileData.modality || null,
+      loincCode: fileData.loincCode || null,
       labCategory: fileData.labCategory || null,
-      reviewStatus: fileData.reviewStatus || 'pending_doctor_review',
-      doctorApproved: Boolean(fileData.doctorApproved),
+      reviewStatus: fileData.reviewStatus || fileData.status || 'pending_doctor_review',
+      doctorApproved: Boolean(fileData.doctorApproved || fileData.certifiedByDoctor),
       isPanicValue: Boolean(fileData.isPanicValue),
       fileType: fileData.fileType || fileData.contentType || null,
       fileSize: fileData.fileSize || null,
