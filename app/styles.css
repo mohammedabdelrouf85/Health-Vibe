@@ -11024,6 +11024,71 @@ body.dark .thread-direct-action-card {
   border-inline-start: 4px solid #ef4444;
 }
 
+.rology-archive-card.is-keyboard-selected,
+.rology-archive-card:focus-visible {
+  outline: none;
+  border-color: var(--teal, #0ea5e9);
+  box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.45), 0 8px 24px rgba(14, 165, 233, 0.22);
+  transform: translateY(-2px);
+}
+
+.rology-shortcuts-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 14px;
+  background: rgba(14, 165, 233, 0.08);
+  border: 1px solid rgba(14, 165, 233, 0.22);
+  border-radius: 10px;
+  margin-bottom: 14px;
+  font-size: 12.5px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.rology-shortcuts-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink, #f8fafc);
+}
+
+.rology-sla-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  border-radius: 6px;
+  color: #10b981;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: monospace;
+}
+
+.rology-help-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--surface, #1e293b);
+  border: 1px solid var(--line, #334155);
+  color: #38bdf8;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.rology-help-btn:hover {
+  background: #0ea5e9;
+  color: #fff;
+  border-color: #0ea5e9;
+}
+
 .rology-card-header {
   display: flex;
   justify-content: space-between;
@@ -11151,11 +11216,21 @@ body.dark .thread-direct-action-card {
   font-size: 12.5px;
   color: var(--ink, #f8fafc);
   line-height: 1.4;
+  direction: auto;
+  unicode-bidi: plaintext;
+  text-align: start;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+.bidi-auto-text,
+.clinical-bidi-text {
+  direction: auto;
+  unicode-bidi: plaintext;
+  text-align: start;
 }
 
 .rology-seal-strip {
@@ -11340,6 +11415,9 @@ body.dark .thread-direct-action-card {
   font-size: 13px;
   color: var(--ink, #f8fafc);
   line-height: 1.5;
+  direction: auto;
+  unicode-bidi: plaintext;
+  text-align: start;
 }
 
 .rology-modal-seal-badge {
@@ -11470,6 +11548,9 @@ body.dark .thread-direct-action-card {
   padding: 10px 14px;
   font-size: 13px;
   color: #1e293b;
+  direction: auto;
+  unicode-bidi: plaintext;
+  text-align: start;
 }
 
 .pdf-official-footer {
@@ -11623,5 +11704,824 @@ body.dark .thread-direct-action-card {
   }
 }
 
+/* ==========================================================================
+   TABEEBHUB DOCTOR ANALYTICS & UPCOMING CLINIC APPOINTMENTS STYLING
+   ========================================================================== */
 
+.tabeeb-analytics-section {
+  width: 100%;
+}
 
+.tabeeb-analytics-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* Header & Timeframe Switcher */
+.tabeeb-analytics-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  background: var(--surface, #1e293b);
+  border: 1.5px solid var(--line, #334155);
+  border-radius: 16px;
+  padding: 18px 24px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+  flex-wrap: wrap;
+}
+
+.tabeeb-header-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.tabeeb-header-icon {
+  font-size: 32px;
+  line-height: 1;
+  background: rgba(14, 165, 233, 0.15);
+  border: 1px solid rgba(14, 165, 233, 0.3);
+  padding: 10px;
+  border-radius: 14px;
+}
+
+.tabeeb-analytics-title {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--ink, #f8fafc);
+  letter-spacing: -0.02em;
+}
+
+.tabeeb-analytics-subtitle {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--muted, #94a3b8);
+  line-height: 1.4;
+}
+
+.tabeeb-timeframe-picker {
+  display: inline-flex;
+  background: var(--surface-2, #0f172a);
+  border: 1.5px solid var(--line, #334155);
+  border-radius: 12px;
+  padding: 4px;
+  gap: 4px;
+}
+
+.tabeeb-timeframe-btn {
+  background: transparent;
+  border: none;
+  color: var(--muted, #94a3b8);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tabeeb-timeframe-btn:hover {
+  color: var(--ink, #f8fafc);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.tabeeb-timeframe-btn.is-active {
+  background: var(--teal, #0ea5e9);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.4);
+}
+
+/* 4-Card KPI Overview Grid */
+.tabeeb-kpis-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+.tabeeb-kpi-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  background: var(--surface, #1e293b);
+  border: 1.5px solid var(--line, #334155);
+  border-radius: 14px;
+  padding: 16px 18px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.tabeeb-kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
+  border-color: rgba(14, 165, 233, 0.4);
+}
+
+.tabeeb-kpi-icon-wrap {
+  font-size: 24px;
+  padding: 10px;
+  border-radius: 12px;
+  background: var(--surface-2, #0f172a);
+  border: 1px solid var(--line, #334155);
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.tabeeb-kpi-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.tabeeb-kpi-content small {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted, #94a3b8);
+  margin-bottom: 4px;
+}
+
+.tabeeb-kpi-value-row {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.tabeeb-kpi-value {
+  font-size: 24px;
+  font-weight: 900;
+  color: var(--ink, #f8fafc);
+  line-height: 1.1;
+  font-family: inherit;
+}
+
+.tabeeb-kpi-unit {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted, #94a3b8);
+}
+
+.tabeeb-kpi-subtext {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  color: #64748b;
+  line-height: 1.3;
+}
+
+.tabeeb-kpi-badge {
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 6px;
+  margin-top: 5px;
+}
+
+.tabeeb-kpi-badge.badge-success {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.tabeeb-kpi-badge.badge-warning {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.tabeeb-kpi-badge.badge-info {
+  background: rgba(14, 165, 233, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(14, 165, 233, 0.3);
+}
+
+/* Dashboard Body: 2-Column Responsive Split */
+.tabeeb-dashboard-body {
+  display: grid;
+  grid-template-columns: 420px 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+.tabeeb-analytics-left-col {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.tabeeb-analytics-right-col {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.tabeeb-panel {
+  background: var(--surface, #1e293b);
+  border: 1.5px solid var(--line, #334155);
+  border-radius: 16px;
+  padding: 18px 20px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+}
+
+.tabeeb-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.tabeeb-panel-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--ink, #f8fafc);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tabeeb-panel-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(14, 165, 233, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(14, 165, 233, 0.3);
+}
+
+.tabeeb-panel-desc {
+  margin: 0 0 16px;
+  font-size: 12px;
+  color: var(--muted, #94a3b8);
+  line-height: 1.4;
+}
+
+/* Response Time (TAT) Speed Meter & Benchmarks */
+.tat-speed-meter {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.tat-speed-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 700;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--surface-2, #0f172a);
+  border: 1px solid var(--line, #334155);
+}
+
+.tat-speed-badge.top-tier {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.3);
+  color: #34d399;
+}
+
+.tat-speed-badge.standard-tier {
+  background: rgba(14, 165, 233, 0.12);
+  border-color: rgba(14, 165, 233, 0.3);
+  color: #38bdf8;
+}
+
+.tat-speed-badge.delayed-tier {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.3);
+  color: #fbbf24;
+}
+
+.tat-bands-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.tat-band-item {
+  background: var(--surface-2, #0f172a);
+  border: 1px solid var(--line, #334155);
+  border-radius: 10px;
+  padding: 10px;
+  text-align: center;
+  transition: all 0.2s ease;
+}
+
+.tat-band-item small {
+  display: block;
+  font-size: 11px;
+  color: var(--muted, #94a3b8);
+  margin-bottom: 4px;
+}
+
+.tat-band-item strong {
+  display: block;
+  font-size: 13px;
+  color: var(--ink, #f8fafc);
+  font-weight: 800;
+}
+
+.tat-band-item.is-current {
+  border-color: var(--teal, #0ea5e9);
+  background: rgba(14, 165, 233, 0.12);
+  box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.2);
+}
+
+/* Caseload Condition Distribution */
+.caseload-bars-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.caseload-bar-row {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.caseload-bar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+}
+
+.caseload-label {
+  font-weight: 700;
+  color: var(--ink, #f8fafc);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.caseload-stats {
+  color: var(--muted, #94a3b8);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.caseload-track {
+  width: 100%;
+  height: 8px;
+  background: var(--surface-2, #0f172a);
+  border: 1px solid var(--line, #334155);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.caseload-fill {
+  height: 100%;
+  border-radius: 6px;
+  transition: width 0.4s ease-out;
+}
+
+.caseload-fill.fill-asthma {
+  background: linear-gradient(90deg, #38bdf8, #0ea5e9);
+}
+
+.caseload-fill.fill-hypertension {
+  background: linear-gradient(90deg, #f43f5e, #e11d48);
+}
+
+.caseload-fill.fill-pneumonia {
+  background: linear-gradient(90deg, #a855f7, #9333ea);
+}
+
+.caseload-fill.fill-blood {
+  background: linear-gradient(90deg, #ef4444, #b91c1c);
+}
+
+.caseload-fill.fill-metabolic {
+  background: linear-gradient(90deg, #10b981, #059669);
+}
+
+/* Upcoming Clinic Appointments Section */
+.tabeeb-appt-filter-bar {
+  display: flex;
+  gap: 6px;
+  background: var(--surface-2, #0f172a);
+  border: 1px solid var(--line, #334155);
+  border-radius: 12px;
+  padding: 4px;
+  margin-bottom: 16px;
+  overflow-x: auto;
+}
+
+.tabeeb-appt-filter-btn {
+  background: transparent;
+  border: none;
+  color: var(--muted, #94a3b8);
+  font-size: 12.5px;
+  font-weight: 700;
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tabeeb-appt-filter-btn:hover {
+  color: var(--ink, #f8fafc);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.tabeeb-appt-filter-btn.is-active {
+  background: var(--teal, #0ea5e9);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.35);
+}
+
+.tabeeb-appts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tabeeb-appt-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--surface-2, #0f172a);
+  border: 1.5px solid var(--line, #334155);
+  border-radius: 14px;
+  padding: 14px 16px;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.tabeeb-appt-card:hover {
+  border-color: rgba(14, 165, 233, 0.45);
+  transform: translateY(-1px);
+}
+
+.appt-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.appt-patient-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.appt-avatar {
+  font-size: 20px;
+  background: rgba(14, 165, 233, 0.15);
+  border: 1px solid rgba(14, 165, 233, 0.3);
+  padding: 8px;
+  border-radius: 12px;
+  line-height: 1;
+}
+
+.appt-patient-name {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--ink, #f8fafc);
+}
+
+.appt-patient-sub {
+  font-size: 11.5px;
+  color: var(--muted, #94a3b8);
+  margin-top: 2px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.appt-top-badges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.appt-status-chip {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+.appt-status-chip.type-in-person {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.appt-status-chip.type-telehealth {
+  background: rgba(14, 165, 233, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(14, 165, 233, 0.3);
+}
+
+.appt-vital-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(245, 158, 11, 0.12);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.appt-complaint-row {
+  background: var(--surface, #1e293b);
+  border: 1px solid var(--line, #334155);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--ink, #f8fafc);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.complaint-label {
+  font-weight: 700;
+  color: var(--muted, #94a3b8);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.appt-actions-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.btn-appt-action {
+  flex: 1;
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.btn-appt-action.btn-examine {
+  background: var(--teal, #0ea5e9);
+  color: #ffffff;
+  border: 1px solid transparent;
+}
+
+.btn-appt-action.btn-examine:hover {
+  background: #0284c7;
+  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.4);
+}
+
+.btn-appt-action.btn-dossier {
+  background: var(--surface, #1e293b);
+  border: 1px solid var(--line, #334155);
+  color: var(--ink, #f8fafc);
+}
+
+.btn-appt-action.btn-dossier:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--teal, #0ea5e9);
+}
+
+.btn-appt-action.btn-remind {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #34d399;
+}
+
+.btn-appt-action.btn-remind:hover {
+  background: rgba(16, 185, 129, 0.22);
+}
+
+.tabeeb-empty-state {
+  text-align: center;
+  padding: 32px 16px;
+  color: var(--muted, #94a3b8);
+}
+
+.tabeeb-empty-icon {
+  font-size: 32px;
+  margin-bottom: 8px;
+}
+
+/* ==========================================================================
+   RESPONSIVE DESIGN RULES FOR MOBILE, TABLET & DESKTOP (TABEEBHUB BENCHMARK)
+   ========================================================================== */
+
+/* Tablet Breakpoint (768px to 1024px) */
+@media (max-width: 1024px) {
+  .tabeeb-kpis-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .tabeeb-dashboard-body {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Mobile & Touch Devices (< 768px) */
+@media (max-width: 768px) {
+  .tabeeb-analytics-header {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 14px;
+    gap: 12px;
+  }
+
+  .tabeeb-timeframe-picker {
+    width: 100%;
+    display: flex;
+  }
+
+  .tabeeb-timeframe-btn {
+    flex: 1;
+    min-height: 44px; /* Touch target requirement >= 44px */
+    font-size: 13px;
+  }
+
+  .tabeeb-kpis-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .tabeeb-kpi-card {
+    padding: 14px;
+  }
+
+  .tat-bands-grid {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .tabeeb-appt-filter-bar {
+    width: 100%;
+  }
+
+  .tabeeb-appt-filter-btn {
+    min-height: 44px; /* Touch target requirement >= 44px */
+    padding: 8px 12px;
+  }
+
+  .appt-card-top {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .appt-actions-row {
+    flex-direction: column;
+  }
+
+  .btn-appt-action {
+    width: 100%;
+    min-height: 44px; /* Touch target requirement >= 44px */
+    font-size: 13px;
+  }
+}
+
+/* ==========================================================================
+   TABEEBHUB DOCTOR ANALYTICS & CLINIC SCHEDULE: PERFORMANCE & SHORTCUTS
+   ========================================================================== */
+
+.tabeeb-shortcuts-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  background: var(--surface, #ffffff);
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 12px;
+  padding: 8px 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.tabeeb-shortcuts-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--muted, #64748b);
+  font-weight: 500;
+}
+
+.tabeeb-sla-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(16, 185, 129, 0.1);
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  border-radius: 20px;
+  padding: 3px 10px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+.tabeeb-help-btn {
+  background: var(--surface-2, #f1f5f9);
+  color: var(--ink, #1e293b);
+  border: 1px solid var(--line, #cbd5e1);
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tabeeb-help-btn:hover {
+  background: #0ea5e9;
+  color: #ffffff;
+  border-color: #0ea5e9;
+}
+
+.tabeeb-kbd {
+  display: inline-block;
+  padding: 1px 5px;
+  font-size: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: var(--muted, #64748b);
+  background: var(--surface-2, #f1f5f9);
+  border: 1px solid var(--line, #cbd5e1);
+  border-radius: 4px;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
+  margin-inline-start: 4px;
+  vertical-align: middle;
+}
+
+.btn-timeframe .tabeeb-kbd {
+  background: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.12);
+}
+
+.btn-timeframe.is-active .tabeeb-kbd {
+  background: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.tabeeb-appt-card.is-keyboard-selected {
+  outline: 2px solid #0ea5e9;
+  border-color: #0ea5e9;
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.18), 0 4px 12px rgba(14, 165, 233, 0.12);
+  transform: translateY(-2px);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.tabeeb-shortcuts-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.tabeeb-shortcut-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--surface-2, #f8fafc);
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.tabeeb-shortcut-item .shortcut-desc {
+  font-weight: 600;
+  color: var(--ink, #1e293b);
+}
+
+.tabeeb-shortcut-item .shortcut-key {
+  padding: 3px 8px;
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  background: var(--surface, #ffffff);
+  border: 1px solid var(--line, #cbd5e1);
+  border-radius: 6px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  font-weight: 700;
+}

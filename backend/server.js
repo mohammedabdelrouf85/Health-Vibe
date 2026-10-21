@@ -83,6 +83,8 @@ const rejectReentryService = require('./reject-reentry-service');
 const doctorInvestigationsService = require('./doctor-investigations-service');
 const doctorFollowUpService = require('./doctor-followup-service');
 const doctorPatientDirectoryService = require('./doctor-patient-directory-service');
+const doctorReviewedHistoryService = require('./doctor-reviewed-history-service');
+const doctorAnalyticsService = require('./doctor-analytics-service');
 
 // =============================================================================
 // 🌍 DUAL ENVIRONMENT CONFIGURATION (Development vs Production)
@@ -7316,6 +7318,417 @@ async function handleDoctorAssignedPatientsSearch(req, res) {
 app.get('/api/doctor/patients', requireAuth, requireDoctor, handleDoctorAssignedPatientsSearch);
 app.get('/api/doctor/assigned-patients', requireAuth, requireDoctor, handleDoctorAssignedPatientsSearch);
 app.get('/api/doctor/cases/search', requireAuth, requireDoctor, handleDoctorAssignedPatientsSearch);
+
+/**
+ * GET /api/doctor/reviewed-cases
+ * GET /api/doctor/cases/reviewed
+ * GET /api/doctor/reviewed-history
+ * 
+ * Benchmark: Rology Tele-radiology / Clinical Archive Standard
+ * Returns the archive of all cases reviewed and certified by the authenticated doctor,
+ * supporting multi-field search, date period filtering, risk triage filtering, sorting,
+ * KPI summary strip, zero-trust physician data isolation, and enterprise audit logging.
+ */
+async function handleDoctorReviewedCasesSearch(req, res) {
+  try {
+    const doctorId = req.user.uid;
+    const doctorEmail = req.user.email;
+    const isOwner = Boolean(req.user.isOwner || (req.user.customClaims && req.user.customClaims.isOwner) || req.user.role === 'super_admin');
+
+    // 1. Zero-Trust Patient Account Rejection
+    if (req.user.role === 'patient') {
+      return res.status(403).json({ error: 'FORBIDDEN', message: 'Patients are not permitted to access doctor clinical archives.' });
+    }
+
+    // 2. Verified Doctor Credential Verification
+    const doctorIdentity = req.doctorIdentity || (typeof getVerifiedDoctorIdentity === 'function' ? await getVerifiedDoctorIdentity(doctorId) : null);
+    if (!doctorIdentity) {
+      return res.status(403).json({ error: 'DOCTOR_CREDENTIALS_NOT_VERIFIED', message: 'Physician credentials have not been approved by clinical governance.' });
+    }
+
+    const profile = req.doctorProfile || (typeof getServerUserProfile === 'function' ? await getServerUserProfile(doctorId) : null);
+    if (typeof verifyDoctorAuthorization === 'function') {
+      const authCheck = verifyDoctorAuthorization(doctorIdentity, profile);
+      if (!authCheck.ok) {
+        return res.status(403).json({
+          error: authCheck.error,
+          message: authCheck.message,
+          licenseExpiryDate: authCheck.licenseExpiryDate,
+          reverificationDueDate: authCheck.reverificationDueDate
+        });
+      }
+    }
+
+    const {
+      q,
+      search,
+      dateFilter,
+      period,
+      startDate,
+      from,
+      endDate,
+      to,
+      priority,
+      risk,
+      sort,
+      isSandbox,
+      page,
+      limit,
+      lang
+    } = req.query;
+
+    const searchTerm = search !== undefined ? search : q;
+    const dateRangeFilter = dateFilter !== undefined ? dateFilter : period;
+    const priorityFilter = priority !== undefined ? priority : risk;
+
+    const result = await doctorReviewedHistoryService.fetchDoctorReviewedCases(db, {
+      doctorId,
+      doctorEmail,
+      isOwner,
+      search: searchTerm,
+      dateFilter: dateRangeFilter || 'all',
+      startDate: startDate || from || null,
+      endDate: endDate || to || null,
+      priority: priorityFilter || 'all',
+      sort: sort || 'date_desc',
+      isSandbox: isSandbox === 'true' || isSandbox === true,
+      page: Number(page) || 1,
+      limit: Number(limit) || 50,
+      isEn: lang === 'en'
+    });
+
+    // Authoritative Enterprise Audit Trail
+    if (db) {
+      await doctorReviewedHistoryService.recordReviewedHistoryAudit(db, {
+        req,
+        doctorId,
+        doctorIdentity,
+        clinicId: (typeof recordClinicId === 'function' ? recordClinicId(profile) : null) || req.user.clinicId || null,
+        search: searchTerm,
+        filters: {
+          dateFilter: dateRangeFilter || 'all',
+          priority: priorityFilter || 'all',
+          sort: sort || 'date_desc',
+          isSandbox: isSandbox === 'true' || isSandbox === true
+        },
+        totalMatched: result.total,
+        type: AUDIT_EVENT_TYPES.DOCTOR_REVIEWED_HISTORY_ACCESSED
+      });
+    }
+
+    return res.json(result);
+  } catch (err) {
+    console.error('[DOCTOR REVIEWED CASES ARCHIVE ERROR]:', err);
+    return res.status(500).json({ error: 'ARCHIVE_QUERY_FAILED', message: err.message });
+  }
+}
+
+/**
+ * GET /api/doctor/reviewed-cases/:caseId
+ * GET /api/doctor/cases/:caseId/reviewed
+ * 
+ * Fetches a single archived reviewed case with multi-doctor quarantine enforcement.
+ */
+async function handleDoctorReviewedCaseDetails(req, res) {
+  try {
+    const doctorId = req.user.uid;
+    const caseId = req.params.caseId;
+
+    if (!caseId) {
+      return res.status(400).json({ error: 'MISSING_CASE_ID', message: 'Case ID is required.' });
+    }
+
+    // 1. Zero-Trust Patient Account Rejection
+    if (req.user.role === 'patient') {
+      return res.status(403).json({ error: 'FORBIDDEN', message: 'Patients are not permitted to access doctor clinical archives.' });
+    }
+
+    // 2. Verified Doctor Credential Verification
+    const doctorIdentity = req.doctorIdentity || (typeof getVerifiedDoctorIdentity === 'function' ? await getVerifiedDoctorIdentity(doctorId) : null);
+    if (!doctorIdentity) {
+      return res.status(403).json({ error: 'DOCTOR_CREDENTIALS_NOT_VERIFIED', message: 'Physician credentials have not been approved by clinical governance.' });
+    }
+
+    const profile = req.doctorProfile || (typeof getServerUserProfile === 'function' ? await getServerUserProfile(doctorId) : null);
+    if (typeof verifyDoctorAuthorization === 'function') {
+      const authCheck = verifyDoctorAuthorization(doctorIdentity, profile);
+      if (!authCheck.ok) {
+        return res.status(403).json({ error: authCheck.error, message: authCheck.message });
+      }
+    }
+
+    const caseDoc = await db.collection('cases').doc(caseId).get();
+    if (!caseDoc.exists) {
+      return res.status(404).json({ error: 'CASE_NOT_FOUND', message: `Case ${caseId} does not exist.` });
+    }
+
+    const caseData = caseDoc.data() || {};
+
+    // Patient cannot view confidential archive via doctor endpoint even if they have dual claims
+    if (caseData.patientId && caseData.patientId === doctorId) {
+      return res.status(403).json({ error: 'FORBIDDEN', message: 'Patients cannot inspect clinical archive records of their own case.' });
+    }
+
+    // Must be reviewed or approved
+    if (!doctorReviewedHistoryService.isCaseReviewedOrApproved(caseData)) {
+      return res.status(400).json({ error: 'CASE_NOT_REVIEWED', message: 'This case has not yet been reviewed or approved.' });
+    }
+
+    // Strict Multi-Doctor Zero-Trust Data Isolation
+    const isOwner = Boolean(req.user.isOwner || (req.user.customClaims && req.user.customClaims.isOwner) || req.user.role === 'super_admin');
+    const isApprovedByThisDoc = (caseData.approvingDoctorId === doctorId || caseData.doctorIdentity?.uid === doctorId);
+    const isAssignedToThisDoc = (caseData.assignedDoctorId === doctorId || String(caseData.assignedDoctorEmail || '').toLowerCase() === String(req.user.email || '').toLowerCase());
+
+    if (!isOwner && !isApprovedByThisDoc && !isAssignedToThisDoc) {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'You are not authorized to view this archived case record.' });
+    }
+
+    // Record audit event
+    if (db) {
+      await doctorReviewedHistoryService.recordReviewedHistoryAudit(db, {
+        req,
+        doctorId,
+        doctorIdentity,
+        clinicId: (typeof recordClinicId === 'function' ? recordClinicId(caseData) : null) || req.user.clinicId || null,
+        caseId,
+        type: AUDIT_EVENT_TYPES.DOCTOR_REVIEWED_CASE_VIEWED
+      });
+    }
+
+    return res.json({
+      success: true,
+      case: {
+        id: caseId,
+        ...caseData
+      }
+    });
+  } catch (err) {
+    console.error('[DOCTOR REVIEWED CASE DETAILS ERROR]:', err);
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
+  }
+}
+
+/**
+ * GET /api/doctor/reviewed-cases/:caseId/pdf
+ * GET /api/doctor/cases/:caseId/pdf-preview
+ * 
+ * Generates and returns certified printable PDF document sheet payload for an archived case report.
+ */
+async function handleDoctorArchivedCasePdfPreview(req, res) {
+  try {
+    const doctorId = req.user.uid;
+    const caseId = req.params.caseId;
+
+    if (!caseId) {
+      return res.status(400).json({ error: 'MISSING_CASE_ID', message: 'Case ID is required.' });
+    }
+
+    // 1. Zero-Trust Patient Account Rejection
+    if (req.user.role === 'patient') {
+      return res.status(403).json({ error: 'FORBIDDEN', message: 'Patients cannot access doctor archive PDF endpoint directly.' });
+    }
+
+    // 2. Verified Doctor Credential Verification
+    const doctorIdentity = req.doctorIdentity || (typeof getVerifiedDoctorIdentity === 'function' ? await getVerifiedDoctorIdentity(doctorId) : null);
+    if (!doctorIdentity) {
+      return res.status(403).json({ error: 'DOCTOR_CREDENTIALS_NOT_VERIFIED', message: 'Physician credentials have not been approved by clinical governance.' });
+    }
+
+    const profile = req.doctorProfile || (typeof getServerUserProfile === 'function' ? await getServerUserProfile(doctorId) : null);
+    if (typeof verifyDoctorAuthorization === 'function') {
+      const authCheck = verifyDoctorAuthorization(doctorIdentity, profile);
+      if (!authCheck.ok) {
+        return res.status(403).json({ error: authCheck.error, message: authCheck.message });
+      }
+    }
+
+    const caseDoc = await db.collection('cases').doc(caseId).get();
+    if (!caseDoc.exists) {
+      return res.status(404).json({ error: 'CASE_NOT_FOUND', message: `Case ${caseId} does not exist.` });
+    }
+
+    const caseData = caseDoc.data() || {};
+
+    // Must be reviewed or approved
+    if (!doctorReviewedHistoryService.isCaseReviewedOrApproved(caseData)) {
+      return res.status(400).json({ error: 'CASE_NOT_REVIEWED', message: 'This case has not yet been reviewed or approved.' });
+    }
+
+    // Strict Multi-Doctor Zero-Trust Data Isolation
+    const isOwner = Boolean(req.user.isOwner || (req.user.customClaims && req.user.customClaims.isOwner) || req.user.role === 'super_admin');
+    const isApprovedByThisDoc = (caseData.approvingDoctorId === doctorId || caseData.doctorIdentity?.uid === doctorId);
+    const isAssignedToThisDoc = (caseData.assignedDoctorId === doctorId || String(caseData.assignedDoctorEmail || '').toLowerCase() === String(req.user.email || '').toLowerCase());
+
+    if (!isOwner && !isApprovedByThisDoc && !isAssignedToThisDoc) {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'You are not authorized to view the PDF report for this case.' });
+    }
+
+    const isEn = req.query.lang === 'en';
+    const pdfData = doctorReviewedHistoryService.getArchivedCasePdfData({ id: caseId, ...caseData }, { isEn, doctorIdentity });
+
+    // Record audit event
+    if (db) {
+      await doctorReviewedHistoryService.recordReviewedHistoryAudit(db, {
+        req,
+        doctorId,
+        doctorIdentity,
+        clinicId: (typeof recordClinicId === 'function' ? recordClinicId(caseData) : null) || req.user.clinicId || null,
+        caseId,
+        type: AUDIT_EVENT_TYPES.DOCTOR_ARCHIVED_REPORT_PDF_ACCESSED
+      });
+    }
+
+    return res.json({
+      success: true,
+      caseId,
+      pdfData
+    });
+  } catch (err) {
+    console.error('[DOCTOR ARCHIVED PDF PREVIEW ERROR]:', err);
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message });
+  }
+}
+
+app.get('/api/doctor/reviewed-cases', requireAuth, requireDoctor, handleDoctorReviewedCasesSearch);
+app.get('/api/doctor/cases/reviewed', requireAuth, requireDoctor, handleDoctorReviewedCasesSearch);
+app.get('/api/doctor/reviewed-history', requireAuth, requireDoctor, handleDoctorReviewedCasesSearch);
+
+app.get('/api/doctor/reviewed-cases/:caseId', requireAuth, requireDoctor, handleDoctorReviewedCaseDetails);
+app.get('/api/doctor/cases/:caseId/reviewed', requireAuth, requireDoctor, handleDoctorReviewedCaseDetails);
+
+app.get('/api/doctor/reviewed-cases/:caseId/pdf', requireAuth, requireDoctor, handleDoctorArchivedCasePdfPreview);
+app.get('/api/doctor/cases/:caseId/pdf-preview', requireAuth, requireDoctor, handleDoctorArchivedCasePdfPreview);
+
+/**
+ * GET /api/doctor/analytics
+ * GET /api/doctor/performance-analytics
+ * 
+ * Benchmark: TabeebHub Personal Physician Performance & Clinic Analytics
+ * Returns comprehensive performance analytics for the authenticated doctor,
+ * including total reviewed cases, today's completed, average turnaround time (TAT),
+ * 30-minute SLA adherence rate, caseload breakdown across conditions, and upcoming clinic appointments.
+ * Strictly verifies Doctor credentials and records access in Audit Log.
+ */
+async function handleDoctorAnalytics(req, res) {
+  try {
+    const doctorId = req.user.uid;
+    const doctorEmail = req.user.email;
+    const isOwner = Boolean(req.user.isOwner || (req.user.customClaims && req.user.customClaims.isOwner) || req.user.role === 'super_admin');
+
+    // 1. Zero-Trust Patient Account Rejection
+    if (req.user.role === 'patient') {
+      return res.status(403).json({ error: 'FORBIDDEN', message: 'Patients are not permitted to access doctor performance analytics.' });
+    }
+
+    // 2. Verified Doctor Credential Verification
+    const doctorIdentity = req.doctorIdentity || (typeof getVerifiedDoctorIdentity === 'function' ? await getVerifiedDoctorIdentity(doctorId) : null);
+    if (!doctorIdentity) {
+      return res.status(403).json({ error: 'DOCTOR_CREDENTIALS_NOT_VERIFIED', message: 'Physician credentials have not been approved by clinical governance.' });
+    }
+
+    const profile = req.doctorProfile || (typeof getServerUserProfile === 'function' ? await getServerUserProfile(doctorId) : null);
+    if (typeof verifyDoctorAuthorization === 'function') {
+      const authCheck = verifyDoctorAuthorization(doctorIdentity, profile);
+      if (!authCheck.ok) {
+        return res.status(403).json({
+          error: authCheck.error,
+          message: authCheck.message,
+          licenseExpiryDate: authCheck.licenseExpiryDate,
+          reverificationDueDate: authCheck.reverificationDueDate
+        });
+      }
+    }
+
+    const { timeframe, appointmentFilter, apptFilter, lang } = req.query;
+
+    const result = await doctorAnalyticsService.fetchDoctorAnalytics(db, {
+      doctorId,
+      doctorEmail,
+      isOwner,
+      timeframe: timeframe || 'today',
+      appointmentFilter: apptFilter || appointmentFilter || 'all',
+      isEn: lang === 'en'
+    });
+
+    // Enterprise Audit Trail
+    if (db) {
+      await doctorAnalyticsService.recordDoctorAnalyticsAudit(db, {
+        req,
+        doctorId,
+        doctorIdentity,
+        clinicId: (typeof recordClinicId === 'function' ? recordClinicId(profile) : null) || req.user.clinicId || null,
+        timeframe: timeframe || 'today',
+        appointmentFilter: apptFilter || appointmentFilter || 'all',
+        analyticsSummary: result
+      });
+    }
+
+    return res.json(result);
+  } catch (err) {
+    console.error('[DOCTOR ANALYTICS ERROR]:', err);
+    return res.status(500).json({ error: 'ANALYTICS_QUERY_FAILED', message: err.message });
+  }
+}
+
+/**
+ * POST /api/doctor/appointments/:id/reminder
+ * POST /api/doctor/appointments/reminder
+ * 
+ * Sends a verified clinic appointment reminder to the patient and logs the action in the audit trail.
+ */
+async function handleDoctorAppointmentReminder(req, res) {
+  try {
+    const doctorId = req.user.uid;
+    const appointmentId = req.params.id || req.body?.appointmentId || req.body?.id;
+    const patientName = req.body?.patientName;
+
+    if (!appointmentId) {
+      return res.status(400).json({ error: 'MISSING_APPOINTMENT_ID', message: 'Appointment ID is required.' });
+    }
+
+    // 1. Zero-Trust Patient Account Rejection
+    if (req.user.role === 'patient') {
+      return res.status(403).json({ error: 'FORBIDDEN', message: 'Patients are not permitted to send doctor reminders.' });
+    }
+
+    // 2. Verified Doctor Credential Verification
+    const doctorIdentity = req.doctorIdentity || (typeof getVerifiedDoctorIdentity === 'function' ? await getVerifiedDoctorIdentity(doctorId) : null);
+    if (!doctorIdentity) {
+      return res.status(403).json({ error: 'DOCTOR_CREDENTIALS_NOT_VERIFIED', message: 'Physician credentials have not been approved by clinical governance.' });
+    }
+
+    const profile = req.doctorProfile || (typeof getServerUserProfile === 'function' ? await getServerUserProfile(doctorId) : null);
+    if (typeof verifyDoctorAuthorization === 'function') {
+      const authCheck = verifyDoctorAuthorization(doctorIdentity, profile);
+      if (!authCheck.ok) {
+        return res.status(403).json({
+          error: authCheck.error,
+          message: authCheck.message
+        });
+      }
+    }
+
+    const result = await doctorAnalyticsService.sendDoctorAppointmentReminder(db, {
+      req,
+      doctorId,
+      doctorIdentity,
+      appointmentId,
+      patientName,
+      clinicId: (typeof recordClinicId === 'function' ? recordClinicId(profile) : null) || req.user.clinicId || null
+    });
+
+    return res.json(result);
+  } catch (err) {
+    console.error('[DOCTOR APPOINTMENT REMINDER ERROR]:', err);
+    return res.status(500).json({ error: 'REMINDER_FAILED', message: err.message });
+  }
+}
+
+app.get('/api/doctor/analytics', requireAuth, requireDoctor, handleDoctorAnalytics);
+app.get('/api/doctor/performance-analytics', requireAuth, requireDoctor, handleDoctorAnalytics);
+
+app.post('/api/doctor/appointments/:id/reminder', requireAuth, requireDoctor, handleDoctorAppointmentReminder);
+app.post('/api/doctor/appointments/reminder', requireAuth, requireDoctor, handleDoctorAppointmentReminder);
 
 app.post('/api/doctor/withdraw-clinical-report', requireAuth, requireVerifiedEmail, requireDoctor, requireMfaIfEnrolled, async (req, res) => {
   const { caseId, reason } = req.body || {};

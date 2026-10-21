@@ -81,7 +81,12 @@ const AUDIT_EVENT_TYPES = {
   DOCTOR_PRIVATE_NOTES_QUARANTINED: 'DOCTOR_PRIVATE_NOTES_QUARANTINED',
   DOCTOR_PRIVATE_NOTES_ACCESSED: 'DOCTOR_PRIVATE_NOTES_ACCESSED',
   DOCTOR_PATIENT_DIRECTORY_SEARCHED: 'DOCTOR_PATIENT_DIRECTORY_SEARCHED',
-  DOCTOR_PATIENT_DIRECTORY_FILTERED: 'DOCTOR_PATIENT_DIRECTORY_FILTERED'
+  DOCTOR_PATIENT_DIRECTORY_FILTERED: 'DOCTOR_PATIENT_DIRECTORY_FILTERED',
+  DOCTOR_REVIEWED_HISTORY_ACCESSED: 'DOCTOR_REVIEWED_HISTORY_ACCESSED',
+  DOCTOR_REVIEWED_CASE_VIEWED: 'DOCTOR_REVIEWED_CASE_VIEWED',
+  DOCTOR_ARCHIVED_REPORT_PDF_ACCESSED: 'DOCTOR_ARCHIVED_REPORT_PDF_ACCESSED',
+  DOCTOR_ANALYTICS_ACCESSED: 'DOCTOR_ANALYTICS_ACCESSED',
+  DOCTOR_APPOINTMENT_REMINDER_SENT: 'DOCTOR_APPOINTMENT_REMINDER_SENT'
 };
 
 /**
@@ -256,7 +261,7 @@ async function recordAuditEvent(db, {
   });
 
   // Authoritative network & device metadata
-  const rawIp = req ? (req.headers['x-forwarded-for']?.split(',')[0] || req.socket?.remoteAddress || req.ip) : null;
+  const rawIp = req ? (req.headers ? (req.headers['x-forwarded-for']?.split(',')[0] || req.socket?.remoteAddress || req.ip) : req.ip) : null;
   const ipMetadata = sanitizeIp(rawIp);
   const deviceMetadata = extractDeviceMetadata(req);
 

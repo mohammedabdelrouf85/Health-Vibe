@@ -1548,8 +1548,14 @@ function applyLanguage(language) {
     renderReportScreen(window._selectedReportCaseId || null);
   } else if (activeScreenName === "pending" && typeof renderPendingScreen === "function") {
     renderPendingScreen();
-  } else if (activeScreenName === "doctor" && typeof renderDoctorQueue === "function") {
-    renderDoctorQueue();
+  } else if (activeScreenName === "doctor") {
+    if (currentDoctorWorkspaceMode === "analytics" && typeof renderDoctorAnalyticsDashboard === "function") {
+      renderDoctorAnalyticsDashboard();
+    } else if (currentDoctorWorkspaceMode === "history" && typeof renderDoctorReviewedHistory === "function") {
+      renderDoctorReviewedHistory();
+    } else if (typeof renderDoctorQueue === "function") {
+      renderDoctorQueue();
+    }
   } else if (activeScreenName === "history" && typeof renderPatientHistory === "function") {
     renderPatientHistory();
   } else if (activeScreenName === "appointments" && typeof renderAppointmentsScreen === "function") {
@@ -3913,13 +3919,17 @@ let currentDoctorArchiveSearch = '';
 let currentDoctorArchiveDateFilter = 'all';
 let currentDoctorArchivePriorityFilter = 'all';
 let currentDoctorArchiveSort = 'date_desc';
+let currentDoctorAnalyticsTimeframe = 'today';
+let currentDoctorUpcomingApptFilter = 'all';
 
 window.setDoctorWorkspaceMode = function(mode) {
-  currentDoctorWorkspaceMode = mode === 'history' ? 'history' : 'worklist';
+  currentDoctorWorkspaceMode = (mode === 'history' || mode === 'analytics') ? mode : 'worklist';
   const worklistTab = document.getElementById("tabDoctorWorklist");
   const historyTab = document.getElementById("tabDoctorReviewedHistory");
+  const analyticsTab = document.getElementById("tabDoctorAnalytics");
   const worklistLayout = document.getElementById("doctorWorkspaceLayout");
   const historySection = document.getElementById("doctorReviewedHistorySection");
+  const analyticsSection = document.getElementById("doctorAnalyticsSection");
 
   if (worklistTab) {
     worklistTab.classList.toggle("is-active", currentDoctorWorkspaceMode === 'worklist');
@@ -3929,17 +3939,141 @@ window.setDoctorWorkspaceMode = function(mode) {
     historyTab.classList.toggle("is-active", currentDoctorWorkspaceMode === 'history');
     historyTab.setAttribute("aria-selected", currentDoctorWorkspaceMode === 'history' ? "true" : "false");
   }
+  if (analyticsTab) {
+    analyticsTab.classList.toggle("is-active", currentDoctorWorkspaceMode === 'analytics');
+    analyticsTab.setAttribute("aria-selected", currentDoctorWorkspaceMode === 'analytics' ? "true" : "false");
+  }
 
   if (currentDoctorWorkspaceMode === 'history') {
     if (worklistLayout) worklistLayout.style.display = "none";
+    if (analyticsSection) analyticsSection.style.display = "none";
     if (historySection) {
       historySection.style.display = "block";
       renderDoctorReviewedHistory();
     }
+  } else if (currentDoctorWorkspaceMode === 'analytics') {
+    if (worklistLayout) worklistLayout.style.display = "none";
+    if (historySection) historySection.style.display = "none";
+    if (analyticsSection) {
+      analyticsSection.style.display = "block";
+      renderDoctorAnalyticsDashboard();
+    }
   } else {
     if (historySection) historySection.style.display = "none";
+    if (analyticsSection) analyticsSection.style.display = "none";
     if (worklistLayout) worklistLayout.style.display = "grid";
     renderDoctorQueue();
+  }
+};
+
+window.setDoctorAnalyticsTimeframe = function(timeframe) {
+  currentDoctorAnalyticsTimeframe = timeframe || 'today';
+  renderDoctorAnalyticsDashboard();
+};
+
+window.setDoctorUpcomingApptFilter = function(filter) {
+  currentDoctorUpcomingApptFilter = filter || 'all';
+  renderDoctorAnalyticsDashboard();
+};
+
+window.renderDoctorAnalyticsDashboard = async function() {
+  const container = document.getElementById("doctorAnalyticsSection");
+  if (!container) return;
+
+  const startLoadMs = (typeof performance !== "undefined" && typeof performance.now === "function") ? performance.now() : Date.now();
+  const isEn = (currentLanguage === "en");
+  let analyticsData = null;
+
+  // 1. Authoritative Backend Fetch (Verified Doctor)
+  if (typeof callBackend === "function" && selectedRole === ROLES.DOCTOR) {
+    try {
+      const qParams = new URLSearchParams({
+        timeframe: currentDoctorAnalyticsTimeframe || 'today',
+        apptFilter: currentDoctorUpcomingApptFilter || 'all',
+        lang: currentLanguage || 'ar'
+      });
+      const res = await callBackend(`/api/doctor/analytics?${qParams.toString()}`);
+      if (res && res.ok) {
+        analyticsData = res;
+      }
+    } catch (e) {
+      // Graceful offline fallback to local calculations
+    }
+  }
+
+  // 2. Client-side Local Fallback
+  if (!analyticsData) {
+    const cases = state.doctorQueue || [];
+    const appointments = state.appointments || [];
+
+    if (window.HealthVibes?.DoctorUI?.calculateDoctorAnalytics) {
+      analyticsData = window.HealthVibes.DoctorUI.calculateDoctorAnalytics(cases, appointments, {
+        timeframe: currentDoctorAnalyticsTimeframe,
+        appointmentFilter: currentDoctorUpcomingApptFilter,
+        isEn
+      });
+    }
+  }
+
+  if (analyticsData && window.HealthVibes?.DoctorUI?.renderDoctorAnalyticsDashboardHtml) {
+    const apptsBadge = document.getElementById("doctorUpcomingApptsCount");
+    if (apptsBadge && Array.isArray(analyticsData.upcomingAppointments)) {
+      apptsBadge.textContent = String(analyticsData.upcomingAppointments.length);
+    }
+
+    container.innerHTML = window.HealthVibes.DoctorUI.renderDoctorAnalyticsDashboardHtml(analyticsData, isEn);
+    const duration = Math.round(((typeof performance !== "undefined" && typeof performance.now === "function") ? performance.now() : Date.now()) - startLoadMs);
+    if (window.HealthVibes?.DoctorUI?.recordDoctorAnalyticsLoadMetric) {
+      window.HealthVibes.DoctorUI.recordDoctorAnalyticsLoadMetric('dashboard', duration);
+    }
+    const latencyEl = document.getElementById("doctorAnalyticsLatency");
+    if (latencyEl) {
+      latencyEl.textContent = String(duration);
+    }
+  }
+};
+
+window.handleDoctorExamineAppt = function(caseId) {
+  const startMs = (typeof performance !== "undefined" && typeof performance.now === "function") ? performance.now() : Date.now();
+  setDoctorWorkspaceMode('worklist');
+  if (typeof selectDoctorCase === "function" && caseId) {
+    selectDoctorCase(caseId);
+  }
+  const duration = Math.round(((typeof performance !== "undefined" && typeof performance.now === "function") ? performance.now() : Date.now()) - startMs);
+  if (window.HealthVibes?.DoctorUI?.recordDoctorAnalyticsLoadMetric) {
+    window.HealthVibes.DoctorUI.recordDoctorAnalyticsLoadMetric(`examine-${caseId}`, duration);
+  }
+};
+
+window.handleDoctorViewPatientDossier = function(caseId) {
+  const startMs = (typeof performance !== "undefined" && typeof performance.now === "function") ? performance.now() : Date.now();
+  setDoctorWorkspaceMode('worklist');
+  if (typeof selectDoctorCase === "function" && caseId) {
+    selectDoctorCase(caseId);
+    if (typeof switchReviewTab === "function") {
+      switchReviewTab('history');
+    }
+  }
+  const duration = Math.round(((typeof performance !== "undefined" && typeof performance.now === "function") ? performance.now() : Date.now()) - startMs);
+  if (window.HealthVibes?.DoctorUI?.recordDoctorAnalyticsLoadMetric) {
+    window.HealthVibes.DoctorUI.recordDoctorAnalyticsLoadMetric(`dossier-${caseId}`, duration);
+  }
+};
+
+window.handleDoctorSendApptReminder = async function(apptId) {
+  const isEn = (currentLanguage === "en");
+  if (typeof callBackend === "function" && selectedRole === ROLES.DOCTOR && apptId) {
+    try {
+      await callBackend(`/api/doctor/appointments/${encodeURIComponent(apptId)}/reminder`, {
+        method: 'POST',
+        body: JSON.stringify({ appointmentId: apptId })
+      });
+    } catch (e) {
+      // Offline fallback
+    }
+  }
+  if (typeof showToast === "function") {
+    showToast(isEn ? "WhatsApp appointment reminder sent to patient" : "تم إرسال رسالة تذكير بالموعد عبر الواتساب للمريض");
   }
 };
 
@@ -3947,28 +4081,60 @@ window.renderDoctorReviewedHistory = async function() {
   const container = document.getElementById("doctorReviewedHistorySection");
   if (!container) return;
 
+  const startLoadMs = (typeof performance !== "undefined" && typeof performance.now === "function") ? performance.now() : Date.now();
   const isEn = currentLanguage === "en";
-  let allCases = state.doctorQueue || [];
-  if (allCases.length === 0) {
+  let reviewedCases = [];
+  let isBackendConnected = false;
+
+  // Attempt to fetch from backend authoritative endpoint if logged in as doctor
+  if (typeof callBackend === "function" && selectedRole === ROLES.DOCTOR) {
     try {
-      allCases = await getCases({ includeTest: true });
-      state.doctorQueue = allCases;
+      const qParams = new URLSearchParams({
+        search: currentDoctorArchiveSearch || '',
+        dateFilter: currentDoctorArchiveDateFilter || 'all',
+        priority: currentDoctorArchivePriorityFilter || 'all',
+        sort: currentDoctorArchiveSort || 'date_desc',
+        lang: currentLanguage || 'ar'
+      });
+      const res = await callBackend(`/api/doctor/reviewed-cases?${qParams.toString()}`);
+      if (res && Array.isArray(res.cases)) {
+        reviewedCases = res.cases;
+        isBackendConnected = true;
+      }
     } catch (e) {
-      console.warn("Could not fetch cases for archive:", e.message);
+      // Graceful offline fallback
     }
   }
 
-  const reviewedCases = (allCases || []).filter(c => {
-    if (!c) return false;
-    const isApproved = c.status === CASE_STATUS.APPROVED || String(c.status).toLowerCase() === "approved" || c.doctorApproved === true;
-    const hasApprovalHistory = Array.isArray(c.statusHistory) && c.statusHistory.some(h => String(h.status).toLowerCase() === "approved");
-    if (selectedRole === ROLES.DOCTOR && !isCaseAssignedToCurrentDoctor(c)) return false;
-    return isApproved || hasApprovalHistory;
-  });
+  // Fallback to local state if backend not reached
+  if (!isBackendConnected) {
+    let allCases = state.doctorQueue || [];
+    if (allCases.length === 0) {
+      try {
+        allCases = await getCases({ includeTest: true });
+        state.doctorQueue = allCases;
+      } catch (e) {
+        console.warn("Could not fetch cases for archive:", e.message);
+      }
+    }
+
+    reviewedCases = (allCases || []).filter(c => {
+      if (!c) return false;
+      const isApproved = c.status === CASE_STATUS.APPROVED || String(c.status).toLowerCase() === "approved" || c.doctorApproved === true;
+      const hasApprovalHistory = Array.isArray(c.statusHistory) && c.statusHistory.some(h => String(h.status).toLowerCase() === "approved");
+      if (selectedRole === ROLES.DOCTOR && !isCaseAssignedToCurrentDoctor(c)) return false;
+      return isApproved || hasApprovalHistory;
+    });
+  }
 
   const historyBadge = document.getElementById("doctorReviewedHistoryCount");
   if (historyBadge) {
     historyBadge.textContent = String(reviewedCases.length);
+  }
+
+  const elapsedMs = Math.round(((typeof performance !== "undefined" && typeof performance.now === "function") ? performance.now() : Date.now()) - startLoadMs);
+  if (window.HealthVibes?.DoctorUI?.recordArchivedCaseLoadMetric) {
+    window.HealthVibes.DoctorUI.recordArchivedCaseLoadMetric('archive_history', elapsedMs);
   }
 
   if (window.HealthVibes?.DoctorUI?.renderDoctorReviewedHistoryHtml) {
@@ -3983,9 +4149,20 @@ window.renderDoctorReviewedHistory = async function() {
   }
 };
 
-window.setDoctorArchiveSearch = function(val) {
+let _doctorArchiveSearchDebounceTimer = null;
+window.setDoctorArchiveSearch = function(val, immediate = false) {
   currentDoctorArchiveSearch = String(val || "").trim().toLowerCase();
-  renderDoctorReviewedHistory();
+  if (_doctorArchiveSearchDebounceTimer) {
+    clearTimeout(_doctorArchiveSearchDebounceTimer);
+    _doctorArchiveSearchDebounceTimer = null;
+  }
+  if (immediate) {
+    renderDoctorReviewedHistory();
+    return;
+  }
+  _doctorArchiveSearchDebounceTimer = setTimeout(() => {
+    renderDoctorReviewedHistory();
+  }, 150);
 };
 
 window.setDoctorArchiveDateFilter = function(val) {
@@ -4011,6 +4188,13 @@ window.resetDoctorArchiveFilters = function() {
   renderDoctorReviewedHistory();
 };
 
+window.navigateDoctorReviewedHistory = function(direction) {
+  if (window.HealthVibes?.DoctorUI?.navigateDoctorReviewedHistory) {
+    return window.HealthVibes.DoctorUI.navigateDoctorReviewedHistory(direction);
+  }
+  return null;
+};
+
 window.viewArchivedCaseReport = function(caseId) {
   window._selectedReportCaseId = caseId;
   showScreen("report");
@@ -4020,6 +4204,36 @@ window.viewArchivedCaseReport = function(caseId) {
 };
 
 window.viewArchivedCasePdf = function(caseId) {
+  const cached = window.HealthVibes?.DoctorUI?.getCachedArchivedCaseData ? window.HealthVibes.DoctorUI.getCachedArchivedCaseData(caseId) : null;
+  if (cached && cached.pdfData && window.HealthVibes?.DoctorUI?.openArchivedCasePdfModal) {
+    window.HealthVibes.DoctorUI.openArchivedCasePdfModal(caseId, cached.pdfData);
+    return;
+  }
+
+  if (typeof callBackend === "function") {
+    callBackend(`/api/doctor/reviewed-cases/${encodeURIComponent(caseId)}/pdf?lang=${currentLanguage || 'ar'}`)
+      .then(res => {
+        if (res && res.pdfData && window.HealthVibes?.DoctorUI?.openArchivedCasePdfModal) {
+          if (window.HealthVibes?.DoctorUI?.cacheArchivedCaseData) {
+            window.HealthVibes.DoctorUI.cacheArchivedCaseData(caseId, { ...cached, pdfData: res.pdfData });
+          }
+          window.HealthVibes.DoctorUI.openArchivedCasePdfModal(caseId, res.pdfData);
+        } else if (window.HealthVibes?.DoctorUI?.openArchivedCasePdfModal) {
+          window.HealthVibes.DoctorUI.openArchivedCasePdfModal(caseId);
+        } else {
+          window.exportReportToPdf(caseId, currentLanguage);
+        }
+      })
+      .catch(() => {
+        if (window.HealthVibes?.DoctorUI?.openArchivedCasePdfModal) {
+          window.HealthVibes.DoctorUI.openArchivedCasePdfModal(caseId);
+        } else {
+          window.exportReportToPdf(caseId, currentLanguage);
+        }
+      });
+    return;
+  }
+
   if (window.HealthVibes?.DoctorUI?.openArchivedCasePdfModal) {
     window.HealthVibes.DoctorUI.openArchivedCasePdfModal(caseId);
   } else {
@@ -4429,6 +4643,13 @@ function renderDoctorQueueItems(allCases) {
   if (reviewedBadge) {
     const reviewedCount = (realCases || []).filter(c => c.status === CASE_STATUS.APPROVED || c.doctorApproved === true).length;
     reviewedBadge.textContent = String(reviewedCount);
+  }
+  const upcomingApptsBadge = document.getElementById("doctorUpcomingApptsCount");
+  if (upcomingApptsBadge) {
+    if (window.HealthVibes?.DoctorUI?.buildDoctorUpcomingAppointments) {
+      const appts = window.HealthVibes.DoctorUI.buildDoctorUpcomingAppointments(state.appointments || [], realCases, { isEn });
+      upcomingApptsBadge.textContent = String(appts.length);
+    }
   }
 
   // ⚡ تحديث شريط مؤشرات أداء الطبيب المصغر

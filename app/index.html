@@ -1649,7 +1649,7 @@
           </button>
         </div>
 
-        <!-- Rology Workspace Mode Switcher: Worklist vs Reviewed Cases History -->
+        <!-- Workspace Mode Switcher: Worklist vs Reviewed Cases History vs Doctor Analytics (TabeebHub) -->
         <div class="rology-workspace-nav-bar" id="doctorWorkspaceNavBar" role="tablist" aria-label="أنماط عرض عيادة الطبيب">
           <button type="button" class="rology-nav-tab is-active" id="tabDoctorWorklist" onclick="setDoctorWorkspaceMode('worklist')" role="tab" aria-selected="true">
             <span class="tab-icon">🩺</span>
@@ -1660,6 +1660,11 @@
             <span class="tab-icon">📚</span>
             <span class="tab-label" id="labelDoctorReviewedHistory">سجل الحالات المراجعة (Reviewed Cases History)</span>
             <span class="pill ok" id="doctorReviewedHistoryCount">0</span>
+          </button>
+          <button type="button" class="rology-nav-tab" id="tabDoctorAnalytics" onclick="setDoctorWorkspaceMode('analytics')" role="tab" aria-selected="false">
+            <span class="tab-icon">📊</span>
+            <span class="tab-label" id="labelDoctorAnalytics">إحصائيات الأداء ومواعيد العيادة (Doctor Analytics)</span>
+            <span class="pill primary" id="doctorUpcomingApptsCount">0</span>
           </button>
         </div>
 
@@ -1681,6 +1686,11 @@
         <!-- Rology Reviewed Cases History & Certified Reports Archive Section -->
         <section class="rology-archive-section" id="doctorReviewedHistorySection" style="display: none;" aria-label="سجل الحالات المراجعة والأرشيف السريري">
           <!-- Dynamically populated via renderDoctorReviewedHistory() -->
+        </section>
+
+        <!-- TabeebHub Doctor Analytics & Clinic Performance Dashboard Section -->
+        <section class="tabeeb-analytics-section" id="doctorAnalyticsSection" style="display: none;" aria-label="إحصائيات أداء الطبيب ومواعيد العيادة">
+          <!-- Dynamically populated via renderDoctorAnalyticsDashboard() -->
         </section>
       </section>
 
