@@ -9524,6 +9524,7 @@ function showScreen(name) {
     renderAdminMetrics();
     renderAdminApplications();
     renderAdminUsers();
+    renderAdminClinics();
   }
   if (name === "consent") {
     renderConsentScreen();
@@ -16152,9 +16153,10 @@ window.refreshAdminDashboardLive = async function() {
     await Promise.all([
       renderAdminMetrics(),
       renderAdminApplications(),
-      renderAdminUsers()
+      renderAdminUsers(),
+      renderAdminClinics()
     ]);
-    showToast(isEn ? "Admin dashboard updated with all accounts!" : "تم تحديث لوحة الإدارة بكافة الحسابات المؤكدة والعادية!");
+    showToast(isEn ? "Admin dashboard updated with all accounts & clinic branches!" : "تم تحديث لوحة الإدارة بكافة الحسابات والفروع الطبية المعتمدة!");
   } catch (err) {
     console.error("Refresh error:", err);
   } finally {
@@ -16235,6 +16237,280 @@ function setAdminUsersFilter(filter) {
   renderAdminUsers();
 }
 window.setAdminUsersFilter = setAdminUsersFilter;
+
+// =============================================================================
+// 🏥 PRACTO BENCHMARK: CLINICS & BRANCHES MANAGER
+// =============================================================================
+let currentAdminClinicsFilter = "all";
+let adminClinicsSearchQuery = "";
+
+const DEFAULT_ADMIN_CLINICS = [
+  {
+    id: "clinic_cairo_main",
+    branchId: "branch_dokki_central",
+    nameAr: "مجمع النيل الطبي التخصصي (فرع الدقي المركزي)",
+    nameEn: "Nile Specialized Medical Complex (Dokki Central)",
+    city: "Giza",
+    cityAr: "الجيزة",
+    cityEn: "Giza",
+    addressAr: "شارع التحرير، الدقي، بجوار محطة مترو الدقي",
+    addressEn: "Tahrir St, Dokki, next to Dokki Metro Station",
+    phone: "+20 2 3749 0001",
+    mapUrl: "https://maps.google.com/?q=30.0384,31.2119",
+    doctorsCount: 8,
+    activeSpecialties: ["أمراض الصدر والحساسية", "الباطنة العامة", "الأشعة التشخيصية"],
+    isPrimary: true
+  },
+  {
+    id: "clinic_heliopolis",
+    branchId: "branch_heliopolis",
+    nameAr: "مركز مصر الجديدة للصدر والحساسية",
+    nameEn: "Heliopolis Chest & Allergy Center",
+    city: "Cairo",
+    cityAr: "القاهرة",
+    cityEn: "Cairo",
+    addressAr: "شارع الميرغني، كلية البنات، مصر الجديدة",
+    addressEn: "El-Merghany St, Girls College, Heliopolis",
+    phone: "+20 2 2418 0002",
+    mapUrl: "https://maps.google.com/?q=30.0910,31.3320",
+    doctorsCount: 5,
+    activeSpecialties: ["أمراض الصدر", "الأنف والأذن والحنجرة"],
+    isPrimary: false
+  },
+  {
+    id: "clinic_alexandria",
+    branchId: "branch_alexandria",
+    nameAr: "عيادات الإسكندرية الاستشارية",
+    nameEn: "Alexandria Consulting Clinics",
+    city: "Alexandria",
+    cityAr: "الإسكندرية",
+    cityEn: "Alexandria",
+    addressAr: "طريق الحرية، محطة الرمل، الإسكندرية",
+    addressEn: "Al-Horreya Ave, Raml Station, Alexandria",
+    phone: "+20 3 4870 0003",
+    mapUrl: "https://maps.google.com/?q=31.2001,29.9187",
+    doctorsCount: 4,
+    activeSpecialties: ["الأمراض الباطنية والصدرية", "طب الأطفال"],
+    isPrimary: false
+  },
+  {
+    id: "clinic_telehealth_virtual",
+    branchId: "branch_telehealth_virtual",
+    nameAr: "العيادة الافتراضية (استشارات الفيديو والمتابعة الرقمية)",
+    nameEn: "Virtual Telehealth Clinic (Remote Video)",
+    city: "Telehealth",
+    cityAr: "عن بُعد / مصر",
+    cityEn: "Remote / Egypt",
+    addressAr: "منصة استشارات مرئية مشفرة تغطي كافة محافظات الجمهورية",
+    addressEn: "Encrypted digital consultation service covering all governorates",
+    phone: "+20 100 000 9999",
+    mapUrl: "",
+    doctorsCount: 12,
+    activeSpecialties: ["كافة التخصصات الطبية عن بُعد"],
+    isPrimary: false,
+    isVirtual: true
+  }
+];
+
+function getStoredAdminClinics() {
+  try {
+    const raw = localStorage.getItem("hv_admin_clinics_list");
+    if (raw) return JSON.parse(raw);
+  } catch(e) {}
+  return DEFAULT_ADMIN_CLINICS;
+}
+
+function saveStoredAdminClinics(clinics) {
+  try {
+    localStorage.setItem("hv_admin_clinics_list", JSON.stringify(clinics));
+  } catch(e) {}
+}
+
+function filterAdminClinicsList(city) {
+  currentAdminClinicsFilter = city;
+  const container = document.getElementById("adminClinicsCityFilterTabs");
+  if (container) {
+    const btns = container.querySelectorAll(".status-filter-tab");
+    btns.forEach(b => {
+      b.classList.remove("active");
+      if ((city === "all" && b.textContent.includes("كافة")) || b.textContent.includes(city)) {
+        b.classList.add("active");
+      }
+    });
+  }
+  renderAdminClinics();
+}
+window.filterAdminClinicsList = filterAdminClinicsList;
+
+function searchAdminClinicsList(query) {
+  adminClinicsSearchQuery = (query || "").trim().toLowerCase();
+  renderAdminClinics();
+}
+window.searchAdminClinicsList = searchAdminClinicsList;
+
+async function renderAdminClinics() {
+  const container = document.getElementById("adminClinicsListContainer");
+  if (!container) return;
+
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  const clinics = getStoredAdminClinics();
+
+  const countBadge = document.getElementById("adminClinicsCountBadge");
+  if (countBadge) {
+    countBadge.textContent = isEn ? `${clinics.length} registered clinics` : `${clinics.length} مراكز وفروع مسجلة`;
+  }
+
+  let filtered = clinics;
+  if (currentAdminClinicsFilter !== "all") {
+    filtered = filtered.filter(c => c.city === currentAdminClinicsFilter || (currentAdminClinicsFilter === "Telehealth" && c.isVirtual));
+  }
+
+  if (adminClinicsSearchQuery) {
+    filtered = filtered.filter(c =>
+      (c.nameAr || "").toLowerCase().includes(adminClinicsSearchQuery) ||
+      (c.nameEn || "").toLowerCase().includes(adminClinicsSearchQuery) ||
+      (c.addressAr || "").toLowerCase().includes(adminClinicsSearchQuery) ||
+      (c.addressEn || "").toLowerCase().includes(adminClinicsSearchQuery) ||
+      (c.phone || "").includes(adminClinicsSearchQuery)
+    );
+  }
+
+  if (filtered.length === 0) {
+    container.innerHTML = `
+      <div style="grid-column: 1 / -1; padding: 32px; text-align: center; color: var(--muted); background: var(--surface-2); border-radius: 12px; border: 1px solid var(--line);">
+        <span style="font-size: 32px; display: block; margin-bottom: 8px;">🏥</span>
+        <strong>${isEn ? "No clinics or branches found matching search/filter" : "لا توجد مراكز أو فروع تطابق البحث الحالي"}</strong>
+      </div>
+    `;
+    return;
+  }
+
+  let html = "";
+  filtered.forEach(c => {
+    const isPrimary = Boolean(c.isPrimary);
+    const isVirtual = Boolean(c.isVirtual);
+    html += `
+      <div class="admin-clinic-card" style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px; padding: 18px; display: flex; flex-direction: column; justify-content: space-between; position: relative;">
+        <div>
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 8px;">
+            <h4 style="margin: 0; font-size: 16.5px; color: var(--ink); line-height: 1.4;">${isEn ? (c.nameEn || c.nameAr) : (c.nameAr || c.nameEn)}</h4>
+            <div style="display: flex; gap: 4px; flex-shrink: 0;">
+              ${isPrimary ? `<span class="pill ok" style="font-size: 10.5px;">${isEn ? 'Primary Branch' : 'الفرع الرئيسي'}</span>` : ''}
+              ${isVirtual ? `<span class="pill info" style="font-size: 10.5px;">${isEn ? 'Virtual / Video' : 'عيادة افتراضية'}</span>` : ''}
+            </div>
+          </div>
+
+          <div style="font-size: 13px; color: var(--muted); margin-bottom: 12px; display: flex; flex-direction: column; gap: 6px;">
+            <div>📍 <strong>${isEn ? 'Address:' : 'العنوان:'}</strong> ${isEn ? (c.addressEn || c.addressAr) : (c.addressAr || c.addressEn)}</div>
+            <div>📞 <strong>${isEn ? 'Direct Phone:' : 'هاتف الفرع:'}</strong> <a href="tel:${c.phone}" style="color: var(--teal); font-family: monospace;">${c.phone}</a></div>
+            <div>🩺 <strong>${isEn ? 'Affiliated Doctors:' : 'الأطباء المعتمدون بالفرع:'}</strong> <span style="font-weight: 700; color: #10b981;">${c.doctorsCount || 0} ${isEn ? 'physicians' : 'أطباء'}</span></div>
+            <div>🏷️ <strong>${isEn ? 'Specialties:' : 'التخصصات:'}</strong> <span style="font-size: 11.5px;">${(c.activeSpecialties || []).join(' • ')}</span></div>
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--line); padding-top: 12px; margin-top: 8px;">
+          <div>
+            ${c.mapUrl ? `
+              <a href="${c.mapUrl}" target="_blank" rel="noopener noreferrer" class="soft-button" style="padding: 5px 10px; font-size: 11.5px; display: inline-flex; align-items: center; gap: 4px; text-decoration: none;">
+                🗺️ ${isEn ? 'Open Map' : 'موقع الخريطة'}
+              </a>
+            ` : `
+              <span style="font-size: 11px; color: var(--muted);">${isEn ? 'Online Video Sessions' : 'خدمة رقمية بدون مقر'}</span>
+            `}
+          </div>
+          <div style="display: flex; gap: 6px;">
+            <button type="button" class="soft-button" onclick="promptEditClinicBranch('${c.id}')" style="padding: 5px 12px; font-size: 12px;">
+              ✏️ ${isEn ? 'Edit' : 'تعديل'}
+            </button>
+            ${!isPrimary ? `
+              <button type="button" class="danger-button" onclick="deleteClinicBranch('${c.id}')" style="padding: 5px 10px; font-size: 11.5px;" title="${isEn ? 'Delete branch' : 'حذف الفرع'}">
+                🗑️
+              </button>
+            ` : ''}
+          </div>
+        </div>
+      </div>
+    `;
+  });
+
+  container.innerHTML = html;
+}
+window.renderAdminClinics = renderAdminClinics;
+
+function promptAddNewClinicBranch() {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  const name = prompt(isEn ? "Enter Clinic / Hospital Branch Name (Arabic):" : "أدخل اسم المركز الطبي أو الفرع (باللغة العربية):");
+  if (!name || !name.trim()) return;
+
+  const city = prompt(isEn ? "City (Cairo, Giza, Alexandria, Telehealth):" : "المدينة (القاهرة، الجيزة، الإسكندرية، Telehealth):", "القاهرة");
+  const address = prompt(isEn ? "Branch Physical Address:" : "العنوان بالتفصيل ورقم الشارع:", "شارع التحرير، الدقي");
+  const phone = prompt(isEn ? "Contact Phone Number:" : "رقم هاتف الفرع والاتصال المباشر:", "+20 2 3333 4444");
+  const doctorsCount = prompt(isEn ? "Number of initial doctors assigned to this branch:" : "عدد الأطباء التابعين لهذا الفرع مبدئياً:", "3");
+
+  const clinics = getStoredAdminClinics();
+  const newClinic = {
+    id: `clinic_${Date.now()}`,
+    branchId: `branch_${Date.now()}`,
+    nameAr: name.trim(),
+    nameEn: name.trim(),
+    city: city ? city.trim() : "Cairo",
+    cityAr: city ? city.trim() : "القاهرة",
+    cityEn: city ? city.trim() : "Cairo",
+    addressAr: address ? address.trim() : "",
+    addressEn: address ? address.trim() : "",
+    phone: phone ? phone.trim() : "",
+    mapUrl: "https://maps.google.com",
+    doctorsCount: parseInt(doctorsCount, 10) || 1,
+    activeSpecialties: ["أمراض الصدر والباطنة"],
+    isPrimary: false
+  };
+
+  clinics.push(newClinic);
+  saveStoredAdminClinics(clinics);
+  renderAdminClinics();
+  renderAdminMetrics();
+  showToast(isEn ? "New clinic branch successfully registered!" : "تم تسجيل الفرع الطبي الجديد في المنظومة بنجاح!");
+}
+window.promptAddNewClinicBranch = promptAddNewClinicBranch;
+
+function promptEditClinicBranch(clinicId) {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  const clinics = getStoredAdminClinics();
+  const clinic = clinics.find(c => c.id === clinicId);
+  if (!clinic) return;
+
+  const newName = prompt(isEn ? "Edit Clinic Name:" : "تعديل اسم الفرع / المركز الطبي:", clinic.nameAr || clinic.nameEn);
+  if (!newName || !newName.trim()) return;
+
+  const newAddress = prompt(isEn ? "Edit Address:" : "تعديل العنوان:", clinic.addressAr || clinic.addressEn);
+  const newPhone = prompt(isEn ? "Edit Contact Phone:" : "تعديل هاتف التواصل:", clinic.phone);
+  const newDoctorsCount = prompt(isEn ? "Number of affiliated doctors:" : "عدد الأطباء المعتمدين بالفرع:", String(clinic.doctorsCount || 1));
+
+  clinic.nameAr = newName.trim();
+  clinic.nameEn = newName.trim();
+  if (newAddress) { clinic.addressAr = newAddress.trim(); clinic.addressEn = newAddress.trim(); }
+  if (newPhone) clinic.phone = newPhone.trim();
+  if (newDoctorsCount) clinic.doctorsCount = parseInt(newDoctorsCount, 10) || clinic.doctorsCount;
+
+  saveStoredAdminClinics(clinics);
+  renderAdminClinics();
+  renderAdminMetrics();
+  showToast(isEn ? "Branch details updated successfully!" : "تم تحديث بيانات الفرع الطبي بنجاح!");
+}
+window.promptEditClinicBranch = promptEditClinicBranch;
+
+function deleteClinicBranch(clinicId) {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  if (!confirm(isEn ? "Are you sure you want to delete this branch from the network?" : "هل أنت متأكد من رغبتك في حذف هذا الفرع من شبكة المراكز المعتمدة؟")) return;
+
+  let clinics = getStoredAdminClinics();
+  clinics = clinics.filter(c => c.id !== clinicId);
+  saveStoredAdminClinics(clinics);
+  renderAdminClinics();
+  renderAdminMetrics();
+  showToast(isEn ? "Branch deleted." : "تم حذف الفرع من الشبكة.");
+}
+window.deleteClinicBranch = deleteClinicBranch;
 
 async function renderAdminUsers() {
   const container = document.getElementById("adminUsersTableContainer");

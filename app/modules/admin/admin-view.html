@@ -199,6 +199,46 @@
           </div>
         </article>
 
+        <!-- 27. BRANCHES & CLINICS MANAGER (Practo Benchmark) -->
+        <article class="panel" id="adminClinicsManagerPanel" style="margin-top: 24px;">
+          <div class="panel-head" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <h3 style="margin: 0; font-size: 19px;">إدارة المراكز الطبية والفروع والعيادات (Branches & Clinics Manager)</h3>
+                <span class="pill ok" id="adminClinicsActiveBadge" style="font-size: 11px;">شبكة معتمدة 🏥</span>
+              </div>
+              <p style="margin: 4px 0 0; font-size: 13px; color: var(--muted);">
+                إضافة وتعديل بيانات المراكز الطبية، عناوين الفروع على الخريطة، أرقام الهواتف المباشرة، وقوائم الأطباء المعتمدين لكل فرع
+              </p>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <span class="pill info" id="adminClinicsCountBadge">جاري التحميل...</span>
+              <button type="button" class="solid-button" onclick="promptAddNewClinicBranch()" style="padding: 6px 14px; font-size: 12.5px; display: inline-flex; align-items: center; gap: 5px;">
+                <span>➕</span> إضافة فرع / مركز طبي جديد
+              </button>
+            </div>
+          </div>
+
+          <!-- Clinics Filter Bar & Search -->
+          <div style="display: flex; gap: 12px; margin-top: 16px; flex-wrap: wrap; align-items: center; justify-content: space-between;">
+            <div class="status-filter-tabs" id="adminClinicsCityFilterTabs" style="display: flex; gap: 6px; flex-wrap: wrap;">
+              <button type="button" class="status-filter-tab active" onclick="filterAdminClinicsList('all')">كافة الفروع</button>
+              <button type="button" class="status-filter-tab" onclick="filterAdminClinicsList('Cairo')">القاهرة</button>
+              <button type="button" class="status-filter-tab" onclick="filterAdminClinicsList('Giza')">الجيزة</button>
+              <button type="button" class="status-filter-tab" onclick="filterAdminClinicsList('Alexandria')">الإسكندرية</button>
+              <button type="button" class="status-filter-tab" onclick="filterAdminClinicsList('Telehealth')">العيادة الافتراضية</button>
+            </div>
+            <div style="position: relative; min-width: 260px;">
+              <input type="text" id="adminClinicsSearchInput" oninput="searchAdminClinicsList(this.value)" placeholder="🔍 بحث باسم الفرع أو العنوان أو الهاتف..." style="width: 100%; padding: 8px 12px; font-size: 13px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface);">
+            </div>
+          </div>
+
+          <!-- Branches Container -->
+          <div id="adminClinicsListContainer" style="margin-top: 18px; display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px;">
+            <!-- Rendered dynamically via renderAdminClinics() -->
+          </div>
+        </article>
+
         <!-- 28. REAL-TIME SYSTEM ERROR MONITORING & OBSERVABILITY -->
         <article class="panel" id="adminErrorMonitoringPanel" style="margin-top: 24px;">
           <div class="panel-head" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
