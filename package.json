@@ -151,6 +151,7 @@
     "test:ai-monitoring-qa-audit": "node tests/ai_monitoring_qa_audit_infermedica.test.js",
     "test:ai-monitoring-sop": "node tests/ai_monitoring_sop_documentation.test.js",
     "test:model-registry": "node tests/model_registry_rollback_glass_health.test.js",
+    "test:model-registry-backend": "node tests/model_registry_backend_rbac_glass_health.test.js",
     "test:suite-641-670": "node tests/kry_priority_slot_allocation_641_645.test.js && node tests/vezeeta_visit_rating_646_650.test.js && node tests/practo_lab_result_alerts_651_655.test.js && node tests/vezeeta_doctor_directory_656_660.test.js && node tests/clinido_booking_transparency_661_665.test.js && node tests/esaal_saved_chat_history_666_670.test.js"
   },
   "keywords": [

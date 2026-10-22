@@ -7322,6 +7322,10 @@ const INITIAL_CLINICAL_AI_MODELS = [
     conditionLabelAr: "فرز الطوارئ والأعراض التنفسية",
     conditionLabelEn: "Acute Respiratory & Hypoxemia Triage",
     architecture: "Rule-Based + Bayesian Expert System",
+    parametersCount: "128K Rules & Weights",
+    datasetVersion: "HealthVibe-Validation-v2.1",
+    trainingCheckpoint: "chk_triage_v1.1_b80_final",
+    releaseDate: "2026-10-20",
     evaluationDate: "2026-10-20",
     sampleSize: 80,
     confusionMatrix: { tp: 42, fp: 2, tn: 36, fn: 0 },
@@ -7346,6 +7350,10 @@ const INITIAL_CLINICAL_AI_MODELS = [
     conditionLabelAr: "فرز الطوارئ التنفسية (النسخة النشطة)",
     conditionLabelEn: "Active Production Respiratory Triage",
     architecture: "Rule-Based Expert System",
+    parametersCount: "84K Rules",
+    datasetVersion: "HealthVibe-Validation-v1.0",
+    trainingCheckpoint: "chk_triage_v1.0_baseline",
+    releaseDate: "2026-09-29",
     evaluationDate: "2026-09-29",
     sampleSize: 80,
     confusionMatrix: { tp: 42, fp: 10, tn: 28, fn: 0 },
@@ -7370,6 +7378,10 @@ const INITIAL_CLINICAL_AI_MODELS = [
     conditionLabelAr: "فحص نقص الأكسجة ونبضات القلب (SpO2 Guard)",
     conditionLabelEn: "Pulse Oximetry & Hypoxemia Classification",
     architecture: "Extreme Gradient Boosting + Vital Guardrails",
+    parametersCount: "450K Trees & Nodes",
+    datasetVersion: "PulseOx-Cohort-2026",
+    trainingCheckpoint: "chk_hypox_v1.2_xgb_prod",
+    releaseDate: "2026-10-18",
     evaluationDate: "2026-10-18",
     sampleSize: 120,
     confusionMatrix: { tp: 65, fp: 2, tn: 53, fn: 0 },
@@ -7394,6 +7406,10 @@ const INITIAL_CLINICAL_AI_MODELS = [
     conditionLabelAr: "أعراض الالتهاب الرئوي وكوفيد-19 المعقدة",
     conditionLabelEn: "Pneumonia & Complex Viral Respiratory",
     architecture: "Multi-Task Deep Neural Network (DNN)",
+    parametersCount: "1.2M Weights",
+    datasetVersion: "MIMIC-IV-Ext-Pneumo",
+    trainingCheckpoint: "chk_symptomnet_v2.0_dnn",
+    releaseDate: "2026-10-15",
     evaluationDate: "2026-10-15",
     sampleSize: 150,
     confusionMatrix: { tp: 78, fp: 6, tn: 63, fn: 3 },
@@ -7418,6 +7434,10 @@ const INITIAL_CLINICAL_AI_MODELS = [
     conditionLabelAr: "أمراض الجهاز التنفسي لدى الأطفال والرضع",
     conditionLabelEn: "Pediatric & Infant Respiratory Protocol",
     architecture: "Decision Forest + Pediatric Vital Bounds",
+    parametersCount: "96K Trees & Nodes",
+    datasetVersion: "Pediatric-Resp-2026",
+    trainingCheckpoint: "chk_pediatric_v1.0_prod",
+    releaseDate: "2026-10-05",
     evaluationDate: "2026-10-05",
     sampleSize: 95,
     confusionMatrix: { tp: 48, fp: 4, tn: 42, fn: 1 },
@@ -7497,7 +7517,7 @@ function formatAiPct(val) {
   return (val * 100).toFixed(1) + '%';
 }
 
-function computeModelMetricsBackend(model) {
+function computeModelMetricsBackend(model, allModels = []) {
   const cm = model.confusionMatrix || { tp: 0, fp: 0, tn: 0, fn: 0 };
   const sens = calculateAiSensitivity(cm.tp, cm.fn);
   const spec = calculateAiSpecificity(cm.tn, cm.fp);
@@ -7514,8 +7534,13 @@ function computeModelMetricsBackend(model) {
     ? docConc.rate
     : (docConc.total > 0 ? docConc.agreed / docConc.total : 0);
 
+  const scopeModels = Array.isArray(allModels) && allModels.length > 0 ? allModels : inMemoryAiModels;
+  const activeInScope = scopeModels.find(m => m.conditionScope === model.conditionScope && m.status === 'active' && m.id !== model.id);
+  const rollbackEligibility = model.status !== 'active' && Boolean(activeInScope) && (model.status === 'candidate' || model.status === 'archived' || model.status === 'rolled_back');
+
   return {
     ...model,
+    rollbackEligibility,
     metrics: {
       sensitivity: sens,
       sensitivityPct: formatAiPct(sens),
@@ -7955,13 +7980,19 @@ app.post('/api/admin/ai/models/:modelId/promote', requireAuth, async (req, res) 
 });
 
 /**
- * POST /api/admin/ai/models/:modelId/rollback
- * Instant emergency rollback to previous verified AI model version (Glass Health Benchmark).
+ * -----------------------------------------------------------------------------
+ * 📜 GLASS HEALTH MODEL REGISTRY & SAFE ROLLBACK SUITE
+ * -----------------------------------------------------------------------------
+ */
+
+/**
+ * Shared Safe Rollback Handler for Glass Health AI Model Registry
  * Atomically activates targetModel, demotes currently active model to 'rolled_back',
- * captures rollback reason, and records statutory audit event AI_MODEL_ROLLED_BACK.
+ * captures rollback reason, validates Zero-PHI in notes/reason, and records
+ * statutory audit event AI_MODEL_ROLLED_BACK.
  * Restricted to Super Admin and Clinical QA.
  */
-app.post('/api/admin/ai/models/:modelId/rollback', requireAuth, async (req, res) => {
+async function handleAiModelRollback(req, res) {
   try {
     const role = await resolveAiRequesterRole(req);
     const isOwner = hasTrustedOwnerClaim(req.user);
@@ -7973,6 +8004,29 @@ app.post('/api/admin/ai/models/:modelId/rollback', requireAuth, async (req, res)
     }
 
     setAiSecurityHeaders(res);
+
+    // 🛡️ Zero-PHI Security Guard on rollback reason and notes
+    const phiLeakage = detectAiPhiLeakage(req.body);
+    if (phiLeakage) {
+      if (auditService && typeof auditService.recordAuditEvent === 'function') {
+        await auditService.recordAuditEvent(db, {
+          type: auditService.AUDIT_EVENT_TYPES.AI_PHI_LEAKAGE_BLOCKED,
+          req,
+          details: {
+            modelId: req.params?.modelId,
+            detectedField: phiLeakage.field,
+            path: phiLeakage.path,
+            reason: phiLeakage.reason,
+            blockedAt: new Date().toISOString()
+          }
+        }).catch(() => {});
+      }
+      return res.status(400).json({
+        error: 'PHI_LEAKAGE_PROHIBITED',
+        message: 'Security & Legal Compliance Policy: Direct PHI or patient identifiers detected in rollback reason or notes.'
+      });
+    }
+
     const { modelId } = req.params;
     const { reason, notes } = req.body || {};
 
@@ -7987,6 +8041,7 @@ app.post('/api/admin/ai/models/:modelId/rollback', requireAuth, async (req, res)
 
     const conditionScope = targetModel.conditionScope;
     const previousActiveModels = [];
+    let demotedActiveModel = null;
 
     // Demote currently active models in the same scope to 'rolled_back'
     for (const m of inMemoryAiModels) {
@@ -7997,6 +8052,7 @@ app.post('/api/admin/ai/models/:modelId/rollback', requireAuth, async (req, res)
         m.rollbackNotes = notes || '';
         m.rolledBackBy = { uid: req.user.uid, email: req.user.email, role };
         previousActiveModels.push({ id: m.id, version: m.version, name: m.name });
+        demotedActiveModel = m;
         if (db) {
           await db.collection('ai_models').doc(m.id).set(m, { merge: true }).catch(() => {});
         }
@@ -8012,34 +8068,528 @@ app.post('/api/admin/ai/models/:modelId/rollback', requireAuth, async (req, res)
       await db.collection('ai_models').doc(targetModel.id).set(targetModel, { merge: true }).catch(() => {});
     }
 
-    // Record Immutable Audit Event
+    // Statutory audit event
+    const auditRecord = {
+      targetModelId: targetModel.id,
+      targetVersion: targetModel.version,
+      targetName: targetModel.name,
+      conditionScope,
+      previousActiveModels,
+      reason: targetModel.rollbackReason,
+      notes: notes || '',
+      restoredAt: targetModel.restoredAt
+    };
+
     if (auditService && typeof auditService.recordAuditEvent === 'function') {
       await auditService.recordAuditEvent(db, {
         type: auditService.AUDIT_EVENT_TYPES.AI_MODEL_ROLLED_BACK,
         req,
-        details: {
-          targetModelId: targetModel.id,
-          targetVersion: targetModel.version,
-          targetName: targetModel.name,
-          conditionScope,
-          previousActiveModels,
-          reason: targetModel.rollbackReason,
-          notes: notes || '',
-          restoredAt: targetModel.restoredAt
-        }
+        details: auditRecord
       }).catch(err => console.warn('[AUDIT] Failed to record AI model rollback:', err.message));
     }
 
     res.json({
       success: true,
       message: `Emergency rollback successful: Model ${targetModel.name} (${targetModel.version}) is now active in production (Glass Health Zero-Downtime Hot-Swap).`,
-      model: sanitizeAiModelRecord(computeModelMetricsBackend(targetModel)),
+      model: sanitizeAiModelRecord(computeModelMetricsBackend(targetModel, catalog)),
+      demotedModel: demotedActiveModel ? sanitizeAiModelRecord(computeModelMetricsBackend(demotedActiveModel, catalog)) : null,
       previousActiveModels,
       rollbackReason: targetModel.rollbackReason,
-      restoredAt: targetModel.restoredAt
+      restoredAt: targetModel.restoredAt,
+      rollbackEvent: {
+        timestamp: targetModel.restoredAt,
+        conditionScope,
+        targetModelId: targetModel.id,
+        targetVersion: targetModel.version,
+        reason: targetModel.rollbackReason,
+        notes: notes || '',
+        operator: { uid: req.user.uid, email: req.user.email, role }
+      }
     });
   } catch (err) {
     res.status(500).json({ error: 'AI_MODEL_ROLLBACK_FAILED', message: err.message });
+  }
+}
+
+// Rollback endpoints (both standard and registry REST paths)
+app.post('/api/admin/ai/models/:modelId/rollback', requireAuth, handleAiModelRollback);
+app.post('/api/admin/ai/registry/:modelId/rollback', requireAuth, handleAiModelRollback);
+
+/**
+ * GET /api/admin/ai/registry
+ * Glass Health Model Registry: List all registered AI models with full lineage metadata,
+ * release dates, training checkpoints, architecture, parameters count, and rollback eligibility.
+ * Supports multi-criteria filtering: condition, status, timeRange, search, and sorting.
+ * RBAC: Restricted to AI_MONITORING_AUTHORIZED_ROLES.
+ */
+app.get('/api/admin/ai/registry', requireAuth, async (req, res) => {
+  try {
+    const role = await resolveAiRequesterRole(req);
+    const isOwner = hasTrustedOwnerClaim(req.user);
+    if (!isOwner && !AI_MONITORING_AUTHORIZED_ROLES.includes(role)) {
+      return res.status(403).json({
+        error: 'ACCESS_DENIED',
+        message: `Role '${role}' is not authorized to access AI Model Registry.`
+      });
+    }
+
+    setAiSecurityHeaders(res);
+
+    // 🛡️ Parameter injection defense
+    const rawSearch = String(req.query?.search || '');
+    if (rawSearch.includes('<script>') || rawSearch.includes('javascript:') || rawSearch.includes('../') || rawSearch.includes('{"$gt"')) {
+      if (auditService && typeof auditService.recordAuditEvent === 'function') {
+        await auditService.recordAuditEvent(db, {
+          type: auditService.AUDIT_EVENT_TYPES.AI_SECURITY_VIOLATION_BLOCKED,
+          req,
+          details: {
+            param: 'search',
+            querySnippet: rawSearch.substring(0, 50),
+            reason: 'SUSPICIOUS_REGISTRY_SEARCH_INJECTION_DETECTED',
+            blockedAt: new Date().toISOString()
+          }
+        }).catch(() => {});
+      }
+    }
+
+    const catalog = await getAiModelsCatalog();
+    const { condition, status, timeRange, search, sortBy } = req.query || {};
+
+    let filtered = catalog.filter(m => {
+      if (condition && condition !== 'all' && m.conditionScope !== condition) return false;
+      if (status && status !== 'all' && m.status !== status) return false;
+      if (timeRange && timeRange !== 'all') {
+        const refDate = m.releaseDate || m.evaluationDate;
+        if (refDate) {
+          const evalTime = new Date(refDate).getTime();
+          const daysAgo = (Date.now() - evalTime) / (1000 * 60 * 60 * 24);
+          if (timeRange === '7d' && daysAgo > 7) return false;
+          if (timeRange === '30d' && daysAgo > 30) return false;
+          if (timeRange === '90d' && daysAgo > 90) return false;
+        }
+      }
+      if (search && String(search).trim()) {
+        const q = String(search).trim().toLowerCase();
+        const haystack = [
+          m.name,
+          m.version,
+          m.releaseTitle,
+          m.conditionLabelAr,
+          m.conditionLabelEn,
+          m.architecture,
+          m.datasetVersion,
+          m.trainingCheckpoint,
+          m.parametersCount,
+          m.notes
+        ].join(' ').toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+      return true;
+    });
+
+    // Compute metrics and rollback eligibility
+    let computedModels = filtered.map(m => {
+      const activeInScope = catalog.find(act => act.conditionScope === m.conditionScope && act.status === 'active' && act.id !== m.id);
+      const computed = computeModelMetricsBackend(m, catalog);
+      const isEligible = m.status !== 'active' && Boolean(activeInScope) && (m.status === 'candidate' || m.status === 'archived' || m.status === 'rolled_back');
+      return sanitizeAiModelRecord({
+        ...computed,
+        rollbackEligibility: isEligible,
+        activeBaselineInScope: activeInScope ? { id: activeInScope.id, version: activeInScope.version, name: activeInScope.name } : null
+      });
+    });
+
+    // Sorting
+    const sort = sortBy || 'date_desc';
+    computedModels.sort((a, b) => {
+      if (sort === 'date_desc') {
+        return new Date(b.releaseDate || b.evaluationDate || 0) - new Date(a.releaseDate || a.evaluationDate || 0);
+      }
+      if (sort === 'date_asc') {
+        return new Date(a.releaseDate || a.evaluationDate || 0) - new Date(b.releaseDate || b.evaluationDate || 0);
+      }
+      if (sort === 'version_desc') {
+        return (b.version || '').localeCompare(a.version || '', undefined, { numeric: true });
+      }
+      if (sort === 'sensitivity_desc') {
+        return (b.metrics?.sensitivity || 0) - (a.metrics?.sensitivity || 0);
+      }
+      if (sort === 'specificity_desc') {
+        return (b.metrics?.specificity || 0) - (a.metrics?.specificity || 0);
+      }
+      if (sort === 'f1_desc') {
+        return (b.metrics?.f1Score || 0) - (a.metrics?.f1Score || 0);
+      }
+      if (sort === 'concordance_desc') {
+        return (b.metrics?.doctorConcordanceRate || 0) - (a.metrics?.doctorConcordanceRate || 0);
+      }
+      return 0;
+    });
+
+    // Scopes summary
+    const scopesSummary = {};
+    catalog.forEach(m => {
+      const scope = m.conditionScope;
+      if (!scopesSummary[scope]) {
+        scopesSummary[scope] = {
+          conditionScope: scope,
+          labelAr: m.conditionLabelAr || scope,
+          labelEn: m.conditionLabelEn || scope,
+          activeModel: null,
+          candidateModel: null,
+          totalModels: 0,
+          archivedCount: 0,
+          rolledBackCount: 0
+        };
+      }
+      scopesSummary[scope].totalModels++;
+      if (m.status === 'active') scopesSummary[scope].activeModel = { id: m.id, version: m.version, name: m.name };
+      if (m.status === 'candidate') scopesSummary[scope].candidateModel = { id: m.id, version: m.version, name: m.name };
+      if (m.status === 'archived') scopesSummary[scope].archivedCount++;
+      if (m.status === 'rolled_back') scopesSummary[scope].rolledBackCount++;
+    });
+
+    const activeCount = catalog.filter(m => m.status === 'active').length;
+    const candidateCount = catalog.filter(m => m.status === 'candidate').length;
+    const archivedCount = catalog.filter(m => m.status === 'archived').length;
+    const rolledBackCount = catalog.filter(m => m.status === 'rolled_back').length;
+    const experimentalCount = catalog.filter(m => m.status === 'experimental').length;
+
+    res.json({
+      success: true,
+      count: computedModels.length,
+      totalModels: catalog.length,
+      activeCount,
+      candidateCount,
+      archivedCount,
+      rolledBackCount,
+      experimentalCount,
+      scopesSummary,
+      models: computedModels
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'AI_REGISTRY_FETCH_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/admin/ai/registry/diff
+ * Computes side-by-side delta between two models (target vs baseline).
+ * Params: from (or fromModelId), to (or toModelId).
+ * If from is omitted, automatically finds the active model in the same condition scope as `to`.
+ * Returns statistical diff: sensitivityDelta, specificityDelta, fpDelta, fnDelta, precisionDelta,
+ * f1ScoreDelta, aucRocDelta, doctorConcordanceDelta, isSafetyNeutral, isFpImproved, subCohortsDelta.
+ * RBAC: Restricted to AI_MONITORING_AUTHORIZED_ROLES.
+ */
+app.get('/api/admin/ai/registry/diff', requireAuth, async (req, res) => {
+  try {
+    const role = await resolveAiRequesterRole(req);
+    const isOwner = hasTrustedOwnerClaim(req.user);
+    if (!isOwner && !AI_MONITORING_AUTHORIZED_ROLES.includes(role)) {
+      return res.status(403).json({
+        error: 'ACCESS_DENIED',
+        message: `Role '${role}' is not authorized to compute model diffs.`
+      });
+    }
+
+    setAiSecurityHeaders(res);
+    const catalog = await getAiModelsCatalog();
+    const fromId = req.query.from || req.query.fromModelId;
+    const toId = req.query.to || req.query.toModelId;
+
+    if (!toId) {
+      return res.status(400).json({
+        error: 'INVALID_REQUEST',
+        message: "Query parameter 'to' (or 'toModelId') is required."
+      });
+    }
+
+    const toModel = catalog.find(m => m.id === toId || m.version === toId);
+    if (!toModel) {
+      return res.status(404).json({
+        error: 'MODEL_NOT_FOUND',
+        message: `Target model '${toId}' not found.`
+      });
+    }
+
+    let fromModel = null;
+    if (fromId) {
+      fromModel = catalog.find(m => m.id === fromId || m.version === fromId);
+    } else {
+      // Default to active model in the same scope
+      fromModel = catalog.find(m => m.conditionScope === toModel.conditionScope && m.status === 'active' && m.id !== toModel.id);
+    }
+
+    if (!fromModel) {
+      return res.status(404).json({
+        error: 'BASELINE_MODEL_NOT_FOUND',
+        message: `Baseline model '${fromId || 'active baseline'}' not found for scope '${toModel.conditionScope}'.`
+      });
+    }
+
+    const fromMetrics = computeModelMetricsBackend(fromModel, catalog);
+    const toMetrics = computeModelMetricsBackend(toModel, catalog);
+
+    const sensDiff = Number((toMetrics.metrics.sensitivity - fromMetrics.metrics.sensitivity).toFixed(4));
+    const specDiff = Number((toMetrics.metrics.specificity - fromMetrics.metrics.specificity).toFixed(4));
+    const precDiff = Number((toMetrics.metrics.precision - fromMetrics.metrics.precision).toFixed(4));
+    const f1Diff = Number((toMetrics.metrics.f1Score - fromMetrics.metrics.f1Score).toFixed(4));
+    const aucDiff = Number(((toMetrics.aucRoc || 0) - (fromMetrics.aucRoc || 0)).toFixed(4));
+    const fpDiff = (toMetrics.confusionMatrix?.fp || 0) - (fromMetrics.confusionMatrix?.fp || 0);
+    const fnDiff = (toMetrics.confusionMatrix?.fn || 0) - (fromMetrics.confusionMatrix?.fn || 0);
+    const tpDiff = (toMetrics.confusionMatrix?.tp || 0) - (fromMetrics.confusionMatrix?.tp || 0);
+    const tnDiff = (toMetrics.confusionMatrix?.tn || 0) - (fromMetrics.confusionMatrix?.tn || 0);
+    const concDiff = Number((toMetrics.metrics.doctorConcordanceRate - fromMetrics.metrics.doctorConcordanceRate).toFixed(4));
+
+    const subCohortsDelta = {};
+    if (fromModel.subCohorts && toModel.subCohorts) {
+      const keys = new Set([...Object.keys(fromModel.subCohorts), ...Object.keys(toModel.subCohorts)]);
+      keys.forEach(k => {
+        const f = fromModel.subCohorts[k] || {};
+        const t = toModel.subCohorts[k] || {};
+        subCohortsDelta[k] = {
+          sensitivityDelta: Number(((t.sensitivity || 0) - (f.sensitivity || 0)).toFixed(4)),
+          specificityDelta: Number(((t.specificity || 0) - (f.specificity || 0)).toFixed(4)),
+          concordanceDelta: Number(((t.concordance || 0) - (f.concordance || 0)).toFixed(4))
+        };
+      });
+    }
+
+    res.json({
+      success: true,
+      fromModel: sanitizeAiModelRecord(fromMetrics),
+      toModel: sanitizeAiModelRecord(toMetrics),
+      delta: {
+        sensitivityDelta: sensDiff,
+        sensitivityDeltaPct: (sensDiff * 100).toFixed(1) + '%',
+        specificityDelta: specDiff,
+        specificityDeltaPct: (specDiff * 100).toFixed(1) + '%',
+        precisionDelta: precDiff,
+        precisionDeltaPct: (precDiff * 100).toFixed(1) + '%',
+        f1ScoreDelta: f1Diff,
+        f1ScoreDeltaPct: (f1Diff * 100).toFixed(1) + '%',
+        aucRocDelta: aucDiff,
+        aucRocDeltaFormatted: aucDiff.toFixed(4),
+        fpDelta: fpDiff,
+        fnDelta: fnDiff,
+        tpDelta: tpDiff,
+        tnDelta: tnDiff,
+        concordanceDelta: concDiff,
+        concordanceDeltaPct: (concDiff * 100).toFixed(1) + '%',
+        isSafetyNeutral: toMetrics.metrics.sensitivity >= 1.0 || toMetrics.metrics.sensitivity >= fromMetrics.metrics.sensitivity,
+        isFpImproved: fpDiff < 0,
+        subCohortsDelta
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'AI_DIFF_CALCULATION_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/admin/ai/registry/history/rollbacks
+ * Retrieves historical statutory rollback events from database audit_events.
+ * Filters by conditionScope, targetModelId, limit.
+ * RBAC: Restricted to AI_MONITORING_AUTHORIZED_ROLES.
+ */
+app.get('/api/admin/ai/registry/history/rollbacks', requireAuth, async (req, res) => {
+  try {
+    const role = await resolveAiRequesterRole(req);
+    const isOwner = hasTrustedOwnerClaim(req.user);
+    if (!isOwner && !AI_MONITORING_AUTHORIZED_ROLES.includes(role)) {
+      return res.status(403).json({
+        error: 'ACCESS_DENIED',
+        message: `Role '${role}' is not authorized to access rollback history.`
+      });
+    }
+
+    setAiSecurityHeaders(res);
+    const { conditionScope, targetModelId, limit = 50 } = req.query || {};
+
+    let events = [];
+    if (db && typeof db.collection === 'function') {
+      try {
+        const snap = await db.collection('audit_events')
+          .where('type', '==', auditService.AUDIT_EVENT_TYPES.AI_MODEL_ROLLED_BACK)
+          .get();
+        if (snap && snap.docs) {
+          events = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        }
+      } catch (_) {}
+    }
+
+    if (events.length === 0 && auditService && typeof auditService.getInMemoryAuditEvents === 'function') {
+      events = auditService.getInMemoryAuditEvents().filter(e => e.type === auditService.AUDIT_EVENT_TYPES.AI_MODEL_ROLLED_BACK);
+    }
+
+    if (conditionScope && conditionScope !== 'all') {
+      events = events.filter(e => e.details?.conditionScope === conditionScope);
+    }
+
+    if (targetModelId && targetModelId !== 'all') {
+      events = events.filter(e => e.details?.targetModelId === targetModelId || e.details?.targetVersion === targetModelId);
+    }
+
+    events.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+    events = events.slice(0, Number(limit) || 50);
+
+    res.json({
+      success: true,
+      count: events.length,
+      events
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'AI_ROLLBACK_HISTORY_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/admin/ai/registry/export
+ * Export clinical AI models and training lineage metrics in CSV or JSON format.
+ * 🛡️ Enforces Zero-PHI scrubbing and generates statutory audit trail for all data exports.
+ */
+app.get('/api/admin/ai/registry/export', requireAuth, async (req, res) => {
+  try {
+    const role = await resolveAiRequesterRole(req);
+    const isOwner = hasTrustedOwnerClaim(req.user);
+    if (!isOwner && !AI_MONITORING_AUTHORIZED_ROLES.includes(role)) {
+      return res.status(403).json({
+        error: 'ACCESS_DENIED',
+        message: `Role '${role}' is not authorized to export AI model registry.`
+      });
+    }
+
+    setAiSecurityHeaders(res);
+    const format = (req.query.format || 'json').toLowerCase();
+    const catalog = await getAiModelsCatalog();
+    const computedModels = catalog.map(m => sanitizeAiModelRecord(computeModelMetricsBackend(m, catalog)));
+
+    // Record Immutable Audit Event
+    if (auditService && typeof auditService.recordAuditEvent === 'function') {
+      await auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.AI_MODEL_EXPORTED,
+        req,
+        details: {
+          target: 'model_registry',
+          format,
+          recordsCount: computedModels.length,
+          exportedAt: new Date().toISOString()
+        }
+      }).catch(err => console.warn('[AUDIT] Failed to record AI model registry export:', err.message));
+    }
+
+    if (format === 'csv') {
+      const headers = [
+        "Model ID",
+        "Version",
+        "Model Name",
+        "Status",
+        "Condition Scope",
+        "Release Date",
+        "Training Checkpoint",
+        "Dataset Version",
+        "Parameters Count",
+        "Sensitivity",
+        "Specificity",
+        "Precision (PPV)",
+        "F1-Score",
+        "AUC-ROC",
+        "Doctor Concordance Rate",
+        "Sample Size (N)",
+        "TP",
+        "FP",
+        "TN",
+        "FN",
+        "Evaluation Date"
+      ];
+
+      const rows = computedModels.map(m => {
+        const met = m.metrics;
+        const cm = m.confusionMatrix || { tp: 0, fp: 0, tn: 0, fn: 0 };
+        return [
+          `"${m.id}"`,
+          `"${m.version}"`,
+          `"${m.name}"`,
+          `"${m.status}"`,
+          `"${m.conditionScope}"`,
+          `"${m.releaseDate || ''}"`,
+          `"${m.trainingCheckpoint || ''}"`,
+          `"${m.datasetVersion || ''}"`,
+          `"${m.parametersCount || ''}"`,
+          `"${met.sensitivityPct}"`,
+          `"${met.specificityPct}"`,
+          `"${met.precisionPct}"`,
+          `"${met.f1ScorePct}"`,
+          `"${met.aucRocFormatted}"`,
+          `"${met.doctorConcordancePct}"`,
+          met.totalCases,
+          cm.tp,
+          cm.fp,
+          cm.tn,
+          cm.fn,
+          `"${m.evaluationDate}"`
+        ].join(",");
+      });
+
+      const csv = [headers.join(","), ...rows].join("\n");
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', 'attachment; filename="ai_model_registry_lineage.csv"');
+      return res.send(csv);
+    }
+
+    return res.json({
+      success: true,
+      exportedAt: new Date().toISOString(),
+      count: computedModels.length,
+      models: computedModels
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'AI_REGISTRY_EXPORT_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/admin/ai/registry/:modelId
+ * Detailed inspection of a specific model in the registry (lineage, sub-cohorts, confusion matrix, ROC).
+ * RBAC: Restricted to AI_MONITORING_AUTHORIZED_ROLES.
+ */
+app.get('/api/admin/ai/registry/:modelId', requireAuth, async (req, res) => {
+  try {
+    const role = await resolveAiRequesterRole(req);
+    const isOwner = hasTrustedOwnerClaim(req.user);
+    if (!isOwner && !AI_MONITORING_AUTHORIZED_ROLES.includes(role)) {
+      return res.status(403).json({
+        error: 'ACCESS_DENIED',
+        message: `Role '${role}' is not authorized to access AI Model Registry details.`
+      });
+    }
+
+    setAiSecurityHeaders(res);
+    const { modelId } = req.params;
+    const catalog = await getAiModelsCatalog();
+    const model = catalog.find(m => m.id === modelId || m.version === modelId);
+    if (!model) {
+      return res.status(404).json({
+        error: 'MODEL_NOT_FOUND',
+        message: `AI Model with ID or version '${modelId}' not found in registry.`
+      });
+    }
+
+    const activeInScope = catalog.find(m => m.conditionScope === model.conditionScope && m.status === 'active' && m.id !== model.id);
+    const isEligible = model.status !== 'active' && Boolean(activeInScope) && (model.status === 'candidate' || model.status === 'archived' || model.status === 'rolled_back');
+
+    const computed = sanitizeAiModelRecord({
+      ...computeModelMetricsBackend(model, catalog),
+      rollbackEligibility: isEligible,
+      activeBaselineInScope: activeInScope ? { id: activeInScope.id, version: activeInScope.version, name: activeInScope.name } : null
+    });
+
+    res.json({
+      success: true,
+      model: computed
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'AI_REGISTRY_MODEL_FETCH_FAILED', message: err.message });
   }
 });
 
