@@ -840,8 +840,10 @@ const roleLabels = {
   doctor_pending: "طبيب بانتظار الاعتماد",
   doctor: "حساب طبيب موثق",
   clinic_admin: "مدير عيادة",
-  support: "دعم فني",
-  super_admin: "Owner"
+  support: "دعم فني (Support)",
+  ops: "مدير عمليات (Operations Admin)",
+  clinical_qa: "ضمان جودة سريرية (Clinical QA)",
+  super_admin: "المدير العام (Super Admin)"
 };
 
 const englishTitles = {
@@ -875,8 +877,10 @@ const englishRoleLabels = {
   doctor_pending: "Pending doctor account",
   doctor: "Verified doctor account",
   clinic_admin: "Clinic admin account",
-  support: "Support account",
-  super_admin: "Owner"
+  support: "Customer Support (Zero-PHI)",
+  ops: "Operations Admin (Zero-PHI)",
+  clinical_qa: "Clinical QA Admin (Aggregate-Only)",
+  super_admin: "Super Admin (Owner)"
 };
 
 const englishNames = {
@@ -16239,19 +16243,46 @@ async function renderAdminUsers() {
       filteredUsers = users.filter(u => !u.emailVerified && !u.isOwner);
     } else if (currentAdminUsersFilter === "verified") {
       filteredUsers = users.filter(u => u.emailVerified || u.isOwner);
+    } else if (currentAdminUsersFilter === "admins") {
+      filteredUsers = users.filter(u => isAdminRole(u.role) || u.isOwner || isOwnerUser(u.email));
+    } else if (currentAdminUsersFilter === "super_admin") {
+      filteredUsers = users.filter(u => u.role === ROLES.SUPER_ADMIN || u.isOwner || isOwnerUser(u.email));
+    } else if (currentAdminUsersFilter === "ops") {
+      filteredUsers = users.filter(u => u.role === ROLES.OPS);
+    } else if (currentAdminUsersFilter === "clinical_qa") {
+      filteredUsers = users.filter(u => u.role === ROLES.CLINICAL_QA);
+    } else if (currentAdminUsersFilter === "support") {
+      filteredUsers = users.filter(u => u.role === ROLES.SUPPORT);
+    } else if (currentAdminUsersFilter === "doctors") {
+      filteredUsers = users.filter(u => isAnyDoctorRole(u.role));
+    } else if (currentAdminUsersFilter === "patients") {
+      filteredUsers = users.filter(u => !isAdminRole(u.role) && !isAnyDoctorRole(u.role) && !u.isOwner && !isOwnerUser(u.email));
     }
+
+    const adminStaffCount = users.filter(u => isAdminRole(u.role) || u.isOwner || isOwnerUser(u.email)).length;
+    const doctorsCount = users.filter(u => isAnyDoctorRole(u.role)).length;
+    const patientsCount = totalUsers - adminStaffCount - doctorsCount;
 
     let html = `
       <!-- Filter Tabs -->
-      <div class="status-filter-tabs" style="margin-bottom: 16px;">
+      <div class="status-filter-tabs" style="margin-bottom: 16px; display: flex; flex-wrap: wrap; gap: 8px;">
         <button type="button" class="status-filter-tab ${currentAdminUsersFilter === 'all' ? 'active' : ''}" onclick="setAdminUsersFilter('all')">
           ${isEn ? 'All Accounts' : 'كافة الحسابات'} (${totalUsers})
         </button>
-        <button type="button" class="status-filter-tab ${currentAdminUsersFilter === 'unverified' ? 'active' : ''}" onclick="setAdminUsersFilter('unverified')" style="${unverifiedUsersCount > 0 ? 'color: #f59e0b; font-weight: 700;' : ''}">
-          ${isEn ? 'Unverified / Regular' : 'الحسابات غير المؤكدة'} (${unverifiedUsersCount}) ${unverifiedUsersCount > 0 ? '⚠️' : ''}
+        <button type="button" class="status-filter-tab ${currentAdminUsersFilter === 'admins' ? 'active' : ''}" onclick="setAdminUsersFilter('admins')" style="font-weight: 700;">
+          🛡️ ${isEn ? 'Admin Sub-Roles' : 'أدوار الإدارة'} (${adminStaffCount})
+        </button>
+        <button type="button" class="status-filter-tab ${currentAdminUsersFilter === 'doctors' ? 'active' : ''}" onclick="setAdminUsersFilter('doctors')">
+          🩺 ${isEn ? 'Doctors' : 'الأطباء'} (${doctorsCount})
+        </button>
+        <button type="button" class="status-filter-tab ${currentAdminUsersFilter === 'patients' ? 'active' : ''}" onclick="setAdminUsersFilter('patients')">
+          👤 ${isEn ? 'Patients' : 'المرضى'} (${patientsCount >= 0 ? patientsCount : 0})
         </button>
         <button type="button" class="status-filter-tab ${currentAdminUsersFilter === 'verified' ? 'active' : ''}" onclick="setAdminUsersFilter('verified')">
-          ${isEn ? 'Verified Accounts' : 'الحسابات المؤكدة'} (${verifiedUsersCount}) ✓
+          ${isEn ? 'Verified' : 'المؤكدة'} (${verifiedUsersCount}) ✓
+        </button>
+        <button type="button" class="status-filter-tab ${currentAdminUsersFilter === 'unverified' ? 'active' : ''}" onclick="setAdminUsersFilter('unverified')" style="${unverifiedUsersCount > 0 ? 'color: #f59e0b; font-weight: 700;' : ''}">
+          ${isEn ? 'Unverified' : 'غير المؤكدة'} (${unverifiedUsersCount}) ${unverifiedUsersCount > 0 ? '⚠️' : ''}
         </button>
       </div>
 
@@ -16339,11 +16370,17 @@ async function renderAdminUsers() {
             </td>
             <td style="padding: 12px 14px; text-align: end;">
               <select ${hasPermission(PERMISSIONS.MANAGE_USER_ROLES) ? "" : "disabled"} onchange="changeUserRole('${u.id}', this.value, '${userNameStr}', '${u.email}')" class="admin-role-select">
-                <option value="patient" ${role === 'patient' ? 'selected' : ''}>👤 ${isEn ? 'Patient (مريض)' : 'حساب مريض'}</option>
-                <option value="doctor" ${role === 'doctor' ? 'selected' : ''}>🩺 ${isEn ? 'Doctor (طبيب موثق)' : 'طبيب موثق'}</option>
-                <option value="clinic_admin" ${role === 'clinic_admin' ? 'selected' : ''}>🏥 ${isEn ? 'Clinic admin (مدير عيادة)' : 'مدير عيادة'}</option>
-                <option value="support" ${role === 'support' ? 'selected' : ''}>🎧 ${isEn ? 'Support (دعم فني)' : 'دعم فني (محدود)'}</option>
-                <option value="super_admin" ${role === 'super_admin' ? 'selected' : ''}>👑 Owner</option>
+                <optgroup label="${isEn ? 'Administrative Sub-Roles (Least-Privilege)' : 'أدوار الإدارة (صلاحيات مقيدة)'}">
+                  <option value="super_admin" ${role === 'super_admin' ? 'selected' : ''}>👑 ${isEn ? 'Super Admin (Owner)' : 'المدير العام (Super Admin)'}</option>
+                  <option value="ops" ${role === 'ops' ? 'selected' : ''}>⚙️ ${isEn ? 'Operations Admin (Zero-PHI)' : 'مدير العمليات (Operations Admin)'}</option>
+                  <option value="clinical_qa" ${role === 'clinical_qa' ? 'selected' : ''}>🔬 ${isEn ? 'Clinical QA Admin (Aggregate-Only)' : 'ضمان الجودة السريرية (Clinical QA)'}</option>
+                  <option value="support" ${role === 'support' ? 'selected' : ''}>🎧 ${isEn ? 'Customer Support (Zero-PHI)' : 'الدعم الفني (Customer Support)'}</option>
+                  <option value="clinic_admin" ${role === 'clinic_admin' ? 'selected' : ''}>🏥 ${isEn ? 'Clinic Admin' : 'مدير عيادة (Clinic Admin)'}</option>
+                </optgroup>
+                <optgroup label="${isEn ? 'Clinical & Patient Accounts' : 'حسابات الأطباء والمرضى'}">
+                  <option value="doctor" ${role === 'doctor' ? 'selected' : ''}>🩺 ${isEn ? 'Doctor (طبيب موثق)' : 'طبيب موثق'}</option>
+                  <option value="patient" ${role === 'patient' ? 'selected' : ''}>👤 ${isEn ? 'Patient (مريض)' : 'حساب مريض'}</option>
+                </optgroup>
               </select>
             </td>
           </tr>
