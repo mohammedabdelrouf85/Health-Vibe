@@ -195,6 +195,7 @@ const sandbox = {
   },
   console,
   Buffer,
+  URL,
   setTimeout,
   clearTimeout
 };
@@ -421,6 +422,118 @@ const app = sandbox.module.exports;
     );
     assert.ok(docAuditEvent, 'Audit event CLINIC_DOCTORS_UPDATED must be recorded');
     console.log('  ✓ Doctor affiliations synchronized with doctor profile and audit trail.\n');
+
+    // ── TEST 8: Security & Legal: HTTPS Map URL & Phone Format Validation ────
+    console.log('▶ TEST 8: Map URL Validation (HTTPS/Whitelisted Domains) & Phone Defense');
+    // Insecure HTTP map URL rejected
+    const httpMapRes = await api('POST', '/api/admin/clinics', 'token-super-admin', {
+      nameAr: 'عيادة الدقي التجريبية',
+      city: 'Giza',
+      addressAr: 'شارع مصدق',
+      phone: '+20 2 3760 1111',
+      mapUrl: 'http://maps.google.com/?q=30.0,31.0'
+    });
+    assert.strictEqual(httpMapRes.status, 400, 'HTTP insecure map URL must be rejected');
+    assert.strictEqual(httpMapRes.data.error, 'INVALID_MAP_URL');
+
+    // Untrusted domain map URL rejected (prevent open redirect / SSRF)
+    const untrustedMapRes = await api('POST', '/api/admin/clinics', 'token-super-admin', {
+      nameAr: 'عيادة المهندسين',
+      city: 'Giza',
+      addressAr: 'شارع سوريا',
+      phone: '+20 2 3760 2222',
+      mapUrl: 'https://malicious-tracker.com/redirect'
+    });
+    assert.strictEqual(untrustedMapRes.status, 400, 'Untrusted map domain must be rejected');
+    assert.strictEqual(untrustedMapRes.data.error, 'INVALID_MAP_URL');
+
+    // Invalid phone number format rejected
+    const invalidPhoneRes = await api('POST', '/api/admin/clinics', 'token-super-admin', {
+      nameAr: 'عيادة الزمالك',
+      city: 'Cairo',
+      addressAr: 'شارع 26 يوليو',
+      phone: 'invalid-alpha-phone-number',
+      mapUrl: 'https://maps.google.com/?q=30.0,31.0'
+    });
+    assert.strictEqual(invalidPhoneRes.status, 400, 'Malformed phone number must be rejected');
+    assert.strictEqual(invalidPhoneRes.data.error, 'INVALID_PHONE_FORMAT');
+    console.log('  ✓ Insecure protocols, untrusted domains, and invalid phone formats strictly blocked.\n');
+
+    // ── TEST 9: Security & Legal: Zero-PHI Directory & PII Masking Verification ──
+    console.log('▶ TEST 9: Zero-PHI Verification & Doctor PII Masking in Branch Directory');
+    const catalogRes = await api('GET', '/api/admin/clinics?includeDoctors=true', 'token-super-admin');
+    assert.strictEqual(catalogRes.status, 200);
+
+    catalogRes.data.clinics.forEach(c => {
+      // 1. Zero PHI check
+      assert.strictEqual(c.diagnoses, undefined, 'Branch directory must never contain diagnoses');
+      assert.strictEqual(c.vitals, undefined, 'Branch directory must never contain vitals');
+      assert.strictEqual(c.medicalHistory, undefined, 'Branch directory must never contain medical history');
+      assert.strictEqual(c.symptoms, undefined, 'Branch directory must never contain symptoms');
+      assert.strictEqual(c.cases, undefined, 'Branch directory must never contain raw clinical cases');
+
+      // 2. Doctor PII masking check
+      if (Array.isArray(c.doctors) && c.doctors.length > 0) {
+        c.doctors.forEach(doc => {
+          assert.strictEqual(doc.nationalId, undefined, 'Doctor national IDs must not leak');
+          assert.strictEqual(doc.licenseDocumentUrl, undefined, 'Syndicate documents must not leak');
+          if (doc.email) {
+            assert.ok(doc.email.includes('***'), `Doctor email must be masked: ${doc.email}`);
+          }
+        });
+      }
+    });
+    console.log('  ✓ Zero PHI confirmed across all branch records; doctor email addresses masked.\n');
+
+    // ── TEST 10: Security & Legal: Cross-Clinic Patient Isolation Guard ────────
+    console.log('▶ TEST 10: Cross-Clinic Medical Data Isolation Guard (/api/admin/clinics/:id/patients)');
+    // Cairo admin attempting to query Giza clinic patients
+    const crossPatientRes = await api('GET', '/api/admin/clinics/clinic_giza_west/patients', 'token-clinic-admin-cairo');
+    assert.strictEqual(crossPatientRes.status, 403, 'Cross-clinic patient inquiry must be rejected with 403');
+    assert.strictEqual(crossPatientRes.data.error, 'CROSS_CLINIC_LEAKAGE_PROHIBITED');
+
+    // Non-clinical Ops admin attempting to query clinic patients
+    const opsPatientRes = await api('GET', '/api/admin/clinics/clinic_cairo_main/patients', 'token-ops-admin');
+    assert.strictEqual(opsPatientRes.status, 403, 'Ops admin must be barred from patient clinical rosters');
+    assert.ok(
+      opsPatientRes.data.error === 'ACCESS_DENIED' || opsPatientRes.data.error === 'LEAST_PRIVILEGE_RESTRICTION',
+      'Must return ACCESS_DENIED or LEAST_PRIVILEGE_RESTRICTION'
+    );
+
+    // Verify audit event logged for cross-clinic leakage attempt
+    const crossLeakEvent = Array.from(docs.audit_events.values()).find(
+      e => e.type === 'CROSS_CLINIC_LEAKAGE_ATTEMPT_BLOCKED'
+    );
+    assert.ok(crossLeakEvent, 'Incident CROSS_CLINIC_LEAKAGE_ATTEMPT_BLOCKED must be audited');
+    assert.strictEqual(crossLeakEvent.actor.uid, 'user-clinic-admin-cairo');
+    console.log('  ✓ Cross-clinic patient leakage prevented; security violation logged to audit trail.\n');
+
+    // ── TEST 11: Security & Legal: AES-256-GCM Encryption Service Integration ──
+    console.log('▶ TEST 11: AES-256-GCM Encryption Service at Rest (AEAD)');
+    const { encryptionService } = require('../backend/encryption-service');
+
+    const sensitiveBranchData = JSON.stringify({
+      hotlineDirectDispatchPin: '8849-SECRET-PIN',
+      emergencyBackupPhone: '+20 100 888 7777',
+      telehealthEncryptedStreamKey: 'stream_sec_xyz9988'
+    });
+
+    const encryptedEnvelope = encryptionService.encrypt(sensitiveBranchData, 'clinic_cairo_main');
+    assert.strictEqual(encryptedEnvelope.algorithm, 'AES-256-GCM', 'Must use AES-256-GCM');
+    assert.ok(encryptedEnvelope.ciphertext, 'Ciphertext must exist');
+    assert.ok(encryptedEnvelope.iv, 'IV must exist (96 bits)');
+    assert.ok(encryptedEnvelope.authTag, 'AuthTag must exist (128 bits)');
+
+    // Decrypt and verify
+    const decrypted = encryptionService.decrypt(encryptedEnvelope, 'clinic_cairo_main');
+    const parsed = JSON.parse(decrypted);
+    assert.strictEqual(parsed.hotlineDirectDispatchPin, '8849-SECRET-PIN');
+
+    // Tampered AAD detection
+    assert.throws(() => {
+      encryptionService.decrypt(encryptedEnvelope, 'clinic_foreign_tampered');
+    }, /DECRYPTION_AUTH_FAILED/, 'Tampered associated data must fail decryption');
+    console.log('  ✓ AES-256-GCM encryption verified with cryptographic tamper resistance.\n');
 
     console.log('==================================================================');
     console.log('✅ ALL BRANCHES & CLINICS MANAGER TESTS PASSED (100% SUCCESS)');

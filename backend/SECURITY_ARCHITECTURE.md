@@ -98,5 +98,31 @@
    - سياسة RLS `doctor_assigned_cases_only` على جدول `clinical_cases`: تمنع استعراض أو تعديل الحالات التابعة لأطباء آخرين.
    - سياسة RLS `doctor_patient_history_access` على جدول `patient_history`: تمنع الطبيب من استعراض التاريخ الطبي لمرضى خارج عيادته واختصاصه.
 
+---
+
+### 7. إدارة العيادات والمستشفيات والفروع (Branches & Clinics Manager — Multi-Branch Isolation & Zero-Leakage Security):
+
+1. **عزل الصلاحيات ومنع التسريب الجانبي (Strict Multi-Tenant Branch Isolation)**:
+   - يتم عزل صلاحيات مدير الفرع (`clinic_admin`) بشكل قطعي عن الفروع الأخرى عبر التحقق السيرفري الصارم (`scope.clinicId === targetClinicId`).
+   - محاولات الوصول أو التعديل المتقاطع بين الفروع تُرفض فوراً برمز `403 ACCESS_DENIED`.
+   - الاستعلام عن سجلات المرضى والحالات الطبية التابعة لفرع آخر محظور قطيعاً برمز `403 CROSS_CLINIC_LEAKAGE_PROHIBITED` مع تدوين حادثة أمنية في سجل التدقيق (`CROSS_CLINIC_LEAKAGE_ATTEMPT_BLOCKED`).
+
+2. **انعدام البيانات الطبية في سجل الدليل الإداري (Zero-PHI in Administrative Directory)**:
+   - سجلات الفروع والمراكز الطبية معزولة كلياً عن المستودع السريري، ولا تحوي أو تُرجع إطلاقاً أي معلومات تشخيصية أو مؤشرات حيوية أو سجلات مرضية (Zero Patient Health Information).
+   - يتم حجب وإخفاء بيانات الاتصال الشخصية للأطباء المعتمدين بالفرع (`maskBranchDoctorEmail`) وحظر تسريب الهويات الوطنية أو التراخيص النقابية الحساسة للمستخدمين العاديين.
+
+3. **التشفير الشامل وحماية البيانات (Full In-Transit & At-Rest Encryption)**:
+   - **أثناء النقل (In-Transit):** فرض بروتوكول TLS 1.3 وتشفير HTTPS الإلزامي لكافة الاستدعاءات وتبادل البيانات.
+   - **في السكون (At-Rest):** تشفير السجلات الحساسة والملفات السريرية المخزنة عبر خوارزمية AES-256-GCM ذاتية المصادقة (AEAD) ومفاتيح تشفير مشتقة بـ PBKDF2 وفق معايير HIPAA و GDPR والقانون المصري لحماية البيانات رقم 151 لسنة 2020.
+
+4. **تأمين روابط الخرائط والوقاية من هجمات الحقن (Map URL Validation & SSRF / XSS Defense)**:
+   - تفرض دالة `validateAndSanitizeMapUrl` بروتوكول `https://` المشفر حصراً، وتتحقق من القائمة البيضاء للنطاقات الجغرافية الموثوقة (`maps.google.com`, `goo.gl`, `openstreetmap.org`, `waze.com`).
+   - رفض أي روابط تحتوي على بروتوكولات غير آمنة (`http://`, `javascript:`, `data:`) لمنع هجمات التوجيه الخبيث أو الاستغلال عبر الخادم (SSRF).
+   - تطهير أرقام الهواتف عبر `sanitizeBranchPhone` والنصوص والعناوين عبر `sanitizeBranchText` لردع هجمات الـ Stored XSS.
+
+5. **حماية الفرع الرئيسي وسجل التدقيق السيادي (Immutable Audit Trail)**:
+   - حظر حذف الفرع الطبي الرئيسي للمؤسسة (`isPrimary: true`) لضمان استمرارية التشغيل ومنع التخريب العرضي (`CANNOT_DELETE_PRIMARY_BRANCH`).
+   - توثيق وتثبيت كل عملية إضافة (`CLINIC_BRANCH_CREATED`)، أو تعديل (`CLINIC_BRANCH_UPDATED`)، أو حذف (`CLINIC_BRANCH_DELETED`)، أو تحديث لأطباء الفرع (`CLINIC_DOCTORS_UPDATED`) في جدول `audit_events` بتوقيع الخادم وهوية الفاعل.
+
 
 

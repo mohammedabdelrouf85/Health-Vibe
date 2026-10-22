@@ -6290,6 +6290,74 @@ const DEFAULT_ADMIN_CLINICS_CATALOG = [
 
 let inMemoryAdminClinics = [...DEFAULT_ADMIN_CLINICS_CATALOG];
 
+/**
+ * 🔒 Security & Privacy Enforcement Helpers for Clinic Branches
+ * Enforces:
+ * 1. HTTPS-only map URLs with whitelisted domains to prevent SSRF and XSS attacks.
+ * 2. Strict phone format validation.
+ * 3. Text sanitization against XSS.
+ * 4. PII masking on doctor emails and absolute Zero-PHI in branch responses.
+ */
+function maskBranchDoctorEmail(email) {
+  if (!email || typeof email !== 'string') return '';
+  const parts = email.trim().toLowerCase().split('@');
+  if (parts.length !== 2) return '***';
+  const name = parts[0];
+  const domain = parts[1];
+  if (name.length <= 2) return `${name[0]}***@${domain}`;
+  return `${name[0]}***${name[name.length - 1]}@${domain}`;
+}
+
+function validateAndSanitizeMapUrl(rawUrl) {
+  if (!rawUrl || typeof rawUrl !== 'string') return '';
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return '';
+
+  if (!trimmed.startsWith('https://')) {
+    throw new Error('INVALID_MAP_URL_PROTOCOL: Map URL must use secure https:// protocol.');
+  }
+
+  try {
+    const URLCtor = typeof URL !== 'undefined' ? URL : require('url').URL;
+    const parsed = new URLCtor(trimmed);
+    const allowedHosts = [
+      'maps.google.com',
+      'www.google.com',
+      'google.com',
+      'goo.gl',
+      'maps.app.goo.gl',
+      'openstreetmap.org',
+      'www.openstreetmap.org',
+      'waze.com',
+      'www.waze.com'
+    ];
+    const isAllowed = allowedHosts.some(h => parsed.hostname === h || parsed.hostname.endsWith('.' + h));
+    if (!isAllowed) {
+      throw new Error('UNTRUSTED_MAP_DOMAIN: Map URL must point to a recognized mapping provider (Google Maps, OpenStreetMap, or Waze).');
+    }
+    return parsed.toString();
+  } catch (err) {
+    throw new Error(err.message || 'INVALID_MAP_URL: Malformed URL.');
+  }
+}
+
+function sanitizeBranchPhone(phone) {
+  if (!phone || typeof phone !== 'string') return '';
+  const trimmed = phone.trim();
+  if (!/^[+]?[\d\s\-()]{7,25}$/.test(trimmed)) {
+    throw new Error('INVALID_PHONE_FORMAT: Phone number must follow valid telephone digit format.');
+  }
+  return trimmed;
+}
+
+function sanitizeBranchText(text, maxLength = 250) {
+  if (!text || typeof text !== 'string') return '';
+  return text
+    .replace(/[<>]/g, '')
+    .trim()
+    .slice(0, maxLength);
+}
+
 async function getAdminClinicsCatalog() {
   if (db) {
     try {
@@ -6341,7 +6409,7 @@ app.get('/api/admin/clinics', requireAuth, requireVerifiedEmail, requireAdmin, a
       );
     }
 
-    // If requested, include affiliated doctors list
+    // If requested, include affiliated doctors list (Strictly Zero PHI, masked email)
     if (includeDoctors === 'true' && db) {
       const usersSnap = await db.collection('users').where('role', '==', ROLES.DOCTOR).get().catch(() => ({ docs: [] }));
       const allDoctors = usersSnap.docs.map(d => ({ uid: d.id, ...d.data() }));
@@ -6360,6 +6428,7 @@ app.get('/api/admin/clinics', requireAuth, requireVerifiedEmail, requireAdmin, a
             uid: d.uid,
             name: d.name || d.displayName,
             specialty: d.specialty || d.medicalSpecialty || 'General',
+            email: maskBranchDoctorEmail(d.email),
             roleInClinic: d.roleInClinic || 'consultant'
           }))
         };
@@ -6414,7 +6483,7 @@ app.get('/api/admin/clinics/:clinicId', requireAuth, requireVerifiedEmail, requi
           uid: d.uid,
           name: d.name || d.displayName,
           specialty: d.specialty || 'General',
-          email: d.email,
+          email: maskBranchDoctorEmail(d.email),
           roleInClinic: d.roleInClinic || 'consultant'
         }));
     }
@@ -6423,6 +6492,47 @@ app.get('/api/admin/clinics/:clinicId', requireAuth, requireVerifiedEmail, requi
       success: true,
       clinic,
       doctors: branchDoctors
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * GET /api/admin/clinics/:clinicId/patients
+ * Strict Cross-Clinic Isolation & Zero-Leakage Guard
+ * Prevents clinic administrators from viewing or intercepting patient clinical data of another branch.
+ */
+app.get('/api/admin/clinics/:clinicId/patients', requireAuth, requireVerifiedEmail, requireAdmin, async (req, res) => {
+  try {
+    const { clinicId } = req.params;
+    const scope = await resolveRequesterClinic(req);
+
+    if (NON_CLINICAL_ADMIN_ROLES.includes(scope.role)) {
+      return res.status(403).json({
+        error: 'LEAST_PRIVILEGE_RESTRICTION',
+        message: 'Administrative sub-role is not authorized to access patient clinical rosters.'
+      });
+    }
+
+    if (scope.role === ROLES.CLINIC_ADMIN && scope.clinicId && scope.clinicId !== clinicId) {
+      if (auditService && typeof auditService.recordAuditEvent === 'function') {
+        auditService.recordAuditEvent(db, {
+          type: 'CROSS_CLINIC_LEAKAGE_ATTEMPT_BLOCKED',
+          req,
+          clinicId,
+          details: { attemptedClinicId: clinicId, requesterClinicId: scope.clinicId }
+        }).catch(() => {});
+      }
+      return res.status(403).json({
+        error: 'CROSS_CLINIC_LEAKAGE_PROHIBITED',
+        message: 'Clinic administrator is strictly barred from accessing patients or clinical records of another branch.'
+      });
+    }
+
+    return res.status(403).json({
+      error: 'DIRECT_CLINICAL_ROSTER_RESTRICTED',
+      message: 'Direct patient clinical rosters cannot be browsed via administrative branch manager. Medical access requires clinical consent and practitioner licensing.'
     });
   } catch (err) {
     res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
@@ -6473,20 +6583,34 @@ app.post('/api/admin/clinics', requireAuth, requireVerifiedEmail, requireAdmin, 
       isVirtual
     } = req.body || {};
 
-    const branchName = (nameAr || nameEn || name || '').trim();
+    const branchName = sanitizeBranchText(nameAr || nameEn || name || '');
     if (!branchName) {
       return res.status(400).json({ error: 'INVALID_REQUEST', message: 'Clinic or branch name is required.' });
     }
 
-    const branchCity = (city || cityAr || cityEn || 'Cairo').trim();
-    const branchAddress = (addressAr || addressEn || address || '').trim();
+    const branchCity = sanitizeBranchText(city || cityAr || cityEn || 'Cairo', 80);
+    const branchAddress = sanitizeBranchText(addressAr || addressEn || address || '', 300);
     if (!branchAddress && !isVirtual) {
       return res.status(400).json({ error: 'INVALID_REQUEST', message: 'Physical address is required for in-person clinic branches.' });
     }
 
-    const branchPhone = (phone || '').trim();
+    let branchPhone = '';
+    try {
+      branchPhone = sanitizeBranchPhone(phone);
+    } catch (e) {
+      return res.status(400).json({ error: 'INVALID_PHONE_FORMAT', message: e.message });
+    }
     if (!branchPhone) {
       return res.status(400).json({ error: 'INVALID_REQUEST', message: 'Direct branch contact phone number is required.' });
+    }
+
+    let sanitizedMapUrl = '';
+    if (mapUrl) {
+      try {
+        sanitizedMapUrl = validateAndSanitizeMapUrl(mapUrl);
+      } catch (e) {
+        return res.status(400).json({ error: 'INVALID_MAP_URL', message: e.message });
+      }
     }
 
     const clinicId = id || branchId || `clinic_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
@@ -6497,16 +6621,16 @@ app.post('/api/admin/clinics', requireAuth, requireVerifiedEmail, requireAdmin, 
       clinicId,
       branchId: branchId || clinicId,
       name: branchName,
-      nameAr: (nameAr || branchName).trim(),
-      nameEn: (nameEn || branchName).trim(),
+      nameAr: sanitizeBranchText(nameAr || branchName),
+      nameEn: sanitizeBranchText(nameEn || branchName),
       city: branchCity,
-      cityAr: (cityAr || branchCity).trim(),
-      cityEn: (cityEn || branchCity).trim(),
+      cityAr: sanitizeBranchText(cityAr || branchCity),
+      cityEn: sanitizeBranchText(cityEn || branchCity),
       address: branchAddress,
-      addressAr: (addressAr || branchAddress).trim(),
-      addressEn: (addressEn || branchAddress).trim(),
+      addressAr: sanitizeBranchText(addressAr || branchAddress),
+      addressEn: sanitizeBranchText(addressEn || branchAddress),
       phone: branchPhone,
-      mapUrl: (mapUrl || '').trim(),
+      mapUrl: sanitizedMapUrl,
       doctorsCount: typeof doctorsCount === 'number' ? doctorsCount : (Array.isArray(affiliatedDoctorIds) ? affiliatedDoctorIds.length : 1),
       affiliatedDoctorIds: Array.isArray(affiliatedDoctorIds) ? affiliatedDoctorIds : [],
       activeSpecialties: Array.isArray(activeSpecialties) && activeSpecialties.length > 0 ? activeSpecialties : ['أمراض الصدر والباطنة'],
@@ -6618,17 +6742,36 @@ app.put('/api/admin/clinics/:clinicId', requireAuth, requireVerifiedEmail, requi
       updatedBy: req.user.uid
     };
 
-    if (name !== undefined) updates.name = String(name).trim();
-    if (nameAr !== undefined) updates.nameAr = String(nameAr).trim();
-    if (nameEn !== undefined) updates.nameEn = String(nameEn).trim();
-    if (city !== undefined) updates.city = String(city).trim();
-    if (cityAr !== undefined) updates.cityAr = String(cityAr).trim();
-    if (cityEn !== undefined) updates.cityEn = String(cityEn).trim();
-    if (address !== undefined) updates.address = String(address).trim();
-    if (addressAr !== undefined) updates.addressAr = String(addressAr).trim();
-    if (addressEn !== undefined) updates.addressEn = String(addressEn).trim();
-    if (phone !== undefined) updates.phone = String(phone).trim();
-    if (mapUrl !== undefined) updates.mapUrl = String(mapUrl).trim();
+    if (name !== undefined) updates.name = sanitizeBranchText(name);
+    if (nameAr !== undefined) updates.nameAr = sanitizeBranchText(nameAr);
+    if (nameEn !== undefined) updates.nameEn = sanitizeBranchText(nameEn);
+    if (city !== undefined) updates.city = sanitizeBranchText(city, 80);
+    if (cityAr !== undefined) updates.cityAr = sanitizeBranchText(cityAr, 80);
+    if (cityEn !== undefined) updates.cityEn = sanitizeBranchText(cityEn, 80);
+    if (address !== undefined) updates.address = sanitizeBranchText(address, 300);
+    if (addressAr !== undefined) updates.addressAr = sanitizeBranchText(addressAr, 300);
+    if (addressEn !== undefined) updates.addressEn = sanitizeBranchText(addressEn, 300);
+
+    if (phone !== undefined) {
+      try {
+        updates.phone = sanitizeBranchPhone(phone);
+      } catch (e) {
+        return res.status(400).json({ error: 'INVALID_PHONE_FORMAT', message: e.message });
+      }
+    }
+
+    if (mapUrl !== undefined) {
+      if (mapUrl === '') {
+        updates.mapUrl = '';
+      } else {
+        try {
+          updates.mapUrl = validateAndSanitizeMapUrl(mapUrl);
+        } catch (e) {
+          return res.status(400).json({ error: 'INVALID_MAP_URL', message: e.message });
+        }
+      }
+    }
+
     if (doctorsCount !== undefined) updates.doctorsCount = parseInt(doctorsCount, 10) || 0;
     if (Array.isArray(affiliatedDoctorIds)) updates.affiliatedDoctorIds = affiliatedDoctorIds;
     if (Array.isArray(activeSpecialties)) updates.activeSpecialties = activeSpecialties;

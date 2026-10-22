@@ -899,8 +899,9 @@ service cloud.firestore {
 
     match /clinics/{clinicId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update, delete: if isOwner() || isPlatformAdmin() || tokenClinicAdminFor(resource.data);
+      allow create: if isOwner() || isPlatformAdmin();
+      allow update: if isOwner() || isPlatformAdmin() || (tokenClinicAdminFor(resource.data) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['isPrimary', 'id', 'clinicId']));
+      allow delete: if (isOwner() || isPlatformAdmin()) && (!('isPrimary' in resource.data) || resource.data.isPrimary != true);
     }
 
     match /case_status_history/{historyId} {
