@@ -24,6 +24,9 @@
             <button type="button" class="solid-button" onclick="document.getElementById('adminModelRegistryContainer')?.scrollIntoView({behavior: 'smooth'})" style="padding: 8px 16px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; background: linear-gradient(135deg, #0284c7, #0ea5e9);">
               <span>📜</span> سجل إصدارات النماذج والتبديل الآمن
             </button>
+            <button type="button" class="solid-button" onclick="document.getElementById('adminClinicalCmsContainer')?.scrollIntoView({behavior: 'smooth'})" style="padding: 8px 16px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; background: linear-gradient(135deg, #0f766e, #0d9488);">
+              <span>📚</span> إدارة التوصيات الطبية (Clinical CMS)
+            </button>
           </div>
         </div>
 
@@ -506,6 +509,11 @@
         <!-- 33. AI MODEL REGISTRY & SAFE ROLLBACK (Glass Health Benchmark) -->
         <article class="panel" id="adminModelRegistryPanel" style="margin-top: 24px; padding: 0; background: transparent; border: none;">
           <div id="adminModelRegistryContainer"></div>
+        </article>
+
+        <!-- 34. CLINICAL CONTENT MANAGEMENT SYSTEM (Isabel Healthcare Benchmark) -->
+        <article class="panel" id="adminClinicalCmsPanel" style="margin-top: 24px; padding: 0; background: transparent; border: none;">
+          <div id="adminClinicalCmsContainer"></div>
         </article>
 
       </section>
