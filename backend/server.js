@@ -6193,6 +6193,702 @@ app.post('/api/admin/clinics/memberships', requireAuth, requireVerifiedEmail, re
   });
 });
 
+// =============================================================================
+// 🏥 BRANCHES & CLINICS MANAGER (Practo Benchmark) - CRUD & FINE-GRAINED RBAC
+// =============================================================================
+
+const DEFAULT_ADMIN_CLINICS_CATALOG = [
+  {
+    id: 'clinic_cairo_main',
+    branchId: 'branch_cairo_main',
+    clinicId: 'clinic_cairo_main',
+    name: 'المركز الطبي الاستشاري الرئيسي — فرع التحرير والدقي',
+    nameAr: 'المركز الطبي الاستشاري الرئيسي — فرع التحرير والدقي',
+    nameEn: 'HealthVibe Consultant Medical Center — Main Branch',
+    city: 'Cairo',
+    cityAr: 'القاهرة',
+    cityEn: 'Cairo',
+    address: '14 شارع التحرير، الدقي، ميدان المساحة، القاهرة الكبرى',
+    addressAr: '14 شارع التحرير، الدقي، ميدان المساحة، القاهرة الكبرى',
+    addressEn: '14 El-Tahrir St, Dokki, Mesaha Sq, Greater Cairo',
+    phone: '+20 2 3762 0001',
+    mapUrl: 'https://maps.google.com/?q=30.0384,31.2124',
+    doctorsCount: 8,
+    affiliatedDoctorIds: [],
+    activeSpecialties: ['أمراض الصدر والجهاز التنفسي', 'الباطنة العامة', 'أمراض الحساسية والمناعة'],
+    isPrimary: true,
+    isVirtual: false,
+    status: 'active'
+  },
+  {
+    id: 'clinic_giza_west',
+    branchId: 'branch_giza_west',
+    clinicId: 'clinic_giza_west',
+    name: 'مجمع عيادات الصفا التخصصية — فرع الجيزة والمهندسين',
+    nameAr: 'مجمع عيادات الصفا التخصصية — فرع الجيزة والمهندسين',
+    nameEn: 'El-Safa Specialized Clinics Complex — Giza Branch',
+    city: 'Giza',
+    cityAr: 'الجيزة',
+    cityEn: 'Giza',
+    address: '28 شارع جامعة الدول العربية، المهندسين، الجيزة',
+    addressAr: '28 شارع جامعة الدول العربية، المهندسين، الجيزة',
+    addressEn: '28 Gameat El-Dowal Al-Arabiya St, Mohandessin, Giza',
+    phone: '+20 2 3345 0002',
+    mapUrl: 'https://maps.google.com/?q=30.0520,31.2005',
+    doctorsCount: 6,
+    affiliatedDoctorIds: [],
+    activeSpecialties: ['أمراض الصدر', 'الأنف والأذن والحنجرة', 'طب الأطفال التخصصي'],
+    isPrimary: false,
+    isVirtual: false,
+    status: 'active'
+  },
+  {
+    id: 'clinic_alex_smouha',
+    branchId: 'branch_alex_smouha',
+    clinicId: 'clinic_alex_smouha',
+    name: 'مركز النيل الطبي للرعاية الصدرية — فرع سموحة والإسكندرية',
+    nameAr: 'مركز النيل الطبي للرعاية الصدرية — فرع سموحة والإسكندرية',
+    nameEn: 'Nile Pulmonary Center — Smouha Alexandria Branch',
+    city: 'Alexandria',
+    cityAr: 'الإسكندرية',
+    cityEn: 'Alexandria',
+    address: 'ميدان فيكتور عمانويل، سموحة، الإسكندرية',
+    addressAr: 'ميدان فيكتور عمانويل، سموحة، الإسكندرية',
+    addressEn: 'Victor Emmanuel Sq, Smouha, Alexandria',
+    phone: '+20 3 4870 0003',
+    mapUrl: 'https://maps.google.com/?q=31.2001,29.9187',
+    doctorsCount: 4,
+    affiliatedDoctorIds: [],
+    activeSpecialties: ['الأمراض الباطنية والصدرية', 'طب الأطفال'],
+    isPrimary: false,
+    isVirtual: false,
+    status: 'active'
+  },
+  {
+    id: 'clinic_telehealth_virtual',
+    branchId: 'branch_telehealth_virtual',
+    clinicId: 'clinic_telehealth_virtual',
+    name: 'العيادة الافتراضية (استشارات الفيديو والمتابعة الرقمية)',
+    nameAr: 'العيادة الافتراضية (استشارات الفيديو والمتابعة الرقمية)',
+    nameEn: 'Virtual Telehealth Clinic (Remote Video)',
+    city: 'Telehealth',
+    cityAr: 'عن بُعد / مصر',
+    cityEn: 'Remote / Egypt',
+    address: 'منصة استشارات مرئية مشفرة تغطي كافة محافظات الجمهورية',
+    addressAr: 'منصة استشارات مرئية مشفرة تغطي كافة محافظات الجمهورية',
+    addressEn: 'Encrypted digital consultation service covering all governorates',
+    phone: '+20 100 000 9999',
+    mapUrl: '',
+    doctorsCount: 12,
+    affiliatedDoctorIds: [],
+    activeSpecialties: ['كافة التخصصات الطبية عن بُعد'],
+    isPrimary: false,
+    isVirtual: true,
+    status: 'active'
+  }
+];
+
+let inMemoryAdminClinics = [...DEFAULT_ADMIN_CLINICS_CATALOG];
+
+async function getAdminClinicsCatalog() {
+  if (db) {
+    try {
+      const snap = await db.collection('clinics').get();
+      if (!snap.empty && snap.docs.length > 0) {
+        return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      }
+    } catch (e) {
+      // Fallback to in-memory
+    }
+  }
+  return [...inMemoryAdminClinics];
+}
+
+/**
+ * GET /api/admin/clinics
+ * List all medical centers, hospitals, and clinic branches with fine-grained RBAC scoping.
+ * Super Admin sees all branches; Clinic Admin sees only their assigned branch.
+ */
+app.get('/api/admin/clinics', requireAuth, requireVerifiedEmail, requireAdmin, async (req, res) => {
+  try {
+    const scope = await resolveRequesterClinic(req);
+    let clinics = await getAdminClinicsCatalog();
+
+    // Fine-grained RBAC scoping: Clinic admin only gets their assigned clinic
+    if (scope.role === ROLES.CLINIC_ADMIN && scope.clinicId) {
+      clinics = clinics.filter(c => (c.clinicId || c.id) === scope.clinicId);
+    }
+
+    // Optional query filtering
+    const { city, search, includeDoctors } = req.query || {};
+    if (city && city !== 'all') {
+      clinics = clinics.filter(c =>
+        c.city === city || c.cityAr === city || c.cityEn === city ||
+        (city === 'Telehealth' && c.isVirtual)
+      );
+    }
+
+    if (search && String(search).trim()) {
+      const q = String(search).trim().toLowerCase();
+      clinics = clinics.filter(c =>
+        (c.nameAr || '').toLowerCase().includes(q) ||
+        (c.nameEn || '').toLowerCase().includes(q) ||
+        (c.name || '').toLowerCase().includes(q) ||
+        (c.addressAr || '').toLowerCase().includes(q) ||
+        (c.addressEn || '').toLowerCase().includes(q) ||
+        (c.address || '').toLowerCase().includes(q) ||
+        (c.phone || '').includes(q)
+      );
+    }
+
+    // If requested, include affiliated doctors list
+    if (includeDoctors === 'true' && db) {
+      const usersSnap = await db.collection('users').where('role', '==', ROLES.DOCTOR).get().catch(() => ({ docs: [] }));
+      const allDoctors = usersSnap.docs.map(d => ({ uid: d.id, ...d.data() }));
+
+      clinics = clinics.map(clinic => {
+        const branchDoctors = allDoctors.filter(doc => {
+          if (doc.clinicId === clinic.id || doc.clinic === clinic.name || doc.clinic === clinic.id) return true;
+          if (Array.isArray(doc.clinicMemberships)) {
+            return doc.clinicMemberships.some(m => m && (m.clinicId === clinic.id || m.clinicId === clinic.clinicId) && m.status !== 'revoked');
+          }
+          return false;
+        });
+        return {
+          ...clinic,
+          doctors: branchDoctors.map(d => ({
+            uid: d.uid,
+            name: d.name || d.displayName,
+            specialty: d.specialty || d.medicalSpecialty || 'General',
+            roleInClinic: d.roleInClinic || 'consultant'
+          }))
+        };
+      });
+    }
+
+    res.json({
+      success: true,
+      count: clinics.length,
+      clinics
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * GET /api/admin/clinics/:clinicId
+ * Get single clinic branch details and affiliated doctors
+ */
+app.get('/api/admin/clinics/:clinicId', requireAuth, requireVerifiedEmail, requireAdmin, async (req, res) => {
+  try {
+    const { clinicId } = req.params;
+    const scope = await resolveRequesterClinic(req);
+
+    if (scope.role === ROLES.CLINIC_ADMIN && scope.clinicId && scope.clinicId !== clinicId) {
+      return res.status(403).json({
+        error: 'ACCESS_DENIED',
+        message: 'Clinic administrators can only view details for their assigned clinic.'
+      });
+    }
+
+    const clinics = await getAdminClinicsCatalog();
+    const clinic = clinics.find(c => (c.clinicId || c.id) === clinicId);
+    if (!clinic) {
+      return res.status(404).json({ error: 'NOT_FOUND', message: 'Clinic branch not found.' });
+    }
+
+    let branchDoctors = [];
+    if (db) {
+      const usersSnap = await db.collection('users').where('role', '==', ROLES.DOCTOR).get().catch(() => ({ docs: [] }));
+      branchDoctors = usersSnap.docs
+        .map(d => ({ uid: d.id, ...d.data() }))
+        .filter(doc => {
+          if (doc.clinicId === clinicId || doc.clinic === clinic.name || doc.clinic === clinicId) return true;
+          if (Array.isArray(doc.clinicMemberships)) {
+            return doc.clinicMemberships.some(m => m && (m.clinicId === clinicId || m.clinicId === clinic.clinicId) && m.status !== 'revoked');
+          }
+          return false;
+        })
+        .map(d => ({
+          uid: d.uid,
+          name: d.name || d.displayName,
+          specialty: d.specialty || 'General',
+          email: d.email,
+          roleInClinic: d.roleInClinic || 'consultant'
+        }));
+    }
+
+    res.json({
+      success: true,
+      clinic,
+      doctors: branchDoctors
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/admin/clinics
+ * Register a new clinic / hospital branch with map URL, physical address, direct phone, and doctors.
+ * Only Super Admin (or trusted Owner) is permitted to register new medical facilities.
+ */
+app.post('/api/admin/clinics', requireAuth, requireVerifiedEmail, requireAdmin, async (req, res) => {
+  try {
+    const scope = await resolveRequesterClinic(req);
+
+    // Fine-grained RBAC: Clinic Admin and non-clinical roles CANNOT create new clinics
+    if (scope.role === ROLES.CLINIC_ADMIN) {
+      return res.status(403).json({
+        error: 'ACCESS_DENIED',
+        message: 'Clinic administrators cannot create new clinic branches. Only Super Admin can register new branches.'
+      });
+    }
+    if (NON_CLINICAL_ADMIN_ROLES.includes(scope.role)) {
+      return res.status(403).json({
+        error: 'ACCESS_DENIED',
+        message: 'Administrative sub-role is not authorized to register clinic branches.'
+      });
+    }
+
+    const {
+      id,
+      branchId,
+      name,
+      nameAr,
+      nameEn,
+      city,
+      cityAr,
+      cityEn,
+      address,
+      addressAr,
+      addressEn,
+      phone,
+      mapUrl,
+      doctorsCount,
+      affiliatedDoctorIds,
+      activeSpecialties,
+      isPrimary,
+      isVirtual
+    } = req.body || {};
+
+    const branchName = (nameAr || nameEn || name || '').trim();
+    if (!branchName) {
+      return res.status(400).json({ error: 'INVALID_REQUEST', message: 'Clinic or branch name is required.' });
+    }
+
+    const branchCity = (city || cityAr || cityEn || 'Cairo').trim();
+    const branchAddress = (addressAr || addressEn || address || '').trim();
+    if (!branchAddress && !isVirtual) {
+      return res.status(400).json({ error: 'INVALID_REQUEST', message: 'Physical address is required for in-person clinic branches.' });
+    }
+
+    const branchPhone = (phone || '').trim();
+    if (!branchPhone) {
+      return res.status(400).json({ error: 'INVALID_REQUEST', message: 'Direct branch contact phone number is required.' });
+    }
+
+    const clinicId = id || branchId || `clinic_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
+    const nowIso = new Date().toISOString();
+
+    const newBranch = {
+      id: clinicId,
+      clinicId,
+      branchId: branchId || clinicId,
+      name: branchName,
+      nameAr: (nameAr || branchName).trim(),
+      nameEn: (nameEn || branchName).trim(),
+      city: branchCity,
+      cityAr: (cityAr || branchCity).trim(),
+      cityEn: (cityEn || branchCity).trim(),
+      address: branchAddress,
+      addressAr: (addressAr || branchAddress).trim(),
+      addressEn: (addressEn || branchAddress).trim(),
+      phone: branchPhone,
+      mapUrl: (mapUrl || '').trim(),
+      doctorsCount: typeof doctorsCount === 'number' ? doctorsCount : (Array.isArray(affiliatedDoctorIds) ? affiliatedDoctorIds.length : 1),
+      affiliatedDoctorIds: Array.isArray(affiliatedDoctorIds) ? affiliatedDoctorIds : [],
+      activeSpecialties: Array.isArray(activeSpecialties) && activeSpecialties.length > 0 ? activeSpecialties : ['أمراض الصدر والباطنة'],
+      isPrimary: Boolean(isPrimary),
+      isVirtual: Boolean(isVirtual),
+      status: 'active',
+      createdAt: nowIso,
+      createdBy: req.user.uid,
+      updatedAt: nowIso,
+      updatedBy: req.user.uid
+    };
+
+    // Persist to database if available
+    if (db) {
+      await db.collection('clinics').doc(clinicId).set(newBranch);
+    }
+    inMemoryAdminClinics.push(newBranch);
+
+    // Record Immutable Audit Event
+    if (auditService && typeof auditService.recordAuditEvent === 'function') {
+      await auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.CLINIC_BRANCH_CREATED,
+        req,
+        clinicId,
+        details: {
+          clinicId,
+          nameAr: newBranch.nameAr,
+          nameEn: newBranch.nameEn,
+          city: newBranch.city,
+          phone: newBranch.phone,
+          addressAr: newBranch.addressAr,
+          doctorsCount: newBranch.doctorsCount,
+          isPrimary: newBranch.isPrimary
+        }
+      }).catch(err => console.warn('[AUDIT] Failed to record branch creation audit event:', err.message));
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'Clinic branch successfully registered in the healthcare network.',
+      clinic: newBranch
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * PUT /api/admin/clinics/:clinicId
+ * Update clinic branch details (names, address, direct phone, map URL, specialties, affiliated doctors).
+ * Scoped RBAC: Clinic Admin can ONLY update their own branch. Super Admin can update any.
+ */
+app.put('/api/admin/clinics/:clinicId', requireAuth, requireVerifiedEmail, requireAdmin, async (req, res) => {
+  try {
+    const { clinicId } = req.params;
+    const scope = await resolveRequesterClinic(req);
+
+    // Scoped RBAC check
+    if (NON_CLINICAL_ADMIN_ROLES.includes(scope.role)) {
+      return res.status(403).json({
+        error: 'ACCESS_DENIED',
+        message: 'Administrative sub-role is not authorized to modify clinic branches.'
+      });
+    }
+    if (scope.role === ROLES.CLINIC_ADMIN && scope.clinicId && scope.clinicId !== clinicId) {
+      return res.status(403).json({
+        error: 'ACCESS_DENIED',
+        message: 'Clinic administrators can only modify their assigned clinic.'
+      });
+    }
+
+    let existingDoc = null;
+    if (db) {
+      const doc = await db.collection('clinics').doc(clinicId).get();
+      if (doc.exists) {
+        existingDoc = { id: doc.id, ...doc.data() };
+      }
+    }
+    if (!existingDoc) {
+      existingDoc = inMemoryAdminClinics.find(c => (c.clinicId || c.id) === clinicId);
+    }
+    if (!existingDoc) {
+      return res.status(404).json({ error: 'NOT_FOUND', message: 'Clinic branch not found.' });
+    }
+
+    const {
+      name,
+      nameAr,
+      nameEn,
+      city,
+      cityAr,
+      cityEn,
+      address,
+      addressAr,
+      addressEn,
+      phone,
+      mapUrl,
+      doctorsCount,
+      affiliatedDoctorIds,
+      activeSpecialties,
+      isPrimary,
+      isVirtual,
+      status
+    } = req.body || {};
+
+    const nowIso = new Date().toISOString();
+    const updates = {
+      updatedAt: nowIso,
+      updatedBy: req.user.uid
+    };
+
+    if (name !== undefined) updates.name = String(name).trim();
+    if (nameAr !== undefined) updates.nameAr = String(nameAr).trim();
+    if (nameEn !== undefined) updates.nameEn = String(nameEn).trim();
+    if (city !== undefined) updates.city = String(city).trim();
+    if (cityAr !== undefined) updates.cityAr = String(cityAr).trim();
+    if (cityEn !== undefined) updates.cityEn = String(cityEn).trim();
+    if (address !== undefined) updates.address = String(address).trim();
+    if (addressAr !== undefined) updates.addressAr = String(addressAr).trim();
+    if (addressEn !== undefined) updates.addressEn = String(addressEn).trim();
+    if (phone !== undefined) updates.phone = String(phone).trim();
+    if (mapUrl !== undefined) updates.mapUrl = String(mapUrl).trim();
+    if (doctorsCount !== undefined) updates.doctorsCount = parseInt(doctorsCount, 10) || 0;
+    if (Array.isArray(affiliatedDoctorIds)) updates.affiliatedDoctorIds = affiliatedDoctorIds;
+    if (Array.isArray(activeSpecialties)) updates.activeSpecialties = activeSpecialties;
+    if (isVirtual !== undefined) updates.isVirtual = Boolean(isVirtual);
+    if (status !== undefined) updates.status = String(status).trim();
+
+    // Only Super Admin can change primary branch designation
+    if (isPrimary !== undefined && (scope.role === ROLES.SUPER_ADMIN || hasTrustedOwnerClaim(req.user))) {
+      updates.isPrimary = Boolean(isPrimary);
+    }
+
+    const merged = { ...existingDoc, ...updates };
+
+    if (db) {
+      await db.collection('clinics').doc(clinicId).set(merged, { merge: true });
+    }
+    const memIdx = inMemoryAdminClinics.findIndex(c => (c.clinicId || c.id) === clinicId);
+    if (memIdx >= 0) {
+      inMemoryAdminClinics[memIdx] = merged;
+    } else {
+      inMemoryAdminClinics.push(merged);
+    }
+
+    // Record Immutable Audit Event
+    if (auditService && typeof auditService.recordAuditEvent === 'function') {
+      await auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.CLINIC_BRANCH_UPDATED,
+        req,
+        clinicId,
+        details: {
+          clinicId,
+          updatedFields: Object.keys(updates),
+          name: merged.nameAr || merged.nameEn,
+          phone: merged.phone,
+          mapUrl: merged.mapUrl
+        }
+      }).catch(err => console.warn('[AUDIT] Failed to record branch update audit event:', err.message));
+    }
+
+    res.json({
+      success: true,
+      message: 'Clinic branch details successfully updated.',
+      clinic: merged
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * DELETE /api/admin/clinics/:clinicId
+ * Remove a clinic branch from the approved network.
+ * Strict RBAC: Only Super Admin can delete a branch. Cannot delete the primary headquarters branch.
+ */
+app.delete('/api/admin/clinics/:clinicId', requireAuth, requireVerifiedEmail, requireAdmin, async (req, res) => {
+  try {
+    const { clinicId } = req.params;
+    const scope = await resolveRequesterClinic(req);
+
+    // Only Super Admin can delete branches
+    if (scope.role !== ROLES.SUPER_ADMIN && !hasTrustedOwnerClaim(req.user)) {
+      return res.status(403).json({
+        error: 'ACCESS_DENIED',
+        message: 'Only Super Admin can delete clinic branches from the network.'
+      });
+    }
+
+    let clinicDoc = null;
+    if (db) {
+      const doc = await db.collection('clinics').doc(clinicId).get();
+      if (doc.exists) clinicDoc = { id: doc.id, ...doc.data() };
+    }
+    if (!clinicDoc) {
+      clinicDoc = inMemoryAdminClinics.find(c => (c.clinicId || c.id) === clinicId);
+    }
+    if (!clinicDoc) {
+      return res.status(404).json({ error: 'NOT_FOUND', message: 'Clinic branch not found.' });
+    }
+
+    // Protect primary branch from accidental or unauthorized deletion
+    if (clinicDoc.isPrimary) {
+      return res.status(400).json({
+        error: 'CANNOT_DELETE_PRIMARY_BRANCH',
+        message: 'The primary headquarters branch cannot be deleted from the network.'
+      });
+    }
+
+    if (db) {
+      await db.collection('clinics').doc(clinicId).delete();
+    }
+    inMemoryAdminClinics = inMemoryAdminClinics.filter(c => (c.clinicId || c.id) !== clinicId);
+
+    // Record Immutable Audit Event
+    if (auditService && typeof auditService.recordAuditEvent === 'function') {
+      await auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.CLINIC_BRANCH_DELETED,
+        req,
+        clinicId,
+        details: {
+          deletedClinicId: clinicId,
+          name: clinicDoc.nameAr || clinicDoc.nameEn,
+          deletedAt: new Date().toISOString()
+        }
+      }).catch(err => console.warn('[AUDIT] Failed to record branch deletion audit event:', err.message));
+    }
+
+    res.json({
+      success: true,
+      message: 'Clinic branch successfully removed from the healthcare network.'
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * GET /api/admin/clinics/:clinicId/doctors
+ * Retrieve list of doctors affiliated with this clinic branch.
+ */
+app.get('/api/admin/clinics/:clinicId/doctors', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { clinicId } = req.params;
+    const scope = await resolveRequesterClinic(req);
+
+    if (scope.role === ROLES.CLINIC_ADMIN && scope.clinicId && scope.clinicId !== clinicId) {
+      return res.status(403).json({
+        error: 'ACCESS_DENIED',
+        message: 'Clinic administrators can only view doctors for their assigned clinic.'
+      });
+    }
+
+    let doctors = [];
+    if (db) {
+      const usersSnap = await db.collection('users').where('role', '==', ROLES.DOCTOR).get().catch(() => ({ docs: [] }));
+      doctors = usersSnap.docs
+        .map(d => ({ uid: d.id, ...d.data() }))
+        .filter(doc => {
+          if (doc.clinicId === clinicId) return true;
+          if (Array.isArray(doc.clinicMemberships)) {
+            return doc.clinicMemberships.some(m => m && m.clinicId === clinicId && m.status !== 'revoked');
+          }
+          return false;
+        })
+        .map(d => ({
+          uid: d.uid,
+          name: d.name || d.displayName,
+          specialty: d.specialty || 'General',
+          email: d.email,
+          roleInClinic: d.roleInClinic || 'consultant'
+        }));
+    }
+
+    res.json({
+      success: true,
+      clinicId,
+      count: doctors.length,
+      doctors
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+/**
+ * POST /api/admin/clinics/:clinicId/doctors
+ * Affiliate or unlink doctor from a branch with audit logging.
+ */
+app.post('/api/admin/clinics/:clinicId/doctors', requireAuth, requireVerifiedEmail, requireAdmin, async (req, res) => {
+  try {
+    const { clinicId } = req.params;
+    const { doctorId, action = 'link', roleInClinic = 'consultant' } = req.body || {};
+    if (!doctorId) {
+      return res.status(400).json({ error: 'INVALID_REQUEST', message: 'doctorId is required.' });
+    }
+
+    const scope = await resolveRequesterClinic(req);
+    if (NON_CLINICAL_ADMIN_ROLES.includes(scope.role)) {
+      return res.status(403).json({
+        error: 'ACCESS_DENIED',
+        message: 'Administrative sub-role is not authorized to alter clinic doctor affiliations.'
+      });
+    }
+    if (scope.role === ROLES.CLINIC_ADMIN && scope.clinicId && scope.clinicId !== clinicId) {
+      return res.status(403).json({
+        error: 'ACCESS_DENIED',
+        message: 'Clinic administrators can only alter doctor affiliations for their assigned clinic.'
+      });
+    }
+
+    const doctorProfile = await getServerUserProfile(doctorId);
+    if (!doctorProfile) {
+      return res.status(404).json({ error: 'NOT_FOUND', message: 'Doctor profile not found.' });
+    }
+
+    const nowIso = new Date().toISOString();
+    const memberships = Array.isArray(doctorProfile.clinicMemberships) ? [...doctorProfile.clinicMemberships] : [];
+    const idx = memberships.findIndex(m => m && m.clinicId === clinicId);
+
+    const clinicMembership = {
+      clinicId,
+      status: action === 'unlink' ? 'revoked' : 'approved',
+      roleInClinic,
+      updatedAt: nowIso,
+      updatedBy: req.user.uid
+    };
+
+    if (idx >= 0) {
+      memberships[idx] = clinicMembership;
+    } else if (action !== 'unlink') {
+      memberships.push(clinicMembership);
+    }
+
+    if (db) {
+      await db.collection('users').doc(doctorId).set({
+        clinicMemberships: memberships
+      }, { merge: true });
+
+      // Update doctor count on clinic
+      const clinicRef = db.collection('clinics').doc(clinicId);
+      const cDoc = await clinicRef.get();
+      if (cDoc.exists) {
+        const cData = cDoc.data();
+        let docIds = Array.isArray(cData.affiliatedDoctorIds) ? [...cData.affiliatedDoctorIds] : [];
+        if (action === 'unlink') {
+          docIds = docIds.filter(id => id !== doctorId);
+        } else if (!docIds.includes(doctorId)) {
+          docIds.push(doctorId);
+        }
+        await clinicRef.update({
+          affiliatedDoctorIds: docIds,
+          doctorsCount: docIds.length,
+          updatedAt: nowIso
+        });
+      }
+    }
+
+    // Record Immutable Audit Event
+    if (auditService && typeof auditService.recordAuditEvent === 'function') {
+      await auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.CLINIC_DOCTORS_UPDATED,
+        req,
+        clinicId,
+        targetUserId: doctorId,
+        details: { clinicId, doctorId, action, roleInClinic }
+      }).catch(err => console.warn('[AUDIT] Failed to record doctor affiliation audit event:', err.message));
+    }
+
+    res.json({
+      success: true,
+      message: `Doctor successfully ${action === 'unlink' ? 'unlinked from' : 'affiliated with'} clinic branch.`,
+      clinicId,
+      doctorId,
+      status: clinicMembership.status
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+
 /**
  * POST /api/doctor/submit-application
  * Secure submission of doctor application with National ID policy regulation and legal review safeguards
