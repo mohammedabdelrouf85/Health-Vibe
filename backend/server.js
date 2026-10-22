@@ -8325,11 +8325,24 @@ app.get('/api/admin/ai/export', requireAuth, async (req, res) => {
 // Expose models, evaluations & reset for testing
 app.inMemoryAiModels = inMemoryAiModels;
 app.inMemoryAiEvaluations = inMemoryAiEvaluations;
-app.resetAiModels = () => {
+app.resetAiModels = async () => {
   inMemoryAiModels = JSON.parse(JSON.stringify(INITIAL_CLINICAL_AI_MODELS));
   inMemoryAiEvaluations = [];
   app.inMemoryAiModels = inMemoryAiModels;
   app.inMemoryAiEvaluations = inMemoryAiEvaluations;
+  if (db) {
+    try {
+      const snap = await db.collection('ai_models').get();
+      if (snap && snap.forEach) {
+        snap.forEach(async doc => {
+          await db.collection('ai_models').doc(doc.id).delete().catch(() => {});
+        });
+      }
+      for (const m of inMemoryAiModels) {
+        await db.collection('ai_models').doc(m.id).set(m).catch(() => {});
+      }
+    } catch (_) {}
+  }
 };
 
 // Credential values come from an administrator-approved application, not the
