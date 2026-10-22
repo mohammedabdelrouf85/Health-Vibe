@@ -7307,6 +7307,734 @@ app.post('/api/audit/file-accessed', requireAuth, async (req, res) => {
   }
 });
 
+// =============================================================================
+// 🤖 AI MODEL MONITORING & CLINICAL GOVERNANCE (INFERMEDICA BENCHMARK)
+// =============================================================================
+
+const INITIAL_CLINICAL_AI_MODELS = [
+  {
+    id: "model_v1_1_candidate",
+    version: "v1.1",
+    name: "HealthVibe-Triage-v1.1",
+    releaseTitle: "تحديث شجرة الفرز السريري (خوارزمية v1.1 المرشحة)",
+    status: "candidate",
+    conditionScope: "respiratory_triage",
+    conditionLabelAr: "فرز الطوارئ والأعراض التنفسية",
+    conditionLabelEn: "Acute Respiratory & Hypoxemia Triage",
+    architecture: "Rule-Based + Bayesian Expert System",
+    evaluationDate: "2026-10-20",
+    sampleSize: 80,
+    confusionMatrix: { tp: 42, fp: 2, tn: 36, fn: 0 },
+    aucRoc: 0.9981,
+    doctorConcordance: { agreed: 78, total: 80, rate: 0.975 },
+    physicianOverrides: 2,
+    subCohorts: {
+      pediatric: { n: 16, sensitivity: 1.0, specificity: 0.933, concordance: 0.937 },
+      adult: { n: 44, sensitivity: 1.0, specificity: 0.952, concordance: 0.977 },
+      geriatric: { n: 20, sensitivity: 1.0, specificity: 0.941, concordance: 1.0 },
+      chronicLungDisease: { n: 20, sensitivity: 1.0, specificity: 0.900, concordance: 0.95 }
+    },
+    notes: "تخفيض بنسبة 80% في الإنذارات الكاذبة (False Positives) مع الحفاظ على حساسية 100% للحالات الحرجة."
+  },
+  {
+    id: "model_v1_0_active",
+    version: "v1.0",
+    name: "HealthVibe-Triage-v1.0",
+    releaseTitle: "نظام الفرز السريري المعتمد في الإنتاج (Production Active)",
+    status: "active",
+    conditionScope: "respiratory_triage",
+    conditionLabelAr: "فرز الطوارئ التنفسية (النسخة النشطة)",
+    conditionLabelEn: "Active Production Respiratory Triage",
+    architecture: "Rule-Based Expert System",
+    evaluationDate: "2026-09-29",
+    sampleSize: 80,
+    confusionMatrix: { tp: 42, fp: 10, tn: 28, fn: 0 },
+    aucRoc: 0.9956,
+    doctorConcordance: { agreed: 73, total: 80, rate: 0.9125 },
+    physicianOverrides: 7,
+    subCohorts: {
+      pediatric: { n: 16, sensitivity: 1.0, specificity: 0.733, concordance: 0.875 },
+      adult: { n: 44, sensitivity: 1.0, specificity: 0.762, concordance: 0.909 },
+      geriatric: { n: 20, sensitivity: 1.0, specificity: 0.706, concordance: 0.95 },
+      chronicLungDisease: { n: 20, sensitivity: 1.0, specificity: 0.700, concordance: 0.90 }
+    },
+    notes: "الإصدار المعتمد حالياً في المنظومة الطبية؛ حساسية ممتازة 100% ولكن بمعدل إنذارات كاذبة مرتفع نسبياً."
+  },
+  {
+    id: "model_hypoxemia_v1_2",
+    version: "v1.2-sp",
+    name: "HealthVibe-Hypoxemia-v1.2",
+    releaseTitle: "مصنف نقص الأكسجة الحاد (Acute Hypoxemia Guard)",
+    status: "candidate",
+    conditionScope: "hypoxemia",
+    conditionLabelAr: "فحص نقص الأكسجة ونبضات القلب (SpO2 Guard)",
+    conditionLabelEn: "Pulse Oximetry & Hypoxemia Classification",
+    architecture: "Extreme Gradient Boosting + Vital Guardrails",
+    evaluationDate: "2026-10-18",
+    sampleSize: 120,
+    confusionMatrix: { tp: 65, fp: 2, tn: 53, fn: 0 },
+    aucRoc: 0.9992,
+    doctorConcordance: { agreed: 118, total: 120, rate: 0.9833 },
+    physicianOverrides: 2,
+    subCohorts: {
+      pediatric: { n: 24, sensitivity: 1.0, specificity: 0.955, concordance: 0.958 },
+      adult: { n: 66, sensitivity: 1.0, specificity: 0.967, concordance: 0.985 },
+      geriatric: { n: 30, sensitivity: 1.0, specificity: 0.962, concordance: 1.0 },
+      chronicLungDisease: { n: 35, sensitivity: 1.0, specificity: 0.941, concordance: 0.971 }
+    },
+    notes: "كاشف دقيق لنقص الأكسجة الصامت مع تدقيق التوافق مع قراءات Pulse Oximeter."
+  },
+  {
+    id: "model_symptomnet_v2_0",
+    version: "v2.0-exp",
+    name: "HealthVibe-SymptomNet-v2.0",
+    releaseTitle: "الشبكة العصبية لتحليل الأعراض المعقدة (SymptomNet)",
+    status: "experimental",
+    conditionScope: "pneumonia_covid",
+    conditionLabelAr: "أعراض الالتهاب الرئوي وكوفيد-19 المعقدة",
+    conditionLabelEn: "Pneumonia & Complex Viral Respiratory",
+    architecture: "Multi-Task Deep Neural Network (DNN)",
+    evaluationDate: "2026-10-15",
+    sampleSize: 150,
+    confusionMatrix: { tp: 78, fp: 6, tn: 63, fn: 3 },
+    aucRoc: 0.9890,
+    doctorConcordance: { agreed: 141, total: 150, rate: 0.940 },
+    physicianOverrides: 9,
+    subCohorts: {
+      pediatric: { n: 30, sensitivity: 0.952, specificity: 0.889, concordance: 0.933 },
+      adult: { n: 85, sensitivity: 0.976, specificity: 0.930, concordance: 0.941 },
+      geriatric: { n: 35, sensitivity: 0.947, specificity: 0.938, concordance: 0.943 },
+      chronicLungDisease: { n: 40, sensitivity: 0.958, specificity: 0.875, concordance: 0.925 }
+    },
+    notes: "نموذج تجريبي متعدد الفئات لتصنيف الالتهاب الرئوي الجرثومي والفيروسي."
+  },
+  {
+    id: "model_pediatric_v1_0",
+    version: "v1.0-ped",
+    name: "HealthVibe-Pediatric-v1.0",
+    releaseTitle: "محرك فرز طب الأطفال التخصصي (Pediatric Care)",
+    status: "active",
+    conditionScope: "pediatric",
+    conditionLabelAr: "أمراض الجهاز التنفسي لدى الأطفال والرضع",
+    conditionLabelEn: "Pediatric & Infant Respiratory Protocol",
+    architecture: "Decision Forest + Pediatric Vital Bounds",
+    evaluationDate: "2026-10-05",
+    sampleSize: 95,
+    confusionMatrix: { tp: 48, fp: 4, tn: 42, fn: 1 },
+    aucRoc: 0.9875,
+    doctorConcordance: { agreed: 91, total: 95, rate: 0.9578 },
+    physicianOverrides: 4,
+    subCohorts: {
+      infants: { n: 25, sensitivity: 1.0, specificity: 0.909, concordance: 0.96 },
+      children: { n: 70, sensitivity: 0.971, specificity: 0.914, concordance: 0.957 }
+    },
+    notes: "معاير خصيصاً لحدود التنفس وسرعة ضربات القلب حسب الفئات العمرية للأطفال."
+  }
+];
+
+let inMemoryAiModels = JSON.parse(JSON.stringify(INITIAL_CLINICAL_AI_MODELS));
+
+// Enrich models with ground truth from reports/evaluation_results.json if present
+try {
+  const evalPath = path.resolve(__dirname, '../reports/evaluation_results.json');
+  if (fs.existsSync(evalPath)) {
+    const evalData = JSON.parse(fs.readFileSync(evalPath, 'utf8'));
+    if (evalData.candidateVersion_v1_1) {
+      const cand = inMemoryAiModels.find(m => m.version === 'v1.1');
+      if (cand) {
+        if (evalData.candidateVersion_v1_1.rocAuc?.rocPoints) {
+          cand.rocPoints = evalData.candidateVersion_v1_1.rocAuc.rocPoints;
+        }
+        if (evalData.candidateVersion_v1_1.calibration) {
+          cand.calibration = evalData.candidateVersion_v1_1.calibration;
+        }
+      }
+    }
+    if (evalData.activeVersion_v1_0) {
+      const act = inMemoryAiModels.find(m => m.version === 'v1.0');
+      if (act) {
+        if (evalData.activeVersion_v1_0.rocAuc?.rocPoints) {
+          act.rocPoints = evalData.activeVersion_v1_0.rocAuc.rocPoints;
+        }
+      }
+    }
+  }
+} catch (_) {}
+
+function calculateAiSensitivity(tp, fn) {
+  const denom = tp + fn;
+  return denom > 0 ? tp / denom : 0;
+}
+
+function calculateAiSpecificity(tn, fp) {
+  const denom = tn + fp;
+  return denom > 0 ? tn / denom : 0;
+}
+
+function calculateAiPrecision(tp, fp) {
+  const denom = tp + fp;
+  return denom > 0 ? tp / denom : 0;
+}
+
+function calculateAiF1Score(prec, sens) {
+  return (prec + sens > 0) ? (2 * prec * sens) / (prec + sens) : 0;
+}
+
+function calculateAiWilsonCI(val, n, z = 1.96) {
+  if (!n || n <= 0) return { lower: 0, upper: 0 };
+  const p = Math.max(0, Math.min(1, val));
+  const denom = 1 + (z * z) / n;
+  const center = p + (z * z) / (2 * n);
+  const rad = z * Math.sqrt((p * (1 - p) + (z * z) / (4 * n)) / n);
+  return {
+    lower: Math.max(0, Number(((center - rad) / denom).toFixed(4))),
+    upper: Math.min(1, Number(((center + rad) / denom).toFixed(4)))
+  };
+}
+
+function formatAiPct(val) {
+  if (val === null || val === undefined || isNaN(val)) return '0.0%';
+  return (val * 100).toFixed(1) + '%';
+}
+
+function computeModelMetricsBackend(model) {
+  const cm = model.confusionMatrix || { tp: 0, fp: 0, tn: 0, fn: 0 };
+  const sens = calculateAiSensitivity(cm.tp, cm.fn);
+  const spec = calculateAiSpecificity(cm.tn, cm.fp);
+  const prec = calculateAiPrecision(cm.tp, cm.fp);
+  const f1 = calculateAiF1Score(prec, sens);
+  const total = cm.tp + cm.fp + cm.tn + cm.fn;
+
+  const sensCI = calculateAiWilsonCI(sens, cm.tp + cm.fn);
+  const specCI = calculateAiWilsonCI(spec, cm.tn + cm.fp);
+  const precCI = calculateAiWilsonCI(prec, cm.tp + cm.fp);
+
+  const docConc = model.doctorConcordance || {};
+  const concordanceRate = docConc.rate !== undefined
+    ? docConc.rate
+    : (docConc.total > 0 ? docConc.agreed / docConc.total : 0);
+
+  return {
+    ...model,
+    metrics: {
+      sensitivity: sens,
+      sensitivityPct: formatAiPct(sens),
+      sensitivityCI: sensCI,
+
+      specificity: spec,
+      specificityPct: formatAiPct(spec),
+      specificityCI: specCI,
+
+      precision: prec,
+      precisionPct: formatAiPct(prec),
+      precisionCI: precCI,
+
+      f1Score: f1,
+      f1ScorePct: formatAiPct(f1),
+
+      aucRoc: model.aucRoc || 0,
+      aucRocFormatted: (model.aucRoc || 0).toFixed(4),
+
+      doctorConcordanceRate: concordanceRate,
+      doctorConcordancePct: formatAiPct(concordanceRate),
+      doctorAgreedCases: docConc.agreed || 0,
+      doctorTotalEvaluated: docConc.total || total,
+
+      totalCases: total,
+      actualPositives: cm.tp + cm.fn,
+      actualNegatives: cm.tn + cm.fp,
+      predictedPositives: cm.tp + cm.fp,
+      predictedNegatives: cm.tn + cm.fn
+    }
+  };
+}
+
+function computeAggregateMetricsBackend(computedModels = []) {
+  if (computedModels.length === 0) {
+    return {
+      avgSensitivity: 0,
+      avgSpecificity: 0,
+      avgPrecision: 0,
+      avgF1Score: 0,
+      avgAucRoc: 0,
+      avgDoctorConcordance: 0,
+      totalCases: 0,
+      modelsCount: 0
+    };
+  }
+
+  let sumSens = 0;
+  let sumSpec = 0;
+  let sumPrec = 0;
+  let sumF1 = 0;
+  let sumAuc = 0;
+  let sumConc = 0;
+  let totalN = 0;
+
+  computedModels.forEach(m => {
+    const met = m.metrics;
+    sumSens += met.sensitivity;
+    sumSpec += met.specificity;
+    sumPrec += met.precision;
+    sumF1 += met.f1Score;
+    sumAuc += met.aucRoc;
+    sumConc += met.doctorConcordanceRate;
+    totalN += met.totalCases;
+  });
+
+  const count = computedModels.length;
+
+  return {
+    avgSensitivity: sumSens / count,
+    avgSensitivityPct: formatAiPct(sumSens / count),
+    avgSpecificity: sumSpec / count,
+    avgSpecificityPct: formatAiPct(sumSpec / count),
+    avgPrecision: sumPrec / count,
+    avgPrecisionPct: formatAiPct(sumPrec / count),
+    avgF1Score: sumF1 / count,
+    avgF1ScorePct: formatAiPct(sumF1 / count),
+    avgAucRoc: sumAuc / count,
+    avgAucRocFormatted: (sumAuc / count).toFixed(4),
+    avgDoctorConcordance: sumConc / count,
+    avgDoctorConcordancePct: formatAiPct(sumConc / count),
+    totalCases: totalN,
+    modelsCount: count
+  };
+}
+
+function generateModelsCsvBackend(computedModels = []) {
+  const headers = [
+    "Model ID",
+    "Version",
+    "Model Name",
+    "Status",
+    "Condition Scope",
+    "Sensitivity",
+    "Specificity",
+    "Precision (PPV)",
+    "F1-Score",
+    "AUC-ROC",
+    "Doctor Concordance Rate",
+    "Sample Size (N)",
+    "TP",
+    "FP",
+    "TN",
+    "FN",
+    "Evaluation Date"
+  ];
+
+  const rows = computedModels.map(m => {
+    const met = m.metrics;
+    const cm = m.confusionMatrix || { tp: 0, fp: 0, tn: 0, fn: 0 };
+    return [
+      `"${m.id}"`,
+      `"${m.version}"`,
+      `"${m.name}"`,
+      `"${m.status}"`,
+      `"${m.conditionScope}"`,
+      `"${met.sensitivityPct}"`,
+      `"${met.specificityPct}"`,
+      `"${met.precisionPct}"`,
+      `"${met.f1ScorePct}"`,
+      `"${met.aucRocFormatted}"`,
+      `"${met.doctorConcordancePct}"`,
+      met.totalCases,
+      cm.tp,
+      cm.fp,
+      cm.tn,
+      cm.fn,
+      `"${m.evaluationDate}"`
+    ].join(",");
+  });
+
+  return [headers.join(","), ...rows].join("\n");
+}
+
+async function getAiModelsCatalog() {
+  if (!db) return inMemoryAiModels;
+  try {
+    const snap = await db.collection('ai_models').get();
+    if (snap.empty) {
+      for (const m of inMemoryAiModels) {
+        await db.collection('ai_models').doc(m.id).set(m);
+      }
+      return inMemoryAiModels;
+    }
+    const list = [];
+    snap.forEach(doc => list.push({ id: doc.id, ...doc.data() }));
+    inMemoryAiModels = list;
+    return list;
+  } catch (_) {
+    return inMemoryAiModels;
+  }
+}
+
+const AI_MONITORING_AUTHORIZED_ROLES = [
+  ROLES.SUPER_ADMIN,
+  ROLES.CLINICAL_QA,
+  ROLES.OPS,
+  ROLES.CLINIC_ADMIN,
+  ROLES.ORG_ADMIN
+];
+
+const AI_MODEL_MANAGERS = [
+  ROLES.SUPER_ADMIN,
+  ROLES.CLINICAL_QA
+];
+
+async function resolveAiRequesterRole(req) {
+  if (hasTrustedOwnerClaim(req.user)) return ROLES.SUPER_ADMIN;
+  let role = getTrustedClaimRole(req.user);
+  if (db && req.user && req.user.uid) {
+    try {
+      const userDoc = await db.collection('users').doc(req.user.uid).get();
+      if (userDoc.exists && userDoc.data().role) {
+        role = normalizeRole(userDoc.data().role, false);
+      }
+    } catch (_) {}
+  }
+  return role;
+}
+
+/**
+ * GET /api/admin/ai/models
+ * List all clinical AI models with metrics (Sensitivity, Specificity, Precision, F1, AUC, Doctor Concordance)
+ * Filtering by version, condition, status, timeRange, and search.
+ */
+app.get('/api/admin/ai/models', requireAuth, async (req, res) => {
+  try {
+    const role = await resolveAiRequesterRole(req);
+    const isOwner = hasTrustedOwnerClaim(req.user);
+    if (!isOwner && !AI_MONITORING_AUTHORIZED_ROLES.includes(role)) {
+      return res.status(403).json({
+        error: 'ACCESS_DENIED',
+        message: `Role '${role}' is not authorized to access AI Model Monitoring.`
+      });
+    }
+
+    const catalog = await getAiModelsCatalog();
+    const { version, condition, status, timeRange, search } = req.query || {};
+
+    let filtered = catalog.filter(m => {
+      if (version && version !== 'all' && m.id !== version && m.version !== version) return false;
+      if (condition && condition !== 'all' && m.conditionScope !== condition) return false;
+      if (status && status !== 'all' && m.status !== status) return false;
+      if (timeRange && timeRange !== 'all' && m.evaluationDate) {
+        const evalTime = new Date(m.evaluationDate).getTime();
+        const daysAgo = (Date.now() - evalTime) / (1000 * 60 * 60 * 24);
+        if (timeRange === '7d' && daysAgo > 7) return false;
+        if (timeRange === '30d' && daysAgo > 30) return false;
+        if (timeRange === '90d' && daysAgo > 90) return false;
+      }
+      if (search && String(search).trim()) {
+        const q = String(search).trim().toLowerCase();
+        const haystack = [m.name, m.version, m.releaseTitle, m.conditionLabelAr, m.conditionLabelEn, m.architecture, m.notes].join(' ').toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+      return true;
+    });
+
+    const computedModels = filtered.map(computeModelMetricsBackend);
+    const aggregateMetrics = computeAggregateMetricsBackend(computedModels);
+
+    res.json({
+      success: true,
+      count: computedModels.length,
+      models: computedModels,
+      aggregateMetrics
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'AI_MODELS_FETCH_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/admin/ai/models/:modelId
+ * Deep dive inspection of a specific model version (confusion matrix, ROC, sub-cohorts)
+ */
+app.get('/api/admin/ai/models/:modelId', requireAuth, async (req, res) => {
+  try {
+    const role = await resolveAiRequesterRole(req);
+    const isOwner = hasTrustedOwnerClaim(req.user);
+    if (!isOwner && !AI_MONITORING_AUTHORIZED_ROLES.includes(role)) {
+      return res.status(403).json({
+        error: 'ACCESS_DENIED',
+        message: `Role '${role}' is not authorized to access AI Model details.`
+      });
+    }
+
+    const { modelId } = req.params;
+    const catalog = await getAiModelsCatalog();
+    const model = catalog.find(m => m.id === modelId || m.version === modelId);
+    if (!model) {
+      return res.status(404).json({
+        error: 'MODEL_NOT_FOUND',
+        message: `AI Model with ID or version '${modelId}' not found.`
+      });
+    }
+
+    const computed = computeModelMetricsBackend(model);
+    res.json({
+      success: true,
+      model: computed
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'AI_MODEL_FETCH_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/admin/ai/models/:modelId/promote
+ * Promote candidate or staged model to active production status.
+ * Automatically archives previous active model in the same scope.
+ * Restricted to Super Admin and Clinical QA with immutable statutory audit logging.
+ */
+app.post('/api/admin/ai/models/:modelId/promote', requireAuth, async (req, res) => {
+  try {
+    const role = await resolveAiRequesterRole(req);
+    const isOwner = hasTrustedOwnerClaim(req.user);
+    if (!isOwner && !AI_MODEL_MANAGERS.includes(role)) {
+      return res.status(403).json({
+        error: 'ACCESS_DENIED',
+        message: `Role '${role}' is not authorized to promote AI models to active production status. Requires Super Admin or Clinical QA privileges.`
+      });
+    }
+
+    const { modelId } = req.params;
+    const catalog = await getAiModelsCatalog();
+    const targetModel = catalog.find(m => m.id === modelId || m.version === modelId);
+    if (!targetModel) {
+      return res.status(404).json({
+        error: 'MODEL_NOT_FOUND',
+        message: `AI Model with ID or version '${modelId}' not found.`
+      });
+    }
+
+    const previousStatus = targetModel.status;
+    const conditionScope = targetModel.conditionScope;
+
+    // Demote existing active models in the same scope
+    const archivedModels = [];
+    for (const m of inMemoryAiModels) {
+      if (m.conditionScope === conditionScope && m.status === 'active' && m.id !== targetModel.id) {
+        m.status = 'archived';
+        m.archivedAt = new Date().toISOString();
+        archivedModels.push({ id: m.id, version: m.version, name: m.name });
+        if (db) {
+          await db.collection('ai_models').doc(m.id).set(m, { merge: true }).catch(() => {});
+        }
+      }
+    }
+
+    targetModel.status = 'active';
+    targetModel.promotedAt = new Date().toISOString();
+    targetModel.promotedBy = { uid: req.user.uid, email: req.user.email, role };
+
+    if (db) {
+      await db.collection('ai_models').doc(targetModel.id).set(targetModel, { merge: true }).catch(() => {});
+    }
+
+    // Record Immutable Audit Event
+    if (auditService && typeof auditService.recordAuditEvent === 'function') {
+      await auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.AI_MODEL_PROMOTED,
+        req,
+        details: {
+          modelId: targetModel.id,
+          version: targetModel.version,
+          name: targetModel.name,
+          conditionScope,
+          previousStatus,
+          newStatus: 'active',
+          archivedModels,
+          promotedAt: targetModel.promotedAt
+        }
+      }).catch(err => console.warn('[AUDIT] Failed to record AI model promotion:', err.message));
+    }
+
+    res.json({
+      success: true,
+      message: `Model ${targetModel.name} (${targetModel.version}) successfully promoted to active production status.`,
+      model: computeModelMetricsBackend(targetModel),
+      archivedModels
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'AI_MODEL_PROMOTE_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/admin/ai/evaluation/record
+ * Record new clinical evaluation batch / calibration results for an AI model.
+ * Restricted to Super Admin and Clinical QA with immutable statutory audit logging.
+ */
+app.post('/api/admin/ai/evaluation/record', requireAuth, async (req, res) => {
+  try {
+    const role = await resolveAiRequesterRole(req);
+    const isOwner = hasTrustedOwnerClaim(req.user);
+    if (!isOwner && !AI_MODEL_MANAGERS.includes(role)) {
+      return res.status(403).json({
+        error: 'ACCESS_DENIED',
+        message: `Role '${role}' is not authorized to record AI clinical evaluations. Requires Super Admin or Clinical QA privileges.`
+      });
+    }
+
+    const { modelId, batchName, datasetVersion, confusionMatrix, doctorConcordance, notes, sampleSize } = req.body || {};
+    if (!modelId) {
+      return res.status(400).json({
+        error: 'INVALID_REQUEST',
+        message: 'modelId is required to record clinical evaluation.'
+      });
+    }
+
+    const catalog = await getAiModelsCatalog();
+    const targetModel = catalog.find(m => m.id === modelId || m.version === modelId);
+    if (!targetModel) {
+      return res.status(404).json({
+        error: 'MODEL_NOT_FOUND',
+        message: `AI Model with ID or version '${modelId}' not found.`
+      });
+    }
+
+    const evalId = `eval_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const cm = confusionMatrix || targetModel.confusionMatrix || { tp: 0, fp: 0, tn: 0, fn: 0 };
+    const n = sampleSize || (cm.tp + cm.fp + cm.tn + cm.fn);
+    const evaluationRecord = {
+      id: evalId,
+      modelId: targetModel.id,
+      modelVersion: targetModel.version,
+      batchName: batchName || 'Calibration Batch',
+      datasetVersion: datasetVersion || 'HealthVibe-Eval-v1',
+      confusionMatrix: cm,
+      sampleSize: n,
+      doctorConcordance: doctorConcordance || targetModel.doctorConcordance || { agreed: n, total: n, rate: 1.0 },
+      notes: notes || '',
+      evaluatedBy: { uid: req.user.uid, email: req.user.email, role },
+      evaluatedAt: new Date().toISOString()
+    };
+
+    // Update target model metrics & date
+    targetModel.evaluationDate = evaluationRecord.evaluatedAt.split('T')[0];
+    if (confusionMatrix) targetModel.confusionMatrix = cm;
+    if (sampleSize) targetModel.sampleSize = n;
+    if (doctorConcordance) targetModel.doctorConcordance = doctorConcordance;
+
+    if (db) {
+      await db.collection('ai_evaluations').doc(evalId).set(evaluationRecord).catch(() => {});
+      await db.collection('ai_models').doc(targetModel.id).set(targetModel, { merge: true }).catch(() => {});
+    }
+
+    // Record Immutable Audit Event
+    if (auditService && typeof auditService.recordAuditEvent === 'function') {
+      await auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.AI_MODEL_EVALUATED,
+        req,
+        details: {
+          evaluationId: evalId,
+          modelId: targetModel.id,
+          version: targetModel.version,
+          batchName: evaluationRecord.batchName,
+          datasetVersion: evaluationRecord.datasetVersion,
+          sampleSize: n,
+          confusionMatrix: cm,
+          doctorConcordance: evaluationRecord.doctorConcordance,
+          evaluatedAt: evaluationRecord.evaluatedAt
+        }
+      }).catch(err => console.warn('[AUDIT] Failed to record AI model evaluation:', err.message));
+    }
+
+    res.status(201).json({
+      success: true,
+      evaluation: evaluationRecord,
+      updatedModel: computeModelMetricsBackend(targetModel)
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'AI_EVALUATION_RECORD_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/admin/ai/export
+ * Export clinical AI models and evaluation metrics in CSV or JSON format.
+ * Generates statutory audit trail for all data exports.
+ */
+app.get('/api/admin/ai/export', requireAuth, async (req, res) => {
+  try {
+    const role = await resolveAiRequesterRole(req);
+    const isOwner = hasTrustedOwnerClaim(req.user);
+    if (!isOwner && !AI_MONITORING_AUTHORIZED_ROLES.includes(role)) {
+      return res.status(403).json({
+        error: 'ACCESS_DENIED',
+        message: `Role '${role}' is not authorized to export AI evaluation metrics.`
+      });
+    }
+
+    const format = (req.query.format || 'json').toLowerCase();
+    const catalog = await getAiModelsCatalog();
+    const { version, condition, status, timeRange, search } = req.query || {};
+
+    let filtered = catalog.filter(m => {
+      if (version && version !== 'all' && m.id !== version && m.version !== version) return false;
+      if (condition && condition !== 'all' && m.conditionScope !== condition) return false;
+      if (status && status !== 'all' && m.status !== status) return false;
+      if (timeRange && timeRange !== 'all' && m.evaluationDate) {
+        const evalTime = new Date(m.evaluationDate).getTime();
+        const daysAgo = (Date.now() - evalTime) / (1000 * 60 * 60 * 24);
+        if (timeRange === '7d' && daysAgo > 7) return false;
+        if (timeRange === '30d' && daysAgo > 30) return false;
+        if (timeRange === '90d' && daysAgo > 90) return false;
+      }
+      if (search && String(search).trim()) {
+        const q = String(search).trim().toLowerCase();
+        const haystack = [m.name, m.version, m.releaseTitle, m.conditionLabelAr, m.conditionLabelEn, m.architecture, m.notes].join(' ').toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+      return true;
+    });
+
+    const computedModels = filtered.map(computeModelMetricsBackend);
+    const aggregateMetrics = computeAggregateMetricsBackend(computedModels);
+
+    // Record Immutable Audit Event
+    if (auditService && typeof auditService.recordAuditEvent === 'function') {
+      await auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.AI_MODEL_EXPORTED,
+        req,
+        details: {
+          format,
+          recordsCount: computedModels.length,
+          filters: { version, condition, status, timeRange, search },
+          exportedAt: new Date().toISOString()
+        }
+      }).catch(err => console.warn('[AUDIT] Failed to record AI model export:', err.message));
+    }
+
+    if (format === 'csv') {
+      const csv = generateModelsCsvBackend(computedModels);
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', 'attachment; filename="ai_models_evaluation_metrics.csv"');
+      return res.send(csv);
+    }
+
+    return res.json({
+      success: true,
+      exportedAt: new Date().toISOString(),
+      count: computedModels.length,
+      models: computedModels,
+      aggregateMetrics
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'AI_EXPORT_FAILED', message: err.message });
+  }
+});
+
+// Expose models & reset for testing
+app.inMemoryAiModels = inMemoryAiModels;
+app.resetAiModels = () => {
+  inMemoryAiModels = JSON.parse(JSON.stringify(INITIAL_CLINICAL_AI_MODELS));
+  app.inMemoryAiModels = inMemoryAiModels;
+};
+
 // Credential values come from an administrator-approved application, not the
 // editable user profile, ID token display name, or report request body.
 async function getVerifiedDoctorIdentity(uid) {
