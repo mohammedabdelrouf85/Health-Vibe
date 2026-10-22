@@ -72,6 +72,7 @@
   <link rel="stylesheet" href="./modules/doctor/doctor.css">
   <link rel="stylesheet" href="./modules/doctor/doctor-schedule.css">
   <link rel="stylesheet" href="./modules/admin/admin.css">
+  <link rel="stylesheet" href="./modules/admin/ai-monitoring.css">
   <link rel="stylesheet" href="./modules/appointments/appointments.css">
   <link rel="stylesheet" href="./modules/assessment/assessment.css">
   <link rel="stylesheet" href="./modules/reports/reports.css">
@@ -2424,6 +2425,9 @@
             <button type="button" class="solid-button" onclick="showScreen('kpi')" style="padding: 8px 16px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px;">
               <span>📊</span> لوحة مؤشرات الأداء (KPIs)
             </button>
+            <button type="button" class="solid-button" onclick="document.getElementById('adminAiMonitoringPanelContainer')?.scrollIntoView({behavior: 'smooth'})" style="padding: 8px 16px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; background: linear-gradient(135deg, #10b981, #0d9488);">
+              <span>🤖</span> مراقبة نماذج الذكاء الاصطناعي
+            </button>
           </div>
         </div>
 
@@ -2935,6 +2939,11 @@
               <div id="adminViewerRejectionsCount" style="font-size: 11px; color: var(--muted); margin-top: 2px;">صور غير واضحة أو تالفة</div>
             </div>
           </div>
+        </article>
+
+        <!-- 32. AI MODEL MONITORING DASHBOARD (Infermedica Benchmark) -->
+        <article class="panel" id="adminAiMonitoringPanel" style="margin-top: 24px; padding: 0; background: transparent; border: none;">
+          <div id="adminAiMonitoringPanelContainer"></div>
         </article>
 
       </section>
@@ -4577,6 +4586,8 @@
   <script defer src="./modules/appointments/feature-panels-641-670.js?v=1.0"></script>
   <script defer src="./modules/admin/admin-service.js?v=1.0"></script>
   <script defer src="./modules/admin/admin-ui.js?v=1.0"></script>
+  <script defer src="./modules/admin/ai-monitoring-service.js?v=1.0"></script>
+  <script defer src="./modules/admin/ai-monitoring-ui.js?v=1.0"></script>
   <script defer src="./modules/notifications/notifications-service.js?v=1.0"></script>
   <script defer src="./modules/notifications/notifications-ui.js?v=1.0"></script>
   <script defer src="./modules/diabetes/diabetes-service.js?v=1.0"></script>

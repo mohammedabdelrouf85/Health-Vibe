@@ -18,6 +18,9 @@
             <button type="button" class="solid-button" onclick="showScreen('kpi')" style="padding: 8px 16px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px;">
               <span>📊</span> لوحة مؤشرات الأداء (KPIs)
             </button>
+            <button type="button" class="solid-button" onclick="document.getElementById('adminAiMonitoringPanelContainer')?.scrollIntoView({behavior: 'smooth'})" style="padding: 8px 16px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; background: linear-gradient(135deg, #10b981, #0d9488);">
+              <span>🤖</span> مراقبة نماذج الذكاء الاصطناعي
+            </button>
           </div>
         </div>
 
@@ -490,6 +493,11 @@
               <div id="adminViewerRejectionsCount" style="font-size: 11px; color: var(--muted); margin-top: 2px;">صور غير واضحة أو تالفة</div>
             </div>
           </div>
+        </article>
+
+        <!-- 32. AI MODEL MONITORING DASHBOARD (Infermedica Benchmark) -->
+        <article class="panel" id="adminAiMonitoringPanel" style="margin-top: 24px; padding: 0; background: transparent; border: none;">
+          <div id="adminAiMonitoringPanelContainer"></div>
         </article>
 
       </section>

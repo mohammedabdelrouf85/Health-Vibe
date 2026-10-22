@@ -9525,6 +9525,9 @@ function showScreen(name) {
     renderAdminApplications();
     renderAdminUsers();
     renderAdminClinics();
+    if (window.HealthVibes?.AIMonitoringUI?.renderAIMonitoringPanel) {
+      window.HealthVibes.AIMonitoringUI.renderAIMonitoringPanel("adminAiMonitoringPanelContainer");
+    }
   }
   if (name === "consent") {
     renderConsentScreen();
