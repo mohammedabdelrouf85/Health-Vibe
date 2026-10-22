@@ -64,6 +64,8 @@
   <link rel="stylesheet" href="./modules/patient/family-profiles.css">
   <link rel="stylesheet" href="./modules/patient/onboarding.css">
   <link rel="stylesheet" href="./modules/patient/condition-tailoring.css">
+  <link rel="stylesheet" href="./modules/patient/medication-reminders.css">
+  <link rel="stylesheet" href="./modules/patient/scheduled-reassessment.css">
   <link rel="stylesheet" href="./modules/help/faq.css">
   <link rel="stylesheet" href="./modules/core/connection-banner.css">
   <link rel="stylesheet" href="./modules/core/lite-mode.css">
@@ -74,6 +76,8 @@
   <link rel="stylesheet" href="./modules/assessment/assessment.css">
   <link rel="stylesheet" href="./modules/reports/reports.css">
   <link rel="stylesheet" href="./modules/reports/quick-share.css">
+  <link rel="stylesheet" href="./modules/appointments/priority-slot-allocation.css">
+  <link rel="stylesheet" href="./modules/appointments/feature-panels-641-670.css">
   <script src="./bootstrap.js?v=5.0"></script>
   <script src="./network-resilience.js?v=1.0"></script>
   <script src="./modules/core/connection-banner.js?v=1.0"></script>
@@ -527,6 +531,8 @@
         <button class="nav-item" data-screen="profile" data-i18n-title="nav.profile"><span class="nav-icon">👤</span><span class="nav-label" data-i18n="nav.profile">Medical Profile</span></button>
         <button class="nav-item" type="button" onclick="openChestRadiologyStudio()" data-i18n-title="radiologyUpload.title"><span class="nav-icon">🩻</span><span class="nav-label" data-i18n="radiologyUpload.title">الأشعة الصدرية (X-Ray / CT)</span></button>
         <button class="nav-item" type="button" onclick="openMedicationCaptureStudio()" data-i18n-title="medicationCapture.navTitle"><span class="nav-icon">💊</span><span class="nav-label" data-i18n="medicationCapture.navTitle">علب الأدوية والروشتات (Medication Photos)</span></button>
+        <button class="nav-item" type="button" id="navMedicationRemindersBtn" onclick="openMedicationRemindersStudio()" data-i18n-title="medicationReminders.navTitle"><span class="nav-icon">⏰</span><span class="nav-label" data-i18n="medicationReminders.navTitle">تنبيهات البخاخات والأدوية (Reminders)</span></button>
+        <button class="nav-item" type="button" id="navScheduledReassessmentBtn" onclick="openScheduledReassessmentWizard()" data-i18n-title="scheduledReassessment.navTitle"><span class="nav-icon">📈</span><span class="nav-label" data-i18n="scheduledReassessment.navTitle">تقييم المتابعة الدوري (NuvoAir)</span></button>
         <button class="nav-item" data-screen="consent" data-i18n-title="nav.consent"><span class="nav-icon">🔒</span><span class="nav-label" data-i18n="nav.consent">Consent & Privacy</span></button>
         <button class="nav-item" data-screen="assessment" data-i18n-title="nav.assessment"><span class="nav-icon">🫁</span><span class="nav-label" data-i18n="nav.assessment">Breathing Assessment</span></button>
 
@@ -731,6 +737,11 @@
           <article><span data-i18n="patient.resultStatus">Result status</span><strong id="patientResultStatus">--</strong><small data-i18n="patient.waitingForDoctor">Waiting for doctor</small></article>
           <article><span data-i18n="patient.medicalProfile">Medical Profile</span><strong id="patientProfileCompletion">100%</strong><small data-i18n="common.complete">Complete</small></article>
         </div>
+
+        <!-- Medication Reminders & Inhaler Adherence Widget (Propeller Health Benchmark) -->
+        <div id="patientMedicationRemindersCard" class="medication-reminders-card-mount"></div>
+        <!-- Scheduled Re-assessment & Longitudinal Control Widget (NuvoAir Medical Benchmark) -->
+        <div id="patientScheduledReassessmentCard" class="scheduled-reassessment-card-mount"></div>
 
         <article class="panel" style="margin-top: 18px;">
           <div class="panel-head"><h3>Alerts</h3><span class="pill pending" id="patientAlertsCount">0 new</span></div>
@@ -1368,6 +1379,14 @@
                 <span data-i18n="labUpload.syncStatusBtn">تحديث الربط بالملف 🔄</span>
               </button>
             </div>
+          </article>
+
+          <!-- =========================================================================
+               🔒 AMWELL-BENCHMARK PRIVATE CLOUD STORAGE & SIGNED URLS VAULT (P2 Feature)
+               Private Cloud Bucket Encryption (AES-256) & Ephemeral Signed URLs (15m TTL)
+               ========================================================================= -->
+          <article class="panel amwell-secure-storage-panel" id="amwellSecureVaultPanel">
+            <div id="amwellSecureVaultMount"></div>
           </article>
 
           <!-- =========================================================================
@@ -2315,6 +2334,9 @@
             <div id="chatQuickChips" style="display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap;"></div>
             <div class="chat-compose">
               <button type="button" class="chat-cam-btn" id="btnChatMedCapture" onclick="openMedicationCaptureStudio({ source: 'chatbot' })" title="تصوير علبة دواء أو بخاخة أو روشتة" aria-label="تصوير علبة دواء أو بخاخة أو روشتة">📷</button>
+              <button type="button" class="chat-cam-btn" id="btnChatMedReminders" onclick="openMedicationRemindersStudio({ source: 'chatbot' })" title="تنبيهات البخاخات ومتابعة الالتزام (Propeller)" aria-label="تنبيهات البخاخات ومتابعة الالتزام">⏰</button>
+              <button type="button" class="chat-cam-btn" id="btnChatScheduledReassessment" onclick="openScheduledReassessmentWizard({ source: 'chatbot' })" title="تقييم المتابعة الدوري (NuvoAir)" aria-label="تقييم المتابعة الدوري">📈</button>
+              <button type="button" class="chat-cam-btn" id="btnChatSecureFileAttach" onclick="HealthVibes.SecureFilesUI.triggerFileBrowse()" title="إرفاق تحليل أو أشعة مشفرة (Amwell Vault)" aria-label="إرفاق تحليل أو أشعة مشفرة">📎</button>
               <label for="chatInput" class="sr-only">اكتب استفسارك هنا حول تقريرك المعتمد / Ask assistant</label>
               <input id="chatInput" placeholder="اكتب استفسارك هنا حول تقريرك المعتمد..." autocomplete="off">
               <button id="sendChat" class="solid-button">إرسال</button>
@@ -4525,6 +4547,7 @@
   <script defer src="./modules/patient/patient-ui.js?v=1.0"></script>
   <script defer src="./modules/patient/chest-radiology-ui.js?v=1.0"></script>
   <script defer src="./modules/patient/medication-capture-ui.js?v=1.0"></script>
+  <script defer src="./modules/patient/secure-files-ui.js?v=1.0"></script>
   <script defer src="./modules/patient/family-service.js?v=1.0"></script>
   <script defer src="./modules/patient/family-ui.js?v=1.0"></script>
   <script defer src="./modules/patient/onboarding-service.js?v=1.0"></script>
@@ -4533,6 +4556,8 @@
   <script defer src="./modules/patient/condition-tailoring-ui.js?v=1.0"></script>
   <script defer src="./modules/patient/blood-disorders-ui.js?v=1.0"></script>
   <script defer src="./modules/patient/obesity-ui.js?v=1.0"></script>
+  <script defer src="./modules/patient/medication-reminders-ui.js?v=1.0"></script>
+  <script defer src="./modules/patient/scheduled-reassessment-ui.js?v=1.0"></script>
   <script defer src="./modules/help/faq-service.js?v=1.0"></script>
   <script defer src="./modules/help/faq-ui.js?v=1.0"></script>
   <script defer src="./modules/assessment/assessment-validation.js?v=1.0"></script>
@@ -4549,6 +4574,7 @@
   <script defer src="./modules/reports/quick-share-ui.js?v=1.0"></script>
   <script defer src="./modules/appointments/appointments-service.js?v=1.0"></script>
   <script defer src="./modules/appointments/appointments-ui.js?v=1.0"></script>
+  <script defer src="./modules/appointments/feature-panels-641-670.js?v=1.0"></script>
   <script defer src="./modules/admin/admin-service.js?v=1.0"></script>
   <script defer src="./modules/admin/admin-ui.js?v=1.0"></script>
   <script defer src="./modules/notifications/notifications-service.js?v=1.0"></script>

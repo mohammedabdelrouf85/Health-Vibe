@@ -89,7 +89,7 @@ async function runTests() {
   // ─────────────────────────────────────────────────────────────────
   console.log('▶ TEST 1: Waiting List Priority Tiers, FIFO Ordering & Validation');
 
-  const targetDate = '2026-10-15';
+  const targetDate = '2026-11-15';
   const doctorId = 'dr_mona';
 
   // 1A: Routine patient joins first

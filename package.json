@@ -134,10 +134,16 @@
     "build:prod": "node scripts/build.js --env=production",
     "deploy:staging": "node scripts/deploy.js --env=staging",
     "deploy:prod": "node scripts/deploy.js --env=production --force",
-    "deploy:live": "node scripts/deploy.js --env=production --force",
     "rollback:staging": "node scripts/rollback.js --env=staging",
     "rollback:prod": "node scripts/rollback.js --env=production",
-    "grant:owners": "node backend/scripts/grant-owners.js"
+    "grant:owners": "node backend/scripts/grant-owners.js",
+    "test:priority-slots": "node tests/kry_priority_slot_allocation_641_645.test.js",
+    "test:visit-ratings": "node tests/vezeeta_visit_rating_646_650.test.js",
+    "test:lab-result-alerts": "node tests/practo_lab_result_alerts_651_655.test.js",
+    "test:doctor-directory": "node tests/vezeeta_doctor_directory_656_660.test.js",
+    "test:booking-transparency": "node tests/clinido_booking_transparency_661_665.test.js",
+    "test:chat-history": "node tests/esaal_saved_chat_history_666_670.test.js",
+    "test:suite-641-670": "node tests/kry_priority_slot_allocation_641_645.test.js && node tests/vezeeta_visit_rating_646_650.test.js && node tests/practo_lab_result_alerts_651_655.test.js && node tests/vezeeta_doctor_directory_656_660.test.js && node tests/clinido_booking_transparency_661_665.test.js && node tests/esaal_saved_chat_history_666_670.test.js"
   },
   "keywords": [
     "health-vibe",

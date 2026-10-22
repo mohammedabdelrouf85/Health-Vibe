@@ -386,6 +386,22 @@
     ONE_CLICK_REBOOK_CLICKED: 'one_click_rebook_clicked',
     ONE_CLICK_REBOOK_SUCCESS: 'one_click_rebook_success',
     CALENDAR_ICS_DOWNLOADED: 'calendar_ics_downloaded',
+    // 📅 Okadoc Google Calendar Telemetry Events
+    GOOGLE_CALENDAR_BUTTON_CLICKED: 'google_calendar_button_clicked',
+    GOOGLE_CALENDAR_SYNC_SUCCESS: 'google_calendar_sync_success',
+    GOOGLE_CALENDAR_SYNC_FAILURE: 'google_calendar_sync_failure',
+    GOOGLE_CALENDAR_DEEP_LINK_GENERATED: 'google_calendar_deep_link_generated',
+    GOOGLE_CALENDAR_CONSENT_GRANTED: 'google_calendar_consent_granted',
+    GOOGLE_CALENDAR_CONSENT_REVOKED: 'google_calendar_consent_revoked',
+    GOOGLE_CALENDAR_DISCLAIMER_VIEWED: 'google_calendar_disclaimer_viewed',
+    CHATBOT_CALENDAR_CARD_RENDERED: 'chatbot_calendar_card_rendered',
+    CHATBOT_CALENDAR_CARD_CLICKED: 'chatbot_calendar_card_clicked',
+    APPOINTMENT_CALENDAR_SYNC_CLICKED: 'appointment_calendar_sync_clicked',
+    APPOINTMENT_CALENDAR_LINKS_GENERATED: 'appointment_calendar_links_generated',
+    APPOINTMENT_CALENDAR_SYNC_SAVED: 'appointment_calendar_sync_saved',
+    CALENDAR_PRIVACY_VIOLATION_BLOCKED: 'calendar_privacy_violation_blocked',
+    CALENDAR_PHYSICIAN_PRIMACY_ENFORCED: 'calendar_physician_primacy_enforced',
+    CALENDAR_CONSENT_UPDATED: 'calendar_consent_updated',
     // 🔔 Doctolib Automated Reminders & No-Show Telemetry
     APPOINTMENT_REMINDER_SENT: 'appointment_reminder_sent',
     APPOINTMENT_REMINDER_DELIVERED: 'appointment_reminder_delivered',
@@ -526,6 +542,93 @@
     const rebookClicks = events.filter(e => matchEvt(e, 'one_click_rebook_clicked')).length;
     const rebookSuccesses = events.filter(e => matchEvt(e, 'one_click_rebook_success')).length;
     const icsDownloads = events.filter(e => matchEvt(e, 'calendar_ics_downloaded')).length;
+
+    // 📅 Okadoc Google Calendar Telemetry & Utilization
+    const calendarSyncClicks = events.filter(e =>
+      matchEvt(e, 'google_calendar_button_clicked') || matchEvt(e, 'appointment_calendar_sync_clicked')
+    ).length;
+    const calendarSyncSuccesses = events.filter(e =>
+      matchEvt(e, 'google_calendar_sync_success') || matchEvt(e, 'appointment_calendar_sync_saved')
+    ).length;
+    const calendarSyncFailures = events.filter(e =>
+      matchEvt(e, 'google_calendar_sync_failure')
+    ).length;
+    const calendarLinksGenerated = events.filter(e =>
+      matchEvt(e, 'google_calendar_deep_link_generated') || matchEvt(e, 'appointment_calendar_links_generated')
+    ).length;
+    const chatbotCardsRendered = events.filter(e =>
+      matchEvt(e, 'chatbot_calendar_card_rendered')
+    ).length;
+    const chatbotCardsClicked = events.filter(e =>
+      matchEvt(e, 'chatbot_calendar_card_clicked')
+    ).length;
+    const calendarPrivacyBlocks = events.filter(e =>
+      matchEvt(e, 'calendar_privacy_violation_blocked')
+    ).length;
+    const calendarPhysicianPrimacyBlocks = events.filter(e =>
+      matchEvt(e, 'calendar_physician_primacy_enforced')
+    ).length;
+    const calendarConsentGrants = events.filter(e =>
+      matchEvt(e, 'google_calendar_consent_granted') || (matchEvt(e, 'calendar_consent_updated') && (e.payload?.consent === true || e.properties?.consent === true))
+    ).length;
+    const calendarConsentRevocations = events.filter(e =>
+      matchEvt(e, 'google_calendar_consent_revoked') || (matchEvt(e, 'calendar_consent_updated') && (e.payload?.consent === false || e.properties?.consent === false))
+    ).length;
+
+    // From DB appointments
+    const dbCalendarSyncedAppts = filteredAppts.filter(a =>
+      Boolean(a.syncedToGoogleCalendar || a.calendarSyncCount > 0 || a.calendarSyncStatus === 'synced')
+    );
+    const dbCalendarSyncedCount = dbCalendarSyncedAppts.length;
+
+    const effectiveCalendarSyncSuccesses = Math.max(calendarSyncSuccesses, dbCalendarSyncedCount);
+    const effectiveCalendarSyncAttempts = calendarSyncClicks > 0
+      ? calendarSyncClicks
+      : (effectiveCalendarSyncSuccesses + calendarSyncFailures);
+
+    const googleCalendarAdoptionRate = total > 0
+      ? Number(((effectiveCalendarSyncSuccesses / total) * 100).toFixed(1))
+      : null;
+    const googleCalendarSyncSuccessRate = effectiveCalendarSyncAttempts > 0
+      ? Number(((effectiveCalendarSyncSuccesses / effectiveCalendarSyncAttempts) * 100).toFixed(1))
+      : null;
+    const googleCalendarSyncFailureRate = effectiveCalendarSyncAttempts > 0
+      ? Number(((calendarSyncFailures / effectiveCalendarSyncAttempts) * 100).toFixed(1))
+      : null;
+    const chatbotCalendarCtr = chatbotCardsRendered > 0
+      ? Number(((chatbotCardsClicked / chatbotCardsRendered) * 100).toFixed(1))
+      : null;
+
+    let calendarPatientSyncs = 0;
+    let calendarDoctorSyncs = 0;
+    let calendarClinicSyncs = 0;
+    let calendarTelehealthSyncs = 0;
+    let calendarFollowupSyncs = 0;
+
+    events.forEach(e => {
+      if (matchEvt(e, 'google_calendar_button_clicked') || matchEvt(e, 'appointment_calendar_sync_clicked') || matchEvt(e, 'google_calendar_sync_success') || matchEvt(e, 'appointment_calendar_sync_saved')) {
+        const p = e.payload || e.properties || {};
+        const r = String(p.role || p.actorRole || p.initiatorRole || 'patient').toLowerCase();
+        if (r === 'doctor') calendarDoctorSyncs++;
+        else calendarPatientSyncs++;
+
+        const cType = String(p.consultationType || p.type || '').toLowerCase();
+        if (cType === 'video' || cType === 'telehealth' || p.isOnline === true) calendarTelehealthSyncs++;
+        else if (cType === 'followup') calendarFollowupSyncs++;
+        else if (cType) calendarClinicSyncs++;
+      }
+    });
+
+    dbCalendarSyncedAppts.forEach(a => {
+      const r = String(a.calendarSyncedByRole || a.lastSyncedByRole || 'patient').toLowerCase();
+      if (r === 'doctor') calendarDoctorSyncs++;
+      else calendarPatientSyncs++;
+
+      const cType = String(a.consultationType || a.type || '').toLowerCase();
+      if (cType === 'video' || cType === 'telehealth' || a.isOnlineConsultation || a.isOnline) calendarTelehealthSyncs++;
+      else if (cType === 'followup') calendarFollowupSyncs++;
+      else calendarClinicSyncs++;
+    });
 
     // 🔔 Doctolib Automated Reminders & Attendance Confirmation Telemetry
     const reminderSentEvents = events.filter(e => matchEvt(e, 'appointment_reminder_sent'));
@@ -790,7 +893,28 @@
         leaveCancellationsCount,
         averageSlotDurationMinutes,
         branchCoverageRate,
-        branchScheduleBreakdown
+        branchScheduleBreakdown,
+        // 📅 Okadoc Google Calendar summary keys
+        calendarSyncClicks,
+        calendarSyncSuccesses,
+        calendarSyncFailures,
+        calendarLinksGenerated,
+        effectiveCalendarSyncAttempts,
+        googleCalendarAdoptionRate,
+        googleCalendarSyncSuccessRate,
+        googleCalendarSyncFailureRate,
+        calendarPatientSyncs,
+        calendarDoctorSyncs,
+        calendarClinicSyncs,
+        calendarTelehealthSyncs,
+        calendarFollowupSyncs,
+        chatbotCardsRendered,
+        chatbotCardsClicked,
+        chatbotCalendarCtr,
+        calendarPrivacyBlocks,
+        calendarPhysicianPrimacyBlocks,
+        calendarConsentGrants,
+        calendarConsentRevocations
       },
       total,
       confirmed,
@@ -871,8 +995,95 @@
       rescheduleReasonsBreakdown,
       cancellationReasonsBreakdown,
       initiatorBreakdown,
+      // 📅 Okadoc Google Calendar Displays & Structured Breakdown
+      googleCalendarAdoptionRate,
+      googleCalendarAdoptionRateDisplay: googleCalendarAdoptionRate !== null ? `${googleCalendarAdoptionRate}%` : naText,
+      googleCalendarAdoptionRateDisplayAr: googleCalendarAdoptionRate !== null ? `${googleCalendarAdoptionRate}%` : 'غير متاح',
+      googleCalendarSyncSuccessRate,
+      googleCalendarSyncSuccessRateDisplay: googleCalendarSyncSuccessRate !== null ? `${googleCalendarSyncSuccessRate}%` : naText,
+      googleCalendarSyncSuccessRateDisplayAr: googleCalendarSyncSuccessRate !== null ? `${googleCalendarSyncSuccessRate}%` : 'غير متاح',
+      googleCalendarSyncFailureRate,
+      googleCalendarSyncFailureRateDisplay: googleCalendarSyncFailureRate !== null ? `${googleCalendarSyncFailureRate}%` : naText,
+      googleCalendarSyncFailureRateDisplayAr: googleCalendarSyncFailureRate !== null ? `${googleCalendarSyncFailureRate}%` : 'غير متاح',
+      googleCalendarPatientSyncCount: calendarPatientSyncs,
+      googleCalendarDoctorSyncCount: calendarDoctorSyncs,
+      googleCalendarClinicCount: calendarClinicSyncs,
+      googleCalendarTelehealthCount: calendarTelehealthSyncs,
+      googleCalendarFollowupCount: calendarFollowupSyncs,
+      chatbotCalendarCardRenderCount: chatbotCardsRendered,
+      chatbotCalendarCardClickCount: chatbotCardsClicked,
+      chatbotCalendarCtr,
+      chatbotCalendarCtrDisplay: chatbotCalendarCtr !== null ? `${chatbotCalendarCtr}%` : naText,
+      chatbotCalendarCtrDisplayAr: chatbotCalendarCtr !== null ? `${chatbotCalendarCtr}%` : 'غير متاح',
+      calendarPrivacyBlocks,
+      calendarPhysicianPrimacyBlocks,
+      calendarConsentGrants,
+      calendarConsentRevocations,
+      googleCalendar: {
+        syncClicks: calendarSyncClicks,
+        syncSuccesses: effectiveCalendarSyncSuccesses,
+        syncFailures: calendarSyncFailures,
+        linksGenerated: calendarLinksGenerated,
+        adoptionRate: googleCalendarAdoptionRate,
+        syncSuccessRate: googleCalendarSyncSuccessRate,
+        syncFailureRate: googleCalendarSyncFailureRate,
+        roleBreakdown: {
+          patientCount: calendarPatientSyncs,
+          doctorCount: calendarDoctorSyncs,
+          patientRatio: (calendarPatientSyncs + calendarDoctorSyncs) > 0 ? Number(((calendarPatientSyncs / (calendarPatientSyncs + calendarDoctorSyncs)) * 100).toFixed(1)) : null,
+          doctorRatio: (calendarPatientSyncs + calendarDoctorSyncs) > 0 ? Number(((calendarDoctorSyncs / (calendarPatientSyncs + calendarDoctorSyncs)) * 100).toFixed(1)) : null
+        },
+        consultationBreakdown: {
+          clinicCount: calendarClinicSyncs,
+          telehealthCount: calendarTelehealthSyncs,
+          followupCount: calendarFollowupSyncs
+        },
+        chatbotEngagement: {
+          cardsRendered: chatbotCardsRendered,
+          cardsClicked: chatbotCardsClicked,
+          ctr: chatbotCalendarCtr
+        },
+        securityAudit: {
+          privacyBlocks: calendarPrivacyBlocks,
+          physicianPrimacyBlocks: calendarPhysicianPrimacyBlocks,
+          consentGrants: calendarConsentGrants,
+          consentRevocations: calendarConsentRevocations
+        }
+      },
       doctorUtilization: docUtilizationMap,
       doctorUtilizationList: Array.from(docUtilization.entries()).map(([doctorId, count]) => ({ doctorId, count }))
+    };
+  }
+
+  /**
+   * 📅 Computes administrative KPIs and utilization metrics for Okadoc Google Calendar Integration (Client Parity).
+   */
+  function calculateGoogleCalendarKpis(appointments = [], options = {}) {
+    const isEn = Boolean(options.isEn);
+    const kpis = calculateAppointmentKpis(appointments, options);
+    const naText = isEn ? 'Unavailable' : 'غير متاح';
+
+    return {
+      timePeriod: options.timePeriod || 'Rolling 30 Days',
+      summary: kpis.summary,
+      adoptionRate: kpis.googleCalendarAdoptionRate,
+      adoptionRateDisplay: kpis.googleCalendarAdoptionRateDisplay,
+      adoptionRateDisplayAr: kpis.googleCalendarAdoptionRateDisplayAr,
+      syncSuccessRate: kpis.googleCalendarSyncSuccessRate,
+      syncSuccessRateDisplay: kpis.googleCalendarSyncSuccessRateDisplay,
+      syncSuccessRateDisplayAr: kpis.googleCalendarSyncSuccessRateDisplayAr,
+      syncFailureRate: kpis.googleCalendarSyncFailureRate,
+      syncFailureRateDisplay: kpis.googleCalendarSyncFailureRateDisplay,
+      syncFailureRateDisplayAr: kpis.googleCalendarSyncFailureRateDisplayAr,
+      chatbotCtr: kpis.chatbotCalendarCtr,
+      chatbotCtrDisplay: kpis.chatbotCalendarCtrDisplay,
+      chatbotCtrDisplayAr: kpis.chatbotCalendarCtrDisplayAr,
+      roleBreakdown: kpis.googleCalendar.roleBreakdown,
+      consultationBreakdown: kpis.googleCalendar.consultationBreakdown,
+      chatbotEngagement: kpis.googleCalendar.chatbotEngagement,
+      securityAudit: kpis.googleCalendar.securityAudit,
+      totalBookings: kpis.total,
+      generatedAt: new Date().toISOString()
     };
   }
 
@@ -1018,6 +1229,7 @@
     calculateKpiMetrics,
     calculateAssessmentJourneyMetrics,
     calculateAppointmentKpis,
+    calculateGoogleCalendarKpis,
     calculateMedicalViewerKpis,
     EVENT_TYPES,
     APPOINTMENT_EVENT_TYPES,

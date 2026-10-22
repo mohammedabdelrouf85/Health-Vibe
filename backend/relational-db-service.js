@@ -35,7 +35,16 @@ class RelationalDatabaseService {
       patient_history: new Map(),
       audit_logs: new Map(),
       medical_file_annotations: new Map(),
-      medical_viewer_audit_logs: new Map()
+      medical_viewer_audit_logs: new Map(),
+      secure_medical_files: new Map(),
+      patient_medications: new Map(),
+      medication_doses: new Map(),
+      rescue_inhaler_logs: new Map(),
+      medication_reminders_queue: new Map(),
+      scheduled_reassessments: new Map(),
+      reassessment_submissions: new Map(),
+      appointment_calendar_syncs: new Map(),
+      patient_calendar_consents: new Map()
     };
 
     // Secondary Indexes for rapid lookup
@@ -48,7 +57,20 @@ class RelationalDatabaseService {
       cases_patient_id: new Map(),
       annotations_case_id: new Map(),
       annotations_file_id: new Map(),
-      viewer_audit_case_id: new Map()
+      viewer_audit_case_id: new Map(),
+      secure_files_patient_id: new Map(),
+      secure_files_appointment_id: new Map(),
+      secure_files_case_id: new Map(),
+      secure_files_session_id: new Map(),
+      patient_medications_patient_id: new Map(),
+      medication_doses_patient_id: new Map(),
+      rescue_logs_patient_id: new Map(),
+      medication_reminders_patient_id: new Map(),
+      scheduled_reassessments_patient_id: new Map(),
+      reassessment_submissions_patient_id: new Map(),
+      calendar_syncs_appointment_id: new Map(),
+      calendar_syncs_user_id: new Map(),
+      calendar_consents_patient_id: new Map()
     };
 
     this.schemaVersion = "2.1.0-relational";
@@ -990,7 +1012,540 @@ class RelationalDatabaseService {
   }
 
   // ───────────────────────────────────────────────────────────────────────────
-  // 8. HEALTH CHECK & METRICS
+  // 7.5 SECURE MEDICAL FILES & ATTACHMENTS (Amwell Benchmark)
+  // ───────────────────────────────────────────────────────────────────────────
+
+  async createSecureMedicalFile(fileData) {
+    this._assertOperationalProvenance(fileData, "secure_medical_files");
+
+    const patientId = fileData.patientId;
+    if (!patientId) {
+      throw new Error("patientId is mandatory for secure medical files.");
+    }
+
+    const id = fileData.fileId || fileData.id || `sec_file_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
+    const record = {
+      id,
+      patient_id: patientId,
+      file_name: fileData.fileName || fileData.file_name || "medical_document.pdf",
+      file_size: Number(fileData.fileSize || fileData.file_size) || 0,
+      mime_type: fileData.mimeType || fileData.mime_type || "application/octet-stream",
+      category: fileData.category || "lab_analysis",
+      bucket_name: fileData.bucketName || fileData.bucket_name || "health-vibe-private-vault",
+      storage_path: fileData.storagePath || fileData.storage_path || `private_vault/${patientId}/${id}`,
+      encryption_mode: fileData.encryption?.mode || fileData.encryption_mode || "AES-256-GCM",
+      encrypted_at_rest: true,
+      scan_status: fileData.scanStatus || fileData.scan_status || "clean",
+      malware_scan_result: fileData.malwareScanResult || fileData.malware_scan_result || { clean: true },
+      appointment_id: fileData.appointmentId || fileData.appointment_id || null,
+      case_id: fileData.caseId || fileData.case_id || null,
+      session_id: fileData.sessionId || fileData.session_id || null,
+      availability: fileData.availability || "available",
+      source: fileData.source || "patient_vault",
+      created_at: fileData.createdAt || fileData.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    this.tables.secure_medical_files.set(id, record);
+
+    // Index by patient
+    if (!this.indexes.secure_files_patient_id.has(patientId)) {
+      this.indexes.secure_files_patient_id.set(patientId, new Set());
+    }
+    this.indexes.secure_files_patient_id.get(patientId).add(id);
+
+    // Index by appointment
+    if (record.appointment_id) {
+      if (!this.indexes.secure_files_appointment_id.has(record.appointment_id)) {
+        this.indexes.secure_files_appointment_id.set(record.appointment_id, new Set());
+      }
+      this.indexes.secure_files_appointment_id.get(record.appointment_id).add(id);
+    }
+
+    // Index by case
+    if (record.case_id) {
+      if (!this.indexes.secure_files_case_id.has(record.case_id)) {
+        this.indexes.secure_files_case_id.set(record.case_id, new Set());
+      }
+      this.indexes.secure_files_case_id.get(record.case_id).add(id);
+    }
+
+    // Index by chatbot session
+    if (record.session_id) {
+      if (!this.indexes.secure_files_session_id.has(record.session_id)) {
+        this.indexes.secure_files_session_id.set(record.session_id, new Set());
+      }
+      this.indexes.secure_files_session_id.get(record.session_id).add(id);
+    }
+
+    return { ...record };
+  }
+
+  getSecureMedicalFileById(fileId) {
+    if (!fileId) return null;
+    const file = this.tables.secure_medical_files.get(fileId);
+    return file ? { ...file } : null;
+  }
+
+  getSecureMedicalFilesByPatient(patientId) {
+    if (!patientId) return [];
+    const ids = this.indexes.secure_files_patient_id.get(patientId);
+    if (!ids) return [];
+
+    const results = [];
+    for (const id of ids) {
+      const rec = this.tables.secure_medical_files.get(id);
+      if (rec) results.push({ ...rec });
+    }
+    return results.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  }
+
+  getSecureMedicalFilesByAppointment(appointmentId) {
+    if (!appointmentId) return [];
+    const ids = this.indexes.secure_files_appointment_id.get(appointmentId);
+    if (!ids) return [];
+
+    const results = [];
+    for (const id of ids) {
+      const rec = this.tables.secure_medical_files.get(id);
+      if (rec) results.push({ ...rec });
+    }
+    return results.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  }
+
+  getSecureMedicalFilesByCase(caseId) {
+    if (!caseId) return [];
+    const ids = this.indexes.secure_files_case_id.get(caseId);
+    if (!ids) return [];
+
+    const results = [];
+    for (const id of ids) {
+      const rec = this.tables.secure_medical_files.get(id);
+      if (rec) results.push({ ...rec });
+    }
+    return results.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  }
+
+  getSecureMedicalFilesByChatSession(sessionId) {
+    if (!sessionId) return [];
+    const ids = this.indexes.secure_files_session_id.get(sessionId);
+    if (!ids) return [];
+
+    const results = [];
+    for (const id of ids) {
+      const rec = this.tables.secure_medical_files.get(id);
+      if (rec) results.push({ ...rec });
+    }
+    return results.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  }
+
+  async linkSecureFileToAppointment(fileId, appointmentId) {
+    const file = this.tables.secure_medical_files.get(fileId);
+    if (!file) {
+      throw new Error(`Secure medical file '${fileId}' not found in relational database.`);
+    }
+
+    file.appointment_id = appointmentId;
+    file.updated_at = new Date().toISOString();
+
+    if (!this.indexes.secure_files_appointment_id.has(appointmentId)) {
+      this.indexes.secure_files_appointment_id.set(appointmentId, new Set());
+    }
+    this.indexes.secure_files_appointment_id.get(appointmentId).add(fileId);
+
+    return { ...file };
+  }
+
+  async linkSecureFileToChatSession(fileId, sessionId) {
+    const file = this.tables.secure_medical_files.get(fileId);
+    if (!file) {
+      throw new Error(`Secure medical file '${fileId}' not found in relational database.`);
+    }
+
+    file.session_id = sessionId;
+    file.updated_at = new Date().toISOString();
+
+    if (!this.indexes.secure_files_session_id.has(sessionId)) {
+      this.indexes.secure_files_session_id.set(sessionId, new Set());
+    }
+    this.indexes.secure_files_session_id.get(sessionId).add(fileId);
+
+    return { ...file };
+  }
+
+  async deleteSecureMedicalFile(fileId) {
+    const file = this.tables.secure_medical_files.get(fileId);
+    if (!file) return false;
+
+    // Remove from indexes
+    if (file.patient_id && this.indexes.secure_files_patient_id.has(file.patient_id)) {
+      this.indexes.secure_files_patient_id.get(file.patient_id).delete(fileId);
+    }
+    if (file.appointment_id && this.indexes.secure_files_appointment_id.has(file.appointment_id)) {
+      this.indexes.secure_files_appointment_id.get(file.appointment_id).delete(fileId);
+    }
+    if (file.case_id && this.indexes.secure_files_case_id.has(file.case_id)) {
+      this.indexes.secure_files_case_id.get(file.case_id).delete(fileId);
+    }
+    if (file.session_id && this.indexes.secure_files_session_id.has(file.session_id)) {
+      this.indexes.secure_files_session_id.get(file.session_id).delete(fileId);
+    }
+
+    this.tables.secure_medical_files.delete(fileId);
+    return true;
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // 8. PROPELLER HEALTH MEDICATION & INHALER REMINDERS PERSISTENCE
+  // ───────────────────────────────────────────────────────────────────────────
+
+  async savePatientMedication(medData = {}) {
+    const medId = medData.id || medData.medId || `med_${crypto.randomBytes(8).toString("hex")}`;
+    const record = {
+      id: medId,
+      patient_id: medData.patient_id || medData.patientId,
+      name: medData.name,
+      name_ar: medData.nameAr || medData.name_ar,
+      type: medData.type || "controller", // controller vs rescue
+      active_ingredients: medData.activeIngredients || medData.active_ingredients,
+      schedule_times: medData.scheduleTimes || medData.schedule_times || [],
+      dosage_puffs: Number(medData.dosagePuffs || medData.dosage_puffs || 1),
+      canister_total: Number(medData.canisterTotal || medData.canister_total || 120),
+      canister_remaining: Number(medData.canisterRemaining !== undefined ? medData.canisterRemaining : (medData.canister_remaining !== undefined ? medData.canister_remaining : 120)),
+      low_canister_threshold: Number(medData.lowCanisterThreshold || medData.low_canister_threshold || 20),
+      is_active: medData.isActive !== undefined ? medData.isActive : true,
+      created_at: medData.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    this.tables.patient_medications.set(medId, record);
+    if (record.patient_id) {
+      if (!this.indexes.patient_medications_patient_id.has(record.patient_id)) {
+        this.indexes.patient_medications_patient_id.set(record.patient_id, new Set());
+      }
+      this.indexes.patient_medications_patient_id.get(record.patient_id).add(medId);
+    }
+    return { ...record };
+  }
+
+  async getPatientMedications(patientId) {
+    if (!patientId) return [];
+    const medIds = this.indexes.patient_medications_patient_id.get(patientId);
+    if (!medIds) return [];
+    return Array.from(medIds)
+      .map(id => this.tables.patient_medications.get(id))
+      .filter(Boolean);
+  }
+
+  async saveMedicationDose(doseData = {}) {
+    const doseId = doseData.id || `dose_${crypto.randomBytes(8).toString("hex")}`;
+    const record = {
+      id: doseId,
+      patient_id: doseData.patient_id || doseData.patientId,
+      med_id: doseData.med_id || doseData.medId,
+      scheduled_time: doseData.scheduled_time || doseData.scheduledTime,
+      scheduled_date: doseData.scheduled_date || doseData.scheduledDate || new Date().toISOString().split("T")[0],
+      status: doseData.status || "taken", // taken, snoozed, skipped, missed
+      taken_at: doseData.taken_at || doseData.takenAt || (doseData.status === "taken" ? new Date().toISOString() : null),
+      snoozed_until: doseData.snoozed_until || doseData.snoozedUntil || null,
+      reason: doseData.reason || null,
+      puffs: Number(doseData.puffs || 1),
+      created_at: doseData.created_at || new Date().toISOString()
+    };
+
+    this.tables.medication_doses.set(doseId, record);
+    if (record.patient_id) {
+      if (!this.indexes.medication_doses_patient_id.has(record.patient_id)) {
+        this.indexes.medication_doses_patient_id.set(record.patient_id, new Set());
+      }
+      this.indexes.medication_doses_patient_id.get(record.patient_id).add(doseId);
+    }
+    return { ...record };
+  }
+
+  async getMedicationDoses(patientId) {
+    if (!patientId) return [];
+    const doseIds = this.indexes.medication_doses_patient_id.get(patientId);
+    if (!doseIds) return [];
+    return Array.from(doseIds)
+      .map(id => this.tables.medication_doses.get(id))
+      .filter(Boolean)
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  }
+
+  async saveRescueInhalerLog(rescueData = {}) {
+    const logId = rescueData.id || `rescue_${crypto.randomBytes(8).toString("hex")}`;
+    const record = {
+      id: logId,
+      patient_id: rescueData.patient_id || rescueData.patientId,
+      med_id: rescueData.med_id || rescueData.medId,
+      puffs: Number(rescueData.puffs || 1),
+      trigger: rescueData.trigger || "acute_dyspnea",
+      timestamp: rescueData.timestamp || new Date().toISOString(),
+      safety_alert_triggered: Boolean(rescueData.safety_alert_triggered || rescueData.safetyAlertTriggered),
+      notes: rescueData.notes || null,
+      created_at: new Date().toISOString()
+    };
+
+    this.tables.rescue_inhaler_logs.set(logId, record);
+    if (record.patient_id) {
+      if (!this.indexes.rescue_logs_patient_id.has(record.patient_id)) {
+        this.indexes.rescue_logs_patient_id.set(record.patient_id, new Set());
+      }
+      this.indexes.rescue_logs_patient_id.get(record.patient_id).add(logId);
+    }
+    return { ...record };
+  }
+
+  async getRescueInhalerLogs(patientId) {
+    if (!patientId) return [];
+    const logIds = this.indexes.rescue_logs_patient_id.get(patientId);
+    if (!logIds) return [];
+    return Array.from(logIds)
+      .map(id => this.tables.rescue_inhaler_logs.get(id))
+      .filter(Boolean)
+      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  }
+
+  async saveMedicationReminder(reminderData = {}) {
+    const reminderId = reminderData.id || `rem_${crypto.randomBytes(8).toString("hex")}`;
+    const record = {
+      id: reminderId,
+      patient_id: reminderData.patient_id || reminderData.patientId,
+      med_id: reminderData.med_id || reminderData.medId,
+      scheduled_for: reminderData.scheduled_for || reminderData.scheduledFor,
+      channel: reminderData.channel || "in_app", // in_app, push, whatsapp
+      status: reminderData.status || "pending", // pending, sent, delivered, failed
+      dispatched_at: reminderData.dispatched_at || null,
+      created_at: new Date().toISOString()
+    };
+
+    this.tables.medication_reminders_queue.set(reminderId, record);
+    if (record.patient_id) {
+      if (!this.indexes.medication_reminders_patient_id.has(record.patient_id)) {
+        this.indexes.medication_reminders_patient_id.set(record.patient_id, new Set());
+      }
+      this.indexes.medication_reminders_patient_id.get(record.patient_id).add(reminderId);
+    }
+    return { ...record };
+  }
+
+  async getMedicationReminders(patientId) {
+    if (!patientId) return [];
+    const ids = this.indexes.medication_reminders_patient_id.get(patientId);
+    if (!ids) return [];
+    return Array.from(ids)
+      .map(id => this.tables.medication_reminders_queue.get(id))
+      .filter(Boolean);
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // 8. SCHEDULED RE-ASSESSMENT (NuvoAir Medical Benchmark)
+  // ───────────────────────────────────────────────────────────────────────────
+
+  async saveScheduledReassessment(scheduleData = {}) {
+    const id = scheduleData.id || `sched_${crypto.randomBytes(8).toString("hex")}`;
+    const patientId = scheduleData.patient_id || scheduleData.patientId;
+    const record = {
+      id,
+      patient_id: patientId,
+      status: scheduleData.status || "scheduled",
+      interval_days: Number(scheduleData.interval_days || scheduleData.intervalDays || 7),
+      start_date: scheduleData.start_date || scheduleData.startDate,
+      due_date: scheduleData.due_date || scheduleData.dueDate,
+      due_timestamp: scheduleData.due_timestamp || scheduleData.dueTimestamp,
+      notification_channel: scheduleData.notification_channel || scheduleData.notificationChannel || "in_app",
+      snooze_count: Number(scheduleData.snooze_count || scheduleData.snoozeCount || 0),
+      snoozed_until: scheduleData.snoozed_until || scheduleData.snoozedUntil || null,
+      reason: scheduleData.reason || "post_treatment_7day_improvement",
+      baseline_score: scheduleData.baseline_score || scheduleData.baselineScore || null,
+      created_at: scheduleData.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    this.tables.scheduled_reassessments.set(id, record);
+    if (patientId) {
+      if (!this.indexes.scheduled_reassessments_patient_id.has(patientId)) {
+        this.indexes.scheduled_reassessments_patient_id.set(patientId, new Set());
+      }
+      this.indexes.scheduled_reassessments_patient_id.get(patientId).add(id);
+    }
+    return { ...record };
+  }
+
+  async getScheduledReassessment(patientId) {
+    if (!patientId) return null;
+    const ids = this.indexes.scheduled_reassessments_patient_id.get(patientId);
+    if (!ids || ids.size === 0) return null;
+    const list = Array.from(ids)
+      .map(id => this.tables.scheduled_reassessments.get(id))
+      .filter(Boolean)
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    return list[0] ? { ...list[0] } : null;
+  }
+
+  async saveReassessmentSubmission(subData = {}) {
+    const id = subData.id || `reassess_${crypto.randomBytes(8).toString("hex")}`;
+    const patientId = subData.patient_id || subData.patientId;
+    const record = {
+      id,
+      patient_id: patientId,
+      completed_at: subData.completed_at || subData.completedAt || new Date().toISOString(),
+      date: subData.date || new Date().toISOString().split("T")[0],
+      score: Number(subData.score || 0),
+      control_band: subData.control_band || subData.controlBand || "poor",
+      trajectory: subData.trajectory || "stable",
+      delta_points: Number(subData.delta_points || subData.deltaPoints || 0),
+      delta_pct: Number(subData.delta_pct || subData.deltaPct || 0),
+      baseline_score: Number(subData.baseline_score || subData.baselineScore || 0),
+      clinical_review_recommended: Boolean(subData.clinical_review_recommended ?? subData.clinicalReviewRecommended),
+      day_breathlessness: subData.day_breathlessness ?? subData.dayBreathlessness,
+      night_waking: subData.night_waking ?? subData.nightWaking,
+      rescue_puffs_week: subData.rescue_puffs_week ?? subData.rescuePuffsWeek,
+      activity_limitation: subData.activity_limitation ?? subData.activityLimitation,
+      spo2: subData.spo2,
+      fev1_percent: subData.fev1_percent ?? subData.fev1Percent,
+      peak_flow: subData.peak_flow ?? subData.peakFlow,
+      notes: subData.notes || null,
+      created_at: new Date().toISOString()
+    };
+
+    this.tables.reassessment_submissions.set(id, record);
+    if (patientId) {
+      if (!this.indexes.reassessment_submissions_patient_id.has(patientId)) {
+        this.indexes.reassessment_submissions_patient_id.set(patientId, new Set());
+      }
+      this.indexes.reassessment_submissions_patient_id.get(patientId).add(id);
+    }
+    return { ...record };
+  }
+
+  async getReassessmentSubmissions(patientId) {
+    if (!patientId) return [];
+    const ids = this.indexes.reassessment_submissions_patient_id.get(patientId);
+    if (!ids || ids.size === 0) return [];
+    return Array.from(ids)
+      .map(id => this.tables.reassessment_submissions.get(id))
+      .filter(Boolean)
+      .sort((a, b) => new Date(b.completed_at) - new Date(a.completed_at));
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // 8.5 OKADOC CALENDAR SYNC PERSISTENCE
+  // ───────────────────────────────────────────────────────────────────────────
+
+  async recordCalendarSync(syncData = {}) {
+    const id = syncData.id || `calsync_${crypto.randomBytes(8).toString("hex")}`;
+    const appointmentId = syncData.appointment_id || syncData.appointmentId;
+    if (!appointmentId) {
+      throw new Error("appointment_id is required for calendar sync record.");
+    }
+    const userId = syncData.user_id || syncData.userId || null;
+
+    const record = {
+      id,
+      appointment_id: appointmentId,
+      user_id: userId,
+      role: syncData.role || "patient",
+      calendar_provider: syncData.calendar_provider || syncData.calendarProvider || "google",
+      synced_at: syncData.synced_at || syncData.syncedAt || new Date().toISOString(),
+      ip_address: syncData.ip_address || syncData.ipAddress || null,
+      user_agent: syncData.user_agent || syncData.userAgent || null,
+      created_at: syncData.created_at || new Date().toISOString()
+    };
+
+    this.tables.appointment_calendar_syncs.set(id, record);
+
+    if (appointmentId) {
+      if (!this.indexes.calendar_syncs_appointment_id.has(appointmentId)) {
+        this.indexes.calendar_syncs_appointment_id.set(appointmentId, new Set());
+      }
+      this.indexes.calendar_syncs_appointment_id.get(appointmentId).add(id);
+    }
+
+    if (userId) {
+      if (!this.indexes.calendar_syncs_user_id.has(userId)) {
+        this.indexes.calendar_syncs_user_id.set(userId, new Set());
+      }
+      this.indexes.calendar_syncs_user_id.get(userId).add(id);
+    }
+
+    return { ...record };
+  }
+
+  async getCalendarSyncsByAppointmentId(appointmentId) {
+    if (!appointmentId) return [];
+    const ids = this.indexes.calendar_syncs_appointment_id.get(appointmentId);
+    if (!ids || ids.size === 0) return [];
+    return Array.from(ids)
+      .map(id => this.tables.appointment_calendar_syncs.get(id))
+      .filter(Boolean)
+      .sort((a, b) => new Date(b.synced_at) - new Date(a.synced_at));
+  }
+
+  async setPatientCalendarConsent(patientIdOrData, maybeOptions = {}) {
+    let patientId;
+    let options;
+    if (typeof patientIdOrData === "object" && patientIdOrData !== null) {
+      patientId = patientIdOrData.patientId || patientIdOrData.patient_id;
+      options = patientIdOrData;
+    } else {
+      patientId = patientIdOrData;
+      options = maybeOptions || {};
+    }
+
+    if (!patientId) {
+      throw new Error("patientId is required to set calendar consent.");
+    }
+
+    const consent = options.consent !== undefined ? Boolean(options.consent) : true;
+    const consentMethod = options.consentMethod || options.consent_method || "explicit_ui_toggle";
+    const ipAddress = options.ipAddress || options.ip_address || null;
+    const userAgent = options.userAgent || options.user_agent || null;
+    const reason = options.reason || (consent ? "Patient consented" : "Patient revoked consent");
+
+    const id = `calconsent_${patientId}`;
+    const nowIso = new Date().toISOString();
+    const existing = this.tables.patient_calendar_consents.get(id) || {};
+
+    const record = {
+      id,
+      patient_id: patientId,
+      consent,
+      consent_method: consentMethod,
+      reason,
+      consent_given_at: consent ? (existing.consent_given_at || nowIso) : existing.consent_given_at || null,
+      consent_revoked_at: consent ? null : nowIso,
+      ip_address: ipAddress || existing.ip_address || null,
+      user_agent: userAgent || existing.user_agent || null,
+      created_at: existing.created_at || nowIso,
+      updated_at: nowIso
+    };
+
+    this.tables.patient_calendar_consents.set(id, record);
+    this.indexes.calendar_consents_patient_id.set(patientId, id);
+
+    return { ...record };
+  }
+
+  async getPatientCalendarConsent(patientId) {
+    if (!patientId) return { consent: true, consentGiven: true, defaultPolicy: "opt_in_with_revocation" };
+    const id = this.indexes.calendar_consents_patient_id.get(patientId) || `calconsent_${patientId}`;
+    const record = this.tables.patient_calendar_consents.get(id);
+    if (!record) {
+      return {
+        patient_id: patientId,
+        consent: true,
+        consentGiven: true,
+        defaultPolicy: "opt_in_with_revocation",
+        consent_revoked_at: null
+      };
+    }
+    return { ...record, consentGiven: record.consent };
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // 9. HEALTH CHECK & METRICS
   // ───────────────────────────────────────────────────────────────────────────
 
   getHealthStatus() {
@@ -1008,7 +1563,16 @@ class RelationalDatabaseService {
         patientHistoryRecordsCount: this.tables.patient_history.size,
         auditLogsCount: this.tables.audit_logs.size,
         medicalFileAnnotationsCount: this.tables.medical_file_annotations.size,
-        medicalViewerAuditLogsCount: this.tables.medical_viewer_audit_logs.size
+        medicalViewerAuditLogsCount: this.tables.medical_viewer_audit_logs.size,
+        secureMedicalFilesCount: this.tables.secure_medical_files.size,
+        patientMedicationsCount: this.tables.patient_medications.size,
+        medicationDosesCount: this.tables.medication_doses.size,
+        rescueInhalerLogsCount: this.tables.rescue_inhaler_logs.size,
+        medicationRemindersQueueCount: this.tables.medication_reminders_queue.size,
+        scheduledReassessmentsCount: this.tables.scheduled_reassessments.size,
+        reassessmentSubmissionsCount: this.tables.reassessment_submissions.size,
+        calendarSyncsCount: this.tables.appointment_calendar_syncs.size,
+        patientCalendarConsentsCount: this.tables.patient_calendar_consents.size
       }
     };
   }

@@ -148,7 +148,7 @@ console.log('==================================================================\
       doctorId: 'doc_pulmo_1',
       doctorName: 'Dr. Tarek Pulmonology',
       clinicId: 'cairo_maadi',
-      date: '2026-10-20',
+      date: '2026-11-20',
       slotId: 'slot_1100',
       timeSlot: '11:00 ص',
       timeSlotEn: '11:00 AM',
@@ -170,7 +170,7 @@ console.log('==================================================================\
     const actorPatient = { uid: 'pat_user_1', role: 'patient' };
     const res = await schedulingService.rescheduleAppointmentTransaction(mockDb, {
       appointmentId: 'appt_telemetry_test_1',
-      newDate: '2026-10-22',
+      newDate: '2026-11-25',
       newSlotId: 'slot_1000',
       reason: 'Work conflict'
     }, actorPatient);
@@ -202,7 +202,7 @@ console.log('==================================================================\
     try {
       await schedulingService.rescheduleAppointmentTransaction(mockDb, {
         appointmentId: 'appt_non_existent',
-        newDate: '2026-10-22',
+        newDate: '2026-11-25',
         newSlotId: 'slot_10-00'
       }, { uid: 'pat_user_1', role: 'patient' });
     } catch (e) {

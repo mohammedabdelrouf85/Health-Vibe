@@ -9392,5 +9392,554 @@ body.light .friendly-primary-action-btn:focus-visible {
   }
 }
 
+/* =============================================================================
+   🔒 AMWELL-BENCHMARK PRIVATE CLOUD STORAGE & SIGNED URLS VAULT
+   AES-256 Cloud Vault, Malware Scanning Badges & Ephemeral Signed URLs (15m TTL)
+   ============================================================================= */
 
+.amwell-secure-storage-panel {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 24px;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+}
 
+.amwell-vault-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-bottom: 18px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.amwell-stats-pills {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.amwell-stat-badge {
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(14, 165, 233, 0.1);
+  color: #0284c7;
+  border: 1px solid rgba(14, 165, 233, 0.25);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.amwell-stat-badge.clean {
+  background: rgba(16, 185, 129, 0.1);
+  color: #059669;
+  border-color: rgba(16, 185, 129, 0.25);
+}
+
+.amwell-stat-badge.timer {
+  background: rgba(245, 158, 11, 0.1);
+  color: #d97706;
+  border-color: rgba(245, 158, 11, 0.25);
+}
+
+.amwell-upload-actions {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+.amwell-categories-strip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  margin-bottom: 18px;
+  scrollbar-width: thin;
+}
+
+.amwell-cat-tab {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+  min-height: 40px;
+}
+
+.amwell-cat-tab:hover {
+  border-color: var(--teal);
+  color: var(--teal);
+}
+
+.amwell-cat-tab.active {
+  background: var(--teal);
+  border-color: var(--teal);
+  color: #ffffff;
+}
+
+.amwell-files-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap: 16px;
+}
+
+.amwell-file-card {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.amwell-file-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(14, 165, 164, 0.4);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+.amwell-file-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.amwell-file-icon-wrap {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: rgba(14, 165, 164, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.amwell-file-title-wrap {
+  flex: 1;
+  min-width: 0;
+}
+
+.amwell-file-name {
+  display: block;
+  font-size: 13.5px;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.amwell-file-meta {
+  font-size: 11.5px;
+  color: var(--muted);
+  display: block;
+  margin-top: 2px;
+}
+
+.amwell-file-security-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.amwell-sec-chip {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.amwell-sec-chip.enc {
+  background: rgba(14, 165, 233, 0.1);
+  color: #0284c7;
+  border: 1px solid rgba(14, 165, 233, 0.2);
+}
+
+.amwell-sec-chip.scan.clean {
+  background: rgba(16, 185, 129, 0.1);
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.amwell-sec-chip.scan.warn {
+  background: rgba(245, 158, 11, 0.1);
+  color: #d97706;
+  border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.amwell-sec-chip.bucket {
+  background: rgba(100, 116, 139, 0.1);
+  color: #64748b;
+  border: 1px solid rgba(100, 116, 139, 0.2);
+}
+
+.amwell-signed-status-box {
+  background: rgba(0, 0, 0, 0.03);
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  padding: 8px 12px;
+}
+
+.amwell-signed-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.amwell-signed-pill {
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.amwell-signed-pill.active {
+  background: rgba(16, 185, 129, 0.15);
+  color: #059669;
+}
+
+.amwell-signed-pill.expired {
+  background: rgba(239, 68, 68, 0.15);
+  color: #dc2626;
+}
+
+.amwell-file-actions-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.amwell-btn {
+  height: 44px;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: none;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.amwell-btn.primary {
+  background: var(--teal);
+  color: #ffffff;
+  flex: 1;
+}
+
+.amwell-btn.primary:hover {
+  background: var(--teal-hover, #0f766e);
+}
+
+.amwell-btn.outline {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+
+.amwell-btn.outline:hover {
+  border-color: var(--teal);
+  color: var(--teal);
+}
+
+.amwell-btn.icon-only {
+  width: 44px;
+  min-width: 44px;
+  padding: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+
+.amwell-btn.small {
+  height: 36px;
+  min-height: 36px;
+  font-size: 12px;
+  padding: 0 12px;
+}
+
+.amwell-btn.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* Empty State */
+.amwell-empty-state {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 40px 20px;
+  background: var(--surface-2);
+  border: 1px dashed var(--line);
+  border-radius: 14px;
+}
+
+/* Modal Viewport */
+.amwell-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.amwell-modal-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  width: 100%;
+  max-width: 720px;
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.4);
+}
+
+.amwell-modal-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.amwell-meta-badges {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+.amwell-pill {
+  font-size: 10.5px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.amwell-pill.enc { background: rgba(14, 165, 233, 0.15); color: #0284c7; }
+.amwell-pill.bucket { background: rgba(100, 116, 139, 0.15); color: #475569; }
+.amwell-pill.clean { background: rgba(16, 185, 129, 0.15); color: #059669; }
+
+.amwell-close-btn {
+  background: none;
+  border: none;
+  font-size: 20px;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 8px;
+}
+
+.amwell-close-btn:hover {
+  color: var(--ink);
+  background: var(--surface-2);
+}
+
+.amwell-signed-banner {
+  background: rgba(14, 165, 164, 0.08);
+  border-bottom: 1px solid rgba(14, 165, 164, 0.2);
+  padding: 10px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.amwell-timer-badge {
+  font-weight: 700;
+  color: #059669;
+  background: rgba(16, 185, 129, 0.15);
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 12.5px;
+}
+
+.amwell-action-btn.small {
+  padding: 6px 12px;
+  font-size: 12px;
+  border-radius: 6px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.amwell-action-btn.small.primary {
+  background: var(--teal);
+  color: #fff;
+  border-color: var(--teal);
+}
+
+.amwell-modal-body {
+  padding: 24px;
+  overflow-y: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 280px;
+  position: relative;
+}
+
+.amwell-doc-placeholder {
+  text-align: center;
+  padding: 24px;
+}
+
+.amwell-image-viewport {
+  position: relative;
+  max-width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.amwell-preview-img {
+  max-width: 100%;
+  max-height: 480px;
+  object-fit: contain;
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.amwell-watermark-overlay {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  background: rgba(0, 0, 0, 0.65);
+  color: #f1f5f9;
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+  pointer-events: none;
+}
+
+.amwell-modal-footer {
+  padding: 12px 20px;
+  background: var(--surface-2);
+  border-top: 1px solid var(--line);
+}
+
+/* Appointments Dossier Integration Box */
+.amwell-appointment-dossier-box {
+  background: rgba(14, 165, 164, 0.05);
+  border: 1px solid rgba(14, 165, 164, 0.25);
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+
+.dossier-box-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.dossier-attachments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dossier-file-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 12px;
+}
+
+/* Chatbot Card */
+.amwell-chatbot-file-card {
+  margin-top: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.chat-file-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.chat-file-badges {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.chat-file-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Highlight panel effect */
+.highlight-panel {
+  outline: 2.5px solid var(--teal);
+  box-shadow: 0 0 25px rgba(14, 165, 164, 0.4);
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 768px) {
+  .amwell-secure-storage-panel {
+    padding: 16px;
+  }
+  .amwell-vault-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .amwell-upload-actions {
+    flex-direction: column;
+  }
+  .amwell-files-grid {
+    grid-template-columns: 1fr;
+  }
+  .amwell-signed-banner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

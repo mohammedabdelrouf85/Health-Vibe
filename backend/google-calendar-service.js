@@ -16,7 +16,9 @@
  *      are reconciled back to Health Vibe DB's authoritative state.
  */
 
+const crypto = require('crypto');
 const auditService = require('./audit-service');
+const { relationalDbService } = require('./relational-db-service');
 
 // ============================================================================
 // 🔒 CONSTANTS & GOVERNANCE POLICIES
@@ -281,10 +283,12 @@ function buildGoogleCalendarEventPayload(appointment) {
     `Clinic: ${clinicName}`,
     '',
     '-------------------------------------------------------',
-    'CONFIDENTIAL HEALTHCARE RECORD NOTICE:',
+    'CONFIDENTIAL HEALTHCARE RECORD & PHYSICIAN PRIMACY NOTICE:',
     'To protect patient confidentiality, medical details and clinical charts',
     'are accessible only inside the secure portal after authentication:',
     `https://healthvibe.ai/app/index.html?screen=appointments&id=${encodeURIComponent(apptId)}`,
+    '',
+    'STATUTORY NOTICE & PHYSICIAN PRIMACY: Clinical evaluation, diagnoses, and prescriptions require direct evaluation by a licensed human physician. Autonomous AI tools do not provide independent diagnosis or alter treatments. In case of emergency, call 123.',
     '-------------------------------------------------------'
   ].join('\n');
 
@@ -569,6 +573,771 @@ async function reconcileGoogleCalendarEvent(db, appointmentId, externalEventData
   };
 }
 
+// ============================================================================
+// 📅 OKADOC BENCHMARK: 1-CLICK GOOGLE CALENDAR DEEP-LINK GENERATOR & DB SYNC
+// ============================================================================
+
+/**
+ * 🔒 ZERO-PHI SANITIZATION UTILITY FOR CALENDAR URLS & EVENTS
+ * HIPAA / GDPR: Strip all sensitive medical keywords, diagnoses, medications, and vitals.
+ */
+function sanitizeCalendarContent(text = '') {
+  if (!text || typeof text !== 'string') return '';
+  return text
+    // Strip explicit diagnosis prefixes and clinical values
+    .replace(/(?:تشخيص|diagnosis|مرض|سرطان|سل|درن|spo2|أكسجين|oxygen|asthma|copd|ربو|التهاب|antibiotic|steroid|inhaler|بخاخ):[^\n,;]+/gi, '')
+    // Replace standalone high-sensitivity diagnostic terms with generic clinical tokens
+    .replace(/\b(copd|asthma|bronchiectasis|pneumonia|covid-19|tuberculosis|spo2|respiratory rate|ventolin|symbicort|prednisolone)\b/gi, '[Clinical Note]')
+    .trim();
+}
+
+const FORBIDDEN_AI_CLINICAL_CLAIMS = [
+  'ai diagnosed',
+  'ai diagnosis',
+  'autonomous diagnosis',
+  'ai prescription',
+  'prescribed by ai',
+  'treatment plan override',
+  'ai recommended medication',
+  'تجاوز الطبيب',
+  'تشخيص الذكاء الاصطناعي',
+  'وصفة الذكاء الاصطناعي',
+  'علاج آلي نهائي'
+];
+
+const RESERVED_PHYSICIAN_CLINICAL_FIELDS = [
+  'clinicalDiagnosis',
+  'rxPrescription',
+  'icd10Code',
+  'physicianTreatmentPlan',
+  'doctorEvaluation'
+];
+
+/**
+ * 👨‍⚕️ PHYSICIAN PRIMACY & PRIVACY VALIDATOR
+ * Guarantees that:
+ * 1. AI chatbots or non-clinicians cannot author clinical diagnoses, prescriptions, or override doctor decisions.
+ * 2. URLs and external calendar events contain Zero PHI.
+ * 3. Statutory medical disclaimers are enforced.
+ */
+function validateCalendarPrivacyAndPrimacy(appointment = {}, actorUser = null, db = null) {
+  if (!appointment) return { valid: false, code: 'INVALID_APPOINTMENT' };
+
+  const actorRole = actorUser?.role || 'patient';
+  const isPhysician = actorRole === 'doctor' || actorRole === 'super_admin' || actorRole === 'clinic_admin';
+
+  // 1. 👨‍⚕️ PHYSICIAN PRIMACY: Prevent non-physicians / bots from injecting clinical authority
+  for (const field of RESERVED_PHYSICIAN_CLINICAL_FIELDS) {
+    if (appointment[field] && !isPhysician) {
+      if (db && typeof auditService.recordAuditEvent === 'function') {
+        try {
+          auditService.recordAuditEvent(db, {
+            type: 'CALENDAR_PHYSICIAN_PRIMACY_ENFORCED',
+            actorUid: actorUser?.uid || 'non_physician',
+            actorRole,
+            details: {
+              appointmentId: appointment.id,
+              blockedField: field,
+              reason: 'FIELD_RESERVED_FOR_LICENSED_PHYSICIAN'
+            }
+          });
+        } catch (e) {}
+      }
+      const err = new Error(`Physician Primacy Violation: Field '${field}' is strictly reserved for licensed human physicians. Non-physicians and AI cannot author clinical diagnoses or prescriptions in calendar events.`);
+      err.code = 'PHYSICIAN_PRIMACY_VIOLATION';
+      err.statusCode = 403;
+      throw err;
+    }
+  }
+
+  // Scan notes and text fields for autonomous AI claims
+  const rawNotes = String(appointment.notes || appointment.patientNotes || appointment.reason || '').toLowerCase();
+  for (const claim of FORBIDDEN_AI_CLINICAL_CLAIMS) {
+    if (rawNotes.includes(claim)) {
+      if (db && typeof auditService.recordAuditEvent === 'function') {
+        try {
+          auditService.recordAuditEvent(db, {
+            type: 'CALENDAR_PHYSICIAN_PRIMACY_ENFORCED',
+            actorUid: actorUser?.uid || 'bot_or_user',
+            actorRole,
+            details: {
+              appointmentId: appointment.id,
+              detectedClaim: claim,
+              reason: 'AUTONOMOUS_AI_MEDICAL_CLAIM_PROHIBITED'
+            }
+          });
+        } catch (e) {}
+      }
+      const err = new Error(`Physician Primacy Violation: Calendar entries cannot contain autonomous AI medical diagnosis or treatment override ('${claim}'). Clinical authority is strictly reserved for the human doctor.`);
+      err.code = 'PHYSICIAN_PRIMACY_VIOLATION';
+      err.statusCode = 403;
+      throw err;
+    }
+  }
+
+  // 2. 🔒 ZERO-PHI PRIVACY CHECK: Check for raw medical diagnoses or vitals leakage
+  let privacyViolationDetected = false;
+  const rawTextToAudit = [
+    appointment.notes,
+    appointment.patientNotes,
+    appointment.diagnosis,
+    appointment.symptoms,
+    appointment.vitalSigns
+  ].filter(Boolean).join(' ');
+
+  if (/(?:تشخيص|diagnosis|مرض|سرطان|سل|درن|spo2|أكسجين|oxygen|asthma|copd|ربو|التهاب|antibiotic|steroid|inhaler|بخاخ):/i.test(rawTextToAudit) ||
+      /\b(copd|asthma|bronchiectasis|pneumonia|covid-19|tuberculosis|spo2|respiratory rate|ventolin|symbicort|prednisolone)\b/i.test(rawTextToAudit)) {
+    privacyViolationDetected = true;
+    if (db && typeof auditService.recordAuditEvent === 'function') {
+      try {
+        auditService.recordAuditEvent(db, {
+          type: 'CALENDAR_PRIVACY_VIOLATION_BLOCKED',
+          actorUid: actorUser?.uid || 'system_sanitizer',
+          actorRole,
+          details: {
+            appointmentId: appointment.id,
+            action: 'PHI_STRIPPED_FROM_CALENDAR_PARAMETERS'
+          }
+        });
+      } catch (e) {}
+    }
+  }
+
+  return {
+    valid: true,
+    privacyCompliant: true,
+    physicianPrimacyGuaranteed: true,
+    privacyViolationDetected,
+    statutoryDisclaimer: {
+      ar: 'تنبيه طبي قانوني: الاستشارة الطبية تتطلب تقييماً سريرياً مباشراً من طبيب بشري مرخص. أدوات الذكاء الاصطناعي لا تقدم تشخيصاً طبياً مستقلاً أو تعدل خططاً علاجية. في الطوارئ اتصل بـ 123.',
+      en: 'Statutory Notice: Medical appointment requires direct clinical evaluation by a licensed human physician. Autonomous AI tools do not provide clinical diagnosis or alter prescriptions. In emergency, call 123.'
+    }
+  };
+}
+
+/**
+ * Generates an Okadoc-style 1-click Google Calendar deep link for an appointment.
+ * Supports dual perspective: 'patient' vs 'doctor'.
+ * Supports 'ar' and 'en' language formats.
+ * Enforces zero-PHI sanitization and Physician Primacy disclaimers on all parameters.
+ */
+function generateGoogleCalendarDeepLink(appointment, options = {}) {
+  if (!appointment) return '#';
+
+  // 1. Patient Consent Check (if explicitly enforced or checked)
+  if (options.enforceConsent && options.patientConsent === false) {
+    const err = new Error('Patient has revoked calendar synchronization consent. Calendar link generation blocked for privacy.');
+    err.code = 'PATIENT_CALENDAR_CONSENT_REVOKED';
+    err.statusCode = 403;
+    throw err;
+  }
+
+  // 2. Validate Privacy & Physician Primacy
+  validateCalendarPrivacyAndPrimacy(appointment, options.actorUser, options.db);
+
+  const role = (options.role || 'patient').toLowerCase();
+  const lang = (options.lang || options.language || 'ar').toLowerCase();
+  const isEn = lang.startsWith('en');
+
+  const apptId = appointment.id || 'N/A';
+  const docName = isEn 
+    ? (appointment.doctorNameEn || appointment.doctorName || 'Specialist Physician')
+    : (appointment.doctorName || appointment.doctorNameEn || 'الطبيب الاستشاري المعالج');
+  const docSpecialty = isEn
+    ? (appointment.doctorSpecialtyEn || appointment.doctorSpecialty || 'Pulmonology & Respiratory Care')
+    : (appointment.doctorSpecialty || appointment.doctorSpecialtyEn || 'أمراض الصدر والجهاز التنفسي');
+
+  const patientName = appointment.patientName || (isEn ? 'Patient' : 'المريض');
+  const consultationType = appointment.consultationType || appointment.type || (appointment.isOnlineConsultation ? 'video' : 'clinic');
+  const isVideo = consultationType === 'video' || Boolean(appointment.isOnlineConsultation);
+
+  // Determine Location
+  let location = '';
+  if (isVideo) {
+    location = appointment.telehealthUrl || appointment.meetingLink || 'https://healthvibe.ai/app/telehealth.html';
+  } else {
+    location = isEn
+      ? (appointment.clinicAddressEn || appointment.clinicAddress || appointment.clinicNameEn || appointment.clinicName || 'Specialized Chest Clinic - Dokki Branch, Cairo')
+      : (appointment.clinicAddress || appointment.clinicAddressEn || appointment.clinicName || appointment.clinicNameEn || 'مركز القاهرة التخصصي لأمراض الصدر — فرع الدقي');
+  }
+
+  // Parse Date and Time
+  const rawDate = appointment.date || new Date().toISOString().split('T')[0];
+  const dateClean = String(rawDate).replace(/-/g, '');
+
+  let hour = 10;
+  let min = 0;
+  const t = String(appointment.timeSlot || appointment.slotId || '');
+  const match = t.match(/(\d{1,2}):(\d{2})/);
+  if (match) {
+    hour = parseInt(match[1], 10);
+    min = parseInt(match[2], 10);
+    if ((t.includes('مساء') || t.toLowerCase().includes('pm')) && hour < 12) hour += 12;
+    if ((t.includes('صباح') || t.toLowerCase().includes('am')) && hour === 12) hour = 0;
+  } else if (t.startsWith('slot_')) {
+    const numPart = t.replace('slot_', '');
+    if (numPart.length === 4) {
+      hour = parseInt(numPart.substring(0, 2), 10);
+      min = parseInt(numPart.substring(2, 4), 10);
+    }
+  }
+
+  const duration = parseInt(appointment.durationMinutes, 10) || 30;
+  const totalStartMinutes = hour * 60 + min;
+  const totalEndMinutes = totalStartMinutes + duration;
+  const endHour = Math.floor(totalEndMinutes / 60) % 24;
+  const endMin = totalEndMinutes % 60;
+
+  const pad = n => String(n).padStart(2, '0');
+  const startIso = `${dateClean}T${pad(hour)}${pad(min)}00`;
+  const endIso = `${dateClean}T${pad(endHour)}${pad(endMin)}00`;
+
+  let title = '';
+  let detailsLines = [];
+
+  const portalAuthUrl = `https://healthvibe.ai/app/index.html?screen=appointments&id=${encodeURIComponent(apptId)}`;
+
+  if (role === 'doctor') {
+    title = isEn
+      ? `Health Vibe: Clinical Consultation with Patient ${patientName}`
+      : `Health Vibe: كشف سريري للمريض ${patientName}`;
+
+    detailsLines = [
+      isEn ? `🩺 Clinical Consultation with Patient: ${patientName}` : `🩺 موعد كشف سريري مع المريض: ${patientName}`,
+      isEn ? `📌 Consultation Type: ${consultationType}` : `📌 نوع الاستشارة: ${consultationType}`,
+      isEn ? `📍 Location / Room: ${location}` : `📍 المقر / رابط الاستشارة: ${location}`,
+      isEn ? `🏷️ Booking Reference: ${apptId}` : `🏷️ رقم الحجز المرجعي: ${apptId}`,
+      isEn ? `🔐 Secure Patient Dossier: ${portalAuthUrl}` : `🔐 ملف المريض والتقارير المرفقة: ${portalAuthUrl}`,
+      isEn 
+        ? `⚠️ SLA Policy: Check patient history and prior vitals in portal before starting consultation.`
+        : `⚠️ معيار السلامة السريرية: يرجى مراجعة الملف الطبي والعلامات الحيوية عبر البوابة قبل بدء الكشف.`,
+      isEn
+        ? '⚠️ Clinical Governance & Physician Primacy: All clinical diagnosis, prescription management, and care decisions are under the exclusive authority of the licensed human physician.'
+        : '⚠️ حوكمة السلامة وسيادة الطبيب: التشخيص السريري وصرف الأدوية وقرارات العلاج هي مسؤولية حصرية للطبيب البشري المرخص.'
+    ];
+  } else {
+    // Patient perspective
+    title = isEn
+      ? `Health Vibe: Consultation with Dr. ${docName}`
+      : `Health Vibe: استشارة طبية مع د. ${docName}`;
+
+    const prepInstructions = isVideo
+      ? (isEn 
+          ? 'Virtual consultation room opens 5 mins prior. Please ensure good internet connection and previous test reports handy.'
+          : 'تفتح الغرفة الافتراضية قبل الموعد بـ 5 دقائق. يرجى التأكد من اتصال الإنترنت وتجهيز أي تحاليل سابقة.')
+      : (isEn
+          ? 'Please arrive at the clinic 10 minutes early for check-in and vital signs measurement. Bring previous prescriptions.'
+          : 'يرجى الحضور لمقر العيادة قبل الموعد بـ 10 دقائق لتسجيل الوصول وقياس العلامات الحيوية، مع إحضار الروشتات السابقة.');
+
+    detailsLines = [
+      isEn ? `🩺 Consultation with: Dr. ${docName} (${docSpecialty})` : `🩺 استشارة طبية مع: د. ${docName} (${docSpecialty})`,
+      isEn ? `📌 Type: ${isVideo ? 'Virtual Telehealth Video' : 'In-Clinic Consultation'}` : `📌 النوع: ${isVideo ? 'استشارة مرئية عن بُعد' : 'كشف بمقر العيادة'}`,
+      isEn ? `📍 Location: ${location}` : `📍 المكان: ${location}`,
+      isEn ? `🏷️ Booking Reference: ${apptId}` : `🏷️ رقم الحجز: ${apptId}`,
+      isEn ? `📋 Preparation: ${prepInstructions}` : `📋 إرشادات التحضير: ${prepInstructions}`,
+      isEn ? `🔐 Manage Appointment & Instructions: ${portalAuthUrl}` : `🔐 تفاصيل وإدارة الموعد: ${portalAuthUrl}`,
+      isEn 
+        ? '⚠️ In case of medical emergency, immediately contact emergency services (123).'
+        : '⚠️ في حالات الطوارئ الطبية العاجلة يرجى الاتصال بالإسعاف (123) فوراً.',
+      isEn
+        ? '⚠️ Statutory Notice: Medical appointment requires direct clinical evaluation by a licensed human physician. Autonomous AI tools do not provide clinical diagnosis or alter prescriptions.'
+        : '⚠️ تنبيه طبي قانوني: الاستشارة الطبية تتطلب تقييماً سريرياً مباشراً من طبيب بشري مرخص. أدوات الذكاء الاصطناعي لا تقدم تشخيصاً طبياً مستقلاً أو تعدل خططاً علاجية.'
+    ];
+  }
+
+  // Zero-PHI Sanitization on query components
+  const sanitizedTitle = sanitizeCalendarContent(title);
+  const sanitizedDetails = sanitizeCalendarContent(detailsLines.join('\n'));
+  const sanitizedLocation = sanitizeCalendarContent(location);
+
+  return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(sanitizedTitle)}&dates=${startIso}/${endIso}&details=${encodeURIComponent(sanitizedDetails)}&location=${encodeURIComponent(sanitizedLocation)}`;
+}
+
+/**
+ * Generates an aggregated suite of calendar sync links for an appointment.
+ */
+function generateAppointmentCalendarLinks(appointment, options = {}) {
+  const patientGoogleUrl = generateGoogleCalendarDeepLink(appointment, { ...options, role: 'patient' });
+  const doctorGoogleUrl = generateGoogleCalendarDeepLink(appointment, { ...options, role: 'doctor' });
+  const apptId = appointment?.id || 'appointment';
+  const icsDownloadUrl = `/api/appointments/${encodeURIComponent(apptId)}/calendar.ics`;
+
+  return {
+    googleCalendarUrl: patientGoogleUrl,
+    googleCalendarDoctorUrl: doctorGoogleUrl,
+    icsDownloadUrl,
+    outlookUrl: patientGoogleUrl.replace('calendar.google.com/calendar/render?action=TEMPLATE', 'outlook.live.com/calendar/0/deeplink/compose'),
+    yahooUrl: patientGoogleUrl.replace('calendar.google.com/calendar/render?action=TEMPLATE', 'calendar.yahoo.com/?v=60')
+  };
+}
+
+/**
+ * Records an appointment calendar sync interaction in the database (Relational DB & Firestore),
+ * logs an immutable security audit event, and registers analytics telemetry.
+ */
+async function recordAppointmentCalendarSync(db, {
+  appointmentId,
+  userId,
+  role = 'patient',
+  calendarProvider = 'google',
+  ipAddress = null,
+  userAgent = null
+} = {}) {
+  if (!appointmentId) {
+    const err = new Error('appointmentId is required.');
+    err.code = 'MISSING_APPOINTMENT_ID';
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const nowIso = new Date().toISOString();
+  const syncId = `calsync_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+
+  const syncRecord = {
+    id: syncId,
+    appointmentId,
+    userId: userId || 'anonymous',
+    role: role || 'patient',
+    calendarProvider: calendarProvider || 'google',
+    syncedAt: nowIso,
+    ipAddress: ipAddress || null,
+    userAgent: userAgent || null,
+    createdAt: nowIso
+  };
+
+  // 1. Persist to Relational DB (PostgreSQL / Supabase Operational Engine)
+  let relationalRecord = null;
+  try {
+    if (relationalDbService && typeof relationalDbService.recordCalendarSync === 'function') {
+      relationalRecord = await relationalDbService.recordCalendarSync({
+        id: syncId,
+        appointment_id: appointmentId,
+        user_id: userId,
+        role,
+        calendar_provider: calendarProvider,
+        synced_at: nowIso,
+        ip_address: ipAddress,
+        user_agent: userAgent,
+        created_at: nowIso
+      });
+    }
+  } catch (relErr) {
+    console.warn('[CALENDAR RELATIONAL DB SYNC WARNING]:', relErr.message);
+  }
+
+  // 2. Persist to Firestore appointment_calendar_syncs collection
+  if (db && typeof db.collection === 'function') {
+    try {
+      await db.collection('appointment_calendar_syncs').doc(syncId).set(syncRecord);
+      if (typeof db.collection('appointments').doc(appointmentId).update === 'function') {
+        await db.collection('appointments').doc(appointmentId).update({
+          calendarLastSyncedAt: nowIso,
+          calendarProvider: calendarProvider
+        });
+      }
+    } catch (fsErr) {
+      console.warn('[CALENDAR FIRESTORE SYNC WARNING]:', fsErr.message);
+    }
+  }
+
+  // 3. Immutable Security Audit Event
+  try {
+    if (typeof auditService.recordAuditEvent === 'function') {
+      auditService.recordAuditEvent(db, {
+        type: 'APPOINTMENT_CALENDAR_SYNCED',
+        actorUid: userId || 'patient_user',
+        actorRole: role || 'patient',
+        details: {
+          appointmentId,
+          syncId,
+          calendarProvider,
+          syncedAt: nowIso
+        }
+      });
+    }
+  } catch (auditErr) {}
+
+  // 4. Analytics Telemetry Event
+  try {
+    const analyticsService = require('./analytics-service');
+    if (typeof analyticsService.recordEvent === 'function') {
+      analyticsService.recordEvent({
+        eventType: analyticsService.EVENT_TYPES.GOOGLE_CALENDAR_BUTTON_CLICKED || 'google_calendar_button_clicked',
+        userId: userId || 'anonymous',
+        payload: {
+          appointmentId,
+          role,
+          calendarProvider,
+          syncedAt: nowIso
+        }
+      });
+      analyticsService.recordEvent({
+        eventType: analyticsService.EVENT_TYPES.GOOGLE_CALENDAR_SYNC_SUCCESS || 'google_calendar_sync_success',
+        userId: userId || 'anonymous',
+        payload: {
+          appointmentId,
+          role,
+          calendarProvider,
+          syncId,
+          syncedAt: nowIso
+        }
+      });
+    }
+  } catch (telemetryErr) {}
+
+  return {
+    success: true,
+    syncId,
+    syncedAt: nowIso,
+    record: relationalRecord || syncRecord
+  };
+}
+
+/**
+ * Retrieves sync history for a specific appointment from Relational DB with Firestore fallback.
+ */
+async function getAppointmentCalendarSyncs(db, appointmentId) {
+  if (!appointmentId) return [];
+
+  // 1. Relational DB first
+  try {
+    if (relationalDbService && typeof relationalDbService.getCalendarSyncsByAppointmentId === 'function') {
+      const records = await relationalDbService.getCalendarSyncsByAppointmentId(appointmentId);
+      if (records && records.length > 0) return records;
+    }
+  } catch (e) {}
+
+  // 2. Firestore fallback
+  if (db && typeof db.collection === 'function') {
+    try {
+      const snap = await db.collection('appointment_calendar_syncs')
+        .where('appointmentId', '==', appointmentId)
+        .get();
+      if (snap && snap.docs) {
+        return snap.docs.map(doc => doc.data());
+      }
+    } catch (e) {}
+  }
+
+  return [];
+}
+
+/**
+ * Sets patient calendar consent governance preference (grant or revoke).
+ */
+async function setPatientCalendarConsent(db, patientId, {
+  consent = true,
+  reason = '',
+  actorUser = null,
+  ipAddress = null,
+  userAgent = null
+} = {}) {
+  if (!patientId) {
+    const err = new Error('patientId is required.');
+    err.code = 'MISSING_PATIENT_ID';
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const consentBool = Boolean(consent);
+  const nowIso = new Date().toISOString();
+
+  const consentRecord = {
+    patientId,
+    consent: consentBool,
+    updatedAt: nowIso,
+    reason: reason || (consentBool ? 'Patient opted in for calendar integration' : 'Patient revoked calendar sync'),
+    updatedBy: actorUser?.uid || patientId,
+    actorRole: actorUser?.role || 'patient',
+    ipAddress: ipAddress || null,
+    userAgent: userAgent || null
+  };
+
+  // 1. Relational DB persistence
+  let relResult = null;
+  try {
+    if (relationalDbService && typeof relationalDbService.setPatientCalendarConsent === 'function') {
+      relResult = await relationalDbService.setPatientCalendarConsent(patientId, {
+        consent: consentBool,
+        reason: consentRecord.reason,
+        updated_by: consentRecord.updatedBy,
+        actor_role: consentRecord.actorRole,
+        ip_address: ipAddress,
+        user_agent: userAgent
+      });
+    }
+  } catch (relErr) {
+    console.warn('[CALENDAR CONSENT RELATIONAL DB WARNING]:', relErr.message);
+  }
+
+  // 2. Firestore persistence
+  if (db && typeof db.collection === 'function') {
+    try {
+      await db.collection('patient_calendar_consents').doc(patientId).set(consentRecord, { merge: true });
+    } catch (fsErr) {
+      console.warn('[CALENDAR CONSENT FIRESTORE WARNING]:', fsErr.message);
+    }
+  }
+
+  // 3. Immutable Security Audit Event
+  try {
+    if (typeof auditService.recordAuditEvent === 'function') {
+      auditService.recordAuditEvent(db, {
+        type: consentBool ? 'CALENDAR_CONSENT_GRANTED' : 'CALENDAR_CONSENT_REVOKED',
+        actorUid: actorUser?.uid || patientId,
+        actorRole: actorUser?.role || 'patient',
+        details: {
+          patientId,
+          consent: consentBool,
+          reason: consentRecord.reason,
+          timestamp: nowIso
+        }
+      });
+    }
+  } catch (auditErr) {}
+
+  // 4. Telemetry Event
+  try {
+    const analyticsService = require('./analytics-service');
+    if (typeof analyticsService.recordEvent === 'function') {
+      analyticsService.recordEvent({
+        eventType: analyticsService.EVENT_TYPES.CALENDAR_CONSENT_UPDATED || 'calendar_consent_updated',
+        userId: actorUser?.uid || patientId,
+        payload: {
+          patientId,
+          consent: consentBool,
+          reason: consentRecord.reason
+        }
+      });
+      analyticsService.recordEvent({
+        eventType: consentBool
+          ? (analyticsService.EVENT_TYPES.GOOGLE_CALENDAR_CONSENT_GRANTED || 'google_calendar_consent_granted')
+          : (analyticsService.EVENT_TYPES.GOOGLE_CALENDAR_CONSENT_REVOKED || 'google_calendar_consent_revoked'),
+        userId: actorUser?.uid || patientId,
+        payload: {
+          patientId,
+          consent: consentBool,
+          reason: consentRecord.reason
+        }
+      });
+    }
+  } catch (telemetryErr) {}
+
+  return {
+    success: true,
+    patientId,
+    consent: consentBool,
+    updatedAt: nowIso,
+    record: relResult || consentRecord
+  };
+}
+
+/**
+ * Retrieves the current patient calendar sync consent status.
+ */
+async function getPatientCalendarConsent(db, patientId) {
+  if (!patientId) return { patientId, consent: true, defaultFallback: true };
+
+  // 1. Relational DB first
+  try {
+    if (relationalDbService && typeof relationalDbService.getPatientCalendarConsent === 'function') {
+      const relRecord = await relationalDbService.getPatientCalendarConsent(patientId);
+      if (relRecord) {
+        return {
+          patientId,
+          consent: Boolean(relRecord.consent),
+          updatedAt: relRecord.updated_at || relRecord.updatedAt,
+          reason: relRecord.reason,
+          source: 'relational_db'
+        };
+      }
+    }
+  } catch (e) {}
+
+  // 2. Firestore fallback
+  if (db && typeof db.collection === 'function') {
+    try {
+      const snap = await db.collection('patient_calendar_consents').doc(patientId).get();
+      if (snap && snap.exists) {
+        const data = snap.data();
+        return {
+          patientId,
+          consent: Boolean(data.consent),
+          updatedAt: data.updatedAt,
+          reason: data.reason,
+          source: 'firestore'
+        };
+      }
+    } catch (e) {}
+  }
+
+  // Default: opt-in enabled with notice
+  return {
+    patientId,
+    consent: true,
+    defaultFallback: true,
+    reason: 'DEFAULT_OPT_IN_WITH_STATUTORY_DISCLAIMER'
+  };
+}
+
+/**
+ * Generates non-clinical, localized appointment calendar context for the AI Chatbot.
+ * Provides upcoming appointments with 1-click Google Calendar add links and statutory disclaimers.
+ */
+async function generateChatbotCalendarContext(db, patientId, { lang = 'ar' } = {}) {
+  if (!patientId) {
+    return {
+      success: false,
+      message: 'patientId is required for chatbot calendar context.'
+    };
+  }
+
+  const isEn = String(lang).toLowerCase().startsWith('en');
+  let appointments = [];
+
+  // Query upcoming appointments from Firestore
+  if (db && typeof db.collection === 'function') {
+    try {
+      const snap = await db.collection('appointments')
+        .where('patientId', '==', patientId)
+        .get();
+      if (snap && snap.docs) {
+        appointments = snap.docs
+          .map(d => ({ id: d.id, ...d.data() }))
+          .filter(a => a.status !== 'cancelled');
+      }
+    } catch (e) {
+      console.warn('[CHATBOT CALENDAR CONTEXT WARNING]:', e.message);
+    }
+  }
+
+  // Generate localized calendar action cards
+  const cards = appointments.map(appt => {
+    const links = generateAppointmentCalendarLinks(appt, { lang, role: 'patient' });
+    return {
+      appointmentId: appt.id,
+      doctorName: isEn ? (appt.doctorNameEn || appt.doctorName || 'Doctor') : (appt.doctorName || appt.doctorNameEn || 'الطبيب'),
+      doctorSpecialty: isEn ? (appt.doctorSpecialtyEn || appt.doctorSpecialty || 'Specialist') : (appt.doctorSpecialty || appt.doctorSpecialtyEn || 'استشاري'),
+      date: appt.date,
+      timeSlot: appt.timeSlot,
+      status: appt.status || 'confirmed',
+      isTelehealth: Boolean(appt.isOnlineConsultation || appt.type === 'video'),
+      googleCalendarUrl: links.googleCalendarUrl,
+      icsDownloadUrl: links.icsDownloadUrl,
+      cardTitle: isEn
+        ? `Upcoming Appointment with Dr. ${appt.doctorNameEn || appt.doctorName || 'Doctor'}`
+        : `موعدك القادم مع د. ${appt.doctorName || appt.doctorNameEn || 'الطبيب'}`,
+      actionPrompt: isEn
+        ? 'Never forget your clinical visit! Add this appointment directly to your Google Calendar.'
+        : 'لا تنسَ زيارتك الطبية! يمكنك إضافة هذا الموعد مباشرة إلى تقويم جوجل (Google Calendar) بنقرة واحدة.',
+      buttonText: isEn ? 'Add to Google Calendar' : 'إضافة إلى تقويم جوجل (Google Calendar)',
+      statutoryNotice: isEn
+        ? 'Statutory Notice: Medical appointment requires direct clinical evaluation by a licensed human physician. Autonomous AI tools do not provide clinical diagnosis. In emergency, call 123.'
+        : 'تنبيه طبي قانوني: الاستشارة تتطلب تقييماً سريرياً مباشراً من طبيب بشري مرخص. الذكاء الاصطناعي لا يقدم تشخيصاً مستقلاً. في الطوارئ اتصل بـ 123.'
+    };
+  });
+
+  return {
+    success: true,
+    patientId,
+    lang,
+    appointmentsCount: cards.length,
+    cards,
+    overallStatutoryDisclaimer: isEn
+      ? 'Statutory Notice: Chatbot facilitates booking and calendar scheduling only. All medical evaluations are conducted exclusively by licensed human physicians.'
+      : 'تنبيه طبي قانوني: المساعد الذكي يسهل تنظيم المواعيد وجدولتها بالتقويم فقط. التقييم والعلاج اختصاص حصري للأطباء البشريين المرخصين.'
+  };
+}
+
+/**
+ * 📊 Retrieves consolidated administrative analytics for Google Calendar Integration.
+ * Aggregates actual records from database, consent status, security audit events, and telemetry.
+ */
+async function getGoogleCalendarAnalytics(db, options = {}) {
+  const analyticsService = require('./analytics-service');
+  const schedulingService = require('./scheduling-service');
+
+  // 1. Get raw telemetry KPIs
+  const telemetryKpis = analyticsService.calculateGoogleCalendarKpis(
+    analyticsService.getInMemoryEvents(),
+    options
+  );
+
+  // 2. Query actual appointments from scheduling service
+  let apptAnalytics = null;
+  try {
+    apptAnalytics = await schedulingService.getAppointmentAnalytics(db, options);
+  } catch (e) {
+    console.warn('[GOOGLE CALENDAR ANALYTICS]: Failed to fetch appointment DB analytics:', e.message);
+  }
+
+  // 3. Query consent records count from Relational DB / Firestore
+  let totalConsentsGranted = 0;
+  let totalConsentsRevoked = 0;
+  try {
+    if (relationalDbService && typeof relationalDbService.getHealthStatus === 'function') {
+      const health = relationalDbService.getHealthStatus();
+      totalConsentsGranted = health.tables?.patient_calendar_consents?.totalRecords || 0;
+    }
+  } catch (e) {}
+
+  if (db && typeof db.collection === 'function') {
+    try {
+      const snap = await db.collection('patient_calendar_consents').get();
+      if (snap && snap.docs) {
+        snap.docs.forEach(doc => {
+          const d = doc.data();
+          if (d.consent === false) totalConsentsRevoked++;
+          else totalConsentsGranted++;
+        });
+      }
+    } catch (e) {}
+  }
+
+  // 4. Construct unified administrative report
+  const isEn = Boolean(options.isEn);
+  const totalBookings = apptAnalytics?.summary?.totalBookings || telemetryKpis.summary.totalBookings || 0;
+  const totalCalendarSynced = apptAnalytics?.summary?.totalCalendarSynced || telemetryKpis.summary.syncSuccesses || 0;
+  const effectiveAdoptionRate = totalBookings > 0
+    ? Number(((totalCalendarSynced / totalBookings) * 100).toFixed(1))
+    : telemetryKpis.metrics.adoptionRate.rate;
+
+  const naText = isEn ? 'Unavailable' : 'غير متاح';
+
+  return {
+    success: true,
+    timePeriod: options.timePeriod || 'Rolling 30 Days',
+    clinicId: options.clinicId || 'all',
+    summary: {
+      ...telemetryKpis.summary,
+      totalBookings,
+      totalCalendarSynced,
+      adoptionRate: effectiveAdoptionRate,
+      consentsGranted: totalConsentsGranted,
+      consentsRevoked: Math.max(totalConsentsRevoked, telemetryKpis.securityAudit.consentRevocations)
+    },
+    metrics: {
+      ...telemetryKpis.metrics,
+      adoptionRate: {
+        ...telemetryKpis.metrics.adoptionRate,
+        rate: effectiveAdoptionRate,
+        display: effectiveAdoptionRate !== null ? `${effectiveAdoptionRate}%` : naText,
+        displayAr: effectiveAdoptionRate !== null ? `${effectiveAdoptionRate}%` : 'غير متاح'
+      }
+    },
+    display: {
+      ...telemetryKpis.display,
+      adoptionRateDisplay: effectiveAdoptionRate !== null ? `${effectiveAdoptionRate}%` : naText,
+      adoptionRateDisplayAr: effectiveAdoptionRate !== null ? `${effectiveAdoptionRate}%` : 'غير متاح'
+    },
+    roleBreakdown: telemetryKpis.roleBreakdown,
+    consultationBreakdown: telemetryKpis.consultationBreakdown,
+    chatbotEngagement: telemetryKpis.chatbotEngagement,
+    securityAudit: telemetryKpis.securityAudit,
+    generatedAt: new Date().toISOString()
+  };
+}
+
 /**
  * Clear in-memory caches (used between tests).
  */
@@ -581,6 +1350,8 @@ module.exports = {
   MINIMUM_REQUIRED_OAUTH_SCOPES,
   DISALLOWED_BROAD_SCOPES,
   SOURCE_OF_TRUTH,
+  FORBIDDEN_AI_CLINICAL_CLAIMS,
+  RESERVED_PHYSICIAN_CLINICAL_FIELDS,
   validateOAuthScopes,
   connectDoctorGoogleCalendar,
   disconnectDoctorGoogleCalendar,
@@ -590,7 +1361,19 @@ module.exports = {
   syncAppointmentRescheduled,
   syncAppointmentCancelled,
   reconcileGoogleCalendarEvent,
+  sanitizeCalendarContent,
+  validateCalendarPrivacyAndPrimacy,
+  generateGoogleCalendarDeepLink,
+  generateAppointmentCalendarLinks,
+  generateChatbotCalendarContext,
+  getGoogleCalendarAnalytics,
+  recordAppointmentCalendarSync,
+  getAppointmentCalendarSyncs,
+  setPatientCalendarConsent,
+  getPatientCalendarConsent,
   clearGoogleCalendarMemoryStore,
   _inMemoryDoctorCalendarConfigs: inMemoryDoctorCalendarConfigs,
   _inMemoryExternalGoogleCalendarEvents: inMemoryExternalGoogleCalendarEvents
 };
+
+

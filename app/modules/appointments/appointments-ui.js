@@ -28,36 +28,124 @@
   };
 
   /**
-   * Builds direct Google Calendar URL for an appointment
+   * Builds direct Google Calendar URL for an appointment (Okadoc Standard)
+   * Supports both Patient and Doctor perspectives with pre-visit instructions and ISO timestamps.
    */
-  function buildGoogleCalendarUrl(appt = {}) {
-    const rawDate = appt.date || appt.dateStr;
-    if (!rawDate || !appt.timeSlot) return "#";
+  function buildGoogleCalendarUrl(appt = {}, options = {}) {
+    const rawDate = appt.date || appt.dateStr || new Date().toISOString().split("T")[0];
+    if (!rawDate && !appt.timeSlot) return "#";
     try {
-      const title = encodeURIComponent(`Health Vibe: استشارة مع ${appt.doctorName || "الطبيب المعالج"}`);
-      const details = encodeURIComponent(`موعد كشف سريري مع ${appt.doctorName || ""}\nالنوع: ${appt.typeLabel || appt.type || "استشارة"}\nالعيادة: ${appt.clinicName || ""}\nالمريض: ${appt.patientName || ""}\nملاحظات: ${appt.notes || "لا توجد"}`);
-      const location = encodeURIComponent(appt.clinicName || "Health Vibe Telehealth Room");
+      const isEn = typeof options.isEn === "boolean"
+        ? options.isEn
+        : (options.lang === "en" || (typeof global.currentLanguage !== "undefined" && global.currentLanguage === "en") || (appt.doctorName && String(appt.doctorName).startsWith("Dr.")));
+      const role = options.role || appt.role || appt.viewerRole || "patient";
 
-      // Approximate standard 30 min duration
+      const docName = isEn 
+        ? (appt.doctorNameEn || appt.doctorName || "Treating Physician")
+        : (appt.doctorName || "طبيبك المعالج");
+      const patientName = appt.patientName || state.selectedBeneficiaryName || (isEn ? "Patient" : "المريض");
+      const consultationType = appt.typeLabel || appt.type || (appt.isOnlineConsultation || appt.type === "video" ? (isEn ? "Telehealth Video" : "استشارة فيديو عن بُعد") : (isEn ? "In-Clinic Visit" : "كشف عيادة"));
+      const bookingId = appt.id || appt.bookingId || "HV-" + Date.now();
+      const notes = appt.notes || (isEn ? "No additional notes" : "لا توجد ملاحظات إضافية");
+
+      // Determine Venue / Location
+      let location = "";
+      if (appt.type === "video" || appt.isOnlineConsultation || appt.consultationType === "video") {
+        const roomId = appt.videoJoinUrl || appt.telehealthRoomId || appt.id || "telehealth-room";
+        location = isEn 
+          ? (appt.videoJoinUrl || `Health Vibe Telehealth (Video) - https://healthvibe.clinic/room/${roomId}`)
+          : (appt.videoJoinUrl || `عيادة هيلث فايب الافتراضية - استشارة فيديو (https://healthvibe.clinic/room/${roomId})`);
+      } else {
+        location = appt.clinicAddress || appt.branch || appt.clinicName || (isEn 
+          ? "Specialized Chest Clinic - Dokki Branch, Giza"
+          : "مركز القاهرة التخصصي لأمراض الصدر — فرع الدقي");
+      }
+
+      // Title & Details based on Role (Patient vs Doctor)
+      let title = "";
+      let details = "";
+
+      if (role === "doctor") {
+        title = isEn
+          ? `Medical Appointment with Patient ${patientName}`
+          : `Health Vibe: كشف سريري للمريض ${patientName}`;
+        
+        const dossierUrl = appt.linkedCaseId || appt.assessmentId 
+          ? `https://healthvibe.clinic/dossier/${appt.linkedCaseId || appt.assessmentId}`
+          : "";
+        
+        const detailsLines = [
+          isEn ? `🩺 Clinical Consultation with Patient: ${patientName}` : `🩺 موعد كشف سريري مع المريض: ${patientName}`,
+          isEn ? `📌 Consultation Type: ${consultationType}` : `📌 نوع الاستشارة: ${consultationType}`,
+          isEn ? `📍 Location / Telehealth: ${location}` : `📍 المقر / رابط الاستشارة: ${location}`,
+          isEn ? `🏷️ Booking Reference: ${bookingId}` : `🏷️ رقم الحجز المرجعي: ${bookingId}`,
+          isEn ? `📝 Chief Complaint / Notes: ${notes}` : `📝 شكوى المريض وملاحظات الزيارة: ${notes}`
+        ];
+        if (dossierUrl) {
+          detailsLines.push(isEn ? `📑 Linked Triage Dossier: ${dossierUrl}` : `📑 ملف الفرز السريري المرفق: ${dossierUrl}`);
+        }
+        detailsLines.push(isEn 
+          ? `⚠️ Standard Okadoc SLA: Check patient vitals (SpO2, Respiratory Rate) prior to consultation.`
+          : `⚠️ معيار Okadoc السريري: يرجى مراجعة العلامات الحيوية (SpO2، معدل التنفس) قبل بدء الكشف.`
+        );
+        details = detailsLines.join("\n");
+      } else {
+        // Patient perspective
+        title = isEn
+          ? `Medical Appointment with ${docName}`
+          : `Health Vibe: استشارة مع ${docName}`;
+
+        const prepInstructions = (appt.type === "video" || appt.isOnlineConsultation || appt.consultationType === "video")
+          ? (isEn 
+              ? "Encrypted virtual room opens 5 mins before appointment. Please have a stable connection and past test reports ready."
+              : "تفتح الغرفة الافتراضية قبل الموعد بـ 5 دقائق. يرجى التأكد من اتصال الإنترنت وتجهيز أي تحاليل أو قياسات أكسجين سابقة.")
+          : (isEn
+              ? "Please arrive at the clinic 10 minutes early for check-in and vitals measurement. Bring prior prescriptions."
+              : "يرجى الحضور إلى مقر العيادة قبل الموعد بـ 10 دقائق لتسجيل الوصول وقياس العلامات الحيوية، مع إحضار الروشتات السابقة والفحوصات.");
+
+        const detailsLines = [
+          isEn ? `Appointment with ${docName}` : `موعد كشف سريري مع ${docName}`,
+          isEn ? `Type: ${consultationType}` : `النوع: ${consultationType}`,
+          isEn ? `Location: ${location}` : `العيادة: ${location}`,
+          isEn ? `Patient: ${patientName}` : `المريض: ${patientName}`,
+          isEn ? `Preparation: ${prepInstructions}` : `إرشادات التحضير: ${prepInstructions}`,
+          isEn ? `Notes: ${notes}` : `ملاحظات: ${notes}`
+        ];
+        details = detailsLines.join("\n");
+      }
+
+      // Time parsing
       const dateClean = String(rawDate).replace(/-/g, "");
-      // Default time parser (e.g. 10:00 AM -> 100000, 04:00 PM -> 160000)
       let hour = 10;
       let min = 0;
-      const t = String(appt.timeSlot || "");
+      const t = String(appt.timeSlot || appt.slotId || "");
       const match = t.match(/(\d{1,2}):(\d{2})/);
       if (match) {
         hour = parseInt(match[1], 10);
         min = parseInt(match[2], 10);
         if ((t.includes("مساء") || t.toLowerCase().includes("pm")) && hour < 12) hour += 12;
         if ((t.includes("صباح") || t.toLowerCase().includes("am")) && hour === 12) hour = 0;
+      } else if (t.startsWith("slot_")) {
+        const numPart = t.replace("slot_", "");
+        if (numPart.length === 4) {
+          hour = parseInt(numPart.substring(0, 2), 10);
+          min = parseInt(numPart.substring(2, 4), 10);
+        }
       }
-      const pad = n => String(n).padStart(2, "0");
-      const startIso = `${dateClean}T${pad(hour)}${pad(min)}00Z`;
-      const endHour = min >= 30 ? hour + 1 : hour;
-      const endMin = min >= 30 ? min - 30 : min + 30;
-      const endIso = `${dateClean}T${pad(endHour)}${pad(endMin)}00Z`;
 
-      return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${startIso}/${endIso}&details=${details}&location=${location}`;
+      const duration = parseInt(appt.durationMinutes, 10) || 30;
+      const totalStartMinutes = hour * 60 + min;
+      const totalEndMinutes = totalStartMinutes + duration;
+      const endHour = Math.floor(totalEndMinutes / 60) % 24;
+      const endMin = totalEndMinutes % 60;
+
+      const pad = n => String(n).padStart(2, "0");
+      const startIso = `${dateClean}T${pad(hour)}${pad(min)}00`;
+      const endHourPadded = pad(endHour);
+      const endMinPadded = pad(endMin);
+      const endIso = `${dateClean}T${endHourPadded}${endMinPadded}00`;
+
+      return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&dates=${startIso}/${endIso}&details=${encodeURIComponent(details)}&location=${encodeURIComponent(location)}`;
     } catch (e) {
       return "#";
     }
@@ -874,6 +962,14 @@
               ? "ℹ️ This certified evaluation dossier will be transmitted directly to the attending physician prior to the consultation so they can review your respiratory findings in advance."
               : "ℹ️ سيتم إرفاق تقرير التقييم التنفسي المعتمد مباشرة بالموعد ليطلع عليه الطبيب المعالج ويدرس حالتك قبل بدء المقابلة السريرية."}
           </p>
+
+          ${global.HealthVibes && global.HealthVibes.MedicationRemindersUI && typeof global.HealthVibes.MedicationRemindersUI.renderAppointmentAdherenceSnippet === "function"
+            ? global.HealthVibes.MedicationRemindersUI.renderAppointmentAdherenceSnippet()
+            : ""}
+
+          ${global.HealthVibes && global.HealthVibes.ScheduledReassessmentUI && typeof global.HealthVibes.ScheduledReassessmentUI.renderAppointmentReassessmentSnippet === "function"
+            ? global.HealthVibes.ScheduledReassessmentUI.renderAppointmentReassessmentSnippet()
+            : ""}
         </div>
 
         <div class="dossier-card-footer">
@@ -891,6 +987,15 @@
         renderAttachedAssessmentDossier(containerId, isEn, onDetach);
         if (typeof onDetach === "function") onDetach();
       };
+    }
+  }
+
+  /**
+   * Renders the Amwell-grade Encrypted Pre-Visit Attachments Dossier
+   */
+  function renderAttachedSecureFiles(containerId, isEn = false) {
+    if (global.HealthVibes && global.HealthVibes.SecureFilesUI && typeof global.HealthVibes.SecureFilesUI.renderAppointmentSecureAttachments === "function") {
+      global.HealthVibes.SecureFilesUI.renderAppointmentSecureAttachments(containerId, null, isEn);
     }
   }
 
@@ -981,39 +1086,9 @@
   }
 
   /**
-   * Generates Google Calendar web add URL
+   * Generates Google Calendar web add URL (Aliased to unified buildGoogleCalendarUrl)
    */
-  function buildGoogleCalendarUrl(appt = {}) {
-    const rawDate = appt.date || appt.dateStr || new Date().toISOString().split("T")[0];
-    const docName = appt.doctorName || "Treating Physician";
-    const clinicName = appt.clinicName || (appt.type === "video" ? "Health Vibe Telehealth (Video)" : (appt.branch || "Specialized Chest Clinic"));
-    const title = `Medical Appointment with ${docName}`;
-    const details = `Appointment with ${docName}\nType: ${appt.typeLabel || appt.type || 'Clinic'}\nLocation: ${clinicName}`;
-
-    let hour = 10, min = 0;
-    const t = String(appt.timeSlot || appt.slotId || "");
-    const match = t.match(/(\d{1,2}):(\d{2})/);
-    if (match) {
-      hour = parseInt(match[1], 10);
-      min = parseInt(match[2], 10);
-      if ((t.includes("مساء") || t.toLowerCase().includes("pm")) && hour < 12) hour += 12;
-      if ((t.includes("صباح") || t.toLowerCase().includes("am")) && hour === 12) hour = 0;
-    } else if (t.startsWith("slot_")) {
-      const numPart = t.replace("slot_", "");
-      if (numPart.length === 4) {
-        hour = parseInt(numPart.substring(0, 2), 10);
-        min = parseInt(numPart.substring(2, 4), 10);
-      }
-    }
-    const pad = n => String(n).padStart(2, "0");
-    const dateClean = String(rawDate).replace(/-/g, "");
-    const startIso = `${dateClean}T${pad(hour)}${pad(min)}00`;
-    const endHour = min >= 30 ? hour + 1 : hour;
-    const endMin = min >= 30 ? min - 30 : min + 30;
-    const endIso = `${dateClean}T${pad(endHour)}${pad(endMin)}00`;
-
-    return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&dates=${startIso}/${endIso}&details=${encodeURIComponent(details)}&location=${encodeURIComponent(clinicName)}`;
-  }
+  const getGoogleCalendarUrl = buildGoogleCalendarUrl;
 
   /**
    * Generates Outlook / Office 365 web add URL
@@ -1907,6 +1982,275 @@
     return `<span class="doctolib-badge badge-pending" style="background: rgba(245, 158, 11, 0.12); color: #d97706; border: 1px solid rgba(245, 158, 11, 0.3); padding: 4px 8px; border-radius: 6px; font-size: 11.5px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">⏳ ${isEn ? "Pending Confirmation (No-Show Risk)" : "بانتظار التأكيد (خطر تغيب)"}</span>`;
   }
 
+  /**
+   * Copies formatted appointment details to clipboard
+   */
+  function copyAppointmentDetailsToClipboard(appt = {}, options = {}) {
+    const isEn = typeof options.isEn === "boolean"
+      ? options.isEn
+      : (options.lang === "en" || (typeof global.currentLanguage !== "undefined" && global.currentLanguage === "en"));
+    const role = options.role || appt.role || "patient";
+    const docName = appt.doctorName || (isEn ? "Treating Physician" : "طبيبك المعالج");
+    const patientName = appt.patientName || state.selectedBeneficiaryName || (isEn ? "Patient" : "المريض");
+    const date = appt.date || appt.dateStr || "";
+    const time = appt.timeSlot || appt.slotId || "";
+    const type = appt.typeLabel || appt.type || (appt.type === "video" ? (isEn ? "Video Call" : "استشارة فيديو") : (isEn ? "In-Clinic" : "كشف عيادة"));
+    const location = appt.clinicName || (appt.type === "video" ? (isEn ? "Health Vibe Virtual Telehealth" : "عيادة هيلث فايب الافتراضية") : (isEn ? "Specialized Chest Clinic" : "عيادة الصدر التخصصية"));
+
+    const text = isEn
+      ? `📅 Health Vibe Appointment Details\nDoctor: ${docName}\nPatient: ${patientName}\nDate: ${date}\nTime: ${time}\nType: ${type}\nLocation: ${location}\nBooking Ref: ${appt.id || "N/A"}`
+      : `📅 تفاصيل موعد هيلث فايب\nالطبيب: ${docName}\nالمريض: ${patientName}\nالتاريخ: ${date}\nالوقت: ${time}\nالنوع: ${type}\nالمقر: ${location}\nرقم الحجز: ${appt.id || "غير متوفر"}`;
+
+    if (typeof navigator !== "undefined" && navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+      navigator.clipboard.writeText(text).then(() => {
+        if (typeof global.showToast === "function") {
+          global.showToast(isEn ? "Appointment details copied to clipboard!" : "تم نسخ تفاصيل الموعد بنجاح إلى الحافظة!");
+        }
+      }).catch(() => {});
+    }
+    return text;
+  }
+
+  /**
+   * Renders Okadoc-style Booking Confirmation Card with 1-Click Google Calendar Sync
+   * Supports both Patient and Doctor views, mobile-responsive layout, and WCAG touch targets.
+   */
+  function renderBookingConfirmationCalendarCard(appt = {}, options = {}) {
+    const isEn = typeof options.isEn === "boolean"
+      ? options.isEn
+      : (options.lang === "en" || (typeof global.currentLanguage !== "undefined" && global.currentLanguage === "en"));
+    const role = options.role || appt.role || appt.viewerRole || "patient";
+
+    const docName = isEn 
+      ? (appt.doctorNameEn || appt.doctorName || "Treating Physician") 
+      : (appt.doctorName || "طبيبك المعالج");
+    const docSpecialty = isEn
+      ? (appt.doctorSpecialtyEn || appt.doctorSpecialty || "Consultant Pulmonologist")
+      : (appt.doctorSpecialty || "استشاري الأمراض الصدرية والحساسية");
+    const patientName = appt.patientName || state.selectedBeneficiaryName || (isEn ? "Primary Patient" : "المريض الأساسي");
+    const dateStr = appt.date || appt.dateStr || "";
+    const timeStr = appt.timeSlot || appt.slotId || "";
+    const isVideo = appt.type === "video" || appt.isOnlineConsultation || appt.consultationType === "video";
+    const typeLabel = appt.typeLabel || appt.type || (isVideo ? (isEn ? "Telehealth Video Consultation" : "استشارة فيديو عن بُعد") : (isEn ? "In-Clinic Visit" : "كشف عيادة حضوري"));
+    const clinicName = appt.clinicName || (isVideo 
+      ? (isEn ? "Health Vibe Virtual Telehealth Room" : "عيادة هيلث فايب الافتراضية")
+      : (appt.branch || (isEn ? "Cairo Specialized Chest Center — Dokki Branch" : "مركز القاهرة التخصصي لأمراض الصدر — فرع الدقي")));
+    const bookingRef = appt.id || appt.bookingId || "HV-" + Math.floor(100000 + Math.random() * 900000);
+
+    const googleCalUrl = buildGoogleCalendarUrl(appt, { role, isEn });
+
+    const prepHeader = isEn ? "Pre-Visit Instructions & Prevention of Missed Visits:" : "إرشادات ما قبل الزيارة الطبية لمنع نسيان الموعد:";
+    const prepText = isVideo
+      ? (isEn 
+          ? "The encrypted HD video room will open automatically 5 minutes prior to your slot. Please have previous lab reports and pulse oximeter readings available."
+          : "تفتح غرفة الاستشارة الافتراضية عالية التشفير قبل الموعد بـ 5 دقائق. يرجى تجهيز أي فحوصات سابقة وقراءات مقياس الأكسجين.")
+      : (isEn
+          ? "Please arrive 10 minutes prior to your appointment for vital signs check-in. Bring prior prescriptions and pulmonary function reports."
+          : "يرجى الحضور لمقر العيادة قبل الموعد بـ 10 دقائق لتسجيل الوصول وقياس العلامات الحيوية، مع إحضار الفحوصات ووظائف التنفس السابقة.");
+
+    const roleNotice = role === "doctor"
+      ? (isEn 
+          ? "Doctor Notice: This appointment is locked into your daily clinical queue and attached to the patient's triage dossier."
+          : "تنبيه الطبيب: تم قفل هذا الموعد في جدول عيادتك اليومي وربطه بملف الفرز السريري للمريض.")
+      : (isEn
+          ? "Automated SMS & Email alerts will be sent 24 hours and 2 hours prior to ensure you never miss your visit."
+          : "ستصلك رسائل تذكير تلقائية عبر SMS والبريد قبل الزيارة بـ 24 ساعة وساعتين لمنع نسيان الموعد.");
+
+    return `
+      <div class="okadoc-calendar-confirmation-card" data-appointment-id="${escapeHtml(bookingRef)}" data-role="${escapeHtml(role)}" dir="${isEn ? "ltr" : "rtl"}">
+        <div class="okadoc-success-badge-wrapper">
+          <div class="okadoc-success-icon" aria-hidden="true">✓</div>
+          <span class="okadoc-badge-pill">
+            <span>📅</span> ${isEn ? "Smart Google Calendar • Okadoc Standard" : "ربط التقويم الذكي • Okadoc Standard"}
+          </span>
+        </div>
+
+        <h3 class="okadoc-card-title">
+          ${isEn ? "Appointment Confirmed Successfully!" : "تم تأكيد حجز الموعد بنجاح!"}
+        </h3>
+        <p class="okadoc-card-subtitle">
+          ${isEn 
+            ? "Your visit is secured. Add it to your Google Calendar now to receive instant sync and prevent missing your appointment." 
+            : "تم حجز وتأكيد موعدك سريرياً. أضف الموعد لتقويم Google فوراً لتلقي التنبيهات وتجنب نسيان الزيارة."}
+        </p>
+
+        <!-- Summary Recap Box -->
+        <div class="okadoc-recap-box">
+          <div class="okadoc-recap-row">
+            <span class="okadoc-recap-label">${isEn ? "Attending Doctor:" : "الطبيب المعالج:"}</span>
+            <span class="okadoc-recap-value doctor-highlight">🩺 ${escapeHtml(docName)}</span>
+          </div>
+          <div class="okadoc-recap-row">
+            <span class="okadoc-recap-label">${isEn ? "Specialty:" : "التخصص:"}</span>
+            <span class="okadoc-recap-value muted">${escapeHtml(docSpecialty)}</span>
+          </div>
+          <div class="okadoc-recap-row">
+            <span class="okadoc-recap-label">${role === "doctor" ? (isEn ? "Patient Name:" : "اسم المريض:") : (isEn ? "Beneficiary:" : "المريض:")}</span>
+            <span class="okadoc-recap-value">👤 ${escapeHtml(patientName)}</span>
+          </div>
+          <div class="okadoc-recap-row highlight-row">
+            <span class="okadoc-recap-label">${isEn ? "Date & Time Slot:" : "موعد وتوقيت الزيارة:"}</span>
+            <span class="okadoc-recap-value time-badge">📅 ${escapeHtml(dateStr)} — ⏰ ${escapeHtml(timeStr)}</span>
+          </div>
+          <div class="okadoc-recap-row">
+            <span class="okadoc-recap-label">${isEn ? "Consultation Mode:" : "نوع الاستشارة والمقر:"}</span>
+            <span class="okadoc-recap-value venue-badge ${isVideo ? "video" : "clinic"}">
+              ${isVideo ? "📹" : "🏥"} ${escapeHtml(typeLabel)} (${escapeHtml(clinicName)})
+            </span>
+          </div>
+          <div class="okadoc-recap-row">
+            <span class="okadoc-recap-label">${isEn ? "Booking Reference:" : "رقم الحجز المرجعي:"}</span>
+            <span class="okadoc-recap-value code-badge">${escapeHtml(bookingRef)}</span>
+          </div>
+        </div>
+
+        <!-- Pre-visit clinical guidance -->
+        <div class="okadoc-prep-notice">
+          <div class="prep-notice-header">
+            <span class="prep-icon">📋</span>
+            <strong>${prepHeader}</strong>
+          </div>
+          <p class="prep-notice-text">${prepText}</p>
+          <div class="prep-notice-footer">
+            <span class="bell-icon">🔔</span>
+            <small>${roleNotice}</small>
+          </div>
+        </div>
+
+        <!-- 1-Click Action Buttons -->
+        <div class="okadoc-cal-actions">
+          <a href="${googleCalUrl}" target="_blank" rel="noopener noreferrer" class="okadoc-btn-google-cal" id="btnOkadocAddToGoogleCal">
+            <svg class="google-cal-svg-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+              <path fill="#4285F4" d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11z"/>
+              <path fill="#34A853" d="M7 10h5v5H7z"/>
+            </svg>
+            <span>${role === "doctor" ? (isEn ? "Add to Google Calendar (Doctor)" : "إضافة الموعد لتقويم Google (طبيب)") : (isEn ? "Add to Google Calendar" : "إضافة إلى تقويم Google")}</span>
+          </a>
+
+          <button type="button" class="okadoc-btn-ics" id="btnOkadocDownloadIcs" data-appointment-id="${escapeHtml(bookingRef)}">
+            <span>📥</span>
+            <span>${isEn ? "Download .ics (Apple / Outlook)" : "تحميل ملف التقويم (.ics)"}</span>
+          </button>
+
+          <button type="button" class="okadoc-btn-copy" id="btnOkadocCopyDetails" title="${isEn ? "Copy to clipboard" : "نسخ تفاصيل الموعد"}">
+            <span>📋</span>
+            <span>${isEn ? "Copy Details" : "نسخ التفاصيل"}</span>
+          </button>
+        </div>
+
+        <!-- Modal Footer Actions -->
+        <div class="okadoc-card-footer">
+          <button type="button" class="outline-button okadoc-btn-view-appts" id="btnOkadocViewMyAppointments" style="min-height:44px; flex:1;">
+            <span>🗓️</span> ${isEn ? "View My Appointments" : "عرض مواعيدي"}
+          </button>
+          <button type="button" class="solid-button okadoc-btn-done" id="btnOkadocDone" style="min-height:44px; flex:1; background:var(--teal, #0d9488);">
+            ✓ ${isEn ? "Done" : "تم"}
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * Opens the celebratory Okadoc Booking Confirmation Modal with 1-Click Google Calendar Sync
+   */
+  function openBookingConfirmationCalendarModal(appt = {}, options = {}) {
+    let modal = document.getElementById("bookingConfirmationCalendarModal");
+    const isEn = typeof options.isEn === "boolean"
+      ? options.isEn
+      : (options.lang === "en" || (typeof global.currentLanguage !== "undefined" && global.currentLanguage === "en"));
+
+    if (!modal) {
+      modal = document.createElement("div");
+      modal.id = "bookingConfirmationCalendarModal";
+      modal.className = "vezeeta-modal-overlay okadoc-booking-success-modal";
+      modal.setAttribute("role", "dialog");
+      modal.setAttribute("aria-modal", "true");
+      modal.setAttribute("aria-hidden", "true");
+      document.body.appendChild(modal);
+    }
+
+    modal.innerHTML = `
+      <div class="vezeeta-modal-dialog okadoc-booking-success-dialog">
+        <div class="vezeeta-modal-header" style="border-bottom:none; padding:16px 20px 0;">
+          <span style="font-size:12px; font-weight:700; color:var(--teal, #0d9488); letter-spacing:0.5px; text-transform:uppercase;">
+            ${isEn ? "Okadoc Calendar Sync" : "ربط تقويم الزيارة"}
+          </span>
+          <button type="button" class="vezeeta-modal-close" id="btnCloseOkadocCalModal" aria-label="${isEn ? "Close" : "إغلاق"}">✕</button>
+        </div>
+        <div class="vezeeta-modal-body" style="padding: 10px 20px 24px;">
+          ${renderBookingConfirmationCalendarCard(appt, { ...options, isEn })}
+        </div>
+      </div>
+    `;
+
+    // Wire events
+    const closeBtn = modal.querySelector("#btnCloseOkadocCalModal");
+    if (closeBtn) closeBtn.onclick = closeBookingConfirmationCalendarModal;
+
+    const doneBtn = modal.querySelector("#btnOkadocDone");
+    if (doneBtn) {
+      doneBtn.onclick = () => {
+        closeBookingConfirmationCalendarModal();
+        if (typeof options.onDone === "function") options.onDone();
+      };
+    }
+
+    const icsBtn = modal.querySelector("#btnOkadocDownloadIcs");
+    if (icsBtn) {
+      icsBtn.onclick = () => downloadIcsCalendar(appt, { ...options, isEn });
+    }
+
+    const copyBtn = modal.querySelector("#btnOkadocCopyDetails");
+    if (copyBtn) {
+      copyBtn.onclick = () => {
+        copyAppointmentDetailsToClipboard(appt, { ...options, isEn });
+        copyBtn.innerHTML = `<span>✓</span> <span>${isEn ? "Copied!" : "تم النسخ!"}</span>`;
+        setTimeout(() => {
+          copyBtn.innerHTML = `<span>📋</span> <span>${isEn ? "Copy Details" : "نسخ التفاصيل"}</span>`;
+        }, 2200);
+      };
+    }
+
+    const viewApptsBtn = modal.querySelector("#btnOkadocViewMyAppointments");
+    if (viewApptsBtn) {
+      viewApptsBtn.onclick = () => {
+        closeBookingConfirmationCalendarModal();
+        if (typeof options.onViewAppointments === "function") {
+          options.onViewAppointments();
+        } else if (typeof global.showScreen === "function") {
+          global.showScreen("appointments");
+        }
+      };
+    }
+
+    // Keyboard ESC to close
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") {
+        closeBookingConfirmationCalendarModal();
+        document.removeEventListener("keydown", onKeyDown);
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+
+    modal.classList.add("open");
+    modal.setAttribute("aria-hidden", "false");
+
+    if (typeof global.dispatchEvent === "function" && typeof CustomEvent === "function") {
+      global.dispatchEvent(new CustomEvent("healthvibe:appointment:calendar-opened", { detail: { appt } }));
+    }
+
+    return modal;
+  }
+
+  function closeBookingConfirmationCalendarModal() {
+    const modal = document.getElementById("bookingConfirmationCalendarModal");
+    if (modal) {
+      modal.classList.remove("open");
+      modal.setAttribute("aria-hidden", "true");
+    }
+  }
+
   const AppointmentsUI = {
     state,
     buildGoogleCalendarUrl,
@@ -1924,6 +2268,7 @@
     getLinkedCase,
     clearLinkedCase,
     renderAttachedAssessmentDossier,
+    renderAttachedSecureFiles,
     renderConsultationModeSelector,
     renderConsultationDetailsCard,
     getSelectedConsultationType,
@@ -1943,7 +2288,11 @@
     renderReminderHero,
     openReminderPreferencesModal,
     closeReminderPreferencesModal,
-    renderDoctorAttendanceBadge
+    renderDoctorAttendanceBadge,
+    copyAppointmentDetailsToClipboard,
+    renderBookingConfirmationCalendarCard,
+    openBookingConfirmationCalendarModal,
+    closeBookingConfirmationCalendarModal
   };
 
   global.HealthVibes = global.HealthVibes || {};

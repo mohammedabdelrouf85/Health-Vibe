@@ -8496,7 +8496,8 @@ app.post('/api/appointments/book', requireAuth, requireVerifiedEmail, async (req
     return res.status(201).json({
       success: true,
       appointmentId: savedAppointment.id,
-      appointment: savedAppointment
+      appointment: savedAppointment,
+      calendarLinks: savedAppointment.calendarLinks || null
     });
   } catch (err) {
     console.error('[APPOINTMENT BOOK ERROR]:', err);
@@ -8650,6 +8651,205 @@ app.get(['/api/appointments/:id/calendar.ics', '/api/appointments/:id/ics', '/ap
     return res.status(statusCode).json({ error: err.code || 'ICS_GENERATION_FAILED', message: err.message });
   }
 });
+
+/**
+ * GET /api/appointments/:id/calendar/links
+ * Okadoc Benchmark: Generates 1-click Google Calendar deep links (Patient & Doctor perspectives)
+ * with strict Zero-PHI URL sanitization and RBAC authorization verification.
+ */
+app.get('/api/appointments/:id/calendar/links', requireAuth, async (req, res) => {
+  const appointmentId = req.params.id;
+  if (!db || typeof db.collection !== 'function') {
+    return res.status(503).json({ error: 'APPOINTMENT_STORAGE_UNAVAILABLE', message: 'Appointment storage is unavailable.' });
+  }
+  try {
+    const appointment = await schedulingService.getAppointmentById(db, appointmentId, req.user);
+    const calendarLinks = googleCalendarService.generateAppointmentCalendarLinks(appointment, {
+      lang: req.query.lang || 'ar',
+      role: req.user.role === 'doctor' ? 'doctor' : 'patient'
+    });
+    return res.status(200).json({
+      success: true,
+      appointmentId,
+      calendar: calendarLinks
+    });
+  } catch (err) {
+    console.error('[APPOINTMENT CALENDAR LINKS ERROR]:', err);
+    const statusCode = err.statusCode || (err.code === 'APPOINTMENT_NOT_FOUND' ? 404 : (err.code === 'ACCESS_DENIED' ? 403 : 500));
+    return res.status(statusCode).json({ error: err.code || 'CALENDAR_LINKS_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/appointments/:id/calendar/sync-event
+ * Okadoc Benchmark: Records an appointment calendar sync event in Relational DB & Firestore,
+ * logs an immutable security audit trail, and registers usage analytics telemetry.
+ */
+app.post('/api/appointments/:id/calendar/sync-event', requireAuth, async (req, res) => {
+  const appointmentId = req.params.id;
+  if (!db || typeof db.collection !== 'function') {
+    return res.status(503).json({ error: 'APPOINTMENT_STORAGE_UNAVAILABLE', message: 'Appointment storage is unavailable.' });
+  }
+  try {
+    await schedulingService.getAppointmentById(db, appointmentId, req.user);
+    const result = await googleCalendarService.recordAppointmentCalendarSync(db, {
+      appointmentId,
+      userId: req.user.uid,
+      role: req.user.role,
+      calendarProvider: req.body?.calendarProvider || req.body?.provider || 'google',
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent']
+    });
+    return res.status(200).json({
+      success: true,
+      message: 'Calendar sync event recorded successfully.',
+      ...result
+    });
+  } catch (err) {
+    console.error('[APPOINTMENT CALENDAR SYNC ERROR]:', err);
+    const statusCode = err.statusCode || (err.code === 'APPOINTMENT_NOT_FOUND' ? 404 : (err.code === 'ACCESS_DENIED' ? 403 : 500));
+    return res.status(statusCode).json({ error: err.code || 'CALENDAR_SYNC_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/appointments/:id/calendar/sync-history
+ * Okadoc Benchmark: Retrieves full calendar sync audit history for an appointment.
+ */
+app.get('/api/appointments/:id/calendar/sync-history', requireAuth, async (req, res) => {
+  const appointmentId = req.params.id;
+  if (!db || typeof db.collection !== 'function') {
+    return res.status(503).json({ error: 'APPOINTMENT_STORAGE_UNAVAILABLE', message: 'Appointment storage is unavailable.' });
+  }
+  try {
+    await schedulingService.getAppointmentById(db, appointmentId, req.user);
+    const syncs = await googleCalendarService.getAppointmentCalendarSyncs(db, appointmentId);
+    return res.status(200).json({
+      success: true,
+      appointmentId,
+      syncs
+    });
+  } catch (err) {
+    console.error('[APPOINTMENT CALENDAR SYNC HISTORY ERROR]:', err);
+    const statusCode = err.statusCode || (err.code === 'APPOINTMENT_NOT_FOUND' ? 404 : (err.code === 'ACCESS_DENIED' ? 403 : 500));
+    return res.status(statusCode).json({ error: err.code || 'CALENDAR_SYNC_HISTORY_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/appointments/:id/calendar/validate-safety
+ * Safety & Privacy: Validates appointment calendar payload for Zero-PHI compliance and Physician Primacy.
+ */
+app.post('/api/appointments/:id/calendar/validate-safety', requireAuth, async (req, res) => {
+  const appointmentId = req.params.id;
+  if (!db || typeof db.collection !== 'function') {
+    return res.status(503).json({ error: 'APPOINTMENT_STORAGE_UNAVAILABLE', message: 'Appointment storage is unavailable.' });
+  }
+  try {
+    const appointment = await schedulingService.getAppointmentById(db, appointmentId, req.user);
+    const candidateAppointment = {
+      ...appointment,
+      ...(req.body || {})
+    };
+    const validation = googleCalendarService.validateCalendarPrivacyAndPrimacy(candidateAppointment, req.user, db);
+    return res.status(200).json({
+      success: true,
+      appointmentId,
+      ...validation
+    });
+  } catch (err) {
+    console.error('[APPOINTMENT CALENDAR VALIDATE SAFETY ERROR]:', err);
+    const statusCode = err.statusCode || (err.code === 'PHYSICIAN_PRIMACY_VIOLATION' ? 403 : (err.code === 'APPOINTMENT_NOT_FOUND' ? 404 : 500));
+    return res.status(statusCode).json({ error: err.code || 'SAFETY_VALIDATION_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/patient/calendar/consent
+ * Safety & Privacy: Records patient opt-in or revocation of external calendar synchronization.
+ */
+app.post('/api/patient/calendar/consent', requireAuth, async (req, res) => {
+  if (!db || typeof db.collection !== 'function') {
+    return res.status(503).json({ error: 'STORAGE_UNAVAILABLE', message: 'Storage is unavailable.' });
+  }
+  try {
+    const patientId = req.body?.patientId || req.user.uid;
+    // Patient can manage their own consent; doctor/super_admin can manage patient consent
+    if (patientId !== req.user.uid && req.user.role !== 'doctor' && req.user.role !== 'super_admin' && req.user.role !== 'clinic_admin') {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Cannot modify calendar consent for another user.' });
+    }
+
+    const { consent = true, reason = '' } = req.body;
+    const result = await googleCalendarService.setPatientCalendarConsent(db, patientId, {
+      consent,
+      reason,
+      actorUser: req.user,
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent']
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: consent ? 'Calendar consent granted successfully.' : 'Calendar consent revoked successfully.',
+      ...result
+    });
+  } catch (err) {
+    console.error('[PATIENT CALENDAR CONSENT ERROR]:', err);
+    const statusCode = err.statusCode || 500;
+    return res.status(statusCode).json({ error: err.code || 'CONSENT_UPDATE_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/patient/calendar/consent
+ * Safety & Privacy: Retrieves patient calendar synchronization consent status.
+ */
+app.get('/api/patient/calendar/consent', requireAuth, async (req, res) => {
+  if (!db || typeof db.collection !== 'function') {
+    return res.status(503).json({ error: 'STORAGE_UNAVAILABLE', message: 'Storage is unavailable.' });
+  }
+  try {
+    const patientId = req.query?.patientId || req.user.uid;
+    if (patientId !== req.user.uid && req.user.role !== 'doctor' && req.user.role !== 'super_admin' && req.user.role !== 'clinic_admin') {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Cannot view calendar consent for another user.' });
+    }
+
+    const result = await googleCalendarService.getPatientCalendarConsent(db, patientId);
+    return res.status(200).json({
+      success: true,
+      ...result
+    });
+  } catch (err) {
+    console.error('[GET PATIENT CALENDAR CONSENT ERROR]:', err);
+    const statusCode = err.statusCode || 500;
+    return res.status(statusCode).json({ error: err.code || 'CONSENT_FETCH_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/appointments/chatbot/calendar-context/:patientId
+ * Chatbot Integration: Provides upcoming appointment context with 1-click Google Calendar cards.
+ */
+app.get('/api/appointments/chatbot/calendar-context/:patientId', requireAuth, async (req, res) => {
+  if (!db || typeof db.collection !== 'function') {
+    return res.status(503).json({ error: 'STORAGE_UNAVAILABLE', message: 'Storage is unavailable.' });
+  }
+  try {
+    const patientId = req.params.patientId;
+    if (patientId !== req.user.uid && req.user.role !== 'doctor' && req.user.role !== 'super_admin' && req.user.role !== 'clinic_admin') {
+      return res.status(403).json({ error: 'ACCESS_DENIED', message: 'Cannot access chatbot calendar context for another patient.' });
+    }
+
+    const lang = req.query.lang || req.user.preferredLanguage || 'ar';
+    const result = await googleCalendarService.generateChatbotCalendarContext(db, patientId, { lang });
+    return res.status(200).json(result);
+  } catch (err) {
+    console.error('[CHATBOT CALENDAR CONTEXT ERROR]:', err);
+    return res.status(500).json({ error: 'CHATBOT_CALENDAR_CONTEXT_FAILED', message: err.message });
+  }
+});
+
+
 
 /**
  * GET /api/appointments/my-appointments
@@ -20365,6 +20565,793 @@ app.get('/api/radiology/chatbot-context/:patientId', requireAuth, async (req, re
   }
 });
 
+/**
+ * 🔒 AMWELL-BENCHMARK PRIVATE CLOUD STORAGE & EPHEMERAL SIGNED URLS APIS
+ */
+const { cloudStorageSignedUrlsService, SCAN_STATUS, ENCRYPTION_MODES } = require('./cloud-storage-signed-urls-service');
+
+// POST /api/storage/upload-private
+app.post('/api/storage/upload-private', requireAuth, async (req, res) => {
+  try {
+    const {
+      fileName,
+      fileSize,
+      mimeType,
+      category = 'lab_analysis',
+      appointmentId,
+      caseId,
+      source = 'patient_vault'
+    } = req.body || {};
+
+    const result = await cloudStorageSignedUrlsService.registerPrivateUpload({
+      patientId: req.user.uid,
+      fileName,
+      fileSize,
+      mimeType,
+      category,
+      appointmentId,
+      caseId,
+      source,
+      doctorUser: req.user,
+      db
+    });
+
+    res.status(201).json({ success: true, file: result });
+  } catch (err) {
+    res.status(400).json({ error: 'PRIVATE_UPLOAD_FAILED', message: err.message });
+  }
+});
+
+// POST /api/storage/signed-url
+app.post('/api/storage/signed-url', requireAuth, (req, res) => {
+  try {
+    const { fileId, ttlSeconds } = req.body || {};
+    if (!fileId) {
+      return res.status(400).json({ error: 'MISSING_FILE_ID', message: 'fileId is required.' });
+    }
+
+    const result = cloudStorageSignedUrlsService.generateSignedUrl({
+      fileId,
+      requestingUser: req.user,
+      ttlSeconds
+    });
+
+    res.status(200).json(result);
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.code || 'SIGNED_URL_FAILED', message: err.message });
+  }
+});
+
+// GET /api/storage/secure-file/:fileId
+app.get('/api/storage/secure-file/:fileId', (req, res) => {
+  try {
+    const { fileId } = req.params;
+    const { token } = req.query;
+
+    const verification = cloudStorageSignedUrlsService.verifySignedToken(fileId, token, req.user);
+    if (!verification.valid) {
+      return res.status(403).json({ error: verification.error, message: verification.message, expiredAt: verification.expiredAt });
+    }
+
+    // Set secure headers preventing persistent browser caching of PHI
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.setHeader('X-Amwell-Encryption', verification.file.encryption.mode);
+    res.setHeader('X-Scan-Status', verification.file.scanStatus);
+    res.setHeader('X-Link-TTL-Remaining', String(verification.remainingSeconds));
+
+    res.status(200).json({
+      success: true,
+      message: 'Access granted via valid ephemeral signed URL.',
+      file: verification.file,
+      remainingSeconds: verification.remainingSeconds,
+      downloadUrl: `/api/storage/download-stream/${fileId}?token=${encodeURIComponent(token)}`
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'SECURE_FILE_ACCESS_FAILED', message: err.message });
+  }
+});
+
+// GET /api/storage/patient-files/:patientId
+app.get('/api/storage/patient-files/:patientId', requireAuth, (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const files = cloudStorageSignedUrlsService.getPatientPrivateFiles(patientId, req.user);
+    res.status(200).json({ success: true, count: files.length, files });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.code || 'FETCH_FILES_FAILED', message: err.message });
+  }
+});
+
+// POST /api/storage/scan/:fileId
+app.post('/api/storage/scan/:fileId', requireAuth, async (req, res) => {
+  try {
+    const { fileId } = req.params;
+    const result = await cloudStorageSignedUrlsService.scanFileForMalware(fileId);
+    res.status(200).json({ success: true, file: result });
+  } catch (err) {
+    res.status(400).json({ error: 'SCAN_FAILED', message: err.message });
+  }
+});
+
+// POST /api/storage/link-appointment
+app.post('/api/storage/link-appointment', requireAuth, async (req, res) => {
+  try {
+    const { fileId, appointmentId } = req.body || {};
+    const result = await cloudStorageSignedUrlsService.linkFileToAppointment({
+      fileId,
+      appointmentId,
+      requestingUser: req.user,
+      db
+    });
+    res.status(200).json(result);
+  } catch (err) {
+    res.status(400).json({ error: 'LINK_APPOINTMENT_FAILED', message: err.message });
+  }
+});
+
+// POST /api/storage/link-chat-session
+app.post('/api/storage/link-chat-session', requireAuth, async (req, res) => {
+  try {
+    const { fileId, sessionId } = req.body || {};
+    const result = await cloudStorageSignedUrlsService.linkFileToChatSession({
+      fileId,
+      sessionId,
+      requestingUser: req.user,
+      db
+    });
+    res.status(200).json(result);
+  } catch (err) {
+    res.status(400).json({ error: 'LINK_CHAT_SESSION_FAILED', message: err.message });
+  }
+});
+
+// POST /api/storage/notify-dossier
+app.post('/api/storage/notify-dossier', requireAuth, async (req, res) => {
+  try {
+    const { fileId, appointmentId, doctorId } = req.body || {};
+    const file = cloudStorageSignedUrlsService._filesStore.get(fileId);
+    if (!file) {
+      return res.status(404).json({ error: 'FILE_NOT_FOUND', message: 'File not found in vault.' });
+    }
+
+    const notificationResult = await notificationService.dispatchSecureStorageNotification({
+      eventType: notificationService.NOTIFICATION_TYPES.APPOINTMENT_DOSSIER_UPDATED,
+      fileRecord: file,
+      recipientId: doctorId,
+      appointment: { id: appointmentId },
+      db
+    });
+
+    res.status(200).json({ success: true, notification: notificationResult });
+  } catch (err) {
+    res.status(400).json({ error: 'NOTIFY_DOSSIER_FAILED', message: err.message });
+  }
+});
+
+// GET /api/storage/appointment-files/:appointmentId
+app.get('/api/storage/appointment-files/:appointmentId', requireAuth, (req, res) => {
+  try {
+    const { appointmentId } = req.params;
+    const files = [];
+
+    // Query in-memory and relational db
+    for (const file of cloudStorageSignedUrlsService._filesStore.values()) {
+      if (file.appointmentId === appointmentId) {
+        let signedUrl = null;
+        try {
+          const signed = cloudStorageSignedUrlsService.generateSignedUrl({
+            fileId: file.fileId,
+            requestingUser: req.user,
+            ttlSeconds: 900
+          });
+          signedUrl = signed.signedUrl;
+        } catch (_) {}
+
+        files.push({
+          ...file,
+          signedUrl,
+          isEncrypted: true
+        });
+      }
+    }
+
+    res.status(200).json({ success: true, appointmentId, count: files.length, files });
+  } catch (err) {
+    res.status(500).json({ error: 'FETCH_APPOINTMENT_FILES_FAILED', message: err.message });
+  }
+});
+
+// GET /api/storage/chatbot-context/:patientId
+app.get('/api/storage/chatbot-context/:patientId', requireAuth, (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const { lang } = req.query || {};
+    const result = cloudStorageSignedUrlsService.generateChatbotSecureContext(patientId, { lang: lang || 'ar' });
+    res.status(200).json({ success: true, ...result });
+  } catch (err) {
+    res.status(500).json({ error: 'CHATBOT_STORAGE_CONTEXT_FAILED', message: err.message });
+  }
+});
+
+// DELETE /api/storage/file/:fileId
+app.delete('/api/storage/file/:fileId', requireAuth, async (req, res) => {
+  try {
+    const { fileId } = req.params;
+    const deleted = await cloudStorageSignedUrlsService.deletePrivateFile(fileId, req.user);
+    if (!deleted) {
+      return res.status(404).json({ error: 'FILE_NOT_FOUND', message: 'File not found or already deleted.' });
+    }
+    res.status(200).json({ success: true, message: 'File deleted from private storage vault.' });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.code || 'DELETE_FAILED', message: err.message });
+  }
+});
+
+// POST /api/storage/certify-review
+// Certified Human Physician Review Gate: Enforces doctor review and non-autonomous AI boundary
+app.post('/api/storage/certify-review', requireAuth, async (req, res) => {
+  try {
+    const { fileId, clinicalImpression, findings, isNormal } = req.body || {};
+    const result = await cloudStorageSignedUrlsService.certifyFileReviewByDoctor({
+      fileId,
+      doctorUser: req.user,
+      clinicalImpression,
+      findings,
+      isNormal,
+      db
+    });
+    res.status(200).json(result);
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.code || 'CERTIFICATION_FAILED', message: err.message });
+  }
+});
+
+// POST /api/storage/validate-chatbot-safety
+// Chatbot clinical safety filter: Prevents autonomous diagnosis or prescription alterations
+app.post('/api/storage/validate-chatbot-safety', requireAuth, (req, res) => {
+  try {
+    const { message, lang } = req.body || {};
+    const result = cloudStorageSignedUrlsService.validateChatbotClinicalSafety(message, { lang });
+    res.status(200).json(result);
+  } catch (err) {
+    res.status(500).json({ error: 'SAFETY_VALIDATION_FAILED', message: err.message });
+  }
+});
+
+// POST /api/storage/revoke-token
+// Kill-Switch: Instantly revokes an ephemeral signed URL token
+app.post('/api/storage/revoke-token', requireAuth, (req, res) => {
+  try {
+    const { token } = req.body || {};
+    if (!token) {
+      return res.status(400).json({ error: 'MISSING_TOKEN', message: 'Token is required for revocation.' });
+    }
+    const revoked = cloudStorageSignedUrlsService.revokeSignedToken(token);
+    res.status(200).json({ success: true, revoked, message: 'Signed URL token permanently revoked.' });
+  } catch (err) {
+    res.status(500).json({ error: 'REVOCATION_FAILED', message: err.message });
+  }
+});
+
+/**
+ * 🔒 AMWELL BENCHMARK: SECURE CLOUD STORAGE & SIGNED URLS USAGE & KPI ANALYTICS
+ * GET /api/analytics/secure-storage
+ * GET /api/storage/analytics/kpis
+ */
+const handleSecureStorageAnalytics = (req, res) => {
+  try {
+    const isAuthorized = req.user && (
+      ['super_admin', 'admin', 'clinic_admin', 'doctor', 'radiologist'].includes(req.user.role) ||
+      req.user.isOwner === true
+    );
+
+    if (!isAuthorized) {
+      return res.status(403).json({
+        error: 'FORBIDDEN',
+        message: 'Unauthorized: Only platform administrators, clinic admins, and authorized clinicians can access secure storage analytics.'
+      });
+    }
+
+    const { timePeriod, clinicId, startDate, endDate } = req.query || {};
+    const analyticsService = require('./analytics-service');
+
+    const effectiveClinic = req.user.role === 'clinic_admin' ? req.user.clinicId : clinicId;
+
+    const analyticsData = analyticsService.calculateSecureStorageKpis(
+      analyticsService.getInMemoryEvents(),
+      {
+        timePeriod: timePeriod || 'all',
+        clinicId: effectiveClinic,
+        startDate,
+        endDate,
+        filesStore: cloudStorageSignedUrlsService._filesStore
+      }
+    );
+
+    res.status(200).json({
+      success: true,
+      ...analyticsData,
+      generatedAt: new Date().toISOString()
+    });
+  } catch (err) {
+    res.status(500).json({
+      error: 'STORAGE_ANALYTICS_FAILED',
+      message: err.message
+    });
+  }
+};
+
+app.get('/api/analytics/secure-storage', requireAuth, handleSecureStorageAnalytics);
+app.get('/api/storage/analytics/kpis', requireAuth, handleSecureStorageAnalytics);
+
+/**
+ * ⏰ PROPELLER HEALTH BENCHMARK: PREVENTATIVE INHALER REMINDERS & ADHERENCE APIS
+ */
+const {
+  medicationRemindersService,
+  MEDICATION_TYPES,
+  DOSE_STATUS,
+  ADHERENCE_BANDS
+} = require('./medication-reminders-service');
+
+// GET /api/medication-reminders/medications
+app.get('/api/medication-reminders/medications', requireAuth, async (req, res) => {
+  try {
+    const targetPatientId = req.query.patientId || req.user.uid;
+    const medications = await medicationRemindersService.getPatientMedications(targetPatientId, req.user);
+    res.status(200).json({ success: true, count: medications.length, medications });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'FETCH_MEDICATIONS_FAILED', message: err.message });
+  }
+});
+
+// POST /api/medication-reminders/medications
+app.post('/api/medication-reminders/medications', requireAuth, async (req, res) => {
+  try {
+    const targetPatientId = req.body.patientId || req.user.uid;
+    const medRecord = await medicationRemindersService.registerMedication(targetPatientId, req.body, req.user);
+    res.status(201).json({ success: true, medication: medRecord });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'REGISTER_MEDICATION_FAILED', message: err.message });
+  }
+});
+
+// POST /api/medication-reminders/doses/log
+app.post('/api/medication-reminders/doses/log', requireAuth, async (req, res) => {
+  try {
+    const targetPatientId = req.body.patientId || req.user.uid;
+    const result = await medicationRemindersService.logDose(targetPatientId, req.body, req.user);
+    res.status(200).json(result);
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'LOG_DOSE_FAILED', message: err.message });
+  }
+});
+
+// POST /api/medication-reminders/rescue/log
+app.post('/api/medication-reminders/rescue/log', requireAuth, async (req, res) => {
+  try {
+    const targetPatientId = req.body.patientId || req.user.uid;
+    const result = await medicationRemindersService.logRescuePuff(targetPatientId, req.body, req.user);
+    res.status(200).json(result);
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'LOG_RESCUE_FAILED', message: err.message });
+  }
+});
+
+// GET /api/medication-reminders/adherence/:patientId
+app.get('/api/medication-reminders/adherence/:patientId', requireAuth, async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const days = req.query.days ? parseInt(req.query.days, 10) : 7;
+    const result = await medicationRemindersService.calculateAdherence(patientId, { days }, req.user);
+    res.status(200).json({ success: true, ...result });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'ADHERENCE_FAILED', message: err.message });
+  }
+});
+
+// POST /api/medication-reminders/canister/refill
+app.post('/api/medication-reminders/canister/refill', requireAuth, async (req, res) => {
+  try {
+    const { patientId, medId, customPuffs } = req.body || {};
+    const targetPatientId = patientId || req.user.uid;
+    const result = await medicationRemindersService.refillCanister(targetPatientId, medId, customPuffs, req.user);
+    res.status(200).json(result);
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'CANISTER_REFILL_FAILED', message: err.message });
+  }
+});
+
+// POST /api/medication-reminders/reminders/dispatch
+app.post('/api/medication-reminders/reminders/dispatch', requireAuth, async (req, res) => {
+  try {
+    const isAuthorized = ['super_admin', 'admin', 'system'].includes(req.user.role) || req.user.isOwner === true;
+    if (!isAuthorized) {
+      return res.status(403).json({ error: 'FORBIDDEN', message: 'Only administrators or scheduler tasks can trigger batch reminders dispatch.' });
+    }
+    const { targetDate } = req.body || {};
+    const result = await medicationRemindersService.dispatchDailyReminders(targetDate);
+    res.status(200).json(result);
+  } catch (err) {
+    res.status(500).json({ error: 'DISPATCH_REMINDERS_FAILED', message: err.message });
+  }
+});
+
+// GET /api/medication-reminders/dossier/:patientId
+app.get('/api/medication-reminders/dossier/:patientId', requireAuth, async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const result = await medicationRemindersService.getPreVisitAdherenceDossier(patientId, req.user);
+    res.status(200).json({ success: true, dossier: result });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'DOSSIER_FAILED', message: err.message });
+  }
+});
+
+// GET /api/medication-reminders/chatbot/context/:patientId
+app.get('/api/medication-reminders/chatbot/context/:patientId', requireAuth, async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const result = await medicationRemindersService.getChatbotReminderContext(patientId);
+    res.status(200).json({ success: true, ...result });
+  } catch (err) {
+    res.status(500).json({ error: 'CHATBOT_CONTEXT_FAILED', message: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔒 PROPELLER HEALTH: SAFETY, PRIVACY & PHYSICIAN SCOPE GUARDRAILS APIS
+// ─────────────────────────────────────────────────────────────────────────────
+
+const {
+  medicationSafetyPrivacyService,
+  CLINICAL_DISCLAIMERS,
+  EMERGENCY_HOTLINES
+} = require('./medication-safety-privacy-service');
+
+// POST /api/medication-reminders/prescriptions/update (Strict Human Physician Gate)
+app.post('/api/medication-reminders/prescriptions/update', requireAuth, async (req, res) => {
+  try {
+    const { patientId, medId, updates } = req.body || {};
+    const targetPatientId = patientId || req.user.uid;
+    const result = await medicationRemindersService.updateMedicationPrescription(targetPatientId, medId, updates, req.user);
+    res.status(200).json(result);
+  } catch (err) {
+    res.status(err.statusCode || 400).json({
+      error: err.code || 'PRESCRIPTION_UPDATE_FAILED',
+      message: err.message,
+      details: err.details || null
+    });
+  }
+});
+
+// POST /api/medication-reminders/safety/evaluate-query (Chatbot & Dosage Safety Guardrail)
+app.post('/api/medication-reminders/safety/evaluate-query', requireAuth, (req, res) => {
+  try {
+    const { queryText, patientContext } = req.body || {};
+    const result = medicationSafetyPrivacyService.evaluateQuerySafety(queryText, {
+      ...patientContext,
+      patientId: patientContext?.patientId || req.user.uid
+    });
+    res.status(200).json({ success: true, ...result });
+  } catch (err) {
+    res.status(500).json({ error: 'QUERY_EVALUATION_FAILED', message: err.message });
+  }
+});
+
+// POST /api/medication-reminders/safety/assess-rescue (24h Clinical Safety Assessment)
+app.post('/api/medication-reminders/safety/assess-rescue', requireAuth, (req, res) => {
+  try {
+    const { patientId, past24hRescuePuffs } = req.body || {};
+    const targetPatientId = patientId || req.user.uid;
+    const result = medicationSafetyPrivacyService.assessRescueOveruseSafety(targetPatientId, past24hRescuePuffs);
+    res.status(200).json({ success: true, ...result });
+  } catch (err) {
+    res.status(500).json({ error: 'RESCUE_ASSESSMENT_FAILED', message: err.message });
+  }
+});
+
+// GET /api/medication-reminders/privacy/export/:patientId (GDPR Art. 15/20 Data Portability)
+app.get('/api/medication-reminders/privacy/export/:patientId', requireAuth, async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const result = await medicationSafetyPrivacyService.exportPatientMedicationHistory(patientId, req.user);
+    res.status(200).json({ success: true, export: result });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'EXPORT_FAILED', message: err.message });
+  }
+});
+
+// POST /api/medication-reminders/privacy/purge/:patientId (GDPR Art. 17 Erasure with Retention Guard)
+app.post('/api/medication-reminders/privacy/purge/:patientId', requireAuth, async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const result = await medicationSafetyPrivacyService.purgePatientMedicationData(patientId, req.user, req.body);
+    res.status(200).json({ success: true, purge: result });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'PURGE_FAILED', message: err.message });
+  }
+});
+
+// POST /api/medication-reminders/privacy/anonymize-research (HIPAA Safe Harbor De-identification)
+app.post('/api/medication-reminders/privacy/anonymize-research', requireAuth, (req, res) => {
+  try {
+    const isAuthorized = ['doctor', 'specialist', 'pulmonologist', 'admin', 'super_admin'].includes(req.user.role);
+    if (!isAuthorized) {
+      return res.status(403).json({ error: 'FORBIDDEN', message: 'Only authorized clinical researchers or administrators can access research anonymization.' });
+    }
+    const { records } = req.body || {};
+    const anonymized = medicationSafetyPrivacyService.anonymizeMedicationDataForResearch(Array.isArray(records) ? records : []);
+    res.status(200).json({ success: true, count: anonymized.length, records: anonymized });
+  } catch (err) {
+    res.status(500).json({ error: 'ANONYMIZATION_FAILED', message: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 📊 PROPELLER HEALTH: POPULATION RESPIRATORY ADHERENCE & CLINICAL KPIS APIS
+// ─────────────────────────────────────────────────────────────────────────────
+
+const handleMedicationReminderAnalytics = (req, res) => {
+  try {
+    const isAuthorized = req.user && (
+      ['super_admin', 'admin', 'clinic_admin', 'doctor', 'specialist', 'pulmonologist'].includes(req.user.role) ||
+      req.user.isOwner === true
+    );
+
+    if (!isAuthorized) {
+      return res.status(403).json({
+        error: 'FORBIDDEN',
+        message: 'Unauthorized: Only platform administrators, clinic directors, and authorized pulmonologists can access respiratory adherence analytics.'
+      });
+    }
+
+    const { timePeriod, patientId, startDate, endDate } = req.query || {};
+    const analyticsService = require('./analytics-service');
+
+    const kpiData = analyticsService.calculateMedicationReminderKpis(
+      analyticsService.getInMemoryEvents(),
+      {
+        timePeriod: timePeriod || 'all',
+        patientId,
+        startDate,
+        endDate
+      }
+    );
+
+    res.status(200).json({
+      success: true,
+      ...kpiData,
+      generatedAt: new Date().toISOString()
+    });
+  } catch (err) {
+    res.status(500).json({
+      error: 'MEDICATION_ANALYTICS_FAILED',
+      message: err.message
+    });
+  }
+};
+
+app.get('/api/medication-reminders/analytics/kpis', requireAuth, handleMedicationReminderAnalytics);
+app.get('/api/analytics/medication-reminders', requireAuth, handleMedicationReminderAnalytics);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🫁 NUVOAIR MEDICAL BENCHMARK: SCHEDULED RE-ASSESSMENT & TRAJECTORY APIS
+// ─────────────────────────────────────────────────────────────────────────────
+
+const {
+  scheduledReassessmentService,
+  REASSESSMENT_STATUS,
+  TRAJECTORY_STATUS,
+  CONTROL_BANDS,
+  DEFAULT_INTERVAL_DAYS
+} = require('./scheduled-reassessment-service');
+
+// POST /api/reassessment/schedule
+app.post('/api/reassessment/schedule', requireAuth, async (req, res) => {
+  try {
+    const targetPatientId = req.body?.patientId || req.user.uid;
+    const schedule = await scheduledReassessmentService.scheduleReassessment(targetPatientId, req.body || {}, req.user);
+    res.status(201).json({ success: true, schedule });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'SCHEDULE_REASSESSMENT_FAILED', message: err.message });
+  }
+});
+
+// GET /api/reassessment/patient/:patientId
+app.get('/api/reassessment/patient/:patientId', requireAuth, async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const schedule = await scheduledReassessmentService.getPatientSchedule(patientId, req.user);
+    res.status(200).json({ success: true, schedule });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'FETCH_SCHEDULE_FAILED', message: err.message });
+  }
+});
+
+// POST /api/reassessment/patient/:patientId/snooze
+app.post('/api/reassessment/patient/:patientId/snooze', requireAuth, async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const result = await scheduledReassessmentService.snoozeReassessment(patientId, req.body || {}, req.user);
+    res.status(200).json(result);
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'SNOOZE_REASSESSMENT_FAILED', message: err.message });
+  }
+});
+
+// POST /api/reassessment/patient/:patientId/submit
+app.post('/api/reassessment/patient/:patientId/submit', requireAuth, async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const result = await scheduledReassessmentService.submitReassessment(patientId, req.body || {}, req.user);
+    res.status(201).json({ success: true, ...result });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'SUBMIT_REASSESSMENT_FAILED', message: err.message });
+  }
+});
+
+// GET /api/reassessment/patient/:patientId/history
+app.get('/api/reassessment/patient/:patientId/history', requireAuth, async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const history = await scheduledReassessmentService.getReassessmentHistory(patientId, req.user);
+    res.status(200).json({ success: true, count: history.length, history });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'FETCH_HISTORY_FAILED', message: err.message });
+  }
+});
+
+// GET /api/reassessment/patient/:patientId/trajectory
+app.get('/api/reassessment/patient/:patientId/trajectory', requireAuth, async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const report = await scheduledReassessmentService.getTrajectoryReport(patientId, req.user);
+    res.status(200).json({ success: true, ...report });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'TRAJECTORY_REPORT_FAILED', message: err.message });
+  }
+});
+
+// POST /api/reassessment/dispatch-reminders
+app.post('/api/reassessment/dispatch-reminders', requireAuth, async (req, res) => {
+  try {
+    const isAuthorized = req.user && (
+      ['super_admin', 'admin', 'clinic_admin', 'system'].includes(req.user.role) ||
+      req.user.isOwner === true
+    );
+    if (!isAuthorized) {
+      return res.status(403).json({
+        error: 'FORBIDDEN',
+        message: 'Only administrators or scheduler tasks can trigger batch reassessment reminder dispatch.'
+      });
+    }
+    const { targetDate } = req.body || {};
+    const result = await scheduledReassessmentService.dispatchPendingReminders(targetDate);
+    res.status(200).json(result);
+  } catch (err) {
+    res.status(500).json({ error: 'DISPATCH_REMINDERS_FAILED', message: err.message });
+  }
+});
+
+// GET /api/reassessment/dossier/:patientId
+app.get('/api/reassessment/dossier/:patientId', requireAuth, async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const result = await scheduledReassessmentService.getDossierSnippet(patientId, req.user);
+    res.status(200).json({ success: true, dossier: result });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'DOSSIER_FAILED', message: err.message });
+  }
+});
+
+// GET /api/reassessment/chatbot/context/:patientId
+app.get('/api/reassessment/chatbot/context/:patientId', requireAuth, async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const result = await scheduledReassessmentService.getChatbotContext(patientId);
+    res.status(200).json({ success: true, ...result });
+  } catch (err) {
+    res.status(500).json({ error: 'CHATBOT_CONTEXT_FAILED', message: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 📊 NUVOAIR MEDICAL BENCHMARK: RE-ASSESSMENT CLINICAL KPIS & ANALYTICS APIS
+// ─────────────────────────────────────────────────────────────────────────────
+
+const handleScheduledReassessmentAnalytics = (req, res) => {
+  try {
+    const isAuthorized = req.user && (
+      ['super_admin', 'admin', 'clinic_admin', 'doctor', 'specialist', 'pulmonologist'].includes(req.user.role) ||
+      req.user.isOwner === true
+    );
+
+    if (!isAuthorized) {
+      return res.status(403).json({
+        error: 'FORBIDDEN',
+        message: 'Unauthorized: Only platform administrators, clinic directors, and authorized pulmonologists can access re-assessment longitudinal analytics.'
+      });
+    }
+
+    const { timePeriod, patientId, startDate, endDate } = req.query || {};
+    const analyticsService = require('./analytics-service');
+
+    const kpiData = analyticsService.calculateScheduledReassessmentKpis(
+      analyticsService.getInMemoryEvents(),
+      {
+        timePeriod: timePeriod || 'all',
+        patientId,
+        startDate,
+        endDate
+      }
+    );
+
+    res.status(200).json({
+      success: true,
+      ...kpiData,
+      generatedAt: new Date().toISOString()
+    });
+  } catch (err) {
+    res.status(500).json({
+      error: 'REASSESSMENT_ANALYTICS_FAILED',
+      message: err.message
+    });
+  }
+};
+
+app.get('/api/reassessment/analytics/kpis', requireAuth, handleScheduledReassessmentAnalytics);
+app.get('/api/analytics/reassessment', requireAuth, handleScheduledReassessmentAnalytics);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 📅 OKADOC BENCHMARK: GOOGLE CALENDAR ADMIN KPIS & UTILIZATION ANALYTICS APIS
+// ─────────────────────────────────────────────────────────────────────────────
+
+const handleGoogleCalendarAnalytics = async (req, res) => {
+  try {
+    const isAuthorized = req.user && (
+      ['super_admin', 'admin', 'clinic_admin'].includes(req.user.role) ||
+      req.user.isOwner === true
+    );
+
+    if (!isAuthorized) {
+      return res.status(403).json({
+        error: 'FORBIDDEN',
+        message: 'Unauthorized: Only platform administrators and clinic directors can inspect Google Calendar analytics.'
+      });
+    }
+
+    const { timePeriod, clinicId, startDate, endDate, isEn } = req.query || {};
+    const googleCalendarService = require('./google-calendar-service');
+
+    const result = await googleCalendarService.getGoogleCalendarAnalytics(db, {
+      timePeriod: timePeriod || 'all',
+      clinicId,
+      startDate,
+      endDate,
+      isEn: isEn === 'true' || isEn === true
+    });
+
+    res.status(200).json(result);
+  } catch (err) {
+    res.status(500).json({
+      error: 'GOOGLE_CALENDAR_ANALYTICS_FAILED',
+      message: err.message
+    });
+  }
+};
+
+app.get('/api/admin/analytics/google-calendar', requireAuth, handleGoogleCalendarAnalytics);
+app.get('/api/analytics/google-calendar', requireAuth, handleGoogleCalendarAnalytics);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🧩 TASKS #641-#670: Priority Slots (Kry), Visit Ratings (Vezeeta), Lab Result
+// Alerts (Practo), Doctor Directory (Vezeeta), Fee & Wait (CliniDo), Chat History (Esaal)
+// ─────────────────────────────────────────────────────────────────────────────
+require('./feature-routes-641-670')(app, requireAuth);
+
 module.exports = app;
+
+
 
 

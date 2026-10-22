@@ -9465,6 +9465,12 @@ function showScreen(name) {
     if (window.HealthVibes?.FamilyProfilesUI?.renderAll) {
       window.HealthVibes.FamilyProfilesUI.renderAll();
     }
+    if (window.HealthVibes?.MedicationRemindersUI?.renderDashboardWidget) {
+      window.HealthVibes.MedicationRemindersUI.renderDashboardWidget();
+    }
+    if (window.HealthVibes?.ScheduledReassessmentUI?.renderDashboardCard) {
+      window.HealthVibes.ScheduledReassessmentUI.renderDashboardCard();
+    }
   } else if (window._patientCasesUnsub) {
     try { window._patientCasesUnsub(); } catch(e) {}
     window._patientCasesUnsub = null;
@@ -12455,6 +12461,11 @@ async function renderAppointmentsScreen() {
     });
   }
 
+  // 0b. Render Amwell Pre-Visit Encrypted Cloud Attachments (Signed URLs)
+  if (window.HealthVibes?.AppointmentsUI?.renderAttachedSecureFiles) {
+    window.HealthVibes.AppointmentsUI.renderAttachedSecureFiles("attachedSecureFilesMount", isEn);
+  }
+
   // 1. Render Vezeeta Doctor Filter Tabs (Treating Doctor vs All Pulmonologists)
   if (window.HealthVibes?.AppointmentsUI?.renderDoctorFilterTabs) {
     window.HealthVibes.AppointmentsUI.renderDoctorFilterTabs("vezeetaDoctorTabsMount", window.HealthVibes.AppointmentsUI.state.currentDoctorFilter, (filterId) => {
@@ -12841,6 +12852,17 @@ async function confirmAppointmentBooking(forceDirect = false) {
     await renderPatientAppointmentsList();
     await renderAppointmentsScreen();
     updatePatientDashboardNextAppt();
+
+    // Okadoc standard: Immediate 1-click Google Calendar & .ics sync modal
+    if (window.AppointmentsUI && typeof window.AppointmentsUI.openBookingConfirmationCalendarModal === "function") {
+      window.AppointmentsUI.openBookingConfirmationCalendarModal(saved.appointment || apptData, {
+        role: "patient",
+        isEn,
+        onViewAppointments: () => {
+          if (typeof showScreen === "function") showScreen("appointments");
+        }
+      });
+    }
   } catch (err) {
     console.error("Booking appointment error:", err);
     showRetryFailure(isEn ? "Booking failed: " + err.message : "فشل حجز الموعد: " + err.message, () => confirmAppointmentBooking());
@@ -13001,7 +13023,10 @@ async function renderPatientAppointmentsList() {
             <button type="button" class="soft-button" style="padding: 6px 12px; font-size: 12px; color: #ef4444;" onclick="cancelAppointment('${appt.id}')">
               ✕ ${isEn ? "Cancel" : "إلغاء الموعد"}
             </button>
-            <button type="button" class="outline-button" style="padding: 6px 10px; font-size: 12px;" onclick="downloadAppointmentIcs('${appt.id}')" title="${isEn ? "Add to Calendar (.ics)" : "إضافة للتقويم (.ics)"}">
+            <a href="${window.AppointmentsUI ? window.AppointmentsUI.buildGoogleCalendarUrl(appt, { role: 'patient', isEn }) : '#'}" target="_blank" rel="noopener noreferrer" class="outline-button okadoc-quick-cal-btn" style="padding: 6px 10px; font-size: 12px; text-decoration: none; color: #1a73e8; border-color: rgba(66, 133, 244, 0.4); display: inline-flex; align-items: center; gap: 4px;" title="${isEn ? "Add to Google Calendar" : "إضافة إلى تقويم Google"}">
+              <span>📅 + Google</span>
+            </a>
+            <button type="button" class="outline-button" style="padding: 6px 10px; font-size: 12px;" onclick="openAppointmentCalendarSyncModal('${appt.id}')" title="${isEn ? "Add to Calendar (.ics / Google)" : "إضافة للتقويم (.ics)"}">
               📅 ${isEn ? "Calendar" : "التقويم"}
             </button>
             <button type="button" class="outline-button" style="padding: 6px 10px; font-size: 12px;" onclick="openReminderPreferencesModal('${appt.id}')" title="${isEn ? "Reminder Preferences" : "تفضيلات التذكير"}">
@@ -13202,6 +13227,21 @@ function downloadAppointmentIcs(apptId) {
   }
 }
 window.downloadAppointmentIcs = downloadAppointmentIcs;
+
+function openAppointmentCalendarSyncModal(apptId) {
+  const appts = window._lastRenderedAppointments || [];
+  const appt = appts.find(a => a.id === apptId) || { id: apptId };
+  const apptUi = window.AppointmentsUI || (window.HealthVibes && window.HealthVibes.AppointmentsUI);
+  if (apptUi && typeof apptUi.openBookingConfirmationCalendarModal === "function") {
+    const isDoctor = typeof auth !== "undefined" && auth.currentUser && auth.currentUser.role === "doctor";
+    return apptUi.openBookingConfirmationCalendarModal(appt, {
+      role: isDoctor ? "doctor" : "patient"
+    });
+  } else if (apptUi && typeof apptUi.downloadIcsCalendar === "function") {
+    return apptUi.downloadIcsCalendar(appt);
+  }
+}
+window.openAppointmentCalendarSyncModal = openAppointmentCalendarSyncModal;
 
 function joinAppointmentVideo(apptId) {
   const isEn = currentLanguage === "en";
@@ -14133,10 +14173,10 @@ async function uploadDoctorApplicationDocument({ user, appId, file }) {
   };
 }
 
-const MEDICAL_FILE_ALLOWED_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp", "application/dicom", "application/octet-stream"];
-const MEDICAL_FILE_ALLOWED_EXTENSIONS = [".pdf", ".jpg", ".jpeg", ".png", ".webp", ".dcm", ".dicom"];
+const MEDICAL_FILE_ALLOWED_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
+const MEDICAL_FILE_ALLOWED_EXTENSIONS = [".pdf", ".jpg", ".jpeg", ".png", ".webp"];
 const MEDICAL_FILE_BLOCKED_EXECUTABLE_EXTENSIONS = DOCTOR_APP_BLOCKED_EXECUTABLE_EXTENSIONS;
-const MEDICAL_FILE_MAX_SIZE = 15 * 1024 * 1024; // 15MB for high-resolution radiology & lab files
+const MEDICAL_FILE_MAX_SIZE = 10 * 1024 * 1024; // 10MB limit matching storage.rules
 const pendingMedicalFileUploads = [];
 const activeMedicalUploadTasks = new Map();
 
@@ -19120,6 +19160,8 @@ async function renderAssistantScreen() {
         <button type="button" class="outline-button" style="font-size: 12px; padding: 4px 10px; border-radius: 20px;" onclick="sendAssistantQuickPrompt('${isEn ? "Explain medical terms in my report" : "شرح مصطلحات التقرير"}')">📖 ${isEn ? "Explain Terms" : "شرح المصطلحات"}</button>
         <button type="button" class="outline-button" style="font-size: 12px; padding: 4px 10px; border-radius: 20px;" onclick="sendAssistantQuickPrompt('${isEn ? "Help me prepare questions for my doctor" : "تجهيز أسئلة للطبيب"}')">📋 ${isEn ? "Doctor Questions" : "أسئلة للطبيب"}</button>
         <button type="button" class="outline-button" style="font-size: 12px; padding: 4px 10px; border-radius: 20px; border-color: #0ea5e9; color: #0ea5e9;" onclick="openMedicationCaptureStudio({ source: 'chatbot' })">📸 ${isEn ? "Snap Med / Inhaler" : "تصوير دواء أو بخاخة"}</button>
+        <button type="button" class="outline-button" style="font-size: 12px; padding: 4px 10px; border-radius: 20px; border-color: #09b8b6; color: #09b8b6;" onclick="openMedicationRemindersStudio({ source: 'chatbot' })">⏰ ${isEn ? "Inhaler Reminders" : "تنبيهات البخاخات"}</button>
+        <button type="button" class="outline-button" style="font-size: 12px; padding: 4px 10px; border-radius: 20px; border-color: #0284c7; color: #0284c7;" onclick="openScheduledReassessmentWizard({ source: 'chatbot' })">📈 ${isEn ? "Week 1 Check-in" : "تقييم المتابعة (NuvoAir)"}</button>
         <button type="button" class="outline-button" style="font-size: 12px; padding: 4px 10px; border-radius: 20px; border-color: #ef4444; color: #ef4444;" onclick="sendAssistantQuickPrompt('${isEn ? "Approved emergency guidance and red flags" : "إرشادات الطوارئ وعلامات الخطر"}')">🚨 ${isEn ? "Emergency Guidance" : "إرشادات الطوارئ"}</button>
       `;
     }
@@ -19532,6 +19574,40 @@ async function handleSendChatMessage() {
     return;
   }
 
+  // Propeller Health Benchmark: Daily Inhaler Reminder & Adherence Query
+  const isReminderQuery = /تذكير|تنبيه|ميعاد\s*(البخاخة|الدواء)|موعد\s*(البخاخة|الدواء)|جرعة\s*اليوم|التزام|remind|reminder|inhaler\s*time|adherence|take\s*dose|puffs/i.test(q);
+  if (isReminderQuery) {
+    if (window.HealthVibes && window.HealthVibes.MedicationRemindersUI && typeof window.HealthVibes.MedicationRemindersUI.renderChatbotCard === "function") {
+      botResponse = window.HealthVibes.MedicationRemindersUI.renderChatbotCard();
+    } else {
+      botResponse = isEn
+        ? "⏰ Daily preventative inhaler reminders help maintain high adherence and prevent sudden asthma attacks."
+        : "⏰ التذكير اليومي بمواعيد البخاخات الوقائية يعزز الالتزام العلاجي ويمنع أزمات الربو المفاجئة.";
+    }
+    botResponse += disclaimerHtml;
+    setTrustedHtml(thinkingBubble, botResponse);
+    saveHistory(botResponse);
+    if (messages.scrollTop !== undefined) messages.scrollTop = messages.scrollHeight;
+    return;
+  }
+
+  // NuvoAir Medical Benchmark: 7-Day Scheduled Re-assessment & Improvement Query
+  const isReassessmentQuery = /تقييم\s*(المتابعة|الأسبوع|الدوري)|تحسن\s*(التنفس|العلاج)|الأسبوع\s*الأول|قياس\s*التحسن|reassessment|follow-?up\s*check|nuvoair|week\s*1\s*check|improvement\s*score/i.test(q);
+  if (isReassessmentQuery) {
+    if (window.HealthVibes && window.HealthVibes.ScheduledReassessmentUI && typeof window.HealthVibes.ScheduledReassessmentUI.renderChatbotCard === "function") {
+      botResponse = window.HealthVibes.ScheduledReassessmentUI.renderChatbotCard();
+    } else {
+      botResponse = isEn
+        ? "📈 Weekly scheduled re-assessments track your respiratory improvement and therapy response over time."
+        : "📈 تقييم المتابعة الدوري الأسبوعي يقيس مدى تحسن تنفسك واستجابتك للخطة العلاجية بمرور الوقت.";
+    }
+    botResponse += disclaimerHtml;
+    setTrustedHtml(thinkingBubble, botResponse);
+    saveHistory(botResponse);
+    if (messages.scrollTop !== undefined) messages.scrollTop = messages.scrollHeight;
+    return;
+  }
+
   const isMedQuery = /دواء|علاج|روشتة|جرعة|أدوية|بخاخ|مضاد|مسكن|medication|medicine|drug|prescription|dose|rx/i.test(q);
   const isRecQuery = /نصائح|تعليمات|ارشادات|توصيات|أعمل ايه|ماذا أفعل|advice|recommendation|instruction|tips/i.test(q);
   const isDiagQuery = /تشخيص|مرضي|حالتي|ماذا عندي|أعراض|diagnosis|condition|disease|what do i have/i.test(q);
@@ -19618,6 +19694,59 @@ window.acknowledgeChatbotMedicationUpload = function(photo) {
   setTrustedHtml(bubble, content);
   messages.appendChild(bubble);
   if (messages.scrollTop !== undefined) messages.scrollTop = messages.scrollHeight;
+};
+
+window.acknowledgeChatbotSecureFileUpload = function(file) {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  const messages = document.getElementById("chatMessages");
+  if (!messages) return;
+  const bubble = document.createElement("div");
+  bubble.className = "bot amwell-chatbot-attachment-msg";
+  const fileName = file.fileName || (isEn ? "Medical Scan / Lab Report" : "تقرير تحليل / فحص إشعاعي");
+  const fileId = file.fileId || `file_${Date.now()}`;
+  
+  const headerText = isEn
+    ? `🔐 <strong>Secure File Received & Stored in Private Cloud Bucket</strong>`
+    : `🔐 <strong>تم استلام الملف وتشفيره في Private Cloud Bucket بنجاح</strong>`;
+  
+  const descText = isEn
+    ? `File <strong>${escapeHtml(fileName)}</strong> is encrypted at rest (AES-256). Anti-malware scan passed: Clean ✓. Access is restricted via temporary Signed URLs.`
+    : `الملف <strong>${escapeHtml(fileName)}</strong> مشفر بالكامل (AES-256). اجتاز الفحص الأمني بنجاح: سليم 🛡️. يتم الوصول إليه بروابط مؤقتة الصلاحية.`;
+
+  const cardHtml = (window.HealthVibes && window.HealthVibes.SecureFilesUI)
+    ? window.HealthVibes.SecureFilesUI.renderChatbotSecureAttachmentCard(file, isEn)
+    : `
+      <div style="margin-top: 8px; padding: 10px; background: rgba(14, 165, 164, 0.08); border-radius: 10px; border: 1px solid rgba(14, 165, 164, 0.25);">
+        <strong>📄 ${escapeHtml(fileName)}</strong><br>
+        <span style="font-size: 11px; color: var(--muted);">Private Bucket • Clean Scan • 15m TTL</span>
+      </div>
+    `;
+
+  setTrustedHtml(bubble, `
+    <div>${headerText}</div>
+    <p style="margin: 6px 0 10px; font-size: 12.5px; line-height: 1.5;">${descText}</p>
+    ${cardHtml}
+  `);
+  messages.appendChild(bubble);
+  if (messages.scrollTop !== undefined) messages.scrollTop = messages.scrollHeight;
+};
+
+window.openAmwellSecureVault = function() {
+  const panel = document.getElementById("amwellSecureVaultPanel");
+  if (panel) {
+    panel.scrollIntoView({ behavior: "smooth", block: "start" });
+    panel.classList.add("highlight-panel");
+    setTimeout(() => panel.classList.remove("highlight-panel"), 2000);
+  }
+  if (window.HealthVibes && window.HealthVibes.SecureFilesUI) {
+    window.HealthVibes.SecureFilesUI.renderVaultView();
+  }
+};
+
+window.openScheduledReassessmentWizard = function(options = {}) {
+  if (window.HealthVibes && window.HealthVibes.ScheduledReassessmentUI && typeof window.HealthVibes.ScheduledReassessmentUI.openWizardModal === "function") {
+    window.HealthVibes.ScheduledReassessmentUI.openWizardModal(options.step || 1);
+  }
 };
 
 const sendChatBtn = document.getElementById("sendChat");

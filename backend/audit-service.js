@@ -73,6 +73,13 @@ const AUDIT_EVENT_TYPES = {
   APPOINTMENT_RESCHEDULED: 'APPOINTMENT_RESCHEDULED',
   APPOINTMENT_CANCELLED: 'APPOINTMENT_CANCELLED',
   APPOINTMENT_STATUS_CHANGED: 'APPOINTMENT_STATUS_CHANGED',
+  APPOINTMENT_CALENDAR_LINKS_GENERATED: 'APPOINTMENT_CALENDAR_LINKS_GENERATED',
+  APPOINTMENT_CALENDAR_SYNCED: 'APPOINTMENT_CALENDAR_SYNCED',
+  CALENDAR_PRIVACY_AUDIT_CHECK: 'CALENDAR_PRIVACY_AUDIT_CHECK',
+  CALENDAR_PRIVACY_VIOLATION_BLOCKED: 'CALENDAR_PRIVACY_VIOLATION_BLOCKED',
+  CALENDAR_PHYSICIAN_PRIMACY_ENFORCED: 'CALENDAR_PHYSICIAN_PRIMACY_ENFORCED',
+  CALENDAR_CONSENT_GRANTED: 'CALENDAR_CONSENT_GRANTED',
+  CALENDAR_CONSENT_REVOKED: 'CALENDAR_CONSENT_REVOKED',
   OPERATIONAL_SWITCH_CHANGED: 'OPERATIONAL_SWITCH_CHANGED',
   // Disease Module Auditable Events
   ASSESSMENT_CREATION: 'ASSESSMENT_CREATION',
@@ -361,7 +368,13 @@ async function recordAuditEvent(dbOrParams, maybeParams = {}) {
   const type = params.type || params.eventType;
   if (!type) throw new Error('Audit event type is required.');
 
-  const actor = params.actor;
+  const actor = params.actor || (params.actorUid ? {
+    uid: params.actorUid,
+    role: params.actorRole || 'user',
+    emailMasked: params.emailMasked || '',
+    clinicId: params.clinicId || null,
+    isOwner: Boolean(params.isOwner)
+  } : null);
   const targetUserId = params.targetUserId || null;
   const clinicId = params.clinicId || null;
   const details = params.details || {};

@@ -709,6 +709,7 @@ async function emitAppointmentNotificationEvent(db, { type, appointment, actorUs
         branchLocation: appointment.branchLocation || null,
         arrivalGuidance: appointment.arrivalGuidance || null,
         followupScope: appointment.followupScope || null,
+        googleCalendarUrl: appointment.googleCalendarUrl || (appointment.calendarLinks ? appointment.calendarLinks.googleCalendarUrl : null) || null,
         subject,
         status: 'sent',
         sentAt: nowIso,
@@ -722,6 +723,7 @@ async function emitAppointmentNotificationEvent(db, { type, appointment, actorUs
           arrivalGuidance: appointment.arrivalGuidance || null,
           followupScope: appointment.followupScope || null,
           telehealthUrl: appointment.telehealthUrl || appointment.meetingLink || null,
+          googleCalendarUrl: appointment.googleCalendarUrl || (appointment.calendarLinks ? appointment.calendarLinks.googleCalendarUrl : null) || null,
           reason: details.reason || null,
           previousDate: details.previousDate || null,
           previousSlotId: details.previousSlotId || null,
@@ -1668,6 +1670,17 @@ async function bookAppointmentTransaction(db, payload, authUser) {
       }
     }
 
+    // Generate 1-click Google Calendar & external calendar sync links (Okadoc Model)
+    try {
+      const calendarLinks = googleCalendarService.generateAppointmentCalendarLinks(savedAppointment);
+      savedAppointment.calendarLinks = calendarLinks;
+      savedAppointment.googleCalendarUrl = calendarLinks.googleCalendarUrl;
+      savedAppointment.googleCalendarDoctorUrl = calendarLinks.googleCalendarDoctorUrl;
+      savedAppointment.icsDownloadUrl = calendarLinks.icsDownloadUrl;
+    } catch (cLinkErr) {
+      console.warn('[CALENDAR LINKS GEN WARNING]:', cLinkErr.message);
+    }
+
     // Emit notification event reliably
     try {
       await emitAppointmentNotificationEvent(db, {
@@ -2109,6 +2122,17 @@ async function rescheduleAppointmentTransaction(db, payload, actorUser) {
 
     // Release old memory locks if any
     releaseMemoryLocks(oldDocSlotKey, oldPatSlotKey);
+
+    // Generate updated 1-click Google Calendar & external calendar sync links (Okadoc Model)
+    try {
+      const calendarLinks = googleCalendarService.generateAppointmentCalendarLinks(updatedAppointment);
+      updatedAppointment.calendarLinks = calendarLinks;
+      updatedAppointment.googleCalendarUrl = calendarLinks.googleCalendarUrl;
+      updatedAppointment.googleCalendarDoctorUrl = calendarLinks.googleCalendarDoctorUrl;
+      updatedAppointment.icsDownloadUrl = calendarLinks.icsDownloadUrl;
+    } catch (cLinkErr) {
+      console.warn('[CALENDAR LINKS RESCHEDULE GEN WARNING]:', cLinkErr.message);
+    }
 
     // Emit notification and audit event reliably
     try {
@@ -3491,6 +3515,30 @@ async function getAppointmentAnalytics(db, options = {}) {
 
     const totalSlots = morningCount + eveningCount;
 
+    // 📅 Okadoc Google Calendar Integration DB Metrics
+    const syncedDbAppointments = filteredDbAppointments.filter(a =>
+      Boolean(a.syncedToGoogleCalendar || a.calendarSyncCount > 0 || a.calendarSyncStatus === 'synced')
+    );
+    const totalCalendarSynced = syncedDbAppointments.length;
+    const dbGoogleCalendarAdoptionRate = totalDb > 0 ? Number(((totalCalendarSynced / totalDb) * 100).toFixed(1)) : null;
+
+    let dbPatientSyncCount = 0;
+    let dbDoctorSyncCount = 0;
+    let dbClinicSyncCount = 0;
+    let dbTelehealthSyncCount = 0;
+    let dbFollowupSyncCount = 0;
+
+    syncedDbAppointments.forEach(a => {
+      const r = String(a.calendarSyncedByRole || a.lastSyncedByRole || 'patient').toLowerCase();
+      if (r === 'doctor') dbDoctorSyncCount++;
+      else dbPatientSyncCount++;
+
+      const cType = String(a.consultationType || a.type || '').toLowerCase();
+      if (cType === 'video' || cType === 'telehealth' || a.isOnlineConsultation || a.isOnline) dbTelehealthSyncCount++;
+      else if (cType === 'followup') dbFollowupSyncCount++;
+      else dbClinicSyncCount++;
+    });
+
     const rescheduledAppts = filteredDbAppointments.filter(a =>
       a.status === APPOINTMENT_STATUSES.RESCHEDULED ||
       a.status === 'rescheduled' ||
@@ -3617,7 +3665,17 @@ async function getAppointmentAnalytics(db, options = {}) {
       },
       rescheduleReasonsBreakdown,
       cancellationReasonsBreakdown,
-      initiatorBreakdown
+      initiatorBreakdown,
+      // 📅 Okadoc Google Calendar summary keys
+      totalCalendarSynced,
+      googleCalendarAdoptionRate: dbGoogleCalendarAdoptionRate !== null ? dbGoogleCalendarAdoptionRate : (telemetryKpis?.googleCalendar?.adoptionRate?.rate || null),
+      googleCalendarSyncSuccessRate: telemetryKpis?.googleCalendar?.syncSuccessRate?.rate || (totalCalendarSynced > 0 ? 100.0 : null),
+      googleCalendarSyncFailureRate: telemetryKpis?.googleCalendar?.syncFailureRate?.rate || 0,
+      calendarPatientSyncs: Math.max(dbPatientSyncCount, telemetryKpis?.summary?.calendarPatientSyncs || 0),
+      calendarDoctorSyncs: Math.max(dbDoctorSyncCount, telemetryKpis?.summary?.calendarDoctorSyncs || 0),
+      calendarClinicSyncs: Math.max(dbClinicSyncCount, telemetryKpis?.summary?.calendarClinicSyncs || 0),
+      calendarTelehealthSyncs: Math.max(dbTelehealthSyncCount, telemetryKpis?.summary?.calendarTelehealthSyncs || 0),
+      calendarFollowupSyncs: Math.max(dbFollowupSyncCount, telemetryKpis?.summary?.calendarFollowupSyncs || 0)
     };
   }
 
@@ -3627,6 +3685,11 @@ async function getAppointmentAnalytics(db, options = {}) {
     clinicId: clinicFilter || 'all',
     summary,
     telemetry: telemetryKpis,
+    googleCalendar: telemetryKpis?.googleCalendar || {
+      adoptionRate: { rate: summary.googleCalendarAdoptionRate },
+      syncSuccessRate: { rate: summary.googleCalendarSyncSuccessRate },
+      syncFailureRate: { rate: summary.googleCalendarSyncFailureRate }
+    },
     dbSummary: {
       totalPersisted: filteredDbAppointments.length,
       confirmed: filteredDbAppointments.filter(a => a.status === APPOINTMENT_STATUSES.CONFIRMED).length,
@@ -3640,6 +3703,8 @@ async function getAppointmentAnalytics(db, options = {}) {
       video: filteredDbAppointments.filter(a => a.consultationType === 'video').length,
       followup: filteredDbAppointments.filter(a => a.consultationType === 'followup').length,
       commuteRelief: filteredDbAppointments.filter(a => Boolean(a.commuteReliefActive || a.consultationType === 'video' || a.consultationType === 'followup')).length,
+      totalCalendarSynced: summary.totalCalendarSynced || 0,
+      googleCalendarAdoptionRate: summary.googleCalendarAdoptionRate || null,
       scheduleUpdateCount: telemetryKpis?.scheduleUpdateCount || 0,
       leaveRequestsCount: telemetryKpis?.leaveRequestsCount || 0,
       averageSlotDurationMinutes: telemetryKpis?.averageSlotDurationMinutes || 30,

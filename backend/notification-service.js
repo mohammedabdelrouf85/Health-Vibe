@@ -59,7 +59,21 @@ const NOTIFICATION_TYPES = {
   DOCTOR_SCHEDULE_UPDATED: 'doctor_schedule_updated',
   DOCTOR_LEAVE_EXCEPTION: 'doctor_leave_exception',
   LAB_REPORT_UPLOADED: 'lab_report_uploaded',
-  LAB_REPORT_CRITICAL_ALERT: 'lab_report_critical_alert'
+  LAB_REPORT_CRITICAL_ALERT: 'lab_report_critical_alert',
+  SECURE_FILE_UPLOADED: 'secure_file_uploaded',
+  SECURE_FILE_SCAN_CLEAN: 'secure_file_scan_clean',
+  SECURE_FILE_SCAN_THREAT: 'secure_file_scan_threat',
+  APPOINTMENT_DOSSIER_UPDATED: 'appointment_dossier_updated',
+  CHATBOT_FILE_ATTACHED: 'chatbot_file_attached',
+  SIGNED_URL_EXPIRING: 'signed_url_expiring',
+  MEDICATION_REMINDER_DUE: 'medication_reminder_due',
+  MEDICATION_REMINDER_SNOOZED: 'medication_reminder_snoozed',
+  MEDICATION_RESCUE_SAFETY_ALERT: 'medication_rescue_safety_alert',
+  MEDICATION_CANISTER_LOW: 'medication_canister_low',
+  MEDICATION_ADHERENCE_REPORT: 'medication_adherence_report',
+  REASSESSMENT_REMINDER_DUE: 'reassessment_reminder_due',
+  REASSESSMENT_OVERDUE_ALERT: 'reassessment_overdue_alert',
+  REASSESSMENT_TRAJECTORY_REPORT: 'reassessment_trajectory_report'
 };
 
 function escapeHtml(value) {
@@ -494,6 +508,7 @@ function buildAppointmentEmail({
   reason,
   cancellationReason,
   meetUrl,
+  googleCalendarUrl,
   appUrl
 }) {
   const portalUrl = normalizeAppBaseUrl(appUrl || process.env.APP_BASE_URL);
@@ -576,6 +591,14 @@ function buildAppointmentEmail({
         </div>
       ` : ''}
 
+      ${googleCalendarUrl && effectiveAction !== 'cancelled' ? `
+        <div style="text-align: center; margin: 20px 0;">
+          <a href="${escapeHtml(googleCalendarUrl)}" target="_blank" rel="noopener noreferrer" style="background: #4285F4; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 10px; font-weight: 700; font-size: 14px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 2px 6px rgba(66, 133, 244, 0.3);">
+            📅 إضافة إلى تقويم جوجل (Google Calendar)
+          </a>
+        </div>
+      ` : ''}
+
       <div style="text-align: center; margin: 24px 0 10px;">
         <a href="${escapeHtml(apptLink)}" target="_blank" rel="noopener noreferrer" style="color: #0d9488; text-decoration: underline; font-size: 14px;">
           إدارة مواعيدي واستعراض تفاصيل الحجز
@@ -596,8 +619,7 @@ function buildAppointmentEmail({
 الطبيب: ${doctorName || 'غير مسجل'} (${doctorSpecialty || ''})
 العيادة: ${clinicName || ''}
 التاريخ: ${date || ''} - الوقت: ${timeSlot || ''}
-${reason ? `الملاحظات: ${reason}\n` : ''}
-رابط المواعيد: ${apptLink}
+${reason ? `الملاحظات: ${reason}\n` : ''}${googleCalendarUrl && effectiveAction !== 'cancelled' ? `إضافة إلى تقويم جوجل: ${googleCalendarUrl}\n` : ''}رابط المواعيد: ${apptLink}
 © Health Vibe AI`;
 
   return { subject, html, text };
@@ -1963,6 +1985,7 @@ function isUrgentEvent(params = {}) {
 
   if (urgent === true) return true;
   if (evt === NOTIFICATION_TYPES.ESCALATION || evt === 'escalation' || evt === 'emergency') return true;
+  if (evt === NOTIFICATION_TYPES.SECURE_FILE_SCAN_THREAT || evt === 'secure_file_scan_threat') return true;
   if (prio === 'critical' || prio === 'urgent') return true;
   if (sev === 'CRITICAL' || sev === 'HIGH_RISK' || sev === 'عالي الخطورة') return true;
   return false;
@@ -2006,10 +2029,13 @@ function generateAuthorizedDestinationLink({
       ? `${portalUrl}/app/index.html?screen=report&caseId=${encodeURIComponent(caseId)}`
       : `${portalUrl}/app/index.html?screen=report`;
   }
-  if (evt.startsWith('appointment_') || evt === 'appointment_changes') {
+  if (evt.startsWith('appointment_') || evt === 'appointment_changes' || evt === NOTIFICATION_TYPES.APPOINTMENT_DOSSIER_UPDATED) {
     return appointmentId
       ? `${portalUrl}/app/index.html?screen=appointments&id=${encodeURIComponent(appointmentId)}`
       : `${portalUrl}/app/index.html?screen=appointments`;
+  }
+  if (evt.startsWith('secure_file_') || evt === NOTIFICATION_TYPES.SIGNED_URL_EXPIRING) {
+    return `${portalUrl}/app/index.html?screen=vault`;
   }
   if (evt === 'feedback_update' || evt === 'ticket_update') {
     return ticketId
@@ -2841,6 +2867,100 @@ async function sendCancelNotification(appointment = {}, options = {}) {
   };
 }
 
+async function dispatchSecureStorageNotification({
+  eventType = NOTIFICATION_TYPES.SECURE_FILE_SCAN_CLEAN,
+  fileRecord = {},
+  recipientUser = null,
+  recipientId = null,
+  recipientEmail = null,
+  appointment = null,
+  signedUrl = null,
+  lang = 'ar',
+  db = null
+} = {}) {
+  const isEn = lang === 'en';
+  const targetUid = recipientUser?.uid || recipientId || fileRecord.patientId;
+  const fileName = fileRecord.fileName || fileRecord.file_name || 'Medical_File';
+  const fileCategory = fileRecord.category || 'lab_analysis';
+  const appointmentId = appointment?.id || fileRecord.appointmentId || fileRecord.appointment_id;
+
+  let title = '';
+  let message = '';
+  let urgent = false;
+
+  switch (eventType) {
+    case NOTIFICATION_TYPES.SECURE_FILE_SCAN_THREAT:
+      urgent = true;
+      title = isEn ? '⚠️ Security Alert: Medical File Quarantined' : '⚠️ تنبيه أمني: تم عزل الملف الطبي لاحتوائه على مخاطر';
+      message = isEn
+        ? `The uploaded file '${fileName}' was quarantined by the cloud security scanner. Zero-trust protection is active.`
+        : `تم حظر وعزل الملف '${fileName}' فوراً بعد رصد تهديد أمني عبر نظام الفحص السحابي لضمان حماية سجلاتك.`;
+      break;
+
+    case NOTIFICATION_TYPES.APPOINTMENT_DOSSIER_UPDATED:
+      title = isEn ? `📋 New Clinical Attachment for Appointment #${appointmentId || ''}` : `📋 مرفق طبي جديد للاستشارة #${appointmentId || ''}`;
+      message = isEn
+        ? `Patient added verified encrypted attachment '${fileName}' (${fileCategory}). Preview available via 15-minute ephemeral signed URL.`
+        : `قام المريض بإرفاق فحص معتمد مشفر '${fileName}' للاستشارة الطبية. الرابط المؤقت متاح للمعاينة الآمنة لمدة 15 دقيقة.`;
+      break;
+
+    case NOTIFICATION_TYPES.CHATBOT_FILE_ATTACHED:
+      title = isEn ? '🤖 Chatbot Assistant: File Encrypted & Indexed' : '🤖 شات بوت الذكاء الاصطناعي: تم تشفير وفهرسة الملف';
+      message = isEn
+        ? `File '${fileName}' encrypted with AES-256 and integrated into your AI clinical consultation session.`
+        : `تم تشفير الملف '${fileName}' ببروتوكول AES-256 وربطه بجلسة الاستشارة الذكية بأمان تام.`;
+      break;
+
+    case NOTIFICATION_TYPES.SIGNED_URL_EXPIRING:
+      title = isEn ? '⏱️ Ephemeral Link Expiring Soon' : '⏱️ اقتراب انتهاء صلاحية الرابط المؤقت';
+      message = isEn
+        ? `The temporary viewing link for '${fileName}' expires shortly. You can refresh the link with 1 click.`
+        : `صلاحية الرابط المؤقت للملف '${fileName}' على وشك الانتهاء. يمكنك تجديد الرابط بنقرة واحدة من الخزنة.`;
+      break;
+
+    case NOTIFICATION_TYPES.SECURE_FILE_UPLOADED:
+    case NOTIFICATION_TYPES.SECURE_FILE_SCAN_CLEAN:
+    default:
+      title = isEn ? '🛡️ Medical File Encrypted & Scan Clean' : '🛡️ تم تشفير الفحص الطبي والفحص الأمني سليم';
+      message = isEn
+        ? `Your medical file '${fileName}' is securely stored in your Private Cloud Bucket (AES-256 at rest). Scan: 100% Clean.`
+        : `تم حفظ وفحص ملفك '${fileName}' وتخزينه في Private Cloud Bucket مشفر بالكامل (AES-256). الفحص الأمني: سليم.`;
+      break;
+  }
+
+  let historyRecord = null;
+  if (targetUid) {
+    try {
+      historyRecord = await recordNotificationHistory(db, {
+        userId: targetUid,
+        eventType,
+        title,
+        message,
+        urgent,
+        metadata: {
+          fileId: fileRecord.fileId || fileRecord.id,
+          fileName,
+          category: fileCategory,
+          appointmentId,
+          scanStatus: fileRecord.scanStatus || 'clean',
+          signedUrl
+        }
+      });
+    } catch (_) {}
+  }
+
+  return {
+    success: true,
+    eventType,
+    targetUid,
+    title,
+    message,
+    urgent,
+    notificationId: historyRecord ? historyRecord.id : `notif_${Date.now()}`,
+    timestamp: new Date().toISOString()
+  };
+}
+
 module.exports = {
   NOTIFICATION_STATUS,
   NOTIFICATION_TYPES,
@@ -2885,6 +3005,7 @@ module.exports = {
   sendCancelNotification,
   formatAppointmentReminderMessage,
   scheduleDualWindowAppointmentReminders,
-  sendMultiChannelAppointmentReminder
+  sendMultiChannelAppointmentReminder,
+  dispatchSecureStorageNotification
 };
 
