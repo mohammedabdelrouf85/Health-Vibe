@@ -9698,11 +9698,67 @@ app.get('/api/admin/clinical-cms/guidelines', requireAuth, async (req, res) => {
 });
 
 /**
+ * GET /api/admin/clinical-cms/guidelines/diff
+ * Compute side-by-side comparison between two guidelines.
+ * RBAC: Restricted to CLINICAL_CMS_READ_ROLES.
+ */
+app.get('/api/admin/clinical-cms/guidelines/diff', requireAuth, async (req, res) => {
+  try {
+    const role = await resolveAiRequesterRole(req);
+    const isOwner = hasTrustedOwnerClaim(req.user);
+    if (!isOwner && !CLINICAL_CMS_READ_ROLES.includes(role)) {
+      return res.status(403).json({
+        error: 'ACCESS_DENIED',
+        message: `Role '${role}' is not authorized to view guideline diffs.`
+      });
+    }
+
+    setAiSecurityHeaders(res);
+    const { fromId, toId } = req.query || {};
+    if (!fromId || !toId) {
+      return res.status(400).json({ error: 'MISSING_DIFF_TARGETS', message: 'Both fromId and toId are required.' });
+    }
+
+    const catalog = await getClinicalGuidelinesStore();
+    const fromGuideline = catalog.find(g => g.id === fromId);
+    const toGuideline = catalog.find(g => g.id === toId);
+    if (!fromGuideline) return res.status(404).json({ error: 'GUIDELINE_NOT_FOUND', message: `Guideline '${fromId}' not found.` });
+    if (!toGuideline) return res.status(404).json({ error: 'GUIDELINE_NOT_FOUND', message: `Guideline '${toId}' not found.` });
+
+    res.json({
+      success: true,
+      from: {
+        id: fromGuideline.id,
+        version: fromGuideline.version,
+        titleAr: fromGuideline.titleAr,
+        titleEn: fromGuideline.titleEn,
+        evidenceLevel: fromGuideline.evidenceLevel
+      },
+      to: {
+        id: toGuideline.id,
+        version: toGuideline.version,
+        titleAr: toGuideline.titleAr,
+        titleEn: toGuideline.titleEn,
+        evidenceLevel: toGuideline.evidenceLevel
+      },
+      deltas: {
+        criteriaChanged: fromGuideline.criteriaAr !== toGuideline.criteriaAr || fromGuideline.criteriaEn !== toGuideline.criteriaEn,
+        actionItemsChanged: fromGuideline.actionItemsAr !== toGuideline.actionItemsAr || fromGuideline.actionItemsEn !== toGuideline.actionItemsEn,
+        redFlagsChanged: fromGuideline.redFlagsAr !== toGuideline.redFlagsAr || fromGuideline.redFlagsEn !== toGuideline.redFlagsEn
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'DIFF_FAILED', message: err.message });
+  }
+});
+
+/**
  * GET /api/admin/clinical-cms/guidelines/:id
  * Retrieve single guideline with revision history.
  * RBAC: Restricted to CLINICAL_CMS_READ_ROLES.
  */
-app.get('/api/admin/clinical-cms/guidelines/:id', requireAuth, async (req, res) => {
+app.get('/api/admin/clinical-cms/guidelines/:id', requireAuth, async (req, res, next) => {
+  if (req.params.id === 'diff') return next();
   try {
     const role = await resolveAiRequesterRole(req);
     const isOwner = hasTrustedOwnerClaim(req.user);
@@ -9890,6 +9946,17 @@ app.put('/api/admin/clinical-cms/guidelines/:id', requireAuth, async (req, res) 
     // Zero-PHI check
     const phiLeakage = detectAiPhiLeakage(req.body);
     if (phiLeakage) {
+      if (auditService && typeof auditService.recordAuditEvent === 'function') {
+        await auditService.recordAuditEvent(db, {
+          type: auditService.AUDIT_EVENT_TYPES.AI_PHI_LEAKAGE_BLOCKED,
+          req,
+          details: {
+            endpoint: `/api/admin/clinical-cms/guidelines/${req.params.id}`,
+            detectedField: phiLeakage.field,
+            blockedAt: new Date().toISOString()
+          }
+        }).catch(() => {});
+      }
       return res.status(400).json({
         error: 'PHI_LEAKAGE_PROHIBITED',
         message: 'Direct patient identifiers are strictly prohibited in clinical guidelines.'
@@ -9906,7 +9973,8 @@ app.put('/api/admin/clinical-cms/guidelines/:id', requireAuth, async (req, res) 
       return res.status(404).json({ error: 'GUIDELINE_NOT_FOUND', message: `Guideline '${id}' not found.` });
     }
 
-    const parityValidation = validateClinicalGuidelineParity(req.body);
+    const merged = { ...target, ...req.body };
+    const parityValidation = validateClinicalGuidelineParity(merged);
     if (!parityValidation.isValid) {
       return res.status(400).json({
         error: 'BILINGUAL_PARITY_FAILED',
@@ -9918,26 +9986,26 @@ app.put('/api/admin/clinical-cms/guidelines/:id', requireAuth, async (req, res) 
     const now = new Date().toISOString();
     const nextVersion = req.body.version || target.version;
 
-    target.category = req.body.category || target.category;
-    target.conditionScope = req.body.conditionScope || target.conditionScope;
-    target.evidenceLevel = req.body.evidenceLevel || target.evidenceLevel;
-    target.targetAudience = req.body.targetAudience || target.targetAudience;
-    target.titleAr = req.body.titleAr.trim();
-    target.titleEn = req.body.titleEn.trim();
-    target.summaryAr = req.body.summaryAr.trim();
-    target.summaryEn = req.body.summaryEn.trim();
-    target.criteriaAr = req.body.criteriaAr.trim();
-    target.criteriaEn = req.body.criteriaEn.trim();
-    target.actionItemsAr = req.body.actionItemsAr.trim();
-    target.actionItemsEn = req.body.actionItemsEn.trim();
-    target.redFlagsAr = req.body.redFlagsAr.trim();
-    target.redFlagsEn = req.body.redFlagsEn.trim();
-    target.patientInstructionsAr = req.body.patientInstructionsAr?.trim() || '';
-    target.patientInstructionsEn = req.body.patientInstructionsEn?.trim() || '';
+    target.category = req.body.category !== undefined ? req.body.category : target.category;
+    target.conditionScope = req.body.conditionScope !== undefined ? req.body.conditionScope : target.conditionScope;
+    target.evidenceLevel = req.body.evidenceLevel !== undefined ? req.body.evidenceLevel : target.evidenceLevel;
+    target.targetAudience = req.body.targetAudience !== undefined ? req.body.targetAudience : target.targetAudience;
+    target.titleAr = (merged.titleAr || '').trim();
+    target.titleEn = (merged.titleEn || '').trim();
+    target.summaryAr = (merged.summaryAr || '').trim();
+    target.summaryEn = (merged.summaryEn || '').trim();
+    target.criteriaAr = (merged.criteriaAr || '').trim();
+    target.criteriaEn = (merged.criteriaEn || '').trim();
+    target.actionItemsAr = (merged.actionItemsAr || '').trim();
+    target.actionItemsEn = (merged.actionItemsEn || '').trim();
+    target.redFlagsAr = (merged.redFlagsAr || '').trim();
+    target.redFlagsEn = (merged.redFlagsEn || '').trim();
+    target.patientInstructionsAr = (merged.patientInstructionsAr || '').trim();
+    target.patientInstructionsEn = (merged.patientInstructionsEn || '').trim();
     target.version = nextVersion;
     target.updatedAt = now;
 
-    if (target.status === 'published' && !req.body.keepPublished) {
+    if (['published', 'archived', 'approved'].includes(target.status) && !req.body.keepPublished) {
       target.status = 'draft';
     }
 
@@ -10190,7 +10258,7 @@ app.post('/api/admin/clinical-cms/guidelines/:id/reject', requireAuth, async (re
     }
 
     const now = new Date().toISOString();
-    const reason = req.body?.reason || 'Clinical revisions required.';
+    const reason = req.body?.reason || req.body?.feedback || 'Clinical revisions required.';
     target.status = 'rejected';
     target.updatedAt = now;
     target.peerReviewer = {
@@ -10406,7 +10474,12 @@ app.get('/api/admin/clinical-cms/audit-trail', requireAuth, async (req, res) => 
         if (snap && snap.docs) {
           events = snap.docs
             .map(d => ({ id: d.id, ...d.data() }))
-            .filter(e => typeof e.type === 'string' && e.type.startsWith('CLINICAL_GUIDELINE_'));
+            .filter(e => typeof e.type === 'string' && (
+              e.type.startsWith('CLINICAL_GUIDELINE_') ||
+              e.type.startsWith('CLINICAL_GUIDELINES_') ||
+              e.type === 'AI_PHI_LEAKAGE_BLOCKED' ||
+              e.type === 'AI_SECURITY_VIOLATION_BLOCKED'
+            ));
         }
       } catch (_) {}
     }
