@@ -9528,6 +9528,9 @@ function showScreen(name) {
     if (window.HealthVibes?.AIMonitoringUI?.renderAIMonitoringPanel) {
       window.HealthVibes.AIMonitoringUI.renderAIMonitoringPanel("adminAiMonitoringPanelContainer");
     }
+    if (window.HealthVibes?.ModelRegistryUI?.renderModelRegistryPanel) {
+      window.HealthVibes.ModelRegistryUI.renderModelRegistryPanel("adminModelRegistryContainer");
+    }
   }
   if (name === "consent") {
     renderConsentScreen();

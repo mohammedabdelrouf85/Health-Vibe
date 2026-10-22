@@ -7955,6 +7955,95 @@ app.post('/api/admin/ai/models/:modelId/promote', requireAuth, async (req, res) 
 });
 
 /**
+ * POST /api/admin/ai/models/:modelId/rollback
+ * Instant emergency rollback to previous verified AI model version (Glass Health Benchmark).
+ * Atomically activates targetModel, demotes currently active model to 'rolled_back',
+ * captures rollback reason, and records statutory audit event AI_MODEL_ROLLED_BACK.
+ * Restricted to Super Admin and Clinical QA.
+ */
+app.post('/api/admin/ai/models/:modelId/rollback', requireAuth, async (req, res) => {
+  try {
+    const role = await resolveAiRequesterRole(req);
+    const isOwner = hasTrustedOwnerClaim(req.user);
+    if (!isOwner && !AI_MODEL_MANAGERS.includes(role)) {
+      return res.status(403).json({
+        error: 'ACCESS_DENIED',
+        message: `Role '${role}' is not authorized to execute emergency model rollbacks. Requires Super Admin or Clinical QA privileges.`
+      });
+    }
+
+    setAiSecurityHeaders(res);
+    const { modelId } = req.params;
+    const { reason, notes } = req.body || {};
+
+    const catalog = await getAiModelsCatalog();
+    const targetModel = catalog.find(m => m.id === modelId || m.version === modelId);
+    if (!targetModel) {
+      return res.status(404).json({
+        error: 'MODEL_NOT_FOUND',
+        message: `Target AI Model with ID or version '${modelId}' not found for rollback.`
+      });
+    }
+
+    const conditionScope = targetModel.conditionScope;
+    const previousActiveModels = [];
+
+    // Demote currently active models in the same scope to 'rolled_back'
+    for (const m of inMemoryAiModels) {
+      if (m.conditionScope === conditionScope && m.status === 'active' && m.id !== targetModel.id) {
+        m.status = 'rolled_back';
+        m.rolledBackAt = new Date().toISOString();
+        m.rollbackReason = reason || 'Emergency failover to previous verified version';
+        m.rollbackNotes = notes || '';
+        m.rolledBackBy = { uid: req.user.uid, email: req.user.email, role };
+        previousActiveModels.push({ id: m.id, version: m.version, name: m.name });
+        if (db) {
+          await db.collection('ai_models').doc(m.id).set(m, { merge: true }).catch(() => {});
+        }
+      }
+    }
+
+    targetModel.status = 'active';
+    targetModel.restoredAt = new Date().toISOString();
+    targetModel.restoredBy = { uid: req.user.uid, email: req.user.email, role };
+    targetModel.rollbackReason = reason || 'Restored as verified baseline';
+
+    if (db) {
+      await db.collection('ai_models').doc(targetModel.id).set(targetModel, { merge: true }).catch(() => {});
+    }
+
+    // Record Immutable Audit Event
+    if (auditService && typeof auditService.recordAuditEvent === 'function') {
+      await auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.AI_MODEL_ROLLED_BACK,
+        req,
+        details: {
+          targetModelId: targetModel.id,
+          targetVersion: targetModel.version,
+          targetName: targetModel.name,
+          conditionScope,
+          previousActiveModels,
+          reason: targetModel.rollbackReason,
+          notes: notes || '',
+          restoredAt: targetModel.restoredAt
+        }
+      }).catch(err => console.warn('[AUDIT] Failed to record AI model rollback:', err.message));
+    }
+
+    res.json({
+      success: true,
+      message: `Emergency rollback successful: Model ${targetModel.name} (${targetModel.version}) is now active in production (Glass Health Zero-Downtime Hot-Swap).`,
+      model: sanitizeAiModelRecord(computeModelMetricsBackend(targetModel)),
+      previousActiveModels,
+      rollbackReason: targetModel.rollbackReason,
+      restoredAt: targetModel.restoredAt
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'AI_MODEL_ROLLBACK_FAILED', message: err.message });
+  }
+});
+
+/**
  * POST /api/admin/ai/evaluation/record
  * Record new clinical evaluation batch / calibration results for an AI model.
  * 🛡️ Enforces Zero-PHI defense & AES-256-GCM authenticated encryption at rest.

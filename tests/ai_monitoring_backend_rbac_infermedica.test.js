@@ -371,6 +371,31 @@ const app = sandbox.module.exports;
 
     console.log('  ✓ Promotion lifecycle verified: candidate activated, previous version archived, unauthorized roles blocked.\n');
 
+    // 4.4 Emergency Safe Rollback (Glass Health Benchmark)
+    // 4.4.1 Unauthorized role blocked from rollback
+    const unauthRollback = await api('POST', '/api/admin/ai/models/model_v1_0_active/rollback', 'token-ops-admin', {
+      reason: 'Unauthorized test'
+    });
+    assert.equal(unauthRollback.status, 403, 'Ops must be forbidden from executing model rollback');
+
+    // 4.4.2 Clinical QA executes safe emergency rollback to v1.0
+    const rollbackRes = await api('POST', '/api/admin/ai/models/model_v1_0_active/rollback', 'token-clinical-qa', {
+      reason: 'ارتفاع مفاجئ في الإنذارات الكاذبة (False Positive Alert Spike)',
+      notes: 'تراجع فوري للنسخة المستقرة السابقة.'
+    });
+    assert.equal(rollbackRes.status, 200, 'Clinical QA rollback succeeds with 200');
+    assert.equal(rollbackRes.data.success, true);
+    assert.equal(rollbackRes.data.model.status, 'active', 'v1.0 is restored to active');
+    assert.equal(rollbackRes.data.previousActiveModels.some(m => m.version === 'v1.1'), true, 'v1.1 was demoted');
+
+    // Verify state in catalog after rollback
+    const checkRestored = await api('GET', '/api/admin/ai/models/model_v1_0_active', 'token-clinical-qa');
+    assert.equal(checkRestored.data.model.status, 'active', 'v1.0 is active');
+    const checkDemoted = await api('GET', '/api/admin/ai/models/model_v1_1_candidate', 'token-clinical-qa');
+    assert.equal(checkDemoted.data.model.status, 'rolled_back', 'v1.1 is rolled_back');
+
+    console.log('  ✓ Safe emergency rollback verified: previous baseline restored to active, demoted marked rolled_back.\n');
+
     // -------------------------------------------------------------------------
     // TEST 5: Recording Clinical Evaluation Batches
     // -------------------------------------------------------------------------
@@ -458,6 +483,13 @@ const app = sandbox.module.exports;
     assert.ok(csvExport, 'CSV export audit event must exist');
     assert.equal(csvExport.actor?.uid || csvExport.userId, 'user-clinical-qa');
     assert.equal(csvExport.details.format, 'csv');
+
+    // Verify AI_MODEL_ROLLED_BACK
+    const rollbackAudit = auditLogs.find(l => l.type === 'AI_MODEL_ROLLED_BACK');
+    assert.ok(rollbackAudit, 'AI_MODEL_ROLLED_BACK audit event must exist');
+    assert.equal(rollbackAudit.actor?.uid || rollbackAudit.userId, 'user-clinical-qa');
+    assert.equal(rollbackAudit.actor?.role, 'clinical_qa');
+    assert.equal(rollbackAudit.details.targetVersion, 'v1.0');
 
     console.log('  ✓ Statutory audit trail verified with full actor attribution and immutable metadata.\n');
 
