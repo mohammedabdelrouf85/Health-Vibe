@@ -6353,7 +6353,10 @@ function sanitizeBranchPhone(phone) {
 function sanitizeBranchText(text, maxLength = 250) {
   if (!text || typeof text !== 'string') return '';
   return text
-    .replace(/[<>]/g, '')
+    .replace(/<[^>]*>/g, '') // Strip full HTML tags with attributes
+    .replace(/[<>]/g, '')    // Strip any dangling brackets
+    .replace(/\bon\w+\s*=[^"'\s>]*(?:\s|$|["'])/gi, '') // Strip residual event handlers
+    .replace(/javascript\s*:/gi, '')
     .trim()
     .slice(0, maxLength);
 }
@@ -6919,7 +6922,7 @@ app.get('/api/admin/clinics/:clinicId/doctors', requireAuth, requireAdmin, async
           uid: d.uid,
           name: d.name || d.displayName,
           specialty: d.specialty || 'General',
-          email: d.email,
+          email: maskBranchDoctorEmail(d.email),
           roleInClinic: d.roleInClinic || 'consultant'
         }));
     }
