@@ -15513,6 +15513,12 @@ async function renderAdminApplications() {
               </div>
             </div>
             <div><span>${isEn ? "Application Date" : "تاريخ التقديم"}</span><strong>${dateStr}</strong></div>
+            ${app.rejectionReason ? `
+              <div style="background: rgba(239, 68, 68, 0.08); padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(239, 68, 68, 0.25);">
+                <span style="color: #ef4444; font-weight: 700;">${isEn ? "Rejection / Suspension Note:" : "سبب الرفض أو الملاحظة:"}</span>
+                <strong style="color: #ef4444; display: block; font-size: 13px; margin-top: 2px;">${escapeHtmlAttr(app.rejectionReason)}</strong>
+              </div>
+            ` : ''}
           </div>
 
           <div style="display: flex; gap: 10px; justify-content: flex-end; align-items: center; padding-top: 10px; border-top: 1px solid var(--line); flex-wrap: wrap;">
@@ -16182,12 +16188,29 @@ async function rejectDoctorApplication(appId, userId) {
   const isEn = currentLanguage === "en";
   try {
     if (!enforcePermission(PERMISSIONS.REJECT_DOCTOR_APPLICATION, "Reject Doctor")) return;
+
+    const defaultReason = isEn
+      ? "Medical syndicate credentials or submitted ID documents could not be verified."
+      : "تعذر التحقق من صحة ترخيص مزاولة المهنة أو كارنيه النقابة أو بطاقة الرقم القومي المرفوعة.";
+
+    const promptMessage = isEn
+      ? "Reason for rejecting or suspending doctor application:"
+      : "سبب رفض أو تعليق طلب اعتماد الطبيب (سيتم إبلاغ المتقدم به):";
+
+    const reason = prompt(promptMessage, defaultReason);
+    if (reason === null) return; // Administrator cancelled prompt
+
     const result = await callBackend("/api/admin/reject-doctor-application", {
-      method: "POST", body: JSON.stringify({ applicationId: appId, applicantUserId: userId })
+      method: "POST",
+      body: JSON.stringify({
+        applicationId: appId,
+        applicantUserId: userId,
+        rejectionReason: reason.trim() || defaultReason
+      })
     });
     if (!result?.success) throw new Error("Rejection was not confirmed by the server");
 
-    showToast(isEn ? "Application rejected." : "تم رفض الطلب.");
+    showToast(isEn ? "Application rejected and doctor notified with reason." : "تم تسجيل رفض الطلب وتوثيق السبب في السجل.");
     await renderAdminMetrics();
     await renderAdminApplications();
     await renderAdminUsers();
