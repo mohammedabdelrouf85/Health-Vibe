@@ -9226,6 +9226,1163 @@ app.resetAiModels = async () => {
   }
 };
 
+// =============================================================================
+// 📚 CLINICAL CONTENT MANAGEMENT SYSTEM (ISABEL HEALTHCARE BENCHMARK)
+// =============================================================================
+
+const CLINICAL_CMS_READ_ROLES = [
+  ROLES.SUPER_ADMIN,
+  ROLES.CLINICAL_QA,
+  ROLES.OPS,
+  ROLES.CLINIC_ADMIN,
+  ROLES.ORG_ADMIN
+];
+
+const CLINICAL_CMS_WRITE_ROLES = [
+  ROLES.SUPER_ADMIN,
+  ROLES.CLINICAL_QA
+];
+
+const CLINICAL_CMS_APPROVER_ROLES = [
+  ROLES.SUPER_ADMIN,
+  ROLES.CLINICAL_QA
+];
+
+const INITIAL_CLINICAL_CMS_GUIDELINES = [
+  {
+    id: "guideline_resp_triage_redflags",
+    version: "v2.0",
+    status: "published",
+    category: "red_flags",
+    conditionScope: "respiratory_triage",
+    evidenceLevel: "Grade_A_High",
+    targetAudience: "triage_officer",
+    titleAr: "علامات الخطورة والتنفس السريع للأعراض التنفسية الحادة",
+    titleEn: "Acute Respiratory Red Flags & Severe Dyspnea Guidance",
+    summaryAr: "بروتوكول الفرز الطارئ الفوري لمرضى الضائقة التنفسية الحادة وتحديد مؤشرات الإحالة إلى العناية المركزة.",
+    summaryEn: "Emergency triage protocol for acute respiratory distress, cyanosis, and ICU escalation triggers.",
+    criteriaAr: "تشبع أكسجين SpO2 < 90%، معدل تنفس > 30/دقيقة، أو استخدام العضلات المساعدة للتنفس.",
+    criteriaEn: "Resting SpO2 < 90% on room air, respiratory rate > 30 bpm, or accessory muscle usage.",
+    actionItemsAr: "إعطاء أكسجين عالي التدفق فوري، وضع المريض بزاوية 45 درجة، وتجهيز خط وريدي عاجل مع استدعاء طبيب الطوارئ.",
+    actionItemsEn: "Administer immediate high-flow O2 (target SpO2 94-98%), position patient at 45 degrees, establish IV access.",
+    redFlagsAr: "زرقة مركزية (Cyanosis)، ارتباك حاد أو تغيم الوعي، صمت صدري تام أثناء التسمع (Silent Chest).",
+    redFlagsEn: "Central cyanosis, acute confusion/altered mental status, completely silent chest on auscultation.",
+    patientInstructionsAr: "عدم الاستلقاء مستوياً على الظهر، تجنب المجهود البدني تماماً، والاتصال بالإسعاف فوراً عند ازدياد ضيق التنفس.",
+    patientInstructionsEn: "Maintain seated posture, avoid physical exertion, call emergency services immediately if breathing worsens.",
+    author: { uid: "user-clinical-qa", name: "د. هدى منصور", role: "clinical_qa" },
+    peerReviewer: { uid: "user-super-admin", name: "د. محمد عبد الرؤوف", role: "super_admin", reviewDate: "2026-10-18T10:30:00Z", reviewNotes: "معتمد سريرياً ومتوافق مع معايير فرز الطوارئ العالمية." },
+    approver: { uid: "user-super-admin", name: "د. محمد عبد الرؤوف", role: "super_admin", approvalDate: "2026-10-19T14:00:00Z", approvalNotes: "تم النشر في الإنتاج وتفعيله في محرك الفرز الذكي." },
+    publishedAt: "2026-10-19T14:00:00Z",
+    createdAt: "2026-10-15T09:00:00Z",
+    updatedAt: "2026-10-19T14:00:00Z",
+    revisionHistory: [
+      {
+        version: "v1.0",
+        status: "published",
+        updatedAt: "2026-09-15T11:00:00Z",
+        authorName: "د. هدى منصور",
+        changeSummary: "الإصدار الأولي لقواعد الفرز التنفسي."
+      },
+      {
+        version: "v2.0",
+        status: "published",
+        updatedAt: "2026-10-19T14:00:00Z",
+        authorName: "د. محمد عبد الرؤوف",
+        changeSummary: "تحديث معايير معدل التنفس ليتطابق مع معايير Isabel Healthcare وخفض الإنذارات الكاذبة."
+      }
+    ]
+  },
+  {
+    id: "guideline_pediatric_fever_triage",
+    version: "v1.4",
+    status: "published",
+    category: "triage_protocol",
+    conditionScope: "pediatric",
+    evidenceLevel: "Grade_A_High",
+    targetAudience: "physician",
+    titleAr: "بروتوكول فرز حمى الأطفال وحدود معدل التنفس حسب العمر",
+    titleEn: "Pediatric Fever Triage Protocol & Age-Specific Tachypnea Bounds",
+    summaryAr: "دليل سريري لتقييم درجات الحرارة المرتفعة لدى الرضع والأطفال وربطها بمعدلات سرعة التنفس الطبيعية لكل مرحلة عمرية.",
+    summaryEn: "Clinical protocol for assessing fever in infants and pediatric cohorts correlated with age-specific vital bounds.",
+    criteriaAr: "حمى > 38.0°م لدى الرضع أقل من 3 أشهر، أو حمى > 39.0°م لدى الأطفال مترافقة مع سرعة تنفس > 50/دقيقة.",
+    criteriaEn: "Rectal temperature > 38.0°C in infants < 3 months, or temperature > 39.0°C with tachypnea (> 50 bpm for infants).",
+    actionItemsAr: "فحص بؤر العدوى المحتملة، مراقبة نضوب السوائل وعلامات الجفاف، وتجنب الأسبرين نهائياً.",
+    actionItemsEn: "Thorough septic workup for neonates, assess hydration and capillary refill, strictly avoid aspirin.",
+    redFlagsAr: "برود الأطراف مع شحوب رخو، بكاء أنيني ضعيف، انخساف الأضلاع أثناء الشهيق (Severe Chest Indrawing).",
+    redFlagsEn: "Cold extremities with mottled skin, weak high-pitched grunting, sternal/intercostal retraction.",
+    patientInstructionsAr: "إعطاء السوائل ومحاليل الإماهة بانتظام، استخدام كمادات المياه الفاترة، وطلب المشورة الفورية عند قلة التبول.",
+    patientInstructionsEn: "Maintain oral hydration, apply lukewarm compresses, seek immediate care if urination ceases for > 6 hours.",
+    author: { uid: "user-clinical-qa", name: "د. هدى منصور", role: "clinical_qa" },
+    peerReviewer: { uid: "user-super-admin", name: "د. محمد عبد الرؤوف", role: "super_admin", reviewDate: "2026-10-04T12:00:00Z", reviewNotes: "دقيق ومطابق لبروتوكولات منظمة الصحة العالمية لطب الأطفال." },
+    approver: { uid: "user-super-admin", name: "د. محمد عبد الرؤوف", role: "super_admin", approvalDate: "2026-10-05T08:00:00Z", approvalNotes: "معتمد للنشر في وحدة الأطفال التخصصية." },
+    publishedAt: "2026-10-05T08:00:00Z",
+    createdAt: "2026-10-01T10:00:00Z",
+    updatedAt: "2026-10-05T08:00:00Z",
+    revisionHistory: [
+      {
+        version: "v1.0",
+        status: "published",
+        updatedAt: "2026-10-05T08:00:00Z",
+        authorName: "د. هدى منصور",
+        changeSummary: "اعتماد البروتوكول المخصص لطب الأطفال."
+      }
+    ]
+  },
+  {
+    id: "guideline_hypoxemia_spo2_home",
+    version: "v1.2",
+    status: "published",
+    category: "home_treatment",
+    conditionScope: "hypoxemia",
+    evidenceLevel: "Grade_B_Moderate",
+    targetAudience: "patient_family",
+    titleAr: "إرشادات نقص الأكسجة الصامت ومتابعة قياس SpO2 المنزلي",
+    titleEn: "Silent Hypoxemia Home Monitoring & Pulse Oximetry Guidance",
+    summaryAr: "تعليمات واضحة للمريض وأسرته لكيفية قراءة مقياس النبض والتأكسج، والتعامل مع حالات نقص الأكسجة الخفي دون ضيق تنفس واضح.",
+    summaryEn: "Patient-facing instructions on pulse oximeter usage, identifying silent hypoxemia, and home oxygen thresholds.",
+    criteriaAr: "قراءة SpO2 بين 91% و 94% أثناء الراحة مع غياب أعراض الاختناق الشديدة.",
+    criteriaEn: "Resting SpO2 reading between 91% and 94% on room air without acute subjective distress.",
+    actionItemsAr: "إعادة القياس بعد تدفئة الأصابع، الجلوس مستقيماً أو اتخاذ وضعية الانكباب (Proning)، وإعادة التقييم خلال ساعة.",
+    actionItemsEn: "Recheck with warm fingers, adopt proning/upright posture, log readings every 2 hours.",
+    redFlagsAr: "هبوط القراءة إلى أقل من 90%، الدوخة المفاجئة، أو الشعور ببرودة وزرقة في الشفتين.",
+    redFlagsEn: "SpO2 reading dropping below 90%, sudden dizziness/lightheadedness, cyanotic lip discoloration.",
+    patientInstructionsAr: "التواصل مع العيادة الرقمية لتحديث التقرير الطبي، وشرب الماء الدافئ وتجنب التدخين السلبي تماماً.",
+    patientInstructionsEn: "Contact tele-clinic for reassessment, maintain warm fluid intake, eliminate smoke exposure.",
+    author: { uid: "user-clinical-qa", name: "د. هدى منصور", role: "clinical_qa" },
+    peerReviewer: { uid: "user-super-admin", name: "د. محمد عبد الرؤوف", role: "super_admin", reviewDate: "2026-10-11T16:00:00Z", reviewNotes: "صياغة واضحة ومناسبة للمريض مع تنبيهات أمان ممتازة." },
+    approver: { uid: "user-super-admin", name: "د. محمد عبد الرؤوف", role: "super_admin", approvalDate: "2026-10-12T09:00:00Z", approvalNotes: "معتمد للنشر في تطبيق المريض والمساعد الطبي." },
+    publishedAt: "2026-10-12T09:00:00Z",
+    createdAt: "2026-10-10T14:00:00Z",
+    updatedAt: "2026-10-12T09:00:00Z",
+    revisionHistory: [
+      {
+        version: "v1.2",
+        status: "published",
+        updatedAt: "2026-10-12T09:00:00Z",
+        authorName: "د. هدى منصور",
+        changeSummary: "إضافة وضعية الانكباب (Proning) وتحسين دقة القياس."
+      }
+    ]
+  },
+  {
+    id: "guideline_pneumonia_antibiotic_stewardship",
+    version: "v2.1-rc",
+    status: "in_review",
+    category: "discharge_care",
+    conditionScope: "pneumonia_covid",
+    evidenceLevel: "Grade_A_High",
+    targetAudience: "physician",
+    titleAr: "بروتوكول ترشيد المضادات الحيوية في التهابات الجهاز التنفسي والتهاب الرئة",
+    titleEn: "Respiratory Infection Antibiotic Stewardship & Discharge Protocol",
+    summaryAr: "توجيهات لتقليل الاستخدام غير المبرر للمضادات الحيوية في حالات الالتهاب الفيروسي مع تحديد معايير بدء العلاج البكتيري.",
+    summaryEn: "Antibiotic stewardship protocol minimizing unnecessary prescribing in viral cases with clear bacterial criteria.",
+    criteriaAr: "وجود بلغم صديدي، حمى مستمرة لأكثر من 5 أيام، وارتفاع كرات الدم البيضاء أو بروتين CRP > 50 mg/L.",
+    criteriaEn: "Purulent sputum, fever persistent > 5 days, elevated inflammatory markers (CRP > 50 mg/L).",
+    actionItemsAr: "تحديد خط العلاج الأول المناسب حسب الحساسية المحلية، الالتزام بالجرعة والمدة المحددة (5-7 أيام).",
+    actionItemsEn: "Initiate first-line guideline-adherent monotherapy, restrict treatment duration to 5-7 days.",
+    redFlagsAr: "فشل الاستجابة بعد 72 ساعة من بدء العلاج، تدهور الوعي، أو مؤشرات متلازمة الاستجابة الالتهابية الجهازية (SIRS).",
+    redFlagsEn: "Failure to improve after 72 hours, altered mental status, or emergence of sepsis/SIRS criteria.",
+    patientInstructionsAr: "إكمال كورس العلاج كاملاً دون انقطاع، مراجعة الطبيب عند حدوث طفح جلدي أو إسهال حاد.",
+    patientInstructionsEn: "Complete full antibiotic course, notify clinic immediately if severe watery diarrhea or rash develops.",
+    author: { uid: "user-clinical-qa", name: "د. هدى منصور", role: "clinical_qa" },
+    peerReviewer: { uid: "user-super-admin", name: "د. محمد عبد الرؤوف", role: "super_admin", reviewDate: null, reviewNotes: "قيد المراجعة السريرية لتحديد التوافق مع بروتوكولات وزارة الصحة المصرية." },
+    approver: null,
+    publishedAt: null,
+    createdAt: "2026-10-21T11:00:00Z",
+    updatedAt: "2026-10-21T15:00:00Z",
+    revisionHistory: [
+      {
+        version: "v2.0",
+        status: "draft",
+        updatedAt: "2026-10-20T10:00:00Z",
+        authorName: "د. هدى منصور",
+        changeSummary: "مسودة التحديث لإضافة ترشيد المضادات الحيوية."
+      },
+      {
+        version: "v2.1-rc",
+        status: "in_review",
+        updatedAt: "2026-10-21T15:00:00Z",
+        authorName: "د. هدى منصور",
+        changeSummary: "إرسال للمراجعة السريرية من قِبل كبير الأطباء."
+      }
+    ]
+  },
+  {
+    id: "guideline_diabetic_wound_emergency",
+    version: "v1.0-draft",
+    status: "draft",
+    category: "referral_criteria",
+    conditionScope: "general_emergency",
+    evidenceLevel: "Grade_B_Moderate",
+    targetAudience: "nurse",
+    titleAr: "معايير الإحالة العاجلة لقدم السكري وعلامات العدوى الجهازية",
+    titleEn: "Diabetic Foot Ulcer Urgent Referral Criteria & Systemic Sepsis Alerts",
+    summaryAr: "معايير موحدة للتمريض والرعاية الأولية للتحويل السريع إلى جراحة الأوعية الدموية وقدم السكري عند ظهور علامات نخر أو إنتان.",
+    summaryEn: "Standardized primary care referral criteria for diabetic foot ulcers exhibiting necrosis or sepsis.",
+    criteriaAr: "قرحة قدم سكري مع احمرار محيطي > 2 سم، صديد نفاذ، أو جس العظام مباشرة بقاع القرحة (Probe-to-bone positive).",
+    criteriaEn: "Ulcer with erythema > 2 cm, foul discharge, or positive probe-to-bone test.",
+    actionItemsAr: "تثبيت الطرف وتجنب تحميل الوزن، فحص نبضات الشرايين المحيطية، وأخذ مسحة عميقة للزرع قبل المضاد الحيوي.",
+    actionItemsEn: "Offload foot immediately, assess peripheral pulses, obtain deep tissue culture prior to antibiotics.",
+    redFlagsAr: "غرغرينا سوداء أو فقاعات غازية، حمى مترافقة مع هبوط في ضغط الدم، ألم مستمر لا يستجيب للمسكنات.",
+    redFlagsEn: "Ascending gas gangrene, crepitus, fever accompanied by hypotension, refractory pain.",
+    patientInstructionsAr: "عدم المشي على القدم المصابة نهائياً، إبقاء الضمادة جافة ونظيفة، والتوجه فوراً للمستشفى.",
+    patientInstructionsEn: "Strictly avoid weight-bearing on affected foot, keep dressing dry, present to ER immediately.",
+    author: { uid: "user-clinical-qa", name: "د. هدى منصور", role: "clinical_qa" },
+    peerReviewer: null,
+    approver: null,
+    publishedAt: null,
+    createdAt: "2026-10-22T08:00:00Z",
+    updatedAt: "2026-10-22T08:00:00Z",
+    revisionHistory: [
+      {
+        version: "v1.0-draft",
+        status: "draft",
+        updatedAt: "2026-10-22T08:00:00Z",
+        authorName: "د. هدى منصور",
+        changeSummary: "إنشاء مسودة أولية لبروتوكول تحويل قدم السكري."
+      }
+    ]
+  },
+  {
+    id: "guideline_asthma_exacerbation_stepwise",
+    version: "v3.0",
+    status: "approved",
+    category: "triage_protocol",
+    conditionScope: "respiratory_triage",
+    evidenceLevel: "Grade_A_High",
+    targetAudience: "physician",
+    titleAr: "بروتوكول التدبير المتدرج لنوبات الربو الشعبي الحادة",
+    titleEn: "Stepwise Management of Acute Bronchial Asthma Exacerbation",
+    summaryAr: "خطوات مدروسة للتعامل مع النوبات الحادة لمرضى الربو تشمل موسعات الشعب قصيرة المفعول، الستيرويدات، ومراقبة وظائف الرئة.",
+    summaryEn: "Stepwise protocol for acute asthma exacerbation including SABA nebulization, systemic steroids, and PEF monitoring.",
+    criteriaAr: "أزيز حاد بالصدر، عدم القدرة على إكمال جملة كاملة بنفس واحد، وتراجع ذروة تدفق الزفير (PEF) إلى أقل من 50%.",
+    criteriaEn: "Audible wheezing, inability to complete full sentences in one breath, PEF < 50% predicted.",
+    actionItemsAr: "جلسات استنشاق سالبيوتامول وإبراتروبيوم متكررة، إعطاء كورتيكوستيرويد جهازي فوري، ومراقبة التأكسج.",
+    actionItemsEn: "Deliver back-to-back SABA + ipratropium nebulization, initiate oral/IV corticosteroids, continuous O2 monitoring.",
+    redFlagsAr: "صمت صدري مفاجئ (Silent Chest)، تباطؤ ضربات القلب، إعياء تنفسي شديد، أو عدم استجابة لجلسات الاستنشاق الثلاث الأولى.",
+    redFlagsEn: "Silent chest, paradoxical bradycardia, profound respiratory muscle exhaustion, lack of response to 3 nebs.",
+    patientInstructionsAr: "استخدام جهاز الاستنشاق عبر المباعد (Spacer)، تجنب مهيجات الربو كالبخور والعطور، والعودة الفورية عند تكرار النوبة.",
+    patientInstructionsEn: "Use spacer with MDI, eliminate domestic allergens and perfumes, return immediately if symptoms recur.",
+    author: { uid: "user-clinical-qa", name: "د. هدى منصور", role: "clinical_qa" },
+    peerReviewer: { uid: "user-super-admin", name: "د. محمد عبد الرؤوف", role: "super_admin", reviewDate: "2026-10-21T09:00:00Z", reviewNotes: "محدث وفق إرشادات GINA 2026 العالمية ومعتمد للنشر." },
+    approver: { uid: "user-super-admin", name: "د. محمد عبد الرؤوف", role: "super_admin", approvalDate: "2026-10-22T10:00:00Z", approvalNotes: "جاهز للنشر في التحديث القادم لمحرك الفرز." },
+    publishedAt: null,
+    createdAt: "2026-10-18T12:00:00Z",
+    updatedAt: "2026-10-22T10:00:00Z",
+    revisionHistory: [
+      {
+        version: "v2.5",
+        status: "published",
+        updatedAt: "2026-08-10T11:00:00Z",
+        authorName: "د. هدى منصور",
+        changeSummary: "الإصدار المعتمد السابق."
+      },
+      {
+        version: "v3.0",
+        status: "approved",
+        updatedAt: "2026-10-22T10:00:00Z",
+        authorName: "د. محمد عبد الرؤوف",
+        changeSummary: "إضافة إرشادات GINA 2026 وموسعات الشعب المزدوجة."
+      }
+    ]
+  }
+];
+
+let inMemoryClinicalGuidelines = JSON.parse(JSON.stringify(INITIAL_CLINICAL_CMS_GUIDELINES));
+
+function validateClinicalGuidelineParity(data) {
+  const errors = [];
+  if (!data?.titleAr || !String(data.titleAr).trim()) errors.push("Title in Arabic is required (عنوان التوصية بالعربية مطلوب)");
+  if (!data?.titleEn || !String(data.titleEn).trim()) errors.push("Title in English is required (عنوان التوصية بالإنجليزية مطلوب)");
+  if (!data?.summaryAr || !String(data.summaryAr).trim()) errors.push("Clinical summary in Arabic is required (الملخص بالعربية مطلوب)");
+  if (!data?.summaryEn || !String(data.summaryEn).trim()) errors.push("Clinical summary in English is required (الملخص بالإنجليزية مطلوب)");
+  if (!data?.criteriaAr || !String(data.criteriaAr).trim()) errors.push("Clinical criteria in Arabic is required (المعايير السريرية بالعربية مطلوبة)");
+  if (!data?.criteriaEn || !String(data.criteriaEn).trim()) errors.push("Clinical criteria in English is required (المعايير السريرية بالإنجليزية مطلوبة)");
+  if (!data?.actionItemsAr || !String(data.actionItemsAr).trim()) errors.push("Action items in Arabic are required (الإجراءات والتوصيات بالعربية مطلوبة)");
+  if (!data?.actionItemsEn || !String(data.actionItemsEn).trim()) errors.push("Action items in English are required (الإجراءات والتوصيات بالإنجليزية مطلوبة)");
+  if (!data?.redFlagsAr || !String(data.redFlagsAr).trim()) errors.push("Red flags in Arabic are required (علامات الخطورة بالعربية مطلوبة)");
+  if (!data?.redFlagsEn || !String(data.redFlagsEn).trim()) errors.push("Red flags in English are required (علامات الخطورة بالإنجليزية مطلوبة)");
+
+  return {
+    isValid: errors.length === 0,
+    errors,
+    parityScorePct: errors.length === 0 ? 100 : Math.max(0, Math.round(((10 - errors.length) / 10) * 100))
+  };
+}
+
+async function getClinicalGuidelinesStore() {
+  const map = new Map();
+  for (const g of inMemoryClinicalGuidelines) {
+    map.set(g.id, g);
+  }
+  if (db) {
+    try {
+      const snap = await db.collection('clinical_guidelines').get();
+      if (snap && snap.docs) {
+        for (const doc of snap.docs) {
+          map.set(doc.id, { id: doc.id, ...doc.data() });
+        }
+      }
+    } catch (_) {}
+  }
+  return Array.from(map.values());
+}
+
+/**
+ * GET /api/admin/clinical-cms/guidelines
+ * List all clinical guidelines with filtering, search, sorting and KPI metrics.
+ * RBAC: Restricted to CLINICAL_CMS_READ_ROLES.
+ */
+app.get('/api/admin/clinical-cms/guidelines', requireAuth, async (req, res) => {
+  try {
+    const role = await resolveAiRequesterRole(req);
+    const isOwner = hasTrustedOwnerClaim(req.user);
+    if (!isOwner && !CLINICAL_CMS_READ_ROLES.includes(role)) {
+      return res.status(403).json({
+        error: 'ACCESS_DENIED',
+        message: `Role '${role}' is not authorized to access Clinical CMS guidelines.`
+      });
+    }
+
+    setAiSecurityHeaders(res);
+
+    // Injection defense
+    const rawSearch = String(req.query?.search || '');
+    if (rawSearch.includes('<script>') || rawSearch.includes('javascript:') || rawSearch.includes('../') || rawSearch.includes('{"$gt"')) {
+      if (auditService && typeof auditService.recordAuditEvent === 'function') {
+        await auditService.recordAuditEvent(db, {
+          type: auditService.AUDIT_EVENT_TYPES.AI_SECURITY_VIOLATION_BLOCKED,
+          req,
+          details: {
+            endpoint: '/api/admin/clinical-cms/guidelines',
+            param: 'search',
+            querySnippet: rawSearch.substring(0, 50),
+            reason: 'SUSPICIOUS_QUERY_INJECTION_DETECTED',
+            blockedAt: new Date().toISOString()
+          }
+        }).catch(() => {});
+      }
+      return res.status(400).json({ error: 'INVALID_QUERY', message: 'Suspicious search parameters rejected.' });
+    }
+
+    const { status, category, conditionScope, evidenceLevel, search, sortBy } = req.query || {};
+    const catalog = await getClinicalGuidelinesStore();
+    let list = [...catalog];
+
+    if (status && status !== 'all') {
+      list = list.filter(g => g.status === status);
+    }
+    if (category && category !== 'all') {
+      list = list.filter(g => g.category === category);
+    }
+    if (conditionScope && conditionScope !== 'all') {
+      list = list.filter(g => g.conditionScope === conditionScope);
+    }
+    if (evidenceLevel && evidenceLevel !== 'all') {
+      list = list.filter(g => g.evidenceLevel === evidenceLevel);
+    }
+
+    if (search && search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter(g =>
+        g.titleAr?.toLowerCase().includes(q) ||
+        g.titleEn?.toLowerCase().includes(q) ||
+        g.summaryAr?.toLowerCase().includes(q) ||
+        g.summaryEn?.toLowerCase().includes(q) ||
+        g.criteriaAr?.toLowerCase().includes(q) ||
+        g.criteriaEn?.toLowerCase().includes(q) ||
+        g.redFlagsAr?.toLowerCase().includes(q) ||
+        g.redFlagsEn?.toLowerCase().includes(q) ||
+        g.id.toLowerCase().includes(q)
+      );
+    }
+
+    if (sortBy === 'date_asc') {
+      list.sort((a, b) => new Date(a.updatedAt || a.createdAt) - new Date(b.updatedAt || b.createdAt));
+    } else if (sortBy === 'title_ar') {
+      list.sort((a, b) => (a.titleAr || '').localeCompare(b.titleAr || '', 'ar'));
+    } else if (sortBy === 'title_en') {
+      list.sort((a, b) => (a.titleEn || '').localeCompare(b.titleEn || '', 'en'));
+    } else if (sortBy === 'version_desc') {
+      list.sort((a, b) => (b.version || '').localeCompare(a.version || ''));
+    } else {
+      list.sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
+    }
+
+    const total = catalog.length;
+    const published = catalog.filter(g => g.status === 'published').length;
+    const inReview = catalog.filter(g => g.status === 'in_review').length;
+    const approved = catalog.filter(g => g.status === 'approved').length;
+    const draft = catalog.filter(g => g.status === 'draft').length;
+    const archived = catalog.filter(g => g.status === 'archived').length;
+    const redFlagsCount = catalog.filter(g => g.category === 'red_flags').length;
+
+    let validParityCount = 0;
+    catalog.forEach(g => {
+      if (validateClinicalGuidelineParity(g).isValid) validParityCount++;
+    });
+    const parityRatePct = total > 0 ? Math.round((validParityCount / total) * 100) : 100;
+
+    res.json({
+      success: true,
+      count: list.length,
+      metrics: {
+        total,
+        published,
+        inReview,
+        approved,
+        draft,
+        archived,
+        redFlagsCount,
+        parityRatePct
+      },
+      guidelines: list
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'CLINICAL_CMS_FETCH_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/admin/clinical-cms/guidelines/:id
+ * Retrieve single guideline with revision history.
+ * RBAC: Restricted to CLINICAL_CMS_READ_ROLES.
+ */
+app.get('/api/admin/clinical-cms/guidelines/:id', requireAuth, async (req, res) => {
+  try {
+    const role = await resolveAiRequesterRole(req);
+    const isOwner = hasTrustedOwnerClaim(req.user);
+    if (!isOwner && !CLINICAL_CMS_READ_ROLES.includes(role)) {
+      return res.status(403).json({
+        error: 'ACCESS_DENIED',
+        message: `Role '${role}' is not authorized to inspect Clinical CMS guideline.`
+      });
+    }
+
+    setAiSecurityHeaders(res);
+    const { id } = req.params;
+    const catalog = await getClinicalGuidelinesStore();
+    const guideline = catalog.find(g => g.id === id);
+    if (!guideline) {
+      return res.status(404).json({
+        error: 'GUIDELINE_NOT_FOUND',
+        message: `Clinical guideline '${id}' not found.`
+      });
+    }
+
+    res.json({
+      success: true,
+      guideline
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'CLINICAL_CMS_GET_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/admin/clinical-cms/guidelines
+ * Create new clinical guideline in draft status.
+ * RBAC: Restricted to CLINICAL_CMS_WRITE_ROLES (Super Admin & Clinical QA).
+ */
+app.post('/api/admin/clinical-cms/guidelines', requireAuth, async (req, res) => {
+  try {
+    const role = await resolveAiRequesterRole(req);
+    const isOwner = hasTrustedOwnerClaim(req.user);
+    if (!isOwner && !CLINICAL_CMS_WRITE_ROLES.includes(role)) {
+      return res.status(403).json({
+        error: 'ACCESS_DENIED',
+        message: `Role '${role}' is not authorized to create clinical guidelines. Super Admin or Clinical QA required.`
+      });
+    }
+
+    setAiSecurityHeaders(res);
+
+    // Zero-PHI check
+    const phiLeakage = detectAiPhiLeakage(req.body);
+    if (phiLeakage) {
+      if (auditService && typeof auditService.recordAuditEvent === 'function') {
+        await auditService.recordAuditEvent(db, {
+          type: auditService.AUDIT_EVENT_TYPES.AI_PHI_LEAKAGE_BLOCKED,
+          req,
+          details: {
+            endpoint: '/api/admin/clinical-cms/guidelines',
+            detectedField: phiLeakage.field,
+            blockedAt: new Date().toISOString()
+          }
+        }).catch(() => {});
+      }
+      return res.status(400).json({
+        error: 'PHI_LEAKAGE_PROHIBITED',
+        message: 'Direct patient identifiers are strictly prohibited in clinical guidelines.'
+      });
+    }
+
+    const parityValidation = validateClinicalGuidelineParity(req.body);
+    if (!parityValidation.isValid) {
+      return res.status(400).json({
+        error: 'BILINGUAL_PARITY_FAILED',
+        message: 'Guideline failed dual-language parity check.',
+        errors: parityValidation.errors
+      });
+    }
+
+    const {
+      id, version, category, conditionScope, evidenceLevel, targetAudience,
+      titleAr, titleEn, summaryAr, summaryEn, criteriaAr, criteriaEn,
+      actionItemsAr, actionItemsEn, redFlagsAr, redFlagsEn,
+      patientInstructionsAr, patientInstructionsEn, changeSummary
+    } = req.body || {};
+
+    const guidelineId = id || `guideline_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const catalog = await getClinicalGuidelinesStore();
+    if (catalog.find(g => g.id === guidelineId)) {
+      return res.status(409).json({
+        error: 'GUIDELINE_EXISTS',
+        message: `Guideline ID '${guidelineId}' already exists.`
+      });
+    }
+
+    const now = new Date().toISOString();
+    const newDoc = {
+      id: guidelineId,
+      version: version || 'v1.0-draft',
+      status: 'draft',
+      category: category || 'triage_protocol',
+      conditionScope: conditionScope || 'respiratory_triage',
+      evidenceLevel: evidenceLevel || 'Grade_B_Moderate',
+      targetAudience: targetAudience || 'physician',
+      titleAr: titleAr.trim(),
+      titleEn: titleEn.trim(),
+      summaryAr: summaryAr.trim(),
+      summaryEn: summaryEn.trim(),
+      criteriaAr: criteriaAr.trim(),
+      criteriaEn: criteriaEn.trim(),
+      actionItemsAr: actionItemsAr.trim(),
+      actionItemsEn: actionItemsEn.trim(),
+      redFlagsAr: redFlagsAr.trim(),
+      redFlagsEn: redFlagsEn.trim(),
+      patientInstructionsAr: patientInstructionsAr?.trim() || '',
+      patientInstructionsEn: patientInstructionsEn?.trim() || '',
+      author: {
+        uid: req.user?.uid || 'user-clinical-qa',
+        name: req.user?.name || req.user?.email || 'Clinical QA Specialist',
+        role
+      },
+      peerReviewer: null,
+      approver: null,
+      publishedAt: null,
+      createdAt: now,
+      updatedAt: now,
+      revisionHistory: [
+        {
+          version: version || 'v1.0-draft',
+          status: 'draft',
+          updatedAt: now,
+          authorName: req.user?.name || 'Clinical QA',
+          changeSummary: changeSummary || 'Initial draft creation.'
+        }
+      ]
+    };
+
+    inMemoryClinicalGuidelines.unshift(newDoc);
+    if (db) {
+      await db.collection('clinical_guidelines').doc(newDoc.id).set(newDoc).catch(() => {});
+    }
+
+    if (auditService && typeof auditService.recordAuditEvent === 'function') {
+      await auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.CLINICAL_GUIDELINE_CREATED,
+        req,
+        details: {
+          guidelineId: newDoc.id,
+          version: newDoc.version,
+          category: newDoc.category,
+          conditionScope: newDoc.conditionScope,
+          createdAt: now
+        }
+      }).catch(() => {});
+    }
+
+    res.status(201).json({
+      success: true,
+      guideline: newDoc
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'CLINICAL_CMS_CREATE_FAILED', message: err.message });
+  }
+});
+
+/**
+ * PUT /api/admin/clinical-cms/guidelines/:id
+ * Update clinical guideline and append revision.
+ * RBAC: Restricted to CLINICAL_CMS_WRITE_ROLES.
+ */
+app.put('/api/admin/clinical-cms/guidelines/:id', requireAuth, async (req, res) => {
+  try {
+    const role = await resolveAiRequesterRole(req);
+    const isOwner = hasTrustedOwnerClaim(req.user);
+    if (!isOwner && !CLINICAL_CMS_WRITE_ROLES.includes(role)) {
+      return res.status(403).json({
+        error: 'ACCESS_DENIED',
+        message: `Role '${role}' is not authorized to edit clinical guidelines.`
+      });
+    }
+
+    setAiSecurityHeaders(res);
+
+    // Zero-PHI check
+    const phiLeakage = detectAiPhiLeakage(req.body);
+    if (phiLeakage) {
+      return res.status(400).json({
+        error: 'PHI_LEAKAGE_PROHIBITED',
+        message: 'Direct patient identifiers are strictly prohibited in clinical guidelines.'
+      });
+    }
+
+    const { id } = req.params;
+    let target = inMemoryClinicalGuidelines.find(g => g.id === id);
+    if (!target && db) {
+      const snap = await db.collection('clinical_guidelines').doc(id).get();
+      if (snap.exists) target = snap.data();
+    }
+    if (!target) {
+      return res.status(404).json({ error: 'GUIDELINE_NOT_FOUND', message: `Guideline '${id}' not found.` });
+    }
+
+    const parityValidation = validateClinicalGuidelineParity(req.body);
+    if (!parityValidation.isValid) {
+      return res.status(400).json({
+        error: 'BILINGUAL_PARITY_FAILED',
+        message: 'Guideline update failed dual-language parity check.',
+        errors: parityValidation.errors
+      });
+    }
+
+    const now = new Date().toISOString();
+    const nextVersion = req.body.version || target.version;
+
+    target.category = req.body.category || target.category;
+    target.conditionScope = req.body.conditionScope || target.conditionScope;
+    target.evidenceLevel = req.body.evidenceLevel || target.evidenceLevel;
+    target.targetAudience = req.body.targetAudience || target.targetAudience;
+    target.titleAr = req.body.titleAr.trim();
+    target.titleEn = req.body.titleEn.trim();
+    target.summaryAr = req.body.summaryAr.trim();
+    target.summaryEn = req.body.summaryEn.trim();
+    target.criteriaAr = req.body.criteriaAr.trim();
+    target.criteriaEn = req.body.criteriaEn.trim();
+    target.actionItemsAr = req.body.actionItemsAr.trim();
+    target.actionItemsEn = req.body.actionItemsEn.trim();
+    target.redFlagsAr = req.body.redFlagsAr.trim();
+    target.redFlagsEn = req.body.redFlagsEn.trim();
+    target.patientInstructionsAr = req.body.patientInstructionsAr?.trim() || '';
+    target.patientInstructionsEn = req.body.patientInstructionsEn?.trim() || '';
+    target.version = nextVersion;
+    target.updatedAt = now;
+
+    if (target.status === 'published' && !req.body.keepPublished) {
+      target.status = 'draft';
+    }
+
+    target.revisionHistory.push({
+      version: nextVersion,
+      status: target.status,
+      updatedAt: now,
+      authorName: req.user?.name || 'Clinical Reviewer',
+      changeSummary: req.body.changeSummary || 'Content updated with revised criteria.'
+    });
+
+    if (db) {
+      await db.collection('clinical_guidelines').doc(id).set(target).catch(() => {});
+    }
+
+    if (auditService && typeof auditService.recordAuditEvent === 'function') {
+      await auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.CLINICAL_GUIDELINE_UPDATED,
+        req,
+        details: {
+          guidelineId: target.id,
+          version: nextVersion,
+          status: target.status,
+          updatedAt: now
+        }
+      }).catch(() => {});
+    }
+
+    res.json({
+      success: true,
+      guideline: target
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'CLINICAL_CMS_UPDATE_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/admin/clinical-cms/guidelines/:id/submit-review
+ * Submit draft guideline for peer review.
+ * RBAC: Restricted to CLINICAL_CMS_WRITE_ROLES.
+ */
+app.post('/api/admin/clinical-cms/guidelines/:id/submit-review', requireAuth, async (req, res) => {
+  try {
+    const role = await resolveAiRequesterRole(req);
+    const isOwner = hasTrustedOwnerClaim(req.user);
+    if (!isOwner && !CLINICAL_CMS_WRITE_ROLES.includes(role)) {
+      return res.status(403).json({
+        error: 'ACCESS_DENIED',
+        message: `Role '${role}' is not authorized to submit guidelines for review.`
+      });
+    }
+
+    setAiSecurityHeaders(res);
+    const { id } = req.params;
+    const target = inMemoryClinicalGuidelines.find(g => g.id === id);
+    if (!target) return res.status(404).json({ error: 'GUIDELINE_NOT_FOUND', message: `Guideline '${id}' not found.` });
+
+    if (target.status !== 'draft' && target.status !== 'rejected') {
+      return res.status(400).json({
+        error: 'INVALID_STATUS_TRANSITION',
+        message: `Cannot submit for review from status '${target.status}'. Must be 'draft' or 'rejected'.`
+      });
+    }
+
+    const now = new Date().toISOString();
+    target.status = 'in_review';
+    target.updatedAt = now;
+    target.peerReviewer = {
+      uid: null,
+      name: 'Awaiting Clinical Reviewer',
+      role: 'clinical_qa',
+      reviewDate: null,
+      reviewNotes: req.body?.notes || ''
+    };
+
+    target.revisionHistory.push({
+      version: target.version,
+      status: 'in_review',
+      updatedAt: now,
+      authorName: req.user?.name || 'Clinical QA',
+      changeSummary: req.body?.notes || 'Submitted for formal clinical peer review.'
+    });
+
+    if (db) await db.collection('clinical_guidelines').doc(id).set(target).catch(() => {});
+
+    if (auditService && typeof auditService.recordAuditEvent === 'function') {
+      await auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.CLINICAL_GUIDELINE_SUBMITTED_FOR_REVIEW,
+        req,
+        details: { guidelineId: target.id, version: target.version, notes: req.body?.notes || '' }
+      }).catch(() => {});
+    }
+
+    res.json({ success: true, guideline: target });
+  } catch (err) {
+    res.status(500).json({ error: 'SUBMIT_REVIEW_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/admin/clinical-cms/guidelines/:id/approve
+ * Formally approve in-review guideline.
+ * RBAC: Restricted to CLINICAL_CMS_APPROVER_ROLES (Super Admin & Clinical QA Lead only).
+ */
+app.post('/api/admin/clinical-cms/guidelines/:id/approve', requireAuth, async (req, res) => {
+  try {
+    const role = await resolveAiRequesterRole(req);
+    const isOwner = hasTrustedOwnerClaim(req.user);
+    if (!isOwner && !CLINICAL_CMS_APPROVER_ROLES.includes(role)) {
+      return res.status(403).json({
+        error: 'ACCESS_DENIED',
+        message: `Role '${role}' is not authorized to approve clinical guidelines. Super Admin or Clinical QA Lead required.`
+      });
+    }
+
+    setAiSecurityHeaders(res);
+    const { id } = req.params;
+    const target = inMemoryClinicalGuidelines.find(g => g.id === id);
+    if (!target) return res.status(404).json({ error: 'GUIDELINE_NOT_FOUND', message: `Guideline '${id}' not found.` });
+
+    if (target.status !== 'in_review') {
+      return res.status(400).json({
+        error: 'INVALID_STATUS_TRANSITION',
+        message: `Cannot approve guideline with status '${target.status}'. Must be 'in_review'.`
+      });
+    }
+
+    const now = new Date().toISOString();
+    target.status = 'approved';
+    target.updatedAt = now;
+    target.approver = {
+      uid: req.user?.uid || 'user-super-admin',
+      name: req.user?.name || req.user?.email || 'Medical Director',
+      role,
+      approvalDate: now,
+      approvalNotes: req.body?.notes || 'Formally approved for production release.'
+    };
+
+    target.revisionHistory.push({
+      version: target.version,
+      status: 'approved',
+      updatedAt: now,
+      authorName: req.user?.name || 'Medical Director',
+      changeSummary: req.body?.notes || 'Formally approved by Clinical QA Lead / Medical Director.'
+    });
+
+    if (db) await db.collection('clinical_guidelines').doc(id).set(target).catch(() => {});
+
+    if (auditService && typeof auditService.recordAuditEvent === 'function') {
+      await auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.CLINICAL_GUIDELINE_APPROVED,
+        req,
+        details: { guidelineId: target.id, version: target.version, approverRole: role }
+      }).catch(() => {});
+    }
+
+    res.json({ success: true, guideline: target });
+  } catch (err) {
+    res.status(500).json({ error: 'APPROVE_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/admin/clinical-cms/guidelines/:id/publish
+ * Publish approved guideline to live production triage engine.
+ * RBAC: Restricted to CLINICAL_CMS_APPROVER_ROLES.
+ */
+app.post('/api/admin/clinical-cms/guidelines/:id/publish', requireAuth, async (req, res) => {
+  try {
+    const role = await resolveAiRequesterRole(req);
+    const isOwner = hasTrustedOwnerClaim(req.user);
+    if (!isOwner && !CLINICAL_CMS_APPROVER_ROLES.includes(role)) {
+      return res.status(403).json({
+        error: 'ACCESS_DENIED',
+        message: `Role '${role}' is not authorized to publish clinical guidelines.`
+      });
+    }
+
+    setAiSecurityHeaders(res);
+    const { id } = req.params;
+    const target = inMemoryClinicalGuidelines.find(g => g.id === id);
+    if (!target) return res.status(404).json({ error: 'GUIDELINE_NOT_FOUND', message: `Guideline '${id}' not found.` });
+
+    if (target.status !== 'approved' && target.status !== 'published') {
+      return res.status(400).json({
+        error: 'INVALID_STATUS_TRANSITION',
+        message: `Cannot publish guideline with status '${target.status}'. Must be 'approved' first.`
+      });
+    }
+
+    const now = new Date().toISOString();
+    target.status = 'published';
+    target.publishedAt = now;
+    target.updatedAt = now;
+
+    target.revisionHistory.push({
+      version: target.version,
+      status: 'published',
+      updatedAt: now,
+      authorName: req.user?.name || 'Release Manager',
+      changeSummary: req.body?.notes || 'Published to active clinical triage engine.'
+    });
+
+    if (db) await db.collection('clinical_guidelines').doc(id).set(target).catch(() => {});
+
+    if (auditService && typeof auditService.recordAuditEvent === 'function') {
+      await auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.CLINICAL_GUIDELINE_PUBLISHED,
+        req,
+        details: { guidelineId: target.id, version: target.version, publishedAt: now }
+      }).catch(() => {});
+    }
+
+    res.json({ success: true, guideline: target });
+  } catch (err) {
+    res.status(500).json({ error: 'PUBLISH_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/admin/clinical-cms/guidelines/:id/reject
+ * Reject guideline with required modification feedback.
+ * RBAC: Restricted to CLINICAL_CMS_APPROVER_ROLES.
+ */
+app.post('/api/admin/clinical-cms/guidelines/:id/reject', requireAuth, async (req, res) => {
+  try {
+    const role = await resolveAiRequesterRole(req);
+    const isOwner = hasTrustedOwnerClaim(req.user);
+    if (!isOwner && !CLINICAL_CMS_APPROVER_ROLES.includes(role)) {
+      return res.status(403).json({
+        error: 'ACCESS_DENIED',
+        message: `Role '${role}' is not authorized to reject clinical guidelines.`
+      });
+    }
+
+    setAiSecurityHeaders(res);
+    const { id } = req.params;
+    const target = inMemoryClinicalGuidelines.find(g => g.id === id);
+    if (!target) return res.status(404).json({ error: 'GUIDELINE_NOT_FOUND', message: `Guideline '${id}' not found.` });
+
+    if (target.status !== 'in_review') {
+      return res.status(400).json({
+        error: 'INVALID_STATUS_TRANSITION',
+        message: `Cannot reject guideline with status '${target.status}'. Must be 'in_review'.`
+      });
+    }
+
+    const now = new Date().toISOString();
+    const reason = req.body?.reason || 'Clinical revisions required.';
+    target.status = 'rejected';
+    target.updatedAt = now;
+    target.peerReviewer = {
+      uid: req.user?.uid || 'user-clinical-qa',
+      name: req.user?.name || 'Reviewer',
+      role,
+      reviewDate: now,
+      reviewNotes: reason
+    };
+
+    target.revisionHistory.push({
+      version: target.version,
+      status: 'rejected',
+      updatedAt: now,
+      authorName: req.user?.name || 'Reviewer',
+      changeSummary: `Rejected: ${reason}`
+    });
+
+    if (db) await db.collection('clinical_guidelines').doc(id).set(target).catch(() => {});
+
+    if (auditService && typeof auditService.recordAuditEvent === 'function') {
+      await auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.CLINICAL_GUIDELINE_REJECTED,
+        req,
+        details: { guidelineId: target.id, reason }
+      }).catch(() => {});
+    }
+
+    res.json({ success: true, guideline: target });
+  } catch (err) {
+    res.status(500).json({ error: 'REJECT_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/admin/clinical-cms/guidelines/:id/archive
+ * Archive clinical guideline.
+ * RBAC: Restricted to CLINICAL_CMS_APPROVER_ROLES.
+ */
+app.post('/api/admin/clinical-cms/guidelines/:id/archive', requireAuth, async (req, res) => {
+  try {
+    const role = await resolveAiRequesterRole(req);
+    const isOwner = hasTrustedOwnerClaim(req.user);
+    if (!isOwner && !CLINICAL_CMS_APPROVER_ROLES.includes(role)) {
+      return res.status(403).json({
+        error: 'ACCESS_DENIED',
+        message: `Role '${role}' is not authorized to archive clinical guidelines.`
+      });
+    }
+
+    setAiSecurityHeaders(res);
+    const { id } = req.params;
+    const target = inMemoryClinicalGuidelines.find(g => g.id === id);
+    if (!target) return res.status(404).json({ error: 'GUIDELINE_NOT_FOUND', message: `Guideline '${id}' not found.` });
+
+    const now = new Date().toISOString();
+    const reason = req.body?.reason || 'Archived by administrator.';
+    target.status = 'archived';
+    target.updatedAt = now;
+
+    target.revisionHistory.push({
+      version: target.version,
+      status: 'archived',
+      updatedAt: now,
+      authorName: req.user?.name || 'Administrator',
+      changeSummary: `Archived: ${reason}`
+    });
+
+    if (db) await db.collection('clinical_guidelines').doc(id).set(target).catch(() => {});
+
+    if (auditService && typeof auditService.recordAuditEvent === 'function') {
+      await auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.CLINICAL_GUIDELINE_ARCHIVED,
+        req,
+        details: { guidelineId: target.id, reason }
+      }).catch(() => {});
+    }
+
+    res.json({ success: true, guideline: target });
+  } catch (err) {
+    res.status(500).json({ error: 'ARCHIVE_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/admin/clinical-cms/guidelines/:id/diff
+ * Compute side-by-side comparison between two revisions.
+ * RBAC: Restricted to CLINICAL_CMS_READ_ROLES.
+ */
+app.get('/api/admin/clinical-cms/guidelines/:id/diff', requireAuth, async (req, res) => {
+  try {
+    const role = await resolveAiRequesterRole(req);
+    const isOwner = hasTrustedOwnerClaim(req.user);
+    if (!isOwner && !CLINICAL_CMS_READ_ROLES.includes(role)) {
+      return res.status(403).json({
+        error: 'ACCESS_DENIED',
+        message: `Role '${role}' is not authorized to view guideline diffs.`
+      });
+    }
+
+    setAiSecurityHeaders(res);
+    const { id } = req.params;
+    const target = inMemoryClinicalGuidelines.find(g => g.id === id);
+    if (!target) return res.status(404).json({ error: 'GUIDELINE_NOT_FOUND', message: `Guideline '${id}' not found.` });
+
+    const { versionA, versionB } = req.query || {};
+    const revs = target.revisionHistory || [];
+    const revA = revs.find(r => r.version === versionA) || revs[0] || { version: target.version, changeSummary: 'Base' };
+    const revB = revs.find(r => r.version === versionB) || revs[revs.length - 1] || revA;
+
+    res.json({
+      success: true,
+      guidelineId: target.id,
+      titleAr: target.titleAr,
+      titleEn: target.titleEn,
+      versionA: revA,
+      versionB: revB,
+      currentContent: {
+        criteriaAr: target.criteriaAr,
+        criteriaEn: target.criteriaEn,
+        actionItemsAr: target.actionItemsAr,
+        actionItemsEn: target.actionItemsEn,
+        redFlagsAr: target.redFlagsAr,
+        redFlagsEn: target.redFlagsEn
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'DIFF_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/admin/clinical-cms/export
+ * Export clinical guidelines in CSV or JSON with security headers.
+ * RBAC: Restricted to CLINICAL_CMS_READ_ROLES.
+ */
+app.get('/api/admin/clinical-cms/export', requireAuth, async (req, res) => {
+  try {
+    const role = await resolveAiRequesterRole(req);
+    const isOwner = hasTrustedOwnerClaim(req.user);
+    if (!isOwner && !CLINICAL_CMS_READ_ROLES.includes(role)) {
+      return res.status(403).json({
+        error: 'ACCESS_DENIED',
+        message: `Role '${role}' is not authorized to export clinical guidelines.`
+      });
+    }
+
+    setAiSecurityHeaders(res);
+    const catalog = await getClinicalGuidelinesStore();
+    const format = String(req.query?.format || 'csv').toLowerCase();
+
+    if (auditService && typeof auditService.recordAuditEvent === 'function') {
+      await auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.CLINICAL_GUIDELINES_EXPORTED,
+        req,
+        details: { format, count: catalog.length, exportedAt: new Date().toISOString() }
+      }).catch(() => {});
+    }
+
+    if (format === 'json') {
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="healthvibe_clinical_guidelines_${Date.now()}.json"`);
+      return res.json({ success: true, count: catalog.length, guidelines: catalog });
+    }
+
+    const headers = [
+      'Guideline_ID', 'Version', 'Status', 'Category', 'Scope', 'Evidence_Level',
+      'Target_Audience', 'Title_AR', 'Title_EN', 'Summary_AR', 'Summary_EN',
+      'Criteria_AR', 'Criteria_EN', 'Action_Items_AR', 'Action_Items_EN',
+      'Red_Flags_AR', 'Red_Flags_EN', 'Published_At', 'Updated_At'
+    ];
+
+    const rows = catalog.map(g => [
+      `"${g.id}"`, `"${g.version}"`, `"${g.status}"`, `"${g.category}"`, `"${g.conditionScope}"`,
+      `"${g.evidenceLevel}"`, `"${g.targetAudience}"`, `"${(g.titleAr || '').replace(/"/g, '""')}"`,
+      `"${(g.titleEn || '').replace(/"/g, '""')}"`, `"${(g.summaryAr || '').replace(/"/g, '""')}"`,
+      `"${(g.summaryEn || '').replace(/"/g, '""')}"`, `"${(g.criteriaAr || '').replace(/"/g, '""')}"`,
+      `"${(g.criteriaEn || '').replace(/"/g, '""')}"`, `"${(g.actionItemsAr || '').replace(/"/g, '""')}"`,
+      `"${(g.actionItemsEn || '').replace(/"/g, '""')}"`, `"${(g.redFlagsAr || '').replace(/"/g, '""')}"`,
+      `"${(g.redFlagsEn || '').replace(/"/g, '""')}"`, `"${g.publishedAt || ''}"`, `"${g.updatedAt || ''}"`
+    ].join(','));
+
+    const csvOutput = [headers.join(','), ...rows].join('\n');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="healthvibe_clinical_guidelines_${Date.now()}.csv"`);
+    res.send(csvOutput);
+  } catch (err) {
+    res.status(500).json({ error: 'EXPORT_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/admin/clinical-cms/audit-trail
+ * Retrieve statutory audit history of Clinical CMS events from audit store.
+ * RBAC: Restricted to CLINICAL_CMS_READ_ROLES.
+ */
+app.get('/api/admin/clinical-cms/audit-trail', requireAuth, async (req, res) => {
+  try {
+    const role = await resolveAiRequesterRole(req);
+    const isOwner = hasTrustedOwnerClaim(req.user);
+    if (!isOwner && !CLINICAL_CMS_READ_ROLES.includes(role)) {
+      return res.status(403).json({
+        error: 'ACCESS_DENIED',
+        message: `Role '${role}' is not authorized to inspect Clinical CMS audit trail.`
+      });
+    }
+
+    setAiSecurityHeaders(res);
+    let events = [];
+    if (db && typeof db.collection === 'function') {
+      try {
+        const snap = await db.collection('audit_events').get();
+        if (snap && snap.docs) {
+          events = snap.docs
+            .map(d => ({ id: d.id, ...d.data() }))
+            .filter(e => typeof e.type === 'string' && e.type.startsWith('CLINICAL_GUIDELINE_'));
+        }
+      } catch (_) {}
+    }
+
+    events.sort((a, b) => new Date(b.timestamp || b.createdAt || 0) - new Date(a.timestamp || a.createdAt || 0));
+
+    res.json({
+      success: true,
+      count: events.length,
+      events
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'AUDIT_TRAIL_FETCH_FAILED', message: err.message });
+  }
+});
+
+// Expose guidelines for testing
+app.inMemoryClinicalGuidelines = inMemoryClinicalGuidelines;
+app.resetClinicalGuidelines = async () => {
+  inMemoryClinicalGuidelines = JSON.parse(JSON.stringify(INITIAL_CLINICAL_CMS_GUIDELINES));
+  app.inMemoryClinicalGuidelines = inMemoryClinicalGuidelines;
+  if (db) {
+    try {
+      const snap = await db.collection('clinical_guidelines').get();
+      if (snap && snap.forEach) {
+        snap.forEach(async doc => {
+          await db.collection('clinical_guidelines').doc(doc.id).delete().catch(() => {});
+        });
+      }
+      for (const g of inMemoryClinicalGuidelines) {
+        await db.collection('clinical_guidelines').doc(g.id).set(g).catch(() => {});
+      }
+    } catch (_) {}
+  }
+};
+
 // Credential values come from an administrator-approved application, not the
 // editable user profile, ID token display name, or report request body.
 async function getVerifiedDoctorIdentity(uid) {
