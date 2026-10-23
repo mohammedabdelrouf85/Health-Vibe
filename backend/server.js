@@ -24849,9 +24849,30 @@ app.post('/api/admin/roi-calculator/simulate', requireAuth, requireAdmin, async 
 
     const { doctors = 3, patientsPerDocPerDay = 35, feeEGP = 400, clinicId } = req.body || {};
 
-    const numDoctors = Math.max(1, Math.min(50, parseInt(doctors, 10) || 1));
-    const numPatients = Math.max(5, Math.min(200, parseInt(patientsPerDocPerDay, 10) || 10));
-    const consultationFee = Math.max(50, Math.min(5000, parseInt(feeEGP, 10) || 100));
+    // Security & Data Sanity Check: Reject malicious injection, negative numbers, or extreme outliers
+    const rawDoctors = Number(doctors);
+    const rawPatients = Number(patientsPerDocPerDay);
+    const rawFee = Number(feeEGP);
+
+    if (isNaN(rawDoctors) || isNaN(rawPatients) || isNaN(rawFee) || rawDoctors < 1 || rawPatients < 1 || rawFee < 0 || rawDoctors > 100 || rawPatients > 1000 || rawFee > 50000) {
+      if (auditService && typeof auditService.recordAuditEvent === 'function') {
+        await auditService.recordAuditEvent(db, {
+          type: auditService.AUDIT_EVENT_TYPES.ROI_CALCULATOR_ANOMALOUS_INPUT_BLOCKED,
+          req,
+          clinicId,
+          outcome: 'BLOCKED',
+          details: { violation: 'ANOMALOUS_OR_MALFORMED_INPUT', rawDoctors, rawPatients, rawFee }
+        });
+      }
+      return res.status(400).json({
+        error: 'INVALID_INPUT_PARAMETERS',
+        message: 'Security validation error: Simulation parameters contain anomalous, negative, or out-of-range values.'
+      });
+    }
+
+    const numDoctors = Math.max(1, Math.min(50, Math.floor(rawDoctors)));
+    const numPatients = Math.max(5, Math.min(200, Math.floor(rawPatients)));
+    const consultationFee = Math.max(50, Math.min(5000, Math.floor(rawFee)));
 
     // Empirical Egyptian Healthcare Benchmark Constants
     const OPERATING_DAYS_PER_MONTH = 26; // 26 working days in Egyptian clinics
