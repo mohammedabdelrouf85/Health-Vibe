@@ -5501,6 +5501,25 @@ app.post(['/api/admin/security-alerts/acknowledge', '/api/security-alerts/acknow
  */
 app.get(['/api/admin/deletion-queue', '/api/deletion-queue'], requireAuth, requireAdmin, async (req, res) => {
   try {
+    const actorRole = req.user.role || 'clinic_admin';
+    const isSuperAdmin = actorRole === 'super_admin' || req.user.isOwner === true;
+
+    // Clinic admins cannot access global data deletion queue
+    if (!isSuperAdmin && actorRole !== 'super_admin') {
+      if (auditService && typeof auditService.recordAuditEvent === 'function') {
+        await auditService.recordAuditEvent(db, {
+          type: auditService.AUDIT_EVENT_TYPES.DELETION_QUEUE_ACCESS_DENIED,
+          req,
+          outcome: 'DENIED',
+          details: { reason: 'SUPER_ADMIN_REQUIRED', attemptedRole: actorRole }
+        });
+      }
+      return res.status(403).json({
+        error: 'FORBIDDEN',
+        message: 'Strict RBAC: Only Super Administrators have authority to monitor and manage the Data Deletion Queue.'
+      });
+    }
+
     const jobs = [];
     if (privacyService && privacyService.privacyJobRegistry) {
       for (const [userId, job] of privacyService.privacyJobRegistry.entries()) {
@@ -5551,6 +5570,15 @@ app.get(['/api/admin/deletion-queue', '/api/deletion-queue'], requireAuth, requi
       filteredJobs = filteredJobs.filter(j => j.userId.toLowerCase().includes(q) || j.userEmailMasked.toLowerCase().includes(q));
     }
 
+    if (auditService && typeof auditService.recordAuditEvent === 'function') {
+      await auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.DELETION_QUEUE_VIEWED,
+        req,
+        outcome: 'SUCCESS',
+        details: { resultCount: filteredJobs.length, statusFilter: status || 'all' }
+      });
+    }
+
     res.json({
       success: true,
       queue: filteredJobs,
@@ -5568,6 +5596,21 @@ app.get(['/api/admin/deletion-queue', '/api/deletion-queue'], requireAuth, requi
  */
 app.post(['/api/admin/deletion-queue/retry', '/api/deletion-queue/retry'], requireAuth, requireAdmin, async (req, res) => {
   try {
+    const actorRole = req.user.role || 'clinic_admin';
+    const isSuperAdmin = actorRole === 'super_admin' || req.user.isOwner === true;
+
+    if (!isSuperAdmin) {
+      if (auditService && typeof auditService.recordAuditEvent === 'function') {
+        await auditService.recordAuditEvent(db, {
+          type: auditService.AUDIT_EVENT_TYPES.DELETION_QUEUE_ACCESS_DENIED,
+          req,
+          outcome: 'DENIED',
+          details: { action: 'RETRY', attemptedRole: actorRole }
+        });
+      }
+      return res.status(403).json({ error: 'FORBIDDEN', message: 'Only Super Administrators can retry deletion jobs.' });
+    }
+
     const { userId } = req.body;
     if (!userId) {
       return res.status(400).json({ error: 'USER_ID_REQUIRED', message: 'Target userId is required to retry deletion.' });
@@ -5581,6 +5624,16 @@ app.post(['/api/admin/deletion-queue/retry', '/api/deletion-queue/retry'], requi
       adminAuth: admin.auth(),
       whatsappBot
     });
+
+    if (auditService && typeof auditService.recordAuditEvent === 'function') {
+      await auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.DELETION_QUEUE_RETRY_TRIGGERED,
+        req,
+        outcome: result.success ? 'SUCCESS' : 'FAILED',
+        targetUserId: userId,
+        details: { status: result.status }
+      });
+    }
 
     res.json({ success: true, result });
   } catch (err) {

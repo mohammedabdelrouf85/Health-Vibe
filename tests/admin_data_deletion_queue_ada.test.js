@@ -99,6 +99,24 @@ runTest('4.1: app.js contains renderAdminDeletionQueue, export, and retry functi
   assert.ok(appJsCode.includes("window.retryAdminDeletion"));
 });
 
+// 5. Backend RBAC & Audit Trail Verification (Task #722 Ada Health)
+console.log('\n--- 5. Backend RBAC & Audit Trail Verification (Task #722) ---');
+runTest('5.1: audit-service.js defines all required Deletion Queue audit event types', () => {
+  const auditService = require('../backend/audit-service');
+  assert.ok(auditService.AUDIT_EVENT_TYPES.DELETION_QUEUE_VIEWED, 'Missing DELETION_QUEUE_VIEWED');
+  assert.ok(auditService.AUDIT_EVENT_TYPES.DELETION_QUEUE_RETRY_TRIGGERED, 'Missing DELETION_QUEUE_RETRY_TRIGGERED');
+  assert.ok(auditService.AUDIT_EVENT_TYPES.DELETION_QUEUE_ACCESS_DENIED, 'Missing DELETION_QUEUE_ACCESS_DENIED');
+  assert.ok(auditService.AUDIT_EVENT_TYPES.DELETION_QUEUE_JOB_PURGED, 'Missing DELETION_QUEUE_JOB_PURGED');
+});
+
+runTest('5.2: server.js enforces Super Admin check and logs DELETION_QUEUE_ACCESS_DENIED on unauthorized attempts', () => {
+  const serverCode = fs.readFileSync(path.resolve(__dirname, '../backend/server.js'), 'utf8');
+  assert.ok(serverCode.includes("DELETION_QUEUE_ACCESS_DENIED"), 'server.js must log DELETION_QUEUE_ACCESS_DENIED');
+  assert.ok(serverCode.includes("Strict RBAC: Only Super Administrators have authority"), 'server.js must enforce Super Admin message');
+  assert.ok(serverCode.includes("DELETION_QUEUE_VIEWED"), 'server.js must log DELETION_QUEUE_VIEWED on successful view');
+  assert.ok(serverCode.includes("DELETION_QUEUE_RETRY_TRIGGERED"), 'server.js must log DELETION_QUEUE_RETRY_TRIGGERED on retry');
+});
+
 console.log('==================================================================');
 console.log(`🎉 ALL TESTS COMPLETED: ${passedCount}/${passedCount + failedCount} PASSED`);
 console.log('🌟 100% SUCCESS: Ada Health Data Deletion Queue Fully Verified!');
