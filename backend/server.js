@@ -24723,6 +24723,31 @@ app.post('/api/admin/co-branding/logo', requireAuth, requireAdmin, async (req, r
       });
     }
 
+    // Security Check: Guard against XSS, SVG scripts, javascript: pseudo-protocols, or malicious injection in logoUrl
+    const lowerLogo = String(logoUrl).toLowerCase().trim();
+    const isMalicious = lowerLogo.startsWith('javascript:') ||
+      lowerLogo.includes('<script') ||
+      lowerLogo.includes('onload=') ||
+      lowerLogo.includes('onerror=') ||
+      lowerLogo.includes('iframe') ||
+      lowerLogo.includes('data:text/html');
+
+    if (isMalicious || logoUrl.length > 500000) {
+      if (auditService && typeof auditService.recordAuditEvent === 'function') {
+        await auditService.recordAuditEvent(db, {
+          type: auditService.AUDIT_EVENT_TYPES.CO_BRANDING_MALICIOUS_PAYLOAD_BLOCKED,
+          req,
+          clinicId,
+          outcome: 'BLOCKED',
+          details: { violation: 'MALICIOUS_LOGO_PAYLOAD', reason: 'UNSAFE_PROTOCOL_OR_SCRIPT_TAG' }
+        });
+      }
+      return res.status(400).json({
+        error: 'MALICIOUS_PAYLOAD_BLOCKED',
+        message: 'Security validation error: Logo URL or SVG contains unsafe executable scripts or protocols.'
+      });
+    }
+
     // Clinic Isolation Check
     if (isClinicAdmin) {
       const userClinicId = req.user.clinicId || req.user.clinic || 'clinic_nile_cairo';
