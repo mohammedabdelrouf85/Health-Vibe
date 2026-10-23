@@ -1241,4 +1241,108 @@
           </div>
         </article>
 
+        <!-- 40. DOCTOLIB BENCHMARK: DOCTOR TIME SAVINGS & NO-SHOW REDUCTION CALCULATOR (#741) -->
+        <article class="panel" id="adminRoiCalculatorPanel" style="margin-top: 24px;">
+          <div class="panel-head" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <h3 style="margin: 0; font-size: 19px;" data-i18n="appointments.roiCalcTitle">حاسبة توفير وقت الطبيب وتقليل الـ No-Show للعيادات (Doctolib Benchmark)</h3>
+                <span class="pill ok" style="font-size: 11px;">Doctolib Model ⏱️</span>
+              </div>
+              <p style="margin: 4px 0 0; font-size: 13px; color: var(--muted);" data-i18n="appointments.roiCalcSubtitle">
+                محاكاة العائد الاستثماري والوفر الزمني للعيادات والمراكز الطبية وفق واقع السوق المصري والتسعير بالجنيه (EGP)
+              </p>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <span class="pill info" style="font-size: 11.5px; padding: 4px 10px;" data-i18n="appointments.roiCalcEgyptianMarketBadge">
+                معايرة ببيانات السوق المصري الميدانية 🇪🇬
+              </span>
+              <button type="button" class="soft-button" onclick="resetAdminRoiCalculator()" id="btnResetRoiCalc" style="padding: 6px 12px; font-size: 12.5px; display: inline-flex; align-items: center; gap: 5px;">
+                🔄 استعادة الإعدادات الافتراضية
+              </button>
+            </div>
+          </div>
+
+          <!-- Top Interactive Metrics Display Grid -->
+          <div class="metric-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-top: 16px;">
+            <article style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 14px;">
+              <span style="font-size: 12px; color: var(--muted);" data-i18n="appointments.roiCalcHoursSavedMonthly">ساعات الفرز والتوثيق الموفرة شهرياً</span>
+              <strong id="adminRoiHoursSaved" style="font-size: 22px; color: #10b981; display: block; margin: 4px 0;">455 ساعة</strong>
+              <small style="color: #10b981; font-size: 11px;">~10 دقائق لكل استشارة طبية</small>
+            </article>
+
+            <article style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 14px;">
+              <span style="font-size: 12px; color: var(--muted);" data-i18n="appointments.roiCalcNoShowRecoveredRevenue">العائد المالي المسترد من منع غياب المرضى (EGP)</span>
+              <strong id="adminRoiRevenueGain" style="font-size: 22px; color: #06b6d4; display: block; margin: 4px 0;">+54,800 ج.م</strong>
+              <small style="color: #06b6d4; font-size: 11px;">استرداد ~137 موعد مهدر شهرياً</small>
+            </article>
+
+            <article style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 14px;">
+              <span style="font-size: 12px; color: var(--muted);">انخفاض معدل التخلف (No-Show Drop)</span>
+              <strong id="adminRoiNoShowDrop" style="font-size: 22px; color: #8b5cf6; display: block; margin: 4px 0;">من 18% إلى 3.8%</strong>
+              <small style="color: #8b5cf6; font-size: 11px;">عبر التذكير التلقائي عبر WhatsApp</small>
+            </article>
+
+            <article style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 14px;">
+              <span style="font-size: 12px; color: var(--muted);" data-i18n="appointments.roiCalcTriageSpeedup">معدل تسريع دورة الكشف الطبي</span>
+              <strong id="adminRoiSpeedup" style="font-size: 22px; color: #f59e0b; display: block; margin: 4px 0;">3x أسرع</strong>
+              <small style="color: #10b981; font-size: 11px;">جاهزية ملخص الأعراض السريري</small>
+            </article>
+          </div>
+
+          <!-- Egyptian Healthcare Market Parameters & Sliders -->
+          <div style="margin-top: 18px; background: var(--surface-1); padding: 16px 20px; border-radius: 12px; border: 1px solid var(--line);">
+            <h4 style="margin: 0 0 14px; font-size: 14px; color: var(--ink);">🎛️ معاملات محاكاة المنشأة الطبية (حسب واقع العيادات والمراكز في مصر):</h4>
+            
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px;">
+              <!-- Slider 1: Doctors Count -->
+              <div style="background: var(--surface-2); padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                  <label for="adminInputDoctors" style="font-size: 12.5px; font-weight: 600; color: var(--ink);">عدد أطباء المركز:</label>
+                  <span id="adminValDoctors" style="font-size: 13px; font-weight: 700; color: #10b981;">3 أطباء</span>
+                </div>
+                <input type="range" id="adminInputDoctors" min="1" max="30" value="3" oninput="updateAdminRoiCalculator()" style="width: 100%; cursor: pointer;">
+                <div style="display: flex; justify-content: space-between; font-size: 10.5px; color: var(--muted); margin-top: 4px;">
+                  <span>طبيب واحد (Solo)</span>
+                  <span>15 طبيب</span>
+                  <span>30 طبيب (مجمع)</span>
+                </div>
+              </div>
+
+              <!-- Slider 2: Patients / Doctor / Day -->
+              <div style="background: var(--surface-2); padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                  <label for="adminInputPatients" style="font-size: 12.5px; font-weight: 600; color: var(--ink);">حالات الكشف اليومية / طبيب:</label>
+                  <span id="adminValPatients" style="font-size: 13px; font-weight: 700; color: #06b6d4;">35 كشف/يوم</span>
+                </div>
+                <input type="range" id="adminInputPatients" min="10" max="120" value="35" step="5" oninput="updateAdminRoiCalculator()" style="width: 100%; cursor: pointer;">
+                <div style="display: flex; justify-content: space-between; font-size: 10.5px; color: var(--muted); margin-top: 4px;">
+                  <span>10 كشوفات</span>
+                  <span>60 كشف</span>
+                  <span>120 كشف (طاقة قصوى)</span>
+                </div>
+              </div>
+
+              <!-- Slider 3: Consultation Fee in EGP -->
+              <div style="background: var(--surface-2); padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                  <label for="adminInputFee" style="font-size: 12.5px; font-weight: 600; color: var(--ink);">متوسط سعر الكشف (جنيه مصري EGP):</label>
+                  <span id="adminValFee" style="font-size: 13px; font-weight: 700; color: #f59e0b;">400 ج.م</span>
+                </div>
+                <input type="range" id="adminInputFee" min="100" max="2500" value="400" step="50" oninput="updateAdminRoiCalculator()" style="width: 100%; cursor: pointer;">
+                <div style="display: flex; justify-content: space-between; font-size: 10.5px; color: var(--muted); margin-top: 4px;">
+                  <span>100 ج.م (شعبي/تطوعي)</span>
+                  <span>1,000 ج.م</span>
+                  <span>2,500 ج.م (استشاري دولي)</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Egyptian Market Benchmark Formula Summary Box -->
+            <div id="adminRoiBreakdownBox" style="margin-top: 14px; background: rgba(9, 184, 182, 0.08); border: 1px solid rgba(9, 184, 182, 0.25); border-radius: 8px; padding: 10px 14px; font-size: 12px; color: var(--ink); line-height: 1.6;">
+              💡 <strong>معادلة العائد التشغيلي (معيار Doctolib للسوق المصري):</strong> مبني على 26 يوم عمل شهرياً (إجمالي 2,730 كشف بالمركز). استرداد نسبة 5% من المواعيد الضائعة يحقق <strong>+54,800 ج.م شهرياً</strong> إيراد مسترد مباشرة، وتوفير <strong>455 ساعة</strong> من أوقات الانتظار والتوثيق اليدوي.
+            </div>
+          </div>
+        </article>
+
       </section>

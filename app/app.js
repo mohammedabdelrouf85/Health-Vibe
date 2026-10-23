@@ -23947,3 +23947,93 @@ function openCoBrandingUploadModal(clinicId) {
   }
 }
 window.openCoBrandingUploadModal = openCoBrandingUploadModal;
+
+// ============================================================================
+// ⏱️ DOCTOLIB BENCHMARK: DOCTOR TIME SAVINGS & NO-SHOW REDUCTION CALCULATOR (#741)
+// ============================================================================
+
+function updateAdminRoiCalculator() {
+  const docInput = document.getElementById("adminInputDoctors");
+  const patInput = document.getElementById("adminInputPatients");
+  const feeInput = document.getElementById("adminInputFee");
+  if (!docInput || !patInput || !feeInput) return;
+
+  const doctors = parseInt(docInput.value, 10) || 1;
+  const patientsPerDay = parseInt(patInput.value, 10) || 10;
+  const fee = parseInt(feeInput.value, 10) || 100;
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+
+  // 1. Pluralized Doctors Label in Arabic / English
+  const valDocEl = document.getElementById("adminValDoctors");
+  if (valDocEl) {
+    if (isEn) {
+      valDocEl.textContent = doctors === 1 ? "1 Doctor" : `${doctors} Doctors`;
+    } else {
+      if (doctors === 1) valDocEl.textContent = "طبيب واحد (Solo)";
+      else if (doctors === 2) valDocEl.textContent = "طبيبان (2)";
+      else if (doctors >= 3 && doctors <= 10) valDocEl.textContent = `${doctors} أطباء`;
+      else valDocEl.textContent = `${doctors} طبيباً`;
+    }
+  }
+
+  // 2. Patients per Day per Doctor + Total Clinic Daily Capacity
+  const totalDailyPatients = doctors * patientsPerDay;
+  const valPatEl = document.getElementById("adminValPatients");
+  if (valPatEl) {
+    valPatEl.textContent = isEn
+      ? `${patientsPerDay} visits/doc/day (${totalDailyPatients} total/day)`
+      : `${patientsPerDay} كشف/طبيب يومياً (${totalDailyPatients} إجمالي المركز)`;
+  }
+
+  // 3. Consultation Fee in Egyptian Pounds (EGP / ج.م)
+  const valFeeEl = document.getElementById("adminValFee");
+  if (valFeeEl) {
+    valFeeEl.textContent = isEn ? `${fee.toLocaleString()} EGP` : `${fee.toLocaleString()} ج.م`;
+  }
+
+  // 4. Mathematical Model for Monthly Consultations & Time Saved:
+  // Working days = 26 clinic operating days per month in Egypt
+  // Pre-triage questionnaire & automated digital certified reports save ~10 minutes per consultation
+  const monthlyPatients = totalDailyPatients * 26;
+  const hoursSavedPerMonth = Math.round((monthlyPatients * 10) / 60);
+
+  // 5. Mathematical Model for Financial Gain in Egyptian Pounds (EGP):
+  // Automated WhatsApp reminders & follow-ups cut no-shows from ~18% to <4%, recovering ~5% of scheduled appointment volume
+  const recoveryRate = 0.05; // 5% conservative recovery of previously lost slots
+  const recoveredVisitsPerMonth = Math.round(monthlyPatients * recoveryRate);
+  const extraRevenueEGP = recoveredVisitsPerMonth * fee;
+
+  // 6. Update Primary Metric Outputs
+  const calcHoursEl = document.getElementById("adminRoiHoursSaved");
+  if (calcHoursEl) {
+    calcHoursEl.textContent = isEn ? `${hoursSavedPerMonth.toLocaleString()} hrs` : `${hoursSavedPerMonth.toLocaleString()} ساعة`;
+  }
+
+  const calcRevEl = document.getElementById("adminRoiRevenueGain");
+  if (calcRevEl) {
+    calcRevEl.textContent = isEn ? `+${extraRevenueEGP.toLocaleString()} EGP` : `+${extraRevenueEGP.toLocaleString()} ج.م`;
+  }
+
+  // 7. Dynamic Transparent Breakdown Badge
+  const breakdownEl = document.getElementById("adminRoiBreakdownBox");
+  if (breakdownEl) {
+    if (isEn) {
+      breakdownEl.innerHTML = `💡 <strong>Operational ROI Model (Doctolib Benchmark for Egyptian Market):</strong> Based on 26 operational clinic days per month (${monthlyPatients.toLocaleString()} total visits). Recovering ~5% of lost slots yields <strong>+${extraRevenueEGP.toLocaleString()} EGP/month</strong> directly recovered revenue, and saves <strong>${hoursSavedPerMonth.toLocaleString()} hours</strong> of doctor documentation and administrative triage time.`;
+    } else {
+      breakdownEl.innerHTML = `💡 <strong>معادلة العائد التشغيلي (معيار Doctolib للسوق المصري):</strong> مبني على 26 يوم عمل شهرياً (إجمالي ${monthlyPatients.toLocaleString()} كشف بالمركز). استرداد نسبة 5% من المواعيد الضائعة يحقق <strong>+${extraRevenueEGP.toLocaleString()} ج.م شهرياً</strong> إيراد مسترد مباشرة، وتوفير <strong>${hoursSavedPerMonth.toLocaleString()} ساعة</strong> من أوقات الانتظار والتوثيق اليدوي.`;
+    }
+  }
+}
+window.updateAdminRoiCalculator = updateAdminRoiCalculator;
+
+function resetAdminRoiCalculator() {
+  const docInput = document.getElementById("adminInputDoctors");
+  const patInput = document.getElementById("adminInputPatients");
+  const feeInput = document.getElementById("adminInputFee");
+  if (docInput) docInput.value = 3;
+  if (patInput) patInput.value = 35;
+  if (feeInput) feeInput.value = 400;
+  updateAdminRoiCalculator();
+}
+window.resetAdminRoiCalculator = resetAdminRoiCalculator;
+
