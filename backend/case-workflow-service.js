@@ -505,7 +505,7 @@ class CaseWorkflowService {
   // 4. CLINIC ONBOARDING (clinics collection)
   // ===========================================================================
   async onboardClinic({ user, body, db }) {
-    const { nameAr, nameEn, governorate, address, phone, email } = body;
+    const { nameAr, nameEn, governorate, address, phone, email, packageType, licenseFileName, licenseFileBase64, specialty, doctorCount } = body;
     if (!nameAr && !nameEn) {
       throw new Error('Clinic name (Arabic or English) is required.');
     }
@@ -523,6 +523,11 @@ class CaseWorkflowService {
       address: address || '',
       phone: phone || '',
       email: email || (user ? user.email : ''),
+      packageType: packageType || 'pilot',
+      specialty: specialty || 'pulmonology',
+      doctorCount: doctorCount || '1-5',
+      licenseFileName: licenseFileName || null,
+      hasLicenseDoc: Boolean(licenseFileName || licenseFileBase64),
       subscriptionStatus: 'trial',
       onboardingRequestStatus: 'pending',
       createdAt: nowIso,

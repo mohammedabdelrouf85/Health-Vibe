@@ -24257,9 +24257,138 @@ app.post('/api/clinics/onboard', async (req, res) => {
       body: req.body || {},
       db
     });
+
+    if (auditService && typeof auditService.recordAuditEvent === 'function') {
+      await auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.CLINIC_ONBOARDING_REGISTERED,
+        req,
+        clinicId: result.clinicId,
+        outcome: 'SUCCESS',
+        details: {
+          clinicId: result.clinicId,
+          packageType: req.body.packageType || 'pilot',
+          hasLicenseDoc: Boolean(req.body.licenseFileName || req.body.licenseFileBase64),
+          specialty: req.body.specialty || 'pulmonology'
+        }
+      });
+    }
+
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-Zero-PHI-Enforced', 'true');
+
     res.status(201).json(result);
   } catch (err) {
     res.status(400).json({ error: 'CLINIC_ONBOARDING_FAILED', message: err.message });
+  }
+});
+
+/**
+  * GET /api/admin/clinics/onboarding-requests
+  * Retrieves all clinic onboarding requests for Super Admin review
+  */
+app.get('/api/admin/clinics/onboarding-requests', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const actorRole = req.user.role || 'clinic_admin';
+    const isSuperAdmin = actorRole === 'super_admin' || req.user.isOwner === true;
+
+    if (!isSuperAdmin) {
+      if (auditService && typeof auditService.recordAuditEvent === 'function') {
+        await auditService.recordAuditEvent(db, {
+          type: auditService.AUDIT_EVENT_TYPES.CLINIC_ONBOARDING_ACCESS_DENIED,
+          req,
+          outcome: 'DENIED',
+          details: { reason: 'SUPER_ADMIN_REQUIRED', attemptedRole: actorRole }
+        });
+      }
+      return res.status(403).json({
+        error: 'FORBIDDEN',
+        message: 'Strict RBAC: Only Super Administrators can view global clinic onboarding applications.'
+      });
+    }
+
+    const clinics = [];
+    if (db && typeof db.collection === 'function') {
+      const snap = await db.collection('clinics').get();
+      if (snap && snap.forEach) {
+        snap.forEach(doc => {
+          const data = doc.data() || {};
+          clinics.push({
+            id: doc.id,
+            clinicId: data.clinicId || doc.id,
+            nameAr: data.nameAr || '',
+            nameEn: data.nameEn || '',
+            governorate: data.governorate || '',
+            email: auditService.maskEmail(data.email || ''),
+            phone: data.phone || '',
+            packageType: data.packageType || 'pilot',
+            hasLicenseDoc: Boolean(data.hasLicenseDoc),
+            licenseFileName: data.licenseFileName || null,
+            subscriptionStatus: data.subscriptionStatus || 'trial',
+            onboardingRequestStatus: data.onboardingRequestStatus || 'pending',
+            createdAt: data.createdAt || null
+          });
+        });
+      }
+    }
+
+    res.setHeader('X-Zero-PHI-Enforced', 'true');
+    res.status(200).json({ success: true, count: clinics.length, clinics });
+  } catch (err) {
+    res.status(500).json({ error: 'FETCH_ONBOARDING_REQUESTS_FAILED', message: err.message });
+  }
+});
+
+/**
+  * PATCH /api/admin/clinics/:clinicId/status
+  * Super Admin approves, rejects, or updates clinic onboarding request
+  */
+app.patch('/api/admin/clinics/:clinicId/status', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const actorRole = req.user.role || 'clinic_admin';
+    const isSuperAdmin = actorRole === 'super_admin' || req.user.isOwner === true;
+
+    if (!isSuperAdmin) {
+      if (auditService && typeof auditService.recordAuditEvent === 'function') {
+        await auditService.recordAuditEvent(db, {
+          type: auditService.AUDIT_EVENT_TYPES.CLINIC_ONBOARDING_ACCESS_DENIED,
+          req,
+          outcome: 'DENIED',
+          details: { reason: 'SUPER_ADMIN_REQUIRED', attemptedRole: actorRole }
+        });
+      }
+      return res.status(403).json({
+        error: 'FORBIDDEN',
+        message: 'Strict RBAC: Only Super Administrators can update clinic status.'
+      });
+    }
+
+    const { clinicId } = req.params;
+    const { status, subscriptionStatus, notes } = req.body || {};
+
+    if (db && typeof db.collection === 'function') {
+      const updatePayload = {
+        updatedAt: new Date().toISOString()
+      };
+      if (status) updatePayload.onboardingRequestStatus = status;
+      if (subscriptionStatus) updatePayload.subscriptionStatus = subscriptionStatus;
+
+      await db.collection('clinics').doc(clinicId).set(updatePayload, { merge: true });
+    }
+
+    if (auditService && typeof auditService.recordAuditEvent === 'function') {
+      await auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.CLINIC_ONBOARDING_STATUS_UPDATED,
+        req,
+        clinicId,
+        outcome: 'SUCCESS',
+        details: { clinicId, newStatus: status, subscriptionStatus, notes }
+      });
+    }
+
+    res.status(200).json({ success: true, clinicId, status, subscriptionStatus });
+  } catch (err) {
+    res.status(500).json({ error: 'UPDATE_CLINIC_STATUS_FAILED', message: err.message });
   }
 });
 

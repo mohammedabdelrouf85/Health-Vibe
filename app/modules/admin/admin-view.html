@@ -249,6 +249,40 @@
           <div id="adminClinicsListContainer" style="margin-top: 18px; display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px;">
             <!-- Rendered dynamically via renderAdminClinics() -->
           </div>
+
+          <!-- 🏥 Vezeeta Benchmark: Clinic Onboarding Requests & License Verification Review (#726-#729) -->
+          <div style="margin-top: 24px; border-top: 1px dashed var(--line); padding-top: 18px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+              <div>
+                <h4 style="margin: 0; font-size: 15.5px; display: flex; align-items: center; gap: 6px;">
+                  <span>📋</span> طلبات الانضمام الذاتي ومراجعة التراخيص الطبية (Vezeeta Benchmark)
+                </h4>
+                <p style="margin: 2px 0 0; font-size: 12px; color: var(--muted);">مراجعة طلبات العيادات الجديدة، الباقات المختارة، والتأكد من أوراق الترخيص المهني قبل التفعيل</p>
+              </div>
+              <button type="button" class="soft-button" onclick="loadAndRenderClinicOnboardingRequests()" style="padding: 4px 10px; font-size: 11.5px;">
+                🔄 تحديث طلبات الانضمام
+              </button>
+            </div>
+
+            <div style="overflow-x: auto; border: 1px solid var(--line); border-radius: 8px;">
+              <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: start;">
+                <thead>
+                  <tr style="background: var(--surface-2); border-bottom: 1px solid var(--line);">
+                    <th style="padding: 8px 10px;">العيادة / المركز</th>
+                    <th style="padding: 8px 10px;">الباقة</th>
+                    <th style="padding: 8px 10px;">المحافظة</th>
+                    <th style="padding: 8px 10px;">البريد المشفر</th>
+                    <th style="padding: 8px 10px;">الترخيص الطبي</th>
+                    <th style="padding: 8px 10px;">الحالة</th>
+                    <th style="padding: 8px 10px;">الإجراءات</th>
+                  </tr>
+                </thead>
+                <tbody id="adminClinicOnboardingRequestsTbody">
+                  <tr><td colspan="7" style="text-align: center; padding: 14px; color: var(--muted);">اضغط تحديث لعرض طلبات الانضمام المعلقة...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
         </article>
 
         <!-- 28. REAL-TIME SYSTEM ERROR MONITORING & OBSERVABILITY -->

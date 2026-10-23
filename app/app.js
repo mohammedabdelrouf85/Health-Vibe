@@ -17263,6 +17263,96 @@ function deleteClinicBranch(clinicId) {
 }
 window.deleteClinicBranch = deleteClinicBranch;
 
+/**
+ * 🏥 VEZEETA BENCHMARK: CLINIC ONBOARDING SELF-REGISTRATION & LICENSE REVIEW (#726-#729)
+ */
+async function loadAndRenderClinicOnboardingRequests() {
+  const container = document.getElementById("adminClinicOnboardingRequestsTbody");
+  if (!container) return;
+
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  container.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 18px; color: var(--muted);">${isEn ? "Loading onboarding applications..." : "جاري تحميل طلبات انضمام العيادات..."}</td></tr>`;
+
+  try {
+    const res = await fetch("/api/admin/clinics/onboarding-requests", {
+      headers: { "Accept": "application/json" }
+    });
+
+    if (!res.ok) {
+      if (res.status === 403) {
+        container.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 18px; color: #ef4444;">${isEn ? "Access Denied: Super Admin authority required." : "تم رفض الوصول: صلاحية المشرف العام (Super Admin) مطلوبة."}</td></tr>`;
+        return;
+      }
+      throw new Error(`HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    const clinics = (data && data.clinics) || [];
+
+    if (clinics.length === 0) {
+      container.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 24px; color: var(--muted);">${isEn ? "No pending clinic onboarding requests found." : "لا توجد طلبات انضمام عيادات مسجلة حالياً."}</td></tr>`;
+      return;
+    }
+
+    let rowsHtml = "";
+    clinics.forEach(c => {
+      const statusBadge = c.onboardingRequestStatus === "approved"
+        ? `<span class="pill ok" style="font-size: 11px;">${isEn ? "Approved" : "معتمد ✓"}</span>`
+        : c.onboardingRequestStatus === "rejected"
+        ? `<span class="pill danger" style="font-size: 11px;">${isEn ? "Rejected" : "مرفوض ✗"}</span>`
+        : `<span class="pill warn" style="font-size: 11px;">${isEn ? "Pending Review" : "قيد المراجعة ⏳"}</span>`;
+
+      const licenseBadge = c.hasLicenseDoc
+        ? `<span class="pill info" style="font-size: 11px;" title="${c.licenseFileName || 'Uploaded'}">📄 ${isEn ? "License Attached" : "مرفق ترخيص"}</span>`
+        : `<span style="color: var(--muted); font-size: 11.5px;">${isEn ? "No document" : "بدون وثيقة"}</span>`;
+
+      rowsHtml += `
+        <tr style="border-bottom: 1px solid var(--line);">
+          <td style="padding: 10px 12px; font-weight: 600;">${c.nameAr || c.nameEn}</td>
+          <td style="padding: 10px 12px;"><span class="pill" style="font-size: 11px; background: rgba(9,184,182,0.15); color: #2dd4bf;">${c.packageType || 'pilot'}</span></td>
+          <td style="padding: 10px 12px;">${c.governorate || '-'}</td>
+          <td style="padding: 10px 12px; font-family: monospace; font-size: 12px;">${c.email}</td>
+          <td style="padding: 10px 12px;">${licenseBadge}</td>
+          <td style="padding: 10px 12px;">${statusBadge}</td>
+          <td style="padding: 10px 12px;">
+            <div style="display: flex; gap: 6px;">
+              <button type="button" class="soft-button" onclick="updateClinicOnboardingStatus('${c.clinicId}', 'approved', 'active')" style="padding: 4px 8px; font-size: 11px;">
+                ✓ ${isEn ? "Approve" : "اعتماد"}
+              </button>
+              <button type="button" class="danger-button" onclick="updateClinicOnboardingStatus('${c.clinicId}', 'rejected', 'suspended')" style="padding: 4px 8px; font-size: 11px;">
+                ✗ ${isEn ? "Reject" : "رفض"}
+              </button>
+            </div>
+          </td>
+        </tr>
+      `;
+    });
+
+    container.innerHTML = rowsHtml;
+  } catch (err) {
+    container.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 18px; color: #ef4444;">${isEn ? "Failed to load onboarding requests: " : "تعذر جلب طلبات الانضمام: "}${err.message}</td></tr>`;
+  }
+}
+window.loadAndRenderClinicOnboardingRequests = loadAndRenderClinicOnboardingRequests;
+
+async function updateClinicOnboardingStatus(clinicId, status, subscriptionStatus) {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  try {
+    const res = await fetch(`/api/admin/clinics/${clinicId}/status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status, subscriptionStatus })
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    showToast(isEn ? `Clinic status updated to ${status}.` : `تم تحديث حالة العيادة بنجاح إلى: ${status}`);
+    loadAndRenderClinicOnboardingRequests();
+    renderAdminClinics();
+  } catch (err) {
+    alert((isEn ? "Error updating clinic status: " : "خطأ أثناء تحديث حالة العيادة: ") + err.message);
+  }
+}
+window.updateClinicOnboardingStatus = updateClinicOnboardingStatus;
+
 async function renderAdminUsers() {
   const container = document.getElementById("adminUsersTableContainer");
   if (!container) return;

@@ -1506,6 +1506,21 @@
             </div>
 
             <div class="form-field full-span">
+              <label for="leadLicenseDoc" id="labelLicenseDoc">
+                <span class="label-text">أوراق ومستند ترخيص العيادة / السجل التجاري الطبي (اختياري للتحقق السريع)</span>
+              </label>
+              <div style="border: 2px dashed rgba(9, 184, 182, 0.4); border-radius: 12px; padding: 16px; text-align: center; background: rgba(9, 184, 182, 0.04); transition: border-color 0.2s ease;" id="licenseDropZone">
+                <input type="file" id="leadLicenseDoc" accept=".pdf,.png,.jpg,.jpeg,.webp" onchange="handleLicenseFileChange(this)" style="display: none;" />
+                <button type="button" onclick="document.getElementById('leadLicenseDoc').click()" style="background: rgba(9, 184, 182, 0.2); border: 1px solid rgba(9, 184, 182, 0.5); color: #2dd4bf; padding: 8px 18px; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 13px; display: inline-flex; align-items: center; gap: 8px;">
+                  <span>📄</span>
+                  <span id="btnUploadLicenseText">اختر ملف الترخيص (PDF, PNG, JPG)</span>
+                </button>
+                <div id="licenseFileName" style="margin-top: 8px; font-size: 12.5px; color: #5eead4; font-weight: 600; display: none;"></div>
+                <div style="font-size: 11.5px; color: #94a3b8; margin-top: 6px;" id="licenseUploadHelp">الحد الأقصى 10 ميجابايت • يتم التشفير الفوري وفق معايير الأمان الطبي</div>
+              </div>
+            </div>
+
+            <div class="form-field full-span">
               <label for="leadNotes" id="labelNotes">
                 <span class="label-text">أي متطلبات أو أنظمة برمجية ترغب في ربطها؟ (اختياري)</span>
               </label>
@@ -1548,6 +1563,7 @@
               <div><span style="color: #8da9a7;" id="summaryLabelContact">المسؤول:</span> <strong id="summaryContactName" style="color: #ffffff;">أ.د. كريم عبد العزيز (Senior Pulmonology Consultant)</strong></div>
               <div><span style="color: #8da9a7;" id="summaryLabelPhone">الهاتف / واتساب:</span> <span id="summaryPhone" dir="ltr" style="font-weight: 600; color: #38bdf8;">+20 102 345 6789</span></div>
               <div><span style="color: #8da9a7;" id="summaryLabelPackage">الباقة:</span> <strong id="summaryPackage" style="color: #34d399;">باقة التشغيل التجريبي المعتمدة (Pilot Package)</strong></div>
+              <div id="summaryLicenseContainer" style="display: none;"><span style="color: #8da9a7;" id="summaryLabelLicense">وثيقة الترخيص:</span> <strong id="summaryLicense" style="color: #5eead4;">مرفق للتحقق ✓</strong></div>
             </div>
           </div>
 
@@ -1828,6 +1844,9 @@
         labelSpecialty: "التخصص الطبي الرئيسي",
         labelDoctorCount: "عدد الأطباء في العيادة / المركز",
         labelCity: "المدينة / المحافظة",
+        labelLicenseDoc: "أوراق ومستند ترخيص العيادة / السجل التجاري الطبي (اختياري للتحقق السريع)",
+        btnUploadLicenseText: "اختر ملف الترخيص (PDF, PNG, JPG)",
+        licenseUploadHelp: "الحد الأقصى 10 ميجابايت • يتم التشفير الفوري وفق معايير الأمان الطبي",
         labelTime: "الوقت المفضل للمكالمة التوضيحية",
         labelNotes: "أي متطلبات أو أنظمة برمجية ترغب في ربطها؟ (اختياري)",
         btnSubmitLeadText: "إرسال طلب العرض التجريبي وبدء الـ 30 يوماً مجاناً",
@@ -1840,6 +1859,7 @@
         summaryLabelContact: "المسؤول:",
         summaryLabelPhone: "الهاتف / واتساب:",
         summaryLabelPackage: "الباقة المختارة:",
+        summaryLabelLicense: "وثيقة الترخيص:",
         leadNextSteps: "سيتواصل معك مستشار التحول السريري هاتفياً أو عبر الواتساب خلال أقل من 24 ساعة لتفعيل الباقة التجريبية (1 عيادة • 3 أطباء • 30 يوماً مجاناً) وتجهيز المنظومة السحابية.",
         leadWhatsAppBtnText: "متابعة فورية مع الإدارة عبر الواتساب",
         btnResetLeadForm: "← تقديم طلب لفرع آخر أو عيادة إضافية",
@@ -2020,6 +2040,9 @@
         labelSpecialty: "Primary Clinical Specialty",
         labelDoctorCount: "Number of Physicians in Clinic",
         labelCity: "City / Governorate",
+        labelLicenseDoc: "Clinic Medical License / Commercial Registration (Optional for fast verification)",
+        btnUploadLicenseText: "Choose License Document (PDF, PNG, JPG)",
+        licenseUploadHelp: "Max 10MB • Instant encrypted upload per healthcare security standards",
         labelTime: "Preferred Consultation Call Window",
         labelNotes: "Software integrations or specific clinical requirements? (Optional)",
         btnSubmitLeadText: "Submit Demo Request & Start 30 Days Free",
@@ -2032,6 +2055,7 @@
         summaryLabelContact: "Contact Person:",
         summaryLabelPhone: "Phone / WhatsApp:",
         summaryLabelPackage: "Selected Package:",
+        summaryLabelLicense: "License Document:",
         leadNextSteps: "A clinical transformation specialist will contact you via phone or WhatsApp within 24 hours to activate your trial package (1 Clinic • 3 Doctors • 30 Days Free) and configure your cloud instance.",
         leadWhatsAppBtnText: "Instant WhatsApp Follow-up with Admin",
         btnResetLeadForm: "← Submit request for another branch",
@@ -2406,9 +2430,52 @@
       }
     }
 
+    let currentLicenseFileBase64 = null;
+    let currentLicenseFileName = null;
+
+    function handleLicenseFileChange(input) {
+      const file = input && input.files && input.files[0];
+      const nameEl = document.getElementById("licenseFileName");
+      if (!file) {
+        currentLicenseFileBase64 = null;
+        currentLicenseFileName = null;
+        if (nameEl) nameEl.style.display = "none";
+        return;
+      }
+
+      // Check max 10MB
+      if (file.size > 10 * 1024 * 1024) {
+        alert(currentClinicLang === "ar" ? "حجم الملف يتجاوز الحد الأقصى المسموح (10 ميجابايت)." : "File size exceeds 10MB limit.");
+        input.value = "";
+        currentLicenseFileBase64 = null;
+        currentLicenseFileName = null;
+        if (nameEl) nameEl.style.display = "none";
+        return;
+      }
+
+      currentLicenseFileName = file.name;
+      if (nameEl) {
+        nameEl.textContent = `✓ ${file.name} (${Math.round(file.size / 1024)} KB)`;
+        nameEl.style.display = "block";
+      }
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        currentLicenseFileBase64 = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
     function resetClinicLeadForm() {
       const form = document.getElementById("clinicLeadForm");
       const alertBox = document.getElementById("leadSuccessAlert");
+      currentLicenseFileBase64 = null;
+      currentLicenseFileName = null;
+      const nameEl = document.getElementById("licenseFileName");
+      if (nameEl) {
+        nameEl.textContent = "";
+        nameEl.style.display = "none";
+      }
       if (form) {
         form.reset();
         form.style.display = "block";
@@ -2461,6 +2528,8 @@
         specialty,
         doctorCount,
         city,
+        licenseFileName: currentLicenseFileName,
+        licenseFileBase64: currentLicenseFileBase64,
         notes
       };
 
@@ -2503,7 +2572,9 @@
           governorate: city,
           specialty: specialty,
           doctorCount: doctorCount,
-          packageType: packageType
+          packageType: packageType,
+          licenseFileName: currentLicenseFileName,
+          licenseFileBase64: currentLicenseFileBase64
         };
 
         // Dual dispatch: onboard endpoint and demo-request notification
@@ -2536,6 +2607,17 @@
       if (document.getElementById("summaryContactName")) document.getElementById("summaryContactName").textContent = contactName;
       if (document.getElementById("summaryPhone")) document.getElementById("summaryPhone").textContent = phone;
       if (document.getElementById("summaryPackage")) document.getElementById("summaryPackage").textContent = packageLabel;
+
+      const licBox = document.getElementById("summaryLicenseContainer");
+      const licText = document.getElementById("summaryLicense");
+      if (licBox && licText) {
+        if (currentLicenseFileName) {
+          licText.textContent = `✓ ${currentLicenseFileName}`;
+          licBox.style.display = "block";
+        } else {
+          licBox.style.display = "none";
+        }
+      }
 
       const waBtn = document.getElementById("leadWhatsAppBtn");
       if (waBtn) {
