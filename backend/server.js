@@ -24440,6 +24440,22 @@ app.get('/api/admin/clinic-director/analytics', requireAuth, requireAdmin, async
       });
     }
 
+    // Security Check: Sanitize query parameters against Injection attacks
+    if (requestedClinicId && (/[<>'";\\]/.test(requestedClinicId) || requestedClinicId.includes('$'))) {
+      if (auditService && typeof auditService.recordAuditEvent === 'function') {
+        await auditService.recordAuditEvent(db, {
+          type: auditService.AUDIT_EVENT_TYPES.CLINIC_DIRECTOR_SECURITY_VIOLATION_BLOCKED,
+          req,
+          outcome: 'BLOCKED',
+          details: { violationType: 'INJECTION_ATTEMPT', param: 'clinicId', value: requestedClinicId }
+        });
+      }
+      return res.status(400).json({
+        error: 'INVALID_INPUT',
+        message: 'Security validation failure: clinicId contains illegal characters.'
+      });
+    }
+
     if (isSuperAdmin && requestedClinicId) {
       targetClinicId = requestedClinicId;
     }
@@ -24531,6 +24547,8 @@ app.get('/api/admin/clinic-director/analytics', requireAuth, requireAdmin, async
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('X-Zero-PHI-Enforced', 'true');
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
 
     res.status(200).json({
       success: true,
