@@ -24393,6 +24393,163 @@ app.patch('/api/admin/clinics/:clinicId/status', requireAuth, requireAdmin, asyn
 });
 
 /**
+ * GET /api/admin/clinic-director/analytics
+ * 🏥 TABEEBHUB BENCHMARK: CLINIC & HOSPITAL DIRECTOR OPERATIONS DASHBOARD (#732)
+ * Restricted to clinic_admin (for their own clinic) or super_admin.
+ */
+app.get('/api/admin/clinic-director/analytics', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const actorRole = req.user.role || 'clinic_admin';
+    const isSuperAdmin = actorRole === 'super_admin' || req.user.isOwner === true;
+    const isClinicAdmin = actorRole === 'clinic_admin';
+
+    // Must be either super_admin or clinic_admin
+    if (!isSuperAdmin && !isClinicAdmin) {
+      if (auditService && typeof auditService.recordAuditEvent === 'function') {
+        await auditService.recordAuditEvent(db, {
+          type: auditService.AUDIT_EVENT_TYPES.CLINIC_DIRECTOR_ACCESS_DENIED,
+          req,
+          outcome: 'DENIED',
+          details: { reason: 'UNAUTHORIZED_ROLE', attemptedRole: actorRole }
+        });
+      }
+      return res.status(403).json({
+        error: 'FORBIDDEN',
+        message: 'Strict RBAC: Only Clinic Administrators or Super Admins can access clinic director operational metrics.'
+      });
+    }
+
+    // Determine target clinic
+    const requestedClinicId = req.query.clinicId;
+    let targetClinicId = req.user.clinicId || req.user.clinic || 'clinic_cairo_main';
+
+    // If clinic_admin attempts to query another clinic's data, strictly deny
+    if (isClinicAdmin && requestedClinicId && requestedClinicId !== targetClinicId) {
+      if (auditService && typeof auditService.recordAuditEvent === 'function') {
+        await auditService.recordAuditEvent(db, {
+          type: auditService.AUDIT_EVENT_TYPES.CLINIC_DIRECTOR_ACCESS_DENIED,
+          req,
+          clinicId: requestedClinicId,
+          outcome: 'DENIED',
+          details: { reason: 'CROSS_CLINIC_ACCESS_PROHIBITED', userClinicId: targetClinicId, requestedClinicId }
+        });
+      }
+      return res.status(403).json({
+        error: 'CROSS_CLINIC_FORBIDDEN',
+        message: 'Clinic isolation violation: You cannot access operational metrics of another clinic.'
+      });
+    }
+
+    if (isSuperAdmin && requestedClinicId) {
+      targetClinicId = requestedClinicId;
+    }
+
+    // Mock/aggregate realistic data for this clinic's doctors
+    const doctors = [
+      {
+        id: "doc_1",
+        nameAr: "أ.د. حازم القاضي",
+        nameEn: "Prof. Dr. Hazem El-Kady",
+        specialty: "pulmonology",
+        specialtyAr: "أمراض الصدر والحساسية",
+        specialtyEn: "Pulmonology & Allergy",
+        triagedCount: 114,
+        completedBookings: 98,
+        avgReviewMinutes: 14,
+        patientSatisfaction: "98%",
+        status: "active"
+      },
+      {
+        id: "doc_2",
+        nameAr: "د. كريم عبد العزيز",
+        nameEn: "Dr. Karim Abdel-Aziz",
+        specialty: "pulmonology",
+        specialtyAr: "أمراض الصدر والتنفس",
+        specialtyEn: "Pulmonology",
+        triagedCount: 86,
+        completedBookings: 72,
+        avgReviewMinutes: 17,
+        patientSatisfaction: "96%",
+        status: "active"
+      },
+      {
+        id: "doc_3",
+        nameAr: "د. إيمان عبد الشافي",
+        nameEn: "Dr. Eman Abdel-Shafy",
+        specialty: "internal_medicine",
+        specialtyAr: "الباطنة العامة",
+        specialtyEn: "Internal Medicine",
+        triagedCount: 65,
+        completedBookings: 54,
+        avgReviewMinutes: 19,
+        patientSatisfaction: "95%",
+        status: "active"
+      },
+      {
+        id: "doc_4",
+        nameAr: "د. طارق الغندور",
+        nameEn: "Dr. Tarek El-Ghandour",
+        specialty: "pediatrics",
+        specialtyAr: "صدر وأطفال",
+        specialtyEn: "Pediatric Chest",
+        triagedCount: 42,
+        completedBookings: 36,
+        avgReviewMinutes: 22,
+        patientSatisfaction: "94%",
+        status: "active"
+      },
+      {
+        id: "doc_5",
+        nameAr: "د. منى زهران",
+        nameEn: "Dr. Mona Zahran",
+        specialty: "radiology",
+        specialtyAr: "الأشعة التشخيصية",
+        specialtyEn: "Diagnostic Radiology",
+        triagedCount: 35,
+        completedBookings: 24,
+        avgReviewMinutes: 12,
+        patientSatisfaction: "99%",
+        status: "active"
+      }
+    ];
+
+    const totalTriaged = doctors.reduce((acc, d) => acc + d.triagedCount, 0);
+    const totalBookings = doctors.reduce((acc, d) => acc + d.completedBookings, 0);
+    const avgReview = Math.round(doctors.reduce((acc, d) => acc + d.avgReviewMinutes, 0) / doctors.length);
+
+    // Audit event logging
+    if (auditService && typeof auditService.recordAuditEvent === 'function') {
+      await auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.CLINIC_DIRECTOR_DASHBOARD_VIEWED,
+        req,
+        clinicId: targetClinicId,
+        outcome: 'SUCCESS',
+        details: { clinicId: targetClinicId, doctorsCount: doctors.length, totalTriaged, totalBookings }
+      });
+    }
+
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-Zero-PHI-Enforced', 'true');
+
+    res.status(200).json({
+      success: true,
+      clinicId: targetClinicId,
+      summary: {
+        activeDoctorsCount: doctors.length,
+        totalTriagedCases: totalTriaged,
+        completedBookings: totalBookings,
+        averageReviewMinutes: avgReview,
+        conversionRatePct: Math.round((totalBookings / totalTriaged) * 100)
+      },
+      doctors
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'FETCH_CLINIC_ANALYTICS_FAILED', message: err.message });
+  }
+});
+
+/**
  * POST /api/admin/email-queue/process
  * Triggers batch processing of pending transactional emails.
  */

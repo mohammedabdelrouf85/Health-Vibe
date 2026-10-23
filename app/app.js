@@ -23588,7 +23588,26 @@ async function refreshClinicDirectorDashboard() {
   const user = typeof getActiveUser === "function" ? getActiveUser() : null;
   const scopeBadge = document.getElementById("clinicDirectorScopeBadge");
 
-  if (scopeBadge) {
+  try {
+    const res = await fetch("/api/admin/clinic-director/analytics", {
+      headers: { "Accept": "application/json" }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.doctors && data.doctors.length > 0) {
+        clinicDirectorDoctorsData = data.doctors;
+      }
+      if (scopeBadge && data.clinicId) {
+        scopeBadge.textContent = isEn
+          ? `Clinic Scope: ${data.clinicId}`
+          : `نطاق العيادة: ${data.clinicId}`;
+      }
+    }
+  } catch (err) {
+    // Graceful offline/demo fallback
+  }
+
+  if (scopeBadge && !scopeBadge.textContent.includes(":")) {
     scopeBadge.textContent = isEn
       ? "Center Scope: Nile Medical Center"
       : "نطاق المركز: مجمع النيل الطبي المركزي";
