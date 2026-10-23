@@ -109,6 +109,14 @@ const EVENT_TYPES = Object.freeze({
   BOOKING_CONVERTED_FROM_ASSESSMENT: 'booking_converted_from_assessment',
   USAGE_ANALYTICS_VIEWED: 'usage_analytics_viewed',
 
+  // 📑 Amwell Benchmark: Periodic Operational Reports & Executive Telemetry
+  OPERATIONAL_REPORT_VIEWED: 'operational_report_viewed',
+  OPERATIONAL_REPORT_GENERATED: 'operational_report_generated',
+  OPERATIONAL_REPORT_EXPORTED_CSV: 'operational_report_exported_csv',
+  OPERATIONAL_REPORT_EXPORTED_PDF: 'operational_report_exported_pdf',
+  OPERATIONAL_REPORT_FILTER_APPLIED: 'operational_report_filter_applied',
+  OPERATIONAL_REPORT_ACCESS_DENIED: 'operational_report_access_denied',
+
   // 🧪 Lab Upload & Medical Diagnostics Telemetry (Docus AI Benchmark)
   LAB_UPLOAD_ATTEMPT: 'lab_upload_attempt',
   LAB_UPLOAD_SUCCESS: 'lab_upload_success',
@@ -3479,6 +3487,259 @@ function getUsageConversionAnalytics(options = {}) {
   return calculateUsageConversionKpis(inMemoryEvents, options);
 }
 
+// ============================================================================
+// 📑 AMWELL BENCHMARK: PERIODIC OPERATIONAL REPORTS & EXECUTIVE TELEMETRY
+// ============================================================================
+
+/**
+ * Calculates operational periodic KPIs for Amwell benchmark
+ * Weekly & Monthly operational performance, zero-PHI sanitized, role-filtered
+ */
+function calculateOperationalReportKpis(events = [], options = {}) {
+  const {
+    clinicId = null,
+    period = 'monthly', // 'weekly', 'monthly', 'quarterly', 'custom'
+    startDate = null,
+    endDate = null,
+    locale = 'ar'
+  } = options;
+
+  const isEn = locale === 'en';
+  const naText = isEn ? 'Unavailable' : 'غير متاح';
+
+  const now = Date.now();
+  let windowStart = 0;
+  if (startDate) {
+    windowStart = typeof startDate === 'number' ? startDate : Date.parse(startDate) || 0;
+  } else if (period === 'weekly') {
+    windowStart = now - (7 * 24 * 60 * 60 * 1000);
+  } else if (period === 'quarterly') {
+    windowStart = now - (90 * 24 * 60 * 60 * 1000);
+  } else {
+    // default monthly: 30 days
+    windowStart = now - (30 * 24 * 60 * 60 * 1000);
+  }
+
+  let windowEnd = now;
+  if (endDate) {
+    windowEnd = typeof endDate === 'number' ? endDate : Date.parse(endDate) || now;
+  }
+
+  const filteredEvents = (events || []).filter(e => {
+    if (!e) return false;
+    if (clinicId && e.clinicId && e.clinicId !== clinicId) return false;
+    const ts = e.timestamp ? (typeof e.timestamp === 'number' ? e.timestamp : Date.parse(e.timestamp) || 0) : 0;
+    if (ts > 0) {
+      if (windowStart > 0 && ts < windowStart) return false;
+      if (windowEnd > 0 && ts > windowEnd) return false;
+    }
+    return true;
+  });
+
+  // Aggregation variables
+  let totalConsultations = 0;
+  let videoConsultations = 0;
+  let inClinicConsultations = 0;
+  let totalTriageCompleted = 0;
+  let criticalEscalations = 0;
+  let cancelledAppointments = 0;
+  let completedAppointments = 0;
+  let doctorReviewDurations = [];
+  const clinicBreakdownMap = new Map();
+  const doctorWorkloadMap = new Map();
+
+  filteredEvents.forEach(e => {
+    const type = e.eventType;
+    const p = e.payload || {};
+    const cId = e.clinicId || p.clinicId || 'clinic_hq';
+    const cName = p.clinicName || (cId === 'clinic_hq' ? (isEn ? 'Headquarters Medical' : 'المركز الطبي الرئيسي') : `Clinic ${cId}`);
+
+    if (!clinicBreakdownMap.has(cId)) {
+      clinicBreakdownMap.set(cId, {
+        clinicId: cId,
+        clinicName: cName,
+        totalConsultations: 0,
+        completedAppointments: 0,
+        triageCount: 0,
+        avgReviewMinutes: null,
+        reviewDurations: [],
+        slaComplianceRate: 100
+      });
+    }
+    const clinicStat = clinicBreakdownMap.get(cId);
+
+    if (type === EVENT_TYPES.ASSESSMENT_COMPLETE) {
+      totalTriageCompleted++;
+      clinicStat.triageCount++;
+      if (p.priority === 'urgent' || p.priority === 'emergency' || (Number(p.oxygenLevel) > 0 && Number(p.oxygenLevel) < 90)) {
+        criticalEscalations++;
+      }
+    }
+
+    if (type === EVENT_TYPES.APPOINTMENT_BOOK_SUCCESS || type === 'appointment_booked') {
+      totalConsultations++;
+      clinicStat.totalConsultations++;
+      if (p.consultationType === 'video' || p.isTelehealth || p.modality === 'video') {
+        videoConsultations++;
+      } else {
+        inClinicConsultations++;
+      }
+    }
+
+    if (type === EVENT_TYPES.APPOINTMENT_COMPLETE) {
+      completedAppointments++;
+      clinicStat.completedAppointments++;
+    }
+
+    if (type === EVENT_TYPES.APPOINTMENT_CANCEL_SUCCESS || type === EVENT_TYPES.APPOINTMENT_CANCEL) {
+      cancelledAppointments++;
+    }
+
+    if (type === EVENT_TYPES.DOCTOR_REVIEW) {
+      let dur = null;
+      if (typeof p.reviewDurationMinutes === 'number') dur = p.reviewDurationMinutes;
+      else if (typeof p.responseTimeMs === 'number') dur = p.responseTimeMs / 60000;
+      if (dur !== null && dur >= 0) {
+        doctorReviewDurations.push(dur);
+        clinicStat.reviewDurations.push(dur);
+      }
+      const dId = p.doctorId || e.userId || 'doc_unknown';
+      const dName = p.doctorName || `Doctor ${dId}`;
+      if (!doctorWorkloadMap.has(dId)) {
+        doctorWorkloadMap.set(dId, {
+          doctorId: dId,
+          doctorName: dName,
+          clinicId: cId,
+          reviewsCompleted: 0,
+          appointmentsHandled: 0
+        });
+      }
+      doctorWorkloadMap.get(dId).reviewsCompleted++;
+    }
+  });
+
+  const totalReviews = doctorReviewDurations.length;
+  const avgDoctorReviewMinutes = totalReviews > 0
+    ? Number((doctorReviewDurations.reduce((a, b) => a + b, 0) / totalReviews).toFixed(1))
+    : null;
+
+  const totalBookingsAttempted = totalConsultations + cancelledAppointments;
+  const appointmentCompletionRate = totalBookingsAttempted > 0
+    ? Number(((completedAppointments / totalBookingsAttempted) * 100).toFixed(1))
+    : null;
+
+  const cancellationRate = totalBookingsAttempted > 0
+    ? Number(((cancelledAppointments / totalBookingsAttempted) * 100).toFixed(1))
+    : null;
+
+  const telehealthAdoptionRate = totalConsultations > 0
+    ? Number(((videoConsultations / totalConsultations) * 100).toFixed(1))
+    : null;
+
+  // Finalize clinic statistics
+  const clinicSummaries = Array.from(clinicBreakdownMap.values()).map(c => {
+    const reviews = c.reviewDurations.length;
+    const avg = reviews > 0
+      ? Number((c.reviewDurations.reduce((a, b) => a + b, 0) / reviews).toFixed(1))
+      : null;
+    const compliant = reviews > 0 ? c.reviewDurations.filter(d => d <= 30).length : 0;
+    const compliance = reviews > 0 ? Math.round((compliant / reviews) * 100) : 100;
+    return {
+      clinicId: c.clinicId,
+      clinicName: c.clinicName,
+      totalConsultations: c.totalConsultations,
+      completedAppointments: c.completedAppointments,
+      triageCount: c.triageCount,
+      avgReviewMinutes: avg,
+      slaComplianceRate: compliance
+    };
+  });
+
+  return {
+    meta: {
+      reportType: 'OPERATIONAL_EXECUTIVE_SUMMARY',
+      benchmark: 'Amwell Health',
+      period,
+      locale,
+      windowStart: new Date(windowStart).toISOString(),
+      windowEnd: new Date(windowEnd).toISOString(),
+      generatedAt: new Date().toISOString(),
+      zeroPhiGuaranteed: true,
+      clinicId: clinicId || 'all_clinics'
+    },
+    executiveSummary: {
+      totalConsultations,
+      videoConsultations,
+      inClinicConsultations,
+      telehealthAdoptionRate: telehealthAdoptionRate !== null ? `${telehealthAdoptionRate}%` : naText,
+      totalTriageCompleted,
+      criticalEscalations,
+      completedAppointments,
+      cancelledAppointments,
+      appointmentCompletionRate: appointmentCompletionRate !== null ? `${appointmentCompletionRate}%` : naText,
+      cancellationRate: cancellationRate !== null ? `${cancellationRate}%` : naText,
+      avgDoctorReviewMinutes: avgDoctorReviewMinutes !== null ? avgDoctorReviewMinutes : naText,
+      slaCompliant: avgDoctorReviewMinutes !== null ? avgDoctorReviewMinutes <= 30 : true
+    },
+    clinicSummaries,
+    doctorWorkloadSummaries: Array.from(doctorWorkloadMap.values())
+  };
+}
+
+/**
+ * Generates safe CSV string from operational report
+ * Implements formula injection prevention (starting =, +, -, @)
+ * Completely eliminates PHI
+ */
+function generateOperationalReportExportCsv(reportData) {
+  if (!reportData || !reportData.executiveSummary) return '';
+
+  const cleanVal = (v) => {
+    if (v === null || v === undefined) return '""';
+    let s = String(v).replace(/"/g, '""');
+    if (/^[=+\-@\t\r]/.test(s)) {
+      s = `'${s}`;
+    }
+    return `"${s}"`;
+  };
+
+  const summary = reportData.executiveSummary;
+  const lines = [
+    ['Metric', 'Value', 'Benchmark Target'],
+    ['Total Consultations', summary.totalConsultations, 'Growth target > 15%'],
+    ['Video Consultations (Telehealth)', summary.videoConsultations, 'Amwell Target > 30%'],
+    ['In-Clinic Consultations', summary.inClinicConsultations, 'Balanced distribution'],
+    ['Telehealth Adoption Rate', summary.telehealthAdoptionRate, 'Amwell Standard > 35%'],
+    ['Completed Triage Assessments', summary.totalTriageCompleted, '100% triage safety'],
+    ['Critical Escalations (Priority 1)', summary.criticalEscalations, '< 5 min physician response'],
+    ['Completed Appointments', summary.completedAppointments, 'Completion > 85%'],
+    ['Cancelled Appointments', summary.cancelledAppointments, 'Target < 10%'],
+    ['Appointment Completion Rate', summary.appointmentCompletionRate, '> 80%'],
+    ['Cancellation Rate', summary.cancellationRate, '< 10%'],
+    ['Avg Doctor Review Time (Min)', summary.avgDoctorReviewMinutes, '< 30 Minutes SLA']
+  ].map(row => row.map(cleanVal).join(','));
+
+  // Append Clinic Summaries
+  if (Array.isArray(reportData.clinicSummaries) && reportData.clinicSummaries.length > 0) {
+    lines.push('');
+    lines.push(['--- CLINIC OPERATIONAL PERFORMANCE ---'].map(cleanVal).join(','));
+    lines.push(['Clinic ID', 'Clinic Name', 'Consultations', 'Completed Appts', 'Triage Count', 'Avg Review (Min)', 'SLA Compliance'].map(cleanVal).join(','));
+    reportData.clinicSummaries.forEach(c => {
+      lines.push([
+        c.clinicId,
+        c.clinicName,
+        c.totalConsultations,
+        c.completedAppointments,
+        c.triageCount,
+        c.avgReviewMinutes !== null ? c.avgReviewMinutes : 'N/A',
+        `${c.slaComplianceRate}%`
+      ].map(cleanVal).join(','));
+    });
+  }
+
+  return lines.join('\r\n');
+}
+
 /**
  * Resets the in-memory analytics state (useful for clean testing).
  */
@@ -3539,6 +3800,9 @@ module.exports = {
   getScheduledReassessmentAnalytics,
   calculateUsageConversionKpis,
   getUsageConversionAnalytics,
+  calculateOperationalReportKpis,
+  generateOperationalReportExportCsv,
+  getOperationalReportAnalytics: (opts) => calculateOperationalReportKpis(inMemoryEvents, opts),
   sanitizeAndValidatePayload,
   sanitizeProperties: (props) => sanitizeAndValidatePayload(EVENT_TYPES.APPOINTMENT_BOOK_ATTEMPT, props).cleanPayload,
   buildKpiMetric,

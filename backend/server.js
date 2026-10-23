@@ -4936,6 +4936,345 @@ app.post(['/api/admin/usage-conversion/verify-encryption', '/api/usage-conversio
   }
 });
 
+// ============================================================================
+// 📑 AMWELL BENCHMARK: PERIODIC OPERATIONAL REPORTS & EXECUTIVE GOVERNANCE
+// (Tasks #706, #707, #708)
+// ============================================================================
+
+const OPERATIONAL_REPORT_AEAD_SECRET = process.env.OPERATIONAL_REPORT_SECRET || 'health-vibe-ai-operational-reports-master-key-2026';
+
+function getOperationalReportMasterKey() {
+  return crypto.createHash('sha256').update(OPERATIONAL_REPORT_AEAD_SECRET).digest();
+}
+
+function encryptOperationalReportSnapshot(payload, reportScope = 'operational_report_platform') {
+  const masterKey = getOperationalReportMasterKey();
+  const iv = crypto.randomBytes(12); // 96-bit IV
+  const cipher = crypto.createCipheriv('aes-256-gcm', masterKey, iv);
+  
+  const serialized = JSON.stringify(payload);
+  const encrypted = Buffer.concat([cipher.update(serialized, 'utf8'), cipher.final()]);
+  const authTag = cipher.getAuthTag();
+
+  const sha256Checksum = crypto.createHash('sha256').update(serialized, 'utf8').digest('hex');
+
+  return {
+    algorithm: 'AES-256-GCM',
+    keyDerivation: 'SHA-256',
+    iv: iv.toString('base64'),
+    authTag: authTag.toString('base64'),
+    ciphertext: encrypted.toString('base64'),
+    sha256Checksum,
+    reportScope,
+    encryptedAt: new Date().toISOString(),
+    zeroPhiGuaranteed: true
+  };
+}
+
+function verifyAndDecryptOperationalReportSnapshot(envelope) {
+  if (!envelope || !envelope.ciphertext || !envelope.iv || !envelope.authTag) {
+    throw new Error('INVALID_ENVELOPE_FORMAT');
+  }
+
+  const masterKey = getOperationalReportMasterKey();
+  const iv = Buffer.from(envelope.iv, 'base64');
+  const authTag = Buffer.from(envelope.authTag, 'base64');
+  const decipher = crypto.createDecipheriv('aes-256-gcm', masterKey, iv);
+  decipher.setAuthTag(authTag);
+
+  const decrypted = Buffer.concat([
+    decipher.update(Buffer.from(envelope.ciphertext, 'base64')),
+    decipher.final()
+  ]);
+
+  const decryptedStr = decrypted.toString('utf8');
+  const computedChecksum = crypto.createHash('sha256').update(decryptedStr, 'utf8').digest('hex');
+
+  if (envelope.sha256Checksum && envelope.sha256Checksum !== computedChecksum) {
+    throw new Error('CHECKSUM_MISMATCH');
+  }
+
+  return {
+    data: JSON.parse(decryptedStr),
+    checksumVerified: true
+  };
+}
+
+/**
+ * Security guard for Operational Reports: zero-PHI, XSS and SQL/NoSQL injection scanning
+ */
+function scanOperationalReportSecurityGuard(req, res, next) {
+  const queryStr = JSON.stringify(req.query || {});
+  const bodyStr = JSON.stringify(req.body || {});
+  const combined = `${queryStr} ${bodyStr}`;
+
+  // Check 14-digit national IDs
+  if (/\b\d{14}\b/.test(combined)) {
+    if (auditService && typeof auditService.recordAuditEvent === 'function') {
+      auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.OPERATIONAL_REPORT_PHI_LEAKAGE_BLOCKED,
+        req,
+        outcome: 'BLOCKED',
+        details: { reason: 'NATIONAL_ID_DETECTED', blockedPattern: '14-digit Egyptian National ID' }
+      }).catch(() => {});
+    }
+    return res.status(400).json({
+      error: 'PHI_LEAKAGE_PROHIBITED',
+      message: 'Direct patient identifiers (e.g. National ID) are strictly prohibited in operational executive reports.'
+    });
+  }
+
+  // Check for forbidden medical keys
+  const forbiddenKeys = ['symptoms', 'diagnosis', 'medicalNotes', 'prescriptionDetails'];
+  for (const k of forbiddenKeys) {
+    if (req.body && req.body[k] !== undefined) {
+      if (auditService && typeof auditService.recordAuditEvent === 'function') {
+        auditService.recordAuditEvent(db, {
+          type: auditService.AUDIT_EVENT_TYPES.OPERATIONAL_REPORT_PHI_LEAKAGE_BLOCKED,
+          req,
+          outcome: 'BLOCKED',
+          details: { forbiddenKey: k }
+        }).catch(() => {});
+      }
+      return res.status(400).json({
+        error: 'CLINICAL_DETAILS_FORBIDDEN',
+        message: `Forbidden clinical parameter [${k}] cannot be transmitted in operational management reports.`
+      });
+    }
+  }
+
+  // Check injection attacks
+  if (/<script|javascript:|(\.\.\/|\.\.\\)/i.test(combined)) {
+    if (auditService && typeof auditService.recordAuditEvent === 'function') {
+      auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.OPERATIONAL_REPORT_SECURITY_VIOLATION_BLOCKED,
+        req,
+        outcome: 'BLOCKED',
+        details: { violation: 'XSS_OR_PATH_TRAVERSAL_DETECTED' }
+      }).catch(() => {});
+    }
+    return res.status(400).json({
+      error: 'MALICIOUS_INPUT_DETECTED',
+      message: 'Potential XSS or directory traversal pattern was detected and neutralized.'
+    });
+  }
+
+  next();
+}
+
+app.use(['/api/admin/operational-reports', '/api/operational-reports'], scanOperationalReportSecurityGuard);
+
+/**
+ * GET /api/admin/operational-reports
+ * Retrieves operational performance data for clinics and platform (Amwell benchmark)
+ */
+app.get(['/api/admin/operational-reports', '/api/operational-reports'], requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const actorRole = req.user.role || 'clinic_admin';
+    const isSuperAdmin = actorRole === 'super_admin' || req.user.isOwner === true;
+    const requestedClinic = req.query.clinicId;
+    let effectiveClinic = requestedClinic;
+
+    if (!isSuperAdmin) {
+      const userAssignedClinic = req.user.clinicId || (req.user.claims && req.user.claims.clinicId);
+      if (!userAssignedClinic) {
+        if (auditService && typeof auditService.recordAuditEvent === 'function') {
+          await auditService.recordAuditEvent(db, {
+            type: auditService.AUDIT_EVENT_TYPES.OPERATIONAL_REPORT_ACCESS_DENIED,
+            req,
+            outcome: 'DENIED',
+            details: { reason: 'NO_CLINIC_ASSIGNED' }
+          });
+        }
+        return res.status(403).json({ error: 'FORBIDDEN', message: 'No clinic assigned to this administrator.' });
+      }
+      if (requestedClinic && requestedClinic !== userAssignedClinic) {
+        if (auditService && typeof auditService.recordAuditEvent === 'function') {
+          await auditService.recordAuditEvent(db, {
+            type: auditService.AUDIT_EVENT_TYPES.OPERATIONAL_REPORT_ACCESS_DENIED,
+            req,
+            outcome: 'DENIED',
+            details: { requestedClinic, userAssignedClinic }
+          });
+        }
+        return res.status(403).json({ error: 'FORBIDDEN', message: 'Unauthorized access to other clinics operational reports.' });
+      }
+      effectiveClinic = userAssignedClinic;
+    }
+
+    const period = req.query.period || 'monthly';
+    const startDate = req.query.startDate;
+    const endDate = req.query.endDate;
+    const locale = req.query.locale || 'ar';
+
+    const events = (analyticsService && typeof analyticsService.getInMemoryEvents === 'function')
+      ? analyticsService.getInMemoryEvents()
+      : [];
+
+    const report = analyticsService.calculateOperationalReportKpis(events, {
+      clinicId: effectiveClinic,
+      period,
+      startDate,
+      endDate,
+      locale
+    });
+
+    if (auditService && typeof auditService.recordAuditEvent === 'function') {
+      await auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.OPERATIONAL_REPORT_VIEWED,
+        req,
+        outcome: 'SUCCESS',
+        details: {
+          clinicId: effectiveClinic || 'all_clinics',
+          period,
+          totalConsultations: report.executiveSummary.totalConsultations
+        }
+      });
+    }
+
+    res.json({
+      success: true,
+      report
+    });
+  } catch (err) {
+    console.error('[OPERATIONAL REPORTS API ERROR]:', err);
+    res.status(500).json({ error: 'OPERATIONAL_REPORT_FETCH_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/admin/operational-reports/export
+ * Safe CSV / PDF-metadata export without PHI
+ */
+app.get(['/api/admin/operational-reports/export', '/api/operational-reports/export'], requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const actorRole = req.user.role || 'clinic_admin';
+    const isSuperAdmin = actorRole === 'super_admin' || req.user.isOwner === true;
+    const requestedClinic = req.query.clinicId;
+    let effectiveClinic = requestedClinic;
+
+    if (!isSuperAdmin) {
+      const userAssignedClinic = req.user.clinicId || (req.user.claims && req.user.claims.clinicId);
+      if (requestedClinic && requestedClinic !== userAssignedClinic) {
+        return res.status(403).json({ error: 'FORBIDDEN', message: 'Unauthorized export across clinics.' });
+      }
+      effectiveClinic = userAssignedClinic;
+    }
+
+    const format = (req.query.format || 'csv').toLowerCase();
+    const period = req.query.period || 'monthly';
+    const events = analyticsService.getInMemoryEvents ? analyticsService.getInMemoryEvents() : [];
+
+    const report = analyticsService.calculateOperationalReportKpis(events, {
+      clinicId: effectiveClinic,
+      period
+    });
+
+    if (auditService && typeof auditService.recordAuditEvent === 'function') {
+      const auditType = format === 'pdf'
+        ? auditService.AUDIT_EVENT_TYPES.OPERATIONAL_REPORT_EXPORTED_PDF
+        : auditService.AUDIT_EVENT_TYPES.OPERATIONAL_REPORT_EXPORTED_CSV;
+      await auditService.recordAuditEvent(db, {
+        type: auditType,
+        req,
+        outcome: 'SUCCESS',
+        details: {
+          format,
+          clinicId: effectiveClinic || 'all',
+          totalConsultations: report.executiveSummary.totalConsultations
+        }
+      });
+    }
+
+    const timestampStr = new Date().toISOString().replace(/[:.]/g, '-');
+    if (format === 'json') {
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="operational-report-${timestampStr}.json"`);
+      return res.send(JSON.stringify(report, null, 2));
+    }
+
+    if (format === 'pdf') {
+      // PDF metadata & sanitized structured payload
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="operational-report-${timestampStr}-pdf-meta.json"`);
+      return res.json({
+        success: true,
+        pdfRenderReady: true,
+        reportTitle: 'Periodic Operational Healthcare Report (Amwell Benchmark)',
+        generatedAt: new Date().toISOString(),
+        zeroPhiCertified: true,
+        documentHash: crypto.createHash('sha256').update(JSON.stringify(report)).digest('hex'),
+        data: report
+      });
+    }
+
+    // Default CSV
+    const csvContent = analyticsService.generateOperationalReportExportCsv(report);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="operational-report-${timestampStr}.csv"`);
+    res.send(csvContent);
+  } catch (err) {
+    console.error('[OPERATIONAL REPORT EXPORT ERROR]:', err);
+    res.status(500).json({ error: 'EXPORT_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/admin/operational-reports/encrypt-snapshot
+ * Encrypts report snapshot with AES-256-GCM AEAD
+ */
+app.post(['/api/admin/operational-reports/encrypt-snapshot', '/api/operational-reports/encrypt-snapshot'], requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const reportData = req.body.report || req.body;
+    const envelope = encryptOperationalReportSnapshot(reportData, 'operational_report_export');
+    res.json({
+      success: true,
+      isEncryptedAtRest: true,
+      encryptedEnvelope: envelope
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'ENCRYPTION_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/admin/operational-reports/verify-encryption
+ * Verifies envelope integrity
+ */
+app.post(['/api/admin/operational-reports/verify-encryption', '/api/operational-reports/verify-encryption'], requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const envelope = req.body.encryptedEnvelope || req.body;
+    let verification;
+    try {
+      verification = verifyAndDecryptOperationalReportSnapshot(envelope);
+    } catch (e) {
+      return res.status(400).json({
+        success: false,
+        tamperProofValidated: false,
+        error: 'CIPHERTEXT_OR_TAG_TAMPERED'
+      });
+    }
+
+    if (auditService && typeof auditService.recordAuditEvent === 'function') {
+      await auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.OPERATIONAL_REPORT_ENCRYPTION_VERIFIED,
+        req,
+        outcome: 'SUCCESS',
+        details: { algorithm: 'AES-256-GCM', tamperProofValidated: true }
+      });
+    }
+
+    res.json({
+      success: true,
+      tamperProofValidated: true,
+      checksumVerified: verification.checksumVerified,
+      algorithm: envelope.algorithm || 'AES-256-GCM'
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'VERIFICATION_FAILED', message: err.message });
+  }
+});
+
 /**
  * GET /api/kpi/metrics
  * Server-authoritative KPI analytics: response time, approval time, patients/day, and workload

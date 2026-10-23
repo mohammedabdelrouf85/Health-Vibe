@@ -593,6 +593,124 @@
           </div>
         </article>
 
+        <!-- 30.1 AMWELL PERIODIC OPERATIONAL HEALTHCARE REPORTS -->
+        <article class="panel" id="adminOperationalReportsPanel" style="margin-top: 24px;">
+          <div class="panel-head" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <h3 style="margin: 0; font-size: 19px;" data-i18n="appointments.operationalReportsTitle">التقارير التشغيلية الدورية للإدارة (Amwell Benchmark)</h3>
+                <span class="pill ok" style="font-size: 11px; background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3);" data-i18n="appointments.opRepZeroPhiBadge">حماية تامة من بيانات المرضى (Zero-PHI)</span>
+              </div>
+              <p style="margin: 4px 0 0; font-size: 13px; color: var(--muted);" data-i18n="appointments.operationalReportsSubtitle">
+                توليد تقارير أسبوعية وشهرية عن أداء المنصة والعيادات بصيغة CSV/PDF دون تضمين أي بيانات شخصية للمرضى
+              </p>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <button type="button" class="soft-button" onclick="refreshAdminOperationalReports()" id="btnRefreshOperationalReports" style="padding: 6px 12px; font-size: 12.5px; display: inline-flex; align-items: center; gap: 5px;">
+                🔄 <span data-i18n="appointments.refreshAnalyticsBtn">تحديث التحليلات</span>
+              </button>
+              <button type="button" class="outline-button" onclick="exportAdminOperationalReportCsv()" id="btnExportOperationalReportCsv" style="padding: 6px 12px; font-size: 12.5px; display: inline-flex; align-items: center; gap: 5px;">
+                📥 <span data-i18n="appointments.opRepExportCsv">تصدير تقرير CSV</span>
+              </button>
+              <button type="button" class="outline-button" onclick="exportAdminOperationalReportPdf()" id="btnExportOperationalReportPdf" style="padding: 6px 12px; font-size: 12.5px; display: inline-flex; align-items: center; gap: 5px; border-color: #3b82f6; color: #60a5fa;">
+                📄 <span data-i18n="appointments.opRepExportPdf">تصدير تقرير PDF</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Filters Bar -->
+          <div style="margin-top: 16px; padding: 12px 14px; background: var(--surface-1); border-radius: 10px; border: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <span style="font-size: 12.5px; font-weight: 600; color: var(--muted);">دورية التقرير:</span>
+              <div class="usage-time-pills" id="adminOpReportPeriodPills">
+                <button type="button" class="usage-pill-btn" data-period="weekly" onclick="setOperationalReportPeriod('weekly')">أسبوعي (Weekly)</button>
+                <button type="button" class="usage-pill-btn active" data-period="monthly" onclick="setOperationalReportPeriod('monthly')">شهري (Monthly)</button>
+                <button type="button" class="usage-pill-btn" data-period="quarterly" onclick="setOperationalReportPeriod('quarterly')">ربع سنوي (Quarterly)</button>
+              </div>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+              <select id="adminOpReportClinicFilter" onchange="setOperationalReportClinicFilter(this.value)" style="padding: 6px 10px; font-size: 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);">
+                <option value="">كافة العيادات والفروع</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Executive Summary KPI Cards -->
+          <div style="margin-top: 18px; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px;">
+            <div class="usage-kpi-card teal" id="cardOpReportConsultations">
+              <div class="usage-kpi-header">
+                <span class="usage-kpi-title" data-i18n="appointments.opRepTotalConsultations">إجمالي الاستشارات</span>
+                <span class="usage-kpi-icon">🩺</span>
+              </div>
+              <div class="usage-kpi-value" id="adminOpReportTotalConsultations">--</div>
+              <div class="usage-kpi-footer">
+                <span>حضوري / عن بُعد</span>
+                <span class="trend-badge positive" id="adminOpReportConsultationsTrend">Amwell Ready</span>
+              </div>
+            </div>
+
+            <div class="usage-kpi-card blue" id="cardOpReportTelehealth">
+              <div class="usage-kpi-header">
+                <span class="usage-kpi-title" data-i18n="appointments.opRepTelehealthRate">نسبة الرعاية عن بُعد</span>
+                <span class="usage-kpi-icon">💻</span>
+              </div>
+              <div class="usage-kpi-value" id="adminOpReportTelehealthRate">--%</div>
+              <div class="usage-kpi-footer">
+                <span>المستهدف: &gt; 30%</span>
+                <span class="trend-badge" id="adminOpReportTelehealthAdoption">نشط</span>
+              </div>
+            </div>
+
+            <div class="usage-kpi-card purple" id="cardOpReportCompletion">
+              <div class="usage-kpi-header">
+                <span class="usage-kpi-title" data-i18n="appointments.opRepCompletionRate">معدل إتمام المواعيد</span>
+                <span class="usage-kpi-icon">✅</span>
+              </div>
+              <div class="usage-kpi-value" id="adminOpReportCompletionRate">--%</div>
+              <div class="usage-kpi-footer">
+                <span>المستهدف: &ge; 80%</span>
+                <span class="trend-badge positive" id="adminOpReportCompletionBadge">ملتزم</span>
+              </div>
+            </div>
+
+            <div class="usage-kpi-card emerald" id="cardOpReportReviewTime">
+              <div class="usage-kpi-header">
+                <span class="usage-kpi-title" data-i18n="appointments.opRepAvgReviewTime">متوسط وقت المراجعة الطبية</span>
+                <span class="usage-kpi-icon">⏱️</span>
+              </div>
+              <div class="usage-kpi-value" id="adminOpReportAvgReviewTime"><bdi class="bidi-isolate">-- دقيقة</bdi></div>
+              <div class="usage-kpi-footer">
+                <span>اتفاقية الخدمة: &lt; 30 دقيقة</span>
+                <span class="trend-badge positive" id="adminOpReportSlaBadge">SLA Compliant</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Clinic Performance Summary Table -->
+          <div style="margin-top: 20px;">
+            <h4 style="margin: 0 0 10px 0; font-size: 15px; font-weight: 700;" data-i18n="appointments.opRepClinicPerformance">أداء الفروع والعيادات</h4>
+            <div style="overflow-x: auto; border: 1px solid var(--line); border-radius: 10px;">
+              <table style="width: 100%; border-collapse: collapse; font-size: 12.5px; text-align: start;">
+                <thead>
+                  <tr style="background: var(--surface-2); border-bottom: 1px solid var(--line);">
+                    <th style="padding: 10px 12px;">معرف الفرع</th>
+                    <th style="padding: 10px 12px;">اسم العيادة</th>
+                    <th style="padding: 10px 12px;">الاستشارات</th>
+                    <th style="padding: 10px 12px;">المواعيد المكتملة</th>
+                    <th style="padding: 10px 12px;">حالات الفرز</th>
+                    <th style="padding: 10px 12px;">متوسط المراجعة</th>
+                    <th style="padding: 10px 12px;">الامتثال لاتفاقية الخدمة</th>
+                  </tr>
+                </thead>
+                <tbody id="adminOpReportClinicTableTbody">
+                  <tr><td colspan="7" style="text-align: center; padding: 18px; color: var(--muted);">جاري تحميل تقرير الفروع...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </article>
+
         <!-- 31. APPOINTMENT CALENDAR TELEMETRY & BOOKING ANALYTICS -->
         <article class="panel" id="adminAppointmentsAnalyticsPanel" style="margin-top: 24px;">
           <div class="panel-head" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">

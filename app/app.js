@@ -16406,6 +16406,157 @@ window.exportAdminUsageConversionCsv = function() {
   if (typeof showToast === "function") showToast(isEn ? "Analytics CSV exported successfully!" : "تم تصدير تقرير التحليلات بصيغة CSV بنجاح!");
 };
 
+// ============================================================================
+// 📑 AMWELL BENCHMARK: PERIODIC OPERATIONAL REPORTS CLIENT ENGINE
+// ============================================================================
+
+let cachedOperationalReportData = null;
+let currentOperationalReportPeriod = "monthly";
+let currentOperationalReportClinic = "";
+
+async function renderAdminOperationalReports(serverData = null) {
+  try {
+    const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+    let data = serverData;
+
+    if (!data) {
+      if (typeof ApiService !== "undefined" && ApiService.getOperationalReportAnalytics) {
+        try {
+          data = await ApiService.getOperationalReportAnalytics({
+            period: currentOperationalReportPeriod,
+            clinicId: currentOperationalReportClinic,
+            locale: isEn ? "en" : "ar"
+          });
+        } catch (e) {
+          console.warn("ApiService.getOperationalReportAnalytics failed, calculating locally:", e);
+        }
+      }
+
+      if (!data && typeof HealthVibes !== "undefined" && HealthVibes.AdminService) {
+        const cases = window.__allCasesCache || [];
+        const appts = window.__allAppointmentsCache || [];
+        const users = window.__allUsersCache || [];
+        data = HealthVibes.AdminService.calculateOperationalReportKpis(cases, appts, users, {
+          period: currentOperationalReportPeriod,
+          clinicId: currentOperationalReportClinic,
+          locale: isEn ? "en" : "ar"
+        });
+      }
+    }
+
+    cachedOperationalReportData = data;
+    if (!data || !data.executiveSummary) return;
+
+    const summary = data.executiveSummary;
+    const setText = (id, val) => {
+      const el = document.getElementById(id);
+      if (el) el.innerText = val !== null && val !== undefined ? val : "--";
+    };
+
+    setText("adminOpReportTotalConsultations", summary.totalConsultations);
+    setText("adminOpReportTelehealthRate", summary.telehealthAdoptionRate);
+    setText("adminOpReportCompletionRate", summary.appointmentCompletionRate);
+    setText("adminOpReportAvgReviewTime", `${summary.avgDoctorReviewMinutes} ${isEn ? "min" : "دقيقة"}`);
+
+    // Populate Clinic Table
+    const tbody = document.getElementById("adminOpReportClinicTableTbody");
+    if (tbody && Array.isArray(data.clinicSummaries)) {
+      if (data.clinicSummaries.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding: 18px; color: var(--muted);">${isEn ? "No clinic operational activity recorded for this period." : "لا توجد أنشطة تشغيلية مسجلة للعيادات في هذه الفترة."}</td></tr>`;
+      } else {
+        tbody.innerHTML = data.clinicSummaries.map(c => `
+          <tr style="border-bottom: 1px solid var(--line);">
+            <td style="padding: 10px 12px; font-weight: 600;">${c.clinicId}</td>
+            <td style="padding: 10px 12px;">${c.clinicName}</td>
+            <td style="padding: 10px 12px;">${c.totalConsultations}</td>
+            <td style="padding: 10px 12px;">${c.completedAppointments}</td>
+            <td style="padding: 10px 12px;">${c.triageCount}</td>
+            <td style="padding: 10px 12px;"><bdi class="bidi-isolate">${c.avgReviewMinutes !== null ? `${c.avgReviewMinutes} ${isEn ? "min" : "دقيقة"}` : "--"}</bdi></td>
+            <td style="padding: 10px 12px;"><span class="pill ${c.slaComplianceRate >= 85 ? "ok" : "warning"}">${c.slaComplianceRate}%</span></td>
+          </tr>
+        `).join("");
+      }
+    }
+  } catch (err) {
+    console.error("renderAdminOperationalReports error:", err);
+  }
+}
+
+window.renderAdminOperationalReports = renderAdminOperationalReports;
+
+window.refreshAdminOperationalReports = async function() {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  if (typeof showToast === "function") showToast(isEn ? "Refreshing operational report..." : "جاري تحديث التقرير التشغيلي...");
+  await renderAdminOperationalReports();
+  if (typeof showToast === "function") showToast(isEn ? "Operational report updated!" : "تم تحديث التقرير التشغيلي بنجاح!");
+};
+
+window.setOperationalReportPeriod = async function(period) {
+  currentOperationalReportPeriod = period;
+  const pills = document.querySelectorAll("#adminOpReportPeriodPills .usage-pill-btn");
+  pills.forEach(p => p.classList.toggle("active", p.getAttribute("data-period") === period));
+  await renderAdminOperationalReports();
+};
+
+window.setOperationalReportClinicFilter = async function(clinicId) {
+  currentOperationalReportClinic = clinicId;
+  await renderAdminOperationalReports();
+};
+
+window.exportAdminOperationalReportCsv = function() {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  const data = cachedOperationalReportData;
+  if (!data || !data.executiveSummary) {
+    if (typeof showToast === "function") showToast(isEn ? "No operational report data to export." : "لا توجد بيانات تقرير للتصدير.");
+    return;
+  }
+
+  const s = data.executiveSummary;
+  const rows = [
+    ["Health Vibe AI - Periodic Operational Healthcare Report (Amwell Benchmark)"],
+    ["Generated At", new Date().toISOString()],
+    ["Period", currentOperationalReportPeriod],
+    ["Clinic", currentOperationalReportClinic || "all"],
+    [],
+    ["Metric", "Value", "Benchmark Target"],
+    ["Total Consultations", s.totalConsultations, "Growth > 15%"],
+    ["Video Consultations (Telehealth)", s.videoConsultations, "Amwell Target > 30%"],
+    ["In-Clinic Consultations", s.inClinicConsultations, "Balanced distribution"],
+    ["Telehealth Adoption Rate", s.telehealthAdoptionRate, "Amwell Standard > 35%"],
+    ["Completed Triage Assessments", s.totalTriageCompleted, "100% triage safety"],
+    ["Critical Escalations (Priority 1)", s.criticalEscalations, "< 5 min physician response"],
+    ["Completed Appointments", s.completedAppointments, "Target > 80%"],
+    ["Cancelled Appointments", s.cancelledAppointments, "Target < 10%"],
+    ["Appointment Completion Rate", s.appointmentCompletionRate, "> 80%"],
+    ["Cancellation Rate", s.cancellationRate, "< 10%"],
+    ["Avg Doctor Review Time", `${s.avgDoctorReviewMinutes} min`, "< 30 Minutes SLA"]
+  ];
+
+  const csvContent = "\uFEFF" + rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `operational_report_${currentOperationalReportPeriod}_${Date.now()}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  if (typeof showToast === "function") showToast(isEn ? "Operational report CSV downloaded!" : "تم تنزيل تقرير التشغيل CSV بنجاح!");
+};
+
+window.exportAdminOperationalReportPdf = function() {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  const data = cachedOperationalReportData;
+  if (!data) {
+    if (typeof showToast === "function") showToast(isEn ? "No report available for PDF." : "لا يوجد تقرير جاهز للطباعة.");
+    return;
+  }
+  // Print / PDF preview trigger
+  window.print();
+  if (typeof showToast === "function") showToast(isEn ? "PDF print dialogue triggered." : "تم فتح نافذة حفظ التقرير بصيغة PDF.");
+};
+
 
 
 window.refreshAdminDashboardLive = async function() {
