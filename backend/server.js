@@ -24567,6 +24567,231 @@ app.get('/api/admin/clinic-director/analytics', requireAuth, requireAdmin, async
   }
 });
 
+// ============================================================================
+// 🔬 ROLOGY BENCHMARK: CO-BRANDED MEDICAL REPORTS BACKEND & RBAC (#737)
+// ============================================================================
+
+const CO_BRANDING_MOCK_CLINICS = [
+  {
+    clinicId: "clinic_nile_cairo",
+    nameAr: "مجمع النيل الطبي التخصصي",
+    nameEn: "Nile Specialized Medical Complex",
+    branchAr: "الفرع الرئيسي • المعادي",
+    branchEn: "Main Branch • Maadi",
+    subscriptionTier: "enterprise",
+    brandingStatus: "active",
+    reportsIssued: 742,
+    logoUrl: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='44' height='44' viewBox='0 0 24 24' fill='none' stroke='%230284c7' stroke-width='2'><path d='M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'></path><polyline points='9 22 9 12 15 12 15 22'></polyline></svg>",
+    complianceScore: "99.8%"
+  },
+  {
+    clinicId: "clinic_alex_chest",
+    nameAr: "مستشفى الإسكندرية الدولي للصدر",
+    nameEn: "Alexandria Int'l Chest Hospital",
+    branchAr: "سموحة • الإسكندرية",
+    branchEn: "Smouha • Alexandria",
+    subscriptionTier: "enterprise",
+    brandingStatus: "active",
+    reportsIssued: 520,
+    logoUrl: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='44' height='44' viewBox='0 0 24 24' fill='none' stroke='%2310b981' stroke-width='2'><path d='M22 12h-4l-3 9L9 3l-3 9H2'></path></svg>",
+    complianceScore: "99.4%"
+  },
+  {
+    clinicId: "clinic_delta_radiology",
+    nameAr: "مراكز دلتا للأشعة والتشخيص",
+    nameEn: "Delta Diagnostic Radiology Centers",
+    branchAr: "المنصورة • الدلتا",
+    branchEn: "Mansoura • Delta",
+    subscriptionTier: "pro",
+    brandingStatus: "pending",
+    reportsIssued: 310,
+    logoUrl: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='44' height='44' viewBox='0 0 24 24' fill='none' stroke='%23f59e0b' stroke-width='2'><circle cx='12' cy='12' r='10'></circle><circle cx='12' cy='12' r='4'></circle></svg>",
+    complianceScore: "98.7%"
+  },
+  {
+    clinicId: "clinic_giza_pediatric",
+    nameAr: "عيادات الجيزة التخصصية للأطفال",
+    nameEn: "Giza Pediatric Specialty Clinics",
+    branchAr: "الدقي • الجيزة",
+    branchEn: "Dokki • Giza",
+    subscriptionTier: "pro",
+    brandingStatus: "active",
+    reportsIssued: 268,
+    logoUrl: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='44' height='44' viewBox='0 0 24 24' fill='none' stroke='%238b5cf6' stroke-width='2'><path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z'></path></svg>",
+    complianceScore: "99.1%"
+  },
+  {
+    clinicId: "clinic_helwan_care",
+    nameAr: "مركز حلوان للرعاية الأولية",
+    nameEn: "Helwan Primary Care Center",
+    branchAr: "حلوان • القاهرة",
+    branchEn: "Helwan • Cairo",
+    subscriptionTier: "starter",
+    brandingStatus: "eligible",
+    reportsIssued: 0,
+    logoUrl: "",
+    complianceScore: "N/A"
+  }
+];
+
+/**
+ * GET /api/admin/co-branding/clinics
+ * Lists co-branded clinics, tiers, logos, and verification statuses.
+ * Accessible to super_admin (all clinics) and clinic_admin (their clinic only).
+ */
+app.get('/api/admin/co-branding/clinics', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const actorRole = req.user.role || 'clinic_admin';
+    const isSuperAdmin = actorRole === 'super_admin' || req.user.isOwner === true;
+    const isClinicAdmin = actorRole === 'clinic_admin';
+
+    if (!isSuperAdmin && !isClinicAdmin) {
+      if (auditService && typeof auditService.recordAuditEvent === 'function') {
+        await auditService.recordAuditEvent(db, {
+          type: auditService.AUDIT_EVENT_TYPES.CO_BRANDING_ACCESS_DENIED,
+          req,
+          outcome: 'DENIED',
+          details: { reason: 'UNAUTHORIZED_ROLE', attemptedRole: actorRole }
+        });
+      }
+      return res.status(403).json({
+        error: 'FORBIDDEN',
+        message: 'Strict RBAC: Only Super Admins or Clinic Administrators can view co-branding settings.'
+      });
+    }
+
+    let clinics = CO_BRANDING_MOCK_CLINICS;
+    if (isClinicAdmin) {
+      const userClinicId = req.user.clinicId || req.user.clinic || 'clinic_nile_cairo';
+      clinics = CO_BRANDING_MOCK_CLINICS.filter(c => c.clinicId === userClinicId);
+    }
+
+    if (auditService && typeof auditService.recordAuditEvent === 'function') {
+      await auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.CO_BRANDING_CLINICS_VIEWED,
+        req,
+        outcome: 'SUCCESS',
+        details: { count: clinics.length, isSuperAdmin }
+      });
+    }
+
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-Zero-PHI-Enforced', 'true');
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+
+    res.status(200).json({
+      success: true,
+      clinics
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'FETCH_CO_BRANDING_CLINICS_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/admin/co-branding/logo
+ * Updates clinic logo and activates co-branded reports for Enterprise/Pro tiers.
+ */
+app.post('/api/admin/co-branding/logo', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const actorRole = req.user.role || 'clinic_admin';
+    const isSuperAdmin = actorRole === 'super_admin' || req.user.isOwner === true;
+    const isClinicAdmin = actorRole === 'clinic_admin';
+
+    if (!isSuperAdmin && !isClinicAdmin) {
+      if (auditService && typeof auditService.recordAuditEvent === 'function') {
+        await auditService.recordAuditEvent(db, {
+          type: auditService.AUDIT_EVENT_TYPES.CO_BRANDING_ACCESS_DENIED,
+          req,
+          outcome: 'DENIED',
+          details: { reason: 'UNAUTHORIZED_ROLE', attemptedRole: actorRole }
+        });
+      }
+      return res.status(403).json({
+        error: 'FORBIDDEN',
+        message: 'Strict RBAC: Only Super Admins or Clinic Administrators can configure clinic logos.'
+      });
+    }
+
+    const { clinicId, logoUrl } = req.body || {};
+    if (!clinicId || !logoUrl) {
+      return res.status(400).json({
+        error: 'INVALID_INPUT',
+        message: 'clinicId and logoUrl are required.'
+      });
+    }
+
+    // Clinic Isolation Check
+    if (isClinicAdmin) {
+      const userClinicId = req.user.clinicId || req.user.clinic || 'clinic_nile_cairo';
+      if (clinicId !== userClinicId) {
+        if (auditService && typeof auditService.recordAuditEvent === 'function') {
+          await auditService.recordAuditEvent(db, {
+            type: auditService.AUDIT_EVENT_TYPES.CO_BRANDING_ACCESS_DENIED,
+            req,
+            clinicId,
+            outcome: 'DENIED',
+            details: { reason: 'CROSS_CLINIC_ACCESS_PROHIBITED', userClinicId, targetClinicId: clinicId }
+          });
+        }
+        return res.status(403).json({
+          error: 'CROSS_CLINIC_FORBIDDEN',
+          message: 'Clinic isolation violation: You cannot configure another clinic\'s co-branded logo.'
+        });
+      }
+    }
+
+    const targetClinic = CO_BRANDING_MOCK_CLINICS.find(c => c.clinicId === clinicId);
+    if (!targetClinic) {
+      return res.status(404).json({ error: 'CLINIC_NOT_FOUND', message: 'Target clinic not found.' });
+    }
+
+    // Tier Verification: Co-branding is only available on Enterprise or Pro tiers
+    if (targetClinic.subscriptionTier === 'starter') {
+      if (auditService && typeof auditService.recordAuditEvent === 'function') {
+        await auditService.recordAuditEvent(db, {
+          type: auditService.AUDIT_EVENT_TYPES.CO_BRANDING_TIER_UPGRADE_REQUIRED,
+          req,
+          clinicId,
+          outcome: 'BLOCKED',
+          details: { tier: 'starter', requiredTiers: ['pro', 'enterprise'] }
+        });
+      }
+      return res.status(402).json({
+        error: 'PAYMENT_REQUIRED',
+        message: 'Co-Branded reports require upgrading to Professional or Enterprise tier (Rology benchmark standard).'
+      });
+    }
+
+    targetClinic.logoUrl = logoUrl;
+    targetClinic.brandingStatus = 'active';
+
+    if (auditService && typeof auditService.recordAuditEvent === 'function') {
+      await auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.CO_BRANDING_LOGO_UPDATED,
+        req,
+        clinicId,
+        outcome: 'SUCCESS',
+        details: { clinicId, subscriptionTier: targetClinic.subscriptionTier, brandingStatus: 'active' }
+      });
+    }
+
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-Zero-PHI-Enforced', 'true');
+
+    res.status(200).json({
+      success: true,
+      message: 'Clinic logo updated and co-branded reports activated successfully.',
+      clinic: targetClinic
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'UPDATE_CO_BRANDING_LOGO_FAILED', message: err.message });
+  }
+});
+
 /**
  * POST /api/admin/email-queue/process
  * Triggers batch processing of pending transactional emails.
