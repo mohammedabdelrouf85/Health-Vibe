@@ -24939,6 +24939,218 @@ app.post('/api/admin/roi-calculator/simulate', requireAuth, requireAdmin, async 
   }
 });
 
+// ============================================================================
+// 🏥 PRACTO BENCHMARK: B2B CLINIC SUBSCRIPTION & ASSESSMENT QUOTA MANAGEMENT (#747)
+// ============================================================================
+
+const billingService = require('./billing-service');
+
+// In-memory / Firestore mock registry for clinic subscriptions
+const clinicSubscriptionsRegistry = [
+  {
+    clinicId: 'clinic_cairo_chest',
+    nameAr: 'مركز القاهرة التخصصي لأمراض الصدر',
+    nameEn: 'Cairo Specialized Chest Center',
+    planTier: 'CLINIC_PRO',
+    status: 'active', // 'trialing' | 'active' | 'past_due' | 'canceled' | 'expired'
+    trialEndsAt: null,
+    currentBillingCycle: {
+      startsAt: '2026-10-01T00:00:00.000Z',
+      endsAt: '2026-10-31T23:59:59.000Z'
+    },
+    quota: {
+      monthlyAssessmentsLimit: 2500,
+      usedAssessmentsThisMonth: 1420,
+      remainingAssessments: 1080,
+      doctorSeatsLimit: 10,
+      activeDoctorsCount: 6
+    },
+    autoRenew: true,
+    lastInvoiceId: 'INV-2026-10-0441'
+  },
+  {
+    clinicId: 'clinic_alex_respiratory',
+    nameAr: 'عيادات الإسكندرية الرئوية',
+    nameEn: 'Alexandria Pulmonary Clinics',
+    planTier: 'CLINIC_BASIC',
+    status: 'active',
+    trialEndsAt: null,
+    currentBillingCycle: {
+      startsAt: '2026-10-01T00:00:00.000Z',
+      endsAt: '2026-10-31T23:59:59.000Z'
+    },
+    quota: {
+      monthlyAssessmentsLimit: 800,
+      usedAssessmentsThisMonth: 785,
+      remainingAssessments: 15,
+      doctorSeatsLimit: 3,
+      activeDoctorsCount: 3
+    },
+    autoRenew: true,
+    lastInvoiceId: 'INV-2026-10-0382'
+  },
+  {
+    clinicId: 'clinic_giza_pediatric_allergy',
+    nameAr: 'مركز الجيزة لحساسية ومناعة الأطفال',
+    nameEn: 'Giza Pediatric Allergy Center',
+    planTier: 'DOCTOR_STARTER',
+    status: 'trialing',
+    trialEndsAt: '2026-11-15T23:59:59.000Z',
+    currentBillingCycle: {
+      startsAt: '2026-10-15T00:00:00.000Z',
+      endsAt: '2026-11-15T23:59:59.000Z'
+    },
+    quota: {
+      monthlyAssessmentsLimit: 200,
+      usedAssessmentsThisMonth: 88,
+      remainingAssessments: 112,
+      doctorSeatsLimit: 1,
+      activeDoctorsCount: 1
+    },
+    autoRenew: false,
+    lastInvoiceId: null
+  }
+];
+
+/**
+ * GET /api/admin/subscriptions
+ * Retrieves B2B subscription status, tiers, and assessment quotas for clinics.
+ * - Super Admin can view all clinics.
+ * - Clinic Admin can only view their own clinic's subscription.
+ */
+app.get('/api/admin/subscriptions', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const actorRole = req.user.role || 'clinic_admin';
+    const isSuperAdmin = actorRole === 'super_admin' || req.user.isOwner === true;
+    const actorClinicId = req.user.clinicId;
+
+    let targetSubscriptions = [];
+    if (isSuperAdmin) {
+      targetSubscriptions = clinicSubscriptionsRegistry;
+    } else if (actorClinicId) {
+      targetSubscriptions = clinicSubscriptionsRegistry.filter(c => c.clinicId === actorClinicId);
+    } else {
+      if (auditService && typeof auditService.recordAuditEvent === 'function') {
+        await auditService.recordAuditEvent(db, {
+          type: auditService.AUDIT_EVENT_TYPES.CLINIC_SUBSCRIPTION_ACCESS_DENIED,
+          req,
+          outcome: 'DENIED',
+          details: { reason: 'NO_CLINIC_BOUND_TO_ADMIN', actorRole }
+        });
+      }
+      return res.status(403).json({
+        error: 'FORBIDDEN',
+        message: 'Clinic administrator is not associated with any active clinic organization.'
+      });
+    }
+
+    // Audit Logging
+    if (auditService && typeof auditService.recordAuditEvent === 'function') {
+      await auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.CLINIC_SUBSCRIPTION_STATUS_VIEWED,
+        req,
+        clinicId: actorClinicId || 'all_clinics',
+        outcome: 'SUCCESS',
+        details: { count: targetSubscriptions.length, isSuperAdmin }
+      });
+    }
+
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-Zero-PHI-Enforced', 'true');
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+
+    res.status(200).json({
+      success: true,
+      benchmark: 'Practo B2B Clinic Subscription Governance Edition',
+      totalClinics: targetSubscriptions.length,
+      subscriptions: targetSubscriptions
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'FETCH_SUBSCRIPTIONS_FAILED', message: err.message });
+  }
+});
+
+/**
+ * PATCH /api/admin/subscriptions/:clinicId
+ * Updates a clinic's subscription tier, status, or quota limits.
+ * Strict RBAC: Super Admin only can upgrade/change plans.
+ */
+app.patch('/api/admin/subscriptions/:clinicId', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const actorRole = req.user.role || 'clinic_admin';
+    const isSuperAdmin = actorRole === 'super_admin' || req.user.isOwner === true;
+    const { clinicId } = req.params;
+
+    if (!isSuperAdmin) {
+      if (auditService && typeof auditService.recordAuditEvent === 'function') {
+        await auditService.recordAuditEvent(db, {
+          type: auditService.AUDIT_EVENT_TYPES.CLINIC_SUBSCRIPTION_ACCESS_DENIED,
+          req,
+          clinicId,
+          outcome: 'DENIED',
+          details: { reason: 'SUPER_ADMIN_REQUIRED_FOR_TIER_MUTATION', actorRole }
+        });
+      }
+      return res.status(403).json({
+        error: 'FORBIDDEN',
+        message: 'Strict RBAC: Only Super Administrators can alter clinic subscription tiers or quotas.'
+      });
+    }
+
+    const { planTier, status, autoRenew } = req.body || {};
+    const validTiers = ['DOCTOR_STARTER', 'CLINIC_BASIC', 'CLINIC_PRO', 'ENTERPRISE'];
+    const validStatuses = ['trialing', 'active', 'past_due', 'canceled', 'expired'];
+
+    const targetSub = clinicSubscriptionsRegistry.find(c => c.clinicId === clinicId);
+    if (!targetSub) {
+      return res.status(404).json({ error: 'CLINIC_NOT_FOUND', message: 'Target clinic subscription not found.' });
+    }
+
+    const prevTier = targetSub.planTier;
+    const prevStatus = targetSub.status;
+
+    if (planTier && validTiers.includes(planTier)) {
+      targetSub.planTier = planTier;
+      // Adjust limits based on billing-service plan definitions
+      const planDef = billingService.PLANS && billingService.PLANS[planTier];
+      if (planDef && planDef.limits) {
+        targetSub.quota.monthlyAssessmentsLimit = planDef.limits.assessmentsPerMonth;
+        targetSub.quota.doctorSeatsLimit = planDef.limits.doctorSeats;
+        targetSub.quota.remainingAssessments = Math.max(0, targetSub.quota.monthlyAssessmentsLimit - targetSub.quota.usedAssessmentsThisMonth);
+      }
+    }
+
+    if (status && validStatuses.includes(status)) {
+      targetSub.status = status;
+    }
+
+    if (typeof autoRenew === 'boolean') {
+      targetSub.autoRenew = autoRenew;
+    }
+
+    // Audit Logging
+    if (auditService && typeof auditService.recordAuditEvent === 'function') {
+      await auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.CLINIC_SUBSCRIPTION_TIER_UPDATED,
+        req,
+        clinicId,
+        outcome: 'SUCCESS',
+        details: { prevTier, newTier: targetSub.planTier, prevStatus, newStatus: targetSub.status }
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Clinic subscription tier and quota updated successfully.',
+      subscription: targetSub
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'UPDATE_SUBSCRIPTION_FAILED', message: err.message });
+  }
+});
+
 /**
  * POST /api/admin/email-queue/process
  * Triggers batch processing of pending transactional emails.
