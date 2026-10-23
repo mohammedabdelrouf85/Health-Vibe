@@ -23705,3 +23705,245 @@ function searchClinicDirectorDoctorsTable(val) {
   renderClinicDirectorDoctors();
 }
 window.searchClinicDirectorDoctorsTable = searchClinicDirectorDoctorsTable;
+
+// ============================================================================
+// 🔬 ROLOGY BENCHMARK: CLINIC CO-BRANDED PATIENT REPORTS (#736)
+// ============================================================================
+
+let coBrandClinicsData = [
+  {
+    clinicId: "clinic_nile_cairo",
+    nameAr: "مجمع النيل الطبي التخصصي",
+    nameEn: "Nile Specialized Medical Complex",
+    branchAr: "الفرع الرئيسي • المعادي",
+    branchEn: "Main Branch • Maadi",
+    subscriptionTier: "enterprise",
+    brandingStatus: "active",
+    reportsIssued: 742,
+    logoUrl: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='44' height='44' viewBox='0 0 24 24' fill='none' stroke='%230284c7' stroke-width='2'><path d='M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'></path><polyline points='9 22 9 12 15 12 15 22'></polyline></svg>",
+    complianceScore: "99.8%"
+  },
+  {
+    clinicId: "clinic_alex_chest",
+    nameAr: "مستشفى الإسكندرية الدولي للصدر",
+    nameEn: "Alexandria Int'l Chest Hospital",
+    branchAr: "سموحة • الإسكندرية",
+    branchEn: "Smouha • Alexandria",
+    subscriptionTier: "enterprise",
+    brandingStatus: "active",
+    reportsIssued: 520,
+    logoUrl: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='44' height='44' viewBox='0 0 24 24' fill='none' stroke='%2310b981' stroke-width='2'><path d='M22 12h-4l-3 9L9 3l-3 9H2'></path></svg>",
+    complianceScore: "99.4%"
+  },
+  {
+    clinicId: "clinic_delta_radiology",
+    nameAr: "مراكز دلتا للأشعة والتشخيص",
+    nameEn: "Delta Diagnostic Radiology Centers",
+    branchAr: "المنصورة • الدلتا",
+    branchEn: "Mansoura • Delta",
+    subscriptionTier: "pro",
+    brandingStatus: "pending",
+    reportsIssued: 310,
+    logoUrl: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='44' height='44' viewBox='0 0 24 24' fill='none' stroke='%23f59e0b' stroke-width='2'><circle cx='12' cy='12' r='10'></circle><circle cx='12' cy='12' r='4'></circle></svg>",
+    complianceScore: "98.7%"
+  },
+  {
+    clinicId: "clinic_giza_pediatric",
+    nameAr: "عيادات الجيزة التخصصية للأطفال",
+    nameEn: "Giza Pediatric Specialty Clinics",
+    branchAr: "الدقي • الجيزة",
+    branchEn: "Dokki • Giza",
+    subscriptionTier: "pro",
+    brandingStatus: "active",
+    reportsIssued: 268,
+    logoUrl: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='44' height='44' viewBox='0 0 24 24' fill='none' stroke='%238b5cf6' stroke-width='2'><path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z'></path></svg>",
+    complianceScore: "99.1%"
+  },
+  {
+    clinicId: "clinic_helwan_care",
+    nameAr: "مركز حلوان للرعاية الأولية",
+    nameEn: "Helwan Primary Care Center",
+    branchAr: "حلوان • القاهرة",
+    branchEn: "Helwan • Cairo",
+    subscriptionTier: "starter",
+    brandingStatus: "eligible",
+    reportsIssued: 0,
+    logoUrl: "",
+    complianceScore: "N/A"
+  }
+];
+
+let coBrandStatusFilter = "all";
+let coBrandTierFilter = "all";
+let coBrandSearchQuery = "";
+
+async function refreshCoBrandingClinics() {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+
+  try {
+    const res = await fetch("/api/admin/co-branding/clinics", {
+      headers: { "Accept": "application/json" }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.clinics && data.clinics.length > 0) {
+        coBrandClinicsData = data.clinics;
+      }
+    }
+  } catch (err) {
+    // Graceful offline fallback
+  }
+
+  const activeClinics = coBrandClinicsData.filter(c => c.brandingStatus === "active");
+  const pendingClinics = coBrandClinicsData.filter(c => c.brandingStatus === "pending");
+  const totalReports = coBrandClinicsData.reduce((acc, c) => acc + (c.reportsIssued || 0), 0);
+
+  const activeEl = document.getElementById("coBrandActiveCount");
+  if (activeEl) activeEl.textContent = isEn ? `${activeClinics.length} Clinics` : `${activeClinics.length} عيادة`;
+
+  const reportsEl = document.getElementById("coBrandReportsCount");
+  if (reportsEl) reportsEl.textContent = isEn ? `${totalReports.toLocaleString()} Reports` : `${totalReports.toLocaleString()} تقرير`;
+
+  const pendingEl = document.getElementById("coBrandPendingCount");
+  if (pendingEl) pendingEl.textContent = isEn ? `${pendingClinics.length} Requests` : `${pendingClinics.length} طلبات`;
+
+  renderCoBrandingClinics();
+}
+window.refreshCoBrandingClinics = refreshCoBrandingClinics;
+
+function renderCoBrandingClinics() {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  const tbody = document.getElementById("coBrandClinicsTableTbody");
+  if (!tbody) return;
+
+  const filtered = coBrandClinicsData.filter(c => {
+    const matchStatus = coBrandStatusFilter === "all" || c.brandingStatus === coBrandStatusFilter;
+    const matchTier = coBrandTierFilter === "all" || c.subscriptionTier === coBrandTierFilter;
+    const query = coBrandSearchQuery.toLowerCase();
+    const matchQuery = !query ||
+      c.clinicId.toLowerCase().includes(query) ||
+      c.nameAr.toLowerCase().includes(query) ||
+      c.nameEn.toLowerCase().includes(query);
+    return matchStatus && matchTier && matchQuery;
+  });
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="7" style="padding: 24px; text-align: center; color: var(--muted);">
+          ${isEn ? "No clinics matched current co-branding filters." : "لا توجد مراكز مطابقة لفلاتر التخصيص الحالية."}
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  let html = "";
+  filtered.forEach(c => {
+    let statusBadge = "";
+    if (c.brandingStatus === "active") {
+      statusBadge = `<span class="pill ok" style="font-size: 11px;">${isEn ? "Co-Branded Active" : "مفعل ✓"}</span>`;
+    } else if (c.brandingStatus === "pending") {
+      statusBadge = `<span class="pill warn" style="font-size: 11px;">${isEn ? "Pending Review" : "قيد المراجعة ⏳"}</span>`;
+    } else {
+      statusBadge = `<span class="pill info" style="font-size: 11px;">${isEn ? "Eligible" : "مؤهل للترقية 🚀"}</span>`;
+    }
+
+    const tierBadge = c.subscriptionTier === "enterprise"
+      ? `<span style="color: #8b5cf6; font-weight: 700;">Enterprise 🏢</span>`
+      : c.subscriptionTier === "pro"
+      ? `<span style="color: #06b6d4; font-weight: 600;">Pro 🏥</span>`
+      : `<span style="color: var(--muted);">Starter</span>`;
+
+    const logoHtml = c.logoUrl
+      ? `<img src="${c.logoUrl}" alt="Logo" style="width: 36px; height: 36px; object-fit: contain; border-radius: 6px; border: 1px solid var(--line); background: #ffffff; padding: 2px;">`
+      : `<div style="width: 36px; height: 36px; border-radius: 6px; border: 1px dashed var(--line); display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--muted);">بلا</div>`;
+
+    html += `
+      <tr style="border-bottom: 1px solid var(--line);">
+        <td style="padding: 10px 12px; text-align: center;">${logoHtml}</td>
+        <td style="padding: 10px 12px;">
+          <strong style="color: var(--ink);">${isEn ? c.nameEn : c.nameAr}</strong>
+          <small style="display: block; color: var(--muted); font-size: 11px;">${isEn ? c.branchEn : c.branchAr}</small>
+        </td>
+        <td style="padding: 10px 12px; font-size: 12px;">${tierBadge}</td>
+        <td style="padding: 10px 12px;">${statusBadge}</td>
+        <td style="padding: 10px 12px; font-weight: 700; color: #06b6d4;">${c.reportsIssued.toLocaleString()} ${isEn ? "reports" : "تقرير"}</td>
+        <td style="padding: 10px 12px;">
+          <button type="button" class="soft-button" onclick="previewClinicCoBrandedReport('${c.clinicId}')" style="padding: 4px 10px; font-size: 11.5px;">
+            👁️ ${isEn ? "Preview Header" : "معاينة الترويسة"}
+          </button>
+        </td>
+        <td style="padding: 10px 12px;">
+          <button type="button" class="outline-button" onclick="openCoBrandingUploadModal('${c.clinicId}')" style="padding: 4px 10px; font-size: 11.5px;">
+            ⚙️ ${isEn ? "Configure" : "إعداد الشعار"}
+          </button>
+        </td>
+      </tr>
+    `;
+  });
+
+  tbody.innerHTML = html;
+}
+window.renderCoBrandingClinics = renderCoBrandingClinics;
+
+function filterCoBrandingClinicsTable() {
+  const statusEl = document.getElementById("coBrandFilterStatusSelect");
+  if (statusEl) coBrandStatusFilter = statusEl.value;
+
+  const tierEl = document.getElementById("coBrandTierFilterSelect");
+  if (tierEl) coBrandTierFilter = tierEl.value;
+
+  renderCoBrandingClinics();
+}
+window.filterCoBrandingClinicsTable = filterCoBrandingClinicsTable;
+
+function searchCoBrandingClinicsTable(val) {
+  coBrandSearchQuery = (val || "").trim();
+  renderCoBrandingClinics();
+}
+window.searchCoBrandingClinicsTable = searchCoBrandingClinicsTable;
+
+function previewClinicCoBrandedReport(clinicId) {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  const clinic = coBrandClinicsData.find(c => c.clinicId === clinicId) || coBrandClinicsData[0];
+  if (!clinic) return;
+
+  const simLogo = document.getElementById("coBrandSimClinicLogo");
+  const simName = document.getElementById("coBrandSimClinicName");
+  const simBranch = document.getElementById("coBrandSimClinicBranch");
+
+  if (simLogo && clinic.logoUrl) simLogo.src = clinic.logoUrl;
+  if (simName) simName.textContent = isEn ? clinic.nameEn : clinic.nameAr;
+  if (simBranch) simBranch.textContent = isEn ? clinic.branchEn : clinic.branchAr;
+
+  const simContainer = document.getElementById("coBrandLiveHeaderSimulator");
+  if (simContainer) {
+    simContainer.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    simContainer.style.outline = "2px solid #06b6d4";
+    setTimeout(() => { simContainer.style.outline = "none"; }, 1500);
+  }
+}
+window.previewClinicCoBrandedReport = previewClinicCoBrandedReport;
+
+function openCoBrandingUploadModal(clinicId) {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  const clinic = coBrandClinicsData.find(c => c.clinicId === clinicId) || coBrandClinicsData[0];
+  const clinicName = isEn ? clinic.nameEn : clinic.nameAr;
+
+  const newLogoUrl = prompt(
+    isEn
+      ? `Enter image URL for ${clinicName} logo (SVG / PNG max 500KB):`
+      : `أدخل رابط أو كود صورة الشعار لـ ${clinicName} (بصيغة SVG أو PNG وبحد أقصى 500KB):`,
+    clinic.logoUrl || "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='44' height='44' viewBox='0 0 24 24' fill='none' stroke='%230284c7' stroke-width='2'><circle cx='12' cy='12' r='10'></circle><polyline points='12 6 12 12 16 14'></polyline></svg>"
+  );
+
+  if (newLogoUrl && newLogoUrl.trim()) {
+    clinic.logoUrl = newLogoUrl.trim();
+    clinic.brandingStatus = "active";
+    renderCoBrandingClinics();
+    previewClinicCoBrandedReport(clinic.clinicId);
+    alert(isEn ? `Clinic logo for ${clinicName} updated and activated!` : `تم حفظ وتفعيل شعار ${clinicName} بنجاح داخل التقارير الطبية المشتركة.`);
+  }
+}
+window.openCoBrandingUploadModal = openCoBrandingUploadModal;
