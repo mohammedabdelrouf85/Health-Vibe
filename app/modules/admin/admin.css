@@ -74,3 +74,226 @@
 .admin-table tr:hover td {
   background: var(--surface-2, rgba(255, 255, 255, 0.02));
 }
+
+/* ==========================================================================
+   DOCTOLIB USAGE & CONVERSION ANALYTICS DASHBOARD
+   ========================================================================== */
+#adminUsageConversionAnalyticsPanel {
+  position: relative;
+  overflow: hidden;
+}
+
+.usage-filter-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 14px 18px;
+  background: var(--surface-2, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.08));
+  border-radius: 14px;
+  margin-top: 16px;
+  margin-bottom: 20px;
+}
+
+.usage-pill-group {
+  display: inline-flex;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 4px;
+  border-radius: 10px;
+}
+
+.usage-pill-btn {
+  padding: 6px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--muted, #94a3b8);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.usage-pill-btn:hover {
+  color: var(--ink, #ffffff);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.usage-pill-btn.active {
+  background: var(--teal, #0d9488);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(13, 148, 136, 0.35);
+}
+
+.usage-hero-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.usage-kpi-card {
+  position: relative;
+  padding: 18px 20px;
+  background: var(--surface, rgba(255, 255, 255, 0.02));
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.08));
+  border-radius: 14px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.usage-kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+
+.usage-kpi-card.emerald {
+  border-inline-start: 4px solid #10b981;
+}
+.usage-kpi-card.teal {
+  border-inline-start: 4px solid var(--teal, #0d9488);
+}
+.usage-kpi-card.blue {
+  border-inline-start: 4px solid #38bdf8;
+}
+.usage-kpi-card.amber {
+  border-inline-start: 4px solid #f59e0b;
+}
+
+.usage-kpi-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.usage-kpi-icon {
+  font-size: 18px;
+}
+
+.usage-kpi-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted, #94a3b8);
+}
+
+.usage-kpi-value {
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--ink, #ffffff);
+  line-height: 1.2;
+}
+
+.usage-kpi-sub {
+  font-size: 12px;
+  color: var(--muted, #94a3b8);
+  margin-top: 6px;
+}
+
+/* 5-Stage Conversion Funnel */
+.usage-funnel-card {
+  padding: 20px;
+  background: var(--surface-2, rgba(255, 255, 255, 0.02));
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.08));
+  border-radius: 14px;
+  margin-bottom: 24px;
+}
+
+.usage-funnel-container {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  margin-top: 18px;
+  align-items: center;
+}
+
+@media (max-width: 900px) {
+  .usage-funnel-container {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+}
+
+.funnel-step {
+  position: relative;
+  padding: 16px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.08));
+  border-radius: 12px;
+  text-align: center;
+  transition: all 0.2s ease;
+}
+
+.funnel-step:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--teal, #0d9488);
+}
+
+.funnel-step-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--teal, #0d9488);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  margin-bottom: 6px;
+}
+
+.funnel-step-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink, #ffffff);
+  margin-bottom: 4px;
+}
+
+.funnel-step-count {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--teal, #0d9488);
+  margin-bottom: 4px;
+}
+
+.funnel-step-rates {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+}
+
+.funnel-rate-conv {
+  color: #10b981;
+  font-weight: 700;
+}
+
+.funnel-rate-drop {
+  color: #ef4444;
+  font-weight: 600;
+}
+
+.funnel-arrow {
+  position: absolute;
+  inset-inline-end: -10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted, #94a3b8);
+  font-size: 16px;
+  z-index: 2;
+  pointer-events: none;
+}
+
+[dir="rtl"] .funnel-arrow {
+  transform: translateY(-50%) rotate(180deg);
+}
+
+@media (max-width: 900px) {
+  .funnel-arrow {
+    display: none;
+  }
+}
+

@@ -103,6 +103,12 @@ const EVENT_TYPES = Object.freeze({
   APPOINTMENT_REMINDER_ANALYTICS_VIEWED: 'appointment_reminder_analytics_viewed',
   APPOINTMENT_REMINDER_CHANNEL_OPT_OUT: 'appointment_reminder_channel_opt_out',
 
+  // 📈 Doctolib Usage & Conversion Analytics Telemetry
+  PATIENT_REGISTERED: 'patient_registered',
+  CONVERSION_FUNNEL_ADVANCED: 'conversion_funnel_advanced',
+  BOOKING_CONVERTED_FROM_ASSESSMENT: 'booking_converted_from_assessment',
+  USAGE_ANALYTICS_VIEWED: 'usage_analytics_viewed',
+
   // 🧪 Lab Upload & Medical Diagnostics Telemetry (Docus AI Benchmark)
   LAB_UPLOAD_ATTEMPT: 'lab_upload_attempt',
   LAB_UPLOAD_SUCCESS: 'lab_upload_success',
@@ -302,7 +308,9 @@ function sanitizeAndValidatePayload(eventType, payload = {}) {
     'calendarProvider', 'syncId', 'syncedAt', 'isDoctor', 'consent', 'enforceConsent',
     'consentStatus', 'syncStatus', 'syncMethod', 'cardCount', 'appointmentDate', 'timeSlot',
     'slotKey', 'deepLinkType', 'hasTelehealthUrl', 'reasonCategory', 'consentRevoked',
-    'buttonLocation', 'screenName', 'calendarTitle', 'clientTimestamp', 'actorId'
+    'buttonLocation', 'screenName', 'calendarTitle', 'clientTimestamp', 'actorId',
+    // 📈 Doctolib Usage & Conversion Analytics operational metadata
+    'dossierAttached', 'stage', 'funnelStep', 'converted', 'reviewDurationMinutes', 'triageSeverity'
   ];
 
   for (const [k, v] of Object.entries(payload)) {
@@ -864,6 +872,13 @@ function calculateProductKpis(events = inMemoryEvents, options = {}) {
 
     // 10. DOCTOR MEDICAL FILE & RADIOLOGY VIEWER UTILIZATION & SUCCESS (Rology Flow)
     medicalViewer: calculateMedicalViewerKpis(filteredEvents, {
+      timePeriod: periodLabel,
+      clinicId: clinicFilter,
+      isEn: options.isEn
+    }),
+
+    // 11. DOCTOLIB USAGE & CONVERSION ANALYTICS
+    usageConversion: calculateUsageConversionKpis(filteredEvents, {
       timePeriod: periodLabel,
       clinicId: clinicFilter,
       isEn: options.isEn
@@ -2991,6 +3006,480 @@ function getScheduledReassessmentAnalytics(options = {}) {
 }
 
 /**
+ * 📈 DOCTOLIB BENCHMARK: USAGE & CONVERSION ANALYTICS ENGINE
+ *
+ * Tracks:
+ * 1. Registered Patients Count & Growth: Total registered users, period additions, active cohorts.
+ * 2. Completed Health Assessments: Started vs completed triage, completion rate, risk/severity distribution.
+ * 3. Physician Average Review Time: Duration from completion to clinical review/certification, median, SLA compliance (< 30m).
+ * 4. Conversion Rate to Appointment Booking: Assessments/patients converting to confirmed bookings, dossier attachment lift (+34%), modality distribution.
+ * 5. 5-Stage Multi-Touch Conversion Funnel: Registered -> Started -> Completed -> Reviewed -> Booked with step-to-step conversion & drop-off.
+ * 6. Doctor Leaderboard & Patient Conversion Log Table generation.
+ */
+function calculateUsageConversionKpis(events = inMemoryEvents, options = {}) {
+  const isEn = Boolean(options.isEn);
+  const now = Date.now();
+  const timePeriod = options.timePeriod || 'all';
+  const clinicFilter = (options.clinicId || '').trim().toLowerCase();
+
+  let minTs = 0;
+  let maxTs = Infinity;
+
+  if (options.startDate) {
+    minTs = Date.parse(options.startDate) || 0;
+  }
+  if (options.endDate) {
+    const endP = Date.parse(options.endDate) || 0;
+    maxTs = typeof options.endDate === 'string' && options.endDate.length === 10 ? endP + 86399999 : endP;
+  }
+  if (!options.startDate && !options.endDate) {
+    if (timePeriod === 'today' || timePeriod === 'last_24h') {
+      const d = new Date();
+      d.setHours(0, 0, 0, 0);
+      minTs = d.getTime();
+      maxTs = now;
+    } else if (timePeriod === '7d' || timePeriod === 'last_7d') {
+      minTs = now - 7 * 24 * 3600 * 1000;
+      maxTs = now;
+    } else if (timePeriod === '30d' || timePeriod === 'last_30d') {
+      minTs = now - 30 * 24 * 3600 * 1000;
+      maxTs = now;
+    }
+  }
+
+  const periodLabel = options.startDate && options.endDate
+    ? `${options.startDate} to ${options.endDate}`
+    : timePeriod;
+
+  function matchType(e, targetType) {
+    const raw = String(e.eventType || e.type || '').trim().toLowerCase();
+    const target = String(targetType).trim().toLowerCase();
+    return raw === target;
+  }
+
+  // Filter events within window and clinic
+  const filteredEvents = (events || []).filter(e => {
+    if (!e) return false;
+    const ts = e.timestamp ? (typeof e.timestamp === 'number' ? e.timestamp : Date.parse(e.timestamp) || 0) : 0;
+    if (minTs > 0 && ts < minTs) return false;
+    if (maxTs < Infinity && ts > maxTs) return false;
+    if (clinicFilter && clinicFilter !== 'all') {
+      const cId = String(e.clinicId || e.payload?.clinicId || e.properties?.clinicId || '').trim().toLowerCase();
+      if (cId && cId !== clinicFilter) return false;
+    }
+    return true;
+  });
+
+  // Today window for daily additions
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayStartTs = todayStart.getTime();
+
+  // 1. REGISTERED PATIENTS METRICS
+  const registeredUserIds = new Set();
+  let registeredTodayCount = 0;
+  (events || []).forEach(e => {
+    if (matchType(e, EVENT_TYPES.SIGNUP) || matchType(e, EVENT_TYPES.PATIENT_REGISTERED)) {
+      const uid = e.userId || e.payload?.userId || e.payload?.patientId;
+      if (uid) registeredUserIds.add(uid);
+      const ts = e.timestamp ? (typeof e.timestamp === 'number' ? e.timestamp : Date.parse(e.timestamp) || 0) : 0;
+      if (ts >= todayStartTs) registeredTodayCount++;
+    }
+  });
+
+  const periodRegisteredUsers = new Set();
+  filteredEvents.forEach(e => {
+    if (matchType(e, EVENT_TYPES.SIGNUP) || matchType(e, EVENT_TYPES.PATIENT_REGISTERED)) {
+      const uid = e.userId || e.payload?.userId || e.payload?.patientId;
+      if (uid) periodRegisteredUsers.add(uid);
+    }
+  });
+
+  const totalRegisteredCount = registeredUserIds.size;
+  const filteredRegisteredCount = periodRegisteredUsers.size > 0 ? periodRegisteredUsers.size : totalRegisteredCount;
+
+  // 2. COMPLETED ASSESSMENTS METRICS
+  const startEvents = filteredEvents.filter(e => matchType(e, EVENT_TYPES.ASSESSMENT_START));
+  const completeEvents = filteredEvents.filter(e => matchType(e, EVENT_TYPES.ASSESSMENT_COMPLETE));
+  const abandonEvents = filteredEvents.filter(e => matchType(e, EVENT_TYPES.ASSESSMENT_ABANDON));
+
+  const startedAssessmentsCount = startEvents.length;
+  const completedAssessmentsCount = completeEvents.length;
+  const abandonedAssessmentsCount = abandonEvents.length;
+
+  const assessmentCompletionRate = startedAssessmentsCount > 0
+    ? Number(((completedAssessmentsCount / startedAssessmentsCount) * 100).toFixed(1))
+    : null;
+
+  // Severity & Risk breakdown
+  let urgentAssessmentsCount = 0;
+  let highAssessmentsCount = 0;
+  let normalAssessmentsCount = 0;
+
+  completeEvents.forEach(e => {
+    const p = e.payload || {};
+    const o2 = Number(p.oxygenLevel || p.spo2 || p.o2 || 0);
+    const risk = String(p.priority || p.risk || p.severity || '').toLowerCase();
+    if ((o2 > 0 && o2 < 90) || risk === 'urgent' || risk === 'critical') {
+      urgentAssessmentsCount++;
+    } else if ((o2 >= 90 && o2 < 93) || risk === 'high') {
+      highAssessmentsCount++;
+    } else {
+      normalAssessmentsCount++;
+    }
+  });
+
+  // 3. PHYSICIAN AVERAGE REVIEW TIME METRICS
+  const reviewDurations = [];
+  const urgentReviewDurations = [];
+  const doctorReviewMap = new Map();
+  const completesMap = new Map();
+
+  completeEvents.forEach(e => {
+    const key = e.payload?.caseId || e.payload?.assessmentId || e.payload?.id;
+    const ts = e.timestamp ? (typeof e.timestamp === 'number' ? e.timestamp : Date.parse(e.timestamp) || 0) : 0;
+    if (key && ts > 0) completesMap.set(key, ts);
+  });
+
+  const doctorReviewEvents = filteredEvents.filter(e => matchType(e, EVENT_TYPES.DOCTOR_REVIEW));
+
+  doctorReviewEvents.forEach(e => {
+    const p = e.payload || {};
+    const key = p.caseId || p.assessmentId;
+    const docId = p.doctorId || e.userId || 'doc_general';
+    const docName = p.doctorName || (isEn ? `Dr. ${docId}` : `د. ${docId}`);
+    const clinicName = p.clinicName || e.clinicId || (isEn ? 'Main Medical Center' : 'المركز الطبي الرئيسي');
+    const ts = e.timestamp ? (typeof e.timestamp === 'number' ? e.timestamp : Date.parse(e.timestamp) || 0) : 0;
+
+    let diffMin = null;
+    if (typeof p.responseTimeMs === 'number') {
+      diffMin = p.responseTimeMs / 60000;
+    } else if (typeof p.reviewDurationMinutes === 'number') {
+      diffMin = p.reviewDurationMinutes;
+    } else if (key && completesMap.has(key)) {
+      const compTs = completesMap.get(key);
+      if (ts >= compTs) {
+        diffMin = (ts - compTs) / 60000;
+      }
+    }
+
+    if (!doctorReviewMap.has(docId)) {
+      doctorReviewMap.set(docId, {
+        doctorId: docId,
+        doctorName: docName,
+        clinicName: clinicName,
+        reviewsCount: 0,
+        durations: [],
+        convertedBookings: 0
+      });
+    }
+
+    const docEntry = doctorReviewMap.get(docId);
+    docEntry.reviewsCount++;
+
+    if (diffMin !== null && diffMin >= 0) {
+      reviewDurations.push(diffMin);
+      docEntry.durations.push(diffMin);
+      const isUrgent = p.priority === 'urgent' || (Number(p.oxygenLevel) > 0 && Number(p.oxygenLevel) < 90);
+      if (isUrgent) urgentReviewDurations.push(diffMin);
+    }
+  });
+
+  reviewDurations.sort((a, b) => a - b);
+  const totalReviewsEvaluated = reviewDurations.length;
+  const avgDoctorReviewTimeMinutes = totalReviewsEvaluated > 0
+    ? Number((reviewDurations.reduce((a, b) => a + b, 0) / totalReviewsEvaluated).toFixed(1))
+    : null;
+  const medianDoctorReviewTimeMinutes = totalReviewsEvaluated > 0
+    ? Number(reviewDurations[Math.floor(totalReviewsEvaluated / 2)].toFixed(1))
+    : null;
+  const urgentAvgDoctorReviewTimeMinutes = urgentReviewDurations.length > 0
+    ? Number((urgentReviewDurations.reduce((a, b) => a + b, 0) / urgentReviewDurations.length).toFixed(1))
+    : null;
+
+  // SLA is < 30 minutes
+  const slaOnTimeCount = reviewDurations.filter(d => d <= 30).length;
+  const reviewSlaComplianceRate = totalReviewsEvaluated > 0
+    ? Number(((slaOnTimeCount / totalReviewsEvaluated) * 100).toFixed(1))
+    : null;
+
+  // 4. CONVERSION RATE TO APPOINTMENT BOOKING (Doctolib Model)
+  const bookingSuccessEvents = filteredEvents.filter(e =>
+    matchType(e, EVENT_TYPES.APPOINTMENT_BOOK_SUCCESS) ||
+    matchType(e, EVENT_TYPES.FOLLOW_UP_BOOKED) ||
+    matchType(e, EVENT_TYPES.BOOKING_CONVERTED_FROM_ASSESSMENT)
+  );
+
+  const convertedPatients = new Set();
+  let dossierAttachedBookings = 0;
+  let telehealthBookings = 0;
+  let inClinicBookings = 0;
+
+  bookingSuccessEvents.forEach(e => {
+    const p = e.payload || {};
+    const uid = e.userId || p.patientId || p.userId;
+    if (uid) convertedPatients.add(uid);
+
+    const isDossierAttached = Boolean(
+      p.dossierAttached ||
+      p.linkedCaseId ||
+      p.caseId ||
+      p.assessmentId ||
+      p.previsitDossierAttached
+    );
+    if (isDossierAttached) dossierAttachedBookings++;
+
+    const cType = String(p.consultationType || (p.isOnlineConsultation ? 'video' : 'clinic')).toLowerCase();
+    if (cType === 'video' || cType === 'telehealth' || cType === 'followup') {
+      telehealthBookings++;
+    } else {
+      inClinicBookings++;
+    }
+
+    const docId = p.doctorId || e.payload?.doctorId;
+    if (docId && doctorReviewMap.has(docId)) {
+      doctorReviewMap.get(docId).convertedBookings++;
+    }
+  });
+
+  const totalBookingsConverted = bookingSuccessEvents.length;
+  const totalUniqueConvertedPatients = convertedPatients.size;
+
+  // Conversion rate from completed assessments
+  const conversionRate = completedAssessmentsCount > 0
+    ? Number(((totalBookingsConverted / completedAssessmentsCount) * 100).toFixed(1))
+    : (startedAssessmentsCount > 0 ? Number(((totalBookingsConverted / startedAssessmentsCount) * 100).toFixed(1)) : null);
+
+  const conversionRateFromRegistered = filteredRegisteredCount > 0
+    ? Number(((totalBookingsConverted / filteredRegisteredCount) * 100).toFixed(1))
+    : null;
+
+  // Dossier attachment lift (+34% on Doctolib)
+  const dossierAttachmentRate = totalBookingsConverted > 0
+    ? Number(((dossierAttachedBookings / totalBookingsConverted) * 100).toFixed(1))
+    : null;
+
+  // 5. 5-STAGE DOCTOLIB CONVERSION FUNNEL
+  const stage1Count = filteredRegisteredCount;
+  const stage2Count = startedAssessmentsCount;
+  const stage3Count = completedAssessmentsCount;
+  const stage4Count = doctorReviewEvents.length;
+  const stage5Count = totalBookingsConverted;
+
+  const funnel = [
+    {
+      stage: 1,
+      id: 'registered',
+      name: 'Registered Patients',
+      nameAr: 'المسجلون',
+      count: stage1Count,
+      conversionFromPrev: 100,
+      dropoffRate: 0,
+      cumulativeConversion: 100
+    },
+    {
+      stage: 2,
+      id: 'assessment_start',
+      name: 'Assessment Started',
+      nameAr: 'بدء الفحص السريري',
+      count: stage2Count,
+      conversionFromPrev: stage1Count > 0 ? Number(((stage2Count / stage1Count) * 100).toFixed(1)) : (stage2Count > 0 ? 100 : 0),
+      dropoffRate: stage1Count > 0 ? Number((Math.max(0, (stage1Count - stage2Count) / stage1Count) * 100).toFixed(1)) : 0,
+      cumulativeConversion: stage1Count > 0 ? Number(((stage2Count / stage1Count) * 100).toFixed(1)) : 0
+    },
+    {
+      stage: 3,
+      id: 'assessment_complete',
+      name: 'Assessment Completed',
+      nameAr: 'فحص سريري مكتمل',
+      count: stage3Count,
+      conversionFromPrev: stage2Count > 0 ? Number(((stage3Count / stage2Count) * 100).toFixed(1)) : 0,
+      dropoffRate: stage2Count > 0 ? Number((Math.max(0, (stage2Count - stage3Count) / stage2Count) * 100).toFixed(1)) : 0,
+      cumulativeConversion: stage1Count > 0 ? Number(((stage3Count / stage1Count) * 100).toFixed(1)) : 0
+    },
+    {
+      stage: 4,
+      id: 'doctor_reviewed',
+      name: 'Doctor Reviewed',
+      nameAr: 'مراجعة واعتماد الطبيب',
+      count: stage4Count,
+      conversionFromPrev: stage3Count > 0 ? Number(((stage4Count / stage3Count) * 100).toFixed(1)) : 0,
+      dropoffRate: stage3Count > 0 ? Number((Math.max(0, (stage3Count - stage4Count) / stage3Count) * 100).toFixed(1)) : 0,
+      cumulativeConversion: stage1Count > 0 ? Number(((stage4Count / stage1Count) * 100).toFixed(1)) : 0
+    },
+    {
+      stage: 5,
+      id: 'booking_converted',
+      name: 'Appointment Booked',
+      nameAr: 'حجز موعد مؤكد',
+      count: stage5Count,
+      conversionFromPrev: stage4Count > 0 ? Number(((stage5Count / stage4Count) * 100).toFixed(1)) : (stage3Count > 0 ? Number(((stage5Count / stage3Count) * 100).toFixed(1)) : 0),
+      dropoffRate: stage4Count > 0 ? Number((Math.max(0, (stage4Count - stage5Count) / stage4Count) * 100).toFixed(1)) : 0,
+      cumulativeConversion: stage1Count > 0 ? Number(((stage5Count / stage1Count) * 100).toFixed(1)) : (stage2Count > 0 ? Number(((stage5Count / stage2Count) * 100).toFixed(1)) : 0)
+    }
+  ];
+
+  // 6. DOCTOR LEADERBOARD ROWS
+  const doctorLeaderboard = Array.from(doctorReviewMap.values()).map(d => {
+    const docAvg = d.durations.length > 0
+      ? Number((d.durations.reduce((a, b) => a + b, 0) / d.durations.length).toFixed(1))
+      : null;
+    const docOnTime = d.durations.filter(x => x <= 30).length;
+    const docSlaRate = d.durations.length > 0
+      ? Number(((docOnTime / d.durations.length) * 100).toFixed(1))
+      : null;
+    const docConvRate = d.reviewsCount > 0
+      ? Number(((d.convertedBookings / d.reviewsCount) * 100).toFixed(1))
+      : 0;
+
+    return {
+      doctorId: d.doctorId,
+      doctorName: d.doctorName,
+      clinicName: d.clinicName,
+      reviewsCount: d.reviewsCount,
+      avgReviewTimeMinutes: docAvg,
+      avgReviewDisplay: docAvg !== null ? (isEn ? `${docAvg} min` : `${docAvg} دقيقة`) : (isEn ? 'Unavailable' : 'غير متاح'),
+      convertedBookings: d.convertedBookings,
+      conversionRate: docConvRate,
+      conversionRateDisplay: `${docConvRate}%`,
+      slaRate: docSlaRate,
+      slaStatus: docAvg !== null && docAvg <= 30 ? 'optimal' : (docAvg !== null && docAvg <= 60 ? 'warning' : 'critical')
+    };
+  });
+
+  // 7. PATIENT JOURNEYS (Pseudonymized & Zero-PHI)
+  const patientJourneys = [];
+  const processedUserIds = new Set();
+  filteredEvents.forEach(e => {
+    const rawUid = e.userId || e.payload?.patientId;
+    if (!rawUid || processedUserIds.has(rawUid) || patientJourneys.length >= 50) return;
+    processedUserIds.add(rawUid);
+
+    // Pseudonymize with salted SHA-256 hash (e.g. p_anon_a1b2c3d4)
+    const pseudonym = 'p_anon_' + crypto.createHash('sha256').update(`hv_salt_${rawUid}`).digest('hex').substring(0, 8);
+    const userEvents = filteredEvents.filter(ev => ev.userId === rawUid);
+    const hasCompleted = userEvents.some(ev => matchType(ev, EVENT_TYPES.ASSESSMENT_COMPLETE));
+    const hasBooked = userEvents.some(ev => matchType(ev, EVENT_TYPES.APPOINTMENT_BOOK_SUCCESS) || matchType(ev, EVENT_TYPES.BOOKING_CONVERTED_FROM_ASSESSMENT));
+    const reviewEv = userEvents.find(ev => matchType(ev, EVENT_TYPES.DOCTOR_REVIEW));
+
+    patientJourneys.push({
+      id: pseudonym,
+      userId: pseudonym,
+      patientCode: `PT-${pseudonym.slice(-4).toUpperCase()}`,
+      date: new Date(e.timestamp || Date.now()).toLocaleDateString(isEn ? 'en-US' : 'ar-EG'),
+      assessmentStatus: hasCompleted ? (isEn ? 'Certified' : 'معتمد') : (isEn ? 'In Progress' : 'قيد الفحص'),
+      assessmentCompleted: hasCompleted,
+      reviewDuration: reviewEv ? (isEn ? `${reviewEv.payload?.reviewDurationMinutes || 15} mins` : `${reviewEv.payload?.reviewDurationMinutes || 15} دقيقة`) : (isEn ? 'Pending' : 'قيد المراجعة'),
+      appointmentBooked: hasBooked,
+      conversionStage: hasBooked ? (isEn ? 'Booked' : 'حجز مؤكد') : (hasCompleted ? (isEn ? 'Reviewed' : 'تمت المراجعة') : (isEn ? 'Assessment Started' : 'بدأ الفحص'))
+    });
+  });
+
+  return {
+    success: true,
+    benchmark: 'Doctolib',
+    timePeriod: periodLabel,
+    clinicId: clinicFilter || 'all',
+    evaluatedEventsCount: filteredEvents.length,
+    patientJourneys,
+
+    // 1. Registered Patients
+    registeredPatients: {
+      total: filteredRegisteredCount,
+      allTimeTotal: totalRegisteredCount,
+      today: registeredTodayCount,
+      display: String(filteredRegisteredCount),
+      todayDisplay: isEn ? `Today: ${registeredTodayCount} new patients` : `اليوم: ${registeredTodayCount} مريض جديد`
+    },
+
+    // 2. Completed Assessments
+    completedAssessments: {
+      started: startedAssessmentsCount,
+      completed: completedAssessmentsCount,
+      abandoned: abandonedAssessmentsCount,
+      completionRate: assessmentCompletionRate,
+      completionRateDisplay: assessmentCompletionRate !== null ? `${assessmentCompletionRate}%` : (isEn ? 'Unavailable' : 'غير متاح'),
+      breakdown: {
+        urgent: urgentAssessmentsCount,
+        high: highAssessmentsCount,
+        normal: normalAssessmentsCount
+      },
+      breakdownDisplay: isEn
+        ? `Urgent: ${urgentAssessmentsCount} | High: ${highAssessmentsCount} | Normal: ${normalAssessmentsCount}`
+        : `عاجل: ${urgentAssessmentsCount} | عالي: ${highAssessmentsCount} | عادي: ${normalAssessmentsCount}`
+    },
+
+    // 3. Average Doctor Review Time
+    doctorReviewTime: {
+      avgMinutes: avgDoctorReviewTimeMinutes,
+      medianMinutes: medianDoctorReviewTimeMinutes,
+      urgentAvgMinutes: urgentAvgDoctorReviewTimeMinutes,
+      reviewsEvaluated: totalReviewsEvaluated,
+      slaComplianceRate: reviewSlaComplianceRate,
+      isAvailable: totalReviewsEvaluated > 0,
+      display: totalReviewsEvaluated > 0 ? (isEn ? `${avgDoctorReviewTimeMinutes} min` : `${avgDoctorReviewTimeMinutes} دقيقة`) : (isEn ? 'Unavailable' : 'غير متاح'),
+      slaStatus: avgDoctorReviewTimeMinutes !== null && avgDoctorReviewTimeMinutes <= 30 ? 'optimal' : 'warning',
+      slaDisplay: isEn
+        ? `SLA: < 30m (${reviewSlaComplianceRate !== null ? reviewSlaComplianceRate : 0}% compliance)`
+        : `SLA: < 30 دقيقة (الالتزام: ${reviewSlaComplianceRate !== null ? reviewSlaComplianceRate : 0}%)`
+    },
+
+    // 4. Conversion Rate to Appointment Booking
+    conversion: {
+      totalBookingsConverted,
+      uniqueConvertedPatients: totalUniqueConvertedPatients,
+      conversionRate,
+      conversionRateFromRegistered,
+      conversionRateDisplay: conversionRate !== null ? `${conversionRate}%` : (isEn ? 'Unavailable' : 'غير متاح'),
+      dossierAttachedBookings,
+      dossierAttachmentRate,
+      dossierBoostDisplay: isEn ? '+34% conversion boost with attached dossier' : '+34% زيادة تحويل مع الملف الطبي المرفق',
+      modality: {
+        telehealth: telehealthBookings,
+        inClinic: inClinicBookings,
+        telehealthRatio: totalBookingsConverted > 0 ? Number(((telehealthBookings / totalBookingsConverted) * 100).toFixed(1)) : 0,
+        inClinicRatio: totalBookingsConverted > 0 ? Number(((inClinicBookings / totalBookingsConverted) * 100).toFixed(1)) : 0
+      }
+    },
+
+    // 5. Funnel
+    funnel,
+
+    // 6. Doctor Leaderboard
+    doctorLeaderboard,
+
+    // SLA Benchmarks
+    slaBenchmarks: [
+      {
+        kpi: isEn ? 'Doctor Review Turnaround' : 'سرعة مراجعة واعتماد الطبيب',
+        target: '< 30m',
+        actual: avgDoctorReviewTimeMinutes !== null ? `${avgDoctorReviewTimeMinutes}m` : (isEn ? 'Unavailable' : 'غير متاح'),
+        compliance: reviewSlaComplianceRate !== null ? `${reviewSlaComplianceRate}%` : 'N/A',
+        status: avgDoctorReviewTimeMinutes !== null && avgDoctorReviewTimeMinutes <= 30 ? 'optimal' : 'warning'
+      },
+      {
+        kpi: isEn ? 'Assessment Completion Rate' : 'معدل إكمال التقييمات السريرية',
+        target: '≥ 90%',
+        actual: assessmentCompletionRate !== null ? `${assessmentCompletionRate}%` : (isEn ? 'Unavailable' : 'غير متاح'),
+        compliance: assessmentCompletionRate !== null && assessmentCompletionRate >= 90 ? '100%' : 'Needs Focus',
+        status: assessmentCompletionRate !== null && assessmentCompletionRate >= 90 ? 'optimal' : 'warning'
+      },
+      {
+        kpi: isEn ? 'Booking Conversion Rate (Doctolib)' : 'معدل التحول لحجز المواعيد',
+        target: '≥ 60%',
+        actual: conversionRate !== null ? `${conversionRate}%` : (isEn ? 'Unavailable' : 'غير متاح'),
+        compliance: conversionRate !== null && conversionRate >= 60 ? '100%' : 'Normal',
+        status: conversionRate !== null && conversionRate >= 60 ? 'optimal' : 'neutral'
+      }
+    ]
+  };
+}
+
+function getUsageConversionAnalytics(options = {}) {
+  return calculateUsageConversionKpis(inMemoryEvents, options);
+}
+
+/**
  * Resets the in-memory analytics state (useful for clean testing).
  */
 function resetAnalyticsState() {
@@ -3048,6 +3537,8 @@ module.exports = {
   getMedicationReminderAnalytics,
   calculateScheduledReassessmentKpis,
   getScheduledReassessmentAnalytics,
+  calculateUsageConversionKpis,
+  getUsageConversionAnalytics,
   sanitizeAndValidatePayload,
   sanitizeProperties: (props) => sanitizeAndValidatePayload(EVENT_TYPES.APPOINTMENT_BOOK_ATTEMPT, props).cleanPayload,
   buildKpiMetric,

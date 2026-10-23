@@ -24,6 +24,9 @@
             <button type="button" class="solid-button" onclick="document.getElementById('adminModelRegistryContainer')?.scrollIntoView({behavior: 'smooth'})" style="padding: 8px 16px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; background: linear-gradient(135deg, #0284c7, #0ea5e9);">
               <span>📜</span> سجل إصدارات النماذج والتبديل الآمن
             </button>
+            <button type="button" class="solid-button" onclick="document.getElementById('adminUsageConversionAnalyticsPanel')?.scrollIntoView({behavior: 'smooth'})" style="padding: 8px 16px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; background: linear-gradient(135deg, #0d9488, #059669);">
+              <span>📈</span> تحليلات الاستخدام والتحويل (Doctolib)
+            </button>
             <button type="button" class="solid-button" onclick="document.getElementById('adminClinicalCmsContainer')?.scrollIntoView({behavior: 'smooth'})" style="padding: 8px 16px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; background: linear-gradient(135deg, #0f766e, #0d9488);">
               <span>📚</span> إدارة التوصيات الطبية (Clinical CMS)
             </button>
@@ -361,8 +364,236 @@
             </table>
           </div>
         </article>
-      
-        <!-- 30. APPOINTMENT CALENDAR TELEMETRY & BOOKING ANALYTICS -->
+
+        <!-- 30. DOCTOLIB USAGE & CONVERSION ANALYTICS DASHBOARD -->
+        <article class="panel" id="adminUsageConversionAnalyticsPanel" style="margin-top: 24px;">
+          <div class="panel-head" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <h3 style="margin: 0; font-size: 19px;" data-i18n="appointments.usageConversionTitle">لوحة تحليلات الاستخدام والتحويل (Usage & Conversion Analytics)</h3>
+                <span class="pill ok" id="adminUsageHealthBadge" style="font-size: 11px;">Doctolib Benchmark 🟢</span>
+              </div>
+              <p style="margin: 4px 0 0; font-size: 13px; color: var(--muted);" data-i18n="appointments.usageConversionSubtitle">
+                متابعة أعداد المرضى المسجلين، التقييمات المكتملة، متوسط وقت مراجعة الأطباء، ومعدل التحول لحجز المواعيد
+              </p>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <span id="adminUsageLastRefreshed" style="font-size: 12px; color: var(--muted);">آخر تحديث: الآن</span>
+              <button type="button" class="soft-button" onclick="refreshAdminUsageConversionAnalytics()" id="btnRefreshUsageConversion" style="padding: 6px 12px; font-size: 12.5px; display: inline-flex; align-items: center; gap: 5px;">
+                <span id="adminUsageRefreshSpinner">🔄</span> <span data-i18n="appointments.refreshAnalyticsBtn">تحديث التحليلات</span>
+              </button>
+              <button type="button" class="outline-button" onclick="exportAdminUsageConversionCsv()" id="btnExportUsageConversionCsv" style="padding: 6px 12px; font-size: 12.5px; display: inline-flex; align-items: center; gap: 5px;">
+                <span>📥</span> <span data-i18n="appointments.exportCsvBtn">تصدير CSV</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Fast Filter Toolbar -->
+          <div class="usage-filter-toolbar">
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+              <span style="font-size: 13px; font-weight: 700; color: var(--muted);">النطاق الزمني:</span>
+              <div class="usage-pill-group" id="usageTimeFilterGroup">
+                <button type="button" class="usage-pill-btn active" data-range="all" onclick="setUsageConversionTimeFilter('all')">الكل (All)</button>
+                <button type="button" class="usage-pill-btn" data-range="today" onclick="setUsageConversionTimeFilter('today')">اليوم (Today)</button>
+                <button type="button" class="usage-pill-btn" data-range="7d" onclick="setUsageConversionTimeFilter('7d')">آخر 7 أيام (7d)</button>
+                <button type="button" class="usage-pill-btn" data-range="30d" onclick="setUsageConversionTimeFilter('30d')">آخر 30 يوم (30d)</button>
+              </div>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+              <label for="adminUsageClinicFilter" style="font-size: 12.5px; font-weight: 600; color: var(--muted);">العيادة:</label>
+              <select id="adminUsageClinicFilter" onchange="setUsageConversionClinicFilter(this.value)" style="padding: 6px 10px; font-size: 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);">
+                <option value="all">كافة العيادات والفروع (All Clinics)</option>
+              </select>
+
+              <label for="adminUsageModeFilter" style="font-size: 12.5px; font-weight: 600; color: var(--muted);">القناة:</label>
+              <select id="adminUsageModeFilter" onchange="setUsageConversionModeFilter(this.value)" style="padding: 6px 10px; font-size: 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);">
+                <option value="all">كافة القنوات (All Modalities)</option>
+                <option value="clinic">عيادة (حضوري)</option>
+                <option value="video">عن بُعد (فيديو Telehealth)</option>
+              </select>
+
+              <input type="text" id="adminUsageTableSearch" oninput="filterUsageConversionTables(this.value)" placeholder="بحث سريع في الجداول..." style="padding: 6px 12px; font-size: 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); width: 170px;">
+            </div>
+          </div>
+
+          <!-- Hero KPI Cards -->
+          <div class="usage-hero-grid" id="adminUsageHeroGrid">
+            <!-- 1. Registered Patients -->
+            <div class="usage-kpi-card emerald" id="cardUsageRegistered">
+              <div class="usage-kpi-header">
+                <span class="usage-kpi-icon">👥</span>
+                <span class="usage-kpi-title" data-i18n="appointments.registeredPatientsTitle">المرضى المسجلون</span>
+              </div>
+              <div class="usage-kpi-value" id="adminUsageRegisteredPatientsCount">--</div>
+              <div class="usage-kpi-sub" id="adminUsageRegisteredTodayBadge">اليوم: -- جديد</div>
+            </div>
+
+            <!-- 2. Completed Assessments -->
+            <div class="usage-kpi-card teal" id="cardUsageAssessments">
+              <div class="usage-kpi-header">
+                <span class="usage-kpi-icon">🩺</span>
+                <span class="usage-kpi-title" data-i18n="appointments.completedAssessmentsTitle">التقييمات المكتملة</span>
+              </div>
+              <div class="usage-kpi-value" id="adminUsageCompletedAssessmentsCount">--</div>
+              <div class="usage-kpi-sub" id="adminUsageCompletionRateBadge">معدل الإكمال: <bdi class="bidi-isolate">--%</bdi></div>
+            </div>
+
+            <!-- 3. Doctor Review Time -->
+            <div class="usage-kpi-card blue" id="cardUsageReviewTime">
+              <div class="usage-kpi-header">
+                <span class="usage-kpi-icon">⏱️</span>
+                <span class="usage-kpi-title" data-i18n="appointments.doctorReviewTimeTitle">متوسط وقت مراجعة الأطباء</span>
+              </div>
+              <div class="usage-kpi-value" id="adminUsageAvgDoctorReviewTime">--</div>
+              <div class="usage-kpi-sub" id="adminUsageReviewSlaBadge">SLA: <bdi class="bidi-isolate">&lt; 30 دقيقة</bdi></div>
+            </div>
+
+            <!-- 4. Conversion Rate -->
+            <div class="usage-kpi-card amber" id="cardUsageConversion">
+              <div class="usage-kpi-header">
+                <span class="usage-kpi-icon">🎯</span>
+                <span class="usage-kpi-title" data-i18n="appointments.bookingConversionRateTitle">معدل التحول لحجز المواعيد</span>
+              </div>
+              <div class="usage-kpi-value" id="adminUsageConversionRate" style="color: #f59e0b;">--%</div>
+              <div class="usage-kpi-sub" id="adminUsageTotalBookingsBadge">-- حجز مؤكد</div>
+            </div>
+          </div>
+
+          <!-- Doctolib 5-Stage Multi-Touch Conversion Funnel -->
+          <div class="usage-funnel-card">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+              <div>
+                <h4 style="margin: 0; font-size: 15px; font-weight: 700;" data-i18n="appointments.conversionFunnelTitle">قمع التحويل متعدد المراحل (Doctolib Funnel)</h4>
+                <p style="margin: 3px 0 0; font-size: 12px; color: var(--muted);">تتبع تسرب المرضى في كل خطوة من التسجيل حتى حجز موعد مؤكد</p>
+              </div>
+              <span class="pill info" id="adminUsageDossierLiftBadge">+34% زيادة تحويل بالملف الطبي المرفق (Pre-Visit Dossier)</span>
+            </div>
+
+            <div class="usage-funnel-container" id="adminUsageFunnelContainer">
+              <!-- Step 1 -->
+              <div class="funnel-step" data-step="1">
+                <div class="funnel-step-badge">1</div>
+                <div class="funnel-step-content">
+                  <div class="funnel-step-name" data-i18n="appointments.funnelStageRegistered">المسجلون</div>
+                  <div class="funnel-step-count" id="adminUsageFunnelStep1Count">0</div>
+                  <div class="funnel-step-rates"><span class="funnel-rate-conv">100% الأساس</span></div>
+                </div>
+                <div class="funnel-arrow">➜</div>
+              </div>
+
+              <!-- Step 2 -->
+              <div class="funnel-step" data-step="2">
+                <div class="funnel-step-badge">2</div>
+                <div class="funnel-step-content">
+                  <div class="funnel-step-name" data-i18n="appointments.funnelStageStarted">بدء الفحص</div>
+                  <div class="funnel-step-count" id="adminUsageFunnelStep2Count">0</div>
+                  <div class="funnel-step-rates">
+                    <span class="funnel-rate-conv" id="adminUsageFunnelStep2Rate">--% تحويل</span>
+                    <span class="funnel-rate-drop" id="adminUsageFunnelStep2Drop">--% تسرب</span>
+                  </div>
+                </div>
+                <div class="funnel-arrow">➜</div>
+              </div>
+
+              <!-- Step 3 -->
+              <div class="funnel-step" data-step="3">
+                <div class="funnel-step-badge">3</div>
+                <div class="funnel-step-content">
+                  <div class="funnel-step-name" data-i18n="appointments.funnelStageCompleted">فحص مكتمل</div>
+                  <div class="funnel-step-count" id="adminUsageFunnelStep3Count">0</div>
+                  <div class="funnel-step-rates">
+                    <span class="funnel-rate-conv" id="adminUsageFunnelStep3Rate">--% تحويل</span>
+                    <span class="funnel-rate-drop" id="adminUsageFunnelStep3Drop">--% تسرب</span>
+                  </div>
+                </div>
+                <div class="funnel-arrow">➜</div>
+              </div>
+
+              <!-- Step 4 -->
+              <div class="funnel-step" data-step="4">
+                <div class="funnel-step-badge">4</div>
+                <div class="funnel-step-content">
+                  <div class="funnel-step-name" data-i18n="appointments.funnelStageReviewed">مراجعة الطبيب</div>
+                  <div class="funnel-step-count" id="adminUsageFunnelStep4Count">0</div>
+                  <div class="funnel-step-rates">
+                    <span class="funnel-rate-conv" id="adminUsageFunnelStep4Rate">--% تحويل</span>
+                    <span class="funnel-rate-drop" id="adminUsageFunnelStep4Drop">--% تسرب</span>
+                  </div>
+                </div>
+                <div class="funnel-arrow">➜</div>
+              </div>
+
+              <!-- Step 5 -->
+              <div class="funnel-step" data-step="5">
+                <div class="funnel-step-badge">5</div>
+                <div class="funnel-step-content">
+                  <div class="funnel-step-name" data-i18n="appointments.funnelStageBooked">حجز موعد</div>
+                  <div class="funnel-step-count" id="adminUsageFunnelStep5Count">0</div>
+                  <div class="funnel-step-rates">
+                    <span class="funnel-rate-conv" id="adminUsageFunnelStep5Rate">--% تحويل</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Actionable Data Tables -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 20px;">
+            <!-- Doctor Leaderboard Table -->
+            <div class="admin-table-container">
+              <div style="padding: 12px 16px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center;">
+                <strong style="font-size: 13.5px;" data-i18n="appointments.doctorConversionLeaderboardTitle">أداء الأطباء ومعدل التحويل لحجز المواعيد</strong>
+                <span class="pill info" id="adminUsageDoctorCountBadge">0 أطباء</span>
+              </div>
+              <div style="overflow-x: auto;">
+                <table class="admin-table" id="adminUsageDoctorLeaderboardTable">
+                  <thead>
+                    <tr>
+                      <th>الطبيب والعيادة</th>
+                      <th>المراجعات</th>
+                      <th>متوسط الاستجابة</th>
+                      <th>الحجوزات</th>
+                      <th>معدل التحويل</th>
+                      <th>الالتزام</th>
+                      <th>الحالة</th>
+                    </tr>
+                  </thead>
+                  <tbody id="adminUsageDoctorLeaderboardTbody">
+                    <tr><td colspan="7" style="text-align:center; padding: 20px; color: var(--muted);">جاري تحميل بيانات الأطباء...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Patient Journey Log Table -->
+            <div class="admin-table-container">
+              <div style="padding: 12px 16px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center;">
+                <strong style="font-size: 13.5px;" data-i18n="appointments.patientJourneyLogTitle">سجل مسار وتحويل المرضى</strong>
+                <span class="pill info" id="adminUsagePatientCountBadge">0 مرضى</span>
+              </div>
+              <div style="overflow-x: auto;">
+                <table class="admin-table" id="adminUsagePatientJourneyTable">
+                  <thead>
+                    <tr>
+                      <th>كود المريض</th>
+                      <th>تاريخ التسجيل</th>
+                      <th>حالة الفحص</th>
+                      <th>وقت المراجعة</th>
+                      <th>الموعد</th>
+                      <th>المرحلة</th>
+                    </tr>
+                  </thead>
+                  <tbody id="adminUsagePatientJourneyTbody">
+                    <tr><td colspan="6" style="text-align:center; padding: 20px; color: var(--muted);">جاري تحميل سجل المرضى...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <!-- 31. APPOINTMENT CALENDAR TELEMETRY & BOOKING ANALYTICS -->
         <article class="panel" id="adminAppointmentsAnalyticsPanel" style="margin-top: 24px;">
           <div class="panel-head" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
             <div>

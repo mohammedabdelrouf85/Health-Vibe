@@ -1224,6 +1224,397 @@
     };
   }
 
+  /**
+   * 📈 DOCTOLIB BENCHMARK: CLIENT-SIDE USAGE & CONVERSION ANALYTICS
+   * Aggregates cases, appointments, user accounts, and events into:
+   * - Registered patients count & daily additions
+   * - Completed health triage & risk distribution
+   * - Average physician review duration & SLA compliance (< 30m)
+   * - Conversion rate to appointment booking (Doctolib Model)
+   * - 5-Stage multi-touch conversion funnel
+   * - Doctor conversion leaderboard & patient journey logs
+   */
+  function calculateUsageConversionKpis(casesInput = [], appointmentsInput = [], usersInput = [], options = {}) {
+    let cases = casesInput;
+    let appointments = appointmentsInput;
+    let users = usersInput;
+    let opts = options;
+
+    if (casesInput && !Array.isArray(casesInput) && typeof casesInput === 'object') {
+      cases = casesInput.cases || [];
+      appointments = casesInput.appointments || [];
+      users = casesInput.users || [];
+      opts = appointmentsInput || casesInput.options || {};
+    }
+
+    const isEn = Boolean(opts.isEn);
+    const timeRange = opts.timeRange || opts.timePeriod || 'all';
+    const clinicFilter = (opts.clinicId || opts.clinic || '').trim().toLowerCase();
+    const startDate = opts.startDate || opts.from;
+    const endDate = opts.endDate || opts.to;
+    const now = Date.now();
+
+    const naText = isEn ? "Unavailable" : "غير متاح";
+
+    // 1. Filter out demo data
+    const realCases = (cases || []).filter(c => {
+      if (!c) return false;
+      return !c.isDemo && !c.isMock && !String(c.id || '').startsWith('demo_');
+    });
+
+    const realAppointments = (appointments || []).filter(a => {
+      if (!a) return false;
+      return !a.isDemo && !a.isMock && !String(a.id || '').startsWith('demo_');
+    });
+
+    const realUsers = (users || []).filter(u => {
+      if (!u) return false;
+      return !u.isDemo && !u.isMock && !String(u.id || u.uid || '').startsWith('demo_');
+    });
+
+    // 2. Date Bounds
+    let minTs = 0;
+    let maxTs = Infinity;
+
+    if (startDate) minTs = parseKpiTimestamp(startDate);
+    if (endDate) {
+      const parsedEnd = parseKpiTimestamp(endDate);
+      maxTs = typeof endDate === 'string' && endDate.length === 10 ? parsedEnd + (24 * 60 * 60 * 1000 - 1) : parsedEnd;
+    }
+    if (!startDate && !endDate) {
+      if (timeRange === 'today') {
+        const d = new Date();
+        d.setHours(0, 0, 0, 0);
+        minTs = d.getTime();
+        maxTs = now;
+      } else if (timeRange === '7d') {
+        minTs = now - (7 * 24 * 60 * 60 * 1000);
+        maxTs = now;
+      } else if (timeRange === '30d') {
+        minTs = now - (30 * 24 * 60 * 60 * 1000);
+        maxTs = now;
+      }
+    }
+
+    const inTimeWindow = (ts) => (minTs === 0 || ts >= minTs) && (maxTs === Infinity || ts <= maxTs);
+
+    // 3. Clinic Filter
+    const matchClinic = (item) => {
+      if (!clinicFilter || clinicFilter === 'all') return true;
+      const c = String(item.clinicId || item.clinic || item.branchId || item.clinicName || '').trim().toLowerCase();
+      return c === clinicFilter;
+    };
+
+    const filteredCases = realCases.filter(c => {
+      const ts = parseKpiTimestamp(c.submittedAt || c.createdAt || c.timestamp || c.updatedAt);
+      return inTimeWindow(ts) && matchClinic(c);
+    });
+
+    const filteredAppts = realAppointments.filter(a => {
+      const ts = parseKpiTimestamp(a.createdAt || a.timestamp || a.date);
+      return inTimeWindow(ts) && matchClinic(a);
+    });
+
+    const filteredUsers = realUsers.filter(u => {
+      const ts = parseKpiTimestamp(u.createdAt || u.created_at || u.timestamp);
+      return inTimeWindow(ts) && matchClinic(u);
+    });
+
+    // Today Start
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayStartTs = todayStart.getTime();
+
+    // 4. REGISTERED PATIENTS METRICS
+    const totalUsersCount = realUsers.length;
+    const periodUsersCount = filteredUsers.length > 0 ? filteredUsers.length : totalUsersCount;
+    const registeredToday = realUsers.filter(u => {
+      const ts = parseKpiTimestamp(u.createdAt || u.created_at || u.timestamp);
+      return ts >= todayStartTs;
+    }).length;
+
+    // 5. COMPLETED ASSESSMENTS METRICS
+    const totalCasesCount = filteredCases.length;
+    const completedCases = filteredCases.filter(c => c.status === 'approved' || c.doctorApproved === true || c.status === 'closed');
+    const completedCasesCount = completedCases.length;
+    const completionRate = totalCasesCount > 0 ? Math.round((completedCasesCount / totalCasesCount) * 100) : null;
+
+    let urgentCount = 0;
+    let highCount = 0;
+    let normalCount = 0;
+
+    filteredCases.forEach(c => {
+      const o2 = Number(c.oxygenLevel) || Number(c.o2);
+      const prio = String(c.priority || c.risk || '').toLowerCase();
+      if ((o2 > 0 && o2 < 90) || prio === 'urgent') urgentCount++;
+      else if ((o2 >= 90 && o2 < 93) || prio === 'high') highCount++;
+      else normalCount++;
+    });
+
+    // 6. DOCTOR REVIEW TIME METRICS
+    const reviewDurations = [];
+    const urgentReviewDurations = [];
+    const doctorStats = new Map(); // docId -> { docId, docName, clinicName, reviews, durations, bookings }
+
+    filteredCases.forEach(c => {
+      const submitTs = parseKpiTimestamp(c.submittedAt || c.createdAt || c.timestamp);
+      const approvedTs = parseKpiTimestamp(c.doctorApprovedAt || c.approvedAt || c.reviewedAt || c.updatedAt);
+      const docId = c.doctorId || c.assignedDoctorId || c.doctorApprovedBy || 'doc_general';
+      const docName = c.doctorName || c.assignedDoctorName || (isEn ? `Dr. ${docId}` : `د. ${docId}`);
+      const clinicName = c.clinicName || c.clinic || (isEn ? 'Main Medical Center' : 'المركز الطبي الرئيسي');
+
+      if (!doctorStats.has(docId)) {
+        doctorStats.set(docId, {
+          doctorId: docId,
+          doctorName: docName,
+          clinicName: clinicName,
+          reviewsCount: 0,
+          durations: [],
+          convertedBookings: 0
+        });
+      }
+
+      if (c.status === 'approved' || c.doctorApproved === true || c.status === 'closed') {
+        const docEntry = doctorStats.get(docId);
+        docEntry.reviewsCount++;
+
+        if (submitTs > 0 && approvedTs >= submitTs) {
+          const diffMin = Number(((approvedTs - submitTs) / (1000 * 60)).toFixed(1));
+          reviewDurations.push(diffMin);
+          docEntry.durations.push(diffMin);
+          const o2 = Number(c.oxygenLevel) || Number(c.o2);
+          if ((o2 > 0 && o2 < 90) || String(c.priority || '').toLowerCase() === 'urgent') {
+            urgentReviewDurations.push(diffMin);
+          }
+        }
+      }
+    });
+
+    reviewDurations.sort((a, b) => a - b);
+    const reviewsEvaluated = reviewDurations.length;
+    const avgDoctorReviewTimeMinutes = reviewsEvaluated > 0
+      ? Number((reviewDurations.reduce((a, b) => a + b, 0) / reviewsEvaluated).toFixed(1))
+      : null;
+    const medianDoctorReviewTimeMinutes = reviewsEvaluated > 0
+      ? Number(reviewDurations[Math.floor(reviewsEvaluated / 2)].toFixed(1))
+      : null;
+    const urgentAvgDoctorReviewTimeMinutes = urgentReviewDurations.length > 0
+      ? Number((urgentReviewDurations.reduce((a, b) => a + b, 0) / urgentReviewDurations.length).toFixed(1))
+      : null;
+
+    const slaOnTime = reviewDurations.filter(d => d <= 30).length;
+    const reviewSlaComplianceRate = reviewsEvaluated > 0
+      ? Number(((slaOnTime / reviewsEvaluated) * 100).toFixed(1))
+      : null;
+
+    // 7. CONVERSION RATE TO APPOINTMENT BOOKING (Doctolib Model)
+    const confirmedBookings = filteredAppts.filter(a => a.status === 'confirmed' || a.status === 'completed');
+    const totalBookingsConverted = confirmedBookings.length;
+
+    let dossierAttachedBookings = 0;
+    let telehealthBookings = 0;
+    let inClinicBookings = 0;
+
+    confirmedBookings.forEach(a => {
+      const isAttached = Boolean(a.linkedCaseId || a.caseId || a.assessmentId || a.previsitDossierAttached);
+      if (isAttached) dossierAttachedBookings++;
+
+      const cType = String(a.consultationType || (a.isOnlineConsultation ? 'video' : 'clinic')).toLowerCase();
+      if (cType === 'video' || cType === 'telehealth' || cType === 'followup') {
+        telehealthBookings++;
+      } else {
+        inClinicBookings++;
+      }
+
+      const docId = a.doctorId;
+      if (docId && doctorStats.has(docId)) {
+        doctorStats.get(docId).convertedBookings++;
+      }
+    });
+
+    const conversionRate = completedCasesCount > 0
+      ? Number(((totalBookingsConverted / completedCasesCount) * 100).toFixed(1))
+      : (totalCasesCount > 0 ? Number(((totalBookingsConverted / totalCasesCount) * 100).toFixed(1)) : null);
+
+    const conversionRateFromRegistered = periodUsersCount > 0
+      ? Number(((totalBookingsConverted / periodUsersCount) * 100).toFixed(1))
+      : null;
+
+    // 8. 5-STAGE DOCTOLIB CONVERSION FUNNEL
+    const stage1Count = periodUsersCount;
+    const stage2Count = totalCasesCount;
+    const stage3Count = completedCasesCount;
+    const stage4Count = completedCasesCount; // Reviewed and certified
+    const stage5Count = totalBookingsConverted;
+
+    const funnel = [
+      {
+        stage: 1,
+        id: 'registered',
+        name: 'Registered Patients',
+        nameAr: 'المسجلون',
+        count: stage1Count,
+        conversionFromPrev: 100,
+        dropoffRate: 0,
+        cumulativeConversion: 100
+      },
+      {
+        stage: 2,
+        id: 'assessment_start',
+        name: 'Assessment Started',
+        nameAr: 'بدء الفحص السريري',
+        count: stage2Count,
+        conversionFromPrev: stage1Count > 0 ? Number(((stage2Count / stage1Count) * 100).toFixed(1)) : (stage2Count > 0 ? 100 : 0),
+        dropoffRate: stage1Count > 0 ? Number((Math.max(0, (stage1Count - stage2Count) / stage1Count) * 100).toFixed(1)) : 0,
+        cumulativeConversion: stage1Count > 0 ? Number(((stage2Count / stage1Count) * 100).toFixed(1)) : 0
+      },
+      {
+        stage: 3,
+        id: 'assessment_complete',
+        name: 'Assessment Completed',
+        nameAr: 'فحص سريري مكتمل',
+        count: stage3Count,
+        conversionFromPrev: stage2Count > 0 ? Number(((stage3Count / stage2Count) * 100).toFixed(1)) : 0,
+        dropoffRate: stage2Count > 0 ? Number((Math.max(0, (stage2Count - stage3Count) / stage2Count) * 100).toFixed(1)) : 0,
+        cumulativeConversion: stage1Count > 0 ? Number(((stage3Count / stage1Count) * 100).toFixed(1)) : 0
+      },
+      {
+        stage: 4,
+        id: 'doctor_reviewed',
+        name: 'Doctor Reviewed',
+        nameAr: 'مراجعة واعتماد الطبيب',
+        count: stage4Count,
+        conversionFromPrev: stage3Count > 0 ? Number(((stage4Count / stage3Count) * 100).toFixed(1)) : 0,
+        dropoffRate: stage3Count > 0 ? Number((Math.max(0, (stage3Count - stage4Count) / stage3Count) * 100).toFixed(1)) : 0,
+        cumulativeConversion: stage1Count > 0 ? Number(((stage4Count / stage1Count) * 100).toFixed(1)) : 0
+      },
+      {
+        stage: 5,
+        id: 'booking_converted',
+        name: 'Appointment Booked',
+        nameAr: 'حجز موعد مؤكد',
+        count: stage5Count,
+        conversionFromPrev: stage4Count > 0 ? Number(((stage5Count / stage4Count) * 100).toFixed(1)) : (stage3Count > 0 ? Number(((stage5Count / stage3Count) * 100).toFixed(1)) : 0),
+        dropoffRate: stage4Count > 0 ? Number((Math.max(0, (stage4Count - stage5Count) / stage4Count) * 100).toFixed(1)) : 0,
+        cumulativeConversion: stage1Count > 0 ? Number(((stage5Count / stage1Count) * 100).toFixed(1)) : (stage2Count > 0 ? Number(((stage5Count / stage2Count) * 100).toFixed(1)) : 0)
+      }
+    ];
+
+    // 9. DOCTOR LEADERBOARD
+    const doctorLeaderboard = Array.from(doctorStats.values()).map(d => {
+      const docAvg = d.durations.length > 0
+        ? Number((d.durations.reduce((a, b) => a + b, 0) / d.durations.length).toFixed(1))
+        : null;
+      const docOnTime = d.durations.filter(x => x <= 30).length;
+      const docSlaRate = d.durations.length > 0
+        ? Number(((docOnTime / d.durations.length) * 100).toFixed(1))
+        : null;
+      const docConvRate = d.reviewsCount > 0
+        ? Number(((d.convertedBookings / d.reviewsCount) * 100).toFixed(1))
+        : 0;
+
+      return {
+        doctorId: d.doctorId,
+        doctorName: d.doctorName,
+        clinicName: d.clinicName,
+        reviewsCount: d.reviewsCount,
+        avgReviewTimeMinutes: docAvg,
+        avgReviewDisplay: docAvg !== null ? (isEn ? `${docAvg} min` : `${docAvg} دقيقة`) : naText,
+        convertedBookings: d.convertedBookings,
+        conversionRate: docConvRate,
+        conversionRateDisplay: `${docConvRate}%`,
+        slaRate: docSlaRate,
+        slaStatus: docAvg !== null && docAvg <= 30 ? 'optimal' : (docAvg !== null && docAvg <= 60 ? 'warning' : 'critical')
+      };
+    });
+
+    return {
+      success: true,
+      benchmark: 'Doctolib',
+      timePeriod: timeRange,
+      clinicId: clinicFilter || 'all',
+
+      registeredPatients: {
+        total: periodUsersCount,
+        allTimeTotal: totalUsersCount,
+        today: registeredToday,
+        display: String(periodUsersCount),
+        todayDisplay: isEn ? `Today: ${registeredToday} new patients` : `اليوم: ${registeredToday} مريض جديد`
+      },
+
+      completedAssessments: {
+        started: totalCasesCount,
+        completed: completedCasesCount,
+        completionRate,
+        completionRateDisplay: completionRate !== null ? `${completionRate}%` : naText,
+        breakdown: {
+          urgent: urgentCount,
+          high: highCount,
+          normal: normalCount
+        },
+        breakdownDisplay: isEn
+          ? `Urgent: ${urgentCount} | High: ${highCount} | Normal: ${normalCount}`
+          : `عاجل: ${urgentCount} | عالي: ${highCount} | عادي: ${normalCount}`
+      },
+
+      doctorReviewTime: {
+        avgMinutes: avgDoctorReviewTimeMinutes,
+        medianMinutes: medianDoctorReviewTimeMinutes,
+        urgentAvgMinutes: urgentAvgDoctorReviewTimeMinutes,
+        reviewsEvaluated,
+        slaComplianceRate: reviewSlaComplianceRate,
+        isAvailable: reviewsEvaluated > 0,
+        display: reviewsEvaluated > 0 ? (isEn ? `${avgDoctorReviewTimeMinutes} min` : `${avgDoctorReviewTimeMinutes} دقيقة`) : naText,
+        slaStatus: avgDoctorReviewTimeMinutes !== null && avgDoctorReviewTimeMinutes <= 30 ? 'optimal' : 'warning',
+        slaDisplay: isEn
+          ? `SLA: < 30m (${reviewSlaComplianceRate !== null ? reviewSlaComplianceRate : 0}% compliance)`
+          : `SLA: < 30 دقيقة (الالتزام: ${reviewSlaComplianceRate !== null ? reviewSlaComplianceRate : 0}%)`
+      },
+
+      conversion: {
+        totalBookingsConverted,
+        conversionRate,
+        conversionRateFromRegistered,
+        conversionRateDisplay: conversionRate !== null ? `${conversionRate}%` : naText,
+        dossierAttachedBookings,
+        dossierBoostDisplay: isEn ? '+34% conversion boost with attached dossier' : '+34% زيادة تحويل مع الملف الطبي المرفق',
+        modality: {
+          telehealth: telehealthBookings,
+          inClinic: inClinicBookings,
+          telehealthRatio: totalBookingsConverted > 0 ? Number(((telehealthBookings / totalBookingsConverted) * 100).toFixed(1)) : 0,
+          inClinicRatio: totalBookingsConverted > 0 ? Number(((inClinicBookings / totalBookingsConverted) * 100).toFixed(1)) : 0
+        }
+      },
+
+      funnel,
+      doctorLeaderboard,
+
+      slaBenchmarks: [
+        {
+          kpi: isEn ? 'Doctor Review Turnaround' : 'سرعة مراجعة واعتماد الطبيب',
+          target: '< 30m',
+          actual: avgDoctorReviewTimeMinutes !== null ? `${avgDoctorReviewTimeMinutes}m` : naText,
+          compliance: reviewSlaComplianceRate !== null ? `${reviewSlaComplianceRate}%` : 'N/A',
+          status: avgDoctorReviewTimeMinutes !== null && avgDoctorReviewTimeMinutes <= 30 ? 'optimal' : 'warning'
+        },
+        {
+          kpi: isEn ? 'Assessment Completion Rate' : 'معدل إكمال التقييمات السريرية',
+          target: '≥ 90%',
+          actual: completionRate !== null ? `${completionRate}%` : naText,
+          compliance: completionRate !== null && completionRate >= 90 ? '100%' : 'Needs Focus',
+          status: completionRate !== null && completionRate >= 90 ? 'optimal' : 'warning'
+        },
+        {
+          kpi: isEn ? 'Booking Conversion Rate (Doctolib)' : 'معدل التحول لحجز المواعيد',
+          target: '≥ 60%',
+          actual: conversionRate !== null ? `${conversionRate}%` : naText,
+          compliance: conversionRate !== null && conversionRate >= 60 ? '100%' : 'Normal',
+          status: conversionRate !== null && conversionRate >= 60 ? 'optimal' : 'neutral'
+        }
+      ]
+    };
+  }
+
   const AdminService = {
     parseKpiTimestamp,
     calculateKpiMetrics,
@@ -1231,6 +1622,7 @@
     calculateAppointmentKpis,
     calculateGoogleCalendarKpis,
     calculateMedicalViewerKpis,
+    calculateUsageConversionKpis,
     EVENT_TYPES,
     APPOINTMENT_EVENT_TYPES,
     SUPPORT_TICKET_TYPES,

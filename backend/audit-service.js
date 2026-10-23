@@ -112,7 +112,18 @@ const AUDIT_EVENT_TYPES = {
   CLINICAL_GUIDELINE_PUBLISHED: 'CLINICAL_GUIDELINE_PUBLISHED',
   CLINICAL_GUIDELINE_REJECTED: 'CLINICAL_GUIDELINE_REJECTED',
   CLINICAL_GUIDELINE_ARCHIVED: 'CLINICAL_GUIDELINE_ARCHIVED',
-  CLINICAL_GUIDELINES_EXPORTED: 'CLINICAL_GUIDELINES_EXPORTED'
+  CLINICAL_GUIDELINES_EXPORTED: 'CLINICAL_GUIDELINES_EXPORTED',
+  // 📈 Doctolib Usage & Conversion Analytics Auditable Events
+  USAGE_CONVERSION_ANALYTICS_VIEWED: 'USAGE_CONVERSION_ANALYTICS_VIEWED',
+  USAGE_CONVERSION_ANALYTICS_EXPORTED: 'USAGE_CONVERSION_ANALYTICS_EXPORTED',
+  USAGE_CONVERSION_ACCESS_DENIED: 'USAGE_CONVERSION_ACCESS_DENIED',
+  USAGE_CONVERSION_PHI_LEAKAGE_BLOCKED: 'USAGE_CONVERSION_PHI_LEAKAGE_BLOCKED',
+  USAGE_CONVERSION_SECURITY_VIOLATION_BLOCKED: 'USAGE_CONVERSION_SECURITY_VIOLATION_BLOCKED',
+  USAGE_CONVERSION_ENCRYPTION_VERIFIED: 'USAGE_CONVERSION_ENCRYPTION_VERIFIED',
+  // Operational Reports Auditable Events (Amwell Benchmark)
+  OPERATIONAL_REPORT_VIEWED: 'OPERATIONAL_REPORT_VIEWED',
+  OPERATIONAL_REPORT_EXPORTED: 'OPERATIONAL_REPORT_EXPORTED',
+  OPERATIONAL_REPORT_ACCESS_DENIED: 'OPERATIONAL_REPORT_ACCESS_DENIED'
 };
 
 /**
@@ -508,15 +519,15 @@ async function queryAuditEvents(db, { requesterUser, filters = {} }) {
     scopedClinicId = String(filters.clinicId);
   }
 
-  if (!db || typeof db.collection !== 'function') {
-    return { events: [], totalCount: 0, limit: filters.limit || 50, offset: filters.offset || 0 };
-  }
-
-  const snapshot = await db.collection('audit_events').get();
   let events = [];
-  snapshot.forEach(doc => {
-    events.push({ id: doc.id, ...doc.data() });
-  });
+  if (db && typeof db.collection === 'function') {
+    const snapshot = await db.collection('audit_events').get();
+    snapshot.forEach(doc => {
+      events.push({ id: doc.id, ...doc.data() });
+    });
+  } else {
+    events = inMemoryAuditEvents.map(e => ({ ...e, id: e.eventId || e.id || `audit_${Date.now()}` }));
+  }
 
   // Sort descending by timestamp
   events.sort((a, b) => {
