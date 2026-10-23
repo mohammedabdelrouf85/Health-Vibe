@@ -23500,9 +23500,189 @@ if (document.readyState === "loading") {
     initAsyncContextProtections();
     initMobileTouchGestures();
     updateMobileBottomNav();
+    refreshClinicDirectorDashboard();
   });
 } else {
   initAsyncContextProtections();
   initMobileTouchGestures();
   updateMobileBottomNav();
+  refreshClinicDirectorDashboard();
 }
+
+/**
+ * 🏥 TABEEBHUB BENCHMARK: CLINIC & HOSPITAL DIRECTOR OPERATIONS DASHBOARD (#731)
+ */
+let clinicDirectorDoctorsData = [
+  {
+    id: "doc_1",
+    nameAr: "أ.د. حازم القاضي",
+    nameEn: "Prof. Dr. Hazem El-Kady",
+    specialty: "pulmonology",
+    specialtyAr: "أمراض الصدر والحساسية",
+    specialtyEn: "Pulmonology & Allergy",
+    triagedCount: 114,
+    completedBookings: 98,
+    avgReviewMinutes: 14,
+    patientSatisfaction: "98%",
+    status: "active"
+  },
+  {
+    id: "doc_2",
+    nameAr: "د. كريم عبد العزيز",
+    nameEn: "Dr. Karim Abdel-Aziz",
+    specialty: "pulmonology",
+    specialtyAr: "أمراض الصدر والتنفس",
+    specialtyEn: "Pulmonology",
+    triagedCount: 86,
+    completedBookings: 72,
+    avgReviewMinutes: 17,
+    patientSatisfaction: "96%",
+    status: "active"
+  },
+  {
+    id: "doc_3",
+    nameAr: "د. إيمان عبد الشافي",
+    nameEn: "Dr. Eman Abdel-Shafy",
+    specialty: "internal_medicine",
+    specialtyAr: "الباطنة العامة",
+    specialtyEn: "Internal Medicine",
+    triagedCount: 65,
+    completedBookings: 54,
+    avgReviewMinutes: 19,
+    patientSatisfaction: "95%",
+    status: "active"
+  },
+  {
+    id: "doc_4",
+    nameAr: "د. طارق الغندور",
+    nameEn: "Dr. Tarek El-Ghandour",
+    specialty: "pediatrics",
+    specialtyAr: "صدر وأطفال",
+    specialtyEn: "Pediatric Chest",
+    triagedCount: 42,
+    completedBookings: 36,
+    avgReviewMinutes: 22,
+    patientSatisfaction: "94%",
+    status: "active"
+  },
+  {
+    id: "doc_5",
+    nameAr: "د. منى زهران",
+    nameEn: "Dr. Mona Zahran",
+    specialty: "radiology",
+    specialtyAr: "الأشعة التشخيصية",
+    specialtyEn: "Diagnostic Radiology",
+    triagedCount: 35,
+    completedBookings: 24,
+    avgReviewMinutes: 12,
+    patientSatisfaction: "99%",
+    status: "active"
+  }
+];
+
+let clinicDirectorSpecialtyFilter = "all";
+let clinicDirectorSearchQuery = "";
+
+async function refreshClinicDirectorDashboard() {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  const user = typeof getActiveUser === "function" ? getActiveUser() : null;
+  const scopeBadge = document.getElementById("clinicDirectorScopeBadge");
+
+  if (scopeBadge) {
+    scopeBadge.textContent = isEn
+      ? "Center Scope: Nile Medical Center"
+      : "نطاق المركز: مجمع النيل الطبي المركزي";
+  }
+
+  // Calculate live aggregate stats
+  const totalTriaged = clinicDirectorDoctorsData.reduce((acc, d) => acc + d.triagedCount, 0);
+  const totalBookings = clinicDirectorDoctorsData.reduce((acc, d) => acc + d.completedBookings, 0);
+  const avgReview = Math.round(clinicDirectorDoctorsData.reduce((acc, d) => acc + d.avgReviewMinutes, 0) / (clinicDirectorDoctorsData.length || 1));
+
+  const docCountEl = document.getElementById("clinicDirectorDocCount");
+  if (docCountEl) docCountEl.textContent = isEn ? `${clinicDirectorDoctorsData.length} Doctors` : `${clinicDirectorDoctorsData.length} أطباء`;
+
+  const triagedEl = document.getElementById("clinicDirectorTriagedCount");
+  if (triagedEl) triagedEl.textContent = isEn ? `${totalTriaged} cases` : `${totalTriaged} حالة`;
+
+  const bookingsEl = document.getElementById("clinicDirectorBookingsCount");
+  if (bookingsEl) bookingsEl.textContent = isEn ? `${totalBookings} visits` : `${totalBookings} موعد`;
+
+  const reviewEl = document.getElementById("clinicDirectorAvgReviewTime");
+  if (reviewEl) reviewEl.textContent = isEn ? `${avgReview} mins` : `${avgReview} دقيقة`;
+
+  renderClinicDirectorDoctors();
+}
+window.refreshClinicDirectorDashboard = refreshClinicDirectorDashboard;
+
+function renderClinicDirectorDoctors() {
+  const tbody = document.getElementById("clinicDirectorDoctorsTableTbody");
+  if (!tbody) return;
+
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  let filtered = clinicDirectorDoctorsData;
+
+  if (clinicDirectorSpecialtyFilter !== "all") {
+    filtered = filtered.filter(d => d.specialty === clinicDirectorSpecialtyFilter);
+  }
+
+  if (clinicDirectorSearchQuery) {
+    const q = clinicDirectorSearchQuery.toLowerCase();
+    filtered = filtered.filter(d =>
+      (d.nameAr || "").toLowerCase().includes(q) ||
+      (d.nameEn || "").toLowerCase().includes(q) ||
+      (d.specialtyAr || "").toLowerCase().includes(q) ||
+      (d.specialtyEn || "").toLowerCase().includes(q)
+    );
+  }
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 24px; color: var(--muted);">${isEn ? "No physicians found matching current filter." : "لا يوجد أطباء يطابقون شروط البحث الحالية."}</td></tr>`;
+    return;
+  }
+
+  let html = "";
+  filtered.forEach(d => {
+    html += `
+      <tr style="border-bottom: 1px solid var(--line);">
+        <td style="padding: 10px 12px; font-weight: 600; color: var(--ink);">
+          👨‍⚕️ ${isEn ? d.nameEn : d.nameAr}
+        </td>
+        <td style="padding: 10px 12px; font-size: 12px;">
+          ${isEn ? d.specialtyEn : d.specialtyAr}
+        </td>
+        <td style="padding: 10px 12px; font-weight: 700; color: #06b6d4;">
+          ${d.triagedCount} ${isEn ? "cases" : "حالة"}
+        </td>
+        <td style="padding: 10px 12px; font-weight: 700; color: #8b5cf6;">
+          ${d.completedBookings} ${isEn ? "visits" : "موعد"}
+        </td>
+        <td style="padding: 10px 12px; font-family: monospace;">
+          ⏱️ ${d.avgReviewMinutes} ${isEn ? "m" : "د"}
+        </td>
+        <td style="padding: 10px 12px; color: #10b981; font-weight: 700;">
+          ⭐ ${d.patientSatisfaction}
+        </td>
+        <td style="padding: 10px 12px;">
+          <span class="pill ok" style="font-size: 11px;">${isEn ? "Active" : "نشط ومتاح ✓"}</span>
+        </td>
+      </tr>
+    `;
+  });
+
+  tbody.innerHTML = html;
+}
+window.renderClinicDirectorDoctors = renderClinicDirectorDoctors;
+
+function filterClinicDirectorDoctorsTable() {
+  const specEl = document.getElementById("clinicDirectorSpecialtyFilter");
+  if (specEl) clinicDirectorSpecialtyFilter = specEl.value;
+  renderClinicDirectorDoctors();
+}
+window.filterClinicDirectorDoctorsTable = filterClinicDirectorDoctorsTable;
+
+function searchClinicDirectorDoctorsTable(val) {
+  clinicDirectorSearchQuery = (val || "").trim();
+  renderClinicDirectorDoctors();
+}
+window.searchClinicDirectorDoctorsTable = searchClinicDirectorDoctorsTable;

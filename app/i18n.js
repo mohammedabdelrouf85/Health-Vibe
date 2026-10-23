@@ -910,6 +910,9 @@
         delQueueExportBtn: "تصدير سجل الحذف CSV",
         delQueueRetryBtn: "إعادة تنفيذ الحذف",
         delQueuePurgedBadge: "تم محو الهوية بنجاح (GDPR Clean)",
+        // 🏥 TabeebHub Benchmark: Clinic Director Operations Dashboard (#731)
+        clinicDirectorTitle: "لوحة تحكم مدير العيادة أو المستشفى (Clinic / Hospital Director Operations)",
+        clinicDirectorSubtitle: "متابعة أداء أطباء المركز الطبي، أعداد الحالات المفروزة سريرياً، نسب الالتزام، وإحصائيات تحويل الحجوزات ونسب الإلغاء",
         medPhotoAnalyticsTitle: "تحليلات ومراقبة رفع صور الأدوية والروشتات",
         medPhotoAnalyticsSubtitle: "مراقبة معدلات نجاح التصوير والرفع، تحويل الروشتات إلى وصفات معتمدة، وتوزيع العلب والبخاخات (معيار الطبي Altibbi)",
         medPhotoSuccessRate: "معدل نجاح رفع الصور",
@@ -2774,6 +2777,9 @@
         delQueueExportBtn: "Export Deletion Queue CSV",
         delQueueRetryBtn: "Retry Deletion",
         delQueuePurgedBadge: "De-identified & Purged",
+        // 🏥 TabeebHub Benchmark: Clinic Director Operations Dashboard (#731)
+        clinicDirectorTitle: "Clinic / Hospital Director Operations Dashboard (TabeebHub Benchmark)",
+        clinicDirectorSubtitle: "Monitor affiliated physicians performance, triaged patient volumes, adherence rates, and appointment conversion analytics",
         medPhotoAnalyticsTitle: "Medication & Rx Photo Capture Analytics",
         medPhotoAnalyticsSubtitle: "Monitoring upload success rates, doctor Rx transcription, and category distributions (Altibbi Telemedicine Benchmark)",
         medPhotoSuccessRate: "Photo Upload Success Rate",

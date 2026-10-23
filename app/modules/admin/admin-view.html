@@ -1019,4 +1019,96 @@
           </div>
         </article>
 
+        <!-- 38. TABEEBHUB BENCHMARK: CLINIC & HOSPITAL DIRECTOR OPERATIONS DASHBOARD (#731) -->
+        <article class="panel" id="adminClinicDirectorDashboardPanel" style="margin-top: 24px;">
+          <div class="panel-head" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <h3 style="margin: 0; font-size: 19px;" data-i18n="admin.clinicDirectorTitle">لوحة تحكم مدير العيادة أو المستشفى (Clinic / Hospital Director Operations)</h3>
+                <span class="pill ok" style="font-size: 11px;">TabeebHub Benchmark 🏥</span>
+              </div>
+              <p style="margin: 4px 0 0; font-size: 13px; color: var(--muted);" data-i18n="admin.clinicDirectorSubtitle">
+                متابعة أداء أطباء المركز الطبي، أعداد الحالات المفروزة سريرياً، نسب الالتزام، وإحصائيات تحويل الحجوزات ونسب الإلغاء
+              </p>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <span class="pill info" id="clinicDirectorScopeBadge">نطاق المركز: مجمع النيل الطبي</span>
+              <button type="button" class="soft-button" onclick="refreshClinicDirectorDashboard()" id="btnRefreshClinicDirector" style="padding: 6px 12px; font-size: 12.5px; display: inline-flex; align-items: center; gap: 5px;">
+                🔄 تحديث مؤشرات العيادة
+              </button>
+            </div>
+          </div>
+
+          <!-- Top KPI Highlights Grid for Clinic Director -->
+          <div class="metric-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-top: 16px;">
+            <article style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 14px;">
+              <span style="font-size: 12px; color: var(--muted);">أطباء المركز النشطون</span>
+              <strong id="clinicDirectorDocCount" style="font-size: 22px; color: #10b981; display: block; margin: 4px 0;">8 أطباء</strong>
+              <small style="color: var(--teal); font-size: 11px;">100% مسجلون بالجدول</small>
+            </article>
+
+            <article style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 14px;">
+              <span style="font-size: 12px; color: var(--muted);">الحالات المفروزة بالمركز</span>
+              <strong id="clinicDirectorTriagedCount" style="font-size: 22px; color: #06b6d4; display: block; margin: 4px 0;">342 حالة</strong>
+              <small style="color: #06b6d4; font-size: 11px;">فرز سريري مكتمل</small>
+            </article>
+
+            <article style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 14px;">
+              <span style="font-size: 12px; color: var(--muted);">الحجوزات المحولة والمكتملة</span>
+              <strong id="clinicDirectorBookingsCount" style="font-size: 22px; color: #8b5cf6; display: block; margin: 4px 0;">284 موعد</strong>
+              <small style="color: #8b5cf6; font-size: 11px;">معدل تحول 83%</small>
+            </article>
+
+            <article style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 14px;">
+              <span style="font-size: 12px; color: var(--muted);">متوسط وقت استجابة الأطباء</span>
+              <strong id="clinicDirectorAvgReviewTime" style="font-size: 22px; color: #f59e0b; display: block; margin: 4px 0;">18 دقيقة</strong>
+              <small style="color: #10b981; font-size: 11px;">أسرع من المعدل المستهدف (30 د)</small>
+            </article>
+          </div>
+
+          <!-- Doctor Performance & Triage Filters -->
+          <div style="display: flex; gap: 12px; margin-top: 18px; flex-wrap: wrap; align-items: center; justify-content: space-between; background: var(--surface-1); padding: 10px 14px; border-radius: 10px;">
+            <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+              <span style="font-size: 12px; font-weight: 600; color: var(--muted);">فلترة التخصص:</span>
+              <select id="clinicDirectorSpecialtyFilter" onchange="filterClinicDirectorDoctorsTable()" style="padding: 6px 10px; font-size: 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);">
+                <option value="all">كافة التخصصات (All Specialties)</option>
+                <option value="pulmonology">أمراض الصدر والحساسية (Pulmonology)</option>
+                <option value="internal_medicine">الباطنة العامة (Internal Medicine)</option>
+                <option value="pediatrics">الأطفال (Pediatrics)</option>
+                <option value="radiology">الأشعة التشخيصية (Radiology)</option>
+              </select>
+
+              <select id="clinicDirectorPeriodFilter" onchange="filterClinicDirectorDoctorsTable()" style="padding: 6px 10px; font-size: 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);">
+                <option value="month">الشهر الحالي</option>
+                <option value="quarter">الربع السنوي</option>
+                <option value="year">العام الحالي</option>
+              </select>
+            </div>
+
+            <div style="position: relative; min-width: 240px;">
+              <input type="text" id="clinicDirectorSearchInput" oninput="searchClinicDirectorDoctorsTable(this.value)" placeholder="🔍 بحث باسم الطبيب أو كود التخصص..." style="width: 100%; padding: 6px 12px; font-size: 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);">
+            </div>
+          </div>
+
+          <!-- Doctors Performance Breakdown Table -->
+          <div style="margin-top: 14px; overflow-x: auto; border: 1px solid var(--line); border-radius: 10px;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 12.5px; text-align: start;">
+              <thead>
+                <tr style="background: var(--surface-2); border-bottom: 1px solid var(--line);">
+                  <th style="padding: 10px 12px;">اسم الطبيب / الاستشاري</th>
+                  <th style="padding: 10px 12px;">التخصص</th>
+                  <th style="padding: 10px 12px;">الحالات المفروزة</th>
+                  <th style="padding: 10px 12px;">المواعيد المنجزة</th>
+                  <th style="padding: 10px 12px;">متوسط زمن المراجعة</th>
+                  <th style="padding: 10px 12px;">نسبة رضا المرضى</th>
+                  <th style="padding: 10px 12px;">الحالة التشغيلية</th>
+                </tr>
+              </thead>
+              <tbody id="clinicDirectorDoctorsTableTbody">
+                <!-- Dynamically populated via renderClinicDirectorDoctors() -->
+              </tbody>
+            </table>
+          </div>
+        </article>
+
       </section>
