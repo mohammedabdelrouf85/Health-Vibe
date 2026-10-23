@@ -865,4 +865,74 @@
           <div id="adminClinicalCmsContainer"></div>
         </article>
 
+        <!-- 35. TELADOC SECURITY AUDIT LOG VIEWER (#711-#715) -->
+        <article class="panel" id="adminSecurityAuditViewerPanel" style="margin-top: 24px;">
+          <div class="panel-head" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <h3 style="margin: 0; font-size: 19px;" data-i18n="appointments.secAuditTitle">مستعرض سجل المراجعة الأمنية (Security Audit Log Viewer)</h3>
+                <span class="pill info" style="font-size: 11px;">Teladoc Benchmark</span>
+              </div>
+              <p style="margin: 4px 0 0; font-size: 13px; color: var(--muted);" data-i18n="appointments.secAuditSubtitle">
+                شاشة مخصصة لفحص من شاهد أو عدل أو اعتمد أي سجل طبي مع فلاتر التاريخ والمستخدمين
+              </p>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <button type="button" class="soft-button" onclick="refreshAdminSecurityAuditLogs()" id="btnRefreshSecurityAuditLogs" style="padding: 6px 12px; font-size: 12.5px;">🔄 تحديث السجل</button>
+              <button type="button" class="outline-button" onclick="exportAdminSecurityAuditLogsCsv()" id="btnExportSecurityAuditLogsCsv" style="padding: 6px 12px; font-size: 12.5px;">📥 تصدير السجل CSV</button>
+            </div>
+          </div>
+
+          <div style="margin-top: 14px; padding: 12px; background: var(--surface-1); border-radius: 10px; display: flex; gap: 10px; flex-wrap: wrap;">
+            <input type="text" id="adminSecAuditSearchInput" oninput="filterAdminSecurityAuditLogs(this.value)" placeholder="بحث بالمعرف، الطبيب، أو نوع الحدث..." style="padding: 6px 12px; font-size: 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); flex: 1; min-width: 200px;">
+            <select id="adminSecAuditEventTypeFilter" onchange="filterAdminSecurityAuditLogs()" style="padding: 6px 10px; font-size: 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);">
+              <option value="">كافة الأحداث الأمنية</option>
+              <option value="VIEW">استعراض سجل</option>
+              <option value="UPDATE">تعديل سجل</option>
+              <option value="APPROVE">اعتماد طبي</option>
+              <option value="SECURITY">أحداث أمنية</option>
+            </select>
+          </div>
+
+          <div style="margin-top: 16px; overflow-x: auto; border: 1px solid var(--line); border-radius: 10px;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 12.5px; text-align: start;">
+              <thead>
+                <tr style="background: var(--surface-2); border-bottom: 1px solid var(--line);">
+                  <th style="padding: 10px 12px;">التوقيت</th>
+                  <th style="padding: 10px 12px;">المستخدم (Actor)</th>
+                  <th style="padding: 10px 12px;">الدور</th>
+                  <th style="padding: 10px 12px;">نوع الإجراء</th>
+                  <th style="padding: 10px 12px;">السجل المستهدف</th>
+                  <th style="padding: 10px 12px;">النتيجة</th>
+                </tr>
+              </thead>
+              <tbody id="adminSecurityAuditLogsTbody">
+                <tr><td colspan="6" style="text-align: center; padding: 18px; color: var(--muted);">جاري تحميل سجلات التدقيق الأمني...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+
+        <!-- 36. HEALTHVIBE AI INTRUSION DETECTION & ABNORMAL ACCESS ALERTS (#716-#720) -->
+        <article class="panel" id="adminSecurityAlertsPanel" style="margin-top: 24px;">
+          <div class="panel-head" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <h3 style="margin: 0; font-size: 19px;" data-i18n="appointments.secAlertsTitle">نظام تنبيهات محاولات الاختراق والدخول غير الطبيعي</h3>
+                <span class="pill danger" id="adminSecAlertsCountBadge" style="font-size: 11px;">0 إنذارات نشطة</span>
+              </div>
+              <p style="margin: 4px 0 0; font-size: 13px; color: var(--muted);" data-i18n="appointments.secAlertsSubtitle">
+                رصد محاولات الدخول المتكررة الفاشلة والأنشطة المشبوهة وإرسال إنذار أمني فوري
+              </p>
+            </div>
+            <button type="button" class="soft-button" onclick="refreshAdminSecurityAlerts()" id="btnRefreshSecurityAlerts" style="padding: 6px 12px; font-size: 12.5px;">🔄 فحص التنبيهات</button>
+          </div>
+
+          <div id="adminSecurityAlertsListContainer" style="margin-top: 16px; display: flex; flex-direction: column; gap: 10px;">
+            <div style="padding: 16px; text-align: center; color: var(--muted); background: var(--surface-1); border-radius: 10px;" id="adminSecAlertsEmptyState">
+              🛡️ المنظومة آمنة بالكامل - لا توجد محاولات اختراق أو وصول مشبوه حالياً
+            </div>
+          </div>
+        </article>
+
       </section>

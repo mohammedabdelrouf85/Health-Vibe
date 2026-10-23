@@ -883,6 +883,21 @@
         opRepExportPdf: "تصدير تقرير PDF",
         opRepClinicPerformance: "أداء الفروع والعيادات",
         opRepZeroPhiBadge: "حماية تامة من بيانات المرضى (Zero-PHI)",
+
+        // 🔍 Teladoc Health: Security Audit Log Viewer (#711-#715)
+        secAuditTitle: "مستعرض سجل المراجعة الأمنية (Security Audit Log Viewer)",
+        secAuditSubtitle: "شاشة مخصصة لفحص من شاهد أو عدل أو اعتمد أي سجل طبي مع فلاتر التاريخ والمستخدمين",
+        secAuditExportBtn: "تصدير سجل المراجعة CSV",
+        secAuditFilterActor: "تصفية بالمستخدم",
+        secAuditFilterEvent: "نوع الحدث الأمني",
+        secAuditFilterDate: "التاريخ",
+
+        // 🚨 HealthVibe AI: Intrusion Alerts (#716-#720)
+        secAlertsTitle: "نظام تنبيهات محاولات الاختراق والدخول غير الطبيعي",
+        secAlertsSubtitle: "رصد محاولات الدخول المتكررة الفاشلة والأنشطة المشبوهة وإرسال إنذار أمني فوري",
+        secAlertAcknowledgeBtn: "تأكيد واستلام الإنذار",
+        secAlertCriticalBadge: "إنذار أمني حرج",
+        secAlertNoAlerts: "المنظومة آمنة بالكامل - لا توجد محاولات اختراق نشطة",
         medPhotoAnalyticsTitle: "تحليلات ومراقبة رفع صور الأدوية والروشتات",
         medPhotoAnalyticsSubtitle: "مراقبة معدلات نجاح التصوير والرفع، تحويل الروشتات إلى وصفات معتمدة، وتوزيع العلب والبخاخات (معيار الطبي Altibbi)",
         medPhotoSuccessRate: "معدل نجاح رفع الصور",
@@ -2720,6 +2735,21 @@
         opRepExportPdf: "Export PDF Report",
         opRepClinicPerformance: "Clinic & Branch Performance",
         opRepZeroPhiBadge: "100% Zero-PHI Certified",
+
+        // 🔍 Teladoc Health: Security Audit Log Viewer (#711-#715)
+        secAuditTitle: "Security Audit Log Viewer (Teladoc Benchmark)",
+        secAuditSubtitle: "Dedicated Super Admin viewer to audit who viewed, edited, or approved any medical record with timestamp & actor filters",
+        secAuditExportBtn: "Export Audit Log CSV",
+        secAuditFilterActor: "Filter by User",
+        secAuditFilterEvent: "Security Event Type",
+        secAuditFilterDate: "Date Range",
+
+        // 🚨 HealthVibe AI: Intrusion Alerts (#716-#720)
+        secAlertsTitle: "Intrusion Detection & Abnormal Access Alert System",
+        secAlertsSubtitle: "Monitor multiple failed login attempts or unauthorized access and dispatch immediate security alerts",
+        secAlertAcknowledgeBtn: "Acknowledge Security Alert",
+        secAlertCriticalBadge: "Critical Security Alert",
+        secAlertNoAlerts: "Platform fully secure - No active intrusion alerts",
         medPhotoAnalyticsTitle: "Medication & Rx Photo Capture Analytics",
         medPhotoAnalyticsSubtitle: "Monitoring upload success rates, doctor Rx transcription, and category distributions (Altibbi Telemedicine Benchmark)",
         medPhotoSuccessRate: "Photo Upload Success Rate",

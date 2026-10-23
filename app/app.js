@@ -16557,6 +16557,188 @@ window.exportAdminOperationalReportPdf = function() {
   if (typeof showToast === "function") showToast(isEn ? "PDF print dialogue triggered." : "تم فتح نافذة حفظ التقرير بصيغة PDF.");
 };
 
+// ============================================================================
+// 🔍 TELADOC SECURITY AUDIT LOG VIEWER & HEALTHVIBE AI INTRUSION ALERTS
+// ============================================================================
+
+let cachedAuditLogsData = [];
+
+async function renderAdminSecurityAuditLogs(logs = null) {
+  try {
+    const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+    let data = logs;
+
+    if (!data) {
+      try {
+        const res = await fetch("/api/admin/security-audit-viewer/logs");
+        if (res.ok) {
+          const json = await res.json();
+          data = json.data?.events || [];
+        }
+      } catch (e) {
+        console.warn("fetch security audit logs failed:", e);
+      }
+    }
+
+    cachedAuditLogsData = data || [];
+    const tbody = document.getElementById("adminSecurityAuditLogsTbody");
+    if (!tbody) return;
+
+    if (!data || data.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 18px; color: var(--muted);">${isEn ? "No auditable security events recorded yet." : "لم يتم تسجيل أحداث أمنية حتى الآن."}</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = data.slice(0, 50).map(item => `
+      <tr style="border-bottom: 1px solid var(--line);">
+        <td style="padding: 10px 12px; font-size: 11.5px; color: var(--muted);"><bdi class="bidi-isolate">${item.timestamp ? new Date(item.timestamp).toLocaleString() : "--"}</bdi></td>
+        <td style="padding: 10px 12px; font-weight: 600;">${item.actor?.emailMasked || item.actor?.uid || "system"}</td>
+        <td style="padding: 10px 12px;"><span class="pill">${item.actor?.role || "user"}</span></td>
+        <td style="padding: 10px 12px; font-weight: 600; color: #3b82f6;">${item.type}</td>
+        <td style="padding: 10px 12px; font-family: monospace; font-size: 11px;">${item.targetUserId || item.clinicId || "global"}</td>
+        <td style="padding: 10px 12px;"><span class="pill ${item.outcome === "SUCCESS" ? "ok" : "danger"}">${item.outcome || "INFO"}</span></td>
+      </tr>
+    `).join("");
+  } catch (err) {
+    console.error("renderAdminSecurityAuditLogs error:", err);
+  }
+}
+
+window.renderAdminSecurityAuditLogs = renderAdminSecurityAuditLogs;
+
+window.refreshAdminSecurityAuditLogs = async function() {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  if (typeof showToast === "function") showToast(isEn ? "Refreshing audit logs..." : "جاري تحديث سجلات التدقيق...");
+  await renderAdminSecurityAuditLogs();
+};
+
+window.filterAdminSecurityAuditLogs = function(query) {
+  const q = (query || document.getElementById("adminSecAuditSearchInput")?.value || "").toLowerCase().trim();
+  const typeFilter = document.getElementById("adminSecAuditEventTypeFilter")?.value || "";
+  
+  const filtered = (cachedAuditLogsData || []).filter(item => {
+    if (typeFilter && !item.type?.includes(typeFilter)) return false;
+    if (q) {
+      const str = `${item.type} ${item.actor?.uid} ${item.actor?.emailMasked} ${item.targetUserId}`.toLowerCase();
+      if (!str.includes(q)) return false;
+    }
+    return true;
+  });
+
+  renderAdminSecurityAuditLogs(filtered);
+};
+
+window.exportAdminSecurityAuditLogsCsv = function() {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  if (!cachedAuditLogsData || cachedAuditLogsData.length === 0) {
+    if (typeof showToast === "function") showToast(isEn ? "No audit logs to export." : "لا توجد سجلات تدقيق للتصدير.");
+    return;
+  }
+
+  const rows = [
+    ["Health Vibe AI - Security Audit Trail (Teladoc Benchmark)"],
+    ["Generated At", new Date().toISOString()],
+    [],
+    ["Timestamp", "Actor UID", "Role", "Event Type", "Target", "Outcome"]
+  ];
+
+  cachedAuditLogsData.forEach(e => {
+    rows.push([
+      e.timestamp,
+      e.actor?.uid || "system",
+      e.actor?.role || "user",
+      e.type,
+      e.targetUserId || e.clinicId || "global",
+      e.outcome
+    ]);
+  });
+
+  const csvContent = "\uFEFF" + rows.map(r => r.map(v => `"${String(v || "").replace(/"/g, '""')}"`).join(",")).join("\n");
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `security_audit_logs_${Date.now()}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  if (typeof showToast === "function") showToast(isEn ? "Security audit logs exported!" : "تم تصدير سجلات المراجعة بنجاح!");
+};
+
+// 🚨 Security Alerts Client Engine
+async function renderAdminSecurityAlerts() {
+  try {
+    const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+    let alerts = [];
+    try {
+      const res = await fetch("/api/admin/security-alerts");
+      if (res.ok) {
+        const json = await res.json();
+        alerts = json.alerts || [];
+      }
+    } catch (e) {
+      console.warn("fetch security alerts failed:", e);
+    }
+
+    const container = document.getElementById("adminSecurityAlertsListContainer");
+    const countBadge = document.getElementById("adminSecAlertsCountBadge");
+    if (countBadge) countBadge.innerText = `${alerts.filter(a => a.status === "OPEN").length} ${isEn ? "Active Alerts" : "إنذارات نشطة"}`;
+
+    if (!container) return;
+
+    if (alerts.length === 0) {
+      container.innerHTML = `<div style="padding: 16px; text-align: center; color: var(--muted); background: var(--surface-1); border-radius: 10px;">${isEn ? "Platform fully secure - No active intrusion alerts." : "🛡️ المنظومة آمنة بالكامل - لا توجد محاولات اختراق أو وصول مشبوه حالياً."}</div>`;
+      return;
+    }
+
+    container.innerHTML = alerts.map(a => `
+      <div style="padding: 14px; background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 10px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+        <div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span class="pill danger" style="font-weight: 700;">${a.severity}</span>
+            <strong style="color: #ef4444;">${a.type}</strong>
+            <span style="font-size: 11px; color: var(--muted);"><bdi class="bidi-isolate">${new Date(a.triggeredAt).toLocaleTimeString()}</bdi></span>
+          </div>
+          <p style="margin: 4px 0 0; font-size: 12.5px; color: var(--ink);">
+            ${a.reason} | IP: <code>${a.ipAddress || "N/A"}</code> | الحساب المستهدف: <code>${a.targetEmail || "N/A"}</code>
+          </p>
+        </div>
+        <div>
+          ${a.status === "OPEN" ? `
+            <button type="button" class="solid-button" onclick="acknowledgeSecurityAlert('${a.alertId}')" style="background: #ef4444; color: #fff; padding: 6px 12px; font-size: 12px;">
+              ${isEn ? "Acknowledge" : "استلام ومعالجة الإنذار"}
+            </button>
+          ` : `
+            <span class="pill ok">${isEn ? "Acknowledged" : "تم الاستلام"}</span>
+          `}
+        </div>
+      </div>
+    `).join("");
+  } catch (err) {
+    console.error("renderAdminSecurityAlerts error:", err);
+  }
+}
+
+window.renderAdminSecurityAlerts = renderAdminSecurityAlerts;
+window.refreshAdminSecurityAlerts = renderAdminSecurityAlerts;
+
+window.acknowledgeSecurityAlert = async function(alertId) {
+  try {
+    const res = await fetch("/api/admin/security-alerts/acknowledge", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ alertId })
+    });
+    if (res.ok) {
+      if (typeof showToast === "function") showToast("تم استلام الإنذار وتوثيق التدخل الأمني.");
+      await renderAdminSecurityAlerts();
+    }
+  } catch (e) {
+    console.error("acknowledgeSecurityAlert error:", e);
+  }
+};
+
 
 
 window.refreshAdminDashboardLive = async function() {

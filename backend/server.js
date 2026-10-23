@@ -5275,6 +5275,222 @@ app.post(['/api/admin/operational-reports/verify-encryption', '/api/operational-
   }
 });
 
+// ============================================================================
+// 🔍 TELADOC HEALTH BENCHMARK: SECURITY AUDIT LOG VIEWER (Tasks #711 - #715)
+// ============================================================================
+
+/**
+ * GET /api/admin/security-audit-viewer/logs
+ * Dedicated Super Admin & Clinic Admin viewer for medical access and modifications
+ */
+app.get(['/api/admin/security-audit-viewer/logs', '/api/security-audit-viewer/logs'], requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const actorRole = req.user.role || 'clinic_admin';
+    const isSuperAdmin = actorRole === 'super_admin' || req.user.isOwner === true;
+    const requestedClinic = req.query.clinicId;
+    let effectiveClinic = requestedClinic;
+
+    if (!isSuperAdmin) {
+      const userAssignedClinic = req.user.clinicId || (req.user.claims && req.user.claims.clinicId);
+      if (!userAssignedClinic) {
+        return res.status(403).json({ error: 'FORBIDDEN', message: 'No clinic assigned to this administrator.' });
+      }
+      if (requestedClinic && requestedClinic !== userAssignedClinic) {
+        return res.status(403).json({ error: 'FORBIDDEN', message: 'Unauthorized clinic audit log access.' });
+      }
+      effectiveClinic = userAssignedClinic;
+    }
+
+    const {
+      startDate,
+      endDate,
+      actorUid,
+      targetUserId,
+      type,
+      search,
+      limit = 50,
+      offset = 0
+    } = req.query;
+
+    const queryResult = await auditService.queryAuditEvents(db, {
+      requesterUser: {
+        uid: req.user.uid,
+        role: actorRole,
+        isOwner: req.user.isOwner,
+        clinicId: effectiveClinic
+      },
+      filters: {
+        clinicId: effectiveClinic,
+        startDate,
+        endDate,
+        actorUid,
+        targetUserId,
+        type,
+        search,
+        limit,
+        offset
+      }
+    });
+
+    if (auditService && typeof auditService.recordAuditEvent === 'function') {
+      await auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.SECURITY_AUDIT_LOG_VIEWED,
+        req,
+        outcome: 'SUCCESS',
+        details: {
+          resultCount: queryResult.events.length,
+          totalCount: queryResult.totalCount,
+          clinicId: effectiveClinic || 'all'
+        }
+      });
+    }
+
+    res.json({
+      success: true,
+      data: queryResult
+    });
+  } catch (err) {
+    console.error('[SECURITY AUDIT VIEWER ERROR]:', err);
+    res.status(500).json({ error: 'AUDIT_VIEWER_FAILED', message: err.message });
+  }
+});
+
+/**
+ * GET /api/admin/security-audit-viewer/export
+ * Safe export with zero-PHI and formula neutralization
+ */
+app.get(['/api/admin/security-audit-viewer/export', '/api/security-audit-viewer/export'], requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const actorRole = req.user.role || 'clinic_admin';
+    const isSuperAdmin = actorRole === 'super_admin' || req.user.isOwner === true;
+    const requestedClinic = req.query.clinicId;
+    let effectiveClinic = requestedClinic;
+
+    if (!isSuperAdmin) {
+      const userAssignedClinic = req.user.clinicId || (req.user.claims && req.user.claims.clinicId);
+      if (requestedClinic && requestedClinic !== userAssignedClinic) {
+        return res.status(403).json({ error: 'FORBIDDEN', message: 'Unauthorized export across clinics.' });
+      }
+      effectiveClinic = userAssignedClinic;
+    }
+
+    const format = (req.query.format || 'csv').toLowerCase();
+    const result = await auditService.exportAuditEvents(db, {
+      requesterUser: {
+        uid: req.user.uid,
+        role: actorRole,
+        isOwner: req.user.isOwner,
+        clinicId: effectiveClinic
+      },
+      filters: {
+        clinicId: effectiveClinic,
+        startDate: req.query.startDate,
+        endDate: req.query.endDate,
+        type: req.query.type,
+        actorUid: req.query.actorUid
+      },
+      format,
+      req
+    });
+
+    res.setHeader('Content-Type', result.contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
+    res.send(result.data);
+  } catch (err) {
+    console.error('[SECURITY AUDIT EXPORT ERROR]:', err);
+    res.status(500).json({ error: 'EXPORT_FAILED', message: err.message });
+  }
+});
+
+// ============================================================================
+// 🚨 HEALTHVIBE AI: INTRUSION DETECTION & ABNORMAL ACCESS (Tasks #716 - #720)
+// ============================================================================
+
+// Memory store for intrusion attempts
+const failedLoginAttemptsMap = new Map();
+const activeSecurityAlerts = [];
+
+function checkIntrusionAlertRules(ip, actorEmail, reason) {
+  const now = Date.now();
+  const windowMs = 5 * 60 * 1000; // 5 minutes window
+  const key = `${ip || 'unknown'}_${actorEmail || 'unknown'}`;
+  
+  if (!failedLoginAttemptsMap.has(key)) {
+    failedLoginAttemptsMap.set(key, []);
+  }
+
+  const attempts = failedLoginAttemptsMap.get(key);
+  // remove old
+  const validAttempts = attempts.filter(ts => now - ts <= windowMs);
+  validAttempts.push(now);
+  failedLoginAttemptsMap.set(key, validAttempts);
+
+  if (validAttempts.length >= 5) {
+    // Trigger high-priority intrusion alert!
+    const alert = {
+      alertId: `alert_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      severity: 'CRITICAL',
+      type: 'MULTIPLE_FAILED_LOGINS',
+      targetEmail: actorEmail,
+      ipAddress: ip,
+      attemptCount: validAttempts.length,
+      triggeredAt: new Date().toISOString(),
+      status: 'OPEN',
+      reason: reason || 'More than 5 consecutive authentication failures in 5 minutes'
+    };
+    activeSecurityAlerts.unshift(alert);
+    return alert;
+  }
+  return null;
+}
+
+/**
+ * GET /api/admin/security-alerts
+ * Lists active intrusion & abnormal access alerts
+ */
+app.get(['/api/admin/security-alerts', '/api/security-alerts'], requireAuth, requireAdmin, async (req, res) => {
+  try {
+    res.json({
+      success: true,
+      alerts: activeSecurityAlerts.slice(0, 50),
+      openCount: activeSecurityAlerts.filter(a => a.status === 'OPEN').length
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'FETCH_ALERTS_FAILED', message: err.message });
+  }
+});
+
+/**
+ * POST /api/admin/security-alerts/acknowledge
+ * Acknowledges an intrusion alert
+ */
+app.post(['/api/admin/security-alerts/acknowledge', '/api/security-alerts/acknowledge'], requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { alertId, note } = req.body;
+    const alert = activeSecurityAlerts.find(a => a.alertId === alertId);
+    if (!alert) {
+      return res.status(404).json({ error: 'ALERT_NOT_FOUND', message: 'Security alert not found.' });
+    }
+    alert.status = 'ACKNOWLEDGED';
+    alert.acknowledgedBy = req.user.uid;
+    alert.acknowledgedAt = new Date().toISOString();
+    alert.note = note || 'Acknowledged by security administrator';
+
+    if (auditService && typeof auditService.recordAuditEvent === 'function') {
+      await auditService.recordAuditEvent(db, {
+        type: auditService.AUDIT_EVENT_TYPES.SECURITY_ALERT_ACKNOWLEDGED,
+        req,
+        outcome: 'SUCCESS',
+        details: { alertId, status: 'ACKNOWLEDGED' }
+      });
+    }
+
+    res.json({ success: true, alert });
+  } catch (err) {
+    res.status(500).json({ error: 'ACKNOWLEDGE_FAILED', message: err.message });
+  }
+});
+
 /**
  * GET /api/kpi/metrics
  * Server-authoritative KPI analytics: response time, approval time, patients/day, and workload
