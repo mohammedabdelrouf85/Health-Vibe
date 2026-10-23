@@ -976,6 +976,7 @@ async function executeAccountDeletion({
       status: 'completed',
       message: 'Account and personal data successfully deleted.',
       jobId: job.jobId,
+      job,
       steps: job.steps
     };
   } catch (unexpectedErr) {
