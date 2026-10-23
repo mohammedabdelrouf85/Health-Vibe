@@ -935,4 +935,54 @@
           </div>
         </article>
 
+        <!-- 37. ADA HEALTH DATA DELETION QUEUE & RIGHT TO ERASURE (#721) -->
+        <article class="panel" id="adminDeletionQueuePanel" style="margin-top: 24px;">
+          <div class="panel-head" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <h3 style="margin: 0; font-size: 19px;" data-i18n="appointments.delQueueTitle">إدارة طلبات حذف الحسابات وحق النسيان (Data Deletion Queue)</h3>
+                <span class="pill ok" style="font-size: 11px;">Ada Health Benchmark</span>
+              </div>
+              <p style="margin: 4px 0 0; font-size: 13px; color: var(--muted);" data-i18n="appointments.delQueueSubtitle">
+                متابعة تنفيذ طلبات حذف حسابات المرضى والتأكد من مسح البيانات الشخصية وفق السياسة القانونية و GDPR Art. 17
+              </p>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <button type="button" class="soft-button" onclick="refreshAdminDeletionQueue()" id="btnRefreshDeletionQueue" style="padding: 6px 12px; font-size: 12.5px;">🔄 تحديث القائمة</button>
+              <button type="button" class="outline-button" onclick="exportAdminDeletionQueueCsv()" id="btnExportDeletionQueueCsv" style="padding: 6px 12px; font-size: 12.5px;">📥 تصدير السجل CSV</button>
+            </div>
+          </div>
+
+          <!-- Filters Bar -->
+          <div style="margin-top: 14px; padding: 12px; background: var(--surface-1); border-radius: 10px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 260px;">
+              <input type="text" id="adminDeletionSearchInput" oninput="filterAdminDeletionQueue(this.value)" placeholder="بحث بمعرف المريض أو البريد المشفر..." style="padding: 6px 12px; font-size: 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); flex: 1;">
+              <select id="adminDeletionStatusFilter" onchange="filterAdminDeletionQueue()" style="padding: 6px 10px; font-size: 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);">
+                <option value="">كافة الحالات (All)</option>
+                <option value="completed">مكتمل وممسوح (Completed)</option>
+                <option value="in_progress">قيد المعالجة (In Progress)</option>
+                <option value="partially_failed">فشل جزئي (Needs Retry)</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="margin-top: 16px; overflow-x: auto; border: 1px solid var(--line); border-radius: 10px;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 12.5px; text-align: start;">
+              <thead>
+                <tr style="background: var(--surface-2); border-bottom: 1px solid var(--line);">
+                  <th style="padding: 10px 12px;">معرف الطلب</th>
+                  <th style="padding: 10px 12px;">المريض المشفر</th>
+                  <th style="padding: 10px 12px;">تاريخ الطلب</th>
+                  <th style="padding: 10px 12px;">حالة المعالجة</th>
+                  <th style="padding: 10px 12px;">المسح السريري والسحابي</th>
+                  <th style="padding: 10px 12px;">الإجراءات</th>
+                </tr>
+              </thead>
+              <tbody id="adminDeletionQueueTbody">
+                <tr><td colspan="6" style="text-align: center; padding: 18px; color: var(--muted);">جاري تحميل قائمة طلبات الحذف...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+
       </section>
