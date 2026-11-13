@@ -1,7 +1,7 @@
 /**
- * HEALTH VIBE AI: TASK #81 CLINIDO-GRADE OTP & EGYPTIAN PHONE VERIFICATION TEST SUITE
+ * HEALTH VIBE AI: TASK #81 & #83 CLINIDO-GRADE OTP & EGYPTIAN PHONE VERIFICATION TEST SUITE
  * 
- * Verifies Task #81:
+ * Verifies Task #81 & Task #83:
  * "تأكيد البريد الإلكتروني ورقم الهاتف (OTP) | تفعيل التحقق من البريد الإلكتروني 
  *  أو رقم الموبايل المصري (010/011/012/015) عبر رمز تحقق OTP لضمان صحة بيانات التواصل عند إرسال التقارير. | CliniDo"
  */
@@ -12,7 +12,7 @@ const whatsappBot = require("../backend/whatsapp-bot");
 const app = require("../backend/server");
 
 console.log("==================================================================");
-console.log("📱 HEALTH VIBE AI: TASK #81 CLINIDO OTP & EGYPTIAN PHONE TESTS");
+console.log("📱 HEALTH VIBE AI: TASK #81 & #83 CLINIDO OTP & EGYPTIAN PHONE TESTS");
 console.log("==================================================================\n");
 
 async function runTests() {
@@ -222,7 +222,7 @@ async function runTests() {
   server.close();
 
   console.log("==================================================================");
-  console.log("🎉 ALL TASK #81 CLINIDO OTP & EGYPTIAN PHONE TESTS PASSED (100%)!");
+  console.log("🎉 ALL TASK #81 & #83 CLINIDO OTP & EGYPTIAN PHONE TESTS PASSED (100%)!");
   console.log("==================================================================");
   process.exit(0);
 }
