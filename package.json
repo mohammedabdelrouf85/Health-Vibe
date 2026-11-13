@@ -80,6 +80,7 @@
     "test:model-rollback": "node tests/model_rollback_and_governance.test.js",
     "test:task-84": "node tests/model_rollback_and_governance.test.js",
     "test:medical-dictionary": "node tests/simplified_arabic_medical_dictionary.test.js",
+    "test:task-85": "node tests/simplified_arabic_medical_dictionary.test.js",
     "test:doctor-profile": "node tests/doctor_public_profile_and_booking_governance.test.js",
     "test:seo": "node tests/seo_metadata_and_content_governance.test.js",
     "test:expansion": "node tests/pilot_expansion_and_retention.test.js",
