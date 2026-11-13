@@ -834,5 +834,38 @@
     "version": "1.0.0",
     "status": "deployed",
     "deployedAt": "2026-10-18T17:36:50.000Z"
+  },
+  {
+    "releaseId": "rel_production_1794588075607",
+    "timestamp": "2026-11-13T16:41:15.607Z",
+    "environment": "production",
+    "projectId": "health-vibes-a4b3b",
+    "gitCommit": "feec7a3f53e807316c09406ededf955d614052b9",
+    "gitBranch": "main",
+    "version": "1.0.0",
+    "status": "failed",
+    "error": "Command failed: node \"D:\\MY PC\\Coding\\Health Vibe Ai\\node_modules\\firebase-tools\\lib\\bin\\firebase.js\" deploy --project health-vibes-a4b3b --only hosting,firestore:rules --non-interactive"
+  },
+  {
+    "releaseId": "rel_production_1794588103672",
+    "timestamp": "2026-11-13T16:41:43.672Z",
+    "environment": "production",
+    "projectId": "health-vibes-a4b3b",
+    "gitCommit": "feec7a3f53e807316c09406ededf955d614052b9",
+    "gitBranch": "main",
+    "version": "1.0.0",
+    "status": "deployed",
+    "deployedAt": "2026-11-13T16:42:01.863Z"
+  },
+  {
+    "releaseId": "rel_production_1794588126832",
+    "timestamp": "2026-11-13T16:42:06.832Z",
+    "environment": "production",
+    "projectId": "health-vibes-a4b3b",
+    "gitCommit": "feec7a3f53e807316c09406ededf955d614052b9",
+    "gitBranch": "main",
+    "version": "1.0.0",
+    "status": "failed",
+    "error": "Command failed: node \"D:\\MY PC\\Coding\\Health Vibe Ai\\node_modules\\firebase-tools\\lib\\bin\\firebase.js\" deploy --project health-vibes-a4b3b --only firestore:rules --non-interactive"
   }
 ]
