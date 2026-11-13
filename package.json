@@ -78,6 +78,7 @@
     "test:kry-offline": "node tests/kry_offline_session_storage_autosave.test.js",
     "test:buoy-emergency": "node tests/buoy_persistent_emergency_banner.test.js",
     "test:model-rollback": "node tests/model_rollback_and_governance.test.js",
+    "test:task-84": "node tests/model_rollback_and_governance.test.js",
     "test:medical-dictionary": "node tests/simplified_arabic_medical_dictionary.test.js",
     "test:doctor-profile": "node tests/doctor_public_profile_and_booking_governance.test.js",
     "test:seo": "node tests/seo_metadata_and_content_governance.test.js",
