@@ -1793,6 +1793,14 @@
             <div class="panel-head"><h3 data-i18n="assessment.title">تقييم التنفس</h3><span id="assessmentProgressLabel" class="pill info">الخطوة 2 من 4</span></div>
             <div class="progress" aria-label="Assessment completion progress"><span id="assessmentProgressBar" style="width:0%"></span></div>
             <div id="intakeOperationalBanner" style="display: none;"></div>
+            <!-- Kry Benchmark (#82): Offline & Weak Connection Autosave Banner -->
+            <div id="assessmentOfflineNetworkBanner" class="clinical-note" hidden style="margin: 8px 0 12px; background: rgba(245, 158, 11, 0.12); border: 1.5px solid #f59e0b; color: var(--ink); border-radius: 10px; padding: 10px 14px; display: none; align-items: center; gap: 10px;" role="status" aria-live="polite">
+              <span style="font-size: 18px;">📡</span>
+              <div style="flex: 1; font-size: 12.5px; line-height: 1.5;">
+                <strong id="assessmentOfflineNetworkTitle" data-i18n="assessment.offlineBannerTitle" style="color: #d97706; display: block;">انقطاع أو ضعف الاتصال بالإنترنت — وضع الحفظ التلقائي مفعل (معيار Kry)</strong>
+                <span id="assessmentOfflineNetworkDesc" data-i18n="assessment.offlineBannerDesc">يتم حفظ كافة إجاباتك وقياساتك فوراً وتلقائياً في ذاكرة الجلسة (SessionStorage) على هاتفك حتى لا تضيع بياناتك أبداً.</span>
+              </div>
+            </div>
             <div id="assessmentDraftStatus" class="field-hint" style="margin: 8px 0 12px;" data-i18n="assessment.draftStatusEmpty">لم يتم حفظ مسودة بعد</div>
             <div id="assessmentRecoveryBanner" class="clinical-note" hidden style="margin-bottom: 14px;">
               <span data-i18n="assessment.draftBannerText">توجد مسودة محفوظة لهذا الحساب. يمكنك المتابعة أو البدء من جديد.</span>
@@ -3983,15 +3991,32 @@
         </div>
       </div>
 
-      <!-- Tab 2: Email Link Section -->
+      <!-- Tab 2: Email OTP & Link Section (CliniDo Standard #81 & #83) -->
       <div id="emailVerifySection" style="display: none;">
-        <div style="background: var(--surface-2); padding: 14px; border-radius: 12px; border: 1px solid var(--line); margin-bottom: 16px;">
-          <p style="margin: 0 0 12px; font-size: 12.5px; color: var(--ink); line-height: 1.5;" id="verifyModalEmailNote">
-            أرسلنا رابط تأكيد إلى بريدك الإلكتروني المسجل. يرجى فحص صندوق الوارد أو مجلد Spam ثم النقر على "تحقق الآن".
+        <div style="background: var(--surface-2); padding: 14px; border-radius: 12px; border: 1px solid var(--line); margin-bottom: 14px;">
+          <h4 style="margin: 0 0 6px; font-size: 14px; color: var(--ink); display: flex; align-items: center; gap: 6px;">
+            <span>📧</span> <span id="emailOtpSectionTitle">التحقق من البريد الإلكتروني عبر رمز OTP (6 أرقام)</span>
+          </h4>
+          <p style="margin: 0 0 12px; font-size: 12.5px; color: var(--muted); line-height: 1.5;" id="verifyModalEmailNote">
+            لضمان صحة بيانات التواصل عند إرسال التقارير الطبية (معيار كلينيدو)، اطلب رمز تحقق مكوناً من 6 أرقام على بريدك الإلكتروني أو استخدم رابط التفعيل.
           </p>
-          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-            <button type="button" id="verifyModalCheckBtn" onclick="checkEmailVerification()" class="solid-button" style="flex: 1; background: var(--teal); border-color: var(--teal);">تحقق الآن</button>
-            <button type="button" id="verifyModalResendBtn" onclick="resendVerificationEmail()" class="outline-button" style="flex: 1;">إعادة إرسال الرابط</button>
+          <button type="button" id="requestEmailOtpBtn" onclick="requestEmailOtpCode()" class="solid-button" style="width: 100%; background: var(--teal); border-color: var(--teal); font-weight: 700; padding: 10px 14px; margin-bottom: 12px;">
+            <span id="requestEmailOtpBtnText">📨 إرسال رمز التحقق (OTP) إلى البريد الإلكتروني</span>
+          </button>
+
+          <div id="emailOtpInputContainer" style="padding: 12px; border-radius: 10px; background: var(--surface); border: 1px dashed var(--teal); margin-bottom: 12px;">
+            <label for="verifyEmailOtpCodeInput" style="display: block; font-size: 12px; font-weight: 700; margin-bottom: 6px; color: var(--ink);" id="emailOtpDigitsLabel">
+              أدخل رمز التحقق (6 أرقام) المرسل لبريدك الإلكتروني:
+            </label>
+            <input type="text" id="verifyEmailOtpCodeInput" maxlength="6" dir="ltr" placeholder="• • • • • •" autocomplete="one-time-code" style="width: 100%; letter-spacing: 8px; font-size: 22px; font-weight: 900; text-align: center; padding: 10px; border-radius: 8px; border: 2px solid var(--teal); background: var(--surface-2); color: var(--teal-2); font-family: monospace; box-sizing: border-box;" />
+            <button type="button" id="confirmEmailOtpBtn" onclick="verifyEmailOtpCode()" class="solid-button" style="width: 100%; margin-top: 10px; background: var(--teal); border-color: var(--teal); font-weight: 800;">
+              تأكيد رمز البريد الإلكتروني وتفعيل الحساب ✓
+            </button>
+          </div>
+
+          <div style="display: flex; gap: 8px; flex-wrap: wrap; border-top: 1px solid var(--line); padding-top: 10px;">
+            <button type="button" id="verifyModalCheckBtn" onclick="checkEmailVerification()" class="outline-button" style="flex: 1; font-size: 12px;">تحقق من رابط البريد</button>
+            <button type="button" id="verifyModalResendBtn" onclick="resendVerificationEmail()" class="outline-button" style="flex: 1; font-size: 12px;">إعادة إرسال الرابط</button>
           </div>
         </div>
       </div>

@@ -9097,12 +9097,102 @@ async function verifyPhoneOtp() {
   }
 }
 
+async function requestEmailOtpCode() {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  const user = getActiveUser();
+  if (!user) {
+    showToast(isEn ? "Please sign in first." : "يرجى تسجيل الدخول أولاً.");
+    return;
+  }
+
+  const reqBtn = document.getElementById("requestEmailOtpBtn");
+  const reqBtnText = document.getElementById("requestEmailOtpBtnText");
+  if (reqBtn) reqBtn.disabled = true;
+  if (reqBtnText) reqBtnText.textContent = isEn ? "Sending Email OTP..." : "⏳ جاري إرسال رمز التحقق لبريدك...";
+
+  try {
+    await callBackend("/api/auth/email/request-otp", {
+      method: "POST",
+      body: JSON.stringify({ email: user.email })
+    });
+    showToast(isEn
+      ? "📧 6-digit verification code sent to your email address!"
+      : "📧 تم إرسال رمز التحقق (6 أرقام) إلى بريدك الإلكتروني بنجاح!");
+    const otpInput = document.getElementById("verifyEmailOtpCodeInput");
+    if (otpInput) {
+      otpInput.value = "";
+      otpInput.focus();
+    }
+  } catch (err) {
+    console.error("requestEmailOtpCode error:", err);
+    showToast(err.message || (isEn ? "Failed to send Email OTP." : "تعذر إرسال رمز التحقق للبريد الإلكتروني."));
+  } finally {
+    if (reqBtn) reqBtn.disabled = false;
+    if (reqBtnText) {
+      reqBtnText.textContent = isEn
+        ? "📨 Send Verification Code (OTP) to Email"
+        : "📨 إرسال رمز التحقق (OTP) إلى البريد الإلكتروني";
+    }
+  }
+}
+
+async function verifyEmailOtpCode() {
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  const otpInput = document.getElementById("verifyEmailOtpCodeInput");
+  const enteredCode = (otpInput?.value || "").trim().replace(/\D/g, "");
+
+  if (!enteredCode || enteredCode.length !== 6) {
+    showToast(isEn ? "Please enter a valid 6-digit email OTP code." : "يرجى إدخال رمز التحقق المكون من 6 أرقام المرسل لبريدك.");
+    if (otpInput) otpInput.focus();
+    return;
+  }
+
+  const confirmBtn = document.getElementById("confirmEmailOtpBtn");
+  if (confirmBtn) {
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = isEn ? "Verifying Email OTP..." : "جاري التحقق من الرمز...";
+  }
+
+  try {
+    const res = await callBackend("/api/auth/email/verify-otp", {
+      method: "POST",
+      body: JSON.stringify({ code: enteredCode })
+    });
+
+    if (res && res.success) {
+      window._isUserVerified = true;
+      const user = getActiveUser();
+      if (user && db) {
+        await db.collection("users").doc(user.uid).set({
+          emailVerified: true,
+          verificationMethod: "email_otp",
+          verifiedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true }).catch(() => {});
+      }
+      updateEmailVerificationUI(user || (auth ? auth.currentUser : null));
+      closeVerifyRequiredModal();
+      showToast(isEn
+        ? "🎉 Email verified via OTP! Your contact details are now certified for report delivery."
+        : "🎉 تم تأكيد البريد الإلكتروني بنجاح عبر رمز OTP! بيانات التواصل معتمدة الآن لإرسال التقارير.");
+    } else {
+      showToast(isEn ? "Invalid verification code." : "رمز التحقق غير صحيح أو منتهي الصلاحية.");
+    }
+  } catch (err) {
+    console.error("verifyEmailOtpCode error:", err);
+    showToast(err.message || (isEn ? "Verification failed. Please check the code." : "فشل التحقق. يرجى التأكد من صحة الرمز."));
+  } finally {
+    if (confirmBtn) {
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = isEn
+        ? "Verify Email Code & Activate Account ✓"
+        : "تأكيد رمز البريد الإلكتروني وتفعيل الحساب ✓";
+    }
+  }
+}
+
 async function resendVerificationEmail() {
-  const user = auth.currentUser;
+  const user = auth ? auth.currentUser : getActiveUser();
   if (!user) return;
-  showToast(currentLanguage === "en" ? "Email verification is coming soon." : "تفعيل البريد الإلكتروني قريبًا.");
-  updateVerificationSoonState();
-  return;
 
   if (isVerificationRevoked(user)) {
     showToast(currentLanguage === "en" ? "Account verification has been revoked by the platform administrator." : "تم إلغاء تفعيل هذا الحساب بواسطة إدارة المنصة.");
@@ -9126,8 +9216,15 @@ async function resendVerificationEmail() {
 
   try {
     if (resendBtn) resendBtn.disabled = true;
-    await user.sendEmailVerification();
-    showToast(currentLanguage === "en" ? "Verification email sent! Check Inbox or Spam folder." : "تم إرسال رابط التأكيد! يرجى فحص البريد الوارد ومجلد Spam.");
+    // Dispatch both Email OTP and Firebase Verification Link if supported
+    await callBackend("/api/auth/email/request-otp", {
+      method: "POST",
+      body: JSON.stringify({ email: user.email })
+    }).catch(() => {});
+    if (typeof user.sendEmailVerification === "function") {
+      await user.sendEmailVerification().catch(() => {});
+    }
+    showToast(currentLanguage === "en" ? "Verification OTP & link sent! Check Inbox or Spam folder." : "تم إرسال رمز التحقق ورابط التأكيد! يرجى فحص البريد الوارد ومجلد Spam.");
 
     resendCooldown = true;
     let secondsLeft = 60;
@@ -9155,11 +9252,8 @@ async function resendVerificationEmail() {
 }
 
 async function checkEmailVerification() {
-  const user = auth.currentUser;
+  const user = auth ? auth.currentUser : getActiveUser();
   if (!user) return;
-  showToast(currentLanguage === "en" ? "Email verification is coming soon." : "تفعيل البريد الإلكتروني قريبًا.");
-  updateVerificationSoonState();
-  return;
 
   if (isVerificationRevoked(user)) {
     showToast(currentLanguage === "en" ? "Account verification has been revoked by the platform administrator." : "تم إلغاء تفعيل هذا الحساب بواسطة إدارة المنصة.");
@@ -9168,17 +9262,22 @@ async function checkEmailVerification() {
   }
 
   try {
-    await user.reload();
-    const updatedUser = auth.currentUser;
+    if (typeof user.reload === "function") {
+      await user.reload();
+    }
+    const updatedUser = (auth && auth.currentUser) || user;
 
     if (updatedUser && (updatedUser.emailVerified || isUserVerified(updatedUser))) {
       showToast(currentLanguage === "en" ? "🎉 Email verified successfully!" : "🎉 تم تأكيد البريد الإلكتروني بنجاح!");
       updateEmailVerificationUI(updatedUser);
-      await db.collection("users").doc(updatedUser.uid).set({
-        emailVerified: true
-      }, { merge: true });
+      if (db && updatedUser.uid) {
+        await db.collection("users").doc(updatedUser.uid).set({
+          emailVerified: true
+        }, { merge: true });
+      }
+      closeVerifyRequiredModal();
     } else {
-      showToast(currentLanguage === "en" ? "Email is not verified yet. Please check your inbox and click the verification link." : "لم يتم تأكيد البريد بعد. يرجى فتح البريد الإلكتروني والضغط على الرابط المرسل إليك أولاً.");
+      showToast(currentLanguage === "en" ? "Email is not verified yet. Please enter the 6-digit OTP or click the verification link in your inbox." : "لم يتم تأكيد البريد بعد. يرجى إدخال رمز التحقق المكون من 6 أرقام أو الضغط على الرابط المرسل لبريدك.");
     }
   } catch (err) {
     console.error("Check verification error:", err);
@@ -9192,11 +9291,11 @@ function openVerifyRequiredModal(actionNameAr = "هذا الإجراء", actionN
   const isEn = currentLanguage === "en";
   const title = document.getElementById("verifyModalTitle");
   const desc = document.getElementById("verifyModalDesc");
-  if (title) title.textContent = isEn ? "Account Verification Required" : "توثيق وتفعيل الحساب إجباري";
+  if (title) title.textContent = isEn ? "Contact Verification Required (CliniDo Standard)" : "تأكيد بيانات التواصل وتوثيق الحساب (معيار كلينيدو)";
   if (desc) {
     desc.textContent = isEn
-      ? `WhatsApp and email activation are coming soon.`
-      : `تفعيل الواتساب والبريد الإلكتروني قريبًا.`;
+      ? `Verify your Egyptian mobile number (010/011/012/015) or email address via a 6-digit OTP code to ensure accurate communication before ${actionNameEn}.`
+      : `يرجى تفعيل التحقق من رقم الموبايل المصري (010/011/012/015) أو البريد الإلكتروني عبر رمز تحقق OTP لضمان صحة بيانات التواصل قبل ${actionNameAr}.`;
   }
   const phoneInput = document.getElementById("verifyPhoneInput");
   if (phoneInput && !phoneInput.value) {
@@ -9209,7 +9308,6 @@ function openVerifyRequiredModal(actionNameAr = "هذا الإجراء", actionN
     }
   }
   switchVerifyModalTab(defaultTab);
-  updateVerificationSoonState();
   modal.classList.add("open");
   modal.setAttribute("aria-hidden", "false");
 }
@@ -9252,6 +9350,9 @@ window.switchVerifyModalTab = switchVerifyModalTab;
 window.requestBotOtpCode = requestBotOtpCode;
 window.sendPhoneOrWhatsAppOtp = sendPhoneOrWhatsAppOtp;
 window.verifyPhoneOtp = verifyPhoneOtp;
+window.requestEmailOtpCode = requestEmailOtpCode;
+window.verifyEmailOtpCode = verifyEmailOtpCode;
+window.validateEgyptianMobileClient = validateEgyptianMobileClient;
 window.copyGeneratedOtp = copyGeneratedOtp;
 window.autoFillAndVerifyOtp = autoFillAndVerifyOtp;
 window.resendVerificationEmail = resendVerificationEmail;
@@ -19553,16 +19654,41 @@ window.MODEL_VERSION = MODEL_VERSION;
 
 const ASSESSMENT_DRAFT_COLLECTION = "assessmentDrafts";
 const ASSESSMENT_DRAFT_VERSION = "2026-09-draft-v1";
+const ASSESSMENT_SESSION_DRAFT_KEY = "hv_respiratory_assessment_session_draft";
 let _assessmentDraftSaveTimer = null;
 let _assessmentLoadedDraft = null;
+let _assessmentNetworkMonitorBound = false;
 
 function getAssessmentDraftKey(user = getActiveUser()) {
   const uid = user && user.uid ? user.uid : "guest";
   return `hv_assessment_draft_${uid}`;
 }
 
+function getAssessmentSessionDraftKey(user = getActiveUser()) {
+  const uid = user && user.uid ? user.uid : "guest";
+  return `hv_assessment_draft_${uid}`;
+}
+
 function getAssessmentDraftDocId(user = getActiveUser()) {
   return user && user.uid ? user.uid : null;
+}
+
+function updateAssessmentNetworkStatusBanner(forceOffline = null) {
+  const banner = document.getElementById("assessmentOfflineNetworkBanner");
+  const statusEl = document.getElementById("assessmentDraftStatus");
+  const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+  const isOff = typeof forceOffline === "boolean" ? forceOffline : (typeof isOfflineNow === "function" && isOfflineNow());
+
+  if (banner) {
+    banner.hidden = !isOff;
+    banner.style.display = isOff ? "flex" : "none";
+  }
+
+  if (isOff && statusEl) {
+    statusEl.textContent = isEn
+      ? "📡 Offline Mode (Kry Standard): Answers auto-saved in SessionStorage on your device"
+      : "📡 انقطاع الإنترنت (معيار Kry): يتم حفظ إجاباتك تلقائياً في SessionStorage حتى لا تضيع بياناتك";
+  }
 }
 
 function setChoiceGroupValue(groupId, value) {
@@ -19576,6 +19702,9 @@ function setChoiceGroupValue(groupId, value) {
 function gatherAssessmentDraftFields() {
   const readChoices = (groupId) => Array.from(document.querySelectorAll(`#${groupId} .choice.active`)).map(btn => btn.textContent.trim());
   const firstChoice = (groupId) => readChoices(groupId)[0] || "";
+  const criticalSymptoms = Array.from(document.querySelectorAll(".critical-symptom-chip[aria-pressed='true']"))
+    .map(chip => chip.getAttribute("data-symptom"))
+    .filter(Boolean);
   return {
     oxygenRaw: readOxygenRawValue(),
     breathingDifficulty: firstChoice("breathingChoices"),
@@ -19588,6 +19717,7 @@ function gatherAssessmentDraftFields() {
     recentInfection: firstChoice("recentInfectionChoices"),
     asthmaCopd: firstChoice("asthmaCopdChoices"),
     riskFactors: readChoices("riskChoices"),
+    criticalSymptoms,
     currentMedications: document.getElementById("currentMedicationsInput")?.value.trim() || "",
     notes: document.getElementById("assessmentNotesInput")?.value.trim() || "",
     inlineConsent: Boolean(document.getElementById("assessmentInlineConsent")?.checked)
@@ -19617,6 +19747,17 @@ function applyAssessmentDraftFields(fields = {}) {
       btn.classList.toggle("active", fields.riskFactors.includes(btn.textContent.trim()));
     });
   }
+  if (Array.isArray(fields.criticalSymptoms)) {
+    document.querySelectorAll(".critical-symptom-chip").forEach(chip => {
+      const sym = chip.getAttribute("data-symptom");
+      const active = fields.criticalSymptoms.includes(sym);
+      chip.setAttribute("aria-pressed", active ? "true" : "false");
+      chip.classList.toggle("active", active);
+    });
+    if (typeof window.updateCriticalSymptomsCheck === "function") {
+      window.updateCriticalSymptomsCheck();
+    }
+  }
   const inlineConsent = document.getElementById("assessmentInlineConsent");
   if (inlineConsent && typeof fields.inlineConsent === "boolean") inlineConsent.checked = fields.inlineConsent;
   updateAssessmentProgress();
@@ -19628,11 +19769,13 @@ function buildAssessmentDraftPayload(user = getActiveUser()) {
   return {
     schemaVersion: ASSESSMENT_DRAFT_VERSION,
     status: "draft",
+    storageEngine: "sessionStorage+localStorage",
     patientId: user?.uid || null,
     createdBy: user?.uid || null,
     patientEmail: user?.email || null,
     fields,
     updatedAtClient: new Date().toISOString(),
+    isOfflineSnapshot: typeof isOfflineNow === "function" ? isOfflineNow() : false,
     isSubmittedToDoctor: false
   };
 }
@@ -19660,65 +19803,162 @@ function updateAssessmentProgress() {
   return pct;
 }
 
+/**
+ * Kry Benchmark (Task #82): Synchronous immediate write to sessionStorage & localStorage
+ * Ensures zero data loss if mobile network drops or page reloads mid-assessment.
+ */
+function saveAssessmentToSessionStorageSync(user = getActiveUser()) {
+  const payload = buildAssessmentDraftPayload(user);
+  const serialized = JSON.stringify(payload);
+  const userDraftKey = getAssessmentDraftKey(user);
+  try {
+    if (typeof sessionStorage !== "undefined") {
+      sessionStorage.setItem(userDraftKey, serialized);
+      sessionStorage.setItem(ASSESSMENT_SESSION_DRAFT_KEY, serialized);
+    }
+  } catch (e) {}
+  try {
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem(userDraftKey, serialized);
+    }
+  } catch (e) {}
+  return payload;
+}
+
 async function saveAssessmentDraftNow() {
   const user = getActiveUser();
-  const payload = buildAssessmentDraftPayload(user);
+  const payload = saveAssessmentToSessionStorageSync(user);
   updateAssessmentProgress();
-  try {
-    localStorage.setItem(getAssessmentDraftKey(user), JSON.stringify(payload));
-  } catch(e) {}
+  updateAssessmentNetworkStatusBanner();
+
+  const status = document.getElementById("assessmentDraftStatus");
+  const isEn = currentLanguage === "en";
+  const isOff = typeof isOfflineNow === "function" && isOfflineNow();
+
+  if (isOff) {
+    if (status) {
+      status.textContent = isEn
+        ? "📡 Offline Mode: Answers safely preserved in SessionStorage (Kry Standard)"
+        : "📡 وضع عدم الاتصال: تم حفظ إجاباتك تلقائياً في SessionStorage (معيار Kry)";
+    }
+    return payload;
+  }
+
   if (user?.uid && typeof db !== "undefined" && db) {
     try {
       await db.collection(ASSESSMENT_DRAFT_COLLECTION).doc(getAssessmentDraftDocId(user)).set({
         ...payload,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
-      const status = document.getElementById("assessmentDraftStatus");
-      if (status) status.textContent = currentLanguage === "en" ? "Draft saved securely to your account" : "تم حفظ المسودة بأمان على حسابك";
+      if (status) {
+        status.textContent = isEn
+          ? "✓ Auto-saved in SessionStorage & synced to cloud"
+          : "✓ تم الحفظ التلقائي في SessionStorage ومزامنة السحابة بأمان";
+      }
     } catch (err) {
       console.warn("Assessment draft cloud save failed:", err);
-      const status = document.getElementById("assessmentDraftStatus");
-      if (status) status.textContent = currentLanguage === "en" ? "Draft saved on this device; cloud sync pending" : "تم حفظ المسودة على هذا الجهاز؛ مزامنة السحابة معلقة";
+      if (status) {
+        status.textContent = isEn
+          ? "📡 Saved in SessionStorage on this device; cloud sync pending"
+          : "📡 تم حفظ إجاباتك في SessionStorage على هذا الجهاز؛ مزامنة السحابة معلقة";
+      }
     }
+  } else if (status) {
+    status.textContent = isEn
+      ? "✓ Answers auto-saved in SessionStorage on this device"
+      : "✓ تم حفظ إجاباتك تلقائياً في SessionStorage على هذا الجهاز";
   }
+  return payload;
 }
 
 function scheduleAssessmentDraftSave() {
   updateAssessmentProgress();
+  // Immediately persist to sessionStorage synchronously on every keystroke/choice (Kry Standard #82)
+  saveAssessmentToSessionStorageSync();
   window.clearTimeout(_assessmentDraftSaveTimer);
   _assessmentDraftSaveTimer = window.setTimeout(saveAssessmentDraftNow, 450);
 }
 
 async function loadAssessmentDraft() {
   const user = getActiveUser();
-  let draft = null;
-  if (user?.uid && typeof db !== "undefined" && db) {
+  const userDraftKey = getAssessmentDraftKey(user);
+  let sessionDraft = null;
+  let localDraft = null;
+  let cloudDraft = null;
+
+  // 1. Read from sessionStorage first (highest priority for interrupted active mobile session - Task #82)
+  try {
+    if (typeof sessionStorage !== "undefined") {
+      const rawSession = sessionStorage.getItem(userDraftKey) || sessionStorage.getItem(ASSESSMENT_SESSION_DRAFT_KEY);
+      if (rawSession) {
+        const parsed = JSON.parse(rawSession);
+        if (parsed && (!parsed.patientId || !user?.uid || parsed.patientId === user.uid)) {
+          sessionDraft = parsed;
+        }
+      }
+    }
+  } catch (e) {
+    sessionDraft = null;
+  }
+
+  // 2. Read from localStorage fallback
+  try {
+    if (typeof localStorage !== "undefined") {
+      localDraft = JSON.parse(localStorage.getItem(userDraftKey) || "null");
+    }
+  } catch (e) {
+    localDraft = null;
+  }
+
+  // 3. Read from Firestore cloud if online
+  if (user?.uid && typeof db !== "undefined" && db && !(typeof isOfflineNow === "function" && isOfflineNow())) {
     try {
       const snap = await db.collection(ASSESSMENT_DRAFT_COLLECTION).doc(getAssessmentDraftDocId(user)).get();
-      if (snap.exists) draft = { id: snap.id, ...snap.data() };
+      if (snap.exists) cloudDraft = { id: snap.id, ...snap.data() };
     } catch (err) {
       console.warn("Assessment draft cloud load failed:", err);
     }
   }
-  if (!draft) {
-    try {
-      draft = JSON.parse(localStorage.getItem(getAssessmentDraftKey(user)) || "null");
-    } catch(e) {
-      draft = null;
-    }
+
+  // Pick the freshest valid unsubmitted draft (prioritizing sessionStorage if newer or offline)
+  const candidates = [sessionDraft, localDraft, cloudDraft].filter(
+    d => d && d.status === "draft" && !d.isSubmittedToDoctor && d.fields
+  );
+  candidates.sort((a, b) => {
+    const tA = Date.parse(a.updatedAtClient || 0) || 0;
+    const tB = Date.parse(b.updatedAtClient || 0) || 0;
+    return tB - tA;
+  });
+
+  const draft = candidates[0] || null;
+  _assessmentLoadedDraft = draft;
+
+  // Automatically restore fields into form when recovering from sessionStorage so patient never loses progress
+  if (_assessmentLoadedDraft && _assessmentLoadedDraft.fields) {
+    applyAssessmentDraftFields(_assessmentLoadedDraft.fields);
   }
-  _assessmentLoadedDraft = draft && draft.status === "draft" && !draft.isSubmittedToDoctor ? draft : null;
+
   const banner = document.getElementById("assessmentRecoveryBanner");
   if (banner) banner.hidden = !_assessmentLoadedDraft;
   updateAssessmentProgress();
+  updateAssessmentNetworkStatusBanner();
   return _assessmentLoadedDraft;
 }
 
 async function clearAssessmentDraft() {
   const user = getActiveUser();
+  const userDraftKey = getAssessmentDraftKey(user);
   try {
-    localStorage.removeItem(getAssessmentDraftKey(user));
-  } catch(e) {}
+    if (typeof sessionStorage !== "undefined") {
+      sessionStorage.removeItem(userDraftKey);
+      sessionStorage.removeItem(ASSESSMENT_SESSION_DRAFT_KEY);
+    }
+  } catch (e) {}
+  try {
+    if (typeof localStorage !== "undefined") {
+      localStorage.removeItem(userDraftKey);
+    }
+  } catch (e) {}
   if (user?.uid && typeof db !== "undefined" && db) {
     try {
       await db.collection(ASSESSMENT_DRAFT_COLLECTION).doc(getAssessmentDraftDocId(user)).set({
@@ -19742,13 +19982,36 @@ function initAssessmentDraftAutosave() {
   root.addEventListener("input", scheduleAssessmentDraftSave);
   root.addEventListener("change", scheduleAssessmentDraftSave);
   root.addEventListener("click", (event) => {
-    if (event.target.closest(".choice")) window.setTimeout(scheduleAssessmentDraftSave, 0);
+    if (event.target.closest(".choice") || event.target.closest(".critical-symptom-chip")) {
+      window.setTimeout(scheduleAssessmentDraftSave, 0);
+    }
   });
+
+  if (!_assessmentNetworkMonitorBound && typeof window !== "undefined") {
+    _assessmentNetworkMonitorBound = true;
+    window.addEventListener("offline", () => {
+      saveAssessmentToSessionStorageSync();
+      updateAssessmentNetworkStatusBanner(true);
+      const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+      showToast(isEn
+        ? "📡 Connection lost. Your respiratory assessment answers are safely preserved in SessionStorage."
+        : "📡 انقطع اتصال الإنترنت. تم حفظ إجابات استمارة الجهاز التنفسي تلقائياً في SessionStorage.");
+    });
+    window.addEventListener("online", () => {
+      updateAssessmentNetworkStatusBanner(false);
+      saveAssessmentDraftNow();
+      const isEn = typeof currentLanguage !== "undefined" && currentLanguage === "en";
+      showToast(isEn
+        ? "🌐 Connection restored! Syncing your saved assessment draft..."
+        : "🌐 عاد اتصال الإنترنت! جاري مزامنة إجاباتك المحفوظة بأمان...");
+    });
+  }
+
   document.getElementById("btnResumeAssessmentDraft")?.addEventListener("click", () => {
     if (_assessmentLoadedDraft?.fields) {
       applyAssessmentDraftFields(_assessmentLoadedDraft.fields);
       document.getElementById("assessmentRecoveryBanner").hidden = true;
-      showToast(currentLanguage === "en" ? "Draft restored." : "تم استرجاع المسودة.");
+      showToast(currentLanguage === "en" ? "Draft restored from SessionStorage." : "تم استرجاع إجاباتك المحفوظة بنجاح.");
     }
   });
   document.getElementById("btnDiscardAssessmentDraft")?.addEventListener("click", async () => {
@@ -19775,8 +20038,11 @@ function initAssessmentDraftAutosave() {
 
 window.gatherAssessmentDraftFields = gatherAssessmentDraftFields;
 window.applyAssessmentDraftFields = applyAssessmentDraftFields;
+window.saveAssessmentToSessionStorageSync = saveAssessmentToSessionStorageSync;
 window.saveAssessmentDraftNow = saveAssessmentDraftNow;
 window.loadAssessmentDraft = loadAssessmentDraft;
+window.clearAssessmentDraft = clearAssessmentDraft;
+window.updateAssessmentNetworkStatusBanner = updateAssessmentNetworkStatusBanner;
 
 /**
  * Comprehensive Validation Engine for Clinical Assessment Fields
