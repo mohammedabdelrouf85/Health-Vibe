@@ -202,7 +202,7 @@ const allowedOrigins = isDevelopment
     ? configuredOrigins
     : (isStaging
         ? ['https://staging.healthvibe.ai', 'https://demo.healthvibes.app', 'https://health-vibes-staging.web.app', 'https://health-vibes-staging.firebaseapp.com']
-        : ['https://healthvibes.app', 'https://www.healthvibes.app', 'https://demo.healthvibes.app', 'https://healthvibe.ai', 'https://app.healthvibe.ai', 'https://health-vibes-a4b3b.web.app', 'https://health-vibes-a4b3b.firebaseapp.com']));
+        : ['https://healthvibes.com', 'https://www.healthvibes.com', 'https://healthvibes.app', 'https://www.healthvibes.app', 'https://demo.healthvibes.app', 'https://healthvibe.ai', 'https://app.healthvibe.ai', 'https://health-vibes-a4b3b.web.app', 'https://health-vibes-a4b3b.firebaseapp.com']));
 
 // =============================================================================
 // 🛡️ SECURITY HARDENING & OWASP COMPLIANCE
@@ -210,7 +210,7 @@ const allowedOrigins = isDevelopment
 // Suppress server fingerprinting
 app.disable('x-powered-by');
 
-// Enforce HTTPS & TLS 1.3 on all healthvibes.app domains and APIs (Request 36)
+// Enforce HTTPS & TLS 1.3 on all healthvibes.app / healthvibes.com domains and APIs (Request 36)
 const { httpsAndTls13EnforcementMiddleware } = require('./tls-security-service');
 app.use(httpsAndTls13EnforcementMiddleware);
 
@@ -221,10 +221,10 @@ app.use((req, res, next) => {
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
-  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com https://accounts.google.com https://www.google.com https://www.recaptcha.net; script-src-attr 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://www.gstatic.com https://*.googleusercontent.com https://firebasestorage.googleapis.com https://*.firebasestorage.app; connect-src 'self' http://localhost:4000 http://127.0.0.1:4000 https://healthvibes.app https://*.healthvibes.app https://healthvibe.ai https://*.healthvibe.ai https://*.firebaseio.com https://*.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://accounts.google.com https://*.google.com https://www.recaptcha.net https://*.firebaseapp.com https://health-vibes-a4b3b.firebaseapp.com https://health-vibes-a4b3b.web.app https://*.web.app; frame-src 'self' https://healthvibes.app https://*.healthvibes.app https://health-vibes-a4b3b.web.app https://health-vibes-a4b3b.firebaseapp.com https://accounts.google.com https://www.google.com https://recaptcha.google.com https://www.recaptcha.net https://*.web.app; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self';");
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com https://accounts.google.com https://www.google.com https://www.recaptcha.net; script-src-attr 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://www.gstatic.com https://*.googleusercontent.com https://firebasestorage.googleapis.com https://*.firebasestorage.app; connect-src 'self' http://localhost:4000 http://127.0.0.1:4000 https://healthvibes.com https://*.healthvibes.com https://healthvibes.app https://*.healthvibes.app https://healthvibe.ai https://*.healthvibe.ai https://*.firebaseio.com https://*.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://accounts.google.com https://*.google.com https://www.recaptcha.net https://*.firebaseapp.com https://health-vibes-a4b3b.firebaseapp.com https://health-vibes-a4b3b.web.app https://*.web.app; frame-src 'self' https://healthvibes.com https://*.healthvibes.com https://healthvibes.app https://*.healthvibes.app https://health-vibes-a4b3b.web.app https://health-vibes-a4b3b.firebaseapp.com https://accounts.google.com https://www.google.com https://recaptcha.google.com https://www.recaptcha.net https://*.web.app; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self';");
   res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-  if (isProduction || isStaging || (req.headers.host && req.headers.host.includes('healthvibes.app')) || req.secure || req.headers['x-forwarded-proto'] === 'https') {
+  if (isProduction || isStaging || (req.headers.host && (req.headers.host.includes('healthvibes.com') || req.headers.host.includes('healthvibes.app'))) || req.secure || req.headers['x-forwarded-proto'] === 'https') {
     res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
   }
 
@@ -645,7 +645,7 @@ function isDemoEnvironmentAllowed(req) {
   const origin = (req.headers.origin || '').toLowerCase();
   
   // Explicitly prohibited on live production hosts
-  if (host === 'healthvibes.app' || host === 'www.healthvibes.app' || origin.includes('//healthvibes.app') || origin.includes('//www.healthvibes.app')) {
+  if (host === 'healthvibes.com' || host === 'www.healthvibes.com' || host === 'healthvibes.app' || host === 'www.healthvibes.app' || origin.includes('//healthvibes.com') || origin.includes('//www.healthvibes.com') || origin.includes('//healthvibes.app') || origin.includes('//www.healthvibes.app')) {
     return false;
   }
   

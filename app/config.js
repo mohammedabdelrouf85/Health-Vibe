@@ -9,6 +9,8 @@
   const DEV_PROJECT_ID = "health-vibes-dev";
   const LOCAL_HOSTS = ["localhost", "127.0.0.1", "0.0.0.0", ""];
   const PRODUCTION_HOSTS = [
+    "healthvibes.com",
+    "www.healthvibes.com",
     "healthvibes.app",
     "www.healthvibes.app",
     "healthvibe.ai",

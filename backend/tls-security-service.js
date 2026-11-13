@@ -17,6 +17,10 @@ const crypto = require('crypto');
 
 // Enforced Domains Scope
 const ENFORCED_DOMAINS = Object.freeze([
+  'healthvibes.com',
+  'www.healthvibes.com',
+  'api.healthvibes.com',
+  'app.healthvibes.com',
   'healthvibes.app',
   'api.healthvibes.app',
   'app.healthvibes.app',

@@ -6766,7 +6766,7 @@ function showAuth(mode) {
   if (demoSandboxOpts) {
     const isDemoAllowed = window.HEALTH_VIBE_CONFIG && (window.HEALTH_VIBE_CONFIG.isDemo?.() || window.HEALTH_VIBE_CONFIG.allowDemoSeed || window.HEALTH_VIBE_CONFIG.isDemoEnvironment);
     const host = ((typeof window !== "undefined" && window.location && window.location.hostname) || "").toLowerCase();
-    const isStrictProd = (host === "healthvibes.app" || host === "www.healthvibes.app");
+    const isStrictProd = (host === "healthvibes.com" || host === "www.healthvibes.com" || host === "healthvibes.app" || host === "www.healthvibes.app");
     demoSandboxOpts.style.display = (isDemoAllowed && !isStrictProd) ? "block" : "none";
   }
 }
@@ -8174,7 +8174,7 @@ window.enterApp = enterApp;
 function isDemoEnvironmentProhibited() {
   const host = ((typeof window !== "undefined" && window.location && window.location.hostname) || "").toLowerCase();
   const isProdConfig = window.HEALTH_VIBE_CONFIG && typeof window.HEALTH_VIBE_CONFIG.isProduction === "function" && window.HEALTH_VIBE_CONFIG.isProduction();
-  return isProdConfig && (host === "healthvibes.app" || host === "www.healthvibes.app");
+  return isProdConfig && (host === "healthvibes.com" || host === "www.healthvibes.com" || host === "healthvibes.app" || host === "www.healthvibes.app");
 }
 
 function getDeidentifiedDemoRecords(isEn) {
