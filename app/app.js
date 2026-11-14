@@ -1658,6 +1658,7 @@ function applyLanguage(language) {
   if (typeof setAuthMode === "function") setAuthMode(authMode);
   if (typeof updateEmailVerificationUI === "function" && typeof auth !== "undefined") updateEmailVerificationUI(auth.currentUser);
   if (typeof updateOxygenWarning === "function") updateOxygenWarning();
+  if (typeof updateRespiratoryRateIndicator === "function") updateRespiratoryRateIndicator();
 
   // 10. Re-render dynamic active screen without wiping user inputs
   if (activeScreenName === "patient" && typeof renderPatientDashboard === "function") {
@@ -18232,6 +18233,78 @@ function parseOptionalRespiratoryRateInput(value) {
   return { ok: true, value: parsed, unit: "breaths/min", reason: null };
 }
 
+let respiratoryRateTimerInterval = null;
+let respiratoryRateTimerDeadline = 0;
+
+function updateRespiratoryRateIndicator() {
+  const input = document.getElementById("respiratoryRateInput");
+  const status = document.getElementById("respiratoryRateStatus");
+  if (!input || !status) return;
+  const parsed = parseOptionalRespiratoryRateInput(input.value);
+  const isEn = currentLanguage === "en";
+  if (!parsed.ok) {
+    status.textContent = "";
+    status.dataset.severity = "";
+    status.style.color = "";
+  } else if (parsed.value !== null && parsed.value > 24) {
+    status.textContent = isEn
+      ? `Fast breathing detected (${parsed.value}/min). Please contact a clinician promptly; seek emergency care for severe breathing difficulty.`
+      : `تنبيه: معدل التنفس سريع (${parsed.value} نفس/دقيقة). تواصل مع الطبيب سريعاً، واطلب الطوارئ عند وجود صعوبة شديدة في التنفس.`;
+    status.dataset.severity = "high";
+    status.style.color = "var(--red)";
+  } else if (parsed.value !== null) {
+    status.textContent = isEn ? `Recorded: ${parsed.value} breaths per minute.` : `تم تسجيل ${parsed.value} نفس/دقيقة.`;
+    status.dataset.severity = "normal";
+    status.style.color = "var(--green)";
+  } else {
+    status.textContent = "";
+    status.dataset.severity = "";
+    status.style.color = "";
+  }
+}
+
+function stopRespiratoryRateTimer(completed = false) {
+  if (respiratoryRateTimerInterval) {
+    clearInterval(respiratoryRateTimerInterval);
+    respiratoryRateTimerInterval = null;
+  }
+  const button = document.getElementById("respiratoryRateTimerButton");
+  const display = document.getElementById("respiratoryRateTimerDisplay");
+  const input = document.getElementById("respiratoryRateInput");
+  if (button) {
+    button.setAttribute("aria-pressed", "false");
+    button.textContent = currentLanguage === "en" ? "↻ Restart 1-minute timer" : "↻ إعادة مؤقت الدقيقة";
+  }
+  if (display) display.textContent = completed ? "00:00" : "01:00";
+  if (completed) {
+    const status = document.getElementById("respiratoryRateStatus");
+    if (status) {
+      status.textContent = currentLanguage === "en" ? "Minute complete. Enter the number of breaths you counted." : "انتهت الدقيقة. أدخل عدد مرات التنفس التي أحصيتها.";
+      status.dataset.severity = "info";
+      status.style.color = "var(--teal)";
+    }
+    if (input) input.focus();
+  }
+}
+
+function startRespiratoryRateTimer() {
+  stopRespiratoryRateTimer(false);
+  const button = document.getElementById("respiratoryRateTimerButton");
+  const display = document.getElementById("respiratoryRateTimerDisplay");
+  if (!button || !display) return;
+  respiratoryRateTimerDeadline = Date.now() + 60000;
+  display.hidden = false;
+  button.setAttribute("aria-pressed", "true");
+  button.textContent = currentLanguage === "en" ? "■ Stop timer" : "■ إيقاف المؤقت";
+  const tick = () => {
+    const remaining = Math.max(0, Math.ceil((respiratoryRateTimerDeadline - Date.now()) / 1000));
+    display.textContent = `00:${String(remaining).padStart(2, "0")}`;
+    if (remaining === 0) stopRespiratoryRateTimer(true);
+  };
+  tick();
+  respiratoryRateTimerInterval = setInterval(tick, 250);
+}
+
 function normalizeYesNoUnknown(value) {
   const clean = String(value ?? "").trim().toLowerCase();
   if (clean === "نعم" || clean === "yes") return "yes";
@@ -18960,6 +19033,19 @@ document.addEventListener("DOMContentLoaded", () => {
   if (oxygenInput) {
     oxygenInput.addEventListener("input", updateOxygenWarning);
     oxygenInput.addEventListener("change", updateOxygenWarning);
+  }
+
+  const respiratoryRateInput = document.getElementById("respiratoryRateInput");
+  if (respiratoryRateInput) {
+    respiratoryRateInput.addEventListener("input", updateRespiratoryRateIndicator);
+    respiratoryRateInput.addEventListener("change", updateRespiratoryRateIndicator);
+  }
+  const respiratoryRateTimerButton = document.getElementById("respiratoryRateTimerButton");
+  if (respiratoryRateTimerButton) {
+    respiratoryRateTimerButton.addEventListener("click", () => {
+      if (respiratoryRateTimerInterval) stopRespiratoryRateTimer(false);
+      else startRespiratoryRateTimer();
+    });
   }
 
   const closeGuideBtn = document.getElementById("closeEmergencyGuideBtn");

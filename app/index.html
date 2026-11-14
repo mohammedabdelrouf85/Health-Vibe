@@ -1894,8 +1894,14 @@
             <div id="oxygenWarning" class="field-warning" hidden></div>
             <label data-i18n="assessment.tempLabel">درجة الحرارة (السخونية)</label>
             <input id="temperatureInput" inputmode="decimal" aria-label="درجة الحرارة" placeholder="37.0 °C أو unknown">
-            <label data-i18n="assessment.respiratoryRateLabel">معدل وسرعة التنفس (اختياري)</label>
-            <input id="respiratoryRateInput" type="number" min="5" max="60" aria-label="معدل التنفس في الدقيقة" placeholder="مثال: 18">
+            <label data-i18n="assessment.respiratoryRateLabel">معدل التنفس في الدقيقة (اختياري)</label>
+            <small class="field-hint" style="color: var(--muted); font-size: 12px; display: block; margin: -2px 0 6px;">اجلس بهدوء، واحسب كل شهيق وزفير كَنَفَس واحد لمدة دقيقة كاملة. يمكنك إدخال قراءة قاسها مختص.</small>
+            <input id="respiratoryRateInput" type="number" inputmode="numeric" min="5" max="60" step="1" aria-label="معدل التنفس في الدقيقة" placeholder="مثال: 18">
+            <div class="respiratory-rate-tools" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:8px 0;">
+              <button type="button" id="respiratoryRateTimerButton" class="soft-button" aria-pressed="false">▶ ابدأ مؤقت الدقيقة</button>
+              <span id="respiratoryRateTimerDisplay" role="timer" aria-live="off" style="font-variant-numeric:tabular-nums;font-weight:700;" hidden>01:00</span>
+            </div>
+            <div id="respiratoryRateStatus" class="field-hint" role="status" aria-live="polite" style="margin:6px 0 10px;"></div>
             <label data-i18n="assessment.chestPainLabel">ألم أو نغزة أو ثقل في الصدر</label>
             <small class="field-hint" style="color: var(--muted); font-size: 12px; display: block; margin: -2px 0 6px;" data-i18n="assessment.chestPainHelp">نغزة، شكة مع النفس، أو ثقل ضاغط على القفص الصدري</small>
             <div id="chestPainChoices" class="choice-row three">
