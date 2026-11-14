@@ -5,6 +5,8 @@ const path = require('path');
 const { RespiratoryRFClassifier } = require('./respiratory_rf_classifier');
 const {
   COUGH_DURATION_PREPROCESSOR,
+  COUGH_DURATION_FEATURE_COUNT,
+  WHEEZING_FEATURE_COUNT,
   extractFeatures,
   fitCoughDurationPreprocessor,
   getCoughDurationDays,
@@ -76,9 +78,10 @@ test.forEach(record => {
     cough_duration_days: record.symptoms?.symptomDurationDays
   };
   const vector = extractFeatures(input, { coughDurationPreprocessor: fittedPreprocessor });
-  const legacyVector = vector.slice(0, -5);
+  const legacyVector = vector.slice(0, -(COUGH_DURATION_FEATURE_COUNT + WHEEZING_FEATURE_COUNT));
+  const coughDurationCandidateVector = vector.slice(0, -WHEEZING_FEATURE_COUNT);
   const baseline = classifier.predict(legacyVector);
-  const candidate = classifier.predict(vector);
+  const candidate = classifier.predict(coughDurationCandidateVector);
   const baselineLabel = labels[baseline.triage_category] || 'normal';
   const candidateLabel = labels[candidate.triage_category] || 'normal';
   if (baselineLabel === record.groundTruth?.triage) baselineCorrect += 1;

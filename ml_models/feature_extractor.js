@@ -76,6 +76,41 @@ const COUGH_DURATION_PREPROCESSOR = Object.freeze({
   categories: Object.freeze(['acute', 'subacute', 'chronic'])
 });
 
+// A tri-state categorical input. One-hot bits are already normalized to [0, 1];
+// absent/invalid values use the explicit unknown category plus a missing flag.
+const WHEEZING_PREPROCESSOR = Object.freeze({
+  version: 'wheezing-preprocess-v1',
+  categories: Object.freeze(['yes', 'no', 'unknown'])
+});
+const WHEEZING_FEATURE_COUNT = WHEEZING_PREPROCESSOR.categories.length + 1;
+const COUGH_DURATION_FEATURE_COUNT = 5;
+
+function normalizeWheezing(value) {
+  if (value === true || value === 1) return 'yes';
+  if (value === false || value === 0) return 'no';
+  const normalized = String(value ?? '').trim().toLowerCase();
+  if (['yes', 'y', 'true', '1', 'نعم'].includes(normalized)) return 'yes';
+  if (['no', 'n', 'false', '0', 'لا'].includes(normalized)) return 'no';
+  if (['unknown', 'not sure', 'unsure', 'غير معروف', 'غير متأكد', 'مش عارف'].includes(normalized)) return 'unknown';
+  return null;
+}
+
+function transformWheezing(record = {}) {
+  const symptoms = record.symptoms || record.assessment?.symptoms || {};
+  const rawValue = record.wheezing ?? record.wheezing_present ?? record.wheezingPresent
+    ?? symptoms.wheezing ?? record.assessment?.symptoms?.wheezing;
+  const absent = rawValue === null || rawValue === undefined || String(rawValue).trim() === '';
+  const normalized = normalizeWheezing(rawValue);
+  const valid = normalized !== null;
+  const category = valid ? normalized : 'unknown';
+  return {
+    category,
+    oneHot: WHEEZING_PREPROCESSOR.categories.map(option => category === option ? 1 : 0),
+    missing: valid ? 0 : 1,
+    sourceStatus: valid ? category : absent ? 'missing' : 'invalid'
+  };
+}
+
 function normalizeCoughCategory(value, allowed) {
   if (typeof value !== 'string') return null;
   const normalized = value.trim().toLowerCase().replace(/[\s-]+/g, '_');
@@ -303,6 +338,7 @@ function extractFeatures(rawData = {}, {
   const mmrcFeatures = transformMmrcScore(mmrcInput, mmrcPreprocessor);
   const coughFeatures = transformCoughCharacter(rawData);
   const coughDurationFeatures = transformCoughDuration(rawData, coughDurationPreprocessor);
+  const wheezingFeatures = transformWheezing(rawData);
   const sbp = clampNumber(rawData.systolic_bp || rawData.systolic, 'systolic_bp');
   const dbp = clampNumber(rawData.diastolic_bp || rawData.diastolic, 'diastolic_bp');
   const temp = clampNumber(rawData.temperature_c || rawData.temperature, 'temperature_c');
@@ -360,7 +396,9 @@ function extractFeatures(rawData = {}, {
     coughDurationFeatures.bandAcute,
     coughDurationFeatures.bandSubacute,
     coughDurationFeatures.bandChronic,
-    coughDurationFeatures.missing
+    coughDurationFeatures.missing,
+    ...wheezingFeatures.oneHot,
+    wheezingFeatures.missing
   ];
 }
 
@@ -369,6 +407,9 @@ module.exports = {
   MMRC_PREPROCESSOR,
   COUGH_CHARACTER_PREPROCESSOR,
   COUGH_DURATION_PREPROCESSOR,
+  WHEEZING_PREPROCESSOR,
+  WHEEZING_FEATURE_COUNT,
+  COUGH_DURATION_FEATURE_COUNT,
   RESPIRATORY_RATE_PREPROCESSOR,
   SPO2_PREPROCESSOR,
   clampNumber,
@@ -382,5 +423,7 @@ module.exports = {
   transformCoughCharacter,
   fitCoughDurationPreprocessor,
   getCoughDurationDays,
-  transformCoughDuration
+  transformCoughDuration,
+  normalizeWheezing,
+  transformWheezing
 };
