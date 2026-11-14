@@ -2768,6 +2768,10 @@ body.dark .slot-list strong {
   display: none !important;
 }
 
+.assessment-dependent-section[hidden] {
+  display: none !important;
+}
+
 .choice.active {
   background: var(--cyan);
   color: var(--teal);

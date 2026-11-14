@@ -11725,6 +11725,7 @@ async function renderReportScreen(targetCaseId = null) {
     );
     const symptomsObj = caseData.assessment?.symptoms || {};
     const chestPainDisplay = escapeHtml(isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوب") : recordedClinicalText(isEn ? symptomsObj.chestPainLabelEn : (symptomsObj.chestPainLabelAr || caseData.chestPain), isEn));
+    const chestPainTypeDisplay = escapeHtml(isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوب") : recordedClinicalText(isEn ? (symptomsObj.chestPainTypeLabelEn || caseData.chestPainTypeLabelEn) : (symptomsObj.chestPainTypeLabelAr || caseData.chestPainTypeLabelAr), isEn));
     const wheezingDisplay = escapeHtml(isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوب") : recordedClinicalText(isEn ? (symptomsObj.wheezingLabelEn || caseData.wheezingLabelEn) : (symptomsObj.wheezingLabelAr || caseData.wheezingLabelAr), isEn));
     const progressionDisplay = escapeHtml(isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوب") : recordedClinicalText(isEn ? symptomsObj.symptomProgressionLabelEn : (symptomsObj.symptomProgressionLabelAr || caseData.symptomProgression), isEn));
     const infectionDisplay = escapeHtml(isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوب") : recordedClinicalText(isEn ? symptomsObj.recentInfectionLabelEn : (symptomsObj.recentInfectionLabelAr || caseData.recentInfection), isEn));
@@ -11953,6 +11954,11 @@ async function renderReportScreen(targetCaseId = null) {
             <div style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px; text-align: center;">
               <span style="font-size: 11.5px; color: var(--muted); display: block; margin-bottom: 4px;">${isEn ? "Chest Pain" : "ألم الصدر"}</span>
               <strong style="font-size: 15px; color: var(--ink); display: block; margin-top: 6px;">${chestPainDisplay}</strong>
+            </div>
+
+            <div style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px; text-align: center;">
+              <span style="font-size: 11.5px; color: var(--muted); display: block; margin-bottom: 4px;">${isEn ? "Chest Pain Pattern" : "طبيعة ألم الصدر"}</span>
+              <strong style="font-size: 15px; color: var(--ink); display: block; margin-top: 6px;">${chestPainTypeDisplay}</strong>
             </div>
 
             <div style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px; text-align: center;">
@@ -18585,11 +18591,12 @@ window.toggleCriticalSymptom = function(symptomKey) {
   // Also sync with chestPainChoices if chest pain is selected
   if (symptomKey === "acuteChestPain") {
     const isChestPainActive = window._selectedCriticalChips.has("acuteChestPain");
-    if (isChestPainActive) {
-      document.querySelectorAll("#chestPainChoices .choice").forEach(btn => {
-        btn.classList.toggle("active", btn.textContent.trim() === "نعم" || btn.textContent.trim() === "Yes");
-      });
-    }
+    document.querySelectorAll("#chestPainChoices .choice").forEach(btn => {
+      const selected = isChestPainActive ? btn.dataset.chestPain === "yes" : btn.classList.contains("active");
+      btn.classList.toggle("active", selected);
+      btn.setAttribute("aria-pressed", selected ? "true" : "false");
+    });
+    updateChestPainDetailUI();
   }
 
   window.updateCriticalSymptomsCheck();
@@ -18909,6 +18916,7 @@ window.openConfirmAssessmentModal = function(data, onConfirm) {
   safeSet("confirmTemperature", data.temperature);
   safeSet("confirmRespiratoryRate", data.respiratoryRate);
   safeSet("confirmChestPain", data.chestPain);
+  safeSet("confirmChestPainType", data.chestPainType || (isEn ? "Not applicable" : "لا ينطبق"));
   safeSet("confirmWheezing", data.wheezing);
   safeSet("confirmProgression", data.symptomProgression);
   safeSet("confirmRecentInfection", data.recentInfection);
@@ -19057,6 +19065,7 @@ window.closeRulesGovernanceModal = function() {
 document.addEventListener("DOMContentLoaded", () => {
   initializeDialogAccessibility();
   updateCoughInputsUI();
+  updateChestPainDetailUI();
   document.getElementById("coughDurationInput")?.addEventListener("input", updateCoughDurationCategory);
   document.getElementById("wheezingAudioButton")?.addEventListener("click", toggleWheezingAudioExample);
   updateWheezingAudioButtonLabel(false);
@@ -19351,6 +19360,7 @@ const SINGLE_SELECT_CHOICE_GROUPS = [
   "coughChoices",
   "wheezingChoices",
   "chestPainChoices",
+  "chestPainCharacterChoices",
   "symptomProgressionChoices",
   "recentInfectionChoices",
   "asthmaCopdChoices"
@@ -19370,7 +19380,7 @@ SINGLE_SELECT_CHOICE_GROUPS.forEach((groupId) => {
         radio.setAttribute("aria-checked", selected ? "true" : "false");
         radio.tabIndex = selected ? 0 : -1;
       });
-    } else if (groupId === "coughNatureChoices" || groupId === "sputumColorChoices" || groupId === "wheezingChoices") {
+    } else if (["coughNatureChoices", "sputumColorChoices", "wheezingChoices", "chestPainChoices", "chestPainCharacterChoices"].includes(groupId)) {
       group.querySelectorAll(".choice").forEach((choice) => {
         choice.setAttribute("aria-pressed", choice === btn ? "true" : "false");
       });
@@ -19381,18 +19391,20 @@ SINGLE_SELECT_CHOICE_GROUPS.forEach((groupId) => {
     }
 
     if (groupId === "coughNatureChoices" || groupId === "sputumColorChoices") updateCoughInputsUI();
+    if (groupId === "chestPainChoices" || groupId === "chestPainCharacterChoices") updateChestPainDetailUI();
 
     // Conditional Branching & Reactive State Updates:
     // 1. If Chest Pain is 'نعم' / 'Yes', trigger urgent clinical guidance warning
     if (groupId === "chestPainChoices") {
-      const choiceVal = btn.textContent.trim().toLowerCase();
-      const isChestPainYes = choiceVal === "نعم" || choiceVal === "yes";
+      const isChestPainYes = btn.dataset.chestPain === "yes";
       const o2Warning = document.getElementById("oxygenWarning");
       if (isChestPainYes && o2Warning) {
         o2Warning.hidden = false;
         o2Warning.innerHTML = currentLanguage === "en"
-          ? "🚨 <strong>Urgent Note:</strong> Severe or acute chest pain requires emergency medical assessment (Call 123)."
-          : "🚨 <strong>تنبيه عاجل:</strong> ألم الصدر الحاد يستوجب رعاية طبية طارئة فورية (اتصل بـ 123).";
+          ? "🚨 <strong>Urgent note:</strong> Chest pain has many possible causes. Call 123 for sudden or severe pain, sudden breathlessness, fainting, or coughing blood."
+          : "🚨 <strong>تنبيه:</strong> لألم الصدر أسباب متعددة. اتصل بالإسعاف 123 عند الألم المفاجئ أو الشديد، أو ضيق النفس المفاجئ، أو الإغماء، أو السعال المصحوب بالدم.";
+      } else if (o2Warning) {
+        updateOxygenWarning();
       }
     }
 
@@ -19522,6 +19534,28 @@ const SPUTUM_COLOR_TEXT = Object.freeze({
   yellow_green: { ar: "أصفر أو أخضر", en: "Yellow or green" },
   blood_streaked: { ar: "مدمم", en: "Blood-streaked" }
 });
+const CHEST_PAIN_CHARACTER_TEXT = Object.freeze({
+  tightness: { ar: "ضغط أو ثقل/ضيق بالصدر", en: "Pressure, heaviness, or tightness" },
+  pleuritic: { ar: "ألم حاد يزيد مع النفس العميق أو السعال", en: "Sharp pain that worsens with a deep breath or cough" },
+  both: { ar: "كلاهما", en: "Both" },
+  other_unknown: { ar: "نوع آخر أو غير متأكد", en: "Another type or not sure" }
+});
+
+function updateChestPainDetailUI() {
+  const pain = document.querySelector("#chestPainChoices .choice.active")?.dataset.chestPain || "";
+  const section = document.getElementById("chestPainCharacterSection");
+  const group = document.getElementById("chestPainCharacterChoices");
+  const warning = document.getElementById("pleuriticPainWarning");
+  if (section) section.hidden = pain !== "yes";
+  if (pain !== "yes" && group) {
+    group.querySelectorAll(".choice").forEach(button => {
+      button.classList.remove("active");
+      button.setAttribute("aria-pressed", "false");
+    });
+  }
+  const kind = document.querySelector("#chestPainCharacterChoices .choice.active")?.dataset.chestPainCharacter || "";
+  if (warning) warning.hidden = pain !== "yes" || !["pleuritic", "both"].includes(kind);
+}
 
 function getMmrcGradeLabel(score, language = currentLanguage) {
   return MMRC_GRADE_TEXT[score]?.[language] || "";
@@ -19692,6 +19726,7 @@ function buildAssessmentModel({
   respiratoryRateRaw = "",
   wheezingRaw = "غير معروف",
   chestPainRaw = "غير معروف",
+  chestPainTypeRaw,
   symptomProgressionRaw = "غير معروف",
   recentInfectionRaw = "غير معروف",
   asthmaCopdRaw = "غير معروف",
@@ -19791,6 +19826,17 @@ function buildAssessmentModel({
       : "معدل التنفس غير صحيح: أدخل رقماً صحيحاً بين 5 و 60 نفس/دقيقة أو اتركه فارغاً أو اكتب غير معروف.");
   }
   const chestPain = normalizeYesNoUnknown(chestPainRaw) || "unknown";
+  const validChestPainTypes = Object.keys(CHEST_PAIN_CHARACTER_TEXT);
+  const chestPainType = chestPain === "yes" && validChestPainTypes.includes(String(chestPainTypeRaw || ""))
+    ? String(chestPainTypeRaw)
+    : null;
+  if (chestPain === "yes" && chestPainTypeRaw !== undefined && !chestPainType) {
+    throw new Error(currentLanguage === "en"
+      ? "Please describe the chest pain pattern."
+      : "يرجى تحديد طبيعة ألم الصدر.");
+  }
+  const chestPainTypeLabelAr = chestPainType ? CHEST_PAIN_CHARACTER_TEXT[chestPainType].ar : null;
+  const chestPainTypeLabelEn = chestPainType ? CHEST_PAIN_CHARACTER_TEXT[chestPainType].en : null;
   const wheezing = normalizeYesNoUnknown(wheezingRaw) || "unknown";
   const symptomProgression = normalizeSymptomProgression(symptomProgressionRaw) || "unknown";
   const recentInfection = normalizeYesNoUnknown(recentInfectionRaw) || "unknown";
@@ -19838,8 +19884,8 @@ function buildAssessmentModel({
     ? COUGH_NATURE_TEXT.none.en
     : coughNature ? [COUGH_NATURE_TEXT[coughNature].en, sputumColorLabelEn, coughMeta.en, coughDurationSummaryEn].filter(Boolean).join(" — ")
       : (coughMeta.en && coughMeta.en !== "None" ? coughMeta.en + " cough" : "");
-  const symptomsSummaryAr = [coughSummaryAr, hasDyspnea ? "ضيق تنفس" : "", wheezing === "yes" ? "صفير أو أزيز بالصدر" : ""].filter(Boolean).join(" مع ") || "لا توجد أعراض ظاهرة";
-  const symptomsSummaryEn = [coughSummaryEn, hasDyspnea ? "Shortness of breath" : "", wheezing === "yes" ? "Chest wheezing" : ""].filter(Boolean).join(" with ") || "No apparent symptoms";
+  const symptomsSummaryAr = [coughSummaryAr, hasDyspnea ? "ضيق تنفس" : "", wheezing === "yes" ? "صفير أو أزيز بالصدر" : "", chestPain === "yes" ? (chestPainTypeLabelAr || "ألم بالصدر") : ""].filter(Boolean).join(" مع ") || "لا توجد أعراض ظاهرة";
+  const symptomsSummaryEn = [coughSummaryEn, hasDyspnea ? "Shortness of breath" : "", wheezing === "yes" ? "Chest wheezing" : "", chestPain === "yes" ? (chestPainTypeLabelEn || "Chest pain") : ""].filter(Boolean).join(" with ") || "No apparent symptoms";
 
   // Resolve authentic patient identity
   const cachedDoc = window._cachedUserDoc || {};
@@ -19949,6 +19995,9 @@ function buildAssessmentModel({
         chestPain,
         chestPainLabelAr: yesNoUnknownLabel(chestPain, false),
         chestPainLabelEn: yesNoUnknownLabel(chestPain, true),
+        chestPainType,
+        chestPainTypeLabelAr,
+        chestPainTypeLabelEn,
         wheezing,
         wheezingLabelAr: yesNoUnknownLabel(wheezing, false),
         wheezingLabelEn: yesNoUnknownLabel(wheezing, true),
@@ -20040,6 +20089,9 @@ function buildAssessmentModel({
     durationEn: durationEn,
     chestPain: yesNoUnknownLabel(chestPain, false),
     chestPainKey: chestPain,
+    chestPainType,
+    chestPainTypeLabelAr,
+    chestPainTypeLabelEn,
     wheezing,
     wheezingLabelAr: yesNoUnknownLabel(wheezing, false),
     wheezingLabelEn: yesNoUnknownLabel(wheezing, true),
@@ -20181,7 +20233,9 @@ function setChoiceGroupValue(groupId, value) {
     const matchesValue = btn.textContent.trim() === value
       || btn.dataset.coughSeverity === value
       || btn.dataset.coughNature === value
-      || btn.dataset.sputumColor === value;
+      || btn.dataset.sputumColor === value
+      || btn.dataset.chestPain === value
+      || btn.dataset.chestPainCharacter === value;
     btn.classList.toggle("active", matchesValue);
     if (btn.hasAttribute("aria-pressed")) btn.setAttribute("aria-pressed", matchesValue ? "true" : "false");
   });
@@ -20200,6 +20254,8 @@ function gatherAssessmentDraftFields() {
   const coughDurationDays = document.getElementById("coughDurationInput")?.value.trim() || "";
   const activeCoughSeverity = document.querySelector("#coughChoices .choice.active[data-cough-severity]");
   const wheezing = document.querySelector("#wheezingChoices .choice.active")?.dataset.wheezing || "";
+  const chestPain = document.querySelector("#chestPainChoices .choice.active")?.dataset.chestPain || "";
+  const chestPainType = document.querySelector("#chestPainCharacterChoices .choice.active")?.dataset.chestPainCharacter || "";
   return {
     oxygenRaw: readOxygenRawValue(),
     breathingDifficulty: mmrcScore === null ? "" : (mmrcScore > 0 ? "yes" : "no"),
@@ -20208,11 +20264,13 @@ function gatherAssessmentDraftFields() {
     sputumColor,
     coughDurationDays,
     wheezing,
+    chestPain,
+    chestPainType,
     coughLevel: coughNature === "none" ? "none" : (activeCoughSeverity?.dataset.coughSeverity || ""),
     symptomDuration: document.getElementById("symptomDuration")?.value.trim() || "",
     temperatureRaw: document.getElementById("temperatureInput")?.value.trim() || "",
     respiratoryRateRaw: document.getElementById("respiratoryRateInput")?.value.trim() || "",
-    chestPain: firstChoice("chestPainChoices"),
+    chestPain,
     symptomProgression: firstChoice("symptomProgressionChoices"),
     recentInfection: firstChoice("recentInfectionChoices"),
     asthmaCopd: firstChoice("asthmaCopdChoices"),
@@ -20278,7 +20336,9 @@ function applyAssessmentDraftFields(fields = {}) {
   }
   setChoiceGroupValue("coughChoices", fields.coughLevel);
   updateCoughInputsUI();
-  setChoiceGroupValue("chestPainChoices", fields.chestPain);
+  setChoiceGroupValue("chestPainChoices", normalizeYesNoUnknown(fields.chestPain) || fields.chestPain);
+  setChoiceGroupValue("chestPainCharacterChoices", fields.chestPainType);
+  updateChestPainDetailUI();
   setChoiceGroupValue("symptomProgressionChoices", fields.symptomProgression);
   setChoiceGroupValue("recentInfectionChoices", fields.recentInfection);
   setChoiceGroupValue("asthmaCopdChoices", fields.asthmaCopd);
@@ -20602,6 +20662,7 @@ function validateAssessmentFields({
   temperature,
   respiratoryRate,
   chestPain,
+  chestPainType,
   symptomProgression,
   recentInfection,
   asthmaCopd,
@@ -20734,6 +20795,13 @@ function validateAssessmentFields({
       message: isEn ? "Please record wheezing as Yes, No, or Unknown." : "يرجى تحديد وجود الصفير: نعم أو لا أو غير معروف."
     });
   }
+  if (chestPain !== undefined && normalizeYesNoUnknown(chestPain) === "yes"
+    && chestPainType !== undefined && !Object.prototype.hasOwnProperty.call(CHEST_PAIN_CHARACTER_TEXT, chestPainType)) {
+    errors.push({
+      field: "chestPainCharacterChoices",
+      message: isEn ? "Please describe the chest pain pattern." : "يرجى تحديد طبيعة ألم الصدر."
+    });
+  }
 
   if (String(currentMedications || "").length > 500) {
     errors.push({
@@ -20851,7 +20919,8 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
     const symptomDuration = durationField ? durationField.value.trim() : "غير محدد";
     const temperatureRaw = document.getElementById("temperatureInput")?.value.trim() || "";
     const respiratoryRateRaw = document.getElementById("respiratoryRateInput")?.value.trim() || "";
-    const chestPain = readActiveChoiceText("chestPainChoices");
+    const chestPain = document.querySelector("#chestPainChoices .choice.active")?.dataset.chestPain || "";
+    const chestPainType = document.querySelector("#chestPainCharacterChoices .choice.active")?.dataset.chestPainCharacter || "";
     const wheezing = document.querySelector("#wheezingChoices .choice.active")?.dataset.wheezing || "";
     const symptomProgression = readActiveChoiceText("symptomProgressionChoices");
     const recentInfection = readActiveChoiceText("recentInfectionChoices");
@@ -20879,6 +20948,7 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
       temperature: temperatureRaw,
       respiratoryRate: respiratoryRateRaw,
       chestPain,
+      chestPainType,
       wheezing,
       symptomProgression,
       recentInfection,
@@ -20895,7 +20965,7 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
         const el = document.getElementById(id);
         if (el) el.style.borderColor = "";
       });
-      ["breathingChoices", "coughNatureChoices", "sputumColorChoices", "coughChoices", "riskChoices", "chestPainChoices", "wheezingChoices", "symptomProgressionChoices", "recentInfectionChoices", "asthmaCopdChoices"].forEach(id => {
+      ["breathingChoices", "coughNatureChoices", "sputumColorChoices", "coughChoices", "riskChoices", "chestPainChoices", "chestPainCharacterChoices", "wheezingChoices", "symptomProgressionChoices", "recentInfectionChoices", "asthmaCopdChoices"].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.outline = "";
       });
@@ -20964,7 +21034,8 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
       symptomDuration,
       temperature: temperatureRaw || (isEn ? "Not provided" : "غير مسجل"),
       respiratoryRate: respiratoryRateRaw || (isEn ? "Not provided" : "غير مسجل"),
-      chestPain,
+      chestPain: yesNoUnknownLabel(chestPain, isEn),
+      chestPainType: chestPainType ? CHEST_PAIN_CHARACTER_TEXT[chestPainType][isEn ? "en" : "ar"] : "",
       wheezing: yesNoUnknownLabel(wheezing, isEn),
       symptomProgression,
       recentInfection,
@@ -21018,6 +21089,7 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
           respiratoryRateRaw,
           wheezingRaw: wheezing,
           chestPainRaw: chestPain,
+          chestPainTypeRaw: chestPainType,
           symptomProgressionRaw: symptomProgression,
           recentInfectionRaw: recentInfection,
           asthmaCopdRaw: asthmaCopd,
