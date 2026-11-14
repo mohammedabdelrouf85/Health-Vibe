@@ -1929,6 +1929,17 @@
               <span id="respiratoryRateTimerDisplay" role="timer" aria-live="off" style="font-variant-numeric:tabular-nums;font-weight:700;" hidden>01:00</span>
             </div>
             <div id="respiratoryRateStatus" class="field-hint" role="status" aria-live="polite" style="margin:6px 0 10px;"></div>
+            <label id="wheezingLabel" data-i18n="assessment.wheezingLabel">هل تسمع صفيراً أو أزيزاً في صدرك؟</label>
+            <small class="field-hint" style="color: var(--muted); font-size: 12px; display: block; margin: -2px 0 6px;" data-i18n="assessment.wheezingHelp">هل يظهر الصوت أثناء الزفير أو في الليل؟</small>
+            <div id="wheezingChoices" class="choice-row three" role="group" aria-labelledby="wheezingLabel">
+              <button type="button" class="choice" data-wheezing="yes" aria-pressed="false"><span data-i18n="assessment.wheezingYes">نعم</span></button>
+              <button type="button" class="choice" data-wheezing="no" aria-pressed="false"><span data-i18n="assessment.wheezingNo">لا</span></button>
+              <button type="button" class="choice" data-wheezing="unknown" aria-pressed="false"><span data-i18n="assessment.wheezingUnknown">غير معروف</span></button>
+            </div>
+            <div class="field-hint" style="display:flex;align-items:center;gap:8px;margin:6px 0 12px;flex-wrap:wrap;">
+              <button type="button" class="soft-button" id="wheezingAudioButton" aria-pressed="false"><span aria-hidden="true">▶</span> <span id="wheezingAudioButtonLabel" data-i18n="assessment.wheezingPlayAudio">استمع إلى مثال توضيحي</span></button>
+              <span data-i18n="assessment.wheezingAudioNote">صوت محاكاة اختياري للتوضيح فقط؛ ليس تسجيلاً تشخيصياً.</span>
+            </div>
             <label data-i18n="assessment.chestPainLabel">ألم أو نغزة أو ثقل في الصدر</label>
             <small class="field-hint" style="color: var(--muted); font-size: 12px; display: block; margin: -2px 0 6px;" data-i18n="assessment.chestPainHelp">نغزة، شكة مع النفس، أو ثقل ضاغط على القفص الصدري</small>
             <div id="chestPainChoices" class="choice-row three">
@@ -4097,6 +4108,7 @@
         <div><span>درجة الحرارة</span><strong id="confirmTemperature">--</strong></div>
         <div><span>معدل التنفس</span><strong id="confirmRespiratoryRate">--</strong></div>
         <div><span>ألم بالصدر</span><strong id="confirmChestPain">--</strong></div>
+        <div><span data-i18n="assessment.wheezingLabel">صفير أو أزيز الصدر</span><strong id="confirmWheezing">--</strong></div>
         <div><span>تطور الأعراض</span><strong id="confirmProgression">--</strong></div>
         <div><span>عدوى حديثة</span><strong id="confirmRecentInfection">--</strong></div>
         <div><span>ربو أو COPD</span><strong id="confirmAsthmaCopd">--</strong></div>
