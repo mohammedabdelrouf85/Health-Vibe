@@ -2764,6 +2764,10 @@ body.dark .slot-list strong {
   font-weight: 800;
 }
 
+.cough-dependent-section[hidden] {
+  display: none !important;
+}
+
 .choice.active {
   background: var(--cyan);
   color: var(--teal);

@@ -11687,7 +11687,18 @@ async function renderReportScreen(targetCaseId = null) {
       ? (caseData.breathingDifficultyLabelEn || caseData.assessment?.symptoms?.breathingDifficultyLabelEn || caseData.breathingDifficulty || caseData.difficulty)
       : (caseData.breathingDifficultyLabelAr || caseData.assessment?.symptoms?.breathingDifficultyLabelAr || caseData.breathingDifficulty || caseData.difficulty);
     const breathingDifficultyDisplay = escapeHtml(isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوب") : recordedClinicalText(breathingLabel, isEn));
-    const coughLevelDisplay = escapeHtml(isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوبة") : (recordedClinicalText(caseData.coughLevel, isEn)));
+    const coughTypeLabel = isEn
+      ? (caseData.coughNatureLabelEn || caseData.assessment?.symptoms?.coughNatureLabelEn)
+      : (caseData.coughNatureLabelAr || caseData.assessment?.symptoms?.coughNatureLabelAr);
+    const sputumLabel = isEn
+      ? (caseData.sputumColorLabelEn || caseData.assessment?.symptoms?.sputumColorLabelEn)
+      : (caseData.sputumColorLabelAr || caseData.assessment?.symptoms?.sputumColorLabelAr);
+    const coughParts = caseData.coughNature === "none"
+      ? [coughTypeLabel]
+      : [coughTypeLabel, sputumLabel, recordedClinicalText(caseData.coughLevel, isEn)].filter(Boolean);
+    const coughLevelDisplay = escapeHtml(isSupport
+      ? (isEn ? "🔒 Masked" : "🔒 محجوبة")
+      : (coughParts.length ? coughParts.join(" — ") : recordedClinicalText(caseData.coughLevel, isEn)));
     const durationDisplay = escapeHtml(isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوب") : (recordedClinicalText(caseData.symptomDuration || caseData.duration, isEn)));
     const formatOptionalMetric = (value, unit, status) => {
       if (isSupport) return isEn ? "🔒 Masked" : "🔒 محجوب";
@@ -19031,6 +19042,7 @@ window.closeRulesGovernanceModal = function() {
 // Bind interactive modals (Emergency & Confirmation)
 document.addEventListener("DOMContentLoaded", () => {
   initializeDialogAccessibility();
+  updateCoughInputsUI();
 
   const oxygenInput = document.getElementById("oxygenInput");
   if (oxygenInput) {
@@ -19317,6 +19329,8 @@ if (checkVerificationBtn) {
 // Single-select: ضيق التنفس + درجة الكحة + ألم الصدر + تطور الأعراض + عدوى حديثة + ربو/COPD
 const SINGLE_SELECT_CHOICE_GROUPS = [
   "breathingChoices",
+  "coughNatureChoices",
+  "sputumColorChoices",
   "coughChoices",
   "chestPainChoices",
   "symptomProgressionChoices",
@@ -19338,7 +19352,17 @@ SINGLE_SELECT_CHOICE_GROUPS.forEach((groupId) => {
         radio.setAttribute("aria-checked", selected ? "true" : "false");
         radio.tabIndex = selected ? 0 : -1;
       });
+    } else if (groupId === "coughNatureChoices" || groupId === "sputumColorChoices") {
+      group.querySelectorAll(".choice").forEach((choice) => {
+        choice.setAttribute("aria-pressed", choice === btn ? "true" : "false");
+      });
+    } else if (groupId === "coughChoices") {
+      group.querySelectorAll(".choice").forEach((choice) => {
+        choice.setAttribute("aria-pressed", choice === btn ? "true" : "false");
+      });
     }
+
+    if (groupId === "coughNatureChoices" || groupId === "sputumColorChoices") updateCoughInputsUI();
 
     // Conditional Branching & Reactive State Updates:
     // 1. If Chest Pain is 'نعم' / 'Yes', trigger urgent clinical guidance warning
@@ -19469,8 +19493,54 @@ const MMRC_GRADE_TEXT = Object.freeze({
   4: { ar: "يمنعني ضيق النفس من مغادرة المنزل، أو أشعر به عند ارتداء الملابس أو خلعها.", en: "I am too breathless to leave home, or become breathless while dressing or undressing." }
 });
 
+const COUGH_NATURE_TEXT = Object.freeze({
+  none: { ar: "لا توجد كحة", en: "No cough" },
+  dry: { ar: "كحة جافة", en: "Dry cough" },
+  productive: { ar: "كحة ببلغم", en: "Cough with phlegm" }
+});
+const SPUTUM_COLOR_TEXT = Object.freeze({
+  clear: { ar: "شفاف", en: "Clear" },
+  white: { ar: "أبيض", en: "White" },
+  yellow_green: { ar: "أصفر أو أخضر", en: "Yellow or green" },
+  blood_streaked: { ar: "مدمم", en: "Blood-streaked" }
+});
+
 function getMmrcGradeLabel(score, language = currentLanguage) {
   return MMRC_GRADE_TEXT[score]?.[language] || "";
+}
+
+function updateCoughInputsUI() {
+  const nature = document.querySelector("#coughNatureChoices .choice.active")?.dataset.coughNature || "";
+  const severitySection = document.getElementById("coughSeveritySection");
+  const sputumSection = document.getElementById("sputumColorSection");
+  const sputumGroup = document.getElementById("sputumColorChoices");
+  const severityGroup = document.getElementById("coughChoices");
+  const bloodWarning = document.getElementById("sputumBloodWarning");
+
+  if (severitySection) severitySection.hidden = !nature || nature === "none";
+  if (nature === "none" && severityGroup) {
+    severityGroup.querySelectorAll(".choice").forEach(button => {
+      const selected = button.dataset.coughSeverity === "none";
+      button.classList.toggle("active", selected);
+      button.setAttribute("aria-pressed", selected ? "true" : "false");
+    });
+  } else if (nature && nature !== "none" && severityGroup) {
+    severityGroup.querySelectorAll(".choice[data-cough-severity='none']").forEach(button => {
+      button.classList.remove("active");
+      button.setAttribute("aria-pressed", "false");
+    });
+  }
+
+  const isProductive = nature === "productive";
+  if (sputumSection) sputumSection.hidden = !isProductive;
+  if (!isProductive && sputumGroup) {
+    sputumGroup.querySelectorAll(".choice").forEach(button => {
+      button.classList.remove("active");
+      button.setAttribute("aria-pressed", "false");
+    });
+  }
+  const hasBlood = isProductive && document.querySelector("#sputumColorChoices .choice.active")?.dataset.sputumColor === "blood_streaked";
+  if (bloodWarning) bloodWarning.hidden = !hasBlood;
 }
 
 /**
@@ -19482,6 +19552,8 @@ function buildAssessmentModel({
   breathingRaw,
   mmrcScore = null,
   coughRaw,
+  coughNatureRaw = null,
+  sputumColorRaw = null,
   symptomDurationRaw,
   temperatureRaw = "",
   respiratoryRateRaw = "",
@@ -19538,6 +19610,15 @@ function buildAssessmentModel({
   else if (coughClean.includes("متوسط") || coughClean === "moderate") coughKey = "moderate";
   else if (coughClean.includes("خفيف") || coughClean === "mild") coughKey = "mild";
   const coughMeta = AssessmentDictionaries.cough[coughKey];
+  const validCoughNatures = Object.keys(COUGH_NATURE_TEXT);
+  const coughNature = validCoughNatures.includes(String(coughNatureRaw || "")) ? String(coughNatureRaw) : null;
+  const sputumColor = coughNature === "productive" && SPUTUM_COLOR_TEXT[String(sputumColorRaw || "")]
+    ? String(sputumColorRaw)
+    : null;
+  const coughNatureLabelAr = coughNature ? COUGH_NATURE_TEXT[coughNature].ar : null;
+  const coughNatureLabelEn = coughNature ? COUGH_NATURE_TEXT[coughNature].en : null;
+  const sputumColorLabelAr = sputumColor ? SPUTUM_COLOR_TEXT[sputumColor].ar : null;
+  const sputumColorLabelEn = sputumColor ? SPUTUM_COLOR_TEXT[sputumColor].en : null;
 
   // 5. Symptom Duration Normalization
   const parsedDuration = parseStrictSymptomDurationInput(symptomDurationRaw);
@@ -19599,8 +19680,16 @@ function buildAssessmentModel({
   const prioMeta = AssessmentDictionaries.priority[priority];
 
   // 7. Symptoms summary string
-  const symptomsSummaryAr = `${coughMeta.ar && coughMeta.ar !== 'لا توجد' ? 'كحة ' + coughMeta.ar : ''}${hasDyspnea ? (coughMeta.ar && coughMeta.ar !== 'لا توجد' ? ' مع ضيق تنفس' : 'ضيق تنفس') : ''}`.trim() || "لا توجد أعراض ظاهرة";
-  const symptomsSummaryEn = `${coughMeta.en && coughMeta.en !== 'None' ? coughMeta.en + ' cough' : ''}${hasDyspnea ? (coughMeta.en && coughMeta.en !== 'None' ? ' with shortness of breath' : 'Shortness of breath') : ''}`.trim() || "No apparent symptoms";
+  const coughSummaryAr = coughNature === "none"
+    ? COUGH_NATURE_TEXT.none.ar
+    : coughNature ? [COUGH_NATURE_TEXT[coughNature].ar, sputumColorLabelAr, coughMeta.ar].filter(Boolean).join(" — ")
+      : (coughMeta.ar && coughMeta.ar !== "لا توجد" ? "كحة " + coughMeta.ar : "");
+  const coughSummaryEn = coughNature === "none"
+    ? COUGH_NATURE_TEXT.none.en
+    : coughNature ? [COUGH_NATURE_TEXT[coughNature].en, sputumColorLabelEn, coughMeta.en].filter(Boolean).join(" — ")
+      : (coughMeta.en && coughMeta.en !== "None" ? coughMeta.en + " cough" : "");
+  const symptomsSummaryAr = `${coughSummaryAr}${hasDyspnea ? (coughSummaryAr ? ' مع ضيق تنفس' : 'ضيق تنفس') : ''}`.trim() || "لا توجد أعراض ظاهرة";
+  const symptomsSummaryEn = `${coughSummaryEn}${hasDyspnea ? (coughSummaryEn ? ' with shortness of breath' : 'Shortness of breath') : ''}`.trim() || "No apparent symptoms";
 
   // Resolve authentic patient identity
   const cachedDoc = window._cachedUserDoc || {};
@@ -19694,6 +19783,12 @@ function buildAssessmentModel({
         coughSeverity: coughKey,
         coughSeverityLabelAr: coughMeta.ar,
         coughSeverityLabelEn: coughMeta.en,
+        coughNature,
+        coughNatureLabelAr,
+        coughNatureLabelEn,
+        sputumColor,
+        sputumColorLabelAr,
+        sputumColorLabelEn,
         durationDays: durationDays,
         durationText: durationStr,
         durationTextEn: durationEn,
@@ -19773,6 +19868,12 @@ function buildAssessmentModel({
     breathingDifficultyLabelEn: mmrcLabelEn,
     mmrcGrade: parsedMmrcScore,
     coughLevel: coughMeta.ar,
+    coughNature,
+    coughNatureLabelAr,
+    coughNatureLabelEn,
+    sputumColor,
+    sputumColorLabelAr,
+    sputumColorLabelEn,
     symptomDuration: durationStr,
     duration: durationStr,
     durationEn: durationEn,
@@ -19913,7 +20014,12 @@ function setChoiceGroupValue(groupId, value) {
   const group = document.getElementById(groupId);
   if (!group) return;
   group.querySelectorAll(".choice").forEach((btn) => {
-    btn.classList.toggle("active", btn.textContent.trim() === value);
+    const matchesValue = btn.textContent.trim() === value
+      || btn.dataset.coughSeverity === value
+      || btn.dataset.coughNature === value
+      || btn.dataset.sputumColor === value;
+    btn.classList.toggle("active", matchesValue);
+    if (btn.hasAttribute("aria-pressed")) btn.setAttribute("aria-pressed", matchesValue ? "true" : "false");
   });
 }
 
@@ -19925,11 +20031,16 @@ function gatherAssessmentDraftFields() {
     .filter(Boolean);
   const activeMmrcOption = document.querySelector("#breathingChoices .choice.active[data-mmrc-score]");
   const mmrcScore = activeMmrcOption ? Number(activeMmrcOption.dataset.mmrcScore) : null;
+  const coughNature = document.querySelector("#coughNatureChoices .choice.active")?.dataset.coughNature || "";
+  const sputumColor = document.querySelector("#sputumColorChoices .choice.active")?.dataset.sputumColor || "";
+  const activeCoughSeverity = document.querySelector("#coughChoices .choice.active[data-cough-severity]");
   return {
     oxygenRaw: readOxygenRawValue(),
     breathingDifficulty: mmrcScore === null ? "" : (mmrcScore > 0 ? "yes" : "no"),
     mmrcScore,
-    coughLevel: firstChoice("coughChoices"),
+    coughNature,
+    sputumColor,
+    coughLevel: coughNature === "none" ? "none" : (activeCoughSeverity?.dataset.coughSeverity || ""),
     symptomDuration: document.getElementById("symptomDuration")?.value.trim() || "",
     temperatureRaw: document.getElementById("temperatureInput")?.value.trim() || "",
     respiratoryRateRaw: document.getElementById("respiratoryRateInput")?.value.trim() || "",
@@ -19972,7 +20083,24 @@ function applyAssessmentDraftFields(fields = {}) {
       btn.tabIndex = isSelected ? 0 : -1;
     });
   }
+  const coughNatureGroup = document.getElementById("coughNatureChoices");
+  if (coughNatureGroup) {
+    coughNatureGroup.querySelectorAll(".choice").forEach(button => {
+      const selected = button.dataset.coughNature === fields.coughNature;
+      button.classList.toggle("active", selected);
+      button.setAttribute("aria-pressed", selected ? "true" : "false");
+    });
+  }
+  const sputumColorGroup = document.getElementById("sputumColorChoices");
+  if (sputumColorGroup) {
+    sputumColorGroup.querySelectorAll(".choice").forEach(button => {
+      const selected = button.dataset.sputumColor === fields.sputumColor;
+      button.classList.toggle("active", selected);
+      button.setAttribute("aria-pressed", selected ? "true" : "false");
+    });
+  }
   setChoiceGroupValue("coughChoices", fields.coughLevel);
+  updateCoughInputsUI();
   setChoiceGroupValue("chestPainChoices", fields.chestPain);
   setChoiceGroupValue("symptomProgressionChoices", fields.symptomProgression);
   setChoiceGroupValue("recentInfectionChoices", fields.recentInfection);
@@ -20290,6 +20418,8 @@ function validateAssessmentFields({
   breathingDifficulty,
   mmrcScore,
   coughLevel,
+  coughNature,
+  sputumColor,
   symptomDuration,
   temperature,
   respiratoryRate,
@@ -20336,12 +20466,32 @@ function validateAssessmentFields({
   // 3. Cough Level (Required selection)
   const validCough = ["خفيفة", "متوسطة", "شديدة", "لا توجد", "mild", "moderate", "severe", "none"];
   const coughStr = String(coughLevel || "").trim();
-  if (!coughStr || coughStr === "غير محدد" || (!validCough.includes(coughStr.toLowerCase()) && !validCough.includes(coughStr))) {
+  const validCoughSeverity = Boolean(coughStr && coughStr !== "غير محدد" && (validCough.includes(coughStr.toLowerCase()) || validCough.includes(coughStr)));
+  const coughNatureProvided = coughNature !== undefined;
+  const validCoughNature = ["none", "dry", "productive"].includes(coughNature);
+  const coughSeverityMatchesNature = coughNature === "none"
+    ? ["none", "لا توجد"].includes(coughStr.toLowerCase()) || coughStr === "لا توجد"
+    : coughNature === "dry" || coughNature === "productive"
+      ? validCoughSeverity && !["none", "لا توجد"].includes(coughStr.toLowerCase()) && coughStr !== "لا توجد"
+      : true;
+  if (coughNatureProvided && (!validCoughNature || !coughSeverityMatchesNature)) {
+    errors.push({
+      field: validCoughNature ? "coughChoices" : "coughNatureChoices",
+      message: isEn
+        ? "Please choose a cough severity that matches the selected cough type."
+        : "اختر شدة كحة متوافقة مع النوع المحدد."
+    });
+  }
+  if (!coughNatureProvided && !validCoughSeverity) {
     errors.push({
       field: "coughChoices",
-      message: isEn
-        ? "Please select cough severity level."
-        : "يرجى اختيار درجة شدة الكحة من الخيارات المتاحة."
+      message: isEn ? "Please select cough severity level." : "يرجى اختيار درجة شدة الكحة من الخيارات المتاحة."
+    });
+  }
+  if (coughNatureProvided && coughNature === "productive" && !["clear", "white", "yellow_green", "blood_streaked"].includes(sputumColor)) {
+    errors.push({
+      field: "sputumColorChoices",
+      message: isEn ? "Please select the phlegm color." : "يرجى اختيار لون البلغم."
     });
   }
 
@@ -20490,12 +20640,12 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
     const breathingDifficulty = mmrcScore === null ? "غير محدد" : (mmrcScore > 0 ? "yes" : "no");
     const mmrcLabel = mmrcScore === null ? breathingDifficulty : `mMRC ${mmrcScore}: ${getMmrcGradeLabel(mmrcScore)}`;
 
-    // درجة الكحة
-    const coughChoices = document.querySelectorAll("#coughChoices .choice");
-    let coughLevel = "غير محدد";
-    coughChoices.forEach((btn) => {
-      if (btn.classList.contains("active")) coughLevel = btn.textContent.trim();
-    });
+    // Cough character, sputum color, and legacy severity
+    const coughNature = document.querySelector("#coughNatureChoices .choice.active")?.dataset.coughNature || "";
+    const sputumColor = document.querySelector("#sputumColorChoices .choice.active")?.dataset.sputumColor || "";
+    const coughLevel = coughNature === "none"
+      ? "none"
+      : (document.querySelector("#coughChoices .choice.active")?.dataset.coughSeverity || "");
 
     // مدة الأعراض
     const durationField = document.getElementById("symptomDuration");
@@ -20522,6 +20672,8 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
       breathingDifficulty,
       mmrcScore,
       coughLevel,
+      coughNature,
+      sputumColor,
       symptomDuration,
       temperature: temperatureRaw,
       respiratoryRate: respiratoryRateRaw,
@@ -20541,7 +20693,7 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
         const el = document.getElementById(id);
         if (el) el.style.borderColor = "";
       });
-      ["breathingChoices", "coughChoices", "riskChoices", "chestPainChoices", "symptomProgressionChoices", "recentInfectionChoices", "asthmaCopdChoices"].forEach(id => {
+      ["breathingChoices", "coughNatureChoices", "sputumColorChoices", "coughChoices", "riskChoices", "chestPainChoices", "symptomProgressionChoices", "recentInfectionChoices", "asthmaCopdChoices"].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.outline = "";
       });
@@ -20593,12 +20745,18 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
     // حساب الأولوية المتوقعة
     const priority = isCritical ? "urgent" : (oxygenLevel >= 92 && oxygenLevel < 95 ? "high" : "normal");
     const priorityAr = { urgent: "🚨 عاجل", high: "⚠️ عالية", normal: "✔️ عادية" };
+    const coughNatureLabel = COUGH_NATURE_TEXT[coughNature][isEn ? "en" : "ar"];
+    const sputumColorLabel = sputumColor ? SPUTUM_COLOR_TEXT[sputumColor][isEn ? "en" : "ar"] : "";
+    const coughSeverityLabel = AssessmentDictionaries.cough[coughLevel]?.[isEn ? "en" : "ar"] || "";
+    const coughSummary = coughNature === "none"
+      ? coughNatureLabel
+      : [coughNatureLabel, sputumColorLabel, coughSeverityLabel].filter(Boolean).join(" — ");
 
     // ── فتح نافذة تأكيد الإرسال (Confirmation Step Before Submission) ──
     openConfirmAssessmentModal({
       oxygenLevel,
       breathingDifficulty: mmrcLabel,
-      coughLevel,
+      coughLevel: coughSummary,
       symptomDuration,
       temperature: temperatureRaw || (isEn ? "Not provided" : "غير مسجل"),
       respiratoryRate: respiratoryRateRaw || (isEn ? "Not provided" : "غير مسجل"),
@@ -20647,6 +20805,8 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
           breathingRaw: breathingDifficulty,
           mmrcScore,
           coughRaw: coughLevel,
+          coughNatureRaw: coughNature,
+          sputumColorRaw: sputumColor,
           symptomDurationRaw: symptomDuration,
           temperatureRaw,
           respiratoryRateRaw,

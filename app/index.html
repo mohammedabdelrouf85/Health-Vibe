@@ -1882,13 +1882,31 @@
               <button type="button" class="choice" data-mmrc-score="3" role="radio" aria-checked="false" tabindex="-1"><span class="mmrc-grade">3</span><span data-i18n="assessment.mmrcGrade3">أتوقف لالتقاط نفسي بعد نحو 100 متر أو بضع دقائق من المشي على أرض مستوية.</span></button>
               <button type="button" class="choice" data-mmrc-score="4" role="radio" aria-checked="false" tabindex="-1"><span class="mmrc-grade">4</span><span data-i18n="assessment.mmrcGrade4">يمنعني ضيق النفس من مغادرة المنزل، أو أشعر به عند ارتداء الملابس أو خلعها.</span></button>
             </div>
-            <label data-i18n="assessment.coughLabel">طبيعة ودرجة الكحة (السعال)</label>
-            <small class="field-hint" style="color: var(--muted); font-size: 12px; display: block; margin: -2px 0 6px;" data-i18n="assessment.coughHelp">كحة جافة (ناشفة بدون بلغم) أو كحة مصحوبة ببلغم</small>
-            <div id="coughChoices" class="choice-row four">
-              <button class="choice">خفيفة</button>
-              <button class="choice active">متوسطة</button>
-              <button class="choice">شديدة</button>
-              <button class="choice">لا توجد</button>
+            <label id="coughNatureLabel" data-i18n="assessment.coughNatureLabel">نوع السعال</label>
+            <small class="field-hint" style="color: var(--muted); font-size: 12px; display: block; margin: -2px 0 6px;" data-i18n="assessment.coughNatureHelp">حدد إن كانت الكحة جافة أو مصحوبة ببلغم.</small>
+            <div id="coughNatureChoices" class="choice-row three" role="group" aria-labelledby="coughNatureLabel">
+              <button type="button" class="choice" data-cough-nature="none" aria-pressed="false"><span data-i18n="assessment.coughNone">لا توجد كحة</span></button>
+              <button type="button" class="choice" data-cough-nature="dry" aria-pressed="false"><span data-i18n="assessment.coughDry">كحة جافة</span></button>
+              <button type="button" class="choice" data-cough-nature="productive" aria-pressed="false"><span data-i18n="assessment.coughProductive">كحة ببلغم</span></button>
+            </div>
+            <div id="sputumColorSection" class="cough-dependent-section" hidden>
+              <label id="sputumColorLabel" data-i18n="assessment.sputumColorLabel">لون البلغم</label>
+              <div id="sputumColorChoices" class="choice-row four" role="group" aria-labelledby="sputumColorLabel">
+                <button type="button" class="choice" data-sputum-color="clear" aria-pressed="false"><span data-i18n="assessment.sputumClear">شفاف</span></button>
+                <button type="button" class="choice" data-sputum-color="white" aria-pressed="false"><span data-i18n="assessment.sputumWhite">أبيض</span></button>
+                <button type="button" class="choice" data-sputum-color="yellow_green" aria-pressed="false"><span data-i18n="assessment.sputumYellowGreen">أصفر أو أخضر</span></button>
+                <button type="button" class="choice" data-sputum-color="blood_streaked" aria-pressed="false"><span data-i18n="assessment.sputumBlood">مدمم</span></button>
+              </div>
+              <div id="sputumBloodWarning" class="safety-note" role="alert" hidden data-i18n="assessment.sputumBloodWarning">وجود دم مع البلغم يستدعي تقييماً طبياً عاجلاً. اطلب الطوارئ فوراً إذا كان الدم كثيراً أو صاحبه ضيق نفس شديد أو ألم صدر.</div>
+            </div>
+            <div id="coughSeveritySection" class="cough-dependent-section" hidden>
+              <label data-i18n="assessment.coughSeverityLabel">شدة الكحة</label>
+              <div id="coughChoices" class="choice-row four">
+                <button type="button" class="choice" data-cough-severity="mild" aria-pressed="false"><span data-i18n="assessment.coughMild">خفيفة</span></button>
+                <button type="button" class="choice" data-cough-severity="moderate" aria-pressed="false"><span data-i18n="assessment.coughModerate">متوسطة</span></button>
+                <button type="button" class="choice" data-cough-severity="severe" aria-pressed="false"><span data-i18n="assessment.coughSevere">شديدة</span></button>
+                <button type="button" class="choice" data-cough-severity="none" aria-pressed="false"><span data-i18n="assessment.coughNone">لا توجد</span></button>
+              </div>
             </div>
             <label data-i18n="assessment.o2Label">تشبع الأكسجين بالدم (SpO₂)</label>
             <small class="field-hint" style="color: var(--muted); font-size: 12px; display: block; margin: -2px 0 6px;">أدخل قراءة جهاز قياس الأكسجين (Pulse Oximeter) من 50% إلى 100%.</small>
