@@ -30,6 +30,17 @@ const SPO2_PREPROCESSOR = Object.freeze({
   bands: Object.freeze({ criticalBelow: 92, moderateBelow: 95 })
 });
 
+// Fitted on the same patient-level training partition only.
+const RESPIRATORY_RATE_PREPROCESSOR = Object.freeze({
+  version: 'respiratory-rate-preprocess-v1',
+  trainingCount: 112,
+  median: 21,
+  mean: 22.178571,
+  standardDeviation: 6.213773,
+  bounds: Object.freeze({ min: 5, max: 60 }),
+  bands: Object.freeze({ lowBelow: 12, normalBelow: 21, elevatedThrough: 24 })
+});
+
 function normalizeArabicDigits(str) {
   if (typeof str !== 'string') return str;
   return str.replace(/[٠-٩]/g, d => d.charCodeAt(0) - 1632);
@@ -65,6 +76,31 @@ function transformSpO2(rawValue) {
   };
 }
 
+function transformRespiratoryRate(rawValue) {
+  const missing = rawValue === null || rawValue === undefined || String(rawValue).trim() === '';
+  const normalizedDigits = normalizeArabicDigits(String(rawValue ?? '')).trim();
+  const match = normalizedDigits.match(/^(\d{1,2})\s*(?:breaths?\s*\/\s*min)?$/i);
+  const parsed = match ? Number(match[1]) : NaN;
+  const valid = !missing && Number.isInteger(parsed) && parsed >= RESPIRATORY_RATE_PREPROCESSOR.bounds.min && parsed <= RESPIRATORY_RATE_PREPROCESSOR.bounds.max;
+  const value = valid ? parsed : RESPIRATORY_RATE_PREPROCESSOR.median;
+  let category = 'tachypnea';
+  if (value < RESPIRATORY_RATE_PREPROCESSOR.bands.lowBelow) category = 'low';
+  else if (value < RESPIRATORY_RATE_PREPROCESSOR.bands.normalBelow) category = 'normal';
+  else if (value <= RESPIRATORY_RATE_PREPROCESSOR.bands.elevatedThrough) category = 'elevated';
+
+  return {
+    value,
+    normalized: Number(((value - RESPIRATORY_RATE_PREPROCESSOR.mean) / RESPIRATORY_RATE_PREPROCESSOR.standardDeviation).toFixed(6)),
+    bandLow: category === 'low' ? 1 : 0,
+    bandNormal: category === 'normal' ? 1 : 0,
+    bandElevated: category === 'elevated' ? 1 : 0,
+    bandTachypnea: category === 'tachypnea' ? 1 : 0,
+    missing: valid ? 0 : 1,
+    category,
+    sourceStatus: missing ? 'missing' : valid ? 'observed' : 'invalid'
+  };
+}
+
 /**
  * Extracts and standardizes a numerical vector from a patient questionnaire payload.
  * @param {Object} rawData 
@@ -75,7 +111,9 @@ function extractFeatures(rawData = {}) {
   const spo2Input = rawData.oxygen_saturation ?? rawData.spo2;
   const spo2Features = transformSpO2(spo2Input);
   const spo2 = spo2Features.value;
-  const rr = clampNumber(rawData.respiratory_rate, 'respiratory_rate');
+  const rrInput = rawData.respiratory_rate ?? rawData.respiratoryRate;
+  const rrFeatures = transformRespiratoryRate(rrInput);
+  const rr = rrFeatures.value;
   const sbp = clampNumber(rawData.systolic_bp || rawData.systolic, 'systolic_bp');
   const dbp = clampNumber(rawData.diastolic_bp || rawData.diastolic, 'diastolic_bp');
   const temp = clampNumber(rawData.temperature_c || rawData.temperature, 'temperature_c');
@@ -115,15 +153,23 @@ function extractFeatures(rawData = {}) {
     spo2Features.bandCritical,
     spo2Features.bandModerate,
     spo2Features.bandNormal,
-    spo2Features.missing
+    spo2Features.missing,
+    rrFeatures.normalized,
+    rrFeatures.bandLow,
+    rrFeatures.bandNormal,
+    rrFeatures.bandElevated,
+    rrFeatures.bandTachypnea,
+    rrFeatures.missing
   ];
 }
 
 module.exports = {
   PHYSIOLOGICAL_BOUNDS,
+  RESPIRATORY_RATE_PREPROCESSOR,
   SPO2_PREPROCESSOR,
   clampNumber,
   extractFeatures,
   normalizeArabicDigits,
-  transformSpO2
+  transformSpO2,
+  transformRespiratoryRate
 };

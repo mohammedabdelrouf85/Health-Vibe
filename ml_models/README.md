@@ -15,6 +15,7 @@ ml_models/
 ├── reproducibility_service.js       # Output determinism verification & requirements auditor
 ├── feature_extractor.js             # Standardized feature normalization & boundary clamping
 ├── evaluate_spo2_preprocessing.js    # SpO₂ encoding, imputation, and held-out robustness comparison
+├── evaluate_respiratory_rate_preprocessing.js # Respiratory-rate preprocessing and robustness comparison
 ├── respiratory_rf_classifier.js     # Random Forest clinical inference engine & safety rules
 ├── training_pipeline.py             # Python training script (Deterministic RANDOM_SEED = 42)
 └── evaluate_models.js               # Clinical benchmark & reproducibility runner
@@ -101,3 +102,7 @@ node ml_models/evaluate_spo2_preprocessing.js
 ```
 
 The held-out split currently has no missing SpO₂ values, so it cannot estimate natural missing-value impact. The script includes a clearly labeled artificial missingness stress check. See [`reports/SPO2_PREPROCESSING_EVALUATION.md`](../reports/SPO2_PREPROCESSING_EVALUATION.md) for results and limitations. The added columns are candidate retraining inputs; the active model does not learn from them until it is retrained and clinically reviewed.
+
+## Respiratory-Rate Feature Processing Candidate
+
+The feature extractor also emits a training-fitted z-score, one-hot low/normal/elevated/tachypnea bands, and a missingness flag for respiratory rate. Run `node ml_models/evaluate_respiratory_rate_preprocessing.js` for complete-case and artificial missingness comparisons. Results and limitations are in [`reports/RESPIRATORY_RATE_PREPROCESSING_EVALUATION.md`](../reports/RESPIRATORY_RATE_PREPROCESSING_EVALUATION.md). The current active model has not been retrained to use the appended encoded columns.
