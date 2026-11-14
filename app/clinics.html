@@ -924,6 +924,8 @@
     /* Responsive */
     @media (max-width: 960px) {
       .clinic-hero { grid-template-columns: 1fr; overflow: hidden; padding: 48px 16px 40px; }
+      #independentDoctorPath > div { grid-template-columns: 1fr !important; padding: 22px 18px !important; }
+      #independentDoctorCta { justify-self: start; }
       .hero-glow-1 { display: none !important; }
       .section-wrap { padding: 48px 16px; overflow: hidden; }
       .comparison-grid {
@@ -968,6 +970,7 @@
       <a href="#calculator" id="navCalculator">حاسبة الإنتاجية</a>
       <a href="#pricing" id="navPricing">الباقات والاشتراكات</a>
       <a href="#faq" id="navFaq">الأسئلة الشائعة</a>
+      <a href="./doctors.html" id="navIndependentDoctors" style="color: var(--clinic-primary); font-weight: 700;">🩺 بوابة الطبيب المستقل</a>
       <a href="./pitch.html" target="_blank" rel="noopener" style="color: #38bdf8; font-weight: 700;">📽️ Pitch Deck</a>
       <a href="./index.html" style="color: var(--clinic-primary);" id="navPatientApp">← تطبيق المريض</a>
     </nav>
@@ -1082,6 +1085,18 @@
           <span style="color: #a4c4c2;" id="simAuditBadge">🔒 تدقيق سريري مشفر ومحمي برمز QR وفق معايير ISO 27001</span>
           <span style="color: var(--clinic-primary); font-weight: 700;" id="simComplianceBadge">HIPAA / GDPR Ready</span>
         </div>
+      </div>
+    </section>
+
+    <!-- INDEPENDENT PHYSICIAN PATH -->
+    <section id="independentDoctorPath" style="max-width: 1152px; margin: 28px auto 38px; padding: 0 24px;">
+      <div style="position: relative; overflow: hidden; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 24px; padding: 26px 30px; border: 1px solid rgba(9,184,182,.32); border-radius: 20px; background: linear-gradient(110deg, rgba(9,184,182,.12), rgba(2,132,199,.08));">
+        <div>
+          <span class="pill-eyebrow" id="independentDoctorEyebrow">🩺 للأطباء أصحاب الممارسة الفردية</span>
+          <h2 id="independentDoctorTitle" style="font-size: clamp(21px, 3vw, 29px); margin: 10px 0 5px; color: #eef8f7;">تعمل بشكل مستقل؟ راجع حالات مرضاك من مساحة الطبيب</h2>
+          <p id="independentDoctorCopy" style="max-width: 720px; margin: 0; color: #a4c4c2; font-size: 14px; line-height: 1.7;">قدّم طلب توثيق حسابك الطبي. بعد مراجعة بياناتك واعتمادها، يمكنك مراجعة الحالات المسندة إليك وإصدار تقاريرك الطبية.</p>
+        </div>
+        <a href="./doctors.html" class="cta-btn-primary" id="independentDoctorCta" style="white-space: nowrap;">اكتشف بوابة الطبيب ←</a>
       </div>
     </section>
 
@@ -1690,6 +1705,11 @@
         navPricing: "الباقات والاشتراكات",
         navFaq: "الأسئلة الشائعة",
         navPatientApp: "← تطبيق المريض",
+        navIndependentDoctors: "🩺 بوابة الطبيب المستقل",
+        independentDoctorEyebrow: "🩺 للأطباء أصحاب الممارسة الفردية",
+        independentDoctorTitle: "تعمل بشكل مستقل؟ راجع حالات مرضاك من مساحة الطبيب",
+        independentDoctorCopy: "قدّم طلب توثيق حسابك الطبي. بعد مراجعة بياناتك واعتمادها، يمكنك مراجعة الحالات المسندة إليك وإصدار تقاريرك الطبية.",
+        independentDoctorCta: "اكتشف بوابة الطبيب ←",
         navBookDemoText: "طلب ديمو تجريبي",
         heroEyebrow: "نظام الفرز والتشغيل السريري الذكي للأطباء والعيادات",
         heroHeadline: 'حوّل عيادتك إلى مركز رعاية تنفسية ذكي متصل <span class="highlight-text">على مدار الساعة</span>',
@@ -1882,6 +1902,11 @@
         navPricing: "Plans & Pricing",
         navFaq: "FAQ",
         navPatientApp: "← Patient App",
+        navIndependentDoctors: "🩺 Independent doctors",
+        independentDoctorEyebrow: "🩺 For independent physicians",
+        independentDoctorTitle: "Practicing independently? Review your patients’ cases in your own workspace.",
+        independentDoctorCopy: "Apply to verify your physician account. After your credentials are reviewed and approved, you can review cases assigned to you and issue medical reports.",
+        independentDoctorCta: "Explore the doctor portal →",
         navBookDemoText: "Book Live Demo",
         heroEyebrow: "Smart Clinical Operating System for Physicians & Clinics",
         heroHeadline: 'Transform your clinic into an AI-augmented <span class="highlight-text">24/7 Clinical Center</span>',

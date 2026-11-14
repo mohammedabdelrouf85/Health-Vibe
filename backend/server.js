@@ -1746,6 +1746,9 @@ if (!admin.apps.length) {
 const db = admin.apps.length ? admin.firestore() : null;
 if (db) feedbackSupportService.setDb(db);
 if (db) operationalSwitchesService.init(db).catch(() => {});
+const { RecommendationTemplateGovernanceService } = require('./recommendation-template-governance-service');
+const recommendationTemplateGovernance = new RecommendationTemplateGovernanceService(db);
+app.recommendationTemplateGovernance = recommendationTemplateGovernance;
 
 // Initialize Doctor Assignment & Workload Balancing Service (One Medical Model)
 const doctorAssignmentService = new DoctorAssignmentService({
@@ -6305,8 +6308,7 @@ app.post('/api/doctor/submit-application', requireAuth, async (req, res) => {
     docName,
     docSize,
     docContentType,
-    storagePath,
-    downloadURL
+    storagePath
   } = req.body || {};
 
   if (!licenseNumber || typeof licenseNumber !== 'string') {
@@ -6323,6 +6325,22 @@ app.post('/api/doctor/submit-application', requireAuth, async (req, res) => {
   }
 
   const appId = `app_${userId}`;
+
+  if (!storagePath || !String(storagePath).startsWith(`doctor_applications/${userId}/${appId}/`)) {
+    return res.status(400).json({ error: 'INVALID_DOCUMENT_PATH' });
+  }
+  if (!['application/pdf', 'image/jpeg', 'image/png'].includes(docContentType)) {
+    return res.status(400).json({ error: 'UNSUPPORTED_DOCUMENT_TYPE' });
+  }
+  try {
+    const [uploadedObject] = await admin.storage().bucket().file(storagePath).getMetadata();
+    const custom = uploadedObject.metadata || {};
+    if (custom.actualMimeValidated !== 'true' || custom.detectedMimeType !== docContentType || Number(uploadedObject.size) !== Number(docSize)) {
+      return res.status(409).json({ error: 'DOCUMENT_VALIDATION_PENDING_OR_FAILED' });
+    }
+  } catch (_) {
+    return res.status(409).json({ error: 'DOCUMENT_VALIDATION_PENDING_OR_FAILED' });
+  }
 
   const appData = {
     id: appId,
@@ -6341,7 +6359,6 @@ app.post('/api/doctor/submit-application', requireAuth, async (req, res) => {
     docSize: docSize || null,
     docContentType: docContentType || null,
     storagePath: storagePath || null,
-    downloadURL: downloadURL || null,
     status: 'pending',
     appliedAt: admin.firestore.FieldValue.serverTimestamp()
   };
@@ -13812,17 +13829,17 @@ app.post('/api/clinics/pilot/circuit-breaker/evaluate', requireAuth, requireDoct
  * tripartite certification (questions, thresholds, recommendations), and cryptographic seals.
  * Directly addresses PRD Page 18 Critical Risk mitigation.
  */
-app.get('/api/pilot/clinical-reviewer/certification', (req, res) => {
+app.get('/api/pilot/clinical-reviewer/certification', async (req, res) => {
   try {
     const seal = pilotReadinessService.clinicalReviewerService.getCertificationSeal();
     const verification = pilotReadinessService.clinicalReviewerService.verifyAllComponentsApproved();
     const questionnaire = pilotReadinessService.clinicalReviewerService.getIntakeQuestionnaire();
     const thresholds = pilotReadinessService.clinicalReviewerService.getRiskThresholds();
-    const recommendations = pilotReadinessService.clinicalReviewerService.getRecommendationsAndDisclaimers();
+    const recommendations = await recommendationTemplateGovernance.getPublished();
 
     res.json({
       success: true,
-      certified: verification.certified,
+      certified: verification.certified && recommendations.approved === true,
       reviewer: seal.certifiedReviewer,
       certifications: seal.certifications,
       masterFingerprint: seal.masterFingerprintSha256,
@@ -13839,6 +13856,57 @@ app.get('/api/pilot/clinical-reviewer/certification', (req, res) => {
     res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
   }
 });
+
+// Only the currently published, reviewer-approved recommendation template is exposed to clients.
+app.get('/api/clinical/recommendation-templates/published', async (req, res) => {
+  try {
+    res.set('Cache-Control', 'no-store');
+    res.json({ success: true, template: await recommendationTemplateGovernance.getPublished() });
+  } catch (err) {
+    res.status(503).json({ error: 'TEMPLATE_STORE_UNAVAILABLE' });
+  }
+});
+
+// Administrators can submit changes, but cannot publish or approve them.
+app.post('/api/admin/clinical/recommendation-templates/proposals', requireAuth,
+  requireStrictRole([ROLES.CLINIC_ADMIN, ROLES.ORG_ADMIN, ROLES.SUPER_ADMIN]), async (req, res) => {
+    try {
+      const proposal = await recommendationTemplateGovernance.propose({
+        content: req.body?.content,
+        actor: { uid: req.user.uid, email: req.user.email, role: getTrustedClaimRole(req.user) }
+      });
+      res.status(201).json({ success: true, proposal });
+    } catch (err) {
+      if (err.message === 'INVALID_TEMPLATE') return res.status(400).json({ error: err.message, details: err.details });
+      res.status(err.message === 'PERSISTENCE_UNAVAILABLE' ? 503 : 500).json({ error: err.message || 'SERVER_ERROR' });
+    }
+  });
+
+// Clinical QA is the only role allowed to review, approve, or reject a proposal.
+app.get('/api/clinical/recommendation-templates/proposals', requireAuth,
+  requireStrictRole([ROLES.CLINICAL_QA]), async (req, res) => {
+    try {
+      res.json({ success: true, proposals: await recommendationTemplateGovernance.listPending() });
+    } catch (err) {
+      res.status(503).json({ error: 'TEMPLATE_STORE_UNAVAILABLE' });
+    }
+  });
+
+app.post('/api/clinical/recommendation-templates/proposals/:proposalId/review', requireAuth,
+  requireStrictRole([ROLES.CLINICAL_QA]), async (req, res) => {
+    try {
+      const result = await recommendationTemplateGovernance.review({
+        proposalId: req.params.proposalId,
+        decision: req.body?.decision,
+        notes: req.body?.notes,
+        reviewer: { uid: req.user.uid, email: req.user.email, role: getTrustedClaimRole(req.user) }
+      });
+      res.json({ success: true, proposal: result });
+    } catch (err) {
+      const clientErrors = ['INVALID_REVIEW', 'PROPOSAL_NOT_PENDING', 'PUBLISHED_VERSION_CHANGED'];
+      res.status(clientErrors.includes(err.message) ? 409 : 503).json({ error: err.message || 'TEMPLATE_STORE_UNAVAILABLE' });
+    }
+  });
 
 /**
  * POST /api/pilot/clinical-reviewer/re-certify

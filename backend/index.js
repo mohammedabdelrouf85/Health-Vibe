@@ -21,3 +21,4 @@ exports.api = functions.https.onRequest(app);
 exports.onUserCreated = cloudTriggers.onUserCreated;
 exports.onDoctorApplicationUpdated = cloudTriggers.onDoctorApplicationUpdated;
 exports.onDoctorApplicationCreated = cloudTriggers.onDoctorApplicationCreated;
+exports.onStorageFileFinalized = cloudTriggers.onStorageFileFinalized;

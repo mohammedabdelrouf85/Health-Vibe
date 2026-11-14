@@ -15109,8 +15109,7 @@ window.submitContactClient = submitContactClient;
 let selectedDoctorAppNationalIdFile = null;
 let selectedDoctorAppSyndicateFile = null;
 let selectedDoctorAppFile = null;
-const DOCTOR_APP_ALLOWED_FILE_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
-const DOCTOR_APP_ALLOWED_FILE_EXTENSIONS = [".pdf", ".jpg", ".jpeg", ".png", ".webp"];
+const DOCTOR_APP_ALLOWED_FILE_EXTENSIONS = [".pdf", ".jpg", ".jpeg", ".png"];
 const DOCTOR_APP_BLOCKED_EXECUTABLE_EXTENSIONS = [".exe", ".dll", ".bat", ".cmd", ".com", ".msi", ".ps1", ".sh", ".js", ".vbs", ".scr", ".jar", ".apk", ".dmg"];
 const DOCTOR_APP_MAX_FILE_SIZE = 10 * 1024 * 1024;
 
@@ -15136,16 +15135,30 @@ function encodeAuditArg(value) {
 }
 
 window.openDoctorCredentialDocument = async function(encodedUrl, encodedAppId = "", encodedApplicantUserId = "", encodedDocName = "") {
-  const url = decodeURIComponent(encodedUrl || "");
-  if (!url) return false;
-  const safeUrl = getSafeExternalUrl(url);
+  const documentRef = decodeURIComponent(encodedUrl || "");
+  if (!documentRef) return false;
+  const appId = decodeURIComponent(encodedAppId || "");
+  const applicantUserId = decodeURIComponent(encodedApplicantUserId || "");
+  const docName = decodeURIComponent(encodedDocName || "");
+  let safeUrl = "";
+  try {
+    if (documentRef.startsWith("doctor_applications/")) {
+      const fileRef = storage.ref().child(documentRef);
+      const metadata = await fileRef.getMetadata();
+      const custom = metadata.customMetadata || {};
+      if (custom.actualMimeValidated !== "true" || !["application/pdf", "image/jpeg", "image/png"].includes(custom.detectedMimeType)) throw new Error("FILE_NOT_VALIDATED");
+      safeUrl = await fileRef.getDownloadURL();
+    } else {
+      safeUrl = getSafeExternalUrl(documentRef);
+    }
+  } catch (_) {
+    showToast(currentLanguage === "en" ? "This document is unavailable or has not passed file verification." : "المستند غير متاح أو لم يجتز التحقق من نوع الملف.");
+    return false;
+  }
   if (!safeUrl) {
     showToast(currentLanguage === "en" ? "Blocked unsafe document link." : "تم منع رابط مستند غير آمن.");
     return false;
   }
-  const appId = decodeURIComponent(encodedAppId || "");
-  const applicantUserId = decodeURIComponent(encodedApplicantUserId || "");
-  const docName = decodeURIComponent(encodedDocName || "");
   await writeClientAuditLog("DOCTOR_CREDENTIAL_DOCUMENT_OPENED", {
     applicationId: appId || "",
     applicantUserId: applicantUserId || "",
@@ -15167,24 +15180,57 @@ function validateDoctorApplicationFile(file, label = "") {
   const hasAllowedExtension = DOCTOR_APP_ALLOWED_FILE_EXTENSIONS.some((ext) => lowerName.endsWith(ext));
   const hasBlockedExecutableExtension = DOCTOR_APP_BLOCKED_EXECUTABLE_EXTENSIONS.some((ext) => lowerName.endsWith(ext));
   if (hasBlockedExecutableExtension || !hasAllowedExtension) {
-    throw new Error(isEn ? "Unsupported or unsafe file extension. Please upload only PDF, JPG, PNG, or WEBP." : "امتداد الملف غير مدعوم أو غير آمن. يرجى رفع PDF أو JPG أو PNG أو WEBP فقط.");
+    throw new Error(isEn ? "Unsupported or unsafe file extension. Please upload only PDF, JPG, or PNG." : "امتداد الملف غير مدعوم أو غير آمن. يرجى رفع PDF أو JPG أو PNG فقط.");
   }
-  if (!DOCTOR_APP_ALLOWED_FILE_TYPES.includes(file.type)) {
-    throw new Error(isEn ? "Unsupported file type. Please upload a PDF, JPG, PNG, or WEBP file." : "نوع الملف غير مدعوم. يرجى رفع PDF أو JPG أو PNG أو WEBP.");
-  }
-  if (file.size > DOCTOR_APP_MAX_FILE_SIZE) {
+  const expectedType = lowerName.endsWith(".pdf") ? "application/pdf" : (lowerName.endsWith(".png") ? "image/png" : "image/jpeg");
+  if (file.size <= 0 || file.size > DOCTOR_APP_MAX_FILE_SIZE) {
     throw new Error(isEn ? "File is too large. Maximum allowed size is 10MB." : "حجم الملف كبير جداً. الحد الأقصى المسموح به 10 ميجابايت.");
   }
+  return expectedType;
+}
+
+async function detectUploadFileMime(file, label = "") {
+  const expectedType = validateDoctorApplicationFile(file, label);
+  const header = new Uint8Array(await file.slice(0, 8).arrayBuffer());
+  const startsWith = (signature) => signature.every((byte, index) => header[index] === byte);
+  const matches = expectedType === "application/pdf"
+    ? String.fromCharCode(...header.slice(0, 5)) === "%PDF-"
+    : (expectedType === "image/jpeg"
+      ? startsWith([0xff, 0xd8, 0xff])
+      : startsWith([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  if (!matches) {
+    throw new Error(currentLanguage === "en" ? "The file content does not match a supported PDF, JPG, or PNG format." : "محتوى الملف لا يطابق صيغة PDF أو JPG أو PNG المسموح بها.");
+  }
+  return expectedType;
+}
+
+async function waitForServerMimeValidation(fileRef, expectedMimeType) {
+  const isEn = currentLanguage === "en";
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    try {
+      const metadata = await fileRef.getMetadata();
+      const custom = metadata.customMetadata || {};
+      if (custom.actualMimeValidated === "true" && custom.detectedMimeType === expectedMimeType) return metadata;
+      if (custom.validationFailed === "true") break;
+    } catch (error) {
+      if (String(error?.code || "").includes("object-not-found")) break;
+      if (attempt === 39) throw error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  throw new Error(isEn
+    ? "The file did not pass server-side type verification. Choose a genuine PDF, JPG, or PNG file and try again."
+    : "لم يجتز الملف التحقق من نوعه على الخادم. اختر ملف PDF أو JPG أو PNG حقيقياً ثم أعد المحاولة.");
 }
 
 async function uploadDoctorApplicationDocument({ user, appId, file, credentialType = "license" }) {
-  validateDoctorApplicationFile(file);
+  const detectedContentType = await detectUploadFileMime(file);
   const safeName = getSafeStorageFileName(file.name);
   const prefix = credentialType === "national_id" ? "national_id" : (credentialType === "syndicate_card" ? "syndicate_card" : "license");
   const storagePath = `doctor_applications/${user.uid}/${appId}/${prefix}_${Date.now()}_${safeName}`;
   const fileRef = storage.ref().child(storagePath);
   const snapshot = await fileRef.put(file, {
-    contentType: file.type,
+    contentType: detectedContentType,
     customMetadata: {
       appId,
       userId: user.uid,
@@ -15192,19 +15238,17 @@ async function uploadDoctorApplicationDocument({ user, appId, file, credentialTy
       uploadedFor: "doctor_application"
     }
   });
-  const downloadURL = await snapshot.ref.getDownloadURL();
+  await waitForServerMimeValidation(snapshot.ref, detectedContentType);
   return {
     docName: file.name,
     docSize: file.size,
-    docContentType: file.type,
+    docContentType: detectedContentType,
     storagePath,
-    downloadURL,
     credentialType
   };
 }
 
-const MEDICAL_FILE_ALLOWED_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
-const MEDICAL_FILE_ALLOWED_EXTENSIONS = [".pdf", ".jpg", ".jpeg", ".png", ".webp"];
+const MEDICAL_FILE_ALLOWED_EXTENSIONS = [".pdf", ".jpg", ".jpeg", ".png"];
 const MEDICAL_FILE_BLOCKED_EXECUTABLE_EXTENSIONS = DOCTOR_APP_BLOCKED_EXECUTABLE_EXTENSIONS;
 const MEDICAL_FILE_MAX_SIZE = 10 * 1024 * 1024;
 const pendingMedicalFileUploads = [];
@@ -15226,14 +15270,13 @@ function validateMedicalCaseFile(file) {
   const hasAllowedExtension = MEDICAL_FILE_ALLOWED_EXTENSIONS.some((ext) => lowerName.endsWith(ext));
   const hasBlockedExecutableExtension = MEDICAL_FILE_BLOCKED_EXECUTABLE_EXTENSIONS.some((ext) => lowerName.endsWith(ext));
   if (hasBlockedExecutableExtension || !hasAllowedExtension) {
-    throw new Error(isEn ? "Unsupported or unsafe file extension. Upload PDF, JPG, PNG, or WEBP only." : "امتداد الملف غير مدعوم أو غير آمن. ارفع PDF أو JPG أو PNG أو WEBP فقط.");
+    throw new Error(isEn ? "Unsupported or unsafe file extension. Upload PDF, JPG, or PNG only." : "امتداد الملف غير مدعوم أو غير آمن. ارفع PDF أو JPG أو PNG فقط.");
   }
-  if (!MEDICAL_FILE_ALLOWED_TYPES.includes(file.type)) {
-    throw new Error(isEn ? "Unsupported file type. Upload PDF, JPG, PNG, or WEBP only." : "نوع الملف غير مدعوم. ارفع PDF أو JPG أو PNG أو WEBP فقط.");
-  }
+  const expectedType = lowerName.endsWith(".pdf") ? "application/pdf" : (lowerName.endsWith(".png") ? "image/png" : "image/jpeg");
   if (file.size <= 0 || file.size > MEDICAL_FILE_MAX_SIZE) {
     throw new Error(isEn ? "File size must be greater than 0 and no more than 10MB." : "يجب أن يكون حجم الملف أكبر من صفر ولا يتجاوز 10 ميجابايت.");
   }
+  return expectedType;
 }
 
 function formatMedicalFileSize(size) {
@@ -15283,7 +15326,7 @@ function stageMedicalCaseFiles(fileList) {
       file,
       fileName: file.name,
       safeFileName: getSafeMedicalFileName(file.name),
-      contentType: file.type,
+      contentType: validateMedicalCaseFile(file),
       size: file.size,
       progress: 0,
       status: "staged",
@@ -15317,7 +15360,7 @@ async function getLatestPatientCaseId(user) {
 }
 
 async function uploadMedicalCaseFile({ user, caseId, state }) {
-  validateMedicalCaseFile(state.file);
+  state.contentType = await detectUploadFileMime(state.file);
   const fileDocRef = db.collection("case_files").doc();
   const fileId = fileDocRef.id;
   const storagePath = `case_files/${user.uid}/${caseId}/${fileId}/${state.safeFileName}`;
@@ -15363,6 +15406,7 @@ async function uploadMedicalCaseFile({ user, caseId, state }) {
   });
 
   activeMedicalUploadTasks.delete(fileId);
+  await waitForServerMimeValidation(storage.ref().child(storagePath), state.contentType);
   state.progress = 100;
   state.status = "uploaded_quarantined";
   state.scanStatus = "pending";
@@ -15929,13 +15973,11 @@ async function handleDoctorAppSubmit(e) {
       docSize: uploadedSyndicate.docSize,
       docContentType: uploadedSyndicate.docContentType,
       storagePath: uploadedSyndicate.storagePath,
-      downloadURL: uploadedSyndicate.downloadURL,
       nationalIdDoc: {
         docName: uploadedNationalId.docName,
         docSize: uploadedNationalId.docSize,
         docContentType: uploadedNationalId.docContentType,
         storagePath: uploadedNationalId.storagePath,
-        downloadURL: uploadedNationalId.downloadURL,
         credentialType: "national_id",
         uploadedAt: new Date().toISOString()
       },
@@ -15944,7 +15986,6 @@ async function handleDoctorAppSubmit(e) {
         docSize: uploadedSyndicate.docSize,
         docContentType: uploadedSyndicate.docContentType,
         storagePath: uploadedSyndicate.storagePath,
-        downloadURL: uploadedSyndicate.downloadURL,
         credentialType: "syndicate_card",
         uploadedAt: new Date().toISOString()
       },
@@ -15969,7 +16010,7 @@ async function handleDoctorAppSubmit(e) {
       doctorAppDocSize: uploadedSyndicate.docSize,
       doctorAppDocContentType: uploadedSyndicate.docContentType,
       doctorAppDocStoragePath: uploadedSyndicate.storagePath,
-      doctorAppDocDownloadURL: uploadedSyndicate.downloadURL,
+      doctorAppDocDownloadURL: firebase.firestore.FieldValue.delete(),
       doctorAppNationalIdDoc: appData.nationalIdDoc,
       doctorAppSyndicateDoc: appData.syndicateCardDoc,
       doctorAppDate: new Date().toLocaleDateString(isEn ? "en-US" : "ar-EG")
@@ -16140,8 +16181,8 @@ async function renderVerificationScreen() {
                 <span>🪪 ${isEn ? "National ID Card" : "بطاقة الرقم القومي"}</span>
                 <div>
                   <strong>${escapeHtmlAttr(nationalIdName)}</strong>
-                  ${nationalIdDoc.downloadURL ? `
-                    <a href="#" onclick="return openDoctorCredentialDocument('${encodeAuditArg(nationalIdDoc.downloadURL)}', '${encodeAuditArg(userData.doctorApplicationId || "")}', '${encodeAuditArg(user.uid)}', '${encodeAuditArg(nationalIdName)}')" style="margin-inline-start: 8px; font-size: 12px; color: var(--teal); text-decoration: underline;">
+                  ${(nationalIdDoc.storagePath || nationalIdDoc.downloadURL) ? `
+                    <a href="#" onclick="return openDoctorCredentialDocument('${encodeAuditArg(nationalIdDoc.storagePath || nationalIdDoc.downloadURL)}', '${encodeAuditArg(userData.doctorApplicationId || "")}', '${encodeAuditArg(user.uid)}', '${encodeAuditArg(nationalIdName)}')" style="margin-inline-start: 8px; font-size: 12px; color: var(--teal); text-decoration: underline;">
                       ${isEn ? "View National ID ↗" : "معاينة بطاقة الرقم القومي ↗"}
                     </a>
                   ` : `<span style="font-size: 12px; color: #10b981; margin-inline-start: 6px;">(${isEn ? "Received ✓" : "مستلمة ومحفوظة بأمان ✓"})</span>`}
@@ -16151,8 +16192,8 @@ async function renderVerificationScreen() {
                 <span>🩺 ${isEn ? "Syndicate Card / License" : "كارنيه نقابة الأطباء"}</span>
                 <div>
                   <strong>${escapeHtmlAttr(syndicateDocName)}</strong>
-                  ${(syndicateDoc.downloadURL || userData.doctorAppDocDownloadURL) ? `
-                    <a href="#" onclick="return openDoctorCredentialDocument('${encodeAuditArg(syndicateDoc.downloadURL || userData.doctorAppDocDownloadURL)}', '${encodeAuditArg(userData.doctorApplicationId || "")}', '${encodeAuditArg(user.uid)}', '${encodeAuditArg(syndicateDocName)}')" style="margin-inline-start: 8px; font-size: 12px; color: var(--teal); text-decoration: underline;">
+                  ${(syndicateDoc.storagePath || userData.doctorAppDocStoragePath || syndicateDoc.downloadURL || userData.doctorAppDocDownloadURL) ? `
+                    <a href="#" onclick="return openDoctorCredentialDocument('${encodeAuditArg(syndicateDoc.storagePath || userData.doctorAppDocStoragePath || syndicateDoc.downloadURL || userData.doctorAppDocDownloadURL)}', '${encodeAuditArg(userData.doctorApplicationId || "")}', '${encodeAuditArg(user.uid)}', '${encodeAuditArg(syndicateDocName)}')" style="margin-inline-start: 8px; font-size: 12px; color: var(--teal); text-decoration: underline;">
                       ${isEn ? "View Syndicate Card ↗" : "معاينة كارنيه النقابة ↗"}
                     </a>
                   ` : `<span style="font-size: 12px; color: #10b981; margin-inline-start: 6px;">(${isEn ? "Received ✓" : "مستلم ومحفوظ بأمان ✓"})</span>`}
@@ -16249,7 +16290,7 @@ async function renderVerificationScreen() {
                   <span style="font-size: 30px;">🪪</span>
                   <p id="doctorAppNationalIdFileName" style="margin: 8px 0 4px; font-weight: 600; font-size: 13.5px; color: var(--ink);">${isEn ? "Click to select National ID card photo (PDF, JPG, PNG)" : "اضغط لاختيار صورة بطاقة الرقم القومي (PDF, JPG, PNG)"}</p>
                   <span style="font-size: 11.5px; color: var(--muted);">${isEn ? "Max size: 10MB (Official ID verification)" : "أقصى حجم: 10 ميجابايت (للتحقق الرسمي من الهوية)"}</span>
-                  <input type="file" id="doctorAppNationalIdFile" style="display: none;" accept="image/*,.pdf" onchange="onDoctorNationalIdPicked(this)" />
+                  <input type="file" id="doctorAppNationalIdFile" style="display: none;" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" onchange="onDoctorNationalIdPicked(this)" />
                 </div>
               </div>
 
@@ -16260,8 +16301,8 @@ async function renderVerificationScreen() {
                   <span style="font-size: 30px;">🩺</span>
                   <p id="doctorAppSyndicateFileName" style="margin: 8px 0 4px; font-weight: 600; font-size: 13.5px; color: var(--ink);">${isEn ? "Click to select syndicate document or license photo" : "اضغط لاختيار صورة كارنيه النقابة أو الترخيص"}</p>
                   <span style="font-size: 11.5px; color: var(--muted);">${isEn ? "Max size: 10MB (Professional syndicate record)" : "أقصى حجم: 10 ميجابايت (للمطابقة مع سجل النقابة)"}</span>
-                  <input type="file" id="doctorAppDocFile" style="display: none;" accept="image/*,.pdf" onchange="onDoctorSyndicateCardPicked(this)" />
-                  <input type="file" id="doctorAppSyndicateFile" style="display: none;" accept="image/*,.pdf" onchange="onDoctorSyndicateCardPicked(this)" />
+                  <input type="file" id="doctorAppDocFile" style="display: none;" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" onchange="onDoctorSyndicateCardPicked(this)" />
+                  <input type="file" id="doctorAppSyndicateFile" style="display: none;" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" onchange="onDoctorSyndicateCardPicked(this)" />
                 </div>
               </div>
             </div>
@@ -16528,9 +16569,9 @@ async function renderAdminApplications() {
       const nationalId = app.nationalIdDoc || app.doctorAppNationalIdDoc || null;
       const syndicateCard = app.syndicateCardDoc || app.doctorAppSyndicateDoc || null;
       const nationalIdName = nationalId?.docName || (isEn ? "National ID Card" : "صورة بطاقة الرقم القومي");
-      const nationalIdUrl = nationalId?.downloadURL || "";
+      const nationalIdUrl = nationalId?.storagePath || nationalId?.downloadURL || "";
       const syndicateName = syndicateCard?.docName || app.docName || (isEn ? "Syndicate Card / License" : "كارنيه نقابة الأطباء");
-      const syndicateUrl = syndicateCard?.downloadURL || app.downloadURL || "";
+      const syndicateUrl = syndicateCard?.storagePath || app.storagePath || syndicateCard?.downloadURL || app.downloadURL || "";
 
       html += `
         <div class="admin-app-card" style="margin-bottom: 14px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 16px; transition: border-color 0.2s;">
@@ -16552,7 +16593,7 @@ async function renderAdminApplications() {
               <div>
                 <strong>${escapeHtmlAttr(nationalIdName)}</strong>
                 ${nationalIdUrl ? `
-                  <a href="${nationalIdUrl}" target="_blank" rel="noopener noreferrer" style="margin-inline-start: 8px; font-size: 12px; color: var(--teal); text-decoration: underline;">
+                  <a href="#" onclick="return openDoctorCredentialDocument('${encodeAuditArg(nationalIdUrl)}', '${encodeAuditArg(app.id || '')}', '${encodeAuditArg(app.userId || '')}', '${encodeAuditArg(nationalIdName)}')" style="margin-inline-start: 8px; font-size: 12px; color: var(--teal); text-decoration: underline;">
                     ${isEn ? "View National ID ↗" : "عرض بطاقة الرقم القومي ↗"}
                   </a>
                 ` : `<span style="font-size: 12px; color: #10b981; margin-inline-start: 6px;">(${isEn ? "Verified Record ✓" : "مستلمة ومحفوظة بأمان ✓"})</span>`}
@@ -16563,7 +16604,7 @@ async function renderAdminApplications() {
               <div>
                 <strong>${escapeHtmlAttr(syndicateName)}</strong>
                 ${syndicateUrl ? `
-                  <a href="${syndicateUrl}" target="_blank" rel="noopener noreferrer" style="margin-inline-start: 8px; font-size: 12px; color: var(--teal); text-decoration: underline;">
+                  <a href="#" onclick="return openDoctorCredentialDocument('${encodeAuditArg(syndicateUrl)}', '${encodeAuditArg(app.id || '')}', '${encodeAuditArg(app.userId || '')}', '${encodeAuditArg(syndicateName)}')" style="margin-inline-start: 8px; font-size: 12px; color: var(--teal); text-decoration: underline;">
                     ${isEn ? "View Syndicate Card ↗" : "عرض كارنيه النقابة ↗"}
                   </a>
                 ` : `<span style="font-size: 12px; color: #10b981; margin-inline-start: 6px;">(${isEn ? "Verified Record ✓" : "مستلم ومحفوظ بأمان ✓"})</span>`}
@@ -21887,6 +21928,30 @@ if (initialScreen === "verify-report" || initialScreen === "verify" || isVerifyP
 bindScreenNavigation();
 applyLanguage(currentLanguage);
 checkUrlAuthAction();
+
+// Independent physician landing page onboarding deep link.
+if (new URLSearchParams(window.location.search).get("doctorApply") === "1") {
+  const startDoctorApplication = (user) => {
+    if (user) {
+      handleOpenDoctorApply();
+    } else {
+      showAuth("signup");
+      const roleSelect = document.getElementById("authRole");
+      if (roleSelect) {
+        roleSelect.value = ROLES.DOCTOR_PENDING;
+        roleSelect.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    }
+    history.replaceState(null, "", window.location.pathname);
+  };
+  if (auth?.currentUser) startDoctorApplication(auth.currentUser);
+  else if (auth && typeof auth.onAuthStateChanged === "function") {
+    const unsubscribeDoctorApply = auth.onAuthStateChanged((user) => {
+      unsubscribeDoctorApply();
+      startDoctorApplication(user);
+    });
+  }
+}
 
 // ── Hash-Based Deep Link Route Guard ─────────────────────────────────────────
 // Supports URL patterns like index.html#screen=doctor for external deep links.
