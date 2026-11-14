@@ -11727,6 +11727,8 @@ async function renderReportScreen(targetCaseId = null) {
     const chestPainDisplay = escapeHtml(isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوب") : recordedClinicalText(isEn ? symptomsObj.chestPainLabelEn : (symptomsObj.chestPainLabelAr || caseData.chestPain), isEn));
     const chestPainTypeDisplay = escapeHtml(isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوب") : recordedClinicalText(isEn ? (symptomsObj.chestPainTypeLabelEn || caseData.chestPainTypeLabelEn) : (symptomsObj.chestPainTypeLabelAr || caseData.chestPainTypeLabelAr), isEn));
     const wheezingDisplay = escapeHtml(isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوب") : recordedClinicalText(isEn ? (symptomsObj.wheezingLabelEn || caseData.wheezingLabelEn) : (symptomsObj.wheezingLabelAr || caseData.wheezingLabelAr), isEn));
+    const chillsDisplay = escapeHtml(isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوب") : recordedClinicalText(isEn ? (symptomsObj.chillsLabelEn || caseData.chillsLabelEn) : (symptomsObj.chillsLabelAr || caseData.chillsLabelAr), isEn));
+    const nightSweatsDisplay = escapeHtml(isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوب") : recordedClinicalText(isEn ? (symptomsObj.nightSweatsLabelEn || caseData.nightSweatsLabelEn) : (symptomsObj.nightSweatsLabelAr || caseData.nightSweatsLabelAr), isEn));
     const progressionDisplay = escapeHtml(isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوب") : recordedClinicalText(isEn ? symptomsObj.symptomProgressionLabelEn : (symptomsObj.symptomProgressionLabelAr || caseData.symptomProgression), isEn));
     const infectionDisplay = escapeHtml(isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوب") : recordedClinicalText(isEn ? symptomsObj.recentInfectionLabelEn : (symptomsObj.recentInfectionLabelAr || caseData.recentInfection), isEn));
     const asthmaCopdDisplay = escapeHtml(isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوب") : recordedClinicalText(isEn ? symptomsObj.asthmaCopdLabelEn : (symptomsObj.asthmaCopdLabelAr || caseData.asthmaCopd), isEn));
@@ -11944,6 +11946,16 @@ async function renderReportScreen(targetCaseId = null) {
             <div style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px; text-align: center;">
               <span style="font-size: 11.5px; color: var(--muted); display: block; margin-bottom: 4px;">${isEn ? "Temperature" : "درجة الحرارة"}</span>
               <strong style="font-size: 15px; color: var(--ink); display: block; margin-top: 6px;">${temperatureDisplay}</strong>
+            </div>
+
+            <div style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px; text-align: center;">
+              <span style="font-size: 11.5px; color: var(--muted); display: block; margin-bottom: 4px;">${isEn ? "Chills or Shivering" : "رعشة أو قشعريرة"}</span>
+              <strong style="font-size: 15px; color: var(--ink); display: block; margin-top: 6px;">${chillsDisplay}</strong>
+            </div>
+
+            <div style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px; text-align: center;">
+              <span style="font-size: 11.5px; color: var(--muted); display: block; margin-bottom: 4px;">${isEn ? "Night Sweats" : "تعرق ليلي"}</span>
+              <strong style="font-size: 15px; color: var(--ink); display: block; margin-top: 6px;">${nightSweatsDisplay}</strong>
             </div>
 
             <div style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px; text-align: center;">
@@ -18914,6 +18926,8 @@ window.openConfirmAssessmentModal = function(data, onConfirm) {
   safeSet("confirmCough", data.coughLevel);
   safeSet("confirmDuration", data.symptomDuration);
   safeSet("confirmTemperature", data.temperature);
+  safeSet("confirmChills", data.chills);
+  safeSet("confirmNightSweats", data.nightSweats);
   safeSet("confirmRespiratoryRate", data.respiratoryRate);
   safeSet("confirmChestPain", data.chestPain);
   safeSet("confirmChestPainType", data.chestPainType || (isEn ? "Not applicable" : "لا ينطبق"));
@@ -19359,6 +19373,8 @@ const SINGLE_SELECT_CHOICE_GROUPS = [
   "sputumColorChoices",
   "coughChoices",
   "wheezingChoices",
+  "chillsChoices",
+  "nightSweatsChoices",
   "chestPainChoices",
   "chestPainCharacterChoices",
   "symptomProgressionChoices",
@@ -19380,7 +19396,7 @@ SINGLE_SELECT_CHOICE_GROUPS.forEach((groupId) => {
         radio.setAttribute("aria-checked", selected ? "true" : "false");
         radio.tabIndex = selected ? 0 : -1;
       });
-    } else if (["coughNatureChoices", "sputumColorChoices", "wheezingChoices", "chestPainChoices", "chestPainCharacterChoices"].includes(groupId)) {
+    } else if (["coughNatureChoices", "sputumColorChoices", "wheezingChoices", "chillsChoices", "nightSweatsChoices", "chestPainChoices", "chestPainCharacterChoices"].includes(groupId)) {
       group.querySelectorAll(".choice").forEach((choice) => {
         choice.setAttribute("aria-pressed", choice === btn ? "true" : "false");
       });
@@ -19725,6 +19741,8 @@ function buildAssessmentModel({
   temperatureRaw = "",
   respiratoryRateRaw = "",
   wheezingRaw = "غير معروف",
+  chillsRaw = "غير معروف",
+  nightSweatsRaw = "غير معروف",
   chestPainRaw = "غير معروف",
   chestPainTypeRaw,
   symptomProgressionRaw = "غير معروف",
@@ -19838,6 +19856,8 @@ function buildAssessmentModel({
   const chestPainTypeLabelAr = chestPainType ? CHEST_PAIN_CHARACTER_TEXT[chestPainType].ar : null;
   const chestPainTypeLabelEn = chestPainType ? CHEST_PAIN_CHARACTER_TEXT[chestPainType].en : null;
   const wheezing = normalizeYesNoUnknown(wheezingRaw) || "unknown";
+  const chills = normalizeYesNoUnknown(chillsRaw) || "unknown";
+  const nightSweats = normalizeYesNoUnknown(nightSweatsRaw) || "unknown";
   const symptomProgression = normalizeSymptomProgression(symptomProgressionRaw) || "unknown";
   const recentInfection = normalizeYesNoUnknown(recentInfectionRaw) || "unknown";
   const asthmaCopd = normalizeYesNoUnknown(asthmaCopdRaw) || "unknown";
@@ -19884,8 +19904,8 @@ function buildAssessmentModel({
     ? COUGH_NATURE_TEXT.none.en
     : coughNature ? [COUGH_NATURE_TEXT[coughNature].en, sputumColorLabelEn, coughMeta.en, coughDurationSummaryEn].filter(Boolean).join(" — ")
       : (coughMeta.en && coughMeta.en !== "None" ? coughMeta.en + " cough" : "");
-  const symptomsSummaryAr = [coughSummaryAr, hasDyspnea ? "ضيق تنفس" : "", wheezing === "yes" ? "صفير أو أزيز بالصدر" : "", chestPain === "yes" ? (chestPainTypeLabelAr || "ألم بالصدر") : ""].filter(Boolean).join(" مع ") || "لا توجد أعراض ظاهرة";
-  const symptomsSummaryEn = [coughSummaryEn, hasDyspnea ? "Shortness of breath" : "", wheezing === "yes" ? "Chest wheezing" : "", chestPain === "yes" ? (chestPainTypeLabelEn || "Chest pain") : ""].filter(Boolean).join(" with ") || "No apparent symptoms";
+  const symptomsSummaryAr = [coughSummaryAr, hasDyspnea ? "ضيق تنفس" : "", wheezing === "yes" ? "صفير أو أزيز بالصدر" : "", chestPain === "yes" ? (chestPainTypeLabelAr || "ألم بالصدر") : "", chills === "yes" ? "رعشة أو قشعريرة" : "", nightSweats === "yes" ? "تعرق ليلي" : ""].filter(Boolean).join(" مع ") || "لا توجد أعراض ظاهرة";
+  const symptomsSummaryEn = [coughSummaryEn, hasDyspnea ? "Shortness of breath" : "", wheezing === "yes" ? "Chest wheezing" : "", chestPain === "yes" ? (chestPainTypeLabelEn || "Chest pain") : "", chills === "yes" ? "Chills or shivering" : "", nightSweats === "yes" ? "Night sweats" : ""].filter(Boolean).join(" with ") || "No apparent symptoms";
 
   // Resolve authentic patient identity
   const cachedDoc = window._cachedUserDoc || {};
@@ -20001,6 +20021,12 @@ function buildAssessmentModel({
         wheezing,
         wheezingLabelAr: yesNoUnknownLabel(wheezing, false),
         wheezingLabelEn: yesNoUnknownLabel(wheezing, true),
+        chills,
+        chillsLabelAr: yesNoUnknownLabel(chills, false),
+        chillsLabelEn: yesNoUnknownLabel(chills, true),
+        nightSweats,
+        nightSweatsLabelAr: yesNoUnknownLabel(nightSweats, false),
+        nightSweatsLabelEn: yesNoUnknownLabel(nightSweats, true),
         symptomProgression,
         symptomProgressionLabelAr: symptomProgressionLabel(symptomProgression, false),
         symptomProgressionLabelEn: symptomProgressionLabel(symptomProgression, true),
@@ -20095,6 +20121,12 @@ function buildAssessmentModel({
     wheezing,
     wheezingLabelAr: yesNoUnknownLabel(wheezing, false),
     wheezingLabelEn: yesNoUnknownLabel(wheezing, true),
+    chills,
+    chillsLabelAr: yesNoUnknownLabel(chills, false),
+    chillsLabelEn: yesNoUnknownLabel(chills, true),
+    nightSweats,
+    nightSweatsLabelAr: yesNoUnknownLabel(nightSweats, false),
+    nightSweatsLabelEn: yesNoUnknownLabel(nightSweats, true),
     symptomProgression: symptomProgressionLabel(symptomProgression, false),
     symptomProgressionKey: symptomProgression,
     recentInfection: yesNoUnknownLabel(recentInfection, false),
@@ -20235,7 +20267,9 @@ function setChoiceGroupValue(groupId, value) {
       || btn.dataset.coughNature === value
       || btn.dataset.sputumColor === value
       || btn.dataset.chestPain === value
-      || btn.dataset.chestPainCharacter === value;
+      || btn.dataset.chestPainCharacter === value
+      || btn.dataset.chills === value
+      || btn.dataset.nightSweats === value;
     btn.classList.toggle("active", matchesValue);
     if (btn.hasAttribute("aria-pressed")) btn.setAttribute("aria-pressed", matchesValue ? "true" : "false");
   });
@@ -20254,6 +20288,8 @@ function gatherAssessmentDraftFields() {
   const coughDurationDays = document.getElementById("coughDurationInput")?.value.trim() || "";
   const activeCoughSeverity = document.querySelector("#coughChoices .choice.active[data-cough-severity]");
   const wheezing = document.querySelector("#wheezingChoices .choice.active")?.dataset.wheezing || "";
+  const chills = document.querySelector("#chillsChoices .choice.active")?.dataset.chills || "";
+  const nightSweats = document.querySelector("#nightSweatsChoices .choice.active")?.dataset.nightSweats || "";
   const chestPain = document.querySelector("#chestPainChoices .choice.active")?.dataset.chestPain || "";
   const chestPainType = document.querySelector("#chestPainCharacterChoices .choice.active")?.dataset.chestPainCharacter || "";
   return {
@@ -20264,13 +20300,14 @@ function gatherAssessmentDraftFields() {
     sputumColor,
     coughDurationDays,
     wheezing,
+    chills,
+    nightSweats,
     chestPain,
     chestPainType,
     coughLevel: coughNature === "none" ? "none" : (activeCoughSeverity?.dataset.coughSeverity || ""),
     symptomDuration: document.getElementById("symptomDuration")?.value.trim() || "",
     temperatureRaw: document.getElementById("temperatureInput")?.value.trim() || "",
     respiratoryRateRaw: document.getElementById("respiratoryRateInput")?.value.trim() || "",
-    chestPain,
     symptomProgression: firstChoice("symptomProgressionChoices"),
     recentInfection: firstChoice("recentInfectionChoices"),
     asthmaCopd: firstChoice("asthmaCopdChoices"),
@@ -20338,6 +20375,8 @@ function applyAssessmentDraftFields(fields = {}) {
   updateCoughInputsUI();
   setChoiceGroupValue("chestPainChoices", normalizeYesNoUnknown(fields.chestPain) || fields.chestPain);
   setChoiceGroupValue("chestPainCharacterChoices", fields.chestPainType);
+  setChoiceGroupValue("chillsChoices", fields.chills);
+  setChoiceGroupValue("nightSweatsChoices", fields.nightSweats);
   updateChestPainDetailUI();
   setChoiceGroupValue("symptomProgressionChoices", fields.symptomProgression);
   setChoiceGroupValue("recentInfectionChoices", fields.recentInfection);
@@ -20670,6 +20709,8 @@ function validateAssessmentFields({
   notes,
   riskFactors,
   wheezing,
+  chills,
+  nightSweats,
   isEn = false
 }) {
   const errors = [];
@@ -20780,6 +20821,8 @@ function validateAssessmentFields({
 
   [
     ["chestPainChoices", chestPain, normalizeYesNoUnknown, isEn ? "Please record chest pain as Yes, No, or Unknown." : "يرجى تسجيل ألم الصدر: نعم أو لا أو غير معروف."],
+    ["chillsChoices", chills, normalizeYesNoUnknown, isEn ? "Please record chills as Yes, No, or Not sure." : "يرجى تسجيل الرعشة: نعم أو لا أو غير متأكد."],
+    ["nightSweatsChoices", nightSweats, normalizeYesNoUnknown, isEn ? "Please record night sweats as Yes, No, or Not sure." : "يرجى تسجيل التعرق الليلي: نعم أو لا أو غير متأكد."],
     ["recentInfectionChoices", recentInfection, normalizeYesNoUnknown, isEn ? "Please record recent infection as Yes, No, or Unknown." : "يرجى تسجيل العدوى الحديثة: نعم أو لا أو غير معروف."],
     ["asthmaCopdChoices", asthmaCopd, normalizeYesNoUnknown, isEn ? "Please record asthma/COPD as Yes, No, or Unknown." : "يرجى تسجيل الربو/COPD: نعم أو لا أو غير معروف."],
     ["symptomProgressionChoices", symptomProgression, normalizeSymptomProgression, isEn ? "Please record symptom progression." : "يرجى تسجيل تطور الأعراض."]
@@ -20922,6 +20965,8 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
     const chestPain = document.querySelector("#chestPainChoices .choice.active")?.dataset.chestPain || "";
     const chestPainType = document.querySelector("#chestPainCharacterChoices .choice.active")?.dataset.chestPainCharacter || "";
     const wheezing = document.querySelector("#wheezingChoices .choice.active")?.dataset.wheezing || "";
+    const chills = document.querySelector("#chillsChoices .choice.active")?.dataset.chills || "";
+    const nightSweats = document.querySelector("#nightSweatsChoices .choice.active")?.dataset.nightSweats || "";
     const symptomProgression = readActiveChoiceText("symptomProgressionChoices");
     const recentInfection = readActiveChoiceText("recentInfectionChoices");
     const asthmaCopd = readActiveChoiceText("asthmaCopdChoices");
@@ -20950,6 +20995,8 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
       chestPain,
       chestPainType,
       wheezing,
+      chills,
+      nightSweats,
       symptomProgression,
       recentInfection,
       asthmaCopd,
@@ -20965,7 +21012,7 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
         const el = document.getElementById(id);
         if (el) el.style.borderColor = "";
       });
-      ["breathingChoices", "coughNatureChoices", "sputumColorChoices", "coughChoices", "riskChoices", "chestPainChoices", "chestPainCharacterChoices", "wheezingChoices", "symptomProgressionChoices", "recentInfectionChoices", "asthmaCopdChoices"].forEach(id => {
+      ["breathingChoices", "coughNatureChoices", "sputumColorChoices", "coughChoices", "riskChoices", "chestPainChoices", "chestPainCharacterChoices", "wheezingChoices", "chillsChoices", "nightSweatsChoices", "symptomProgressionChoices", "recentInfectionChoices", "asthmaCopdChoices"].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.outline = "";
       });
@@ -21037,6 +21084,8 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
       chestPain: yesNoUnknownLabel(chestPain, isEn),
       chestPainType: chestPainType ? CHEST_PAIN_CHARACTER_TEXT[chestPainType][isEn ? "en" : "ar"] : "",
       wheezing: yesNoUnknownLabel(wheezing, isEn),
+      chills: yesNoUnknownLabel(chills, isEn),
+      nightSweats: yesNoUnknownLabel(nightSweats, isEn),
       symptomProgression,
       recentInfection,
       asthmaCopd,
@@ -21088,6 +21137,8 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
           temperatureRaw,
           respiratoryRateRaw,
           wheezingRaw: wheezing,
+          chillsRaw: chills,
+          nightSweatsRaw: nightSweats,
           chestPainRaw: chestPain,
           chestPainTypeRaw: chestPainType,
           symptomProgressionRaw: symptomProgression,

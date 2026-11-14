@@ -1919,8 +1919,22 @@
             <input id="oxygenInput" type="number" inputmode="numeric" min="50" max="100" step="1" value="95" aria-label="تشبع الأكسجين بالدم SpO2، من 50 إلى 100 بالمئة" placeholder="95">
             <div id="oxygenClassification" class="field-hint" role="status" aria-live="polite" style="margin: 6px 0 10px; font-weight: 700;"></div>
             <div id="oxygenWarning" class="field-warning" hidden></div>
-            <label data-i18n="assessment.tempLabel">درجة الحرارة (السخونية)</label>
-            <input id="temperatureInput" inputmode="decimal" aria-label="درجة الحرارة" placeholder="37.0 °C أو unknown">
+            <label data-i18n="assessment.tempLabel">درجة حرارة الجسم (°م)</label>
+            <input id="temperatureInput" inputmode="decimal" aria-label="درجة الحرارة بالدرجة المئوية" placeholder="37.0 °م أو غير معروف">
+            <label id="chillsLabel" data-i18n="assessment.chillsLabel">هل تشعر برعشة أو قشعريرة؟</label>
+            <small class="field-hint" style="color: var(--muted); font-size: 12px; display: block; margin: -2px 0 6px;" data-i18n="assessment.chillsHelp">اختر الإجابة الأقرب لما تشعر به الآن.</small>
+            <div id="chillsChoices" class="choice-row three" role="group" aria-labelledby="chillsLabel">
+              <button type="button" class="choice" data-chills="yes" aria-pressed="false"><span data-i18n="assessment.chillsYes">نعم</span></button>
+              <button type="button" class="choice" data-chills="no" aria-pressed="false"><span data-i18n="assessment.chillsNo">لا</span></button>
+              <button type="button" class="choice" data-chills="unknown" aria-pressed="false"><span data-i18n="assessment.chillsUnknown">غير متأكد</span></button>
+            </div>
+            <label id="nightSweatsLabel" data-i18n="assessment.nightSweatsLabel">هل تعاني من تعرق ليلي أثناء النوم؟</label>
+            <small class="field-hint" style="color: var(--muted); font-size: 12px; display: block; margin: -2px 0 6px;" data-i18n="assessment.nightSweatsHelp">تعرق ملحوظ أثناء النوم، وليس بسبب حرارة الغرفة فقط.</small>
+            <div id="nightSweatsChoices" class="choice-row three" role="group" aria-labelledby="nightSweatsLabel">
+              <button type="button" class="choice" data-night-sweats="yes" aria-pressed="false"><span data-i18n="assessment.nightSweatsYes">نعم</span></button>
+              <button type="button" class="choice" data-night-sweats="no" aria-pressed="false"><span data-i18n="assessment.nightSweatsNo">لا</span></button>
+              <button type="button" class="choice" data-night-sweats="unknown" aria-pressed="false"><span data-i18n="assessment.nightSweatsUnknown">غير متأكد</span></button>
+            </div>
             <label data-i18n="assessment.respiratoryRateLabel">معدل التنفس في الدقيقة (اختياري)</label>
             <small class="field-hint" style="color: var(--muted); font-size: 12px; display: block; margin: -2px 0 6px;">اجلس بهدوء، واحسب كل شهيق وزفير كَنَفَس واحد لمدة دقيقة كاملة. يمكنك إدخال قراءة قاسها مختص.</small>
             <input id="respiratoryRateInput" type="number" inputmode="numeric" min="5" max="60" step="1" aria-label="معدل التنفس في الدقيقة" placeholder="مثال: 18">
@@ -4117,6 +4131,8 @@
         <div><span>درجة الكحة</span><strong id="confirmCough">--</strong></div>
         <div><span>مدة الأعراض</span><strong id="confirmDuration">--</strong></div>
         <div><span>درجة الحرارة</span><strong id="confirmTemperature">--</strong></div>
+        <div><span data-i18n="assessment.chillsLabel">رعشة أو قشعريرة</span><strong id="confirmChills">--</strong></div>
+        <div><span data-i18n="assessment.nightSweatsLabel">تعرق ليلي</span><strong id="confirmNightSweats">--</strong></div>
         <div><span>معدل التنفس</span><strong id="confirmRespiratoryRate">--</strong></div>
         <div><span>ألم بالصدر</span><strong id="confirmChestPain">--</strong></div>
         <div><span data-i18n="assessment.chestPainCharacterLabel">طبيعة ألم الصدر</span><strong id="confirmChestPainType">--</strong></div>
