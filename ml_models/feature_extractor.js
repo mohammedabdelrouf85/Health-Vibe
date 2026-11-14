@@ -85,6 +85,71 @@ const WHEEZING_PREPROCESSOR = Object.freeze({
 const WHEEZING_FEATURE_COUNT = WHEEZING_PREPROCESSOR.categories.length + 1;
 const COUGH_DURATION_FEATURE_COUNT = 5;
 
+const CHEST_PAIN_PREPROCESSOR = Object.freeze({
+  version: 'chest-pain-pattern-preprocess-v1',
+  categories: Object.freeze(['tightness', 'pleuritic', 'both', 'other_unknown', 'unknown'])
+});
+const CHEST_PAIN_FEATURE_COUNT = CHEST_PAIN_PREPROCESSOR.categories.length + 1;
+
+function normalizeChestPainPresence(value) {
+  if (value === true || value === 1) return 'yes';
+  if (value === false || value === 0) return 'no';
+  const normalized = String(value ?? '').trim().toLowerCase();
+  if (['yes', 'y', 'true', '1', 'نعم'].includes(normalized)) return 'yes';
+  if (['no', 'n', 'false', '0', 'لا'].includes(normalized)) return 'no';
+  if (['unknown', 'not sure', 'unsure', 'غير معروف', 'غير متأكد', 'مش عارف'].includes(normalized)) return 'unknown';
+  return null;
+}
+
+function normalizeChestPainType(value) {
+  const normalized = String(value ?? '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  if (CHEST_PAIN_PREPROCESSOR.categories.includes(normalized)) return normalized;
+  if (/pressure|heaviness|tightness|ثقل|ضغط|ضيق/.test(normalized)) return 'tightness';
+  if (/pleuritic|deep_breath|inhalation|inspiration|نفس_عميق|النفس_العميق|الشهيق|يزيد_مع_التنفس/.test(normalized)) return 'pleuritic';
+  if (['both', 'كلاهما', 'الاتنين', 'الاثنين'].includes(normalized)) return 'both';
+  if (['other', 'unsure', 'not_sure', 'another_type', 'نوع_آخر', 'غير_متأكد'].includes(normalized)) return 'other_unknown';
+  return null;
+}
+
+function transformChestPainCharacter(record = {}) {
+  const symptoms = record.symptoms || record.assessment?.symptoms || {};
+  const rawPresence = record.chest_pain ?? record.chestPain ?? record.chestPainKey
+    ?? symptoms.chestPain ?? symptoms.chestPainKey ?? record.assessment?.symptoms?.chestPain;
+  const presenceAbsent = rawPresence === null || rawPresence === undefined || String(rawPresence).trim() === '';
+  const presence = normalizeChestPainPresence(rawPresence);
+  const rawType = record.chest_pain_type ?? record.chestPainType ?? record.chestPainTypeKey
+    ?? symptoms.chestPainType ?? record.assessment?.symptoms?.chestPainType;
+  const typeAbsent = rawType === null || rawType === undefined || String(rawType).trim() === '';
+  const type = normalizeChestPainType(rawType);
+
+  if (presence === 'no') {
+    return {
+      category: 'not_applicable',
+      oneHot: CHEST_PAIN_PREPROCESSOR.categories.map(() => 0),
+      missing: 0,
+      sourceStatus: 'not_applicable'
+    };
+  }
+
+  if (type) {
+    return {
+      category: type,
+      oneHot: CHEST_PAIN_PREPROCESSOR.categories.map(category => category === type ? 1 : 0),
+      missing: 0,
+      sourceStatus: 'observed'
+    };
+  }
+
+  const explicitlyUnknown = presence === 'unknown' && typeAbsent;
+  const category = 'unknown';
+  return {
+    category,
+    oneHot: CHEST_PAIN_PREPROCESSOR.categories.map(option => option === category ? 1 : 0),
+    missing: explicitlyUnknown ? 0 : 1,
+    sourceStatus: explicitlyUnknown ? 'unknown' : presenceAbsent && typeAbsent ? 'missing' : typeAbsent ? 'missing' : 'invalid'
+  };
+}
+
 function normalizeWheezing(value) {
   if (value === true || value === 1) return 'yes';
   if (value === false || value === 0) return 'no';
@@ -339,6 +404,7 @@ function extractFeatures(rawData = {}, {
   const coughFeatures = transformCoughCharacter(rawData);
   const coughDurationFeatures = transformCoughDuration(rawData, coughDurationPreprocessor);
   const wheezingFeatures = transformWheezing(rawData);
+  const chestPainFeatures = transformChestPainCharacter(rawData);
   const sbp = clampNumber(rawData.systolic_bp || rawData.systolic, 'systolic_bp');
   const dbp = clampNumber(rawData.diastolic_bp || rawData.diastolic, 'diastolic_bp');
   const temp = clampNumber(rawData.temperature_c || rawData.temperature, 'temperature_c');
@@ -353,7 +419,9 @@ function extractFeatures(rawData = {}, {
 
   const coughDays = clampNumber(rawData.cough_duration_days || (rawData.has_cough ? 7 : 0), 'cough_duration_days');
   const hemoptysis = (rawData.hemoptysis || rawData.coughing_blood) ? 1.0 : 0.0;
-  const chestPain = (rawData.chest_pain || rawData.sharp_chest_pain) ? 1.0 : 0.0;
+  const chestPainPresence = normalizeChestPainPresence(rawData.chest_pain ?? rawData.chestPainKey
+    ?? rawData.chestPain ?? rawData.symptoms?.chestPain ?? rawData.assessment?.symptoms?.chestPain);
+  const chestPain = (chestPainPresence === 'yes' || rawData.sharp_chest_pain) ? 1.0 : 0.0;
   const smokingYears = clampNumber(rawData.smoking_pack_years || (rawData.smoker ? 10 : 0), 'smoking_pack_years');
   const asthmaHistory = (rawData.chronic_asthma_history || rawData.has_asthma) ? 1.0 : 0.0;
   const copdHistory = (rawData.chronic_copd_history || rawData.has_copd) ? 1.0 : 0.0;
@@ -398,7 +466,9 @@ function extractFeatures(rawData = {}, {
     coughDurationFeatures.bandChronic,
     coughDurationFeatures.missing,
     ...wheezingFeatures.oneHot,
-    wheezingFeatures.missing
+    wheezingFeatures.missing,
+    ...chestPainFeatures.oneHot,
+    chestPainFeatures.missing
   ];
 }
 
@@ -410,6 +480,8 @@ module.exports = {
   WHEEZING_PREPROCESSOR,
   WHEEZING_FEATURE_COUNT,
   COUGH_DURATION_FEATURE_COUNT,
+  CHEST_PAIN_PREPROCESSOR,
+  CHEST_PAIN_FEATURE_COUNT,
   RESPIRATORY_RATE_PREPROCESSOR,
   SPO2_PREPROCESSOR,
   clampNumber,
@@ -425,5 +497,8 @@ module.exports = {
   getCoughDurationDays,
   transformCoughDuration,
   normalizeWheezing,
-  transformWheezing
+  transformWheezing,
+  normalizeChestPainPresence,
+  normalizeChestPainType,
+  transformChestPainCharacter
 };

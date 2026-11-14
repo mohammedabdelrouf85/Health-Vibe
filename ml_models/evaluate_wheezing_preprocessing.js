@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const { RespiratoryRFClassifier } = require('./respiratory_rf_classifier');
-const { WHEEZING_FEATURE_COUNT, WHEEZING_PREPROCESSOR, extractFeatures, transformWheezing } = require('./feature_extractor');
+const { CHEST_PAIN_FEATURE_COUNT, WHEEZING_FEATURE_COUNT, WHEEZING_PREPROCESSOR, extractFeatures, transformWheezing } = require('./feature_extractor');
 
 const root = path.resolve(__dirname, '..');
 const train = JSON.parse(fs.readFileSync(path.join(root, 'dataset/train_dataset.json'), 'utf8'));
@@ -50,8 +50,9 @@ test.forEach(record => {
     wheezing: record.symptoms?.wheezing
   };
   const candidateVector = extractFeatures(input);
-  const baseline = classifier.predict(candidateVector.slice(0, -WHEEZING_FEATURE_COUNT));
-  const candidate = classifier.predict(candidateVector);
+  const baseline = classifier.predict(candidateVector.slice(0, -(WHEEZING_FEATURE_COUNT + CHEST_PAIN_FEATURE_COUNT)));
+  const wheezingCandidateVector = candidateVector.slice(0, -CHEST_PAIN_FEATURE_COUNT);
+  const candidate = classifier.predict(wheezingCandidateVector);
   const baselineLabel = labels[baseline.triage_category] || 'normal';
   const candidateLabel = labels[candidate.triage_category] || 'normal';
   if (baselineLabel === record.groundTruth?.triage) baselineCorrect += 1;
