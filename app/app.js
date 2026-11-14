@@ -1659,6 +1659,7 @@ function applyLanguage(language) {
   if (typeof updateEmailVerificationUI === "function" && typeof auth !== "undefined") updateEmailVerificationUI(auth.currentUser);
   if (typeof updateOxygenWarning === "function") updateOxygenWarning();
   if (typeof updateRespiratoryRateIndicator === "function") updateRespiratoryRateIndicator();
+  if (typeof updateCoughDurationCategory === "function") updateCoughDurationCategory();
 
   // 10. Re-render dynamic active screen without wiping user inputs
   if (activeScreenName === "patient" && typeof renderPatientDashboard === "function") {
@@ -11693,9 +11694,14 @@ async function renderReportScreen(targetCaseId = null) {
     const sputumLabel = isEn
       ? (caseData.sputumColorLabelEn || caseData.assessment?.symptoms?.sputumColorLabelEn)
       : (caseData.sputumColorLabelAr || caseData.assessment?.symptoms?.sputumColorLabelAr);
+    const coughDurationCategory = caseData.coughDurationCategory || caseData.assessment?.symptoms?.coughDurationCategory;
+    const coughDurationLabel = isEn
+      ? (caseData.coughDurationLabelEn || caseData.assessment?.symptoms?.coughDurationLabelEn || coughDurationCategoryLabel(coughDurationCategory, "en"))
+      : (caseData.coughDurationLabelAr || caseData.assessment?.symptoms?.coughDurationLabelAr || coughDurationCategoryLabel(coughDurationCategory, "ar"));
+    const coughDurationDays = caseData.coughDurationDays ?? caseData.assessment?.symptoms?.coughDurationDays;
     const coughParts = caseData.coughNature === "none"
       ? [coughTypeLabel]
-      : [coughTypeLabel, sputumLabel, recordedClinicalText(caseData.coughLevel, isEn)].filter(Boolean);
+      : [coughTypeLabel, sputumLabel, recordedClinicalText(caseData.coughLevel, isEn), coughDurationDays ? `${coughDurationDays} ${isEn ? "days" : "يوماً"} (${coughDurationLabel})` : ""].filter(Boolean);
     const coughLevelDisplay = escapeHtml(isSupport
       ? (isEn ? "🔒 Masked" : "🔒 محجوبة")
       : (coughParts.length ? coughParts.join(" — ") : recordedClinicalText(caseData.coughLevel, isEn)));
@@ -19043,6 +19049,7 @@ window.closeRulesGovernanceModal = function() {
 document.addEventListener("DOMContentLoaded", () => {
   initializeDialogAccessibility();
   updateCoughInputsUI();
+  document.getElementById("coughDurationInput")?.addEventListener("input", updateCoughDurationCategory);
 
   const oxygenInput = document.getElementById("oxygenInput");
   if (oxygenInput) {
@@ -19512,12 +19519,16 @@ function getMmrcGradeLabel(score, language = currentLanguage) {
 function updateCoughInputsUI() {
   const nature = document.querySelector("#coughNatureChoices .choice.active")?.dataset.coughNature || "";
   const severitySection = document.getElementById("coughSeveritySection");
+  const durationSection = document.getElementById("coughDurationSection");
+  const durationInput = document.getElementById("coughDurationInput");
   const sputumSection = document.getElementById("sputumColorSection");
   const sputumGroup = document.getElementById("sputumColorChoices");
   const severityGroup = document.getElementById("coughChoices");
   const bloodWarning = document.getElementById("sputumBloodWarning");
 
   if (severitySection) severitySection.hidden = !nature || nature === "none";
+  if (durationSection) durationSection.hidden = !nature || nature === "none";
+  if (nature === "none" && durationInput) durationInput.value = "";
   if (nature === "none" && severityGroup) {
     severityGroup.querySelectorAll(".choice").forEach(button => {
       const selected = button.dataset.coughSeverity === "none";
@@ -19541,6 +19552,32 @@ function updateCoughInputsUI() {
   }
   const hasBlood = isProductive && document.querySelector("#sputumColorChoices .choice.active")?.dataset.sputumColor === "blood_streaked";
   if (bloodWarning) bloodWarning.hidden = !hasBlood;
+  updateCoughDurationCategory();
+}
+
+function classifyCoughDuration(days) {
+  if (!Number.isInteger(days) || days < 1 || days > 365) return null;
+  if (days < 21) return "acute";
+  if (days <= 56) return "subacute";
+  return "chronic";
+}
+
+const COUGH_DURATION_TEXT = Object.freeze({
+  acute: { ar: "سعال حاد (أقل من 3 أسابيع)", en: "Acute cough (less than 3 weeks)" },
+  subacute: { ar: "سعال تحت حاد (من 3 إلى 8 أسابيع)", en: "Subacute cough (3 to 8 weeks)" },
+  chronic: { ar: "سعال مزمن (أكثر من 8 أسابيع)", en: "Chronic cough (more than 8 weeks)" }
+});
+
+function coughDurationCategoryLabel(category, language = currentLanguage) {
+  return COUGH_DURATION_TEXT[category]?.[language] || "";
+}
+
+function updateCoughDurationCategory() {
+  const input = document.getElementById("coughDurationInput");
+  const status = document.getElementById("coughDurationCategory");
+  if (!input || !status) return;
+  const category = classifyCoughDuration(input.value.trim() ? Number(input.value) : NaN);
+  status.textContent = coughDurationCategoryLabel(category);
 }
 
 /**
@@ -19554,6 +19591,7 @@ function buildAssessmentModel({
   coughRaw,
   coughNatureRaw = null,
   sputumColorRaw = null,
+  coughDurationRaw = null,
   symptomDurationRaw,
   temperatureRaw = "",
   respiratoryRateRaw = "",
@@ -19620,6 +19658,19 @@ function buildAssessmentModel({
   const sputumColorLabelAr = sputumColor ? SPUTUM_COLOR_TEXT[sputumColor].ar : null;
   const sputumColorLabelEn = sputumColor ? SPUTUM_COLOR_TEXT[sputumColor].en : null;
 
+  const parsedCoughDuration = coughNature && coughNature !== "none"
+    ? parseStrictSymptomDurationInput(coughDurationRaw)
+    : { ok: true, value: null };
+  if (coughNatureRaw !== null && coughNatureRaw !== undefined && coughNature !== "none" && !parsedCoughDuration.ok) {
+    throw new Error(currentLanguage === "en"
+      ? "Invalid cough duration: enter a whole number of days between 1 and 365."
+      : "مدة السعال غير صحيحة: أدخل عدداً صحيحاً من الأيام بين 1 و365.");
+  }
+  const coughDurationDays = parsedCoughDuration.value;
+  const coughDurationCategory = classifyCoughDuration(coughDurationDays);
+  const coughDurationLabelAr = coughDurationCategoryLabel(coughDurationCategory, "ar");
+  const coughDurationLabelEn = coughDurationCategoryLabel(coughDurationCategory, "en");
+
   // 5. Symptom Duration Normalization
   const parsedDuration = parseStrictSymptomDurationInput(symptomDurationRaw);
   if (!parsedDuration.ok) {
@@ -19680,13 +19731,15 @@ function buildAssessmentModel({
   const prioMeta = AssessmentDictionaries.priority[priority];
 
   // 7. Symptoms summary string
+  const coughDurationSummaryAr = coughDurationDays ? `${coughDurationDays} يوماً (${coughDurationLabelAr})` : "";
+  const coughDurationSummaryEn = coughDurationDays ? `${coughDurationDays} days (${coughDurationLabelEn})` : "";
   const coughSummaryAr = coughNature === "none"
     ? COUGH_NATURE_TEXT.none.ar
-    : coughNature ? [COUGH_NATURE_TEXT[coughNature].ar, sputumColorLabelAr, coughMeta.ar].filter(Boolean).join(" — ")
+    : coughNature ? [COUGH_NATURE_TEXT[coughNature].ar, sputumColorLabelAr, coughMeta.ar, coughDurationSummaryAr].filter(Boolean).join(" — ")
       : (coughMeta.ar && coughMeta.ar !== "لا توجد" ? "كحة " + coughMeta.ar : "");
   const coughSummaryEn = coughNature === "none"
     ? COUGH_NATURE_TEXT.none.en
-    : coughNature ? [COUGH_NATURE_TEXT[coughNature].en, sputumColorLabelEn, coughMeta.en].filter(Boolean).join(" — ")
+    : coughNature ? [COUGH_NATURE_TEXT[coughNature].en, sputumColorLabelEn, coughMeta.en, coughDurationSummaryEn].filter(Boolean).join(" — ")
       : (coughMeta.en && coughMeta.en !== "None" ? coughMeta.en + " cough" : "");
   const symptomsSummaryAr = `${coughSummaryAr}${hasDyspnea ? (coughSummaryAr ? ' مع ضيق تنفس' : 'ضيق تنفس') : ''}`.trim() || "لا توجد أعراض ظاهرة";
   const symptomsSummaryEn = `${coughSummaryEn}${hasDyspnea ? (coughSummaryEn ? ' with shortness of breath' : 'Shortness of breath') : ''}`.trim() || "No apparent symptoms";
@@ -19789,6 +19842,10 @@ function buildAssessmentModel({
         sputumColor,
         sputumColorLabelAr,
         sputumColorLabelEn,
+        coughDurationDays,
+        coughDurationCategory,
+        coughDurationLabelAr,
+        coughDurationLabelEn,
         durationDays: durationDays,
         durationText: durationStr,
         durationTextEn: durationEn,
@@ -19874,6 +19931,10 @@ function buildAssessmentModel({
     sputumColor,
     sputumColorLabelAr,
     sputumColorLabelEn,
+    coughDurationDays,
+    coughDurationCategory,
+    coughDurationLabelAr,
+    coughDurationLabelEn,
     symptomDuration: durationStr,
     duration: durationStr,
     durationEn: durationEn,
@@ -20033,6 +20094,7 @@ function gatherAssessmentDraftFields() {
   const mmrcScore = activeMmrcOption ? Number(activeMmrcOption.dataset.mmrcScore) : null;
   const coughNature = document.querySelector("#coughNatureChoices .choice.active")?.dataset.coughNature || "";
   const sputumColor = document.querySelector("#sputumColorChoices .choice.active")?.dataset.sputumColor || "";
+  const coughDurationDays = document.getElementById("coughDurationInput")?.value.trim() || "";
   const activeCoughSeverity = document.querySelector("#coughChoices .choice.active[data-cough-severity]");
   return {
     oxygenRaw: readOxygenRawValue(),
@@ -20040,6 +20102,7 @@ function gatherAssessmentDraftFields() {
     mmrcScore,
     coughNature,
     sputumColor,
+    coughDurationDays,
     coughLevel: coughNature === "none" ? "none" : (activeCoughSeverity?.dataset.coughSeverity || ""),
     symptomDuration: document.getElementById("symptomDuration")?.value.trim() || "",
     temperatureRaw: document.getElementById("temperatureInput")?.value.trim() || "",
@@ -20063,6 +20126,7 @@ function applyAssessmentDraftFields(fields = {}) {
   };
   setValue("oxygenInput", fields.oxygenRaw);
   setValue("symptomDuration", fields.symptomDuration);
+  setValue("coughDurationInput", fields.coughDurationDays);
   setValue("temperatureInput", fields.temperatureRaw);
   setValue("respiratoryRateInput", fields.respiratoryRateRaw);
   setValue("currentMedicationsInput", fields.currentMedications);
@@ -20420,6 +20484,7 @@ function validateAssessmentFields({
   coughLevel,
   coughNature,
   sputumColor,
+  coughDurationDays,
   symptomDuration,
   temperature,
   respiratoryRate,
@@ -20493,6 +20558,18 @@ function validateAssessmentFields({
       field: "sputumColorChoices",
       message: isEn ? "Please select the phlegm color." : "يرجى اختيار لون البلغم."
     });
+  }
+
+  if (coughNatureProvided && ["dry", "productive"].includes(coughNature)) {
+    const parsedCoughDuration = parseStrictSymptomDurationInput(coughDurationDays);
+    if (!parsedCoughDuration.ok) {
+      errors.push({
+        field: "coughDurationInput",
+        message: isEn
+          ? "Enter cough duration as a whole number of days between 1 and 365."
+          : "أدخل مدة السعال كعدد صحيح من 1 إلى 365 يوماً."
+      });
+    }
   }
 
   // 4. Symptom Duration (Must contain valid day count: 1 - 365)
@@ -20643,6 +20720,7 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
     // Cough character, sputum color, and legacy severity
     const coughNature = document.querySelector("#coughNatureChoices .choice.active")?.dataset.coughNature || "";
     const sputumColor = document.querySelector("#sputumColorChoices .choice.active")?.dataset.sputumColor || "";
+    const coughDurationDays = document.getElementById("coughDurationInput")?.value.trim() || "";
     const coughLevel = coughNature === "none"
       ? "none"
       : (document.querySelector("#coughChoices .choice.active")?.dataset.coughSeverity || "");
@@ -20674,6 +20752,7 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
       coughLevel,
       coughNature,
       sputumColor,
+      coughDurationDays,
       symptomDuration,
       temperature: temperatureRaw,
       respiratoryRate: respiratoryRateRaw,
@@ -20689,7 +20768,7 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
 
     if (!validation.isValid) {
       // تنظيف الحدود السابقة
-      ["oxygenInput", "symptomDuration", "temperatureInput", "respiratoryRateInput", "currentMedicationsInput", "assessmentNotesInput"].forEach(id => {
+      ["oxygenInput", "symptomDuration", "coughDurationInput", "temperatureInput", "respiratoryRateInput", "currentMedicationsInput", "assessmentNotesInput"].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.borderColor = "";
       });
@@ -20748,9 +20827,11 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
     const coughNatureLabel = COUGH_NATURE_TEXT[coughNature][isEn ? "en" : "ar"];
     const sputumColorLabel = sputumColor ? SPUTUM_COLOR_TEXT[sputumColor][isEn ? "en" : "ar"] : "";
     const coughSeverityLabel = AssessmentDictionaries.cough[coughLevel]?.[isEn ? "en" : "ar"] || "";
+    const coughDurationCategory = classifyCoughDuration(Number(coughDurationDays));
+    const coughDurationLabel = coughDurationCategoryLabel(coughDurationCategory, isEn ? "en" : "ar");
     const coughSummary = coughNature === "none"
       ? coughNatureLabel
-      : [coughNatureLabel, sputumColorLabel, coughSeverityLabel].filter(Boolean).join(" — ");
+      : [coughNatureLabel, sputumColorLabel, coughSeverityLabel, coughDurationDays ? `${coughDurationDays} ${isEn ? "days" : "يوماً"} (${coughDurationLabel})` : ""].filter(Boolean).join(" — ");
 
     // ── فتح نافذة تأكيد الإرسال (Confirmation Step Before Submission) ──
     openConfirmAssessmentModal({
@@ -20807,6 +20888,7 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
           coughRaw: coughLevel,
           coughNatureRaw: coughNature,
           sputumColorRaw: sputumColor,
+          coughDurationRaw: coughDurationDays,
           symptomDurationRaw: symptomDuration,
           temperatureRaw,
           respiratoryRateRaw,

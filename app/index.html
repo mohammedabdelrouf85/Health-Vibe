@@ -1889,6 +1889,12 @@
               <button type="button" class="choice" data-cough-nature="dry" aria-pressed="false"><span data-i18n="assessment.coughDry">كحة جافة</span></button>
               <button type="button" class="choice" data-cough-nature="productive" aria-pressed="false"><span data-i18n="assessment.coughProductive">كحة ببلغم</span></button>
             </div>
+            <div id="coughDurationSection" class="cough-dependent-section" hidden>
+              <label for="coughDurationInput" data-i18n="assessment.coughDurationLabel">مدة السعال بالأيام</label>
+              <small class="field-hint" style="color: var(--muted); font-size: 12px; display: block; margin: -2px 0 6px;" data-i18n="assessment.coughDurationHelp">أدخل عدد الأيام، وسنوضح لك إن كانت المدة حادة أو تحت حادة أو مزمنة.</small>
+              <input id="coughDurationInput" type="number" inputmode="numeric" min="1" max="365" step="1" placeholder="مثال: 21" aria-describedby="coughDurationCategory">
+              <div id="coughDurationCategory" class="field-hint" role="status" aria-live="polite" style="margin: 4px 0 10px;"></div>
+            </div>
             <div id="sputumColorSection" class="cough-dependent-section" hidden>
               <label id="sputumColorLabel" data-i18n="assessment.sputumColorLabel">لون البلغم</label>
               <div id="sputumColorChoices" class="choice-row four" role="group" aria-labelledby="sputumColorLabel">
