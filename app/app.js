@@ -18289,11 +18289,27 @@ function readActiveChoiceText(containerId, fallback = "غير معروف") {
 function updateOxygenWarning() {
   const warning = document.getElementById("oxygenWarning");
   const field = document.getElementById("oxygenInput");
+  const classification = document.getElementById("oxygenClassification");
   if (!warning) return;
 
   const isEn = currentLanguage === "en";
   const parsedOxygen = parseStrictOxygenInput(readOxygenRawValue());
   const oxygen = parsedOxygen.value;
+  if (classification) {
+    if (!parsedOxygen.ok) {
+      classification.textContent = "";
+      classification.removeAttribute("data-severity");
+    } else if (oxygen < 92) {
+      classification.textContent = isEn ? "Critical low oxygen (SpO₂ < 92%) — seek urgent medical assessment." : "نقص أكسجة حرج (SpO₂ أقل من 92%) — اطلب تقييماً طبياً عاجلاً.";
+      classification.dataset.severity = "critical";
+    } else if (oxygen < 95) {
+      classification.textContent = isEn ? "Moderately low oxygen (SpO₂ 92–94%) — prompt clinician review is advised." : "نقص أكسجة متوسط (SpO₂ من 92% إلى 94%) — يُنصح بمراجعة الطبيب سريعاً.";
+      classification.dataset.severity = "moderate";
+    } else {
+      classification.textContent = isEn ? "SpO₂ in the expected range (95% or higher)." : "قراءة SpO₂ ضمن النطاق المتوقع (95% فأكثر).";
+      classification.dataset.severity = "normal";
+    }
+  }
   if (field) field.style.borderColor = "";
   if (typeof window.updateCriticalSymptomsCheck === "function") {
     window.updateCriticalSymptomsCheck();
@@ -18352,7 +18368,7 @@ function updateOxygenWarning() {
     return;
   }
 
-  if (oxygen >= 50 && oxygen < 90) {
+  if (oxygen >= 50 && oxygen < 92) {
     warning.hidden = false;
     warning.className = "field-warning has-emergency-card";
     if (field) field.style.borderColor = "var(--red)";
@@ -18364,8 +18380,8 @@ function updateOxygenWarning() {
         </div>
         <p class="emergency-lead">
           ${isEn
-            ? 'Oxygen saturation below 90% is dangerously low and requires immediate emergency medical care.'
-            : 'هذه النسبة تشير إلى نقص حاد بالأكسجين وتستدعي تدخلاً إسعافياً عاجلاً وفورياً دون تأخير.'}
+            ? 'Oxygen saturation below 92% is critically low and requires urgent medical assessment. Call emergency services for severe symptoms.'
+            : 'هذه النسبة مصنفة كحرجة وتحتاج إلى تقييم طبي عاجل. اتصل بالإسعاف عند وجود أعراض شديدة.'}
         </p>
         <ul class="emergency-actions-list">
           <li><strong>${isEn ? 'Call Ambulance Immediately:' : 'اتصل بالإسعاف فوراً:'}</strong> ${isEn ? 'Call 123 (or local ambulance) or proceed to the nearest Emergency Room.' : 'اتصل برقم 123 (مصر) أو توجه لأقرب قسم طوارئ.'}</li>
@@ -18387,7 +18403,7 @@ function updateOxygenWarning() {
     return;
   }
 
-  if (oxygen >= 90 && oxygen < 93) {
+  if (oxygen >= 92 && oxygen < 95) {
     warning.hidden = false;
     warning.className = "field-warning has-emergency-card";
     if (field) field.style.borderColor = "var(--amber)";
@@ -18399,8 +18415,8 @@ function updateOxygenWarning() {
         </div>
         <p class="emergency-lead">
           ${isEn
-            ? 'Oxygen saturation is below optimal (≥95%). This case is flagged as urgent priority for the doctor.'
-            : 'نسبة تشبع الأكسجين أقل من المعدل الطبيعي (≥95%). سيتم تصنيف حالتك بأولوية عاجلة للطبيب.'}
+            ? 'Oxygen saturation is moderately low. Prompt clinician review is advised.'
+            : 'نسبة تشبع الأكسجين متوسطة الانخفاض. يُنصح بمراجعة الطبيب سريعاً.'}
         </p>
         <ul class="emergency-actions-list">
           <li>${isEn ? 'If you experience sudden severe breathlessness, chest pain, or blue lips, call 123 immediately.' : 'إذا شعرت بزيادة سريعة في ضيق التنفس أو ألم بالصدر أو زرقة بالشفاه، توجه للطوارئ فوراً أو اتصل بـ 123.'}</li>
@@ -18939,6 +18955,12 @@ window.closeRulesGovernanceModal = function() {
 // Bind interactive modals (Emergency & Confirmation)
 document.addEventListener("DOMContentLoaded", () => {
   initializeDialogAccessibility();
+
+  const oxygenInput = document.getElementById("oxygenInput");
+  if (oxygenInput) {
+    oxygenInput.addEventListener("input", updateOxygenWarning);
+    oxygenInput.addEventListener("change", updateOxygenWarning);
+  }
 
   const closeGuideBtn = document.getElementById("closeEmergencyGuideBtn");
   if (closeGuideBtn) closeGuideBtn.addEventListener("click", closeEmergencyGuideModal);
@@ -20389,7 +20411,7 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
     const criticalSigns = (typeof window.updateCriticalSymptomsCheck === "function")
       ? window.updateCriticalSymptomsCheck()
       : (window._activeCriticalSymptoms || []);
-    const isCritical = (oxygenLevel > 0 && oxygenLevel < 90) || (criticalSigns && criticalSigns.length > 0);
+    const isCritical = (oxygenLevel > 0 && oxygenLevel < 92) || (criticalSigns && criticalSigns.length > 0);
 
     if (isCritical && !window._emergencySubmissionConfirmed) {
       submitBtn.disabled = false;
@@ -20408,7 +20430,7 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
     const clinicName = window._patientClinicName || "";
 
     // حساب الأولوية المتوقعة
-    const priority = isCritical ? "urgent" : (oxygenLevel > 0 && oxygenLevel < 93 ? "high" : "normal");
+    const priority = isCritical ? "urgent" : (oxygenLevel >= 92 && oxygenLevel < 95 ? "high" : "normal");
     const priorityAr = { urgent: "🚨 عاجل", high: "⚠️ عالية", normal: "✔️ عادية" };
 
     // ── فتح نافذة تأكيد الإرسال (Confirmation Step Before Submission) ──
@@ -20539,7 +20561,7 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
         // ── تفعيل بانر الطوارئ البارز في شاشة الانتظار ──────────────────
         const pendingAlertEl = document.getElementById("pendingEmergencyAlert");
         if (pendingAlertEl) {
-          if (oxygenLevel > 0 && oxygenLevel < 90) {
+          if (oxygenLevel > 0 && oxygenLevel < 92) {
             pendingAlertEl.hidden = false;
             pendingAlertEl.className = "emergency-pending-banner critical";
             pendingAlertEl.innerHTML = `
@@ -20549,8 +20571,8 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
                   <h2 class="emergency-banner-title">${isEn ? 'CRITICAL EMERGENCY ALERT — Seek Immediate Emergency Care' : 'تنبيه طوارئ فوري — لا تنتظر مراجعة الطبيب الإلكترونية'}</h2>
                   <p class="emergency-banner-desc">
                     ${isEn
-                      ? `Recorded oxygen level (<strong style="color:#ef4444;font-size:16px;">${oxygenLevel}%</strong>) is critically low (severe hypoxemia). Online clinical review cannot replace emergency department care. Please call 123 or proceed to the nearest ER now.`
-                      : `نسبة الأكسجين المسجلة (<strong style="color:#ef4444;font-size:16px;">${oxygenLevel}%</strong>) حرجة للغاية (نقص أكسجين حاد). المراجعة الإلكترونية الروتينية لا تغني عن الطوارئ. يرجى التوجه فوراً لأقرب قسم طوارئ أو الاتصال بالإسعاف الآن.`}
+                      ? `Recorded oxygen level (<strong style="color:#ef4444;font-size:16px;">${oxygenLevel}%</strong>) is critically low and requires urgent medical assessment. Online review cannot replace in-person care.`
+                      : `نسبة الأكسجين المسجلة (<strong style="color:#ef4444;font-size:16px;">${oxygenLevel}%</strong>) حرجة وتحتاج إلى تقييم طبي عاجل. المراجعة الإلكترونية لا تغني عن الرعاية الطبية المباشرة.`}
                   </p>
                 </div>
               </div>
@@ -20563,7 +20585,7 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
                 </button>
               </div>
             `;
-          } else if (oxygenLevel >= 90 && oxygenLevel < 93) {
+          } else if (oxygenLevel >= 92 && oxygenLevel < 95) {
             pendingAlertEl.hidden = false;
             pendingAlertEl.className = "emergency-pending-banner warning";
             pendingAlertEl.innerHTML = `

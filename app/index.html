@@ -1887,8 +1887,10 @@
               <button class="choice">شديدة</button>
               <button class="choice">لا توجد</button>
             </div>
-            <label data-i18n="assessment.o2Label">نسبة الأكسجين (50% - 100%)</label>
-            <input id="oxygenInput" type="number" min="50" max="100" value="95" aria-label="نسبة الأكسجين" placeholder="95">
+            <label data-i18n="assessment.o2Label">تشبع الأكسجين بالدم (SpO₂)</label>
+            <small class="field-hint" style="color: var(--muted); font-size: 12px; display: block; margin: -2px 0 6px;">أدخل قراءة جهاز قياس الأكسجين (Pulse Oximeter) من 50% إلى 100%.</small>
+            <input id="oxygenInput" type="number" inputmode="numeric" min="50" max="100" step="1" value="95" aria-label="تشبع الأكسجين بالدم SpO2، من 50 إلى 100 بالمئة" placeholder="95">
+            <div id="oxygenClassification" class="field-hint" role="status" aria-live="polite" style="margin: 6px 0 10px; font-weight: 700;"></div>
             <div id="oxygenWarning" class="field-warning" hidden></div>
             <label data-i18n="assessment.tempLabel">درجة الحرارة (السخونية)</label>
             <input id="temperatureInput" inputmode="decimal" aria-label="درجة الحرارة" placeholder="37.0 °C أو unknown">
