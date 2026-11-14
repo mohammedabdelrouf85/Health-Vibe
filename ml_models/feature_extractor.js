@@ -54,6 +54,51 @@ const MMRC_PREPROCESSOR = Object.freeze({
   normalizationScale: 2
 });
 
+// Cough character is nominal, so it is one-hot encoded rather than assigned
+// an artificial numeric order. Missing values use an all-zero vector plus an
+// explicit missing flag; no cough phenotype is imputed from unrelated data.
+const COUGH_CHARACTER_PREPROCESSOR = Object.freeze({
+  version: 'cough-character-preprocess-v1',
+  natureCategories: Object.freeze(['none', 'dry', 'productive']),
+  sputumColorCategories: Object.freeze(['clear', 'white', 'yellow_green', 'blood_streaked'])
+});
+
+function normalizeCoughCategory(value, allowed) {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim().toLowerCase().replace(/[\s-]+/g, '_');
+  return allowed.includes(normalized) ? normalized : null;
+}
+
+function transformCoughCharacter(record = {}) {
+  const symptoms = record.symptoms || record.assessment?.symptoms || {};
+  const rawNature = record.cough_nature ?? record.coughNature ?? symptoms.coughNature;
+  const natureMissing = rawNature === null || rawNature === undefined || String(rawNature).trim() === '';
+  const nature = normalizeCoughCategory(rawNature, COUGH_CHARACTER_PREPROCESSOR.natureCategories);
+  const natureValid = nature !== null;
+
+  const rawColor = record.sputum_color ?? record.sputumColor ?? symptoms.sputumColor;
+  const colorNotApplicable = nature === 'none' || nature === 'dry';
+  const colorMissing = nature === 'productive'
+    && (rawColor === null || rawColor === undefined || String(rawColor).trim() === '');
+  const color = nature === 'productive'
+    ? normalizeCoughCategory(rawColor, COUGH_CHARACTER_PREPROCESSOR.sputumColorCategories)
+    : null;
+  const colorValid = color !== null;
+
+  return {
+    nature: natureValid ? nature : 'unknown',
+    sputumColor: colorValid ? color : colorNotApplicable ? 'not_applicable' : 'unknown',
+    natureOneHot: COUGH_CHARACTER_PREPROCESSOR.natureCategories.map(category => nature === category ? 1 : 0),
+    sputumColorOneHot: COUGH_CHARACTER_PREPROCESSOR.sputumColorCategories.map(category => color === category ? 1 : 0),
+    natureMissing: natureValid ? 0 : 1,
+    sputumColorMissing: colorMissing ? 1 : 0,
+    sourceStatus: {
+      nature: natureValid ? 'observed' : natureMissing ? 'missing' : 'invalid',
+      sputumColor: colorValid ? 'observed' : colorNotApplicable ? 'not_applicable' : colorMissing ? 'missing' : nature === 'productive' ? 'invalid' : 'not_reported'
+    }
+  };
+}
+
 function normalizeArabicDigits(str) {
   if (typeof str !== 'string') return str;
   return str.replace(/[٠-٩]/g, d => d.charCodeAt(0) - 1632);
@@ -164,6 +209,7 @@ function extractFeatures(rawData = {}, { mmrcPreprocessor = MMRC_PREPROCESSOR } 
   const mmrcInput = rawData.mmrc_score ?? rawData.mmrcGrade ?? rawData.mmrc_grade
     ?? rawData.symptoms?.mmrcGrade ?? rawData.assessment?.symptoms?.mmrcGrade;
   const mmrcFeatures = transformMmrcScore(mmrcInput, mmrcPreprocessor);
+  const coughFeatures = transformCoughCharacter(rawData);
   const sbp = clampNumber(rawData.systolic_bp || rawData.systolic, 'systolic_bp');
   const dbp = clampNumber(rawData.diastolic_bp || rawData.diastolic, 'diastolic_bp');
   const temp = clampNumber(rawData.temperature_c || rawData.temperature, 'temperature_c');
@@ -212,13 +258,18 @@ function extractFeatures(rawData = {}, { mmrcPreprocessor = MMRC_PREPROCESSOR } 
     rrFeatures.missing,
     mmrcFeatures.normalized,
     ...mmrcFeatures.oneHot,
-    mmrcFeatures.missing
+    mmrcFeatures.missing,
+    ...coughFeatures.natureOneHot,
+    ...coughFeatures.sputumColorOneHot,
+    coughFeatures.natureMissing,
+    coughFeatures.sputumColorMissing
   ];
 }
 
 module.exports = {
   PHYSIOLOGICAL_BOUNDS,
   MMRC_PREPROCESSOR,
+  COUGH_CHARACTER_PREPROCESSOR,
   RESPIRATORY_RATE_PREPROCESSOR,
   SPO2_PREPROCESSOR,
   clampNumber,
@@ -228,5 +279,6 @@ module.exports = {
   normalizeArabicDigits,
   transformSpO2,
   transformRespiratoryRate,
-  transformMmrcScore
+  transformMmrcScore,
+  transformCoughCharacter
 };
