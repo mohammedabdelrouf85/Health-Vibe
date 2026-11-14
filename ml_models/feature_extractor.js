@@ -63,10 +63,99 @@ const COUGH_CHARACTER_PREPROCESSOR = Object.freeze({
   sputumColorCategories: Object.freeze(['clear', 'white', 'yellow_green', 'blood_streaked'])
 });
 
+// The current train split does not contain cough-specific duration labels.
+// Until it does, keep the established model fallback (7 days) and mark the
+// imputation explicitly; never substitute general symptom duration here.
+const COUGH_DURATION_PREPROCESSOR = Object.freeze({
+  version: 'cough-duration-preprocess-v1',
+  fitted: false,
+  trainingCount: 0,
+  median: 7,
+  bounds: Object.freeze({ min: 1, max: 365 }),
+  normalization: Object.freeze({ min: 1, max: 365 }),
+  categories: Object.freeze(['acute', 'subacute', 'chronic'])
+});
+
 function normalizeCoughCategory(value, allowed) {
   if (typeof value !== 'string') return null;
   const normalized = value.trim().toLowerCase().replace(/[\s-]+/g, '_');
   return allowed.includes(normalized) ? normalized : null;
+}
+
+function getCoughDurationDays(record = {}) {
+  const symptoms = record.symptoms || record.assessment?.symptoms || {};
+  return record.cough_duration_days ?? record.coughDurationDays
+    ?? symptoms.coughDurationDays ?? record.assessment?.symptoms?.coughDurationDays;
+}
+
+function getCoughPresence(record = {}) {
+  const symptoms = record.symptoms || record.assessment?.symptoms || {};
+  const nature = normalizeCoughCategory(
+    record.cough_nature ?? record.coughNature ?? symptoms.coughNature,
+    COUGH_CHARACTER_PREPROCESSOR.natureCategories
+  );
+  if (nature === 'none') return false;
+  if (nature === 'dry' || nature === 'productive') return true;
+  const explicit = record.has_cough ?? record.hasCough ?? symptoms.hasCough;
+  if (explicit === false || explicit === 0 || explicit === 'false') return false;
+  if (explicit === true || explicit === 1 || explicit === 'true') return true;
+  const severity = String(record.coughLevel ?? symptoms.coughLevel ?? '').trim().toLowerCase();
+  if (['none', 'لا توجد', 'no cough'].includes(severity)) return false;
+  if (severity) return true;
+  return null;
+}
+
+function fitCoughDurationPreprocessor(trainingRecords = [], fallbackMedian = COUGH_DURATION_PREPROCESSOR.median) {
+  const values = trainingRecords.map(getCoughDurationDays).map(raw => {
+    const normalized = normalizeArabicDigits(String(raw ?? '')).trim();
+    if (!/^\d{1,3}$/.test(normalized)) return null;
+    const value = Number(normalized);
+    return value >= COUGH_DURATION_PREPROCESSOR.bounds.min && value <= COUGH_DURATION_PREPROCESSOR.bounds.max ? value : null;
+  }).filter(Number.isInteger).sort((a, b) => a - b);
+  if (!values.length) return { ...COUGH_DURATION_PREPROCESSOR, median: fallbackMedian, fitted: false, trainingCount: 0 };
+  const middle = Math.floor(values.length / 2);
+  const median = values.length % 2 ? values[middle] : (values[middle - 1] + values[middle]) / 2;
+  return { ...COUGH_DURATION_PREPROCESSOR, median, fitted: true, trainingCount: values.length };
+}
+
+function transformCoughDuration(record = {}, preprocessor = COUGH_DURATION_PREPROCESSOR) {
+  const rawValue = getCoughDurationDays(record);
+  const missing = rawValue === null || rawValue === undefined || String(rawValue).trim() === '';
+  const normalizedDigits = normalizeArabicDigits(String(rawValue ?? '')).trim();
+  const match = normalizedDigits.match(/^(\d{1,3})(?:\s*(?:days?|d|يوم|أيام|ايام))?$/i);
+  const parsed = match ? Number(match[1]) : NaN;
+  const valid = !missing && Number.isInteger(parsed)
+    && parsed >= preprocessor.bounds.min && parsed <= preprocessor.bounds.max;
+  const coughPresence = getCoughPresence(record);
+
+  if (coughPresence === false) {
+    return {
+      value: 0,
+      normalized: 0,
+      category: 'not_applicable',
+      bandAcute: 0,
+      bandSubacute: 0,
+      bandChronic: 0,
+      missing: 0,
+      sourceStatus: 'not_applicable'
+    };
+  }
+
+  const value = valid ? parsed : preprocessor.median;
+  const category = valid
+    ? value < 21 ? 'acute' : value <= 56 ? 'subacute' : 'chronic'
+    : 'unknown';
+  return {
+    value,
+    normalized: Number(((value - preprocessor.normalization.min)
+      / (preprocessor.normalization.max - preprocessor.normalization.min)).toFixed(6)),
+    category,
+    bandAcute: category === 'acute' ? 1 : 0,
+    bandSubacute: category === 'subacute' ? 1 : 0,
+    bandChronic: category === 'chronic' ? 1 : 0,
+    missing: valid ? 0 : 1,
+    sourceStatus: valid ? 'observed' : missing ? 'missing' : 'invalid'
+  };
 }
 
 function transformCoughCharacter(record = {}) {
@@ -198,7 +287,10 @@ function transformMmrcScore(rawValue, preprocessor = MMRC_PREPROCESSOR) {
  * @param {Object} rawData 
  * @returns {Array<number>}
  */
-function extractFeatures(rawData = {}, { mmrcPreprocessor = MMRC_PREPROCESSOR } = {}) {
+function extractFeatures(rawData = {}, {
+  mmrcPreprocessor = MMRC_PREPROCESSOR,
+  coughDurationPreprocessor = COUGH_DURATION_PREPROCESSOR
+} = {}) {
   const age = clampNumber(rawData.age, 'age');
   const spo2Input = rawData.oxygen_saturation ?? rawData.spo2;
   const spo2Features = transformSpO2(spo2Input);
@@ -210,6 +302,7 @@ function extractFeatures(rawData = {}, { mmrcPreprocessor = MMRC_PREPROCESSOR } 
     ?? rawData.symptoms?.mmrcGrade ?? rawData.assessment?.symptoms?.mmrcGrade;
   const mmrcFeatures = transformMmrcScore(mmrcInput, mmrcPreprocessor);
   const coughFeatures = transformCoughCharacter(rawData);
+  const coughDurationFeatures = transformCoughDuration(rawData, coughDurationPreprocessor);
   const sbp = clampNumber(rawData.systolic_bp || rawData.systolic, 'systolic_bp');
   const dbp = clampNumber(rawData.diastolic_bp || rawData.diastolic, 'diastolic_bp');
   const temp = clampNumber(rawData.temperature_c || rawData.temperature, 'temperature_c');
@@ -262,7 +355,12 @@ function extractFeatures(rawData = {}, { mmrcPreprocessor = MMRC_PREPROCESSOR } 
     ...coughFeatures.natureOneHot,
     ...coughFeatures.sputumColorOneHot,
     coughFeatures.natureMissing,
-    coughFeatures.sputumColorMissing
+    coughFeatures.sputumColorMissing,
+    coughDurationFeatures.normalized,
+    coughDurationFeatures.bandAcute,
+    coughDurationFeatures.bandSubacute,
+    coughDurationFeatures.bandChronic,
+    coughDurationFeatures.missing
   ];
 }
 
@@ -270,6 +368,7 @@ module.exports = {
   PHYSIOLOGICAL_BOUNDS,
   MMRC_PREPROCESSOR,
   COUGH_CHARACTER_PREPROCESSOR,
+  COUGH_DURATION_PREPROCESSOR,
   RESPIRATORY_RATE_PREPROCESSOR,
   SPO2_PREPROCESSOR,
   clampNumber,
@@ -280,5 +379,8 @@ module.exports = {
   transformSpO2,
   transformRespiratoryRate,
   transformMmrcScore,
-  transformCoughCharacter
+  transformCoughCharacter,
+  fitCoughDurationPreprocessor,
+  getCoughDurationDays,
+  transformCoughDuration
 };
