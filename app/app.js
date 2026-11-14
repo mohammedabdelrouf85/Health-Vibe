@@ -11683,7 +11683,10 @@ async function renderReportScreen(targetCaseId = null) {
 
     const doctorRecommendations = recorded.recs.map(escapeHtml);
 
-    const breathingDifficultyDisplay = escapeHtml(isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوب") : (recordedClinicalText(caseData.breathingDifficulty || caseData.difficulty, isEn)));
+    const breathingLabel = isEn
+      ? (caseData.breathingDifficultyLabelEn || caseData.assessment?.symptoms?.breathingDifficultyLabelEn || caseData.breathingDifficulty || caseData.difficulty)
+      : (caseData.breathingDifficultyLabelAr || caseData.assessment?.symptoms?.breathingDifficultyLabelAr || caseData.breathingDifficulty || caseData.difficulty);
+    const breathingDifficultyDisplay = escapeHtml(isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوب") : recordedClinicalText(breathingLabel, isEn));
     const coughLevelDisplay = escapeHtml(isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوبة") : (recordedClinicalText(caseData.coughLevel, isEn)));
     const durationDisplay = escapeHtml(isSupport ? (isEn ? "🔒 Masked" : "🔒 محجوب") : (recordedClinicalText(caseData.symptomDuration || caseData.duration, isEn)));
     const formatOptionalMetric = (value, unit, status) => {
@@ -19329,6 +19332,13 @@ SINGLE_SELECT_CHOICE_GROUPS.forEach((groupId) => {
     if (!btn) return;
     group.querySelectorAll(".choice").forEach((b) => b.classList.remove("active"));
     btn.classList.add("active");
+    if (groupId === "breathingChoices") {
+      group.querySelectorAll("[role='radio']").forEach((radio) => {
+        const selected = radio === btn;
+        radio.setAttribute("aria-checked", selected ? "true" : "false");
+        radio.tabIndex = selected ? 0 : -1;
+      });
+    }
 
     // Conditional Branching & Reactive State Updates:
     // 1. If Chest Pain is 'نعم' / 'Yes', trigger urgent clinical guidance warning
@@ -19348,6 +19358,20 @@ SINGLE_SELECT_CHOICE_GROUPS.forEach((groupId) => {
     if (typeof updateAssessmentProgress === "function") updateAssessmentProgress();
     if (typeof scheduleAssessmentDraftSave === "function") scheduleAssessmentDraftSave();
   });
+  if (groupId === "breathingChoices") {
+    const radios = Array.from(group.querySelectorAll("[role='radio']"));
+    if (!radios.some(radio => radio.classList.contains("active")) && radios[0]) radios[0].tabIndex = 0;
+    group.addEventListener("keydown", (event) => {
+      if (!['ArrowDown', 'ArrowRight', 'ArrowUp', 'ArrowLeft'].includes(event.key)) return;
+      const options = Array.from(group.querySelectorAll("[role='radio']"));
+      const currentIndex = Math.max(0, options.findIndex(option => option.getAttribute("aria-checked") === "true"));
+      const direction = ['ArrowDown', 'ArrowRight'].includes(event.key) ? 1 : -1;
+      const next = options[(currentIndex + direction + options.length) % options.length];
+      event.preventDefault();
+      next.focus();
+      next.click();
+    });
+  }
 });
 
 // Multi-select: عوامل الخطورة (يمكن اختيار أكثر من واحد)
@@ -19437,6 +19461,18 @@ const AssessmentDictionaries = Object.freeze({
   }
 });
 
+const MMRC_GRADE_TEXT = Object.freeze({
+  0: { ar: "لا أشعر بضيق إلا مع مجهود بدني شديد، مثل الجري أو صعود درج كثير.", en: "I only get breathless with strenuous exercise, such as running or walking up many stairs." },
+  1: { ar: "أشعر بضيق عند الإسراع في المشي على أرض مستوية أو صعود تل بسيط.", en: "I get short of breath when hurrying on level ground or walking up a slight hill." },
+  2: { ar: "أمشي أبطأ من أقراني بسبب ضيق النفس، أو أضطر للتوقف لالتقاط نفسي أثناء المشي المعتاد.", en: "I walk slower than people my age because of breathlessness, or stop for breath at my usual pace on level ground." },
+  3: { ar: "أتوقف لالتقاط نفسي بعد نحو 100 متر أو بضع دقائق من المشي على أرض مستوية.", en: "I stop for breath after about 100 metres or a few minutes on level ground." },
+  4: { ar: "يمنعني ضيق النفس من مغادرة المنزل، أو أشعر به عند ارتداء الملابس أو خلعها.", en: "I am too breathless to leave home, or become breathless while dressing or undressing." }
+});
+
+function getMmrcGradeLabel(score, language = currentLanguage) {
+  return MMRC_GRADE_TEXT[score]?.[language] || "";
+}
+
 /**
  * Normalizes input symptoms and vital signs into a strict, validated Assessment Schema
  */
@@ -19444,6 +19480,7 @@ function buildAssessmentModel({
   user,
   oxygenLevel,
   breathingRaw,
+  mmrcScore = null,
   coughRaw,
   symptomDurationRaw,
   temperatureRaw = "",
@@ -19478,11 +19515,21 @@ function buildAssessmentModel({
   const isCritical = o2 > 0 && o2 < 90;
   const isHighRisk = o2 > 0 && o2 < 93;
 
-  // 3. Breathing Difficulty Normalization
+  // 3. mMRC scale and legacy binary breathing flag
+  const parsedMmrcScore = mmrcScore === null || mmrcScore === undefined || mmrcScore === "" ? null : Number(mmrcScore);
+  if (parsedMmrcScore !== null && (!Number.isInteger(parsedMmrcScore) || parsedMmrcScore < 0 || parsedMmrcScore > 4)) {
+    throw new Error(currentLanguage === "en" ? "Select an mMRC grade from 0 to 4." : "اختر درجة mMRC من 0 إلى 4.");
+  }
+
+  // 3. Breathing Difficulty Normalization (backward-compatible yes/no signal)
   const breathingClean = String(breathingRaw || "").trim();
-  const hasDyspnea = breathingClean === "نعم" || breathingClean.toLowerCase() === "yes";
+  const hasDyspnea = parsedMmrcScore !== null
+    ? parsedMmrcScore > 0
+    : breathingClean === "نعم" || breathingClean.toLowerCase() === "yes";
   const breathingKey = hasDyspnea ? "yes" : "no";
   const breathingMeta = AssessmentDictionaries.breathing[breathingKey];
+  const mmrcLabelAr = parsedMmrcScore === null ? breathingMeta.ar : `mMRC ${parsedMmrcScore}: ${getMmrcGradeLabel(parsedMmrcScore, "ar")}`;
+  const mmrcLabelEn = parsedMmrcScore === null ? breathingMeta.en : `mMRC ${parsedMmrcScore}: ${getMmrcGradeLabel(parsedMmrcScore, "en")}`;
 
   // 4. Cough Severity Normalization
   let coughKey = "none";
@@ -19640,8 +19687,10 @@ function buildAssessmentModel({
       },
       symptoms: {
         breathingDifficulty: breathingKey,
-        breathingDifficultyLabelAr: breathingMeta.ar,
-        breathingDifficultyLabelEn: breathingMeta.en,
+        breathingDifficultyLabelAr: mmrcLabelAr,
+        breathingDifficultyLabelEn: mmrcLabelEn,
+        mmrcGrade: parsedMmrcScore,
+        dyspneaScale: parsedMmrcScore === null ? null : "mMRC",
         coughSeverity: coughKey,
         coughSeverityLabelAr: coughMeta.ar,
         coughSeverityLabelEn: coughMeta.en,
@@ -19720,6 +19769,9 @@ function buildAssessmentModel({
     respiratoryRateUnit: parsedRespiratoryRate.unit,
     respiratoryRateStatus: parsedRespiratoryRate.reason || "recorded",
     breathingDifficulty: breathingMeta.ar,
+    breathingDifficultyLabelAr: mmrcLabelAr,
+    breathingDifficultyLabelEn: mmrcLabelEn,
+    mmrcGrade: parsedMmrcScore,
     coughLevel: coughMeta.ar,
     symptomDuration: durationStr,
     duration: durationStr,
@@ -19871,9 +19923,12 @@ function gatherAssessmentDraftFields() {
   const criticalSymptoms = Array.from(document.querySelectorAll(".critical-symptom-chip[aria-pressed='true']"))
     .map(chip => chip.getAttribute("data-symptom"))
     .filter(Boolean);
+  const activeMmrcOption = document.querySelector("#breathingChoices .choice.active[data-mmrc-score]");
+  const mmrcScore = activeMmrcOption ? Number(activeMmrcOption.dataset.mmrcScore) : null;
   return {
     oxygenRaw: readOxygenRawValue(),
-    breathingDifficulty: firstChoice("breathingChoices"),
+    breathingDifficulty: mmrcScore === null ? "" : (mmrcScore > 0 ? "yes" : "no"),
+    mmrcScore,
     coughLevel: firstChoice("coughChoices"),
     symptomDuration: document.getElementById("symptomDuration")?.value.trim() || "",
     temperatureRaw: document.getElementById("temperatureInput")?.value.trim() || "",
@@ -19901,7 +19956,22 @@ function applyAssessmentDraftFields(fields = {}) {
   setValue("respiratoryRateInput", fields.respiratoryRateRaw);
   setValue("currentMedicationsInput", fields.currentMedications);
   setValue("assessmentNotesInput", fields.notes);
-  setChoiceGroupValue("breathingChoices", fields.breathingDifficulty);
+  const breathingGroup = document.getElementById("breathingChoices");
+  if (breathingGroup) {
+    let selectedScore = fields.mmrcScore;
+    if (selectedScore === undefined || selectedScore === null) {
+      const legacy = String(fields.breathingDifficulty || "").trim().toLowerCase();
+      if (["yes", "نعم", "true"].includes(legacy) || legacy.includes("نعم")) selectedScore = 1;
+      else if (["no", "لا", "false"].includes(legacy) || legacy.includes("لا")) selectedScore = 0;
+    }
+    const selected = breathingGroup.querySelector(`[data-mmrc-score="${selectedScore}"]`);
+    breathingGroup.querySelectorAll(".choice").forEach((btn) => {
+      const isSelected = btn === selected;
+      btn.classList.toggle("active", isSelected);
+      btn.setAttribute("aria-checked", isSelected ? "true" : "false");
+      btn.tabIndex = isSelected ? 0 : -1;
+    });
+  }
   setChoiceGroupValue("coughChoices", fields.coughLevel);
   setChoiceGroupValue("chestPainChoices", fields.chestPain);
   setChoiceGroupValue("symptomProgressionChoices", fields.symptomProgression);
@@ -20218,6 +20288,7 @@ window.updateAssessmentNetworkStatusBanner = updateAssessmentNetworkStatusBanner
 function validateAssessmentFields({
   oxygenLevel,
   breathingDifficulty,
+  mmrcScore,
   coughLevel,
   symptomDuration,
   temperature,
@@ -20249,12 +20320,16 @@ function validateAssessmentFields({
   // 2. Breathing Difficulty (Required selection)
   const validBreathing = ["نعم", "لا", "yes", "no"];
   const breathingStr = String(breathingDifficulty || "").trim();
-  if (!breathingStr || breathingStr === "غير محدد" || (!validBreathing.includes(breathingStr.toLowerCase()) && !validBreathing.includes(breathingStr))) {
+  const hasValidMmrc = mmrcScore !== null && Number.isInteger(Number(mmrcScore)) && Number(mmrcScore) >= 0 && Number(mmrcScore) <= 4;
+  const breathingInvalid = mmrcScore !== undefined
+    ? !hasValidMmrc
+    : (!breathingStr || breathingStr === "غير محدد" || (!validBreathing.includes(breathingStr.toLowerCase()) && !validBreathing.includes(breathingStr)));
+  if (breathingInvalid) {
     errors.push({
       field: "breathingChoices",
       message: isEn
-        ? "Please specify whether shortness of breath is present (Yes or No)."
-        : "يرجى تحديد ما إذا كان يوجد ضيق في التنفس (نعم أم لا)."
+        ? "Please select one mMRC breathlessness grade (0 to 4)."
+        : "يرجى اختيار درجة واحدة من مقياس ضيق التنفس mMRC (من 0 إلى 4)."
     });
   }
 
@@ -20409,12 +20484,11 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
     // ── جمع بيانات النموذج ──────────────────────────────────────────
     const oxygenRaw = readOxygenRawValue();
 
-    // ضيق التنفس (نعم/لا)
-    const breathingChoices = document.querySelectorAll("#breathingChoices .choice");
-    let breathingDifficulty = "غير محدد";
-    breathingChoices.forEach((btn) => {
-      if (btn.classList.contains("active")) breathingDifficulty = btn.textContent.trim();
-    });
+    // Modified Medical Research Council (mMRC) dyspnea grade (0-4)
+    const selectedMmrcOption = document.querySelector("#breathingChoices .choice.active[data-mmrc-score]");
+    const mmrcScore = selectedMmrcOption ? Number(selectedMmrcOption.dataset.mmrcScore) : null;
+    const breathingDifficulty = mmrcScore === null ? "غير محدد" : (mmrcScore > 0 ? "yes" : "no");
+    const mmrcLabel = mmrcScore === null ? breathingDifficulty : `mMRC ${mmrcScore}: ${getMmrcGradeLabel(mmrcScore)}`;
 
     // درجة الكحة
     const coughChoices = document.querySelectorAll("#coughChoices .choice");
@@ -20446,6 +20520,7 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
     const validation = validateAssessmentFields({
       oxygenLevel: oxygenRaw,
       breathingDifficulty,
+      mmrcScore,
       coughLevel,
       symptomDuration,
       temperature: temperatureRaw,
@@ -20522,7 +20597,7 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
     // ── فتح نافذة تأكيد الإرسال (Confirmation Step Before Submission) ──
     openConfirmAssessmentModal({
       oxygenLevel,
-      breathingDifficulty,
+      breathingDifficulty: mmrcLabel,
       coughLevel,
       symptomDuration,
       temperature: temperatureRaw || (isEn ? "Not provided" : "غير مسجل"),
@@ -20570,6 +20645,7 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
           user,
           oxygenLevel,
           breathingRaw: breathingDifficulty,
+          mmrcScore,
           coughRaw: coughLevel,
           symptomDurationRaw: symptomDuration,
           temperatureRaw,

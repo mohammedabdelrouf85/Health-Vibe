@@ -1873,11 +1873,14 @@
               </button>
             </div>
 
-            <label data-i18n="assessment.shortnessOfBreath">هل يوجد ضيق تنفس أو نهجان؟</label>
-            <small class="field-hint" style="color: var(--muted); font-size: 12px; display: block; margin: -2px 0 6px;" data-i18n="assessment.shortnessOfBreathHelp">نهجان، كرشة نفس، أو صعوبة في سحب النفس (سواء مع المجهود أو أثناء الراحة)</small>
-            <div id="breathingChoices" class="choice-row">
-              <button class="choice active">نعم</button>
-              <button class="choice">لا</button>
+            <label id="shortnessOfBreathLabel" data-i18n="assessment.shortnessOfBreath">مقياس ضيق التنفس mMRC</label>
+            <small class="field-hint" style="color: var(--muted); font-size: 12px; display: block; margin: -2px 0 6px;" data-i18n="assessment.shortnessOfBreathHelp">اختر العبارة الأقرب لما تشعر به بسبب ضيق النفس.</small>
+            <div id="breathingChoices" class="choice-row mmrc-choice-list" role="radiogroup" aria-labelledby="shortnessOfBreathLabel">
+              <button type="button" class="choice" data-mmrc-score="0" role="radio" aria-checked="false" tabindex="-1"><span class="mmrc-grade">0</span><span data-i18n="assessment.mmrcGrade0">لا أشعر بضيق إلا مع مجهود بدني شديد، مثل الجري أو صعود درج كثير.</span></button>
+              <button type="button" class="choice" data-mmrc-score="1" role="radio" aria-checked="false" tabindex="-1"><span class="mmrc-grade">1</span><span data-i18n="assessment.mmrcGrade1">أشعر بضيق عند الإسراع في المشي على أرض مستوية أو صعود تل بسيط.</span></button>
+              <button type="button" class="choice" data-mmrc-score="2" role="radio" aria-checked="false" tabindex="-1"><span class="mmrc-grade">2</span><span data-i18n="assessment.mmrcGrade2">أمشي أبطأ من أقراني بسبب ضيق النفس، أو أضطر للتوقف لالتقاط نفسي أثناء المشي المعتاد.</span></button>
+              <button type="button" class="choice" data-mmrc-score="3" role="radio" aria-checked="false" tabindex="-1"><span class="mmrc-grade">3</span><span data-i18n="assessment.mmrcGrade3">أتوقف لالتقاط نفسي بعد نحو 100 متر أو بضع دقائق من المشي على أرض مستوية.</span></button>
+              <button type="button" class="choice" data-mmrc-score="4" role="radio" aria-checked="false" tabindex="-1"><span class="mmrc-grade">4</span><span data-i18n="assessment.mmrcGrade4">يمنعني ضيق النفس من مغادرة المنزل، أو أشعر به عند ارتداء الملابس أو خلعها.</span></button>
             </div>
             <label data-i18n="assessment.coughLabel">طبيعة ودرجة الكحة (السعال)</label>
             <small class="field-hint" style="color: var(--muted); font-size: 12px; display: block; margin: -2px 0 6px;" data-i18n="assessment.coughHelp">كحة جافة (ناشفة بدون بلغم) أو كحة مصحوبة ببلغم</small>

@@ -2737,6 +2737,33 @@ body.dark .slot-list strong {
 .choice-row.three { grid-template-columns: repeat(3, 1fr); }
 .choice-row.four { grid-template-columns: repeat(4, 1fr); }
 
+.mmrc-choice-list {
+  grid-template-columns: 1fr;
+}
+
+.mmrc-choice-list .choice {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 10px;
+  min-height: 48px;
+  height: auto;
+  padding: 12px 14px;
+  text-align: start;
+  line-height: 1.55;
+}
+
+.mmrc-choice-list .mmrc-grade {
+  display: inline-grid;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--surface);
+  font-weight: 800;
+}
+
 .choice.active {
   background: var(--cyan);
   color: var(--teal);
