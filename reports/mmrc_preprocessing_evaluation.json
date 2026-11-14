@@ -1,0 +1,79 @@
+{
+  "evaluation": "Preprocessing and active-model parity; no fitted mMRC accuracy claim",
+  "modelVersion": "resp_rf_v1.0.2",
+  "seed": 42,
+  "trainCount": 112,
+  "testCount": 23,
+  "trainMmrcLabeledCount": 0,
+  "testMmrcLabeledCount": 0,
+  "accuracyImpactEstimable": false,
+  "configuredPreprocessor": {
+    "version": "mmrc-preprocess-v1",
+    "fitted": false,
+    "trainingCount": 0,
+    "median": 2,
+    "min": 0,
+    "max": 4,
+    "normalizationCenter": 2,
+    "normalizationScale": 2
+  },
+  "fittedPreprocessor": {
+    "version": "mmrc-preprocess-v1",
+    "fitted": false,
+    "trainingCount": 0,
+    "median": 2,
+    "min": 0,
+    "max": 4,
+    "normalizationCenter": 2,
+    "normalizationScale": 2
+  },
+  "holdoutBaseline": {
+    "n": 23,
+    "accuracy": 0.8696,
+    "macroF1": 0.8268,
+    "urgentSensitivity": 1,
+    "predictionParity": "23/23",
+    "confusionMatrix": {
+      "normal": {
+        "normal": 6,
+        "high": 2,
+        "urgent": 0
+      },
+      "high": {
+        "normal": 0,
+        "high": 3,
+        "urgent": 1
+      },
+      "urgent": {
+        "normal": 0,
+        "high": 0,
+        "urgent": 11
+      }
+    }
+  },
+  "holdoutCandidateWithImputedMmrc": {
+    "n": 23,
+    "accuracy": 0.8696,
+    "macroF1": 0.8268,
+    "urgentSensitivity": 1,
+    "predictionParity": "23/23",
+    "confusionMatrix": {
+      "normal": {
+        "normal": 6,
+        "high": 2,
+        "urgent": 0
+      },
+      "high": {
+        "normal": 0,
+        "high": 3,
+        "urgent": 1
+      },
+      "urgent": {
+        "normal": 0,
+        "high": 0,
+        "urgent": 11
+      }
+    }
+  },
+  "interpretation": "The current deterministic model ignores appended mMRC features. Identical predictions are parity only; no mMRC-labeled holdout exists to estimate its predictive accuracy impact."
+}

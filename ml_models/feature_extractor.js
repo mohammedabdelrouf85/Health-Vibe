@@ -41,6 +41,19 @@ const RESPIRATORY_RATE_PREPROCESSOR = Object.freeze({
   bands: Object.freeze({ lowBelow: 12, normalBelow: 21, elevatedThrough: 24 })
 });
 
+// No patient-level mMRC values exist in the current train split. Grade 2 is a
+// temporary scale midpoint; replace it with a median fitted on actual train data.
+const MMRC_PREPROCESSOR = Object.freeze({
+  version: 'mmrc-preprocess-v1',
+  fitted: false,
+  trainingCount: 0,
+  median: 2,
+  min: 0,
+  max: 4,
+  normalizationCenter: 2,
+  normalizationScale: 2
+});
+
 function normalizeArabicDigits(str) {
   if (typeof str !== 'string') return str;
   return str.replace(/[٠-٩]/g, d => d.charCodeAt(0) - 1632);
@@ -101,12 +114,46 @@ function transformRespiratoryRate(rawValue) {
   };
 }
 
+function getMmrcScore(record = {}) {
+  const value = record.mmrc_score ?? record.mmrcGrade ?? record.mmrc_grade
+    ?? record.symptoms?.mmrcGrade ?? record.assessment?.symptoms?.mmrcGrade;
+  if (value === null || value === undefined || String(value).trim() === '') return null;
+  const parsed = Number(normalizeArabicDigits(String(value)).trim());
+  return Number.isInteger(parsed) && parsed >= MMRC_PREPROCESSOR.min && parsed <= MMRC_PREPROCESSOR.max ? parsed : null;
+}
+
+function fitMmrcPreprocessor(trainingRecords = [], fallbackMedian = MMRC_PREPROCESSOR.median) {
+  const grades = trainingRecords.map(getMmrcScore).filter(Number.isInteger).sort((a, b) => a - b);
+  if (!grades.length) {
+    return { ...MMRC_PREPROCESSOR, median: fallbackMedian, fitted: false, trainingCount: 0 };
+  }
+  const mid = Math.floor(grades.length / 2);
+  const median = grades.length % 2 ? grades[mid] : (grades[mid - 1] + grades[mid]) / 2;
+  return { ...MMRC_PREPROCESSOR, median, fitted: true, trainingCount: grades.length };
+}
+
+function transformMmrcScore(rawValue, preprocessor = MMRC_PREPROCESSOR) {
+  const missing = rawValue === null || rawValue === undefined || String(rawValue).trim() === '';
+  const normalizedDigits = normalizeArabicDigits(String(rawValue ?? '')).trim();
+  const parsed = /^\d$/.test(normalizedDigits) ? Number(normalizedDigits) : NaN;
+  const valid = !missing && Number.isInteger(parsed) && parsed >= preprocessor.min && parsed <= preprocessor.max;
+  const value = valid ? parsed : preprocessor.median;
+  const oneHot = Array.from({ length: 5 }, (_, grade) => value === grade ? 1 : 0);
+  return {
+    value,
+    normalized: Number(((value - preprocessor.normalizationCenter) / preprocessor.normalizationScale).toFixed(6)),
+    oneHot,
+    missing: valid ? 0 : 1,
+    sourceStatus: missing ? 'missing' : valid ? 'observed' : 'invalid'
+  };
+}
+
 /**
  * Extracts and standardizes a numerical vector from a patient questionnaire payload.
  * @param {Object} rawData 
  * @returns {Array<number>}
  */
-function extractFeatures(rawData = {}) {
+function extractFeatures(rawData = {}, { mmrcPreprocessor = MMRC_PREPROCESSOR } = {}) {
   const age = clampNumber(rawData.age, 'age');
   const spo2Input = rawData.oxygen_saturation ?? rawData.spo2;
   const spo2Features = transformSpO2(spo2Input);
@@ -114,6 +161,9 @@ function extractFeatures(rawData = {}) {
   const rrInput = rawData.respiratory_rate ?? rawData.respiratoryRate;
   const rrFeatures = transformRespiratoryRate(rrInput);
   const rr = rrFeatures.value;
+  const mmrcInput = rawData.mmrc_score ?? rawData.mmrcGrade ?? rawData.mmrc_grade
+    ?? rawData.symptoms?.mmrcGrade ?? rawData.assessment?.symptoms?.mmrcGrade;
+  const mmrcFeatures = transformMmrcScore(mmrcInput, mmrcPreprocessor);
   const sbp = clampNumber(rawData.systolic_bp || rawData.systolic, 'systolic_bp');
   const dbp = clampNumber(rawData.diastolic_bp || rawData.diastolic, 'diastolic_bp');
   const temp = clampNumber(rawData.temperature_c || rawData.temperature, 'temperature_c');
@@ -159,17 +209,24 @@ function extractFeatures(rawData = {}) {
     rrFeatures.bandNormal,
     rrFeatures.bandElevated,
     rrFeatures.bandTachypnea,
-    rrFeatures.missing
+    rrFeatures.missing,
+    mmrcFeatures.normalized,
+    ...mmrcFeatures.oneHot,
+    mmrcFeatures.missing
   ];
 }
 
 module.exports = {
   PHYSIOLOGICAL_BOUNDS,
+  MMRC_PREPROCESSOR,
   RESPIRATORY_RATE_PREPROCESSOR,
   SPO2_PREPROCESSOR,
   clampNumber,
   extractFeatures,
+  fitMmrcPreprocessor,
+  getMmrcScore,
   normalizeArabicDigits,
   transformSpO2,
-  transformRespiratoryRate
+  transformRespiratoryRate,
+  transformMmrcScore
 };

@@ -16,6 +16,7 @@ ml_models/
 ├── feature_extractor.js             # Standardized feature normalization & boundary clamping
 ├── evaluate_spo2_preprocessing.js    # SpO₂ encoding, imputation, and held-out robustness comparison
 ├── evaluate_respiratory_rate_preprocessing.js # Respiratory-rate preprocessing and robustness comparison
+├── evaluate_mmrc_preprocessing.js      # mMRC encoding and labeled-holdout availability check
 ├── respiratory_rf_classifier.js     # Random Forest clinical inference engine & safety rules
 ├── training_pipeline.py             # Python training script (Deterministic RANDOM_SEED = 42)
 └── evaluate_models.js               # Clinical benchmark & reproducibility runner
@@ -106,3 +107,7 @@ The held-out split currently has no missing SpO₂ values, so it cannot estimate
 ## Respiratory-Rate Feature Processing Candidate
 
 The feature extractor also emits a training-fitted z-score, one-hot low/normal/elevated/tachypnea bands, and a missingness flag for respiratory rate. Run `node ml_models/evaluate_respiratory_rate_preprocessing.js` for complete-case and artificial missingness comparisons. Results and limitations are in [`reports/RESPIRATORY_RATE_PREPROCESSING_EVALUATION.md`](../reports/RESPIRATORY_RATE_PREPROCESSING_EVALUATION.md). The current active model has not been retrained to use the appended encoded columns.
+
+## mMRC Feature Processing Candidate
+
+The feature extractor accepts grades 0–4, emits midpoint-centered normalization, five one-hot columns, and a missingness indicator. Run `node ml_models/evaluate_mmrc_preprocessing.js`. Current train/test data contain no mMRC labels, so the fallback midpoint (grade 2) is provisional and predictive accuracy impact cannot be estimated from this cohort. See [`reports/MMRC_PREPROCESSING_EVALUATION.md`](../reports/MMRC_PREPROCESSING_EVALUATION.md). Do not treat the active model's parity result as evidence that mMRC improves prediction; retraining and a labeled, held-out cohort are required.
