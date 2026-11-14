@@ -75,25 +75,19 @@
   }
 
   function deriveAiConfidence(c) {
+    if (!c) return null;
+    if (typeof c.modelConfidenceNumeric === "number" && Number.isFinite(c.modelConfidenceNumeric)) return c.modelConfidenceNumeric;
     if (typeof c?.aiConfidence === "number" && c.aiConfidence > 0) {
-      return Math.min(99.4, Math.max(70.0, c.aiConfidence));
+      return c.aiConfidence;
     }
     if (typeof c?.confidenceScore === "number" && c.confidenceScore > 0) {
-      return Math.min(99.4, Math.max(70.0, c.confidenceScore));
+      return c.confidenceScore;
     }
     if (typeof c?.confidence === "number" && c.confidence > 0) {
       const pct = c.confidence <= 1 ? c.confidence * 100 : c.confidence;
-      return Math.min(99.4, Math.max(70.0, pct));
+      return pct;
     }
-
-    // Deterministic realistic calculation based on clinical markers
-    const o2 = getOxygenValue(c);
-    let score = 92.4;
-    if (o2 > 0 && o2 < 92) score += 3.2;
-    if (c?.symptomDuration || c?.duration) score += 1.4;
-    if (c?.breathingDifficulty || c?.coughLevel) score += 1.8;
-    if (Array.isArray(c?.triggeredRules) && c.triggeredRules.length > 0) score += 0.8;
-    return Math.min(98.8, Math.round(score * 10) / 10);
+    return null;
   }
 
   function getStandardCareProtocol(conditionTitle, isEn) {
@@ -178,7 +172,7 @@
     // AI Prediction & Confidence
     const aiCondition = deriveAiCondition(c, isEn);
     const aiConfidence = deriveAiConfidence(c);
-    const confidenceColor = aiConfidence >= 88 ? "#10b981" : (aiConfidence >= 75 ? "#f59e0b" : "#ef4444");
+    const confidenceColor = aiConfidence === null ? "#64748b" : (aiConfidence >= 88 ? "#10b981" : (aiConfidence >= 75 ? "#f59e0b" : "#ef4444"));
 
     // Standard Protocol
     const protocol = getStandardCareProtocol(aiCondition, isEn);
@@ -394,7 +388,7 @@
               </div>
 
               <!-- AI CONFIDENCE GAUGE & METRIC -->
-              <div class="ai-confidence-container">
+              ${aiConfidence !== null ? `<div class="ai-confidence-container">
                 <div class="gauge-wrapper">
                   <svg class="confidence-circle" viewBox="0 0 100 100">
                     <circle class="circle-bg" cx="50" cy="50" r="40" />
@@ -418,7 +412,7 @@
                       : "قام نموذج الذكاء الاصطناعي بتحليل 14 مؤشراً سريرياً وتنفسياً بنسبة ثقة إحصائية " + aiConfidence + "% استناداً لمستوى تشبع الأكسجين، طبيعة السعال، والتاريخ المرضي للصدر."}
                   </p>
                 </div>
-              </div>
+              </div>` : `<div class="ai-confidence-container"><div class="confidence-details"><span class="pill info">${isEn ? "No recorded statistical confidence score" : "لا توجد نسبة ثقة إحصائية مسجلة"}</span><p class="conf-desc">${isEn ? "This rules-based triage indicator is not a validated statistical confidence score." : "مؤشر الفرز الحالي مبني على قواعد، وليس نسبة ثقة إحصائية متحققاً منها."}</p></div></div>`}
 
               <!-- KEY CONTRIBUTING FACTORS & CLINICAL EVIDENCE -->
               <div class="ai-evidence-box">

@@ -10882,8 +10882,15 @@ async function renderPatientDashboard() {
 
         const isApproved = isCaseApprovedForPatient(c);
         if (!isSupport && !isApproved) {
-          priorityLabel = isEn ? "Locked until approval" : "مغلق حتى الاعتماد";
+          priorityLabel = isEn ? "Your doctor is reviewing your assessment" : "طبيبك يراجع نتيجة التقييم";
           document.getElementById("patientClinicalConfidence").textContent = priorityLabel;
+        } else if (!isSupport && isApproved && window.HealthVibes?.ConfidenceExplanation) {
+          const patientConfidence = window.HealthVibes.ConfidenceExplanation.getConfidenceExplanation(c, {
+            isApproved: true,
+            language: isEn ? "en" : "ar",
+            role: "patient"
+          });
+          document.getElementById("patientClinicalConfidence").textContent = patientConfidence.patientScoreDisplay;
         }
         const latestReportEl = document.getElementById("patientLatestReport");
         const resultStatusEl = document.getElementById("patientResultStatus");
@@ -11415,6 +11422,14 @@ async function renderReportScreen(targetCaseId = null) {
 
     // Check genuine approval: both case status and doctor approval flag must be released.
     const isApproved = isPreview || isCaseApprovedForPatient(caseData);
+    const confidenceExplanationHtml = window.HealthVibes?.ConfidenceExplanation
+      ? window.HealthVibes.ConfidenceExplanation.renderReportConfidenceCardHtml(
+          caseData,
+          isEn,
+          isApproved,
+          isSupport ? "support" : (isAdminRole(normalizeRole(selectedRole)) ? "admin" : (isDoctorRole(normalizeRole(selectedRole)) ? "doctor" : "patient"))
+        )
+      : "";
 
     // STATE 2: CASE EXISTS BUT NOT APPROVED (LOCKED CLINICAL GATEWAY)
     // 🛡️ SECURITY & CLINICAL SAFETY RULE: Under NO circumstances should unapproved reports display clinical diagnoses to the patient!
@@ -11969,6 +11984,8 @@ async function renderReportScreen(targetCaseId = null) {
             </div>
           </div>
         </div>
+
+        ${confidenceExplanationHtml}
 
         <!-- DOCTOR OFFICIAL DIAGNOSIS -->
         ${isSupport ? `

@@ -10,35 +10,23 @@
 (function (global) {
   "use strict";
 
-  /**
-   * Deterministically extract or calculate the statistical model confidence (70.0% - 99.4%)
-   * @param {object} c Case record
-   * @returns {number} Numeric percentage rounded to 1 decimal place
-   */
+  /** Return a recorded model score only; never invent a clinical confidence value. */
   function deriveAiConfidence(c) {
-    if (!c) return 88.5;
+    if (!c) return null;
     if (typeof c.modelConfidenceNumeric === "number" && c.modelConfidenceNumeric > 0) {
-      return Math.min(99.4, Math.max(70.0, Math.round(c.modelConfidenceNumeric * 10) / 10));
+      return c.modelConfidenceNumeric;
     }
     if (typeof c.aiConfidence === "number" && c.aiConfidence > 0) {
-      return Math.min(99.4, Math.max(70.0, Math.round(c.aiConfidence * 10) / 10));
+      return c.aiConfidence;
     }
     if (typeof c.confidenceScore === "number" && c.confidenceScore > 0) {
-      return Math.min(99.4, Math.max(70.0, Math.round(c.confidenceScore * 10) / 10));
+      return c.confidenceScore;
     }
     if (typeof c.confidence === "number" && c.confidence > 0) {
       const pct = c.confidence <= 1 ? c.confidence * 100 : c.confidence;
-      return Math.min(99.4, Math.max(70.0, Math.round(pct * 10) / 10));
+      return pct;
     }
-
-    // Deterministic realistic calculation based on clinical markers
-    const o2 = Number(c.oxygenLevel ?? c.o2 ?? 0);
-    let score = 92.4;
-    if (o2 > 0 && o2 < 92) score += 3.2;
-    if (c.symptomDuration || c.duration) score += 1.4;
-    if (c.breathingDifficulty || c.coughLevel) score += 1.8;
-    if (Array.isArray(c.triggeredRules) && c.triggeredRules.length > 0) score += 0.8;
-    return Math.min(98.8, Math.round(score * 10) / 10);
+    return null;
   }
 
   /**
@@ -63,8 +51,8 @@
     const role = String(options.role || "patient").toLowerCase();
     const isDoctorOrAdmin = role === "doctor" || role === "admin" || role === "super_admin";
 
-    const reassuranceTooltipAr = "نسبة التوافق تعكس مدى تطابق الأعراض والمؤشرات الحيوية مع الحالات السريرية المشابهة، وليست حكماً نهائياً مفرداً؛ حيث تخضع كافة الحالات للمراجعة والتدقيق البشري الكامل من الطبيب المرخص قبل الاعتماد.";
-    const reassuranceTooltipEn = "Clinical alignment reflects how closely documented symptoms and vital signs match established medical profiles under direct physician supervision, rather than an automated diagnosis.";
+    const reassuranceTooltipAr = "هذه العبارة تلخص نتيجة التقييم بعد مراجعة الطبيب. وهي لا تمثل تشخيصاً مستقلاً أو ضماناً لنتيجة صحية؛ اتبع توصيات طبيبك واسأله عما تحتاج إلى توضيحه.";
+    const reassuranceTooltipEn = "This is a plain-language summary of the assessment after your doctor’s review. It is not a diagnosis or a guarantee; follow your doctor’s advice and ask them about anything unclear.";
 
     // Locked state (prior to doctor approval)
     if (!isApproved) {
@@ -84,18 +72,18 @@
         reassuranceTooltipAr,
         reassuranceTooltipEn,
         patientScoreDisplay: isEn ? "Locked until approval" : "مغلق حتى الاعتماد",
-        modelConfidenceNumeric: numericScore,
-        visibleScore: isDoctorOrAdmin ? `${numericScore}%` : null,
+        modelConfidenceNumeric: isDoctorOrAdmin ? numericScore : null,
+        visibleScore: isDoctorOrAdmin && numericScore !== null ? `${numericScore}%` : null,
         isApproved: false
       };
     }
 
-    // Approved states categorized into Ada Health tiers
-    if (numericScore >= 85) {
-      const badgeTextAr = "توافق سريري مرتفع (معتمد)";
-      const badgeTextEn = "High Clinical Alignment (Approved)";
-      const explanationAr = "توافق سريري مرتفع مع المؤشرات الموثقة — معتمد ومؤكد سريرياً من الطبيب المعالج";
-      const explanationEn = "High clinical alignment with documented indicators — verified and approved by attending physician";
+    // Patient wording is based on doctor review, never on a statistical threshold.
+    if (numericScore === null || numericScore >= 70) {
+      const badgeTextAr = "راجع الطبيب نتيجة التقييم";
+      const badgeTextEn = "Your doctor reviewed the assessment";
+      const explanationAr = "راجع الطبيب نتيجة التقييم وأصدر التوجيهات الطبية الموضحة في تقريرك.";
+      const explanationEn = "Your doctor reviewed the assessment and provided the care guidance in your report.";
 
       return {
         tier: "high",
@@ -111,44 +99,16 @@
         reassuranceTooltipAr,
         reassuranceTooltipEn,
         patientScoreDisplay: isEn ? badgeTextEn : badgeTextAr,
-        modelConfidenceNumeric: numericScore,
-        visibleScore: isDoctorOrAdmin ? `${numericScore}%` : (isEn ? badgeTextEn : badgeTextAr),
+        modelConfidenceNumeric: isDoctorOrAdmin ? numericScore : null,
+        visibleScore: isDoctorOrAdmin && numericScore !== null ? `${numericScore}%` : (isEn ? badgeTextEn : badgeTextAr),
         isApproved: true
       };
     }
 
-    if (numericScore >= 70) {
-      const badgeTextAr = "مؤشرات سريرية متوافقة (مدققة)";
-      const badgeTextEn = "Clinically Consistent Indicators (Reviewed)";
-      const explanationAr = "مؤشرات سريرية متوافقة — خضعت للتدقيق والتأكيد السريري بواسطة الطبيب المعالج";
-      const explanationEn = "Clinically consistent indicators — thoroughly reviewed and confirmed by attending physician";
-
-      return {
-        tier: "moderate",
-        pillClass: "info",
-        color: "#0284c7",
-        badgeText: isEn ? badgeTextEn : badgeTextAr,
-        badgeTextAr,
-        badgeTextEn,
-        explanation: isEn ? explanationEn : explanationAr,
-        explanationAr,
-        explanationEn,
-        reassuranceTooltip: isEn ? reassuranceTooltipEn : reassuranceTooltipAr,
-        reassuranceTooltipAr,
-        reassuranceTooltipEn,
-        patientScoreDisplay: isEn ? badgeTextEn : badgeTextAr,
-        modelConfidenceNumeric: numericScore,
-        visibleScore: isDoctorOrAdmin ? `${numericScore}%` : (isEn ? badgeTextEn : badgeTextAr),
-        isApproved: true
-      };
-    }
-
-    // Preliminary / uncalibrated (< 70)
-    const badgeTextAr = "تقييم أولي (مفحوص سريرياً)";
-    const badgeTextEn = "Preliminary Evaluation (Examined)";
-    const explanationAr = "تقييم أولي خضع للفحص والمراجعة السريرية الشاملة بواسطة الطبيب";
-    const explanationEn = "Preliminary evaluation — completed under comprehensive physician examination";
-
+    const badgeTextAr = "راجع الطبيب نتيجة التقييم";
+    const badgeTextEn = "Your doctor reviewed the assessment";
+    const explanationAr = "راجع الطبيب نتيجة التقييم وأصدر التوجيهات الطبية الموضحة في تقريرك.";
+    const explanationEn = "Your doctor reviewed the assessment and provided the care guidance in your report.";
     return {
       tier: "preliminary",
       pillClass: "pending",
@@ -163,8 +123,8 @@
       reassuranceTooltipAr,
       reassuranceTooltipEn,
       patientScoreDisplay: isEn ? badgeTextEn : badgeTextAr,
-      modelConfidenceNumeric: numericScore,
-      visibleScore: isDoctorOrAdmin ? `${numericScore}%` : (isEn ? badgeTextEn : badgeTextAr),
+      modelConfidenceNumeric: isDoctorOrAdmin ? numericScore : null,
+      visibleScore: isDoctorOrAdmin && numericScore !== null ? `${numericScore}%` : (isEn ? badgeTextEn : badgeTextAr),
       isApproved: true
     };
   }
@@ -229,8 +189,8 @@
           </strong>
           <small style="color: var(--muted); font-size: 12px; line-height: 1.5; display: block;">
             ${isEn
-              ? "This assessment reflects verified diagnostic indicators cross-referenced with clinical criteria by your licensed physician."
-              : "يعكس هذا المؤشر توافق الأعراض والعلامات الحيوية الموثقة مع المعايير الإكلينيكية المعتمدة من الطبيب المعالج."}
+              ? "This is a plain-language summary of the assessment after your doctor’s review. It is not a diagnosis or a guarantee; follow your doctor’s advice and ask them about anything unclear."
+              : "هذا ملخص مبسط لنتيجة التقييم بعد مراجعة الطبيب، ولا يمثل تشخيصاً مستقلاً أو ضماناً لنتيجة صحية. اتبع توصيات طبيبك واسأله عما تحتاج إلى توضيحه."}
           </small>
         </div>
 
@@ -281,8 +241,8 @@
           <strong>${isEn ? "Ada Health Reassurance Principle:" : "مبدأ الطمأنينة الطبية (معيار Ada Health):"}</strong>
           <p style="margin: 6px 0 0;">
             ${isEn
-              ? "Clinical alignment reflects how closely documented symptoms and vital signs match established medical profiles under direct physician supervision, rather than an automated diagnosis."
-              : "نسبة التوافق تعكس مدى تطابق الأعراض والمؤشرات الحيوية مع الحالات السريرية المشابهة، وليست حكماً نهائياً مفرداً؛ حيث تخضع كافة الحالات للمراجعة والتدقيق البشري الكامل من الطبيب المرخص قبل الاعتماد."}
+              ? "The statistical score is an estimate produced by the model. Your doctor reviews the assessment and makes the clinical decision; the score does not predict your outcome."
+              : "النسبة الإحصائية تقدير ينتجه النموذج، ويراجع الطبيب التقييم ويتخذ القرار السريري. هذه النسبة لا تتنبأ بمآل حالتك."}
           </p>
         </div>
 
@@ -291,7 +251,7 @@
             <span style="color: #10b981; font-weight: bold; font-size: 16px;">✓</span>
             <div>
               <strong>${isEn ? "Supervised Care:" : "إشراف طبي بشري كامل:"}</strong>
-              <span style="color: var(--muted, #64748b);">${isEn ? " No algorithm diagnoses you independently. Every case is verified by a human doctor." : " لا توجد خوارزمية تشخصك بشكل مستقل، كل حالة يدققها طبيب بشري مرخص."}</span>
+              <span style="color: var(--muted, #64748b);">${isEn ? "The model does not make the final clinical decision." : "النموذج لا يتخذ القرار السريري النهائي."}</span>
             </div>
           </div>
           <div style="display: flex; align-items: flex-start; gap: 10px;">
