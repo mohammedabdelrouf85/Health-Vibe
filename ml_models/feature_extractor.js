@@ -18,6 +18,18 @@ const PHYSIOLOGICAL_BOUNDS = {
   fasting_blood_glucose: { min: 20, max: 1000, default: 95 }
 };
 
+// Fitted on dataset/train_dataset.json only (112 records; split manifest seed 42).
+// Refit these values on the training partition whenever the dataset version changes.
+const SPO2_PREPROCESSOR = Object.freeze({
+  version: 'spo2-preprocess-v1',
+  trainingCount: 112,
+  median: 92,
+  mean: 91.982143,
+  standardDeviation: 4.5591,
+  bounds: Object.freeze({ min: 50, max: 100 }),
+  bands: Object.freeze({ criticalBelow: 92, moderateBelow: 95 })
+});
+
 function normalizeArabicDigits(str) {
   if (typeof str !== 'string') return str;
   return str.replace(/[٠-٩]/g, d => d.charCodeAt(0) - 1632);
@@ -30,6 +42,29 @@ function clampNumber(val, key) {
   return Math.min(Math.max(num, min), max);
 }
 
+function transformSpO2(rawValue) {
+  const missing = rawValue === null || rawValue === undefined || String(rawValue).trim() === '';
+  const normalizedDigits = normalizeArabicDigits(String(rawValue ?? '')).trim();
+  const match = normalizedDigits.match(/^(\d{1,3})\s*%?$/);
+  const parsed = match ? Number(match[1]) : NaN;
+  const valid = !missing && Number.isInteger(parsed) && parsed >= SPO2_PREPROCESSOR.bounds.min && parsed <= SPO2_PREPROCESSOR.bounds.max;
+  const value = valid ? parsed : SPO2_PREPROCESSOR.median;
+  const category = value < SPO2_PREPROCESSOR.bands.criticalBelow
+    ? 'critical'
+    : value < SPO2_PREPROCESSOR.bands.moderateBelow ? 'moderate' : 'normal';
+
+  return {
+    value,
+    normalized: Number(((value - SPO2_PREPROCESSOR.mean) / SPO2_PREPROCESSOR.standardDeviation).toFixed(6)),
+    bandCritical: category === 'critical' ? 1 : 0,
+    bandModerate: category === 'moderate' ? 1 : 0,
+    bandNormal: category === 'normal' ? 1 : 0,
+    missing: valid ? 0 : 1,
+    category,
+    sourceStatus: missing ? 'missing' : valid ? 'observed' : 'invalid'
+  };
+}
+
 /**
  * Extracts and standardizes a numerical vector from a patient questionnaire payload.
  * @param {Object} rawData 
@@ -37,7 +72,9 @@ function clampNumber(val, key) {
  */
 function extractFeatures(rawData = {}) {
   const age = clampNumber(rawData.age, 'age');
-  const spo2 = clampNumber(rawData.oxygen_saturation || rawData.spo2, 'oxygen_saturation');
+  const spo2Input = rawData.oxygen_saturation ?? rawData.spo2;
+  const spo2Features = transformSpO2(spo2Input);
+  const spo2 = spo2Features.value;
   const rr = clampNumber(rawData.respiratory_rate, 'respiratory_rate');
   const sbp = clampNumber(rawData.systolic_bp || rawData.systolic, 'systolic_bp');
   const dbp = clampNumber(rawData.diastolic_bp || rawData.diastolic, 'diastolic_bp');
@@ -73,13 +110,20 @@ function extractFeatures(rawData = {}) {
     smokingYears,
     asthmaHistory,
     copdHistory,
-    allergyHistory
+    allergyHistory,
+    spo2Features.normalized,
+    spo2Features.bandCritical,
+    spo2Features.bandModerate,
+    spo2Features.bandNormal,
+    spo2Features.missing
   ];
 }
 
 module.exports = {
   PHYSIOLOGICAL_BOUNDS,
+  SPO2_PREPROCESSOR,
   clampNumber,
   extractFeatures,
-  normalizeArabicDigits
+  normalizeArabicDigits,
+  transformSpO2
 };

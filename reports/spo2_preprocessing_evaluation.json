@@ -1,0 +1,121 @@
+{
+  "evaluation": "Existing deterministic inference engine; preprocessing comparison only",
+  "modelVersion": "resp_rf_v1.0.2",
+  "seed": 42,
+  "trainCount": 112,
+  "testCount": 23,
+  "testSpO2MissingCount": 0,
+  "preprocessing": {
+    "version": "spo2-preprocess-v1",
+    "trainingCount": 112,
+    "median": 92,
+    "mean": 91.982143,
+    "standardDeviation": 4.5591,
+    "bounds": {
+      "min": 50,
+      "max": 100
+    },
+    "bands": {
+      "criticalBelow": 92,
+      "moderateBelow": 95
+    }
+  },
+  "completeHoldout": {
+    "baseline": {
+      "n": 23,
+      "accuracy": 0.8696,
+      "macroF1": 0.8268,
+      "urgentSensitivity": 1,
+      "confusionMatrix": {
+        "normal": {
+          "normal": 6,
+          "high": 2,
+          "urgent": 0
+        },
+        "high": {
+          "normal": 0,
+          "high": 3,
+          "urgent": 1
+        },
+        "urgent": {
+          "normal": 0,
+          "high": 0,
+          "urgent": 11
+        }
+      }
+    },
+    "candidate": {
+      "n": 23,
+      "accuracy": 0.8696,
+      "macroF1": 0.8268,
+      "urgentSensitivity": 1,
+      "confusionMatrix": {
+        "normal": {
+          "normal": 6,
+          "high": 2,
+          "urgent": 0
+        },
+        "high": {
+          "normal": 0,
+          "high": 3,
+          "urgent": 1
+        },
+        "urgent": {
+          "normal": 0,
+          "high": 0,
+          "urgent": 11
+        }
+      }
+    }
+  },
+  "deterministic20PercentMaskStress": {
+    "maskedRecords": 5,
+    "note": "Artificial masking of every fifth test record; not a prospective or natural missingness estimate.",
+    "baselineDefaultImputation": {
+      "n": 23,
+      "accuracy": 0.8261,
+      "macroF1": 0.7522,
+      "urgentSensitivity": 1,
+      "confusionMatrix": {
+        "normal": {
+          "normal": 6,
+          "high": 2,
+          "urgent": 0
+        },
+        "high": {
+          "normal": 1,
+          "high": 2,
+          "urgent": 1
+        },
+        "urgent": {
+          "normal": 0,
+          "high": 0,
+          "urgent": 11
+        }
+      }
+    },
+    "candidateTrainingMedianWithMissingFlag": {
+      "n": 23,
+      "accuracy": 0.8261,
+      "macroF1": 0.7753,
+      "urgentSensitivity": 1,
+      "confusionMatrix": {
+        "normal": {
+          "normal": 5,
+          "high": 3,
+          "urgent": 0
+        },
+        "high": {
+          "normal": 0,
+          "high": 3,
+          "urgent": 1
+        },
+        "urgent": {
+          "normal": 0,
+          "high": 0,
+          "urgent": 11
+        }
+      }
+    }
+  }
+}

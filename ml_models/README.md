@@ -14,6 +14,7 @@ ml_models/
 ├── model_registry.json              # Version catalog, hyperparameters, validation hashes & seed
 ├── reproducibility_service.js       # Output determinism verification & requirements auditor
 ├── feature_extractor.js             # Standardized feature normalization & boundary clamping
+├── evaluate_spo2_preprocessing.js    # SpO₂ encoding, imputation, and held-out robustness comparison
 ├── respiratory_rf_classifier.js     # Random Forest clinical inference engine & safety rules
 ├── training_pipeline.py             # Python training script (Deterministic RANDOM_SEED = 42)
 └── evaluate_models.js               # Clinical benchmark & reproducibility runner
@@ -90,3 +91,13 @@ Or run the full reproducibility suite:
 ```bash
 npm run test:reproducibility
 ```
+
+## SpO₂ Feature Processing Candidate
+
+The respiratory feature extractor now emits SpO₂ z-score, one-hot severity bands, and a missingness indicator. Imputation statistics are fitted from the training split only. Run the comparison with:
+
+```bash
+node ml_models/evaluate_spo2_preprocessing.js
+```
+
+The held-out split currently has no missing SpO₂ values, so it cannot estimate natural missing-value impact. The script includes a clearly labeled artificial missingness stress check. See [`reports/SPO2_PREPROCESSING_EVALUATION.md`](../reports/SPO2_PREPROCESSING_EVALUATION.md) for results and limitations. The added columns are candidate retraining inputs; the active model does not learn from them until it is retrained and clinically reviewed.
