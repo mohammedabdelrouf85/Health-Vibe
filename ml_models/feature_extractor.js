@@ -41,6 +41,36 @@ const RESPIRATORY_RATE_PREPROCESSOR = Object.freeze({
   bands: Object.freeze({ lowBelow: 12, normalBelow: 21, elevatedThrough: 24 })
 });
 
+// Fitted on dataset/train_dataset.json only (112 records; patient-level split
+// seed 42). Chills and night-sweat labels are not present in this cohort.
+const FEVER_PREPROCESSOR = Object.freeze({
+  version: 'fever-chills-preprocess-v1',
+  trainingCount: 112,
+  median: 37.45,
+  mean: 37.691071,
+  standardDeviation: 0.803069,
+  bounds: Object.freeze({ min: 34, max: 43 }),
+  feverThresholdC: 38,
+  symptomCategories: Object.freeze(['yes', 'no', 'unknown'])
+});
+const FEVER_CHILLS_FEATURE_COUNT = 12;
+
+function fitTemperaturePreprocessor(trainingRecords = []) {
+  const values = trainingRecords.map(record => {
+    const rawValue = record?.vitals?.temperature ?? record?.temperature_c ?? record?.temperature;
+    const transformed = transformTemperature(rawValue);
+    return transformed.sourceStatus === 'observed' ? transformed.value : NaN;
+  })
+    .filter(Number.isFinite)
+    .sort((a, b) => a - b);
+  if (!values.length) return { ...FEVER_PREPROCESSOR, fitted: false, trainingCount: 0 };
+  const middle = Math.floor(values.length / 2);
+  const median = values.length % 2 ? values[middle] : (values[middle - 1] + values[middle]) / 2;
+  const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
+  const standardDeviation = Math.sqrt(values.reduce((sum, value) => sum + ((value - mean) ** 2), 0) / values.length) || 1;
+  return { ...FEVER_PREPROCESSOR, trainingCount: values.length, median, mean: Number(mean.toFixed(6)), standardDeviation: Number(standardDeviation.toFixed(6)), fitted: true };
+}
+
 // No patient-level mMRC values exist in the current train split. Grade 2 is a
 // temporary scale midpoint; replace it with a median fitted on actual train data.
 const MMRC_PREPROCESSOR = Object.freeze({
@@ -348,6 +378,51 @@ function transformRespiratoryRate(rawValue) {
   };
 }
 
+function transformTemperature(rawValue, preprocessor = FEVER_PREPROCESSOR) {
+  const missing = rawValue === null || rawValue === undefined || String(rawValue).trim() === '';
+  const normalizedDigits = normalizeArabicDigits(String(rawValue ?? '')).replace(/٫/g, '.').trim();
+  const match = normalizedDigits.match(/^\d{2}(?:\.\d)?\s*(?:°?\s*c)?$/i);
+  const parsed = match ? Number(match[0].replace(/°?\s*c$/i, '').trim()) : NaN;
+  const valid = !missing && Number.isFinite(parsed) && parsed >= preprocessor.bounds.min && parsed <= preprocessor.bounds.max;
+  const value = valid ? parsed : preprocessor.median;
+  const category = value >= preprocessor.feverThresholdC ? 'fever' : 'normal';
+  return {
+    value,
+    normalized: Number(((value - preprocessor.mean) / preprocessor.standardDeviation).toFixed(6)),
+    bandNormal: category === 'normal' ? 1 : 0,
+    bandFever: category === 'fever' ? 1 : 0,
+    missing: valid ? 0 : 1,
+    category,
+    sourceStatus: missing ? 'missing' : valid ? 'observed' : 'invalid'
+  };
+}
+
+function normalizeFeverSymptom(value) {
+  if (value === true || value === 1) return 'yes';
+  if (value === false || value === 0) return 'no';
+  const normalized = String(value ?? '').trim().toLowerCase();
+  if (['yes', 'y', 'true', '1', 'نعم'].includes(normalized)) return 'yes';
+  if (['no', 'n', 'false', '0', 'لا'].includes(normalized)) return 'no';
+  if (['unknown', 'not sure', 'unsure', 'غير معروف', 'غير متأكد', 'مش عارف'].includes(normalized)) return 'unknown';
+  return null;
+}
+
+function transformFeverSymptoms(record = {}) {
+  const symptoms = record.symptoms || record.assessment?.symptoms || {};
+  const rawChills = record.chills ?? symptoms.chills;
+  const rawNightSweats = record.night_sweats ?? record.nightSweats ?? symptoms.nightSweats;
+  const chills = normalizeFeverSymptom(rawChills) || 'unknown';
+  const nightSweats = normalizeFeverSymptom(rawNightSweats) || 'unknown';
+  return {
+    chills,
+    chillsOneHot: FEVER_PREPROCESSOR.symptomCategories.map(category => chills === category ? 1 : 0),
+    chillsMissing: normalizeFeverSymptom(rawChills) === null ? 1 : 0,
+    nightSweats,
+    nightSweatsOneHot: FEVER_PREPROCESSOR.symptomCategories.map(category => nightSweats === category ? 1 : 0),
+    nightSweatsMissing: normalizeFeverSymptom(rawNightSweats) === null ? 1 : 0
+  };
+}
+
 function getMmrcScore(record = {}) {
   const value = record.mmrc_score ?? record.mmrcGrade ?? record.mmrc_grade
     ?? record.symptoms?.mmrcGrade ?? record.assessment?.symptoms?.mmrcGrade;
@@ -389,7 +464,8 @@ function transformMmrcScore(rawValue, preprocessor = MMRC_PREPROCESSOR) {
  */
 function extractFeatures(rawData = {}, {
   mmrcPreprocessor = MMRC_PREPROCESSOR,
-  coughDurationPreprocessor = COUGH_DURATION_PREPROCESSOR
+  coughDurationPreprocessor = COUGH_DURATION_PREPROCESSOR,
+  temperaturePreprocessor = FEVER_PREPROCESSOR
 } = {}) {
   const age = clampNumber(rawData.age, 'age');
   const spo2Input = rawData.oxygen_saturation ?? rawData.spo2;
@@ -408,6 +484,8 @@ function extractFeatures(rawData = {}, {
   const sbp = clampNumber(rawData.systolic_bp || rawData.systolic, 'systolic_bp');
   const dbp = clampNumber(rawData.diastolic_bp || rawData.diastolic, 'diastolic_bp');
   const temp = clampNumber(rawData.temperature_c || rawData.temperature, 'temperature_c');
+  const temperatureFeatures = transformTemperature(rawData.temperature_c ?? rawData.temperature, temperaturePreprocessor);
+  const feverSymptoms = transformFeverSymptoms(rawData);
   
   // Categorical / Ordinal severity: 0 = none, 1 = mild, 2 = moderate, 3 = severe
   let dyspnea = 0;
@@ -468,7 +546,15 @@ function extractFeatures(rawData = {}, {
     ...wheezingFeatures.oneHot,
     wheezingFeatures.missing,
     ...chestPainFeatures.oneHot,
-    chestPainFeatures.missing
+    chestPainFeatures.missing,
+    temperatureFeatures.normalized,
+    temperatureFeatures.bandNormal,
+    temperatureFeatures.bandFever,
+    temperatureFeatures.missing,
+    ...feverSymptoms.chillsOneHot,
+    feverSymptoms.chillsMissing,
+    ...feverSymptoms.nightSweatsOneHot,
+    feverSymptoms.nightSweatsMissing
   ];
 }
 
@@ -484,6 +570,9 @@ module.exports = {
   CHEST_PAIN_FEATURE_COUNT,
   RESPIRATORY_RATE_PREPROCESSOR,
   SPO2_PREPROCESSOR,
+  FEVER_PREPROCESSOR,
+  FEVER_CHILLS_FEATURE_COUNT,
+  fitTemperaturePreprocessor,
   clampNumber,
   extractFeatures,
   fitMmrcPreprocessor,
@@ -491,6 +580,9 @@ module.exports = {
   normalizeArabicDigits,
   transformSpO2,
   transformRespiratoryRate,
+  transformTemperature,
+  normalizeFeverSymptom,
+  transformFeverSymptoms,
   transformMmrcScore,
   transformCoughCharacter,
   fitCoughDurationPreprocessor,

@@ -111,3 +111,7 @@ The feature extractor also emits a training-fitted z-score, one-hot low/normal/e
 ## mMRC Feature Processing Candidate
 
 The feature extractor accepts grades 0–4, emits midpoint-centered normalization, five one-hot columns, and a missingness indicator. Run `node ml_models/evaluate_mmrc_preprocessing.js`. Current train/test data contain no mMRC labels, so the fallback midpoint (grade 2) is provisional and predictive accuracy impact cannot be estimated from this cohort. See [`reports/MMRC_PREPROCESSING_EVALUATION.md`](../reports/MMRC_PREPROCESSING_EVALUATION.md). Do not treat the active model's parity result as evidence that mMRC improves prediction; retraining and a labeled, held-out cohort are required.
+
+## Fever, Chills, and Night Sweats Feature Processing Candidate
+
+Temperature emits a training-fitted standardized value, normal/fever one-hot bands, median imputation, and a missingness flag. Chills and night sweats use tri-state one-hot encoding and separate missingness flags. Run `npm run evaluate:fever-preprocessing` for holdout parity and a clearly labeled artificial missingness stress test. Current datasets have no labeled chills/night-sweat values and the active model has not been retrained to consume these appended features, so symptom-related accuracy impact is not estimable. See [`reports/FEVER_CHILLS_PREPROCESSING_EVALUATION.md`](../reports/FEVER_CHILLS_PREPROCESSING_EVALUATION.md).
