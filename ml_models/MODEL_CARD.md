@@ -62,6 +62,10 @@ Evaluated against the balanced multi-center clinical validation cohort ($N = 2,4
 
 The extractor preserves feature position 11 (`smoking_pack_years`) and supports the respiratory assessment's nested `assessment.exposures.smokingHistory` object. It appends 19 candidate inputs: 0–120 normalized pack-years and a missing flag; four-way cigarette-status one-hot encoding and its missing flag; and yes/no/unknown one-hot encoding plus a missing flag for each of shisha, vaping, and passive-smoke exposure. Pack-years are derived from packs/day × years when a direct value is absent. Training currently contains no observed pack-year values or labeled non-cigarette exposure data; imputation remains explicitly unfitted with a zero fallback and missingness indicator. The active inference engine has not been retrained to use the appended categorical inputs.
 
+### Egyptian Environmental Exposure Engineering Candidate
+
+The extractor supports `assessment.exposures.environmental` and appends eight binary-normalized candidate values: multi-hot dust, vehicle exhaust, rice-straw/crop-residue burning, factory fumes, and household-bird exposure, plus `none`, `unknown`, and missing indicators. Missing responses map to unknown and set the missing indicator; an explicit `none` answer remains separate. The train/test cohort has no environmental exposure labels and the production model has not been retrained on these features.
+
 ---
 
 ## 6. Ethical Considerations & Bias Audits

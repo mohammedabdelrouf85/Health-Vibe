@@ -70,6 +70,17 @@ const SMOKING_HISTORY_PREPROCESSOR = Object.freeze({
 });
 const SMOKING_HISTORY_FEATURE_COUNT = 19;
 
+// Environmental questionnaire values are multi-label binary features. No
+// labeled exposure values exist in the current cohort; absent answers are
+// imputed as unknown and tracked separately, never treated as "none".
+const ENVIRONMENTAL_EXPOSURE_PREPROCESSOR = Object.freeze({
+  version: 'egypt-environmental-exposure-preprocess-v1',
+  fitted: false,
+  trainingCount: 0,
+  categories: Object.freeze(['dust', 'traffic_exhaust', 'rice_straw_burning', 'factory_fumes', 'household_birds'])
+});
+const ENVIRONMENTAL_EXPOSURE_FEATURE_COUNT = ENVIRONMENTAL_EXPOSURE_PREPROCESSOR.categories.length + 3;
+
 function fitTemperaturePreprocessor(trainingRecords = []) {
   const values = trainingRecords.map(record => {
     const rawValue = record?.vitals?.temperature ?? record?.temperature_c ?? record?.temperature;
@@ -552,6 +563,66 @@ function fitSmokingHistoryPreprocessor(trainingRecords = []) {
   return { ...SMOKING_HISTORY_PREPROCESSOR, fitted: true, trainingCount: observations.length, medianPackYears };
 }
 
+function normalizeEnvironmentalExposureKey(value) {
+  const normalized = String(value ?? '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  const aliases = {
+    dust: 'dust', dust_exposure: 'dust', soil: 'dust', sand: 'dust', أتربة: 'dust', غبار: 'dust', أتربة_أو_غبار: 'dust',
+    traffic_exhaust: 'traffic_exhaust', vehicle_exhaust: 'traffic_exhaust', car_exhaust: 'traffic_exhaust', عوادم_سيارات: 'traffic_exhaust',
+    rice_straw_burning: 'rice_straw_burning', crop_residue_burning: 'rice_straw_burning', agricultural_burning: 'rice_straw_burning', حرق_قش_الأرز: 'rice_straw_burning', حرق_قش_الأرز_أو_مخلفات_زراعية: 'rice_straw_burning',
+    factory_fumes: 'factory_fumes', industrial_fumes: 'factory_fumes', factory_smoke: 'factory_fumes', أدخنة_مصانع: 'factory_fumes', أبخرة_أو_أدخنة_مصانع: 'factory_fumes',
+    household_birds: 'household_birds', pet_birds: 'household_birds', birds_at_home: 'household_birds', تربية_طيور_منزلية: 'household_birds',
+    none: 'none', no_exposure: 'none', لا_يوجد: 'none',
+    unknown: 'unknown', not_sure: 'unknown', unsure: 'unknown', غير_معروف: 'unknown'
+  };
+  return aliases[normalized] || null;
+}
+
+function getEnvironmentalExposureSource(record = {}) {
+  let rawValues = record.assessment?.exposures?.environmental
+    ?? record.exposures?.environmental
+    ?? record.environmentalExposure
+    ?? record.environmentalExposures
+    ?? record.environmental_exposure;
+  const provided = rawValues !== null && rawValues !== undefined;
+  let malformed = false;
+  if (rawValues && !Array.isArray(rawValues) && Array.isArray(rawValues.sources)) rawValues = rawValues.sources;
+  else if (typeof rawValues === 'string') rawValues = [rawValues];
+  else if (provided && !Array.isArray(rawValues)) malformed = true;
+  const missing = !provided || (Array.isArray(rawValues) && rawValues.length === 0);
+  const values = Array.isArray(rawValues) ? rawValues : [];
+  const mapped = values.map(normalizeEnvironmentalExposureKey);
+  const unique = [...new Set(mapped.filter(Boolean))];
+  const invalid = !missing && (malformed || mapped.some(value => value === null)
+    || (unique.includes('none') && unique.length !== 1)
+    || (unique.includes('unknown') && unique.length !== 1));
+  return {
+    values: invalid ? ['unknown'] : missing ? ['unknown'] : unique,
+    missing: missing || invalid,
+    sourceStatus: missing ? 'missing' : invalid ? 'invalid' : unique.includes('unknown') ? 'unknown' : unique.includes('none') ? 'none' : 'observed'
+  };
+}
+
+function transformEnvironmentalExposure(record = {}, preprocessor = ENVIRONMENTAL_EXPOSURE_PREPROCESSOR) {
+  const source = getEnvironmentalExposureSource(record);
+  return {
+    categories: source.values,
+    sourceOneHot: preprocessor.categories.map(category => source.values.includes(category) ? 1 : 0),
+    none: source.values.includes('none') ? 1 : 0,
+    unknown: source.values.includes('unknown') ? 1 : 0,
+    missing: source.missing ? 1 : 0,
+    sourceStatus: source.sourceStatus
+  };
+}
+
+function fitEnvironmentalExposurePreprocessor(trainingRecords = []) {
+  const observedRecords = trainingRecords.filter(record => !getEnvironmentalExposureSource(record).missing).length;
+  return {
+    ...ENVIRONMENTAL_EXPOSURE_PREPROCESSOR,
+    fitted: observedRecords > 0,
+    trainingCount: observedRecords
+  };
+}
+
 function getMmrcScore(record = {}) {
   const value = record.mmrc_score ?? record.mmrcGrade ?? record.mmrc_grade
     ?? record.symptoms?.mmrcGrade ?? record.assessment?.symptoms?.mmrcGrade;
@@ -595,7 +666,8 @@ function extractFeatures(rawData = {}, {
   mmrcPreprocessor = MMRC_PREPROCESSOR,
   coughDurationPreprocessor = COUGH_DURATION_PREPROCESSOR,
   temperaturePreprocessor = FEVER_PREPROCESSOR,
-  smokingHistoryPreprocessor = SMOKING_HISTORY_PREPROCESSOR
+  smokingHistoryPreprocessor = SMOKING_HISTORY_PREPROCESSOR,
+  environmentalExposurePreprocessor = ENVIRONMENTAL_EXPOSURE_PREPROCESSOR
 } = {}) {
   const age = clampNumber(rawData.age, 'age');
   const spo2Input = rawData.oxygen_saturation ?? rawData.spo2;
@@ -631,6 +703,7 @@ function extractFeatures(rawData = {}, {
     ?? rawData.chestPain ?? rawData.symptoms?.chestPain ?? rawData.assessment?.symptoms?.chestPain);
   const chestPain = (chestPainPresence === 'yes' || rawData.sharp_chest_pain) ? 1.0 : 0.0;
   const smokingHistoryFeatures = transformSmokingHistory(rawData, smokingHistoryPreprocessor);
+  const environmentalExposureFeatures = transformEnvironmentalExposure(rawData, environmentalExposurePreprocessor);
   const smokingYears = smokingHistoryFeatures.packYears;
   const asthmaHistory = (rawData.chronic_asthma_history || rawData.has_asthma) ? 1.0 : 0.0;
   const copdHistory = (rawData.chronic_copd_history || rawData.has_copd) ? 1.0 : 0.0;
@@ -695,7 +768,11 @@ function extractFeatures(rawData = {}, {
     ...smokingHistoryFeatures.vaping.oneHot,
     smokingHistoryFeatures.vaping.missing,
     ...smokingHistoryFeatures.passiveSmoke.oneHot,
-    smokingHistoryFeatures.passiveSmoke.missing
+    smokingHistoryFeatures.passiveSmoke.missing,
+    ...environmentalExposureFeatures.sourceOneHot,
+    environmentalExposureFeatures.none,
+    environmentalExposureFeatures.unknown,
+    environmentalExposureFeatures.missing
   ];
 }
 
@@ -715,8 +792,11 @@ module.exports = {
   FEVER_CHILLS_FEATURE_COUNT,
   SMOKING_HISTORY_PREPROCESSOR,
   SMOKING_HISTORY_FEATURE_COUNT,
+  ENVIRONMENTAL_EXPOSURE_PREPROCESSOR,
+  ENVIRONMENTAL_EXPOSURE_FEATURE_COUNT,
   fitTemperaturePreprocessor,
   fitSmokingHistoryPreprocessor,
+  fitEnvironmentalExposurePreprocessor,
   clampNumber,
   extractFeatures,
   fitMmrcPreprocessor,
@@ -730,6 +810,8 @@ module.exports = {
   normalizeSmokingStatus,
   normalizeSmokingExposure,
   transformSmokingHistory,
+  normalizeEnvironmentalExposureKey,
+  transformEnvironmentalExposure,
   transformMmrcScore,
   transformCoughCharacter,
   fitCoughDurationPreprocessor,
