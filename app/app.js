@@ -11737,6 +11737,21 @@ async function renderReportScreen(targetCaseId = null) {
     const riskFactorsDisplay = isSupport
       ? escapeHtml(isEn ? "🔒 Medical data redacted" : "🔒 بيانات سريرية محجوبة")
       : escapeHtml(Array.isArray(caseData.riskFactors) && caseData.riskFactors.length > 0 ? caseData.riskFactors.join('، ') : recordedClinicalText(null, isEn));
+    const smokingHistory = caseData.assessment?.exposures?.smokingHistory || caseData.smokingHistory;
+    const smokingStatusLabels = isEn
+      ? { never: "Never smoked", current: "Current smoker", former: "Former smoker", unknown: "Not sure" }
+      : { never: "لم يدخن", current: "مدخن حالياً", former: "مدخن سابقاً", unknown: "غير معروف" };
+    const smokingHistoryDisplay = isSupport
+      ? escapeHtml(isEn ? "🔒 Medical data redacted" : "🔒 بيانات سريرية محجوبة")
+      : smokingHistory
+        ? escapeHtml([
+          smokingStatusLabels[smokingHistory.cigaretteStatus] || smokingStatusLabels.unknown,
+          smokingHistory.cigarettePackYears === null || smokingHistory.cigarettePackYears === undefined ? "" : `${smokingHistory.cigarettePackYears} ${isEn ? "pack-years" : "سنة-علبة"}`,
+          `${isEn ? "Shisha" : "شيشة"}: ${yesNoUnknownLabel(smokingHistory.shisha, isEn)}`,
+          `${isEn ? "Vape" : "فيب"}: ${yesNoUnknownLabel(smokingHistory.vaping, isEn)}`,
+          `${isEn ? "Passive smoke" : "تدخين سلبي"}: ${yesNoUnknownLabel(smokingHistory.passiveSmoke, isEn)}`
+        ].filter(Boolean).join(" • "))
+        : escapeHtml(recordedClinicalText(null, isEn));
     const aiScoreDisplay = isSupport
       ? escapeHtml(isEn ? "🔒 Triage score redacted" : "🔒 تصنيف الفرز محجوب للدعم")
       : escapeHtml(isEn ? (caseData.aiScoreEn || caseData.aiScore || missing) : (caseData.aiScore || missing));
@@ -11989,6 +12004,8 @@ async function renderReportScreen(targetCaseId = null) {
             <div>
               <span style="color: var(--muted);">${isEn ? "Reported Risk Factors:" : "عوامل الخطورة المسجلة:"}</span>
               <strong style="margin-inline-start: 6px; color: var(--ink);">${riskFactorsDisplay}</strong>
+              <br><span style="color: var(--muted);">${isEn ? "Smoking & smoke exposure:" : "التدخين والتعرض للدخان:"}</span>
+              <strong style="margin-inline-start: 6px; color: var(--ink);">${smokingHistoryDisplay}</strong>
             </div>
             <div>
               <span style="color: var(--muted);">${isEn ? "AI Risk Classification:" : "تصنيف الذكاء الاصطناعي:"}</span>
@@ -18935,6 +18952,7 @@ window.openConfirmAssessmentModal = function(data, onConfirm) {
   safeSet("confirmProgression", data.symptomProgression);
   safeSet("confirmRecentInfection", data.recentInfection);
   safeSet("confirmAsthmaCopd", data.asthmaCopd);
+  safeSet("confirmSmokingHistory", data.smokingHistory || (isEn ? "Not recorded" : "غير مسجل"));
   safeSet("confirmRisks", data.riskFactors && data.riskFactors.length ? data.riskFactors.join("، ") : (isEn ? "None" : "لا يوجد"));
   safeSet("confirmMedications", data.currentMedications || (isEn ? "Not provided" : "غير مسجل"));
   safeSet("confirmNotes", data.notes || (isEn ? "Not provided" : "غير مسجل"));
@@ -19375,6 +19393,10 @@ const SINGLE_SELECT_CHOICE_GROUPS = [
   "wheezingChoices",
   "chillsChoices",
   "nightSweatsChoices",
+  "cigaretteSmokingStatusChoices",
+  "shishaExposureChoices",
+  "vapeExposureChoices",
+  "passiveSmokeChoices",
   "chestPainChoices",
   "chestPainCharacterChoices",
   "symptomProgressionChoices",
@@ -19396,7 +19418,7 @@ SINGLE_SELECT_CHOICE_GROUPS.forEach((groupId) => {
         radio.setAttribute("aria-checked", selected ? "true" : "false");
         radio.tabIndex = selected ? 0 : -1;
       });
-    } else if (["coughNatureChoices", "sputumColorChoices", "wheezingChoices", "chillsChoices", "nightSweatsChoices", "chestPainChoices", "chestPainCharacterChoices"].includes(groupId)) {
+    } else if (["coughNatureChoices", "sputumColorChoices", "wheezingChoices", "chillsChoices", "nightSweatsChoices", "chestPainChoices", "chestPainCharacterChoices", "cigaretteSmokingStatusChoices", "shishaExposureChoices", "vapeExposureChoices", "passiveSmokeChoices"].includes(groupId)) {
       group.querySelectorAll(".choice").forEach((choice) => {
         choice.setAttribute("aria-pressed", choice === btn ? "true" : "false");
       });
@@ -19408,6 +19430,7 @@ SINGLE_SELECT_CHOICE_GROUPS.forEach((groupId) => {
 
     if (groupId === "coughNatureChoices" || groupId === "sputumColorChoices") updateCoughInputsUI();
     if (groupId === "chestPainChoices" || groupId === "chestPainCharacterChoices") updateChestPainDetailUI();
+    if (groupId === "cigaretteSmokingStatusChoices") updateSmokingHistoryInputs();
 
     // Conditional Branching & Reactive State Updates:
     // 1. If Chest Pain is 'نعم' / 'Yes', trigger urgent clinical guidance warning
@@ -19444,6 +19467,47 @@ SINGLE_SELECT_CHOICE_GROUPS.forEach((groupId) => {
   }
 });
 
+function updateSmokingHistoryInputs() {
+  const status = document.querySelector("#cigaretteSmokingStatusChoices .choice.active")?.dataset.smokingStatus || "unknown";
+  const enabled = status === "current" || status === "former";
+  ["cigarettePacksPerDay", "cigaretteSmokingYears"].forEach(id => {
+    const input = document.getElementById(id);
+    if (input) {
+      input.disabled = !enabled;
+      if (!enabled) input.value = "";
+    }
+  });
+  updatePackYearsDisplay();
+}
+
+function updatePackYearsDisplay() {
+  const status = document.querySelector("#cigaretteSmokingStatusChoices .choice.active")?.dataset.smokingStatus || "unknown";
+  const packs = Number(document.getElementById("cigarettePacksPerDay")?.value);
+  const years = Number(document.getElementById("cigaretteSmokingYears")?.value);
+  const display = document.getElementById("packYearsCalculation");
+  if (!display) return;
+  if (status === "never") {
+    display.textContent = currentLanguage === "en" ? "Pack-years: 0" : "سجل السجائر: صفر سنة-علبة";
+    return;
+  }
+  if ((status === "current" || status === "former") && packs > 0 && years > 0) {
+    const packYears = Math.round(packs * years * 100) / 100;
+    display.textContent = (currentLanguage === "en" ? "Recorded smoking exposure: " : "سجل التدخين: ") + packYears + (currentLanguage === "en" ? " pack-years" : " سنة-علبة");
+  } else {
+    display.textContent = currentLanguage === "en" ? "Enter amount and duration to calculate pack-years." : "أدخل الكمية والمدة لحساب سنة-العلبة.";
+  }
+}
+
+["cigarettePacksPerDay", "cigaretteSmokingYears"].forEach(id => {
+  const input = document.getElementById(id);
+  if (!input) return;
+  ["input", "change"].forEach(eventName => input.addEventListener(eventName, () => {
+    updatePackYearsDisplay();
+    if (typeof updateAssessmentProgress === "function") updateAssessmentProgress();
+    if (typeof scheduleAssessmentDraftSave === "function") scheduleAssessmentDraftSave();
+  }));
+});
+
 // Multi-select: عوامل الخطورة (يمكن اختيار أكثر من واحد)
 const riskGroup = document.getElementById("riskChoices");
 if (riskGroup) {
@@ -19473,6 +19537,51 @@ if (riskGroup) {
 const ASSESSMENT_SCHEMA_VERSION = "1.0.0";
 const REPORT_VERSION = "1.0.0";
 const MODEL_VERSION = "resp_rf_v1.0.2";
+
+function parseOptionalSmokingExposureNumber(value, min, max) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return { ok: true, value: null, missing: true };
+  const normalized = normalizeArabicIndicDigits(raw).replace(/٫/g, ".").trim();
+  if (!/^\d+(?:\.\d{1,2})?$/.test(normalized)) return { ok: false, value: null, missing: false };
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed) || parsed < min || parsed > max) return { ok: false, value: parsed, missing: false };
+  return { ok: true, value: parsed, missing: false };
+}
+
+function buildSmokingHistory(rawHistory = {}) {
+  const { status = "unknown", packsPerDay = "", yearsSmoked = "", shisha = "unknown", vaping = "unknown", passiveSmoke = "unknown" } = rawHistory || {};
+  const validStatuses = ["never", "current", "former", "unknown"];
+  const normalizedStatus = validStatuses.includes(status) ? status : "unknown";
+  const packs = parseOptionalSmokingExposureNumber(packsPerDay, 0.01, 10);
+  const years = parseOptionalSmokingExposureNumber(yearsSmoked, 0.1, 120);
+  const errors = [];
+  if (!validStatuses.includes(status)) errors.push({ field: "cigaretteSmokingStatusChoices", messageKey: "smokingStatusRequired" });
+  if ((normalizedStatus === "current" || normalizedStatus === "former") && !packs.ok) errors.push({ field: "cigarettePacksPerDay", messageKey: "packYearsNumberInvalid" });
+  if ((normalizedStatus === "current" || normalizedStatus === "former") && !years.ok) errors.push({ field: "cigaretteSmokingYears", messageKey: "packYearsNumberInvalid" });
+  if ((normalizedStatus === "current" || normalizedStatus === "former") && packs.ok && packs.missing) errors.push({ field: "cigarettePacksPerDay", messageKey: "packYearsPacksRequired" });
+  if ((normalizedStatus === "current" || normalizedStatus === "former") && years.ok && years.missing) errors.push({ field: "cigaretteSmokingYears", messageKey: "packYearsYearsRequired" });
+  const normalizedExposures = { shisha, vaping, passiveSmoke };
+  Object.entries(normalizedExposures).forEach(([key, value]) => {
+    if (!normalizeYesNoUnknown(value)) errors.push({ field: key === "shisha" ? "shishaExposureChoices" : key === "vaping" ? "vapeExposureChoices" : "passiveSmokeChoices", messageKey: "exposureAnswerRequired" });
+  });
+  const packYears = normalizedStatus === "never" ? 0
+    : normalizedStatus === "current" || normalizedStatus === "former"
+      ? packs.ok && years.ok && !packs.missing && !years.missing ? Math.round(packs.value * years.value * 100) / 100 : null
+      : null;
+  return {
+    isValid: errors.length === 0,
+    errors,
+    value: {
+      cigaretteStatus: normalizedStatus,
+      cigarettePacksPerDay: normalizedStatus === "never" ? 0 : packs.value,
+      cigaretteYearsSmoked: normalizedStatus === "never" ? 0 : years.value,
+      cigarettePackYears: packYears,
+      shisha: normalizeYesNoUnknown(shisha) || "unknown",
+      vaping: normalizeYesNoUnknown(vaping) || "unknown",
+      passiveSmoke: normalizeYesNoUnknown(passiveSmoke) || "unknown"
+    }
+  };
+}
 
 const AssessmentEnums = Object.freeze({
   BreathingDifficulty: {
@@ -19748,6 +19857,7 @@ function buildAssessmentModel({
   symptomProgressionRaw = "غير معروف",
   recentInfectionRaw = "غير معروف",
   asthmaCopdRaw = "غير معروف",
+  smokingHistoryRaw = {},
   currentMedicationsRaw = "",
   notesRaw = "",
   riskFactorsRaw = [],
@@ -19861,6 +19971,11 @@ function buildAssessmentModel({
   const symptomProgression = normalizeSymptomProgression(symptomProgressionRaw) || "unknown";
   const recentInfection = normalizeYesNoUnknown(recentInfectionRaw) || "unknown";
   const asthmaCopd = normalizeYesNoUnknown(asthmaCopdRaw) || "unknown";
+  const smokingHistoryResult = buildSmokingHistory(smokingHistoryRaw);
+  if (!smokingHistoryResult.isValid) {
+    throw new Error(currentLanguage === "en" ? "Please check the cigarette smoking history and smoke exposure answers." : "يرجى مراجعة تاريخ تدخين السجائر وإجابات التعرض للدخان.");
+  }
+  const smokingHistory = smokingHistoryResult.value;
   const currentMedications = String(currentMedicationsRaw || "").trim().slice(0, 500);
   const patientNotes = String(notesRaw || "").trim().slice(0, 1000);
 
@@ -19990,6 +20105,7 @@ function buildAssessmentModel({
         respiratoryRateUnit: parsedRespiratoryRate.unit,
         respiratoryRateStatus: parsedRespiratoryRate.reason || "recorded"
       },
+      exposures: { smokingHistory },
       symptoms: {
         breathingDifficulty: breathingKey,
         breathingDifficultyLabelAr: mmrcLabelAr,
@@ -20133,6 +20249,8 @@ function buildAssessmentModel({
     recentInfectionKey: recentInfection,
     asthmaCopd: yesNoUnknownLabel(asthmaCopd, false),
     asthmaCopdKey: asthmaCopd,
+    smokingHistory,
+    packYears: smokingHistory.cigarettePackYears,
     currentMedications: currentMedications || null,
     patientNotes: patientNotes || null,
     calculatedAge: calculatedAge,
@@ -20269,7 +20387,11 @@ function setChoiceGroupValue(groupId, value) {
       || btn.dataset.chestPain === value
       || btn.dataset.chestPainCharacter === value
       || btn.dataset.chills === value
-      || btn.dataset.nightSweats === value;
+      || btn.dataset.nightSweats === value
+      || btn.dataset.smokingStatus === value
+      || btn.dataset.shisha === value
+      || btn.dataset.vape === value
+      || btn.dataset.passiveSmoke === value;
     btn.classList.toggle("active", matchesValue);
     if (btn.hasAttribute("aria-pressed")) btn.setAttribute("aria-pressed", matchesValue ? "true" : "false");
   });
@@ -20302,6 +20424,12 @@ function gatherAssessmentDraftFields() {
     wheezing,
     chills,
     nightSweats,
+    cigaretteSmokingStatus: document.querySelector("#cigaretteSmokingStatusChoices .choice.active")?.dataset.smokingStatus || "unknown",
+    cigarettePacksPerDay: document.getElementById("cigarettePacksPerDay")?.value.trim() || "",
+    cigaretteSmokingYears: document.getElementById("cigaretteSmokingYears")?.value.trim() || "",
+    shisha: document.querySelector("#shishaExposureChoices .choice.active")?.dataset.shisha || "unknown",
+    vaping: document.querySelector("#vapeExposureChoices .choice.active")?.dataset.vape || "unknown",
+    passiveSmoke: document.querySelector("#passiveSmokeChoices .choice.active")?.dataset.passiveSmoke || "unknown",
     chestPain,
     chestPainType,
     coughLevel: coughNature === "none" ? "none" : (activeCoughSeverity?.dataset.coughSeverity || ""),
@@ -20329,6 +20457,8 @@ function applyAssessmentDraftFields(fields = {}) {
   setValue("coughDurationInput", fields.coughDurationDays);
   setValue("temperatureInput", fields.temperatureRaw);
   setValue("respiratoryRateInput", fields.respiratoryRateRaw);
+  setValue("cigarettePacksPerDay", fields.cigarettePacksPerDay);
+  setValue("cigaretteSmokingYears", fields.cigaretteSmokingYears);
   setValue("currentMedicationsInput", fields.currentMedications);
   setValue("assessmentNotesInput", fields.notes);
   const wheezingGroup = document.getElementById("wheezingChoices");
@@ -20377,6 +20507,11 @@ function applyAssessmentDraftFields(fields = {}) {
   setChoiceGroupValue("chestPainCharacterChoices", fields.chestPainType);
   setChoiceGroupValue("chillsChoices", fields.chills);
   setChoiceGroupValue("nightSweatsChoices", fields.nightSweats);
+  setChoiceGroupValue("cigaretteSmokingStatusChoices", fields.cigaretteSmokingStatus || "unknown");
+  setChoiceGroupValue("shishaExposureChoices", fields.shisha || "unknown");
+  setChoiceGroupValue("vapeExposureChoices", fields.vaping || "unknown");
+  setChoiceGroupValue("passiveSmokeChoices", fields.passiveSmoke || "unknown");
+  updateSmokingHistoryInputs();
   updateChestPainDetailUI();
   setChoiceGroupValue("symptomProgressionChoices", fields.symptomProgression);
   setChoiceGroupValue("recentInfectionChoices", fields.recentInfection);
@@ -20711,6 +20846,7 @@ function validateAssessmentFields({
   wheezing,
   chills,
   nightSweats,
+  smokingHistory = {},
   isEn = false
 }) {
   const errors = [];
@@ -20846,6 +20982,14 @@ function validateAssessmentFields({
     });
   }
 
+  const smokingValidation = buildSmokingHistory(smokingHistory);
+  smokingValidation.errors.forEach(error => {
+    const message = isEn
+      ? ({ smokingStatusRequired: "Select a cigarette smoking status.", packYearsPacksRequired: "Enter packs per day for current or former cigarette smoking.", packYearsYearsRequired: "Enter years smoked for current or former cigarette smoking.", packYearsNumberInvalid: "Enter packs per day from 0.01 to 10 and years smoked from 0.1 to 120.", exposureAnswerRequired: "Please choose Yes, No, or Not sure for each smoke exposure." }[error.messageKey] || "Check smoking history.")
+      : ({ smokingStatusRequired: "يرجى تحديد حالة تدخين السجائر.", packYearsPacksRequired: "أدخل عدد العلب يومياً للمدخن الحالي أو السابق.", packYearsYearsRequired: "أدخل عدد سنوات التدخين للمدخن الحالي أو السابق.", packYearsNumberInvalid: "أدخل علباً يومية من 0.01 إلى 10 وسنوات تدخين من 0.1 إلى 120.", exposureAnswerRequired: "يرجى تحديد نعم أو لا أو غير معروف لكل نوع تعرض للدخان." }[error.messageKey] || "يرجى مراجعة تاريخ التدخين.");
+    errors.push({ field: error.field, message });
+  });
+
   if (String(currentMedications || "").length > 500) {
     errors.push({
       field: "currentMedicationsInput",
@@ -20967,6 +21111,14 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
     const wheezing = document.querySelector("#wheezingChoices .choice.active")?.dataset.wheezing || "";
     const chills = document.querySelector("#chillsChoices .choice.active")?.dataset.chills || "";
     const nightSweats = document.querySelector("#nightSweatsChoices .choice.active")?.dataset.nightSweats || "";
+    const smokingHistory = {
+      status: document.querySelector("#cigaretteSmokingStatusChoices .choice.active")?.dataset.smokingStatus || "unknown",
+      packsPerDay: document.getElementById("cigarettePacksPerDay")?.value.trim() || "",
+      yearsSmoked: document.getElementById("cigaretteSmokingYears")?.value.trim() || "",
+      shisha: document.querySelector("#shishaExposureChoices .choice.active")?.dataset.shisha || "unknown",
+      vaping: document.querySelector("#vapeExposureChoices .choice.active")?.dataset.vape || "unknown",
+      passiveSmoke: document.querySelector("#passiveSmokeChoices .choice.active")?.dataset.passiveSmoke || "unknown"
+    };
     const symptomProgression = readActiveChoiceText("symptomProgressionChoices");
     const recentInfection = readActiveChoiceText("recentInfectionChoices");
     const asthmaCopd = readActiveChoiceText("asthmaCopdChoices");
@@ -20997,6 +21149,7 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
       wheezing,
       chills,
       nightSweats,
+      smokingHistory,
       symptomProgression,
       recentInfection,
       asthmaCopd,
@@ -21008,11 +21161,11 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
 
     if (!validation.isValid) {
       // تنظيف الحدود السابقة
-      ["oxygenInput", "symptomDuration", "coughDurationInput", "temperatureInput", "respiratoryRateInput", "currentMedicationsInput", "assessmentNotesInput"].forEach(id => {
+      ["oxygenInput", "symptomDuration", "coughDurationInput", "temperatureInput", "respiratoryRateInput", "cigarettePacksPerDay", "cigaretteSmokingYears", "currentMedicationsInput", "assessmentNotesInput"].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.borderColor = "";
       });
-      ["breathingChoices", "coughNatureChoices", "sputumColorChoices", "coughChoices", "riskChoices", "chestPainChoices", "chestPainCharacterChoices", "wheezingChoices", "chillsChoices", "nightSweatsChoices", "symptomProgressionChoices", "recentInfectionChoices", "asthmaCopdChoices"].forEach(id => {
+      ["breathingChoices", "coughNatureChoices", "sputumColorChoices", "coughChoices", "riskChoices", "chestPainChoices", "chestPainCharacterChoices", "wheezingChoices", "chillsChoices", "nightSweatsChoices", "cigaretteSmokingStatusChoices", "shishaExposureChoices", "vapeExposureChoices", "passiveSmokeChoices", "symptomProgressionChoices", "recentInfectionChoices", "asthmaCopdChoices"].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.outline = "";
       });
@@ -21064,6 +21217,15 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
     // حساب الأولوية المتوقعة
     const priority = isCritical ? "urgent" : (oxygenLevel >= 92 && oxygenLevel < 95 ? "high" : "normal");
     const priorityAr = { urgent: "🚨 عاجل", high: "⚠️ عالية", normal: "✔️ عادية" };
+    const smokingHistoryResult = buildSmokingHistory(smokingHistory).value;
+    const smokingStatusLabel = { never: isEn ? "Never smoked" : "لم يدخن", current: isEn ? "Current smoker" : "مدخن حالياً", former: isEn ? "Former smoker" : "مدخن سابقاً", unknown: isEn ? "Not sure" : "غير معروف" }[smokingHistoryResult.cigaretteStatus];
+    const smokingHistorySummary = [
+      smokingStatusLabel,
+      smokingHistoryResult.cigarettePackYears === null ? "" : `${smokingHistoryResult.cigarettePackYears} ${isEn ? "pack-years" : "سنة-علبة"}`,
+      `${isEn ? "Shisha" : "شيشة"}: ${yesNoUnknownLabel(smokingHistoryResult.shisha, isEn)}`,
+      `${isEn ? "Vape" : "فيب"}: ${yesNoUnknownLabel(smokingHistoryResult.vaping, isEn)}`,
+      `${isEn ? "Passive smoke" : "تدخين سلبي"}: ${yesNoUnknownLabel(smokingHistoryResult.passiveSmoke, isEn)}`
+    ].filter(Boolean).join(" • ");
     const coughNatureLabel = COUGH_NATURE_TEXT[coughNature][isEn ? "en" : "ar"];
     const sputumColorLabel = sputumColor ? SPUTUM_COLOR_TEXT[sputumColor][isEn ? "en" : "ar"] : "";
     const coughSeverityLabel = AssessmentDictionaries.cough[coughLevel]?.[isEn ? "en" : "ar"] || "";
@@ -21089,6 +21251,7 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
       symptomProgression,
       recentInfection,
       asthmaCopd,
+      smokingHistory: smokingHistorySummary,
       currentMedications: currentMedications || (isEn ? "Not provided" : "غير مسجل"),
       notes: notes || (isEn ? "Not provided" : "غير مسجل"),
       riskFactors,
@@ -21144,6 +21307,7 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
           symptomProgressionRaw: symptomProgression,
           recentInfectionRaw: recentInfection,
           asthmaCopdRaw: asthmaCopd,
+          smokingHistoryRaw: smokingHistory,
           currentMedicationsRaw: currentMedications,
           notesRaw: notes,
           riskFactorsRaw: riskFactors,

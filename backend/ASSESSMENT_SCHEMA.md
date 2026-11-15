@@ -47,6 +47,17 @@
       "respiratoryRateUnit": "breaths/min",
       "respiratoryRateStatus": "recorded"
     },
+    "exposures": {
+      "smokingHistory": {
+        "cigaretteStatus": "former",
+        "cigarettePacksPerDay": 0.5,
+        "cigaretteYearsSmoked": 10,
+        "cigarettePackYears": 5,
+        "shisha": "no",
+        "vaping": "unknown",
+        "passiveSmoke": "yes"
+      }
+    },
     "symptoms": {
       "breathingDifficulty": "no",
       "breathingDifficultyLabelAr": "لا (تنفس طبيعي)",
@@ -244,7 +255,13 @@
 * `recentInfection`: حقل إلزامي كاختيار مغلق `"yes"` | `"no"` | `"unknown"`.
 * `asthmaCopd`: حقل إلزامي كاختيار مغلق `"yes"` | `"no"` | `"unknown"`، مستقل عن عامل الخطورة القديم `asthma` للحفاظ على وضوح الربو/COPD وعدم افتراض التشخيص.
 
-### 2.1 الأدوية والملاحظات التي يقدمها المريض (`assessment.medications` / `assessment.notes`):
+### 2.1 التعرض للتدخين والدخان (`assessment.exposures.smokingHistory`):
+* `cigaretteStatus`: إحدى القيم `"never"` | `"current"` | `"former"` | `"unknown"`.
+* للمدخن الحالي أو السابق، `cigarettePacksPerDay` (من `0.01` إلى `10` علب/يوم) و`cigaretteYearsSmoked` (من `0.1` إلى `120` سنة) مطلوبان؛ سنة-العلبة تُحسب آلياً: `cigarettePacksPerDay × cigaretteYearsSmoked` وتُحفظ في `cigarettePackYears` إلى منزلتين عشريتين.
+* إن لم يكن المريض قد دخن السجائر، تكون سنوات العلبة `0`. إذا كانت الحالة مجهولة، تبقى السنوات `null` ولا تُستنتج.
+* `shisha` و`vaping` و`passiveSmoke` خيارات مغلقة: `"yes"` | `"no"` | `"unknown"`.
+
+### 2.2 الأدوية والملاحظات التي يقدمها المريض (`assessment.medications` / `assessment.notes`):
 * `assessment.medications.current`: نص اختياري حتى `500` حرف، أو `null` عند عدم تقديم بيانات.
 * `assessment.medications.status`: `"provided"` أو `"not-provided"`، ويجب عدم عرض `not-provided` كأنه ينفي استخدام الأدوية.
 * `assessment.notes`: نص اختياري حتى `1000` حرف، أو `null`.

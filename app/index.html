@@ -2002,6 +2002,46 @@
               <button class="choice">حمل</button>
               <button class="choice active">لا يوجد</button>
             </div>
+            <section class="smoking-history-fields" aria-labelledby="smokingHistoryHeading" style="margin-top: 14px; padding: 12px; border: 1px solid var(--line); border-radius: 12px;">
+              <h4 id="smokingHistoryHeading" data-i18n="assessment.smokingHistoryHeading" style="margin: 0 0 8px;">تاريخ التدخين والتعرض للدخان</h4>
+              <label id="cigaretteSmokingStatusLabel" data-i18n="assessment.cigaretteSmokingStatus">ما حالة تدخين السجائر؟</label>
+              <div id="cigaretteSmokingStatusChoices" class="choice-row four" role="group" aria-labelledby="cigaretteSmokingStatusLabel">
+                <button type="button" class="choice active" data-smoking-status="unknown" aria-pressed="true"><span data-i18n="assessment.smokingUnknown">غير معروف</span></button>
+                <button type="button" class="choice" data-smoking-status="never" aria-pressed="false"><span data-i18n="assessment.smokingNever">لم أدخن</span></button>
+                <button type="button" class="choice" data-smoking-status="current" aria-pressed="false"><span data-i18n="assessment.smokingCurrent">أدخن حالياً</span></button>
+                <button type="button" class="choice" data-smoking-status="former" aria-pressed="false"><span data-i18n="assessment.smokingFormer">مدخن سابقاً</span></button>
+              </div>
+              <div id="cigaretteSmokingDetails" class="smoking-numeric-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-top: 10px;">
+                <div>
+                  <label for="cigarettePacksPerDay" data-i18n="assessment.cigarettePacksPerDay">علب السجائر يومياً</label>
+                  <input id="cigarettePacksPerDay" type="number" inputmode="decimal" min="0.01" max="10" step="0.01" placeholder="مثال: 0.5" data-i18n-placeholder="assessment.packsPerDayPlaceholder" disabled>
+                </div>
+                <div>
+                  <label for="cigaretteSmokingYears" data-i18n="assessment.cigaretteSmokingYears">عدد سنوات التدخين</label>
+                  <input id="cigaretteSmokingYears" type="number" inputmode="decimal" min="0.1" max="120" step="0.1" placeholder="مثال: 10" data-i18n-placeholder="assessment.smokingYearsPlaceholder" disabled>
+                </div>
+              </div>
+              <small class="field-hint" data-i18n="assessment.packYearsHelp" style="display:block; margin-top:6px;">سنة-علبة = عدد العلب يومياً × عدد سنوات التدخين.</small>
+              <div id="packYearsCalculation" class="field-hint" role="status" aria-live="polite" style="margin: 6px 0 10px; font-weight: 700;" data-i18n="assessment.packYearsNotCalculated">أدخل الكمية والمدة لحساب سنة-العلبة.</div>
+              <label id="shishaExposureLabel" data-i18n="assessment.shishaExposure">هل تدخن الشيشة؟</label>
+              <div id="shishaExposureChoices" class="choice-row three" role="group" aria-labelledby="shishaExposureLabel">
+                <button type="button" class="choice" data-shisha="yes" aria-pressed="false"><span data-i18n="assessment.chillsYes">نعم</span></button>
+                <button type="button" class="choice" data-shisha="no" aria-pressed="false"><span data-i18n="assessment.chillsNo">لا</span></button>
+                <button type="button" class="choice active" data-shisha="unknown" aria-pressed="true"><span data-i18n="assessment.chillsUnknown">غير متأكد</span></button>
+              </div>
+              <label id="vapeExposureLabel" data-i18n="assessment.vapeExposure">هل تستخدم السجائر الإلكترونية أو الفيب؟</label>
+              <div id="vapeExposureChoices" class="choice-row three" role="group" aria-labelledby="vapeExposureLabel">
+                <button type="button" class="choice" data-vape="yes" aria-pressed="false"><span data-i18n="assessment.chillsYes">نعم</span></button>
+                <button type="button" class="choice" data-vape="no" aria-pressed="false"><span data-i18n="assessment.chillsNo">لا</span></button>
+                <button type="button" class="choice active" data-vape="unknown" aria-pressed="true"><span data-i18n="assessment.chillsUnknown">غير متأكد</span></button>
+              </div>
+              <label id="passiveSmokeLabel" data-i18n="assessment.passiveSmoke">هل تتعرض لدخان الآخرين بانتظام؟</label>
+              <div id="passiveSmokeChoices" class="choice-row three" role="group" aria-labelledby="passiveSmokeLabel">
+                <button type="button" class="choice" data-passive-smoke="yes" aria-pressed="false"><span data-i18n="assessment.chillsYes">نعم</span></button>
+                <button type="button" class="choice" data-passive-smoke="no" aria-pressed="false"><span data-i18n="assessment.chillsNo">لا</span></button>
+                <button type="button" class="choice active" data-passive-smoke="unknown" aria-pressed="true"><span data-i18n="assessment.chillsUnknown">غير متأكد</span></button>
+              </div>
+            </section>
             <label>الأدوية الحالية (اختياري)</label>
             <textarea id="currentMedicationsInput" rows="2" maxlength="500" aria-label="الأدوية الحالية" placeholder="اكتب الأدوية أو اتركها فارغة إذا لم يتم تقديمها"></textarea>
             <label>ملاحظات إضافية (اختياري)</label>
@@ -4140,6 +4180,7 @@
         <div><span>تطور الأعراض</span><strong id="confirmProgression">--</strong></div>
         <div><span>عدوى حديثة</span><strong id="confirmRecentInfection">--</strong></div>
         <div><span>ربو أو COPD</span><strong id="confirmAsthmaCopd">--</strong></div>
+        <div><span data-i18n="assessment.smokingHistoryHeading">تاريخ التدخين والتعرض للدخان</span><strong id="confirmSmokingHistory">--</strong></div>
         <div><span>عوامل الخطورة</span><strong id="confirmRisks">--</strong></div>
         <div><span>الأدوية الحالية</span><strong id="confirmMedications">--</strong></div>
         <div><span>ملاحظات</span><strong id="confirmNotes">--</strong></div>
