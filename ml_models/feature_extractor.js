@@ -55,6 +55,21 @@ const FEVER_PREPROCESSOR = Object.freeze({
 });
 const FEVER_CHILLS_FEATURE_COUNT = 12;
 
+// Pack-year observations and non-cigarette exposures are not present in the
+// current training cohort. The fallback remains explicitly unfitted until
+// such labels are available; a missingness bit prevents zero from implying
+// that the patient never smoked.
+const SMOKING_HISTORY_PREPROCESSOR = Object.freeze({
+  version: 'smoking-history-preprocess-v1',
+  fitted: false,
+  trainingCount: 0,
+  medianPackYears: 0,
+  bounds: Object.freeze({ min: 0, max: 120 }),
+  statusCategories: Object.freeze(['never', 'current', 'former', 'unknown']),
+  exposureCategories: Object.freeze(['yes', 'no', 'unknown'])
+});
+const SMOKING_HISTORY_FEATURE_COUNT = 19;
+
 function fitTemperaturePreprocessor(trainingRecords = []) {
   const values = trainingRecords.map(record => {
     const rawValue = record?.vitals?.temperature ?? record?.temperature_c ?? record?.temperature;
@@ -423,6 +438,120 @@ function transformFeverSymptoms(record = {}) {
   };
 }
 
+function getSmokingHistorySource(record = {}) {
+  const history = record.assessment?.exposures?.smokingHistory
+    ?? record.exposures?.smokingHistory
+    ?? record.smokingHistory
+    ?? record.assessment?.smokingHistory
+    ?? {};
+  const comorbidities = record.comorbidities || record.assessment?.comorbidities || {};
+  const rawStatus = history.cigaretteStatus ?? record.cigaretteStatus ?? record.smoking_status
+    ?? record.smokingStatus ?? comorbidities.smokingStatus;
+  const rawSmoker = record.smoker ?? comorbidities.smoking;
+  let status = normalizeSmokingStatus(rawStatus);
+  let statusMissing = status === null;
+  if (statusMissing && typeof rawSmoker === 'boolean') {
+    status = rawSmoker ? 'current' : 'never';
+    statusMissing = false;
+  }
+  if (!status) status = 'unknown';
+
+  let rawPackYears = history.cigarettePackYears ?? history.packYears ?? record.smoking_pack_years
+    ?? record.packYears ?? comorbidities.packYears;
+  if ((rawPackYears === null || rawPackYears === undefined || String(rawPackYears).trim() === '')
+    && history.cigarettePacksPerDay !== undefined && history.cigaretteYearsSmoked !== undefined
+    && history.cigarettePacksPerDay !== null && history.cigaretteYearsSmoked !== null
+    && String(history.cigarettePacksPerDay).trim() !== '' && String(history.cigaretteYearsSmoked).trim() !== '') {
+    const packs = Number(normalizeArabicDigits(String(history.cigarettePacksPerDay)).replace(/٫/g, '.'));
+    const years = Number(normalizeArabicDigits(String(history.cigaretteYearsSmoked)).replace(/٫/g, '.'));
+    if (Number.isFinite(packs) && Number.isFinite(years)) rawPackYears = packs * years;
+  }
+  const packYears = parsePackYears(rawPackYears);
+  const legacySmokerFallback = packYears.missing && history.cigaretteStatus === undefined
+    && rawStatus === undefined && rawSmoker === true;
+  const rawExposures = {
+    shisha: history.shisha ?? history.hookah ?? record.shisha ?? comorbidities.shisha,
+    vaping: history.vaping ?? history.vape ?? record.vaping ?? record.vape ?? comorbidities.vaping ?? comorbidities.vape,
+    passiveSmoke: history.passiveSmoke ?? record.passiveSmoke ?? comorbidities.passiveSmoke
+  };
+  return { history, status, statusMissing, rawSmoker, packYears, legacySmokerFallback, rawExposures };
+}
+
+function normalizeSmokingStatus(value) {
+  const normalized = String(value ?? '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  if (['never', 'never_smoked', 'non_smoker', 'nonsmoker', 'no', 'لم_يدخن', 'لم_أدخن'].includes(normalized)) return 'never';
+  if (['current', 'active', 'current_smoker', 'مدخن_حاليا', 'أدخن_حاليا'].includes(normalized)) return 'current';
+  if (['former', 'former_smoker', 'ex_smoker', 'مدخن_سابقا'].includes(normalized)) return 'former';
+  if (['unknown', 'not_sure', 'unsure', 'غير_معروف', 'غير_متأكد'].includes(normalized)) return 'unknown';
+  return null;
+}
+
+function normalizeSmokingExposure(value) {
+  if (value === true || value === 1) return 'yes';
+  if (value === false || value === 0) return 'no';
+  const normalized = String(value ?? '').trim().toLowerCase();
+  if (['yes', 'y', 'true', '1', 'نعم'].includes(normalized)) return 'yes';
+  if (['no', 'n', 'false', '0', 'لا'].includes(normalized)) return 'no';
+  if (['unknown', 'not sure', 'unsure', 'غير معروف', 'غير متأكد', 'مش عارف'].includes(normalized)) return 'unknown';
+  return null;
+}
+
+function parsePackYears(rawValue, preprocessor = SMOKING_HISTORY_PREPROCESSOR) {
+  const missing = rawValue === null || rawValue === undefined || String(rawValue).trim() === '';
+  if (missing) return { value: null, missing: true, sourceStatus: 'missing' };
+  const normalized = normalizeArabicDigits(String(rawValue)).replace(/٫/g, '.').trim();
+  const match = normalized.match(/^\d{1,4}(?:\.\d{1,2})?$/);
+  const parsed = match ? Number(normalized) : NaN;
+  if (!Number.isFinite(parsed) || parsed < preprocessor.bounds.min || parsed > preprocessor.bounds.max * 10) {
+    return { value: null, missing: true, sourceStatus: 'invalid' };
+  }
+  return { value: Math.min(parsed, preprocessor.bounds.max), missing: false, sourceStatus: parsed > preprocessor.bounds.max ? 'clipped' : 'observed' };
+}
+
+function transformSmokingHistory(record = {}, preprocessor = SMOKING_HISTORY_PREPROCESSOR) {
+  const source = getSmokingHistorySource(record);
+  const status = source.status;
+  const packYearsMissing = source.packYears.sourceStatus === 'invalid' || (source.packYears.missing && status !== 'never');
+  const imputedPackYears = source.packYears.missing
+    ? source.legacySmokerFallback ? 10 : status === 'never' ? 0 : preprocessor.medianPackYears
+    : source.packYears.value;
+  const packYears = status === 'never' && source.packYears.missing ? 0 : imputedPackYears;
+  const exposureFeatures = {};
+  for (const [key, rawValue] of Object.entries(source.rawExposures)) {
+    const category = normalizeSmokingExposure(rawValue) || 'unknown';
+    exposureFeatures[key] = {
+      category,
+      oneHot: preprocessor.exposureCategories.map(candidate => candidate === category ? 1 : 0),
+      missing: normalizeSmokingExposure(rawValue) === null ? 1 : 0
+    };
+  }
+  return {
+    status,
+    statusOneHot: preprocessor.statusCategories.map(category => category === status ? 1 : 0),
+    statusMissing: source.statusMissing ? 1 : 0,
+    packYears,
+    packYearsNormalized: Number((packYears / preprocessor.bounds.max).toFixed(6)),
+    packYearsMissing: packYearsMissing ? 1 : 0,
+    packYearsSourceStatus: source.packYears.sourceStatus,
+    legacySmokerFallback: source.legacySmokerFallback,
+    ...exposureFeatures
+  };
+}
+
+function fitSmokingHistoryPreprocessor(trainingRecords = []) {
+  const observations = trainingRecords
+    .map(record => getSmokingHistorySource(record).packYears)
+    .filter(feature => !feature.missing && Number.isFinite(feature.value))
+    .map(feature => feature.value)
+    .sort((a, b) => a - b);
+  if (!observations.length) return { ...SMOKING_HISTORY_PREPROCESSOR, fitted: false, trainingCount: 0, medianPackYears: 0 };
+  const middle = Math.floor(observations.length / 2);
+  const medianPackYears = observations.length % 2
+    ? observations[middle]
+    : (observations[middle - 1] + observations[middle]) / 2;
+  return { ...SMOKING_HISTORY_PREPROCESSOR, fitted: true, trainingCount: observations.length, medianPackYears };
+}
+
 function getMmrcScore(record = {}) {
   const value = record.mmrc_score ?? record.mmrcGrade ?? record.mmrc_grade
     ?? record.symptoms?.mmrcGrade ?? record.assessment?.symptoms?.mmrcGrade;
@@ -465,7 +594,8 @@ function transformMmrcScore(rawValue, preprocessor = MMRC_PREPROCESSOR) {
 function extractFeatures(rawData = {}, {
   mmrcPreprocessor = MMRC_PREPROCESSOR,
   coughDurationPreprocessor = COUGH_DURATION_PREPROCESSOR,
-  temperaturePreprocessor = FEVER_PREPROCESSOR
+  temperaturePreprocessor = FEVER_PREPROCESSOR,
+  smokingHistoryPreprocessor = SMOKING_HISTORY_PREPROCESSOR
 } = {}) {
   const age = clampNumber(rawData.age, 'age');
   const spo2Input = rawData.oxygen_saturation ?? rawData.spo2;
@@ -500,7 +630,8 @@ function extractFeatures(rawData = {}, {
   const chestPainPresence = normalizeChestPainPresence(rawData.chest_pain ?? rawData.chestPainKey
     ?? rawData.chestPain ?? rawData.symptoms?.chestPain ?? rawData.assessment?.symptoms?.chestPain);
   const chestPain = (chestPainPresence === 'yes' || rawData.sharp_chest_pain) ? 1.0 : 0.0;
-  const smokingYears = clampNumber(rawData.smoking_pack_years || (rawData.smoker ? 10 : 0), 'smoking_pack_years');
+  const smokingHistoryFeatures = transformSmokingHistory(rawData, smokingHistoryPreprocessor);
+  const smokingYears = smokingHistoryFeatures.packYears;
   const asthmaHistory = (rawData.chronic_asthma_history || rawData.has_asthma) ? 1.0 : 0.0;
   const copdHistory = (rawData.chronic_copd_history || rawData.has_copd) ? 1.0 : 0.0;
   const allergyHistory = (rawData.allergy_history || rawData.has_allergies) ? 1.0 : 0.0;
@@ -554,7 +685,17 @@ function extractFeatures(rawData = {}, {
     ...feverSymptoms.chillsOneHot,
     feverSymptoms.chillsMissing,
     ...feverSymptoms.nightSweatsOneHot,
-    feverSymptoms.nightSweatsMissing
+    feverSymptoms.nightSweatsMissing,
+    smokingHistoryFeatures.packYearsNormalized,
+    smokingHistoryFeatures.packYearsMissing,
+    ...smokingHistoryFeatures.statusOneHot,
+    smokingHistoryFeatures.statusMissing,
+    ...smokingHistoryFeatures.shisha.oneHot,
+    smokingHistoryFeatures.shisha.missing,
+    ...smokingHistoryFeatures.vaping.oneHot,
+    smokingHistoryFeatures.vaping.missing,
+    ...smokingHistoryFeatures.passiveSmoke.oneHot,
+    smokingHistoryFeatures.passiveSmoke.missing
   ];
 }
 
@@ -572,7 +713,10 @@ module.exports = {
   SPO2_PREPROCESSOR,
   FEVER_PREPROCESSOR,
   FEVER_CHILLS_FEATURE_COUNT,
+  SMOKING_HISTORY_PREPROCESSOR,
+  SMOKING_HISTORY_FEATURE_COUNT,
   fitTemperaturePreprocessor,
+  fitSmokingHistoryPreprocessor,
   clampNumber,
   extractFeatures,
   fitMmrcPreprocessor,
@@ -583,6 +727,9 @@ module.exports = {
   transformTemperature,
   normalizeFeverSymptom,
   transformFeverSymptoms,
+  normalizeSmokingStatus,
+  normalizeSmokingExposure,
+  transformSmokingHistory,
   transformMmrcScore,
   transformCoughCharacter,
   fitCoughDurationPreprocessor,

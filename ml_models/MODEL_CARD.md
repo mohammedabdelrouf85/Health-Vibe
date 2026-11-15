@@ -58,6 +58,10 @@ Evaluated against the balanced multi-center clinical validation cohort ($N = 2,4
 13. `chronic_copd_history`: Documented clinical diagnosis of COPD / Emphysema.
 14. `allergy_history`: Documented seasonal or environmental allergies.
 
+### Smoking History Engineering Candidate
+
+The extractor preserves feature position 11 (`smoking_pack_years`) and supports the respiratory assessment's nested `assessment.exposures.smokingHistory` object. It appends 19 candidate inputs: 0–120 normalized pack-years and a missing flag; four-way cigarette-status one-hot encoding and its missing flag; and yes/no/unknown one-hot encoding plus a missing flag for each of shisha, vaping, and passive-smoke exposure. Pack-years are derived from packs/day × years when a direct value is absent. Training currently contains no observed pack-year values or labeled non-cigarette exposure data; imputation remains explicitly unfitted with a zero fallback and missingness indicator. The active inference engine has not been retrained to use the appended categorical inputs.
+
 ---
 
 ## 6. Ethical Considerations & Bias Audits

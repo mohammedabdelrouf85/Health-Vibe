@@ -18,6 +18,7 @@
     "test:critical-symptoms": "node tests/critical_symptoms_emergency_check.test.js",
     "test:patient-level-split": "node tests/strict_patient_level_split.test.js",
     "evaluate:fever-preprocessing": "node ml_models/evaluate_fever_preprocessing.js",
+    "evaluate:smoking-history-preprocessing": "node ml_models/evaluate_smoking_history_preprocessing.js",
     "test:fn-tuning": "node tests/false_negative_analysis_and_threshold_tuning.test.js",
     "test:ml-processing": "node tests/ml_processing_indicator_and_double_submission.test.js",
     "test:model-version": "node tests/model_version_and_audit_logging.test.js",
