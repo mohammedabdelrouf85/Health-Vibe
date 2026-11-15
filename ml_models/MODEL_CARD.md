@@ -71,3 +71,6 @@ The extractor supports `assessment.exposures.environmental` and appends eight bi
 ## 6. Ethical Considerations & Bias Audits
 - **Demographic Parity:** The validation cohort was stratified across age groups ($18-40$, $41-65$, $>65$), genders ($51\%$ female, $49\%$ male), and regional demographics in Egypt (Delta, Greater Cairo, Upper Egypt).
 - **Prohibited Claims:** The model does **NOT** provide a definitive histological or microbiological diagnosis. It acts solely as an urgency triage and differential risk ranker. Every high-risk report mandates certified physician review before patient disclosure.
+### Atopy History Engineering Candidate
+
+The extractor accepts `assessment.exposures.atopyHistory` with five reported history fields: `nasalAllergy`, `eczema`, `childhoodAsthma`, `familyAsthma`, and `familyPulmonaryFibrosis`. Each field uses yes/no/unknown one-hot encoding and an independent missing indicator; absent or invalid values are imputed to unknown while preserving missingness. The current training and test cohort has no atopy labels, and the active model has not been retrained on these candidate features, so predictive impact is not estimable.

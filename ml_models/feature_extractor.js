@@ -80,6 +80,16 @@ const ENVIRONMENTAL_EXPOSURE_PREPROCESSOR = Object.freeze({
   categories: Object.freeze(['dust', 'traffic_exhaust', 'rice_straw_burning', 'factory_fumes', 'household_birds'])
 });
 const ENVIRONMENTAL_EXPOSURE_FEATURE_COUNT = ENVIRONMENTAL_EXPOSURE_PREPROCESSOR.categories.length + 3;
+// Atopy history is tri-state categorical data. Current training records have
+// no labeled observations, so unknown is the explicit fallback plus missing bit.
+const ATOPY_HISTORY_PREPROCESSOR = Object.freeze({
+  version: 'atopy-history-preprocess-v1',
+  fitted: false,
+  trainingCount: 0,
+  categories: Object.freeze(['yes', 'no', 'unknown']),
+  fields: Object.freeze(['nasalAllergy', 'eczema', 'childhoodAsthma', 'familyAsthma', 'familyPulmonaryFibrosis'])
+});
+const ATOPY_HISTORY_FEATURE_COUNT = ATOPY_HISTORY_PREPROCESSOR.fields.length * (ATOPY_HISTORY_PREPROCESSOR.categories.length + 1);
 
 function fitTemperaturePreprocessor(trainingRecords = []) {
   const values = trainingRecords.map(record => {
@@ -623,6 +633,47 @@ function fitEnvironmentalExposurePreprocessor(trainingRecords = []) {
   };
 }
 
+function normalizeAtopyHistoryValue(value) {
+  if (value === true || value === 1) return 'yes';
+  if (value === false || value === 0) return 'no';
+  const normalized = String(value ?? '').trim().toLowerCase();
+  if (['yes', 'y', 'true', '1', 'نعم'].includes(normalized)) return 'yes';
+  if (['no', 'n', 'false', '0', 'لا'].includes(normalized)) return 'no';
+  if (['unknown', 'not sure', 'unsure', 'غير معروف', 'غير متأكد', 'مش عارف'].includes(normalized)) return 'unknown';
+  return null;
+}
+
+function getAtopyHistorySource(record = {}) {
+  return record.assessment?.exposures?.atopyHistory
+    ?? record.exposures?.atopyHistory
+    ?? record.atopyHistory
+    ?? record.assessment?.atopyHistory
+    ?? {};
+}
+
+function transformAtopyHistory(record = {}, preprocessor = ATOPY_HISTORY_PREPROCESSOR) {
+  const source = getAtopyHistorySource(record);
+  const fields = {};
+  for (const key of preprocessor.fields) {
+    const normalized = normalizeAtopyHistoryValue(source?.[key]);
+    const category = normalized || 'unknown';
+    fields[key] = {
+      category,
+      oneHot: preprocessor.categories.map(candidate => candidate === category ? 1 : 0),
+      missing: normalized === null ? 1 : 0
+    };
+  }
+  return fields;
+}
+
+function fitAtopyHistoryPreprocessor(trainingRecords = []) {
+  const observedRecords = trainingRecords.filter(record => {
+    const transformed = transformAtopyHistory(record);
+    return Object.values(transformed).some(feature => feature.missing === 0);
+  }).length;
+  return { ...ATOPY_HISTORY_PREPROCESSOR, fitted: observedRecords > 0, trainingCount: observedRecords };
+}
+
 function getMmrcScore(record = {}) {
   const value = record.mmrc_score ?? record.mmrcGrade ?? record.mmrc_grade
     ?? record.symptoms?.mmrcGrade ?? record.assessment?.symptoms?.mmrcGrade;
@@ -667,7 +718,8 @@ function extractFeatures(rawData = {}, {
   coughDurationPreprocessor = COUGH_DURATION_PREPROCESSOR,
   temperaturePreprocessor = FEVER_PREPROCESSOR,
   smokingHistoryPreprocessor = SMOKING_HISTORY_PREPROCESSOR,
-  environmentalExposurePreprocessor = ENVIRONMENTAL_EXPOSURE_PREPROCESSOR
+  environmentalExposurePreprocessor = ENVIRONMENTAL_EXPOSURE_PREPROCESSOR,
+  atopyHistoryPreprocessor = ATOPY_HISTORY_PREPROCESSOR
 } = {}) {
   const age = clampNumber(rawData.age, 'age');
   const spo2Input = rawData.oxygen_saturation ?? rawData.spo2;
@@ -704,6 +756,7 @@ function extractFeatures(rawData = {}, {
   const chestPain = (chestPainPresence === 'yes' || rawData.sharp_chest_pain) ? 1.0 : 0.0;
   const smokingHistoryFeatures = transformSmokingHistory(rawData, smokingHistoryPreprocessor);
   const environmentalExposureFeatures = transformEnvironmentalExposure(rawData, environmentalExposurePreprocessor);
+  const atopyHistoryFeatures = transformAtopyHistory(rawData, atopyHistoryPreprocessor);
   const smokingYears = smokingHistoryFeatures.packYears;
   const asthmaHistory = (rawData.chronic_asthma_history || rawData.has_asthma) ? 1.0 : 0.0;
   const copdHistory = (rawData.chronic_copd_history || rawData.has_copd) ? 1.0 : 0.0;
@@ -772,7 +825,8 @@ function extractFeatures(rawData = {}, {
     ...environmentalExposureFeatures.sourceOneHot,
     environmentalExposureFeatures.none,
     environmentalExposureFeatures.unknown,
-    environmentalExposureFeatures.missing
+    environmentalExposureFeatures.missing,
+    ...atopyHistoryPreprocessor.fields.flatMap(key => [...atopyHistoryFeatures[key].oneHot, atopyHistoryFeatures[key].missing])
   ];
 }
 
@@ -794,9 +848,12 @@ module.exports = {
   SMOKING_HISTORY_FEATURE_COUNT,
   ENVIRONMENTAL_EXPOSURE_PREPROCESSOR,
   ENVIRONMENTAL_EXPOSURE_FEATURE_COUNT,
+  ATOPY_HISTORY_PREPROCESSOR,
+  ATOPY_HISTORY_FEATURE_COUNT,
   fitTemperaturePreprocessor,
   fitSmokingHistoryPreprocessor,
   fitEnvironmentalExposurePreprocessor,
+  fitAtopyHistoryPreprocessor,
   clampNumber,
   extractFeatures,
   fitMmrcPreprocessor,
@@ -812,6 +869,8 @@ module.exports = {
   transformSmokingHistory,
   normalizeEnvironmentalExposureKey,
   transformEnvironmentalExposure,
+  normalizeAtopyHistoryValue,
+  transformAtopyHistory,
   transformMmrcScore,
   transformCoughCharacter,
   fitCoughDurationPreprocessor,
