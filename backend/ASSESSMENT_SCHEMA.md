@@ -57,7 +57,14 @@
         "vaping": "unknown",
         "passiveSmoke": "yes"
       },
-      "environmental": ["traffic_exhaust", "rice_straw_burning"]
+      "environmental": ["traffic_exhaust", "rice_straw_burning"],
+      "atopyHistory": {
+        "nasalAllergy": "yes",
+        "eczema": "no",
+        "childhoodAsthma": "unknown",
+        "familyAsthma": "no",
+        "familyPulmonaryFibrosis": "unknown"
+      }
     },
     "symptoms": {
       "breathingDifficulty": "no",
@@ -267,7 +274,11 @@
 * استخدم `"none"` عند نفي جميع مصادر التعرض، أو `"unknown"` عندما لا يعرف المريض. هاتان القيمتان حصريتان ولا تجتمعان مع مصادر تعرض أخرى.
 * الحقل يسجل تاريخ التعرض المبلغ عنه للمراجعة الطبية؛ لا يغير درجة الفرز تلقائياً.
 
-### 2.3 الأدوية والملاحظات التي يقدمها المريض (`assessment.medications` / `assessment.notes`):
+### 2.3 التاريخ الشخصي والعائلي للحساسية (`assessment.exposures.atopyHistory`):
+* `nasalAllergy`, `eczema`, `childhoodAsthma`, `familyAsthma`, و`familyPulmonaryFibrosis` حقول إلزامية بخيارات مغلقة: `"yes"` | `"no"` | `"unknown"`.
+* يسجل هذا القسم ما أفاد به المريض للمراجعة الطبية، ولا يثبت تشخيصاً ولا يغير درجة الفرز تلقائياً.
+
+### 2.4 الأدوية والملاحظات التي يقدمها المريض (`assessment.medications` / `assessment.notes`):
 * `assessment.medications.current`: نص اختياري حتى `500` حرف، أو `null` عند عدم تقديم بيانات.
 * `assessment.medications.status`: `"provided"` أو `"not-provided"`، ويجب عدم عرض `not-provided` كأنه ينفي استخدام الأدوية.
 * `assessment.notes`: نص اختياري حتى `1000` حرف، أو `null`.

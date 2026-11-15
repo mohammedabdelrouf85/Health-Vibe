@@ -11761,6 +11761,12 @@ async function renderReportScreen(targetCaseId = null) {
       : Array.isArray(environmentalExposureValues) && environmentalExposureValues.length
         ? escapeHtml(environmentalExposureValues.map(value => environmentalExposureLabels[value] || environmentalExposureLabels.unknown).join(" • "))
         : escapeHtml(recordedClinicalText(null, isEn));
+    const atopyHistory = caseData.assessment?.exposures?.atopyHistory ?? caseData.atopyHistory;
+    const atopyHistoryDisplay = isSupport
+      ? escapeHtml(isEn ? "🔒 Medical data redacted" : "🔒 بيانات سريرية محجوبة")
+      : atopyHistory
+        ? escapeHtml(formatAtopyHistory(atopyHistory, isEn))
+        : escapeHtml(recordedClinicalText(null, isEn));
     const aiScoreDisplay = isSupport
       ? escapeHtml(isEn ? "🔒 Triage score redacted" : "🔒 تصنيف الفرز محجوب للدعم")
       : escapeHtml(isEn ? (caseData.aiScoreEn || caseData.aiScore || missing) : (caseData.aiScore || missing));
@@ -12017,6 +12023,8 @@ async function renderReportScreen(targetCaseId = null) {
               <strong style="margin-inline-start: 6px; color: var(--ink);">${smokingHistoryDisplay}</strong>
               <br><span style="color: var(--muted);">${isEn ? "Occupational & environmental exposure:" : "التعرض المهني والبيئي:"}</span>
               <strong style="margin-inline-start: 6px; color: var(--ink);">${environmentalExposureDisplay}</strong>
+              <br><span style="color: var(--muted);">${isEn ? "Allergy & family history:" : "تاريخ الحساسية والعائلة:"}</span>
+              <strong style="margin-inline-start: 6px; color: var(--ink);">${atopyHistoryDisplay}</strong>
             </div>
             <div>
               <span style="color: var(--muted);">${isEn ? "AI Risk Classification:" : "تصنيف الذكاء الاصطناعي:"}</span>
@@ -18965,6 +18973,7 @@ window.openConfirmAssessmentModal = function(data, onConfirm) {
   safeSet("confirmAsthmaCopd", data.asthmaCopd);
   safeSet("confirmSmokingHistory", data.smokingHistory || (isEn ? "Not recorded" : "غير مسجل"));
   safeSet("confirmEnvironmentalExposure", data.environmentalExposure || (isEn ? "Not recorded" : "غير مسجل"));
+  safeSet("confirmAtopyHistory", data.atopyHistory || (isEn ? "Not recorded" : "غير مسجل"));
   safeSet("confirmRisks", data.riskFactors && data.riskFactors.length ? data.riskFactors.join("، ") : (isEn ? "None" : "لا يوجد"));
   safeSet("confirmMedications", data.currentMedications || (isEn ? "Not provided" : "غير مسجل"));
   safeSet("confirmNotes", data.notes || (isEn ? "Not provided" : "غير مسجل"));
@@ -19409,6 +19418,11 @@ const SINGLE_SELECT_CHOICE_GROUPS = [
   "shishaExposureChoices",
   "vapeExposureChoices",
   "passiveSmokeChoices",
+  "nasalAllergyChoices",
+  "eczemaHistoryChoices",
+  "childhoodAsthmaChoices",
+  "familyAsthmaChoices",
+  "familyPulmonaryFibrosisChoices",
   "chestPainChoices",
   "chestPainCharacterChoices",
   "symptomProgressionChoices",
@@ -19430,7 +19444,7 @@ SINGLE_SELECT_CHOICE_GROUPS.forEach((groupId) => {
         radio.setAttribute("aria-checked", selected ? "true" : "false");
         radio.tabIndex = selected ? 0 : -1;
       });
-    } else if (["coughNatureChoices", "sputumColorChoices", "wheezingChoices", "chillsChoices", "nightSweatsChoices", "chestPainChoices", "chestPainCharacterChoices", "cigaretteSmokingStatusChoices", "shishaExposureChoices", "vapeExposureChoices", "passiveSmokeChoices"].includes(groupId)) {
+    } else if (["coughNatureChoices", "sputumColorChoices", "wheezingChoices", "chillsChoices", "nightSweatsChoices", "chestPainChoices", "chestPainCharacterChoices", "cigaretteSmokingStatusChoices", "shishaExposureChoices", "vapeExposureChoices", "passiveSmokeChoices", "nasalAllergyChoices", "eczemaHistoryChoices", "childhoodAsthmaChoices", "familyAsthmaChoices", "familyPulmonaryFibrosisChoices"].includes(groupId)) {
       group.querySelectorAll(".choice").forEach((choice) => {
         choice.setAttribute("aria-pressed", choice === btn ? "true" : "false");
       });
@@ -19612,6 +19626,30 @@ function normalizeEnvironmentalExposures(rawValues) {
     sources: isValid ? uniqueValues : [],
     errorField: "environmentalExposureChoices"
   };
+}
+
+const ATOPY_HISTORY_GROUPS = Object.freeze({ nasalAllergy: "nasalAllergyChoices", eczema: "eczemaHistoryChoices", childhoodAsthma: "childhoodAsthmaChoices", familyAsthma: "familyAsthmaChoices", familyPulmonaryFibrosis: "familyPulmonaryFibrosisChoices" });
+
+function normalizeAtopyHistory(raw = {}) {
+  const value = {};
+  let isValid = true;
+  Object.keys(ATOPY_HISTORY_GROUPS).forEach(key => {
+    const normalized = normalizeYesNoUnknown(raw?.[key]);
+    if (!normalized) isValid = false;
+    value[key] = normalized || "unknown";
+  });
+  return { isValid, value };
+}
+
+function readAtopyHistoryFromForm() {
+  return Object.fromEntries(Object.entries(ATOPY_HISTORY_GROUPS).map(([key, groupId]) => [key, document.querySelector(`#${groupId} .choice.active`)?.dataset.atopyValue || "unknown"]));
+}
+
+function formatAtopyHistory(history, isEn = false) {
+  const labels = isEn
+    ? { nasalAllergy: "Allergic rhinitis", eczema: "Eczema", childhoodAsthma: "Childhood asthma", familyAsthma: "Family asthma", familyPulmonaryFibrosis: "Family pulmonary fibrosis" }
+    : { nasalAllergy: "حساسية الأنف", eczema: "الإكزيما", childhoodAsthma: "ربو الطفولة", familyAsthma: "ربو العائلة", familyPulmonaryFibrosis: "التليف الرئوي بالعائلة" };
+  return Object.keys(ATOPY_HISTORY_GROUPS).map(key => `${labels[key]}: ${yesNoUnknownLabel(history?.[key] || "unknown", isEn)}`).join(" • ");
 }
 
 const environmentalExposureGroup = document.getElementById("environmentalExposureChoices");
@@ -19914,6 +19952,7 @@ function buildAssessmentModel({
   asthmaCopdRaw = "غير معروف",
   smokingHistoryRaw = {},
   environmentalExposureRaw = ["unknown"],
+  atopyHistoryRaw = {},
   currentMedicationsRaw = "",
   notesRaw = "",
   riskFactorsRaw = [],
@@ -20036,6 +20075,11 @@ function buildAssessmentModel({
   if (!environmentalExposure.isValid) {
     throw new Error(currentLanguage === "en" ? "Please select an environmental exposure, None, or Not sure." : "يرجى اختيار أحد مصادر التعرض البيئي أو لا يوجد أو غير معروف.");
   }
+  const atopyHistoryResult = normalizeAtopyHistory(atopyHistoryRaw);
+  if (!atopyHistoryResult.isValid) {
+    throw new Error(currentLanguage === "en" ? "Please record each personal and family allergy history answer." : "يرجى تسجيل إجابات التاريخ الشخصي والعائلي للحساسية.");
+  }
+  const atopyHistory = atopyHistoryResult.value;
   const currentMedications = String(currentMedicationsRaw || "").trim().slice(0, 500);
   const patientNotes = String(notesRaw || "").trim().slice(0, 1000);
 
@@ -20165,7 +20209,7 @@ function buildAssessmentModel({
         respiratoryRateUnit: parsedRespiratoryRate.unit,
         respiratoryRateStatus: parsedRespiratoryRate.reason || "recorded"
       },
-      exposures: { smokingHistory, environmental: environmentalExposure.sources },
+      exposures: { smokingHistory, environmental: environmentalExposure.sources, atopyHistory },
       symptoms: {
         breathingDifficulty: breathingKey,
         breathingDifficultyLabelAr: mmrcLabelAr,
@@ -20312,6 +20356,7 @@ function buildAssessmentModel({
     smokingHistory,
     packYears: smokingHistory.cigarettePackYears,
     environmentalExposure: environmentalExposure.sources,
+    atopyHistory,
     currentMedications: currentMedications || null,
     patientNotes: patientNotes || null,
     calculatedAge: calculatedAge,
@@ -20453,8 +20498,9 @@ function setChoiceGroupValue(groupId, value) {
       || btn.dataset.shisha === value
       || btn.dataset.vape === value
       || btn.dataset.passiveSmoke === value;
-    btn.classList.toggle("active", matchesValue);
-    if (btn.hasAttribute("aria-pressed")) btn.setAttribute("aria-pressed", matchesValue ? "true" : "false");
+    const matchesAtopyValue = btn.dataset.atopyValue === value;
+    btn.classList.toggle("active", matchesValue || matchesAtopyValue);
+    if (btn.hasAttribute("aria-pressed")) btn.setAttribute("aria-pressed", matchesValue || matchesAtopyValue ? "true" : "false");
   });
 }
 
@@ -20503,6 +20549,7 @@ function gatherAssessmentDraftFields() {
     riskFactors: readChoices("riskChoices"),
     environmentalExposures: Array.from(document.querySelectorAll("#environmentalExposureChoices .choice.active"))
       .map(button => button.dataset.environmentalExposure).filter(Boolean),
+    atopyHistory: readAtopyHistoryFromForm(),
     criticalSymptoms,
     currentMedications: document.getElementById("currentMedicationsInput")?.value.trim() || "",
     notes: document.getElementById("assessmentNotesInput")?.value.trim() || "",
@@ -20588,6 +20635,7 @@ function applyAssessmentDraftFields(fields = {}) {
   setChoiceGroupValue("symptomProgressionChoices", fields.symptomProgression);
   setChoiceGroupValue("recentInfectionChoices", fields.recentInfection);
   setChoiceGroupValue("asthmaCopdChoices", fields.asthmaCopd);
+  Object.entries(ATOPY_HISTORY_GROUPS).forEach(([key, groupId]) => setChoiceGroupValue(groupId, fields.atopyHistory?.[key] || "unknown"));
   const riskGroup = document.getElementById("riskChoices");
   if (riskGroup && Array.isArray(fields.riskFactors) && fields.riskFactors.length) {
     riskGroup.querySelectorAll(".choice").forEach(btn => {
@@ -20920,6 +20968,7 @@ function validateAssessmentFields({
   nightSweats,
   smokingHistory = {},
   environmentalExposures = ["unknown"],
+  atopyHistory = {},
   isEn = false
 }) {
   const errors = [];
@@ -21072,6 +21121,13 @@ function validateAssessmentFields({
     });
   }
 
+  if (!normalizeAtopyHistory(atopyHistory).isValid) {
+    errors.push({
+      field: "atopy-history-fields",
+      message: isEn ? "Please choose Yes, No, or Not sure for each allergy history item." : "يرجى اختيار نعم أو لا أو غير متأكد لكل بند في تاريخ الحساسية."
+    });
+  }
+
   if (String(currentMedications || "").length > 500) {
     errors.push({
       field: "currentMedicationsInput",
@@ -21215,6 +21271,7 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
     });
     const environmentalExposures = Array.from(document.querySelectorAll("#environmentalExposureChoices .choice.active"))
       .map(button => button.dataset.environmentalExposure).filter(Boolean);
+    const atopyHistory = readAtopyHistoryFromForm();
 
     // ── التحقق الشامل الصارم من كافة حقول التقييم (Full Assessment Validation) ──
     const validation = validateAssessmentFields({
@@ -21235,6 +21292,7 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
       nightSweats,
       smokingHistory,
       environmentalExposures,
+      atopyHistory,
       symptomProgression,
       recentInfection,
       asthmaCopd,
@@ -21250,7 +21308,7 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
         const el = document.getElementById(id);
         if (el) el.style.borderColor = "";
       });
-      ["breathingChoices", "coughNatureChoices", "sputumColorChoices", "coughChoices", "riskChoices", "chestPainChoices", "chestPainCharacterChoices", "wheezingChoices", "chillsChoices", "nightSweatsChoices", "cigaretteSmokingStatusChoices", "shishaExposureChoices", "vapeExposureChoices", "passiveSmokeChoices", "environmentalExposureChoices", "symptomProgressionChoices", "recentInfectionChoices", "asthmaCopdChoices"].forEach(id => {
+      ["breathingChoices", "coughNatureChoices", "sputumColorChoices", "coughChoices", "riskChoices", "chestPainChoices", "chestPainCharacterChoices", "wheezingChoices", "chillsChoices", "nightSweatsChoices", "cigaretteSmokingStatusChoices", "shishaExposureChoices", "vapeExposureChoices", "passiveSmokeChoices", "environmentalExposureChoices", "nasalAllergyChoices", "eczemaHistoryChoices", "childhoodAsthmaChoices", "familyAsthmaChoices", "familyPulmonaryFibrosisChoices", "symptomProgressionChoices", "recentInfectionChoices", "asthmaCopdChoices"].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.outline = "";
       });
@@ -21315,6 +21373,7 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
       ? { dust: "Dust, soil, or sand", traffic_exhaust: "Vehicle exhaust", rice_straw_burning: "Rice-straw or crop-residue burning", factory_fumes: "Factory fumes", household_birds: "Household birds", none: "None", unknown: "Not sure" }
       : { dust: "أتربة أو غبار", traffic_exhaust: "عوادم سيارات", rice_straw_burning: "حرق قش الأرز أو مخلفات زراعية", factory_fumes: "أبخرة أو أدخنة مصانع", household_birds: "تربية طيور منزلية", none: "لا يوجد", unknown: "غير معروف" };
     const environmentalExposureSummary = environmentalExposures.map(value => environmentalExposureLabelMap[value] || environmentalExposureLabelMap.unknown).join(" • ");
+    const atopyHistorySummary = formatAtopyHistory(atopyHistory, isEn);
     const coughNatureLabel = COUGH_NATURE_TEXT[coughNature][isEn ? "en" : "ar"];
     const sputumColorLabel = sputumColor ? SPUTUM_COLOR_TEXT[sputumColor][isEn ? "en" : "ar"] : "";
     const coughSeverityLabel = AssessmentDictionaries.cough[coughLevel]?.[isEn ? "en" : "ar"] || "";
@@ -21342,6 +21401,7 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
       asthmaCopd,
       smokingHistory: smokingHistorySummary,
       environmentalExposure: environmentalExposureSummary,
+      atopyHistory: atopyHistorySummary,
       currentMedications: currentMedications || (isEn ? "Not provided" : "غير مسجل"),
       notes: notes || (isEn ? "Not provided" : "غير مسجل"),
       riskFactors,
@@ -21399,6 +21459,7 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
           asthmaCopdRaw: asthmaCopd,
           smokingHistoryRaw: smokingHistory,
           environmentalExposureRaw: environmentalExposures,
+          atopyHistoryRaw: atopyHistory,
           currentMedicationsRaw: currentMedications,
           notesRaw: notes,
           riskFactorsRaw: riskFactors,

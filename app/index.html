@@ -1995,6 +1995,40 @@
               <button class="choice active">لا</button>
               <button class="choice">غير معروف</button>
             </div>
+            <section class="atopy-history-fields" aria-labelledby="atopyHistoryHeading" style="margin-top: 14px; padding: 12px; border: 1px solid var(--line); border-radius: 12px;">
+              <h4 id="atopyHistoryHeading" data-i18n="assessment.atopyHistoryHeading" style="margin: 0 0 6px;">تاريخ الحساسية والربو العائلي</h4>
+              <small id="atopyHistoryHelp" class="field-hint" data-i18n="assessment.atopyHistoryHelp" style="display:block; margin-bottom:8px;">أجب عن التاريخ الشخصي والعائلي. اختر «غير معروف» إذا لم تتأكد.</small>
+              <label id="nasalAllergyLabel" data-i18n="assessment.nasalAllergyHistory">هل سبق تشخيصك بحساسية الأنف؟</label>
+              <div id="nasalAllergyChoices" class="choice-row three atopy-choice-row" role="group" aria-labelledby="nasalAllergyLabel" aria-describedby="atopyHistoryHelp">
+                <button type="button" class="choice" data-atopy-value="yes" aria-pressed="false"><span data-i18n="assessment.chillsYes">نعم</span></button>
+                <button type="button" class="choice" data-atopy-value="no" aria-pressed="false"><span data-i18n="assessment.chillsNo">لا</span></button>
+                <button type="button" class="choice active" data-atopy-value="unknown" aria-pressed="true"><span data-i18n="assessment.chillsUnknown">غير متأكد</span></button>
+              </div>
+              <label id="eczemaHistoryLabel" data-i18n="assessment.eczemaHistory">هل لديك إكزيما أو التهاب جلدي تحسسي؟</label>
+              <div id="eczemaHistoryChoices" class="choice-row three atopy-choice-row" role="group" aria-labelledby="eczemaHistoryLabel" aria-describedby="atopyHistoryHelp">
+                <button type="button" class="choice" data-atopy-value="yes" aria-pressed="false"><span data-i18n="assessment.chillsYes">نعم</span></button>
+                <button type="button" class="choice" data-atopy-value="no" aria-pressed="false"><span data-i18n="assessment.chillsNo">لا</span></button>
+                <button type="button" class="choice active" data-atopy-value="unknown" aria-pressed="true"><span data-i18n="assessment.chillsUnknown">غير متأكد</span></button>
+              </div>
+              <label id="childhoodAsthmaLabel" data-i18n="assessment.childhoodAsthmaHistory">هل أُصبت بحساسية صدر أو ربو في الطفولة؟</label>
+              <div id="childhoodAsthmaChoices" class="choice-row three atopy-choice-row" role="group" aria-labelledby="childhoodAsthmaLabel" aria-describedby="atopyHistoryHelp">
+                <button type="button" class="choice" data-atopy-value="yes" aria-pressed="false"><span data-i18n="assessment.chillsYes">نعم</span></button>
+                <button type="button" class="choice" data-atopy-value="no" aria-pressed="false"><span data-i18n="assessment.chillsNo">لا</span></button>
+                <button type="button" class="choice active" data-atopy-value="unknown" aria-pressed="true"><span data-i18n="assessment.chillsUnknown">غير متأكد</span></button>
+              </div>
+              <label id="familyAsthmaLabel" data-i18n="assessment.familyAsthmaHistory">هل يوجد ربو لدى أحد أفراد العائلة؟</label>
+              <div id="familyAsthmaChoices" class="choice-row three atopy-choice-row" role="group" aria-labelledby="familyAsthmaLabel" aria-describedby="atopyHistoryHelp">
+                <button type="button" class="choice" data-atopy-value="yes" aria-pressed="false"><span data-i18n="assessment.chillsYes">نعم</span></button>
+                <button type="button" class="choice" data-atopy-value="no" aria-pressed="false"><span data-i18n="assessment.chillsNo">لا</span></button>
+                <button type="button" class="choice active" data-atopy-value="unknown" aria-pressed="true"><span data-i18n="assessment.chillsUnknown">غير متأكد</span></button>
+              </div>
+              <label id="familyPulmonaryFibrosisLabel" data-i18n="assessment.familyPulmonaryFibrosisHistory">هل يوجد تليف رئوي لدى أحد أفراد العائلة؟</label>
+              <div id="familyPulmonaryFibrosisChoices" class="choice-row three atopy-choice-row" role="group" aria-labelledby="familyPulmonaryFibrosisLabel" aria-describedby="atopyHistoryHelp">
+                <button type="button" class="choice" data-atopy-value="yes" aria-pressed="false"><span data-i18n="assessment.chillsYes">نعم</span></button>
+                <button type="button" class="choice" data-atopy-value="no" aria-pressed="false"><span data-i18n="assessment.chillsNo">لا</span></button>
+                <button type="button" class="choice active" data-atopy-value="unknown" aria-pressed="true"><span data-i18n="assessment.chillsUnknown">غير متأكد</span></button>
+              </div>
+            </section>
             <label data-i18n="assessment.riskFactorsLabel">عوامل خطورة</label>
             <div id="riskChoices" class="choice-row four">
               <button class="choice">ربو</button>
@@ -4195,6 +4229,7 @@
         <div><span>ربو أو COPD</span><strong id="confirmAsthmaCopd">--</strong></div>
         <div><span data-i18n="assessment.smokingHistoryHeading">تاريخ التدخين والتعرض للدخان</span><strong id="confirmSmokingHistory">--</strong></div>
         <div><span data-i18n="assessment.environmentalExposureHeading">التعرض المهني والبيئي</span><strong id="confirmEnvironmentalExposure">--</strong></div>
+        <div><span data-i18n="assessment.atopyHistoryHeading">تاريخ الحساسية والربو العائلي</span><strong id="confirmAtopyHistory">--</strong></div>
         <div><span>عوامل الخطورة</span><strong id="confirmRisks">--</strong></div>
         <div><span>الأدوية الحالية</span><strong id="confirmMedications">--</strong></div>
         <div><span>ملاحظات</span><strong id="confirmNotes">--</strong></div>
