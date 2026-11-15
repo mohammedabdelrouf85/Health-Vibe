@@ -281,6 +281,10 @@
 ### 2.4 الأدوية والملاحظات التي يقدمها المريض (`assessment.medications` / `assessment.notes`):
 * `assessment.medications.current`: نص اختياري حتى `500` حرف، أو `null` عند عدم تقديم بيانات.
 * `assessment.medications.status`: `"provided"` أو `"not-provided"`، ويجب عدم عرض `not-provided` كأنه ينفي استخدام الأدوية.
+* `assessment.medications.rescueInhalerUsageLast7Days`: عدد صحيح غير سالب لاستخدام بخاخ الإنقاذ خلال آخر 7 أيام، أو `null` إذا لم يُقدّم.
+* `assessment.medications.rescueInhalerUsageStatus`: `"recorded"` أو `"unknown"` أو `"not-provided"` لتمييز الصفر المؤكد عن المجهول وعدم الإجابة. لا يؤثر الحقل على درجة الفرز تلقائياً.
+* `assessment.medications.rescueInhalerUsageLast7Days`: عدد صحيح غير سالب لاستخدام بخاخ الإنقاذ خلال آخر 7 أيام، أو `null` إذا لم يُقدّم.
+* `assessment.medications.rescueInhalerUsageStatus`: `"recorded"` أو `"unknown"` أو `"not-provided"` لتمييز الصفر المؤكد عن المجهول وعدم الإجابة. لا يؤثر الحقل على درجة الفرز تلقائياً.
 * `assessment.notes`: نص اختياري حتى `1000` حرف، أو `null`.
 * `calculatedAge`: عمر محسوب من `dateOfBirth` عند توفره؛ إن لم يقدّم المريض تاريخ ميلاد صالحاً يبقى `null` ولا يستبدل بعمر مفترض.
 

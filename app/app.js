@@ -11761,6 +11761,13 @@ async function renderReportScreen(targetCaseId = null) {
       : Array.isArray(environmentalExposureValues) && environmentalExposureValues.length
         ? escapeHtml(environmentalExposureValues.map(value => environmentalExposureLabels[value] || environmentalExposureLabels.unknown).join(" • "))
         : escapeHtml(recordedClinicalText(null, isEn));
+    const inhalerUsageValue = caseData.assessment?.medications?.rescueInhalerUsageLast7Days ?? caseData.rescueInhalerUsageLast7Days;
+    const inhalerUsageStatus = caseData.assessment?.medications?.rescueInhalerUsageStatus ?? caseData.rescueInhalerUsageStatus;
+    const rescueInhalerUsageDisplay = isSupport
+      ? escapeHtml(isEn ? "🔒 Medical data redacted" : "🔒 بيانات سريرية محجوبة")
+      : inhalerUsageStatus === "recorded" && Number.isInteger(inhalerUsageValue)
+        ? escapeHtml(`${inhalerUsageValue} ${isEn ? (inhalerUsageValue === 1 ? "time in the last 7 days" : "times in the last 7 days") : "مرة خلال آخر 7 أيام"}`)
+        : escapeHtml(inhalerUsageStatus === "unknown" ? (isEn ? "Not sure" : "غير معروف") : recordedClinicalText(null, isEn));
     const atopyHistory = caseData.assessment?.exposures?.atopyHistory ?? caseData.atopyHistory;
     const atopyHistoryDisplay = isSupport
       ? escapeHtml(isEn ? "🔒 Medical data redacted" : "🔒 بيانات سريرية محجوبة")
@@ -12025,6 +12032,8 @@ async function renderReportScreen(targetCaseId = null) {
               <strong style="margin-inline-start: 6px; color: var(--ink);">${environmentalExposureDisplay}</strong>
               <br><span style="color: var(--muted);">${isEn ? "Allergy & family history:" : "تاريخ الحساسية والعائلة:"}</span>
               <strong style="margin-inline-start: 6px; color: var(--ink);">${atopyHistoryDisplay}</strong>
+              <br><span style="color: var(--muted);">${isEn ? "Rescue inhaler use (7 days):" : "استخدام بخاخ الإنقاذ (7 أيام):"}</span>
+              <strong style="margin-inline-start: 6px; color: var(--ink);">${rescueInhalerUsageDisplay}</strong>
             </div>
             <div>
               <span style="color: var(--muted);">${isEn ? "AI Risk Classification:" : "تصنيف الذكاء الاصطناعي:"}</span>
@@ -18974,6 +18983,7 @@ window.openConfirmAssessmentModal = function(data, onConfirm) {
   safeSet("confirmSmokingHistory", data.smokingHistory || (isEn ? "Not recorded" : "غير مسجل"));
   safeSet("confirmEnvironmentalExposure", data.environmentalExposure || (isEn ? "Not recorded" : "غير مسجل"));
   safeSet("confirmAtopyHistory", data.atopyHistory || (isEn ? "Not recorded" : "غير مسجل"));
+  safeSet("confirmRescueInhalerUsage", data.rescueInhalerUsage || (isEn ? "Not provided" : "غير مسجل"));
   safeSet("confirmRisks", data.riskFactors && data.riskFactors.length ? data.riskFactors.join("، ") : (isEn ? "None" : "لا يوجد"));
   safeSet("confirmMedications", data.currentMedications || (isEn ? "Not provided" : "غير مسجل"));
   safeSet("confirmNotes", data.notes || (isEn ? "Not provided" : "غير مسجل"));
@@ -19613,6 +19623,20 @@ const ENVIRONMENTAL_EXPOSURE_KEYS = Object.freeze([
   "dust", "traffic_exhaust", "rice_straw_burning", "factory_fumes", "household_birds"
 ]);
 
+function parseOptionalRescueInhalerUses(value, markedUnknown = false) {
+  if (markedUnknown) {
+    const hasValue = String(value ?? "").trim() !== "";
+    return { ok: !hasValue, value: null, status: "unknown" };
+  }
+  const raw = String(value ?? "").trim();
+  if (!raw) return { ok: true, value: null, status: "not-provided" };
+  const normalized = normalizeArabicIndicDigits(raw);
+  if (!/^\d{1,3}$/.test(normalized)) return { ok: false, value: null, status: "invalid" };
+  const parsed = Number(normalized);
+  if (!Number.isInteger(parsed) || parsed < 0 || parsed > 999) return { ok: false, value: null, status: "invalid" };
+  return { ok: true, value: parsed, status: "recorded" };
+}
+
 function normalizeEnvironmentalExposures(rawValues) {
   const validValues = [...ENVIRONMENTAL_EXPOSURE_KEYS, "none", "unknown"];
   const values = Array.isArray(rawValues) ? rawValues.map(value => String(value).trim()) : [];
@@ -19953,6 +19977,8 @@ function buildAssessmentModel({
   smokingHistoryRaw = {},
   environmentalExposureRaw = ["unknown"],
   atopyHistoryRaw = {},
+  rescueInhalerUsageRaw = null,
+  rescueInhalerUsageUnknownRaw = false,
   currentMedicationsRaw = "",
   notesRaw = "",
   riskFactorsRaw = [],
@@ -20080,6 +20106,10 @@ function buildAssessmentModel({
     throw new Error(currentLanguage === "en" ? "Please record each personal and family allergy history answer." : "يرجى تسجيل إجابات التاريخ الشخصي والعائلي للحساسية.");
   }
   const atopyHistory = atopyHistoryResult.value;
+  const parsedRescueInhalerUses = parseOptionalRescueInhalerUses(rescueInhalerUsageRaw, rescueInhalerUsageUnknownRaw);
+  if (!parsedRescueInhalerUses.ok) {
+    throw new Error(currentLanguage === "en" ? "Rescue inhaler use must be a whole number from 0 to 999 or marked not sure." : "يجب إدخال عدد صحيح من 0 إلى 999 لاستخدام البخاخ أو اختيار غير معروف.");
+  }
   const currentMedications = String(currentMedicationsRaw || "").trim().slice(0, 500);
   const patientNotes = String(notesRaw || "").trim().slice(0, 1000);
 
@@ -20259,7 +20289,9 @@ function buildAssessmentModel({
       },
       medications: {
         current: currentMedications || null,
-        status: currentMedications ? "provided" : "not-provided"
+        status: currentMedications ? "provided" : "not-provided",
+        rescueInhalerUsageLast7Days: parsedRescueInhalerUses.value,
+        rescueInhalerUsageStatus: parsedRescueInhalerUses.status
       },
       notes: patientNotes || null,
       riskFactors: {
@@ -20357,6 +20389,8 @@ function buildAssessmentModel({
     packYears: smokingHistory.cigarettePackYears,
     environmentalExposure: environmentalExposure.sources,
     atopyHistory,
+    rescueInhalerUsageLast7Days: parsedRescueInhalerUses.value,
+    rescueInhalerUsageStatus: parsedRescueInhalerUses.status,
     currentMedications: currentMedications || null,
     patientNotes: patientNotes || null,
     calculatedAge: calculatedAge,
@@ -20550,6 +20584,8 @@ function gatherAssessmentDraftFields() {
     environmentalExposures: Array.from(document.querySelectorAll("#environmentalExposureChoices .choice.active"))
       .map(button => button.dataset.environmentalExposure).filter(Boolean),
     atopyHistory: readAtopyHistoryFromForm(),
+    rescueInhalerUses7Days: document.getElementById("rescueInhalerUses7Days")?.value.trim() || "",
+    rescueInhalerUsageUnknown: Boolean(document.getElementById("rescueInhalerUsageUnknown")?.checked),
     criticalSymptoms,
     currentMedications: document.getElementById("currentMedicationsInput")?.value.trim() || "",
     notes: document.getElementById("assessmentNotesInput")?.value.trim() || "",
@@ -20570,6 +20606,9 @@ function applyAssessmentDraftFields(fields = {}) {
   setValue("cigarettePacksPerDay", fields.cigarettePacksPerDay);
   setValue("cigaretteSmokingYears", fields.cigaretteSmokingYears);
   setValue("currentMedicationsInput", fields.currentMedications);
+  setValue("rescueInhalerUses7Days", fields.rescueInhalerUses7Days);
+  const inhalerUnknown = document.getElementById("rescueInhalerUsageUnknown");
+  if (inhalerUnknown) inhalerUnknown.checked = fields.rescueInhalerUsageUnknown === true;
   setValue("assessmentNotesInput", fields.notes);
   const wheezingGroup = document.getElementById("wheezingChoices");
   if (wheezingGroup) {
@@ -20969,6 +21008,7 @@ function validateAssessmentFields({
   smokingHistory = {},
   environmentalExposures = ["unknown"],
   atopyHistory = {},
+  rescueInhalerUsage = { value: null, status: "not-provided" },
   isEn = false
 }) {
   const errors = [];
@@ -21126,6 +21166,10 @@ function validateAssessmentFields({
       field: "atopy-history-fields",
       message: isEn ? "Please choose Yes, No, or Not sure for each allergy history item." : "يرجى اختيار نعم أو لا أو غير متأكد لكل بند في تاريخ الحساسية."
     });
+  }
+
+  if (!parseOptionalRescueInhalerUses(rescueInhalerUsage.value, rescueInhalerUsage.status === "unknown").ok) {
+    errors.push({ field: "rescueInhalerUses7Days", message: isEn ? "Enter a whole number from 0 to 999 or mark the answer as not sure." : "أدخل عدداً صحيحاً من 0 إلى 999 أو اختر أن الإجابة غير معروفة." });
   }
 
   if (String(currentMedications || "").length > 500) {
@@ -21293,6 +21337,12 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
       smokingHistory,
       environmentalExposures,
       atopyHistory,
+      rescueInhalerUsage: (() => {
+        const isUnknown = Boolean(document.getElementById("rescueInhalerUsageUnknown")?.checked);
+        const raw = document.getElementById("rescueInhalerUses7Days")?.value.trim() || "";
+        const parsed = parseOptionalRescueInhalerUses(raw, isUnknown);
+        return { value: parsed.value, status: parsed.status };
+      })(),
       symptomProgression,
       recentInfection,
       asthmaCopd,
@@ -21304,7 +21354,7 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
 
     if (!validation.isValid) {
       // تنظيف الحدود السابقة
-      ["oxygenInput", "symptomDuration", "coughDurationInput", "temperatureInput", "respiratoryRateInput", "cigarettePacksPerDay", "cigaretteSmokingYears", "currentMedicationsInput", "assessmentNotesInput"].forEach(id => {
+      ["oxygenInput", "symptomDuration", "coughDurationInput", "temperatureInput", "respiratoryRateInput", "cigarettePacksPerDay", "cigaretteSmokingYears", "rescueInhalerUses7Days", "currentMedicationsInput", "assessmentNotesInput"].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.borderColor = "";
       });
@@ -21374,6 +21424,12 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
       : { dust: "أتربة أو غبار", traffic_exhaust: "عوادم سيارات", rice_straw_burning: "حرق قش الأرز أو مخلفات زراعية", factory_fumes: "أبخرة أو أدخنة مصانع", household_birds: "تربية طيور منزلية", none: "لا يوجد", unknown: "غير معروف" };
     const environmentalExposureSummary = environmentalExposures.map(value => environmentalExposureLabelMap[value] || environmentalExposureLabelMap.unknown).join(" • ");
     const atopyHistorySummary = formatAtopyHistory(atopyHistory, isEn);
+    const rescueInhalerUnknown = Boolean(document.getElementById("rescueInhalerUsageUnknown")?.checked);
+    const rescueInhalerRaw = document.getElementById("rescueInhalerUses7Days")?.value.trim() || "";
+    const rescueInhalerParsed = parseOptionalRescueInhalerUses(rescueInhalerRaw, rescueInhalerUnknown);
+    const rescueInhalerUsageSummary = rescueInhalerParsed.status === "recorded"
+      ? `${rescueInhalerParsed.value} ${isEn ? (rescueInhalerParsed.value === 1 ? "time in the last 7 days" : "times in the last 7 days") : "مرة خلال آخر 7 أيام"}`
+      : rescueInhalerParsed.status === "unknown" ? (isEn ? "Not sure" : "غير معروف") : (isEn ? "Not provided" : "غير مسجل");
     const coughNatureLabel = COUGH_NATURE_TEXT[coughNature][isEn ? "en" : "ar"];
     const sputumColorLabel = sputumColor ? SPUTUM_COLOR_TEXT[sputumColor][isEn ? "en" : "ar"] : "";
     const coughSeverityLabel = AssessmentDictionaries.cough[coughLevel]?.[isEn ? "en" : "ar"] || "";
@@ -21402,6 +21458,7 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
       smokingHistory: smokingHistorySummary,
       environmentalExposure: environmentalExposureSummary,
       atopyHistory: atopyHistorySummary,
+      rescueInhalerUsage: rescueInhalerUsageSummary,
       currentMedications: currentMedications || (isEn ? "Not provided" : "غير مسجل"),
       notes: notes || (isEn ? "Not provided" : "غير مسجل"),
       riskFactors,
@@ -21460,6 +21517,8 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
           smokingHistoryRaw: smokingHistory,
           environmentalExposureRaw: environmentalExposures,
           atopyHistoryRaw: atopyHistory,
+          rescueInhalerUsageRaw: rescueInhalerRaw || null,
+          rescueInhalerUsageUnknownRaw: rescueInhalerUnknown,
           currentMedicationsRaw: currentMedications,
           notesRaw: notes,
           riskFactorsRaw: riskFactors,

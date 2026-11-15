@@ -2091,6 +2091,16 @@
             </section>
             <label>الأدوية الحالية (اختياري)</label>
             <textarea id="currentMedicationsInput" rows="2" maxlength="500" aria-label="الأدوية الحالية" placeholder="اكتب الأدوية أو اتركها فارغة إذا لم يتم تقديمها"></textarea>
+            <section class="inhaler-usage-fields" aria-labelledby="inhalerUsageHeading" style="margin-top: 14px; padding: 12px; border: 1px solid var(--line); border-radius: 12px;">
+              <h4 id="inhalerUsageHeading" data-i18n="assessment.inhalerUsageHeading" style="margin: 0 0 6px;">استخدام بخاخ الطوارئ</h4>
+              <small id="inhalerUsageHelp" class="field-hint" data-i18n="assessment.inhalerUsageHelp" style="display:block; margin-bottom:8px;">كم مرة استخدمت بخاخ الإنقاذ مثل الفنتولين أو السالبوتامول خلال آخر 7 أيام؟</small>
+              <label for="rescueInhalerUses7Days" data-i18n="assessment.rescueInhalerUses7Days">عدد مرات الاستخدام خلال 7 أيام</label>
+              <input id="rescueInhalerUses7Days" type="number" inputmode="numeric" min="0" max="999" step="1" placeholder="0" aria-describedby="inhalerUsageHelp" data-i18n-placeholder="assessment.inhalerUsagePlaceholder">
+              <label id="inhalerUsageUnknownLabel" style="display:inline-flex; align-items:center; gap:8px; margin-top:8px;">
+                <input id="rescueInhalerUsageUnknown" type="checkbox" aria-describedby="inhalerUsageHelp">
+                <span data-i18n="assessment.inhalerUsageUnknown">لا أتذكر / غير معروف</span>
+              </label>
+            </section>
             <label>ملاحظات إضافية (اختياري)</label>
             <textarea id="assessmentNotesInput" rows="2" maxlength="1000" aria-label="ملاحظات إضافية" placeholder="أي تفاصيل يريد المريض إضافتها"></textarea>
             <div class="safety-note">لن تظهر نتيجة نهائية للمريض قبل مراجعة الطبيب للحالة.</div>
@@ -4230,6 +4240,7 @@
         <div><span data-i18n="assessment.smokingHistoryHeading">تاريخ التدخين والتعرض للدخان</span><strong id="confirmSmokingHistory">--</strong></div>
         <div><span data-i18n="assessment.environmentalExposureHeading">التعرض المهني والبيئي</span><strong id="confirmEnvironmentalExposure">--</strong></div>
         <div><span data-i18n="assessment.atopyHistoryHeading">تاريخ الحساسية والربو العائلي</span><strong id="confirmAtopyHistory">--</strong></div>
+        <div><span data-i18n="assessment.inhalerUsageHeading">استخدام بخاخ الطوارئ</span><strong id="confirmRescueInhalerUsage">--</strong></div>
         <div><span>عوامل الخطورة</span><strong id="confirmRisks">--</strong></div>
         <div><span>الأدوية الحالية</span><strong id="confirmMedications">--</strong></div>
         <div><span>ملاحظات</span><strong id="confirmNotes">--</strong></div>

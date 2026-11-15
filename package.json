@@ -21,6 +21,7 @@
     "evaluate:smoking-history-preprocessing": "node ml_models/evaluate_smoking_history_preprocessing.js",
     "evaluate:environmental-exposure-preprocessing": "node ml_models/evaluate_environmental_exposure_preprocessing.js",
     "evaluate:atopy-history-preprocessing": "node ml_models/evaluate_atopy_history_preprocessing.js",
+    "test:rescue-inhaler-usage": "node tests/rescue_inhaler_usage.test.js",
     "test:fn-tuning": "node tests/false_negative_analysis_and_threshold_tuning.test.js",
     "test:ml-processing": "node tests/ml_processing_indicator_and_double_submission.test.js",
     "test:model-version": "node tests/model_version_and_audit_logging.test.js",
