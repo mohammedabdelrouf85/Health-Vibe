@@ -11752,6 +11752,15 @@ async function renderReportScreen(targetCaseId = null) {
           `${isEn ? "Passive smoke" : "تدخين سلبي"}: ${yesNoUnknownLabel(smokingHistory.passiveSmoke, isEn)}`
         ].filter(Boolean).join(" • "))
         : escapeHtml(recordedClinicalText(null, isEn));
+    const environmentalExposureValues = caseData.assessment?.exposures?.environmental ?? caseData.environmentalExposure;
+    const environmentalExposureLabels = isEn
+      ? { dust: "Dust, soil, or sand", traffic_exhaust: "Vehicle exhaust", rice_straw_burning: "Rice-straw or crop-residue burning", factory_fumes: "Factory fumes", household_birds: "Household birds", none: "None", unknown: "Not sure" }
+      : { dust: "أتربة أو غبار", traffic_exhaust: "عوادم سيارات", rice_straw_burning: "حرق قش الأرز أو مخلفات زراعية", factory_fumes: "أبخرة أو أدخنة مصانع", household_birds: "تربية طيور منزلية", none: "لا يوجد", unknown: "غير معروف" };
+    const environmentalExposureDisplay = isSupport
+      ? escapeHtml(isEn ? "🔒 Medical data redacted" : "🔒 بيانات سريرية محجوبة")
+      : Array.isArray(environmentalExposureValues) && environmentalExposureValues.length
+        ? escapeHtml(environmentalExposureValues.map(value => environmentalExposureLabels[value] || environmentalExposureLabels.unknown).join(" • "))
+        : escapeHtml(recordedClinicalText(null, isEn));
     const aiScoreDisplay = isSupport
       ? escapeHtml(isEn ? "🔒 Triage score redacted" : "🔒 تصنيف الفرز محجوب للدعم")
       : escapeHtml(isEn ? (caseData.aiScoreEn || caseData.aiScore || missing) : (caseData.aiScore || missing));
@@ -12006,6 +12015,8 @@ async function renderReportScreen(targetCaseId = null) {
               <strong style="margin-inline-start: 6px; color: var(--ink);">${riskFactorsDisplay}</strong>
               <br><span style="color: var(--muted);">${isEn ? "Smoking & smoke exposure:" : "التدخين والتعرض للدخان:"}</span>
               <strong style="margin-inline-start: 6px; color: var(--ink);">${smokingHistoryDisplay}</strong>
+              <br><span style="color: var(--muted);">${isEn ? "Occupational & environmental exposure:" : "التعرض المهني والبيئي:"}</span>
+              <strong style="margin-inline-start: 6px; color: var(--ink);">${environmentalExposureDisplay}</strong>
             </div>
             <div>
               <span style="color: var(--muted);">${isEn ? "AI Risk Classification:" : "تصنيف الذكاء الاصطناعي:"}</span>
@@ -18953,6 +18964,7 @@ window.openConfirmAssessmentModal = function(data, onConfirm) {
   safeSet("confirmRecentInfection", data.recentInfection);
   safeSet("confirmAsthmaCopd", data.asthmaCopd);
   safeSet("confirmSmokingHistory", data.smokingHistory || (isEn ? "Not recorded" : "غير مسجل"));
+  safeSet("confirmEnvironmentalExposure", data.environmentalExposure || (isEn ? "Not recorded" : "غير مسجل"));
   safeSet("confirmRisks", data.riskFactors && data.riskFactors.length ? data.riskFactors.join("، ") : (isEn ? "None" : "لا يوجد"));
   safeSet("confirmMedications", data.currentMedications || (isEn ? "Not provided" : "غير مسجل"));
   safeSet("confirmNotes", data.notes || (isEn ? "Not provided" : "غير مسجل"));
@@ -19583,6 +19595,49 @@ function buildSmokingHistory(rawHistory = {}) {
   };
 }
 
+const ENVIRONMENTAL_EXPOSURE_KEYS = Object.freeze([
+  "dust", "traffic_exhaust", "rice_straw_burning", "factory_fumes", "household_birds"
+]);
+
+function normalizeEnvironmentalExposures(rawValues) {
+  const validValues = [...ENVIRONMENTAL_EXPOSURE_KEYS, "none", "unknown"];
+  const values = Array.isArray(rawValues) ? rawValues.map(value => String(value).trim()) : [];
+  const uniqueValues = [...new Set(values)];
+  const hasInvalid = uniqueValues.some(value => !validValues.includes(value));
+  const sentinels = uniqueValues.filter(value => value === "none" || value === "unknown");
+  const sources = uniqueValues.filter(value => ENVIRONMENTAL_EXPOSURE_KEYS.includes(value));
+  const isValid = !hasInvalid && uniqueValues.length > 0 && (sentinels.length === 0 || (sentinels.length === 1 && sources.length === 0));
+  return {
+    isValid,
+    sources: isValid ? uniqueValues : [],
+    errorField: "environmentalExposureChoices"
+  };
+}
+
+const environmentalExposureGroup = document.getElementById("environmentalExposureChoices");
+if (environmentalExposureGroup) {
+  environmentalExposureGroup.addEventListener("click", event => {
+    const button = event.target.closest(".choice[data-environmental-exposure]");
+    if (!button) return;
+    const value = button.dataset.environmentalExposure;
+    const choices = Array.from(environmentalExposureGroup.querySelectorAll(".choice[data-environmental-exposure]"));
+    if (value === "none" || value === "unknown") {
+      choices.forEach(choice => choice.classList.toggle("active", choice === button));
+    } else {
+      button.classList.toggle("active");
+      choices.filter(choice => ["none", "unknown"].includes(choice.dataset.environmentalExposure))
+        .forEach(choice => choice.classList.remove("active"));
+      if (!choices.some(choice => ENVIRONMENTAL_EXPOSURE_KEYS.includes(choice.dataset.environmentalExposure) && choice.classList.contains("active"))) {
+        const unknownButton = choices.find(choice => choice.dataset.environmentalExposure === "unknown");
+        if (unknownButton) unknownButton.classList.add("active");
+      }
+    }
+    choices.forEach(choice => choice.setAttribute("aria-pressed", choice.classList.contains("active") ? "true" : "false"));
+    if (typeof updateAssessmentProgress === "function") updateAssessmentProgress();
+    if (typeof scheduleAssessmentDraftSave === "function") scheduleAssessmentDraftSave();
+  });
+}
+
 const AssessmentEnums = Object.freeze({
   BreathingDifficulty: {
     YES: "yes",
@@ -19858,6 +19913,7 @@ function buildAssessmentModel({
   recentInfectionRaw = "غير معروف",
   asthmaCopdRaw = "غير معروف",
   smokingHistoryRaw = {},
+  environmentalExposureRaw = ["unknown"],
   currentMedicationsRaw = "",
   notesRaw = "",
   riskFactorsRaw = [],
@@ -19976,6 +20032,10 @@ function buildAssessmentModel({
     throw new Error(currentLanguage === "en" ? "Please check the cigarette smoking history and smoke exposure answers." : "يرجى مراجعة تاريخ تدخين السجائر وإجابات التعرض للدخان.");
   }
   const smokingHistory = smokingHistoryResult.value;
+  const environmentalExposure = normalizeEnvironmentalExposures(environmentalExposureRaw);
+  if (!environmentalExposure.isValid) {
+    throw new Error(currentLanguage === "en" ? "Please select an environmental exposure, None, or Not sure." : "يرجى اختيار أحد مصادر التعرض البيئي أو لا يوجد أو غير معروف.");
+  }
   const currentMedications = String(currentMedicationsRaw || "").trim().slice(0, 500);
   const patientNotes = String(notesRaw || "").trim().slice(0, 1000);
 
@@ -20105,7 +20165,7 @@ function buildAssessmentModel({
         respiratoryRateUnit: parsedRespiratoryRate.unit,
         respiratoryRateStatus: parsedRespiratoryRate.reason || "recorded"
       },
-      exposures: { smokingHistory },
+      exposures: { smokingHistory, environmental: environmentalExposure.sources },
       symptoms: {
         breathingDifficulty: breathingKey,
         breathingDifficultyLabelAr: mmrcLabelAr,
@@ -20251,6 +20311,7 @@ function buildAssessmentModel({
     asthmaCopdKey: asthmaCopd,
     smokingHistory,
     packYears: smokingHistory.cigarettePackYears,
+    environmentalExposure: environmentalExposure.sources,
     currentMedications: currentMedications || null,
     patientNotes: patientNotes || null,
     calculatedAge: calculatedAge,
@@ -20440,6 +20501,8 @@ function gatherAssessmentDraftFields() {
     recentInfection: firstChoice("recentInfectionChoices"),
     asthmaCopd: firstChoice("asthmaCopdChoices"),
     riskFactors: readChoices("riskChoices"),
+    environmentalExposures: Array.from(document.querySelectorAll("#environmentalExposureChoices .choice.active"))
+      .map(button => button.dataset.environmentalExposure).filter(Boolean),
     criticalSymptoms,
     currentMedications: document.getElementById("currentMedicationsInput")?.value.trim() || "",
     notes: document.getElementById("assessmentNotesInput")?.value.trim() || "",
@@ -20511,6 +20574,15 @@ function applyAssessmentDraftFields(fields = {}) {
   setChoiceGroupValue("shishaExposureChoices", fields.shisha || "unknown");
   setChoiceGroupValue("vapeExposureChoices", fields.vaping || "unknown");
   setChoiceGroupValue("passiveSmokeChoices", fields.passiveSmoke || "unknown");
+  const savedExposureValues = Array.isArray(fields.environmentalExposures) && fields.environmentalExposures.length
+    ? fields.environmentalExposures : ["unknown"];
+  const exposureValues = normalizeEnvironmentalExposures(savedExposureValues).isValid ? savedExposureValues : ["unknown"];
+  const exposureGroup = document.getElementById("environmentalExposureChoices");
+  if (exposureGroup) exposureGroup.querySelectorAll(".choice[data-environmental-exposure]").forEach(button => {
+    const selected = exposureValues.includes(button.dataset.environmentalExposure);
+    button.classList.toggle("active", selected);
+    button.setAttribute("aria-pressed", selected ? "true" : "false");
+  });
   updateSmokingHistoryInputs();
   updateChestPainDetailUI();
   setChoiceGroupValue("symptomProgressionChoices", fields.symptomProgression);
@@ -20847,6 +20919,7 @@ function validateAssessmentFields({
   chills,
   nightSweats,
   smokingHistory = {},
+  environmentalExposures = ["unknown"],
   isEn = false
 }) {
   const errors = [];
@@ -20990,6 +21063,15 @@ function validateAssessmentFields({
     errors.push({ field: error.field, message });
   });
 
+  if (!normalizeEnvironmentalExposures(environmentalExposures).isValid) {
+    errors.push({
+      field: "environmentalExposureChoices",
+      message: isEn
+        ? "Select one or more exposures, None, or Not sure."
+        : "اختر مصدراً واحداً أو أكثر للتعرض، أو لا يوجد، أو غير معروف."
+    });
+  }
+
   if (String(currentMedications || "").length > 500) {
     errors.push({
       field: "currentMedicationsInput",
@@ -21131,6 +21213,8 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
     riskChoices.forEach((btn) => {
       if (btn.classList.contains("active")) riskFactors.push(btn.textContent.trim());
     });
+    const environmentalExposures = Array.from(document.querySelectorAll("#environmentalExposureChoices .choice.active"))
+      .map(button => button.dataset.environmentalExposure).filter(Boolean);
 
     // ── التحقق الشامل الصارم من كافة حقول التقييم (Full Assessment Validation) ──
     const validation = validateAssessmentFields({
@@ -21150,6 +21234,7 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
       chills,
       nightSweats,
       smokingHistory,
+      environmentalExposures,
       symptomProgression,
       recentInfection,
       asthmaCopd,
@@ -21165,7 +21250,7 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
         const el = document.getElementById(id);
         if (el) el.style.borderColor = "";
       });
-      ["breathingChoices", "coughNatureChoices", "sputumColorChoices", "coughChoices", "riskChoices", "chestPainChoices", "chestPainCharacterChoices", "wheezingChoices", "chillsChoices", "nightSweatsChoices", "cigaretteSmokingStatusChoices", "shishaExposureChoices", "vapeExposureChoices", "passiveSmokeChoices", "symptomProgressionChoices", "recentInfectionChoices", "asthmaCopdChoices"].forEach(id => {
+      ["breathingChoices", "coughNatureChoices", "sputumColorChoices", "coughChoices", "riskChoices", "chestPainChoices", "chestPainCharacterChoices", "wheezingChoices", "chillsChoices", "nightSweatsChoices", "cigaretteSmokingStatusChoices", "shishaExposureChoices", "vapeExposureChoices", "passiveSmokeChoices", "environmentalExposureChoices", "symptomProgressionChoices", "recentInfectionChoices", "asthmaCopdChoices"].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.outline = "";
       });
@@ -21226,6 +21311,10 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
       `${isEn ? "Vape" : "فيب"}: ${yesNoUnknownLabel(smokingHistoryResult.vaping, isEn)}`,
       `${isEn ? "Passive smoke" : "تدخين سلبي"}: ${yesNoUnknownLabel(smokingHistoryResult.passiveSmoke, isEn)}`
     ].filter(Boolean).join(" • ");
+    const environmentalExposureLabelMap = isEn
+      ? { dust: "Dust, soil, or sand", traffic_exhaust: "Vehicle exhaust", rice_straw_burning: "Rice-straw or crop-residue burning", factory_fumes: "Factory fumes", household_birds: "Household birds", none: "None", unknown: "Not sure" }
+      : { dust: "أتربة أو غبار", traffic_exhaust: "عوادم سيارات", rice_straw_burning: "حرق قش الأرز أو مخلفات زراعية", factory_fumes: "أبخرة أو أدخنة مصانع", household_birds: "تربية طيور منزلية", none: "لا يوجد", unknown: "غير معروف" };
+    const environmentalExposureSummary = environmentalExposures.map(value => environmentalExposureLabelMap[value] || environmentalExposureLabelMap.unknown).join(" • ");
     const coughNatureLabel = COUGH_NATURE_TEXT[coughNature][isEn ? "en" : "ar"];
     const sputumColorLabel = sputumColor ? SPUTUM_COLOR_TEXT[sputumColor][isEn ? "en" : "ar"] : "";
     const coughSeverityLabel = AssessmentDictionaries.cough[coughLevel]?.[isEn ? "en" : "ar"] || "";
@@ -21252,6 +21341,7 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
       recentInfection,
       asthmaCopd,
       smokingHistory: smokingHistorySummary,
+      environmentalExposure: environmentalExposureSummary,
       currentMedications: currentMedications || (isEn ? "Not provided" : "غير مسجل"),
       notes: notes || (isEn ? "Not provided" : "غير مسجل"),
       riskFactors,
@@ -21308,6 +21398,7 @@ document.getElementById("submitAssessment").addEventListener("click", async () =
           recentInfectionRaw: recentInfection,
           asthmaCopdRaw: asthmaCopd,
           smokingHistoryRaw: smokingHistory,
+          environmentalExposureRaw: environmentalExposures,
           currentMedicationsRaw: currentMedications,
           notesRaw: notes,
           riskFactorsRaw: riskFactors,

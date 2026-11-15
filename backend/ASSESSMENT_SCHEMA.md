@@ -56,7 +56,8 @@
         "shisha": "no",
         "vaping": "unknown",
         "passiveSmoke": "yes"
-      }
+      },
+      "environmental": ["traffic_exhaust", "rice_straw_burning"]
     },
     "symptoms": {
       "breathingDifficulty": "no",
@@ -261,7 +262,12 @@
 * إن لم يكن المريض قد دخن السجائر، تكون سنوات العلبة `0`. إذا كانت الحالة مجهولة، تبقى السنوات `null` ولا تُستنتج.
 * `shisha` و`vaping` و`passiveSmoke` خيارات مغلقة: `"yes"` | `"no"` | `"unknown"`.
 
-### 2.2 الأدوية والملاحظات التي يقدمها المريض (`assessment.medications` / `assessment.notes`):
+### 2.2 التعرض المهني والبيئي (`assessment.exposures.environmental`):
+* مصفوفة متعددة الاختيار من `"dust"`، `"traffic_exhaust"`، `"rice_straw_burning"`، `"factory_fumes"`، و`"household_birds"`.
+* استخدم `"none"` عند نفي جميع مصادر التعرض، أو `"unknown"` عندما لا يعرف المريض. هاتان القيمتان حصريتان ولا تجتمعان مع مصادر تعرض أخرى.
+* الحقل يسجل تاريخ التعرض المبلغ عنه للمراجعة الطبية؛ لا يغير درجة الفرز تلقائياً.
+
+### 2.3 الأدوية والملاحظات التي يقدمها المريض (`assessment.medications` / `assessment.notes`):
 * `assessment.medications.current`: نص اختياري حتى `500` حرف، أو `null` عند عدم تقديم بيانات.
 * `assessment.medications.status`: `"provided"` أو `"not-provided"`، ويجب عدم عرض `not-provided` كأنه ينفي استخدام الأدوية.
 * `assessment.notes`: نص اختياري حتى `1000` حرف، أو `null`.

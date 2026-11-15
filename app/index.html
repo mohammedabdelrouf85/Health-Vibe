@@ -2042,6 +2042,19 @@
                 <button type="button" class="choice active" data-passive-smoke="unknown" aria-pressed="true"><span data-i18n="assessment.chillsUnknown">غير متأكد</span></button>
               </div>
             </section>
+            <section class="environmental-exposure-fields" aria-labelledby="environmentalExposureHeading" style="margin-top: 14px; padding: 12px; border: 1px solid var(--line); border-radius: 12px;">
+              <h4 id="environmentalExposureHeading" data-i18n="assessment.environmentalExposureHeading" style="margin: 0 0 6px;">التعرض المهني والبيئي</h4>
+              <small id="environmentalExposureHelp" class="field-hint" data-i18n="assessment.environmentalExposureHelp" style="display:block; margin-bottom:8px;">اختر كل ما ينطبق عليك في المنزل أو العمل أو المنطقة المحيطة.</small>
+              <div id="environmentalExposureChoices" class="choice-row three" role="group" aria-labelledby="environmentalExposureHeading" aria-describedby="environmentalExposureHelp">
+                <button type="button" class="choice" data-environmental-exposure="dust" aria-pressed="false"><span data-i18n="assessment.exposureDust">أتربة أو غبار</span></button>
+                <button type="button" class="choice" data-environmental-exposure="traffic_exhaust" aria-pressed="false"><span data-i18n="assessment.exposureTrafficExhaust">عوادم سيارات</span></button>
+                <button type="button" class="choice" data-environmental-exposure="rice_straw_burning" aria-pressed="false"><span data-i18n="assessment.exposureRiceStrawBurning">حرق قش الأرز أو مخلفات زراعية</span></button>
+                <button type="button" class="choice" data-environmental-exposure="factory_fumes" aria-pressed="false"><span data-i18n="assessment.exposureFactoryFumes">أبخرة أو أدخنة مصانع</span></button>
+                <button type="button" class="choice" data-environmental-exposure="household_birds" aria-pressed="false"><span data-i18n="assessment.exposureHouseholdBirds">تربية طيور منزلية</span></button>
+                <button type="button" class="choice" data-environmental-exposure="none" aria-pressed="false"><span data-i18n="assessment.exposureNone">لا يوجد</span></button>
+                <button type="button" class="choice active" data-environmental-exposure="unknown" aria-pressed="true"><span data-i18n="assessment.exposureUnknown">غير معروف</span></button>
+              </div>
+            </section>
             <label>الأدوية الحالية (اختياري)</label>
             <textarea id="currentMedicationsInput" rows="2" maxlength="500" aria-label="الأدوية الحالية" placeholder="اكتب الأدوية أو اتركها فارغة إذا لم يتم تقديمها"></textarea>
             <label>ملاحظات إضافية (اختياري)</label>
@@ -4181,6 +4194,7 @@
         <div><span>عدوى حديثة</span><strong id="confirmRecentInfection">--</strong></div>
         <div><span>ربو أو COPD</span><strong id="confirmAsthmaCopd">--</strong></div>
         <div><span data-i18n="assessment.smokingHistoryHeading">تاريخ التدخين والتعرض للدخان</span><strong id="confirmSmokingHistory">--</strong></div>
+        <div><span data-i18n="assessment.environmentalExposureHeading">التعرض المهني والبيئي</span><strong id="confirmEnvironmentalExposure">--</strong></div>
         <div><span>عوامل الخطورة</span><strong id="confirmRisks">--</strong></div>
         <div><span>الأدوية الحالية</span><strong id="confirmMedications">--</strong></div>
         <div><span>ملاحظات</span><strong id="confirmNotes">--</strong></div>
